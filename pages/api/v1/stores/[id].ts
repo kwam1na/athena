@@ -35,7 +35,7 @@ async function getStore(req: NextApiRequest, res: NextApiResponse) {
     .select("*")
     .match({ id: id });
 
-  const store = await db.stores.get(id as string);
+  const store = await db.stores.getStore(id as string);
 
   if (data?.length == 0) {
     res.status(404).json({ error: "No store with the given id" });

@@ -1,20 +1,18 @@
 import { supabase } from "@/lib/supabase";
-import { UserProfile } from "@/lib/types";
+import { Category } from "@/lib/types";
 
-const TABLE_NAME = "profiles";
+const TABLE_NAME = "categories";
 
-export const getUserProfiles = async (): Promise<UserProfile[]> => {
+export const getCategories = async (): Promise<Category[]> => {
   const { data, error } = await supabase.from(TABLE_NAME).select("*");
   if (error) {
     throw new Error(`Error fetching ${TABLE_NAME}`);
   }
 
-  return data as UserProfile[];
+  return data as Category[];
 };
 
-export const getUserProfileById = async (
-  id: string
-): Promise<UserProfile | null> => {
+export const getCategoryById = async (id: string): Promise<Category | null> => {
   const { data, error } = await supabase
     .from(TABLE_NAME)
     .select("*")
@@ -25,12 +23,12 @@ export const getUserProfileById = async (
     throw new Error(`Error fetching item with id ${id}`);
   }
 
-  return data as UserProfile;
+  return data as Category;
 };
 
-export const createUserProfile = async (
-  item: Partial<UserProfile>
-): Promise<UserProfile> => {
+export const createCategory = async (
+  item: Partial<Category>
+): Promise<Category> => {
   const { data, error } = await supabase
     .from(TABLE_NAME)
     .insert(item)
@@ -41,13 +39,13 @@ export const createUserProfile = async (
     throw new Error(error.message);
   }
 
-  return data as UserProfile;
+  return data as Category;
 };
 
-export const updateUserProfile = async (
+export const updateCategory = async (
   id: string,
-  item: Partial<UserProfile>
-): Promise<UserProfile> => {
+  item: Partial<Category>
+): Promise<Category> => {
   item.date_updated = new Date().toISOString();
   const { data, error } = await supabase
     .from(TABLE_NAME)
@@ -60,10 +58,10 @@ export const updateUserProfile = async (
     throw new Error(error.message);
   }
 
-  return data as UserProfile;
+  return data as Category;
 };
 
-export const deleteUserProfile = async (id: string): Promise<void> => {
+export const deleteCategory = async (id: string): Promise<void> => {
   const { error } = await supabase.from(TABLE_NAME).delete().eq("id", id);
 
   if (error) {

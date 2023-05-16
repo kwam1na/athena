@@ -2,11 +2,13 @@ export interface UserProfile {
   id: string;
   store_associated_with: string;
   store: Store;
+  date_updated: string | null;
 }
 
 export type Category = {
   id: number;
   created_at: string | null;
+  date_updated: string | null;
   name: string | null;
   description: string | null;
   store_id: number | null;
@@ -24,6 +26,7 @@ export type Inventory = {
 export type Item = {
   id: number;
   created_at: string | null;
+  date_updated: string | null;
   sku: string;
   description: string | null;
   unit_price: number | null;
@@ -42,6 +45,7 @@ export type Profile = {
 export type Store = {
   id: number;
   created_at: string | null;
+  date_updated: string | null;
   is_subscribed: boolean | null;
   name: string | null;
 };
@@ -49,6 +53,7 @@ export type Store = {
 export type Subcategory = {
   id: number;
   created_at: string | null;
+  date_updated: string | null;
   category_id: number | null;
   name: string | null;
   description: string | null;
