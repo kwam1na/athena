@@ -15,7 +15,6 @@ const Nav = () => {
           <p className="ml-2">/ {user.store.name}</p>
         </Link>
       )}
-
       <div className="ml-auto">
         <Link href={user ? "/logout" : "/login"}>
           <p>{user ? "Logout" : "Login"}</p>
