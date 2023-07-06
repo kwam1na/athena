@@ -7,7 +7,7 @@ export default function Sidebar() {
       <nav className="flex-1 p-4">
         <ul>
           <div className="m-2 hover:text-gray-600 rounded block">
-            <Link href={"/"}>Inventory</Link>
+            <Link href={"/items"}>Inventory</Link>
           </div>
           {/* <div className="m-2 hover:text-gray-600 rounded block">
             <Link href={"/settings"}>Settings</Link>

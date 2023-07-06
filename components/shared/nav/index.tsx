@@ -12,7 +12,7 @@ const Nav = () => {
       </Link>
       {!!user && (
         <Link href="/dashboard">
-          <p className="ml-2">/ {user.store.name}</p>
+          <p className="ml-2">/ {user?.store?.name}</p>
         </Link>
       )}
 

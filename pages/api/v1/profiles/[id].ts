@@ -1,5 +1,4 @@
 import { db } from "@/db";
-import { isNumber } from "@/lib";
 import type { NextApiRequest, NextApiResponse } from "next";
 
 export default async function handler(
@@ -28,30 +27,18 @@ export default async function handler(
 
 async function getUserProfile(req: NextApiRequest, res: NextApiResponse) {
   const { id } = req.query;
-  if (!isNumber(id as string)) {
-    res.status(400).json({ error: "Invalid id given." });
-    return;
-  }
   const profile = await db.profiles.getUserProfileById(id as string);
   res.status(200).json(profile);
 }
 
 async function updateUserProfile(req: NextApiRequest, res: NextApiResponse) {
   const { id } = req.query;
-  if (!isNumber(id as string)) {
-    res.status(400).json({ error: "Invalid id given." });
-    return;
-  }
   const profile = await db.profiles.updateUserProfile(id as string, req.body);
   res.status(200).json(profile);
 }
 
 async function deleteUserProfile(req: NextApiRequest, res: NextApiResponse) {
   const { id } = req.query;
-  if (!isNumber(id as string)) {
-    res.status(400).json({ error: "Invalid id given." });
-    return;
-  }
   await db.profiles.deleteUserProfile(id as string);
   res.status(200).json({ success: "Item deleted successfully." });
 }
