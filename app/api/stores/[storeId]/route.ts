@@ -1,0 +1,63 @@
+import { NextRequest, NextResponse } from 'next/server';
+import prismadb from '@/lib/prismadb';
+import { getSession } from '@auth0/nextjs-auth0';
+import { deleteStore, updateStore } from '@/lib/repositories/storesRepository';
+
+export async function PATCH(
+    req: NextRequest,
+    { params }: { params: { storeId: string } },
+) {
+    try {
+
+        const res = new NextResponse();
+        const session = await getSession(req, res);
+        const user = session?.user
+
+        const body = await req.json();
+        const { name } = body;
+
+        if (!user) {
+            return new NextResponse('Unauthenticated', { status: 403 });
+        }
+
+        if (!name) {
+            return new NextResponse('Name is required', { status: 400 });
+        }
+
+        if (!params.storeId) {
+            return new NextResponse('Store id is required', { status: 400 });
+        }
+
+        const store = await updateStore(params.storeId, user.sub, body)
+
+        return NextResponse.json(store, res);
+    } catch (error) {
+        console.log('[STORE_PATCH]', (error as Error).message);
+        return new NextResponse('Internal error', { status: 500 });
+    }
+}
+
+export async function DELETE(
+    req: NextRequest,
+    { params }: { params: { storeId: string } },
+) {
+    try {
+        const res = new NextResponse();
+        const session = await getSession(req, res);
+        const user = session?.user
+
+        if (!user) {
+            return new NextResponse('Unauthenticated', { status: 403 });
+        }
+
+        if (!params.storeId) {
+            return new NextResponse('Store id is required', { status: 400 });
+        }
+
+        const store = await deleteStore(params.storeId, user.sub);
+        return NextResponse.json(store, res);
+    } catch (error) {
+        console.log('[STORE_DELETE]', (error as Error).message);
+        return new NextResponse('Internal error', { status: 500 });
+    }
+}
