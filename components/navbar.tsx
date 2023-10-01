@@ -31,9 +31,9 @@ const Navbar = async () => {
                   <p className="border-r w-16">athena</p>
                   <StoreSwitcher items={stores} />
                </div>
-               <div className="ml-auto mr-8">
+               {/* <div className="ml-auto mr-8">
                   <UserNav />
-               </div>
+               </div> */}
             </div>
             {/* <MainNav /> */}
          </div>

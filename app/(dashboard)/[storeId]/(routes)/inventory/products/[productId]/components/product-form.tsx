@@ -49,6 +49,11 @@ import {
 } from '@/components/ui/card';
 import { cn, formatter } from '@/lib/utils';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { currencies } from '@/lib/constants';
+import {
+   useCurrencyFormatter,
+   useStoreCurrency,
+} from '@/providers/currency-provider';
 
 enum ActionContext {
    NONE,
@@ -115,6 +120,8 @@ export const ProductForm: React.FC<ProductFormProps> = ({
 }) => {
    const params = useParams();
    const router = useRouter();
+   const { storeCurrency } = useStoreCurrency();
+   const fmt = formatter(storeCurrency);
 
    const [open, setOpen] = useState(false);
    const [loading, setLoading] = useState(false);
@@ -183,9 +190,6 @@ export const ProductForm: React.FC<ProductFormProps> = ({
       // @ts-ignore
       defaultValues,
    });
-
-   // console.log('form values:', form.getValues());
-   // console.log('default values:', defaultValues);
 
    const calculateMetrics = (value: number, type: 'price' | 'cpi') => {
       let margin = 0,
@@ -546,9 +550,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                                  Profit
                               </p>
                               <p className="text-sm">
-                                 {isNaN(profit)
-                                    ? '--'
-                                    : formatter.format(profit)}
+                                 {isNaN(profit) ? '--' : fmt.format(profit)}
                               </p>
                            </div>
 

@@ -3,10 +3,10 @@ import { Inter } from 'next/font/google';
 import { ModalProvider } from '@/providers/modal-provider';
 import { ThemeProvider } from '@/providers/theme-provider';
 import { Toaster } from '@/components/ui/toaster';
-import QCProvider from '@/providers/query-client-provider';
 import './globals.css';
-// import { UserProvider } from '@/providers/user-provider';
 import { UserProvider } from '@auth0/nextjs-auth0/client';
+import { CurrencyProvider } from '@/providers/currency-provider';
+import { WrappedUserProvider } from '@/providers/wrapped-user-provider';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -27,7 +27,11 @@ export default async function RootLayout({
             <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
                <Toaster />
                <ModalProvider />
-               <UserProvider>{children}</UserProvider>
+               <UserProvider>
+                  <WrappedUserProvider>
+                     <CurrencyProvider>{children}</CurrencyProvider>
+                  </WrappedUserProvider>
+               </UserProvider>
             </ThemeProvider>
          </body>
       </html>

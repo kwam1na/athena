@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import prismadb from '@/lib/prismadb';
 import { handleError } from '../utils';
 import { withApiAuthRequired, getSession } from '@auth0/nextjs-auth0';
-import { createStore } from '@/lib/repositories/storesRepository';
+import { createStore, getStore } from '@/lib/repositories/storesRepository';
 
 const handler = withApiAuthRequired(async function POST(req: NextRequest) {
     try {
@@ -13,7 +13,7 @@ const handler = withApiAuthRequired(async function POST(req: NextRequest) {
 
         const body = await req.json();
 
-        const { name } = body;
+        const { name, currency } = body;
 
         if (!user) {
             return new NextResponse('Unauthorized', { status: 403 });
@@ -21,6 +21,10 @@ const handler = withApiAuthRequired(async function POST(req: NextRequest) {
 
         if (!name) {
             return new NextResponse('Name is required', { status: 400 });
+        }
+
+        if (!currency) {
+            return new NextResponse('Currency is required', { status: 400 });
         }
 
         const createParams = { ...body, user_id: user.sub }

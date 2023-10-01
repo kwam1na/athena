@@ -3,17 +3,20 @@ import { formatter } from '@/lib/utils';
 import { ProductsClient } from './products/components/client';
 import { ProductColumn } from './products/components/columns';
 import { fetchProducts } from '@/lib/repositories/productsRepository';
+import { getStore } from '@/lib/repositories/storesRepository';
 
 const StorePage = async ({ params }: { params: { storeId: string } }) => {
    const products = await fetchProducts({ store_id: params.storeId });
+   const store = await getStore(params.storeId);
+   const fmt = formatter(store?.currency || 'usd');
 
    const formattedProducts: ProductColumn[] = products.map((item) => ({
       id: item.id,
       name: item.name,
       isFeatured: item.is_featured,
       isArchived: item.is_archived,
-      price: formatter.format(item.price.toNumber()),
-      costPerItem: formatter.format(item.cost_per_item.toNumber()),
+      price: fmt.format(item.price.toNumber()),
+      costPerItem: fmt.format(item.cost_per_item.toNumber()),
       margin: (
          ((item.price.toNumber() - item.cost_per_item.toNumber()) /
             item.price.toNumber()) *

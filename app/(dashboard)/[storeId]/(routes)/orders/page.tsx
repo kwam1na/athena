@@ -5,6 +5,7 @@ import { formatter } from '@/lib/utils';
 
 import { OrderColumn } from './components/columns';
 import { OrderClient } from './components/client';
+import { getStore } from '@/lib/repositories/storesRepository';
 
 const OrdersPage = async ({ params }: { params: { storeId: string } }) => {
    const orders = await prismadb.order.findMany({
@@ -23,6 +24,9 @@ const OrdersPage = async ({ params }: { params: { storeId: string } }) => {
       },
    });
 
+   const store = await getStore(params.storeId);
+   const fmt = formatter(store?.currency || 'usd');
+
    const formattedOrders: OrderColumn[] = orders.map((item) => ({
       id: item.id,
       phone: item.phone,
@@ -30,7 +34,7 @@ const OrdersPage = async ({ params }: { params: { storeId: string } }) => {
       products: item.order_items
          .map((orderItem) => orderItem.product.name)
          .join(', '),
-      totalPrice: formatter.format(
+      totalPrice: fmt.format(
          item.order_items.reduce((total, item) => {
             return total + Number(item.product.price);
          }, 0),

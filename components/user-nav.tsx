@@ -41,15 +41,6 @@ export function UserNav() {
       }
    }
 
-   const router = useRouter();
-
-   const handleLogout = async () => {
-      const response = await fetch('/api/auth/logout', { method: 'POST' });
-      console.log('response:', response);
-      if (response.ok) router.push('/api/auth/login');
-      router.refresh();
-   };
-
    return (
       <DropdownMenu>
          <DropdownMenuTrigger asChild>
@@ -58,7 +49,7 @@ export function UserNav() {
                className="relative h-8 w-8 p-4 rounded-full"
             >
                <Avatar className="h-8 w-8">
-                  <AvatarImage src="/avatars/01.png" alt="@shadcn" />
+                  <AvatarImage src={''} alt="@shadcn" />
                   <AvatarFallback>
                      {fallback && fallback.toUpperCase()}
                   </AvatarFallback>
@@ -74,28 +65,6 @@ export function UserNav() {
                   </p>
                </div>
             </DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuGroup>
-               <DropdownMenuItem className="pt-2 pb-2">
-                  <User className="mr-2 h-4 w-4" />
-                  <span>Profile</span>
-                  <DropdownMenuShortcut>⇧⌘P</DropdownMenuShortcut>
-               </DropdownMenuItem>
-               <DropdownMenuItem className="pt-2 pb-2">
-                  <CreditCard className="mr-2 h-4 w-4" />
-                  <span>Billing</span>
-                  <DropdownMenuShortcut>⌘B</DropdownMenuShortcut>
-               </DropdownMenuItem>
-               <DropdownMenuItem className="pt-2 pb-2">
-                  <Settings className="mr-2 h-4 w-4" />
-                  <span>Settings</span>
-                  <DropdownMenuShortcut>⌘S</DropdownMenuShortcut>
-               </DropdownMenuItem>
-               <DropdownMenuItem className="pt-2 pb-2">
-                  <PlusCircle className="mr-2 h-4 w-4" />
-                  <span>New Team</span>
-               </DropdownMenuItem>
-            </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuItem>
                <Sun className="mr-2 h-[1rem] w-[1rem] rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />

@@ -6,11 +6,15 @@ import { ProductColumn } from './components/columns';
 import { fetchProducts } from '@/lib/repositories/productsRepository';
 import { fetchCategories } from '@/lib/repositories/categoriesRepository';
 import { fetchSubcategories } from '@/lib/repositories/subcategoriesRepository';
+import { getStore } from '@/lib/repositories/storesRepository';
 
 const ProductsPage = async ({ params }: { params: { storeId: string } }) => {
    const products = await fetchProducts({ store_id: params.storeId });
    const categories = await fetchCategories(params.storeId);
    const subcategories = await fetchSubcategories(params.storeId);
+
+   const store = await getStore(params.storeId);
+   const fmt = formatter(store?.currency || 'usd');
 
    const categoryOptions = categories.map((category) => ({
       label: category.name,
@@ -27,8 +31,8 @@ const ProductsPage = async ({ params }: { params: { storeId: string } }) => {
       name: item.name,
       isFeatured: item.is_featured,
       isArchived: item.is_archived,
-      price: formatter.format(item.price.toNumber()),
-      costPerItem: formatter.format(item.cost_per_item.toNumber()),
+      price: fmt.format(item.price.toNumber()),
+      costPerItem: fmt.format(item.cost_per_item.toNumber()),
       margin: (
          ((item.price.toNumber() - item.cost_per_item.toNumber()) /
             item.price.toNumber()) *

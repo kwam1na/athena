@@ -1,7 +1,6 @@
 import { redirect } from 'next/navigation';
 import prismadb from '@/lib/prismadb';
 import { ErrorPage } from '@/components/states/error';
-import { useAuth } from '../api/utils';
 import { getSession } from '@auth0/nextjs-auth0';
 
 export default async function SetupLayout({

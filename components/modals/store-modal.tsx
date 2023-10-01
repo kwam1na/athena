@@ -4,36 +4,41 @@ import * as z from 'zod';
 import axios from 'axios';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
-import { toast } from 'react-hot-toast';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useToast } from '@/components/ui/use-toast';
 
 import { Modal } from '@/components/ui/modal';
 import { Input } from '@/components/ui/input';
+import { useStoreModal } from '@/hooks/use-store-modal';
+import { Button } from '@/components/ui/button';
+import { LoadingButton } from '../ui/loading-button';
+import {
+   Select,
+   SelectContent,
+   SelectItem,
+   SelectTrigger,
+   SelectValue,
+} from '@/components/ui/select';
+import { currencies } from '@/lib/constants';
 import {
    Form,
    FormControl,
-   FormDescription,
    FormField,
    FormItem,
    FormLabel,
    FormMessage,
 } from '@/components/ui/form';
-import { useStoreModal } from '@/hooks/use-store-modal';
-import { Button } from '@/components/ui/button';
-import { LoadingButton } from '../ui/loading-button';
-import { useUserStore } from '@/hooks/use-user';
 
 const formSchema = z.object({
    name: z.string().min(1),
+   currency: z.string().min(1),
 });
 
 export const StoreModal = () => {
    const storeModal = useStoreModal();
    const router = useRouter();
    const { toast } = useToast();
-   const { userId } = useUserStore();
 
    const [loading, setLoading] = useState(false);
 
@@ -41,6 +46,7 @@ export const StoreModal = () => {
       resolver: zodResolver(formSchema),
       defaultValues: {
          name: '',
+         currency: '',
       },
    });
 
@@ -61,7 +67,7 @@ export const StoreModal = () => {
    return (
       <Modal
          title="Create store"
-         description="Add a new store to manage products and categories."
+         description="Add a new store to manage your inventory and operations"
          isOpen={storeModal.isOpen}
          onClose={storeModal.onClose}
       >
@@ -70,23 +76,66 @@ export const StoreModal = () => {
                <div className="space-y-2">
                   <Form {...form}>
                      <form onSubmit={form.handleSubmit(onSubmit)}>
-                        <FormField
-                           control={form.control}
-                           name="name"
-                           render={({ field }) => (
-                              <FormItem>
-                                 <FormLabel>Name</FormLabel>
-                                 <FormControl>
-                                    <Input
-                                       disabled={loading}
-                                       placeholder="E-Commerce"
-                                       {...field}
-                                    />
-                                 </FormControl>
-                                 <FormMessage />
-                              </FormItem>
-                           )}
-                        />
+                        <div className="flex w-full gap-8">
+                           <div className="w-[60%]">
+                              <FormField
+                                 control={form.control}
+                                 name="name"
+                                 render={({ field }) => (
+                                    <FormItem>
+                                       <FormLabel>Name</FormLabel>
+                                       <FormControl>
+                                          <Input
+                                             disabled={loading}
+                                             placeholder="Acme Inc."
+                                             {...field}
+                                          />
+                                       </FormControl>
+                                       <FormMessage />
+                                    </FormItem>
+                                 )}
+                              />
+                           </div>
+
+                           <div className="w-[60%]">
+                              <FormField
+                                 control={form.control}
+                                 name="currency"
+                                 render={({ field }) => (
+                                    <FormItem>
+                                       <FormLabel>Currency</FormLabel>
+                                       <Select
+                                          disabled={loading}
+                                          onValueChange={field.onChange}
+                                          value={field.value}
+                                          defaultValue={field.value}
+                                       >
+                                          <FormControl>
+                                             <SelectTrigger>
+                                                <SelectValue
+                                                   defaultValue={field.value}
+                                                   placeholder="Select a currency"
+                                                />
+                                             </SelectTrigger>
+                                          </FormControl>
+                                          <SelectContent>
+                                             {currencies.map((currency) => (
+                                                <SelectItem
+                                                   key={currency.value}
+                                                   value={currency.value}
+                                                >
+                                                   {currency.label}
+                                                </SelectItem>
+                                             ))}
+                                          </SelectContent>
+                                       </Select>
+                                       <FormMessage />
+                                    </FormItem>
+                                 )}
+                              />
+                           </div>
+                        </div>
+
                         <div className="pt-6 space-x-2 flex items-center justify-end w-full">
                            <Button
                               disabled={loading}

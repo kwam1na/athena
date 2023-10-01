@@ -1,0 +1,236 @@
+'use client';
+
+import * as z from 'zod';
+import axios from 'axios';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useForm } from 'react-hook-form';
+import { Trash } from 'lucide-react';
+import { User } from '@prisma/client';
+import { useParams, useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
+
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import {
+   Form,
+   FormControl,
+   FormField,
+   FormItem,
+   FormLabel,
+   FormMessage,
+} from '@/components/ui/form';
+import { Separator } from '@/components/ui/separator';
+import { Heading } from '@/components/ui/heading';
+import { AlertModal } from '@/components/modals/alert-modal';
+import { useOrigin } from '@/hooks/use-origin';
+import { ActionAlert } from '@/components/ui/action-alert';
+import {
+   Select,
+   SelectContent,
+   SelectItem,
+   SelectTrigger,
+   SelectValue,
+} from '@/components/ui/select';
+import { useToast } from '@/components/ui/use-toast';
+import { useUser } from '@auth0/nextjs-auth0/client';
+import { Claims } from '@auth0/nextjs-auth0';
+import { useWrappedUser } from '@/providers/wrapped-user-provider';
+
+const formSchema = z.object({
+   name: z.string().min(1),
+   email: z.string().email(),
+});
+
+type ProfileFormValues = {
+   name?: string;
+   email: string;
+};
+
+interface ProfileFormProps {
+   initialData: {
+      id?: string;
+      name?: string | null;
+      email?: string;
+      store_id?: string | null;
+      created_at?: Date;
+      updated_at?: Date;
+   } | null;
+}
+
+export const ProfileForm: React.FC<ProfileFormProps> = ({ initialData }) => {
+   const params = useParams();
+   const router = useRouter();
+   const origin = useOrigin();
+   const { toast } = useToast();
+
+   const { user, error, isLoading } = useUser();
+   const { setWrappedUser } = useWrappedUser();
+
+   const [isClient, setIsClient] = useState(false);
+
+   useEffect(() => {
+      setIsClient(true);
+   }, []);
+
+   // console.log('user:', user);
+   // console.log('initial data:', initialData);
+   const cleanedUp = { ...initialData, name: initialData?.name || '' };
+
+   const [open, setOpen] = useState(false);
+   const [loading, setLoading] = useState(false);
+
+   const form = useForm<ProfileFormValues>({
+      resolver: zodResolver(formSchema),
+      defaultValues: cleanedUp ? cleanedUp : { name: '', email: '' },
+   });
+
+   const onSubmit = async (data: ProfileFormValues) => {
+      try {
+         setLoading(true);
+         const res = await axios.patch(`/api/users`, data);
+         setWrappedUser(res.data);
+         router.refresh();
+         toast({
+            title: 'Profile updated.',
+         });
+      } catch (error: any) {
+         console.log('error:', error);
+         toast({
+            title: 'Something went wrong. Try again.',
+         });
+      } finally {
+         setLoading(false);
+      }
+   };
+
+   const onDelete = async () => {
+      try {
+         setLoading(true);
+         await axios.delete(`/api/users`);
+         router.refresh();
+         router.push('/');
+         toast({
+            title: 'Profile deleted.',
+         });
+      } catch (error: any) {
+         toast({
+            title: 'Make sure you removed all products and categories first and then try again.',
+         });
+      } finally {
+         setLoading(false);
+         setOpen(false);
+      }
+   };
+
+   const componentsLoading = loading && isLoading;
+
+   return (
+      <>
+         {isClient ? (
+            <>
+               <AlertModal
+                  isOpen={open}
+                  onClose={() => setOpen(false)}
+                  onConfirm={onDelete}
+                  loading={loading}
+               />
+               <div className="flex items-center justify-between">
+                  <Heading
+                     title="Profile settings"
+                     description="Update your profile"
+                  />
+               </div>
+               <Separator />
+               <Form {...form}>
+                  <form
+                     onSubmit={form.handleSubmit(onSubmit)}
+                     className="space-y-8 w-full"
+                  >
+                     <div className="md:grid md:grid-cols-3 gap-8">
+                        <FormField
+                           control={form.control}
+                           name="name"
+                           render={({ field }) => (
+                              <FormItem>
+                                 <FormLabel>Name</FormLabel>
+                                 <FormControl>
+                                    <Input
+                                       disabled={componentsLoading}
+                                       placeholder="Name"
+                                       {...field}
+                                    />
+                                 </FormControl>
+                                 <FormMessage />
+                              </FormItem>
+                           )}
+                        />
+
+                        <FormField
+                           control={form.control}
+                           name="email"
+                           render={({ field }) => (
+                              <FormItem>
+                                 <FormLabel>Email</FormLabel>
+                                 <FormControl>
+                                    <Input
+                                       type="email"
+                                       disabled={componentsLoading}
+                                       placeholder="Email"
+                                       {...field}
+                                    />
+                                 </FormControl>
+                                 <FormMessage />
+                              </FormItem>
+                           )}
+                        />
+
+                        {/* <FormField
+                     control={form.control}
+                     name="currency"
+                     render={({ field }) => (
+                        <FormItem>
+                           <FormLabel>Currency</FormLabel>
+                           <Select
+                              disabled={componentsLoading}
+                              onValueChange={field.onChange}
+                              value={field.value}
+                              defaultValue={field.value}
+                           >
+                              <FormControl>
+                                 <SelectTrigger>
+                                    <SelectValue
+                                       defaultValue={field.value}
+                                       placeholder="Select a currency"
+                                    />
+                                 </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                 {currencies.map((currency) => (
+                                    <SelectItem
+                                       key={currency.value}
+                                       value={currency.value}
+                                    >
+                                       {currency.label}
+                                    </SelectItem>
+                                 ))}
+                              </SelectContent>
+                           </Select>
+                           <FormMessage />
+                        </FormItem>
+                     )}
+                  /> */}
+                     </div>
+                     <Button
+                        disabled={componentsLoading}
+                        className="ml-auto"
+                        type="submit"
+                     >
+                        Save changes
+                     </Button>
+                  </form>
+               </Form>
+            </>
+         ) : null}
+      </>
+   );
+};

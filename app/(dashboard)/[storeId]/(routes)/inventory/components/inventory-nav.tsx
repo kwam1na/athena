@@ -52,7 +52,7 @@ export function InventoryNav({
                className={cn(
                   'text-sm font-medium transition-colors hover:text-primary',
                   route.active
-                     ? 'text-black dark:text-white'
+                     ? 'text-black dark:text-white bg-muted p-2 pr-4 pl-4 rounded-md'
                      : 'text-muted-foreground',
                )}
             >

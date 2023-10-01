@@ -4,11 +4,10 @@ import * as z from 'zod';
 import axios from 'axios';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
-import { toast } from 'react-hot-toast';
 import { Trash } from 'lucide-react';
 import { Store } from '@prisma/client';
 import { useParams, useRouter } from 'next/navigation';
-import { MouseEvent, useState } from 'react';
+import { useState } from 'react';
 
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -23,12 +22,23 @@ import {
 import { Separator } from '@/components/ui/separator';
 import { Heading } from '@/components/ui/heading';
 import { AlertModal } from '@/components/modals/alert-modal';
-import { ApiAlert } from '@/components/ui/api-alert';
 import { useOrigin } from '@/hooks/use-origin';
 import { ActionAlert } from '@/components/ui/action-alert';
+import {
+   Select,
+   SelectContent,
+   SelectItem,
+   SelectTrigger,
+   SelectValue,
+} from '@/components/ui/select';
+import { currencies } from '@/lib/constants';
+import { useToast } from '@/components/ui/use-toast';
+import { revalidatePath } from 'next/cache';
+import { useStoreCurrency } from '@/providers/currency-provider';
 
 const formSchema = z.object({
    name: z.string().min(2),
+   currency: z.string().min(3),
 });
 
 type SettingsFormValues = z.infer<typeof formSchema>;
@@ -41,13 +51,15 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ initialData }) => {
    const params = useParams();
    const router = useRouter();
    const origin = useOrigin();
+   const { toast } = useToast();
 
    const [open, setOpen] = useState(false);
    const [loading, setLoading] = useState(false);
+   const { setStoreCurrency } = useStoreCurrency();
 
    const form = useForm<SettingsFormValues>({
       resolver: zodResolver(formSchema),
-      defaultValues: initialData,
+      defaultValues: initialData ? initialData : { name: '', currency: '' },
    });
 
    const onSubmit = async (data: SettingsFormValues) => {
@@ -55,9 +67,15 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ initialData }) => {
          setLoading(true);
          await axios.patch(`/api/stores/${params.storeId}`, data);
          router.refresh();
-         toast.success('Store updated.');
+         setStoreCurrency(data.currency);
+         toast({
+            title: 'Store updated.',
+         });
       } catch (error: any) {
-         toast.error('Something went wrong.');
+         console.log('error:', error);
+         toast({
+            title: 'Something went wrong. Try again.',
+         });
       } finally {
          setLoading(false);
       }
@@ -69,11 +87,13 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ initialData }) => {
          await axios.delete(`/api/stores/${params.storeId}`);
          router.refresh();
          router.push('/');
-         toast.success('Store deleted.');
+         toast({
+            title: 'Store deleted.',
+         });
       } catch (error: any) {
-         toast.error(
-            'Make sure you removed all products and categories first.',
-         );
+         toast({
+            title: 'Make sure you removed all products and categories first and then try again.',
+         });
       } finally {
          setLoading(false);
          setOpen(false);
@@ -100,7 +120,7 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ initialData }) => {
                onSubmit={form.handleSubmit(onSubmit)}
                className="space-y-8 w-full"
             >
-               <div className="grid grid-cols-3 gap-8">
+               <div className="md:grid md:grid-cols-3 gap-8">
                   <FormField
                      control={form.control}
                      name="name"
@@ -118,6 +138,42 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ initialData }) => {
                         </FormItem>
                      )}
                   />
+
+                  <FormField
+                     control={form.control}
+                     name="currency"
+                     render={({ field }) => (
+                        <FormItem>
+                           <FormLabel>Currency</FormLabel>
+                           <Select
+                              disabled={loading}
+                              onValueChange={field.onChange}
+                              value={field.value}
+                              defaultValue={field.value}
+                           >
+                              <FormControl>
+                                 <SelectTrigger>
+                                    <SelectValue
+                                       defaultValue={field.value}
+                                       placeholder="Select a currency"
+                                    />
+                                 </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                 {currencies.map((currency) => (
+                                    <SelectItem
+                                       key={currency.value}
+                                       value={currency.value}
+                                    >
+                                       {currency.label}
+                                    </SelectItem>
+                                 ))}
+                              </SelectContent>
+                           </Select>
+                           <FormMessage />
+                        </FormItem>
+                     )}
+                  />
                </div>
                <Button disabled={loading} className="ml-auto" type="submit">
                   Save changes
@@ -125,11 +181,6 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ initialData }) => {
             </form>
          </Form>
          <Separator />
-         {/* <ApiAlert
-                title="NEXT_PUBLIC_API_URL"
-                variant="public"
-                description={`${origin}/api/${params.storeId}`}
-            /> */}
          <ActionAlert
             title={'Delete this store'}
             description={'This will delete this store and all associated data.'}
