@@ -49,11 +49,7 @@ import {
 } from '@/components/ui/card';
 import { cn, formatter } from '@/lib/utils';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { currencies } from '@/lib/constants';
-import {
-   useCurrencyFormatter,
-   useStoreCurrency,
-} from '@/providers/currency-provider';
+import { useStoreCurrency } from '@/providers/currency-provider';
 
 enum ActionContext {
    NONE,
@@ -239,23 +235,6 @@ export const ProductForm: React.FC<ProductFormProps> = ({
    useEffect(() => {
       setHasChanges(hasFormChanged(watchedValues));
    }, [watchedValues]);
-
-   useEffect(() => {
-      const handleUnload = (e: any) => {
-         if (hasChanges) {
-            e.preventDefault();
-            e.returnValue = 'You have unsaved changes!';
-            console.log('yeah?');
-            alert('Ahhhhhh!');
-         }
-      };
-
-      window.addEventListener('beforeunload', handleUnload);
-
-      return () => {
-         window.removeEventListener('beforeunload', handleUnload);
-      };
-   }, [hasChanges]);
 
    const onSubmit = async (data: ProductFormValues) => {
       const cleanedUpData = {

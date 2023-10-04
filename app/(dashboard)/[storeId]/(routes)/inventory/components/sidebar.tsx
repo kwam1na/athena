@@ -1,7 +1,13 @@
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { LayoutDashboard, Package, Settings, ShoppingBag } from 'lucide-react';
+import {
+   Banknote,
+   LayoutDashboard,
+   Package,
+   Settings,
+   ShoppingBag,
+} from 'lucide-react';
 import { UserInfo } from '@/components/user-info';
 
 interface SidebarProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -26,6 +32,12 @@ export const Sidebar = async ({ className, storeId }: SidebarProps) => {
                      </Button>
                   </Link>
 
+                  <Link href={`/${storeId}/sales-report`}>
+                     <Button variant="ghost" className="w-full justify-start">
+                        <Banknote className="mr-2 h-4 w-4" /> Sales report
+                     </Button>
+                  </Link>
+
                   <Link href={`/${storeId}/orders`}>
                      <Button variant="ghost" className="w-full justify-start">
                         <ShoppingBag className="mr-2 h-4 w-4" /> Orders
@@ -40,9 +52,9 @@ export const Sidebar = async ({ className, storeId }: SidebarProps) => {
                </div>
             </div>
 
-            <div className="px-3">
+            {/* <div className="px-3">
                <UserInfo />
-            </div>
+            </div> */}
          </div>
       </div>
    );

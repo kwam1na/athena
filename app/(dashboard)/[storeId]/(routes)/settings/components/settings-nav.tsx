@@ -21,16 +21,16 @@ export function SettingsNav({
          icon: <User className="mr-2 h-4 w-4" />,
       },
       {
-         href: `/${params.storeId}/settings/billing`,
-         label: 'Billing',
-         active: pathname === `/${params.storeId}/settings/billing`,
-         icon: <CreditCard className="mr-2 h-4 w-4" />,
-      },
-      {
          href: `/${params.storeId}/settings/store`,
          label: 'Store',
          active: pathname === `/${params.storeId}/settings/store`,
          icon: <Store className="mr-2 h-4 w-4" />,
+      },
+      {
+         href: `/${params.storeId}/settings/billing`,
+         label: 'Billing',
+         active: pathname === `/${params.storeId}/settings/billing`,
+         icon: <CreditCard className="mr-2 h-4 w-4" />,
       },
       {
          href: `/${params.storeId}/settings/preferences`,

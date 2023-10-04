@@ -40,7 +40,7 @@ export function DataTableViewOptions<TData>({
    }, []);
 
    const handleCheckedChange = (columnId: string, value: boolean) => {
-      const savedColumns = localStorage.getItem('columnVisibility') || '{}';
+      const savedColumns = localStorage.getItem(visibilityMapKey) || '{}';
       const parsedColumns = JSON.parse(savedColumns);
       parsedColumns[columnId] = value;
 

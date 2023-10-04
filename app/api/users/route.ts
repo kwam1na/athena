@@ -27,7 +27,7 @@ export async function PATCH(
         }
 
         // update user in auth0
-        const r = await axios.post(`https://dev-cfptovsv0ozskcr0.us.auth0.com/oauth/token`, { client_id: "apg4CiSFNX0r8GptWtSTCwtVqBfGdQBn", client_secret: "XBhvls70BjFGou6pyhw8AbgLaxSj8psdc8Y-3eZ9WKiVOZPTEvEhGlzsizzsVgc-", audience: "https://dev-cfptovsv0ozskcr0.us.auth0.com/api/v2/", grant_type: "client_credentials" })
+        const r = await axios.post(`https://dev-cfptovsv0ozskcr0.us.auth0.com/oauth/token`, { client_id: process.env.AUTH0_CLIENT_ID, client_secret: process.env.AUTH0_CLIENT_SECRET, audience: "https://dev-cfptovsv0ozskcr0.us.auth0.com/api/v2/", grant_type: "client_credentials" })
 
         const { access_token } = r.data;
 

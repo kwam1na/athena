@@ -32,6 +32,7 @@ export default async function SetupLayout({
          data: {
             id: user.sub,
             email: user.email,
+            name: user.name,
          },
       });
    }

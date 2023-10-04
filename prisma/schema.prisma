@@ -18,19 +18,21 @@ model User {
 }
 
 model Store {
-  id            String        @id @default(uuid())
-  name          String
-  currency      String
-  user_id       String
-  billboards    Billboard[]   @relation("StoreToBillboard")
-  categories    Category[]    @relation("StoreToCategory")
-  subcategories Subcategory[] @relation("StoreToSubcategory")
-  products      Product[]     @relation("StoreToProduct")
-  sizes         Size[]        @relation("StoreToSize")
-  colors        Color[]       @relation("StoreToColor")
-  orders        Order[]       @relation("StoreToOrder")
-  created_at    DateTime      @default(now())
-  updated_at    DateTime      @updatedAt
+  id              String            @id @default(uuid())
+  name            String
+  currency        String
+  user_id         String
+  billboards      Billboard[]       @relation("StoreToBillboard")
+  categories      Category[]        @relation("StoreToCategory")
+  subcategories   Subcategory[]     @relation("StoreToSubcategory")
+  products        Product[]         @relation("StoreToProduct")
+  sizes           Size[]            @relation("StoreToSize")
+  colors          Color[]           @relation("StoreToColor")
+  orders          Order[]           @relation("StoreToOrder")
+  created_at      DateTime          @default(now())
+  updated_at      DateTime          @updatedAt
+  TransactionItem TransactionItem[] @relation("StoreToTransactionItem")
+  Transaction     Transaction[]     @relation("StoreToTransaction")
 }
 
 model Billboard {
@@ -116,6 +118,42 @@ model Product {
   @@index([color_id])
 }
 
+model TransactionItem {
+  id               String      @id @default(uuid())
+  user_id          String
+  store_id         String
+  store            Store       @relation("StoreToTransactionItem", fields: [store_id], references: [id])
+  transaction_id   String
+  transaction      Transaction @relation("TransactionToTransactionItem", fields: [transaction_id], references: [id])
+  category_id      String
+  subcategory_id   String
+  product_id       String
+  sku              String
+  product_name     String
+  price            Decimal
+  cost             Decimal
+  units_sold       Int
+  transaction_date DateTime
+  created_at       DateTime    @default(now())
+  updated_at       DateTime    @updatedAt
+
+  @@index([store_id])
+  @@index([transaction_id])
+}
+
+model Transaction {
+  id               String            @id @default(uuid())
+  user_id          String
+  store_id         String
+  store            Store             @relation("StoreToTransaction", fields: [store_id], references: [id])
+  TransactionItem  TransactionItem[] @relation("TransactionToTransactionItem")
+  transaction_date DateTime
+  created_at       DateTime          @default(now())
+  updated_at       DateTime          @updatedAt
+
+  @@index([store_id])
+}
+
 model SKUCounter {
   id             String      @id @default(uuid())
   category_id    String      @map("category_id")
@@ -183,12 +221,13 @@ model Color {
 }
 
 model Image {
-  id         String   @id @default(uuid())
-  productId  String // Foreign Key to Product
-  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
-  url        String // URL of the image
-  created_at DateTime @default(now())
-  updated_at DateTime @updatedAt
+  id                String   @id @default(uuid())
+  productId         String // Foreign Key to Product
+  product           Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  url               String // URL of the image
+  created_at        DateTime @default(now())
+  updated_at        DateTime @updatedAt
+  transactionItemId String?
 
   @@index([productId])
 }

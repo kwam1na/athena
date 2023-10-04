@@ -41,7 +41,7 @@ export const deleteProduct = async (id: string) => {
     })
 }
 
-export const fetchProducts = async (keys: { store_id: string; category_id?: string; color_id?: string; size_id?: string; is_featured?: boolean; is_archived?: boolean }) => {
+export const fetchProducts = async (keys: { store_id: string;[key: string]: any }) => {
     return await prismadb.product.findMany({
         where: keys,
         include: {

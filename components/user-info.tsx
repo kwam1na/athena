@@ -1,33 +1,14 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
-
-import {
-   CreditCard,
-   LogOut,
-   Moon,
-   PlusCircle,
-   Settings,
-   Sun,
-   User,
-} from 'lucide-react';
+import { LogOut } from 'lucide-react';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Button } from '@/components/ui/button';
-import { useUser } from '@auth0/nextjs-auth0/client';
 import { Card, CardContent } from './ui/card';
-import {
-   Tooltip,
-   TooltipContent,
-   TooltipProvider,
-   TooltipTrigger,
-} from './ui/tooltip';
 import { Skeleton } from './ui/skeleton';
 import { useWrappedUser } from '@/providers/wrapped-user-provider';
 
 export function UserInfo() {
-   const { user, error, isLoading } = useUser();
-   const { wrappedUser, isLoading: isLoadingWrappedUser } = useWrappedUser();
+   const { wrappedUser, isLoading } = useWrappedUser();
 
    const name = wrappedUser?.name;
    let fallback;
@@ -54,7 +35,7 @@ export function UserInfo() {
 
                <div className="flex flex-col gap-4">
                   <div className="space-y-2 pl-2">
-                     {isLoadingWrappedUser ? (
+                     {isLoading ? (
                         <>
                            <Skeleton className="h-4 w-[100px]" />
                            <Skeleton className="h-4 w-[80px]" />

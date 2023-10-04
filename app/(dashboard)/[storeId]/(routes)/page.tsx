@@ -36,9 +36,9 @@ const DashboardPage: React.FC<DashboardPageProps> = async ({ params }) => {
    return (
       <div className="flex-col">
          <div className="flex-1 space-y-4 p-8 pt-6">
-            <Heading title="Dashboard" description="Overview of your store" />
-            <Separator />
-            <div className="grid gap-4 grid-cols-3">
+            <Heading title="Dashboard" />
+            {/* <Separator /> */}
+            <div className="grid gap-4 grid-cols-3 pt-4">
                <Card className="bg-background hover:bg-card">
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                      <CardTitle className="text-sm font-medium">

@@ -1,6 +1,6 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 
 import {
    CreditCard,
@@ -26,10 +26,14 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { ThemeToggle } from './theme-toggle';
 import { useUser } from '@auth0/nextjs-auth0/client';
+import { useWrappedUser } from '@/providers/wrapped-user-provider';
+import Link from 'next/link';
 
 export function UserNav() {
-   const { user, error, isLoading } = useUser();
-   const name = user?.name;
+   const params = useParams();
+   const { wrappedUser, isLoading } = useWrappedUser();
+
+   const name = wrappedUser?.name;
    let fallback;
 
    const names = name?.split(' ');
@@ -61,19 +65,36 @@ export function UserNav() {
                <div className="flex flex-col space-y-2">
                   <p className="text-sm font-medium leading-none">{name}</p>
                   <p className="text-xs leading-none text-muted-foreground">
-                     {user?.email}
+                     {wrappedUser?.email}
                   </p>
                </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
-               <Sun className="mr-2 h-[1rem] w-[1rem] rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-               <Moon className="mr-2 absolute h-[1rem] w-[1rem] rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
-               <span>Theme</span>
-               <div className="ml-auto">
-                  <ThemeToggle />
-               </div>
-            </DropdownMenuItem>
+            <DropdownMenuGroup>
+               <Link href={`/${params.storeId}/settings/profile`}>
+                  <DropdownMenuItem className="pt-2 pb-2">
+                     <User className="mr-2 h-4 w-4" />
+                     <span>Profile</span>
+                     <DropdownMenuShortcut>⇧⌘P</DropdownMenuShortcut>
+                  </DropdownMenuItem>
+               </Link>
+               {/* <DropdownMenuItem className="pt-2 pb-2">
+                  <CreditCard className="mr-2 h-4 w-4" />
+                  <span>Billing</span>
+                  <DropdownMenuShortcut>⌘B</DropdownMenuShortcut>
+               </DropdownMenuItem>
+               <DropdownMenuItem className="pt-2 pb-2">
+                  <Settings className="mr-2 h-4 w-4" />
+                  <span>Settings</span>
+                  <DropdownMenuShortcut>⌘S</DropdownMenuShortcut>
+               </DropdownMenuItem>
+               <DropdownMenuItem className="pt-2 pb-2">
+                  <PlusCircle className="mr-2 h-4 w-4" />
+                  <span>New Team</span>
+               </DropdownMenuItem> */}
+            </DropdownMenuGroup>
+            <DropdownMenuSeparator />
+
             <DropdownMenuItem className="pt-2 pb-2">
                <LogOut className="mr-2 h-4 w-4" />
                <a className="w-full h-full" href="/api/auth/logout">

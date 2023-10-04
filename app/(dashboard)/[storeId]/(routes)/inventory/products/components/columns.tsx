@@ -28,6 +28,10 @@ export const columns: ColumnDef<ProductColumn>[] = [
       header: 'Name',
    },
    {
+      accessorKey: 'sku',
+      header: 'SKU',
+   },
+   {
       accessorKey: 'isArchived',
       header: 'Archived',
    },
@@ -60,10 +64,6 @@ export const columns: ColumnDef<ProductColumn>[] = [
       filterFn: (row, id, value) => {
          return value.includes(row.getValue(id));
       },
-   },
-   {
-      accessorKey: 'sku',
-      header: 'SKU',
    },
    {
       accessorKey: 'size',
