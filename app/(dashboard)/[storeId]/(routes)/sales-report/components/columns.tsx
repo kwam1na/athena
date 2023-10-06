@@ -6,8 +6,6 @@ import { CellAction } from './cell-action';
 import { AutoSavedTransaction, TransactionItem } from './client';
 
 export interface TransactionItemColumn extends TransactionItem {
-   priceValue?: string;
-   costValue?: string;
    setTransactionItems: React.Dispatch<React.SetStateAction<TransactionItem[]>>;
    setFormattedItems: React.Dispatch<
       React.SetStateAction<TransactionItemColumn[]>
