@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 
 import { Modal } from '@/components/ui/modal';
 import { Button } from '@/components/ui/button';
+import { LoadingButton } from '../ui/loading-button';
 
 interface AlertModalProps {
    isOpen: boolean;
@@ -43,13 +44,14 @@ export const AlertModal: React.FC<AlertModalProps> = ({
             <Button disabled={loading} variant="outline" onClick={onClose}>
                Cancel
             </Button>
-            <Button
+            <LoadingButton
+               isLoading={loading}
                disabled={loading}
                variant="destructive"
                onClick={onConfirm}
             >
                Continue
-            </Button>
+            </LoadingButton>
          </div>
       </Modal>
    );

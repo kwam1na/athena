@@ -1,16 +1,21 @@
 'use client';
+import * as React from 'react';
 
 import { ColumnDef } from '@tanstack/react-table';
+import { CellAction } from './cell-action';
+import { AutoSavedTransaction, TransactionItem } from './client';
 
-export type TransactionItemColumn = {
-   id: string;
-   sku: string;
-   productName: string;
-   price: string;
-   costPerItem: string;
-   margin: string;
-   unitsSold: number;
-};
+export interface TransactionItemColumn extends TransactionItem {
+   priceValue?: string;
+   costValue?: string;
+   setTransactionItems: React.Dispatch<React.SetStateAction<TransactionItem[]>>;
+   setFormattedItems: React.Dispatch<
+      React.SetStateAction<TransactionItemColumn[]>
+   >;
+   setAutoSavedTransactions: React.Dispatch<
+      React.SetStateAction<AutoSavedTransaction[]>
+   >;
+}
 
 export const columns: ColumnDef<TransactionItemColumn>[] = [
    {
@@ -35,6 +40,10 @@ export const columns: ColumnDef<TransactionItemColumn>[] = [
    },
    {
       accessorKey: 'margin',
-      header: 'Margin',
+      header: 'Margin (%)',
+   },
+   {
+      id: 'actions',
+      cell: ({ row }) => <CellAction data={row.original} />,
    },
 ];

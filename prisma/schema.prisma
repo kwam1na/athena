@@ -148,6 +148,7 @@ model Transaction {
   store            Store             @relation("StoreToTransaction", fields: [store_id], references: [id])
   TransactionItem  TransactionItem[] @relation("TransactionToTransactionItem")
   transaction_date DateTime
+  status           String            @default("draft")
   created_at       DateTime          @default(now())
   updated_at       DateTime          @updatedAt
 

@@ -50,6 +50,7 @@ import {
 import { cn, formatter } from '@/lib/utils';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useStoreCurrency } from '@/providers/currency-provider';
+import { LoadingButton } from '@/components/ui/loading-button';
 
 enum ActionContext {
    NONE,
@@ -775,9 +776,14 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                      )}
                   />
                </div>
-               <Button disabled={loading} className="ml-auto" type="submit">
+               <LoadingButton
+                  isLoading={loading}
+                  disabled={loading}
+                  className="ml-auto"
+                  type="submit"
+               >
                   {action}
-               </Button>
+               </LoadingButton>
             </form>
          </Form>
       </>

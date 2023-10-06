@@ -1,15 +1,12 @@
 import prismadb from '@/lib/prismadb';
 
-import { CategoryForm } from './components/category-form';
 import { SalesReportClient } from '../components/client';
 
-const CategoryPage = async ({
+const SalesReportPage = async ({
    params,
 }: {
    params: { categoryId: string; storeId: string };
 }) => {
-   console.log('params:', params);
-
    // const category = await prismadb.category.findUnique({
    //    where: {
    //       id: params.categoryId,
@@ -25,4 +22,4 @@ const CategoryPage = async ({
    );
 };
 
-export default CategoryPage;
+export default SalesReportPage;

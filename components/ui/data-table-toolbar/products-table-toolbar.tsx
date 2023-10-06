@@ -13,6 +13,7 @@ interface DataTableToolbarProps<TData> {
    searchKey: string;
    table: Table<TData>;
    tableKey: string;
+   placeholder?: string;
    categoryOptions?: {
       label: string;
       value: string;
@@ -29,6 +30,7 @@ export function DataTableToolbar<TData>({
    searchKey,
    table,
    tableKey,
+   placeholder,
    categoryOptions,
    subcategoryOptions,
 }: DataTableToolbarProps<TData>) {
@@ -38,7 +40,7 @@ export function DataTableToolbar<TData>({
       <div className="flex items-center justify-between">
          <div className="flex flex-1 items-center space-x-2">
             <Input
-               placeholder="Filter items..."
+               placeholder={placeholder || 'Filter items...'}
                value={
                   (table.getColumn(searchKey)?.getFilterValue() as string) ?? ''
                }

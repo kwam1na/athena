@@ -4,6 +4,7 @@ import { getSession } from '@auth0/nextjs-auth0';
 import { deleteProduct, getProduct, updateProduct } from '@/lib/repositories/productsRepository';
 import { findStore } from '@/lib/repositories/storesRepository';
 import { createTransactionItem, findTransactionItem, getTransactionItem, updateTransactionItem } from '@/lib/repositories/transactionItemsRepository';
+import { deleteTransaction, getTransaction } from '@/lib/repositories/transactionsRepository';
 
 export async function POST(
     req: NextRequest,
@@ -87,35 +88,37 @@ export async function POST(
 
 export async function GET(
     req: Request,
-    { params }: { params: { productId: string } },
+    { params }: { params: { transactionId: string } },
 ) {
     try {
-        if (!params.productId) {
-            return new NextResponse('Product id is required', { status: 400 });
+        if (!params.transactionId) {
+            return new NextResponse('Transaction id is required', { status: 400 });
         }
 
-        const product = await getProduct(params.productId);
-        return NextResponse.json(product);
+        const transaction = await getTransaction(params.transactionId);
+        return NextResponse.json(transaction);
     } catch (error) {
-        console.log('[PRODUCT_GET]', (error as Error).message);
+        console.log('[TRANSACTION_GET]', (error as Error).message);
         return new NextResponse('Internal error', { status: 500 });
     }
 }
 
 export async function DELETE(
     req: NextRequest,
-    { params }: { params: { productId: string; storeId: string } },
+    { params }: { params: { transactionId: string; storeId: string } },
 ) {
     try {
         const res = new NextResponse();
         const session = await getSession(req, res);
         const user = session?.user
 
+        console.log('params in DELETE:', params)
+
         if (!user) {
             return new NextResponse('Unauthenticated', { status: 403 });
         }
 
-        if (!params.productId) {
+        if (!params.transactionId) {
             return new NextResponse('Product id is required', { status: 400 });
         }
 
@@ -128,11 +131,11 @@ export async function DELETE(
             return new NextResponse('Unauthorized', { status: 405 });
         }
 
-        const product = await deleteProduct(params.productId);
+        const transaction = await deleteTransaction(params.transactionId);
 
-        return NextResponse.json(product, res);
+        return NextResponse.json(transaction, res);
     } catch (error) {
-        console.log('[PRODUCT_DELETE]', (error as Error).message);
+        console.log('[TRANSACTION_DELETE]', (error as Error).message);
         return new NextResponse('Internal error', { status: 500 });
     }
 }
@@ -242,7 +245,7 @@ export async function PATCH(
 
         return NextResponse.json(product);
     } catch (error) {
-        console.log('[PRODUCT_PATCH]', (error as Error).message);
+        console.log('[TRANSACTION_PATCH]', (error as Error).message);
         return new NextResponse('Internal error', { status: 500 });
     }
 }
