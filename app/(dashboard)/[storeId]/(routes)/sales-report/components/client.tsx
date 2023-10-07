@@ -416,8 +416,8 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
       return transactionItems.map((item) => ({
          categoryId: item.categoryId,
          subcategoryId: item.subcategoryId,
-         costPerItem: fmt.format(parseInt(item.cost || '0')),
-         price: fmt.format(parseInt(item.price || '0')),
+         costPerItem: fmt.format(parseFloat(item.cost || '0')),
+         price: fmt.format(parseFloat(item.price || '0')),
          productId: item.productId,
          productName: item.productName,
          sku: item.sku,

@@ -92,8 +92,8 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
       return items.map((item) => ({
          categoryId: item.categoryId,
          subcategoryId: item.subcategoryId,
-         costPerItem: fmt.format(parseInt(item.cost || '0')),
-         price: fmt.format(parseInt(item.price || '0')),
+         costPerItem: fmt.format(parseFloat(item.cost || '0')),
+         price: fmt.format(parseFloat(item.price || '0')),
          productId: item.productId,
          productName: item.productName,
          sku: item.sku,
@@ -102,8 +102,8 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
          transactionDate: item.transactionDate,
          transactionId: item.transactionId,
          margin: (
-            ((parseInt(item.price || '0') - parseInt(item.cost || '0')) /
-               parseInt(item.price || '0')) *
+            ((parseFloat(item.price || '0') - parseFloat(item.cost || '0')) /
+               parseFloat(item.price || '0')) *
             100
          ).toFixed(2),
          setTransactionItems,
