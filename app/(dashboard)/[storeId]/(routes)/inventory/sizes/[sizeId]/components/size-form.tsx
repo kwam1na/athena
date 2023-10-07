@@ -23,6 +23,7 @@ import { Separator } from '@/components/ui/separator';
 import { Heading } from '@/components/ui/heading';
 import { AlertModal } from '@/components/modals/alert-modal';
 import { useToast } from '@/components/ui/use-toast';
+import { LoadingButton } from '@/components/ui/loading-button';
 
 const formSchema = z.object({
    name: z.string().min(1),
@@ -167,9 +168,14 @@ export const SizeForm: React.FC<SizeFormProps> = ({ initialData }) => {
                      )}
                   />
                </div>
-               <Button disabled={loading} className="ml-auto" type="submit">
+               <LoadingButton
+                  isLoading={loading}
+                  disabled={loading}
+                  className="ml-auto"
+                  type="submit"
+               >
                   {action}
-               </Button>
+               </LoadingButton>
             </form>
          </Form>
       </>

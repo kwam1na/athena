@@ -2,14 +2,16 @@
 
 import { Modal } from '@/components/ui/modal';
 import { Button } from '@/components/ui/button';
+import { LoadingButton } from '../ui/loading-button';
 
 interface ActionModalProps {
    isOpen: boolean;
    title: string;
    description: string;
    onClose: () => void;
-   onConfirm: () => void;
-   loading: boolean;
+   onConfirm?: () => void;
+   confirmButtonDisabled?: boolean;
+   loading?: boolean;
    children?: React.ReactNode;
 }
 
@@ -19,6 +21,7 @@ export const ActionModal: React.FC<ActionModalProps> = ({
    description,
    onClose,
    onConfirm,
+   confirmButtonDisabled,
    loading,
    children,
 }) => {
@@ -34,9 +37,15 @@ export const ActionModal: React.FC<ActionModalProps> = ({
             <Button disabled={loading} variant="outline" onClick={onClose}>
                Cancel
             </Button>
-            {/* <Button disabled={loading} onClick={onConfirm}>
-               Continue
-            </Button> */}
+            {onConfirm && (
+               <LoadingButton
+                  isLoading={loading || false}
+                  disabled={loading || confirmButtonDisabled}
+                  onClick={onConfirm}
+               >
+                  Continue
+               </LoadingButton>
+            )}
          </div>
       </Modal>
    );

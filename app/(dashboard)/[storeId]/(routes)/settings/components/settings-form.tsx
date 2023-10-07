@@ -35,6 +35,7 @@ import { currencies } from '@/lib/constants';
 import { useToast } from '@/components/ui/use-toast';
 import { revalidatePath } from 'next/cache';
 import { useStoreCurrency } from '@/providers/currency-provider';
+import { LoadingButton } from '@/components/ui/loading-button';
 
 const formSchema = z.object({
    name: z.string().min(2),
@@ -175,9 +176,14 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ initialData }) => {
                      )}
                   />
                </div>
-               <Button disabled={loading} className="ml-auto" type="submit">
+               <LoadingButton
+                  isLoading={loading}
+                  disabled={loading}
+                  className="ml-auto"
+                  type="submit"
+               >
                   Save changes
-               </Button>
+               </LoadingButton>
             </form>
          </Form>
          <Separator />

@@ -31,6 +31,7 @@ import {
 } from '@/components/ui/select';
 import { useToast } from '@/components/ui/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { LoadingButton } from '@/components/ui/loading-button';
 
 const formSchema = z.object({
    name: z.string().min(2),
@@ -286,9 +287,14 @@ export const SubategoryForm: React.FC<SubcategoryFormProps> = ({
                      )}
                   /> */}
                </div>
-               <Button disabled={loading} className="ml-auto" type="submit">
+               <LoadingButton
+                  isLoading={loading}
+                  disabled={loading}
+                  className="ml-auto"
+                  type="submit"
+               >
                   {action}
-               </Button>
+               </LoadingButton>
             </form>
          </Form>
       </>

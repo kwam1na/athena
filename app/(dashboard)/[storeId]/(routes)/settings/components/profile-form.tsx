@@ -35,6 +35,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { useUser } from '@auth0/nextjs-auth0/client';
 import { Claims } from '@auth0/nextjs-auth0';
 import { useWrappedUser } from '@/providers/wrapped-user-provider';
+import { LoadingButton } from '@/components/ui/loading-button';
 
 const formSchema = z.object({
    name: z.string().min(1),
@@ -220,13 +221,14 @@ export const ProfileForm: React.FC<ProfileFormProps> = ({ initialData }) => {
                      )}
                   /> */}
                      </div>
-                     <Button
+                     <LoadingButton
+                        isLoading={componentsLoading}
                         disabled={componentsLoading}
                         className="ml-auto"
                         type="submit"
                      >
                         Save changes
-                     </Button>
+                     </LoadingButton>
                   </form>
                </Form>
             </>

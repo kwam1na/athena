@@ -33,15 +33,14 @@ import {
    AlertCircle,
    ArrowLeft,
    Calendar,
-   LineChart,
-   Pen,
+   DollarSign,
+   PackageCheck,
    Plus,
    PlusCircle,
    Save,
    Search,
    Send,
    Trash,
-   X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -71,9 +70,11 @@ import {
    autoSaveIsInSync,
    getAutoSavedTransactions,
    getAutosavedReportTitle,
-   getDraftTransaction,
+   getCategorySalesAndUnits,
    getDraftTransactions,
    getLocalStorageKey,
+   getTotalSales,
+   getTotalUnitsSold,
    removeDraftTransaction,
    saveItemInLocalStorage,
    updateDraftTransactions,
@@ -96,12 +97,14 @@ enum ProductQueryResultType {
 
 interface ProductQueryResult {
    category_id?: string;
+   category?: Record<string, any>;
    cost?: string;
    inventoryCount?: number;
    price?: string;
    product_id?: string;
    product_name?: string;
    sku?: string;
+   subcategory?: Record<string, any>;
    subcategory_id?: string;
    type: ProductQueryResultType;
 }
@@ -113,6 +116,7 @@ export interface Transaction {
 }
 
 export interface TransactionItem {
+   category?: string;
    categoryId?: string;
    createdAt?: string;
    cost?: string;
@@ -120,6 +124,7 @@ export interface TransactionItem {
    price?: string;
    productId?: string;
    productName?: string;
+   subcategory?: string;
    subcategoryId?: string;
    sku?: string;
    storeId?: string;
@@ -131,6 +136,7 @@ export interface TransactionItem {
 }
 
 export interface TransactionItemBody {
+   category?: string;
    category_id?: string;
    cost?: string;
    price?: string;
@@ -138,6 +144,7 @@ export interface TransactionItemBody {
    product_name?: string;
    sku?: string;
    store_id?: string;
+   subcategory?: string;
    subcategory_id?: string;
    transaction_date?: Date;
    transaction_id?: string;
@@ -192,6 +199,7 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
    const [isEditingReportTitle, setIsEditingReportTitle] = useState(false);
    const [isAddingTransactionItem, setIsAddingTransactionItem] =
       useState(false);
+   const [isPublishingReport, setIsPublishingReport] = useState(false);
 
    const [searchResult, setSearchResult] = useState<
       ProductQueryResult | undefined
@@ -287,7 +295,9 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
       product_name: searchResult?.product_name,
       product_id: searchResult?.product_id,
       sku: searchResult?.sku,
+      category: searchResult?.category?.name,
       category_id: searchResult?.category_id,
+      subcategory: searchResult?.subcategory?.name,
       subcategory_id: searchResult?.subcategory_id,
       price: searchResult?.price,
       cost: searchResult?.cost,
@@ -307,7 +317,9 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
       reportTitle: string,
    ) => {
       return {
+         category: draftTransactionItem.category,
          categoryId: draftTransactionItem.category_id,
+         subcategory: draftTransactionItem.subcategory,
          subcategoryId: draftTransactionItem.subcategory_id,
          cost: draftTransactionItem.cost,
          price: draftTransactionItem.price,
@@ -330,6 +342,7 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
       setTransactionItems([]);
       setFormattedItems([]);
       setSearchResult(undefined);
+      setIsSearching(false);
       setEnteredReportTitle(undefined);
       setDate(new Date());
       form.reset();
@@ -531,6 +544,8 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
    ) => {
       const { transactionItems } = transaction;
 
+      setIsSearching(false);
+      setSearchResult(undefined);
       setTransaction(transaction);
       setDate(transaction.transactionDate || new Date());
       setEnteredReportTitle(transaction.reportTitle);
@@ -830,6 +845,8 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
    const displayProductInfo =
       !searching && searchResult?.type === ProductQueryResultType.OK;
 
+   const categorySales = getCategorySalesAndUnits(transactionItems);
+
    const Alerts = () => {
       return (
          <>
@@ -892,6 +909,7 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
                <Button
                   variant={'outline'}
                   onClick={() => setIsAutoSaveModalOpen(true)}
+                  disabled={isPublishingReport}
                >
                   <Save className="mr-2 h-4 w-4" />{' '}
                   {`Autosaved reports (${autoSavedTransactions.length})`}
@@ -902,6 +920,7 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
                <Button
                   variant={'destructive'}
                   onClick={() => setIsAlertModalOpen(true)}
+                  disabled={isPublishingReport}
                >
                   <Trash className="mr-2 h-4 w-4" /> Discard
                </Button>
@@ -909,14 +928,18 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
 
             <LoadingButton
                variant={'outline'}
-               onClick={() => setIsAutoSaveModalOpen(true)}
-               disabled={alertMessages.length != 0}
-               isLoading={false}
+               onClick={() => setIsPublishingReport(true)}
+               disabled={alertMessages.length != 0 || isPublishingReport}
+               isLoading={isPublishingReport}
             >
-               <Send className="mr-2 h-4 w-4" />
+               {!isPublishingReport && <Send className="mr-2 h-4 w-4" />}
                Publish
             </LoadingButton>
-            <Button variant={'outline'} onClick={createNewReport}>
+            <Button
+               variant={'outline'}
+               onClick={createNewReport}
+               disabled={isPublishingReport}
+            >
                <PlusCircle className="mr-2 h-4 w-4" />
                New
             </Button>
@@ -931,6 +954,7 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
                <Button
                   variant={'outline'}
                   onClick={() => setIsEditingReportTitle(true)}
+                  disabled={isPublishingReport}
                >
                   Edit
                </Button>
@@ -966,8 +990,6 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
             title="Autosaved reports"
             description="Continue working on an unpublished report"
             onClose={() => setIsAutoSaveModalOpen(false)}
-            onConfirm={() => console.log('nahh')}
-            loading={false}
          >
             <div className="flex flex-col space-y-4">
                <AutoSavedReports />
@@ -984,7 +1006,11 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
             loading={isDeletingReport}
          />
          <div className="flex">
-            <Button variant={'outline'} onClick={onGoBack}>
+            <Button
+               variant={'outline'}
+               onClick={onGoBack}
+               disabled={isPublishingReport}
+            >
                <ArrowLeft className="mr-2 h-4 w-4" />
             </Button>
          </div>
@@ -1016,7 +1042,8 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
                                        <Input
                                           disabled={
                                              searching ||
-                                             isAddingTransactionItem
+                                             isAddingTransactionItem ||
+                                             isPublishingReport
                                           }
                                           placeholder="Enter product SKU..."
                                           {...field}
@@ -1030,7 +1057,11 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
 
                         <Button
                            type="submit"
-                           disabled={searching || isAddingTransactionItem}
+                           disabled={
+                              searching ||
+                              isAddingTransactionItem ||
+                              isPublishingReport
+                           }
                         >
                            <Search className="mr-2 h-4 w-4" /> Search
                         </Button>
@@ -1111,7 +1142,8 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
                                                 type="submit"
                                                 disabled={
                                                    isAddingTransactionItem ||
-                                                   date == undefined
+                                                   date == undefined ||
+                                                   isPublishingReport
                                                 }
                                                 isLoading={
                                                    isAddingTransactionItem
@@ -1150,6 +1182,7 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
                            className="mt-8 space-x-2"
                            variant={dateButtonVariant}
                            onClick={toggleDatePicker}
+                           disabled={isPublishingReport}
                         >
                            <Calendar className="w-4 h-4 text-muted-foreground" />
                            <p>{date && `${format(date, 'MMMM dd, yyyy')}`}</p>
@@ -1168,6 +1201,7 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
                      className="mt-8 space-x-2"
                      variant={'outline'}
                      onClick={() => setShowDatePicker(false)}
+                     disabled={isPublishingReport}
                   >
                      Cancel
                   </Button>
@@ -1175,11 +1209,9 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
             )}
          </div>
 
-         {transaction && <Separator />}
-
-         <div className="flex justify-between gap-24 pt-4">
+         <div className="flex justify-between gap-24 pt-4 w-full">
             {transaction && (
-               <div className="w-[70%] space-y-4">
+               <div className="w-full space-y-4">
                   <div className="flex gap-4 items-center">
                      <TooltipProvider>
                         <Tooltip>
@@ -1198,6 +1230,7 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
                                  {isEditingReportTitle && (
                                     <Input
                                        placeholder="Enter report title..."
+                                       disabled={isPublishingReport}
                                        onChange={(e) =>
                                           setEnteredReportTitle(e.target.value)
                                        }
@@ -1215,13 +1248,107 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
                      <ReportTitleActionButtons />
                   </div>
 
-                  <DataTableToolbar
-                     searchKey="productName"
-                     tableKey="subcategories"
-                     placeholder="Filter transactions..."
-                     table={table}
-                  />
-                  <DataTable table={table} columns={columns} />
+                  <Separator />
+
+                  <div className="flex w-full gap-24">
+                     <div
+                        className={`w-[60%] space-y-4 ${
+                           isPublishingReport
+                              ? 'pointer-events-none opacity-50'
+                              : ''
+                        }`}
+                     >
+                        <span className="text-muted-foreground">
+                           Transactions
+                        </span>
+                        <DataTableToolbar
+                           searchKey="productName"
+                           tableKey="subcategories"
+                           placeholder="Filter transactions..."
+                           table={table}
+                        />
+                        <DataTable table={table} columns={columns} />
+                     </div>
+
+                     <div
+                        className={`space-y-8 w-[40%] pt-2 ${
+                           isPublishingReport
+                              ? 'pointer-events-none opacity-50'
+                              : ''
+                        }`}
+                     >
+                        <span className="text-muted-foreground">
+                           Report summary
+                        </span>
+                        <div className="grid grid-cols-2 space-x-8 pt-6">
+                           <Card>
+                              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                 <CardTitle className="text-sm font-medium">
+                                    Gross Sales
+                                 </CardTitle>
+                                 <DollarSign className="h-4 w-4 text-muted-foreground" />
+                              </CardHeader>
+                              <CardContent>
+                                 <div className="text-2xl font-bold">
+                                    {fmt.format(
+                                       getTotalSales(transactionItems),
+                                    )}
+                                 </div>
+                              </CardContent>
+                           </Card>
+
+                           <Card>
+                              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                 <CardTitle className="text-sm font-medium">
+                                    Total Units Sold
+                                 </CardTitle>
+                                 <PackageCheck className="h-4 w-4 text-muted-foreground" />
+                              </CardHeader>
+                              <CardContent>
+                                 <div className="text-2xl font-bold">
+                                    {getTotalUnitsSold(transactionItems)}
+                                 </div>
+                              </CardContent>
+                           </Card>
+                        </div>
+
+                        {Object.keys(categorySales).length > 0 && (
+                           <div className="flex flex-col space-y-4">
+                              <span className="text-muted-foreground mb-4">
+                                 Breakdown by categories
+                              </span>
+                              {Object.keys(categorySales).map((item) => {
+                                 return (
+                                    <>
+                                       <div className="flex justify-between">
+                                          <div className="w-1/3">
+                                             <span>{item}</span>
+                                          </div>
+                                          <div className="w-1/3 text-center">
+                                             <span>
+                                                {categorySales[item].unitsSold >
+                                                1
+                                                   ? `${categorySales[item].unitsSold} units`
+                                                   : `${categorySales[item].unitsSold} unit`}
+                                             </span>
+                                          </div>
+                                          <div className="w-1/3 text-right">
+                                             <span>
+                                                {fmt.format(
+                                                   categorySales[item]
+                                                      .totalSales,
+                                                )}
+                                             </span>
+                                          </div>
+                                       </div>
+                                       <Separator />
+                                    </>
+                                 );
+                              })}
+                           </div>
+                        )}
+                     </div>
+                  </div>
                </div>
             )}
          </div>

@@ -24,6 +24,7 @@ import { Heading } from '@/components/ui/heading';
 import { AlertModal } from '@/components/modals/alert-modal';
 import { useToast } from '@/components/ui/use-toast';
 import { ColorPicker } from '@/components/ui/color-picker';
+import { LoadingButton } from '@/components/ui/loading-button';
 
 const formSchema = z.object({
    name: z.string().min(2),
@@ -187,9 +188,14 @@ export const ColorForm: React.FC<ColorFormProps> = ({ initialData }) => {
                      )}
                   />
                </div>
-               <Button disabled={loading} className="ml-auto" type="submit">
+               <LoadingButton
+                  isLoading={loading}
+                  disabled={loading}
+                  className="ml-auto"
+                  type="submit"
+               >
                   {action}
-               </Button>
+               </LoadingButton>
             </form>
          </Form>
       </>

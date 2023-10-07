@@ -16,9 +16,16 @@ import {
 
 import { TransactionItemColumn } from './columns';
 import { useToast } from '@/components/ui/use-toast';
-import { getDraftTransactions, getLocalStorageKey } from '../utils';
+import {
+   getDraftTransactions,
+   getLocalStorageKey,
+   saveItemInLocalStorage,
+} from '../utils';
 import { formatter, keysToCamelCase } from '@/lib/utils';
 import { useStoreCurrency } from '@/providers/currency-provider';
+import { ActionModal } from '@/components/modals/action-modal';
+import { Input } from '@/components/ui/input';
+import { TransactionItem } from './client';
 
 interface CellActionProps {
    data: TransactionItemColumn;
@@ -26,27 +33,40 @@ interface CellActionProps {
 
 export const CellAction: React.FC<CellActionProps> = ({ data }) => {
    const params = useParams();
+   const [isEditUnitsModalOpen, setIsEditUnitsModalOpen] = useState(false);
+   const [unitsSold, setUnitsSold] = useState<number | undefined>(
+      data.unitsSold,
+   );
 
    const { storeCurrency } = useStoreCurrency();
    const fmt = formatter(storeCurrency);
 
-   const removeTransactionItem = () => {
-      const {
-         transactionDate,
-         productId,
-         transactionId,
-         setFormattedItems,
-         setTransactionItems,
-         setAutoSavedTransactions,
-      } = data;
+   const {
+      transactionDate,
+      productId,
+      transactionId,
+      setFormattedItems,
+      setTransactionItems,
+      setAutoSavedTransactions,
+   } = data;
 
+   const handleTransactionItems = (action: 'update' | 'remove') => {
       if (!productId || !transactionDate || !transactionId) return;
 
       const key = getLocalStorageKey(params.storeId);
-      const draftTransactions = getDraftTransactions(params.storeId);
+      let draftTransactions = getDraftTransactions(params.storeId);
 
-      delete draftTransactions[transactionId][productId];
-      localStorage.setItem(key, JSON.stringify(draftTransactions));
+      if (action === 'update') {
+         if (
+            draftTransactions[transactionId] &&
+            draftTransactions[transactionId][productId]
+         )
+            draftTransactions[transactionId][productId].units_sold = unitsSold;
+      } else if (action === 'remove') {
+         delete draftTransactions[transactionId][productId];
+      }
+
+      saveItemInLocalStorage(key, draftTransactions);
 
       const activeTransaction = draftTransactions[transactionId];
       const transactionItems = Object.keys(activeTransaction).map((key) =>
@@ -55,7 +75,6 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
 
       setTransactionItems(transactionItems);
 
-      // update the autosaved transaction with transactionId to have transactionItems
       setAutoSavedTransactions((prev) => {
          return prev.map((transaction) => {
             if (transaction.id === transactionId) {
@@ -65,13 +84,16 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
          });
       });
 
-      const items = transactionItems.map((item) => ({
+      const items = formatTransactionItems(transactionItems);
+      setFormattedItems(items);
+   };
+
+   const formatTransactionItems = (items: TransactionItem[]) => {
+      return items.map((item) => ({
          categoryId: item.categoryId,
          subcategoryId: item.subcategoryId,
          costPerItem: fmt.format(parseInt(item.cost || '0')),
          price: fmt.format(parseInt(item.price || '0')),
-         priceValue: item.price,
-         costValue: item.cost,
          productId: item.productId,
          productName: item.productName,
          sku: item.sku,
@@ -88,12 +110,46 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
          setFormattedItems,
          setAutoSavedTransactions,
       }));
-
-      setFormattedItems(items);
    };
+
+   const updateUnitsSold = () => {
+      if (!productId || !transactionDate || !transactionId) return;
+      handleTransactionItems('update');
+      setIsEditUnitsModalOpen(false);
+   };
+
+   const removeTransactionItem = () => {
+      if (!productId || !transactionDate || !transactionId) return;
+      handleTransactionItems('remove');
+   };
+
+   const invalidUnitsSold =
+      unitsSold !== undefined && (isNaN(unitsSold) || unitsSold < 1);
 
    return (
       <>
+         <ActionModal
+            isOpen={isEditUnitsModalOpen}
+            title="Edit units sold"
+            description={`Update the units sold for ${data.productName}`}
+            onConfirm={updateUnitsSold}
+            confirmButtonDisabled={invalidUnitsSold}
+            onClose={() => setIsEditUnitsModalOpen(false)}
+         >
+            <div className="flex flex-col gap-4">
+               <Input
+                  type="number"
+                  placeholder="Enter units sold..."
+                  onChange={(e) => setUnitsSold(parseInt(e.target.value))}
+                  value={unitsSold}
+               />
+               {invalidUnitsSold && (
+                  <span className="text-destructive text-xs ml-1">
+                     Number must be greater than or equal to 1
+                  </span>
+               )}
+            </div>
+         </ActionModal>
          <DropdownMenu>
             <DropdownMenuTrigger asChild>
                <Button
@@ -105,7 +161,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
                </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-[160px]">
-               <DropdownMenuItem onClick={() => console.log('ayyye')}>
+               <DropdownMenuItem onClick={() => setIsEditUnitsModalOpen(true)}>
                   <Edit className="mr-2 h-4 w-4" /> Edit units sold
                </DropdownMenuItem>
                <DropdownMenuItem onClick={removeTransactionItem}>

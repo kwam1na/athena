@@ -1,5 +1,5 @@
 import { keysToCamelCase } from "@/lib/utils";
-import { AutoSavedTransaction } from "../components/client";
+import { AutoSavedTransaction, TransactionItem } from "../components/client";
 import { format } from "date-fns";
 
 /**
@@ -115,6 +115,64 @@ export const getDraftTransaction = (storeId: string, transactionId: string): Rec
     const transactions = getDraftTransactions(storeId)
     return transactions[transactionId]
 }
+
+/**
+ * Calculates the total sales from an array of TransactionItems.
+ * @param items - Array of TransactionItem objects
+ * @returns Total sales amount
+ */
+export const getTotalSales = (items: TransactionItem[]): number => {
+    return items.reduce((total, item) => total + (parseFloat(item.price || '0') * (item.unitsSold || 0)), 0);
+};
+
+/**
+ * Calculates the total units sold from an array of TransactionItems.
+ * @param items - Array of TransactionItem objects
+ * @returns Total units sold
+ */
+export const getTotalUnitsSold = (items: TransactionItem[]): number => {
+    return items.reduce((total, item) => total + (item.unitsSold || 0), 0);
+};
+
+/**
+ * Calculates sales amount per product from an array of TransactionItems.
+ * @param items - Array of TransactionItem objects
+ * @returns An object where keys are product names and values are total sales for that product
+ */
+export const getProductSales = (items: TransactionItem[]): Record<string, number> => {
+    const productSales: Record<string, number> = {};
+    items.forEach(item => {
+        const name = item.productName || 'Unknown';
+        productSales[name] = (productSales[name] || 0) + (parseFloat(item.price || '0') * (item.unitsSold || 0));
+    });
+    return productSales;
+};
+
+/**
+ * Calculates sales amount and units sold per category from an array of TransactionItems.
+ * @param items - Array of TransactionItem objects
+ * @returns An object where keys are category IDs and values are total sales for that category
+ */
+export const getCategorySalesAndUnits = (items: TransactionItem[]): Record<string, { totalSales: number, unitsSold: number }> => {
+    const categoryData: Record<string, { totalSales: number, unitsSold: number }> = {};
+
+    items.forEach(item => {
+        const category = item.category || 'Unknown';
+
+        if (!categoryData[category]) {
+            categoryData[category] = { totalSales: 0, unitsSold: 0 };
+        }
+
+        const price = parseFloat(item.price || '0');
+        const units = item.unitsSold || 0;
+
+        categoryData[category].totalSales += price * units;
+        categoryData[category].unitsSold += units;
+    });
+
+    return categoryData;
+};
+
 
 /**
  * Removes a specific draft transaction from local storage.
