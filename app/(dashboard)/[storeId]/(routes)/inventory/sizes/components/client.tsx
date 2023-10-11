@@ -78,7 +78,7 @@ export const SizesClient: React.FC<SizesClientProps> = ({ data }) => {
             </Button>
          </div>
          <Separator />
-         <DataTableToolbar searchKey="name" table={table} />
+         <DataTableToolbar searchKey="name" table={table} tableKey="sizes" />
          <DataTable columns={columns} table={table} />
       </>
    );

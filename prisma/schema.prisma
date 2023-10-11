@@ -8,33 +8,6 @@ datasource db {
   relationMode = "prisma"
 }
 
-model User {
-  id         String   @id
-  name       String?
-  email      String
-  store_id   String?
-  created_at DateTime @default(now())
-  updated_at DateTime @updatedAt
-}
-
-model Store {
-  id              String            @id @default(uuid())
-  name            String
-  currency        String
-  user_id         String
-  billboards      Billboard[]       @relation("StoreToBillboard")
-  categories      Category[]        @relation("StoreToCategory")
-  subcategories   Subcategory[]     @relation("StoreToSubcategory")
-  products        Product[]         @relation("StoreToProduct")
-  sizes           Size[]            @relation("StoreToSize")
-  colors          Color[]           @relation("StoreToColor")
-  orders          Order[]           @relation("StoreToOrder")
-  created_at      DateTime          @default(now())
-  updated_at      DateTime          @updatedAt
-  TransactionItem TransactionItem[] @relation("StoreToTransactionItem")
-  Transaction     Transaction[]     @relation("StoreToTransaction")
-}
-
 model Billboard {
   id          String        @id @default(uuid())
   store_id    String
@@ -67,104 +40,29 @@ model Category {
   @@index([billboard_id])
 }
 
-model Subcategory {
-  id           String       @id @default(uuid())
-  store_id     String // Foreign Key to Store
-  store        Store        @relation("StoreToSubcategory", fields: [store_id], references: [id])
-  category_id  String // Foreign Key to Category
-  category     Category     @relation("CategoryToSubcategory", fields: [category_id], references: [id], onDelete: Cascade)
-  billboard_id String? // Foreign Key to Billboard
-  billboard    Billboard?   @relation(fields: [billboard_id], references: [id])
-  name         String
-  products     Product[]    @relation("SubcategoryToProduct")
-  created_at   DateTime     @default(now())
-  updated_at   DateTime     @updatedAt
-  // SKUCounter  SKUCounter    @relation("SubcategoryToSKUCounter")
-  SKUCounter   SKUCounter[]
-
-  @@index([store_id])
-  @@index([category_id])
-  @@index([billboard_id])
-}
-
-model Product {
-  id             String      @id @default(uuid())
-  store_id       String // Foreign Key to Store
-  store          Store       @relation("StoreToProduct", fields: [store_id], references: [id])
-  category_id    String // Foreign Key to Category
-  category       Category    @relation("CategoryToProduct", fields: [category_id], references: [id])
-  subcategory_id String // Foreign Key to Subcategory
-  subcategory    Subcategory @relation("SubcategoryToProduct", fields: [subcategory_id], references: [id], onDelete: Cascade)
-  name           String
-  price          Decimal
-  cost_per_item  Decimal
-  count          Int
-  sku            String
-  is_featured    Boolean     @default(false)
-  is_archived    Boolean     @default(false)
-  size_id        String? // Foreign Key to Size
-  size           Size?       @relation(fields: [size_id], references: [id])
-  color_id       String? // Foreign Key to Color
-  color          Color?      @relation(fields: [color_id], references: [id])
-  images         Image[] // Relation to Image model
-  order_items    OrderItem[] // Relation to Order model
-  created_at     DateTime    @default(now())
-  updated_at     DateTime    @updatedAt
-
-  @@index([store_id])
-  @@index([category_id])
-  @@index([subcategory_id])
-  @@index([size_id])
-  @@index([color_id])
-}
-
-model TransactionItem {
-  id               String      @id @default(uuid())
-  user_id          String
-  store_id         String
-  store            Store       @relation("StoreToTransactionItem", fields: [store_id], references: [id])
-  transaction_id   String
-  transaction      Transaction @relation("TransactionToTransactionItem", fields: [transaction_id], references: [id])
-  category_id      String
-  subcategory_id   String
-  product_id       String
-  sku              String
-  product_name     String
-  price            Decimal
-  cost             Decimal
-  units_sold       Int
-  transaction_date DateTime
-  created_at       DateTime    @default(now())
-  updated_at       DateTime    @updatedAt
-
-  @@index([store_id])
-  @@index([transaction_id])
-}
-
-model Transaction {
-  id               String            @id @default(uuid())
-  user_id          String
-  store_id         String
-  store            Store             @relation("StoreToTransaction", fields: [store_id], references: [id])
-  TransactionItem  TransactionItem[] @relation("TransactionToTransactionItem")
-  transaction_date DateTime
-  status           String            @default("draft")
-  created_at       DateTime          @default(now())
-  updated_at       DateTime          @updatedAt
+model Color {
+  id         String    @id @default(uuid())
+  store_id   String // Foreign Key to Store
+  store      Store     @relation("StoreToColor", fields: [store_id], references: [id])
+  name       String
+  value      String
+  products   Product[] // Relation to Product model
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
 
   @@index([store_id])
 }
 
-model SKUCounter {
-  id             String      @id @default(uuid())
-  category_id    String      @map("category_id")
-  subcategory_id String      @map("subcategory_id")
-  last_used      Int         @default(1)
-  category       Category    @relation(fields: [category_id], references: [id])
-  subcategory    Subcategory @relation(fields: [subcategory_id], references: [id], onDelete: Cascade)
+model Image {
+  id                String   @id @default(uuid())
+  productId         String // Foreign Key to Product
+  product           Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  url               String // URL of the image
+  created_at        DateTime @default(now())
+  updated_at        DateTime @updatedAt
+  transactionItemId String?
 
-  @@unique([category_id, subcategory_id])
-  @@index([subcategory_id])
+  @@index([productId])
 }
 
 model Order {
@@ -195,6 +93,37 @@ model OrderItem {
   @@index([product_id])
 }
 
+model Product {
+  id             String      @id @default(uuid())
+  store_id       String // Foreign Key to Store
+  store          Store       @relation("StoreToProduct", fields: [store_id], references: [id])
+  category_id    String // Foreign Key to Category
+  category       Category    @relation("CategoryToProduct", fields: [category_id], references: [id])
+  subcategory_id String // Foreign Key to Subcategory
+  subcategory    Subcategory @relation("SubcategoryToProduct", fields: [subcategory_id], references: [id], onDelete: Cascade)
+  name           String
+  price          Float
+  cost_per_item  Float
+  count          Int
+  sku            String
+  is_featured    Boolean     @default(false)
+  is_archived    Boolean     @default(false)
+  size_id        String? // Foreign Key to Size
+  size           Size?       @relation(fields: [size_id], references: [id])
+  color_id       String? // Foreign Key to Color
+  color          Color?      @relation(fields: [color_id], references: [id])
+  images         Image[] // Relation to Image model
+  order_items    OrderItem[] // Relation to Order model
+  created_at     DateTime    @default(now())
+  updated_at     DateTime    @updatedAt
+
+  @@index([store_id])
+  @@index([category_id])
+  @@index([subcategory_id])
+  @@index([size_id])
+  @@index([color_id])
+}
+
 model Size {
   id         String    @id @default(uuid())
   store_id   String // Foreign Key to Store
@@ -208,27 +137,105 @@ model Size {
   @@index([store_id])
 }
 
-model Color {
-  id         String    @id @default(uuid())
-  store_id   String // Foreign Key to Store
-  store      Store     @relation("StoreToColor", fields: [store_id], references: [id])
-  name       String
-  value      String
-  products   Product[] // Relation to Product model
-  created_at DateTime  @default(now())
-  updated_at DateTime  @updatedAt
+model SKUCounter {
+  id             String      @id @default(uuid())
+  category_id    String      @map("category_id")
+  subcategory_id String      @map("subcategory_id")
+  last_used      Int         @default(1)
+  category       Category    @relation(fields: [category_id], references: [id])
+  subcategory    Subcategory @relation(fields: [subcategory_id], references: [id], onDelete: Cascade)
+
+  @@unique([category_id, subcategory_id])
+  @@index([subcategory_id])
+}
+
+model Store {
+  id              String            @id @default(uuid())
+  name            String
+  currency        String
+  user_id         String
+  billboards      Billboard[]       @relation("StoreToBillboard")
+  categories      Category[]        @relation("StoreToCategory")
+  subcategories   Subcategory[]     @relation("StoreToSubcategory")
+  products        Product[]         @relation("StoreToProduct")
+  sizes           Size[]            @relation("StoreToSize")
+  colors          Color[]           @relation("StoreToColor")
+  orders          Order[]           @relation("StoreToOrder")
+  created_at      DateTime          @default(now())
+  updated_at      DateTime          @updatedAt
+  TransactionItem TransactionItem[] @relation("StoreToTransactionItem")
+  Transaction     Transaction[]     @relation("StoreToTransaction")
+}
+
+model Subcategory {
+  id           String       @id @default(uuid())
+  store_id     String // Foreign Key to Store
+  store        Store        @relation("StoreToSubcategory", fields: [store_id], references: [id])
+  category_id  String // Foreign Key to Category
+  category     Category     @relation("CategoryToSubcategory", fields: [category_id], references: [id], onDelete: Cascade)
+  billboard_id String? // Foreign Key to Billboard
+  billboard    Billboard?   @relation(fields: [billboard_id], references: [id])
+  name         String
+  products     Product[]    @relation("SubcategoryToProduct")
+  created_at   DateTime     @default(now())
+  updated_at   DateTime     @updatedAt
+  // SKUCounter  SKUCounter    @relation("SubcategoryToSKUCounter")
+  SKUCounter   SKUCounter[]
+
+  @@index([store_id])
+  @@index([category_id])
+  @@index([billboard_id])
+}
+
+model Transaction {
+  id                       String            @id @default(uuid())
+  gross_sales              Float?
+  net_sales                Float?
+  units_sold               Int?
+  user_id                  String
+  store_id                 String
+  store                    Store             @relation("StoreToTransaction", fields: [store_id], references: [id])
+  transaction_items        TransactionItem[] @relation("TransactionToTransactionItem")
+  transaction_date         DateTime
+  transaction_report_title String?
+  status                   String            @default("draft")
+  created_at               DateTime          @default(now())
+  updated_at               DateTime          @updatedAt
 
   @@index([store_id])
 }
 
-model Image {
-  id                String   @id @default(uuid())
-  productId         String // Foreign Key to Product
-  product           Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
-  url               String // URL of the image
-  created_at        DateTime @default(now())
-  updated_at        DateTime @updatedAt
-  transactionItemId String?
+model TransactionItem {
+  id                       String      @id @default(uuid())
+  category                 String
+  category_id              String
+  cost                     Float
+  price                    Float
+  product_id               String
+  product_name             String
+  sku                      String
+  store                    Store       @relation("StoreToTransactionItem", fields: [store_id], references: [id])
+  store_id                 String
+  subcategory              String
+  subcategory_id           String
+  transaction              Transaction @relation("TransactionToTransactionItem", fields: [transaction_id], references: [id], onDelete: Cascade)
+  transaction_date         DateTime
+  transaction_id           String
+  transaction_report_title String
+  units_sold               Int
+  user_id                  String
+  created_at               DateTime    @default(now())
+  updated_at               DateTime    @updatedAt
 
-  @@index([productId])
+  @@index([store_id])
+  @@index([transaction_id])
+}
+
+model User {
+  id         String   @id
+  name       String?
+  email      String
+  store_id   String?
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
 }

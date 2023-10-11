@@ -18,6 +18,7 @@ import { AlertModal } from '@/components/modals/alert-modal';
 
 import { SubcategoryColumn } from './columns';
 import { useToast } from '@/components/ui/use-toast';
+import { apiDeleteSubcategory } from '@/lib/api/subcategories';
 
 interface CellActionProps {
    data: SubcategoryColumn;
@@ -33,7 +34,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
    const onConfirm = async () => {
       try {
          setLoading(true);
-         await axios.delete(`/api/${params.storeId}/subcategories/${data.id}`);
+         await apiDeleteSubcategory(data.id, params.storeId);
          toast({
             title: `Category '${data.name} deleted.`,
          });

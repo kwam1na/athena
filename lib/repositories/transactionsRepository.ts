@@ -10,6 +10,9 @@ export const getTransaction = async (id: string) => {
     return await prismadb.transaction.findUnique({
         where: {
             id,
+        },
+        include: {
+            transaction_items: true,
         }
     })
 }
@@ -39,5 +42,8 @@ export const fetchTransactions = async (keys: { store_id: string;[key: string]: 
         orderBy: {
             created_at: 'desc',
         },
+        include: {
+            transaction_items: true
+        }
     });
 }

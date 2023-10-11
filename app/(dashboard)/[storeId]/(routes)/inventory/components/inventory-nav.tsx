@@ -16,27 +16,27 @@ export function InventoryNav({
       {
          href: `/${params.storeId}/inventory/products`,
          label: 'Products',
-         active: pathname === `/${params.storeId}/inventory/products`,
+         active: pathname.includes('/inventory/products'),
       },
       {
          href: `/${params.storeId}/inventory/categories`,
          label: 'Categories',
-         active: pathname === `/${params.storeId}/inventory/categories`,
+         active: pathname.includes('/inventory/categories'),
       },
       {
          href: `/${params.storeId}/inventory/subcategories`,
          label: 'Subcategories',
-         active: pathname === `/${params.storeId}/inventory/subcategories`,
+         active: pathname.includes('/inventory/subcategories'),
       },
       {
          href: `/${params.storeId}/inventory/colors`,
          label: 'Colors',
-         active: pathname === `/${params.storeId}/inventory/colors`,
+         active: pathname.includes('/inventory/colors'),
       },
       {
          href: `/${params.storeId}/inventory/sizes`,
          label: 'Sizes',
-         active: pathname === `/${params.storeId}/inventory/sizes`,
+         active: pathname.includes('/inventory/sizes'),
       },
    ];
 

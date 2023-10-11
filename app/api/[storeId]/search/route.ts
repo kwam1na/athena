@@ -18,10 +18,11 @@ export async function GET(
             return new NextResponse('Unauthenticated', { status: 403 });
         }
 
+        // would like to be able to search by either sku or product name
         const product = await fetchProducts({
             store_id: params.storeId,
             sku: query,
-            // name: query
+            product_name: query,
         })
         return NextResponse.json(product);
     } catch (error) {

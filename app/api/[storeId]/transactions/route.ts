@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { getSession } from '@auth0/nextjs-auth0';
 import { findStore } from '@/lib/repositories/storesRepository';
-import { createTransaction, fetchTransactions } from '@/lib/repositories/transactionsRepository';
+import { createTransaction, fetchTransactions, getTransaction, updateTransaction } from '@/lib/repositories/transactionsRepository';
 
 export async function POST(
     req: NextRequest,
@@ -67,6 +67,57 @@ export async function GET(
         return NextResponse.json(transactions);
     } catch (error) {
         console.log('[TRANSACTION_GET]', (error as Error).message);
+        return new NextResponse('Internal error', { status: 500 });
+    }
+}
+
+export async function PATCH(
+    req: NextRequest,
+    { params }: { params: { storeId: string } },
+) {
+    try {
+        const res = new NextResponse();
+        const session = await getSession(req, res);
+        const user = session?.user
+
+        const body = await req.json();
+
+        const { id, ...newParams } = body
+
+        if (!user) {
+            return new NextResponse('Unauthenticated', { status: 403 });
+        }
+
+        if (!id) {
+            return new NextResponse('Transaction id is required', { status: 400 });
+        }
+
+        if (!body.transaction_report_title) {
+            return new NextResponse('Transaction report title is required', { status: 400 });
+        }
+
+        if (!params.storeId) {
+            return new NextResponse('Store id is required', { status: 400 });
+        }
+
+        const storeByUserId = await findStore({
+            id: params.storeId,
+            user_id: user.sub,
+        });
+
+        if (!storeByUserId) {
+            return new NextResponse('Unauthorized', { status: 405 });
+        }
+
+        const existingTransaction = await updateTransaction(id, newParams)
+
+        if (!existingTransaction) {
+            return new NextResponse('Transaction with id given not found', { status: 404 })
+        }
+
+        return NextResponse.json(existingTransaction, res);
+    } catch (error) {
+        console.log('[TRANSACTION_POST]', (error as Error).message);
         return new NextResponse('Internal error', { status: 500 });
     }
 }

@@ -32,11 +32,13 @@ interface SubcategoriesClientProps {
       value: string;
       icon?: React.ComponentType<{ className?: string }>;
    }[];
+   storeName: string;
 }
 
 export const SubcategoriesClient: React.FC<SubcategoriesClientProps> = ({
    data,
    categoryOptions,
+   storeName,
 }) => {
    const params = useParams();
    const router = useRouter();
@@ -75,7 +77,7 @@ export const SubcategoriesClient: React.FC<SubcategoriesClientProps> = ({
          <div className="flex items-center justify-between">
             <Heading
                title={`Subcategories`}
-               description="Manage subcategories for your store"
+               description={`Manage subcategories for ${storeName}`}
             />
             <Button
                onClick={() =>

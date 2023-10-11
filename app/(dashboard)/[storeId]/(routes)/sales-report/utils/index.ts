@@ -1,5 +1,5 @@
 import { keysToCamelCase } from "@/lib/utils";
-import { AutoSavedTransaction, TransactionItem } from "../components/client";
+import { AutoSavedTransaction, ReportEntryAction, TransactionItem, TransactionWithoutID } from "../components/client";
 import { format } from "date-fns";
 
 /**
@@ -35,13 +35,47 @@ export const autoSaveIsInSync = (
     });
 };
 
+
+/**
+ * Checks if two arrays of TransactionItem objects are in sync.
+ *
+ * @param a - First array of TransactionItem objects.
+ * @param b - Second array of TransactionItem objects.
+ * @returns boolean - True if both arrays are in sync, otherwise false.
+ */
+export const areTransactionItemsInSync = (
+    a: TransactionItem[],
+    b: TransactionItem[],
+): boolean => {
+    if (a.length !== b.length) return false;
+
+    return a.every((aTrans, index) => {
+        const bTrans = b[index];
+        return JSON.stringify(aTrans) === JSON.stringify(bTrans);
+    });
+}
+
+/**
+ * Checks if two TransactionWithoutID objects are in sync.
+ *
+ * @param a - First TransactionWithoutID object.
+ * @param b - Second TransactionWithoutID object.
+ * @returns boolean - True if both objects are in sync, otherwise false.
+ */
+export const areSingleTransactionsInSync = (
+    a: TransactionWithoutID,
+    b: TransactionWithoutID,
+): boolean => {
+    return JSON.stringify(a) === JSON.stringify(b);
+};
+
 /**
  * Fetches autosaved transactions for a given store ID.
  * @param storeId - ID of the store.
  * @returns - An array of AutoSavedTransaction objects.
  */
-export const getAutoSavedTransactions = (storeId: string) => {
-    const draftTransactions = getDraftTransactions(storeId);
+export const getAutoSavedTransactions = (storeId: string, entryAction: ReportEntryAction) => {
+    const draftTransactions = getLocallySavedTransactions(storeId, entryAction);
     let transactions: AutoSavedTransaction[] = [];
 
     if (Object.keys(draftTransactions).length > 0) {
@@ -87,12 +121,21 @@ export const getAutosavedReportTitle = (id: string, reportDate?: Date) => {
 };
 
 /**
- * Generates a local storage key for transactions using a store ID.
+ * Generates a local storage key for draft transactions using a store ID.
  * @param storeId - ID of the store.
  * @returns - The generated key.
  */
-export const getLocalStorageKey = (storeId: string) => {
+export const getDraftsLocalStorageKey = (storeId: string) => {
     return `transactions-${storeId}`;
+};
+
+/**
+ * Generates a local storage key for transactions being edited using a store ID.
+ * @param storeId - ID of the store.
+ * @returns - The generated key.
+ */
+export const getEditsLocalStorageKey = (storeId: string) => {
+    return `transactions-editing-${storeId}`;
 };
 
 /**
@@ -100,8 +143,8 @@ export const getLocalStorageKey = (storeId: string) => {
  * @param storeId - ID of the store.
  * @returns - Object containing draft transactions.
  */
-export const getDraftTransactions = (storeId: string): Record<string, any> => {
-    const key = getLocalStorageKey(storeId);
+export const getLocallySavedTransactions = (storeId: string, entryAction: ReportEntryAction): Record<string, any> => {
+    const key = entryAction == 'new' ? getDraftsLocalStorageKey(storeId) : getEditsLocalStorageKey(storeId);
     return JSON.parse(localStorage.getItem(key) || '{}');
 };
 
@@ -111,8 +154,8 @@ export const getDraftTransactions = (storeId: string): Record<string, any> => {
  * @param transactionId - ID of the transaction.
  * @returns - Object containing the draft transaction.
  */
-export const getDraftTransaction = (storeId: string, transactionId: string): Record<string, any> => {
-    const transactions = getDraftTransactions(storeId)
+export const getLocallySavedTransaction = (storeId: string, entryAction: ReportEntryAction, transactionId: string): Record<string, any> => {
+    const transactions = getLocallySavedTransactions(storeId, entryAction)
     return transactions[transactionId]
 }
 
@@ -123,6 +166,18 @@ export const getDraftTransaction = (storeId: string, transactionId: string): Rec
  */
 export const getTotalSales = (items: TransactionItem[]): number => {
     return items.reduce((total, item) => total + (parseFloat(item.price || '0') * (item.unitsSold || 0)), 0);
+};
+
+
+/**
+ * Calculates the total sales from an array of TransactionItems.
+ * @param items - Array of TransactionItem objects
+ * @returns Total sales amount
+ */
+export const getNetSales = (items: TransactionItem[]): number => {
+    const totalSales = getTotalSales(items);
+    const totalCost = items.reduce((total, item) => total + (parseFloat(item.cost || '0') * (item.unitsSold || 0)), 0);
+    return totalSales - totalCost
 };
 
 /**
@@ -179,9 +234,9 @@ export const getCategorySalesAndUnits = (items: TransactionItem[]): Record<strin
  * @param storeId - ID of the store.
  * @param transactionId - ID of the transaction.
  */
-export const removeDraftTransaction = (storeId: string, transactionId: string) => {
-    const key = getLocalStorageKey(storeId);
-    const draftTransactions = getDraftTransactions(storeId);
+export const removeLocallySavedTransaction = (storeId: string, entryAction: ReportEntryAction, transactionId: string) => {
+    const key = entryAction == 'new' ? getDraftsLocalStorageKey(storeId) : getEditsLocalStorageKey(storeId);
+    const draftTransactions = getLocallySavedTransactions(storeId, entryAction);
     delete draftTransactions[transactionId];
     saveItemInLocalStorage(key, draftTransactions);
 };
@@ -201,10 +256,10 @@ export const saveItemInLocalStorage = (key: string, data: Record<string, any>) =
  * @param transactionId - ID of the transaction.
  * @param updatedTransaction - The updated transaction data.
  */
-export const updateDraftTransactions = (storeId: string, transactionId: string, updatedTransaction: Record<string, any>) => {
-    const transactions = getDraftTransactions(storeId)
+export const updateLocallySavedTransaction = (storeId: string, entryAction: ReportEntryAction, transactionId: string, updatedTransaction: Record<string, any>) => {
+    const transactions = getLocallySavedTransactions(storeId, entryAction)
     transactions[transactionId] = updatedTransaction
-    const key = getLocalStorageKey(storeId);
+    const key = entryAction == 'new' ? getDraftsLocalStorageKey(storeId) : getEditsLocalStorageKey(storeId);
     localStorage.setItem(key, JSON.stringify(transactions))
 }
 

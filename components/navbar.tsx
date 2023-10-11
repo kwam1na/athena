@@ -6,6 +6,7 @@ import { ThemeToggle } from '@/components/theme-toggle';
 import prismadb from '@/lib/prismadb';
 import { UserNav } from './user-nav';
 import { getSession } from '@auth0/nextjs-auth0';
+import { AppNav } from './app-nav';
 
 const Navbar = async () => {
    const session = await getSession();
@@ -24,12 +25,15 @@ const Navbar = async () => {
    });
 
    return (
-      <div className="border-b h-16">
+      <div className="border-b pb-4">
          <div className="flex flex-col mt-8 ml-8 gap-6">
             <div className="flex">
-               <div className="flex gap-4 items-center">
-                  <p className="border-r w-16">athena</p>
-                  <StoreSwitcher items={stores} />
+               <div className="flex flex-col gap-4">
+                  <div className="flex gap-4 items-center">
+                     <p className="border-r w-16">athena</p>
+                     <StoreSwitcher items={stores} />
+                  </div>
+                  <AppNav />
                </div>
                <div className="ml-auto mr-8">
                   <UserNav />

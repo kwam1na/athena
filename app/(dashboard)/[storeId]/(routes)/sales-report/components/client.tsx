@@ -34,6 +34,7 @@ import {
    ArrowLeft,
    Calendar,
    DollarSign,
+   Info,
    PackageCheck,
    Plus,
    PlusCircle,
@@ -41,10 +42,11 @@ import {
    Search,
    Send,
    Trash,
+   XCircle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Control, FieldValues, useForm } from 'react-hook-form';
+import { useForm, SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
    Form,
@@ -52,10 +54,11 @@ import {
    FormDescription,
    FormField,
    FormItem,
+   FormLabel,
    FormMessage,
 } from '@/components/ui/form';
 import axios from 'axios';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, usePathname, useRouter } from 'next/navigation';
 import { CalendarDatePicker } from '@/components/ui/date-picker';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useStoreCurrency } from '@/providers/currency-provider';
@@ -71,13 +74,16 @@ import {
    getAutoSavedTransactions,
    getAutosavedReportTitle,
    getCategorySalesAndUnits,
-   getDraftTransactions,
-   getLocalStorageKey,
+   getLocallySavedTransactions,
+   getDraftsLocalStorageKey,
+   getNetSales,
    getTotalSales,
    getTotalUnitsSold,
-   removeDraftTransaction,
+   removeLocallySavedTransaction,
    saveItemInLocalStorage,
-   updateDraftTransactions,
+   updateLocallySavedTransaction,
+   getEditsLocalStorageKey,
+   areTransactionItemsInSync,
 } from '../utils';
 import { TooltipProvider } from '@radix-ui/react-tooltip';
 import {
@@ -85,9 +91,31 @@ import {
    TooltipContent,
    TooltipTrigger,
 } from '@/components/ui/tooltip';
+import {
+   Table,
+   TableBody,
+   TableCell,
+   TableHead,
+   TableHeader,
+   TableRow,
+} from '@/components/ui/table';
+import {
+   apiCreateTransaction,
+   apiCreateTransactionItemForTransaction,
+   apiDeleteTransaction,
+   apiUpdateTransaction,
+} from '@/lib/api/transactions';
+import { apiDeleteTransactionItem } from '@/lib/api/transaction-items';
+import { Popover, PopoverTrigger } from '@/components/ui/popover';
+import { PopoverContent } from '@radix-ui/react-popover';
+
+interface IndividualSearchResultProps {
+   index: number;
+   result: ProductQueryResult;
+}
 
 interface SalesReportClientProps {
-   data: TransactionItemColumn[];
+   fetchedTransaction?: Transaction;
 }
 
 enum ProductQueryResultType {
@@ -98,6 +126,7 @@ enum ProductQueryResultType {
 interface ProductQueryResult {
    category_id?: string;
    category?: Record<string, any>;
+   count?: number;
    cost?: string;
    inventoryCount?: number;
    price?: string;
@@ -109,10 +138,19 @@ interface ProductQueryResult {
    type: ProductQueryResultType;
 }
 
+export type ReportEntryAction = 'new' | 'editing';
+
 export interface Transaction {
    id: string;
    reportTitle?: string;
    transactionDate?: Date;
+   transactionItems?: TransactionItem[];
+}
+
+export interface TransactionWithoutID {
+   reportTitle?: string;
+   transactionDate?: Date;
+   transactionItems?: TransactionItem[];
 }
 
 export interface TransactionItem {
@@ -169,15 +207,20 @@ const formSchema = z.object({
    query: z.string().min(1),
 });
 
+const inventoryCountFormSchema = z.object({
+   count: z.coerce.number().min(1),
+});
+
 const transactionItemFormSchema = z.object({
    unitsSold: z.coerce.number().min(1),
 });
 
 type ProductQueryFormValues = z.infer<typeof formSchema>;
 type TransactionItemFormValues = z.infer<typeof transactionItemFormSchema>;
+type InventoryCountFormValues = z.infer<typeof inventoryCountFormSchema>;
 
 export const SalesReportClient: React.FC<SalesReportClientProps> = ({
-   data,
+   fetchedTransaction,
 }) => {
    // table state
    const [sorting, setSorting] = useState<SortingState>([]);
@@ -194,20 +237,36 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
    const [searching, setIsSearching] = useState(false);
    const [showDatePicker, setShowDatePicker] = useState(false);
    const [isAutoSaveModalOpen, setIsAutoSaveModalOpen] = useState(false);
+   const [isUseSavedEditModalOpen, setIsUseSavedEditModalOpen] =
+      useState(false);
    const [isAlertModalOpen, setIsAlertModalOpen] = useState(false);
    const [isDeletingReport, setIsDeletingReport] = useState(false);
    const [isEditingReportTitle, setIsEditingReportTitle] = useState(false);
    const [isAddingTransactionItem, setIsAddingTransactionItem] =
       useState(false);
    const [isPublishingReport, setIsPublishingReport] = useState(false);
+   const [allowForceDelete, setAllowForceDelete] = useState(false);
+   const [isUsingSavedEditedReport, setIsUsingSavedEditedReport] =
+      useState(false);
 
+   const [addingItemButtonStates, setAddingItemButtonStates] = useState<
+      Record<number, boolean>
+   >({});
    const [searchResult, setSearchResult] = useState<
       ProductQueryResult | undefined
    >(undefined);
+   const [searchResults, setSearchResults] = useState<
+      ProductQueryResult[] | undefined
+   >(undefined);
 
-   const [date, setDate] = useState<Date | undefined>(new Date());
+   const [savedEditedTransaction, setSavedEditedTransaction] = useState<
+      Transaction | undefined
+   >(undefined);
+   const [date, setDate] = useState<Date | undefined>(
+      fetchedTransaction?.transactionDate || new Date(),
+   );
    const [transaction, setTransaction] = useState<Transaction | undefined>(
-      undefined,
+      fetchedTransaction || undefined,
    );
    const [transactionItems, setTransactionItems] = useState<TransactionItem[]>(
       [],
@@ -225,16 +284,30 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
    const [dateButtonVariant, setDateButtonVariant] = useState<
       'outline' | 'destructive'
    >('outline');
+   const [alertModalCTAText, setAlertModalCTAText] = useState('Continue');
 
    const params = useParams();
+   const pathName = usePathname();
    const router = useRouter();
    const { toast } = useToast();
 
    const { storeCurrency } = useStoreCurrency();
    const fmt = formatter(storeCurrency);
 
+   const headerText = fetchedTransaction
+      ? 'Edit sales report'
+      : 'Add new sales report';
+
+   const reportEntryAction: ReportEntryAction = fetchedTransaction
+      ? 'editing'
+      : 'new';
+
+   // const [reportFormatCurrency, setReportFormatCurrency] =
+   //    useState(storeCurrency);
+   // const { exchangeRate } = useExchangeRate();
+
    const table = useReactTable({
-      data: data.length > 0 ? data : formattedItems,
+      data: formattedItems,
       columns,
       state: {
          sorting,
@@ -256,7 +329,7 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
       getFacetedUniqueValues: getFacetedUniqueValues(),
    });
 
-   const form = useForm<ProductQueryFormValues>({
+   const searchQueryForm = useForm<ProductQueryFormValues>({
       resolver: zodResolver(formSchema),
       defaultValues: {
          query: '',
@@ -270,12 +343,54 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
       },
    });
 
+   const inventoryCountForm = useForm<InventoryCountFormValues>({
+      resolver: zodResolver(inventoryCountFormSchema),
+      defaultValues: {
+         count: 1,
+      },
+   });
+
+   /**
+    * Check if there is a saved edit and populate the form with it if it exists.
+    * @param {Transaction} fetchedTransaction - The transaction fetched from the server.
+    * @return {boolean} - True if a saved edit exists and was used, otherwise false.
+    */
+   const checkForSavedEdit = (fetchedTransaction: Transaction): boolean => {
+      const savedEditedTransactions = getLocallySavedTransactions(
+         params.storeId,
+         'editing',
+      );
+      const savedEdit = savedEditedTransactions[fetchedTransaction.id];
+
+      if (savedEdit && Object.keys(savedEdit).length > 0) {
+         const savedItems = Object.keys(savedEdit).map((item) =>
+            keysToCamelCase(savedEdit[item]),
+         );
+
+         if (
+            !areTransactionItemsInSync(
+               savedItems,
+               fetchedTransaction.transactionItems || [],
+            )
+         ) {
+            setupFromSavedEdit(savedItems);
+            setIsUseSavedEditModalOpen(true);
+            return true;
+         }
+      }
+
+      return false;
+   };
+
    /**
     * Resets the state variables related to adding a new transaction item.
     */
-   const cleanup = () => {
-      setIsAddingTransactionItem(false);
-      setSearchResult(undefined);
+   const cleanup = (index: number) => {
+      setAddingItemButtonStates({
+         ...addingItemButtonStates,
+         [index]: false,
+      });
+      setSearchResults(undefined);
       transactionItemForm.reset();
    };
 
@@ -291,16 +406,16 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
       date: Date,
       searchResult?: ProductQueryResult,
    ): TransactionItemBody => ({
-      units_sold: data.unitsSold,
-      product_name: searchResult?.product_name,
-      product_id: searchResult?.product_id,
-      sku: searchResult?.sku,
       category: searchResult?.category?.name,
       category_id: searchResult?.category_id,
-      subcategory: searchResult?.subcategory?.name,
-      subcategory_id: searchResult?.subcategory_id,
-      price: searchResult?.price,
       cost: searchResult?.cost,
+      price: searchResult?.price,
+      product_name: searchResult?.product_name,
+      product_id: searchResult?.product_id,
+      subcategory: searchResult?.subcategory?.name,
+      sku: searchResult?.sku,
+      units_sold: data.unitsSold,
+      subcategory_id: searchResult?.subcategory_id,
       transaction_date: date,
    });
 
@@ -341,14 +456,16 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
       setTransaction(undefined);
       setTransactionItems([]);
       setFormattedItems([]);
-      setSearchResult(undefined);
+      setSearchResults(undefined);
       setIsSearching(false);
+      setAllowForceDelete(false);
       setEnteredReportTitle(undefined);
       setDate(new Date());
-      form.reset();
+      searchQueryForm.reset();
 
       const autoSavedTransactionsInLocalStorage = getAutoSavedTransactions(
          params.storeId,
+         reportEntryAction,
       );
       if (
          !autoSaveIsInSync(
@@ -384,10 +501,12 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
 
       try {
          setIsDeletingReport(true);
-         await axios.delete(
-            `/api/${params.storeId}/transactions/${transaction.id}`,
+         await apiDeleteTransaction(transaction.id, params.storeId);
+         removeLocallySavedTransaction(
+            params.storeId,
+            reportEntryAction,
+            transaction.id,
          );
-         removeDraftTransaction(params.storeId, transaction.id);
          setIsAlertModalOpen(false);
          toast({
             title: 'Report deleted successfully.',
@@ -395,16 +514,127 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
          router.refresh();
          createNewReport();
       } catch (error) {
-         console.error(
+         console.log(
             '[ADD_NEW_SALES_REPORT_ERROR] Error deleting transaction:',
             error,
          );
+
+         const { data } = (error as any).response;
+         const { errorCode } = data;
+         console.log(errorCode);
+
+         let errorMessage = 'An error occured deleting this report. Try again.';
+         if (errorCode === 'P2025') {
+            errorMessage =
+               'An error occured deleting this report. You can try again by force-deleting it.';
+            setAllowForceDelete(true);
+            setAlertModalCTAText('Force delete');
+         }
+
          toast({
-            title: 'An error occured deleting this report. Try again.',
+            title: errorMessage,
          });
       } finally {
          setIsDeletingReport(false);
       }
+   };
+
+   /**
+    * Deletes a list of TransactionItems from the database by their IDs.
+    *
+    * @param itemIDs - The array of IDs for the TransactionItems to be deleted.
+    */
+   const deleteTransactionItems = async (itemIDs: string[]) => {
+      await Promise.all(
+         itemIDs.map((id) => apiDeleteTransactionItem(id, params.storeId)),
+      );
+   };
+
+   /**
+    * Discards the saved edited report and sets up state to use the fetched transaction.
+    */
+   const discardSavedEditedReport = () => {
+      if (!fetchedTransaction) return;
+      removeLocallySavedTransaction(
+         params.storeId,
+         'editing',
+         fetchedTransaction.id,
+      );
+
+      setIsUseSavedEditModalOpen(false);
+      setIsUsingSavedEditedReport(false);
+
+      setDate(fetchedTransaction.transactionDate || new Date());
+      setTransactionItems(fetchedTransaction.transactionItems || []);
+      setEnteredReportTitle(fetchedTransaction.reportTitle);
+      const tableItems = getFormattedItemsForTable(
+         fetchedTransaction.transactionItems || [],
+      );
+      setFormattedItems(tableItems);
+
+      // set up a local copy for this edit
+      const key = getEditsLocalStorageKey(params.storeId);
+      const draftItems = fetchedTransaction.transactionItems?.map((item) =>
+         keysToSnakeCase(item),
+      );
+
+      const products: Record<string, any> = {};
+      draftItems?.forEach((item) => {
+         products[item.product_id] = item;
+      });
+
+      const savedEditedTransactions = getLocallySavedTransactions(
+         params.storeId,
+         'editing',
+      );
+      savedEditedTransactions[fetchedTransaction.id] = products;
+
+      saveItemInLocalStorage(key, savedEditedTransactions);
+   };
+
+   /**
+    * Identifies TransactionItems that are present in the fetched transaction but missing in the current state.
+    * These are the items to be removed.
+    *
+    * @param fetchedTransactionItems - The list of TransactionItems fetched from the database
+    * @param currentTransactionItems - The current list of TransactionItems being edited
+    * @returns An array of IDs that identifies which items should be removed from the database
+    */
+   const findTransactionItemsToRemove = (
+      fetchedTransactionItems: TransactionItem[] | undefined,
+      currentTransactionItems: TransactionItem[],
+   ): string[] => {
+      const currentIds = new Set(
+         currentTransactionItems.map((item) => item.id),
+      );
+      const itemsToRemove: string[] = [];
+
+      fetchedTransactionItems?.forEach((fetchedItem) => {
+         if (!currentIds.has(fetchedItem.id)) {
+            itemsToRemove.push(fetchedItem.id || '');
+         }
+      });
+
+      return itemsToRemove;
+   };
+
+   /**
+    * Removes the draft transaction stored in local storage for the current transaction report.
+    */
+   const forceDeleteReport = () => {
+      if (!transaction) return;
+      removeLocallySavedTransaction(
+         params.storeId,
+         reportEntryAction,
+         transaction.id,
+      );
+      setIsAlertModalOpen(false);
+      setAllowForceDelete(false);
+      toast({
+         title: 'Report deleted successfully.',
+      });
+      router.refresh();
+      createNewReport();
    };
 
    /**
@@ -430,6 +660,7 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
                parseInt(item.price || '0')) *
             100
          ).toFixed(2),
+         reportEntryAction,
          setTransactionItems,
          setFormattedItems,
          setAutoSavedTransactions,
@@ -476,21 +707,17 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
       draftTransactions: any,
       draftTransactionKey: string,
    ) => {
-      const transactionRequest = await axios.post(
-         `/api/${params.storeId}/transactions`,
-         { transaction_date: date },
-      );
+      const transactionRequest = await apiCreateTransaction(params.storeId, {
+         transaction_date: date,
+      });
 
-      const reportTitle = getAutosavedReportTitle(
-         transactionRequest.data.id,
-         date,
-      );
+      const reportTitle = getAutosavedReportTitle(transactionRequest.id, date);
 
       updateStateAfterTransaction({ transactionRequest, reportTitle });
       saveDraftTransaction({
          draftTransactions,
          draftTransactionKey,
-         transactionId: transactionRequest.data.id,
+         transactionId: transactionRequest.id,
          body,
          reportTitle,
       });
@@ -502,18 +729,30 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
     */
    const handleSubmitTransactionItem = async (
       data: TransactionItemFormValues,
+      result: ProductQueryResult,
+      index: number,
    ) => {
       if (!date) return;
 
-      const draftTransactionKey = getLocalStorageKey(params.storeId);
-      const draftTransactions = getDraftTransactions(params.storeId);
+      const draftTransactionKey =
+         reportEntryAction === 'new'
+            ? getDraftsLocalStorageKey(params.storeId)
+            : getEditsLocalStorageKey(params.storeId);
+      const draftTransactions = getLocallySavedTransactions(
+         params.storeId,
+         reportEntryAction,
+      );
 
-      const body = createBody(data, date, searchResult);
+      const body = createBody(data, date, result);
 
       try {
-         setIsAddingTransactionItem(true);
+         setAddingItemButtonStates({
+            ...addingItemButtonStates,
+            [index]: true,
+         });
 
          if (!transaction) {
+            console.log('adding new transaction..');
             await handleNewTransaction(
                body,
                date,
@@ -521,6 +760,7 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
                draftTransactionKey,
             );
          } else {
+            console.log('using existing..');
             handleExistingTransaction(
                body,
                transaction,
@@ -530,8 +770,12 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
          }
       } catch (error: any) {
          console.log('error:', error);
+         toast({
+            title: 'An error occurred performing this operation',
+            description: `Error: ${(error as Error).message}`,
+         });
       } finally {
-         cleanup();
+         cleanup(index);
       }
    };
 
@@ -554,11 +798,12 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
       const tableItems = getFormattedItemsForTable(transactionItems);
       setFormattedItems(tableItems);
       setIsAutoSaveModalOpen(false);
-      form.reset();
+      searchQueryForm.reset();
 
       // if switching from a current edit to an autosaved report, autosave the current edit
       const actualAutoSavedTransactions = getAutoSavedTransactions(
          params.storeId,
+         reportEntryAction,
       );
       if (
          !autoSaveIsInSync(actualAutoSavedTransactions, autoSavedTransactions)
@@ -587,16 +832,17 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
     * Handles the submission for product search.
     * @param data - Form values for product query.
     */
-   const onSubmit = async (data: ProductQueryFormValues) => {
+   const onSubmitSearchQuery = async (data: ProductQueryFormValues) => {
+      console.log('searching...');
       try {
          setIsSearching(true);
          const res = await axios.get(
             `/api/${params.storeId}/search?query=${data.query}`,
          );
          if (res.data.length) {
-            const product = res.data[0];
-            setSearchResult({
+            const products = res.data.map((product: any) => ({
                category_id: product.category_id,
+               count: product.count,
                product_name: product.name,
                product_id: product.id,
                sku: product.sku,
@@ -605,16 +851,77 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
                inventoryCount: product.count,
                type: ProductQueryResultType.OK,
                ...product,
-            });
+            }));
+            setSearchResults(products);
          } else {
-            setSearchResult({
-               type: ProductQueryResultType.NO_RESULTS,
-            });
+            setSearchResults([]);
          }
       } catch (error: any) {
          console.log('error:', error);
       } finally {
          setIsSearching(false);
+      }
+   };
+
+   /**
+    * Publishes the report
+    */
+   const publishReport = async () => {
+      if (!transaction) return;
+
+      const itemsToRemove = findTransactionItemsToRemove(
+         fetchedTransaction?.transactionItems,
+         transactionItems,
+      );
+
+      // check counts for individual items and make sure inventory allows it.
+      // update products in inventory with new counts.
+
+      try {
+         setIsPublishingReport(true);
+
+         const payload = transactionItems.map((item) => keysToSnakeCase(item));
+         await Promise.all(
+            payload.map((item) =>
+               apiCreateTransactionItemForTransaction(
+                  transaction.id,
+                  params.storeId,
+                  item,
+               ),
+            ),
+         );
+
+         await apiUpdateTransaction(params.storeId, {
+            id: transaction.id,
+            transaction_report_title: transaction.reportTitle,
+            transaction_date: date,
+            status: 'published',
+            gross_sales: getTotalSales(transactionItems),
+            net_sales: getNetSales(transactionItems),
+            units_sold: getTotalUnitsSold(transactionItems),
+         });
+
+         if (itemsToRemove.length > 0)
+            await deleteTransactionItems(itemsToRemove);
+
+         removeLocallySavedTransaction(
+            params.storeId,
+            reportEntryAction,
+            transaction.id,
+         );
+         router.refresh();
+         router.push(`/${params.storeId}/sales-report`);
+         toast({
+            title: `Report "${transaction.reportTitle}" published successfully.`,
+         });
+      } catch (error) {
+         console.log('error publishing report:', (error as Error).message);
+         toast({
+            title: 'An error occurred publishing this report',
+            description: `Error: ${(error as Error).message}`,
+         });
+      } finally {
+         setIsPublishingReport(false);
       }
    };
 
@@ -661,6 +968,57 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
    };
 
    /**
+    * Save the fetched transaction locally for future editing.
+    */
+   const saveFetchedTransaction = () => {
+      if (!fetchedTransaction) return;
+      // set up a local copy for this edit
+      const savedEditedTransactions = getLocallySavedTransactions(
+         params.storeId,
+         'editing',
+      );
+      const key = getEditsLocalStorageKey(params.storeId);
+      const draftItems = fetchedTransaction.transactionItems?.map((item) =>
+         keysToSnakeCase(item),
+      );
+      const products: Record<string, any> = {};
+      draftItems?.forEach((item) => {
+         products[item.product_id] = item;
+      });
+      savedEditedTransactions[fetchedTransaction.id] = products;
+      saveItemInLocalStorage(key, savedEditedTransactions);
+   };
+
+   /**
+    * Initializes state from a fetched transaction.
+    * @param {Transaction} fetchedTransaction - The transaction fetched from the server.
+    */
+   const setupFromFetchedTransaction = (fetchedTransaction: Transaction) => {
+      setDate(fetchedTransaction.transactionDate || new Date());
+      setTransactionItems(fetchedTransaction.transactionItems || []);
+      setEnteredReportTitle(fetchedTransaction.reportTitle);
+      setFormattedItems(
+         getFormattedItemsForTable(fetchedTransaction.transactionItems || []),
+      );
+      saveFetchedTransaction();
+   };
+
+   /**
+    * Use saved edits to populate state.
+    * @param {TransactionItem[]} savedItems - Array of saved transaction items.
+    */
+   const setupFromSavedEdit = (savedItems: TransactionItem[]) => {
+      if (!fetchedTransaction) return;
+      const savedEditedReport: Transaction = {
+         id: fetchedTransaction.id,
+         transactionDate: new Date(savedItems[0].transactionDate || new Date()),
+         transactionItems: savedItems,
+         reportTitle: savedItems[0].transactionReportTitle,
+      };
+      setSavedEditedTransaction(savedEditedReport);
+   };
+
+   /**
     * Toggles the visibility of the date picker.
     */
    const toggleDatePicker = () => {
@@ -698,9 +1056,9 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
    }) => {
       setEnteredReportTitle(reportTitle);
       setTransaction({
-         id: transactionRequest.data.id,
+         id: transactionRequest.id,
          reportTitle,
-         transactionDate: transactionRequest.data.transaction_date,
+         transactionDate: transactionRequest.transaction_date,
       });
    };
 
@@ -787,8 +1145,36 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
          return acc;
       }, {});
 
-      updateDraftTransactions(params.storeId, id, updatedDraftTransaction);
-      setAutoSavedTransactions(getAutoSavedTransactions(params.storeId));
+      updateLocallySavedTransaction(
+         params.storeId,
+         reportEntryAction,
+         id,
+         updatedDraftTransaction,
+      );
+
+      // only update local auto saved transactions if working on new reports
+      if (reportEntryAction === 'new') {
+         setAutoSavedTransactions(
+            getAutoSavedTransactions(params.storeId, reportEntryAction),
+         );
+      }
+   };
+
+   /**
+    * Uses the saved edited report
+    */
+   const useSavedEditedReport = () => {
+      if (!savedEditedTransaction) return;
+      const { transactionDate, transactionItems, reportTitle } =
+         savedEditedTransaction;
+      setDate(transactionDate);
+      setTransactionItems(transactionItems || []);
+      setEnteredReportTitle(reportTitle);
+      setTransaction(savedEditedTransaction);
+      const tableItems = getFormattedItemsForTable(transactionItems || []);
+      setFormattedItems(tableItems);
+      setIsUsingSavedEditedReport(true);
+      setIsUseSavedEditModalOpen(false);
    };
 
    /**
@@ -822,10 +1208,12 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
          setAlertMessages(filteredAlerts);
          setDateButtonVariant('outline');
 
+         // check for when the date for the report is updated
          if (
             transaction?.transactionDate &&
             !isSameDay(date, transaction.transactionDate)
          ) {
+            // console.log('updating date on items...');
             updateDateOnTransactionItems(date);
          }
       }
@@ -835,17 +1223,64 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
     * useEffect hook for retrieving auto-saved transactions from local storage on component mount.
     */
    useEffect(() => {
-      const autoSavedTransactions = getAutoSavedTransactions(params.storeId);
-      if (autoSavedTransactions.length > 0) {
-         setAutoSavedTransactions(autoSavedTransactions);
-         setIsAutoSaveModalOpen(true);
+      // if editing, don't get autosaved transactions
+      if (!fetchedTransaction) {
+         const autoSavedTransactions = getAutoSavedTransactions(
+            params.storeId,
+            reportEntryAction,
+         );
+         if (autoSavedTransactions.length > 0) {
+            setAutoSavedTransactions(autoSavedTransactions);
+            setIsAutoSaveModalOpen(true);
+         }
       }
    }, []);
 
+   /**
+    * useEffect hook for setting up the form with the fetched transaction on component mount.
+    */
+   useEffect(() => {
+      if (fetchedTransaction) {
+         if (!checkForSavedEdit(fetchedTransaction)) {
+            setupFromFetchedTransaction(fetchedTransaction);
+         }
+      }
+   }, []);
+
+   useEffect(() => {
+      const performSearch = async () => {
+         const searchParams = new URLSearchParams(window.location.search);
+         const query = searchParams.get('query');
+
+         if (query) {
+            await onSubmitSearchQuery({ query });
+
+            // Remove 'query' param after it's used
+            searchParams.delete('query');
+
+            const urlWithoutParams = window.location.pathname;
+            if (searchParams.toString()) {
+               window.history.replaceState(
+                  null,
+                  '',
+                  `?${searchParams.toString()}`,
+               );
+            } else {
+               window.history.replaceState(null, '', urlWithoutParams);
+            }
+         }
+      };
+
+      performSearch();
+   }, []);
+
    const displayProductInfo =
-      !searching && searchResult?.type === ProductQueryResultType.OK;
+      !searching && searchResults && searchResults.length > 0;
 
    const categorySales = getCategorySalesAndUnits(transactionItems);
+   const grossSales = getTotalSales(transactionItems);
+   const netSales = getNetSales(transactionItems);
+   const unitsSold = getTotalUnitsSold(transactionItems);
 
    const Alerts = () => {
       return (
@@ -887,6 +1322,135 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
          );
       });
 
+   const CategoriesTable = () => {
+      return (
+         <Table>
+            <TableHeader>
+               <TableRow>
+                  <TableHead className="w-[100px]">Category</TableHead>
+                  <TableHead>Units sold</TableHead>
+                  <TableHead>Total sales</TableHead>
+               </TableRow>
+            </TableHeader>
+            <TableBody>
+               {Object.keys(categorySales).map((item, index) => (
+                  <TableRow key={index}>
+                     <TableCell className="font-medium">{item}</TableCell>
+                     <TableCell>{categorySales[item].unitsSold}</TableCell>
+                     <TableCell>
+                        {fmt.format(categorySales[item].totalSales)}
+                     </TableCell>
+                  </TableRow>
+               ))}
+            </TableBody>
+         </Table>
+      );
+   };
+
+   const IndividualSearchResult: React.FC<IndividualSearchResultProps> = ({
+      index,
+      result,
+   }) => {
+      const [isOverStockCount, setIsOverStockCount] = useState(false);
+
+      const { handleSubmit, control } = useForm<TransactionItemFormValues>({
+         resolver: zodResolver(transactionItemFormSchema),
+         defaultValues: {
+            unitsSold: 1,
+         },
+      });
+
+      const onSubmit: SubmitHandler<TransactionItemFormValues> = (data) => {
+         const { unitsSold } = data;
+         if (result.count && unitsSold > result.count) {
+            setIsOverStockCount(true);
+         } else handleSubmitTransactionItem(data, result, index);
+      };
+
+      const searchFormValues = searchQueryForm.watch();
+      const { query } = searchFormValues;
+
+      return (
+         <div className="w-full flex flex-row justify-between">
+            <div className="flex flex-col gap-8">
+               <div className="flex items-center gap-16 space-x-2">
+                  <ProductInfoLabel
+                     title="Product name"
+                     value={result.product_name}
+                  />
+                  <ProductInfoLabel
+                     title="List price"
+                     value={fmt.format(parseFloat(String(result.price)))}
+                  />
+                  <ProductInfoLabel
+                     title="Inventory Count"
+                     value={`${result.count}`}
+                  />
+               </div>
+
+               {isOverStockCount && (
+                  <div className="flex space-x-4">
+                     <span className="text-sm text-destructive flex items-center">
+                        <AlertCircle className="mr-2 h-4 w-4" /> Inventory count
+                        for this product is less than the entered units sold
+                     </span>
+                     <Button
+                        className="space-x-2 flex items-center justify-start"
+                        variant={'outline'}
+                        onClick={() =>
+                           router.push(
+                              `/${params.storeId}/inventory/products/${result.product_id}?return_url=${pathName}&query=${query}`,
+                           )
+                        }
+                     >
+                        Update inventory
+                     </Button>
+                  </div>
+               )}
+            </div>
+
+            <Form {...transactionItemForm}>
+               <form onSubmit={handleSubmit(onSubmit)} className="flex gap-4">
+                  <FormField
+                     control={control}
+                     name="unitsSold"
+                     render={({ field }) => (
+                        <FormItem>
+                           <FormControl>
+                              <Input
+                                 className="w-[80px]"
+                                 type="number"
+                                 disabled={addingItemButtonStates[index]}
+                                 placeholder="0"
+                                 {...field}
+                              />
+                           </FormControl>
+                           <FormDescription>Units sold</FormDescription>
+                           <FormMessage />
+                        </FormItem>
+                     )}
+                  />
+                  <LoadingButton
+                     variant={'outline'}
+                     type="submit"
+                     disabled={
+                        addingItemButtonStates[index] ||
+                        date == undefined ||
+                        isPublishingReport
+                     }
+                     isLoading={addingItemButtonStates[index]}
+                  >
+                     {!addingItemButtonStates[index] && (
+                        <Plus className="mr-2 h-4 w-4" />
+                     )}
+                     Add
+                  </LoadingButton>
+               </form>
+            </Form>
+         </div>
+      );
+   };
+
    const ProductInfoLabel = ({
       title,
       value,
@@ -922,19 +1486,20 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
                   onClick={() => setIsAlertModalOpen(true)}
                   disabled={isPublishingReport}
                >
-                  <Trash className="mr-2 h-4 w-4" /> Discard
+                  <Trash className="mr-2 h-4 w-4" /> Delete
                </Button>
             )}
 
-            <LoadingButton
-               variant={'outline'}
-               onClick={() => setIsPublishingReport(true)}
-               disabled={alertMessages.length != 0 || isPublishingReport}
-               isLoading={isPublishingReport}
-            >
-               {!isPublishingReport && <Send className="mr-2 h-4 w-4" />}
-               Publish
-            </LoadingButton>
+            {fetchedTransaction && isUsingSavedEditedReport && (
+               <Button
+                  variant={'outline'}
+                  onClick={discardSavedEditedReport}
+                  disabled={isPublishingReport}
+               >
+                  <XCircle className="mr-2 h-4 w-4" /> Revert changes
+               </Button>
+            )}
+
             <Button
                variant={'outline'}
                onClick={createNewReport}
@@ -943,6 +1508,20 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
                <PlusCircle className="mr-2 h-4 w-4" />
                New
             </Button>
+
+            <LoadingButton
+               // variant={'outline'}
+               onClick={publishReport}
+               disabled={
+                  alertMessages.length != 0 ||
+                  isPublishingReport ||
+                  !transaction
+               }
+               isLoading={isPublishingReport}
+            >
+               {!isPublishingReport && <Send className="mr-2 h-4 w-4" />}
+               {isPublishingReport ? 'Publishing' : 'Publish'}
+            </LoadingButton>
          </div>
       );
    };
@@ -965,13 +1544,16 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
                   <Button
                      onClick={saveReportTitle}
                      disabled={
-                        !enteredReportTitle || !enteredReportTitle.trim()
+                        !enteredReportTitle ||
+                        !enteredReportTitle.trim() ||
+                        isPublishingReport
                      }
                   >
                      Save
                   </Button>
                   <Button
                      variant={'outline'}
+                     disabled={isPublishingReport}
                      onClick={() => setIsEditingReportTitle(false)}
                   >
                      Cancel
@@ -987,20 +1569,29 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
          <Alerts />
          <ActionModal
             isOpen={isAutoSaveModalOpen}
-            title="Autosaved reports"
-            description="Continue working on an unpublished report"
+            title="Draft reports"
+            description="Select a draft to continue working on it, or start a new report."
             onClose={() => setIsAutoSaveModalOpen(false)}
          >
             <div className="flex flex-col space-y-4">
                <AutoSavedReports />
             </div>
          </ActionModal>
+         <ActionModal
+            isOpen={isUseSavedEditModalOpen}
+            title="Unpublished changes detected"
+            description="You have unsaved changes in this report. Do you want to continue editing or discard them?"
+            declineText="Discard"
+            onConfirm={useSavedEditedReport}
+            onClose={discardSavedEditedReport}
+         />
          <AlertModal
             isOpen={isAlertModalOpen}
             onClose={() => {
                setIsAlertModalOpen(false);
             }}
-            onConfirm={deleteReport}
+            onConfirm={allowForceDelete ? forceDeleteReport : deleteReport}
+            ctaText={alertModalCTAText}
             title={'Delete this report?'}
             description={'This action cannot be undone.'}
             loading={isDeletingReport}
@@ -1016,7 +1607,7 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
          </div>
          <div className="flex items-center justify-between space-y-2">
             <Heading
-               title={`Add new sales report`}
+               title={headerText}
                description="Track the daily sales operations of your store"
             />
 
@@ -1024,17 +1615,19 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
          </div>
          <Separator />
 
-         <div className="flex py-4 gap-16">
-            <div className="flex flex-col w-[50%] gap-16">
-               <Form {...form}>
+         <div className="flex py-4 gap-8">
+            <div className="flex flex-col w-[60%] gap-16">
+               <Form {...searchQueryForm}>
                   <form
-                     onSubmit={form.handleSubmit(onSubmit)}
-                     className="flex-col space-y-8 pt-8"
+                     onSubmit={searchQueryForm.handleSubmit(
+                        onSubmitSearchQuery,
+                     )}
+                     className="flex-col space-y-8 pt-8 w-[85%]"
                   >
                      <div className="flex gap-8 justify-center">
                         <div className="w-full">
                            <FormField
-                              control={form.control}
+                              control={searchQueryForm.control}
                               name="query"
                               render={({ field }) => (
                                  <FormItem>
@@ -1045,7 +1638,7 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
                                              isAddingTransactionItem ||
                                              isPublishingReport
                                           }
-                                          placeholder="Enter product SKU..."
+                                          placeholder="Enter product name or SKU..."
                                           {...field}
                                        />
                                     </FormControl>
@@ -1070,12 +1663,12 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
                </Form>
 
                <div className="w-full">
-                  {(searching || searchResult) && (
+                  {(searching || searchResults) && (
                      <Card className="bg-background w-full">
                         <CardHeader>
                            <CardDescription className="flex items-center">
-                              {!searching && searchResult
-                                 ? 'Search result'
+                              {!searching && searchResults
+                                 ? 'Search results'
                                  : 'Searching...'}
                            </CardDescription>
                         </CardHeader>
@@ -1089,85 +1682,48 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
                               ) : (
                                  <>
                                     {displayProductInfo && (
-                                       <div className="flex items-center gap-16 space-x-2">
-                                          <ProductInfoLabel
-                                             title="Product name"
-                                             value={searchResult?.product_name}
-                                          />
-                                          <ProductInfoLabel
-                                             title="List price"
-                                             value={fmt.format(
-                                                parseFloat(
-                                                   String(searchResult.price),
-                                                ),
-                                             )}
-                                          />
+                                       <div
+                                          className="flex flex-col w-full gap-8"
+                                          style={{
+                                             pointerEvents: Object.values(
+                                                addingItemButtonStates,
+                                             ).some((isLoading) => isLoading)
+                                                ? 'none'
+                                                : 'auto',
+                                             opacity: Object.values(
+                                                addingItemButtonStates,
+                                             ).some((isLoading) => isLoading)
+                                                ? 0.5
+                                                : 1,
+                                          }}
+                                       >
+                                          {searchResults.map(
+                                             (result, index) => {
+                                                return (
+                                                   <>
+                                                      <IndividualSearchResult
+                                                         index={index}
+                                                         key={index}
+                                                         result={result}
+                                                      />
+                                                      {index <
+                                                         searchResults.length -
+                                                            1 && <Separator />}
+                                                   </>
+                                                );
+                                             },
+                                          )}
                                        </div>
-                                    )}
-                                    {displayProductInfo && (
-                                       <Form {...transactionItemForm}>
-                                          <form
-                                             onSubmit={transactionItemForm.handleSubmit(
-                                                handleSubmitTransactionItem,
-                                             )}
-                                             className="flex gap-4"
-                                          >
-                                             <FormField
-                                                control={
-                                                   transactionItemForm.control
-                                                }
-                                                name="unitsSold"
-                                                render={({ field }) => (
-                                                   <FormItem>
-                                                      <FormControl>
-                                                         <Input
-                                                            className="w-[80px]"
-                                                            type="number"
-                                                            disabled={
-                                                               isAddingTransactionItem
-                                                            }
-                                                            placeholder="0"
-                                                            {...field}
-                                                         />
-                                                      </FormControl>
-                                                      <FormDescription>
-                                                         Units sold
-                                                      </FormDescription>
-                                                      <FormMessage />
-                                                   </FormItem>
-                                                )}
-                                             />
-                                             <LoadingButton
-                                                variant={'outline'}
-                                                type="submit"
-                                                disabled={
-                                                   isAddingTransactionItem ||
-                                                   date == undefined ||
-                                                   isPublishingReport
-                                                }
-                                                isLoading={
-                                                   isAddingTransactionItem
-                                                }
-                                             >
-                                                {!isAddingTransactionItem && (
-                                                   <Plus className="mr-2 h-4 w-4" />
-                                                )}
-                                                Add
-                                             </LoadingButton>
-                                          </form>
-                                       </Form>
                                     )}
                                  </>
                               )}
                            </div>
 
-                           {!searching &&
-                              searchResult?.type ===
-                                 ProductQueryResultType.NO_RESULTS && (
-                                 <span className="flex justify-center">
-                                    No results found.
-                                 </span>
-                              )}
+                           {!searching && searchResults?.length == 0 && (
+                              <span className="flex justify-center">
+                                 No results found.
+                              </span>
+                           )}
                         </CardContent>
                      </Card>
                   )}
@@ -1207,6 +1763,29 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
                   </Button>
                </div>
             )}
+            {/* Toggle Exchange rate */}
+            {/* <div className="mt-8 space-x-2 flex">
+               <DollarSign className="mt-2 w-4 h-4 text-muted-foreground" />
+               <CurrencyToggle
+                  currency={reportFormatCurrency}
+                  setCurrency={setReportFormatCurrency}
+               />
+               <div />
+               <TooltipProvider>
+                  <Tooltip>
+                     <TooltipTrigger asChild>
+                        <Info className="mt-2 w-4 h-4 text-muted-foreground" />
+                     </TooltipTrigger>
+                     <TooltipContent>
+                        <p className="p-2 w-[320px] text-center">
+                           The currency to view this transaction report in.
+                           Amounts will be formatted with the applicable exhange
+                           rate with respect to your store's currency.
+                        </p>
+                     </TooltipContent>
+                  </Tooltip>
+               </TooltipProvider>
+            </div> */}
          </div>
 
          <div className="flex justify-between gap-24 pt-4 w-full">
@@ -1263,7 +1842,7 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
                         </span>
                         <DataTableToolbar
                            searchKey="productName"
-                           tableKey="subcategories"
+                           tableKey="sales-report-transaction-items"
                            placeholder="Filter transactions..."
                            table={table}
                         />
@@ -1290,9 +1869,7 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
                               </CardHeader>
                               <CardContent>
                                  <div className="text-2xl font-bold">
-                                    {fmt.format(
-                                       getTotalSales(transactionItems),
-                                    )}
+                                    {fmt.format(grossSales)}
                                  </div>
                               </CardContent>
                            </Card>
@@ -1300,53 +1877,35 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
                            <Card>
                               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                                  <CardTitle className="text-sm font-medium">
-                                    Total Units Sold
+                                    Net Sales
                                  </CardTitle>
-                                 <PackageCheck className="h-4 w-4 text-muted-foreground" />
+                                 <DollarSign className="h-4 w-4 text-muted-foreground" />
                               </CardHeader>
                               <CardContent>
                                  <div className="text-2xl font-bold">
-                                    {getTotalUnitsSold(transactionItems)}
+                                    {fmt.format(netSales)}
                                  </div>
                               </CardContent>
                            </Card>
                         </div>
 
-                        {Object.keys(categorySales).length > 0 && (
-                           <div className="flex flex-col space-y-4">
-                              <span className="text-muted-foreground mb-4">
-                                 Breakdown by categories
-                              </span>
-                              {Object.keys(categorySales).map((item) => {
-                                 return (
-                                    <>
-                                       <div className="flex justify-between">
-                                          <div className="w-1/3">
-                                             <span>{item}</span>
-                                          </div>
-                                          <div className="w-1/3 text-center">
-                                             <span>
-                                                {categorySales[item].unitsSold >
-                                                1
-                                                   ? `${categorySales[item].unitsSold} units`
-                                                   : `${categorySales[item].unitsSold} unit`}
-                                             </span>
-                                          </div>
-                                          <div className="w-1/3 text-right">
-                                             <span>
-                                                {fmt.format(
-                                                   categorySales[item]
-                                                      .totalSales,
-                                                )}
-                                             </span>
-                                          </div>
-                                       </div>
-                                       <Separator />
-                                    </>
-                                 );
-                              })}
-                           </div>
-                        )}
+                        <div className="grid grid-cols-2 space-x-8 pt-6">
+                           <Card>
+                              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                 <CardTitle className="text-sm font-medium">
+                                    Units sold
+                                 </CardTitle>
+                                 <PackageCheck className="h-4 w-4 text-muted-foreground" />
+                              </CardHeader>
+                              <CardContent>
+                                 <div className="text-2xl font-bold">
+                                    {unitsSold}
+                                 </div>
+                              </CardContent>
+                           </Card>
+                        </div>
+
+                        <CategoriesTable />
                      </div>
                   </div>
                </div>

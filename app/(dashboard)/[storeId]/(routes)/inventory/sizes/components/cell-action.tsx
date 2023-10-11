@@ -17,6 +17,7 @@ import { AlertModal } from '@/components/modals/alert-modal';
 
 import { SizeColumn } from './columns';
 import { useToast } from '@/components/ui/use-toast';
+import { apiDeleteSize } from '@/lib/api/sizes';
 
 interface CellActionProps {
    data: SizeColumn;
@@ -32,9 +33,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
    const onConfirm = async () => {
       try {
          setLoading(true);
-         await axios.delete(
-            `/api/${params.storeId}/inventory/sizes/${data.id}`,
-         );
+         await apiDeleteSize(data.id, params.storeId);
          toast({
             title: `Size '${data.name} deleted.`,
          });

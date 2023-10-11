@@ -11,6 +11,8 @@ interface ActionModalProps {
    onClose: () => void;
    onConfirm?: () => void;
    confirmButtonDisabled?: boolean;
+   confirmText?: string;
+   declineText?: string;
    loading?: boolean;
    children?: React.ReactNode;
 }
@@ -21,7 +23,9 @@ export const ActionModal: React.FC<ActionModalProps> = ({
    description,
    onClose,
    onConfirm,
+   confirmText,
    confirmButtonDisabled,
+   declineText,
    loading,
    children,
 }) => {
@@ -35,7 +39,7 @@ export const ActionModal: React.FC<ActionModalProps> = ({
          <div>{children}</div>
          <div className="pt-6 space-x-2 flex items-center justify-end w-full">
             <Button disabled={loading} variant="outline" onClick={onClose}>
-               Cancel
+               {declineText || 'Cancel'}
             </Button>
             {onConfirm && (
                <LoadingButton
@@ -43,7 +47,7 @@ export const ActionModal: React.FC<ActionModalProps> = ({
                   disabled={loading || confirmButtonDisabled}
                   onClick={onConfirm}
                >
-                  Continue
+                  {confirmText || 'Continue'}
                </LoadingButton>
             )}
          </div>

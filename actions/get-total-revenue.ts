@@ -1,25 +1,13 @@
-import prismadb from '@/lib/prismadb';
+import { fetchTransactions } from '@/lib/repositories/transactionsRepository';
 
-export const getTotalRevenue = async (store_id: string) => {
-    const paidOrders = await prismadb.order.findMany({
-        where: {
-            store_id,
-            isPaid: true,
-        },
-        include: {
-            order_items: {
-                include: {
-                    product: true,
-                },
-            },
-        },
+export const getTotalRevenue = async (storeId: string) => {
+    const publishedReports = await fetchTransactions({
+        store_id: storeId,
+        status: 'published',
     });
 
-    const totalRevenue = paidOrders.reduce((total, order) => {
-        const orderTotal = order.order_items.reduce((orderSum, item) => {
-            return orderSum + item.product.price.toNumber();
-        }, 0);
-        return total + orderTotal;
+    const totalRevenue = publishedReports.reduce((total, report) => {
+        return total + (report.gross_sales || 0);
     }, 0);
 
     return totalRevenue;

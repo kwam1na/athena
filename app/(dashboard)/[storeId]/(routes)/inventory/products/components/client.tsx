@@ -26,6 +26,7 @@ import { useState } from 'react';
 import { DataTableToolbar } from '@/components/ui/data-table-toolbar/products-table-toolbar';
 
 interface ProductsClientProps {
+   storeName?: string;
    data: ProductColumn[];
    categoryOptions?: {
       label: string;
@@ -42,6 +43,7 @@ interface ProductsClientProps {
 export const ProductsClient: React.FC<ProductsClientProps> = ({
    data,
    categoryOptions,
+   storeName,
    subcategoryOptions,
 }) => {
    const params = useParams();
@@ -81,7 +83,7 @@ export const ProductsClient: React.FC<ProductsClientProps> = ({
          <div className="flex items-center justify-between">
             <Heading
                title={`Products`}
-               description="Manage products for your store"
+               description={`Manage products for ${storeName}`}
             />
             <Button
                onClick={() =>

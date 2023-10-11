@@ -3,9 +3,14 @@ import * as React from 'react';
 
 import { ColumnDef } from '@tanstack/react-table';
 import { CellAction } from './cell-action';
-import { AutoSavedTransaction, TransactionItem } from './client';
+import {
+   AutoSavedTransaction,
+   ReportEntryAction,
+   TransactionItem,
+} from './client';
 
 export interface TransactionItemColumn extends TransactionItem {
+   reportEntryAction: ReportEntryAction;
    setTransactionItems: React.Dispatch<React.SetStateAction<TransactionItem[]>>;
    setFormattedItems: React.Dispatch<
       React.SetStateAction<TransactionItemColumn[]>

@@ -25,6 +25,11 @@ import { Heading } from '@/components/ui/heading';
 import { AlertModal } from '@/components/modals/alert-modal';
 import { useToast } from '@/components/ui/use-toast';
 import { LoadingButton } from '@/components/ui/loading-button';
+import {
+   apiCreateCategory,
+   apiDeleteCategory,
+   apiUpdateCategory,
+} from '@/lib/api/categories';
 
 const formSchema = z.object({
    name: z.string().min(2),
@@ -48,6 +53,8 @@ export const CategoryForm: React.FC<CategoryFormProps> = ({ initialData }) => {
    const title = initialData ? 'Edit category' : 'Create category';
    const description = initialData ? 'Edit a category.' : 'Add a new category';
    const action = initialData ? 'Save changes' : 'Create';
+   const loadingAction = loading ? (initialData ? 'Saving' : 'Creating') : '';
+   const buttonText = loading ? loadingAction : action;
 
    const form = useForm<CategoryFormValues>({
       resolver: zodResolver(formSchema),
@@ -64,12 +71,9 @@ export const CategoryForm: React.FC<CategoryFormProps> = ({ initialData }) => {
       try {
          setLoading(true);
          if (initialData) {
-            await axios.patch(
-               `/api/${params.storeId}/categories/${params.categoryId}`,
-               data,
-            );
+            await apiUpdateCategory(params.categoryId, params.storeId, data);
          } else {
-            await axios.post(`/api/${params.storeId}/categories`, data);
+            await apiCreateCategory(params.storeId, data);
          }
          toast({
             title: `Category '${data.name}' ${
@@ -90,9 +94,7 @@ export const CategoryForm: React.FC<CategoryFormProps> = ({ initialData }) => {
    const onDelete = async () => {
       try {
          setLoading(true);
-         await axios.delete(
-            `/api/${params.storeId}/categories/${params.categoryId}`,
-         );
+         await apiDeleteCategory(params.categoryId, params.storeId);
          router.refresh();
          router.push(`/${params.storeId}/inventory/categories`);
          toast({
@@ -127,10 +129,9 @@ export const CategoryForm: React.FC<CategoryFormProps> = ({ initialData }) => {
                <Button
                   disabled={loading}
                   variant="destructive"
-                  size="sm"
                   onClick={() => setOpen(true)}
                >
-                  <Trash className="h-4 w-4" />
+                  <Trash className="mr-2 h-4 w-4" /> Delete
                </Button>
             )}
          </div>
@@ -165,7 +166,7 @@ export const CategoryForm: React.FC<CategoryFormProps> = ({ initialData }) => {
                   className="ml-auto"
                   type="submit"
                >
-                  {action}
+                  {buttonText}
                </LoadingButton>
             </form>
          </Form>

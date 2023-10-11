@@ -51,6 +51,11 @@ import { cn, formatter } from '@/lib/utils';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useStoreCurrency } from '@/providers/currency-provider';
 import { LoadingButton } from '@/components/ui/loading-button';
+import {
+   apiCreateProduct,
+   apiDeleteProduct,
+   apiUpdateProduct,
+} from '@/lib/api/products';
 
 enum ActionContext {
    NONE,
@@ -160,6 +165,8 @@ export const ProductForm: React.FC<ProductFormProps> = ({
    const title = initialData ? 'Edit product' : 'Create product';
    const description = initialData ? 'Edit a product.' : 'Add a new product';
    const action = initialData ? 'Save changes' : 'Create';
+   const loadingAction = loading ? (initialData ? 'Saving' : 'Creating') : '';
+   const buttonText = loading ? loadingAction : action;
 
    const defaultValues: Record<string, any> = initialData
       ? {
@@ -243,15 +250,33 @@ export const ProductForm: React.FC<ProductFormProps> = ({
          size_id: data.size_id == 'blank-id' ? null : data.size_id,
          color_id: data.color_id == 'blank-id' ? null : data.color_id,
       };
+
+      const searchParams = new URLSearchParams(window.location.search);
+      let returnUrlBase =
+         searchParams.get('return_url') ||
+         `/${params.storeId}/inventory/products`;
+
+      let additionalParams = '';
+      for (let [key, value] of searchParams.entries()) {
+         if (key !== 'return_url') {
+            additionalParams += `${key}=${value}&`;
+         }
+      }
+
+      const returnUrl = additionalParams
+         ? `${returnUrlBase}?${additionalParams.slice(0, -1)}`
+         : returnUrlBase;
+
       try {
          setLoading(true);
          if (initialData) {
-            await axios.patch(
-               `/api/${params.storeId}/products/${params.productId}`,
+            await apiUpdateProduct(
+               params.productId,
+               params.storeId,
                cleanedUpData,
             );
          } else {
-            await axios.post(`/api/${params.storeId}/products`, cleanedUpData);
+            await apiCreateProduct(params.storeId, cleanedUpData);
          }
          toast({
             title: `Product '${data.name}' ${
@@ -259,7 +284,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
             }.`,
          });
          router.refresh();
-         router.push(`/${params.storeId}/inventory/products`);
+         router.push(returnUrl);
       } catch (error: any) {
          toast({
             title: 'Something went wrong adding this product. Try again.',
@@ -272,9 +297,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
    const onDelete = async () => {
       try {
          setLoading(true);
-         await axios.delete(
-            `/api/${params.storeId}/products/${params.productId}`,
-         );
+         await apiDeleteProduct(params.productId, params.storeId);
          router.refresh();
          router.push(`/${params.storeId}/inventory/products`);
          toast({
@@ -407,10 +430,9 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                <Button
                   disabled={loading}
                   variant="destructive"
-                  size="sm"
                   onClick={promptDeleting}
                >
-                  <Trash className="h-4 w-4" />
+                  <Trash className="mr-2 h-4 w-4" /> Delete
                </Button>
             )}
          </div>
@@ -782,7 +804,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                   className="ml-auto"
                   type="submit"
                >
-                  {action}
+                  {buttonText}
                </LoadingButton>
             </form>
          </Form>

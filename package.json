@@ -1,9 +1,10 @@
 {
-    "name": "next13-ecommerce-admin",
+    "name": "athena",
     "version": "0.1.0",
     "private": true,
     "scripts": {
         "dev": "next dev",
+        "dev-1": "export $(cat .env.dev | xargs) && next dev",
         "build": "next build",
         "start": "next start",
         "lint": "next lint",

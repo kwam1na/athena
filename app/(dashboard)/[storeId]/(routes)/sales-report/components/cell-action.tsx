@@ -17,9 +17,10 @@ import {
 import { TransactionItemColumn } from './columns';
 import { useToast } from '@/components/ui/use-toast';
 import {
-   getDraftTransactions,
-   getLocalStorageKey,
+   getLocallySavedTransactions,
+   getDraftsLocalStorageKey,
    saveItemInLocalStorage,
+   getEditsLocalStorageKey,
 } from '../utils';
 import { formatter, keysToCamelCase } from '@/lib/utils';
 import { useStoreCurrency } from '@/providers/currency-provider';
@@ -34,9 +35,7 @@ interface CellActionProps {
 export const CellAction: React.FC<CellActionProps> = ({ data }) => {
    const params = useParams();
    const [isEditUnitsModalOpen, setIsEditUnitsModalOpen] = useState(false);
-   const [unitsSold, setUnitsSold] = useState<number | undefined>(
-      data.unitsSold,
-   );
+   const [unitsSold, setUnitsSold] = useState<number | undefined>(undefined);
 
    const { storeCurrency } = useStoreCurrency();
    const fmt = formatter(storeCurrency);
@@ -45,6 +44,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
       transactionDate,
       productId,
       transactionId,
+      reportEntryAction,
       setFormattedItems,
       setTransactionItems,
       setAutoSavedTransactions,
@@ -53,8 +53,14 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
    const handleTransactionItems = (action: 'update' | 'remove') => {
       if (!productId || !transactionDate || !transactionId) return;
 
-      const key = getLocalStorageKey(params.storeId);
-      let draftTransactions = getDraftTransactions(params.storeId);
+      const key =
+         reportEntryAction == 'new'
+            ? getDraftsLocalStorageKey(params.storeId)
+            : getEditsLocalStorageKey(params.storeId);
+      let draftTransactions = getLocallySavedTransactions(
+         params.storeId,
+         reportEntryAction,
+      );
 
       if (action === 'update') {
          if (
@@ -69,6 +75,8 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
       saveItemInLocalStorage(key, draftTransactions);
 
       const activeTransaction = draftTransactions[transactionId];
+
+      if (!activeTransaction) return;
       const transactionItems = Object.keys(activeTransaction).map((key) =>
          keysToCamelCase(activeTransaction[key]),
       );
@@ -106,21 +114,27 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
                parseFloat(item.price || '0')) *
             100
          ).toFixed(2),
+         reportEntryAction,
          setTransactionItems,
          setFormattedItems,
          setAutoSavedTransactions,
       }));
    };
 
-   const updateUnitsSold = () => {
-      if (!productId || !transactionDate || !transactionId) return;
-      handleTransactionItems('update');
+   const onClose = () => {
       setIsEditUnitsModalOpen(false);
+      setUnitsSold(undefined);
    };
 
    const removeTransactionItem = () => {
       if (!productId || !transactionDate || !transactionId) return;
       handleTransactionItems('remove');
+   };
+
+   const updateUnitsSold = () => {
+      if (!productId || !transactionDate || !transactionId) return;
+      handleTransactionItems('update');
+      setIsEditUnitsModalOpen(false);
    };
 
    const invalidUnitsSold =
@@ -132,9 +146,10 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
             isOpen={isEditUnitsModalOpen}
             title="Edit units sold"
             description={`Update the units sold for ${data.productName}`}
-            onConfirm={updateUnitsSold}
+            confirmText="Update"
             confirmButtonDisabled={invalidUnitsSold}
-            onClose={() => setIsEditUnitsModalOpen(false)}
+            onConfirm={updateUnitsSold}
+            onClose={onClose}
          >
             <div className="flex flex-col gap-4">
                <Input
@@ -142,6 +157,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
                   placeholder="Enter units sold..."
                   onChange={(e) => setUnitsSold(parseInt(e.target.value))}
                   value={unitsSold}
+                  defaultValue={data.unitsSold}
                />
                {invalidUnitsSold && (
                   <span className="text-destructive text-xs ml-1">

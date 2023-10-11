@@ -64,7 +64,6 @@ export const ProfileForm: React.FC<ProfileFormProps> = ({ initialData }) => {
    const origin = useOrigin();
    const { toast } = useToast();
 
-   const { user, error, isLoading } = useUser();
    const { setWrappedUser } = useWrappedUser();
 
    const [isClient, setIsClient] = useState(false);
@@ -123,8 +122,6 @@ export const ProfileForm: React.FC<ProfileFormProps> = ({ initialData }) => {
       }
    };
 
-   const componentsLoading = loading && isLoading;
-
    return (
       <>
          {isClient ? (
@@ -156,7 +153,7 @@ export const ProfileForm: React.FC<ProfileFormProps> = ({ initialData }) => {
                                  <FormLabel>Name</FormLabel>
                                  <FormControl>
                                     <Input
-                                       disabled={componentsLoading}
+                                       disabled={loading}
                                        placeholder="Name"
                                        {...field}
                                     />
@@ -175,7 +172,7 @@ export const ProfileForm: React.FC<ProfileFormProps> = ({ initialData }) => {
                                  <FormControl>
                                     <Input
                                        type="email"
-                                       disabled={componentsLoading}
+                                       disabled={loading}
                                        placeholder="Email"
                                        {...field}
                                     />
@@ -184,50 +181,14 @@ export const ProfileForm: React.FC<ProfileFormProps> = ({ initialData }) => {
                               </FormItem>
                            )}
                         />
-
-                        {/* <FormField
-                     control={form.control}
-                     name="currency"
-                     render={({ field }) => (
-                        <FormItem>
-                           <FormLabel>Currency</FormLabel>
-                           <Select
-                              disabled={componentsLoading}
-                              onValueChange={field.onChange}
-                              value={field.value}
-                              defaultValue={field.value}
-                           >
-                              <FormControl>
-                                 <SelectTrigger>
-                                    <SelectValue
-                                       defaultValue={field.value}
-                                       placeholder="Select a currency"
-                                    />
-                                 </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                 {currencies.map((currency) => (
-                                    <SelectItem
-                                       key={currency.value}
-                                       value={currency.value}
-                                    >
-                                       {currency.label}
-                                    </SelectItem>
-                                 ))}
-                              </SelectContent>
-                           </Select>
-                           <FormMessage />
-                        </FormItem>
-                     )}
-                  /> */}
                      </div>
                      <LoadingButton
-                        isLoading={componentsLoading}
-                        disabled={componentsLoading}
+                        isLoading={loading}
+                        disabled={loading}
                         className="ml-auto"
                         type="submit"
                      >
-                        Save changes
+                        {loading ? 'Saving' : 'Save changes'}
                      </LoadingButton>
                   </form>
                </Form>

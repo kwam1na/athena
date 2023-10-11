@@ -4,7 +4,7 @@ import { getSession } from '@auth0/nextjs-auth0';
 import { deleteProduct, getProduct, updateProduct } from '@/lib/repositories/productsRepository';
 import { findStore } from '@/lib/repositories/storesRepository';
 import { createTransactionItem, findTransactionItem, getTransactionItem, updateTransactionItem } from '@/lib/repositories/transactionItemsRepository';
-import { deleteTransaction, getTransaction } from '@/lib/repositories/transactionsRepository';
+import { deleteTransaction, getTransaction, updateTransaction } from '@/lib/repositories/transactionsRepository';
 
 export async function POST(
     req: NextRequest,
@@ -74,14 +74,15 @@ export async function POST(
         const existingTransactionItem = await findTransactionItem({ product_id, transaction_id: params.transactionId })
 
         if (existingTransactionItem) {
-            const item = await updateTransactionItem(existingTransactionItem.id, { units_sold: existingTransactionItem.units_sold + units_sold })
+            const item = await updateTransactionItem(existingTransactionItem.id, { ...body, cost: parseFloat(body.cost), price: parseFloat(body.price) })
             return NextResponse.json(item, res);
         }
 
-        const transactionItem = await createTransactionItem({ ...body, store_id: params.storeId, transaction_id: params.transactionId, user_id: user.sub })
+        const transactionItem = await createTransactionItem({ ...body, cost: parseFloat(body.cost), price: parseFloat(body.price), store_id: params.storeId, transaction_id: params.transactionId, user_id: user.sub })
         return NextResponse.json(transactionItem, res);
     } catch (error) {
         console.log('[TRANSACTION_POST]', (error as Error).message);
+        await updateTransaction(params.transactionId, { status: 'pending-rollback' })
         return new NextResponse('Internal error', { status: 500 });
     }
 }
@@ -112,8 +113,6 @@ export async function DELETE(
         const session = await getSession(req, res);
         const user = session?.user
 
-        console.log('params in DELETE:', params)
-
         if (!user) {
             return new NextResponse('Unauthenticated', { status: 403 });
         }
@@ -136,13 +135,18 @@ export async function DELETE(
         return NextResponse.json(transaction, res);
     } catch (error) {
         console.log('[TRANSACTION_DELETE]', (error as Error).message);
+        // RECORD DOES NOT EXIST CODE = P2025
+        if ((error as any).code === 'P2025') {
+            return NextResponse.json({ errorCode: 'P2025', message: 'Record does not exist' }, { status: 500 });
+        }
+
         return new NextResponse('Internal error', { status: 500 });
     }
 }
 
 export async function PATCH(
     req: NextRequest,
-    { params }: { params: { productId: string; storeId: string } },
+    { params }: { params: { transactionId: string; storeId: string } },
 ) {
     try {
         const res = new NextResponse();
@@ -165,85 +169,8 @@ export async function PATCH(
             return new NextResponse('Unauthenticated', { status: 403 });
         }
 
-        if (!params.productId) {
-            return new NextResponse('Product id is required', { status: 400 });
-        }
 
-        if (!name) {
-            return new NextResponse('Name is required', { status: 400 });
-        }
-
-        // if (!images || !images.length) {
-        //     return new NextResponse('Images are required', { status: 400 });
-        // }
-
-        if (!price) {
-            return new NextResponse('Price is required', { status: 400 });
-        }
-
-        if (!cost_per_item) {
-            return new NextResponse('Cost per item is required', { status: 400 });
-        }
-
-        if (!count) {
-            return new NextResponse('Count is required', { status: 400 });
-        }
-
-        if (!category_id) {
-            return new NextResponse('Category id is required', { status: 400 });
-        }
-
-        if (!subcategory_id) {
-            return new NextResponse('Subcategory id is required', { status: 400 });
-        }
-
-        const storeByUserId = await findStore({
-            id: params.storeId,
-            user_id: user.sub,
-        });
-
-        if (!storeByUserId) {
-            return new NextResponse('Unauthorized', { status: 405 });
-        }
-
-        // await prismadb.product.update({
-        //     where: {
-        //         id: params.productId,
-        //     },
-        //     data: {
-        //         name,
-        //         price,
-        //         costPerItem,
-        //         count,
-        //         categoryId,
-        //         subcategoryId,
-        //         colorId,
-        //         sizeId,
-        //         images: {
-        //             deleteMany: {},
-        //         },
-        //         isFeatured,
-        //         isArchived,
-        //     },
-        // });
-
-        // const product = await prismadb.product.update({
-        //     where: {
-        //         id: params.productId,
-        //     },
-        //     data: {
-        //         images: {
-        //             createMany: {
-        //                 data: [
-        //                     ...images.map((image: { url: string }) => image),
-        //                 ],
-        //             },
-        //         },
-        //     },
-        // });
-        const product = await updateProduct(params.productId, body)
-
-        return NextResponse.json(product);
+        return NextResponse.json({});
     } catch (error) {
         console.log('[TRANSACTION_PATCH]', (error as Error).message);
         return new NextResponse('Internal error', { status: 500 });

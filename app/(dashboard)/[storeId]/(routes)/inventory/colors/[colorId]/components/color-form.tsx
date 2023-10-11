@@ -25,6 +25,11 @@ import { AlertModal } from '@/components/modals/alert-modal';
 import { useToast } from '@/components/ui/use-toast';
 import { ColorPicker } from '@/components/ui/color-picker';
 import { LoadingButton } from '@/components/ui/loading-button';
+import {
+   apiCreateColor,
+   apiDeleteColor,
+   apiUpdateColor,
+} from '@/lib/api/colors';
 
 const formSchema = z.object({
    name: z.string().min(2),
@@ -49,8 +54,9 @@ export const ColorForm: React.FC<ColorFormProps> = ({ initialData }) => {
 
    const title = initialData ? 'Edit color' : 'Create color';
    const description = initialData ? 'Edit a color.' : 'Add a new color';
-   const toastMessage = initialData ? 'Color updated.' : 'Color created.';
    const action = initialData ? 'Save changes' : 'Create';
+   const loadingAction = loading ? (initialData ? 'Saving' : 'Creating') : '';
+   const buttonText = loading ? loadingAction : action;
 
    const form = useForm<ColorFormValues>({
       resolver: zodResolver(formSchema),
@@ -63,12 +69,9 @@ export const ColorForm: React.FC<ColorFormProps> = ({ initialData }) => {
       try {
          setLoading(true);
          if (initialData) {
-            await axios.patch(
-               `/api/${params.storeId}/colors/${params.colorId}`,
-               data,
-            );
+            await apiUpdateColor(params.colorId, params.storeId, data);
          } else {
-            await axios.post(`/api/${params.storeId}/colors`, data);
+            await apiCreateColor(params.storeId, data);
          }
          toast({
             title: `Category '${data.name}' ${
@@ -92,7 +95,7 @@ export const ColorForm: React.FC<ColorFormProps> = ({ initialData }) => {
    const onDelete = async () => {
       try {
          setLoading(true);
-         await axios.delete(`/api/${params.storeId}/colors/${params.colorId}`);
+         await apiDeleteColor(params.colorId, params.storeId);
          router.refresh();
          router.push(`/${params.storeId}/inventory/colors`);
          toast({
@@ -127,10 +130,9 @@ export const ColorForm: React.FC<ColorFormProps> = ({ initialData }) => {
                <Button
                   disabled={loading}
                   variant="destructive"
-                  size="sm"
                   onClick={() => setOpen(true)}
                >
-                  <Trash className="h-4 w-4" />
+                  <Trash className="mr-2 h-4 w-4" /> Delete
                </Button>
             )}
          </div>
@@ -194,7 +196,7 @@ export const ColorForm: React.FC<ColorFormProps> = ({ initialData }) => {
                   className="ml-auto"
                   type="submit"
                >
-                  {action}
+                  {buttonText}
                </LoadingButton>
             </form>
          </Form>

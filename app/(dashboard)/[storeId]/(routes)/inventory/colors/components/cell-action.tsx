@@ -17,6 +17,7 @@ import { AlertModal } from '@/components/modals/alert-modal';
 
 import { ColorColumn } from './columns';
 import { useToast } from '@/components/ui/use-toast';
+import { apiDeleteColor } from '@/lib/api/colors';
 
 interface CellActionProps {
    data: ColorColumn;
@@ -32,7 +33,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
    const onConfirm = async () => {
       try {
          setLoading(true);
-         await axios.delete(`/api/${params.storeId}/colors/${data.id}`);
+         await apiDeleteColor(data.id, params.storeId);
          toast({
             title: `Color '${data.name} deleted.`,
          });

@@ -34,10 +34,9 @@ export default async function DashboardLayout({
    return (
       <>
          <Navbar />
-         <div className="grid lg:grid-cols-5 h-[90%]">
-            <Sidebar className="hidden lg:block" storeId={params.storeId} />
-            <div className="col-span-3 lg:col-span-4">
-               <div className="h-full px-4 py-6 lg:px-8">{children}</div>
+         <div className="h-full px-8">
+            <div className="h-full">
+               <div className="h-full w-full">{children}</div>
             </div>
          </div>
       </>

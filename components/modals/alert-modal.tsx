@@ -10,12 +10,14 @@ interface AlertModalProps {
    isOpen: boolean;
    title?: string;
    description?: string;
+   ctaText?: string;
    onClose: () => void;
    onConfirm: () => void;
    loading: boolean;
 }
 
 export const AlertModal: React.FC<AlertModalProps> = ({
+   ctaText,
    isOpen,
    title,
    description,
@@ -50,7 +52,7 @@ export const AlertModal: React.FC<AlertModalProps> = ({
                variant="destructive"
                onClick={onConfirm}
             >
-               Continue
+               {ctaText || 'Continue'}
             </LoadingButton>
          </div>
       </Modal>

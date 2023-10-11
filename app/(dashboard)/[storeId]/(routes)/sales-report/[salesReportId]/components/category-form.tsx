@@ -56,9 +56,10 @@ export const CategoryForm: React.FC<CategoryFormProps> = ({ initialData }) => {
    });
 
    const onSubmit = async (data: CategoryFormValues) => {
-      const _params = new URLSearchParams(window.location.search);
+      const searchParams = new URLSearchParams(window.location.search);
       const returnUrl =
-         _params.get('return_url') || `/${params.storeId}/inventory/categories`;
+         searchParams.get('return_url') ||
+         `/${params.storeId}/inventory/categories`;
 
       try {
          setLoading(true);

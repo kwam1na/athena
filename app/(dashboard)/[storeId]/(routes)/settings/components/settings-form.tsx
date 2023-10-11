@@ -182,7 +182,7 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ initialData }) => {
                   className="ml-auto"
                   type="submit"
                >
-                  Save changes
+                  {loading ? 'Saving' : 'Save changes'}
                </LoadingButton>
             </form>
          </Form>

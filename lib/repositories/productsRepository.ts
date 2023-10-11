@@ -42,8 +42,23 @@ export const deleteProduct = async (id: string) => {
 }
 
 export const fetchProducts = async (keys: { store_id: string;[key: string]: any }) => {
+
+    const { store_id, sku, product_name, ...rest } = keys;
+
+    const where: any = {
+        store_id,
+        ...rest
+    };
+
+    if (sku || product_name) {
+        where.OR = [
+            { sku: { contains: sku, mode: "insensitive" } },
+            { name: { contains: product_name, mode: "insensitive" } }
+        ];
+    }
+
     return await prismadb.product.findMany({
-        where: keys,
+        where,
         include: {
             category: true,
             subcategory: true,
