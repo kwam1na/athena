@@ -190,7 +190,7 @@ model Subcategory {
 model Transaction {
   id                       String            @id @default(uuid())
   gross_sales              Float?
-  net_sales                Float?
+  net_revenue              Float?
   units_sold               Int?
   user_id                  String
   store_id                 String

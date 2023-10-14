@@ -39,7 +39,7 @@ export const CurrencyProvider = ({
 
    useEffect(() => {
       const fetchStoreCurrency = async () => {
-         const res = await axios.get(`/api/stores/${params.storeId}`);
+         const res = await axios.get(`/api/v1/stores/${params.storeId}`);
          const { currency } = res?.data || {};
          setStoreCurrency(currency);
       };

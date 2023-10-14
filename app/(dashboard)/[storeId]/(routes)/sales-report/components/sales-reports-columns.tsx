@@ -7,7 +7,7 @@ export type SalesReportColumn = {
    id: string;
    title: string | null;
    grossSales: string;
-   netSales: string;
+   netRevenue: string;
    transactionDate: string;
    unitsSold: number;
    createdAt: string;
@@ -28,8 +28,8 @@ export const columns: ColumnDef<SalesReportColumn>[] = [
       header: 'Gross Sales',
    },
    {
-      accessorKey: 'netSales',
-      header: 'Net Sales',
+      accessorKey: 'netRevenue',
+      header: 'Net Revenue',
    },
    {
       accessorKey: 'unitsSold',

@@ -2,16 +2,16 @@ import axios from 'axios';
 
 // Configure base settings
 const api = axios.create({
-   baseURL: `/api`,
+   baseURL: `/api/v1`,
 });
 
 // Function to create a new product
-export const apiCreateSize = async (
+export const apiCreateCategory = async (
    storeId: string,
    data: Record<string, any>,
 ) => {
    try {
-      const response = await api.post(`/${storeId}/sizes`, data);
+      const response = await api.post(`/${storeId}/categories`, data);
       return response.data;
    } catch (error) {
       throw error;
@@ -19,9 +19,9 @@ export const apiCreateSize = async (
 };
 
 // Function to update a product by ID
-export const apiGetSize = async (id: string, storeId: string) => {
+export const apiGetCategory = async (id: string, storeId: string) => {
    try {
-      const response = await api.get(`/${storeId}/sizes/${id}`);
+      const response = await api.get(`/${storeId}/categories/${id}`);
       return response.data;
    } catch (error) {
       throw error;
@@ -29,9 +29,9 @@ export const apiGetSize = async (id: string, storeId: string) => {
 };
 
 // Function to update a product by ID
-export const apiGetSizes = async (storeId: string) => {
+export const apiGetCategories = async (storeId: string) => {
    try {
-      const response = await api.get(`/${storeId}/sizes`);
+      const response = await api.get(`/${storeId}/categories`);
       return response.data;
    } catch (error) {
       throw error;
@@ -39,13 +39,16 @@ export const apiGetSizes = async (storeId: string) => {
 };
 
 // Function to update a product by ID
-export const apiUpdateSize = async (
+export const apiUpdateCategory = async (
    id: string,
    storeId: string,
    updatedData: Record<string, any>,
 ) => {
    try {
-      const response = await api.patch(`/${storeId}/sizes/${id}`, updatedData);
+      const response = await api.patch(
+         `/${storeId}/categories/${id}`,
+         updatedData,
+      );
       return response.data;
    } catch (error) {
       throw error;
@@ -53,9 +56,9 @@ export const apiUpdateSize = async (
 };
 
 // Function to delete a product by ID
-export const apiDeleteSize = async (id: string, storeId: string) => {
+export const apiDeleteCategory = async (id: string, storeId: string) => {
    try {
-      const response = await api.delete(`/${storeId}/sizes/${id}`);
+      const response = await api.delete(`/${storeId}/categories/${id}`);
       return response.data;
    } catch (error) {
       throw error;

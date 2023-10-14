@@ -2,7 +2,7 @@ import axios from 'axios';
 
 // Configure base settings
 const api = axios.create({
-   baseURL: `/api`,
+   baseURL: `/api/v1`,
 });
 
 // Function to create a new product

@@ -23,7 +23,7 @@ const SalesReportPage = async ({ params }: { params: { storeId: string } }) => {
          title: report.transaction_report_title,
          transactionDate: format(report.transaction_date, 'MMM d, yyyy'),
          grossSales: fmt.format(report.gross_sales || 0),
-         netSales: fmt.format(report.net_sales || 0),
+         netRevenue: fmt.format(report.net_revenue || 0),
          unitsSold: report.units_sold || 0,
          createdAt: format(report.created_at, 'MMM d, yyyy'),
          updatedAt: format(report.updated_at, 'MMM d, yyyy'),

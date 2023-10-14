@@ -25,7 +25,7 @@ const Navbar = async () => {
    });
 
    return (
-      <div className="border-b pb-4">
+      <div className="pb-4">
          <div className="flex flex-col mt-8 ml-8 gap-6">
             <div className="flex">
                <div className="flex flex-col gap-4">

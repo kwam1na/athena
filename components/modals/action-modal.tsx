@@ -15,6 +15,13 @@ interface ActionModalProps {
    declineText?: string;
    loading?: boolean;
    children?: React.ReactNode;
+   ctaButtonVariant?:
+      | 'destructive'
+      | 'outline'
+      | 'secondary'
+      | 'ghost'
+      | 'link'
+      | 'default';
 }
 
 export const ActionModal: React.FC<ActionModalProps> = ({
@@ -28,6 +35,7 @@ export const ActionModal: React.FC<ActionModalProps> = ({
    declineText,
    loading,
    children,
+   ctaButtonVariant,
 }) => {
    return (
       <Modal
@@ -46,6 +54,7 @@ export const ActionModal: React.FC<ActionModalProps> = ({
                   isLoading={loading || false}
                   disabled={loading || confirmButtonDisabled}
                   onClick={onConfirm}
+                  variant={ctaButtonVariant || 'default'}
                >
                   {confirmText || 'Continue'}
                </LoadingButton>

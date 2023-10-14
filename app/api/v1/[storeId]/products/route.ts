@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@auth0/nextjs-auth0';
 import { createProduct, fetchProducts } from '@/lib/repositories/productsRepository';
 import { findStore } from '@/lib/repositories/storesRepository';
-import { generateSKU } from '../../utils';
+import { generateSKU } from '../../../utils';
 import { createSKUCounter, getSKUCounter, updateSKUCounter } from '@/lib/repositories/skuCounterRepository';
 
 export async function POST(

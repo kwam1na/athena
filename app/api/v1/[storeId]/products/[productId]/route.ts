@@ -3,7 +3,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@auth0/nextjs-auth0';
 import { deleteProduct, getProduct, updateProduct } from '@/lib/repositories/productsRepository';
 import { findStore } from '@/lib/repositories/storesRepository';
-import { deleteTransactionItem } from '@/lib/repositories/transactionItemsRepository';
 
 export async function GET(
     req: Request,
@@ -24,7 +23,7 @@ export async function GET(
 
 export async function DELETE(
     req: NextRequest,
-    { params }: { params: { transactionItemId: string; storeId: string } },
+    { params }: { params: { productId: string; storeId: string } },
 ) {
     try {
         const res = new NextResponse();
@@ -35,8 +34,8 @@ export async function DELETE(
             return new NextResponse('Unauthenticated', { status: 403 });
         }
 
-        if (!params.transactionItemId) {
-            return new NextResponse('TransactionItemId is required', { status: 400 });
+        if (!params.productId) {
+            return new NextResponse('Product id is required', { status: 400 });
         }
 
         const storeByUserId = await findStore({
@@ -48,11 +47,11 @@ export async function DELETE(
             return new NextResponse('Unauthorized', { status: 405 });
         }
 
-        const transactionItem = await deleteTransactionItem(params.transactionItemId);
+        const product = await deleteProduct(params.productId);
 
-        return NextResponse.json(transactionItem, res);
+        return NextResponse.json(product, res);
     } catch (error) {
-        console.log('[TRANSACTION_ITEM_DELETE]', (error as Error).message);
+        console.log('[PRODUCT_DELETE]', (error as Error).message);
         return new NextResponse('Internal error', { status: 500 });
     }
 }
@@ -86,33 +85,33 @@ export async function PATCH(
             return new NextResponse('Product id is required', { status: 400 });
         }
 
-        if (!name) {
-            return new NextResponse('Name is required', { status: 400 });
-        }
+        // if (!name) {
+        //     return new NextResponse('Name is required', { status: 400 });
+        // }
 
         // if (!images || !images.length) {
         //     return new NextResponse('Images are required', { status: 400 });
         // }
 
-        if (!price) {
-            return new NextResponse('Price is required', { status: 400 });
-        }
+        // if (!price) {
+        //     return new NextResponse('Price is required', { status: 400 });
+        // }
 
-        if (!cost_per_item) {
-            return new NextResponse('Cost per item is required', { status: 400 });
-        }
+        // if (!cost_per_item) {
+        //     return new NextResponse('Cost per item is required', { status: 400 });
+        // }
 
-        if (!count) {
-            return new NextResponse('Count is required', { status: 400 });
-        }
+        // if (!count) {
+        //     return new NextResponse('Count is required', { status: 400 });
+        // }
 
-        if (!category_id) {
-            return new NextResponse('Category id is required', { status: 400 });
-        }
+        // if (!category_id) {
+        //     return new NextResponse('Category id is required', { status: 400 });
+        // }
 
-        if (!subcategory_id) {
-            return new NextResponse('Subcategory id is required', { status: 400 });
-        }
+        // if (!subcategory_id) {
+        //     return new NextResponse('Subcategory id is required', { status: 400 });
+        // }
 
         const storeByUserId = await findStore({
             id: params.storeId,

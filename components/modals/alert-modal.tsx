@@ -7,13 +7,16 @@ import { Button } from '@/components/ui/button';
 import { LoadingButton } from '../ui/loading-button';
 
 interface AlertModalProps {
-   isOpen: boolean;
-   title?: string;
-   description?: string;
    ctaText?: string;
+   description?: string;
+   isOpen: boolean;
+   loading: boolean;
+   secondaryLoading?: boolean;
+   secondaryCtaText?: string;
+   title?: string;
    onClose: () => void;
    onConfirm: () => void;
-   loading: boolean;
+   onSecondaryConfirm?: () => void;
 }
 
 export const AlertModal: React.FC<AlertModalProps> = ({
@@ -21,9 +24,12 @@ export const AlertModal: React.FC<AlertModalProps> = ({
    isOpen,
    title,
    description,
+   loading,
    onClose,
    onConfirm,
-   loading,
+   onSecondaryConfirm,
+   secondaryLoading,
+   secondaryCtaText,
 }) => {
    const [isMounted, setIsMounted] = useState(false);
 
@@ -46,6 +52,15 @@ export const AlertModal: React.FC<AlertModalProps> = ({
             <Button disabled={loading} variant="outline" onClick={onClose}>
                Cancel
             </Button>
+            {onSecondaryConfirm && (
+               <LoadingButton
+                  isLoading={!!secondaryLoading}
+                  disabled={secondaryLoading}
+                  onClick={onSecondaryConfirm}
+               >
+                  {secondaryCtaText || 'Continue'}
+               </LoadingButton>
+            )}
             <LoadingButton
                isLoading={loading}
                disabled={loading}

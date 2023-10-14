@@ -4,6 +4,7 @@ import * as React from 'react';
 import { ColumnDef } from '@tanstack/react-table';
 import { CellAction } from './cell-action';
 import {
+   AlertMessage,
    AutoSavedTransaction,
    ReportEntryAction,
    TransactionItem,
@@ -11,6 +12,7 @@ import {
 
 export interface TransactionItemColumn extends TransactionItem {
    reportEntryAction: ReportEntryAction;
+   setAlertMessages: React.Dispatch<React.SetStateAction<AlertMessage[]>>;
    setTransactionItems: React.Dispatch<React.SetStateAction<TransactionItem[]>>;
    setFormattedItems: React.Dispatch<
       React.SetStateAction<TransactionItemColumn[]>

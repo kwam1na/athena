@@ -6,10 +6,11 @@ export const createTransaction = async (data: any) => {
     })
 }
 
-export const getTransaction = async (id: string) => {
+export const getTransaction = async (id: string, attr?: Record<string, any>) => {
     return await prismadb.transaction.findUnique({
         where: {
             id,
+            ...attr,
         },
         include: {
             transaction_items: true,

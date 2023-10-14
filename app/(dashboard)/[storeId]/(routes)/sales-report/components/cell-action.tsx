@@ -45,6 +45,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
       productId,
       transactionId,
       reportEntryAction,
+      setAlertMessages,
       setFormattedItems,
       setTransactionItems,
       setAutoSavedTransactions,
@@ -52,6 +53,11 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
 
    const handleTransactionItems = (action: 'update' | 'remove') => {
       if (!productId || !transactionDate || !transactionId) return;
+
+      // remove any alerts for this product
+      setAlertMessages((prev) => {
+         return prev.filter((alert) => alert.key !== productId);
+      });
 
       const key =
          reportEntryAction == 'new'
@@ -115,6 +121,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
             100
          ).toFixed(2),
          reportEntryAction,
+         setAlertMessages,
          setTransactionItems,
          setFormattedItems,
          setAutoSavedTransactions,

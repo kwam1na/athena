@@ -170,11 +170,11 @@ export const getTotalSales = (items: TransactionItem[]): number => {
 
 
 /**
- * Calculates the total sales from an array of TransactionItems.
+ * Calculates the net revenue from an array of TransactionItems.
  * @param items - Array of TransactionItem objects
- * @returns Total sales amount
+ * @returns Net revenue amount
  */
-export const getNetSales = (items: TransactionItem[]): number => {
+export const getNetRevenue = (items: TransactionItem[]): number => {
     const totalSales = getTotalSales(items);
     const totalCost = items.reduce((total, item) => total + (parseFloat(item.cost || '0') * (item.unitsSold || 0)), 0);
     return totalSales - totalCost

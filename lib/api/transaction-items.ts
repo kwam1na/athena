@@ -1,8 +1,9 @@
 import axios from 'axios';
+import { apiGetProduct, apiUpdateProduct } from './products';
 
 // Configure base settings
 const api = axios.create({
-   baseURL: `/api`,
+   baseURL: `/api/v1`,
 });
 
 // Function to create a new product
@@ -48,6 +49,15 @@ export const apiGetTransactionItem = async (id: string, storeId: string) => {
 // Function to delete a product by ID
 export const apiDeleteTransactionItem = async (id: string, storeId: string) => {
    try {
+      // restock the product before deleting
+      const transactionItem = await apiGetTransactionItem(id, storeId);
+      const { product_id, units_sold } = transactionItem;
+
+      const product = await apiGetProduct(product_id, storeId);
+      await apiUpdateProduct(product_id, storeId, {
+         id: product_id,
+         count: product.count + units_sold,
+      });
       const response = await api.delete(`/${storeId}/transactionItems/${id}`);
       return response.data;
    } catch (error) {

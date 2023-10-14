@@ -42,6 +42,7 @@ import {
    Search,
    Send,
    Trash,
+   X,
    XCircle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -63,7 +64,7 @@ import { CalendarDatePicker } from '@/components/ui/date-picker';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useStoreCurrency } from '@/providers/currency-provider';
 import { formatter, keysToCamelCase, keysToSnakeCase } from '@/lib/utils';
-import { format, isFuture, isSameDay } from 'date-fns';
+import { format, isFuture, isSameDay, set } from 'date-fns';
 import { ActionModal } from '@/components/modals/action-modal';
 import { useToast } from '@/components/ui/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -76,7 +77,7 @@ import {
    getCategorySalesAndUnits,
    getLocallySavedTransactions,
    getDraftsLocalStorageKey,
-   getNetSales,
+   getNetRevenue,
    getTotalSales,
    getTotalUnitsSold,
    removeLocallySavedTransaction,
@@ -108,6 +109,8 @@ import {
 import { apiDeleteTransactionItem } from '@/lib/api/transaction-items';
 import { Popover, PopoverTrigger } from '@/components/ui/popover';
 import { PopoverContent } from '@radix-ui/react-popover';
+import { apiRestockAndDeleteTransactionItem } from '@/lib/api/restock';
+import { Switch } from '@/components/ui/switch';
 
 interface IndividualSearchResultProps {
    index: number;
@@ -197,7 +200,7 @@ export interface AutoSavedTransaction {
    transactionItems: TransactionItem[];
 }
 
-interface AlertMessage {
+export interface AlertMessage {
    description?: string;
    key: string;
    title: string;
@@ -240,7 +243,15 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
    const [isUseSavedEditModalOpen, setIsUseSavedEditModalOpen] =
       useState(false);
    const [isAlertModalOpen, setIsAlertModalOpen] = useState(false);
+   const [
+      isDeletePublishedReportModalOpen,
+      setIsDeletePublishedReportModalOpen,
+   ] = useState(false);
    const [isDeletingReport, setIsDeletingReport] = useState(false);
+   const [isDeletingReportWithRestock, setIsDeletingReportWithRestock] =
+      useState(false);
+   const [deleteReportWithRestock, setDeleteReportWithRestock] =
+      useState(false);
    const [isEditingReportTitle, setIsEditingReportTitle] = useState(false);
    const [isAddingTransactionItem, setIsAddingTransactionItem] =
       useState(false);
@@ -500,14 +511,23 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
       if (!transaction) return;
 
       try {
-         setIsDeletingReport(true);
-         await apiDeleteTransaction(transaction.id, params.storeId);
+         if (deleteReportWithRestock) {
+            setIsDeletingReportWithRestock(true);
+         } else setIsDeletingReport(true);
+
+         await apiDeleteTransaction(
+            transaction.id,
+            params.storeId,
+            deleteReportWithRestock,
+         );
          removeLocallySavedTransaction(
             params.storeId,
             reportEntryAction,
             transaction.id,
          );
-         setIsAlertModalOpen(false);
+
+         handleDoneDeletingReport();
+
          toast({
             title: 'Report deleted successfully.',
          });
@@ -521,7 +541,6 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
 
          const { data } = (error as any).response;
          const { errorCode } = data;
-         console.log(errorCode);
 
          let errorMessage = 'An error occured deleting this report. Try again.';
          if (errorCode === 'P2025') {
@@ -533,9 +552,12 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
 
          toast({
             title: errorMessage,
+            description: (error as Error).message,
          });
       } finally {
-         setIsDeletingReport(false);
+         if (deleteReportWithRestock) {
+            setIsDeletingReportWithRestock(false);
+         } else setIsDeletingReport(false);
       }
    };
 
@@ -546,7 +568,9 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
     */
    const deleteTransactionItems = async (itemIDs: string[]) => {
       await Promise.all(
-         itemIDs.map((id) => apiDeleteTransactionItem(id, params.storeId)),
+         itemIDs.map((id) =>
+            apiRestockAndDeleteTransactionItem(id, params.storeId),
+         ),
       );
    };
 
@@ -661,10 +685,33 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
             100
          ).toFixed(2),
          reportEntryAction,
+         setAlertMessages,
          setTransactionItems,
          setFormattedItems,
          setAutoSavedTransactions,
       }));
+   };
+
+   /**
+    * Handles showing the appropriate alert modal when the user attempts to delete a report
+    */
+   const handleDeleteReport = () => {
+      if (fetchedTransaction) {
+         setIsDeletePublishedReportModalOpen(true);
+      } else {
+         setIsAlertModalOpen(true);
+      }
+   };
+
+   /**
+    * Handles hiding the appropriate alert modal when the user attempts to delete a report
+    */
+   const handleDoneDeletingReport = () => {
+      if (fetchedTransaction) {
+         setIsDeletePublishedReportModalOpen(false);
+      } else {
+         setIsAlertModalOpen(false);
+      }
    };
 
    /**
@@ -833,11 +880,10 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
     * @param data - Form values for product query.
     */
    const onSubmitSearchQuery = async (data: ProductQueryFormValues) => {
-      console.log('searching...');
       try {
          setIsSearching(true);
          const res = await axios.get(
-            `/api/${params.storeId}/search?query=${data.query}`,
+            `/api/v1/${params.storeId}/search?query=${data.query}`,
          );
          if (res.data.length) {
             const products = res.data.map((product: any) => ({
@@ -864,7 +910,9 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
    };
 
    /**
-    * Publishes the report
+    * Publishes the report.
+    *
+    * This is called when the user creates a new report or edits a published one.
     */
    const publishReport = async () => {
       if (!transaction) return;
@@ -874,32 +922,24 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
          transactionItems,
       );
 
-      // check counts for individual items and make sure inventory allows it.
-      // update products in inventory with new counts.
-
       try {
          setIsPublishingReport(true);
 
          const payload = transactionItems.map((item) => keysToSnakeCase(item));
-         await Promise.all(
-            payload.map((item) =>
-               apiCreateTransactionItemForTransaction(
-                  transaction.id,
-                  params.storeId,
-                  item,
-               ),
-            ),
+         const response = await axios.post(
+            `/api/v1/${params.storeId}/publish-report`,
+            {
+               transaction_items: payload,
+               transaction,
+               transaction_details: {
+                  gross_sales: getTotalSales(transactionItems),
+                  net_revenue: getNetRevenue(transactionItems),
+                  transaction_date: date,
+                  units_sold: getTotalUnitsSold(transactionItems),
+               },
+            },
          );
-
-         await apiUpdateTransaction(params.storeId, {
-            id: transaction.id,
-            transaction_report_title: transaction.reportTitle,
-            transaction_date: date,
-            status: 'published',
-            gross_sales: getTotalSales(transactionItems),
-            net_sales: getNetSales(transactionItems),
-            units_sold: getTotalUnitsSold(transactionItems),
-         });
+         console.log('response from publishing:', response.data);
 
          if (itemsToRemove.length > 0)
             await deleteTransactionItems(itemsToRemove);
@@ -915,7 +955,20 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
             title: `Report "${transaction.reportTitle}" published successfully.`,
          });
       } catch (error) {
-         console.log('error publishing report:', (error as Error).message);
+         const { data } = (error as any).response;
+         const { offendingItems } = data;
+
+         const messages = offendingItems?.map((item: any) => ({
+            title: `Inventory Shortage for ${item.product_name}`,
+            description: item.existing_units_sold
+               ? `Originally reported: ${item.existing_units_sold} units sold. Now reporting: ${item.updated_units_sold}. Available stock: ${item.inventory_count}. Update exceeds stock.`
+               : `Only ${item.inventory_count} units available. Cannot report ${item.updated_units_sold} units sold.`,
+            key: item.product_id,
+         }));
+
+         if (messages) setAlertMessages(messages);
+
+         // console.log('error publishing report:', (error as Error).message);
          toast({
             title: 'An error occurred publishing this report',
             description: `Error: ${(error as Error).message}`,
@@ -1279,7 +1332,7 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
 
    const categorySales = getCategorySalesAndUnits(transactionItems);
    const grossSales = getTotalSales(transactionItems);
-   const netSales = getNetSales(transactionItems);
+   const netSales = getNetRevenue(transactionItems);
    const unitsSold = getTotalUnitsSold(transactionItems);
 
    const Alerts = () => {
@@ -1362,7 +1415,9 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
 
       const onSubmit: SubmitHandler<TransactionItemFormValues> = (data) => {
          const { unitsSold } = data;
-         if (result.count && unitsSold > result.count) {
+         const productInventoryCount = result.count || 0;
+
+         if (productInventoryCount < 1 || unitsSold > productInventoryCount) {
             setIsOverStockCount(true);
          } else handleSubmitTransactionItem(data, result, index);
       };
@@ -1483,7 +1538,7 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
             {transaction && (
                <Button
                   variant={'destructive'}
-                  onClick={() => setIsAlertModalOpen(true)}
+                  onClick={handleDeleteReport}
                   disabled={isPublishingReport}
                >
                   <Trash className="mr-2 h-4 w-4" /> Delete
@@ -1510,7 +1565,6 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
             </Button>
 
             <LoadingButton
-               // variant={'outline'}
                onClick={publishReport}
                disabled={
                   alertMessages.length != 0 ||
@@ -1585,6 +1639,27 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
             onConfirm={useSavedEditedReport}
             onClose={discardSavedEditedReport}
          />
+
+         <ActionModal
+            isOpen={isDeletePublishedReportModalOpen}
+            title="Delete this report?"
+            description="This action cannot be undone"
+            ctaButtonVariant="destructive"
+            onConfirm={deleteReport}
+            loading={isDeletingReportWithRestock}
+            onClose={() => setIsDeletePublishedReportModalOpen(false)}
+         >
+            <div className="flex items-center justify-end space-x-2">
+               <Switch
+                  id="restock-inventory"
+                  onCheckedChange={(e) => {
+                     setDeleteReportWithRestock(e);
+                  }}
+               />
+               <Label htmlFor="restock-inventory">Restock inventory</Label>
+            </div>
+         </ActionModal>
+
          <AlertModal
             isOpen={isAlertModalOpen}
             onClose={() => {
@@ -1667,9 +1742,21 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
                      <Card className="bg-background w-full">
                         <CardHeader>
                            <CardDescription className="flex items-center">
-                              {!searching && searchResults
-                                 ? 'Search results'
-                                 : 'Searching...'}
+                              <div className="flex justify-between items-center w-full">
+                                 {!searching && searchResults
+                                    ? 'Search results'
+                                    : 'Searching...'}
+                                 <Button
+                                    // className="w-8 h-8"
+                                    variant={'outline'}
+                                    onClick={() => {
+                                       setIsSearching(false);
+                                       setSearchResults(undefined);
+                                    }}
+                                 >
+                                    <X className="h-4 w-4" />
+                                 </Button>
+                              </div>
                            </CardDescription>
                         </CardHeader>
                         <CardContent>
@@ -1877,7 +1964,7 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
                            <Card>
                               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                                  <CardTitle className="text-sm font-medium">
-                                    Net Sales
+                                    Net Revenue
                                  </CardTitle>
                                  <DollarSign className="h-4 w-4 text-muted-foreground" />
                               </CardHeader>
