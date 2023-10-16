@@ -26,7 +26,7 @@ import { formatter, keysToCamelCase } from '@/lib/utils';
 import { useStoreCurrency } from '@/providers/currency-provider';
 import { ActionModal } from '@/components/modals/action-modal';
 import { Input } from '@/components/ui/input';
-import { TransactionItem } from './client';
+import { TransactionItem } from '@/types/sales-report';
 
 interface CellActionProps {
    data: TransactionItemColumn;

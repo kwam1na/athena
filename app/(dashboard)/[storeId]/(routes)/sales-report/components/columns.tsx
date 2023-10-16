@@ -8,7 +8,7 @@ import {
    AutoSavedTransaction,
    ReportEntryAction,
    TransactionItem,
-} from './client';
+} from '@/types/sales-report';
 
 export interface TransactionItemColumn extends TransactionItem {
    reportEntryAction: ReportEntryAction;
@@ -21,6 +21,8 @@ export interface TransactionItemColumn extends TransactionItem {
       React.SetStateAction<AutoSavedTransaction[]>
    >;
 }
+
+export interface ViewTransactionItemColumn extends TransactionItem {}
 
 export const columns: ColumnDef<TransactionItemColumn>[] = [
    {
@@ -50,5 +52,32 @@ export const columns: ColumnDef<TransactionItemColumn>[] = [
    {
       id: 'actions',
       cell: ({ row }) => <CellAction data={row.original} />,
+   },
+];
+
+export const viewReportColumns: ColumnDef<ViewTransactionItemColumn>[] = [
+   {
+      accessorKey: 'productName',
+      header: 'Product',
+   },
+   {
+      accessorKey: 'sku',
+      header: 'SKU',
+   },
+   {
+      accessorKey: 'price',
+      header: 'List price',
+   },
+   {
+      accessorKey: 'costPerItem',
+      header: 'Cost',
+   },
+   {
+      accessorKey: 'unitsSold',
+      header: 'Units sold',
+   },
+   {
+      accessorKey: 'margin',
+      header: 'Margin (%)',
    },
 ];

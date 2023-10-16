@@ -42,7 +42,7 @@ const ProductsPage = async ({ params }: { params: { storeId: string } }) => {
       sku: item.sku,
       size: item.size?.value || 'N/A',
       color: item.color?.value || 'N/A',
-      count: item.count,
+      inventoryCount: item.inventory_count,
       createdAt: format(item.created_at, 'MMM d, yyyy'),
       updatedAt: format(item.updated_at, 'MMM d, yyyy'),
    }));

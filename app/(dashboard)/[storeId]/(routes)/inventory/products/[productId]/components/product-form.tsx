@@ -73,7 +73,7 @@ const formSchema = z.object({
    sku: z.string().optional(),
    color_id: z.string().optional(),
    size_id: z.string().optional(),
-   count: z.coerce.number().min(0).optional(),
+   inventory_count: z.coerce.number().min(0).optional(),
    is_featured: z.boolean().default(false).optional(),
    is_archived: z.boolean().default(false).optional(),
 });
@@ -641,7 +641,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                         />
                         <FormField
                            control={form.control}
-                           name="count"
+                           name="inventory_count"
                            render={({ field }) => (
                               <FormItem>
                                  <FormLabel>Count</FormLabel>

@@ -1,4 +1,5 @@
 import prismadb from '@/lib/prismadb';
+import { Transaction } from '@prisma/client';
 
 export const createTransaction = async (data: any) => {
     return await prismadb.transaction.create({

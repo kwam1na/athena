@@ -14,7 +14,7 @@ export type ProductColumn = {
    subcategory: string;
    sku: string;
    size: string;
-   count: number;
+   inventoryCount: number;
    color: string;
    createdAt: string;
    updatedAt: string;
@@ -48,8 +48,8 @@ export const columns: ColumnDef<ProductColumn>[] = [
       header: 'Margin (%)',
    },
    {
-      accessorKey: 'count',
-      header: 'Count',
+      accessorKey: 'inventoryCount',
+      header: 'Inventory count',
    },
    {
       accessorKey: 'category',

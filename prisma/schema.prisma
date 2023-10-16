@@ -94,28 +94,28 @@ model OrderItem {
 }
 
 model Product {
-  id             String      @id @default(uuid())
-  store_id       String // Foreign Key to Store
-  store          Store       @relation("StoreToProduct", fields: [store_id], references: [id])
-  category_id    String // Foreign Key to Category
-  category       Category    @relation("CategoryToProduct", fields: [category_id], references: [id])
-  subcategory_id String // Foreign Key to Subcategory
-  subcategory    Subcategory @relation("SubcategoryToProduct", fields: [subcategory_id], references: [id], onDelete: Cascade)
-  name           String
-  price          Float
-  cost_per_item  Float
-  count          Int
-  sku            String
-  is_featured    Boolean     @default(false)
-  is_archived    Boolean     @default(false)
-  size_id        String? // Foreign Key to Size
-  size           Size?       @relation(fields: [size_id], references: [id])
-  color_id       String? // Foreign Key to Color
-  color          Color?      @relation(fields: [color_id], references: [id])
-  images         Image[] // Relation to Image model
-  order_items    OrderItem[] // Relation to Order model
-  created_at     DateTime    @default(now())
-  updated_at     DateTime    @updatedAt
+  id              String      @id @default(uuid())
+  store_id        String // Foreign Key to Store
+  store           Store       @relation("StoreToProduct", fields: [store_id], references: [id])
+  category_id     String // Foreign Key to Category
+  category        Category    @relation("CategoryToProduct", fields: [category_id], references: [id])
+  subcategory_id  String // Foreign Key to Subcategory
+  subcategory     Subcategory @relation("SubcategoryToProduct", fields: [subcategory_id], references: [id], onDelete: Cascade)
+  name            String
+  price           Float
+  cost_per_item   Float
+  inventory_count Int
+  sku             String
+  is_featured     Boolean     @default(false)
+  is_archived     Boolean     @default(false)
+  size_id         String? // Foreign Key to Size
+  size            Size?       @relation(fields: [size_id], references: [id])
+  color_id        String? // Foreign Key to Color
+  color           Color?      @relation(fields: [color_id], references: [id])
+  images          Image[] // Relation to Image model
+  order_items     OrderItem[] // Relation to Order model
+  created_at      DateTime    @default(now())
+  updated_at      DateTime    @updatedAt
 
   @@index([store_id])
   @@index([category_id])

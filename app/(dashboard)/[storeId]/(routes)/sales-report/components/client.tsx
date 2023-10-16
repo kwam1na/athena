@@ -34,7 +34,6 @@ import {
    ArrowLeft,
    Calendar,
    DollarSign,
-   Info,
    PackageCheck,
    Plus,
    PlusCircle,
@@ -102,15 +101,19 @@ import {
 } from '@/components/ui/table';
 import {
    apiCreateTransaction,
-   apiCreateTransactionItemForTransaction,
    apiDeleteTransaction,
-   apiUpdateTransaction,
 } from '@/lib/api/transactions';
-import { apiDeleteTransactionItem } from '@/lib/api/transaction-items';
-import { Popover, PopoverTrigger } from '@/components/ui/popover';
-import { PopoverContent } from '@radix-ui/react-popover';
+
 import { apiRestockAndDeleteTransactionItem } from '@/lib/api/restock';
 import { Switch } from '@/components/ui/switch';
+import {
+   AlertMessage,
+   AutoSavedTransaction,
+   ReportEntryAction,
+   Transaction,
+   TransactionItem,
+   TransactionItemBody,
+} from '@/types/sales-report';
 
 interface IndividualSearchResultProps {
    index: number;
@@ -129,9 +132,8 @@ enum ProductQueryResultType {
 interface ProductQueryResult {
    category_id?: string;
    category?: Record<string, any>;
-   count?: number;
    cost?: string;
-   inventoryCount?: number;
+   inventory_count?: number;
    price?: string;
    product_id?: string;
    product_name?: string;
@@ -139,71 +141,6 @@ interface ProductQueryResult {
    subcategory?: Record<string, any>;
    subcategory_id?: string;
    type: ProductQueryResultType;
-}
-
-export type ReportEntryAction = 'new' | 'editing';
-
-export interface Transaction {
-   id: string;
-   reportTitle?: string;
-   transactionDate?: Date;
-   transactionItems?: TransactionItem[];
-}
-
-export interface TransactionWithoutID {
-   reportTitle?: string;
-   transactionDate?: Date;
-   transactionItems?: TransactionItem[];
-}
-
-export interface TransactionItem {
-   category?: string;
-   categoryId?: string;
-   createdAt?: string;
-   cost?: string;
-   id?: string;
-   price?: string;
-   productId?: string;
-   productName?: string;
-   subcategory?: string;
-   subcategoryId?: string;
-   sku?: string;
-   storeId?: string;
-   transactionDate?: Date;
-   transactionId?: string;
-   transactionReportTitle?: string;
-   unitsSold?: number;
-   updatedAt?: number;
-}
-
-export interface TransactionItemBody {
-   category?: string;
-   category_id?: string;
-   cost?: string;
-   price?: string;
-   product_id?: string;
-   product_name?: string;
-   sku?: string;
-   store_id?: string;
-   subcategory?: string;
-   subcategory_id?: string;
-   transaction_date?: Date;
-   transaction_id?: string;
-   transaction_report_title?: string;
-   units_sold?: number;
-}
-
-export interface AutoSavedTransaction {
-   id: string;
-   reportTitle?: string;
-   transactionDate?: Date;
-   transactionItems: TransactionItem[];
-}
-
-export interface AlertMessage {
-   description?: string;
-   key: string;
-   title: string;
 }
 
 const formSchema = z.object({
@@ -296,6 +233,9 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
       'outline' | 'destructive'
    >('outline');
    const [alertModalCTAText, setAlertModalCTAText] = useState('Continue');
+   const [headerText, setHeaderText] = useState(
+      fetchedTransaction ? 'Edit sales report' : 'Add new sales report',
+   );
 
    const params = useParams();
    const pathName = usePathname();
@@ -304,10 +244,6 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
 
    const { storeCurrency } = useStoreCurrency();
    const fmt = formatter(storeCurrency);
-
-   const headerText = fetchedTransaction
-      ? 'Edit sales report'
-      : 'Add new sales report';
 
    const reportEntryAction: ReportEntryAction = fetchedTransaction
       ? 'editing'
@@ -472,23 +408,28 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
       setAllowForceDelete(false);
       setEnteredReportTitle(undefined);
       setDate(new Date());
+      setHeaderText('Add new sales report');
       searchQueryForm.reset();
 
       const autoSavedTransactionsInLocalStorage = getAutoSavedTransactions(
          params.storeId,
          reportEntryAction,
       );
-      if (
-         !autoSaveIsInSync(
-            autoSavedTransactions,
-            autoSavedTransactionsInLocalStorage,
-         )
-      ) {
-         toast({
-            title: 'Autosaved',
-         });
+
+      // if editing, don't autosave as edits are saved under their own local storage key
+      if (!fetchedTransaction) {
+         if (
+            !autoSaveIsInSync(
+               autoSavedTransactions,
+               autoSavedTransactionsInLocalStorage,
+            )
+         ) {
+            toast({
+               title: 'Autosaved',
+            });
+         }
+         setAutoSavedTransactions(autoSavedTransactionsInLocalStorage);
       }
-      setAutoSavedTransactions(autoSavedTransactionsInLocalStorage);
    };
 
    /**
@@ -866,7 +807,10 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
     * Navigate back to the previous page, triggering autosave if needed.
     */
    const onGoBack = () => {
-      if (autoSavedTransactions.length > 0) {
+      if (
+         (transaction && !fetchedTransaction) ||
+         autoSavedTransactions.length > 0
+      ) {
          toast({
             title: 'Autosaved',
          });
@@ -888,13 +832,12 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
          if (res.data.length) {
             const products = res.data.map((product: any) => ({
                category_id: product.category_id,
-               count: product.count,
                product_name: product.name,
                product_id: product.id,
                sku: product.sku,
                price: product.price,
                cost: product.cost_per_item,
-               inventoryCount: product.count,
+               inventory_count: product.inventory_count,
                type: ProductQueryResultType.OK,
                ...product,
             }));
@@ -939,7 +882,6 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
                },
             },
          );
-         console.log('response from publishing:', response.data);
 
          if (itemsToRemove.length > 0)
             await deleteTransactionItems(itemsToRemove);
@@ -961,7 +903,7 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
          const messages = offendingItems?.map((item: any) => ({
             title: `Inventory Shortage for ${item.product_name}`,
             description: item.existing_units_sold
-               ? `Originally reported: ${item.existing_units_sold} units sold. Now reporting: ${item.updated_units_sold}. Available stock: ${item.inventory_count}. Update exceeds stock.`
+               ? `Originally reported: ${item.existing_units_sold} units sold. Now reporting: ${item.updated_provided_units_sold}. Available stock: ${item.inventory_count}. Update exceeds stock.`
                : `Only ${item.inventory_count} units available. Cannot report ${item.updated_units_sold} units sold.`,
             key: item.product_id,
          }));
@@ -1415,7 +1357,7 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
 
       const onSubmit: SubmitHandler<TransactionItemFormValues> = (data) => {
          const { unitsSold } = data;
-         const productInventoryCount = result.count || 0;
+         const productInventoryCount = result.inventory_count || 0;
 
          if (productInventoryCount < 1 || unitsSold > productInventoryCount) {
             setIsOverStockCount(true);
@@ -1439,7 +1381,7 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
                   />
                   <ProductInfoLabel
                      title="Inventory Count"
-                     value={`${result.count}`}
+                     value={`${result.inventory_count}`}
                   />
                </div>
 
@@ -1642,16 +1584,17 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
 
          <ActionModal
             isOpen={isDeletePublishedReportModalOpen}
-            title="Delete this report?"
-            description="This action cannot be undone"
+            title="Delete report"
+            description="Permanently remove this report and all its associated data."
             ctaButtonVariant="destructive"
             onConfirm={deleteReport}
-            loading={isDeletingReportWithRestock}
+            loading={isDeletingReport || isDeletingReportWithRestock}
             onClose={() => setIsDeletePublishedReportModalOpen(false)}
          >
             <div className="flex items-center justify-end space-x-2">
                <Switch
                   id="restock-inventory"
+                  defaultChecked
                   onCheckedChange={(e) => {
                      setDeleteReportWithRestock(e);
                   }}
@@ -1667,8 +1610,10 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
             }}
             onConfirm={allowForceDelete ? forceDeleteReport : deleteReport}
             ctaText={alertModalCTAText}
-            title={'Delete this report?'}
-            description={'This action cannot be undone.'}
+            title={'Delete report'}
+            description={
+               'Permanently remove this report and all its associated data.'
+            }
             loading={isDeletingReport}
          />
          <div className="flex">

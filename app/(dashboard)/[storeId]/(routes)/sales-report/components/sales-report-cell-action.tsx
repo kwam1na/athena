@@ -1,6 +1,5 @@
 'use client';
 
-import axios from 'axios';
 import { Edit, Eye, MoreHorizontal, Trash } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
 import { useState } from 'react';
@@ -10,22 +9,11 @@ import {
    DropdownMenu,
    DropdownMenuContent,
    DropdownMenuItem,
-   DropdownMenuLabel,
    DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
-import { TransactionItemColumn } from './columns';
-import { useToast } from '@/components/ui/use-toast';
-import {
-   getLocallySavedTransactions,
-   getDraftsLocalStorageKey,
-   saveItemInLocalStorage,
-} from '../utils';
-import { formatter, keysToCamelCase } from '@/lib/utils';
+import { formatter } from '@/lib/utils';
 import { useStoreCurrency } from '@/providers/currency-provider';
-import { ActionModal } from '@/components/modals/action-modal';
-import { Input } from '@/components/ui/input';
-import { TransactionItem } from './client';
 import { SalesReportColumn } from './sales-reports-columns';
 
 interface SalesReportCellActionProps {
@@ -57,12 +45,16 @@ export const SalesReportCellAction: React.FC<SalesReportCellActionProps> = ({
             </Button>
          </DropdownMenuTrigger>
          <DropdownMenuContent align="end" className="w-[160px]">
-            <DropdownMenuItem onClick={() => setIsEditUnitsModalOpen(true)}>
+            <DropdownMenuItem
+               onClick={() =>
+                  router.push(`/${params.storeId}/sales-report/${data.id}`)
+               }
+            >
                <Eye className="mr-2 h-4 w-4" /> View
             </DropdownMenuItem>
             <DropdownMenuItem
                onClick={() =>
-                  router.push(`/${params.storeId}/sales-report/${data.id}`)
+                  router.push(`/${params.storeId}/sales-report/${data.id}/edit`)
                }
             >
                <Edit className="mr-2 h-4 w-4" /> Edit
