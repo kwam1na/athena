@@ -42,16 +42,16 @@ export async function POST(
                 product_data: {
                     name: product.name,
                 },
-                unit_amount: product.price.toNumber() * 100,
+                unit_amount: product.price * 100,
             },
         });
     });
 
     const order = await prismadb.order.create({
         data: {
-            storeId: params.storeId,
+            store_id: params.storeId,
             isPaid: false,
-            orderItems: {
+            order_items: {
                 create: productIds.map((productId: string) => ({
                     product: {
                         connect: {
