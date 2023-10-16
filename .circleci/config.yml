@@ -7,4 +7,4 @@ workflows:
    build-and-test:
       jobs:
          - node/test:
-              version: 16.5.0
+              version: 16.13.0
