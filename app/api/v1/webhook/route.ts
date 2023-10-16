@@ -50,12 +50,12 @@ export async function POST(req: Request) {
                 phone: session?.customer_details?.phone || '',
             },
             include: {
-                orderItems: true,
+                order_items: true,
             },
         });
 
-        const productIds = order.orderItems.map(
-            (orderItem) => orderItem.productId,
+        const productIds = order.order_items.map(
+            (orderItem) => orderItem.product_id,
         );
 
         await prismadb.product.updateMany({
@@ -65,7 +65,7 @@ export async function POST(req: Request) {
                 },
             },
             data: {
-                isArchived: true,
+                is_archived: true,
             },
         });
     }
