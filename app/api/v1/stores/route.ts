@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prismadb from '@/lib/prismadb';
-import { handleError } from '../utils';
 import { withApiAuthRequired, getSession } from '@auth0/nextjs-auth0';
 import { createStore, getStore } from '@/lib/repositories/storesRepository';
+import { handleError } from '../../utils';
 
 const handler = withApiAuthRequired(async function POST(req: NextRequest) {
     try {
