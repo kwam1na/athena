@@ -3,6 +3,7 @@ import { format } from 'date-fns';
 import { ColorColumn } from './components/columns';
 import { ColorClient } from './components/client';
 import { fetchColors } from '@/lib/repositories/colorsRepository';
+import { getStore } from '@/lib/repositories/storesRepository';
 
 const ColorsPage = async ({ params }: { params: { storeId: string } }) => {
    const colors = await fetchColors(params.storeId);

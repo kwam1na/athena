@@ -68,7 +68,7 @@ export const SalesReportsClient: React.FC<SalesReportsClientProps> = ({
       <>
          <div className="flex items-center justify-between">
             <Heading
-               title={`Sales report`}
+               title={`Sales reports`}
                description="Manage the sales operations of your store"
             />
             <Button
@@ -81,7 +81,7 @@ export const SalesReportsClient: React.FC<SalesReportsClientProps> = ({
          </div>
          <Separator />
          <DataTableToolbar
-            searchKey="name"
+            searchKey="title"
             tableKey="sales-report"
             table={table}
          />

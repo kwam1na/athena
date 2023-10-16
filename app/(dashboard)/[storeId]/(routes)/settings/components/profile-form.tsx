@@ -35,6 +35,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { useUser } from '@auth0/nextjs-auth0/client';
 import { Claims } from '@auth0/nextjs-auth0';
 import { useWrappedUser } from '@/providers/wrapped-user-provider';
+import { LoadingButton } from '@/components/ui/loading-button';
 
 const formSchema = z.object({
    name: z.string().min(1),
@@ -63,7 +64,6 @@ export const ProfileForm: React.FC<ProfileFormProps> = ({ initialData }) => {
    const origin = useOrigin();
    const { toast } = useToast();
 
-   const { user, error, isLoading } = useUser();
    const { setWrappedUser } = useWrappedUser();
 
    const [isClient, setIsClient] = useState(false);
@@ -122,8 +122,6 @@ export const ProfileForm: React.FC<ProfileFormProps> = ({ initialData }) => {
       }
    };
 
-   const componentsLoading = loading && isLoading;
-
    return (
       <>
          {isClient ? (
@@ -155,7 +153,7 @@ export const ProfileForm: React.FC<ProfileFormProps> = ({ initialData }) => {
                                  <FormLabel>Name</FormLabel>
                                  <FormControl>
                                     <Input
-                                       disabled={componentsLoading}
+                                       disabled={loading}
                                        placeholder="Name"
                                        {...field}
                                     />
@@ -174,7 +172,7 @@ export const ProfileForm: React.FC<ProfileFormProps> = ({ initialData }) => {
                                  <FormControl>
                                     <Input
                                        type="email"
-                                       disabled={componentsLoading}
+                                       disabled={loading}
                                        placeholder="Email"
                                        {...field}
                                     />
@@ -183,50 +181,15 @@ export const ProfileForm: React.FC<ProfileFormProps> = ({ initialData }) => {
                               </FormItem>
                            )}
                         />
-
-                        {/* <FormField
-                     control={form.control}
-                     name="currency"
-                     render={({ field }) => (
-                        <FormItem>
-                           <FormLabel>Currency</FormLabel>
-                           <Select
-                              disabled={componentsLoading}
-                              onValueChange={field.onChange}
-                              value={field.value}
-                              defaultValue={field.value}
-                           >
-                              <FormControl>
-                                 <SelectTrigger>
-                                    <SelectValue
-                                       defaultValue={field.value}
-                                       placeholder="Select a currency"
-                                    />
-                                 </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                 {currencies.map((currency) => (
-                                    <SelectItem
-                                       key={currency.value}
-                                       value={currency.value}
-                                    >
-                                       {currency.label}
-                                    </SelectItem>
-                                 ))}
-                              </SelectContent>
-                           </Select>
-                           <FormMessage />
-                        </FormItem>
-                     )}
-                  /> */}
                      </div>
-                     <Button
-                        disabled={componentsLoading}
+                     <LoadingButton
+                        isLoading={loading}
+                        disabled={loading}
                         className="ml-auto"
                         type="submit"
                      >
-                        Save changes
-                     </Button>
+                        {loading ? 'Saving' : 'Save changes'}
+                     </LoadingButton>
                   </form>
                </Form>
             </>

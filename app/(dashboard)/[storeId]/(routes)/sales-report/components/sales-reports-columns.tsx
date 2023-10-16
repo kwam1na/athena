@@ -1,17 +1,26 @@
 'use client';
 
 import { ColumnDef } from '@tanstack/react-table';
+import { SalesReportCellAction } from './sales-report-cell-action';
 
 export type SalesReportColumn = {
    id: string;
-   grossSales: number;
-   createdAt: Date;
-   updatedAt: Date;
+   title: string | null;
+   grossSales: string;
+   netRevenue: string;
+   transactionDate: string;
+   unitsSold: number;
+   createdAt: string;
+   updatedAt: string;
 };
 
 export const columns: ColumnDef<SalesReportColumn>[] = [
    {
-      accessorKey: 'date',
+      accessorKey: 'title',
+      header: 'Report title',
+   },
+   {
+      accessorKey: 'transactionDate',
       header: 'Date',
    },
    {
@@ -19,7 +28,19 @@ export const columns: ColumnDef<SalesReportColumn>[] = [
       header: 'Gross Sales',
    },
    {
+      accessorKey: 'netRevenue',
+      header: 'Net Revenue',
+   },
+   {
+      accessorKey: 'unitsSold',
+      header: 'Total Units Sold',
+   },
+   {
       accessorKey: 'updatedAt',
       header: 'Updated',
+   },
+   {
+      id: 'actions',
+      cell: ({ row }) => <SalesReportCellAction data={row.original} />,
    },
 ];

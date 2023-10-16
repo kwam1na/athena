@@ -31,6 +31,12 @@ import {
 } from '@/components/ui/select';
 import { useToast } from '@/components/ui/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { LoadingButton } from '@/components/ui/loading-button';
+import {
+   apiCreateSubcategory,
+   apiDeleteSubcategory,
+   apiUpdateSubcategory,
+} from '@/lib/api/subcategories';
 
 const formSchema = z.object({
    name: z.string().min(2),
@@ -62,10 +68,9 @@ export const SubategoryForm: React.FC<SubcategoryFormProps> = ({
    const description = initialData
       ? 'Edit a subcategory.'
       : 'Add a new subcategory';
-   const toastMessage = initialData
-      ? 'Subcategory updated.'
-      : 'Subcategory created.';
    const action = initialData ? 'Save changes' : 'Create';
+   const loadingAction = loading ? (initialData ? 'Saving' : 'Creating') : '';
+   const buttonText = loading ? loadingAction : action;
 
    const form = useForm<SubcategoryFormValues>({
       resolver: zodResolver(formSchema),
@@ -84,12 +89,13 @@ export const SubategoryForm: React.FC<SubcategoryFormProps> = ({
       try {
          setLoading(true);
          if (initialData) {
-            await axios.patch(
-               `/api/${params.storeId}/subcategories/${params.subcategoryId}`,
+            await apiUpdateSubcategory(
+               params.subcategoryId,
+               params.storeId,
                data,
             );
          } else {
-            await axios.post(`/api/${params.storeId}/subcategories`, data);
+            await apiCreateSubcategory(params.storeId, data);
          }
          toast({
             title: `Category '${data.name}' ${
@@ -115,9 +121,7 @@ export const SubategoryForm: React.FC<SubcategoryFormProps> = ({
    const onDelete = async () => {
       try {
          setLoading(true);
-         await axios.delete(
-            `/api/${params.storeId}/subcategories/${params.subcategoryId}`,
-         );
+         await apiDeleteSubcategory(params.subcategoryId, params.storeId);
          router.refresh();
          router.push(`/${params.storeId}/inventory/subcategories`);
          toast({
@@ -184,10 +188,9 @@ export const SubategoryForm: React.FC<SubcategoryFormProps> = ({
                <Button
                   disabled={loading}
                   variant="destructive"
-                  size="sm"
                   onClick={() => setOpen(true)}
                >
-                  <Trash className="h-4 w-4" />
+                  <Trash className="mr-2 h-4 w-4" /> Delete
                </Button>
             )}
          </div>
@@ -286,9 +289,14 @@ export const SubategoryForm: React.FC<SubcategoryFormProps> = ({
                      )}
                   /> */}
                </div>
-               <Button disabled={loading} className="ml-auto" type="submit">
-                  {action}
-               </Button>
+               <LoadingButton
+                  isLoading={loading}
+                  disabled={loading}
+                  className="ml-auto"
+                  type="submit"
+               >
+                  {buttonText}
+               </LoadingButton>
             </form>
          </Form>
       </>

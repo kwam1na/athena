@@ -3,8 +3,11 @@ import { format } from 'date-fns';
 import { CategoryColumn } from './components/columns';
 import { CategoriesClient } from './components/client';
 import { fetchCategories } from '@/lib/repositories/categoriesRepository';
+import { getStore } from '@/lib/repositories/storesRepository';
 
 const CategoriesPage = async ({ params }: { params: { storeId: string } }) => {
+   const store = await getStore(params.storeId);
+   const storeName = store?.name || 'your store';
    const categories = await fetchCategories(params.storeId);
    const categoriesWithProductCount = categories.map((category) => {
       const productCount = category.products.reduce(
@@ -30,7 +33,10 @@ const CategoriesPage = async ({ params }: { params: { storeId: string } }) => {
    return (
       <div className="flex-col">
          <div className="flex-1 space-y-4 p-8 pt-6">
-            <CategoriesClient data={formattedCategories} />
+            <CategoriesClient
+               data={formattedCategories}
+               storeName={storeName}
+            />
          </div>
       </div>
    );

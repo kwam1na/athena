@@ -50,7 +50,7 @@ export const WrappedUserProvider = ({
    useEffect(() => {
       const fetchUser = async () => {
          setIsLoading(true);
-         const res = await axios.get(`/api/users`);
+         const res = await axios.get(`/api/v1/users`);
          const user = res?.data || {};
          setWrappedUser(user);
          setIsLoading(false);

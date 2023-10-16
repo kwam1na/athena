@@ -14,6 +14,7 @@ const ProductsPage = async ({ params }: { params: { storeId: string } }) => {
    const subcategories = await fetchSubcategories(params.storeId);
 
    const store = await getStore(params.storeId);
+   const storeName = store?.name || 'your store';
    const fmt = formatter(store?.currency || 'usd');
 
    const categoryOptions = categories.map((category) => ({
@@ -31,19 +32,17 @@ const ProductsPage = async ({ params }: { params: { storeId: string } }) => {
       name: item.name,
       isFeatured: item.is_featured,
       isArchived: item.is_archived,
-      price: fmt.format(item.price.toNumber()),
-      costPerItem: fmt.format(item.cost_per_item.toNumber()),
-      margin: (
-         ((item.price.toNumber() - item.cost_per_item.toNumber()) /
-            item.price.toNumber()) *
-         100
-      ).toFixed(2),
+      price: fmt.format(item.price),
+      costPerItem: fmt.format(item.cost_per_item),
+      margin: (((item.price - item.cost_per_item) / item.price) * 100).toFixed(
+         2,
+      ),
       category: item.category.name,
       subcategory: item.subcategory.name,
       sku: item.sku,
       size: item.size?.value || 'N/A',
       color: item.color?.value || 'N/A',
-      count: item.count,
+      inventoryCount: item.inventory_count,
       createdAt: format(item.created_at, 'MMM d, yyyy'),
       updatedAt: format(item.updated_at, 'MMM d, yyyy'),
    }));
@@ -52,6 +51,7 @@ const ProductsPage = async ({ params }: { params: { storeId: string } }) => {
       <div className="flex-col">
          <div className="flex-1 space-y-4 p-8 pt-6">
             <ProductsClient
+               storeName={storeName}
                data={formattedProducts}
                categoryOptions={categoryOptions}
                subcategoryOptions={subcategoryOptions}

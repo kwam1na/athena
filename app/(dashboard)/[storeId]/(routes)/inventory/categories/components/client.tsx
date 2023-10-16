@@ -27,9 +27,13 @@ import { DataTableToolbar } from '@/components/ui/data-table-toolbar/products-ta
 
 interface CategoriesClientProps {
    data: CategoryColumn[];
+   storeName: string;
 }
 
-export const CategoriesClient: React.FC<CategoriesClientProps> = ({ data }) => {
+export const CategoriesClient: React.FC<CategoriesClientProps> = ({
+   data,
+   storeName,
+}) => {
    const params = useParams();
    const router = useRouter();
 
@@ -67,7 +71,7 @@ export const CategoriesClient: React.FC<CategoriesClientProps> = ({ data }) => {
          <div className="flex items-center justify-between">
             <Heading
                title={`Categories`}
-               description="Manage categories for your store"
+               description={`Manage categories for ${storeName}`}
             />
             <Button
                onClick={() =>

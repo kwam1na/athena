@@ -7,6 +7,7 @@ import './globals.css';
 import { UserProvider } from '@auth0/nextjs-auth0/client';
 import { CurrencyProvider } from '@/providers/currency-provider';
 import { WrappedUserProvider } from '@/providers/wrapped-user-provider';
+import { ExchangeRateProvider } from '@/providers/exchange-rate-provider';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -29,7 +30,9 @@ export default async function RootLayout({
                <ModalProvider />
                <UserProvider>
                   <WrappedUserProvider>
-                     <CurrencyProvider>{children}</CurrencyProvider>
+                     <CurrencyProvider>
+                        <ExchangeRateProvider>{children}</ExchangeRateProvider>
+                     </CurrencyProvider>
                   </WrappedUserProvider>
                </UserProvider>
             </ThemeProvider>

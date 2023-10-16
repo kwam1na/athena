@@ -23,6 +23,8 @@ import { Separator } from '@/components/ui/separator';
 import { Heading } from '@/components/ui/heading';
 import { AlertModal } from '@/components/modals/alert-modal';
 import { useToast } from '@/components/ui/use-toast';
+import { LoadingButton } from '@/components/ui/loading-button';
+import { apiCreateSize, apiDeleteSize, apiUpdateSize } from '@/lib/api/sizes';
 
 const formSchema = z.object({
    name: z.string().min(1),
@@ -45,8 +47,9 @@ export const SizeForm: React.FC<SizeFormProps> = ({ initialData }) => {
 
    const title = initialData ? 'Edit size' : 'Create size';
    const description = initialData ? 'Edit a size.' : 'Add a new size';
-   const toastMessage = initialData ? 'Size updated.' : 'Size created.';
    const action = initialData ? 'Save changes' : 'Create';
+   const loadingAction = loading ? (initialData ? 'Saving' : 'Creating') : '';
+   const buttonText = loading ? loadingAction : action;
 
    const form = useForm<SizeFormValues>({
       resolver: zodResolver(formSchema),
@@ -59,12 +62,9 @@ export const SizeForm: React.FC<SizeFormProps> = ({ initialData }) => {
       try {
          setLoading(true);
          if (initialData) {
-            await axios.patch(
-               `/api/${params.storeId}/sizes/${params.sizeId}`,
-               data,
-            );
+            await apiUpdateSize(params.sizeId, params.storeId, data);
          } else {
-            await axios.post(`/api/${params.storeId}/sizes`, data);
+            await apiCreateSize(params.storeId, data);
          }
          router.refresh();
          router.push(`/${params.storeId}/inventory/sizes`);
@@ -83,7 +83,7 @@ export const SizeForm: React.FC<SizeFormProps> = ({ initialData }) => {
    const onDelete = async () => {
       try {
          setLoading(true);
-         await axios.delete(`/api/${params.storeId}/sizes/${params.sizeId}`);
+         await apiDeleteSize(params.sizeId, params.storeId);
          router.refresh();
          router.push(`/${params.storeId}/inventory/sizes`);
          toast({
@@ -118,10 +118,9 @@ export const SizeForm: React.FC<SizeFormProps> = ({ initialData }) => {
                <Button
                   disabled={loading}
                   variant="destructive"
-                  size="sm"
                   onClick={() => setOpen(true)}
                >
-                  <Trash className="h-4 w-4" />
+                  <Trash className="mr-2 h-4 w-4" /> Delete
                </Button>
             )}
          </div>
@@ -167,9 +166,14 @@ export const SizeForm: React.FC<SizeFormProps> = ({ initialData }) => {
                      )}
                   />
                </div>
-               <Button disabled={loading} className="ml-auto" type="submit">
-                  {action}
-               </Button>
+               <LoadingButton
+                  isLoading={loading}
+                  disabled={loading}
+                  className="ml-auto"
+                  type="submit"
+               >
+                  {buttonText}
+               </LoadingButton>
             </form>
          </Form>
       </>

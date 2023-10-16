@@ -4,6 +4,7 @@ import { SubcategoryColumn } from './components/columns';
 import { SubcategoriesClient } from './components/client';
 import { fetchSubcategories } from '@/lib/repositories/subcategoriesRepository';
 import { fetchCategories } from '@/lib/repositories/categoriesRepository';
+import { getStore } from '@/lib/repositories/storesRepository';
 
 const SubcategoriesPage = async ({
    params,
@@ -12,6 +13,8 @@ const SubcategoriesPage = async ({
 }) => {
    const subcategories = await fetchSubcategories(params.storeId);
    const categories = await fetchCategories(params.storeId);
+   const store = await getStore(params.storeId);
+   const storeName = store?.name || 'your store';
 
    const categoryOptions = categories.map((category) => ({
       label: category.name,
@@ -45,6 +48,7 @@ const SubcategoriesPage = async ({
             <SubcategoriesClient
                data={formattedSubcategories}
                categoryOptions={categoryOptions}
+               storeName={storeName}
             />
          </div>
       </div>

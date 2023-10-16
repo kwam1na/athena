@@ -1,4 +1,5 @@
 import prismadb from '@/lib/prismadb';
+import { Transaction } from '@prisma/client';
 
 export const createTransaction = async (data: any) => {
     return await prismadb.transaction.create({
@@ -6,10 +7,14 @@ export const createTransaction = async (data: any) => {
     })
 }
 
-export const getTransaction = async (id: string) => {
+export const getTransaction = async (id: string, attr?: Record<string, any>) => {
     return await prismadb.transaction.findUnique({
         where: {
             id,
+            ...attr,
+        },
+        include: {
+            transaction_items: true,
         }
     })
 }
@@ -39,5 +44,8 @@ export const fetchTransactions = async (keys: { store_id: string;[key: string]: 
         orderBy: {
             created_at: 'desc',
         },
+        include: {
+            transaction_items: true
+        }
     });
 }

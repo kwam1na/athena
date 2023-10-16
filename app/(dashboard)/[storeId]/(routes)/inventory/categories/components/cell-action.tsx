@@ -10,7 +10,6 @@ import {
    DropdownMenu,
    DropdownMenuContent,
    DropdownMenuItem,
-   DropdownMenuLabel,
    DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useCategoryModal } from '@/hooks/use-category-modal';
@@ -18,6 +17,7 @@ import { AlertModal } from '@/components/modals/alert-modal';
 import { useToast } from '@/components/ui/use-toast';
 
 import { CategoryColumn } from './columns';
+import { apiDeleteCategory } from '@/lib/api/categories';
 
 interface CellActionProps {
    data: CategoryColumn;
@@ -33,7 +33,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
    const onConfirm = async () => {
       try {
          setLoading(true);
-         await axios.delete(`/api/${params.storeId}/categories/${data.id}`);
+         await apiDeleteCategory(data.id, params.storeId);
          toast({
             title: `Category '${data.name}' deleted`,
          });

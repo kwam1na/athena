@@ -17,6 +17,7 @@ import {
 
 import { ProductColumn } from './columns';
 import { useToast } from '@/components/ui/use-toast';
+import { apiDeleteProduct } from '@/lib/api/products';
 
 interface CellActionProps {
    data: ProductColumn;
@@ -32,7 +33,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
    const onConfirm = async () => {
       try {
          setLoading(true);
-         await axios.delete(`/api/${params.storeId}/products/${data.id}`);
+         await apiDeleteProduct(data.id, params.storeId);
          toast({
             title: `Product '${data.name} deleted.`,
          });
