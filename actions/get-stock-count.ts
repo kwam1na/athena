@@ -7,9 +7,9 @@ export const getStockCount = async (storeId: string) => {
             is_archived: false,
         },
         _sum: {
-            count: true,
+            inventory_count: true,
         },
     });
 
-    return totalCount._sum.count || 0;
+    return totalCount._sum.inventory_count || 0;
 };
