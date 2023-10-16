@@ -11,7 +11,7 @@ const CategoriesPage = async ({ params }: { params: { storeId: string } }) => {
    const categories = await fetchCategories(params.storeId);
    const categoriesWithProductCount = categories.map((category) => {
       const productCount = category.products.reduce(
-         (total, product) => total + (product.count || 0),
+         (total, product) => total + (product.inventory_count || 0),
          0,
       );
       return {

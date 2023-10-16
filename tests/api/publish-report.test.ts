@@ -77,7 +77,7 @@ describe('when checkForOffendingItems is invoked', () => {
         expect(offendingItems).toEqual([]);
     });
 
-    it('should add to offendingItems if no existingItem and item.units_sold > product.count', () => {
+    it('should add to offendingItems if no existingItem and item.units_sold > product.inventory_count', () => {
         const offendingItems: any[] = [];
         const updatedItem = { product_id: '1', product_name: 'test-product', units_sold: 9 };
         const product = { product_id: '1', product_name: 'test-product', inventory_count: 5 };
@@ -94,7 +94,7 @@ describe('when checkForOffendingItems is invoked', () => {
         ]);
     });
 
-    it('should not update offendingItems if no existingItem and item.units_sold <= product.count', () => {
+    it('should not update offendingItems if no existingItem and item.units_sold <= product.inventory_count', () => {
         const offendingItems: any[] = [];
         const updatedItem = { product_id: '1', product_name: 'test-product', units_sold: 5 };
         const product = { product_id: '1', product_name: 'test-product', inventory_count: 5 };
