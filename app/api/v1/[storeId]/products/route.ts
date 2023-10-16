@@ -20,7 +20,7 @@ export async function POST(
         const {
             name,
             price,
-            count,
+            inventory_count,
             cost_per_item,
             category_id,
             subcategory_id,
@@ -44,8 +44,8 @@ export async function POST(
             return new NextResponse('Price is required', { status: 400 });
         }
 
-        if (!count) {
-            return new NextResponse('Count is required', { status: 400 });
+        if (!inventory_count) {
+            return new NextResponse('Inventory count is required', { status: 400 });
         }
 
         if (!cost_per_item) {

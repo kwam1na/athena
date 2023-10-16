@@ -181,7 +181,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
            //   images: [],
            price: Number('a'),
            cost_per_item: Number('a'),
-           count: 1,
+           inventory_count: 1,
            category_id: '',
            subcategory_id: '',
            sku: '',

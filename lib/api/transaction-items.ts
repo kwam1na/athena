@@ -56,7 +56,7 @@ export const apiDeleteTransactionItem = async (id: string, storeId: string) => {
       const product = await apiGetProduct(product_id, storeId);
       await apiUpdateProduct(product_id, storeId, {
          id: product_id,
-         count: product.count + units_sold,
+         inventory_count: product.inventory_count + units_sold,
       });
       const response = await api.delete(`/${storeId}/transactionItems/${id}`);
       return response.data;

@@ -23,7 +23,7 @@ const SubcategoriesPage = async ({
 
    const subcategoriesWithProductCount = subcategories.map((subcategory) => {
       const productCount = subcategory.products.reduce(
-         (total, product) => total + (product.count || 0),
+         (total, product) => total + (product.inventory_count || 0),
          0,
       );
       return {

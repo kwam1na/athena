@@ -126,22 +126,6 @@ interface SalesReportClientProps {
    fetchedTransaction?: Transaction;
 }
 
-const formSchema = z.object({
-   query: z.string().min(1),
-});
-
-const inventoryCountFormSchema = z.object({
-   count: z.coerce.number().min(1),
-});
-
-const transactionItemFormSchema = z.object({
-   unitsSold: z.coerce.number().min(1),
-});
-
-type ProductQueryFormValues = z.infer<typeof formSchema>;
-type TransactionItemFormValues = z.infer<typeof transactionItemFormSchema>;
-type InventoryCountFormValues = z.infer<typeof inventoryCountFormSchema>;
-
 export const ViewReportClient: React.FC<SalesReportClientProps> = ({
    fetchedTransaction,
 }) => {
@@ -188,10 +172,6 @@ export const ViewReportClient: React.FC<SalesReportClientProps> = ({
 
    const { storeCurrency } = useStoreCurrency();
    const fmt = formatter(storeCurrency);
-
-   // const [reportFormatCurrency, setReportFormatCurrency] =
-   //    useState(storeCurrency);
-   // const { exchangeRate } = useExchangeRate();
 
    const table = useReactTable({
       data: formattedItems,

@@ -290,13 +290,6 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
       },
    });
 
-   const inventoryCountForm = useForm<InventoryCountFormValues>({
-      resolver: zodResolver(inventoryCountFormSchema),
-      defaultValues: {
-         count: 1,
-      },
-   });
-
    /**
     * Check if there is a saved edit and populate the form with it if it exists.
     * @param {Transaction} fetchedTransaction - The transaction fetched from the server.

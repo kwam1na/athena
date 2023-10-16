@@ -62,7 +62,7 @@ export const checkInventoryConstraints = async (prisma: any, hasTransactionItems
         try {
             product = await prisma.product.findUnique({
                 where: { id: item.product_id },
-                select: { count: true },
+                select: { inventory_count: true },
             });
         } catch (error) {
             console.error("Failed to find product", error);

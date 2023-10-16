@@ -37,7 +37,7 @@ export async function DELETE(
             // Update inventory
             await prisma.product.update({
                 where: { id: product.id },
-                data: { count: { increment: transactionItem.units_sold } },
+                data: { inventory_count: { increment: transactionItem.units_sold } },
             });
 
             // Delete transaction item
