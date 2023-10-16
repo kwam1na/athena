@@ -123,7 +123,7 @@ describe('when checkForOffendingItems is invoked', () => {
 
 describe('when checkInventoryConstraints is invoked', () => {
     it('should return offendingItems for a new transaction', async () => {
-        (prismadb.product.findUnique as jest.Mock).mockResolvedValueOnce({ product_id: '1', product_name: 'test-product', count: 5 });
+        (prismadb.product.findUnique as jest.Mock).mockResolvedValueOnce({ product_id: '1', product_name: 'test-product', inventory_count: 5 });
 
         const result = await checkInventoryConstraints(prismadb, true, [{ id: '1', product_id: '1', product_name: 'test-product', units_sold: 9 }], undefined);
         const expectedResponse = {
@@ -141,7 +141,7 @@ describe('when checkInventoryConstraints is invoked', () => {
     });
 
     it('should return all offendingItems for a transaction', async () => {
-        (prismadb.product.findUnique as jest.Mock).mockResolvedValueOnce({ product_id: '1', product_name: 'test-product', count: 5 }).mockResolvedValueOnce({ product_id: '2', product_name: 'test-product', count: 1 });
+        (prismadb.product.findUnique as jest.Mock).mockResolvedValueOnce({ product_id: '1', product_name: 'test-product', inventory_count: 5 }).mockResolvedValueOnce({ product_id: '2', product_name: 'test-product', inventory_count: 1 });
 
         const result = await checkInventoryConstraints(prismadb, true, [{ id: '1', product_id: '1', product_name: 'test-product', units_sold: 9 }, { id: '2', product_id: '2', product_name: 'test-product', units_sold: 9 }], undefined);
         const expectedResponse = {
@@ -165,7 +165,7 @@ describe('when checkInventoryConstraints is invoked', () => {
     });
 
     it('should return empty offendingItems if no offending items', async () => {
-        (prismadb.product.findUnique as jest.Mock).mockResolvedValueOnce({ product_id: '1', product_name: 'test-product', count: 15 });
+        (prismadb.product.findUnique as jest.Mock).mockResolvedValueOnce({ product_id: '1', product_name: 'test-product', inventory_count: 15 });
 
         const result = await checkInventoryConstraints(prismadb, true, [{ id: '1', product_id: '1', product_name: 'test-product', units_sold: 9 }], undefined);
         const expectedResponse = {
@@ -184,7 +184,7 @@ describe('when checkInventoryConstraints is invoked', () => {
     });
 
     it('should handle when existingTransaction exists and there are changes to the transaction items (negative inventory change)', async () => {
-        (prismadb.product.findUnique as jest.Mock).mockResolvedValueOnce({ product_id: '1', product_name: 'test-product', count: 5 });
+        (prismadb.product.findUnique as jest.Mock).mockResolvedValueOnce({ product_id: '1', product_name: 'test-product', inventory_count: 5 });
 
         const existingTransaction = {
             id: '1',
@@ -207,7 +207,7 @@ describe('when checkInventoryConstraints is invoked', () => {
     });
 
     it('should handle when existingTransaction exists and there are changes to the transaction items (positive inventory change)', async () => {
-        (prismadb.product.findUnique as jest.Mock).mockResolvedValueOnce({ product_id: '1', product_name: 'test-product', count: 5 });
+        (prismadb.product.findUnique as jest.Mock).mockResolvedValueOnce({ product_id: '1', product_name: 'test-product', inventory_count: 5 });
 
         const existingTransaction = {
             id: '1',
@@ -222,7 +222,7 @@ describe('when checkInventoryConstraints is invoked', () => {
     });
 
     it('should handle when existingTransaction exists and there are changes to the transaction items (no inventory change)', async () => {
-        (prismadb.product.findUnique as jest.Mock).mockResolvedValueOnce({ product_id: '1', product_name: 'test-product', count: 5 });
+        (prismadb.product.findUnique as jest.Mock).mockResolvedValueOnce({ product_id: '1', product_name: 'test-product', inventory_count: 5 });
 
         const existingTransaction = {
             id: '1',
