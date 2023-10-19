@@ -1,6 +1,6 @@
 import { format } from 'date-fns';
 
-import { formatter, keysToCamelCase } from '@/lib/utils';
+import { formatter, keysToCamelCase, reflect } from '@/lib/utils';
 
 import { TransactionsReportsClient } from './components/transactions-reports-client';
 import { getStore } from '@/lib/repositories/storesRepository';
@@ -18,13 +18,53 @@ import {
 } from '@/actions/get-transactions-metrics';
 
 const SalesReportPage = async ({ params }: { params: { storeId: string } }) => {
-   const store = await getStore(params.storeId);
+   const results = await Promise.all([
+      reflect(getStore(params.storeId)),
+      reflect(
+         fetchTransactions({
+            store_id: params.storeId,
+            status: 'published',
+         }),
+      ),
+      reflect(getTotalGrossRevenue(params.storeId)),
+      reflect(getTotalNetRevenue(params.storeId)),
+      reflect(getTotalUnitsSoldForStore(params.storeId)),
+      reflect(getCategoryWiseMetrics(params.storeId)),
+      reflect(getAverageUnitsPerTransaction(params.storeId)),
+      reflect(getAverageTransactionValue(params.storeId)),
+      reflect(getRevenueChange(params.storeId, 'gross')),
+      reflect(getRevenueChange(params.storeId, 'net')),
+      reflect(getTotalUnitsSoldChange(params.storeId)),
+   ]);
+
+   const store =
+      results[0].status === 'fulfilled' ? results[0].value : undefined;
    const fmt = formatter(store?.currency || 'usd');
 
-   const transactionReports = await fetchTransactions({
-      store_id: params.storeId,
-      status: 'published',
-   });
+   const transactionReports =
+      results[1].status === 'fulfilled' ? results[1].value : [];
+
+   const grossRevenue =
+      results[2].status === 'fulfilled' ? results[2].value : 0;
+
+   const netRevenue = results[3].status === 'fulfilled' ? results[3].value : 0;
+   const totalUnitsSold =
+      results[4].status === 'fulfilled' ? results[4].value : 0;
+   const categoriesMetrics =
+      results[5].status === 'fulfilled' ? results[5].value : {};
+
+   const averageUnitsPerTransaction =
+      results[6].status === 'fulfilled' ? results[6].value : 0;
+   const averageTransactionValue =
+      results[7].status === 'fulfilled' ? results[7].value : 0;
+
+   const grossRevenuePercentageChange =
+      results[8].status === 'fulfilled' ? results[8].value : 0;
+   const netRevenuePercentageChange =
+      results[9].status === 'fulfilled' ? results[9].value : 0;
+
+   const totalUnitsSoldPercentageChange =
+      results[10].status === 'fulfilled' ? results[10].value : 0;
 
    const formattedReports: TransactionsReportColumn[] = transactionReports.map(
       (report) => ({
@@ -37,30 +77,6 @@ const SalesReportPage = async ({ params }: { params: { storeId: string } }) => {
          createdAt: format(report.created_at, 'MMM d, yyyy'),
          updatedAt: format(report.updated_at, 'MMM d, yyyy'),
       }),
-   );
-
-   const netRevenue = await getTotalNetRevenue(params.storeId);
-   const totalUnitsSold = await getTotalUnitsSoldForStore(params.storeId);
-   const grossRevenue = await getTotalGrossRevenue(params.storeId);
-   const categoriesMetrics = await getCategoryWiseMetrics(params.storeId);
-   const averageUnitsPerTransaction = await getAverageUnitsPerTransaction(
-      params.storeId,
-   );
-   const averageTransactionValue = await getAverageTransactionValue(
-      params.storeId,
-   );
-
-   const grossRevenuePercentageChange = await getRevenueChange(
-      params.storeId,
-      'gross',
-   );
-   const netRevenuePercentageChange = await getRevenueChange(
-      params.storeId,
-      'net',
-   );
-
-   const totalUnitsSoldPercentageChange = await getTotalUnitsSoldChange(
-      params.storeId,
    );
 
    const salesData = {
