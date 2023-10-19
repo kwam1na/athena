@@ -3,7 +3,7 @@
 import axios from 'axios';
 import { Edit, MoreHorizontal, Trash } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -26,7 +26,7 @@ import { formatter, keysToCamelCase } from '@/lib/utils';
 import { useStoreCurrency } from '@/providers/currency-provider';
 import { ActionModal } from '@/components/modals/action-modal';
 import { Input } from '@/components/ui/input';
-import { TransactionItem } from '@/types/sales-report';
+import { TransactionItem } from '@/types/transactions';
 
 interface CellActionProps {
    data: TransactionItemColumn;
@@ -36,6 +36,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
    const params = useParams();
    const [isEditUnitsModalOpen, setIsEditUnitsModalOpen] = useState(false);
    const [unitsSold, setUnitsSold] = useState<number | undefined>(undefined);
+   const [invalidUnitsSold, setInvalidUnitsSold] = useState(false);
 
    const { storeCurrency } = useStoreCurrency();
    const fmt = formatter(storeCurrency);
@@ -130,7 +131,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
 
    const onClose = () => {
       setIsEditUnitsModalOpen(false);
-      setUnitsSold(undefined);
+      // setUnitsSold(undefined);
    };
 
    const removeTransactionItem = () => {
@@ -144,8 +145,15 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
       setIsEditUnitsModalOpen(false);
    };
 
-   const invalidUnitsSold =
-      unitsSold !== undefined && (isNaN(unitsSold) || unitsSold < 1);
+   useEffect(() => {
+      const isInvalid =
+         unitsSold !== undefined && (isNaN(unitsSold) || unitsSold < 1);
+      setInvalidUnitsSold(isInvalid);
+   }, [unitsSold]);
+
+   useEffect(() => {
+      data.unitsSold && setInvalidUnitsSold(data.unitsSold < 1);
+   }, []);
 
    return (
       <>

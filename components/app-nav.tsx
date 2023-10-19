@@ -27,9 +27,9 @@ export function AppNav({
          icon: <Package className="mr-2 h-4 w-4" />,
       },
       {
-         href: `/${params.storeId}/sales-report`,
-         label: 'Sales reports',
-         active: pathname.includes('/sales-report'),
+         href: `/${params.storeId}/transactions`,
+         label: 'Transactions',
+         active: pathname.includes('/transactions'),
          icon: <Banknote className="mr-2 h-4 w-4" />,
       },
       //   {

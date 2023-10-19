@@ -27,11 +27,23 @@ export async function PATCH(
             return new NextResponse('Currency is required', { status: 400 });
         }
 
+        if (!body.low_stock_threshold) {
+            return new NextResponse('Low stock threshold is required', { status: 400 });
+        }
+
         if (!params.storeId) {
             return new NextResponse('Store id is required', { status: 400 });
         }
 
-        const store = await updateStore(params.storeId, user.sub, body)
+        const storeData = {
+            name,
+            currency,
+            settings: {
+                low_stock_threshold: body.low_stock_threshold,
+            }
+        }
+
+        const store = await updateStore(params.storeId, user.sub, storeData)
 
         return NextResponse.json(store, res);
     } catch (error) {

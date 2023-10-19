@@ -32,7 +32,7 @@ export const Sidebar = async ({ className, storeId }: SidebarProps) => {
                      </Button>
                   </Link>
 
-                  <Link href={`/${storeId}/sales-report`}>
+                  <Link href={`/${storeId}/transactions`}>
                      <Button variant="ghost" className="w-full justify-start">
                         <Banknote className="mr-2 h-4 w-4" /> Sales report
                      </Button>

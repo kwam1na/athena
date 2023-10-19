@@ -1,6 +1,6 @@
 import { fetchTransactions } from '@/lib/repositories/transactionsRepository';
 
-export const getTotalRevenue = async (storeId: string) => {
+export const getTotalGrossRevenue = async (storeId: string) => {
     const publishedReports = await fetchTransactions({
         store_id: storeId,
         status: 'published',

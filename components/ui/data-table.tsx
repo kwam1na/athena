@@ -17,41 +17,48 @@ import { DataTablePagination } from './data-table-pagination';
 interface DataTableProps<TData, TValue> {
    columns: ColumnDef<TData, TValue>[];
    table: any;
+   showHeader?: boolean;
+   showPagination?: boolean;
 }
 
 export function DataTable<TData, TValue>({
    columns,
+   showHeader = true,
+   showPagination = true,
    table,
 }: DataTableProps<TData, TValue>) {
    return (
       <div className="space-y-4">
          <div className="rounded-md border">
             <Table>
-               <TableHeader>
-                  {table
-                     .getHeaderGroups()
-                     .map(
-                        (headerGroup: {
-                           id: Key | null | undefined;
-                           headers: any[];
-                        }) => (
-                           <TableRow key={headerGroup.id}>
-                              {headerGroup.headers.map((header) => {
-                                 return (
-                                    <TableHead key={header.id}>
-                                       {header.isPlaceholder
-                                          ? null
-                                          : flexRender(
-                                               header.column.columnDef.header,
-                                               header.getContext(),
-                                            )}
-                                    </TableHead>
-                                 );
-                              })}
-                           </TableRow>
-                        ),
-                     )}
-               </TableHeader>
+               {showHeader && (
+                  <TableHeader>
+                     {table
+                        .getHeaderGroups()
+                        .map(
+                           (headerGroup: {
+                              id: Key | null | undefined;
+                              headers: any[];
+                           }) => (
+                              <TableRow key={headerGroup.id}>
+                                 {headerGroup.headers.map((header) => {
+                                    return (
+                                       <TableHead key={header.id}>
+                                          {header.isPlaceholder
+                                             ? null
+                                             : flexRender(
+                                                  header.column.columnDef
+                                                     .header,
+                                                  header.getContext(),
+                                               )}
+                                       </TableHead>
+                                    );
+                                 })}
+                              </TableRow>
+                           ),
+                        )}
+                  </TableHeader>
+               )}
                <TableBody>
                   {table.getRowModel().rows?.length ? (
                      table
@@ -90,7 +97,7 @@ export function DataTable<TData, TValue>({
                </TableBody>
             </Table>
          </div>
-         <DataTablePagination table={table} />
+         {showPagination && <DataTablePagination table={table} />}
       </div>
    );
 }

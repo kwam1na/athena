@@ -1,5 +1,4 @@
 import prismadb from '@/lib/prismadb';
-import { Transaction } from '@prisma/client';
 
 export const createTransaction = async (data: any) => {
     return await prismadb.transaction.create({
@@ -38,14 +37,33 @@ export const deleteTransaction = async (id: string) => {
     })
 }
 
-export const fetchTransactions = async (keys: { store_id: string;[key: string]: any }) => {
+
+export const fetchTransactions = async ({ dateRange, ...restKeys }: { store_id: string; dateRange?: { start: Date, end: Date }, [key: string]: any }) => {
+    const dateFilter = dateRange ? {
+        AND: [
+            {
+                transaction_date: {
+                    gte: dateRange.start,
+                },
+            },
+            {
+                transaction_date: {
+                    lte: dateRange.end,
+                },
+            },
+        ],
+    } : {};
+
     return await prismadb.transaction.findMany({
-        where: keys,
+        where: {
+            ...restKeys,
+            ...dateFilter,
+        },
         orderBy: {
             created_at: 'desc',
         },
         include: {
-            transaction_items: true
-        }
+            transaction_items: true,
+        },
     });
-}
+};

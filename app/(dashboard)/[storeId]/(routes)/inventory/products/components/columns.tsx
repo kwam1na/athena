@@ -1,12 +1,12 @@
 'use client';
 
 import { ColumnDef } from '@tanstack/react-table';
-
 import { CellAction } from './cell-action';
 
 export type ProductColumn = {
    id: string;
    name: string;
+   stockStatus: string;
    price: string;
    costPerItem: string;
    margin: string;
@@ -24,12 +24,12 @@ export type ProductColumn = {
 
 export const columns: ColumnDef<ProductColumn>[] = [
    {
-      accessorKey: 'name',
-      header: 'Name',
-   },
-   {
       accessorKey: 'sku',
       header: 'SKU',
+   },
+   {
+      accessorKey: 'name',
+      header: 'Name',
    },
    {
       accessorKey: 'isArchived',
@@ -50,6 +50,26 @@ export const columns: ColumnDef<ProductColumn>[] = [
    {
       accessorKey: 'inventoryCount',
       header: 'Inventory count',
+   },
+   {
+      accessorKey: 'stockStatus',
+      header: 'Stock status',
+      cell: ({ row }) => (
+         <div className="flex items-center gap-x-2">
+            <div
+               className="h-2 w-2 rounded-full"
+               style={{
+                  backgroundColor:
+                     row.original.stockStatus === 'Out of stock'
+                        ? 'darkred'
+                        : row.original.stockStatus === 'Low in stock'
+                        ? 'darkorange'
+                        : 'darkgreen',
+               }}
+            />
+            {row.original.stockStatus}
+         </div>
+      ),
    },
    {
       accessorKey: 'category',

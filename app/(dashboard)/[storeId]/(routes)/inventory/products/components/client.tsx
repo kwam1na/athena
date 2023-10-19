@@ -90,7 +90,7 @@ export const ProductsClient: React.FC<ProductsClientProps> = ({
                   router.push(`/${params.storeId}/inventory/products/new`)
                }
             >
-               <Plus className="mr-2 h-4 w-4" /> Add New
+               <Plus className="mr-2 h-4 w-4" /> Add new
             </Button>
          </div>
          <Separator />

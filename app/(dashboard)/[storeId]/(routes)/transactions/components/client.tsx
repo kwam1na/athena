@@ -113,14 +113,14 @@ import {
    Transaction,
    TransactionItem,
    TransactionItemBody,
-} from '@/types/sales-report';
+} from '@/types/transactions';
 
 interface IndividualSearchResultProps {
    index: number;
    result: ProductQueryResult;
 }
 
-interface SalesReportClientProps {
+interface TransactionsReportClientProps {
    fetchedTransaction?: Transaction;
 }
 
@@ -159,9 +159,9 @@ type ProductQueryFormValues = z.infer<typeof formSchema>;
 type TransactionItemFormValues = z.infer<typeof transactionItemFormSchema>;
 type InventoryCountFormValues = z.infer<typeof inventoryCountFormSchema>;
 
-export const SalesReportClient: React.FC<SalesReportClientProps> = ({
-   fetchedTransaction,
-}) => {
+export const TransactionsReportClient: React.FC<
+   TransactionsReportClientProps
+> = ({ fetchedTransaction }) => {
    // table state
    const [sorting, setSorting] = useState<SortingState>([]);
    const [rowSelection, setRowSelection] = useState({});
@@ -187,8 +187,9 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
    const [isDeletingReport, setIsDeletingReport] = useState(false);
    const [isDeletingReportWithRestock, setIsDeletingReportWithRestock] =
       useState(false);
-   const [deleteReportWithRestock, setDeleteReportWithRestock] =
-      useState(false);
+
+   // set delete report with restock to true by default
+   const [deleteReportWithRestock, setDeleteReportWithRestock] = useState(true);
    const [isEditingReportTitle, setIsEditingReportTitle] = useState(false);
    const [isAddingTransactionItem, setIsAddingTransactionItem] =
       useState(false);
@@ -236,6 +237,8 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
    const [headerText, setHeaderText] = useState(
       fetchedTransaction ? 'Edit sales report' : 'Add new sales report',
    );
+   const [reportEntryAction, setReportEntryAction] =
+      useState<ReportEntryAction>(fetchedTransaction ? 'editing' : 'new');
 
    const params = useParams();
    const pathName = usePathname();
@@ -244,10 +247,6 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
 
    const { storeCurrency } = useStoreCurrency();
    const fmt = formatter(storeCurrency);
-
-   const reportEntryAction: ReportEntryAction = fetchedTransaction
-      ? 'editing'
-      : 'new';
 
    // const [reportFormatCurrency, setReportFormatCurrency] =
    //    useState(storeCurrency);
@@ -402,6 +401,7 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
       setEnteredReportTitle(undefined);
       setDate(new Date());
       setHeaderText('Add new sales report');
+      setReportEntryAction('new');
       searchQueryForm.reset();
 
       const autoSavedTransactionsInLocalStorage = getAutoSavedTransactions(
@@ -445,7 +445,7 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
       if (!transaction) return;
 
       try {
-         if (deleteReportWithRestock) {
+         if (deleteReportWithRestock && fetchedTransaction) {
             setIsDeletingReportWithRestock(true);
          } else setIsDeletingReport(true);
 
@@ -466,6 +466,7 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
             title: 'Report deleted successfully.',
          });
          router.refresh();
+         router.push(`/${params.storeId}/transactions`);
          createNewReport();
       } catch (error) {
          console.log(
@@ -756,6 +757,7 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
             description: `Error: ${(error as Error).message}`,
          });
       } finally {
+         searchQueryForm.reset();
          cleanup(index);
       }
    };
@@ -885,7 +887,7 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
             transaction.id,
          );
          router.refresh();
-         router.push(`/${params.storeId}/sales-report`);
+         router.push(`/${params.storeId}/transactions`);
          toast({
             title: `Report "${transaction.reportTitle}" published successfully.`,
          });
@@ -897,7 +899,7 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
             title: `Inventory Shortage for ${item.product_name}`,
             description: item.existing_units_sold
                ? `Originally reported: ${item.existing_units_sold} units sold. Now reporting: ${item.updated_provided_units_sold}. Available stock: ${item.inventory_count}. Update exceeds stock.`
-               : `Only ${item.inventory_count} units available. Cannot report ${item.updated_units_sold} units sold.`,
+               : `Only ${item.inventory_count} units available. Cannot report ${item.provided_units_sold} units sold.`,
             key: item.product_id,
          }));
 
@@ -1312,7 +1314,7 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
 
    const CategoriesTable = () => {
       return (
-         <Table>
+         <Table className="bg-card rounded-md">
             <TableHeader>
                <TableRow>
                   <TableHead className="w-[100px]">Category</TableHead>
@@ -1587,7 +1589,7 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
             <div className="flex items-center justify-end space-x-2">
                <Switch
                   id="restock-inventory"
-                  defaultChecked
+                  defaultChecked={deleteReportWithRestock}
                   onCheckedChange={(e) => {
                      setDeleteReportWithRestock(e);
                   }}
@@ -1627,6 +1629,50 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
             <ReportActionButtons />
          </div>
          <Separator />
+
+         <div>
+            <div className="grid grid-cols-3 space-x-8 pt-6">
+               <Card className="space-y-4">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                     <CardTitle className="text-sm font-medium">
+                        Gross Sales
+                     </CardTitle>
+                     <DollarSign className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                     <div className="text-2xl font-bold">
+                        {fmt.format(grossSales)}
+                     </div>
+                  </CardContent>
+               </Card>
+
+               <Card className="space-y-4">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                     <CardTitle className="text-sm font-medium">
+                        Net Revenue
+                     </CardTitle>
+                     <DollarSign className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                     <div className="text-2xl font-bold">
+                        {fmt.format(netSales)}
+                     </div>
+                  </CardContent>
+               </Card>
+
+               <Card className="space-y-4">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                     <CardTitle className="text-sm font-medium">
+                        Units sold
+                     </CardTitle>
+                     <PackageCheck className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                     <div className="text-2xl font-bold">{unitsSold}</div>
+                  </CardContent>
+               </Card>
+            </div>
+         </div>
 
          <div className="flex py-4 gap-8">
             <div className="flex flex-col w-[60%] gap-16">
@@ -1867,14 +1913,23 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
                         </span>
                         <DataTableToolbar
                            searchKey="productName"
-                           tableKey="sales-report-transaction-items"
+                           tableKey="transactions-transaction-items"
                            placeholder="Filter transactions..."
                            table={table}
                         />
                         <DataTable table={table} columns={columns} />
                      </div>
 
-                     <div
+                     {Object.keys(categorySales).length > 0 && (
+                        <div className="w-[40%] space-y-4">
+                           <span className="text-muted-foreground">
+                              Breakdown by category
+                           </span>
+                           <CategoriesTable />
+                        </div>
+                     )}
+
+                     {/* <div
                         className={`space-y-8 w-[40%] pt-2 ${
                            isPublishingReport
                               ? 'pointer-events-none opacity-50'
@@ -1931,7 +1986,7 @@ export const SalesReportClient: React.FC<SalesReportClientProps> = ({
                         </div>
 
                         <CategoriesTable />
-                     </div>
+                     </div> */}
                   </div>
                </div>
             )}

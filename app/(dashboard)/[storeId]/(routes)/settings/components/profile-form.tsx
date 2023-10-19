@@ -87,7 +87,7 @@ export const ProfileForm: React.FC<ProfileFormProps> = ({ initialData }) => {
    const onSubmit = async (data: ProfileFormValues) => {
       try {
          setLoading(true);
-         const res = await axios.patch(`/api/users`, data);
+         const res = await axios.patch(`/api/v1/users`, data);
          setWrappedUser(res.data);
          router.refresh();
          toast({
@@ -106,7 +106,7 @@ export const ProfileForm: React.FC<ProfileFormProps> = ({ initialData }) => {
    const onDelete = async () => {
       try {
          setLoading(true);
-         await axios.delete(`/api/users`);
+         await axios.delete(`/api/v1/users`);
          router.refresh();
          router.push('/');
          toast({

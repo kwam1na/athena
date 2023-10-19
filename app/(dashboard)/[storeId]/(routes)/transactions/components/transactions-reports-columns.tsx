@@ -1,9 +1,9 @@
 'use client';
 
 import { ColumnDef } from '@tanstack/react-table';
-import { SalesReportCellAction } from './sales-report-cell-action';
+import { SalesReportCellAction } from './transactions-report-cell-action';
 
-export type SalesReportColumn = {
+export type TransactionsReportColumn = {
    id: string;
    title: string | null;
    grossSales: string;
@@ -14,7 +14,7 @@ export type SalesReportColumn = {
    updatedAt: string;
 };
 
-export const columns: ColumnDef<SalesReportColumn>[] = [
+export const columns: ColumnDef<TransactionsReportColumn>[] = [
    {
       accessorKey: 'title',
       header: 'Report title',

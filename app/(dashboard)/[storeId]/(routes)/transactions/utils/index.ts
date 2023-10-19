@@ -1,5 +1,5 @@
 import { keysToCamelCase } from "@/lib/utils";
-import { AutoSavedTransaction, ReportEntryAction, TransactionItem, TransactionWithoutID } from "@/types/sales-report";
+import { AutoSavedTransaction, ReportEntryAction, TransactionItem, TransactionWithoutID } from "@/types/transactions";
 import { format } from "date-fns";
 
 /**

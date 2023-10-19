@@ -1,7 +1,6 @@
 'use client';
 
 import * as z from 'zod';
-import axios from 'axios';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { useRouter } from 'next/navigation';
@@ -29,6 +28,7 @@ import {
    FormLabel,
    FormMessage,
 } from '@/components/ui/form';
+import { apiCreateStore } from '@/lib/api/stores';
 
 const formSchema = z.object({
    name: z.string().min(1),
@@ -37,7 +37,6 @@ const formSchema = z.object({
 
 export const StoreModal = () => {
    const storeModal = useStoreModal();
-   const router = useRouter();
    const { toast } = useToast();
 
    const [loading, setLoading] = useState(false);
@@ -53,8 +52,8 @@ export const StoreModal = () => {
    const onSubmit = async (values: z.infer<typeof formSchema>) => {
       try {
          setLoading(true);
-         const response = await axios.post('/api/stores', values);
-         window.location.assign(`/${response.data.id}`);
+         const response = await apiCreateStore(values);
+         window.location.assign(`/${response.id}`);
       } catch (error) {
          toast({
             title: 'Something went wrong',
@@ -144,7 +143,11 @@ export const StoreModal = () => {
                            >
                               Cancel
                            </Button>
-                           <LoadingButton isLoading={loading} type="submit">
+                           <LoadingButton
+                              isLoading={loading}
+                              disabled={loading}
+                              type="submit"
+                           >
                               Continue
                            </LoadingButton>
                         </div>

@@ -27,7 +27,12 @@ const handler = withApiAuthRequired(async function POST(req: NextRequest) {
             return new NextResponse('Currency is required', { status: 400 });
         }
 
-        const createParams = { ...body, user_id: user.sub }
+        // set the low_stock_threshold to 10 by default for all new stores
+        const settings = {
+            low_stock_threshold: 10,
+        }
+
+        const createParams = { ...body, user_id: user.sub, settings }
         const store = await createStore(createParams);
 
         await prismadb.user.update({

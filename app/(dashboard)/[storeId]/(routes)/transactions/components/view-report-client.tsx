@@ -18,85 +18,32 @@ import {
    useReactTable,
 } from '@tanstack/react-table';
 
-import {
-   TransactionItemColumn,
-   ViewTransactionItemColumn,
-   viewReportColumns,
-} from './columns';
+import { ViewTransactionItemColumn, viewReportColumns } from './columns';
 import { useEffect, useState } from 'react';
 import { DataTableToolbar } from '@/components/ui/data-table-toolbar/products-table-toolbar';
-import { Input } from '@/components/ui/input';
-import {
-   Card,
-   CardContent,
-   CardDescription,
-   CardHeader,
-   CardTitle,
-} from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
    AlertCircle,
    ArrowLeft,
    Calendar,
    DollarSign,
-   Info,
    PackageCheck,
    Pencil,
-   Plus,
-   PlusCircle,
-   Save,
-   Search,
-   Send,
-   Trash,
-   X,
-   XCircle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { useForm, SubmitHandler } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import {
-   Form,
-   FormControl,
-   FormDescription,
-   FormField,
-   FormItem,
-   FormLabel,
-   FormMessage,
-} from '@/components/ui/form';
-import axios from 'axios';
-import { useParams, usePathname, useRouter } from 'next/navigation';
-import { CalendarDatePicker } from '@/components/ui/date-picker';
-import { Skeleton } from '@/components/ui/skeleton';
+
+import { useParams, useRouter } from 'next/navigation';
 import { useStoreCurrency } from '@/providers/currency-provider';
-import { formatter, keysToCamelCase, keysToSnakeCase } from '@/lib/utils';
-import { format, isFuture, isSameDay, set } from 'date-fns';
-import { ActionModal } from '@/components/modals/action-modal';
-import { useToast } from '@/components/ui/use-toast';
+import { formatter } from '@/lib/utils';
+import { format } from 'date-fns';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { AlertModal } from '@/components/modals/alert-modal';
-import { LoadingButton } from '@/components/ui/loading-button';
 import {
-   autoSaveIsInSync,
-   getAutoSavedTransactions,
-   getAutosavedReportTitle,
    getCategorySalesAndUnits,
-   getLocallySavedTransactions,
-   getDraftsLocalStorageKey,
    getNetRevenue,
    getTotalSales,
    getTotalUnitsSold,
-   removeLocallySavedTransaction,
-   saveItemInLocalStorage,
-   updateLocallySavedTransaction,
-   getEditsLocalStorageKey,
-   areTransactionItemsInSync,
 } from '../utils';
-import { TooltipProvider } from '@radix-ui/react-tooltip';
-import {
-   Tooltip,
-   TooltipContent,
-   TooltipTrigger,
-} from '@/components/ui/tooltip';
 import {
    Table,
    TableBody,
@@ -106,27 +53,16 @@ import {
    TableRow,
 } from '@/components/ui/table';
 import {
-   apiCreateTransaction,
-   apiCreateTransactionItemForTransaction,
-   apiDeleteTransaction,
-   apiUpdateTransaction,
-} from '@/lib/api/transactions';
-import { apiDeleteTransactionItem } from '@/lib/api/transaction-items';
-import { Popover, PopoverTrigger } from '@/components/ui/popover';
-import { PopoverContent } from '@radix-ui/react-popover';
-import { apiRestockAndDeleteTransactionItem } from '@/lib/api/restock';
-import { Switch } from '@/components/ui/switch';
-import {
    AlertMessage,
    Transaction,
    TransactionItem,
-} from '@/types/sales-report';
+} from '@/types/transactions';
 
-interface SalesReportClientProps {
+interface TransactionsReportClientProps {
    fetchedTransaction?: Transaction;
 }
 
-export const ViewReportClient: React.FC<SalesReportClientProps> = ({
+export const ViewReportClient: React.FC<TransactionsReportClientProps> = ({
    fetchedTransaction,
 }) => {
    // table state
@@ -141,20 +77,6 @@ export const ViewReportClient: React.FC<SalesReportClientProps> = ({
    >([]);
 
    // booleans
-   const [searching, setIsSearching] = useState(false);
-   const [showDatePicker, setShowDatePicker] = useState(false);
-   const [isAutoSaveModalOpen, setIsAutoSaveModalOpen] = useState(false);
-   const [isUseSavedEditModalOpen, setIsUseSavedEditModalOpen] =
-      useState(false);
-   const [isAlertModalOpen, setIsAlertModalOpen] = useState(false);
-   const [
-      isDeletePublishedReportModalOpen,
-      setIsDeletePublishedReportModalOpen,
-   ] = useState(false);
-
-   const [savedEditedTransaction, setSavedEditedTransaction] = useState<
-      Transaction | undefined
-   >(undefined);
    const [date, setDate] = useState<Date | undefined>(
       fetchedTransaction?.transactionDate || new Date(),
    );
@@ -274,7 +196,7 @@ export const ViewReportClient: React.FC<SalesReportClientProps> = ({
 
    const CategoriesTable = () => {
       return (
-         <Table>
+         <Table className="bg-card rounded-md">
             <TableHeader>
                <TableRow>
                   <TableHead className="w-[100px]">Category</TableHead>
@@ -305,7 +227,7 @@ export const ViewReportClient: React.FC<SalesReportClientProps> = ({
                   variant={'outline'}
                   onClick={() =>
                      router.push(
-                        `/${params.storeId}/sales-report/${transaction.id}/edit`,
+                        `/${params.storeId}/transactions/${transaction.id}/edit`,
                      )
                   }
                >
@@ -346,6 +268,48 @@ export const ViewReportClient: React.FC<SalesReportClientProps> = ({
             </div>
          </div>
 
+         <div className="grid grid-cols-3 space-x-8 pt-6">
+            <Card className="space-y-4">
+               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">
+                     Gross Sales
+                  </CardTitle>
+                  <DollarSign className="h-4 w-4 text-muted-foreground" />
+               </CardHeader>
+               <CardContent>
+                  <div className="text-2xl font-bold">
+                     {fmt.format(grossSales)}
+                  </div>
+               </CardContent>
+            </Card>
+
+            <Card className="space-y-4">
+               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">
+                     Net Revenue
+                  </CardTitle>
+                  <DollarSign className="h-4 w-4 text-muted-foreground" />
+               </CardHeader>
+               <CardContent>
+                  <div className="text-2xl font-bold">
+                     {fmt.format(netSales)}
+                  </div>
+               </CardContent>
+            </Card>
+
+            <Card className="space-y-4">
+               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">
+                     Units sold
+                  </CardTitle>
+                  <PackageCheck className="h-4 w-4 text-muted-foreground" />
+               </CardHeader>
+               <CardContent>
+                  <div className="text-2xl font-bold">{unitsSold}</div>
+               </CardContent>
+            </Card>
+         </div>
+
          <div className="flex justify-between gap-24 pt-4 w-full">
             {transaction && (
                <div className="w-full space-y-4">
@@ -354,65 +318,19 @@ export const ViewReportClient: React.FC<SalesReportClientProps> = ({
                         <span className="text-muted-foreground">
                            Transactions
                         </span>
-                        <DataTableToolbar
+                        {/* <DataTableToolbar
                            searchKey="productName"
-                           tableKey="sales-report-transaction-items"
+                           tableKey="transactions-transaction-items"
                            placeholder="Filter transactions..."
                            table={table}
-                        />
+                        /> */}
                         <DataTable table={table} columns={viewReportColumns} />
                      </div>
 
-                     <div className={`space-y-8 w-[40%] pt-2`}>
+                     <div className="w-[40%] space-y-4">
                         <span className="text-muted-foreground">
-                           Report summary
+                           Breakdown by category
                         </span>
-                        <div className="grid grid-cols-2 space-x-8 pt-6">
-                           <Card>
-                              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                 <CardTitle className="text-sm font-medium">
-                                    Gross Sales
-                                 </CardTitle>
-                                 <DollarSign className="h-4 w-4 text-muted-foreground" />
-                              </CardHeader>
-                              <CardContent>
-                                 <div className="text-2xl font-bold">
-                                    {fmt.format(grossSales)}
-                                 </div>
-                              </CardContent>
-                           </Card>
-
-                           <Card>
-                              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                 <CardTitle className="text-sm font-medium">
-                                    Net Revenue
-                                 </CardTitle>
-                                 <DollarSign className="h-4 w-4 text-muted-foreground" />
-                              </CardHeader>
-                              <CardContent>
-                                 <div className="text-2xl font-bold">
-                                    {fmt.format(netSales)}
-                                 </div>
-                              </CardContent>
-                           </Card>
-                        </div>
-
-                        <div className="grid grid-cols-2 space-x-8 pt-6">
-                           <Card>
-                              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                 <CardTitle className="text-sm font-medium">
-                                    Units sold
-                                 </CardTitle>
-                                 <PackageCheck className="h-4 w-4 text-muted-foreground" />
-                              </CardHeader>
-                              <CardContent>
-                                 <div className="text-2xl font-bold">
-                                    {unitsSold}
-                                 </div>
-                              </CardContent>
-                           </Card>
-                        </div>
-
                         <CategoriesTable />
                      </div>
                   </div>

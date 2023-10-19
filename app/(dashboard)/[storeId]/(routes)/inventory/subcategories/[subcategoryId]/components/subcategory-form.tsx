@@ -147,7 +147,7 @@ export const SubategoryForm: React.FC<SubcategoryFormProps> = ({
                      <div className="grid grid-rows-2 gap-2">
                         <AlertTitle>No categories found</AlertTitle>
                         <AlertDescription>
-                           You need to add a category to create a product
+                           You need to add a category to create a subcategory.
                         </AlertDescription>
                      </div>
                   </div>
