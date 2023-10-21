@@ -33,6 +33,11 @@ import { Transaction, TransactionItem } from '@prisma/client';
 import { useWrappedUser } from '@/providers/wrapped-user-provider';
 import { MetricCard } from '@/components/ui/metric-card';
 import { ProgressList } from '@/components/ui/progress-list';
+import { GrossRevenueWidget } from '@/components/widgets/gross-revenue-widget';
+import { NetRevenueWidget } from '@/components/widgets/net-revenue-widget';
+import { TotalUnitsSoldWidget } from '@/components/widgets/total-units-sold-widget';
+import { AverageTransactionValueWidget } from '@/components/widgets/average-transactions-value-widget';
+import { AverageUnitsPerTransactionWidget } from '@/components/widgets/average-units-per-transaction-widget';
 
 type TransactionsReport = Transaction & {
    transaction_items: TransactionItem[];
@@ -41,11 +46,11 @@ interface TransactionsReportsClientProps {
    data: TransactionsReportColumn[];
    transactionReports: TransactionsReport[];
    salesData?: {
-      averageTransactionValue: number;
-      averageUnitsPerTransaction: number;
-      grossRevenue: number;
-      netRevenue: number;
-      totalUnitsSold: number;
+      averageTransactionValue?: number;
+      averageUnitsPerTransaction?: number;
+      grossRevenue?: number;
+      netRevenue?: number;
+      totalUnitsSold?: number;
       grossRevenuePercentageChange: number;
       netRevenuePercentageChange: number;
       totalUnitsSoldPercentageChange: number;
@@ -97,9 +102,6 @@ export const TransactionsReportsClient: React.FC<
       getFacetedUniqueValues: getFacetedUniqueValues(),
    });
 
-   const { storeCurrency } = useStoreCurrency();
-   const fmt = formatter(storeCurrency);
-
    const {
       averageTransactionValue,
       averageUnitsPerTransaction,
@@ -147,30 +149,39 @@ export const TransactionsReportsClient: React.FC<
             </Button>
          </div>
 
-         {/* <Separator /> */}
+         <Separator />
 
-         <div className="grid grid-cols-3 space-x-8 pt-8">
-            <MetricCard
-               title={'Gross revenue'}
-               value={fmt.format(grossRevenue || 0)}
-               icon={<DollarSign className="h-4 w-4 text-muted-foreground" />}
+         {/* <div className="grid grid-cols-3 gap-8 pt-8">
+            <GrossRevenueWidget
+               grossRevenue={grossRevenue}
                percentageChange={grossRevenuePercentageChange}
             />
-            <MetricCard
-               title={'Net revenue'}
-               value={fmt.format(netRevenue || 0)}
-               icon={<DollarSign className="h-4 w-4 text-muted-foreground" />}
+            <NetRevenueWidget
+               netRevenue={netRevenue}
                percentageChange={netRevenuePercentageChange}
             />
-            <MetricCard
-               title={'Total units sold'}
-               value={totalUnitsSold?.toString() || '0'}
-               icon={<PackageCheck className="h-4 w-4 text-muted-foreground" />}
+            <TotalUnitsSoldWidget
+               totalUnitsSold={totalUnitsSold}
+               percentageChange={totalUnitsSoldPercentageChange}
+            />
+         </div> */}
+
+         <div className="grid md:grid-cols-1 lg:grid-cols-3 gap-8 pt-8">
+            <GrossRevenueWidget
+               grossRevenue={grossRevenue}
+               percentageChange={grossRevenuePercentageChange}
+            />
+            <NetRevenueWidget
+               netRevenue={netRevenue}
+               percentageChange={netRevenuePercentageChange}
+            />
+            <TotalUnitsSoldWidget
+               totalUnitsSold={totalUnitsSold}
                percentageChange={totalUnitsSoldPercentageChange}
             />
          </div>
 
-         <div className="flex gap-16">
+         {/* <div className="flex gap-16">
             <div className="flex flex-col gap-4 pt-4 w-[70%]">
                <span className="text-muted-foreground">Reports</span>
                <DataTableToolbar
@@ -182,29 +193,15 @@ export const TransactionsReportsClient: React.FC<
             </div>
 
             <div className="flex flex-col gap-4 pt-4 w-[30%] px-4 py-8 mt-14">
-               <div className="flex w-full gap-8 justify-between">
+               <div className="flex w-full h-full gap-8 justify-between">
                   <div className="w-[50%]">
-                     <MetricCard
-                        title={'Avg transaction value (gross)'}
-                        value={fmt.format(averageTransactionValue || 0)}
-                        // icon={
-                        //    <DollarSign className="h-4 w-4 text-muted-foreground" />
-                        // }
+                     <AverageTransactionValueWidget
+                        averageTransactionValue={averageTransactionValue}
                      />
                   </div>
                   <div className="w-[50%]">
-                     <MetricCard
-                        title={'Avg units per transaction'}
-                        value={
-                           (averageUnitsPerTransaction &&
-                              isNaN(averageUnitsPerTransaction)) ||
-                           !averageUnitsPerTransaction
-                              ? '0'
-                              : averageUnitsPerTransaction?.toString()
-                        }
-                        // icon={
-                        //    <Package className="h-4 w-4 text-muted-foreground" />
-                        // }
+                     <AverageUnitsPerTransactionWidget
+                        averageUnitsPerTransaction={averageUnitsPerTransaction}
                      />
                   </div>
                </div>
@@ -218,6 +215,45 @@ export const TransactionsReportsClient: React.FC<
                         />
                      </div>
                   )}
+            </div>
+         </div> */}
+
+         <div className="flex flex-col gap-8 pt-8">
+            <div className="w-full flex flex-col gap-4 pt-4 md:pt-0">
+               <div className="flex w-full gap-8 justify-between">
+                  <div className="w-[50%]">
+                     <AverageTransactionValueWidget
+                        averageTransactionValue={averageTransactionValue}
+                     />
+                  </div>
+                  <div className="w-[50%]">
+                     <AverageUnitsPerTransactionWidget
+                        averageUnitsPerTransaction={averageUnitsPerTransaction}
+                     />
+                  </div>
+               </div>
+            </div>
+
+            <div className="w-full flex gap-8 md:flex-col-reverse lg:flex-row">
+               <div className="flex flex-col gap-4 lg:w-[80%] md:w-[100%]">
+                  <span className="text-muted-foreground">Reports</span>
+                  <DataTableToolbar
+                     searchKey="title"
+                     tableKey="transactions"
+                     table={table}
+                  />
+                  <DataTable columns={columns} table={table} />
+               </div>
+
+               {formattedCategoryMetrics &&
+               formattedCategoryMetrics.length > 0 ? (
+                  <div className="flex flex-col gap-4 pt-4 border rounded-lg px-4 py-8 mt-16 lg:w-[20%] md:w-[100%]">
+                     <ProgressList
+                        data={formattedCategoryMetrics}
+                        header="Sales percentage by category"
+                     />
+                  </div>
+               ) : null}
             </div>
          </div>
       </div>

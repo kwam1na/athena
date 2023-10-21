@@ -1,7 +1,7 @@
 import prismadb from '@/lib/prismadb';
 import { fetchTransactions } from '@/lib/repositories/transactionsRepository';
 
-interface GraphData {
+export interface GraphData {
     month: string;
     grossRevenue: number;
     netRevenue: number;

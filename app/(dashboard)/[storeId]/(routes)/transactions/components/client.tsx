@@ -1631,7 +1631,7 @@ export const TransactionsReportClient: React.FC<
          <Separator />
 
          <div>
-            <div className="grid grid-cols-3 space-x-8 pt-6">
+            <div className="grid lg:grid-cols-3 lg:pt-6 md:grid-cols-1 gap-8">
                <Card className="space-y-4">
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                      <CardTitle className="text-sm font-medium">
@@ -1675,13 +1675,13 @@ export const TransactionsReportClient: React.FC<
          </div>
 
          <div className="flex py-4 gap-8">
-            <div className="flex flex-col w-[60%] gap-16">
+            <div className="flex flex-col lg:w-[60%] md:w-full gap-16">
                <Form {...searchQueryForm}>
                   <form
                      onSubmit={searchQueryForm.handleSubmit(
                         onSubmitSearchQuery,
                      )}
-                     className="flex-col space-y-8 pt-8 w-[85%]"
+                     className="flex-col space-y-8 pt-8 lg:w-[85%] md:w-full"
                   >
                      <div className="flex gap-8 justify-center">
                         <div className="w-full">
@@ -1900,9 +1900,9 @@ export const TransactionsReportClient: React.FC<
 
                   <Separator />
 
-                  <div className="flex w-full gap-24">
+                  <div className="flex w-full lg:gap-24 md:gap-16 lg:flex-row md:flex-col-reverse">
                      <div
-                        className={`w-[60%] space-y-4 ${
+                        className={`lg:w-[60%] md:w-full space-y-4 ${
                            isPublishingReport
                               ? 'pointer-events-none opacity-50'
                               : ''
@@ -1921,7 +1921,7 @@ export const TransactionsReportClient: React.FC<
                      </div>
 
                      {Object.keys(categorySales).length > 0 && (
-                        <div className="w-[40%] space-y-4">
+                        <div className="lg:w-[40%] md:w-full space-y-4">
                            <span className="text-muted-foreground">
                               Breakdown by category
                            </span>

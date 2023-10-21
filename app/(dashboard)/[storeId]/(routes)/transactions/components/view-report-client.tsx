@@ -1,6 +1,5 @@
 'use client';
 
-import * as z from 'zod';
 import { DataTable } from '@/components/ui/data-table';
 import { Heading } from '@/components/ui/heading';
 import { Separator } from '@/components/ui/separator';
@@ -31,7 +30,6 @@ import {
    Pencil,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
 
 import { useParams, useRouter } from 'next/navigation';
 import { useStoreCurrency } from '@/providers/currency-provider';
@@ -92,7 +90,7 @@ export const ViewReportClient: React.FC<TransactionsReportClientProps> = ({
    const params = useParams();
    const router = useRouter();
 
-   const { storeCurrency } = useStoreCurrency();
+   const { storeCurrency, loading: isCurrencyLoading } = useStoreCurrency();
    const fmt = formatter(storeCurrency);
 
    const table = useReactTable({
@@ -268,7 +266,7 @@ export const ViewReportClient: React.FC<TransactionsReportClientProps> = ({
             </div>
          </div>
 
-         <div className="grid grid-cols-3 space-x-8 pt-6">
+         <div className="grid lg:grid-cols-3 lg:pt-6 md:grid-cols-1 gap-8">
             <Card className="space-y-4">
                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium">
@@ -312,22 +310,16 @@ export const ViewReportClient: React.FC<TransactionsReportClientProps> = ({
 
          <div className="flex justify-between gap-24 pt-4 w-full">
             {transaction && (
-               <div className="w-full space-y-4">
-                  <div className="flex w-full gap-24">
-                     <div className={`w-[60%] space-y-4`}>
+               <div className="w-full gap-4">
+                  <div className="flex w-full lg:gap-24 lg:flex-row md:flex-col md:gap-12">
+                     <div className={`lg:w-[60%] md:w-full space-y-4`}>
                         <span className="text-muted-foreground">
                            Transactions
                         </span>
-                        {/* <DataTableToolbar
-                           searchKey="productName"
-                           tableKey="transactions-transaction-items"
-                           placeholder="Filter transactions..."
-                           table={table}
-                        /> */}
                         <DataTable table={table} columns={viewReportColumns} />
                      </div>
 
-                     <div className="w-[40%] space-y-4">
+                     <div className="lg:w-[40%] md:w-full space-y-4">
                         <span className="text-muted-foreground">
                            Breakdown by category
                         </span>

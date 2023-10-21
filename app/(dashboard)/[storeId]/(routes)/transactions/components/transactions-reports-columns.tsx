@@ -36,6 +36,10 @@ export const columns: ColumnDef<TransactionsReportColumn>[] = [
       header: 'Total Units Sold',
    },
    {
+      accessorKey: 'createdAt',
+      header: 'Created',
+   },
+   {
       accessorKey: 'updatedAt',
       header: 'Updated',
    },

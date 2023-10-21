@@ -81,10 +81,21 @@ export const SubategoryForm: React.FC<SubcategoryFormProps> = ({
    });
 
    const onSubmit = async (data: SubcategoryFormValues) => {
-      const _params = new URLSearchParams(window.location.search);
-      const returnUrl =
-         _params.get('return_url') ||
+      const searchParams = new URLSearchParams(window.location.search);
+      let returnUrlBase =
+         searchParams.get('return_url') ||
          `/${params.storeId}/inventory/subcategories`;
+
+      let additionalParams = '';
+      for (let [key, value] of searchParams.entries()) {
+         if (key !== 'return_url') {
+            additionalParams += `${key}=${value}&`;
+         }
+      }
+
+      const returnUrl = additionalParams
+         ? `${returnUrlBase}?${additionalParams.slice(0, -1)}`
+         : returnUrlBase;
 
       try {
          setLoading(true);
@@ -138,6 +149,7 @@ export const SubategoryForm: React.FC<SubcategoryFormProps> = ({
    };
 
    const Alerts = () => {
+      const returnURL = `/${params.storeId}/inventory/subcategories/new`;
       return (
          <>
             {categories.length == 0 && (
@@ -156,7 +168,7 @@ export const SubategoryForm: React.FC<SubcategoryFormProps> = ({
                      variant={'outline'}
                      onClick={() =>
                         router.push(
-                           `/${params.storeId}/inventory/categories/new`,
+                           `/${params.storeId}/inventory/categories/new?return_url=${returnURL}`,
                         )
                      }
                   >

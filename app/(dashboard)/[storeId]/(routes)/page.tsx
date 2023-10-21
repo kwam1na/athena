@@ -26,13 +26,17 @@ import {
    getTotalTransactionReports,
 } from '@/actions/get-transactions-metrics';
 import { ProgressList } from '@/components/ui/progress-list';
-import {
-   UnitsSoldColumn,
-   lowStockProductsColumns,
-   unitsSoldColumns,
-} from './components/view-data-table-columns';
-import { ViewDataTableClient } from './components/view-data-table-client';
+import { UnitsSoldColumn } from './components/view-data-table-columns';
 import { getLowStockProducts } from '@/actions/get-products-metrics';
+import { GrossRevenueWidget } from '@/components/widgets/gross-revenue-widget';
+import { NetRevenueWidget } from '@/components/widgets/net-revenue-widget';
+import { TotalUnitsSoldWidget } from '@/components/widgets/total-units-sold-widget';
+import { AverageTransactionValueWidget } from '@/components/widgets/average-transactions-value-widget';
+import { AverageUnitsPerTransactionWidget } from '@/components/widgets/average-units-per-transaction-widget';
+import { TotalStockWidget } from '@/components/widgets/total-units-in-stock-widget';
+import { LowStockProductsWidget } from '@/components/widgets/low-stock-products-widget';
+import { TopSellingProductssWidget } from '@/components/widgets/top-selling-products-widget';
+import { GraphRevenueWidget } from '@/components/widgets/graph-revenue-widget';
 
 interface DashboardPageProps {
    params: {
@@ -64,13 +68,15 @@ const DashboardPage: React.FC<DashboardPageProps> = async ({ params }) => {
    ]);
 
    const totalRevenue =
-      results[0].status === 'fulfilled' ? results[0].value : 0;
-   const netRevenue = results[1].status === 'fulfilled' ? results[1].value : 0;
+      results[0].status === 'fulfilled' ? results[0].value : undefined;
+   const netRevenue =
+      results[1].status === 'fulfilled' ? results[1].value : undefined;
    const graphRevenue =
       results[2].status === 'fulfilled' ? results[2].value : undefined;
    const totalUnitsSold =
-      results[3].status === 'fulfilled' ? results[3].value : 1;
-   const stockCount = results[4].status === 'fulfilled' ? results[4].value : 0;
+      results[3].status === 'fulfilled' ? results[3].value : undefined;
+   const stockCount =
+      results[4].status === 'fulfilled' ? results[4].value : undefined;
    const categoriesMetrics =
       results[5].status === 'fulfilled' ? results[5].value : {};
    const productsMetrics =
@@ -84,9 +90,9 @@ const DashboardPage: React.FC<DashboardPageProps> = async ({ params }) => {
       results[9].status === 'fulfilled' ? results[9].value : 0;
 
    const averageUnitsPerTransaction =
-      results[10].status === 'fulfilled' ? results[10].value : 0;
+      results[10].status === 'fulfilled' ? results[10].value : undefined;
    const averageTransactionValue =
-      results[11].status === 'fulfilled' ? results[11].value : 0;
+      results[11].status === 'fulfilled' ? results[11].value : undefined;
 
    const session = await getSession();
    const u = session?.user;
@@ -101,24 +107,31 @@ const DashboardPage: React.FC<DashboardPageProps> = async ({ params }) => {
 
    let lowStockProducts;
    if (low_stock_threshold) {
-      lowStockProducts = await getLowStockProducts(
-         params.storeId,
-         low_stock_threshold,
+      const lowStockProductsResult = await reflect(
+         getLowStockProducts(params.storeId, low_stock_threshold),
       );
+      lowStockProducts =
+         lowStockProductsResult.status === 'fulfilled'
+            ? lowStockProductsResult.value
+            : undefined;
    }
 
-   const formattedCategoryMetrics = Object.keys(categoriesMetrics).map(
-      (category) => {
-         const percentage = (
-            (categoriesMetrics[category].units_sold / totalUnitsSold) *
-            100
-         ).toFixed(2);
-         return {
-            title: category,
-            percentage: parseFloat(percentage),
-         };
-      },
-   );
+   let formattedCategoryMetrics;
+   if (totalUnitsSold) {
+      formattedCategoryMetrics = Object.keys(categoriesMetrics).map(
+         (category) => {
+            const percentage = (
+               (categoriesMetrics[category].units_sold / totalUnitsSold) *
+               100
+            ).toFixed(2);
+            return {
+               title: category,
+               percentage: parseFloat(percentage),
+            };
+         },
+         1,
+      );
+   }
 
    const formattedProductMetrics: UnitsSoldColumn[] =
       productsMetrics?.map((productMetric) => {
@@ -131,156 +144,70 @@ const DashboardPage: React.FC<DashboardPageProps> = async ({ params }) => {
 
    return (
       <div className="flex-col">
-         <div className="flex-1 space-y-4 p-8 pt-6">
+         <div className="flex-1 space-y-4 p-4 pt-6">
             <Heading
                title={user ? `Hi, ${user.name}` : 'Dashboard'}
                description={`Here's how ${storeName} is doing`}
             />
-            {/* <Separator /> */}
+            <Separator />
             <div className="grid gap-4 grid-cols-3 pt-4">
-               {
-                  <Link href={`/${params.storeId}/transactions`}>
-                     <MetricCard
-                        title={'Gross revenue'}
-                        value={fmt.format(totalRevenue)}
-                        icon={
-                           <DollarSign className="h-4 w-4 text-muted-foreground" />
-                        }
-                        percentageChange={grossRevenuePercentageChange}
-                     />
-                  </Link>
-               }
+               <GrossRevenueWidget
+                  grossRevenue={totalRevenue}
+                  percentageChange={grossRevenuePercentageChange}
+               />
 
-               {
-                  <Link href={`/${params.storeId}/transactions`}>
-                     <MetricCard
-                        title={'Net revenue'}
-                        value={fmt.format(netRevenue)}
-                        icon={
-                           <DollarSign className="h-4 w-4 text-muted-foreground" />
-                        }
-                        percentageChange={netRevenuePercentageChange}
-                     />
-                  </Link>
-               }
+               <NetRevenueWidget
+                  netRevenue={netRevenue}
+                  percentageChange={netRevenuePercentageChange}
+               />
 
-               <Link href={`/${params.storeId}/transactions`}>
-                  <MetricCard
-                     title={'Total units sold'}
-                     value={totalUnitsSold.toString()}
-                     icon={
-                        <CreditCard className="h-4 w-4 text-muted-foreground" />
-                     }
-                     percentageChange={totalUnitsSoldPercentageChange}
-                  />
-               </Link>
+               <TotalUnitsSoldWidget
+                  totalUnitsSold={totalUnitsSold}
+                  percentageChange={totalUnitsSoldPercentageChange}
+               />
             </div>
 
-            <div>
-               {graphRevenue && graphRevenue.length > 1 && (
-                  <Card className="col-span-4 bg-background w-full">
-                     <CardHeader>
-                        <CardTitle>Sales revenue</CardTitle>
-                     </CardHeader>
-                     <CardContent className="pl-2 h-full p-8">
-                        <Overview data={graphRevenue} />
-                     </CardContent>
-                  </Card>
-               )}
-            </div>
+            <GraphRevenueWidget graphData={graphRevenue} />
 
-            <div className="flex gap-8">
-               <div className="flex flex-col gap-4 w-[50%]">
-                  <div className="flex gap-4 w-full justify-between">
-                     <div className="w-[50%]">
-                        <MetricCard
-                           title={'Avg transaction value (gross)'}
-                           value={fmt.format(
-                              isNaN(averageTransactionValue)
-                                 ? 0
-                                 : averageTransactionValue,
-                           )}
-                           icon={
-                              <DollarSign className="h-4 w-4 text-muted-foreground" />
-                           }
+            <div className="flex flex-col lg:flex-row gap-8 w-full">
+               <div className="flex flex-col gap-4 w-full lg:w-[50%]">
+                  <div className="flex flex-col gap-4 w-full justify-between lg:flex-row">
+                     <div className="w-full lg:w-[50%]">
+                        <AverageTransactionValueWidget
+                           averageTransactionValue={averageTransactionValue}
                         />
                      </div>
-                     <div className="w-[50%]">
-                        <MetricCard
-                           title={'Avg units per transaction'}
-                           value={
-                              isNaN(averageUnitsPerTransaction)
-                                 ? '0'
-                                 : averageUnitsPerTransaction.toString()
-                           }
-                           icon={
-                              <Package className="h-4 w-4 text-muted-foreground" />
+                     <div className="w-full lg:w-[50%]">
+                        <AverageUnitsPerTransactionWidget
+                           averageUnitsPerTransaction={
+                              averageUnitsPerTransaction
                            }
                         />
                      </div>
                   </div>
-                  {
-                     <Link href={`/${params.storeId}/inventory/products`}>
-                        <MetricCard
-                           title={'Products in stock'}
-                           value={stockCount.toString()}
-                           icon={
-                              <Package className="h-4 w-4 text-muted-foreground" />
-                           }
-                        />
-                     </Link>
-                  }
-
-                  {lowStockProducts && lowStockProducts.length > 1 && (
-                     <div className="border rounded-lg p-8 space-y-8">
-                        <p className="text-md">Stock alerts</p>
-                        {lowStockProducts && lowStockProducts.length > 1 && (
-                           <ViewDataTableClient
-                              data={lowStockProducts || []}
-                              columns={lowStockProductsColumns}
-                              additionalData={{ low_stock_threshold }}
-                              type="low-stock-products"
-                           />
-                        )}
-                        {!lowStockProducts && (
-                           <p className="border rounded-lg text-sm text-muted-foreground text-center p-4">
-                              No stock alerts
-                           </p>
-                        )}
-                     </div>
-                  )}
+                  <TotalStockWidget stockCount={stockCount} />
+                  <LowStockProductsWidget
+                     lowStockProducts={lowStockProducts}
+                     lowStockThreshold={low_stock_threshold}
+                  />
                </div>
 
-               {
-                  <div className="w-[50%] flex space-y-4 border rounded-lg gap-8">
-                     <div className="w-[50%] p-8 space-y-8">
-                        <p className="text-md">
-                           Top selling products this month
-                        </p>
-                        {formattedProductMetrics.length > 1 && (
-                           <ViewDataTableClient
-                              data={formattedProductMetrics}
-                              columns={unitsSoldColumns}
-                              type={'top-selling-products'}
-                           />
-                        )}
-                        {formattedProductMetrics.length == 0 && (
-                           <p className="border rounded-lg text-sm text-muted-foreground text-center p-4">
-                              No data
-                           </p>
-                        )}
-                     </div>
-
-                     {formattedCategoryMetrics.length > 0 && (
-                        <div className="w-[50%] pb-8 pr-8">
+               <div className="w-full lg:w-[50%] flex flex-col gap-4 p-4 border rounded-lg">
+                  <div className="w-full p-4 space-y-8">
+                     <TopSellingProductssWidget
+                        topSellingProducts={formattedProductMetrics}
+                     />
+                  </div>
+                  {formattedCategoryMetrics &&
+                     formattedCategoryMetrics.length > 0 && (
+                        <div className="w-full p-4">
                            <ProgressList
                               data={formattedCategoryMetrics}
                               header="Sales percentage by category"
                            />
                         </div>
                      )}
-                  </div>
-               }
+               </div>
             </div>
          </div>
       </div>

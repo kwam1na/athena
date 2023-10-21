@@ -3,6 +3,7 @@
 import {
    Dialog,
    DialogContent,
+   DialogContentWithoutCloseButton,
    DialogDescription,
    DialogFooter,
    DialogHeader,
@@ -16,6 +17,8 @@ interface ModalProps {
    isOpen: boolean;
    onClose: () => void;
    children?: React.ReactNode;
+   withoutHeader?: boolean;
+   withoutCloseButton?: boolean;
 }
 
 export const Modal: React.FC<ModalProps> = ({
@@ -24,6 +27,8 @@ export const Modal: React.FC<ModalProps> = ({
    isOpen,
    onClose,
    children,
+   withoutHeader,
+   withoutCloseButton,
 }) => {
    const onChange = (open: boolean) => {
       if (!open) {
@@ -33,13 +38,28 @@ export const Modal: React.FC<ModalProps> = ({
 
    return (
       <Dialog open={isOpen} onOpenChange={onChange}>
-         <DialogContent>
-            <DialogHeader className="flex gap-6">
-               <DialogTitle className="mt-6">{title}</DialogTitle>
-               <DialogDescription>{description}</DialogDescription>
-            </DialogHeader>
-            <div>{children}</div>
-         </DialogContent>
+         {withoutCloseButton && (
+            <DialogContentWithoutCloseButton>
+               {!!withoutHeader == false && (
+                  <DialogHeader className="flex gap-6">
+                     <DialogTitle className="mt-6">{title}</DialogTitle>
+                     <DialogDescription>{description}</DialogDescription>
+                  </DialogHeader>
+               )}
+               <div>{children}</div>
+            </DialogContentWithoutCloseButton>
+         )}
+         {!withoutCloseButton && (
+            <DialogContent>
+               {!!withoutHeader == false && (
+                  <DialogHeader className="flex gap-6">
+                     <DialogTitle className="mt-6">{title}</DialogTitle>
+                     <DialogDescription>{description}</DialogDescription>
+                  </DialogHeader>
+               )}
+               <div>{children}</div>
+            </DialogContent>
+         )}
       </Dialog>
    );
 };

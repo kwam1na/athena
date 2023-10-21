@@ -45,18 +45,19 @@ const SalesReportPage = async ({ params }: { params: { storeId: string } }) => {
       results[1].status === 'fulfilled' ? results[1].value : [];
 
    const grossRevenue =
-      results[2].status === 'fulfilled' ? results[2].value : 0;
+      results[2].status === 'fulfilled' ? results[2].value : undefined;
 
-   const netRevenue = results[3].status === 'fulfilled' ? results[3].value : 0;
+   const netRevenue =
+      results[3].status === 'fulfilled' ? results[3].value : undefined;
    const totalUnitsSold =
-      results[4].status === 'fulfilled' ? results[4].value : 0;
+      results[4].status === 'fulfilled' ? results[4].value : undefined;
    const categoriesMetrics =
       results[5].status === 'fulfilled' ? results[5].value : {};
 
    const averageUnitsPerTransaction =
-      results[6].status === 'fulfilled' ? results[6].value : 0;
+      results[6].status === 'fulfilled' ? results[6].value : undefined;
    const averageTransactionValue =
-      results[7].status === 'fulfilled' ? results[7].value : 0;
+      results[7].status === 'fulfilled' ? results[7].value : undefined;
 
    const grossRevenuePercentageChange =
       results[8].status === 'fulfilled' ? results[8].value : 0;
@@ -66,8 +67,14 @@ const SalesReportPage = async ({ params }: { params: { storeId: string } }) => {
    const totalUnitsSoldPercentageChange =
       results[10].status === 'fulfilled' ? results[10].value : 0;
 
-   const formattedReports: TransactionsReportColumn[] = transactionReports.map(
-      (report) => ({
+   const sortedTransactionReports = [...transactionReports].sort(
+      (a, b) =>
+         new Date(b.transaction_date).getTime() -
+         new Date(a.transaction_date).getTime(),
+   );
+
+   const formattedReports: TransactionsReportColumn[] =
+      sortedTransactionReports.map((report) => ({
          id: report.id,
          title: report.transaction_report_title,
          transactionDate: format(report.transaction_date, 'MMM d, yyyy'),
@@ -76,8 +83,7 @@ const SalesReportPage = async ({ params }: { params: { storeId: string } }) => {
          unitsSold: report.units_sold || 0,
          createdAt: format(report.created_at, 'MMM d, yyyy'),
          updatedAt: format(report.updated_at, 'MMM d, yyyy'),
-      }),
-   );
+      }));
 
    const salesData = {
       grossRevenue,
