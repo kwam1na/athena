@@ -1,6 +1,7 @@
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge, BadgeProps } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Trash } from 'lucide-react';
 
 interface ActionAlertProps {
    title: string;
@@ -26,17 +27,16 @@ export const ActionAlert: React.FC<ActionAlertProps> = ({
    isLoading,
 }) => {
    return (
-      <Alert style={{ background: 'darkred' }}>
+      <Alert className="bg-rose-800">
          <AlertTitle className="mt-4 flex items-center">{title}</AlertTitle>
          <AlertDescription className="mb-4 flex items-center justify-between">
             {description}
             <Button
                variant={variant == 'danger' ? 'destructive' : 'default'}
-               size="sm"
                onClick={onClick}
                disabled={isLoading}
             >
-               {buttonText}
+               <Trash className="mr-2 h-4 w-4" /> {buttonText}
             </Button>
          </AlertDescription>
       </Alert>

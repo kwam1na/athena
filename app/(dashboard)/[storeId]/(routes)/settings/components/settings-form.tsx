@@ -1,10 +1,8 @@
 'use client';
 
 import * as z from 'zod';
-import axios from 'axios';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
-import { Trash } from 'lucide-react';
 import { Store } from '@prisma/client';
 import { useParams, useRouter } from 'next/navigation';
 import { useState } from 'react';
@@ -36,10 +34,12 @@ import { useToast } from '@/components/ui/use-toast';
 import { revalidatePath } from 'next/cache';
 import { useStoreCurrency } from '@/providers/currency-provider';
 import { LoadingButton } from '@/components/ui/loading-button';
+import { apiDeleteStore, apiUpdateStore } from '@/lib/api/stores';
 
 const formSchema = z.object({
    name: z.string().min(2),
    currency: z.string().min(3),
+   low_stock_threshold: z.coerce.number().min(0),
 });
 
 type SettingsFormValues = z.infer<typeof formSchema>;
@@ -58,15 +58,29 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ initialData }) => {
    const [loading, setLoading] = useState(false);
    const { setStoreCurrency } = useStoreCurrency();
 
+   const getInitialFormValues = (data: any) => {
+      if (!data) return { name: '', currency: '', low_stock_threshold: 0 };
+
+      const { settings, ...rest } = data;
+      const low_stock_threshold =
+         settings &&
+         typeof settings === 'object' &&
+         'low_stock_threshold' in settings
+            ? settings.low_stock_threshold
+            : 0;
+
+      return { ...rest, low_stock_threshold };
+   };
+
    const form = useForm<SettingsFormValues>({
       resolver: zodResolver(formSchema),
-      defaultValues: initialData ? initialData : { name: '', currency: '' },
+      defaultValues: getInitialFormValues(initialData),
    });
 
    const onSubmit = async (data: SettingsFormValues) => {
       try {
          setLoading(true);
-         await axios.patch(`/api/stores/${params.storeId}`, data);
+         await apiUpdateStore(params.storeId, data);
          router.refresh();
          setStoreCurrency(data.currency);
          toast({
@@ -85,7 +99,7 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ initialData }) => {
    const onDelete = async () => {
       try {
          setLoading(true);
-         await axios.delete(`/api/stores/${params.storeId}`);
+         await apiDeleteStore(params.storeId);
          router.refresh();
          router.push('/');
          toast({
@@ -117,74 +131,104 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ initialData }) => {
          </div>
          <Separator />
          <Form {...form}>
-            <form
-               onSubmit={form.handleSubmit(onSubmit)}
-               className="space-y-8 w-full"
-            >
-               <div className="md:grid md:grid-cols-3 gap-8">
-                  <FormField
-                     control={form.control}
-                     name="name"
-                     render={({ field }) => (
-                        <FormItem>
-                           <FormLabel>Name</FormLabel>
-                           <FormControl>
-                              <Input
-                                 disabled={loading}
-                                 placeholder="Store name"
-                                 {...field}
-                              />
-                           </FormControl>
-                           <FormMessage />
-                        </FormItem>
-                     )}
-                  />
-
-                  <FormField
-                     control={form.control}
-                     name="currency"
-                     render={({ field }) => (
-                        <FormItem>
-                           <FormLabel>Currency</FormLabel>
-                           <Select
-                              disabled={loading}
-                              onValueChange={field.onChange}
-                              value={field.value}
-                              defaultValue={field.value}
-                           >
-                              <FormControl>
-                                 <SelectTrigger>
-                                    <SelectValue
-                                       defaultValue={field.value}
-                                       placeholder="Select a currency"
-                                    />
-                                 </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                 {currencies.map((currency) => (
-                                    <SelectItem
-                                       key={currency.value}
-                                       value={currency.value}
-                                    >
-                                       {currency.label}
-                                    </SelectItem>
-                                 ))}
-                              </SelectContent>
-                           </Select>
-                           <FormMessage />
-                        </FormItem>
-                     )}
-                  />
-               </div>
-               <LoadingButton
-                  isLoading={loading}
-                  disabled={loading}
-                  className="ml-auto"
-                  type="submit"
+            <div className="space-y-4">
+               <form
+                  onSubmit={form.handleSubmit(onSubmit)}
+                  className="space-y-8 w-full"
                >
-                  {loading ? 'Saving' : 'Save changes'}
-               </LoadingButton>
-            </form>
+                  <div className="space-y-4">
+                     <span className="text-md">Store details</span>
+                     <div className="md:grid md:grid-cols-3 gap-8">
+                        <FormField
+                           control={form.control}
+                           name="name"
+                           render={({ field }) => (
+                              <FormItem>
+                                 <FormLabel>Name</FormLabel>
+                                 <FormControl>
+                                    <Input
+                                       disabled={loading}
+                                       placeholder="Store name"
+                                       {...field}
+                                    />
+                                 </FormControl>
+                                 <FormMessage />
+                              </FormItem>
+                           )}
+                        />
+
+                        <FormField
+                           control={form.control}
+                           name="currency"
+                           render={({ field }) => (
+                              <FormItem>
+                                 <FormLabel>Currency</FormLabel>
+                                 <Select
+                                    disabled={loading}
+                                    onValueChange={field.onChange}
+                                    value={field.value}
+                                    defaultValue={field.value}
+                                 >
+                                    <FormControl>
+                                       <SelectTrigger>
+                                          <SelectValue
+                                             defaultValue={field.value}
+                                             placeholder="Select a currency"
+                                          />
+                                       </SelectTrigger>
+                                    </FormControl>
+                                    <SelectContent>
+                                       {currencies.map((currency) => (
+                                          <SelectItem
+                                             key={currency.value}
+                                             value={currency.value}
+                                          >
+                                             {currency.label}
+                                          </SelectItem>
+                                       ))}
+                                    </SelectContent>
+                                 </Select>
+                                 <FormMessage />
+                              </FormItem>
+                           )}
+                        />
+                     </div>
+                  </div>
+
+                  <div className="space-y-4">
+                     <span className="text-md">Inventory settings</span>
+                     <div className="md:grid md:grid-cols-3 gap-8">
+                        <FormField
+                           control={form.control}
+                           name="low_stock_threshold"
+                           render={({ field }) => (
+                              <FormItem>
+                                 <FormLabel>Low stock threshold</FormLabel>
+                                 <FormControl>
+                                    <Input
+                                       disabled={loading}
+                                       type="number"
+                                       placeholder="Low stock threshold"
+                                       {...field}
+                                    />
+                                 </FormControl>
+                                 <FormMessage />
+                              </FormItem>
+                           )}
+                        />
+                     </div>
+                  </div>
+
+                  <LoadingButton
+                     isLoading={loading}
+                     disabled={loading}
+                     className="ml-auto"
+                     type="submit"
+                  >
+                     {loading ? 'Saving' : 'Save changes'}
+                  </LoadingButton>
+               </form>
+            </div>
          </Form>
          <Separator />
          <ActionAlert

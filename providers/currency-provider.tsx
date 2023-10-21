@@ -1,6 +1,7 @@
 'use client';
 
 import axios from 'axios';
+import { set } from 'date-fns';
 import { useParams } from 'next/navigation';
 import React, {
    createContext,
@@ -11,6 +12,7 @@ import React, {
 } from 'react';
 
 type CurrencyContextType = {
+   loading: boolean;
    storeCurrency: string;
    setStoreCurrency: React.Dispatch<React.SetStateAction<string>>;
 };
@@ -31,21 +33,28 @@ export const CurrencyProvider = ({
    children: React.ReactNode;
 }) => {
    const [storeCurrency, setStoreCurrency] = useState('USD');
+   const [loading, setLoading] = useState(true);
    const contextValue = useMemo(
-      () => ({ storeCurrency, setStoreCurrency }),
+      () => ({ loading, storeCurrency, setStoreCurrency }),
       [storeCurrency],
    );
    const params = useParams();
 
    useEffect(() => {
-      const fetchStoreCurrency = async () => {
+      fetchStoreCurrency();
+   }, []);
+
+   const fetchStoreCurrency = async () => {
+      try {
          const res = await axios.get(`/api/v1/stores/${params.storeId}`);
          const { currency } = res?.data || {};
          setStoreCurrency(currency);
-      };
-
-      fetchStoreCurrency();
-   }, []);
+      } catch (error) {
+         console.error(error);
+      } finally {
+         setLoading(false);
+      }
+   };
 
    return (
       <CurrencyContext.Provider value={contextValue}>

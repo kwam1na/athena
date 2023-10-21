@@ -5,6 +5,8 @@ import { SubcategoriesClient } from './components/client';
 import { fetchSubcategories } from '@/lib/repositories/subcategoriesRepository';
 import { fetchCategories } from '@/lib/repositories/categoriesRepository';
 import { getStore } from '@/lib/repositories/storesRepository';
+import { EmptyState } from '@/components/states/empty/empty-state';
+import { List, Package } from 'lucide-react';
 
 const SubcategoriesPage = async ({
    params,
@@ -44,12 +46,29 @@ const SubcategoriesPage = async ({
 
    return (
       <div className="flex-col">
-         <div className="flex-1 space-y-4 p-8 pt-6">
-            <SubcategoriesClient
-               data={formattedSubcategories}
-               categoryOptions={categoryOptions}
-               storeName={storeName}
-            />
+         <div className="flex-1 space-y-4 p-4 pt-6">
+            {formattedSubcategories.length > 0 && (
+               <SubcategoriesClient
+                  data={formattedSubcategories}
+                  categoryOptions={categoryOptions}
+                  storeName={storeName}
+               />
+            )}
+            {formattedSubcategories.length == 0 && (
+               <EmptyState
+                  icon={
+                     <List size={'112px'} color="#5C5C5C" strokeWidth={'1px'} />
+                  }
+                  action={{
+                     ctaText: 'Add subcategory',
+                     type: 'navigate',
+                     params: {
+                        url: `/${params.storeId}/inventory/subcategories/new`,
+                     },
+                  }}
+                  text="No subcategories added."
+               />
+            )}
          </div>
       </div>
    );

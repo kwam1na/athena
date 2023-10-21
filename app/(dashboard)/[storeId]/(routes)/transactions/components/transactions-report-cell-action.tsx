@@ -14,10 +14,10 @@ import {
 
 import { formatter } from '@/lib/utils';
 import { useStoreCurrency } from '@/providers/currency-provider';
-import { SalesReportColumn } from './sales-reports-columns';
+import { TransactionsReportColumn } from './transactions-reports-columns';
 
 interface SalesReportCellActionProps {
-   data: SalesReportColumn;
+   data: TransactionsReportColumn;
 }
 
 export const SalesReportCellAction: React.FC<SalesReportCellActionProps> = ({
@@ -25,13 +25,6 @@ export const SalesReportCellAction: React.FC<SalesReportCellActionProps> = ({
 }) => {
    const params = useParams();
    const router = useRouter();
-   const [isEditUnitsModalOpen, setIsEditUnitsModalOpen] = useState(false);
-   const [unitsSold, setUnitsSold] = useState<number | undefined>(undefined);
-
-   const { storeCurrency } = useStoreCurrency();
-   const fmt = formatter(storeCurrency);
-
-   const { transactionDate, id } = data;
 
    return (
       <DropdownMenu>
@@ -47,14 +40,14 @@ export const SalesReportCellAction: React.FC<SalesReportCellActionProps> = ({
          <DropdownMenuContent align="end" className="w-[160px]">
             <DropdownMenuItem
                onClick={() =>
-                  router.push(`/${params.storeId}/sales-report/${data.id}`)
+                  router.push(`/${params.storeId}/transactions/${data.id}`)
                }
             >
                <Eye className="mr-2 h-4 w-4" /> View
             </DropdownMenuItem>
             <DropdownMenuItem
                onClick={() =>
-                  router.push(`/${params.storeId}/sales-report/${data.id}/edit`)
+                  router.push(`/${params.storeId}/transactions/${data.id}/edit`)
                }
             >
                <Edit className="mr-2 h-4 w-4" /> Edit

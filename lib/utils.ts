@@ -1,6 +1,9 @@
 import { type ClassValue, clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
-import { defaultOptions } from './constants';
+
+type PromiseResult<T> =
+    | { status: "fulfilled"; value: T }
+    | { status: "rejected"; reason: any };
 
 export function cn(...inputs: ClassValue[]) {
     return twMerge(clsx(inputs));
@@ -42,4 +45,12 @@ export const keysToCamelCase = (obj: Record<string, any>) => {
     }
     return newObj;
 }
+
+
+export const reflect = <T>(promise: Promise<T>): Promise<PromiseResult<T>> => {
+    return promise.then(
+        (value): PromiseResult<T> => ({ status: "fulfilled", value }),
+        (error): PromiseResult<T> => ({ status: "rejected", reason: error })
+    );
+};
 

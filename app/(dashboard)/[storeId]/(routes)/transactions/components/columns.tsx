@@ -8,7 +8,7 @@ import {
    AutoSavedTransaction,
    ReportEntryAction,
    TransactionItem,
-} from '@/types/sales-report';
+} from '@/types/transactions';
 
 export interface TransactionItemColumn extends TransactionItem {
    reportEntryAction: ReportEntryAction;
@@ -26,12 +26,12 @@ export interface ViewTransactionItemColumn extends TransactionItem {}
 
 export const columns: ColumnDef<TransactionItemColumn>[] = [
    {
-      accessorKey: 'productName',
-      header: 'Product',
-   },
-   {
       accessorKey: 'sku',
       header: 'SKU',
+   },
+   {
+      accessorKey: 'productName',
+      header: 'Product',
    },
    {
       accessorKey: 'price',
@@ -57,12 +57,12 @@ export const columns: ColumnDef<TransactionItemColumn>[] = [
 
 export const viewReportColumns: ColumnDef<ViewTransactionItemColumn>[] = [
    {
-      accessorKey: 'productName',
-      header: 'Product',
-   },
-   {
       accessorKey: 'sku',
       header: 'SKU',
+   },
+   {
+      accessorKey: 'productName',
+      header: 'Product',
    },
    {
       accessorKey: 'price',

@@ -1,16 +1,14 @@
 import { keysToCamelCase } from '@/lib/utils';
-import { SalesReportClient } from '../components/client';
+import { Transaction } from '@/types/transactions';
 import { getTransaction } from '@/lib/repositories/transactionsRepository';
-import { ViewReportClient } from '../components/view-report-client';
-import { Transaction } from '@/types/sales-report';
+import { TransactionsReportClient } from '../../components/client';
 
 const SalesReportPage = async ({
    params,
 }: {
-   params: { storeId: string; salesReportId: string };
+   params: { storeId: string; transactionId: string };
 }) => {
-   const transaction = await getTransaction(params.salesReportId);
-   console.log(params);
+   const transaction = await getTransaction(params.transactionId);
 
    let fetchedTransaction: Transaction | undefined = undefined;
 
@@ -29,11 +27,7 @@ const SalesReportPage = async ({
    return (
       <div className="flex-col">
          <div className="flex-1 space-y-4 p-8 pt-6">
-            {params.salesReportId === 'new' ? (
-               <SalesReportClient fetchedTransaction={fetchedTransaction} />
-            ) : (
-               <ViewReportClient fetchedTransaction={fetchedTransaction} />
-            )}
+            <TransactionsReportClient fetchedTransaction={fetchedTransaction} />
          </div>
       </div>
    );

@@ -14,7 +14,7 @@ export default async function StoreLayout({
 }) {
    return (
       <>
-         <div className="pl-8 pt-4 pb-8">
+         <div className="pt-4 pb-8 border-b">
             <InventoryNav />
          </div>
          <div className="h-full">{children}</div>

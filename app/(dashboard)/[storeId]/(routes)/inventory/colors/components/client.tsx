@@ -74,7 +74,7 @@ export const ColorClient: React.FC<ColorClientProps> = ({ data }) => {
                   router.push(`/${params.storeId}/inventory/colors/new`)
                }
             >
-               <Plus className="mr-2 h-4 w-4" /> Add New
+               <Plus className="mr-2 h-4 w-4" /> Add new
             </Button>
          </div>
          <Separator />

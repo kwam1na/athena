@@ -7,6 +7,8 @@ import { fetchProducts } from '@/lib/repositories/productsRepository';
 import { fetchCategories } from '@/lib/repositories/categoriesRepository';
 import { fetchSubcategories } from '@/lib/repositories/subcategoriesRepository';
 import { getStore } from '@/lib/repositories/storesRepository';
+import { EmptyState } from '@/components/states/empty/empty-state';
+import { Package, ShoppingBag } from 'lucide-react';
 
 const ProductsPage = async ({ params }: { params: { storeId: string } }) => {
    const products = await fetchProducts({ store_id: params.storeId });
@@ -14,6 +16,8 @@ const ProductsPage = async ({ params }: { params: { storeId: string } }) => {
    const subcategories = await fetchSubcategories(params.storeId);
 
    const store = await getStore(params.storeId);
+   const { low_stock_threshold } =
+      (store?.settings as Record<string, any>) || {};
    const storeName = store?.name || 'your store';
    const fmt = formatter(store?.currency || 'usd');
 
@@ -40,6 +44,12 @@ const ProductsPage = async ({ params }: { params: { storeId: string } }) => {
       category: item.category.name,
       subcategory: item.subcategory.name,
       sku: item.sku,
+      stockStatus:
+         item.inventory_count === 0
+            ? 'Out of stock'
+            : item.inventory_count <= low_stock_threshold
+            ? 'Low in stock'
+            : 'In stock',
       size: item.size?.value || 'N/A',
       color: item.color?.value || 'N/A',
       inventoryCount: item.inventory_count,
@@ -49,13 +59,34 @@ const ProductsPage = async ({ params }: { params: { storeId: string } }) => {
 
    return (
       <div className="flex-col">
-         <div className="flex-1 space-y-4 p-8 pt-6">
-            <ProductsClient
-               storeName={storeName}
-               data={formattedProducts}
-               categoryOptions={categoryOptions}
-               subcategoryOptions={subcategoryOptions}
-            />
+         <div className="flex-1 space-y-4 p-4 pt-6">
+            {formattedProducts.length > 0 && (
+               <ProductsClient
+                  storeName={storeName}
+                  data={formattedProducts}
+                  categoryOptions={categoryOptions}
+                  subcategoryOptions={subcategoryOptions}
+               />
+            )}
+            {formattedProducts.length == 0 && (
+               <EmptyState
+                  icon={
+                     <ShoppingBag
+                        size={'112px'}
+                        color="#5C5C5C"
+                        strokeWidth={'1px'}
+                     />
+                  }
+                  action={{
+                     type: 'navigate',
+                     ctaText: 'Add product',
+                     params: {
+                        url: `/${params.storeId}/inventory/products/new`,
+                     },
+                  }}
+                  text="No products added."
+               />
+            )}
          </div>
       </div>
    );

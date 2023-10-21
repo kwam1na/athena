@@ -154,6 +154,7 @@ model Store {
   name            String
   currency        String
   user_id         String
+  settings        Json?
   billboards      Billboard[]       @relation("StoreToBillboard")
   categories      Category[]        @relation("StoreToCategory")
   subcategories   Subcategory[]     @relation("StoreToSubcategory")
