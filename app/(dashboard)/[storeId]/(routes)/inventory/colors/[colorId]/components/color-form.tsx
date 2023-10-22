@@ -30,6 +30,7 @@ import {
    apiDeleteColor,
    apiUpdateColor,
 } from '@/lib/api/colors';
+import useReturnUrl from '@/hooks/use-get-return-url';
 
 const formSchema = z.object({
    name: z.string().min(2),
@@ -65,7 +66,11 @@ export const ColorForm: React.FC<ColorFormProps> = ({ initialData }) => {
       },
    });
 
+   const getReturnUrl = useReturnUrl('/inventory/colors');
+
    const onSubmit = async (data: ColorFormValues) => {
+      const returnUrl = getReturnUrl();
+
       try {
          setLoading(true);
          if (initialData) {
@@ -79,7 +84,7 @@ export const ColorForm: React.FC<ColorFormProps> = ({ initialData }) => {
             }.`,
          });
          router.refresh();
-         router.push(`/${params.storeId}/inventory/colors`);
+         router.push(returnUrl);
          toast({
             title: `Color '${data.name}' ${initialData ? 'updated' : 'added'}.`,
          });

@@ -25,6 +25,7 @@ import { AlertModal } from '@/components/modals/alert-modal';
 import { useToast } from '@/components/ui/use-toast';
 import { LoadingButton } from '@/components/ui/loading-button';
 import { apiCreateSize, apiDeleteSize, apiUpdateSize } from '@/lib/api/sizes';
+import useReturnUrl from '@/hooks/use-get-return-url';
 
 const formSchema = z.object({
    name: z.string().min(1),
@@ -58,7 +59,11 @@ export const SizeForm: React.FC<SizeFormProps> = ({ initialData }) => {
       },
    });
 
+   const getReturnUrl = useReturnUrl('/inventory/sizes');
+
    const onSubmit = async (data: SizeFormValues) => {
+      const returnUrl = getReturnUrl();
+
       try {
          setLoading(true);
          if (initialData) {
@@ -67,7 +72,7 @@ export const SizeForm: React.FC<SizeFormProps> = ({ initialData }) => {
             await apiCreateSize(params.storeId, data);
          }
          router.refresh();
-         router.push(`/${params.storeId}/inventory/sizes`);
+         router.push(returnUrl);
          toast({
             title: `Size '${data.name}' ${initialData ? 'updated' : 'added'}.`,
          });

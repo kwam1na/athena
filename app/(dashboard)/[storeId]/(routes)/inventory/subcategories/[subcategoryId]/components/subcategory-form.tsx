@@ -37,6 +37,7 @@ import {
    apiDeleteSubcategory,
    apiUpdateSubcategory,
 } from '@/lib/api/subcategories';
+import useReturnUrl from '@/hooks/use-get-return-url';
 
 const formSchema = z.object({
    name: z.string().min(2),
@@ -80,22 +81,10 @@ export const SubategoryForm: React.FC<SubcategoryFormProps> = ({
       },
    });
 
+   const getReturnUrl = useReturnUrl('/inventory/subcategories');
+
    const onSubmit = async (data: SubcategoryFormValues) => {
-      const searchParams = new URLSearchParams(window.location.search);
-      let returnUrlBase =
-         searchParams.get('return_url') ||
-         `/${params.storeId}/inventory/subcategories`;
-
-      let additionalParams = '';
-      for (let [key, value] of searchParams.entries()) {
-         if (key !== 'return_url') {
-            additionalParams += `${key}=${value}&`;
-         }
-      }
-
-      const returnUrl = additionalParams
-         ? `${returnUrlBase}?${additionalParams.slice(0, -1)}`
-         : returnUrlBase;
+      const returnUrl = getReturnUrl();
 
       try {
          setLoading(true);

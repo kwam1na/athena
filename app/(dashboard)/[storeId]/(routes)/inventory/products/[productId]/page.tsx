@@ -19,14 +19,54 @@ const ProductPage = async ({
       },
    });
 
-   sizes.unshift({
-      id: 'blank-id',
-      name: 'N/A',
-      store_id: '',
-      value: '',
+   categories.unshift({
+      id: 'add-new-category',
+      name: 'Add new category',
+      store_id: params.storeId,
       created_at: new Date(),
       updated_at: new Date(),
+      subcategory: [],
+      products: [],
+      billboard_id: null,
    });
+
+   subcategories.unshift({
+      id: 'add-new-subcategory',
+      name: 'Add new subcategory',
+      store_id: params.storeId,
+      created_at: new Date(),
+      updated_at: new Date(),
+      products: [],
+      billboard_id: null,
+      category: {
+         id: '',
+         store_id: '',
+         billboard_id: null,
+         name: '',
+         created_at: new Date(),
+         updated_at: new Date(),
+      },
+      category_id: '',
+   });
+
+   sizes.unshift(
+      {
+         id: 'add-new-size',
+         name: 'Add new size',
+         store_id: '',
+         value: '',
+         created_at: new Date(),
+         updated_at: new Date(),
+      },
+      {
+         id: 'blank-id',
+         name: 'N/A',
+         store_id: '',
+         value: '',
+         created_at: new Date(),
+         updated_at: new Date(),
+      },
+   );
 
    const colors = await prismadb.color.findMany({
       where: {
@@ -34,14 +74,24 @@ const ProductPage = async ({
       },
    });
 
-   colors.unshift({
-      id: 'blank-id',
-      name: 'N/A',
-      store_id: '',
-      value: '',
-      created_at: new Date(),
-      updated_at: new Date(),
-   });
+   colors.unshift(
+      {
+         id: 'add-new-color',
+         name: 'Add new color',
+         store_id: '',
+         value: '',
+         created_at: new Date(),
+         updated_at: new Date(),
+      },
+      {
+         id: 'blank-id',
+         name: 'N/A',
+         store_id: '',
+         value: '',
+         created_at: new Date(),
+         updated_at: new Date(),
+      },
+   );
 
    return (
       <div className="flex-col">

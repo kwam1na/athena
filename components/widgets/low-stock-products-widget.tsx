@@ -29,7 +29,7 @@ export const LowStockProductsWidget: React.FC<LowStockProductsWidgetProps> = ({
 
    return (
       <>
-         {!loading && _lowStockProducts && _lowStockProducts.length > 1 && (
+         {!loading && _lowStockProducts && _lowStockProducts.length > 0 && (
             <div className="border rounded-lg p-8 space-y-8">
                <p className="text-md">Stock alerts</p>
                <ViewDataTableClient

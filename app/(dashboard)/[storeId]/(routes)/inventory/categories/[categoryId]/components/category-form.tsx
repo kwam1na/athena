@@ -30,6 +30,7 @@ import {
    apiDeleteCategory,
    apiUpdateCategory,
 } from '@/lib/api/categories';
+import useReturnUrl from '@/hooks/use-get-return-url';
 
 const formSchema = z.object({
    name: z.string().min(2),
@@ -63,10 +64,10 @@ export const CategoryForm: React.FC<CategoryFormProps> = ({ initialData }) => {
       },
    });
 
+   const getReturnUrl = useReturnUrl('/inventory/categories');
+
    const onSubmit = async (data: CategoryFormValues) => {
-      const _params = new URLSearchParams(window.location.search);
-      const returnUrl =
-         _params.get('return_url') || `/${params.storeId}/inventory/categories`;
+      const returnUrl = getReturnUrl();
 
       try {
          setLoading(true);

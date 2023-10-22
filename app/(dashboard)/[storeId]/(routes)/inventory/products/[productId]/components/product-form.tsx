@@ -5,7 +5,7 @@ import axios from 'axios';
 import { useEffect, useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
-import { AlertCircle, ArrowLeft, Trash } from 'lucide-react';
+import { AlertCircle, ArrowLeft, Plus, PlusCircle, Trash } from 'lucide-react';
 import {
    Category,
    Color,
@@ -14,7 +14,7 @@ import {
    Size,
    Subcategory,
 } from '@prisma/client';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, usePathname, useRouter } from 'next/navigation';
 
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -56,6 +56,7 @@ import {
    apiDeleteProduct,
    apiUpdateProduct,
 } from '@/lib/api/products';
+import useReturnUrl from '@/hooks/use-get-return-url';
 
 enum ActionContext {
    NONE,
@@ -122,6 +123,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
 }) => {
    const params = useParams();
    const router = useRouter();
+   const pathName = usePathname();
    const { storeCurrency } = useStoreCurrency();
    const fmt = formatter(storeCurrency);
 
@@ -240,6 +242,8 @@ export const ProductForm: React.FC<ProductFormProps> = ({
 
    const watchedValues = form.watch();
 
+   const getReturnUrl = useReturnUrl('/inventory/products');
+
    useEffect(() => {
       setHasChanges(hasFormChanged(watchedValues));
    }, [watchedValues]);
@@ -251,21 +255,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
          color_id: data.color_id == 'blank-id' ? null : data.color_id,
       };
 
-      const searchParams = new URLSearchParams(window.location.search);
-      let returnUrlBase =
-         searchParams.get('return_url') ||
-         `/${params.storeId}/inventory/products`;
-
-      let additionalParams = '';
-      for (let [key, value] of searchParams.entries()) {
-         if (key !== 'return_url') {
-            additionalParams += `${key}=${value}&`;
-         }
-      }
-
-      const returnUrl = additionalParams
-         ? `${returnUrlBase}?${additionalParams.slice(0, -1)}`
-         : returnUrlBase;
+      const returnUrl = getReturnUrl();
 
       try {
          setLoading(true);
@@ -577,7 +567,15 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                                  <FormLabel>Category</FormLabel>
                                  <Select
                                     disabled={loading}
-                                    onValueChange={field.onChange}
+                                    onValueChange={(value: string) => {
+                                       if (value == 'add-new-category') {
+                                          router.push(
+                                             `/${params.storeId}/inventory/categories/new?return_url=${pathName}`,
+                                          );
+                                       } else {
+                                          field.onChange(value);
+                                       }
+                                    }}
                                     value={field.value}
                                     defaultValue={field.value}
                                  >
@@ -595,7 +593,18 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                                              key={category.id}
                                              value={category.id}
                                           >
-                                             {category.name}
+                                             {category.id.includes(
+                                                'add-new',
+                                             ) ? (
+                                                <div className="flex items-center">
+                                                   <PlusCircle className="mr-2 h-4 w-4" />
+                                                   <p className="text-primary">
+                                                      Add new category
+                                                   </p>
+                                                </div>
+                                             ) : (
+                                                category.name
+                                             )}
                                           </SelectItem>
                                        ))}
                                     </SelectContent>
@@ -612,7 +621,15 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                                  <FormLabel>Subcategory</FormLabel>
                                  <Select
                                     disabled={loading}
-                                    onValueChange={field.onChange}
+                                    onValueChange={(value: string) => {
+                                       if (value == 'add-new-subcategory') {
+                                          router.push(
+                                             `/${params.storeId}/inventory/subcategories/new?return_url=${pathName}`,
+                                          );
+                                       } else {
+                                          field.onChange(value);
+                                       }
+                                    }}
                                     value={field.value}
                                     defaultValue={field.value}
                                  >
@@ -630,7 +647,18 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                                              key={subcategory.id}
                                              value={subcategory.id}
                                           >
-                                             {subcategory.name}
+                                             {subcategory.id.includes(
+                                                'add-new',
+                                             ) ? (
+                                                <div className="flex items-center">
+                                                   <PlusCircle className="mr-2 h-4 w-4" />
+                                                   <p className="text-primary">
+                                                      Add new subcategory
+                                                   </p>
+                                                </div>
+                                             ) : (
+                                                subcategory.name
+                                             )}
                                           </SelectItem>
                                        ))}
                                     </SelectContent>
@@ -690,7 +718,15 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                                  <FormLabel>Size</FormLabel>
                                  <Select
                                     disabled={loading}
-                                    onValueChange={field.onChange}
+                                    onValueChange={(value: string) => {
+                                       if (value == 'add-new-size') {
+                                          router.push(
+                                             `/${params.storeId}/inventory/sizes/new?return_url=${pathName}`,
+                                          );
+                                       } else {
+                                          field.onChange(value);
+                                       }
+                                    }}
                                     value={field.value}
                                     defaultValue={field.value}
                                  >
@@ -708,7 +744,16 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                                              key={size.id}
                                              value={size.id}
                                           >
-                                             {size.name}
+                                             {size.id.includes('add-new') ? (
+                                                <div className="flex items-center">
+                                                   <PlusCircle className="mr-2 h-4 w-4" />
+                                                   <p className="text-primary">
+                                                      Add new size
+                                                   </p>
+                                                </div>
+                                             ) : (
+                                                size.name
+                                             )}
                                           </SelectItem>
                                        ))}
                                     </SelectContent>
@@ -725,7 +770,15 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                                  <FormLabel>Color</FormLabel>
                                  <Select
                                     disabled={loading}
-                                    onValueChange={field.onChange}
+                                    onValueChange={(value: string) => {
+                                       if (value == 'add-new-color') {
+                                          router.push(
+                                             `/${params.storeId}/inventory/colors/new?return_url=${pathName}`,
+                                          );
+                                       } else {
+                                          field.onChange(value);
+                                       }
+                                    }}
                                     value={field.value}
                                     defaultValue={field.value}
                                  >
@@ -743,7 +796,16 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                                              key={color.id}
                                              value={color.id}
                                           >
-                                             {color.name}
+                                             {color.id.includes('add-new') ? (
+                                                <div className="flex items-center">
+                                                   <PlusCircle className="mr-2 h-4 w-4" />
+                                                   <p className="text-primary">
+                                                      Add new color
+                                                   </p>
+                                                </div>
+                                             ) : (
+                                                color.name
+                                             )}
                                           </SelectItem>
                                        ))}
                                     </SelectContent>
