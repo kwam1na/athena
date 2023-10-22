@@ -1,7 +1,5 @@
 import { redirect } from 'next/navigation';
 
-import prismadb from '@/lib/prismadb';
-
 import { SettingsForm } from '../components/settings-form';
 import { getSession } from '@auth0/nextjs-auth0';
 import { findStore } from '@/lib/repositories/storesRepository';

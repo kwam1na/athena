@@ -4,7 +4,7 @@ import * as z from 'zod';
 import axios from 'axios';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
-import { Trash } from 'lucide-react';
+import { captureException } from '@sentry/nextjs';
 import { User } from '@prisma/client';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -72,8 +72,6 @@ export const ProfileForm: React.FC<ProfileFormProps> = ({ initialData }) => {
       setIsClient(true);
    }, []);
 
-   // console.log('user:', user);
-   // console.log('initial data:', initialData);
    const cleanedUp = { ...initialData, name: initialData?.name || '' };
 
    const [open, setOpen] = useState(false);
@@ -94,7 +92,7 @@ export const ProfileForm: React.FC<ProfileFormProps> = ({ initialData }) => {
             title: 'Profile updated.',
          });
       } catch (error: any) {
-         console.log('error:', error);
+         captureException(error);
          toast({
             title: 'Something went wrong. Try again.',
          });
@@ -113,6 +111,7 @@ export const ProfileForm: React.FC<ProfileFormProps> = ({ initialData }) => {
             title: 'Profile deleted.',
          });
       } catch (error: any) {
+         captureException(error);
          toast({
             title: 'Make sure you removed all products and categories first and then try again.',
          });

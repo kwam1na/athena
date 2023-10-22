@@ -19,7 +19,6 @@ import {
 
 import { ViewTransactionItemColumn, viewReportColumns } from './columns';
 import { useEffect, useState } from 'react';
-import { DataTableToolbar } from '@/components/ui/data-table-toolbar/products-table-toolbar';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
    AlertCircle,

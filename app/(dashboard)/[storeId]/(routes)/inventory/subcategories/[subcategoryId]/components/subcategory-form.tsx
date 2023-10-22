@@ -1,12 +1,12 @@
 'use client';
 
 import * as z from 'zod';
-import axios from 'axios';
+import { captureException } from '@sentry/nextjs';
 import { useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { AlertCircle, ArrowLeft, Trash } from 'lucide-react';
-import { Billboard, Category, Subcategory } from '@prisma/client';
+import { Category, Subcategory } from '@prisma/client';
 import { useParams, useRouter } from 'next/navigation';
 
 import { Input } from '@/components/ui/input';
@@ -110,6 +110,7 @@ export const SubategoryForm: React.FC<SubcategoryFormProps> = ({
          router.refresh();
          router.push(returnUrl);
       } catch (error: any) {
+         captureException(error);
          toast({
             title: 'Something went wrong updating this subcategory. Try again.',
          });
@@ -128,6 +129,7 @@ export const SubategoryForm: React.FC<SubcategoryFormProps> = ({
             title: 'Subcategory deleted.',
          });
       } catch (error: any) {
+         captureException(error);
          toast({
             title: 'An error occurred deleting this subcategory. Make sure all products under this subcategory are deleted and try again.',
          });

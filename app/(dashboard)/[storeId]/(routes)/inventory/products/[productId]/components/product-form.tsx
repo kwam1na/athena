@@ -1,7 +1,7 @@
 'use client';
 
 import * as z from 'zod';
-import axios from 'axios';
+import { captureException } from '@sentry/nextjs';
 import { useEffect, useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
@@ -276,6 +276,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
          router.refresh();
          router.push(returnUrl);
       } catch (error: any) {
+         captureException(error);
          toast({
             title: 'Something went wrong adding this product. Try again.',
          });
@@ -294,6 +295,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
             title: 'Product deleted.',
          });
       } catch (error: any) {
+         captureException(error);
          toast({
             title: 'Something went wrong deleting this product. Try again.',
          });

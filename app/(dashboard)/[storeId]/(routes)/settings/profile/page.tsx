@@ -24,15 +24,6 @@ const SettingsPage = async ({ params }: { params: { storeId: string } }) => {
 
    const user = await getUser(auth0User.sub);
 
-   //    const transformedUser: TransformedUser = {
-   //       id: user?.id,
-   //       name: user?.name,
-   //       email: user?.email,
-   //       store_id: user?.store_id,
-   //       created_at: user?.created_at,
-   //       updated_at: user?.updated_at,
-   //    };
-
    return (
       <div className="flex-col">
          <div className="flex-1 space-y-4 p-4 pt-6">

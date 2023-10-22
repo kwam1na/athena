@@ -1,6 +1,7 @@
 'use client';
 
 import * as z from 'zod';
+import { captureException } from '@sentry/nextjs';
 import { DataTable } from '@/components/ui/data-table';
 import { Heading } from '@/components/ui/heading';
 import { Separator } from '@/components/ui/separator';
@@ -114,6 +115,10 @@ import {
    TransactionItem,
    TransactionItemBody,
 } from '@/types/transactions';
+import {
+   apiPublishReport,
+   apiQueryForProduct,
+} from '@/lib/api/store-functions';
 
 interface IndividualSearchResultProps {
    index: number;
@@ -473,6 +478,7 @@ export const TransactionsReportClient: React.FC<
             '[ADD_NEW_SALES_REPORT_ERROR] Error deleting transaction:',
             error,
          );
+         captureException(error);
 
          const { data } = (error as any).response;
          const { errorCode } = data;
@@ -734,7 +740,6 @@ export const TransactionsReportClient: React.FC<
          });
 
          if (!transaction) {
-            console.log('adding new transaction..');
             await handleNewTransaction(
                body,
                date,
@@ -742,7 +747,6 @@ export const TransactionsReportClient: React.FC<
                draftTransactionKey,
             );
          } else {
-            console.log('using existing..');
             handleExistingTransaction(
                body,
                transaction,
@@ -751,7 +755,7 @@ export const TransactionsReportClient: React.FC<
             );
          }
       } catch (error: any) {
-         console.log('error:', error);
+         captureException(error);
          toast({
             title: 'An error occurred performing this operation',
             description: `Error: ${(error as Error).message}`,
@@ -821,9 +825,7 @@ export const TransactionsReportClient: React.FC<
    const onSubmitSearchQuery = async (data: ProductQueryFormValues) => {
       try {
          setIsSearching(true);
-         const res = await axios.get(
-            `/api/v1/${params.storeId}/search?query=${data.query}`,
-         );
+         const res = await apiQueryForProduct(params.storeId, data.query);
          if (res.data.length) {
             const products = res.data.map((product: any) => ({
                category_id: product.category_id,
@@ -841,7 +843,7 @@ export const TransactionsReportClient: React.FC<
             setSearchResults([]);
          }
       } catch (error: any) {
-         console.log('error:', error);
+         captureException(error);
       } finally {
          setIsSearching(false);
       }
@@ -864,19 +866,17 @@ export const TransactionsReportClient: React.FC<
          setIsPublishingReport(true);
 
          const payload = transactionItems.map((item) => keysToSnakeCase(item));
-         const response = await axios.post(
-            `/api/v1/${params.storeId}/publish-report`,
-            {
-               transaction_items: payload,
-               transaction,
-               transaction_details: {
-                  gross_sales: getTotalSales(transactionItems),
-                  net_revenue: getNetRevenue(transactionItems),
-                  transaction_date: date,
-                  units_sold: getTotalUnitsSold(transactionItems),
-               },
+
+         await apiPublishReport(params.storeId, {
+            transaction_items: payload,
+            transaction,
+            transaction_details: {
+               gross_sales: getTotalSales(transactionItems),
+               net_revenue: getNetRevenue(transactionItems),
+               transaction_date: date,
+               units_sold: getTotalUnitsSold(transactionItems),
             },
-         );
+         });
 
          if (itemsToRemove.length > 0)
             await deleteTransactionItems(itemsToRemove);
@@ -892,6 +892,7 @@ export const TransactionsReportClient: React.FC<
             title: `Report "${transaction.reportTitle}" published successfully.`,
          });
       } catch (error) {
+         captureException(error);
          const { data } = (error as any).response;
          const { offendingItems } = data;
 

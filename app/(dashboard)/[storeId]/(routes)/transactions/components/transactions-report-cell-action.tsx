@@ -2,7 +2,6 @@
 
 import { Edit, Eye, MoreHorizontal, Trash } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
-import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -12,8 +11,6 @@ import {
    DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
-import { formatter } from '@/lib/utils';
-import { useStoreCurrency } from '@/providers/currency-provider';
 import { TransactionsReportColumn } from './transactions-reports-columns';
 
 interface SalesReportCellActionProps {

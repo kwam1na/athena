@@ -1,8 +1,7 @@
 'use client';
 
-import axios from 'axios';
 import { Edit, MoreHorizontal, Trash } from 'lucide-react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -131,7 +130,6 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
 
    const onClose = () => {
       setIsEditUnitsModalOpen(false);
-      // setUnitsSold(undefined);
    };
 
    const removeTransactionItem = () => {

@@ -34,13 +34,11 @@ export const deleteSize = async (id: string) => {
     })
 }
 
-export const fetchSizes = async (store_id: string) => {
+export const fetchSizes = async (store_id: string, include?: Record<string, boolean>) => {
     return await prismadb.size.findMany({
         where: {
             store_id,
         },
-        include: {
-            products: true
-        }
+        include,
     });
 }

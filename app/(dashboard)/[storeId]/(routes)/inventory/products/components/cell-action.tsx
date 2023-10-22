@@ -1,6 +1,6 @@
 'use client';
 
-import axios from 'axios';
+import { captureException } from '@sentry/nextjs';
 import { Edit, MoreHorizontal, Trash } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
 import { useState } from 'react';
@@ -39,6 +39,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
          });
          router.refresh();
       } catch (error) {
+         captureException(error);
          toast({
             title: 'An error occured deleting this product.',
          });

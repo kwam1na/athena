@@ -1,5 +1,6 @@
 'use client';
 
+import { startTransaction, captureException } from '@sentry/nextjs';
 import * as z from 'zod';
 import axios from 'axios';
 import { useState } from 'react';
@@ -64,6 +65,8 @@ export const CategoryForm: React.FC<CategoryFormProps> = ({ initialData }) => {
       },
    });
 
+   const transaction = startTransaction({ name: 'Create Category' });
+
    const getReturnUrl = useReturnUrl('/inventory/categories');
 
    const onSubmit = async (data: CategoryFormValues) => {
@@ -84,11 +87,13 @@ export const CategoryForm: React.FC<CategoryFormProps> = ({ initialData }) => {
          router.refresh();
          router.push(returnUrl);
       } catch (error: any) {
+         captureException(error);
          toast({
             title: `Something went wrong adding this category. Try again.`,
          });
       } finally {
          setLoading(false);
+         transaction.finish();
       }
    };
 
@@ -102,12 +107,14 @@ export const CategoryForm: React.FC<CategoryFormProps> = ({ initialData }) => {
             title: `Category deleted.`,
          });
       } catch (error: any) {
+         captureException(error);
          toast({
             title: `An error occured deleting this category. Make sure you have removed all categories and products under this category first.`,
          });
       } finally {
          setLoading(false);
          setOpen(false);
+         transaction.finish();
       }
    };
 

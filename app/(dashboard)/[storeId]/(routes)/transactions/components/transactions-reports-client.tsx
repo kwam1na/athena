@@ -13,7 +13,7 @@ import {
    useReactTable,
 } from '@tanstack/react-table';
 
-import { DollarSign, Package, PackageCheck, Plus } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
 
 import { Button } from '@/components/ui/button';
@@ -27,11 +27,8 @@ import {
 } from './transactions-reports-columns';
 import { useState } from 'react';
 import { DataTableToolbar } from '@/components/ui/data-table-toolbar/products-table-toolbar';
-import { useStoreCurrency } from '@/providers/currency-provider';
-import { formatter, keysToCamelCase } from '@/lib/utils';
 import { Transaction, TransactionItem } from '@prisma/client';
 import { useWrappedUser } from '@/providers/wrapped-user-provider';
-import { MetricCard } from '@/components/ui/metric-card';
 import { ProgressList } from '@/components/ui/progress-list';
 import { GrossRevenueWidget } from '@/components/widgets/gross-revenue-widget';
 import { NetRevenueWidget } from '@/components/widgets/net-revenue-widget';
@@ -151,21 +148,6 @@ export const TransactionsReportsClient: React.FC<
 
          <Separator />
 
-         {/* <div className="grid grid-cols-3 gap-8 pt-8">
-            <GrossRevenueWidget
-               grossRevenue={grossRevenue}
-               percentageChange={grossRevenuePercentageChange}
-            />
-            <NetRevenueWidget
-               netRevenue={netRevenue}
-               percentageChange={netRevenuePercentageChange}
-            />
-            <TotalUnitsSoldWidget
-               totalUnitsSold={totalUnitsSold}
-               percentageChange={totalUnitsSoldPercentageChange}
-            />
-         </div> */}
-
          <div className="grid md:grid-cols-1 lg:grid-cols-3 gap-8 pt-8">
             <GrossRevenueWidget
                grossRevenue={grossRevenue}
@@ -180,43 +162,6 @@ export const TransactionsReportsClient: React.FC<
                percentageChange={totalUnitsSoldPercentageChange}
             />
          </div>
-
-         {/* <div className="flex gap-16">
-            <div className="flex flex-col gap-4 pt-4 w-[70%]">
-               <span className="text-muted-foreground">Reports</span>
-               <DataTableToolbar
-                  searchKey="title"
-                  tableKey="transactions"
-                  table={table}
-               />
-               <DataTable columns={columns} table={table} />
-            </div>
-
-            <div className="flex flex-col gap-4 pt-4 w-[30%] px-4 py-8 mt-14">
-               <div className="flex w-full h-full gap-8 justify-between">
-                  <div className="w-[50%]">
-                     <AverageTransactionValueWidget
-                        averageTransactionValue={averageTransactionValue}
-                     />
-                  </div>
-                  <div className="w-[50%]">
-                     <AverageUnitsPerTransactionWidget
-                        averageUnitsPerTransaction={averageUnitsPerTransaction}
-                     />
-                  </div>
-               </div>
-
-               {formattedCategoryMetrics &&
-                  formattedCategoryMetrics.length > 0 && (
-                     <div className="flex flex-col gap-4 pt-4 border rounded-lg px-4 py-8 mt-14">
-                        <ProgressList
-                           data={formattedCategoryMetrics}
-                           header="Sales percentage by category"
-                        />
-                     </div>
-                  )}
-            </div>
-         </div> */}
 
          <div className="flex flex-col gap-8 pt-8">
             <div className="w-full flex flex-col gap-4 pt-4 md:pt-0">

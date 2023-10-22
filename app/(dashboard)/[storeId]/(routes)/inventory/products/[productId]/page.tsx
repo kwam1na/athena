@@ -3,6 +3,7 @@ import { ProductForm } from './components/product-form';
 import { getProduct } from '@/lib/repositories/productsRepository';
 import { fetchCategories } from '@/lib/repositories/categoriesRepository';
 import { fetchSubcategories } from '@/lib/repositories/subcategoriesRepository';
+import { fetchSizes } from '@/lib/repositories/sizesRepository';
 
 const ProductPage = async ({
    params,
@@ -12,12 +13,7 @@ const ProductPage = async ({
    const product = await getProduct(params.productId);
    const categories = await fetchCategories(params.storeId);
    const subcategories = await fetchSubcategories(params.storeId);
-
-   const sizes = await prismadb.size.findMany({
-      where: {
-         store_id: params.storeId,
-      },
-   });
+   const sizes = await fetchSizes(params.storeId);
 
    categories.unshift({
       id: 'add-new-category',

@@ -1,6 +1,6 @@
 'use client';
 
-import axios from 'axios';
+import { captureException } from '@sentry/nextjs';
 import { useState } from 'react';
 import { Edit, MoreHorizontal, Trash } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
@@ -18,6 +18,7 @@ import { AlertModal } from '@/components/modals/alert-modal';
 import { ColorColumn } from './columns';
 import { useToast } from '@/components/ui/use-toast';
 import { apiDeleteColor } from '@/lib/api/colors';
+import { ca } from 'date-fns/locale';
 
 interface CellActionProps {
    data: ColorColumn;
@@ -39,6 +40,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
          });
          router.refresh();
       } catch (error) {
+         captureException(error);
          toast({
             title: 'An error occured deleting this color. Make sure all products using this color are deleted and try again.',
          });

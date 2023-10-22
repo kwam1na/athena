@@ -6,6 +6,7 @@ import { useForm } from 'react-hook-form';
 import { Store } from '@prisma/client';
 import { useParams, useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { captureException } from '@sentry/nextjs';
 
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -87,7 +88,7 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ initialData }) => {
             title: 'Store updated.',
          });
       } catch (error: any) {
-         console.log('error:', error);
+         captureException(error);
          toast({
             title: 'Something went wrong. Try again.',
          });
@@ -106,6 +107,7 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ initialData }) => {
             title: 'Store deleted.',
          });
       } catch (error: any) {
+         captureException(error);
          toast({
             title: 'Make sure you removed all products and categories first and then try again.',
          });

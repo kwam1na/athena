@@ -1,7 +1,7 @@
 'use client';
 
 import * as z from 'zod';
-import axios from 'axios';
+import { captureException } from '@sentry/nextjs';
 import { useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
@@ -77,6 +77,7 @@ export const SizeForm: React.FC<SizeFormProps> = ({ initialData }) => {
             title: `Size '${data.name}' ${initialData ? 'updated' : 'added'}.`,
          });
       } catch (error: any) {
+         captureException(error);
          toast({
             title: 'Something went wrong adding this size. Try again.',
          });
@@ -95,6 +96,7 @@ export const SizeForm: React.FC<SizeFormProps> = ({ initialData }) => {
             title: 'Size deleted.',
          });
       } catch (error: any) {
+         captureException(error);
          toast({
             title: 'An error occured deleting this size. Make sure you removed all products using this size first and try again.',
          });

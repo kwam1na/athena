@@ -1,7 +1,7 @@
 'use client';
 
 import * as z from 'zod';
-import axios from 'axios';
+import { captureException } from '@sentry/nextjs';
 import { ChangeEvent, FocusEvent, useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
@@ -89,6 +89,7 @@ export const ColorForm: React.FC<ColorFormProps> = ({ initialData }) => {
             title: `Color '${data.name}' ${initialData ? 'updated' : 'added'}.`,
          });
       } catch (error: any) {
+         captureException(error);
          toast({
             title: 'Something went wrong adding this color. Try again.',
          });
@@ -107,6 +108,7 @@ export const ColorForm: React.FC<ColorFormProps> = ({ initialData }) => {
             title: 'Color deleted.',
          });
       } catch (error: any) {
+         captureException(error);
          toast({
             title: 'Something went wrong deleting this product. Make sure all products using this color are deleted and try again.',
          });

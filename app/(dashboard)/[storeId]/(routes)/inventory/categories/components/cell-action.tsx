@@ -1,8 +1,7 @@
 'use client';
-
-import axios from 'axios';
+import { captureException } from '@sentry/nextjs';
 import { useState } from 'react';
-import { Copy, Edit, MoreHorizontal, Trash } from 'lucide-react';
+import { Edit, MoreHorizontal, Trash } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
 
 import { Button } from '@/components/ui/button';
@@ -12,7 +11,6 @@ import {
    DropdownMenuItem,
    DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { useCategoryModal } from '@/hooks/use-category-modal';
 import { AlertModal } from '@/components/modals/alert-modal';
 import { useToast } from '@/components/ui/use-toast';
 
@@ -39,6 +37,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
          });
          router.refresh();
       } catch (error) {
+         captureException(error);
          toast({
             title: 'An error occurred deleting this category. Make sure you removed all categories and products using this category first.',
          });
