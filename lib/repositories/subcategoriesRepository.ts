@@ -35,14 +35,11 @@ export const deleteSubcategory = async (id: string) => {
     })
 }
 
-export const fetchSubcategories = async (store_id: string) => {
+export const fetchSubcategories = async (store_id: number, include?: Record<string, boolean>) => {
     return await prismadb.subcategory.findMany({
         where: {
             store_id,
         },
-        include: {
-            category: true,
-            products: true
-        }
+        include
     });
 }

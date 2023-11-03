@@ -9,8 +9,8 @@ import { DollarSign, RotateCcw } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useState } from 'react';
-import { ViewDataTableClient } from '../../app/(dashboard)/[storeId]/(routes)/components/view-data-table-client';
-import { unitsSoldColumns } from '../../app/(dashboard)/[storeId]/(routes)/components/view-data-table-columns';
+import { ViewDataTableClient } from '../../app/(dashboard)/organizations/[organizationId]/store/[storeId]/(routes)/_components/view-data-table-client';
+import { unitsSoldColumns } from '../../app/(dashboard)/organizations/[organizationId]/store/[storeId]/(routes)/_components/view-data-table-columns';
 
 interface TopSellingProductssWidgetProps {
    topSellingProducts?: Record<string, any>[];

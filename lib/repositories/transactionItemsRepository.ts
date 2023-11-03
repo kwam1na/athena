@@ -1,13 +1,13 @@
 import prismadb from '@/lib/prismadb';
 
 export const createTransactionItem = async (data: any) => {
-    return await prismadb.transactionItem.create({
+    return await prismadb.transaction_item.create({
         data
     })
 }
 
 export const getTransactionItem = async (id: string) => {
-    return await prismadb.transactionItem.findUnique({
+    return await prismadb.transaction_item.findUnique({
         where: {
             id,
         }
@@ -15,14 +15,14 @@ export const getTransactionItem = async (id: string) => {
 }
 
 export const findTransactionItem = async (keys: any) => {
-    return await prismadb.transactionItem.findFirst({
+    return await prismadb.transaction_item.findFirst({
         where: keys,
     })
 }
 
 export const updateTransactionItem = async (id: string, data: any) => {
 
-    return await prismadb.transactionItem.update({
+    return await prismadb.transaction_item.update({
         where: {
             id
         },
@@ -32,7 +32,7 @@ export const updateTransactionItem = async (id: string, data: any) => {
 
 
 export const deleteTransactionItem = async (id: string) => {
-    return await prismadb.transactionItem.delete({
+    return await prismadb.transaction_item.delete({
         where: {
             id,
         },
@@ -40,7 +40,7 @@ export const deleteTransactionItem = async (id: string) => {
 }
 
 export const fetchTransactionItems = async (keys: { store_id: string;[key: string]: any }) => {
-    return await prismadb.transactionItem.findMany({
+    return await prismadb.transaction_item.findMany({
         where: keys,
         orderBy: {
             created_at: 'desc',

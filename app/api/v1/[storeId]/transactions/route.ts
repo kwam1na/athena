@@ -3,6 +3,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@auth0/nextjs-auth0';
 import { findStore } from '@/lib/repositories/storesRepository';
 import { createTransaction, fetchTransactions, getTransaction, updateTransaction } from '@/lib/repositories/transactionsRepository';
+import { cookies } from 'next/headers';
+import { createSupabaseServerClient } from '@/app/api/utils';
+// import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 
 export async function POST(
     req: NextRequest,
@@ -10,8 +13,12 @@ export async function POST(
 ) {
     try {
         const res = new NextResponse();
-        const session = await getSession(req, res);
-        const user = session?.user
+        const supabase = createSupabaseServerClient();
+        const {
+            data: { session },
+        } = await supabase.auth.getSession()
+
+        const user = session?.user;
 
         const body = await req.json();
         const { transaction_date } = body;
@@ -30,14 +37,14 @@ export async function POST(
 
         const storeByUserId = await findStore({
             id: params.storeId,
-            user_id: user.sub,
+            created_by: user.id,
         });
 
         if (!storeByUserId) {
             return new NextResponse('Unauthorized', { status: 405 });
         }
 
-        const transaction = await createTransaction({ store_id: params.storeId, user_id: user.sub, transaction_date })
+        const transaction = await createTransaction({ store_id: params.storeId, user_id: user.id, transaction_date })
         return NextResponse.json(transaction, res);
     } catch (error) {
         console.log('[TRANSACTION_POST]', (error as Error).message);
@@ -77,8 +84,12 @@ export async function PATCH(
 ) {
     try {
         const res = new NextResponse();
-        const session = await getSession(req, res);
-        const user = session?.user
+        const supabase = createSupabaseServerClient();
+        const {
+            data: { session },
+        } = await supabase.auth.getSession()
+
+        const user = session?.user;
 
         const body = await req.json();
 
@@ -102,7 +113,7 @@ export async function PATCH(
 
         const storeByUserId = await findStore({
             id: params.storeId,
-            user_id: user.sub,
+            created_by: user.id,
         });
 
         if (!storeByUserId) {

@@ -27,7 +27,7 @@ export const ActionAlert: React.FC<ActionAlertProps> = ({
    isLoading,
 }) => {
    return (
-      <Alert className="bg-rose-800">
+      <Alert className="border rounded-lg border-destructive bg-red-950">
          <AlertTitle className="mt-4 flex items-center">{title}</AlertTitle>
          <AlertDescription className="mb-4 flex items-center justify-between">
             {description}

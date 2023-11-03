@@ -32,11 +32,6 @@ export function AppNav({
          active: pathname.includes('/transactions'),
          icon: <Banknote className="mr-2 h-4 w-4" />,
       },
-      //   {
-      //      href: `/${params.storeId}/inventory/colors`,
-      //      label: 'Orders',
-      //      active: pathname === `/${params.storeId}/inventory/colors`,
-      //   },
       {
          href: `/${params.storeId}/settings/profile`,
          label: 'Settings',

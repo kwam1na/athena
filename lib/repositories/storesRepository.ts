@@ -6,7 +6,7 @@ export const createStore = async (data: any) => {
     });
 }
 
-export const getStore = async (id: string) => {
+export const getStore = async (id: number) => {
     return await prismadb.store.findUnique({
         where: {
             id,
@@ -23,32 +23,30 @@ export const findStore = async (keys: any) => {
     })
 }
 
-export const updateStore = async (id: string, user_id: string, data: any) => {
+export const updateStore = async (id: number, user_id: string, data: any) => {
     return await prismadb.store.updateMany({
         where: {
             id,
-            user_id,
+            created_by: user_id,
         },
         data,
     })
 }
 
-export const deleteStore = async (id: string, user_id: string) => {
+export const deleteStore = async (id: number, user_id: string) => {
     return await prismadb.store.deleteMany({
         where: {
             id,
-            user_id,
+            created_by: user_id,
         },
     })
 }
 
-// export const fetchStores = async (storeId: string) => {
-//     return await prismadb.store.findMany({
-//         where: {
-//             storeId,
-//         },
-//         include: {
-//             products: true
-//         }
-//     });
-// }
+export const fetchStores = async (userId: string, include?: Record<string, boolean>) => {
+    return await prismadb.store.findMany({
+        where: {
+            created_by: userId,
+        },
+        include,
+    });
+}

@@ -3,8 +3,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@auth0/nextjs-auth0';
 import { createProduct, fetchProducts } from '@/lib/repositories/productsRepository';
 import { findStore } from '@/lib/repositories/storesRepository';
-import { generateSKU } from '../../../utils';
+import { createSupabaseServerClient, generateSKU } from '@/app/api/utils';
 import { createSKUCounter, getSKUCounter, updateSKUCounter } from '@/lib/repositories/skuCounterRepository';
+import { cookies } from 'next/headers';
+// import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 
 export async function POST(
     req: NextRequest,
@@ -12,8 +14,12 @@ export async function POST(
 ) {
     try {
         const res = new NextResponse();
-        const session = await getSession(req, res);
-        const user = session?.user
+        const supabase = createSupabaseServerClient();
+        const {
+            data: { session },
+        } = await supabase.auth.getSession()
+
+        const user = session?.user;
 
         const body = await req.json();
 
@@ -74,7 +80,7 @@ export async function POST(
 
         const storeByUserId = await findStore({
             id: params.storeId,
-            user_id: user.sub,
+            created_by: user.id,
         });
 
         if (!storeByUserId) {

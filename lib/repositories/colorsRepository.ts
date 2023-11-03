@@ -34,7 +34,7 @@ export const deleteColor = async (id: string) => {
     })
 }
 
-export const fetchColors = async (store_id: string) => {
+export const fetchColors = async (store_id: number) => {
     return await prismadb.color.findMany({
         where: {
             store_id,

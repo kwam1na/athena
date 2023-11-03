@@ -41,7 +41,7 @@ export const deleteProduct = async (id: string) => {
     })
 }
 
-export const fetchProducts = async (keys: { store_id: string; inventory_count?: { lte?: number, gte?: number };[key: string]: any }) => {
+export const fetchProducts = async (keys: { store_id: number; inventory_count?: { lte?: number, gte?: number };[key: string]: any }) => {
 
     const { store_id, sku, product_name, inventory_count, ...rest } = keys;
 

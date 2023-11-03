@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { MetricCard } from '@/components/ui/metric-card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { apiGetMetric } from '@/lib/api/metrics';
-import { DollarSign, RotateCcw } from 'lucide-react';
+import { PackageMinus, RotateCcw } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useState } from 'react';
@@ -46,7 +46,7 @@ export const TotalUnitsSoldWidget: React.FC<TotalUnitsSoldWidgetProps> = ({
                   title={'Total units sold'}
                   value={_totalUnitsSold.toString()}
                   icon={
-                     <DollarSign className="h-4 w-4 text-muted-foreground" />
+                     <PackageMinus className="h-4 w-4 text-muted-foreground" />
                   }
                   percentageChange={percentageChange}
                />

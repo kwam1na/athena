@@ -15,8 +15,8 @@ export class InventoryConstraintError extends Error {
 }
 
 export class GenericTransactionError extends Error {
-    details: any;
-    constructor(message: string, details: any) {
+    details?: any;
+    constructor(message: string, details?: any) {
         super(message);
         this.details = details;
     }

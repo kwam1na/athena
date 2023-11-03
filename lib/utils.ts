@@ -18,6 +18,10 @@ export const capitalizeWord = (word: string) => {
     return word.charAt(0).toUpperCase() + word.slice(1)
 }
 
+export const trimString = (str: string) => {
+    return str.trim();
+}
+
 // Convert camelCase to snake_case
 export const toSnakeCase = (str: string) => {
     return str.replace(/[A-Z]/g, (letter: string) => `_${letter.toLowerCase()}`);

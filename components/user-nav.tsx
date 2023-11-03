@@ -28,6 +28,7 @@ import { ThemeToggle } from './theme-toggle';
 import { useUser } from '@auth0/nextjs-auth0/client';
 import { useWrappedUser } from '@/providers/wrapped-user-provider';
 import Link from 'next/link';
+import axios from 'axios';
 
 export function UserNav() {
    const params = useParams();
@@ -44,6 +45,11 @@ export function UserNav() {
          fallback = names[0].charAt(0) + names[1].charAt(0);
       }
    }
+
+   const handleSignOut = async () => {
+      await axios.post('/auth/signout');
+      window.location.href = '/auth';
+   };
 
    return (
       <DropdownMenu>
@@ -97,7 +103,7 @@ export function UserNav() {
 
             <DropdownMenuItem className="pt-2 pb-2">
                <LogOut className="mr-2 h-4 w-4" />
-               <a className="w-full h-full" href="/api/auth/logout">
+               <a className="w-full h-full" onClick={handleSignOut}>
                   Logout
                </a>
             </DropdownMenuItem>

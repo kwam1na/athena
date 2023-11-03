@@ -1,0 +1,320 @@
+'use client';
+
+import * as z from 'zod';
+import { captureException } from '@sentry/nextjs';
+import { useState } from 'react';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useForm } from 'react-hook-form';
+import { AlertCircle, ArrowLeft, PlusCircle, Trash } from 'lucide-react';
+import { category, subcategory } from '@prisma/client';
+import { useParams, usePathname, useRouter } from 'next/navigation';
+
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import {
+   Form,
+   FormControl,
+   FormField,
+   FormItem,
+   FormLabel,
+   FormMessage,
+} from '@/components/ui/form';
+import { Separator } from '@/components/ui/separator';
+import { Heading } from '@/components/ui/heading';
+import { AlertModal } from '@/components/modals/alert-modal';
+import {
+   Select,
+   SelectContent,
+   SelectItem,
+   SelectTrigger,
+   SelectValue,
+} from '@/components/ui/select';
+import { useToast } from '@/components/ui/use-toast';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { LoadingButton } from '@/components/ui/loading-button';
+import {
+   apiCreateSubcategory,
+   apiDeleteSubcategory,
+   apiUpdateSubcategory,
+} from '@/lib/api/subcategories';
+import useReturnUrl from '@/hooks/use-get-return-url';
+import { TaskAlert } from '@/components/ui/task-alert';
+import useGetBaseStoreUrl from '@/hooks/use-get-base-store-url';
+
+const formSchema = z.object({
+   name: z.string().min(2),
+   category_id: z.string().min(1),
+   //    billboardId: z.string().min(1),
+});
+
+type SubcategoryFormValues = z.infer<typeof formSchema>;
+
+interface SubcategoryFormProps {
+   initialData: subcategory | null;
+   categories: category[];
+   //    billboards: Billboard[];
+}
+
+export const SubategoryForm: React.FC<SubcategoryFormProps> = ({
+   initialData,
+   categories,
+   //    billboards,
+}) => {
+   const params = useParams();
+   const baseStoreURL = useGetBaseStoreUrl();
+   const router = useRouter();
+   const pathName = usePathname();
+   const { toast } = useToast();
+
+   const [open, setOpen] = useState(false);
+   const [loading, setLoading] = useState(false);
+
+   const title = initialData ? 'Edit subcategory' : 'Create subcategory';
+   const description = initialData
+      ? 'Edit a subcategory.'
+      : 'Add a new subcategory';
+   const action = initialData ? 'Save changes' : 'Create';
+   const loadingAction = loading ? (initialData ? 'Saving' : 'Creating') : '';
+   const buttonText = loading ? loadingAction : action;
+
+   const form = useForm<SubcategoryFormValues>({
+      resolver: zodResolver(formSchema),
+      defaultValues: initialData || {
+         name: '',
+         category_id: '',
+      },
+   });
+
+   const getReturnUrl = useReturnUrl('/inventory/subcategories');
+
+   const onSubmit = async (data: SubcategoryFormValues) => {
+      const returnUrl = getReturnUrl();
+
+      try {
+         setLoading(true);
+         if (initialData) {
+            await apiUpdateSubcategory(
+               params.subcategoryId,
+               params.storeId,
+               data,
+            );
+         } else {
+            await apiCreateSubcategory(params.storeId, data);
+         }
+         toast({
+            title: `Category '${data.name}' ${
+               initialData ? 'updated' : 'added'
+            }.`,
+         });
+         toast({
+            title: `Subcategory '${data.name}' ${
+               initialData ? 'updated' : 'added'
+            }.`,
+         });
+         router.refresh();
+         router.push(returnUrl);
+      } catch (error: any) {
+         captureException(error);
+         toast({
+            title: 'Something went wrong updating this subcategory. Try again.',
+         });
+      } finally {
+         setLoading(false);
+      }
+   };
+
+   const onDelete = async () => {
+      try {
+         setLoading(true);
+         await apiDeleteSubcategory(params.subcategoryId, params.storeId);
+         router.refresh();
+         router.push(`${baseStoreURL}/inventory/subcategories`);
+         toast({
+            title: 'Subcategory deleted.',
+         });
+      } catch (error: any) {
+         captureException(error);
+         toast({
+            title: 'An error occurred deleting this subcategory. Make sure all products under this subcategory are deleted and try again.',
+         });
+      } finally {
+         setLoading(false);
+         setOpen(false);
+      }
+   };
+
+   const Alerts = () => {
+      const returnURL = `${baseStoreURL}/inventory/subcategories/new`;
+      const hasAddedCategory = !(
+         categories.length == 1 && categories[0].id == 'add-new-category'
+      );
+      return (
+         <>
+            {!hasAddedCategory && (
+               <TaskAlert
+                  title="No categories found"
+                  description="To proceed, please add a category."
+                  action={{
+                     type: 'navigate',
+                     ctaText: 'Add category',
+                     route: `${baseStoreURL}/inventory/categories/new?return_url=${returnURL}`,
+                  }}
+               />
+            )}
+         </>
+      );
+   };
+
+   return (
+      <>
+         <AlertModal
+            isOpen={open}
+            onClose={() => setOpen(false)}
+            onConfirm={onDelete}
+            loading={loading}
+         />
+         <div className="flex flex-col space-y-6">
+            <div>
+               <Button variant={'outline'} onClick={() => router.back()}>
+                  <ArrowLeft className="mr-2 h-4 w-4" />
+               </Button>
+            </div>
+            <Alerts />
+         </div>
+         <div className="flex items-center justify-between">
+            <Heading title={title} description={description} />
+            {initialData && (
+               <Button
+                  disabled={loading}
+                  variant="destructive"
+                  onClick={() => setOpen(true)}
+               >
+                  <Trash className="mr-2 h-4 w-4" /> Delete
+               </Button>
+            )}
+         </div>
+         <Separator />
+         <Form {...form}>
+            <form
+               onSubmit={form.handleSubmit(onSubmit)}
+               className="space-y-8 w-full"
+            >
+               <div className="md:grid md:grid-cols-3 gap-8">
+                  <FormField
+                     control={form.control}
+                     name="name"
+                     render={({ field }) => (
+                        <FormItem>
+                           <FormLabel>Name</FormLabel>
+                           <FormControl>
+                              <Input
+                                 disabled={loading}
+                                 placeholder="Subcategory name"
+                                 {...field}
+                              />
+                           </FormControl>
+                           <FormMessage />
+                        </FormItem>
+                     )}
+                  />
+                  <FormField
+                     control={form.control}
+                     name="category_id"
+                     render={({ field }) => (
+                        <FormItem>
+                           <FormLabel>Category</FormLabel>
+                           <Select
+                              disabled={loading}
+                              onValueChange={(value: string) => {
+                                 if (value == 'add-new-category') {
+                                    router.push(
+                                       `${baseStoreURL}/inventory/categories/new?return_url=${pathName}`,
+                                    );
+                                 } else {
+                                    field.onChange(value);
+                                 }
+                              }}
+                              value={field.value}
+                              defaultValue={field.value}
+                           >
+                              <FormControl>
+                                 <SelectTrigger>
+                                    <SelectValue
+                                       defaultValue={field.value}
+                                       placeholder="Select a category"
+                                    />
+                                 </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                 {categories.map((category) => (
+                                    <SelectItem
+                                       key={category.id}
+                                       value={category.id}
+                                    >
+                                       {category.id.includes('add-new') ? (
+                                          <div className="flex items-center">
+                                             <PlusCircle className="mr-2 h-4 w-4" />
+                                             <p className="text-primary">
+                                                Add new category
+                                             </p>
+                                          </div>
+                                       ) : (
+                                          category.name
+                                       )}
+                                    </SelectItem>
+                                 ))}
+                              </SelectContent>
+                           </Select>
+                           <FormMessage />
+                        </FormItem>
+                     )}
+                  />
+                  {/* <FormField
+                     control={form.control}
+                     name="billboardId"
+                     render={({ field }) => (
+                        <FormItem>
+                           <FormLabel>Billboard</FormLabel>
+                           <Select
+                              disabled={loading}
+                              onValueChange={field.onChange}
+                              value={field.value}
+                              defaultValue={field.value}
+                           >
+                              <FormControl>
+                                 <SelectTrigger>
+                                    <SelectValue
+                                       defaultValue={field.value}
+                                       placeholder="Select a billboard"
+                                    />
+                                 </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                 {billboards.map((billboard) => (
+                                    <SelectItem
+                                       key={billboard.id}
+                                       value={billboard.id}
+                                    >
+                                       {billboard.label}
+                                    </SelectItem>
+                                 ))}
+                              </SelectContent>
+                           </Select>
+                           <FormMessage />
+                        </FormItem>
+                     )}
+                  /> */}
+               </div>
+               <LoadingButton
+                  isLoading={loading}
+                  disabled={loading}
+                  className="ml-auto"
+                  type="submit"
+               >
+                  {buttonText}
+               </LoadingButton>
+            </form>
+         </Form>
+      </>
+   );
+};

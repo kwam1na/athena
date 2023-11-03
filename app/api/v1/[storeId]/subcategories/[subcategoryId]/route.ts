@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@auth0/nextjs-auth0';
 import { deleteSubcategory, getSubcategory, updateSubcategory } from '@/lib/repositories/subcategoriesRepository';
 import { findStore } from '@/lib/repositories/storesRepository';
+import { cookies } from 'next/headers';
+import { createSupabaseServerClient } from '@/app/api/utils';
+// import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 
 export async function GET(
     req: Request,
@@ -26,8 +29,12 @@ export async function DELETE(
 ) {
     try {
         const res = new NextResponse();
-        const session = await getSession(req, res);
-        const user = session?.user
+        const supabase = createSupabaseServerClient();
+        const {
+            data: { session },
+        } = await supabase.auth.getSession()
+
+        const user = session?.user;
 
         if (!user) {
             return new NextResponse('Unauthenticated', { status: 403 });
@@ -39,7 +46,7 @@ export async function DELETE(
 
         const storeByUserId = await findStore({
             id: params.storeId,
-            user_id: user.sub,
+            created_by: user.id,
         });
 
         if (!storeByUserId) {
@@ -60,8 +67,12 @@ export async function PATCH(
 ) {
     try {
         const res = new NextResponse();
-        const session = await getSession(req, res);
-        const user = session?.user
+        const supabase = createSupabaseServerClient();
+        const {
+            data: { session },
+        } = await supabase.auth.getSession()
+
+        const user = session?.user;
 
         const body = await req.json();
 
@@ -82,7 +93,7 @@ export async function PATCH(
 
         const storeByUserId = await findStore({
             id: params.storeId,
-            user_id: user.sub,
+            created_by: user.id,
         });
 
         if (!storeByUserId) {

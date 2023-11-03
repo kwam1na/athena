@@ -1,9 +1,13 @@
+import { getSalesRevenue } from "@/actions/get-sales-revenue";
 import { getStockCount } from "@/actions/get-stock-count";
 import { getTotalGrossRevenue } from "@/actions/get-total-gross-revenue";
 import { getTotalNetRevenue } from "@/actions/get-total-net-revenue";
 import { getTotalUnitsSoldForStore } from "@/actions/get-total-units";
 import { getAverageTransactionValue, getAverageUnitsPerTransaction } from "@/actions/get-transactions-metrics";
+import { createSupabaseServerClient } from "@/app/api/utils";
 import { getSession } from "@auth0/nextjs-auth0";
+// import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
+import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(
@@ -15,8 +19,12 @@ export async function GET(
         const metric = searchParams.get('metric') || undefined;
 
         const res = new NextResponse();
-        const session = await getSession(req, res);
-        const user = session?.user
+        const supabase = createSupabaseServerClient();
+        const {
+            data: { session },
+        } = await supabase.auth.getSession()
+
+        const user = session?.user;
 
         if (!user) {
             return new NextResponse('Unauthenticated', { status: 403 });
@@ -30,29 +38,36 @@ export async function GET(
             return new NextResponse('Metric is required', { status: 400 });
         }
 
+        const storeId = parseInt(params.storeId)
+
         switch (metric) {
+
+            case 'sales_revenue':
+                const salesRevenue = await getSalesRevenue(storeId);
+                return NextResponse.json({ data: { [metric]: salesRevenue } });
+
             case 'gross_revenue':
-                const grossRevenue = await getTotalGrossRevenue(params.storeId);
+                const grossRevenue = await getTotalGrossRevenue(storeId);
                 return NextResponse.json({ data: { [metric]: grossRevenue } });
 
             case 'net_revenue':
-                const netRevenue = await getTotalNetRevenue(params.storeId);
+                const netRevenue = await getTotalNetRevenue(storeId);
                 return NextResponse.json({ data: { [metric]: netRevenue } });
 
             case 'total_units_sold':
-                const totalUnitsSold = await getTotalUnitsSoldForStore(params.storeId);
+                const totalUnitsSold = await getTotalUnitsSoldForStore(storeId);
                 return NextResponse.json({ data: { [metric]: totalUnitsSold } });
 
             case 'average_transaction_value':
-                const averageTransactionValue = await getAverageTransactionValue(params.storeId);
+                const averageTransactionValue = await getAverageTransactionValue(storeId);
                 return NextResponse.json({ data: { [metric]: averageTransactionValue } });
 
             case 'average_units_per_transaction':
-                const averageUnitsPerTransaction = await getAverageUnitsPerTransaction(params.storeId);
+                const averageUnitsPerTransaction = await getAverageUnitsPerTransaction(storeId);
                 return NextResponse.json({ data: { [metric]: averageUnitsPerTransaction } });
 
             case 'total_stock_count':
-                const totalStockCount = await getStockCount(params.storeId);
+                const totalStockCount = await getStockCount(storeId);
                 return NextResponse.json({ data: { [metric]: totalStockCount } });
 
             default:

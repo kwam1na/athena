@@ -52,7 +52,7 @@ export default function StoreSwitcher({
    }));
 
    const currentStore = formattedItems.find(
-      (item) => item.value === params.storeId,
+      (item) => item.value === parseInt(params.storeId),
    );
 
    const [open, setOpen] = React.useState(false);
@@ -139,7 +139,7 @@ export default function StoreSwitcher({
                               storeModal.onOpen();
                            }}
                         >
-                           <PlusCircle className="mr-2 h-5 w-5" />
+                           <PlusCircle className="mr-2 h-4 w-4" />
                            Create store
                         </CommandItem>
                      </CommandGroup>

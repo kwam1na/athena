@@ -2,15 +2,21 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@auth0/nextjs-auth0';
 import { createSubategory, fetchSubcategories } from '@/lib/repositories/subcategoriesRepository';
 import { findStore } from '@/lib/repositories/storesRepository';
+import { cookies } from 'next/headers';
+import { createSupabaseServerClient } from '@/app/api/utils';
+// import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 
 export async function POST(
     req: NextRequest,
     { params }: { params: { storeId: string } },
 ) {
     try {
-        const res = new NextResponse();
-        const session = await getSession(req, res);
-        const user = session?.user
+        const supabase = createSupabaseServerClient();
+        const {
+            data: { session },
+        } = await supabase.auth.getSession()
+
+        const user = session?.user;
 
         const body = await req.json();
 
@@ -36,7 +42,7 @@ export async function POST(
 
         const storeByUserId = await findStore({
             id: params.storeId,
-            user_id: user.sub,
+            created_by: user.id,
         });
 
         if (!storeByUserId) {

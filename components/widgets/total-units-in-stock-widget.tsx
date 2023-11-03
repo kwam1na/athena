@@ -7,7 +7,7 @@ import { apiGetMetric } from '@/lib/api/metrics';
 import { formatter } from '@/lib/utils';
 import { useStoreCurrency } from '@/providers/currency-provider';
 import { set } from 'date-fns';
-import { Package, RotateCcw } from 'lucide-react';
+import { PackageCheck, RotateCcw } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useState } from 'react';
@@ -46,7 +46,9 @@ export const TotalStockWidget: React.FC<TotalStockWidgetProps> = ({
                <MetricCard
                   title={'Products in stock'}
                   value={_totalStockCount.toString()}
-                  icon={<Package className="h-4 w-4 text-muted-foreground" />}
+                  icon={
+                     <PackageCheck className="h-4 w-4 text-muted-foreground" />
+                  }
                />
             </Link>
          )}

@@ -3,6 +3,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@auth0/nextjs-auth0';
 import { createColor, fetchColors } from '@/lib/repositories/colorsRepository';
 import { findStore } from '@/lib/repositories/storesRepository';
+import { cookies } from 'next/headers';
+// import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
+import { createSupabaseServerClient } from '@/app/api/utils';
 
 export async function POST(
     req: NextRequest,
@@ -10,8 +13,14 @@ export async function POST(
 ) {
     try {
         const res = new NextResponse();
-        const session = await getSession(req, res);
-        const user = session?.user
+        // const cookieStore = cookies()
+        // const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
+        const supabase = createSupabaseServerClient();
+        const {
+            data: { session },
+        } = await supabase.auth.getSession()
+
+        const user = session?.user;
 
         const body = await req.json();
 
@@ -35,7 +44,7 @@ export async function POST(
 
         const storeByUserId = await findStore({
             id: params.storeId,
-            user_id: user.sub,
+            created_by: user.id,
         });
 
         if (!storeByUserId) {

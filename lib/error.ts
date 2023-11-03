@@ -1,7 +1,9 @@
 export class ServiceError extends Error {
-    code: number;
-    constructor(message: string, code: number) {
-        super(message)
-        this.code = code;
+    details?: any;
+    status: number;
+    constructor(message: string, status: number, details?: any,) {
+        super(message);
+        this.details = details;
+        this.status = status;
     }
 }

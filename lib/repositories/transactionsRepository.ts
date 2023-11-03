@@ -38,7 +38,7 @@ export const deleteTransaction = async (id: string) => {
 }
 
 
-export const fetchTransactions = async ({ dateRange, ...restKeys }: { store_id: string; dateRange?: { start: Date, end: Date }, [key: string]: any }) => {
+export const fetchTransactions = async ({ dateRange, ...restKeys }: { store_id: number; dateRange?: { start: Date, end: Date }, [key: string]: any }) => {
     const dateFilter = dateRange ? {
         AND: [
             {

@@ -1,10 +1,10 @@
 import prismadb from "@/lib/prismadb";
-import { InventoryConstraintError, ProductNotFoundError } from "./errors";
+import { GenericTransactionError, InventoryConstraintError, ProductNotFoundError } from "./errors";
 import { getTransaction, updateTransaction } from "@/lib/repositories/transactionsRepository";
 import { Transaction } from "./types";
-import { Product, TransactionItem } from "@prisma/client";
+import { product, transaction_item } from "@prisma/client";
 
-export const checkIfItemsUpdated = (transaction_items: Partial<TransactionItem>[], existingTransaction?: Transaction) => {
+export const checkIfItemsUpdated = (transaction_items: Partial<transaction_item>[], existingTransaction?: Transaction) => {
 
     const existingItemIds = existingTransaction?.transaction_items?.map((item: any) => item.id) || [];
     const updatedItemIds = transaction_items.map((item: any) => item.id);
@@ -21,10 +21,10 @@ export const checkIfItemsUpdated = (transaction_items: Partial<TransactionItem>[
 
 export const checkForOffendingItems = ({ existingItem, item, product, offendingItems }:
     {
-        existingItem?: Partial<TransactionItem>
-        item: Partial<TransactionItem>,
+        existingItem?: Partial<transaction_item>
+        item: Partial<transaction_item>,
         offendingItems: Record<string, any>[],
-        product?: Partial<Product>,
+        product?: Partial<product>,
     }) => {
 
     const unitsSold = item?.units_sold || 0;
@@ -52,13 +52,13 @@ export const checkForOffendingItems = ({ existingItem, item, product, offendingI
     }
 };
 
-export const checkInventoryConstraints = async (prisma: any, hasTransactionItemsBeenUpdated: boolean, transaction_items: Partial<TransactionItem>[], existingTransaction?: Transaction) => {
+export const checkInventoryConstraints = async (prisma: any, hasTransactionItemsBeenUpdated: boolean, transaction_items: Partial<transaction_item>[], existingTransaction?: Transaction) => {
     const offendingItems: Record<string, any>[] = [];
 
     const itemsToCheck = hasTransactionItemsBeenUpdated ? transaction_items : (!existingTransaction ? transaction_items : []);
 
     for (const item of itemsToCheck) {
-        let product: Partial<Product> | undefined;
+        let product: Partial<product> | undefined;
         try {
             product = await prisma.product.findUnique({
                 where: { id: item.product_id },
@@ -72,7 +72,7 @@ export const checkInventoryConstraints = async (prisma: any, hasTransactionItems
             });
         }
 
-        const existingItem: Partial<TransactionItem> | undefined = existingTransaction?.transaction_items.find((e: any) => e.id === item.id);
+        const existingItem: Partial<transaction_item> | undefined = existingTransaction?.transaction_items.find((e: any) => e.id === item.id);
         checkForOffendingItems({ existingItem, item, product, offendingItems });
     }
 
@@ -83,10 +83,10 @@ export const checkInventoryConstraints = async (prisma: any, hasTransactionItems
 * Using Parital<TransactionItem> because the transaction items from the frontend will
 * not have all the fields that are in the TransactionItem type
 */
-export const getResult = async (transactionId: string, transaction_items: Partial<TransactionItem>[], transaction_params: Record<string, any>, params: Record<string, any>, userId: string) => {
+export const getResult = async (transactionId: string, transaction_items: Partial<transaction_item>[], transaction_params: Record<string, any>, params: Record<string, any>, userId: string) => {
 
     if (transaction_items.length === 0) {
-        throw new Error('Transaction items cannot be empty');
+        throw new GenericTransactionError('Transaction items cannot be empty');
     }
 
     return await prismadb.$transaction(async (prisma) => {
@@ -114,7 +114,7 @@ export const getResult = async (transactionId: string, transaction_items: Partia
             const transactionPromises = transaction_items.map(async (item: any) => {
                 let existingTransactionItem;
                 if (item.id)
-                    existingTransactionItem = await prisma.transactionItem.findUnique({
+                    existingTransactionItem = await prisma.transaction_item.findUnique({
                         where: { id: item.id, AND: [{ product_id: item.product_id }, { transaction_id: item.transaction_id }] },
                     });
 
@@ -124,7 +124,7 @@ export const getResult = async (transactionId: string, transaction_items: Partia
                 if (existingTransactionItem) {
                     const inventoryChange = existingTransactionItem.units_sold - item.units_sold;
 
-                    transactionItem = await prisma.transactionItem.update({
+                    transactionItem = await prisma.transaction_item.update({
                         where: { id: existingTransactionItem.id },
                         data: body,
                     });
@@ -134,7 +134,7 @@ export const getResult = async (transactionId: string, transaction_items: Partia
                         data: { inventory_count: { increment: inventoryChange } },
                     });
                 } else {
-                    transactionItem = await prisma.transactionItem.create({
+                    transactionItem = await prisma.transaction_item.create({
                         data: body,
                     });
 

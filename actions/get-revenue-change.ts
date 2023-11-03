@@ -1,7 +1,7 @@
 import { fetchTransactions } from "@/lib/repositories/transactionsRepository";
-import { Transaction } from "@prisma/client";
+import { transaction } from "@prisma/client";
 
-export const getRevenueChange = async (storeId: string, type: 'gross' | 'net') => {
+export const getRevenueChange = async (storeId: number, type: 'gross' | 'net') => {
     const currentWeekData = await fetchTransactions({
         store_id: storeId,
         status: 'published',
@@ -29,13 +29,13 @@ export const getRevenueChange = async (storeId: string, type: 'gross' | 'net') =
     return percentageChange === Infinity || isNaN(percentageChange) ? 0 : percentageChange;
 };
 
-const calculateGrossRevenueFromReports = (reports: Transaction[]) => {
+const calculateGrossRevenueFromReports = (reports: transaction[]) => {
     return reports.reduce((total, report) => {
         return total + (report.gross_sales || 0);
     }, 0);
 };
 
-const calculateNetRevenueFromReports = (reports: Transaction[]) => {
+const calculateNetRevenueFromReports = (reports: transaction[]) => {
     return reports.reduce((total, report) => {
         return total + (report.net_revenue || 0);
     }, 0);
