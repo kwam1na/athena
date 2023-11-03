@@ -5,6 +5,7 @@ import { createSize, fetchSizes } from '@/lib/repositories/sizesRepository';
 import { findStore } from '@/lib/repositories/storesRepository';
 import { cookies } from 'next/headers';
 import { createSupabaseServerClient } from '@/app/api/utils';
+import { parse } from 'path';
 // import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 
 export async function POST(
@@ -40,8 +41,10 @@ export async function POST(
             return new NextResponse('Store id is required', { status: 400 });
         }
 
+        const storeId = parseInt(params.storeId)
+
         const storeByUserId = await findStore({
-            id: params.storeId,
+            id: storeId,
             created_by: user.id,
         });
 
@@ -49,7 +52,7 @@ export async function POST(
             return new NextResponse('Unauthorized', { status: 405 });
         }
 
-        const createParams = { ...body, store_id: params.storeId }
+        const createParams = { ...body, store_id: storeId }
         const size = await createSize(createParams);
 
         return NextResponse.json(size, res);
@@ -68,7 +71,7 @@ export async function GET(
             return new NextResponse('Store id is required', { status: 400 });
         }
 
-        const sizes = await fetchSizes(params.storeId);
+        const sizes = await fetchSizes(parseInt(params.storeId));
 
         return NextResponse.json(sizes);
     } catch (error) {

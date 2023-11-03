@@ -119,7 +119,7 @@ export const getResult = async (transactionId: string, transaction_items: Partia
                     });
 
                 let transactionItem;
-                const body = { ...item, cost: parseFloat(item.cost), price: parseFloat(item.price), store_id: params.storeId, user_id: userId }
+                const body = { ...item, cost: parseFloat(item.cost), price: parseFloat(item.price), store_id: parseInt(item.store_id), organization_id: parseInt(item.organization_id), user_id: userId }
 
                 if (existingTransactionItem) {
                     const inventoryChange = existingTransactionItem.units_sold - item.units_sold;

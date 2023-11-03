@@ -14,7 +14,7 @@ import {
 } from '@tanstack/react-table';
 
 import { Plus } from 'lucide-react';
-import { useParams, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 
 import { Button } from '@/components/ui/button';
 import { DataTable } from '@/components/ui/data-table';
@@ -24,6 +24,7 @@ import { Separator } from '@/components/ui/separator';
 import { columns, SubcategoryColumn } from './columns';
 import { useState } from 'react';
 import { DataTableToolbar } from '@/components/ui/data-table-toolbar/products-table-toolbar';
+import useGetBaseStoreUrl from '@/hooks/use-get-base-store-url';
 
 interface SubcategoriesClientProps {
    data: SubcategoryColumn[];
@@ -40,8 +41,8 @@ export const SubcategoriesClient: React.FC<SubcategoriesClientProps> = ({
    categoryOptions,
    storeName,
 }) => {
-   const params = useParams();
    const router = useRouter();
+   const baseStoreURL = useGetBaseStoreUrl();
 
    const [sorting, setSorting] = useState<SortingState>([]);
    const [rowSelection, setRowSelection] = useState({});
@@ -81,7 +82,7 @@ export const SubcategoriesClient: React.FC<SubcategoriesClientProps> = ({
             />
             <Button
                onClick={() =>
-                  router.push(`/${params.storeId}/inventory/subcategories/new`)
+                  router.push(`${baseStoreURL}/inventory/subcategories/new`)
                }
             >
                <Plus className="mr-2 h-4 w-4" /> Add new

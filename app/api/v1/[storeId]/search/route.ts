@@ -3,6 +3,7 @@ import { getSession } from "@auth0/nextjs-auth0";
 // import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
+import { parse } from "path";
 
 export async function GET(
     req: NextRequest,
@@ -25,7 +26,7 @@ export async function GET(
         // }
 
         const product = await fetchProducts({
-            store_id: params.storeId,
+            store_id: parseInt(params.storeId),
             sku: query,
             product_name: query,
         })

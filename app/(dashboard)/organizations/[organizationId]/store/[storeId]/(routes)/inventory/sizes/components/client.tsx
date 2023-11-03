@@ -14,7 +14,7 @@ import {
 } from '@tanstack/react-table';
 
 import { Plus } from 'lucide-react';
-import { useParams, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 
 import { Button } from '@/components/ui/button';
 import { DataTable } from '@/components/ui/data-table';
@@ -24,14 +24,15 @@ import { Separator } from '@/components/ui/separator';
 import { columns, SizeColumn } from './columns';
 import { useState } from 'react';
 import { DataTableToolbar } from '@/components/ui/data-table-toolbar/products-table-toolbar';
+import useGetBaseStoreUrl from '@/hooks/use-get-base-store-url';
 
 interface SizesClientProps {
    data: SizeColumn[];
 }
 
 export const SizesClient: React.FC<SizesClientProps> = ({ data }) => {
-   const params = useParams();
    const router = useRouter();
+   const baseStoreURL = useGetBaseStoreUrl();
 
    const [sorting, setSorting] = useState<SortingState>([]);
    const [rowSelection, setRowSelection] = useState({});
@@ -71,7 +72,7 @@ export const SizesClient: React.FC<SizesClientProps> = ({ data }) => {
             />
             <Button
                onClick={() =>
-                  router.push(`/${params.storeId}/inventory/sizes/new`)
+                  router.push(`${baseStoreURL}/inventory/sizes/new`)
                }
             >
                <Plus className="mr-2 h-4 w-4" /> Add new

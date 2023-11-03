@@ -39,7 +39,7 @@ export const deleteTransactionItem = async (id: string) => {
     })
 }
 
-export const fetchTransactionItems = async (keys: { store_id: string;[key: string]: any }) => {
+export const fetchTransactionItems = async (keys: { store_id: number;[key: string]: any }) => {
     return await prismadb.transaction_item.findMany({
         where: keys,
         orderBy: {

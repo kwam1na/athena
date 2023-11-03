@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-import { getSession } from '@auth0/nextjs-auth0';
 import { deleteCategory, getCategory, updateCategory } from '@/lib/repositories/categoriesRepository';
 import { findStore } from '@/lib/repositories/storesRepository';
 import { cookies } from 'next/headers';
-// import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { createSupabaseServerClient } from '@/app/api/utils';
 
 export async function GET(
@@ -31,8 +29,6 @@ export async function DELETE(
 ) {
     try {
         const res = new NextResponse();
-        const cookieStore = cookies()
-        // const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
         const supabase = createSupabaseServerClient();
         const {
             data: { session },
@@ -49,7 +45,7 @@ export async function DELETE(
         }
 
         const storeByUserId = await findStore({
-            id: params.storeId,
+            id: parseInt(params.storeId),
             created_by: user.id,
         });
 
@@ -72,7 +68,6 @@ export async function PATCH(
 ) {
     try {
         const res = new NextResponse();
-        // const cookieStore = cookies()
         const supabase = createSupabaseServerClient();
         const {
             data: { session },
@@ -97,7 +92,7 @@ export async function PATCH(
         }
 
         const storeByUserId = await findStore({
-            id: params.storeId,
+            id: parseInt(params.storeId),
             created_by: user.id,
         });
 

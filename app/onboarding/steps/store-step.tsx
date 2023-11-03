@@ -54,6 +54,7 @@ export const StoreStep: React.FC<StoreStepProps> = ({
                   onValueChange={onCurrencyChange}
                   value={currency}
                   disabled={disabled}
+                  defaultValue="Select a currency"
                >
                   <SelectTrigger>
                      <SelectValue placeholder="Select a currency" />

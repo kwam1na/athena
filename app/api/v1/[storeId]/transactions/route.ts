@@ -21,7 +21,7 @@ export async function POST(
         const user = session?.user;
 
         const body = await req.json();
-        const { transaction_date } = body;
+        const { transaction_date, organization_id } = body;
 
         if (!user) {
             return new NextResponse('Unauthenticated', { status: 403 });
@@ -31,12 +31,16 @@ export async function POST(
             return new NextResponse('Transaction date is required', { status: 400 });
         }
 
+        if (!organization_id) {
+            return new NextResponse('Organization id is required', { status: 400 });
+        }
+
         if (!params.storeId) {
             return new NextResponse('Store id is required', { status: 400 });
         }
 
         const storeByUserId = await findStore({
-            id: params.storeId,
+            id: parseInt(params.storeId),
             created_by: user.id,
         });
 
@@ -44,7 +48,7 @@ export async function POST(
             return new NextResponse('Unauthorized', { status: 405 });
         }
 
-        const transaction = await createTransaction({ store_id: params.storeId, user_id: user.id, transaction_date })
+        const transaction = await createTransaction({ store_id: parseInt(params.storeId), user_id: user.id, transaction_date, organization_id: parseInt(organization_id) })
         return NextResponse.json(transaction, res);
     } catch (error) {
         console.log('[TRANSACTION_POST]', (error as Error).message);
@@ -68,7 +72,7 @@ export async function GET(
         }
 
         const transactions = await fetchTransactions({
-            store_id: params.storeId,
+            store_id: parseInt(params.storeId),
         });
 
         return NextResponse.json(transactions);
@@ -107,12 +111,16 @@ export async function PATCH(
             return new NextResponse('Transaction report title is required', { status: 400 });
         }
 
+        if (!body.organization_id) {
+            return new NextResponse('Organization id is required', { status: 400 });
+        }
+
         if (!params.storeId) {
             return new NextResponse('Store id is required', { status: 400 });
         }
 
         const storeByUserId = await findStore({
-            id: params.storeId,
+            id: parseInt(params.storeId),
             created_by: user.id,
         });
 

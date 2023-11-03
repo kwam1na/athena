@@ -5,12 +5,6 @@ import { useParams, usePathname } from 'next/navigation';
 
 import { cn } from '@/lib/utils';
 import { Banknote, LayoutDashboard, Package, Settings } from 'lucide-react';
-import {
-   Tooltip,
-   TooltipContent,
-   TooltipProvider,
-   TooltipTrigger,
-} from './ui/tooltip';
 import useGetBaseStoreUrl from '@/hooks/use-get-base-store-url';
 
 export function AppSideBar({
@@ -49,34 +43,11 @@ export function AppSideBar({
 
    return (
       <div className={cn('flex flex-col gap-16 px-4', className)}>
-         <p className="text-lg w-16">athena</p>
-
          <nav
             className="flex flex-col items-center justify-center space-y-6 lg:space-y-10"
             {...props}
          >
             {routes.map((route) => (
-               // <TooltipProvider>
-               //    <Tooltip>
-               //       <TooltipTrigger asChild>
-               //          <Link
-               //             key={route.href}
-               //             href={route.href}
-               //             className={cn(
-               //                'text-sm font-medium transition-colors hover:text-primary flex items-center',
-               //                route.active
-               //                   ? 'text-black dark:text-white bg-muted p-2 pr-4 pl-4 rounded-lg'
-               //                   : 'text-muted-foreground',
-               //             )}
-               //          >
-               //             {route.icon}
-               //          </Link>
-               //       </TooltipTrigger>
-               //       <TooltipContent>
-               //          <p className="text-sm">{route.label}</p>
-               //       </TooltipContent>
-               //    </Tooltip>
-               // </TooltipProvider>
                <Link
                   key={route.href}
                   href={route.href}

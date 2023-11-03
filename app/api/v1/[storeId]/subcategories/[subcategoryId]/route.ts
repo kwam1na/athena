@@ -4,6 +4,7 @@ import { deleteSubcategory, getSubcategory, updateSubcategory } from '@/lib/repo
 import { findStore } from '@/lib/repositories/storesRepository';
 import { cookies } from 'next/headers';
 import { createSupabaseServerClient } from '@/app/api/utils';
+import { parse } from 'path';
 // import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 
 export async function GET(
@@ -45,7 +46,7 @@ export async function DELETE(
         }
 
         const storeByUserId = await findStore({
-            id: params.storeId,
+            id: parseInt(params.storeId),
             created_by: user.id,
         });
 
@@ -92,7 +93,7 @@ export async function PATCH(
         }
 
         const storeByUserId = await findStore({
-            id: params.storeId,
+            id: parseInt(params.storeId),
             created_by: user.id,
         });
 

@@ -5,6 +5,7 @@ import { findStore } from '@/lib/repositories/storesRepository';
 // import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
+import { parse } from 'path';
 
 export async function POST(
     req: NextRequest,
@@ -54,8 +55,10 @@ export async function POST(
             return new NextResponse('Store id is required', { status: 400 });
         }
 
+        const storeId = parseInt(params.storeId)
+
         const storeByUserId = await findStore({
-            id: params.storeId,
+            id: storeId,
             created_by: user.id,
         });
 
@@ -63,7 +66,7 @@ export async function POST(
             return new NextResponse('Unauthorized', { status: 405 });
         }
 
-        const createParams = { ...body, store_id: params.storeId }
+        const createParams = { ...body, store_id: storeId }
         const category = await createCategory(createParams);
 
         return NextResponse.json(category);
@@ -82,7 +85,7 @@ export async function GET(
             return new NextResponse('Store id is required', { status: 400 });
         }
 
-        const categories = await fetchCategories(params.storeId)
+        const categories = await fetchCategories(parseInt(params.storeId))
         return NextResponse.json(categories);
     } catch (error) {
         console.log('[CATEGORIES_GET]', error);

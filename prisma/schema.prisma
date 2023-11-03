@@ -76,7 +76,7 @@ model organization {
 }
 
 model organization_member {
-  id              String       @id @default(uuid())
+  id              Int          @id @default(autoincrement())
   user_id         String
   created_at      DateTime     @default(now())
   organization_id Int
@@ -88,27 +88,30 @@ model organization_member {
 }
 
 model order {
-  id          String       @id @default(uuid())
-  store_id    Int
-  store       store        @relation("StoreToOrder", fields: [store_id], references: [id], onDelete: Cascade)
-  order_items order_item[]
-  isPaid      Boolean      @default(false)
-  phone       String       @default("")
-  address     String       @default("")
-  created_at  DateTime     @default(now())
-  updated_at  DateTime     @updatedAt
+  id              String       @id @default(uuid())
+  organization_id Int
+  store_id        Int
+  store           store        @relation("StoreToOrder", fields: [store_id], references: [id], onDelete: Cascade)
+  order_items     order_item[]
+  isPaid          Boolean      @default(false)
+  phone           String       @default("")
+  address         String       @default("")
+  created_at      DateTime     @default(now())
+  updated_at      DateTime     @updatedAt
 
   @@index([store_id])
 }
 
 model order_item {
-  id         String   @id @default(uuid())
-  order_id   String
-  order      order    @relation(fields: [order_id], references: [id])
-  product_id String
-  product    product  @relation(fields: [product_id], references: [id])
-  created_at DateTime @default(now())
-  updated_at DateTime @updatedAt
+  id              String   @id @default(uuid())
+  organization_id Int
+  store_id        Int
+  order_id        String
+  order           order    @relation(fields: [order_id], references: [id])
+  product_id      String
+  product         product  @relation(fields: [product_id], references: [id])
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
 
   @@index([order_id])
   @@index([product_id])
@@ -116,6 +119,7 @@ model order_item {
 
 model product {
   id              String       @id @default(uuid())
+  organization_id Int
   store_id        Int
   store           store        @relation("StoreToProduct", fields: [store_id], references: [id], onDelete: Cascade)
   category_id     String
@@ -220,6 +224,7 @@ model transaction {
   units_sold               Int?
   user_id                  String
   store_id                 Int
+  organization_id          Int
   store                    store              @relation("StoreToTransaction", fields: [store_id], references: [id], onDelete: Cascade)
   transaction_items        transaction_item[] @relation("TransactionToTransactionItem")
   transaction_date         DateTime
@@ -236,6 +241,7 @@ model transaction_item {
   category                 String
   category_id              String
   cost                     Float
+  organization_id          Int
   price                    Float
   product_id               String
   product_name             String

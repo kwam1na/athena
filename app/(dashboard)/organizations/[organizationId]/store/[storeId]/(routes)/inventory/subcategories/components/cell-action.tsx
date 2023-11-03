@@ -18,6 +18,7 @@ import { AlertModal } from '@/components/modals/alert-modal';
 import { SubcategoryColumn } from './columns';
 import { useToast } from '@/components/ui/use-toast';
 import { apiDeleteSubcategory } from '@/lib/api/subcategories';
+import useGetBaseStoreUrl from '@/hooks/use-get-base-store-url';
 
 interface CellActionProps {
    data: SubcategoryColumn;
@@ -26,6 +27,7 @@ interface CellActionProps {
 export const CellAction: React.FC<CellActionProps> = ({ data }) => {
    const router = useRouter();
    const params = useParams();
+   const baseStoreURL = useGetBaseStoreUrl();
    const { toast } = useToast();
    const [open, setOpen] = useState(false);
    const [loading, setLoading] = useState(false);
@@ -71,7 +73,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
                <DropdownMenuItem
                   onClick={() =>
                      router.push(
-                        `/${params.storeId}/inventory/subcategories/${data.id}`,
+                        `${baseStoreURL}/inventory/subcategories/${data.id}`,
                      )
                   }
                >

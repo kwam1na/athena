@@ -85,7 +85,7 @@ export const SubategoryForm: React.FC<SubcategoryFormProps> = ({
       },
    });
 
-   const getReturnUrl = useReturnUrl('/inventory/subcategories');
+   const getReturnUrl = useReturnUrl(`/inventory/subcategories`);
 
    const onSubmit = async (data: SubcategoryFormValues) => {
       const returnUrl = getReturnUrl();

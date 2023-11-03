@@ -1,10 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-import { getSession } from '@auth0/nextjs-auth0';
 import { createColor, fetchColors } from '@/lib/repositories/colorsRepository';
 import { findStore } from '@/lib/repositories/storesRepository';
-import { cookies } from 'next/headers';
-// import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { createSupabaseServerClient } from '@/app/api/utils';
 
 export async function POST(
@@ -13,8 +10,6 @@ export async function POST(
 ) {
     try {
         const res = new NextResponse();
-        // const cookieStore = cookies()
-        // const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
         const supabase = createSupabaseServerClient();
         const {
             data: { session },
@@ -42,8 +37,10 @@ export async function POST(
             return new NextResponse('Store id is required', { status: 400 });
         }
 
+        const storeId = parseInt(params.storeId)
+
         const storeByUserId = await findStore({
-            id: params.storeId,
+            id: storeId,
             created_by: user.id,
         });
 
@@ -51,7 +48,7 @@ export async function POST(
             return new NextResponse('Unauthorized', { status: 405 });
         }
 
-        const createParams = { ...body, store_id: params.storeId }
+        const createParams = { ...body, store_id: storeId }
         const color = await createColor(createParams);
 
         return NextResponse.json(color, res);
@@ -70,7 +67,7 @@ export async function GET(
             return new NextResponse('Store id is required', { status: 400 });
         }
 
-        const colors = await fetchColors(params.storeId);
+        const colors = await fetchColors(parseInt(params.storeId));
 
         return NextResponse.json(colors);
     } catch (error) {

@@ -19,6 +19,7 @@ import { ColorColumn } from './columns';
 import { useToast } from '@/components/ui/use-toast';
 import { apiDeleteColor } from '@/lib/api/colors';
 import { ca } from 'date-fns/locale';
+import useGetBaseStoreUrl from '@/hooks/use-get-base-store-url';
 
 interface CellActionProps {
    data: ColorColumn;
@@ -27,6 +28,7 @@ interface CellActionProps {
 export const CellAction: React.FC<CellActionProps> = ({ data }) => {
    const router = useRouter();
    const params = useParams();
+   const baseStoreURL = useGetBaseStoreUrl();
    const { toast } = useToast();
    const [open, setOpen] = useState(false);
    const [loading, setLoading] = useState(false);
@@ -71,9 +73,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
             <DropdownMenuContent align="end" className="w-[160px]">
                <DropdownMenuItem
                   onClick={() =>
-                     router.push(
-                        `/${params.storeId}/inventory/colors/${data.id}`,
-                     )
+                     router.push(`${baseStoreURL}/inventory/colors/${data.id}`)
                   }
                >
                   <Edit className="mr-2 h-4 w-4" /> Edit

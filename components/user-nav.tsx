@@ -24,14 +24,13 @@ import {
    DropdownMenuShortcut,
    DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { ThemeToggle } from './theme-toggle';
-import { useUser } from '@auth0/nextjs-auth0/client';
 import { useWrappedUser } from '@/providers/wrapped-user-provider';
 import Link from 'next/link';
 import axios from 'axios';
+import useGetBaseStoreUrl from '@/hooks/use-get-base-store-url';
 
 export function UserNav() {
-   const params = useParams();
+   const baseStoreURL = useGetBaseStoreUrl();
    const { wrappedUser, isLoading } = useWrappedUser();
 
    const name = wrappedUser?.name;
@@ -77,7 +76,7 @@ export function UserNav() {
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-               <Link href={`/${params.storeId}/settings/profile`}>
+               <Link href={`${baseStoreURL}/settings/profile`}>
                   <DropdownMenuItem className="pt-2 pb-2">
                      <User className="mr-2 h-4 w-4" />
                      <span>Profile</span>

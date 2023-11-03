@@ -103,7 +103,7 @@ export default function Onboarding() {
          if (storedOrgId) {
             await apiUpdateOrganization(storedOrgId, {
                name: state.organizationName,
-               organization_id: storedOrgId,
+               organization_id: parseInt(storedOrgId),
             });
          } else {
             const newOrg = await apiCreateOrganization({

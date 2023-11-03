@@ -3,6 +3,7 @@
 import { Button } from '@/components/ui/button';
 import { MetricCard } from '@/components/ui/metric-card';
 import { Skeleton } from '@/components/ui/skeleton';
+import useGetBaseStoreUrl from '@/hooks/use-get-base-store-url';
 import { apiGetMetric } from '@/lib/api/metrics';
 import { PackageMinus, RotateCcw } from 'lucide-react';
 import Link from 'next/link';
@@ -23,6 +24,7 @@ export const TotalUnitsSoldWidget: React.FC<TotalUnitsSoldWidgetProps> = ({
    );
    const [loading, setLoading] = useState(false);
    const params = useParams();
+   const baseStoreURL = useGetBaseStoreUrl();
 
    const fetchData = async () => {
       setLoading(true);
@@ -41,7 +43,7 @@ export const TotalUnitsSoldWidget: React.FC<TotalUnitsSoldWidgetProps> = ({
    return (
       <>
          {!loading && typeof _totalUnitsSold === 'number' && (
-            <Link href={`/${params.storeId}/transactions`}>
+            <Link href={`${baseStoreURL}/transactions`}>
                <MetricCard
                   title={'Total units sold'}
                   value={_totalUnitsSold.toString()}

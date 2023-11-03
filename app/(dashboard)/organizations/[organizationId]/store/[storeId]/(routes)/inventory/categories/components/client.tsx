@@ -24,6 +24,7 @@ import { Separator } from '@/components/ui/separator';
 import { columns, CategoryColumn } from './columns';
 import { useState } from 'react';
 import { DataTableToolbar } from '@/components/ui/data-table-toolbar/products-table-toolbar';
+import useGetBaseStoreUrl from '@/hooks/use-get-base-store-url';
 
 interface CategoriesClientProps {
    data: CategoryColumn[];
@@ -36,6 +37,7 @@ export const CategoriesClient: React.FC<CategoriesClientProps> = ({
 }) => {
    const params = useParams();
    const router = useRouter();
+   const baseStoreURL = useGetBaseStoreUrl();
 
    const [sorting, setSorting] = useState<SortingState>([]);
    const [rowSelection, setRowSelection] = useState({});
@@ -75,7 +77,7 @@ export const CategoriesClient: React.FC<CategoriesClientProps> = ({
             />
             <Button
                onClick={() =>
-                  router.push(`/${params.storeId}/inventory/categories/new`)
+                  router.push(`${baseStoreURL}/inventory/categories/new`)
                }
             >
                <Plus className="mr-2 h-4 w-4" /> Add new

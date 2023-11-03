@@ -32,6 +32,7 @@ import {
    apiUpdateCategory,
 } from '@/lib/api/categories';
 import useReturnUrl from '@/hooks/use-get-return-url';
+import useGetBaseStoreUrl from '@/hooks/use-get-base-store-url';
 
 const formSchema = z.object({
    name: z.string().min(2),
@@ -46,6 +47,7 @@ interface CategoryFormProps {
 export const CategoryForm: React.FC<CategoryFormProps> = ({ initialData }) => {
    const params = useParams();
    const router = useRouter();
+   const baseStoreURL = useGetBaseStoreUrl();
 
    const [open, setOpen] = useState(false);
    const [loading, setLoading] = useState(false);
@@ -67,7 +69,7 @@ export const CategoryForm: React.FC<CategoryFormProps> = ({ initialData }) => {
 
    const transaction = startTransaction({ name: 'Create Category' });
 
-   const getReturnUrl = useReturnUrl('/inventory/categories');
+   const getReturnUrl = useReturnUrl(`/inventory/categories`);
 
    const onSubmit = async (data: CategoryFormValues) => {
       const returnUrl = getReturnUrl();
@@ -102,7 +104,7 @@ export const CategoryForm: React.FC<CategoryFormProps> = ({ initialData }) => {
          setLoading(true);
          await apiDeleteCategory(params.categoryId, params.storeId);
          router.refresh();
-         router.push(`/${params.storeId}/inventory/categories`);
+         router.push(`${baseStoreURL}/inventory/categories`);
          toast({
             title: `Category deleted.`,
          });

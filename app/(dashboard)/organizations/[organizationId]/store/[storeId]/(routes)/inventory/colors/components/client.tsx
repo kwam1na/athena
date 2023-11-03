@@ -24,6 +24,7 @@ import { Separator } from '@/components/ui/separator';
 import { columns, ColorColumn } from './columns';
 import { useState } from 'react';
 import { DataTableToolbar } from '@/components/ui/data-table-toolbar/products-table-toolbar';
+import useGetBaseStoreUrl from '@/hooks/use-get-base-store-url';
 
 interface ColorClientProps {
    data: ColorColumn[];
@@ -32,6 +33,7 @@ interface ColorClientProps {
 export const ColorClient: React.FC<ColorClientProps> = ({ data }) => {
    const params = useParams();
    const router = useRouter();
+   const baseStoreURL = useGetBaseStoreUrl();
 
    const [sorting, setSorting] = useState<SortingState>([]);
    const [rowSelection, setRowSelection] = useState({});
@@ -71,7 +73,7 @@ export const ColorClient: React.FC<ColorClientProps> = ({ data }) => {
             />
             <Button
                onClick={() =>
-                  router.push(`/${params.storeId}/inventory/colors/new`)
+                  router.push(`${baseStoreURL}/inventory/colors/new`)
                }
             >
                <Plus className="mr-2 h-4 w-4" /> Add new

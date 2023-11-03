@@ -18,6 +18,7 @@ import {
 import { ProductColumn } from './columns';
 import { useToast } from '@/components/ui/use-toast';
 import { apiDeleteProduct } from '@/lib/api/products';
+import useGetBaseStoreUrl from '@/hooks/use-get-base-store-url';
 
 interface CellActionProps {
    data: ProductColumn;
@@ -29,6 +30,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
    const { toast } = useToast();
    const router = useRouter();
    const params = useParams();
+   const baseStoreURL = useGetBaseStoreUrl();
 
    const onConfirm = async () => {
       try {
@@ -72,7 +74,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
                <DropdownMenuItem
                   onClick={() =>
                      router.push(
-                        `/${params.storeId}/inventory/products/${data.id}`,
+                        `${baseStoreURL}/inventory/products/${data.id}`,
                      )
                   }
                >

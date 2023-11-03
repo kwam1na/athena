@@ -3,6 +3,7 @@
 import { Button } from '@/components/ui/button';
 import { MetricCard } from '@/components/ui/metric-card';
 import { Skeleton } from '@/components/ui/skeleton';
+import useGetBaseStoreUrl from '@/hooks/use-get-base-store-url';
 import { apiGetMetric } from '@/lib/api/metrics';
 import { formatter } from '@/lib/utils';
 import { useStoreCurrency } from '@/providers/currency-provider';
@@ -24,6 +25,7 @@ export const TotalStockWidget: React.FC<TotalStockWidgetProps> = ({
    );
    const [loading, setLoading] = useState(false);
    const params = useParams();
+   const baseStoreURL = useGetBaseStoreUrl();
 
    const fetchData = async () => {
       setLoading(true);
@@ -42,7 +44,7 @@ export const TotalStockWidget: React.FC<TotalStockWidgetProps> = ({
    return (
       <>
          {!loading && typeof _totalStockCount === 'number' && (
-            <Link href={`/${params.storeId}/inventory/products`}>
+            <Link href={`${baseStoreURL}/inventory/products`}>
                <MetricCard
                   title={'Products in stock'}
                   value={_totalStockCount.toString()}

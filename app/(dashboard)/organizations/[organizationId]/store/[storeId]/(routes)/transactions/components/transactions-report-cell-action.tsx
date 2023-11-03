@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 
 import { TransactionsReportColumn } from './transactions-reports-columns';
+import useGetBaseStoreUrl from '@/hooks/use-get-base-store-url';
 
 interface SalesReportCellActionProps {
    data: TransactionsReportColumn;
@@ -21,6 +22,7 @@ export const SalesReportCellAction: React.FC<SalesReportCellActionProps> = ({
    data,
 }) => {
    const params = useParams();
+   const baseStoreURL = useGetBaseStoreUrl();
    const router = useRouter();
 
    return (
@@ -37,14 +39,14 @@ export const SalesReportCellAction: React.FC<SalesReportCellActionProps> = ({
          <DropdownMenuContent align="end" className="w-[160px]">
             <DropdownMenuItem
                onClick={() =>
-                  router.push(`/${params.storeId}/transactions/${data.id}`)
+                  router.push(`${baseStoreURL}/transactions/${data.id}`)
                }
             >
                <Eye className="mr-2 h-4 w-4" /> View
             </DropdownMenuItem>
             <DropdownMenuItem
                onClick={() =>
-                  router.push(`/${params.storeId}/transactions/${data.id}/edit`)
+                  router.push(`${baseStoreURL}/transactions/${data.id}/edit`)
                }
             >
                <Edit className="mr-2 h-4 w-4" /> Edit

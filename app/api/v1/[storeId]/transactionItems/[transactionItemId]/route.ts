@@ -30,7 +30,7 @@ export async function GET(
         }
 
         const storeByUserId = await findStore({
-            id: params.storeId,
+            id: parseInt(params.storeId),
             created_by: user.id,
         });
 
@@ -68,7 +68,7 @@ export async function DELETE(
         }
 
         const storeByUserId = await findStore({
-            id: params.storeId,
+            id: parseInt(params.storeId),
             created_by: user.id,
         });
 
@@ -146,7 +146,7 @@ export async function PATCH(
         }
 
         const storeByUserId = await findStore({
-            id: params.storeId,
+            id: parseInt(params.storeId),
             created_by: user.id,
         });
 

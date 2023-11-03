@@ -45,7 +45,7 @@ export function SettingsNav({
                key={route.href}
                href={route.href}
                className={cn(
-                  'flex flex-cols items-center text-sm font-medium transition-colors hover:text-primary',
+                  'flex flex-cols items-center text-sm font-medium transition-colors hover:text-primary hover:bg-muted hover:p-2 hover:pr-4 hover:pl-4 hover:rounded-md',
                   route.active
                      ? 'text-black dark:text-white bg-muted p-2 pr-4 pl-4 rounded-md'
                      : 'text-muted-foreground',

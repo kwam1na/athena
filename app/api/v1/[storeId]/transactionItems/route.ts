@@ -5,7 +5,6 @@ import { findStore } from '@/lib/repositories/storesRepository';
 import { createTransactionItem, fetchTransactionItems } from '@/lib/repositories/transactionItemsRepository';
 import { cookies } from 'next/headers';
 import { createSupabaseServerClient } from '@/app/api/utils';
-// import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 
 export async function POST(
     req: NextRequest,
@@ -68,7 +67,7 @@ export async function POST(
         }
 
         const storeByUserId = await findStore({
-            id: params.storeId,
+            id: parseInt(params.storeId),
             created_by: user.id,
         });
 
@@ -76,7 +75,7 @@ export async function POST(
             return new NextResponse('Unauthorized', { status: 405 });
         }
 
-        const transactionItem = await createTransactionItem({ ...body, store_id: params.storeId, user_id: user.id })
+        const transactionItem = await createTransactionItem({ ...body, store_id: parseInt(params.storeId), user_id: user.id })
         return NextResponse.json(transactionItem, res);
     } catch (error) {
         console.log('[TRANSACTION_POST]', (error as Error).message);
@@ -100,7 +99,7 @@ export async function GET(
         }
 
         const transactionItems = await fetchTransactionItems({
-            store_id: params.storeId,
+            store_id: parseInt(params.storeId),
         });
 
         return NextResponse.json(transactionItems);

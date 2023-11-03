@@ -141,7 +141,7 @@ export const TransactionsReportsClient: React.FC<
             <Button
                onClick={() => router.push(`${baseStoreURL}/transactions/new`)}
             >
-               <Plus className="mr-2 h-4 w-4" /> Add new
+               <Plus className="mr-2 h-4 w-4" /> Create new report
             </Button>
          </div>
 

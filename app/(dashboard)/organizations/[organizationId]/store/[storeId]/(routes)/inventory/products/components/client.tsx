@@ -24,6 +24,7 @@ import { Separator } from '@/components/ui/separator';
 import { ProductColumn, columns } from './columns';
 import { useState } from 'react';
 import { DataTableToolbar } from '@/components/ui/data-table-toolbar/products-table-toolbar';
+import useGetBaseStoreUrl from '@/hooks/use-get-base-store-url';
 
 interface ProductsClientProps {
    storeName?: string;
@@ -48,6 +49,7 @@ export const ProductsClient: React.FC<ProductsClientProps> = ({
 }) => {
    const params = useParams();
    const router = useRouter();
+   const baseStoreURL = useGetBaseStoreUrl();
 
    const [sorting, setSorting] = useState<SortingState>([]);
    const [rowSelection, setRowSelection] = useState({});
@@ -87,7 +89,7 @@ export const ProductsClient: React.FC<ProductsClientProps> = ({
             />
             <Button
                onClick={() =>
-                  router.push(`/${params.storeId}/inventory/products/new`)
+                  router.push(`${baseStoreURL}/inventory/products/new`)
                }
             >
                <Plus className="mr-2 h-4 w-4" /> Add new

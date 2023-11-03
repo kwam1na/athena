@@ -122,6 +122,7 @@ import {
 import { ServiceError } from '@/lib/error';
 import { MetricCard } from '@/components/ui/metric-card';
 import { apiUpdateProduct } from '@/lib/api/products';
+import useGetBaseStoreUrl from '@/hooks/use-get-base-store-url';
 
 interface IndividualSearchResultProps {
    index: number;
@@ -142,9 +143,11 @@ interface ProductQueryResult {
    category?: Record<string, any>;
    cost?: string;
    inventory_count?: number;
+   organization_id?: number;
    price?: string;
    product_id?: string;
    product_name?: string;
+   store_id?: number;
    sku?: string;
    subcategory?: Record<string, any>;
    subcategory_id?: string;
@@ -243,7 +246,7 @@ export const TransactionsReportClient: React.FC<
    >('outline');
    const [alertModalCTAText, setAlertModalCTAText] = useState('Continue');
    const [headerText, setHeaderText] = useState(
-      fetchedTransaction ? 'Edit sales report' : 'Add new sales report',
+      fetchedTransaction ? 'Edit sales report' : 'Create new sales report',
    );
    const [reportEntryAction, setReportEntryAction] =
       useState<ReportEntryAction>(fetchedTransaction ? 'editing' : 'new');
@@ -251,6 +254,7 @@ export const TransactionsReportClient: React.FC<
    const params = useParams();
    const pathName = usePathname();
    const router = useRouter();
+   const baseStoreURL = useGetBaseStoreUrl();
    const { toast } = useToast();
 
    const { storeCurrency, loading: isLoadingCurrency } = useStoreCurrency();
@@ -378,9 +382,11 @@ export const TransactionsReportClient: React.FC<
       category: searchResult?.category?.name,
       category_id: searchResult?.category_id,
       cost: searchResult?.cost,
+      organization_id: searchResult?.organization_id,
       price: searchResult?.price,
       product_name: searchResult?.product_name,
       product_id: searchResult?.product_id,
+      store_id: searchResult?.store_id,
       subcategory: searchResult?.subcategory?.name,
       sku: searchResult?.sku,
       units_sold: data.unitsSold,
@@ -406,11 +412,12 @@ export const TransactionsReportClient: React.FC<
          subcategory: draftTransactionItem.subcategory,
          subcategoryId: draftTransactionItem.subcategory_id,
          cost: draftTransactionItem.cost,
+         organizationId: parseInt(params.organizationId),
          price: draftTransactionItem.price,
          productId: draftTransactionItem.product_id,
          sku: draftTransactionItem.sku,
          productName: draftTransactionItem.product_name,
-         storeId: params.storeId,
+         storeId: parseInt(params.storeId),
          unitsSold: draftTransactionItem.units_sold,
          transactionDate: draftTransactionItem.transaction_date,
          transactionId,
@@ -496,7 +503,7 @@ export const TransactionsReportClient: React.FC<
             title: 'Report deleted successfully.',
          });
          router.refresh();
-         router.push(`/${params.storeId}/transactions`);
+         router.push(`${baseStoreURL}/transactions`);
          createNewReport();
       } catch (error) {
          console.log(
@@ -735,6 +742,7 @@ export const TransactionsReportClient: React.FC<
    ) => {
       const transactionRequest = await apiCreateTransaction(params.storeId, {
          transaction_date: date,
+         organization_id: params.organizationId,
       });
 
       const reportTitle = getAutosavedReportTitle(transactionRequest.id, date);
@@ -925,7 +933,7 @@ export const TransactionsReportClient: React.FC<
             transaction.id,
          );
          router.refresh();
-         router.push(`/${params.storeId}/transactions`);
+         router.push(`${baseStoreURL}/transactions`);
          toast({
             title: `Report "${transaction.reportTitle}" published successfully.`,
          });
@@ -1964,9 +1972,7 @@ export const TransactionsReportClient: React.FC<
                                     variant={'outline'}
                                     onClick={() =>
                                        router.push(
-                                          `/${
-                                             params.storeId
-                                          }/inventory/products/new?return_url=${pathName}&query=${
+                                          `${baseStoreURL}/inventory/products/new?return_url=${pathName}&query=${
                                              searchQueryForm.watch().query
                                           }&${getTransactionAndReportActionInUrl()}`,
                                        )

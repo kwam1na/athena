@@ -16,6 +16,7 @@ import { useToast } from '@/components/ui/use-toast';
 
 import { CategoryColumn } from './columns';
 import { apiDeleteCategory } from '@/lib/api/categories';
+import useGetBaseStoreUrl from '@/hooks/use-get-base-store-url';
 
 interface CellActionProps {
    data: CategoryColumn;
@@ -24,6 +25,7 @@ interface CellActionProps {
 export const CellAction: React.FC<CellActionProps> = ({ data }) => {
    const router = useRouter();
    const params = useParams();
+   const baseStoreURL = useGetBaseStoreUrl();
    const [open, setOpen] = useState(false);
    const [loading, setLoading] = useState(false);
    const { toast } = useToast();
@@ -76,7 +78,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
                <DropdownMenuItem
                   onClick={() =>
                      router.push(
-                        `/${params.storeId}/inventory/categories/${data.id}`,
+                        `${baseStoreURL}/inventory/categories/${data.id}`,
                      )
                   }
                >

@@ -56,6 +56,7 @@ import {
    TransactionItem,
 } from '@/types/transactions';
 import { MetricCard } from '@/components/ui/metric-card';
+import useGetBaseStoreUrl from '@/hooks/use-get-base-store-url';
 
 interface TransactionsReportClientProps {
    fetchedTransaction?: Transaction;
@@ -90,6 +91,7 @@ export const ViewReportClient: React.FC<TransactionsReportClientProps> = ({
 
    const params = useParams();
    const router = useRouter();
+   const baseStoreURL = useGetBaseStoreUrl();
 
    const { storeCurrency, loading: isCurrencyLoading } = useStoreCurrency();
    const fmt = formatter(storeCurrency);
@@ -226,7 +228,7 @@ export const ViewReportClient: React.FC<TransactionsReportClientProps> = ({
                   variant={'outline'}
                   onClick={() =>
                      router.push(
-                        `/${params.storeId}/transactions/${transaction.id}/edit`,
+                        `${baseStoreURL}/transactions/${transaction.id}/edit`,
                      )
                   }
                >

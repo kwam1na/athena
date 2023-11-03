@@ -33,18 +33,17 @@ const Navbar = async () => {
    const stores = await fetchStores(user.id);
    const organizations = await fetchOrganizations(user.id);
 
-   console.log('organizations', organizations);
-
    return (
-      <div>
-         <div className="flex w-full items-center">
-            <div className="flex gap-4 items-center">
+      <div className="flex w-full items-center">
+         <div className="flex gap-52 items-center">
+            <p className="text-xl w-16">athena</p>
+            <div className="flex gap-4">
                <OrganizationSwitcher items={organizations} />
                <StoreSwitcher items={stores} />
             </div>
-            <div className="ml-auto mr-8">
-               <UserNav />
-            </div>
+         </div>
+         <div className="ml-auto mr-8">
+            <UserNav />
          </div>
       </div>
    );

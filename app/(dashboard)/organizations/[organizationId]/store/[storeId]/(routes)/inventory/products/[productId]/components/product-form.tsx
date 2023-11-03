@@ -259,13 +259,14 @@ export const ProductForm: React.FC<ProductFormProps> = ({
       setMargin(parseFloat(margin.toFixed(2)));
    };
 
-   const getReturnUrl = useReturnUrl('/inventory/products');
+   const getReturnUrl = useReturnUrl(`/inventory/products`);
 
    const onSubmit = async (data: ProductFormValues) => {
       const cleanedUpData = {
          ...data,
          size_id: data.size_id == 'blank-id' ? null : data.size_id,
          color_id: data.color_id == 'blank-id' ? null : data.color_id,
+         organization_id: params.organizationId,
       };
 
       const returnUrl = getReturnUrl();

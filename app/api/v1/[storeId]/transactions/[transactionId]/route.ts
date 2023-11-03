@@ -70,7 +70,7 @@ export async function POST(
         }
 
         const storeByUserId = await findStore({
-            id: params.storeId,
+            id: parseInt(params.storeId),
             created_by: user.id,
         });
 
@@ -85,7 +85,7 @@ export async function POST(
             return NextResponse.json(item, res);
         }
 
-        const transactionItem = await createTransactionItem({ ...body, cost: parseFloat(body.cost), price: parseFloat(body.price), store_id: params.storeId, transaction_id: params.transactionId, user_id: user.id })
+        const transactionItem = await createTransactionItem({ ...body, cost: parseFloat(body.cost), price: parseFloat(body.price), store_id: parseInt(params.storeId), transaction_id: params.transactionId, user_id: user.id })
         return NextResponse.json(transactionItem, res);
     } catch (error) {
         console.log('[TRANSACTION_POST]', (error as Error).message);
@@ -133,7 +133,7 @@ export async function DELETE(
         }
 
         const storeByUserId = await findStore({
-            id: params.storeId,
+            id: parseInt(params.storeId),
             created_by: user.id,
         });
 

@@ -23,6 +23,7 @@ export async function POST(
 
         const body = await req.json();
 
+
         const {
             name,
             price,
@@ -78,8 +79,14 @@ export async function POST(
             return new NextResponse('Store id is required', { status: 400 });
         }
 
+        if (!body.organization_id) {
+            return new NextResponse('Organization id is required', { status: 400 });
+        }
+
+        const storeId = parseInt(params.storeId)
+
         const storeByUserId = await findStore({
-            id: params.storeId,
+            id: storeId,
             created_by: user.id,
         });
 
@@ -99,7 +106,7 @@ export async function POST(
         //         categoryId,
         //         colorId,
         //         sizeId,
-        //         storeId: params.storeId,
+        //         storeId: storeId,
         //         images: {
         //             createMany: {
         //                 data: [
@@ -119,7 +126,7 @@ export async function POST(
             await updateSKUCounter(skuCounter.id, { last_used: skuCounter.last_used + 1 })
         }
 
-        const createParams = { ...body, store_id: params.storeId }
+        const createParams = { ...body, store_id: storeId, organization_id: parseInt(body.organization_id) }
         const product = await createProduct(createParams)
 
         return NextResponse.json(product, res);
@@ -145,7 +152,7 @@ export async function GET(
         }
 
         const products = await fetchProducts({
-            store_id: params.storeId,
+            store_id: parseInt(params.storeId),
             category_id,
             color_id,
             size_id,

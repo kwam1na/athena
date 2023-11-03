@@ -26,6 +26,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { LoadingButton } from '@/components/ui/loading-button';
 import { apiCreateSize, apiDeleteSize, apiUpdateSize } from '@/lib/api/sizes';
 import useReturnUrl from '@/hooks/use-get-return-url';
+import useGetBaseStoreUrl from '@/hooks/use-get-base-store-url';
 
 const formSchema = z.object({
    name: z.string().min(1),
@@ -41,6 +42,7 @@ interface SizeFormProps {
 export const SizeForm: React.FC<SizeFormProps> = ({ initialData }) => {
    const params = useParams();
    const router = useRouter();
+   const baseStoreURL = useGetBaseStoreUrl();
    const { toast } = useToast();
 
    const [open, setOpen] = useState(false);
@@ -59,7 +61,7 @@ export const SizeForm: React.FC<SizeFormProps> = ({ initialData }) => {
       },
    });
 
-   const getReturnUrl = useReturnUrl('/inventory/sizes');
+   const getReturnUrl = useReturnUrl(`/inventory/sizes`);
 
    const onSubmit = async (data: SizeFormValues) => {
       const returnUrl = getReturnUrl();
@@ -91,7 +93,7 @@ export const SizeForm: React.FC<SizeFormProps> = ({ initialData }) => {
          setLoading(true);
          await apiDeleteSize(params.sizeId, params.storeId);
          router.refresh();
-         router.push(`/${params.storeId}/inventory/sizes`);
+         router.push(`${baseStoreURL}/inventory/sizes`);
          toast({
             title: 'Size deleted.',
          });

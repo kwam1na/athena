@@ -31,6 +31,7 @@ import {
    apiUpdateColor,
 } from '@/lib/api/colors';
 import useReturnUrl from '@/hooks/use-get-return-url';
+import useGetBaseStoreUrl from '@/hooks/use-get-base-store-url';
 
 const formSchema = z.object({
    name: z.string().min(2),
@@ -48,6 +49,7 @@ interface ColorFormProps {
 export const ColorForm: React.FC<ColorFormProps> = ({ initialData }) => {
    const params = useParams();
    const router = useRouter();
+   const baseStoreURL = useGetBaseStoreUrl();
    const { toast } = useToast();
 
    const [open, setOpen] = useState(false);
@@ -66,7 +68,7 @@ export const ColorForm: React.FC<ColorFormProps> = ({ initialData }) => {
       },
    });
 
-   const getReturnUrl = useReturnUrl('/inventory/colors');
+   const getReturnUrl = useReturnUrl(`/inventory/colors`);
 
    const onSubmit = async (data: ColorFormValues) => {
       const returnUrl = getReturnUrl();
@@ -103,7 +105,7 @@ export const ColorForm: React.FC<ColorFormProps> = ({ initialData }) => {
          setLoading(true);
          await apiDeleteColor(params.colorId, params.storeId);
          router.refresh();
-         router.push(`/${params.storeId}/inventory/colors`);
+         router.push(`${baseStoreURL}/inventory/colors`);
          toast({
             title: 'Color deleted.',
          });

@@ -55,16 +55,19 @@ export default async function DashboardLayout({
                      text="athena is currently only available on desktop or larger screens."
                   />
                </div>
+               <div className="hidden md:block px-8 py-10">
+                  <Navbar />
+               </div>
                <div className="flex-grow flex gap-8">
-                  <div className="hidden md:block border-r-2 p-2 pt-8">
-                     <AppSideBar />
-                  </div>
-                  <div className="h-full w-full hidden md:block space-y-8 pl-2 pt-8 pb-24 pr-8">
-                     <Navbar />
+                  <AppSideBar className="hidden md:block p-8 w-[300px]" />
+                  {/* <div className="hidden md:block p-2">
+                  </div> */}
+                  <div className="h-full w-full hidden md:block space-y-8 pl-2 pb-24 pr-8">
+                     {/* <Navbar /> */}
                      <div className="h-full w-full pb-8">{children}</div>
                   </div>
                </div>
-               <div className="w-full h-[80px] border-t-2 flex items-center justify-center py-8">
+               <div className="w-full h-[80px] flex items-center justify-center py-8">
                   <p className="text-sm text-muted">
                      &copy; 2023 v26 Design co.
                   </p>

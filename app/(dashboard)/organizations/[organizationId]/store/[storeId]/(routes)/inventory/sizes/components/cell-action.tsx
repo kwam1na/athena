@@ -17,6 +17,7 @@ import { AlertModal } from '@/components/modals/alert-modal';
 import { SizeColumn } from './columns';
 import { useToast } from '@/components/ui/use-toast';
 import { apiDeleteSize } from '@/lib/api/sizes';
+import useGetBaseStoreUrl from '@/hooks/use-get-base-store-url';
 
 interface CellActionProps {
    data: SizeColumn;
@@ -25,6 +26,7 @@ interface CellActionProps {
 export const CellAction: React.FC<CellActionProps> = ({ data }) => {
    const router = useRouter();
    const params = useParams();
+   const baseStoreURL = useGetBaseStoreUrl();
    const { toast } = useToast();
    const [open, setOpen] = useState(false);
    const [loading, setLoading] = useState(false);
@@ -69,9 +71,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
             <DropdownMenuContent align="end" className="w-[160px]">
                <DropdownMenuItem
                   onClick={() =>
-                     router.push(
-                        `/${params.storeId}/inventory/sizes/${data.id}`,
-                     )
+                     router.push(`${baseStoreURL}/inventory/sizes/${data.id}`)
                   }
                >
                   <Edit className="mr-2 h-4 w-4" /> Edit

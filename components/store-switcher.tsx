@@ -67,7 +67,9 @@ export default function StoreSwitcher({
       } catch (error) {
          console.error(error);
       } finally {
-         router.push(`/${store.value}`);
+         router.push(
+            `/organizations/${params.organizationId}/store/${store.value}`,
+         );
          setOpen(false);
          setIsSwitching(false);
       }
