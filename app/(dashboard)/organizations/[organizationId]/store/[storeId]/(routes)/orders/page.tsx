@@ -7,7 +7,7 @@ import { OrderColumn } from './components/columns';
 import { OrderClient } from './components/client';
 import { getStore } from '@/lib/repositories/storesRepository';
 
-const OrdersPage = async ({ params }: { params: { storeId: string } }) => {
+const OrdersPage = async ({ params }: { params: { storeId: number } }) => {
    const orders = await prismadb.order.findMany({
       where: {
          store_id: params.storeId,

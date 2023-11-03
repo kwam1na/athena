@@ -2,13 +2,14 @@ import { getStore } from '@/lib/repositories/storesRepository';
 import axios from 'axios';
 import { NextApiRequest, NextApiResponse } from 'next';
 import { NextRequest, NextResponse } from 'next/server';
+import { parse } from 'path';
 
 export async function GET(
     req: NextRequest,
     { params }: { params: { storeId: string } },
 ) {
     const res = new NextResponse();
-    const store = await getStore(params.storeId)
+    const store = await getStore(parseInt(params.storeId));
     const currency = store?.currency.toUpperCase()
 
     try {
