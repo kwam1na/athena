@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@auth0/nextjs-auth0';
 import { findStore } from '@/lib/repositories/storesRepository';
 import { createTransactionItem, fetchTransactionItems } from '@/lib/repositories/transactionItemsRepository';
+import { cookies } from 'next/headers';
+import { createSupabaseServerClient } from '@/app/api/utils';
 
 export async function POST(
     req: NextRequest,
@@ -10,8 +12,12 @@ export async function POST(
 ) {
     try {
         const res = new NextResponse();
-        const session = await getSession(req, res);
-        const user = session?.user
+        const supabase = createSupabaseServerClient();
+        const {
+            data: { session },
+        } = await supabase.auth.getSession()
+
+        const user = session?.user;
 
         const body = await req.json();
         const { category_id, subcategory_id, product_id, product_name, price, cost, units_sold, transaction_id, transaction_date } = body;
@@ -61,15 +67,15 @@ export async function POST(
         }
 
         const storeByUserId = await findStore({
-            id: params.storeId,
-            user_id: user.sub,
+            id: parseInt(params.storeId),
+            created_by: user.id,
         });
 
         if (!storeByUserId) {
             return new NextResponse('Unauthorized', { status: 405 });
         }
 
-        const transactionItem = await createTransactionItem({ ...body, store_id: params.storeId, user_id: user.sub })
+        const transactionItem = await createTransactionItem({ ...body, store_id: parseInt(params.storeId), user_id: user.id })
         return NextResponse.json(transactionItem, res);
     } catch (error) {
         console.log('[TRANSACTION_POST]', (error as Error).message);
@@ -93,7 +99,7 @@ export async function GET(
         }
 
         const transactionItems = await fetchTransactionItems({
-            store_id: params.storeId,
+            store_id: parseInt(params.storeId),
         });
 
         return NextResponse.json(transactionItems);

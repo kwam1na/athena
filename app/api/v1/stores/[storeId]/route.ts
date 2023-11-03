@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSession } from '@auth0/nextjs-auth0';
 import { deleteStore, getStore, updateStore } from '@/lib/repositories/storesRepository';
+import { createSupabaseServerClient } from '@/app/api/utils';
 
 export async function PATCH(
     req: NextRequest,
@@ -9,8 +9,12 @@ export async function PATCH(
     try {
 
         const res = new NextResponse();
-        const session = await getSession(req, res);
-        const user = session?.user
+        const supabase = createSupabaseServerClient();
+        const {
+            data: { session },
+        } = await supabase.auth.getSession()
+
+        const user = session?.user;
 
         const body = await req.json();
         const { name, currency } = body;
@@ -43,7 +47,7 @@ export async function PATCH(
             }
         }
 
-        const store = await updateStore(params.storeId, user.sub, storeData)
+        const store = await updateStore(parseInt(params.storeId), user.id, storeData)
 
         return NextResponse.json(store, res);
     } catch (error) {
@@ -58,8 +62,12 @@ export async function DELETE(
 ) {
     try {
         const res = new NextResponse();
-        const session = await getSession(req, res);
-        const user = session?.user
+        const supabase = createSupabaseServerClient();
+        const {
+            data: { session },
+        } = await supabase.auth.getSession()
+
+        const user = session?.user;
 
         if (!user) {
             return new NextResponse('Unauthenticated', { status: 403 });
@@ -69,7 +77,7 @@ export async function DELETE(
             return new NextResponse('Store id is required', { status: 400 });
         }
 
-        const store = await deleteStore(params.storeId, user.sub);
+        const store = await deleteStore(parseInt(params.storeId), user.id);
         return NextResponse.json(store, res);
     } catch (error) {
         console.log('[STORE_DELETE]', (error as Error).message);
@@ -86,7 +94,7 @@ export async function GET(
             return new NextResponse('Store id is required', { status: 400 });
         }
 
-        const store = await getStore(params.storeId)
+        const store = await getStore(parseInt(params.storeId))
         return NextResponse.json(store);
     } catch (error) {
         console.log('[STORES_GET]', error);

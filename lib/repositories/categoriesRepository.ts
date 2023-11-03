@@ -35,7 +35,7 @@ export const deleteCategory = async (id: string) => {
     })
 }
 
-export const fetchCategories = async (store_id: string) => {
+export const fetchCategories = async (store_id: number) => {
     return await prismadb.category.findMany({
         where: {
             store_id,

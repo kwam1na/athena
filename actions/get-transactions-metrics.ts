@@ -2,24 +2,24 @@ import { fetchTransactions } from "@/lib/repositories/transactionsRepository";
 import { getTotalGrossRevenue } from "./get-total-gross-revenue";
 import { getTotalUnitsSoldForStore } from "./get-total-units";
 
-export const getAverageTransactionValue = async (storeId: string) => {
+export const getAverageTransactionValue = async (storeId: number) => {
     const totalRevenue = await getTotalGrossRevenue(storeId);
     const publishedReports = await fetchTransactions({ store_id: storeId, status: 'published' });
     return totalRevenue / publishedReports.length;
 };
 
-export const getTotalTransactionReports = async (storeId: string) => {
+export const getTotalTransactionReports = async (storeId: number) => {
     const publishedReports = await fetchTransactions({ store_id: storeId, status: 'published' });
     return publishedReports.length;
 };
 
-export const getAverageUnitsPerTransaction = async (storeId: string) => {
+export const getAverageUnitsPerTransaction = async (storeId: number) => {
     const totalUnits = await getTotalUnitsSoldForStore(storeId);
     const publishedReports = await fetchTransactions({ store_id: storeId, status: 'published' });
     return totalUnits / publishedReports.length;
 };
 
-export const getCategoryWiseMetrics = async (storeId: string) => {
+export const getCategoryWiseMetrics = async (storeId: number) => {
     const transactions = await fetchTransactions({ store_id: storeId, status: 'published' });
 
     const categoryMetrics: Record<string, { revenue: number, units_sold: number }> = {};
@@ -39,7 +39,7 @@ export const getCategoryWiseMetrics = async (storeId: string) => {
     return categoryMetrics;
 };
 
-export const getTopProductsForMonth = async (storeId: string, month: number, year: number, n: number) => {
+export const getTopProductsForMonth = async (storeId: number, month: number, year: number, n: number) => {
     // Start and end dates for the specified month
     const startDate = new Date(year, month - 1, 1); // months are 0-indexed
     const endDate = new Date(year, month, 0); // 0 gives the last day of the previous month

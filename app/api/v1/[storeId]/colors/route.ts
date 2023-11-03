@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-import { getSession } from '@auth0/nextjs-auth0';
 import { createColor, fetchColors } from '@/lib/repositories/colorsRepository';
 import { findStore } from '@/lib/repositories/storesRepository';
+import { createSupabaseServerClient } from '@/app/api/utils';
 
 export async function POST(
     req: NextRequest,
@@ -10,8 +10,12 @@ export async function POST(
 ) {
     try {
         const res = new NextResponse();
-        const session = await getSession(req, res);
-        const user = session?.user
+        const supabase = createSupabaseServerClient();
+        const {
+            data: { session },
+        } = await supabase.auth.getSession()
+
+        const user = session?.user;
 
         const body = await req.json();
 
@@ -33,16 +37,18 @@ export async function POST(
             return new NextResponse('Store id is required', { status: 400 });
         }
 
+        const storeId = parseInt(params.storeId)
+
         const storeByUserId = await findStore({
-            id: params.storeId,
-            user_id: user.sub,
+            id: storeId,
+            created_by: user.id,
         });
 
         if (!storeByUserId) {
             return new NextResponse('Unauthorized', { status: 405 });
         }
 
-        const createParams = { ...body, store_id: params.storeId }
+        const createParams = { ...body, store_id: storeId }
         const color = await createColor(createParams);
 
         return NextResponse.json(color, res);
@@ -61,7 +67,7 @@ export async function GET(
             return new NextResponse('Store id is required', { status: 400 });
         }
 
-        const colors = await fetchColors(params.storeId);
+        const colors = await fetchColors(parseInt(params.storeId));
 
         return NextResponse.json(colors);
     } catch (error) {

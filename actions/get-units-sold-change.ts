@@ -1,7 +1,7 @@
 import { fetchTransactions } from "@/lib/repositories/transactionsRepository";
-import { Transaction } from "@prisma/client";
+import { transaction } from "@prisma/client";
 
-export const getTotalUnitsSoldChange = async (storeId: string) => {
+export const getTotalUnitsSoldChange = async (storeId: number) => {
     const currentWeekData = await fetchTransactions({
         store_id: storeId,
         status: 'published',
@@ -23,7 +23,7 @@ export const getTotalUnitsSoldChange = async (storeId: string) => {
     return percentageChange === Infinity || isNaN(percentageChange) ? 0 : percentageChange;
 };
 
-const calculateTotalUnitsSoldFromReports = (reports: Transaction[]) => {
+const calculateTotalUnitsSoldFromReports = (reports: transaction[]) => {
     return reports.reduce((total, report) => {
         return total + (report.units_sold || 0);
     }, 0);

@@ -3,7 +3,7 @@
 import * as z from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
-import { useRouter } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useToast } from '@/components/ui/use-toast';
 
@@ -37,6 +37,7 @@ const formSchema = z.object({
 
 export const StoreModal = () => {
    const storeModal = useStoreModal();
+   const params = useParams();
    const { toast } = useToast();
 
    const [loading, setLoading] = useState(false);
@@ -52,8 +53,11 @@ export const StoreModal = () => {
    const onSubmit = async (values: z.infer<typeof formSchema>) => {
       try {
          setLoading(true);
-         const response = await apiCreateStore(values);
-         window.location.assign(`/${response.id}`);
+         const body = { ...values, organization_id: params.organizationId };
+         const response = await apiCreateStore(body);
+         window.location.assign(
+            `/organizations/${params.organizationId}/store/${response.id}`,
+         );
       } catch (error) {
          toast({
             title: 'Something went wrong',

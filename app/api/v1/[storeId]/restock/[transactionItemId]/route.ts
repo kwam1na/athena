@@ -1,5 +1,8 @@
+import { createSupabaseServerClient } from "@/app/api/utils";
 import prismadb from "@/lib/prismadb";
 import { getSession } from "@auth0/nextjs-auth0";
+// import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
+import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function DELETE(
@@ -7,11 +10,12 @@ export async function DELETE(
     { params }: { params: { storeId: string, transactionItemId: string } }
 ) {
     try {
+        const supabase = createSupabaseServerClient();
+        const {
+            data: { session },
+        } = await supabase.auth.getSession()
 
-        const res = new NextResponse();
-        const session = await getSession(req, res);
-        const user = session?.user
-
+        const user = session?.user;
 
         if (!user) {
             return new NextResponse('Unauthenticated', { status: 403 });
@@ -19,7 +23,7 @@ export async function DELETE(
 
         const result = await prismadb.$transaction(async (prisma) => {
             // Retrieve transaction item
-            const transactionItem = await prisma.transactionItem.findUnique({
+            const transactionItem = await prisma.transaction_item.findUnique({
                 where: { id: params.transactionItemId },
             });
             if (!transactionItem) {
@@ -41,7 +45,7 @@ export async function DELETE(
             });
 
             // Delete transaction item
-            await prisma.transactionItem.delete({
+            await prisma.transaction_item.delete({
                 where: { id: params.transactionItemId },
             });
 

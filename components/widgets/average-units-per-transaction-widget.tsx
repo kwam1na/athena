@@ -11,6 +11,7 @@ import { useParams } from 'next/navigation';
 import { useState } from 'react';
 import { apiGetMetric } from '@/lib/api/metrics';
 import { set } from 'date-fns';
+import useGetBaseStoreUrl from '@/hooks/use-get-base-store-url';
 
 interface AverageUnitsPerTransactionWidgetProps {
    averageUnitsPerTransaction?: number;
@@ -23,6 +24,7 @@ export const AverageUnitsPerTransactionWidget: React.FC<
       useState<number | undefined>(averageUnitsPerTransaction);
    const [loading, setLoading] = useState(false);
    const params = useParams();
+   const baseStoreURL = useGetBaseStoreUrl();
 
    const fetchData = async () => {
       setLoading(true);
@@ -44,7 +46,7 @@ export const AverageUnitsPerTransactionWidget: React.FC<
    return (
       <>
          {!loading && typeof _averageUnitsPerTransaction === 'number' && (
-            <Link href={`/${params.storeId}/transactions`}>
+            <Link href={`${baseStoreURL}/transactions`}>
                <MetricCard
                   title={'Avg units per transaction'}
                   value={

@@ -3,6 +3,7 @@
 import { Button } from '@/components/ui/button';
 import { MetricCard } from '@/components/ui/metric-card';
 import { Skeleton } from '@/components/ui/skeleton';
+import useGetBaseStoreUrl from '@/hooks/use-get-base-store-url';
 import { apiGetMetric } from '@/lib/api/metrics';
 import { formatter } from '@/lib/utils';
 import { useStoreCurrency } from '@/providers/currency-provider';
@@ -27,6 +28,7 @@ export const GrossRevenueWidget: React.FC<GrossRevenueWidgetProps> = ({
    const { storeCurrency, loading: isCurrencyLoading } = useStoreCurrency();
    const fmt = formatter(storeCurrency);
    const params = useParams();
+   const baseStoreURL = useGetBaseStoreUrl();
 
    const fetchData = async () => {
       setLoading(true);
@@ -47,7 +49,7 @@ export const GrossRevenueWidget: React.FC<GrossRevenueWidgetProps> = ({
          {typeof _grossRevenue === 'number' &&
             !loading &&
             !isCurrencyLoading && (
-               <Link href={`/${params.storeId}/transactions`}>
+               <Link href={`${baseStoreURL}/transactions`}>
                   <MetricCard
                      title={'Gross revenue'}
                      value={fmt.format(_grossRevenue)}

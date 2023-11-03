@@ -45,6 +45,11 @@ export const CurrencyProvider = ({
    }, []);
 
    const fetchStoreCurrency = async () => {
+      if (!params.storeId) {
+         setLoading(false);
+         return;
+      }
+
       try {
          const res = await axios.get(`/api/v1/stores/${params.storeId}`);
          const { currency } = res?.data || {};

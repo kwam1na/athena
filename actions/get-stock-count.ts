@@ -1,6 +1,6 @@
 import prismadb from '@/lib/prismadb';
 
-export const getStockCount = async (storeId: string) => {
+export const getStockCount = async (storeId: number) => {
     const totalCount = await prismadb.product.aggregate({
         where: {
             store_id: storeId,

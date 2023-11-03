@@ -5,12 +5,12 @@ import { MetricCard } from '@/components/ui/metric-card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatter } from '@/lib/utils';
 import { useStoreCurrency } from '@/providers/currency-provider';
-import { DollarSign, RotateCcw } from 'lucide-react';
+import { Bell, DollarSign, RotateCcw } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useState } from 'react';
-import { ViewDataTableClient } from '../../app/(dashboard)/[storeId]/(routes)/components/view-data-table-client';
-import { lowStockProductsColumns } from '../../app/(dashboard)/[storeId]/(routes)/components/view-data-table-columns';
+import { ViewDataTableClient } from '../../app/(dashboard)/organizations/[organizationId]/store/[storeId]/(routes)/_components/view-data-table-client';
+import { lowStockProductsColumns } from '../../app/(dashboard)/organizations/[organizationId]/store/[storeId]/(routes)/_components/view-data-table-columns';
 
 interface LowStockProductsWidgetProps {
    lowStockProducts?: Record<string, any>[];
@@ -29,9 +29,12 @@ export const LowStockProductsWidget: React.FC<LowStockProductsWidgetProps> = ({
 
    return (
       <>
-         {!loading && _lowStockProducts && _lowStockProducts.length > 1 && (
+         {!loading && _lowStockProducts && _lowStockProducts.length > 0 && (
             <div className="border rounded-lg p-8 space-y-8">
-               <p className="text-md">Stock alerts</p>
+               <div className="flex items-center">
+                  <p className="text-md">Stock alerts</p>
+                  <Bell className="ml-auto h-4 w-4 text-muted-foreground" />
+               </div>
                <ViewDataTableClient
                   data={_lowStockProducts || []}
                   columns={lowStockProductsColumns}

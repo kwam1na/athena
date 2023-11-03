@@ -3,8 +3,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@auth0/nextjs-auth0';
 import { createProduct, fetchProducts } from '@/lib/repositories/productsRepository';
 import { findStore } from '@/lib/repositories/storesRepository';
-import { generateSKU } from '../../../utils';
+import { createSupabaseServerClient, generateSKU } from '@/app/api/utils';
 import { createSKUCounter, getSKUCounter, updateSKUCounter } from '@/lib/repositories/skuCounterRepository';
+import { cookies } from 'next/headers';
+// import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 
 export async function POST(
     req: NextRequest,
@@ -12,10 +14,15 @@ export async function POST(
 ) {
     try {
         const res = new NextResponse();
-        const session = await getSession(req, res);
-        const user = session?.user
+        const supabase = createSupabaseServerClient();
+        const {
+            data: { session },
+        } = await supabase.auth.getSession()
+
+        const user = session?.user;
 
         const body = await req.json();
+
 
         const {
             name,
@@ -72,9 +79,15 @@ export async function POST(
             return new NextResponse('Store id is required', { status: 400 });
         }
 
+        if (!body.organization_id) {
+            return new NextResponse('Organization id is required', { status: 400 });
+        }
+
+        const storeId = parseInt(params.storeId)
+
         const storeByUserId = await findStore({
-            id: params.storeId,
-            user_id: user.sub,
+            id: storeId,
+            created_by: user.id,
         });
 
         if (!storeByUserId) {
@@ -93,7 +106,7 @@ export async function POST(
         //         categoryId,
         //         colorId,
         //         sizeId,
-        //         storeId: params.storeId,
+        //         storeId: storeId,
         //         images: {
         //             createMany: {
         //                 data: [
@@ -113,7 +126,7 @@ export async function POST(
             await updateSKUCounter(skuCounter.id, { last_used: skuCounter.last_used + 1 })
         }
 
-        const createParams = { ...body, store_id: params.storeId }
+        const createParams = { ...body, store_id: storeId, organization_id: parseInt(body.organization_id) }
         const product = await createProduct(createParams)
 
         return NextResponse.json(product, res);
@@ -139,7 +152,7 @@ export async function GET(
         }
 
         const products = await fetchProducts({
-            store_id: params.storeId,
+            store_id: parseInt(params.storeId),
             category_id,
             color_id,
             size_id,

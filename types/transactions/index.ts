@@ -5,6 +5,7 @@ export type Transaction = {
     reportTitle?: string;
     transactionDate?: Date;
     transactionItems?: TransactionItem[];
+    organizationId?: number;
 }
 
 export interface TransactionWithoutID {
@@ -25,7 +26,7 @@ export type TransactionItem = {
     subcategory?: string;
     subcategoryId?: string;
     sku?: string;
-    storeId?: string;
+    storeId?: number;
     transactionDate?: Date;
     transactionId?: string;
     transactionReportTitle?: string;
@@ -37,11 +38,12 @@ export interface TransactionItemBody {
     category?: string;
     category_id?: string;
     cost?: string;
+    organization_id?: number;
     price?: string;
     product_id?: string;
     product_name?: string;
     sku?: string;
-    store_id?: string;
+    store_id?: number;
     subcategory?: string;
     subcategory_id?: string;
     transaction_date?: Date;

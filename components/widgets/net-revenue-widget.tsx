@@ -3,6 +3,7 @@
 import { Button } from '@/components/ui/button';
 import { MetricCard } from '@/components/ui/metric-card';
 import { Skeleton } from '@/components/ui/skeleton';
+import useGetBaseStoreUrl from '@/hooks/use-get-base-store-url';
 import { apiGetMetric } from '@/lib/api/metrics';
 import { formatter } from '@/lib/utils';
 import { useStoreCurrency } from '@/providers/currency-provider';
@@ -28,6 +29,7 @@ export const NetRevenueWidget: React.FC<NetRevenueWidgetProps> = ({
    const { storeCurrency, loading: isCurrencyLoading } = useStoreCurrency();
    const fmt = formatter(storeCurrency);
    const params = useParams();
+   const baseStoreURL = useGetBaseStoreUrl();
 
    const fetchData = async () => {
       setLoading(true);
@@ -46,7 +48,7 @@ export const NetRevenueWidget: React.FC<NetRevenueWidgetProps> = ({
    return (
       <>
          {typeof _netRevenue === 'number' && !loading && !isCurrencyLoading && (
-            <Link href={`/${params.storeId}/transactions`}>
+            <Link href={`${baseStoreURL}/transactions`}>
                <MetricCard
                   title={'Net revenue'}
                   value={fmt.format(_netRevenue)}

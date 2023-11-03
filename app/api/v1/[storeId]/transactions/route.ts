@@ -3,6 +3,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@auth0/nextjs-auth0';
 import { findStore } from '@/lib/repositories/storesRepository';
 import { createTransaction, fetchTransactions, getTransaction, updateTransaction } from '@/lib/repositories/transactionsRepository';
+import { cookies } from 'next/headers';
+import { createSupabaseServerClient } from '@/app/api/utils';
+// import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 
 export async function POST(
     req: NextRequest,
@@ -10,11 +13,15 @@ export async function POST(
 ) {
     try {
         const res = new NextResponse();
-        const session = await getSession(req, res);
-        const user = session?.user
+        const supabase = createSupabaseServerClient();
+        const {
+            data: { session },
+        } = await supabase.auth.getSession()
+
+        const user = session?.user;
 
         const body = await req.json();
-        const { transaction_date } = body;
+        const { transaction_date, organization_id } = body;
 
         if (!user) {
             return new NextResponse('Unauthenticated', { status: 403 });
@@ -24,20 +31,24 @@ export async function POST(
             return new NextResponse('Transaction date is required', { status: 400 });
         }
 
+        if (!organization_id) {
+            return new NextResponse('Organization id is required', { status: 400 });
+        }
+
         if (!params.storeId) {
             return new NextResponse('Store id is required', { status: 400 });
         }
 
         const storeByUserId = await findStore({
-            id: params.storeId,
-            user_id: user.sub,
+            id: parseInt(params.storeId),
+            created_by: user.id,
         });
 
         if (!storeByUserId) {
             return new NextResponse('Unauthorized', { status: 405 });
         }
 
-        const transaction = await createTransaction({ store_id: params.storeId, user_id: user.sub, transaction_date })
+        const transaction = await createTransaction({ store_id: parseInt(params.storeId), user_id: user.id, transaction_date, organization_id: parseInt(organization_id) })
         return NextResponse.json(transaction, res);
     } catch (error) {
         console.log('[TRANSACTION_POST]', (error as Error).message);
@@ -61,7 +72,7 @@ export async function GET(
         }
 
         const transactions = await fetchTransactions({
-            store_id: params.storeId,
+            store_id: parseInt(params.storeId),
         });
 
         return NextResponse.json(transactions);
@@ -77,8 +88,12 @@ export async function PATCH(
 ) {
     try {
         const res = new NextResponse();
-        const session = await getSession(req, res);
-        const user = session?.user
+        const supabase = createSupabaseServerClient();
+        const {
+            data: { session },
+        } = await supabase.auth.getSession()
+
+        const user = session?.user;
 
         const body = await req.json();
 
@@ -96,13 +111,17 @@ export async function PATCH(
             return new NextResponse('Transaction report title is required', { status: 400 });
         }
 
+        if (!body.organization_id) {
+            return new NextResponse('Organization id is required', { status: 400 });
+        }
+
         if (!params.storeId) {
             return new NextResponse('Store id is required', { status: 400 });
         }
 
         const storeByUserId = await findStore({
-            id: params.storeId,
-            user_id: user.sub,
+            id: parseInt(params.storeId),
+            created_by: user.id,
         });
 
         if (!storeByUserId) {

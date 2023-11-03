@@ -5,6 +5,9 @@ import { deleteProduct, getProduct, updateProduct } from '@/lib/repositories/pro
 import { findStore } from '@/lib/repositories/storesRepository';
 import { createTransactionItem, findTransactionItem, getTransactionItem, updateTransactionItem } from '@/lib/repositories/transactionItemsRepository';
 import { deleteTransaction, getTransaction, updateTransaction } from '@/lib/repositories/transactionsRepository';
+import { cookies } from 'next/headers';
+// import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
+import { createSupabaseServerClient } from '@/app/api/utils';
 
 export async function POST(
     req: NextRequest,
@@ -12,8 +15,12 @@ export async function POST(
 ) {
     try {
         const res = new NextResponse();
-        const session = await getSession(req, res);
-        const user = session?.user
+        const supabase = createSupabaseServerClient();
+        const {
+            data: { session },
+        } = await supabase.auth.getSession()
+
+        const user = session?.user;
 
         const body = await req.json();
         const { category_id, subcategory_id, product_id, product_name, price, cost, units_sold, sku, transaction_date } = body;
@@ -63,8 +70,8 @@ export async function POST(
         }
 
         const storeByUserId = await findStore({
-            id: params.storeId,
-            user_id: user.sub,
+            id: parseInt(params.storeId),
+            created_by: user.id,
         });
 
         if (!storeByUserId) {
@@ -78,7 +85,7 @@ export async function POST(
             return NextResponse.json(item, res);
         }
 
-        const transactionItem = await createTransactionItem({ ...body, cost: parseFloat(body.cost), price: parseFloat(body.price), store_id: params.storeId, transaction_id: params.transactionId, user_id: user.sub })
+        const transactionItem = await createTransactionItem({ ...body, cost: parseFloat(body.cost), price: parseFloat(body.price), store_id: parseInt(params.storeId), transaction_id: params.transactionId, user_id: user.id })
         return NextResponse.json(transactionItem, res);
     } catch (error) {
         console.log('[TRANSACTION_POST]', (error as Error).message);
@@ -110,8 +117,12 @@ export async function DELETE(
 ) {
     try {
         const res = new NextResponse();
-        const session = await getSession(req, res);
-        const user = session?.user
+        const supabase = createSupabaseServerClient();
+        const {
+            data: { session },
+        } = await supabase.auth.getSession()
+
+        const user = session?.user;
 
         if (!user) {
             return new NextResponse('Unauthenticated', { status: 403 });
@@ -122,8 +133,8 @@ export async function DELETE(
         }
 
         const storeByUserId = await findStore({
-            id: params.storeId,
-            user_id: user.sub,
+            id: parseInt(params.storeId),
+            created_by: user.id,
         });
 
         if (!storeByUserId) {
@@ -149,9 +160,12 @@ export async function PATCH(
     { params }: { params: { transactionId: string; storeId: string } },
 ) {
     try {
-        const res = new NextResponse();
-        const session = await getSession(req, res);
-        const user = session?.user
+        const supabase = createSupabaseServerClient();
+        const {
+            data: { session },
+        } = await supabase.auth.getSession()
+
+        const user = session?.user;
 
         const body = await req.json();
 

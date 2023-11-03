@@ -1,7 +1,10 @@
 import { getSession } from '@auth0/nextjs-auth0';
 import { NextRequest, NextResponse } from 'next/server';
-import { InventoryConstraintError, ProductNotFoundError } from './errors';
+import { GenericTransactionError, InventoryConstraintError, ProductNotFoundError } from './errors';
 import { getResult } from './utils';
+import { cookies } from 'next/headers';
+import { createSupabaseServerClient } from '@/app/api/utils';
+// import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 
 export async function POST(
     req: NextRequest,
@@ -10,8 +13,12 @@ export async function POST(
     try {
 
         const res = new NextResponse();
-        const session = await getSession(req, res);
-        const user = session?.user
+        const supabase = createSupabaseServerClient();
+        const {
+            data: { session },
+        } = await supabase.auth.getSession()
+
+        const user = session?.user;
 
         const body = await req.json();
         const { transaction_items, transaction, transaction_details } = body;
@@ -22,7 +29,7 @@ export async function POST(
             return new NextResponse('Unauthenticated', { status: 403 });
         }
 
-        const result = await getResult(transaction.id, transaction_items, transaction_params, params, user.sub)
+        const result = await getResult(transaction.id, transaction_items, transaction_params, params, user.id)
 
         return NextResponse.json({ message: 'Report published successfully', transactionItems: result.transaction_items }, res)
 
@@ -37,6 +44,13 @@ export async function POST(
         }
 
         if (error instanceof ProductNotFoundError) {
+            return NextResponse.json({
+                message: error.message,
+                details: error.details,
+            }, { status: 400 });
+        }
+
+        if (error instanceof GenericTransactionError) {
             return NextResponse.json({
                 message: error.message,
                 details: error.details,

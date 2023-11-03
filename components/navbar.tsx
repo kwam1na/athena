@@ -1,44 +1,49 @@
 import { redirect } from 'next/navigation';
 
 import StoreSwitcher from '@/components/store-switcher';
-import { MainNav } from '@/components/main-nav';
-import { ThemeToggle } from '@/components/theme-toggle';
-import prismadb from '@/lib/prismadb';
 import { UserNav } from './user-nav';
-import { getSession } from '@auth0/nextjs-auth0';
-import { AppNav } from './app-nav';
+import { fetchStores } from '@/lib/repositories/storesRepository';
+import { cookies } from 'next/headers';
+import { createServerClient } from '@supabase/ssr';
+import OrganizationSwitcher from './organization-switcher';
+import { fetchOrganizations } from '@/lib/repositories/organizationsRepository';
 
 const Navbar = async () => {
-   const session = await getSession();
+   const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+         cookies: {
+            get(name: string) {
+               return cookies().get(name)?.value;
+            },
+         },
+      },
+   );
+
+   const {
+      data: { session },
+   } = await supabase.auth.getSession();
    const user = session?.user;
 
    if (!user) {
-      redirect('/api/auth/login');
+      redirect('/auth');
    }
 
-   // console.log('user:', user);
-
-   const stores = await prismadb.store.findMany({
-      where: {
-         user_id: user.sub,
-      },
-   });
+   const stores = await fetchStores(user.id);
+   const organizations = await fetchOrganizations(user.id);
 
    return (
-      <div className="pb-4">
-         <div className="flex flex-col mt-8 ml-8 gap-6">
-            <div className="flex">
-               <div className="flex flex-col gap-4">
-                  <div className="flex gap-4 items-center">
-                     <p className="border-r w-16">athena</p>
-                     <StoreSwitcher items={stores} />
-                  </div>
-                  <AppNav />
-               </div>
-               <div className="ml-auto mr-8">
-                  <UserNav />
-               </div>
+      <div className="flex w-full items-center">
+         <div className="flex gap-52 items-center">
+            <p className="text-xl w-16">athena</p>
+            <div className="flex gap-4">
+               <OrganizationSwitcher items={organizations} />
+               <StoreSwitcher items={stores} />
             </div>
+         </div>
+         <div className="ml-auto mr-8">
+            <UserNav />
          </div>
       </div>
    );

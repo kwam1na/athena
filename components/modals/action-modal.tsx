@@ -42,7 +42,7 @@ export const ActionModal: React.FC<ActionModalProps> = ({
          title={title}
          description={description}
          isOpen={isOpen}
-         onClose={onClose}
+         onClose={!loading ? onClose : () => {}}
       >
          <div>{children}</div>
          <div className="pt-6 space-x-2 flex items-center justify-end w-full">
