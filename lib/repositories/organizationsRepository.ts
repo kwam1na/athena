@@ -6,7 +6,7 @@ export const createOrganization = async (data: any) => {
     });
 }
 
-export const getOrganization = async (id: string) => {
+export const getOrganization = async (id: number) => {
     return await prismadb.organization.findUnique({
         where: {
             id,
@@ -36,7 +36,7 @@ export const findUserOrganization = async (userId: string) => {
     });
 }
 
-export const updateOrganization = async (id: string, data: any) => {
+export const updateOrganization = async (id: number, data: any) => {
     return await prismadb.organization.update({
         where: {
             id,
@@ -45,7 +45,7 @@ export const updateOrganization = async (id: string, data: any) => {
     })
 }
 
-export const deleteOrganization = async (id: string,) => {
+export const deleteOrganization = async (id: number) => {
     return await prismadb.organization.deleteMany({
         where: {
             id,
