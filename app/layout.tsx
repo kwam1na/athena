@@ -7,7 +7,9 @@ import './globals.css';
 import { CurrencyProvider } from '@/providers/currency-provider';
 import { WrappedUserProvider } from '@/providers/wrapped-user-provider';
 import { ExchangeRateProvider } from '@/providers/exchange-rate-provider';
-import { createSupabaseServerClient } from './api/utils';
+import { cookies } from 'next/headers';
+import { createServerClient, type CookieOptions } from '@supabase/ssr';
+import AuthListener from '@/providers/auth-listener';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -22,17 +24,32 @@ export default async function RootLayout({
    children: React.ReactNode;
 }) {
    console.debug('[RootLayout] beginning operations');
-   const supabase = createSupabaseServerClient();
+
+   const cookieStore = cookies();
+   const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+         cookies: {
+            get(name: string) {
+               return cookieStore.get(name)?.value;
+            },
+         },
+      },
+   );
+
    const {
       data: { session },
    } = await supabase.auth.getSession();
    const user = session?.user;
+
    return (
       <html lang="en">
          <body className={inter.className}>
             <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
                <Toaster />
                <ModalProvider />
+               <AuthListener />
                {user ? (
                   <WrappedUserProvider>
                      <CurrencyProvider>

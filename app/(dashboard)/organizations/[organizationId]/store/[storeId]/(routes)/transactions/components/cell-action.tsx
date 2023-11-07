@@ -15,12 +15,6 @@ import {
 
 import { TransactionItemColumn } from './columns';
 import { useToast } from '@/components/ui/use-toast';
-import {
-   getLocallySavedTransactions,
-   getDraftsLocalStorageKey,
-   saveItemInLocalStorage,
-   getEditsLocalStorageKey,
-} from '../utils';
 import { formatter, keysToCamelCase } from '@/lib/utils';
 import { useStoreCurrency } from '@/providers/currency-provider';
 import { ActionModal } from '@/components/modals/action-modal';
@@ -45,6 +39,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
       productId,
       transactionId,
       reportEntryAction,
+      transactionsAutosaver,
       setAlertMessages,
       setFormattedItems,
       setTransactionItems,
@@ -59,14 +54,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
          return prev.filter((alert) => alert.key !== productId);
       });
 
-      const key =
-         reportEntryAction == 'new'
-            ? getDraftsLocalStorageKey(params.storeId)
-            : getEditsLocalStorageKey(params.storeId);
-      let draftTransactions = getLocallySavedTransactions(
-         params.storeId,
-         reportEntryAction,
-      );
+      let draftTransactions = transactionsAutosaver.getAll();
 
       if (action === 'update') {
          if (
@@ -78,7 +66,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
          delete draftTransactions[transactionId][productId];
       }
 
-      saveItemInLocalStorage(key, draftTransactions);
+      transactionsAutosaver.save(draftTransactions);
 
       const activeTransaction = draftTransactions[transactionId];
 
@@ -125,6 +113,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
          setTransactionItems,
          setFormattedItems,
          setAutoSavedTransactions,
+         transactionsAutosaver,
       }));
    };
 

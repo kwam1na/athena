@@ -59,6 +59,9 @@ import {
 import useReturnUrl from '@/hooks/use-get-return-url';
 import { TaskAlert } from '@/components/ui/task-alert';
 import useGetBaseStoreUrl from '@/hooks/use-get-base-store-url';
+import { ActionModal } from '@/components/modals/action-modal';
+import { set } from 'date-fns';
+import { ProductsAutosaver } from '../../utils/products-autosaver';
 
 enum ActionContext {
    NONE,
@@ -133,6 +136,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
 
    const [open, setOpen] = useState(false);
    const [loading, setLoading] = useState(false);
+   const [isAutosavedModalOpen, setIsAutosavedModalOpen] = useState(false);
    const [isMounted, setIsMounted] = useState(false);
 
    let initialProfit: number | undefined,
@@ -175,6 +179,8 @@ export const ProductForm: React.FC<ProductFormProps> = ({
    const loadingAction = loading ? (initialData ? 'Saving' : 'Creating') : '';
    const buttonText = loading ? loadingAction : action;
 
+   const productAutosaver = new ProductsAutosaver(params.storeId);
+
    const defaultValues: Record<string, any> = initialData
       ? {
            ...initialData,
@@ -204,10 +210,6 @@ export const ProductForm: React.FC<ProductFormProps> = ({
 
    const hasFormChanged = (formValues: any) => {
       return Object.keys(defaultValues).some((key) => {
-         // if (formValues[key] !== defaultValues[key]) {
-         //    console.log('different:', key);
-         //    console.log('different:', formValues[key], defaultValues[key]);
-         // }
          if (
             (Number.isNaN(formValues[key]) &&
                Number.isNaN(defaultValues[key])) ||
@@ -230,6 +232,12 @@ export const ProductForm: React.FC<ProductFormProps> = ({
    );
 
    const watchedValues = form.watch();
+
+   useEffect(() => {
+      if (productAutosaver.getAll()) {
+         setIsAutosavedModalOpen(true);
+      }
+   }, []);
 
    useEffect(() => {
       setHasChanges(hasFormChanged(watchedValues));
@@ -420,8 +428,30 @@ export const ProductForm: React.FC<ProductFormProps> = ({
       setOpen(true);
    };
 
+   const useAutosavedProduct = () => {
+      setIsAutosavedModalOpen(false);
+   };
+
+   const discardAutosavedProduct = () => {
+      setIsAutosavedModalOpen(false);
+   };
+
+   const autosaveProduct = () => {
+      const draftProduct = productAutosaver.getAll();
+      console.log('autosaved', draftProduct);
+      productAutosaver.save(form.getValues());
+   };
+
    return (
       <>
+         <ActionModal
+            isOpen={isAutosavedModalOpen}
+            title="Unfinished product detected"
+            description="You were previously creating a product. Do you want to continue editing it or start over?"
+            declineText="Discard"
+            onConfirm={() => useAutosavedProduct()}
+            onClose={discardAutosavedProduct}
+         />
          <AlertModal
             isOpen={open}
             onClose={() => {
@@ -499,6 +529,10 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                                        disabled={loading}
                                        placeholder="Product name"
                                        {...field}
+                                       onChange={(e) => {
+                                          field.onChange(e);
+                                          autosaveProduct();
+                                       }}
                                     />
                                  </FormControl>
                                  <FormMessage />
@@ -527,6 +561,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                                                 parseFloat(e.target.value),
                                                 'price',
                                              );
+                                             autosaveProduct();
                                           }}
                                        />
                                     </FormControl>
@@ -602,6 +637,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                                           );
                                        } else {
                                           field.onChange(value);
+                                          autosaveProduct();
                                        }
                                     }}
                                     value={field.value}
@@ -657,6 +693,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                                           );
                                        } else {
                                           field.onChange(value);
+                                          autosaveProduct();
                                        }
                                     }}
                                     value={field.value}
@@ -708,6 +745,10 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                                        disabled={loading}
                                        placeholder="0"
                                        {...field}
+                                       onChange={(e) => {
+                                          field.onChange(e);
+                                          autosaveProduct();
+                                       }}
                                     />
                                  </FormControl>
                                  <FormMessage />
@@ -725,6 +766,10 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                                        disabled={loading}
                                        placeholder="Product SKU"
                                        {...field}
+                                       onChange={(e) => {
+                                          field.onChange(e);
+                                          autosaveProduct();
+                                       }}
                                     />
                                  </FormControl>
                                  <FormDescription>
@@ -755,6 +800,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                                           );
                                        } else {
                                           field.onChange(value);
+                                          autosaveProduct();
                                        }
                                     }}
                                     value={field.value}
@@ -808,6 +854,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                                           );
                                        } else {
                                           field.onChange(value);
+                                          autosaveProduct();
                                        }
                                     }}
                                     value={field.value}
@@ -878,7 +925,10 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                               <Checkbox
                                  checked={field.value}
                                  // @ts-ignore
-                                 onCheckedChange={field.onChange}
+                                 onCheckedChange={(e) => {
+                                    field.onChange(e);
+                                    autosaveProduct();
+                                 }}
                               />
                            </FormControl>
                            <div className="space-y-1 leading-none">

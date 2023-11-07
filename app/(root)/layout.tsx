@@ -10,6 +10,8 @@ import { ModalProvider } from '@/providers/modal-provider';
 import { WrappedUserProvider } from '@/providers/wrapped-user-provider';
 import { CurrencyProvider } from '@/providers/currency-provider';
 import { ExchangeRateProvider } from '@/providers/exchange-rate-provider';
+import AuthListener from '@/providers/auth-listener';
+import { getUser } from '@/lib/repositories/userRepository';
 
 export default async function SetupLayout({
    children,
@@ -18,7 +20,6 @@ export default async function SetupLayout({
 }) {
    console.log('[RootSetupLayout] beginning operations');
 
-   // const supabase = createServerComponentClient<Database>({ cookies });
    const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -39,6 +40,12 @@ export default async function SetupLayout({
    if (!user) {
       console.log('[RootSetupLayout] no userId, redirecting to /sign-in');
       redirect('/auth');
+   }
+
+   const dbUser = await getUser(user.id);
+
+   if (!dbUser?.is_onboarded) {
+      redirect('/onboarding');
    }
 
    let organization;
@@ -68,6 +75,7 @@ export default async function SetupLayout({
       <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
          <Toaster />
          <ModalProvider />
+         <AuthListener />
          {user ? (
             <WrappedUserProvider>
                <CurrencyProvider>

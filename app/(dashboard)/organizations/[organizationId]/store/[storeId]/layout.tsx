@@ -7,9 +7,11 @@ import { EmptyState } from '@/components/states/empty/empty-state';
 import { Monitor } from 'lucide-react';
 import { AppSideBar } from '@/components/app-side-bar';
 import { Separator } from '@/components/ui/separator';
-import { createSupabaseServerClient } from '@/app/api/utils';
+import { cookies } from 'next/headers';
+import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { CurrencyProvider } from '@/providers/currency-provider';
 import { WrappedUserProvider } from '@/providers/wrapped-user-provider';
+import AuthListener from '@/providers/auth-listener';
 
 export default async function DashboardLayout({
    children,
@@ -18,10 +20,23 @@ export default async function DashboardLayout({
    children: React.ReactNode;
    params: { organizationId: string; storeId: string };
 }) {
-   const supabase = createSupabaseServerClient();
+   const cookieStore = cookies();
+   const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+         cookies: {
+            get(name: string) {
+               return cookieStore.get(name)?.value;
+            },
+         },
+      },
+   );
+
    const {
       data: { session },
    } = await supabase.auth.getSession();
+
    const user = session?.user;
 
    if (!user) {
@@ -41,6 +56,7 @@ export default async function DashboardLayout({
 
    return (
       <WrappedUserProvider>
+         <AuthListener />
          <CurrencyProvider>
             <div className="h-screen flex flex-col">
                <div className="md:hidden p-4 flex items-center justify-center">

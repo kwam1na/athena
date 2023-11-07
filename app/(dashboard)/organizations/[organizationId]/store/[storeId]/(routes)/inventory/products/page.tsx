@@ -9,6 +9,7 @@ import { fetchSubcategories } from '@/lib/repositories/subcategoriesRepository';
 import { getStore } from '@/lib/repositories/storesRepository';
 import { EmptyState } from '@/components/states/empty/empty-state';
 import { Package, ShoppingBag } from 'lucide-react';
+import TableSkeleton from '@/components/states/loading/table-skeleton';
 
 const ProductsPage = async ({
    params,

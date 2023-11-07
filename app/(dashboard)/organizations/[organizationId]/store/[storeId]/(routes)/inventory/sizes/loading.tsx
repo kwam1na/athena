@@ -1,13 +1,9 @@
 'use client';
 
-import { Loader } from '@/components/ui/loader';
+import TableSkeleton from '@/components/states/loading/table-skeleton';
 
 const Loading = () => {
-    return (
-        <div className="flex h-full w-full items-center justify-center">
-            <Loader />
-        </div>
-    );
+   return <TableSkeleton />;
 };
 
 export default Loading;

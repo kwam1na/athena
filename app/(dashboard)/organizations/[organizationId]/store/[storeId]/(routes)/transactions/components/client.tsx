@@ -72,18 +72,11 @@ import { AlertModal } from '@/components/modals/alert-modal';
 import { LoadingButton } from '@/components/ui/loading-button';
 import {
    autoSaveIsInSync,
-   getAutoSavedTransactions,
    getAutosavedReportTitle,
    getCategorySalesAndUnits,
-   getLocallySavedTransactions,
-   getDraftsLocalStorageKey,
    getNetRevenue,
    getTotalSales,
    getTotalUnitsSold,
-   removeLocallySavedTransaction,
-   saveItemInLocalStorage,
-   updateLocallySavedTransaction,
-   getEditsLocalStorageKey,
    areTransactionItemsInSync,
 } from '../utils';
 import { TooltipProvider } from '@radix-ui/react-tooltip';
@@ -123,6 +116,7 @@ import { ServiceError } from '@/lib/error';
 import { MetricCard } from '@/components/ui/metric-card';
 import { apiUpdateProduct } from '@/lib/api/products';
 import useGetBaseStoreUrl from '@/hooks/use-get-base-store-url';
+import { TransactionsAutosaver } from '../utils/transactions-autosaver';
 
 interface IndividualSearchResultProps {
    index: number;
@@ -257,6 +251,12 @@ export const TransactionsReportClient: React.FC<
    const baseStoreURL = useGetBaseStoreUrl();
    const { toast } = useToast();
 
+   const entryAction = fetchedTransaction ? 'editing' : 'new';
+   const transactionsAutosaver = new TransactionsAutosaver(
+      params.storeId,
+      entryAction,
+   );
+
    const { storeCurrency, loading: isLoadingCurrency } = useStoreCurrency();
    const fmt = formatter(storeCurrency);
 
@@ -308,10 +308,8 @@ export const TransactionsReportClient: React.FC<
     * otherwise false.
     */
    const checkForSavedEdit = (fetchedTransaction: Transaction): boolean => {
-      const savedEditedTransactions = getLocallySavedTransactions(
-         params.storeId,
-         'editing',
-      );
+      const savedEditedTransactions =
+         transactionsAutosaver.getEditedTransactions(params.storeId);
       const savedEdit = savedEditedTransactions[fetchedTransaction.id];
 
       const searchParams = new URLSearchParams(window.location.search);
@@ -441,10 +439,8 @@ export const TransactionsReportClient: React.FC<
       setReportEntryAction('new');
       searchQueryForm.reset();
 
-      const autoSavedTransactionsInLocalStorage = getAutoSavedTransactions(
-         params.storeId,
-         reportEntryAction,
-      );
+      const autoSavedTransactionsInLocalStorage =
+         transactionsAutosaver.getAutosavedTransactions();
 
       // if editing, don't autosave as edits are saved under their own local storage key
       if (!fetchedTransaction) {
@@ -491,11 +487,7 @@ export const TransactionsReportClient: React.FC<
             params.storeId,
             deleteReportWithRestock,
          );
-         removeLocallySavedTransaction(
-            params.storeId,
-            reportEntryAction,
-            transaction.id,
-         );
+         transactionsAutosaver.remove(transaction.id);
 
          handleDoneDeletingReport();
 
@@ -552,10 +544,10 @@ export const TransactionsReportClient: React.FC<
     */
    const discardSavedEditedReport = () => {
       if (!fetchedTransaction) return;
-      removeLocallySavedTransaction(
-         params.storeId,
-         'editing',
+
+      transactionsAutosaver.removeEditedTransactions(
          fetchedTransaction.id,
+         params.storeId,
       );
 
       setIsUseSavedEditModalOpen(false);
@@ -570,7 +562,6 @@ export const TransactionsReportClient: React.FC<
       setFormattedItems(tableItems);
 
       // set up a local copy for this edit
-      const key = getEditsLocalStorageKey(params.storeId);
       const draftItems = fetchedTransaction.transactionItems?.map((item) =>
          keysToSnakeCase(item),
       );
@@ -580,13 +571,11 @@ export const TransactionsReportClient: React.FC<
          products[item.product_id] = item;
       });
 
-      const savedEditedTransactions = getLocallySavedTransactions(
-         params.storeId,
-         'editing',
-      );
+      const savedEditedTransactions =
+         transactionsAutosaver.getEditedTransactions(params.storeId);
       savedEditedTransactions[fetchedTransaction.id] = products;
 
-      saveItemInLocalStorage(key, savedEditedTransactions);
+      transactionsAutosaver.save(savedEditedTransactions);
    };
 
    /**
@@ -620,11 +609,7 @@ export const TransactionsReportClient: React.FC<
     */
    const forceDeleteReport = () => {
       if (!transaction) return;
-      removeLocallySavedTransaction(
-         params.storeId,
-         reportEntryAction,
-         transaction.id,
-      );
+      transactionsAutosaver.remove(transaction.id);
       setIsAlertModalOpen(false);
       setAllowForceDelete(false);
       toast({
@@ -662,6 +647,7 @@ export const TransactionsReportClient: React.FC<
          setTransactionItems,
          setFormattedItems,
          setAutoSavedTransactions,
+         transactionsAutosaver,
       }));
    };
 
@@ -713,12 +699,10 @@ export const TransactionsReportClient: React.FC<
       body: TransactionItemBody,
       transaction: Transaction,
       draftTransactions: Record<string, any>,
-      draftTransactionKey: string,
    ) => {
       const updatedDraft = updateDraft(body, transaction, draftTransactions);
       draftTransactions[transaction.id] = updatedDraft;
-
-      saveItemInLocalStorage(draftTransactionKey, draftTransactions);
+      transactionsAutosaver.save(draftTransactions);
 
       const tableItems = createTableItemsFromDraftTransaction(updatedDraft);
       setTransactionItems(tableItems);
@@ -738,7 +722,6 @@ export const TransactionsReportClient: React.FC<
       body: TransactionItemBody,
       date: Date,
       draftTransactions: any,
-      draftTransactionKey: string,
    ) => {
       const transactionRequest = await apiCreateTransaction(params.storeId, {
          transaction_date: date,
@@ -750,7 +733,6 @@ export const TransactionsReportClient: React.FC<
       updateStateAfterTransaction({ transactionRequest, reportTitle });
       saveDraftTransaction({
          draftTransactions,
-         draftTransactionKey,
          transactionId: transactionRequest.id,
          body,
          reportTitle,
@@ -768,15 +750,7 @@ export const TransactionsReportClient: React.FC<
    ) => {
       if (!date) return;
 
-      const draftTransactionKey =
-         reportEntryAction === 'new'
-            ? getDraftsLocalStorageKey(params.storeId)
-            : getEditsLocalStorageKey(params.storeId);
-      const draftTransactions = getLocallySavedTransactions(
-         params.storeId,
-         reportEntryAction,
-      );
-
+      const draftTransactions = transactionsAutosaver.getAll();
       const body = createBody(data, date, result);
 
       try {
@@ -786,19 +760,9 @@ export const TransactionsReportClient: React.FC<
          });
 
          if (!transaction) {
-            await handleNewTransaction(
-               body,
-               date,
-               draftTransactions,
-               draftTransactionKey,
-            );
+            await handleNewTransaction(body, date, draftTransactions);
          } else {
-            handleExistingTransaction(
-               body,
-               transaction,
-               draftTransactions,
-               draftTransactionKey,
-            );
+            handleExistingTransaction(body, transaction, draftTransactions);
          }
       } catch (error: any) {
          captureException(error);
@@ -834,10 +798,9 @@ export const TransactionsReportClient: React.FC<
       searchQueryForm.reset();
 
       // if switching from a current edit to an autosaved report, autosave the current edit
-      const actualAutoSavedTransactions = getAutoSavedTransactions(
-         params.storeId,
-         reportEntryAction,
-      );
+      const actualAutoSavedTransactions =
+         transactionsAutosaver.getAutosavedTransactions();
+
       if (
          !autoSaveIsInSync(actualAutoSavedTransactions, autoSavedTransactions)
       ) {
@@ -927,11 +890,7 @@ export const TransactionsReportClient: React.FC<
          if (itemsToRemove.length > 0)
             await deleteTransactionItems(itemsToRemove);
 
-         removeLocallySavedTransaction(
-            params.storeId,
-            reportEntryAction,
-            transaction.id,
-         );
+         transactionsAutosaver.remove(transaction.id);
          router.refresh();
          router.push(`${baseStoreURL}/transactions`);
          toast({
@@ -967,14 +926,12 @@ export const TransactionsReportClient: React.FC<
     */
    const saveDraftTransaction = ({
       body,
-      draftTransactionKey,
       draftTransactions,
       reportTitle,
       transactionId,
    }: {
       body: TransactionItemBody;
       draftTransactions: Record<string, any>;
-      draftTransactionKey: string;
       reportTitle: string;
       transactionId: string;
    }) => {
@@ -988,7 +945,7 @@ export const TransactionsReportClient: React.FC<
       draftTransactions[transactionId] = {
          [body.product_id as string]: draftTransactionItem,
       };
-      saveItemInLocalStorage(draftTransactionKey, draftTransactions);
+      transactionsAutosaver.save(draftTransactions);
       updateItemsState({ draftTransactionItem, transactionId, reportTitle });
    };
 
@@ -1009,11 +966,8 @@ export const TransactionsReportClient: React.FC<
    const saveFetchedTransaction = () => {
       if (!fetchedTransaction) return;
       // set up a local copy for this edit
-      const savedEditedTransactions = getLocallySavedTransactions(
-         params.storeId,
-         'editing',
-      );
-      const key = getEditsLocalStorageKey(params.storeId);
+      const savedEditedTransactions =
+         transactionsAutosaver.getEditedTransactions(params.storeId);
       const draftItems = fetchedTransaction.transactionItems?.map((item) =>
          keysToSnakeCase(item),
       );
@@ -1022,7 +976,10 @@ export const TransactionsReportClient: React.FC<
          products[item.product_id] = item;
       });
       savedEditedTransactions[fetchedTransaction.id] = products;
-      saveItemInLocalStorage(key, savedEditedTransactions);
+      transactionsAutosaver.saveEditedTransactions(
+         params.storeId,
+         savedEditedTransactions,
+      );
    };
 
    /**
@@ -1182,17 +1139,12 @@ export const TransactionsReportClient: React.FC<
          return acc;
       }, {});
 
-      updateLocallySavedTransaction(
-         params.storeId,
-         reportEntryAction,
-         id,
-         updatedDraftTransaction,
-      );
+      transactionsAutosaver.update(id, updatedDraftTransaction);
 
       // only update local auto saved transactions if working on new reports
       if (reportEntryAction === 'new') {
          setAutoSavedTransactions(
-            getAutoSavedTransactions(params.storeId, reportEntryAction),
+            transactionsAutosaver.getAutosavedTransactions(),
          );
       }
    };
@@ -1264,10 +1216,8 @@ export const TransactionsReportClient: React.FC<
    useEffect(() => {
       // if editing, don't get autosaved transactions
       if (!fetchedTransaction) {
-         const autoSavedTransactions = getAutoSavedTransactions(
-            params.storeId,
-            reportEntryAction,
-         );
+         const autoSavedTransactions =
+            transactionsAutosaver.getAutosavedTransactions();
 
          if (autoSavedTransactions.length > 0) {
             setAutoSavedTransactions(autoSavedTransactions);

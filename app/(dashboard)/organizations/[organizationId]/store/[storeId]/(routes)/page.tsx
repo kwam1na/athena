@@ -35,6 +35,7 @@ import { captureException } from '@sentry/nextjs';
 import { TaskAlert } from '@/components/ui/task-alert';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
 
 interface DashboardPageProps {
    params: {

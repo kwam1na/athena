@@ -57,4 +57,3 @@ export const reflect = <T>(promise: Promise<T>): Promise<PromiseResult<T>> => {
         (error): PromiseResult<T> => ({ status: "rejected", reason: error })
     );
 };
-

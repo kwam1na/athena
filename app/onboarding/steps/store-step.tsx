@@ -36,7 +36,7 @@ export const StoreStep: React.FC<StoreStepProps> = ({
          <div className="flex gap-4 w-[60%]">
             <div className="flex flex-col w-full gap-4">
                <Input
-                  placeholder="Acme Inc."
+                  placeholder="Your store name"
                   type="name"
                   onChange={(e) => onStoreNameChange(e.target.value)}
                   value={storeName}

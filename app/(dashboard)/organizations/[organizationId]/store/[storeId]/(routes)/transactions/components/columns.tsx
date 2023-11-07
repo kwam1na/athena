@@ -9,9 +9,11 @@ import {
    ReportEntryAction,
    TransactionItem,
 } from '@/types/transactions';
+import { TransactionsAutosaver } from '../utils/transactions-autosaver';
 
 export interface TransactionItemColumn extends TransactionItem {
    reportEntryAction: ReportEntryAction;
+   transactionsAutosaver: TransactionsAutosaver;
    setAlertMessages: React.Dispatch<React.SetStateAction<AlertMessage[]>>;
    setTransactionItems: React.Dispatch<React.SetStateAction<TransactionItem[]>>;
    setFormattedItems: React.Dispatch<
