@@ -6,6 +6,7 @@ import { useParams, usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { Banknote, LayoutDashboard, Package, Settings } from 'lucide-react';
 import useGetBaseStoreUrl from '@/hooks/use-get-base-store-url';
+import { AthenLogo } from '@/app/assets/athena-logo';
 
 export function AppSideBar({
    className,
@@ -42,9 +43,14 @@ export function AppSideBar({
    ];
 
    return (
-      <div className={cn('flex flex-col gap-16 px-4', className)}>
+      <div className={cn('flex flex-col px-4 space-y-12 h-full', className)}>
+         <div className="w-[64px] h-[64px]">
+            <AthenLogo />
+         </div>
+
+         {/* <p className="text-4xl">athena</p> */}
          <nav
-            className="flex flex-col items-center justify-center space-y-6 lg:space-y-10"
+            className="flex flex-col items-center justify-center gap-6"
             {...props}
          >
             {routes.map((route) => (
@@ -52,7 +58,7 @@ export function AppSideBar({
                   key={route.href}
                   href={route.href}
                   className={cn(
-                     'w-full text-sm font-medium transition-colors hover:text-primary flex items-center',
+                     'w-full text-sm font-medium transition-colors hover:text-primary h-[40px] flex gap-3 items-center',
                      route.active
                         ? 'text-black dark:text-white rounded-lg'
                         : 'text-muted-foreground',

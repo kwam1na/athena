@@ -9,7 +9,7 @@ export default async function StoreLayout({
 }) {
    return (
       <>
-         <SettingsNav className="pb-4 border-b" />
+         <SettingsNav className="p-2 px-6 rounded-md" />
          <div className="h-full pt-6">{children}</div>
       </>
    );

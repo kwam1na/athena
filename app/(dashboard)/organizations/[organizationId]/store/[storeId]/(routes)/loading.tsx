@@ -1,13 +1,7 @@
-'use client';
-
-import { Loader } from '@/components/ui/loader';
+import DashboardSkeleton from '@/components/states/loading/dashboard-skeleton';
 
 const Loading = () => {
-    return (
-        <div className="flex h-full w-full items-center justify-center">
-            <Loader />
-        </div>
-    );
+   return <DashboardSkeleton />;
 };
 
 export default Loading;

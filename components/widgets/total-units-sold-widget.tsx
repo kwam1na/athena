@@ -9,7 +9,8 @@ import { PackageMinus, RotateCcw } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useState } from 'react';
-
+import { motion } from 'framer-motion';
+import { widgetVariants } from '@/lib/constants';
 interface TotalUnitsSoldWidgetProps {
    totalUnitsSold?: number;
    percentageChange?: number;
@@ -41,7 +42,12 @@ export const TotalUnitsSoldWidget: React.FC<TotalUnitsSoldWidgetProps> = ({
    };
 
    return (
-      <>
+      <motion.div
+         variants={widgetVariants}
+         initial="hidden"
+         animate="visible"
+         className="space-y-8"
+      >
          {!loading && typeof _totalUnitsSold === 'number' && (
             <Link href={`${baseStoreURL}/transactions`}>
                <MetricCard
@@ -73,6 +79,6 @@ export const TotalUnitsSoldWidget: React.FC<TotalUnitsSoldWidgetProps> = ({
                <Skeleton className="w-[60%] h-8" />
             </div>
          )}
-      </>
+      </motion.div>
    );
 };

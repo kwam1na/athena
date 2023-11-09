@@ -41,7 +41,6 @@ const Navbar = async () => {
    return (
       <div className="flex w-full items-center">
          <div className="flex gap-52 items-center">
-            <p className="text-xl w-16">athena</p>
             <div className="flex gap-4">
                <OrganizationSwitcher items={organizations} />
                <StoreSwitcher items={stores} />

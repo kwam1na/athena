@@ -13,7 +13,8 @@ import { DollarSign, RotateCcw } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useState } from 'react';
-
+import { motion } from 'framer-motion';
+import { widgetVariants } from '@/lib/constants';
 interface SalesRevenueGraphWidgetProps {
    graphData?: GraphData[];
 }
@@ -42,7 +43,12 @@ export const SalesRevenueGraphWidget: React.FC<
    };
 
    return (
-      <>
+      <motion.div
+         variants={widgetVariants}
+         initial="hidden"
+         animate="visible"
+         className="space-y-8"
+      >
          {!loading && _graphData && _graphData.length > 1 && (
             <Card className="col-span-4 bg-background w-full">
                <CardHeader>
@@ -72,6 +78,6 @@ export const SalesRevenueGraphWidget: React.FC<
                <Skeleton className="w-[60%] h-8" />
             </div>
          )}
-      </>
+      </motion.div>
    );
 };

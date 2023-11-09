@@ -43,7 +43,10 @@ export function InventoryNav({
 
    return (
       <nav
-         className={cn('flex items-center space-x-4 lg:space-x-6', className)}
+         className={cn(
+            'inline-flex items-center space-x-4 bg-card lg:space-x-6',
+            className,
+         )}
          {...props}
       >
          {routes.map((route) => (
@@ -51,9 +54,9 @@ export function InventoryNav({
                key={route.href}
                href={route.href}
                className={cn(
-                  'text-sm font-medium transition-colors hover:text-primary hover:bg-muted hover:p-2 hover:pr-4 hover:pl-4 hover:rounded-md',
+                  'text-sm font-medium transition-colors hover:text-primary',
                   route.active
-                     ? 'text-black dark:text-white bg-muted p-2 pr-4 pl-4 rounded-md'
+                     ? 'text-black dark:text-white bg-background p-2 pr-4 pl-4 rounded-md'
                      : 'text-muted-foreground',
                )}
             >

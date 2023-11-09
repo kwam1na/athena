@@ -2,7 +2,7 @@
 
 import * as z from 'zod';
 import { captureException } from '@sentry/nextjs';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { AlertCircle, ArrowLeft, PlusCircle, Trash } from 'lucide-react';
@@ -30,7 +30,6 @@ import {
    SelectValue,
 } from '@/components/ui/select';
 import { useToast } from '@/components/ui/use-toast';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { LoadingButton } from '@/components/ui/loading-button';
 import {
    apiCreateSubcategory,
@@ -40,11 +39,13 @@ import {
 import useReturnUrl from '@/hooks/use-get-return-url';
 import { TaskAlert } from '@/components/ui/task-alert';
 import useGetBaseStoreUrl from '@/hooks/use-get-base-store-url';
+import { LocalStorageSync } from '@/lib/local-storage-sync';
+import { motion } from 'framer-motion';
+import { widgetVariants } from '@/lib/constants';
 
 const formSchema = z.object({
    name: z.string().min(2),
    category_id: z.string().min(1),
-   //    billboardId: z.string().min(1),
 });
 
 type SubcategoryFormValues = z.infer<typeof formSchema>;
@@ -52,13 +53,11 @@ type SubcategoryFormValues = z.infer<typeof formSchema>;
 interface SubcategoryFormProps {
    initialData: subcategory | null;
    categories: category[];
-   //    billboards: Billboard[];
 }
 
 export const SubategoryForm: React.FC<SubcategoryFormProps> = ({
    initialData,
    categories,
-   //    billboards,
 }) => {
    const params = useParams();
    const baseStoreURL = useGetBaseStoreUrl();
@@ -77,6 +76,11 @@ export const SubategoryForm: React.FC<SubcategoryFormProps> = ({
    const loadingAction = loading ? (initialData ? 'Saving' : 'Creating') : '';
    const buttonText = loading ? loadingAction : action;
 
+   const autosavingKey = initialData
+      ? `subcategory-editing-${params.storeId}`
+      : `subcategory-${params.storeId}`;
+   const autosaver = new LocalStorageSync(autosavingKey);
+
    const form = useForm<SubcategoryFormValues>({
       resolver: zodResolver(formSchema),
       defaultValues: initialData || {
@@ -84,6 +88,61 @@ export const SubategoryForm: React.FC<SubcategoryFormProps> = ({
          category_id: '',
       },
    });
+
+   const autosaveCategory = () => {
+      autosaver.save(form.getValues());
+   };
+
+   const useAutosavedCategory = () => {
+      const autosavedCategory = autosaver.getAll();
+      form.reset(autosavedCategory);
+   };
+
+   const updateReturnURL = () => {
+      const draftProduct = autosaver.getAll();
+
+      if (Object.keys(draftProduct).length > 0) {
+         return `&repopulate=true`;
+      }
+      return '';
+   };
+
+   useEffect(() => {
+      const searchParams = new URLSearchParams(window.location.search);
+      const repopulate = searchParams.get('repopulate');
+
+      if (initialData && !repopulate) {
+         autosaver.save(form.getValues());
+      }
+   }, []);
+
+   useEffect(() => {
+      const autosavedProduct = autosaver.getAll();
+
+      if (Object.keys(autosavedProduct).length > 0) {
+         // check if the user was navigated back here from a different page.
+         // if so, populate the fields with the autosaved category
+         const searchParams = new URLSearchParams(window.location.search);
+         const repopulate = searchParams.get('repopulate');
+
+         searchParams.delete('repopulate');
+
+         const urlWithoutParams = window.location.pathname;
+         if (searchParams.toString()) {
+            window.history.replaceState(
+               null,
+               '',
+               `?${searchParams.toString()}`,
+            );
+         } else {
+            window.history.replaceState(null, '', urlWithoutParams);
+         }
+
+         if (repopulate) {
+            useAutosavedCategory();
+         }
+      }
+   }, []);
 
    const getReturnUrl = useReturnUrl(`/inventory/subcategories`);
 
@@ -120,6 +179,7 @@ export const SubategoryForm: React.FC<SubcategoryFormProps> = ({
          });
       } finally {
          setLoading(false);
+         autosaver.clearAll();
       }
    };
 
@@ -157,7 +217,7 @@ export const SubategoryForm: React.FC<SubcategoryFormProps> = ({
                   action={{
                      type: 'navigate',
                      ctaText: 'Add category',
-                     route: `${baseStoreURL}/inventory/categories/new?return_url=${returnURL}`,
+                     route: `${baseStoreURL}/inventory/categories/new?return_url=${returnURL}${updateReturnURL()}`,
                   }}
                />
             )}
@@ -166,7 +226,12 @@ export const SubategoryForm: React.FC<SubcategoryFormProps> = ({
    };
 
    return (
-      <>
+      <motion.div
+         className="space-y-6"
+         variants={widgetVariants}
+         initial="hidden"
+         animate="visible"
+      >
          <AlertModal
             isOpen={open}
             onClose={() => setOpen(false)}
@@ -211,6 +276,10 @@ export const SubategoryForm: React.FC<SubcategoryFormProps> = ({
                                  disabled={loading}
                                  placeholder="Subcategory name"
                                  {...field}
+                                 onChange={(e) => {
+                                    field.onChange(e);
+                                    autosaveCategory();
+                                 }}
                               />
                            </FormControl>
                            <FormMessage />
@@ -228,7 +297,7 @@ export const SubategoryForm: React.FC<SubcategoryFormProps> = ({
                               onValueChange={(value: string) => {
                                  if (value == 'add-new-category') {
                                     router.push(
-                                       `${baseStoreURL}/inventory/categories/new?return_url=${pathName}`,
+                                       `${baseStoreURL}/inventory/categories/new?return_url=${pathName}${updateReturnURL()}`,
                                     );
                                  } else {
                                     field.onChange(value);
@@ -315,6 +384,6 @@ export const SubategoryForm: React.FC<SubcategoryFormProps> = ({
                </LoadingButton>
             </form>
          </Form>
-      </>
+      </motion.div>
    );
 };

@@ -117,6 +117,8 @@ import { MetricCard } from '@/components/ui/metric-card';
 import { apiUpdateProduct } from '@/lib/api/products';
 import useGetBaseStoreUrl from '@/hooks/use-get-base-store-url';
 import { TransactionsAutosaver } from '../utils/transactions-autosaver';
+import { motion } from 'framer-motion';
+import { widgetVariants } from '@/lib/constants';
 
 interface IndividualSearchResultProps {
    index: number;
@@ -1688,7 +1690,12 @@ export const TransactionsReportClient: React.FC<
    };
 
    return (
-      <>
+      <motion.div
+         className="space-y-6"
+         variants={widgetVariants}
+         initial="hidden"
+         animate="visible"
+      >
          <ActionModal
             isOpen={isAutoSaveModalOpen}
             title="Draft reports"
@@ -2131,6 +2138,6 @@ export const TransactionsReportClient: React.FC<
                </div>
             )}
          </div>
-      </>
+      </motion.div>
    );
 };

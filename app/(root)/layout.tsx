@@ -12,13 +12,16 @@ import { CurrencyProvider } from '@/providers/currency-provider';
 import { ExchangeRateProvider } from '@/providers/exchange-rate-provider';
 import AuthListener from '@/providers/auth-listener';
 import { getUser } from '@/lib/repositories/userRepository';
+import { Inter } from 'next/font/google';
+
+const inter = Inter({ subsets: ['latin'] });
 
 export default async function SetupLayout({
    children,
 }: {
    children: React.ReactNode;
 }) {
-   console.log('[RootSetupLayout] beginning operations');
+   console.debug('[RootSetupLayout] beginning operations');
 
    const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -72,19 +75,23 @@ export default async function SetupLayout({
    }
 
    return (
-      <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-         <Toaster />
-         <ModalProvider />
-         <AuthListener />
-         {user ? (
-            <WrappedUserProvider>
-               <CurrencyProvider>
-                  <ExchangeRateProvider>{children}</ExchangeRateProvider>
-               </CurrencyProvider>
-            </WrappedUserProvider>
-         ) : (
-            children
-         )}
-      </ThemeProvider>
+      <html lang="en">
+         <body className={inter.className}>
+            <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+               <Toaster />
+               <ModalProvider />
+               <AuthListener />
+               {user ? (
+                  <WrappedUserProvider>
+                     <CurrencyProvider>
+                        <ExchangeRateProvider>{children}</ExchangeRateProvider>
+                     </CurrencyProvider>
+                  </WrappedUserProvider>
+               ) : (
+                  children
+               )}
+            </ThemeProvider>
+         </body>
+      </html>
    );
 }

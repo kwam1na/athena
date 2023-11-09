@@ -5,7 +5,7 @@ import { captureException } from '@sentry/nextjs';
 import { useEffect, useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
-import { AlertCircle, ArrowLeft, Plus, PlusCircle, Trash } from 'lucide-react';
+import { ArrowLeft, PlusCircle, Trash } from 'lucide-react';
 import {
    category,
    color,
@@ -48,7 +48,6 @@ import {
    CardHeader,
 } from '@/components/ui/card';
 import { cn, formatter } from '@/lib/utils';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useStoreCurrency } from '@/providers/currency-provider';
 import { LoadingButton } from '@/components/ui/loading-button';
 import {
@@ -60,8 +59,10 @@ import useReturnUrl from '@/hooks/use-get-return-url';
 import { TaskAlert } from '@/components/ui/task-alert';
 import useGetBaseStoreUrl from '@/hooks/use-get-base-store-url';
 import { ActionModal } from '@/components/modals/action-modal';
-import { set } from 'date-fns';
 import { ProductsAutosaver } from '../../utils/products-autosaver';
+import { Skeleton } from '@/components/ui/skeleton';
+import { motion } from 'framer-motion';
+import { widgetVariants } from '@/lib/constants';
 
 enum ActionContext {
    NONE,
@@ -131,7 +132,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
    const pathName = usePathname();
    const baseStoreURL = useGetBaseStoreUrl();
 
-   const { storeCurrency } = useStoreCurrency();
+   const { storeCurrency, loading: isLoadingCurrency } = useStoreCurrency();
    const fmt = formatter(storeCurrency);
 
    const [open, setOpen] = useState(false);
@@ -179,7 +180,11 @@ export const ProductForm: React.FC<ProductFormProps> = ({
    const loadingAction = loading ? (initialData ? 'Saving' : 'Creating') : '';
    const buttonText = loading ? loadingAction : action;
 
-   const productAutosaver = new ProductsAutosaver(params.storeId);
+   const entryAction = initialData ? 'edit' : 'new';
+   const productAutosaver = new ProductsAutosaver(params.storeId, entryAction);
+
+   const searchParams = new URLSearchParams(window.location.search);
+   const productName = searchParams.get('query');
 
    const defaultValues: Record<string, any> = initialData
       ? {
@@ -190,7 +195,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
            color_id: initialData.color_id || '',
         }
       : {
-           name: '',
+           name: productName || '',
            //   images: [],
            price: Number('a'),
            cost_per_item: Number('a'),
@@ -233,9 +238,125 @@ export const ProductForm: React.FC<ProductFormProps> = ({
 
    const watchedValues = form.watch();
 
+   const calculateMetrics = (
+      value: number,
+      type: 'price' | 'cpi',
+      opts?: { price: number; cpi: number },
+   ) => {
+      let margin = 0,
+         profit = 0;
+
+      const _price = opts?.price || price;
+      const _cpi = opts?.cpi || costPerItem;
+
+      if (type == 'price') {
+         profit = value - _cpi;
+         margin = (profit / value) * 100;
+      } else {
+         profit = _price - value;
+         margin = (profit / _price) * 100;
+      }
+
+      setProfit(parseFloat(profit.toFixed(2)));
+      setMargin(parseFloat(margin.toFixed(2)));
+   };
+
+   const useAutosavedProduct = () => {
+      const draftProduct = productAutosaver.getAll();
+      console.log('useAutosavedProduct', draftProduct);
+      form.reset(draftProduct);
+      const opts = {
+         price: parseFloat(draftProduct.price),
+         cpi: parseFloat(draftProduct.cost_per_item),
+      };
+      setPrice(parseFloat(draftProduct.price));
+      setCostPerItem(parseFloat(draftProduct.cost_per_item));
+      calculateMetrics(parseFloat(draftProduct.price), 'price', opts);
+      calculateMetrics(parseFloat(draftProduct.cost_per_item), 'cpi', opts);
+      setIsAutosavedModalOpen(false);
+   };
+
+   const promptLeaving = () => {
+      if (hasChanges && initialData) {
+         setActionContext(ActionContext.LEAVING);
+         setOpen(true);
+      } else {
+         const autosavedProduct = productAutosaver.getAll();
+         if (Object.keys(autosavedProduct).length > 0) {
+            toast({
+               title: 'Autosaved',
+            });
+         }
+         router.back();
+      }
+   };
+
+   const promptDeleting = () => {
+      setActionContext(ActionContext.DELETING);
+      setOpen(true);
+   };
+
+   const discardAutosavedProduct = () => {
+      productAutosaver.clearAll();
+      setIsAutosavedModalOpen(false);
+   };
+
+   const autosaveProduct = () => {
+      productAutosaver.save(form.getValues());
+   };
+
+   // const populateProductName = () => {
+   //    const searchParams = new URLSearchParams(window.location.search);
+   //    const productName = searchParams.get('query');
+
+   //    if (productName) {
+   //       console.log('productName', productName);
+   //       form.resetField('name', { defaultValue: productName });
+   //       console.log('values', form.getValues());
+   //    }
+   // };
+
+   // useEffect(() => {
+   //    populateProductName();
+   // }, []);
+
    useEffect(() => {
-      if (productAutosaver.getAll()) {
+      const searchParams = new URLSearchParams(window.location.search);
+      const repopulate = searchParams.get('repopulate');
+
+      if (initialData && !repopulate) {
+         productAutosaver.save(form.getValues());
+      }
+   }, []);
+
+   useEffect(() => {
+      const autosavedProduct = productAutosaver.getAll();
+      if (!initialData && Object.keys(autosavedProduct).length > 0) {
          setIsAutosavedModalOpen(true);
+      }
+
+      if (Object.keys(autosavedProduct).length > 0) {
+         // check if the user was navigated back here from a different page.
+         // if so, populate the fields with the autosaved product
+         const searchParams = new URLSearchParams(window.location.search);
+         const repopulate = searchParams.get('repopulate');
+
+         searchParams.delete('repopulate');
+
+         const urlWithoutParams = window.location.pathname;
+         if (searchParams.toString()) {
+            window.history.replaceState(
+               null,
+               '',
+               `?${searchParams.toString()}`,
+            );
+         } else {
+            window.history.replaceState(null, '', urlWithoutParams);
+         }
+
+         if (repopulate) {
+            useAutosavedProduct();
+         }
       }
    }, []);
 
@@ -250,22 +371,6 @@ export const ProductForm: React.FC<ProductFormProps> = ({
    if (!isMounted) {
       return null;
    }
-
-   const calculateMetrics = (value: number, type: 'price' | 'cpi') => {
-      let margin = 0,
-         profit = 0;
-
-      if (type == 'price') {
-         profit = value - costPerItem;
-         margin = (profit / value) * 100;
-      } else {
-         profit = price - value;
-         margin = (profit / price) * 100;
-      }
-
-      setProfit(parseFloat(profit.toFixed(2)));
-      setMargin(parseFloat(margin.toFixed(2)));
-   };
 
    const getReturnUrl = useReturnUrl(`/inventory/products`);
 
@@ -303,6 +408,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
             title: 'Something went wrong adding this product. Try again.',
          });
       } finally {
+         productAutosaver.clearAll();
          setLoading(false);
       }
    };
@@ -322,6 +428,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
             title: 'Something went wrong deleting this product. Try again.',
          });
       } finally {
+         productAutosaver.clearAll();
          setLoading(false);
          setOpen(false);
       }
@@ -331,6 +438,15 @@ export const ProductForm: React.FC<ProductFormProps> = ({
    const getCurrentRoute = () => {
       const currentURL = new URL(window.location.href);
       return currentURL.pathname;
+   };
+
+   const updateReturnURL = () => {
+      const draftProduct = productAutosaver.getAll();
+
+      if (Object.keys(draftProduct).length > 0) {
+         return `&repopulate=true`;
+      }
+      return '';
    };
 
    const saveReturnUrlIfNeeded = () => {
@@ -373,7 +489,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                   action={{
                      type: 'navigate',
                      ctaText: 'Add category',
-                     route: `${baseStoreURL}/inventory/categories/new?return_url=${pathName}`,
+                     route: `${baseStoreURL}/inventory/categories/new?return_url=${pathName}${updateReturnURL()}`,
                   }}
                />
             )}
@@ -384,7 +500,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                   action={{
                      type: 'navigate',
                      ctaText: 'Add subcategory',
-                     route: `${baseStoreURL}/inventory/subcategories/new?return_url=${pathName}`,
+                     route: `${baseStoreURL}/inventory/subcategories/new?return_url=${pathName}${updateReturnURL()}`,
                   }}
                />
             )}
@@ -400,7 +516,10 @@ export const ProductForm: React.FC<ProductFormProps> = ({
       case ActionContext.LEAVING:
          alertTitle = 'Changes not saved';
          alertDescription = 'Leaving will discard entered data.';
-         actionFn = () => router.back();
+         actionFn = () => {
+            productAutosaver.clearAll();
+            router.back();
+         };
          break;
 
       case ActionContext.DELETING:
@@ -413,37 +532,13 @@ export const ProductForm: React.FC<ProductFormProps> = ({
          break;
    }
 
-   // Trigger these somewhere in your logic
-   const promptLeaving = () => {
-      if (hasChanges) {
-         setActionContext(ActionContext.LEAVING);
-         setOpen(true);
-      } else {
-         router.back();
-      }
-   };
-
-   const promptDeleting = () => {
-      setActionContext(ActionContext.DELETING);
-      setOpen(true);
-   };
-
-   const useAutosavedProduct = () => {
-      setIsAutosavedModalOpen(false);
-   };
-
-   const discardAutosavedProduct = () => {
-      setIsAutosavedModalOpen(false);
-   };
-
-   const autosaveProduct = () => {
-      const draftProduct = productAutosaver.getAll();
-      console.log('autosaved', draftProduct);
-      productAutosaver.save(form.getValues());
-   };
-
    return (
-      <>
+      <motion.div
+         className="space-y-6"
+         variants={widgetVariants}
+         initial="hidden"
+         animate="visible"
+      >
          <ActionModal
             isOpen={isAutosavedModalOpen}
             title="Unfinished product detected"
@@ -590,6 +685,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                                                 parseFloat(e.target.value),
                                                 'cpi',
                                              );
+                                             autosaveProduct();
                                           }}
                                        />
                                     </FormControl>
@@ -603,9 +699,14 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                               <p className="text-sm text-muted-foreground">
                                  Profit
                               </p>
-                              <p className="text-sm">
-                                 {isNaN(profit) ? '--' : fmt.format(profit)}
-                              </p>
+                              {isLoadingCurrency && (
+                                 <Skeleton className="w-[80px] h-[24px]" />
+                              )}
+                              {!isLoadingCurrency && (
+                                 <p className="text-sm">
+                                    {isNaN(profit) ? '--' : fmt.format(profit)}
+                                 </p>
+                              )}
                            </div>
 
                            <div className="grid grid-rows-2">
@@ -633,7 +734,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                                        if (value == 'add-new-category') {
                                           saveReturnUrlIfNeeded();
                                           router.push(
-                                             `${baseStoreURL}/inventory/categories/new?return_url=${pathName}`,
+                                             `${baseStoreURL}/inventory/categories/new?return_url=${pathName}${updateReturnURL()}`,
                                           );
                                        } else {
                                           field.onChange(value);
@@ -689,7 +790,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                                        if (value == 'add-new-subcategory') {
                                           saveReturnUrlIfNeeded();
                                           router.push(
-                                             `${baseStoreURL}/inventory/subcategories/new?return_url=${pathName}`,
+                                             `${baseStoreURL}/inventory/subcategories/new?return_url=${pathName}${updateReturnURL()}`,
                                           );
                                        } else {
                                           field.onChange(value);
@@ -796,7 +897,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                                        if (value == 'add-new-size') {
                                           // saveReturnUrlIfNeeded();
                                           router.push(
-                                             `${baseStoreURL}/inventory/sizes/new?return_url=${pathName}`,
+                                             `${baseStoreURL}/inventory/sizes/new?return_url=${pathName}${updateReturnURL()}`,
                                           );
                                        } else {
                                           field.onChange(value);
@@ -850,7 +951,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                                        if (value == 'add-new-color') {
                                           saveReturnUrlIfNeeded();
                                           router.push(
-                                             `${baseStoreURL}/inventory/colors/new?return_url=${pathName}`,
+                                             `${baseStoreURL}/inventory/colors/new?return_url=${pathName}${updateReturnURL()}`,
                                           );
                                        } else {
                                           field.onChange(value);
@@ -951,6 +1052,6 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                </LoadingButton>
             </form>
          </Form>
-      </>
+      </motion.div>
    );
 };

@@ -12,6 +12,8 @@ import { useState } from 'react';
 import { apiGetMetric } from '@/lib/api/metrics';
 import { set } from 'date-fns';
 import useGetBaseStoreUrl from '@/hooks/use-get-base-store-url';
+import { motion } from 'framer-motion';
+import { widgetVariants } from '@/lib/constants';
 
 interface AverageUnitsPerTransactionWidgetProps {
    averageUnitsPerTransaction?: number;
@@ -44,7 +46,12 @@ export const AverageUnitsPerTransactionWidget: React.FC<
    };
 
    return (
-      <>
+      <motion.div
+         variants={widgetVariants}
+         initial="hidden"
+         animate="visible"
+         className="space-y-8"
+      >
          {!loading && typeof _averageUnitsPerTransaction === 'number' && (
             <Link href={`${baseStoreURL}/transactions`}>
                <MetricCard
@@ -77,6 +84,6 @@ export const AverageUnitsPerTransactionWidget: React.FC<
                <Skeleton className="w-[60%] h-8" />
             </div>
          )}
-      </>
+      </motion.div>
    );
 };

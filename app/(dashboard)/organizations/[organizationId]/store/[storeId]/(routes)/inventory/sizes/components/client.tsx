@@ -25,6 +25,8 @@ import { columns, SizeColumn } from './columns';
 import { useState } from 'react';
 import { DataTableToolbar } from '@/components/ui/data-table-toolbar/products-table-toolbar';
 import useGetBaseStoreUrl from '@/hooks/use-get-base-store-url';
+import { motion } from 'framer-motion';
+import { mainContainerVariants } from '@/lib/constants';
 
 interface SizesClientProps {
    data: SizeColumn[];
@@ -64,7 +66,12 @@ export const SizesClient: React.FC<SizesClientProps> = ({ data }) => {
    });
 
    return (
-      <>
+      <motion.div
+         variants={mainContainerVariants}
+         initial="hidden"
+         animate="visible"
+         className="space-y-8"
+      >
          <div className="flex items-center justify-between">
             <Heading
                title={`Sizes`}
@@ -81,6 +88,6 @@ export const SizesClient: React.FC<SizesClientProps> = ({ data }) => {
          <Separator />
          <DataTableToolbar searchKey="name" table={table} tableKey="sizes" />
          <DataTable columns={columns} table={table} />
-      </>
+      </motion.div>
    );
 };

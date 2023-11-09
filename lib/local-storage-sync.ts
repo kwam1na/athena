@@ -5,6 +5,10 @@ export class LocalStorageSync<T extends { [key: string]: any }> { // Now T is ex
         this.key = key;
     }
 
+    clearAll() {
+        localStorage.removeItem(this.key);
+    }
+
     save(data: T) {
         localStorage.setItem(this.key, JSON.stringify(data));
     }
