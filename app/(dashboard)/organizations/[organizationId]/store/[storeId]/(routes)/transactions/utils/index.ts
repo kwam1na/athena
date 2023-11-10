@@ -69,43 +69,6 @@ export const areSingleTransactionsInSync = (
     return JSON.stringify(a) === JSON.stringify(b);
 };
 
-/**
- * Fetches autosaved transactions for a given store ID.
- * @param storeId - ID of the store.
- * @returns - An array of AutoSavedTransaction objects.
- */
-export const getAutoSavedTransactions = (storeId: string, entryAction: ReportEntryAction) => {
-    const draftTransactions = getLocallySavedTransactions(storeId, entryAction);
-    let transactions: AutoSavedTransaction[] = [];
-
-    if (Object.keys(draftTransactions).length > 0) {
-        transactions = Object.keys(draftTransactions).map((transactionId) => {
-            let transactionDate: Date | undefined,
-                reportTitle: string | undefined;
-            const transactionItems = draftTransactions[transactionId];
-            const items = Object.keys(transactionItems).map((key) => {
-                if (!transactionDate) {
-                    transactionDate = new Date(
-                        transactionItems[key].transaction_date,
-                    );
-                }
-
-                if (!reportTitle) {
-                    reportTitle = transactionItems[key].transaction_report_title;
-                }
-                return keysToCamelCase(transactionItems[key]);
-            });
-            return {
-                id: transactionId,
-                reportTitle,
-                transactionItems: items,
-                transactionDate,
-            };
-        });
-    }
-
-    return transactions;
-};
 
 /**
  * Gets the title for an autosaved report.
@@ -119,45 +82,6 @@ export const getAutosavedReportTitle = (id: string, reportDate?: Date) => {
         'MMM_d_yyyy',
     )}_${id.split('-')[1]}`;
 };
-
-/**
- * Generates a local storage key for draft transactions using a store ID.
- * @param storeId - ID of the store.
- * @returns - The generated key.
- */
-export const getDraftsLocalStorageKey = (storeId: string) => {
-    return `transactions-${storeId}`;
-};
-
-/**
- * Generates a local storage key for transactions being edited using a store ID.
- * @param storeId - ID of the store.
- * @returns - The generated key.
- */
-export const getEditsLocalStorageKey = (storeId: string) => {
-    return `transactions-editing-${storeId}`;
-};
-
-/**
- * Fetches draft transactions for a given store ID.
- * @param storeId - ID of the store.
- * @returns - Object containing draft transactions.
- */
-export const getLocallySavedTransactions = (storeId: string, entryAction: ReportEntryAction): Record<string, any> => {
-    const key = entryAction == 'new' ? getDraftsLocalStorageKey(storeId) : getEditsLocalStorageKey(storeId);
-    return JSON.parse(localStorage.getItem(key) || '{}');
-};
-
-/**
- * Fetches a specific draft transaction.
- * @param storeId - ID of the store.
- * @param transactionId - ID of the transaction.
- * @returns - Object containing the draft transaction.
- */
-export const getLocallySavedTransaction = (storeId: string, entryAction: ReportEntryAction, transactionId: string): Record<string, any> => {
-    const transactions = getLocallySavedTransactions(storeId, entryAction)
-    return transactions[transactionId]
-}
 
 /**
  * Calculates the total sales from an array of TransactionItems.
@@ -227,44 +151,6 @@ export const getCategorySalesAndUnits = (items: TransactionItem[]): Record<strin
 
     return categoryData;
 };
-
-
-/**
- * Removes a specific draft transaction from local storage.
- * @param storeId - ID of the store.
- * @param transactionId - ID of the transaction.
- */
-export const removeLocallySavedTransaction = (storeId: string, entryAction: ReportEntryAction, transactionId: string) => {
-    const key = entryAction == 'new' ? getDraftsLocalStorageKey(storeId) : getEditsLocalStorageKey(storeId);
-    const draftTransactions = getLocallySavedTransactions(storeId, entryAction);
-    delete draftTransactions[transactionId];
-    saveItemInLocalStorage(key, draftTransactions);
-};
-
-/**
- * Saves an item in local storage.
- * @param key - The local storage key.
- * @param data - Data to be saved.
- */
-export const saveItemInLocalStorage = (key: string, data: Record<string, any>) => {
-    localStorage.setItem(key, JSON.stringify(data))
-}
-
-/**
- * Updates draft transactions in local storage.
- * @param storeId - ID of the store.
- * @param transactionId - ID of the transaction.
- * @param updatedTransaction - The updated transaction data.
- */
-export const updateLocallySavedTransaction = (storeId: string, entryAction: ReportEntryAction, transactionId: string, updatedTransaction: Record<string, any>) => {
-    const transactions = getLocallySavedTransactions(storeId, entryAction)
-    transactions[transactionId] = updatedTransaction
-    const key = entryAction == 'new' ? getDraftsLocalStorageKey(storeId) : getEditsLocalStorageKey(storeId);
-    localStorage.setItem(key, JSON.stringify(transactions))
-}
-
-
-
 
 
 

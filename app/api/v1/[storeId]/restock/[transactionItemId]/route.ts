@@ -1,8 +1,6 @@
-import { createSupabaseServerClient } from "@/app/api/utils";
 import prismadb from "@/lib/prismadb";
-import { getSession } from "@auth0/nextjs-auth0";
-// import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
-import { cookies } from "next/headers";
+import { cookies } from 'next/headers';
+import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextRequest, NextResponse } from "next/server";
 
 export async function DELETE(
@@ -10,7 +8,24 @@ export async function DELETE(
     { params }: { params: { storeId: string, transactionItemId: string } }
 ) {
     try {
-        const supabase = createSupabaseServerClient();
+        const cookieStore = cookies();
+        const supabase = createServerClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+            process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+            {
+                cookies: {
+                    get(name: string) {
+                        return cookieStore.get(name)?.value;
+                    },
+                    set(name: string, value: string, options: CookieOptions) {
+                        cookieStore.set({ name, value, ...options });
+                    },
+                    remove(name: string, options: CookieOptions) {
+                        cookieStore.set({ name, value: '', ...options });
+                    },
+                },
+            },
+        );
         const {
             data: { session },
         } = await supabase.auth.getSession()

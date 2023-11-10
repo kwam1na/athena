@@ -4,10 +4,8 @@ import { getTotalGrossRevenue } from "@/actions/get-total-gross-revenue";
 import { getTotalNetRevenue } from "@/actions/get-total-net-revenue";
 import { getTotalUnitsSoldForStore } from "@/actions/get-total-units";
 import { getAverageTransactionValue, getAverageUnitsPerTransaction } from "@/actions/get-transactions-metrics";
-import { createSupabaseServerClient } from "@/app/api/utils";
-import { getSession } from "@auth0/nextjs-auth0";
-// import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
-import { cookies } from "next/headers";
+import { cookies } from 'next/headers';
+import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(
@@ -18,8 +16,24 @@ export async function GET(
         const { searchParams } = new URL(req.url);
         const metric = searchParams.get('metric') || undefined;
 
-        const res = new NextResponse();
-        const supabase = createSupabaseServerClient();
+        const cookieStore = cookies();
+        const supabase = createServerClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+            process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+            {
+                cookies: {
+                    get(name: string) {
+                        return cookieStore.get(name)?.value;
+                    },
+                    set(name: string, value: string, options: CookieOptions) {
+                        cookieStore.set({ name, value, ...options });
+                    },
+                    remove(name: string, options: CookieOptions) {
+                        cookieStore.set({ name, value: '', ...options });
+                    },
+                },
+            },
+        );
         const {
             data: { session },
         } = await supabase.auth.getSession()

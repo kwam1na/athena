@@ -32,6 +32,8 @@ import {
 } from '@/lib/api/colors';
 import useReturnUrl from '@/hooks/use-get-return-url';
 import useGetBaseStoreUrl from '@/hooks/use-get-base-store-url';
+import { motion } from 'framer-motion';
+import { widgetVariants } from '@/lib/constants';
 
 const formSchema = z.object({
    name: z.string().min(2),
@@ -121,7 +123,12 @@ export const ColorForm: React.FC<ColorFormProps> = ({ initialData }) => {
    };
 
    return (
-      <>
+      <motion.div
+         className="space-y-6"
+         variants={widgetVariants}
+         initial="hidden"
+         animate="visible"
+      >
          <AlertModal
             isOpen={open}
             onClose={() => setOpen(false)}
@@ -209,6 +216,6 @@ export const ColorForm: React.FC<ColorFormProps> = ({ initialData }) => {
                </LoadingButton>
             </form>
          </Form>
-      </>
+      </motion.div>
    );
 };

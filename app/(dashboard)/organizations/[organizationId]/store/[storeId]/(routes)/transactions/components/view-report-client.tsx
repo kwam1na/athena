@@ -57,6 +57,8 @@ import {
 } from '@/types/transactions';
 import { MetricCard } from '@/components/ui/metric-card';
 import useGetBaseStoreUrl from '@/hooks/use-get-base-store-url';
+import { motion } from 'framer-motion';
+import { widgetVariants } from '@/lib/constants';
 
 interface TransactionsReportClientProps {
    fetchedTransaction?: Transaction;
@@ -241,7 +243,12 @@ export const ViewReportClient: React.FC<TransactionsReportClientProps> = ({
    };
 
    return (
-      <>
+      <motion.div
+         className="space-y-6"
+         variants={widgetVariants}
+         initial="hidden"
+         animate="visible"
+      >
          <div className="flex flex-col space-y-6">
             <div className="flex">
                <Button variant={'outline'} onClick={() => router.back()}>
@@ -313,6 +320,6 @@ export const ViewReportClient: React.FC<TransactionsReportClientProps> = ({
                </div>
             )}
          </div>
-      </>
+      </motion.div>
    );
 };

@@ -21,10 +21,20 @@ const SettingsPage = async ({ params }: { params: { storeId: string } }) => {
       },
    );
 
-   const {
-      data: { session },
-   } = await supabase.auth.getSession();
-   const user = session?.user;
+   let user;
+   try {
+      const {
+         data: { session },
+      } = await supabase.auth.getSession();
+      user = session?.user;
+   } catch (error) {
+      redirect('/auth');
+   }
+
+   // const {
+   //    data: { session },
+   // } = await supabase.auth.getSession();
+   // const user = session?.user;
 
    if (!user) {
       redirect('/auth');

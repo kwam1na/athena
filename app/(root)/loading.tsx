@@ -1,13 +1,7 @@
-'use client';
-
-import { Loader } from '@/components/ui/loader';
+import AppSkeleton from '@/components/states/loading/app-skeleton';
 
 const Loading = () => {
-    return (
-        <div className="flex h-full w-full items-center justify-center">
-            <Loader />
-        </div>
-    );
+   return <AppSkeleton />;
 };
 
 export default Loading;

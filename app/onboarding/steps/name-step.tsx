@@ -17,7 +17,7 @@ export const NameStep: React.FC<NameStepProps> = ({
       <>
          <div className="space-y-4">
             <h1 className="text-3xl text-left">
-               Welcome to athena: Let's get started
+               Welcome to athena. Let's get started.
             </h1>
          </div>
          <div className="flex flex-col gap-4 w-[60%]">

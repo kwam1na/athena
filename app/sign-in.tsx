@@ -21,6 +21,7 @@ import Cookies from 'js-cookie';
 import { useRouter } from 'next/navigation';
 import { apiGetUser } from '@/lib/api/users';
 import { Button } from '@/components/ui/button';
+import axios from 'axios';
 
 const formSchema = z.object({
    email: z.string().email(),
@@ -68,8 +69,7 @@ export const SignIn: React.FC<SignInProps> = ({ setIsSignUp }) => {
          });
 
          if (error) {
-            // captureException(error);
-            console.log(error);
+            captureException(error);
             toast({
                title: (error as any).message,
             });
@@ -78,24 +78,19 @@ export const SignIn: React.FC<SignInProps> = ({ setIsSignUp }) => {
 
          const { user, session } = data;
          if (session) {
-            // Calculate time left in seconds
-            const expires_in =
-               (session.expires_at! - Math.floor(Date.now() / 1000)) / 3600;
-
-            console.log('expires in', expires_in);
-
-            // Save the tokens using js-cookie
-            Cookies.set('access_token', session.access_token, {
-               expires: expires_in / 3600,
-            });
-            Cookies.set('refresh_token', session.refresh_token, {
-               expires: 30,
-            }); // Expires in 30 days
+            try {
+               const { access_token, refresh_token } = session;
+               await axios.post('/api/v1/update-tokens', {
+                  access_token,
+                  refresh_token,
+               });
+            } catch (error) {
+               console.error((error as Error).message);
+            }
          }
 
          if (user) {
             const data = await apiGetUser();
-            console.log(data);
 
             if (data) {
                if (data.is_onboarded) {
@@ -108,7 +103,6 @@ export const SignIn: React.FC<SignInProps> = ({ setIsSignUp }) => {
 
             if (error) {
                captureException(error);
-               // Handle the error as you see fit
             }
          }
       } catch (error: any) {

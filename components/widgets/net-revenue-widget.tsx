@@ -12,7 +12,8 @@ import { DollarSign, RotateCcw } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useState } from 'react';
-
+import { motion } from 'framer-motion';
+import { widgetVariants } from '@/lib/constants';
 interface NetRevenueWidgetProps {
    netRevenue?: number;
    percentageChange?: number;
@@ -46,7 +47,12 @@ export const NetRevenueWidget: React.FC<NetRevenueWidgetProps> = ({
    };
 
    return (
-      <>
+      <motion.div
+         variants={widgetVariants}
+         initial="hidden"
+         animate="visible"
+         className="space-y-8"
+      >
          {typeof _netRevenue === 'number' && !loading && !isCurrencyLoading && (
             <Link href={`${baseStoreURL}/transactions`}>
                <MetricCard
@@ -78,6 +84,6 @@ export const NetRevenueWidget: React.FC<NetRevenueWidgetProps> = ({
                <Skeleton className="w-[60%] h-8" />
             </div>
          )}
-      </>
+      </motion.div>
    );
 };

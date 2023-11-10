@@ -25,6 +25,8 @@ import { columns, ColorColumn } from './columns';
 import { useState } from 'react';
 import { DataTableToolbar } from '@/components/ui/data-table-toolbar/products-table-toolbar';
 import useGetBaseStoreUrl from '@/hooks/use-get-base-store-url';
+import { motion } from 'framer-motion';
+import { mainContainerVariants } from '@/lib/constants';
 
 interface ColorClientProps {
    data: ColorColumn[];
@@ -65,7 +67,12 @@ export const ColorClient: React.FC<ColorClientProps> = ({ data }) => {
    });
 
    return (
-      <>
+      <motion.div
+         variants={mainContainerVariants}
+         initial="hidden"
+         animate="visible"
+         className="space-y-8"
+      >
          <div className="flex items-center justify-between">
             <Heading
                title={`Colors`}
@@ -82,6 +89,6 @@ export const ColorClient: React.FC<ColorClientProps> = ({ data }) => {
          <Separator />
          <DataTableToolbar searchKey="name" tableKey="colors" table={table} />
          <DataTable columns={columns} table={table} />
-      </>
+      </motion.div>
    );
 };

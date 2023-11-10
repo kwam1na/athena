@@ -1,19 +1,9 @@
 'use client';
 
-import usePageLoading from 'next/app';
+import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { LoadingButton } from '@/components/ui/loading-button';
 import { Progress } from '@/components/ui/progress';
-import {
-   SelectTrigger,
-   Select,
-   SelectValue,
-   SelectContent,
-   SelectItem,
-} from '@/components/ui/select';
-import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/components/ui/use-toast';
 import {
    apiCreateOrganization,
@@ -21,12 +11,10 @@ import {
 } from '@/lib/api/organizations';
 import { apiCreateStore } from '@/lib/api/stores';
 import { apiUpdateUser } from '@/lib/api/users';
-import { currencies } from '@/lib/constants';
 import { ServiceError } from '@/lib/error';
 import { captureException } from '@sentry/nextjs';
 import { ArrowLeft, ArrowRight } from 'lucide-react';
-import { ChangeEvent, useEffect, useState } from 'react';
-import { set } from 'date-fns';
+import { useState } from 'react';
 import { useOnboarding } from '@/hooks/use-onboarding-state';
 import { NameStep } from './steps/name-step';
 import { OrganizationStep } from './steps/organization-step';
@@ -199,6 +187,12 @@ export default function Onboarding() {
             />
          ),
          onProceed: saveName,
+         blurb: (
+            <p className="text-3xl leading-relaxed self-center my-auto">
+               Knowing your name helps us personalize your experience. What
+               should we call you?
+            </p>
+         ),
       },
       {
          title: 'Organization',
@@ -213,6 +207,14 @@ export default function Onboarding() {
             />
          ),
          onProceed: saveOrganizationName,
+         blurb: (
+            <p className="text-3xl leading-relaxed self-center my-auto">
+               Think of your organization as your brand's main identity. It
+               could be your company name, a holding entity, or a larger group.
+               Choose a name that represents the umbrella for all your business
+               activities. (You can update this later.)
+            </p>
+         ),
       },
       {
          title: 'Store',
@@ -228,26 +230,105 @@ export default function Onboarding() {
             />
          ),
          onProceed: saveStoreName,
+         blurb: (
+            <p className="text-3xl leading-relaxed self-center my-auto">
+               Stores are the individual marketplaces where your products meet
+               your customers. They sit under the organization's umbrella, each
+               with its unique brand and identity, yet unified by your
+               overarching business strategy.
+            </p>
+         ),
       },
    ];
+
+   const containerVariants = {
+      hidden: {
+         opacity: 0,
+         y: 16,
+      },
+      visible: {
+         opacity: 1,
+         y: 0,
+         transition: {
+            type: 'easeIn',
+            duration: 0.8,
+         },
+      },
+   };
+
+   const buttonVariants = {
+      hidden: {
+         opacity: 0,
+         x: -24,
+      },
+      visible: {
+         opacity: 1,
+         x: 0,
+         transition: {
+            type: 'easeIn',
+            duration: 0.5,
+            delay: 0.9,
+         },
+      },
+   };
+
+   const blurbVariants = {
+      hidden: {
+         opacity: 0,
+         y: 8,
+      },
+      visible: {
+         opacity: 1,
+         y: 0,
+         transition: {
+            type: 'easeIn',
+            duration: 0.7,
+            delay: 0.9,
+         },
+      },
+   };
 
    return (
       <div className="flex h-full">
          <div className="flex flex-col h-full w-[50%] justify-center gap-8 px-16">
-            {steps[currentStep].component}
-            <Buttons onProceed={steps[currentStep].onProceed} />
+            <motion.div
+               variants={containerVariants}
+               key={`container-${currentStep}`}
+               initial="hidden"
+               animate="visible"
+               className="space-y-8"
+            >
+               {steps[currentStep].component}
+            </motion.div>
+            <motion.div
+               variants={buttonVariants}
+               key={`button-${currentStep}`}
+               initial="hidden"
+               animate="visible"
+            >
+               <Buttons onProceed={steps[currentStep].onProceed} />
+            </motion.div>
          </div>
 
-         <div className="flex w-[50%] items-end p-32 bg-card h-full">
-            <div className="flex flex-col gap-4 w-full">
-               <Progress
-                  className="bg-background"
-                  value={((currentStep + 1) / state.TOTAL_STEPS) * 100}
-               />
-               <p className="text-muted-foreground text-sm ml-auto">
-                  {`Step ${currentStep + 1} of ${state.TOTAL_STEPS}`}
-               </p>
-            </div>
+         <div className="flex w-[50%] p-32 bg-card">
+            <motion.div
+               className="flex flex-col justify-between w-full h-full"
+               variants={blurbVariants}
+               key={`blurb-${currentStep}`}
+               initial="hidden"
+               animate="visible"
+            >
+               {steps[currentStep].blurb}
+               <div className="flex flex-col gap-4 w-full">
+                  <Progress
+                     className="bg-background"
+                     value={((currentStep + 1) / state.TOTAL_STEPS) * 100}
+                  />
+                  <p className="text-muted-foreground text-sm ml-auto">
+                     {`Step ${currentStep + 1} of ${state.TOTAL_STEPS}`}
+                  </p>
+               </div>
+            </motion.div>
          </div>
       </div>
    );

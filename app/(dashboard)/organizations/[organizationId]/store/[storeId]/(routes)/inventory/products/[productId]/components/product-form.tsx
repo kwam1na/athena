@@ -1,11 +1,11 @@
 'use client';
 
 import * as z from 'zod';
-import { captureException } from '@sentry/nextjs';
+import { captureException, init } from '@sentry/nextjs';
 import { useEffect, useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
-import { AlertCircle, ArrowLeft, Plus, PlusCircle, Trash } from 'lucide-react';
+import { ArrowLeft, PlusCircle, Trash } from 'lucide-react';
 import {
    category,
    color,
@@ -48,7 +48,6 @@ import {
    CardHeader,
 } from '@/components/ui/card';
 import { cn, formatter } from '@/lib/utils';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useStoreCurrency } from '@/providers/currency-provider';
 import { LoadingButton } from '@/components/ui/loading-button';
 import {
@@ -59,6 +58,11 @@ import {
 import useReturnUrl from '@/hooks/use-get-return-url';
 import { TaskAlert } from '@/components/ui/task-alert';
 import useGetBaseStoreUrl from '@/hooks/use-get-base-store-url';
+import { ActionModal } from '@/components/modals/action-modal';
+import { ProductsAutosaver } from '../../utils/products-autosaver';
+import { Skeleton } from '@/components/ui/skeleton';
+import { motion } from 'framer-motion';
+import { widgetVariants } from '@/lib/constants';
 
 enum ActionContext {
    NONE,
@@ -128,12 +132,23 @@ export const ProductForm: React.FC<ProductFormProps> = ({
    const pathName = usePathname();
    const baseStoreURL = useGetBaseStoreUrl();
 
-   const { storeCurrency } = useStoreCurrency();
+   const { storeCurrency, loading: isLoadingCurrency } = useStoreCurrency();
    const fmt = formatter(storeCurrency);
 
    const [open, setOpen] = useState(false);
    const [loading, setLoading] = useState(false);
+   const [isAutosavedModalOpen, setIsAutosavedModalOpen] = useState(false);
    const [isMounted, setIsMounted] = useState(false);
+   const [validSubcategories, setValidSubcategories] = useState<subcategory[]>(
+      initialData
+         ? subcategories.filter(
+              (subcategory) =>
+                 subcategory.category_id === initialData.category_id ||
+                 subcategory.id === 'add-new-subcategory',
+           )
+         : subcategories,
+   );
+   const [invalidatedSubcategory, setInvalidatedSubcategory] = useState(false);
 
    let initialProfit: number | undefined,
       initialMargin: number | undefined,
@@ -175,16 +190,25 @@ export const ProductForm: React.FC<ProductFormProps> = ({
    const loadingAction = loading ? (initialData ? 'Saving' : 'Creating') : '';
    const buttonText = loading ? loadingAction : action;
 
+   const entryAction = initialData ? 'edit' : 'new';
+   const productAutosaver = new ProductsAutosaver(params.storeId, entryAction);
+
+   const searchParams = new URLSearchParams(window.location.search);
+   const productName = searchParams.get('query');
+
    const defaultValues: Record<string, any> = initialData
       ? {
            ...initialData,
            price: parseFloat(String(initialData?.price)),
            cost_per_item: parseFloat(String(initialData?.cost_per_item)),
+           subcategory_id: invalidatedSubcategory
+              ? ''
+              : initialData.subcategory_id,
            size_id: initialData.size_id || '',
            color_id: initialData.color_id || '',
         }
       : {
-           name: '',
+           name: productName || '',
            //   images: [],
            price: Number('a'),
            cost_per_item: Number('a'),
@@ -204,10 +228,6 @@ export const ProductForm: React.FC<ProductFormProps> = ({
 
    const hasFormChanged = (formValues: any) => {
       return Object.keys(defaultValues).some((key) => {
-         // if (formValues[key] !== defaultValues[key]) {
-         //    console.log('different:', key);
-         //    console.log('different:', formValues[key], defaultValues[key]);
-         // }
          if (
             (Number.isNaN(formValues[key]) &&
                Number.isNaN(defaultValues[key])) ||
@@ -231,6 +251,137 @@ export const ProductForm: React.FC<ProductFormProps> = ({
 
    const watchedValues = form.watch();
 
+   const calculateMetrics = (
+      value: number,
+      type: 'price' | 'cpi',
+      opts?: { price: number; cpi: number },
+   ) => {
+      let margin = 0,
+         profit = 0;
+
+      const _price = opts?.price || price;
+      const _cpi = opts?.cpi || costPerItem;
+
+      if (type == 'price') {
+         profit = value - _cpi;
+         margin = (profit / value) * 100;
+      } else {
+         profit = _price - value;
+         margin = (profit / _price) * 100;
+      }
+
+      setProfit(parseFloat(profit.toFixed(2)));
+      setMargin(parseFloat(margin.toFixed(2)));
+   };
+
+   const useAutosavedProduct = () => {
+      const draftProduct = productAutosaver.getAll();
+      form.reset(draftProduct);
+
+      setValidSubcategories(
+         subcategories.filter(
+            (subcategory) =>
+               subcategory.category_id == draftProduct.category_id ||
+               subcategory.id == 'add-new-subcategory',
+         ),
+      );
+
+      const opts = {
+         price: parseFloat(draftProduct.price),
+         cpi: parseFloat(draftProduct.cost_per_item),
+      };
+      setPrice(parseFloat(draftProduct.price));
+      setCostPerItem(parseFloat(draftProduct.cost_per_item));
+      calculateMetrics(parseFloat(draftProduct.price), 'price', opts);
+      calculateMetrics(parseFloat(draftProduct.cost_per_item), 'cpi', opts);
+      setIsAutosavedModalOpen(false);
+   };
+
+   const promptLeaving = () => {
+      if (hasChanges && initialData) {
+         setActionContext(ActionContext.LEAVING);
+         setOpen(true);
+      } else {
+         const autosavedProduct = productAutosaver.getAll();
+         if (Object.keys(autosavedProduct).length > 0) {
+            toast({
+               title: 'Autosaved',
+            });
+         }
+         router.back();
+      }
+   };
+
+   const promptDeleting = () => {
+      setActionContext(ActionContext.DELETING);
+      setOpen(true);
+   };
+
+   const discardAutosavedProduct = () => {
+      productAutosaver.clearAll();
+      setIsAutosavedModalOpen(false);
+   };
+
+   const autosaveProduct = () => {
+      productAutosaver.save(form.getValues());
+   };
+
+   const saveReturnUrlToLocalStorage = () => {
+      const url = window.location.href;
+      const urlObj = new URL(url);
+      const pathname = urlObj.pathname;
+      let return_url = urlObj.searchParams.get('return_url');
+
+      // If return_url exists, append the remaining query params to it
+      if (return_url) {
+         urlObj.searchParams.delete('return_url');
+
+         const remainingQueryParams = urlObj.searchParams.toString();
+         return_url +=
+            (return_url.includes('?') ? '&' : '?') + remainingQueryParams;
+      }
+
+      localStorage.setItem(pathname, JSON.stringify({ return_url }));
+      autosaveProduct();
+   };
+
+   useEffect(() => {
+      const autosavedProduct = productAutosaver.getAll();
+      if (!initialData && Object.keys(autosavedProduct).length > 0) {
+         setIsAutosavedModalOpen(true);
+      }
+
+      const searchParams = new URLSearchParams(window.location.search);
+      const repopulate = searchParams.get('repopulate');
+
+      searchParams.delete('repopulate');
+
+      if (initialData && !repopulate) {
+         productAutosaver.save(form.getValues());
+      }
+
+      if (Object.keys(autosavedProduct).length > 0) {
+         const urlWithoutParams = window.location.pathname;
+         if (searchParams.toString()) {
+            window.history.replaceState(
+               null,
+               '',
+               `?${searchParams.toString()}`,
+            );
+         } else {
+            window.history.replaceState(null, '', urlWithoutParams);
+         }
+
+         if (repopulate) {
+            useAutosavedProduct();
+         }
+      }
+   }, []);
+
+   useEffect(() => {
+      if (!localStorage.getItem(pathName)) saveReturnUrlToLocalStorage();
+   }, []);
+
    useEffect(() => {
       setHasChanges(hasFormChanged(watchedValues));
    }, [watchedValues]);
@@ -243,22 +394,6 @@ export const ProductForm: React.FC<ProductFormProps> = ({
       return null;
    }
 
-   const calculateMetrics = (value: number, type: 'price' | 'cpi') => {
-      let margin = 0,
-         profit = 0;
-
-      if (type == 'price') {
-         profit = value - costPerItem;
-         margin = (profit / value) * 100;
-      } else {
-         profit = price - value;
-         margin = (profit / price) * 100;
-      }
-
-      setProfit(parseFloat(profit.toFixed(2)));
-      setMargin(parseFloat(margin.toFixed(2)));
-   };
-
    const getReturnUrl = useReturnUrl(`/inventory/products`);
 
    const onSubmit = async (data: ProductFormValues) => {
@@ -266,10 +401,24 @@ export const ProductForm: React.FC<ProductFormProps> = ({
          ...data,
          size_id: data.size_id == 'blank-id' ? null : data.size_id,
          color_id: data.color_id == 'blank-id' ? null : data.color_id,
-         organization_id: params.organizationId,
+         organization_id: parseInt(params.organizationId),
       };
 
-      const returnUrl = getReturnUrl();
+      let returnUrl = getReturnUrl();
+      const { return_url } = JSON.parse(localStorage.getItem(pathName) || '{}');
+
+      if (return_url && returnUrl != return_url) {
+         returnUrl = return_url;
+      }
+
+      console.log('invalidated subcategory', invalidatedSubcategory);
+      if (invalidatedSubcategory) {
+         form.setError('subcategory_id', {
+            type: 'custom',
+            message: 'Please select a subcategory.',
+         });
+         return;
+      }
 
       try {
          setLoading(true);
@@ -295,6 +444,8 @@ export const ProductForm: React.FC<ProductFormProps> = ({
             title: 'Something went wrong adding this product. Try again.',
          });
       } finally {
+         productAutosaver.clearAll();
+         localStorage.removeItem(pathName);
          setLoading(false);
       }
    };
@@ -314,40 +465,22 @@ export const ProductForm: React.FC<ProductFormProps> = ({
             title: 'Something went wrong deleting this product. Try again.',
          });
       } finally {
+         productAutosaver.clearAll();
          setLoading(false);
          setOpen(false);
       }
    };
 
-   // Helper function to get the current route without search parameters
-   const getCurrentRoute = () => {
-      const currentURL = new URL(window.location.href);
-      return currentURL.pathname;
-   };
+   const updateReturnURL = () => {
+      const draftProduct = productAutosaver.getAll();
 
-   const saveReturnUrlIfNeeded = () => {
-      const currentURL = new URL(window.location.href);
-      const currentReturnURL = currentURL.searchParams.get('return_url');
-
-      // If a return_url is found and no originalReturnURL is set, save it to session storage.
-      if (currentReturnURL && !sessionStorage.getItem('originalReturnURL')) {
-         sessionStorage.setItem('originalReturnURL', currentReturnURL);
+      if (Object.keys(draftProduct).length > 0) {
+         return `&repopulate=true`;
       }
+      return '';
    };
-
-   // useEffect(() => {
-   //    // console.log('back here..');
-   //    const originalReturnURL = sessionStorage.getItem('originalReturnURL');
-
-   //    if (originalReturnURL) {
-   //       sessionStorage.removeItem('originalReturnURL'); // Clear after use
-   //       console.log('originalReturnURL:', originalReturnURL);
-   //    }
-   // }, []);
 
    const Alerts = () => {
-      saveReturnUrlIfNeeded();
-
       const hasAddedCategory = !(
          categories.length == 1 && categories[0].id == 'add-new-category'
       );
@@ -365,7 +498,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                   action={{
                      type: 'navigate',
                      ctaText: 'Add category',
-                     route: `${baseStoreURL}/inventory/categories/new?return_url=${pathName}`,
+                     route: `${baseStoreURL}/inventory/categories/new?return_url=${pathName}${updateReturnURL()}`,
                   }}
                />
             )}
@@ -376,7 +509,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                   action={{
                      type: 'navigate',
                      ctaText: 'Add subcategory',
-                     route: `${baseStoreURL}/inventory/subcategories/new?return_url=${pathName}`,
+                     route: `${baseStoreURL}/inventory/subcategories/new?return_url=${pathName}${updateReturnURL()}`,
                   }}
                />
             )}
@@ -392,7 +525,10 @@ export const ProductForm: React.FC<ProductFormProps> = ({
       case ActionContext.LEAVING:
          alertTitle = 'Changes not saved';
          alertDescription = 'Leaving will discard entered data.';
-         actionFn = () => router.back();
+         actionFn = () => {
+            productAutosaver.clearAll();
+            router.back();
+         };
          break;
 
       case ActionContext.DELETING:
@@ -405,23 +541,21 @@ export const ProductForm: React.FC<ProductFormProps> = ({
          break;
    }
 
-   // Trigger these somewhere in your logic
-   const promptLeaving = () => {
-      if (hasChanges) {
-         setActionContext(ActionContext.LEAVING);
-         setOpen(true);
-      } else {
-         router.back();
-      }
-   };
-
-   const promptDeleting = () => {
-      setActionContext(ActionContext.DELETING);
-      setOpen(true);
-   };
-
    return (
-      <>
+      <motion.div
+         className="space-y-6"
+         variants={widgetVariants}
+         initial="hidden"
+         animate="visible"
+      >
+         <ActionModal
+            isOpen={isAutosavedModalOpen}
+            title="Unfinished product detected"
+            description="You were previously creating a product. Do you want to continue editing it or start over?"
+            declineText="Discard"
+            onConfirm={() => useAutosavedProduct()}
+            onClose={discardAutosavedProduct}
+         />
          <AlertModal
             isOpen={open}
             onClose={() => {
@@ -434,15 +568,16 @@ export const ProductForm: React.FC<ProductFormProps> = ({
             loading={loading}
          />
          <div className="flex flex-col space-y-6">
-            <div>
+            <div className="flex space-x-4">
                <Button variant={'outline'} onClick={promptLeaving}>
                   <ArrowLeft className="mr-2 h-4 w-4" />
                </Button>
+               <Heading title={title} description={description} />
             </div>
             <Alerts />
          </div>
          <div className="flex items-center justify-between">
-            <Heading title={title} description={description} />
+            {/* <Heading title={title} description={description} /> */}
             {initialData && (
                <Button
                   disabled={loading}
@@ -453,7 +588,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                </Button>
             )}
          </div>
-         <Separator />
+         {/* <Separator /> */}
          <Form {...form}>
             <form
                onSubmit={form.handleSubmit(onSubmit)}
@@ -499,6 +634,10 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                                        disabled={loading}
                                        placeholder="Product name"
                                        {...field}
+                                       onChange={(e) => {
+                                          field.onChange(e);
+                                          autosaveProduct();
+                                       }}
                                     />
                                  </FormControl>
                                  <FormMessage />
@@ -527,6 +666,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                                                 parseFloat(e.target.value),
                                                 'price',
                                              );
+                                             autosaveProduct();
                                           }}
                                        />
                                     </FormControl>
@@ -555,6 +695,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                                                 parseFloat(e.target.value),
                                                 'cpi',
                                              );
+                                             autosaveProduct();
                                           }}
                                        />
                                     </FormControl>
@@ -568,9 +709,14 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                               <p className="text-sm text-muted-foreground">
                                  Profit
                               </p>
-                              <p className="text-sm">
-                                 {isNaN(profit) ? '--' : fmt.format(profit)}
-                              </p>
+                              {isLoadingCurrency && (
+                                 <Skeleton className="w-[80px] h-[24px]" />
+                              )}
+                              {!isLoadingCurrency && (
+                                 <p className="text-sm">
+                                    {isNaN(profit) ? '--' : fmt.format(profit)}
+                                 </p>
+                              )}
                            </div>
 
                            <div className="grid grid-rows-2">
@@ -596,12 +742,27 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                                     disabled={loading}
                                     onValueChange={(value: string) => {
                                        if (value == 'add-new-category') {
-                                          saveReturnUrlIfNeeded();
                                           router.push(
-                                             `${baseStoreURL}/inventory/categories/new?return_url=${pathName}`,
+                                             `${baseStoreURL}/inventory/categories/new?return_url=${pathName}${updateReturnURL()}`,
                                           );
                                        } else {
                                           field.onChange(value);
+                                          form.resetField('subcategory_id');
+
+                                          if (initialData) {
+                                             setInvalidatedSubcategory(true);
+                                          }
+
+                                          setValidSubcategories(
+                                             subcategories.filter(
+                                                (subcategory) =>
+                                                   subcategory.category_id ==
+                                                      value ||
+                                                   subcategory.id ==
+                                                      'add-new-subcategory',
+                                             ),
+                                          );
+                                          autosaveProduct();
                                        }
                                     }}
                                     value={field.value}
@@ -651,12 +812,19 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                                     disabled={loading}
                                     onValueChange={(value: string) => {
                                        if (value == 'add-new-subcategory') {
-                                          saveReturnUrlIfNeeded();
                                           router.push(
-                                             `${baseStoreURL}/inventory/subcategories/new?return_url=${pathName}`,
+                                             `${baseStoreURL}/inventory/subcategories/new?return_url=${pathName}${updateReturnURL()}`,
                                           );
                                        } else {
                                           field.onChange(value);
+                                          autosaveProduct();
+
+                                          if (
+                                             initialData &&
+                                             invalidatedSubcategory
+                                          ) {
+                                             setInvalidatedSubcategory(false);
+                                          }
                                        }
                                     }}
                                     value={field.value}
@@ -671,25 +839,27 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                                        </SelectTrigger>
                                     </FormControl>
                                     <SelectContent>
-                                       {subcategories.map((subcategory) => (
-                                          <SelectItem
-                                             key={subcategory.id}
-                                             value={subcategory.id}
-                                          >
-                                             {subcategory.id.includes(
-                                                'add-new',
-                                             ) ? (
-                                                <div className="flex items-center">
-                                                   <PlusCircle className="mr-2 h-4 w-4" />
-                                                   <p className="text-primary">
-                                                      Add new subcategory
-                                                   </p>
-                                                </div>
-                                             ) : (
-                                                subcategory.name
-                                             )}
-                                          </SelectItem>
-                                       ))}
+                                       {validSubcategories.map(
+                                          (subcategory) => (
+                                             <SelectItem
+                                                key={subcategory.id}
+                                                value={subcategory.id}
+                                             >
+                                                {subcategory.id.includes(
+                                                   'add-new',
+                                                ) ? (
+                                                   <div className="flex items-center">
+                                                      <PlusCircle className="mr-2 h-4 w-4" />
+                                                      <p className="text-primary">
+                                                         Add new subcategory
+                                                      </p>
+                                                   </div>
+                                                ) : (
+                                                   subcategory.name
+                                                )}
+                                             </SelectItem>
+                                          ),
+                                       )}
                                     </SelectContent>
                                  </Select>
                                  <FormMessage />
@@ -708,6 +878,10 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                                        disabled={loading}
                                        placeholder="0"
                                        {...field}
+                                       onChange={(e) => {
+                                          field.onChange(e);
+                                          autosaveProduct();
+                                       }}
                                     />
                                  </FormControl>
                                  <FormMessage />
@@ -725,6 +899,10 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                                        disabled={loading}
                                        placeholder="Product SKU"
                                        {...field}
+                                       onChange={(e) => {
+                                          field.onChange(e);
+                                          autosaveProduct();
+                                       }}
                                     />
                                  </FormControl>
                                  <FormDescription>
@@ -749,12 +927,12 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                                     disabled={loading}
                                     onValueChange={(value: string) => {
                                        if (value == 'add-new-size') {
-                                          // saveReturnUrlIfNeeded();
                                           router.push(
-                                             `${baseStoreURL}/inventory/sizes/new?return_url=${pathName}`,
+                                             `${baseStoreURL}/inventory/sizes/new?return_url=${pathName}${updateReturnURL()}`,
                                           );
                                        } else {
                                           field.onChange(value);
+                                          autosaveProduct();
                                        }
                                     }}
                                     value={field.value}
@@ -802,12 +980,12 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                                     disabled={loading}
                                     onValueChange={(value: string) => {
                                        if (value == 'add-new-color') {
-                                          saveReturnUrlIfNeeded();
                                           router.push(
-                                             `${baseStoreURL}/inventory/colors/new?return_url=${pathName}`,
+                                             `${baseStoreURL}/inventory/colors/new?return_url=${pathName}${updateReturnURL()}`,
                                           );
                                        } else {
                                           field.onChange(value);
+                                          autosaveProduct();
                                        }
                                     }}
                                     value={field.value}
@@ -878,7 +1056,10 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                               <Checkbox
                                  checked={field.value}
                                  // @ts-ignore
-                                 onCheckedChange={field.onChange}
+                                 onCheckedChange={(e) => {
+                                    field.onChange(e);
+                                    autosaveProduct();
+                                 }}
                               />
                            </FormControl>
                            <div className="space-y-1 leading-none">
@@ -901,6 +1082,6 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                </LoadingButton>
             </form>
          </Form>
-      </>
+      </motion.div>
    );
 };

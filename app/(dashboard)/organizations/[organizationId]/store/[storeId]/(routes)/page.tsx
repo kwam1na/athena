@@ -35,7 +35,7 @@ import { captureException } from '@sentry/nextjs';
 import { TaskAlert } from '@/components/ui/task-alert';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { cookies } from 'next/headers';
-
+import DashboardSkeleton from '@/components/states/loading/dashboard-skeleton';
 interface DashboardPageProps {
    params: {
       storeId: string;
@@ -167,81 +167,85 @@ const DashboardPage: React.FC<DashboardPageProps> = async ({ params }) => {
 
    return (
       <div className="flex-col">
-         <div className="flex-1 space-y-4">
-            <Heading
-               title={user ? `Hi, ${user.name}` : 'Dashboard'}
-               description={`Here's how ${storeName} is doing`}
-            />
-            <Separator />
-            {typeof stockCount === 'number' && stockCount === 0 && (
-               <TaskAlert
-                  title="Empty shelves!"
-                  description="Looks like there are no products in your inventory. Add a product to get started."
-                  action={{
-                     type: 'navigate',
-                     ctaText: 'Add product',
-                     route: `/organizations/${params.organizationId}/store/${params.storeId}/inventory/products/new`,
-                  }}
+         <div className="flex-1 space-y-16">
+            <div className="space-y-4">
+               <Heading
+                  title={user ? `Hi, ${user.name}` : 'Dashboard'}
+                  description={`Here's how ${storeName} is doing`}
                />
-            )}
-            <div className="grid gap-4 grid-cols-3 pt-4">
-               <GrossRevenueWidget
-                  grossRevenue={totalRevenue}
-                  percentageChange={grossRevenuePercentageChange}
-               />
-
-               <NetRevenueWidget
-                  netRevenue={netRevenue}
-                  percentageChange={netRevenuePercentageChange}
-               />
-
-               <TotalUnitsSoldWidget
-                  totalUnitsSold={totalUnitsSold}
-                  percentageChange={totalUnitsSoldPercentageChange}
-               />
+               {/* <Separator /> */}
+               {typeof stockCount === 'number' && stockCount === 0 && (
+                  <TaskAlert
+                     title="Empty shelves!"
+                     description="Looks like there are no products in your inventory. Add a product to get started."
+                     action={{
+                        type: 'navigate',
+                        ctaText: 'Add product',
+                        route: `/organizations/${params.organizationId}/store/${params.storeId}/inventory/products/new`,
+                     }}
+                  />
+               )}
             </div>
+            <div className="space-y-4">
+               <div className="grid gap-4 grid-cols-3 pt-4">
+                  <GrossRevenueWidget
+                     grossRevenue={totalRevenue}
+                     percentageChange={grossRevenuePercentageChange}
+                  />
 
-            <SalesRevenueGraphWidget graphData={graphRevenue} />
+                  <NetRevenueWidget
+                     netRevenue={netRevenue}
+                     percentageChange={netRevenuePercentageChange}
+                  />
 
-            <div className="flex flex-col lg:flex-row gap-8 w-full">
-               <div className="flex flex-col gap-4 w-full lg:w-[50%]">
-                  <TotalStockWidget stockCount={stockCount} />
-                  <div className="flex flex-col gap-4 w-full justify-between lg:flex-row">
-                     <div className="w-full lg:w-[50%]">
-                        <AverageTransactionValueWidget
-                           averageTransactionValue={averageTransactionValue}
-                        />
-                     </div>
-                     <div className="w-full lg:w-[50%]">
-                        <AverageUnitsPerTransactionWidget
-                           averageUnitsPerTransaction={
-                              averageUnitsPerTransaction
-                           }
-                        />
-                     </div>
-                  </div>
-
-                  <LowStockProductsWidget
-                     lowStockProducts={lowStockProducts}
-                     lowStockThreshold={low_stock_threshold}
+                  <TotalUnitsSoldWidget
+                     totalUnitsSold={totalUnitsSold}
+                     percentageChange={totalUnitsSoldPercentageChange}
                   />
                </div>
 
-               <div className="w-full lg:w-[50%] flex flex-col gap-4 p-4 border rounded-lg">
-                  <div className="w-full p-4 space-y-8">
-                     <TopSellingProductssWidget
-                        topSellingProducts={formattedProductMetrics}
-                     />
-                  </div>
-                  {formattedCategoryMetrics &&
-                     formattedCategoryMetrics.length > 0 && (
-                        <div className="w-full p-4">
-                           <ProgressList
-                              data={formattedCategoryMetrics}
-                              header="Sales percentage by category"
+               <SalesRevenueGraphWidget graphData={graphRevenue} />
+
+               <div className="flex flex-col lg:flex-row gap-8 w-full">
+                  <div className="flex flex-col gap-4 w-full lg:w-[50%]">
+                     <TotalStockWidget stockCount={stockCount} />
+                     <div className="flex flex-col gap-4 w-full justify-between lg:flex-row">
+                        <div className="w-full lg:w-[50%]">
+                           <AverageTransactionValueWidget
+                              averageTransactionValue={averageTransactionValue}
                            />
                         </div>
-                     )}
+                        <div className="w-full lg:w-[50%]">
+                           <AverageUnitsPerTransactionWidget
+                              averageUnitsPerTransaction={
+                                 averageUnitsPerTransaction
+                              }
+                           />
+                        </div>
+                     </div>
+
+                     <LowStockProductsWidget
+                        lowStockProducts={lowStockProducts}
+                        lowStockThreshold={low_stock_threshold}
+                     />
+                  </div>
+
+                  <div className="w-full lg:w-[50%] flex flex-col gap-4 p-4 border rounded-lg">
+                     <div className="w-full p-4 space-y-8">
+                        <TopSellingProductssWidget
+                           topSellingProducts={formattedProductMetrics}
+                        />
+                     </div>
+                     {formattedCategoryMetrics &&
+                        formattedCategoryMetrics.length > 0 && (
+                           <div className="w-full p-4">
+                              <ProgressList
+                                 data={formattedCategoryMetrics}
+                                 header="Sales percentage by category"
+                              />
+                           </div>
+                        )}
+                  </div>
                </div>
             </div>
          </div>

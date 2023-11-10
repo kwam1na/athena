@@ -25,6 +25,8 @@ import { ProductColumn, columns } from './columns';
 import { useState } from 'react';
 import { DataTableToolbar } from '@/components/ui/data-table-toolbar/products-table-toolbar';
 import useGetBaseStoreUrl from '@/hooks/use-get-base-store-url';
+import { motion } from 'framer-motion';
+import { mainContainerVariants } from '@/lib/constants';
 
 interface ProductsClientProps {
    storeName?: string;
@@ -81,7 +83,12 @@ export const ProductsClient: React.FC<ProductsClientProps> = ({
    });
 
    return (
-      <>
+      <motion.div
+         variants={mainContainerVariants}
+         initial="hidden"
+         animate="visible"
+         className="space-y-8"
+      >
          <div className="flex items-center justify-between">
             <Heading
                title={`Products`}
@@ -104,6 +111,6 @@ export const ProductsClient: React.FC<ProductsClientProps> = ({
             subcategoryOptions={subcategoryOptions}
          />
          <DataTable columns={columns} table={table} />
-      </>
+      </motion.div>
    );
 };

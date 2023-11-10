@@ -25,6 +25,8 @@ import { columns, CategoryColumn } from './columns';
 import { useState } from 'react';
 import { DataTableToolbar } from '@/components/ui/data-table-toolbar/products-table-toolbar';
 import useGetBaseStoreUrl from '@/hooks/use-get-base-store-url';
+import { motion } from 'framer-motion';
+import { mainContainerVariants } from '@/lib/constants';
 
 interface CategoriesClientProps {
    data: CategoryColumn[];
@@ -69,7 +71,12 @@ export const CategoriesClient: React.FC<CategoriesClientProps> = ({
    });
 
    return (
-      <>
+      <motion.div
+         variants={mainContainerVariants}
+         initial="hidden"
+         animate="visible"
+         className="space-y-8"
+      >
          <div className="flex items-center justify-between">
             <Heading
                title={`Categories`}
@@ -90,6 +97,6 @@ export const CategoriesClient: React.FC<CategoriesClientProps> = ({
             table={table}
          />
          <DataTable columns={columns} table={table} />
-      </>
+      </motion.div>
    );
 };

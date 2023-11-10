@@ -11,7 +11,8 @@ import { useParams } from 'next/navigation';
 import { useState } from 'react';
 import { ViewDataTableClient } from '../../app/(dashboard)/organizations/[organizationId]/store/[storeId]/(routes)/_components/view-data-table-client';
 import { unitsSoldColumns } from '../../app/(dashboard)/organizations/[organizationId]/store/[storeId]/(routes)/_components/view-data-table-columns';
-
+import { motion } from 'framer-motion';
+import { widgetVariants } from '@/lib/constants';
 interface TopSellingProductssWidgetProps {
    topSellingProducts?: Record<string, any>[];
 }
@@ -26,7 +27,12 @@ export const TopSellingProductssWidget: React.FC<
    const params = useParams();
 
    return (
-      <>
+      <motion.div
+         variants={widgetVariants}
+         initial="hidden"
+         animate="visible"
+         className="space-y-8"
+      >
          {!loading && _topSellingProducts && _topSellingProducts.length > 1 && (
             <>
                <p className="text-md">Top selling products this month</p>
@@ -63,6 +69,6 @@ export const TopSellingProductssWidget: React.FC<
                <Skeleton className="w-[60%] h-8" />
             </div>
          )}
-      </>
+      </motion.div>
    );
 };

@@ -19,6 +19,7 @@ import { LoadingButton } from '@/components/ui/loading-button';
 import { createBrowserClient } from '@supabase/ssr';
 import Cookies from 'js-cookie';
 import { useRouter } from 'next/navigation';
+import axios from 'axios';
 
 const formSchema = z.object({
    email: z.string().email(),
@@ -75,17 +76,13 @@ export const SignUp = () => {
          const { user, session } = data;
 
          if (session) {
-            // Calculate time left in seconds
-            const expires_in =
-               (session.expires_at! - Math.floor(Date.now() / 1000)) / 3600;
+            try {
+               const { access_token, refresh_token } = session;
+               await axios.post('/api/v1/update-tokens', { access_token, refresh_token });
 
-            // Save the tokens using js-cookie
-            Cookies.set('access_token', session.access_token, {
-               expires: expires_in / 3600,
-            });
-            Cookies.set('refresh_token', session.refresh_token, {
-               expires: 30,
-            }); // Expires in 30 days
+             } catch (error) {
+               console.error((error as Error).message);
+             }
          }
 
          if (user) {

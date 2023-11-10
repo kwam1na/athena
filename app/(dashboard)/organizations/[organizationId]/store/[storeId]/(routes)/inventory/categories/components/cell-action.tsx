@@ -41,7 +41,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
       } catch (error) {
          captureException(error);
          toast({
-            title: 'An error occurred deleting this category. Make sure you removed all categories and products using this category first.',
+            title: 'An error occurred deleting this category. Make sure you removed all subcategories and products using this category first.',
          });
       } finally {
          setOpen(false);

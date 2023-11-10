@@ -1,10 +1,8 @@
 'use client';
 
-import { useParams } from 'next/navigation';
 import useGetBaseStoreUrl from './use-get-base-store-url';
 
 function useReturnUrl(defaultPath: string) {
-   const params = useParams();
    const baseStoreURL = useGetBaseStoreUrl();
 
    const getReturnUrl = () => {

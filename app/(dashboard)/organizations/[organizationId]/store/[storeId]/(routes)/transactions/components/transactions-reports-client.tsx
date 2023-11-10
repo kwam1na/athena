@@ -36,6 +36,8 @@ import { TotalUnitsSoldWidget } from '@/components/widgets/total-units-sold-widg
 import { AverageTransactionValueWidget } from '@/components/widgets/average-transactions-value-widget';
 import { AverageUnitsPerTransactionWidget } from '@/components/widgets/average-units-per-transaction-widget';
 import useGetBaseStoreUrl from '@/hooks/use-get-base-store-url';
+import { motion } from 'framer-motion';
+import { mainContainerVariants } from '@/lib/constants';
 
 type TransactionsReport = transaction & {
    transaction_items: transaction_item[];
@@ -126,7 +128,12 @@ export const TransactionsReportsClient: React.FC<
       });
 
    return (
-      <div className="flex flex-col gap-4">
+      <motion.div
+         className="flex flex-col gap-4"
+         variants={mainContainerVariants}
+         initial="hidden"
+         animate="visible"
+      >
          <div className="flex items-center justify-between">
             <Heading
                title={
@@ -200,6 +207,6 @@ export const TransactionsReportsClient: React.FC<
                ) : null}
             </div>
          </div>
-      </div>
+      </motion.div>
    );
 };

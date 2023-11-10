@@ -27,6 +27,8 @@ import { LoadingButton } from '@/components/ui/loading-button';
 import { apiCreateSize, apiDeleteSize, apiUpdateSize } from '@/lib/api/sizes';
 import useReturnUrl from '@/hooks/use-get-return-url';
 import useGetBaseStoreUrl from '@/hooks/use-get-base-store-url';
+import { motion } from 'framer-motion';
+import { widgetVariants } from '@/lib/constants';
 
 const formSchema = z.object({
    name: z.string().min(1),
@@ -109,7 +111,12 @@ export const SizeForm: React.FC<SizeFormProps> = ({ initialData }) => {
    };
 
    return (
-      <>
+      <motion.div
+         className="space-y-6"
+         variants={widgetVariants}
+         initial="hidden"
+         animate="visible"
+      >
          <AlertModal
             isOpen={open}
             onClose={() => setOpen(false)}
@@ -185,6 +192,6 @@ export const SizeForm: React.FC<SizeFormProps> = ({ initialData }) => {
                </LoadingButton>
             </form>
          </Form>
-      </>
+      </motion.div>
    );
 };

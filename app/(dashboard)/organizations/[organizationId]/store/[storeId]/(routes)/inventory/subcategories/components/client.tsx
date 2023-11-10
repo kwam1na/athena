@@ -25,6 +25,8 @@ import { columns, SubcategoryColumn } from './columns';
 import { useState } from 'react';
 import { DataTableToolbar } from '@/components/ui/data-table-toolbar/products-table-toolbar';
 import useGetBaseStoreUrl from '@/hooks/use-get-base-store-url';
+import { motion } from 'framer-motion';
+import { mainContainerVariants } from '@/lib/constants';
 
 interface SubcategoriesClientProps {
    data: SubcategoryColumn[];
@@ -74,7 +76,12 @@ export const SubcategoriesClient: React.FC<SubcategoriesClientProps> = ({
    });
 
    return (
-      <>
+      <motion.div
+         variants={mainContainerVariants}
+         initial="hidden"
+         animate="visible"
+         className="space-y-8"
+      >
          <div className="flex items-center justify-between">
             <Heading
                title={`Subcategories`}
@@ -96,6 +103,6 @@ export const SubcategoriesClient: React.FC<SubcategoriesClientProps> = ({
             categoryOptions={categoryOptions}
          />
          <DataTable table={table} columns={columns} />
-      </>
+      </motion.div>
    );
 };
