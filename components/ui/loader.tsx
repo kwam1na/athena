@@ -6,7 +6,7 @@ import { ClipLoader, BounceLoader, PuffLoader } from 'react-spinners';
 export const Loader = () => {
    const { theme } = useTheme();
    return (
-      <div className="flex h-[800px] w-full items-center justify-center">
+      <div className="flex h-[1020px] w-full items-center justify-center">
          <PuffLoader
             color={theme === 'dark' ? '#2D2D2D' : ' #D3D3D3'}
             size={50}

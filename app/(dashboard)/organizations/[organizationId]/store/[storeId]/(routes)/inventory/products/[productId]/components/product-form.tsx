@@ -1,7 +1,7 @@
 'use client';
 
 import * as z from 'zod';
-import { captureException } from '@sentry/nextjs';
+import { captureException, init } from '@sentry/nextjs';
 import { useEffect, useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
@@ -139,6 +139,16 @@ export const ProductForm: React.FC<ProductFormProps> = ({
    const [loading, setLoading] = useState(false);
    const [isAutosavedModalOpen, setIsAutosavedModalOpen] = useState(false);
    const [isMounted, setIsMounted] = useState(false);
+   const [validSubcategories, setValidSubcategories] = useState<subcategory[]>(
+      initialData
+         ? subcategories.filter(
+              (subcategory) =>
+                 subcategory.category_id === initialData.category_id ||
+                 subcategory.id === 'add-new-subcategory',
+           )
+         : subcategories,
+   );
+   const [invalidatedSubcategory, setInvalidatedSubcategory] = useState(false);
 
    let initialProfit: number | undefined,
       initialMargin: number | undefined,
@@ -191,6 +201,9 @@ export const ProductForm: React.FC<ProductFormProps> = ({
            ...initialData,
            price: parseFloat(String(initialData?.price)),
            cost_per_item: parseFloat(String(initialData?.cost_per_item)),
+           subcategory_id: invalidatedSubcategory
+              ? ''
+              : initialData.subcategory_id,
            size_id: initialData.size_id || '',
            color_id: initialData.color_id || '',
         }
@@ -263,8 +276,16 @@ export const ProductForm: React.FC<ProductFormProps> = ({
 
    const useAutosavedProduct = () => {
       const draftProduct = productAutosaver.getAll();
-      console.log('useAutosavedProduct', draftProduct);
       form.reset(draftProduct);
+
+      setValidSubcategories(
+         subcategories.filter(
+            (subcategory) =>
+               subcategory.category_id == draftProduct.category_id ||
+               subcategory.id == 'add-new-subcategory',
+         ),
+      );
+
       const opts = {
          price: parseFloat(draftProduct.price),
          cpi: parseFloat(draftProduct.cost_per_item),
@@ -305,29 +326,24 @@ export const ProductForm: React.FC<ProductFormProps> = ({
       productAutosaver.save(form.getValues());
    };
 
-   // const populateProductName = () => {
-   //    const searchParams = new URLSearchParams(window.location.search);
-   //    const productName = searchParams.get('query');
+   const saveReturnUrlToLocalStorage = () => {
+      const url = window.location.href;
+      const urlObj = new URL(url);
+      const pathname = urlObj.pathname;
+      let return_url = urlObj.searchParams.get('return_url');
 
-   //    if (productName) {
-   //       console.log('productName', productName);
-   //       form.resetField('name', { defaultValue: productName });
-   //       console.log('values', form.getValues());
-   //    }
-   // };
+      // If return_url exists, append the remaining query params to it
+      if (return_url) {
+         urlObj.searchParams.delete('return_url');
 
-   // useEffect(() => {
-   //    populateProductName();
-   // }, []);
-
-   useEffect(() => {
-      const searchParams = new URLSearchParams(window.location.search);
-      const repopulate = searchParams.get('repopulate');
-
-      if (initialData && !repopulate) {
-         productAutosaver.save(form.getValues());
+         const remainingQueryParams = urlObj.searchParams.toString();
+         return_url +=
+            (return_url.includes('?') ? '&' : '?') + remainingQueryParams;
       }
-   }, []);
+
+      localStorage.setItem(pathname, JSON.stringify({ return_url }));
+      autosaveProduct();
+   };
 
    useEffect(() => {
       const autosavedProduct = productAutosaver.getAll();
@@ -335,14 +351,16 @@ export const ProductForm: React.FC<ProductFormProps> = ({
          setIsAutosavedModalOpen(true);
       }
 
+      const searchParams = new URLSearchParams(window.location.search);
+      const repopulate = searchParams.get('repopulate');
+
+      searchParams.delete('repopulate');
+
+      if (initialData && !repopulate) {
+         productAutosaver.save(form.getValues());
+      }
+
       if (Object.keys(autosavedProduct).length > 0) {
-         // check if the user was navigated back here from a different page.
-         // if so, populate the fields with the autosaved product
-         const searchParams = new URLSearchParams(window.location.search);
-         const repopulate = searchParams.get('repopulate');
-
-         searchParams.delete('repopulate');
-
          const urlWithoutParams = window.location.pathname;
          if (searchParams.toString()) {
             window.history.replaceState(
@@ -358,6 +376,10 @@ export const ProductForm: React.FC<ProductFormProps> = ({
             useAutosavedProduct();
          }
       }
+   }, []);
+
+   useEffect(() => {
+      if (!localStorage.getItem(pathName)) saveReturnUrlToLocalStorage();
    }, []);
 
    useEffect(() => {
@@ -379,10 +401,24 @@ export const ProductForm: React.FC<ProductFormProps> = ({
          ...data,
          size_id: data.size_id == 'blank-id' ? null : data.size_id,
          color_id: data.color_id == 'blank-id' ? null : data.color_id,
-         organization_id: params.organizationId,
+         organization_id: parseInt(params.organizationId),
       };
 
-      const returnUrl = getReturnUrl();
+      let returnUrl = getReturnUrl();
+      const { return_url } = JSON.parse(localStorage.getItem(pathName) || '{}');
+
+      if (return_url && returnUrl != return_url) {
+         returnUrl = return_url;
+      }
+
+      console.log('invalidated subcategory', invalidatedSubcategory);
+      if (invalidatedSubcategory) {
+         form.setError('subcategory_id', {
+            type: 'custom',
+            message: 'Please select a subcategory.',
+         });
+         return;
+      }
 
       try {
          setLoading(true);
@@ -409,6 +445,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
          });
       } finally {
          productAutosaver.clearAll();
+         localStorage.removeItem(pathName);
          setLoading(false);
       }
    };
@@ -434,12 +471,6 @@ export const ProductForm: React.FC<ProductFormProps> = ({
       }
    };
 
-   // Helper function to get the current route without search parameters
-   const getCurrentRoute = () => {
-      const currentURL = new URL(window.location.href);
-      return currentURL.pathname;
-   };
-
    const updateReturnURL = () => {
       const draftProduct = productAutosaver.getAll();
 
@@ -449,29 +480,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
       return '';
    };
 
-   const saveReturnUrlIfNeeded = () => {
-      const currentURL = new URL(window.location.href);
-      const currentReturnURL = currentURL.searchParams.get('return_url');
-
-      // If a return_url is found and no originalReturnURL is set, save it to session storage.
-      if (currentReturnURL && !sessionStorage.getItem('originalReturnURL')) {
-         sessionStorage.setItem('originalReturnURL', currentReturnURL);
-      }
-   };
-
-   // useEffect(() => {
-   //    // console.log('back here..');
-   //    const originalReturnURL = sessionStorage.getItem('originalReturnURL');
-
-   //    if (originalReturnURL) {
-   //       sessionStorage.removeItem('originalReturnURL'); // Clear after use
-   //       console.log('originalReturnURL:', originalReturnURL);
-   //    }
-   // }, []);
-
    const Alerts = () => {
-      saveReturnUrlIfNeeded();
-
       const hasAddedCategory = !(
          categories.length == 1 && categories[0].id == 'add-new-category'
       );
@@ -559,15 +568,16 @@ export const ProductForm: React.FC<ProductFormProps> = ({
             loading={loading}
          />
          <div className="flex flex-col space-y-6">
-            <div>
+            <div className="flex space-x-4">
                <Button variant={'outline'} onClick={promptLeaving}>
                   <ArrowLeft className="mr-2 h-4 w-4" />
                </Button>
+               <Heading title={title} description={description} />
             </div>
             <Alerts />
          </div>
          <div className="flex items-center justify-between">
-            <Heading title={title} description={description} />
+            {/* <Heading title={title} description={description} /> */}
             {initialData && (
                <Button
                   disabled={loading}
@@ -578,7 +588,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                </Button>
             )}
          </div>
-         <Separator />
+         {/* <Separator /> */}
          <Form {...form}>
             <form
                onSubmit={form.handleSubmit(onSubmit)}
@@ -732,12 +742,26 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                                     disabled={loading}
                                     onValueChange={(value: string) => {
                                        if (value == 'add-new-category') {
-                                          saveReturnUrlIfNeeded();
                                           router.push(
                                              `${baseStoreURL}/inventory/categories/new?return_url=${pathName}${updateReturnURL()}`,
                                           );
                                        } else {
                                           field.onChange(value);
+                                          form.resetField('subcategory_id');
+
+                                          if (initialData) {
+                                             setInvalidatedSubcategory(true);
+                                          }
+
+                                          setValidSubcategories(
+                                             subcategories.filter(
+                                                (subcategory) =>
+                                                   subcategory.category_id ==
+                                                      value ||
+                                                   subcategory.id ==
+                                                      'add-new-subcategory',
+                                             ),
+                                          );
                                           autosaveProduct();
                                        }
                                     }}
@@ -788,13 +812,19 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                                     disabled={loading}
                                     onValueChange={(value: string) => {
                                        if (value == 'add-new-subcategory') {
-                                          saveReturnUrlIfNeeded();
                                           router.push(
                                              `${baseStoreURL}/inventory/subcategories/new?return_url=${pathName}${updateReturnURL()}`,
                                           );
                                        } else {
                                           field.onChange(value);
                                           autosaveProduct();
+
+                                          if (
+                                             initialData &&
+                                             invalidatedSubcategory
+                                          ) {
+                                             setInvalidatedSubcategory(false);
+                                          }
                                        }
                                     }}
                                     value={field.value}
@@ -809,25 +839,27 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                                        </SelectTrigger>
                                     </FormControl>
                                     <SelectContent>
-                                       {subcategories.map((subcategory) => (
-                                          <SelectItem
-                                             key={subcategory.id}
-                                             value={subcategory.id}
-                                          >
-                                             {subcategory.id.includes(
-                                                'add-new',
-                                             ) ? (
-                                                <div className="flex items-center">
-                                                   <PlusCircle className="mr-2 h-4 w-4" />
-                                                   <p className="text-primary">
-                                                      Add new subcategory
-                                                   </p>
-                                                </div>
-                                             ) : (
-                                                subcategory.name
-                                             )}
-                                          </SelectItem>
-                                       ))}
+                                       {validSubcategories.map(
+                                          (subcategory) => (
+                                             <SelectItem
+                                                key={subcategory.id}
+                                                value={subcategory.id}
+                                             >
+                                                {subcategory.id.includes(
+                                                   'add-new',
+                                                ) ? (
+                                                   <div className="flex items-center">
+                                                      <PlusCircle className="mr-2 h-4 w-4" />
+                                                      <p className="text-primary">
+                                                         Add new subcategory
+                                                      </p>
+                                                   </div>
+                                                ) : (
+                                                   subcategory.name
+                                                )}
+                                             </SelectItem>
+                                          ),
+                                       )}
                                     </SelectContent>
                                  </Select>
                                  <FormMessage />
@@ -895,7 +927,6 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                                     disabled={loading}
                                     onValueChange={(value: string) => {
                                        if (value == 'add-new-size') {
-                                          // saveReturnUrlIfNeeded();
                                           router.push(
                                              `${baseStoreURL}/inventory/sizes/new?return_url=${pathName}${updateReturnURL()}`,
                                           );
@@ -949,7 +980,6 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                                     disabled={loading}
                                     onValueChange={(value: string) => {
                                        if (value == 'add-new-color') {
-                                          saveReturnUrlIfNeeded();
                                           router.push(
                                              `${baseStoreURL}/inventory/colors/new?return_url=${pathName}${updateReturnURL()}`,
                                           );

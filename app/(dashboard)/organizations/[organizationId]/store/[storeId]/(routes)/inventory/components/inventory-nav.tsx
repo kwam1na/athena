@@ -44,7 +44,7 @@ export function InventoryNav({
    return (
       <nav
          className={cn(
-            'inline-flex items-center space-x-4 bg-card lg:space-x-6',
+            'flex items-center space-x-4 bg-card lg:space-x-6',
             className,
          )}
          {...props}

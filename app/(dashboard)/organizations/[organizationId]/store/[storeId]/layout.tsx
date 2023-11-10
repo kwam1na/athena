@@ -15,6 +15,7 @@ import AuthListener from '@/providers/auth-listener';
 import AppSkeleton from '@/components/states/loading/app-skeleton';
 import DashboardSkeleton from '@/components/states/loading/dashboard-skeleton';
 import { getUser } from '@/lib/repositories/userRepository';
+import { getStore } from '@/lib/repositories/storesRepository';
 
 export default async function DashboardLayout({
    children,
@@ -48,11 +49,24 @@ export default async function DashboardLayout({
    }
 
    const dbUser = await getUser(user.id);
+   const store = await getStore(parseInt(params.storeId));
+
+   if (store) {
+      const { organization_id } = store;
+      if (organization_id !== parseInt(params.organizationId)) {
+         console.log(
+            '[DashboardLayout] user is not authorized to access this store.',
+         );
+         redirect('/unauthorized');
+      }
+   }
 
    if (dbUser) {
-      const { organization_id, store_id } = dbUser;
+      const { organization_id } = dbUser;
       if (organization_id !== parseInt(params.organizationId)) {
-         console.log('[DashboardLayout] user is not authorized');
+         console.log(
+            '[DashboardLayout] user is not authorized to access this organization.',
+         );
          redirect('/unauthorized');
       }
    }
@@ -74,11 +88,11 @@ export default async function DashboardLayout({
                      text="athena is currently only available on desktop or larger screens."
                   />
                </div>
-               <div className="hidden md:flex flex-grow gap-8 h-full">
-                  <aside className="sticky top-0 h-screen w-[300px] bg-zinc-200 dark:bg-zinc-900 px-6 pt-12">
-                     <AppSideBar className="hidden md:block w-full" />
+               <div className="hidden md:flex gap-8 flex-grow h-full">
+                  <aside className="sticky top-0 h-screen w-[300px] bg-zinc-200 dark:bg-card px-6">
+                     <AppSideBar className="hidden md:block w-full pt-10" />
                   </aside>
-                  <div className="flex-grow flex-col px-6 pt-12 h-full">
+                  <div className="flex-grow flex-col px-6 h-full pt-12">
                      <div className="hidden md:block">
                         <Navbar />
                      </div>

@@ -33,6 +33,7 @@ import {
 import {
    AlertCircle,
    ArrowLeft,
+   Banknote,
    Calendar,
    DollarSign,
    PackageCheck,
@@ -1777,18 +1778,14 @@ export const TransactionsReportClient: React.FC<
                <MetricCard
                   title={'Gross sales'}
                   value={fmt.format(grossSales)}
-                  icon={
-                     <DollarSign className="h-4 w-4 text-muted-foreground" />
-                  }
+                  icon={<Banknote className="h-4 w-4 text-muted-foreground" />}
                   loading={isLoadingCurrency}
                />
 
                <MetricCard
                   title={'Net revenue'}
                   value={fmt.format(netSales)}
-                  icon={
-                     <DollarSign className="h-4 w-4 text-muted-foreground" />
-                  }
+                  icon={<Banknote className="h-4 w-4 text-muted-foreground" />}
                   loading={isLoadingCurrency}
                />
 
@@ -1803,7 +1800,7 @@ export const TransactionsReportClient: React.FC<
          </div>
 
          <div className="flex py-4 gap-8">
-            <div className="flex flex-col lg:w-[60%] md:w-full gap-16">
+            <div className="flex flex-col lg:w-[80%] md:w-full gap-16">
                <Form {...searchQueryForm}>
                   <form
                      onSubmit={searchQueryForm.handleSubmit(

@@ -93,6 +93,25 @@ export const SubategoryForm: React.FC<SubcategoryFormProps> = ({
       autosaver.save(form.getValues());
    };
 
+   const saveReturnUrlToLocalStorage = () => {
+      const url = window.location.href;
+      const urlObj = new URL(url);
+      const pathname = urlObj.pathname;
+      let return_url = urlObj.searchParams.get('return_url');
+
+      // If return_url exists, append the remaining query params to it
+      if (return_url) {
+         urlObj.searchParams.delete('return_url');
+
+         const remainingQueryParams = urlObj.searchParams.toString();
+         return_url +=
+            (return_url.includes('?') ? '&' : '?') + remainingQueryParams;
+      }
+
+      localStorage.setItem(pathname, JSON.stringify({ return_url }));
+      autosaveCategory();
+   };
+
    const useAutosavedCategory = () => {
       const autosavedCategory = autosaver.getAll();
       form.reset(autosavedCategory);
@@ -108,6 +127,10 @@ export const SubategoryForm: React.FC<SubcategoryFormProps> = ({
    };
 
    useEffect(() => {
+      if (!localStorage.getItem(pathName)) saveReturnUrlToLocalStorage();
+   }, []);
+
+   useEffect(() => {
       const searchParams = new URLSearchParams(window.location.search);
       const repopulate = searchParams.get('repopulate');
 
@@ -117,16 +140,18 @@ export const SubategoryForm: React.FC<SubcategoryFormProps> = ({
    }, []);
 
    useEffect(() => {
-      const autosavedProduct = autosaver.getAll();
+      const autosavedCategory = autosaver.getAll();
 
-      if (Object.keys(autosavedProduct).length > 0) {
-         // check if the user was navigated back here from a different page.
-         // if so, populate the fields with the autosaved category
-         const searchParams = new URLSearchParams(window.location.search);
-         const repopulate = searchParams.get('repopulate');
+      const searchParams = new URLSearchParams(window.location.search);
+      const repopulate = searchParams.get('repopulate');
 
-         searchParams.delete('repopulate');
+      searchParams.delete('repopulate');
 
+      if (initialData && !repopulate) {
+         autosaver.save(form.getValues());
+      }
+
+      if (Object.keys(autosavedCategory).length > 0) {
          const urlWithoutParams = window.location.pathname;
          if (searchParams.toString()) {
             window.history.replaceState(
@@ -147,7 +172,12 @@ export const SubategoryForm: React.FC<SubcategoryFormProps> = ({
    const getReturnUrl = useReturnUrl(`/inventory/subcategories`);
 
    const onSubmit = async (data: SubcategoryFormValues) => {
-      const returnUrl = getReturnUrl();
+      let returnUrl = getReturnUrl();
+      const { return_url } = JSON.parse(localStorage.getItem(pathName) || '{}');
+
+      if (return_url && returnUrl != return_url) {
+         returnUrl = return_url;
+      }
 
       try {
          setLoading(true);
@@ -180,6 +210,7 @@ export const SubategoryForm: React.FC<SubcategoryFormProps> = ({
       } finally {
          setLoading(false);
          autosaver.clearAll();
+         localStorage.removeItem(pathName);
       }
    };
 

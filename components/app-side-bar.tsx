@@ -7,6 +7,10 @@ import { cn } from '@/lib/utils';
 import { Banknote, LayoutDashboard, Package, Settings } from 'lucide-react';
 import useGetBaseStoreUrl from '@/hooks/use-get-base-store-url';
 import { AthenLogo } from '@/app/assets/athena-logo';
+import Navbar from './navbar';
+import OrganizationSwitcher from './organization-switcher';
+import StoreSwitcher from './store-switcher';
+import { UserNav } from './user-nav';
 
 export function AppSideBar({
    className,
@@ -44,11 +48,14 @@ export function AppSideBar({
 
    return (
       <div className={cn('flex flex-col px-4 space-y-12 h-full', className)}>
-         <div className="w-[64px] h-[64px]">
-            <AthenLogo />
+         <div className="flex items-center">
+            <div className="w-[64px] h-[64px]">
+               <AthenLogo />
+            </div>
+
+            <p className="text-3xl">athena</p>
          </div>
 
-         {/* <p className="text-4xl">athena</p> */}
          <nav
             className="flex flex-col items-center justify-center gap-6"
             {...props}

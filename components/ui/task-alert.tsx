@@ -31,7 +31,7 @@ export const TaskAlert: React.FC<TaskAlertProps> = ({
       }
    };
    return (
-      <Alert className="flex justify-between">
+      <Alert className="flex justify-between bg-card">
          <div className="flex gap-2 pt-4 pb-4">
             <AlertCircle className="h-4 w-4" />
             <div className="grid grid-rows-2 gap-2">
