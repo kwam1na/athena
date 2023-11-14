@@ -47,7 +47,7 @@ export function AppSideBar({
    ];
 
    return (
-      <div className={cn('flex flex-col px-4 space-y-12 h-full', className)}>
+      <div className={cn('flex flex-col space-y-12 h-full', className)}>
          <div className="flex items-center">
             <div className="w-[64px] h-[64px]">
                <AthenLogo />
@@ -57,7 +57,7 @@ export function AppSideBar({
          </div>
 
          <nav
-            className="flex flex-col items-center justify-center gap-6"
+            className="flex flex-col items-center px-4 justify-center gap-6"
             {...props}
          >
             {routes.map((route) => (

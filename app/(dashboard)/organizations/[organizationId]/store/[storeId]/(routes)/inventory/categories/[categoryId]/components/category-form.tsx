@@ -73,6 +73,27 @@ export const CategoryForm: React.FC<CategoryFormProps> = ({ initialData }) => {
 
    const getReturnUrl = useReturnUrl(`/inventory/categories`);
 
+   const onDelete = async () => {
+      try {
+         setLoading(true);
+         await apiDeleteCategory(params.categoryId, params.storeId);
+         router.refresh();
+         router.push(`${baseStoreURL}/inventory/categories`);
+         toast({
+            title: `Category deleted.`,
+         });
+      } catch (error: any) {
+         captureException(error);
+         toast({
+            title: `An error occured deleting this category. Make sure you have removed all categories and products under this category first.`,
+         });
+      } finally {
+         setLoading(false);
+         setOpen(false);
+         transaction.finish();
+      }
+   };
+
    const onSubmit = async (data: CategoryFormValues) => {
       const returnUrl = getReturnUrl();
 
@@ -101,27 +122,6 @@ export const CategoryForm: React.FC<CategoryFormProps> = ({ initialData }) => {
       }
    };
 
-   const onDelete = async () => {
-      try {
-         setLoading(true);
-         await apiDeleteCategory(params.categoryId, params.storeId);
-         router.refresh();
-         router.push(`${baseStoreURL}/inventory/categories`);
-         toast({
-            title: `Category deleted.`,
-         });
-      } catch (error: any) {
-         captureException(error);
-         toast({
-            title: `An error occured deleting this category. Make sure you have removed all categories and products under this category first.`,
-         });
-      } finally {
-         setLoading(false);
-         setOpen(false);
-         transaction.finish();
-      }
-   };
-
    return (
       <motion.div
          className="space-y-6"
@@ -135,23 +135,28 @@ export const CategoryForm: React.FC<CategoryFormProps> = ({ initialData }) => {
             onConfirm={onDelete}
             loading={loading}
          />
-         <div className="flex">
-            <Button variant={'outline'} onClick={() => router.back()}>
-               <ArrowLeft className="mr-2 h-4 w-4" />
-            </Button>
+         <div className="flex justify-between">
+            <div className="flex flex-col space-y-6">
+               <div className="flex space-x-4">
+                  <Button variant={'outline'} onClick={() => router.back()}>
+                     <ArrowLeft className="mr-2 h-4 w-4" />
+                  </Button>
+                  <Heading title={title} description={description} />
+               </div>
+            </div>
+            <div className="flex items-center">
+               {initialData && (
+                  <Button
+                     disabled={loading}
+                     variant="destructive"
+                     onClick={() => setOpen(true)}
+                  >
+                     <Trash className="mr-2 h-4 w-4" /> Delete
+                  </Button>
+               )}
+            </div>
          </div>
-         <div className="flex items-center justify-between">
-            <Heading title={title} description={description} />
-            {initialData && (
-               <Button
-                  disabled={loading}
-                  variant="destructive"
-                  onClick={() => setOpen(true)}
-               >
-                  <Trash className="mr-2 h-4 w-4" /> Delete
-               </Button>
-            )}
-         </div>
+
          <Separator />
          <Form {...form}>
             <form

@@ -135,22 +135,26 @@ export const ColorForm: React.FC<ColorFormProps> = ({ initialData }) => {
             onConfirm={onDelete}
             loading={loading}
          />
-         <div className="flex">
-            <Button variant={'outline'} onClick={() => router.back()}>
-               <ArrowLeft className="mr-2 h-4 w-4" />
-            </Button>
-         </div>
-         <div className="flex items-center justify-between">
-            <Heading title={title} description={description} />
-            {initialData && (
-               <Button
-                  disabled={loading}
-                  variant="destructive"
-                  onClick={() => setOpen(true)}
-               >
-                  <Trash className="mr-2 h-4 w-4" /> Delete
-               </Button>
-            )}
+         <div className="flex justify-between">
+            <div className="flex flex-col space-y-6">
+               <div className="flex space-x-4">
+                  <Button variant={'outline'} onClick={() => router.back()}>
+                     <ArrowLeft className="mr-2 h-4 w-4" />
+                  </Button>
+                  <Heading title={title} description={description} />
+               </div>
+            </div>
+            <div className="flex items-center">
+               {initialData && (
+                  <Button
+                     disabled={loading}
+                     variant="destructive"
+                     onClick={() => setOpen(true)}
+                  >
+                     <Trash className="mr-2 h-4 w-4" /> Delete
+                  </Button>
+               )}
+            </div>
          </div>
          <Separator />
          <Form {...form}>

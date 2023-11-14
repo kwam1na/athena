@@ -5,7 +5,7 @@ import { captureException, init } from '@sentry/nextjs';
 import { useEffect, useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
-import { ArrowLeft, PlusCircle, Trash } from 'lucide-react';
+import { ArrowLeft, Info, PlusCircle, Trash } from 'lucide-react';
 import {
    category,
    color,
@@ -63,6 +63,13 @@ import { ProductsAutosaver } from '../../utils/products-autosaver';
 import { Skeleton } from '@/components/ui/skeleton';
 import { motion } from 'framer-motion';
 import { widgetVariants } from '@/lib/constants';
+import {
+   Tooltip,
+   TooltipContent,
+   TooltipProvider,
+   TooltipTrigger,
+} from '@/components/ui/tooltip';
+import { InfoCircledIcon } from '@radix-ui/react-icons';
 
 enum ActionContext {
    NONE,
@@ -251,6 +258,16 @@ export const ProductForm: React.FC<ProductFormProps> = ({
 
    const watchedValues = form.watch();
 
+   /**
+    * Autosave product
+    */
+   const autosaveProduct = () => {
+      productAutosaver.save(form.getValues());
+   };
+
+   /**
+    * Calculate profit and margin
+    */
    const calculateMetrics = (
       value: number,
       type: 'price' | 'cpi',
@@ -274,6 +291,161 @@ export const ProductForm: React.FC<ProductFormProps> = ({
       setMargin(parseFloat(margin.toFixed(2)));
    };
 
+   /**
+    * Discard autosaved product
+    */
+   const discardAutosavedProduct = () => {
+      productAutosaver.clearAll();
+      setIsAutosavedModalOpen(false);
+   };
+
+   const getReturnUrl = useReturnUrl(`/inventory/products`);
+
+   /**
+    * Delete product handler
+    */
+   const onDelete = async () => {
+      try {
+         setLoading(true);
+         await apiDeleteProduct(params.productId, params.storeId);
+         router.refresh();
+         router.push(`${baseStoreURL}/inventory/products`);
+         toast({
+            title: 'Product deleted.',
+         });
+      } catch (error: any) {
+         captureException(error);
+         toast({
+            title: 'Something went wrong deleting this product. Try again.',
+         });
+      } finally {
+         productAutosaver.clearAll();
+         setLoading(false);
+         setOpen(false);
+      }
+   };
+
+   /**
+    * Submit product handler
+    */
+   const onSubmit = async (data: ProductFormValues) => {
+      const cleanedUpData = {
+         ...data,
+         size_id: data.size_id == 'blank-id' ? null : data.size_id,
+         color_id: data.color_id == 'blank-id' ? null : data.color_id,
+         organization_id: parseInt(params.organizationId),
+      };
+
+      let returnUrl = getReturnUrl();
+      const { return_url } = JSON.parse(localStorage.getItem(pathName) || '{}');
+
+      if (return_url && returnUrl != return_url) {
+         returnUrl = return_url;
+      }
+
+      if (invalidatedSubcategory) {
+         form.setError('subcategory_id', {
+            type: 'custom',
+            message: 'Please select a subcategory.',
+         });
+         return;
+      }
+
+      try {
+         setLoading(true);
+         if (initialData) {
+            await apiUpdateProduct(
+               params.productId,
+               params.storeId,
+               cleanedUpData,
+            );
+         } else {
+            await apiCreateProduct(params.storeId, cleanedUpData);
+         }
+         toast({
+            title: `Product '${data.name}' ${
+               initialData ? 'updated' : 'added'
+            }.`,
+         });
+         router.refresh();
+         router.push(returnUrl);
+      } catch (error: any) {
+         captureException(error);
+         toast({
+            title: 'Something went wrong adding this product. Try again.',
+         });
+      } finally {
+         productAutosaver.clearAll();
+         localStorage.removeItem(pathName);
+         setLoading(false);
+      }
+   };
+
+   /**
+    * Prompt leaving
+    */
+   const promptLeaving = () => {
+      if (hasChanges && initialData) {
+         setActionContext(ActionContext.LEAVING);
+         setOpen(true);
+      } else if (!initialData) {
+         const autosavedProduct = productAutosaver.getAll();
+         if (Object.keys(autosavedProduct).length > 0) {
+            toast({
+               title: 'Autosaved',
+            });
+         }
+         router.back();
+      } else {
+         router.back();
+      }
+   };
+
+   /**
+    * Prompt deleting
+    */
+   const promptDeleting = () => {
+      setActionContext(ActionContext.DELETING);
+      setOpen(true);
+   };
+
+   /**
+    * Save return_url to local storage
+    */
+   const saveReturnUrlToLocalStorage = () => {
+      const url = window.location.href;
+      const urlObj = new URL(url);
+      const pathname = urlObj.pathname;
+      let return_url = urlObj.searchParams.get('return_url');
+
+      // If return_url exists, append the remaining query params to it
+      if (return_url) {
+         urlObj.searchParams.delete('return_url');
+
+         const remainingQueryParams = urlObj.searchParams.toString();
+         return_url +=
+            (return_url.includes('?') ? '&' : '?') + remainingQueryParams;
+      }
+
+      localStorage.setItem(pathname, JSON.stringify({ return_url }));
+      autosaveProduct();
+   };
+
+   /**
+    * Update return_url to include repopulate query param
+    */
+   const updateReturnURL = () => {
+      const draftProduct = productAutosaver.getAll();
+
+      if (Object.keys(draftProduct).length > 0) {
+         return `&repopulate=true`;
+      }
+      return '';
+   };
+
+   /**
+    * Use autosaved product
+    */
    const useAutosavedProduct = () => {
       const draftProduct = productAutosaver.getAll();
       form.reset(draftProduct);
@@ -295,54 +467,6 @@ export const ProductForm: React.FC<ProductFormProps> = ({
       calculateMetrics(parseFloat(draftProduct.price), 'price', opts);
       calculateMetrics(parseFloat(draftProduct.cost_per_item), 'cpi', opts);
       setIsAutosavedModalOpen(false);
-   };
-
-   const promptLeaving = () => {
-      if (hasChanges && initialData) {
-         setActionContext(ActionContext.LEAVING);
-         setOpen(true);
-      } else {
-         const autosavedProduct = productAutosaver.getAll();
-         if (Object.keys(autosavedProduct).length > 0) {
-            toast({
-               title: 'Autosaved',
-            });
-         }
-         router.back();
-      }
-   };
-
-   const promptDeleting = () => {
-      setActionContext(ActionContext.DELETING);
-      setOpen(true);
-   };
-
-   const discardAutosavedProduct = () => {
-      productAutosaver.clearAll();
-      setIsAutosavedModalOpen(false);
-   };
-
-   const autosaveProduct = () => {
-      productAutosaver.save(form.getValues());
-   };
-
-   const saveReturnUrlToLocalStorage = () => {
-      const url = window.location.href;
-      const urlObj = new URL(url);
-      const pathname = urlObj.pathname;
-      let return_url = urlObj.searchParams.get('return_url');
-
-      // If return_url exists, append the remaining query params to it
-      if (return_url) {
-         urlObj.searchParams.delete('return_url');
-
-         const remainingQueryParams = urlObj.searchParams.toString();
-         return_url +=
-            (return_url.includes('?') ? '&' : '?') + remainingQueryParams;
-      }
-
-      localStorage.setItem(pathname, JSON.stringify({ return_url }));
-      autosaveProduct();
    };
 
    useEffect(() => {
@@ -393,92 +517,6 @@ export const ProductForm: React.FC<ProductFormProps> = ({
    if (!isMounted) {
       return null;
    }
-
-   const getReturnUrl = useReturnUrl(`/inventory/products`);
-
-   const onSubmit = async (data: ProductFormValues) => {
-      const cleanedUpData = {
-         ...data,
-         size_id: data.size_id == 'blank-id' ? null : data.size_id,
-         color_id: data.color_id == 'blank-id' ? null : data.color_id,
-         organization_id: parseInt(params.organizationId),
-      };
-
-      let returnUrl = getReturnUrl();
-      const { return_url } = JSON.parse(localStorage.getItem(pathName) || '{}');
-
-      if (return_url && returnUrl != return_url) {
-         returnUrl = return_url;
-      }
-
-      console.log('invalidated subcategory', invalidatedSubcategory);
-      if (invalidatedSubcategory) {
-         form.setError('subcategory_id', {
-            type: 'custom',
-            message: 'Please select a subcategory.',
-         });
-         return;
-      }
-
-      try {
-         setLoading(true);
-         if (initialData) {
-            await apiUpdateProduct(
-               params.productId,
-               params.storeId,
-               cleanedUpData,
-            );
-         } else {
-            await apiCreateProduct(params.storeId, cleanedUpData);
-         }
-         toast({
-            title: `Product '${data.name}' ${
-               initialData ? 'updated' : 'added'
-            }.`,
-         });
-         router.refresh();
-         router.push(returnUrl);
-      } catch (error: any) {
-         captureException(error);
-         toast({
-            title: 'Something went wrong adding this product. Try again.',
-         });
-      } finally {
-         productAutosaver.clearAll();
-         localStorage.removeItem(pathName);
-         setLoading(false);
-      }
-   };
-
-   const onDelete = async () => {
-      try {
-         setLoading(true);
-         await apiDeleteProduct(params.productId, params.storeId);
-         router.refresh();
-         router.push(`${baseStoreURL}/inventory/products`);
-         toast({
-            title: 'Product deleted.',
-         });
-      } catch (error: any) {
-         captureException(error);
-         toast({
-            title: 'Something went wrong deleting this product. Try again.',
-         });
-      } finally {
-         productAutosaver.clearAll();
-         setLoading(false);
-         setOpen(false);
-      }
-   };
-
-   const updateReturnURL = () => {
-      const draftProduct = productAutosaver.getAll();
-
-      if (Object.keys(draftProduct).length > 0) {
-         return `&repopulate=true`;
-      }
-      return '';
-   };
 
    const Alerts = () => {
       const hasAddedCategory = !(
@@ -567,28 +605,32 @@ export const ProductForm: React.FC<ProductFormProps> = ({
             description={alertDescription}
             loading={loading}
          />
-         <div className="flex flex-col space-y-6">
-            <div className="flex space-x-4">
-               <Button variant={'outline'} onClick={promptLeaving}>
-                  <ArrowLeft className="mr-2 h-4 w-4" />
-               </Button>
-               <Heading title={title} description={description} />
+
+         <div className="flex justify-between">
+            <div className="flex flex-col space-y-6">
+               <div className="flex space-x-4">
+                  <Button variant={'outline'} onClick={promptLeaving}>
+                     <ArrowLeft className="mr-2 h-4 w-4" />
+                  </Button>
+                  <Heading title={title} description={description} />
+               </div>
+               <Alerts />
             </div>
-            <Alerts />
+            <div className="flex items-center">
+               {initialData && (
+                  <Button
+                     disabled={loading}
+                     variant="destructive"
+                     onClick={promptDeleting}
+                  >
+                     <Trash className="mr-2 h-4 w-4" /> Delete
+                  </Button>
+               )}
+            </div>
          </div>
-         <div className="flex items-center justify-between">
-            {/* <Heading title={title} description={description} /> */}
-            {initialData && (
-               <Button
-                  disabled={loading}
-                  variant="destructive"
-                  onClick={promptDeleting}
-               >
-                  <Trash className="mr-2 h-4 w-4" /> Delete
-               </Button>
-            )}
-         </div>
-         {/* <Separator /> */}
+
+         <Separator />
+
          <Form {...form}>
             <form
                onSubmit={form.handleSubmit(onSubmit)}
@@ -705,10 +747,26 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                            />
                         </div>
                         <div className="grid grid-cols-2">
-                           <div className="grid grid-rows-2">
-                              <p className="text-sm text-muted-foreground">
-                                 Profit
-                              </p>
+                           <div className="grid grid-rows-2 space-y-2">
+                              <TooltipProvider>
+                                 <Tooltip>
+                                    <TooltipTrigger asChild>
+                                       <div className="flex items-center">
+                                          <p className="text-sm text-muted-foreground">
+                                             Profit
+                                          </p>
+                                          <InfoCircledIcon className="h-4 w-4 ml-1 text-muted-foreground" />
+                                       </div>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                       <p>
+                                          Profit is the difference between the
+                                          list price and the cost. It indicates
+                                          the actual monetary gain from a sale.
+                                       </p>
+                                    </TooltipContent>
+                                 </Tooltip>
+                              </TooltipProvider>
                               {isLoadingCurrency && (
                                  <Skeleton className="w-[80px] h-[24px]" />
                               )}
@@ -719,10 +777,29 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                               )}
                            </div>
 
-                           <div className="grid grid-rows-2">
-                              <p className="text-sm text-muted-foreground">
-                                 Margin
-                              </p>
+                           <div className="grid grid-rows-2 space-y-2">
+                              <TooltipProvider>
+                                 <Tooltip>
+                                    <TooltipTrigger asChild>
+                                       <div className="flex items-center">
+                                          <p className="text-sm text-muted-foreground">
+                                             Margin
+                                          </p>
+                                          <InfoCircledIcon className="h-4 w-4 ml-1 text-muted-foreground" />
+                                       </div>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                       <p>
+                                          Margin is calculated as the difference
+                                          between the list price and the cost,
+                                          divided by the list price, expressed
+                                          as a percentage. It represents the
+                                          portion of the list price that turns
+                                          into profit.
+                                       </p>
+                                    </TooltipContent>
+                                 </Tooltip>
+                              </TooltipProvider>
                               <p className="text-sm">
                                  {isNaN(margin) ? '--' : `${margin}%`}
                               </p>
@@ -750,7 +827,16 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                                           form.resetField('subcategory_id');
 
                                           if (initialData) {
-                                             setInvalidatedSubcategory(true);
+                                             if (
+                                                initialData.category_id !==
+                                                value
+                                             ) {
+                                                setInvalidatedSubcategory(true);
+                                             } else {
+                                                setInvalidatedSubcategory(
+                                                   false,
+                                                );
+                                             }
                                           }
 
                                           setValidSubcategories(

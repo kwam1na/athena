@@ -1751,26 +1751,25 @@ export const TransactionsReportClient: React.FC<
             loading={isDeletingReport}
          />
 
-         <div className="flex flex-col space-y-6">
-            <div>
-               <Button
-                  variant={'outline'}
-                  onClick={onGoBack}
-                  disabled={isPublishingReport}
-               >
-                  <ArrowLeft className="mr-2 h-4 w-4" />
-               </Button>
+         <div className="flex justify-between">
+            <div className="flex flex-col space-y-6">
+               <div className="flex space-x-4">
+                  <Button
+                     variant={'outline'}
+                     onClick={onGoBack}
+                     disabled={isPublishingReport}
+                  >
+                     <ArrowLeft className="mr-2 h-4 w-4" />
+                  </Button>
+                  <Heading
+                     title={headerText}
+                     description="Track the daily sales operations of your store"
+                  />
+               </div>
             </div>
-            <Alerts />
-         </div>
-         <div className="flex items-center justify-between space-y-2">
-            <Heading
-               title={headerText}
-               description="Track the daily sales operations of your store"
-            />
-
             <ReportActionButtons />
          </div>
+
          <Separator />
 
          <div>
