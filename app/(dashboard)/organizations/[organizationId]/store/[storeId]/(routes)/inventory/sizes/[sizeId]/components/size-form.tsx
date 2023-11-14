@@ -29,6 +29,7 @@ import useReturnUrl from '@/hooks/use-get-return-url';
 import useGetBaseStoreUrl from '@/hooks/use-get-base-store-url';
 import { motion } from 'framer-motion';
 import { widgetVariants } from '@/lib/constants';
+import logger from '@/lib/logger/console-logger';
 
 const formSchema = z.object({
    name: z.string().min(1),
@@ -69,6 +70,10 @@ export const SizeForm: React.FC<SizeFormProps> = ({ initialData }) => {
       const returnUrl = getReturnUrl();
 
       try {
+         logger.info('action: began create/updateSize', {
+            sizeId: params.sizeId,
+            storeId: params.storeId,
+         });
          setLoading(true);
          if (initialData) {
             await apiUpdateSize(params.sizeId, params.storeId, data);
@@ -81,17 +86,30 @@ export const SizeForm: React.FC<SizeFormProps> = ({ initialData }) => {
             title: `Size '${data.name}' ${initialData ? 'updated' : 'added'}.`,
          });
       } catch (error: any) {
+         logger.error('action: create/updateSize', {
+            sizeId: params.sizeId,
+            storeId: params.storeId,
+            error: (error as Error).message,
+         });
          captureException(error);
          toast({
             title: 'Something went wrong adding this size. Try again.',
          });
       } finally {
          setLoading(false);
+         logger.info('action: create/updateSize', {
+            sizeId: params.sizeId,
+            storeId: params.storeId,
+         });
       }
    };
 
    const onDelete = async () => {
       try {
+         logger.info('action: began deleteSize', {
+            sizeId: params.sizeId,
+            storeId: params.storeId,
+         });
          setLoading(true);
          await apiDeleteSize(params.sizeId, params.storeId);
          router.refresh();
@@ -100,6 +118,11 @@ export const SizeForm: React.FC<SizeFormProps> = ({ initialData }) => {
             title: 'Size deleted.',
          });
       } catch (error: any) {
+         logger.error('action: deleteSize', {
+            sizeId: params.sizeId,
+            storeId: params.storeId,
+            error: (error as Error).message,
+         });
          captureException(error);
          toast({
             title: 'An error occured deleting this size. Make sure you removed all products using this size first and try again.',
@@ -107,6 +130,10 @@ export const SizeForm: React.FC<SizeFormProps> = ({ initialData }) => {
       } finally {
          setLoading(false);
          setOpen(false);
+         logger.info('action: deleteSize', {
+            sizeId: params.sizeId,
+            storeId: params.storeId,
+         });
       }
    };
 

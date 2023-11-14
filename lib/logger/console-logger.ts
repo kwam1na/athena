@@ -1,6 +1,6 @@
 import { ILogger } from "../interfaces/logger";
 
-export class ConsoleLogger implements ILogger {
+class ConsoleLogger implements ILogger {
     log(message: string, ...params: any[]): void {
         console.log(message, ...params);
     }
@@ -21,3 +21,6 @@ export class ConsoleLogger implements ILogger {
         console.debug(message, ...params);
     }
 }
+
+const logger = new ConsoleLogger();
+export default logger;

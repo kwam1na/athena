@@ -19,16 +19,9 @@ import { useOnboarding } from '@/hooks/use-onboarding-state';
 import { NameStep } from './steps/name-step';
 import { OrganizationStep } from './steps/organization-step';
 import { StoreStep } from './steps/store-step';
-import { ConsoleLogger } from '@/lib/logger/console-logger';
-import { useWrappedUser } from '@/providers/wrapped-user-provider';
+import logger from '@/lib/logger/console-logger';
 import { createBrowserClient } from '@supabase/ssr';
 import { User } from '@supabase/supabase-js';
-
-interface OnboardingStep {
-   title: string;
-   component: React.FC;
-   action: () => void;
-}
 
 export default function Onboarding() {
    const [isSubmitting, setIsSubmitting] = useState(false);
@@ -38,8 +31,6 @@ export default function Onboarding() {
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
    );
-
-   const logger = new ConsoleLogger();
 
    const {
       currentStep,
@@ -75,13 +66,18 @@ export default function Onboarding() {
       }
 
       try {
+         logger.info('action: began saveName', {
+            name: state.name,
+            user_id: user?.id,
+            component: 'onboarding',
+         });
          setIsSubmitting(true);
          await apiUpdateUser({ name: state.name });
          handleNext();
       } catch (error) {
          captureException(error);
 
-         logger.error('action:saveName', {
+         logger.error('action: saveName', {
             name: state.name,
             user_id: user?.id,
             component: 'onboarding',
@@ -104,7 +100,7 @@ export default function Onboarding() {
             }, 2000);
          }
       } finally {
-         logger.info('action:saveName', {
+         logger.info('action: saveName', {
             name: state.name,
             user_id: user?.id,
             component: 'onboarding',
@@ -120,6 +116,12 @@ export default function Onboarding() {
       }
 
       try {
+         logger.info('action: began saveOrganizationName', {
+            organization_name: state.organizationName,
+            organization_id: sessionStorage.getItem('organizationId'),
+            user_id: user?.id,
+            component: 'onboarding',
+         });
          setIsSubmitting(true);
          const storedOrgId = sessionStorage.getItem('organizationId');
 
@@ -138,7 +140,7 @@ export default function Onboarding() {
          handleNext();
       } catch (error) {
          captureException(error);
-         logger.error('action:saveOrganizationName', {
+         logger.error('action: saveOrganizationName', {
             store_name: state.storeName,
             user_id: user?.id,
             component: 'onboarding',
@@ -148,7 +150,7 @@ export default function Onboarding() {
             title: (error as any).message,
          });
       } finally {
-         logger.info('action:saveOrganizationName', {
+         logger.info('action: saveOrganizationName', {
             organization_name: state.organizationName,
             organization_id: sessionStorage.getItem('organizationId'),
             user_id: user?.id,
@@ -174,6 +176,11 @@ export default function Onboarding() {
       const storedOrgId = sessionStorage.getItem('organizationId');
 
       try {
+         logger.info('action: began saveStoreName', {
+            store_name: state.storeName,
+            user_id: user?.id,
+            component: 'onboarding',
+         });
          setIsSubmitting(true);
          const response = await apiCreateStore({
             name: state.storeName,
@@ -189,7 +196,7 @@ export default function Onboarding() {
          );
       } catch (error) {
          captureException(error);
-         logger.error('action:saveStoreName', {
+         logger.error('action: saveStoreName', {
             store_name: state.storeName,
             user_id: user?.id,
             component: 'onboarding',
@@ -199,7 +206,7 @@ export default function Onboarding() {
             title: (error as any).message,
          });
       } finally {
-         logger.info('action:saveStoreName', {
+         logger.info('action: saveStoreName', {
             store_name: state.storeName,
             user_id: user?.id,
             component: 'onboarding',

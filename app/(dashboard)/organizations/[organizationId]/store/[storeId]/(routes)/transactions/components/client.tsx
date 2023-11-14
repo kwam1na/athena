@@ -120,6 +120,7 @@ import useGetBaseStoreUrl from '@/hooks/use-get-base-store-url';
 import { TransactionsAutosaver } from '../utils/transactions-autosaver';
 import { motion } from 'framer-motion';
 import { widgetVariants } from '@/lib/constants';
+import logger from '@/lib/logger/console-logger';
 
 interface IndividualSearchResultProps {
    index: number;
@@ -481,6 +482,10 @@ export const TransactionsReportClient: React.FC<
       if (!transaction) return;
 
       try {
+         logger.info('action: began deleteReport', {
+            storeId: params.storeId,
+            transactionId: transaction?.id,
+         });
          if (deleteReportWithRestock && fetchedTransaction) {
             setIsDeletingReportWithRestock(true);
          } else setIsDeletingReport(true);
@@ -522,10 +527,20 @@ export const TransactionsReportClient: React.FC<
             title: errorMessage,
             description: (error as Error).message,
          });
+
+         logger.info('action: deleteReport', {
+            storeId: params.storeId,
+            transactionId: transaction?.id,
+            error: (error as Error).message,
+         });
       } finally {
          if (deleteReportWithRestock) {
             setIsDeletingReportWithRestock(false);
          } else setIsDeletingReport(false);
+         logger.info('action: deleteReport', {
+            storeId: params.storeId,
+            transactionId: transaction?.id,
+         });
       }
    };
 
@@ -757,6 +772,15 @@ export const TransactionsReportClient: React.FC<
       const body = createBody(data, date, result);
 
       try {
+         logger.info('action: began addTransactionItem', {
+            storeId: params.storeId,
+            transactionId: transaction?.id,
+            item: {
+               unitsSold: data.unitsSold,
+               product: result.product_name,
+               productId: result.product_id,
+            },
+         });
          setAddingItemButtonStates({
             ...addingItemButtonStates,
             [index]: true,
@@ -768,6 +792,11 @@ export const TransactionsReportClient: React.FC<
             handleExistingTransaction(body, transaction, draftTransactions);
          }
       } catch (error: any) {
+         logger.error('action: addTransactionItem', {
+            storeId: params.storeId,
+            transactionId: transaction?.id,
+            error: (error as Error).message,
+         });
          captureException(error);
          toast({
             title: 'An error occurred performing this operation',
@@ -776,6 +805,15 @@ export const TransactionsReportClient: React.FC<
       } finally {
          searchQueryForm.reset();
          cleanup(index);
+         logger.info('action: addTransactionItem', {
+            storeId: params.storeId,
+            transactionId: transaction?.id,
+            item: {
+               unitsSold: data.unitsSold,
+               product: result.product_name,
+               productId: result.product_id,
+            },
+         });
       }
    };
 
@@ -875,6 +913,11 @@ export const TransactionsReportClient: React.FC<
       );
 
       try {
+         logger.info('action: began publishing Report', {
+            storeId: params.storeId,
+            transactionId: transaction?.id,
+         });
+
          setIsPublishingReport(true);
 
          const payload = transactionItems.map((item) => keysToSnakeCase(item));
@@ -918,8 +961,18 @@ export const TransactionsReportClient: React.FC<
             title: 'An error occurred publishing this report',
             description: `Error: ${(error as ServiceError).message}`,
          });
+
+         logger.error('action: publishReport', {
+            storeId: params.storeId,
+            transactionId: transaction?.id,
+            error: (error as Error).message,
+         });
       } finally {
          setIsPublishingReport(false);
+         logger.info('action: publishReport', {
+            storeId: params.storeId,
+            transactionId: transaction?.id,
+         });
       }
    };
 

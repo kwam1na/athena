@@ -17,6 +17,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { CategoryColumn } from './columns';
 import { apiDeleteCategory } from '@/lib/api/categories';
 import useGetBaseStoreUrl from '@/hooks/use-get-base-store-url';
+import logger from '@/lib/logger/console-logger';
 
 interface CellActionProps {
    data: CategoryColumn;
@@ -32,6 +33,10 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
 
    const onConfirm = async () => {
       try {
+         logger.info('action: began deleteCategoryId (cell action)', {
+            categoryId: data.id,
+            storeId: params.storeId,
+         });
          setLoading(true);
          await apiDeleteCategory(data.id, params.storeId);
          toast({
@@ -43,9 +48,18 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
          toast({
             title: 'An error occurred deleting this category. Make sure you removed all subcategories and products using this category first.',
          });
+         logger.error('action: deleteCategoryId (cell action)', {
+            categoryId: data.id,
+            storeId: params.storeId,
+            error: (error as Error).message,
+         });
       } finally {
          setOpen(false);
          setLoading(false);
+         logger.info('action: deleteCategoryId (cell action)', {
+            categoryId: data.id,
+            storeId: params.storeId,
+         });
       }
    };
 

@@ -34,7 +34,7 @@ import useReturnUrl from '@/hooks/use-get-return-url';
 import useGetBaseStoreUrl from '@/hooks/use-get-base-store-url';
 import { motion } from 'framer-motion';
 import { widgetVariants } from '@/lib/constants';
-import { ConsoleLogger } from '@/lib/logger/console-logger';
+import logger from '@/lib/logger/console-logger';
 
 const formSchema = z.object({
    name: z.string().min(2),
@@ -50,7 +50,6 @@ interface ColorFormProps {
 }
 
 export const ColorForm: React.FC<ColorFormProps> = ({ initialData }) => {
-   const logger = new ConsoleLogger();
    const params = useParams();
    const router = useRouter();
    const baseStoreURL = useGetBaseStoreUrl();
@@ -78,6 +77,10 @@ export const ColorForm: React.FC<ColorFormProps> = ({ initialData }) => {
       const returnUrl = getReturnUrl();
 
       try {
+         logger.info('action: began create/updateColor', {
+            colorId: params.colorId,
+            storeId: params.storeId,
+         });
          setLoading(true);
          if (initialData) {
             await apiUpdateColor(params.colorId, params.storeId, data);
@@ -113,6 +116,10 @@ export const ColorForm: React.FC<ColorFormProps> = ({ initialData }) => {
 
    const onDelete = async () => {
       try {
+         logger.info('action: began deleteColor', {
+            colorId: params.colorId,
+            storeId: params.storeId,
+         });
          setLoading(true);
          await apiDeleteColor(params.colorId, params.storeId);
          router.refresh();

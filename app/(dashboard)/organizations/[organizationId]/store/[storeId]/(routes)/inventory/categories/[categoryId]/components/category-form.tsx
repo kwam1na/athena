@@ -2,11 +2,9 @@
 
 import { startTransaction, captureException } from '@sentry/nextjs';
 import * as z from 'zod';
-import axios from 'axios';
 import { useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
-import { toast } from 'react-hot-toast';
 import { ArrowLeft, Trash } from 'lucide-react';
 import { category } from '@prisma/client';
 import { useParams, useRouter } from 'next/navigation';
@@ -35,7 +33,7 @@ import useReturnUrl from '@/hooks/use-get-return-url';
 import useGetBaseStoreUrl from '@/hooks/use-get-base-store-url';
 import { motion } from 'framer-motion';
 import { widgetVariants } from '@/lib/constants';
-import { ConsoleLogger } from '@/lib/logger/console-logger';
+import logger from '@/lib/logger/console-logger';
 import { wrap } from 'module';
 
 const formSchema = z.object({
@@ -49,7 +47,6 @@ interface CategoryFormProps {
 }
 
 export const CategoryForm: React.FC<CategoryFormProps> = ({ initialData }) => {
-   const logger = new ConsoleLogger();
    const params = useParams();
    const router = useRouter();
    const baseStoreURL = useGetBaseStoreUrl();
@@ -78,6 +75,10 @@ export const CategoryForm: React.FC<CategoryFormProps> = ({ initialData }) => {
 
    const onDelete = async () => {
       try {
+         logger.info('action: began deleteCategory', {
+            categoryId: params.categoryId,
+            storeId: params.storeId,
+         });
          setLoading(true);
          await apiDeleteCategory(params.categoryId, params.storeId);
          router.refresh();
@@ -110,6 +111,10 @@ export const CategoryForm: React.FC<CategoryFormProps> = ({ initialData }) => {
       const returnUrl = getReturnUrl();
 
       try {
+         logger.info('action: began create/updateCategory', {
+            categoryId: params.categoryId,
+            storeId: params.storeId,
+         });
          setLoading(true);
          if (initialData) {
             await apiUpdateCategory(params.categoryId, params.storeId, data);

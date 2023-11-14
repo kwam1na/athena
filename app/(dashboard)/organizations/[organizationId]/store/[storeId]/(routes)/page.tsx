@@ -35,7 +35,7 @@ import { captureException } from '@sentry/nextjs';
 import { TaskAlert } from '@/components/ui/task-alert';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { cookies } from 'next/headers';
-import { ConsoleLogger } from '@/lib/logger/console-logger';
+import logger from '@/lib/logger/console-logger';
 interface DashboardPageProps {
    params: {
       storeId: string;
@@ -55,8 +55,6 @@ const DashboardPage: React.FC<DashboardPageProps> = async ({ params }) => {
          },
       },
    );
-
-   const logger = new ConsoleLogger();
 
    const {
       data: { session },
