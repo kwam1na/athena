@@ -249,20 +249,19 @@ export const ViewReportClient: React.FC<TransactionsReportClientProps> = ({
          initial="hidden"
          animate="visible"
       >
-         <div className="flex flex-col space-y-6">
-            <div className="flex">
-               <Button variant={'outline'} onClick={() => router.back()}>
-                  <ArrowLeft className="mr-2 h-4 w-4" />
-               </Button>
+         <div className="flex justify-between">
+            <div className="flex flex-col space-y-6">
+               <div className="flex space-x-4">
+                  <Button variant={'outline'} onClick={() => router.back()}>
+                     <ArrowLeft className="mr-2 h-4 w-4" />
+                  </Button>
+                  <Heading
+                     title={transaction?.reportTitle || 'Transaction report'}
+                     description="Insights and sales performance"
+                  />
+               </div>
+               <Alerts />
             </div>
-            <Alerts />
-         </div>
-         <div className="flex items-center justify-between space-y-2">
-            <Heading
-               title={transaction?.reportTitle || 'Transaction report'}
-               description="Insights and sales performance"
-            />
-
             <ReportActionButtons />
          </div>
          <Separator />

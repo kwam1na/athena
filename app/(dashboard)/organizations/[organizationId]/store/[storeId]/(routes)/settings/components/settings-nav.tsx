@@ -38,7 +38,7 @@ export function SettingsNav({
    return (
       <nav
          className={cn(
-            'inline-flex items-center space-x-4 bg-card lg:space-x-6',
+            'flex items-center space-x-4 dark:bg-card bg-zinc-100 lg:space-x-6',
             className,
          )}
          {...props}

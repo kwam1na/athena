@@ -269,25 +269,26 @@ export const SubategoryForm: React.FC<SubcategoryFormProps> = ({
             onConfirm={onDelete}
             loading={loading}
          />
-         <div className="flex flex-col space-y-6">
-            <div>
-               <Button variant={'outline'} onClick={() => router.back()}>
-                  <ArrowLeft className="mr-2 h-4 w-4" />
-               </Button>
+         <div className="flex justify-between">
+            <div className="flex flex-col space-y-6">
+               <div className="flex space-x-4">
+                  <Button variant={'outline'} onClick={() => router.back()}>
+                     <ArrowLeft className="mr-2 h-4 w-4" />
+                  </Button>
+                  <Heading title={title} description={description} />
+               </div>
             </div>
-            <Alerts />
-         </div>
-         <div className="flex items-center justify-between">
-            <Heading title={title} description={description} />
-            {initialData && (
-               <Button
-                  disabled={loading}
-                  variant="destructive"
-                  onClick={() => setOpen(true)}
-               >
-                  <Trash className="mr-2 h-4 w-4" /> Delete
-               </Button>
-            )}
+            <div className="flex items-center">
+               {initialData && (
+                  <Button
+                     disabled={loading}
+                     variant="destructive"
+                     onClick={() => setOpen(true)}
+                  >
+                     <Trash className="mr-2 h-4 w-4" /> Delete
+                  </Button>
+               )}
+            </div>
          </div>
          <Separator />
          <Form {...form}>

@@ -1,4 +1,9 @@
+import { useTheme } from 'next-themes';
+
 export const AthenLogo = () => {
+   const { theme } = useTheme();
+
+   const logoBGColor = theme === 'dark' ? '#fff' : '#e0e0e3';
    return (
       <svg
          xmlns="http://www.w3.org/2000/svg"
@@ -7,7 +12,7 @@ export const AthenLogo = () => {
       >
          <g stroke-width="2.00" fill="none" stroke-linecap="butt">
             <path
-               stroke="#fff"
+               stroke={logoBGColor}
                vector-effect="non-scaling-stroke"
                d="
   M 423.42 539.17
@@ -44,7 +49,7 @@ export const AthenLogo = () => {
   A 0.39 0.39 0.0 0 1 423.42 539.17"
             />
             <path
-               stroke="#fff"
+               stroke={logoBGColor}
                vector-effect="non-scaling-stroke"
                d="
   M 521.91 451.23
@@ -66,7 +71,7 @@ export const AthenLogo = () => {
   L 521.91 451.23"
             />
             <path
-               stroke="#fff"
+               stroke={logoBGColor}
                vector-effect="non-scaling-stroke"
                d="
   M 568.34 619.45
@@ -90,7 +95,7 @@ export const AthenLogo = () => {
   Q 562.44 618.27 568.34 619.45"
             />
             <path
-               stroke="#fff"
+               stroke={logoBGColor}
                vector-effect="non-scaling-stroke"
                d="
   M 497.32 340.33
