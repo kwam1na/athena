@@ -35,6 +35,8 @@ import useReturnUrl from '@/hooks/use-get-return-url';
 import useGetBaseStoreUrl from '@/hooks/use-get-base-store-url';
 import { motion } from 'framer-motion';
 import { widgetVariants } from '@/lib/constants';
+import { ConsoleLogger } from '@/lib/logger/console-logger';
+import { wrap } from 'module';
 
 const formSchema = z.object({
    name: z.string().min(2),
@@ -47,6 +49,7 @@ interface CategoryFormProps {
 }
 
 export const CategoryForm: React.FC<CategoryFormProps> = ({ initialData }) => {
+   const logger = new ConsoleLogger();
    const params = useParams();
    const router = useRouter();
    const baseStoreURL = useGetBaseStoreUrl();
@@ -84,12 +87,21 @@ export const CategoryForm: React.FC<CategoryFormProps> = ({ initialData }) => {
          });
       } catch (error: any) {
          captureException(error);
+         logger.error('action: deleteCategory', {
+            categoryId: params.categoryId,
+            storeId: params.storeId,
+            error: (error as Error).message,
+         });
          toast({
             title: `An error occured deleting this category. Make sure you have removed all categories and products under this category first.`,
          });
       } finally {
          setLoading(false);
          setOpen(false);
+         logger.info('action: deleteCategory', {
+            categoryId: params.categoryId,
+            storeId: params.storeId,
+         });
          transaction.finish();
       }
    };
@@ -113,11 +125,20 @@ export const CategoryForm: React.FC<CategoryFormProps> = ({ initialData }) => {
          router.push(returnUrl);
       } catch (error: any) {
          captureException(error);
+         logger.error('action: create/updateCategory', {
+            categoryId: params.categoryId,
+            storeId: params.storeId,
+            error: (error as Error).message,
+         });
          toast({
             title: `Something went wrong adding this category. Try again.`,
          });
       } finally {
          setLoading(false);
+         logger.info('action: create/updateCategory', {
+            categoryId: params.categoryId,
+            storeId: params.storeId,
+         });
          transaction.finish();
       }
    };

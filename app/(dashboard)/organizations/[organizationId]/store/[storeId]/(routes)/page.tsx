@@ -35,7 +35,7 @@ import { captureException } from '@sentry/nextjs';
 import { TaskAlert } from '@/components/ui/task-alert';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { cookies } from 'next/headers';
-import DashboardSkeleton from '@/components/states/loading/dashboard-skeleton';
+import { ConsoleLogger } from '@/lib/logger/console-logger';
 interface DashboardPageProps {
    params: {
       storeId: string;
@@ -55,6 +55,8 @@ const DashboardPage: React.FC<DashboardPageProps> = async ({ params }) => {
          },
       },
    );
+
+   const logger = new ConsoleLogger();
 
    const {
       data: { session },
@@ -115,6 +117,7 @@ const DashboardPage: React.FC<DashboardPageProps> = async ({ params }) => {
 
    results.forEach((result, idx) => {
       if (result.status === 'rejected') {
+         logger.error(`Promise ${idx} failed with reason: ${result.reason}`);
          captureException(
             `Promise ${idx} failed with reason: ${
                (result.reason as Error).message

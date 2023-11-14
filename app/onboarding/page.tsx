@@ -14,11 +14,15 @@ import { apiUpdateUser } from '@/lib/api/users';
 import { ServiceError } from '@/lib/error';
 import { captureException } from '@sentry/nextjs';
 import { ArrowLeft, ArrowRight } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useOnboarding } from '@/hooks/use-onboarding-state';
 import { NameStep } from './steps/name-step';
 import { OrganizationStep } from './steps/organization-step';
 import { StoreStep } from './steps/store-step';
+import { ConsoleLogger } from '@/lib/logger/console-logger';
+import { useWrappedUser } from '@/providers/wrapped-user-provider';
+import { createBrowserClient } from '@supabase/ssr';
+import { User } from '@supabase/supabase-js';
 
 interface OnboardingStep {
    title: string;
@@ -29,6 +33,13 @@ interface OnboardingStep {
 export default function Onboarding() {
    const [isSubmitting, setIsSubmitting] = useState(false);
    const [isRedirecting, setIsRedirecting] = useState(false);
+   const [user, setUser] = useState<User | undefined>(undefined);
+   const supabase = createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+   );
+
+   const logger = new ConsoleLogger();
 
    const {
       currentStep,
@@ -42,6 +53,18 @@ export default function Onboarding() {
       toggleInvalidInput,
       ...state
    } = useOnboarding();
+
+   useEffect(() => {
+      const getUser = async () => {
+         const {
+            data: { session },
+         } = await supabase.auth.getSession();
+         const user = session?.user;
+         setUser(user);
+      };
+
+      getUser();
+   }, []);
 
    const { toast } = useToast();
 
@@ -57,6 +80,13 @@ export default function Onboarding() {
          handleNext();
       } catch (error) {
          captureException(error);
+
+         logger.error('action:saveName', {
+            name: state.name,
+            user_id: user?.id,
+            component: 'onboarding',
+            error: (error as Error).message,
+         });
 
          const serviceError = error as ServiceError;
          let message = serviceError.message;
@@ -74,6 +104,11 @@ export default function Onboarding() {
             }, 2000);
          }
       } finally {
+         logger.info('action:saveName', {
+            name: state.name,
+            user_id: user?.id,
+            component: 'onboarding',
+         });
          setIsSubmitting(false);
       }
    };
@@ -103,10 +138,22 @@ export default function Onboarding() {
          handleNext();
       } catch (error) {
          captureException(error);
+         logger.error('action:saveOrganizationName', {
+            store_name: state.storeName,
+            user_id: user?.id,
+            component: 'onboarding',
+            error: (error as Error).message,
+         });
          toast({
             title: (error as any).message,
          });
       } finally {
+         logger.info('action:saveOrganizationName', {
+            organization_name: state.organizationName,
+            organization_id: sessionStorage.getItem('organizationId'),
+            user_id: user?.id,
+            component: 'onboarding',
+         });
          setIsSubmitting(false);
       }
    };
@@ -142,10 +189,21 @@ export default function Onboarding() {
          );
       } catch (error) {
          captureException(error);
+         logger.error('action:saveStoreName', {
+            store_name: state.storeName,
+            user_id: user?.id,
+            component: 'onboarding',
+            error: (error as Error).message,
+         });
          toast({
             title: (error as any).message,
          });
       } finally {
+         logger.info('action:saveStoreName', {
+            store_name: state.storeName,
+            user_id: user?.id,
+            component: 'onboarding',
+         });
          setIsSubmitting(false);
       }
    };

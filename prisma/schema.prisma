@@ -33,7 +33,6 @@ model category {
   created_at   DateTime      @default(now())
   updated_at   DateTime      @updatedAt
   subcategory  subcategory[] @relation("CategoryToSubcategory")
-  // SKUCounter  SKUCounter    @relation("CategoryToSKUCounter")
   sku_counter  sku_counter[]
 
   @@index([store_id])

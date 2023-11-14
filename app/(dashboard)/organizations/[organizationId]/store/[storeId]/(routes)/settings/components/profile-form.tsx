@@ -21,17 +21,7 @@ import { Separator } from '@/components/ui/separator';
 import { Heading } from '@/components/ui/heading';
 import { AlertModal } from '@/components/modals/alert-modal';
 import { useOrigin } from '@/hooks/use-origin';
-import { ActionAlert } from '@/components/ui/action-alert';
-import {
-   Select,
-   SelectContent,
-   SelectItem,
-   SelectTrigger,
-   SelectValue,
-} from '@/components/ui/select';
 import { useToast } from '@/components/ui/use-toast';
-import { useUser } from '@auth0/nextjs-auth0/client';
-import { Claims } from '@auth0/nextjs-auth0';
 import { useWrappedUser } from '@/providers/wrapped-user-provider';
 import { LoadingButton } from '@/components/ui/loading-button';
 
