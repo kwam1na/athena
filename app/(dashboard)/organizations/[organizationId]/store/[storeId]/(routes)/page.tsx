@@ -4,13 +4,12 @@ import { getTotalGrossRevenue } from '@/actions/get-total-gross-revenue';
 import { getSalesCount } from '@/actions/get-sales-count';
 import { getSalesRevenue } from '@/actions/get-sales-revenue';
 import { getStockCount } from '@/actions/get-stock-count';
-import { formatter, reflect } from '@/lib/utils';
+import { reflect } from '@/lib/utils';
 import { getStore } from '@/lib/repositories/storesRepository';
 import { getTotalUnitsSoldForStore } from '@/actions/get-total-units';
 import { getRevenueChange } from '@/actions/get-revenue-change';
 import { getTotalUnitsSoldChange } from '@/actions/get-units-sold-change';
 import { getTotalNetRevenue } from '@/actions/get-total-net-revenue';
-import { getSession } from '@auth0/nextjs-auth0';
 import { getUser } from '@/lib/repositories/userRepository';
 import {
    getAverageTransactionValue,
@@ -44,13 +43,14 @@ interface DashboardPageProps {
 }
 
 const DashboardPage: React.FC<DashboardPageProps> = async ({ params }) => {
+   const cookieData = (name: string) => cookies().get(name)?.value;
    const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       {
          cookies: {
             get(name: string) {
-               return cookies().get(name)?.value;
+               return cookieData(name);
             },
          },
       },
