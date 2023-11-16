@@ -1,9 +1,9 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useParams } from 'next/navigation';
-
 import { useStoreModal } from '@/hooks/use-store-modal';
+
+export const dynamic = 'force-dynamic';
 
 const SetupPage = () => {
    const onOpen = useStoreModal((state) => state.onOpen);

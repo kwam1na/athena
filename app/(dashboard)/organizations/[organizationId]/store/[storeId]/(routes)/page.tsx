@@ -46,6 +46,8 @@ async function getCookieData(name: string) {
    return cookies().get(name)?.value;
 }
 
+export const dynamic = 'force-dynamic';
+
 const DashboardPage: React.FC<DashboardPageProps> = async ({ params }) => {
    const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
