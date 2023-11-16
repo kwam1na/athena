@@ -75,6 +75,8 @@ export const SubcategoriesClient: React.FC<SubcategoriesClientProps> = ({
       getFacetedUniqueValues: getFacetedUniqueValues(),
    });
 
+   const defaultHiddenColumns = ['createdAt', 'updatedAt'];
+
    return (
       <motion.div
          variants={mainContainerVariants}
@@ -102,7 +104,12 @@ export const SubcategoriesClient: React.FC<SubcategoriesClientProps> = ({
             table={table}
             categoryOptions={categoryOptions}
          />
-         <DataTable table={table} columns={columns} />
+         <DataTable
+            table={table}
+            columns={columns}
+            tableKey="subcategories"
+            defaultHiddenColumns={defaultHiddenColumns}
+         />
       </motion.div>
    );
 };

@@ -27,18 +27,6 @@ export function DataTableViewOptions<TData>({
    const params = useParams();
    const visibilityMapKey = `${params.storeId}-table-${tableKey}-column-visibility`;
 
-   useEffect(() => {
-      const savedColumns = localStorage.getItem(visibilityMapKey);
-      if (savedColumns) {
-         const parsedColumns = JSON.parse(savedColumns);
-         table.getAllColumns().forEach((column) => {
-            if (parsedColumns[column.id] !== undefined) {
-               column.toggleVisibility(parsedColumns[column.id]);
-            }
-         });
-      }
-   }, []);
-
    const handleCheckedChange = (columnId: string, value: boolean) => {
       const savedColumns = localStorage.getItem(visibilityMapKey) || '{}';
       const parsedColumns = JSON.parse(savedColumns);

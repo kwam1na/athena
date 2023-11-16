@@ -42,12 +42,7 @@ export const TotalUnitsSoldWidget: React.FC<TotalUnitsSoldWidgetProps> = ({
    };
 
    return (
-      <motion.div
-         variants={widgetVariants}
-         initial="hidden"
-         animate="visible"
-         className="space-y-8"
-      >
+      <>
          {!loading && typeof _totalUnitsSold === 'number' && (
             <Link href={`${baseStoreURL}/transactions`}>
                <MetricCard
@@ -79,6 +74,6 @@ export const TotalUnitsSoldWidget: React.FC<TotalUnitsSoldWidgetProps> = ({
                <Skeleton className="w-[60%] h-8" />
             </div>
          )}
-      </motion.div>
+      </>
    );
 };

@@ -65,6 +65,8 @@ export const SizesClient: React.FC<SizesClientProps> = ({ data }) => {
       getFacetedUniqueValues: getFacetedUniqueValues(),
    });
 
+   const defaultHiddenColumns = ['createdAt', 'updatedAt'];
+
    return (
       <motion.div
          variants={mainContainerVariants}
@@ -87,7 +89,12 @@ export const SizesClient: React.FC<SizesClientProps> = ({ data }) => {
          </div>
          <Separator />
          <DataTableToolbar searchKey="name" table={table} tableKey="sizes" />
-         <DataTable columns={columns} table={table} />
+         <DataTable
+            columns={columns}
+            table={table}
+            tableKey="sizes"
+            defaultHiddenColumns={defaultHiddenColumns}
+         />
       </motion.div>
    );
 };

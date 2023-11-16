@@ -634,7 +634,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
          />
 
          <div className="flex justify-between">
-            <div className="flex flex-col space-y-6">
+            <div className="flex flex-col space-y-6 w-full">
                <div className="flex space-x-4">
                   <Button variant={'outline'} onClick={promptLeaving}>
                      <ArrowLeft className="mr-2 h-4 w-4" />

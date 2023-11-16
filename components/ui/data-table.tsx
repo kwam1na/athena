@@ -1,6 +1,6 @@
 'use client';
 
-import { Key } from 'react';
+import { Key, useEffect, useState } from 'react';
 
 import { ColumnDef, flexRender } from '@tanstack/react-table';
 
@@ -13,12 +13,15 @@ import {
    TableRow,
 } from '@/components/ui/table';
 import { DataTablePagination } from './data-table-pagination';
+import { useParams } from 'next/navigation';
 
 interface DataTableProps<TData, TValue> {
    columns: ColumnDef<TData, TValue>[];
    table: any;
+   tableKey: string;
    showHeader?: boolean;
    showPagination?: boolean;
+   defaultHiddenColumns?: string[];
 }
 
 export function DataTable<TData, TValue>({
@@ -26,7 +29,30 @@ export function DataTable<TData, TValue>({
    showHeader = true,
    showPagination = true,
    table,
+   tableKey,
+   defaultHiddenColumns,
 }: DataTableProps<TData, TValue>) {
+   const params = useParams();
+   const visibilityMapKey = `${params.storeId}-table-${tableKey}-column-visibility`;
+   const [showTable, setShowTable] = useState(false);
+
+   useEffect(() => {
+      const savedColumns = localStorage.getItem(visibilityMapKey);
+      if (savedColumns) {
+         const parsedColumns = JSON.parse(savedColumns);
+         table.getAllColumns().forEach((column: any) => {
+            if (parsedColumns[column.id] !== undefined) {
+               column.toggleVisibility(parsedColumns[column.id]);
+            }
+         });
+      } else if (defaultHiddenColumns) {
+         defaultHiddenColumns.forEach((columnId) => {
+            table.getColumn(columnId)?.toggleVisibility(false);
+         });
+      }
+      setShowTable(true);
+   }, []);
+
    return (
       <div className="space-y-4">
          <div className="rounded-md border">
@@ -59,42 +85,46 @@ export function DataTable<TData, TValue>({
                         )}
                   </TableHeader>
                )}
-               <TableBody>
-                  {table.getRowModel().rows?.length ? (
-                     table
-                        .getRowModel()
-                        .rows.map(
-                           (row: {
-                              id: Key | null | undefined;
-                              getIsSelected: () => any;
-                              getVisibleCells: () => any[];
-                           }) => (
-                              <TableRow
-                                 key={row.id}
-                                 data-state={row.getIsSelected() && 'selected'}
-                              >
-                                 {row.getVisibleCells().map((cell) => (
-                                    <TableCell key={cell.id}>
-                                       {flexRender(
-                                          cell.column.columnDef.cell,
-                                          cell.getContext(),
-                                       )}
-                                    </TableCell>
-                                 ))}
-                              </TableRow>
-                           ),
-                        )
-                  ) : (
-                     <TableRow>
-                        <TableCell
-                           colSpan={columns.length}
-                           className="h-24 text-center"
-                        >
-                           No results.
-                        </TableCell>
-                     </TableRow>
-                  )}
-               </TableBody>
+               {showTable && (
+                  <TableBody>
+                     {table.getRowModel().rows?.length ? (
+                        table
+                           .getRowModel()
+                           .rows.map(
+                              (row: {
+                                 id: Key | null | undefined;
+                                 getIsSelected: () => any;
+                                 getVisibleCells: () => any[];
+                              }) => (
+                                 <TableRow
+                                    key={row.id}
+                                    data-state={
+                                       row.getIsSelected() && 'selected'
+                                    }
+                                 >
+                                    {row.getVisibleCells().map((cell) => (
+                                       <TableCell key={cell.id}>
+                                          {flexRender(
+                                             cell.column.columnDef.cell,
+                                             cell.getContext(),
+                                          )}
+                                       </TableCell>
+                                    ))}
+                                 </TableRow>
+                              ),
+                           )
+                     ) : (
+                        <TableRow>
+                           <TableCell
+                              colSpan={columns.length}
+                              className="h-24 text-center"
+                           >
+                              No results.
+                           </TableCell>
+                        </TableRow>
+                     )}
+                  </TableBody>
+               )}
             </Table>
          </div>
          {showPagination && <DataTablePagination table={table} />}

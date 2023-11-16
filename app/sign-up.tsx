@@ -9,7 +9,6 @@ import {
    FormControl,
    FormField,
    FormItem,
-   FormLabel,
    FormMessage,
 } from '@/components/ui/form';
 import { useEffect, useState } from 'react';
@@ -17,9 +16,10 @@ import { captureException } from '@sentry/nextjs';
 import { useToast } from '@/components/ui/use-toast';
 import { LoadingButton } from '@/components/ui/loading-button';
 import { createBrowserClient } from '@supabase/ssr';
-import Cookies from 'js-cookie';
 import { useRouter } from 'next/navigation';
+import { motion } from 'framer-motion';
 import axios from 'axios';
+import { mainContainerVariants } from '@/lib/constants';
 
 const formSchema = z.object({
    email: z.string().email(),
@@ -78,11 +78,13 @@ export const SignUp = () => {
          if (session) {
             try {
                const { access_token, refresh_token } = session;
-               await axios.post('/api/v1/update-tokens', { access_token, refresh_token });
-
-             } catch (error) {
+               await axios.post('/api/v1/update-tokens', {
+                  access_token,
+                  refresh_token,
+               });
+            } catch (error) {
                console.error((error as Error).message);
-             }
+            }
          }
 
          if (user) {
@@ -102,7 +104,12 @@ export const SignUp = () => {
    };
 
    return (
-      <div className="flex flex-col gap-12 w-[40%]">
+      <motion.div
+         className="flex flex-col gap-12 w-[40%]"
+         variants={mainContainerVariants}
+         initial="hidden"
+         animate="visible"
+      >
          <div className="flex flex-col items-center space-y-4">
             <h1 className="text-3xl">Hello.</h1>
             <p className="text-sm text-muted-foreground">
@@ -202,6 +209,6 @@ export const SignUp = () => {
                </form>
             </Form>
          </div>
-      </div>
+      </motion.div>
    );
 };

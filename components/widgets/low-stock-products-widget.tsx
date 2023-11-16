@@ -29,12 +29,7 @@ export const LowStockProductsWidget: React.FC<LowStockProductsWidgetProps> = ({
    const params = useParams();
 
    return (
-      <motion.div
-         variants={widgetVariants}
-         initial="hidden"
-         animate="visible"
-         className="space-y-8"
-      >
+      <>
          {!loading && _lowStockProducts && _lowStockProducts.length > 0 && (
             <div className="border rounded-lg p-8 space-y-8">
                <div className="flex items-center">
@@ -73,6 +68,6 @@ export const LowStockProductsWidget: React.FC<LowStockProductsWidgetProps> = ({
                <Skeleton className="w-[60%] h-8" />
             </div>
          )}
-      </motion.div>
+      </>
    );
 };
