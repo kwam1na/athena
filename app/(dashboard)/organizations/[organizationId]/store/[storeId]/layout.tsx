@@ -16,6 +16,7 @@ import AppSkeleton from '@/components/states/loading/app-skeleton';
 import DashboardSkeleton from '@/components/states/loading/dashboard-skeleton';
 import { getUser } from '@/lib/repositories/userRepository';
 import { getStore } from '@/lib/repositories/storesRepository';
+import { LayoutAnimation } from '@/providers/layout-animation';
 
 export default async function DashboardLayout({
    children,
@@ -97,7 +98,7 @@ export default async function DashboardLayout({
                         <Navbar />
                      </div>
                      <main className="flex-grow pt-12 pb-24 h-full">
-                        {children}
+                        <LayoutAnimation>{children}</LayoutAnimation>
                      </main>
                   </div>
                </div>

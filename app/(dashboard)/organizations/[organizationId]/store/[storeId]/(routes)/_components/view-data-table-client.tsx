@@ -102,6 +102,7 @@ export const ViewDataTableClient: React.FC<ViewDataTableClient> = ({
             table={table}
             showHeader={false}
             showPagination={false}
+            tableKey=""
          />
       </>
    );

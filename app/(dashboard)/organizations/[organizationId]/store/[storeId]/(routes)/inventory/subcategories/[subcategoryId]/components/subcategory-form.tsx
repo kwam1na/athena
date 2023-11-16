@@ -42,6 +42,7 @@ import useGetBaseStoreUrl from '@/hooks/use-get-base-store-url';
 import { LocalStorageSync } from '@/lib/local-storage-sync';
 import { motion } from 'framer-motion';
 import { widgetVariants } from '@/lib/constants';
+import logger from '@/lib/logger/console-logger';
 
 const formSchema = z.object({
    name: z.string().min(2),
@@ -180,6 +181,10 @@ export const SubategoryForm: React.FC<SubcategoryFormProps> = ({
       }
 
       try {
+         logger.info('action: began create/updateSubcategory', {
+            subcategoryId: params.subcategoryId,
+            storeId: params.storeId,
+         });
          setLoading(true);
          if (initialData) {
             await apiUpdateSubcategory(
@@ -203,6 +208,11 @@ export const SubategoryForm: React.FC<SubcategoryFormProps> = ({
          router.refresh();
          router.push(returnUrl);
       } catch (error: any) {
+         logger.error('action: create/updateSubcategory', {
+            subcategoryId: params.subcategoryId,
+            storeId: params.storeId,
+            error: (error as Error).message,
+         });
          captureException(error);
          toast({
             title: 'Something went wrong updating this subcategory. Try again.',
@@ -211,6 +221,10 @@ export const SubategoryForm: React.FC<SubcategoryFormProps> = ({
          setLoading(false);
          autosaver.clearAll();
          localStorage.removeItem(pathName);
+         logger.info('action: create/updateSubcategory', {
+            subcategoryId: params.subcategoryId,
+            storeId: params.storeId,
+         });
       }
    };
 
@@ -224,6 +238,11 @@ export const SubategoryForm: React.FC<SubcategoryFormProps> = ({
             title: 'Subcategory deleted.',
          });
       } catch (error: any) {
+         logger.error('action: deleteSubcategory', {
+            subcategoryId: params.subcategoryId,
+            storeId: params.storeId,
+            error: (error as Error).message,
+         });
          captureException(error);
          toast({
             title: 'An error occurred deleting this subcategory. Make sure all products under this subcategory are deleted and try again.',
@@ -231,6 +250,10 @@ export const SubategoryForm: React.FC<SubcategoryFormProps> = ({
       } finally {
          setLoading(false);
          setOpen(false);
+         logger.info('action: deleteSubcategory', {
+            subcategoryId: params.subcategoryId,
+            storeId: params.storeId,
+         });
       }
    };
 

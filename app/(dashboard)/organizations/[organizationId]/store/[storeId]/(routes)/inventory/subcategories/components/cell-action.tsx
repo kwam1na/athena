@@ -19,6 +19,7 @@ import { SubcategoryColumn } from './columns';
 import { useToast } from '@/components/ui/use-toast';
 import { apiDeleteSubcategory } from '@/lib/api/subcategories';
 import useGetBaseStoreUrl from '@/hooks/use-get-base-store-url';
+import logger from '@/lib/logger/console-logger';
 
 interface CellActionProps {
    data: SubcategoryColumn;
@@ -34,6 +35,10 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
 
    const onConfirm = async () => {
       try {
+         logger.info('action: began deleteSubcategory (cell action)', {
+            subcategoryId: data.id,
+            storeId: params.storeId,
+         });
          setLoading(true);
          await apiDeleteSubcategory(data.id, params.storeId);
          toast({
@@ -42,12 +47,21 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
          router.refresh();
       } catch (error) {
          captureException(error);
+         logger.error('action: deleteSubcategory (cell action)', {
+            subcategoryId: data.id,
+            storeId: params.storeId,
+            error: (error as Error).message,
+         });
          toast({
             title: 'Am error occurred deleting this subcategory. Make sure you removed all products using this category first.',
          });
       } finally {
          setOpen(false);
          setLoading(false);
+         logger.info('action: deleteSubcategory (cell action)', {
+            subcategoryId: data.id,
+            storeId: params.storeId,
+         });
       }
    };
 

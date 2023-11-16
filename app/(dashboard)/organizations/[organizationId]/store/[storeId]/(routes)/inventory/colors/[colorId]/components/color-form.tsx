@@ -34,6 +34,7 @@ import useReturnUrl from '@/hooks/use-get-return-url';
 import useGetBaseStoreUrl from '@/hooks/use-get-base-store-url';
 import { motion } from 'framer-motion';
 import { widgetVariants } from '@/lib/constants';
+import logger from '@/lib/logger/console-logger';
 
 const formSchema = z.object({
    name: z.string().min(2),
@@ -76,6 +77,10 @@ export const ColorForm: React.FC<ColorFormProps> = ({ initialData }) => {
       const returnUrl = getReturnUrl();
 
       try {
+         logger.info('action: began create/updateColor', {
+            colorId: params.colorId,
+            storeId: params.storeId,
+         });
          setLoading(true);
          if (initialData) {
             await apiUpdateColor(params.colorId, params.storeId, data);
@@ -83,9 +88,7 @@ export const ColorForm: React.FC<ColorFormProps> = ({ initialData }) => {
             await apiCreateColor(params.storeId, data);
          }
          toast({
-            title: `Category '${data.name}' ${
-               initialData ? 'updated' : 'added'
-            }.`,
+            title: `Color '${data.name}' ${initialData ? 'updated' : 'added'}.`,
          });
          router.refresh();
          router.push(returnUrl);
@@ -94,16 +97,29 @@ export const ColorForm: React.FC<ColorFormProps> = ({ initialData }) => {
          });
       } catch (error: any) {
          captureException(error);
+         logger.error('action: create/updateColor', {
+            colorId: params.colorId,
+            storeId: params.storeId,
+            error: (error as Error).message,
+         });
          toast({
             title: 'Something went wrong adding this color. Try again.',
          });
       } finally {
+         logger.info('action: create/updateColor', {
+            colorId: params.colorId,
+            storeId: params.storeId,
+         });
          setLoading(false);
       }
    };
 
    const onDelete = async () => {
       try {
+         logger.info('action: began deleteColor', {
+            colorId: params.colorId,
+            storeId: params.storeId,
+         });
          setLoading(true);
          await apiDeleteColor(params.colorId, params.storeId);
          router.refresh();
@@ -113,10 +129,19 @@ export const ColorForm: React.FC<ColorFormProps> = ({ initialData }) => {
          });
       } catch (error: any) {
          captureException(error);
+         logger.error('action: deleteColor', {
+            colorId: params.colorId,
+            storeId: params.storeId,
+            error: (error as Error).message,
+         });
          toast({
             title: 'Something went wrong deleting this product. Make sure all products using this color are deleted and try again.',
          });
       } finally {
+         logger.info('action: deleteColor', {
+            colorId: params.colorId,
+            storeId: params.storeId,
+         });
          setLoading(false);
          setOpen(false);
       }

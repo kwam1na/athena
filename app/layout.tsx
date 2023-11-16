@@ -10,12 +10,6 @@ import { ExchangeRateProvider } from '@/providers/exchange-rate-provider';
 import { cookies } from 'next/headers';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import AuthListener from '@/providers/auth-listener';
-import { getUser } from '@/lib/repositories/userRepository';
-import { redirect } from 'next/navigation';
-import { findUserOrganization } from '@/lib/repositories/organizationsRepository';
-import prismadb from '@/lib/prismadb';
-import { ErrorPage } from '@/components/states/error';
-import AppSkeleton from '@/components/states/loading/app-skeleton';
 
 const inter = Inter({ subsets: ['latin'] });
 

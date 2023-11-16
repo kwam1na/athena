@@ -14,7 +14,6 @@ import {
 } from '@/components/ui/dropdown-menu';
 
 import { TransactionItemColumn } from './columns';
-import { useToast } from '@/components/ui/use-toast';
 import { formatter, keysToCamelCase } from '@/lib/utils';
 import { useStoreCurrency } from '@/providers/currency-provider';
 import { ActionModal } from '@/components/modals/action-modal';

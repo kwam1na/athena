@@ -18,6 +18,7 @@ import { SizeColumn } from './columns';
 import { useToast } from '@/components/ui/use-toast';
 import { apiDeleteSize } from '@/lib/api/sizes';
 import useGetBaseStoreUrl from '@/hooks/use-get-base-store-url';
+import logger from '@/lib/logger/console-logger';
 
 interface CellActionProps {
    data: SizeColumn;
@@ -33,6 +34,10 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
 
    const onConfirm = async () => {
       try {
+         logger.info('action: began deleteSize (cell action)', {
+            sizeId: data.id,
+            storeId: params.storeId,
+         });
          setLoading(true);
          await apiDeleteSize(data.id, params.storeId);
          toast({
@@ -40,6 +45,11 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
          });
          router.refresh();
       } catch (error) {
+         logger.error('action: deleteSize (cell action)', {
+            sizeId: data.id,
+            storeId: params.storeId,
+            error: (error as Error).message,
+         });
          captureException(error);
          toast({
             title: 'An error occurred deleting this size. Make sure you removed all products using this size first.',
@@ -47,6 +57,10 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
       } finally {
          setOpen(false);
          setLoading(false);
+         logger.info('action: deleteSize (cell action)', {
+            sizeId: data.id,
+            storeId: params.storeId,
+         });
       }
    };
 

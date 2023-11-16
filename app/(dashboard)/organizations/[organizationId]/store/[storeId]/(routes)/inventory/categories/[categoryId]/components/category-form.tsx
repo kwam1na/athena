@@ -2,11 +2,9 @@
 
 import { startTransaction, captureException } from '@sentry/nextjs';
 import * as z from 'zod';
-import axios from 'axios';
 import { useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
-import { toast } from 'react-hot-toast';
 import { ArrowLeft, Trash } from 'lucide-react';
 import { category } from '@prisma/client';
 import { useParams, useRouter } from 'next/navigation';
@@ -35,6 +33,8 @@ import useReturnUrl from '@/hooks/use-get-return-url';
 import useGetBaseStoreUrl from '@/hooks/use-get-base-store-url';
 import { motion } from 'framer-motion';
 import { widgetVariants } from '@/lib/constants';
+import logger from '@/lib/logger/console-logger';
+import { wrap } from 'module';
 
 const formSchema = z.object({
    name: z.string().min(2),
@@ -75,6 +75,10 @@ export const CategoryForm: React.FC<CategoryFormProps> = ({ initialData }) => {
 
    const onDelete = async () => {
       try {
+         logger.info('action: began deleteCategory', {
+            categoryId: params.categoryId,
+            storeId: params.storeId,
+         });
          setLoading(true);
          await apiDeleteCategory(params.categoryId, params.storeId);
          router.refresh();
@@ -84,12 +88,21 @@ export const CategoryForm: React.FC<CategoryFormProps> = ({ initialData }) => {
          });
       } catch (error: any) {
          captureException(error);
+         logger.error('action: deleteCategory', {
+            categoryId: params.categoryId,
+            storeId: params.storeId,
+            error: (error as Error).message,
+         });
          toast({
             title: `An error occured deleting this category. Make sure you have removed all categories and products under this category first.`,
          });
       } finally {
          setLoading(false);
          setOpen(false);
+         logger.info('action: deleteCategory', {
+            categoryId: params.categoryId,
+            storeId: params.storeId,
+         });
          transaction.finish();
       }
    };
@@ -98,6 +111,10 @@ export const CategoryForm: React.FC<CategoryFormProps> = ({ initialData }) => {
       const returnUrl = getReturnUrl();
 
       try {
+         logger.info('action: began create/updateCategory', {
+            categoryId: params.categoryId,
+            storeId: params.storeId,
+         });
          setLoading(true);
          if (initialData) {
             await apiUpdateCategory(params.categoryId, params.storeId, data);
@@ -113,11 +130,20 @@ export const CategoryForm: React.FC<CategoryFormProps> = ({ initialData }) => {
          router.push(returnUrl);
       } catch (error: any) {
          captureException(error);
+         logger.error('action: create/updateCategory', {
+            categoryId: params.categoryId,
+            storeId: params.storeId,
+            error: (error as Error).message,
+         });
          toast({
             title: `Something went wrong adding this category. Try again.`,
          });
       } finally {
          setLoading(false);
+         logger.info('action: create/updateCategory', {
+            categoryId: params.categoryId,
+            storeId: params.storeId,
+         });
          transaction.finish();
       }
    };

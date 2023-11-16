@@ -47,12 +47,7 @@ export const GrossRevenueWidget: React.FC<GrossRevenueWidgetProps> = ({
    };
 
    return (
-      <motion.div
-         variants={widgetVariants}
-         initial="hidden"
-         animate="visible"
-         className="space-y-8"
-      >
+      <>
          {typeof _grossRevenue === 'number' &&
             !loading &&
             !isCurrencyLoading && (
@@ -86,6 +81,6 @@ export const GrossRevenueWidget: React.FC<GrossRevenueWidgetProps> = ({
                <Skeleton className="w-[60%] h-8" />
             </div>
          )}
-      </motion.div>
+      </>
    );
 };

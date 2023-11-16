@@ -4,13 +4,12 @@ import { getTotalGrossRevenue } from '@/actions/get-total-gross-revenue';
 import { getSalesCount } from '@/actions/get-sales-count';
 import { getSalesRevenue } from '@/actions/get-sales-revenue';
 import { getStockCount } from '@/actions/get-stock-count';
-import { formatter, reflect } from '@/lib/utils';
+import { reflect } from '@/lib/utils';
 import { getStore } from '@/lib/repositories/storesRepository';
 import { getTotalUnitsSoldForStore } from '@/actions/get-total-units';
 import { getRevenueChange } from '@/actions/get-revenue-change';
 import { getTotalUnitsSoldChange } from '@/actions/get-units-sold-change';
 import { getTotalNetRevenue } from '@/actions/get-total-net-revenue';
-import { getSession } from '@auth0/nextjs-auth0';
 import { getUser } from '@/lib/repositories/userRepository';
 import {
    getAverageTransactionValue,
@@ -35,13 +34,19 @@ import { captureException } from '@sentry/nextjs';
 import { TaskAlert } from '@/components/ui/task-alert';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { cookies } from 'next/headers';
-import DashboardSkeleton from '@/components/states/loading/dashboard-skeleton';
+import logger from '@/lib/logger/console-logger';
 interface DashboardPageProps {
    params: {
       storeId: string;
       organizationId: string;
    };
 }
+
+async function getCookieData(name: string) {
+   return cookies().get(name)?.value;
+}
+
+export const dynamic = 'force-dynamic';
 
 const DashboardPage: React.FC<DashboardPageProps> = async ({ params }) => {
    const supabase = createServerClient(
@@ -50,7 +55,7 @@ const DashboardPage: React.FC<DashboardPageProps> = async ({ params }) => {
       {
          cookies: {
             get(name: string) {
-               return cookies().get(name)?.value;
+               return getCookieData(name);
             },
          },
       },
@@ -115,6 +120,7 @@ const DashboardPage: React.FC<DashboardPageProps> = async ({ params }) => {
 
    results.forEach((result, idx) => {
       if (result.status === 'rejected') {
+         logger.error(`Promise ${idx} failed with reason: ${result.reason}`);
          captureException(
             `Promise ${idx} failed with reason: ${
                (result.reason as Error).message

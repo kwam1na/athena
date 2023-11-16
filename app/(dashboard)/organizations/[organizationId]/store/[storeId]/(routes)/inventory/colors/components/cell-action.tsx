@@ -20,6 +20,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { apiDeleteColor } from '@/lib/api/colors';
 import { ca } from 'date-fns/locale';
 import useGetBaseStoreUrl from '@/hooks/use-get-base-store-url';
+import logger from '@/lib/logger/console-logger';
 
 interface CellActionProps {
    data: ColorColumn;
@@ -35,6 +36,10 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
 
    const onConfirm = async () => {
       try {
+         logger.info('action: began deleteColor (cell action)', {
+            colorId: data.id,
+            storeId: params.storeId,
+         });
          setLoading(true);
          await apiDeleteColor(data.id, params.storeId);
          toast({
@@ -42,6 +47,11 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
          });
          router.refresh();
       } catch (error) {
+         logger.error('action: deleteColor (cell action)', {
+            colorId: data.id,
+            storeId: params.storeId,
+            error: (error as Error).message,
+         });
          captureException(error);
          toast({
             title: 'An error occured deleting this color. Make sure all products using this color are deleted and try again.',
@@ -49,6 +59,10 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
       } finally {
          setOpen(false);
          setLoading(false);
+         logger.info('action: deleteColor (cell action)', {
+            colorId: data.id,
+            storeId: params.storeId,
+         });
       }
    };
 

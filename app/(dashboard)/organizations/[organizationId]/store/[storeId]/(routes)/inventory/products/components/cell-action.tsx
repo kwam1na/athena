@@ -19,6 +19,7 @@ import { ProductColumn } from './columns';
 import { useToast } from '@/components/ui/use-toast';
 import { apiDeleteProduct } from '@/lib/api/products';
 import useGetBaseStoreUrl from '@/hooks/use-get-base-store-url';
+import logger from '@/lib/logger/console-logger';
 
 interface CellActionProps {
    data: ProductColumn;
@@ -34,6 +35,10 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
 
    const onConfirm = async () => {
       try {
+         logger.info('action: began deleteProduct (cell action)', {
+            productId: data.id,
+            storeId: params.storeId,
+         });
          setLoading(true);
          await apiDeleteProduct(data.id, params.storeId);
          toast({
@@ -42,12 +47,21 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
          router.refresh();
       } catch (error) {
          captureException(error);
+         logger.error('action: deleteProduct (cell action)', {
+            productId: data.id,
+            storeId: params.storeId,
+            error: (error as Error).message,
+         });
          toast({
             title: 'An error occured deleting this product.',
          });
       } finally {
          setLoading(false);
          setOpen(false);
+         logger.info('action: deleteProduct (cell action)', {
+            productId: data.id,
+            storeId: params.storeId,
+         });
       }
    };
 

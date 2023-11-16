@@ -19,16 +19,13 @@ import { useOnboarding } from '@/hooks/use-onboarding-state';
 import { NameStep } from './steps/name-step';
 import { OrganizationStep } from './steps/organization-step';
 import { StoreStep } from './steps/store-step';
-
-interface OnboardingStep {
-   title: string;
-   component: React.FC;
-   action: () => void;
-}
+import { postLog } from '@/lib/api/logger';
+import { useLogger } from 'next-axiom';
 
 export default function Onboarding() {
    const [isSubmitting, setIsSubmitting] = useState(false);
    const [isRedirecting, setIsRedirecting] = useState(false);
+   const logger = useLogger();
 
    const {
       currentStep,
@@ -45,6 +42,76 @@ export default function Onboarding() {
 
    const { toast } = useToast();
 
+   const saveName1 = async () => {
+      if (!state.name.trim()) {
+         toggleInvalidInput('name', true);
+         return;
+      }
+
+      setIsSubmitting(true);
+
+      // Log the beginning of the action
+      const beginLogPromise = postLog('info', 'action: began saveName', {
+         name: state.name,
+         component: 'onboarding',
+      });
+
+      // Perform the API update
+      const updateUserPromise = apiUpdateUser({ name: state.name });
+
+      try {
+         // Wait for both the log and the update to complete
+         const results = await Promise.allSettled([
+            beginLogPromise,
+            updateUserPromise,
+         ]);
+
+         // Check if the API update was successful
+         const updateResult = results.find(
+            (result) =>
+               result.status === 'fulfilled' &&
+               result.value === updateUserPromise,
+         );
+         if (updateResult) {
+            handleNext();
+         }
+
+         // Log the end of the action
+         await postLog('info', 'action: saveName', {
+            name: state.name,
+            component: 'onboarding',
+         });
+      } catch (error) {
+         captureException(error);
+
+         // Error logging is independent and should not affect the control flow
+         postLog('error', 'action: saveName', {
+            name: state.name,
+            component: 'onboarding',
+            error: (error as Error).message,
+         }).catch(captureException);
+
+         handleAPIError(error);
+      } finally {
+         setIsSubmitting(false);
+      }
+   };
+
+   const handleAPIError = (error: unknown) => {
+      const serviceError = error as ServiceError;
+      let message = serviceError.message;
+      if (serviceError.status === 401) {
+         message = 'Session timed out. Please sign in again.';
+         setTimeout(() => {
+            window.location.href = '/auth';
+         }, 2000);
+      }
+
+      toast({
+         title: message,
+      });
+   };
+
    const saveName = async () => {
       if (!state.name.trim()) {
          toggleInvalidInput('name', true);
@@ -52,11 +119,29 @@ export default function Onboarding() {
       }
 
       try {
+         // logger.info('action: began saveName', {
+         //    name: state.name,
+         //    component: 'onboarding',
+         // });
          setIsSubmitting(true);
          await apiUpdateUser({ name: state.name });
+         await postLog('info', 'action: saveName', {
+            name: state.name,
+            component: 'onboarding',
+         });
+         // logger.info('action: saveName', {
+         //    name: state.name,
+         //    component: 'onboarding',
+         // });
          handleNext();
       } catch (error) {
          captureException(error);
+
+         // await postLog('error', 'action: saveName', {
+         //    name: state.name,
+         //    component: 'onboarding',
+         //    error: (error as Error).message,
+         // });
 
          const serviceError = error as ServiceError;
          let message = serviceError.message;
@@ -85,6 +170,11 @@ export default function Onboarding() {
       }
 
       try {
+         await postLog('info', 'action: began saveOrganizationName', {
+            organization_name: state.organizationName,
+            organization_id: sessionStorage.getItem('organizationId'),
+            component: 'onboarding',
+         });
          setIsSubmitting(true);
          const storedOrgId = sessionStorage.getItem('organizationId');
 
@@ -100,9 +190,22 @@ export default function Onboarding() {
             sessionStorage.setItem('organizationId', newOrg.id);
          }
 
+         await postLog('info', 'action: saveOrganizationName', {
+            organization_name: state.organizationName,
+            organization_id: sessionStorage.getItem('organizationId'),
+            component: 'onboarding',
+         });
+
          handleNext();
       } catch (error) {
          captureException(error);
+
+         await postLog('error', 'action: saveOrganizationName', {
+            store_name: state.storeName,
+            component: 'onboarding',
+            error: (error as Error).message,
+         });
+
          toast({
             title: (error as any).message,
          });
@@ -127,6 +230,10 @@ export default function Onboarding() {
       const storedOrgId = sessionStorage.getItem('organizationId');
 
       try {
+         await postLog('info', 'action: began saveStoreName', {
+            store_name: state.storeName,
+            component: 'onboarding',
+         });
          setIsSubmitting(true);
          const response = await apiCreateStore({
             name: state.storeName,
@@ -135,6 +242,10 @@ export default function Onboarding() {
          });
 
          await apiUpdateUser({ is_onboarded: true });
+         await postLog('info', 'action: saveStoreName', {
+            store_name: state.storeName,
+            component: 'onboarding',
+         });
          sessionStorage.removeItem('organizationId');
          setIsRedirecting(true);
          window.location.assign(
@@ -142,6 +253,13 @@ export default function Onboarding() {
          );
       } catch (error) {
          captureException(error);
+
+         await postLog('error', 'action: saveStoreName', {
+            store_name: state.storeName,
+            component: 'onboarding',
+            error: (error as Error).message,
+         });
+
          toast({
             title: (error as any).message,
          });

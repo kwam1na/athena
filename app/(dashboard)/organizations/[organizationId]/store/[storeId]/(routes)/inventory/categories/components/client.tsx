@@ -70,6 +70,8 @@ export const CategoriesClient: React.FC<CategoriesClientProps> = ({
       getFacetedUniqueValues: getFacetedUniqueValues(),
    });
 
+   const defaultHiddenColumns = ['createdAt', 'updatedAt'];
+
    return (
       <motion.div
          variants={mainContainerVariants}
@@ -96,7 +98,12 @@ export const CategoriesClient: React.FC<CategoriesClientProps> = ({
             tableKey="categories"
             table={table}
          />
-         <DataTable columns={columns} table={table} />
+         <DataTable
+            columns={columns}
+            table={table}
+            tableKey="categories"
+            defaultHiddenColumns={defaultHiddenColumns}
+         />
       </motion.div>
    );
 };

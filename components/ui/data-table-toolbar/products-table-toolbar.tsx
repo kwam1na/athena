@@ -24,9 +24,11 @@ interface DataTableToolbarProps<TData> {
       value: string;
       icon?: React.ComponentType<{ className?: string }>;
    }[];
+   defaultHiddenColumns?: string[];
 }
 
 export function DataTableToolbar<TData>({
+   defaultHiddenColumns,
    searchKey,
    table,
    tableKey,

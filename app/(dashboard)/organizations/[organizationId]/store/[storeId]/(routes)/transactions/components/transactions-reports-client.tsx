@@ -193,7 +193,11 @@ export const TransactionsReportsClient: React.FC<
                      tableKey="transactions"
                      table={table}
                   />
-                  <DataTable columns={columns} table={table} />
+                  <DataTable
+                     columns={columns}
+                     table={table}
+                     tableKey="transactions"
+                  />
                </div>
 
                {formattedCategoryMetrics &&

@@ -70,6 +70,7 @@ import {
    TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { InfoCircledIcon } from '@radix-ui/react-icons';
+import logger from '@/lib/logger/console-logger';
 
 enum ActionContext {
    NONE,
@@ -306,6 +307,10 @@ export const ProductForm: React.FC<ProductFormProps> = ({
     */
    const onDelete = async () => {
       try {
+         logger.info('action: began deleteProduct', {
+            productId: params.productId,
+            storeId: params.storeId,
+         });
          setLoading(true);
          await apiDeleteProduct(params.productId, params.storeId);
          router.refresh();
@@ -315,6 +320,11 @@ export const ProductForm: React.FC<ProductFormProps> = ({
          });
       } catch (error: any) {
          captureException(error);
+         logger.error('action: deleteProduct', {
+            productId: params.productId,
+            storeId: params.storeId,
+            error: (error as Error).message,
+         });
          toast({
             title: 'Something went wrong deleting this product. Try again.',
          });
@@ -322,6 +332,10 @@ export const ProductForm: React.FC<ProductFormProps> = ({
          productAutosaver.clearAll();
          setLoading(false);
          setOpen(false);
+         logger.info('action: deleteProduct', {
+            productId: params.productId,
+            storeId: params.storeId,
+         });
       }
    };
 
@@ -352,6 +366,10 @@ export const ProductForm: React.FC<ProductFormProps> = ({
       }
 
       try {
+         logger.info('action: began create/updateProduct', {
+            productId: params.productId,
+            storeId: params.storeId,
+         });
          setLoading(true);
          if (initialData) {
             await apiUpdateProduct(
@@ -370,6 +388,11 @@ export const ProductForm: React.FC<ProductFormProps> = ({
          router.refresh();
          router.push(returnUrl);
       } catch (error: any) {
+         logger.error('action: create/updateProduct', {
+            productId: params.productId,
+            storeId: params.storeId,
+            error: (error as Error).message,
+         });
          captureException(error);
          toast({
             title: 'Something went wrong adding this product. Try again.',
@@ -378,6 +401,10 @@ export const ProductForm: React.FC<ProductFormProps> = ({
          productAutosaver.clearAll();
          localStorage.removeItem(pathName);
          setLoading(false);
+         logger.info('action: create/updateProduct', {
+            productId: params.productId,
+            storeId: params.storeId,
+         });
       }
    };
 
@@ -607,7 +634,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
          />
 
          <div className="flex justify-between">
-            <div className="flex flex-col space-y-6">
+            <div className="flex flex-col space-y-6 w-full">
                <div className="flex space-x-4">
                   <Button variant={'outline'} onClick={promptLeaving}>
                      <ArrowLeft className="mr-2 h-4 w-4" />

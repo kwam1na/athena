@@ -66,6 +66,8 @@ export const ColorClient: React.FC<ColorClientProps> = ({ data }) => {
       getFacetedUniqueValues: getFacetedUniqueValues(),
    });
 
+   const defaultHiddenColumns = ['createdAt', 'updatedAt'];
+
    return (
       <motion.div
          variants={mainContainerVariants}
@@ -88,7 +90,12 @@ export const ColorClient: React.FC<ColorClientProps> = ({ data }) => {
          </div>
          <Separator />
          <DataTableToolbar searchKey="name" tableKey="colors" table={table} />
-         <DataTable columns={columns} table={table} />
+         <DataTable
+            columns={columns}
+            table={table}
+            tableKey="colors"
+            defaultHiddenColumns={defaultHiddenColumns}
+         />
       </motion.div>
    );
 };

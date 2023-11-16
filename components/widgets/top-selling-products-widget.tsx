@@ -27,12 +27,7 @@ export const TopSellingProductssWidget: React.FC<
    const params = useParams();
 
    return (
-      <motion.div
-         variants={widgetVariants}
-         initial="hidden"
-         animate="visible"
-         className="space-y-8"
-      >
+      <>
          {!loading && _topSellingProducts && _topSellingProducts.length > 1 && (
             <>
                <p className="text-md">Top selling products this month</p>
@@ -69,6 +64,6 @@ export const TopSellingProductssWidget: React.FC<
                <Skeleton className="w-[60%] h-8" />
             </div>
          )}
-      </motion.div>
+      </>
    );
 };

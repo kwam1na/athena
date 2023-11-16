@@ -10,6 +10,7 @@ import React, {
 } from 'react';
 
 export interface WrappedUserProfile {
+   id?: string;
    name?: string;
    email?: string;
    store_id?: string;
