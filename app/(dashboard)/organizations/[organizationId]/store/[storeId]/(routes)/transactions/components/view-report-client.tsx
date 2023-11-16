@@ -306,7 +306,11 @@ export const ViewReportClient: React.FC<TransactionsReportClientProps> = ({
                         <span className="text-muted-foreground">
                            Transactions
                         </span>
-                        <DataTable table={table} columns={viewReportColumns} />
+                        <DataTable
+                           table={table}
+                           columns={viewReportColumns}
+                           tableKey="view-transactions"
+                        />
                      </div>
 
                      <div className="lg:w-[40%] md:w-full space-y-4">

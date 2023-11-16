@@ -2113,7 +2113,11 @@ export const TransactionsReportClient: React.FC<
                            placeholder="Filter transactions..."
                            table={table}
                         />
-                        <DataTable table={table} columns={columns} />
+                        <DataTable
+                           table={table}
+                           columns={columns}
+                           tableKey="transactions-transaction-items"
+                        />
                      </div>
 
                      {Object.keys(categorySales).length > 0 && (
