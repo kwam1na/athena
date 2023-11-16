@@ -42,15 +42,18 @@ interface DashboardPageProps {
    };
 }
 
+async function getCookieData(name: string) {
+   return cookies().get(name)?.value;
+}
+
 const DashboardPage: React.FC<DashboardPageProps> = async ({ params }) => {
-   const cookieData = (name: string) => cookies().get(name)?.value;
    const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       {
          cookies: {
             get(name: string) {
-               return cookieData(name);
+               return getCookieData(name);
             },
          },
       },
