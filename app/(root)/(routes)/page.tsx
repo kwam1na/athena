@@ -3,8 +3,6 @@
 import { useEffect } from 'react';
 import { useStoreModal } from '@/hooks/use-store-modal';
 
-export const dynamic = 'force-dynamic';
-
 const SetupPage = () => {
    const onOpen = useStoreModal((state) => state.onOpen);
    const isOpen = useStoreModal((state) => state.isOpen);
