@@ -26,7 +26,7 @@ import { useState } from 'react';
 import { DataTableToolbar } from '@/components/ui/data-table-toolbar/products-table-toolbar';
 import useGetBaseStoreUrl from '@/hooks/use-get-base-store-url';
 import { motion } from 'framer-motion';
-import { mainContainerVariants } from '@/lib/constants';
+import { mainContainerVariants, widgetVariants } from '@/lib/constants';
 
 interface ProductsClientProps {
    storeName?: string;
@@ -93,13 +93,13 @@ export const ProductsClient: React.FC<ProductsClientProps> = ({
    ];
 
    return (
-      <motion.div
-         variants={mainContainerVariants}
-         initial="hidden"
-         animate="visible"
-         className="space-y-8"
-      >
-         <div className="flex items-center justify-between">
+      <div className="space-y-8">
+         <motion.div
+            className="flex items-center justify-between"
+            variants={widgetVariants}
+            initial="hidden"
+            animate="visible"
+         >
             <Heading
                title={`Products`}
                description={`Manage products for ${storeName}`}
@@ -111,21 +111,30 @@ export const ProductsClient: React.FC<ProductsClientProps> = ({
             >
                <Plus className="mr-2 h-4 w-4" /> Add new
             </Button>
-         </div>
+         </motion.div>
+
          <Separator />
-         <DataTableToolbar
-            searchKey="name"
-            tableKey="products"
-            table={table}
-            categoryOptions={categoryOptions}
-            subcategoryOptions={subcategoryOptions}
-         />
-         <DataTable
-            columns={columns}
-            tableKey="products"
-            table={table}
-            defaultHiddenColumns={defaultHiddenColumns}
-         />
-      </motion.div>
+
+         <motion.div
+            className="space-y-8"
+            variants={mainContainerVariants}
+            initial="hidden"
+            animate="visible"
+         >
+            <DataTableToolbar
+               searchKey="name"
+               tableKey="products"
+               table={table}
+               categoryOptions={categoryOptions}
+               subcategoryOptions={subcategoryOptions}
+            />
+            <DataTable
+               columns={columns}
+               tableKey="products"
+               table={table}
+               defaultHiddenColumns={defaultHiddenColumns}
+            />
+         </motion.div>
+      </div>
    );
 };

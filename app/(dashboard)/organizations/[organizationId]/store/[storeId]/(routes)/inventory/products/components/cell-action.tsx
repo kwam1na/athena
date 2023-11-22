@@ -1,7 +1,7 @@
 'use client';
 
 import { captureException } from '@sentry/nextjs';
-import { Edit, MoreHorizontal, Trash } from 'lucide-react';
+import { Edit, Eye, MoreHorizontal, Trash } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
 import { useState } from 'react';
 
@@ -89,6 +89,15 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
                   onClick={() =>
                      router.push(
                         `${baseStoreURL}/inventory/products/${data.id}`,
+                     )
+                  }
+               >
+                  <Eye className="mr-2 h-4 w-4" /> View
+               </DropdownMenuItem>
+               <DropdownMenuItem
+                  onClick={() =>
+                     router.push(
+                        `${baseStoreURL}/inventory/products/${data.id}/edit`,
                      )
                   }
                >

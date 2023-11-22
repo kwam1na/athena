@@ -37,7 +37,8 @@ import { AverageTransactionValueWidget } from '@/components/widgets/average-tran
 import { AverageUnitsPerTransactionWidget } from '@/components/widgets/average-units-per-transaction-widget';
 import useGetBaseStoreUrl from '@/hooks/use-get-base-store-url';
 import { motion } from 'framer-motion';
-import { mainContainerVariants } from '@/lib/constants';
+import { mainContainerVariants, widgetVariants } from '@/lib/constants';
+import { Skeleton } from '@/components/ui/skeleton';
 
 type TransactionsReport = transaction & {
    transaction_items: transaction_item[];
@@ -128,89 +129,102 @@ export const TransactionsReportsClient: React.FC<
       });
 
    return (
-      <motion.div
-         className="flex flex-col gap-4"
-         variants={mainContainerVariants}
-         initial="hidden"
-         animate="visible"
-      >
-         <div className="flex items-center justify-between">
-            <Heading
-               title={
-                  isLoadingUser ? `Sales reports` : `Hi, ${wrappedUser?.name}`
-               }
-               description={
-                  store
-                     ? `Manage the sales operations of ${store}`
-                     : 'Manage the sales operations of your store'
-               }
-            />
+      <div className="flex flex-col gap-4">
+         <motion.div
+            className="flex items-center justify-between"
+            variants={widgetVariants}
+            initial="hidden"
+            animate="visible"
+         >
+            {isLoadingUser && (
+               <div className="space-y-4">
+                  <Skeleton className="w-[280px] h-[32px]" />
+                  <Skeleton className="w-[320px] h-[16px]" />
+               </div>
+            )}
+            {!isLoadingUser && (
+               <Heading
+                  title={`Hi, ${wrappedUser?.name}`}
+                  description={
+                     store
+                        ? `Manage the sales operations of ${store}`
+                        : 'Manage the sales operations of your store'
+                  }
+               />
+            )}
             <Button
                onClick={() => router.push(`${baseStoreURL}/transactions/new`)}
             >
                <Plus className="mr-2 h-4 w-4" /> Create new report
             </Button>
-         </div>
+         </motion.div>
 
-         <Separator />
-
-         <div className="grid md:grid-cols-1 lg:grid-cols-3 gap-8 pt-8">
-            <GrossRevenueWidget
-               grossRevenue={grossRevenue}
-               percentageChange={grossRevenuePercentageChange}
-            />
-            <NetRevenueWidget
-               netRevenue={netRevenue}
-               percentageChange={netRevenuePercentageChange}
-            />
-            <TotalUnitsSoldWidget
-               totalUnitsSold={totalUnitsSold}
-               percentageChange={totalUnitsSoldPercentageChange}
-            />
-         </div>
-
-         <div className="flex flex-col gap-8 pt-8">
-            <div className="w-full flex flex-col gap-4 pt-4 md:pt-0">
-               <div className="flex w-full gap-8 justify-between">
-                  <div className="w-[50%]">
-                     <AverageTransactionValueWidget
-                        averageTransactionValue={averageTransactionValue}
-                     />
-                  </div>
-                  <div className="w-[50%]">
-                     <AverageUnitsPerTransactionWidget
-                        averageUnitsPerTransaction={averageUnitsPerTransaction}
-                     />
-                  </div>
-               </div>
+         <motion.div
+            className="space-y-6"
+            variants={mainContainerVariants}
+            initial="hidden"
+            animate="visible"
+         >
+            <div className="grid md:grid-cols-1 lg:grid-cols-3 gap-8 pt-8">
+               <GrossRevenueWidget
+                  grossRevenue={grossRevenue}
+                  percentageChange={grossRevenuePercentageChange}
+               />
+               <NetRevenueWidget
+                  netRevenue={netRevenue}
+                  percentageChange={netRevenuePercentageChange}
+               />
+               <TotalUnitsSoldWidget
+                  totalUnitsSold={totalUnitsSold}
+                  percentageChange={totalUnitsSoldPercentageChange}
+               />
             </div>
 
-            <div className="w-full flex gap-8 md:flex-col-reverse lg:flex-row">
-               <div className="flex flex-col gap-4 lg:w-[80%] md:w-[100%]">
-                  <span className="text-muted-foreground">Reports</span>
-                  <DataTableToolbar
-                     searchKey="title"
-                     tableKey="transactions"
-                     table={table}
-                  />
-                  <DataTable
-                     columns={columns}
-                     table={table}
-                     tableKey="transactions"
-                  />
+            <div className="flex flex-col gap-8 pt-8">
+               <div className="w-full flex flex-col gap-4 pt-4 md:pt-0">
+                  <div className="flex w-full gap-8 justify-between">
+                     <div className="w-[50%]">
+                        <AverageTransactionValueWidget
+                           averageTransactionValue={averageTransactionValue}
+                        />
+                     </div>
+                     <div className="w-[50%]">
+                        <AverageUnitsPerTransactionWidget
+                           averageUnitsPerTransaction={
+                              averageUnitsPerTransaction
+                           }
+                        />
+                     </div>
+                  </div>
                </div>
 
-               {formattedCategoryMetrics &&
-               formattedCategoryMetrics.length > 0 ? (
-                  <div className="flex flex-col gap-4 pt-4 border rounded-lg px-4 py-8 mt-16 lg:w-[20%] md:w-[100%]">
-                     <ProgressList
-                        data={formattedCategoryMetrics}
-                        header="Sales percentage by category"
+               <div className="w-full flex gap-8 md:flex-col-reverse lg:flex-row">
+                  <div className="flex flex-col gap-4 lg:w-[80%] md:w-[100%]">
+                     <span className="text-muted-foreground">Reports</span>
+                     <DataTableToolbar
+                        searchKey="title"
+                        tableKey="transactions"
+                        table={table}
+                     />
+                     <DataTable
+                        columns={columns}
+                        table={table}
+                        tableKey="transactions"
                      />
                   </div>
-               ) : null}
+
+                  {formattedCategoryMetrics &&
+                  formattedCategoryMetrics.length > 0 ? (
+                     <div className="flex flex-col gap-4 pt-4 border rounded-lg px-4 py-8 mt-16 lg:w-[20%] md:w-[100%]">
+                        <ProgressList
+                           data={formattedCategoryMetrics}
+                           header="Sales percentage by category"
+                        />
+                     </div>
+                  ) : null}
+               </div>
             </div>
-         </div>
-      </motion.div>
+         </motion.div>
+      </div>
    );
 };

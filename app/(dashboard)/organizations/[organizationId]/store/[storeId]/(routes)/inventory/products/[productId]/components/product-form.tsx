@@ -62,7 +62,7 @@ import { ActionModal } from '@/components/modals/action-modal';
 import { ProductsAutosaver } from '../../utils/products-autosaver';
 import { Skeleton } from '@/components/ui/skeleton';
 import { motion } from 'framer-motion';
-import { widgetVariants } from '@/lib/constants';
+import { mainContainerVariants, widgetVariants } from '@/lib/constants';
 import {
    Tooltip,
    TooltipContent,
@@ -71,6 +71,7 @@ import {
 } from '@/components/ui/tooltip';
 import { InfoCircledIcon } from '@radix-ui/react-icons';
 import logger from '@/lib/logger/console-logger';
+import { Label } from '@/components/ui/label';
 
 enum ActionContext {
    NONE,
@@ -607,12 +608,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
    }
 
    return (
-      <motion.div
-         className="space-y-6"
-         variants={widgetVariants}
-         initial="hidden"
-         animate="visible"
-      >
+      <div className="space-y-6">
          <ActionModal
             isOpen={isAutosavedModalOpen}
             title="Unfinished product detected"
@@ -633,13 +629,18 @@ export const ProductForm: React.FC<ProductFormProps> = ({
             loading={loading}
          />
 
-         <div className="flex justify-between">
+         <motion.div
+            className="flex justify-between"
+            variants={widgetVariants}
+            initial="hidden"
+            animate="visible"
+         >
             <div className="flex flex-col space-y-6 w-full">
-               <div className="flex space-x-4">
+               <div className="flex space-x-4 items-center">
                   <Button variant={'outline'} onClick={promptLeaving}>
                      <ArrowLeft className="mr-2 h-4 w-4" />
                   </Button>
-                  <Heading title={title} description={description} />
+                  <Label className="text-lg">{title}</Label>
                </div>
                <Alerts />
             </div>
@@ -654,16 +655,21 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                   </Button>
                )}
             </div>
-         </div>
+         </motion.div>
 
          <Separator />
 
-         <Form {...form}>
-            <form
-               onSubmit={form.handleSubmit(onSubmit)}
-               className="space-y-8 w-full"
-            >
-               {/* <FormField
+         <motion.div
+            variants={mainContainerVariants}
+            initial="hidden"
+            animate="visible"
+         >
+            <Form {...form}>
+               <form
+                  onSubmit={form.handleSubmit(onSubmit)}
+                  className="space-y-8 w-full"
+               >
+                  {/* <FormField
                   control={form.control}
                   name="images"
                   render={({ field }) => (
@@ -689,52 +695,22 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                      </FormItem>
                   )}
                /> */}
-               <div className="md:grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-                  <CardContainer>
-                     <ProductInfoCard title="Product information">
-                        <FormField
-                           control={form.control}
-                           name="name"
-                           render={({ field }) => (
-                              <FormItem>
-                                 <FormLabel>Name</FormLabel>
-                                 <FormControl>
-                                    <Input
-                                       disabled={loading}
-                                       placeholder="Product name"
-                                       {...field}
-                                       onChange={(e) => {
-                                          field.onChange(e);
-                                          autosaveProduct();
-                                       }}
-                                    />
-                                 </FormControl>
-                                 <FormMessage />
-                              </FormItem>
-                           )}
-                        />
-                        <div className="grid grid-cols-2 gap-6">
+                  <div className="md:grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+                     <CardContainer>
+                        <ProductInfoCard title="Product information">
                            <FormField
                               control={form.control}
-                              name="price"
+                              name="name"
                               render={({ field }) => (
                                  <FormItem>
-                                    <FormLabel> List price</FormLabel>
+                                    <FormLabel>Name</FormLabel>
                                     <FormControl>
                                        <Input
-                                          type="number"
                                           disabled={loading}
-                                          placeholder="9.99"
+                                          placeholder="Product name"
                                           {...field}
                                           onChange={(e) => {
                                              field.onChange(e);
-                                             setPrice(
-                                                parseFloat(e.target.value),
-                                             );
-                                             calculateMetrics(
-                                                parseFloat(e.target.value),
-                                                'price',
-                                             );
                                              autosaveProduct();
                                           }}
                                        />
@@ -743,403 +719,446 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                                  </FormItem>
                               )}
                            />
-                           <FormField
-                              control={form.control}
-                              name="cost_per_item"
-                              render={({ field }) => (
-                                 <FormItem>
-                                    <FormLabel>Cost</FormLabel>
-                                    <FormControl>
-                                       <Input
-                                          type="number"
-                                          disabled={loading}
-                                          placeholder="9.99"
-                                          {...field}
-                                          onChange={(e) => {
-                                             field.onChange(e);
-                                             setCostPerItem(
-                                                parseFloat(e.target.value),
-                                             );
-                                             calculateMetrics(
-                                                parseFloat(e.target.value),
-                                                'cpi',
-                                             );
-                                             autosaveProduct();
-                                          }}
-                                       />
-                                    </FormControl>
-                                    <FormMessage />
-                                 </FormItem>
-                              )}
-                           />
-                        </div>
-                        <div className="grid grid-cols-2">
-                           <div className="grid grid-rows-2 space-y-2">
-                              <TooltipProvider>
-                                 <Tooltip>
-                                    <TooltipTrigger asChild>
-                                       <div className="flex items-center">
-                                          <p className="text-sm text-muted-foreground">
-                                             Profit
-                                          </p>
-                                          <InfoCircledIcon className="h-4 w-4 ml-1 text-muted-foreground" />
-                                       </div>
-                                    </TooltipTrigger>
-                                    <TooltipContent>
-                                       <p>
-                                          Profit is the difference between the
-                                          list price and the cost. It indicates
-                                          the actual monetary gain from a sale.
-                                       </p>
-                                    </TooltipContent>
-                                 </Tooltip>
-                              </TooltipProvider>
-                              {isLoadingCurrency && (
-                                 <Skeleton className="w-[80px] h-[24px]" />
-                              )}
-                              {!isLoadingCurrency && (
-                                 <p className="text-sm">
-                                    {isNaN(profit) ? '--' : fmt.format(profit)}
-                                 </p>
-                              )}
-                           </div>
-
-                           <div className="grid grid-rows-2 space-y-2">
-                              <TooltipProvider>
-                                 <Tooltip>
-                                    <TooltipTrigger asChild>
-                                       <div className="flex items-center">
-                                          <p className="text-sm text-muted-foreground">
-                                             Margin
-                                          </p>
-                                          <InfoCircledIcon className="h-4 w-4 ml-1 text-muted-foreground" />
-                                       </div>
-                                    </TooltipTrigger>
-                                    <TooltipContent>
-                                       <p>
-                                          Margin is calculated as the difference
-                                          between the list price and the cost,
-                                          divided by the list price, expressed
-                                          as a percentage. It represents the
-                                          portion of the list price that turns
-                                          into profit.
-                                       </p>
-                                    </TooltipContent>
-                                 </Tooltip>
-                              </TooltipProvider>
-                              <p className="text-sm">
-                                 {isNaN(margin) ? '--' : `${margin}%`}
-                              </p>
-                           </div>
-                        </div>
-                     </ProductInfoCard>
-                  </CardContainer>
-                  <CardContainer>
-                     <ProductInfoCard title="Inventory" className="grid-cols-2">
-                        <FormField
-                           control={form.control}
-                           name="category_id"
-                           render={({ field }) => (
-                              <FormItem>
-                                 <FormLabel>Category</FormLabel>
-                                 <Select
-                                    disabled={loading}
-                                    onValueChange={(value: string) => {
-                                       if (value == 'add-new-category') {
-                                          router.push(
-                                             `${baseStoreURL}/inventory/categories/new?return_url=${pathName}${updateReturnURL()}`,
-                                          );
-                                       } else {
-                                          field.onChange(value);
-                                          form.resetField('subcategory_id');
-
-                                          if (initialData) {
-                                             if (
-                                                initialData.category_id !==
-                                                value
-                                             ) {
-                                                setInvalidatedSubcategory(true);
-                                             } else {
-                                                setInvalidatedSubcategory(
-                                                   false,
+                           <div className="grid grid-cols-2 gap-6">
+                              <FormField
+                                 control={form.control}
+                                 name="price"
+                                 render={({ field }) => (
+                                    <FormItem>
+                                       <FormLabel> List price</FormLabel>
+                                       <FormControl>
+                                          <Input
+                                             type="number"
+                                             disabled={loading}
+                                             placeholder="9.99"
+                                             {...field}
+                                             onChange={(e) => {
+                                                field.onChange(e);
+                                                setPrice(
+                                                   parseFloat(e.target.value),
                                                 );
+                                                calculateMetrics(
+                                                   parseFloat(e.target.value),
+                                                   'price',
+                                                );
+                                                autosaveProduct();
+                                             }}
+                                          />
+                                       </FormControl>
+                                       <FormMessage />
+                                    </FormItem>
+                                 )}
+                              />
+                              <FormField
+                                 control={form.control}
+                                 name="cost_per_item"
+                                 render={({ field }) => (
+                                    <FormItem>
+                                       <FormLabel>Cost</FormLabel>
+                                       <FormControl>
+                                          <Input
+                                             type="number"
+                                             disabled={loading}
+                                             placeholder="9.99"
+                                             {...field}
+                                             onChange={(e) => {
+                                                field.onChange(e);
+                                                setCostPerItem(
+                                                   parseFloat(e.target.value),
+                                                );
+                                                calculateMetrics(
+                                                   parseFloat(e.target.value),
+                                                   'cpi',
+                                                );
+                                                autosaveProduct();
+                                             }}
+                                          />
+                                       </FormControl>
+                                       <FormMessage />
+                                    </FormItem>
+                                 )}
+                              />
+                           </div>
+                           <div className="grid grid-cols-2">
+                              <div className="grid grid-rows-2 space-y-2">
+                                 <TooltipProvider>
+                                    <Tooltip>
+                                       <TooltipTrigger asChild>
+                                          <div className="flex items-center">
+                                             <p className="text-sm text-muted-foreground">
+                                                Profit
+                                             </p>
+                                             <InfoCircledIcon className="h-4 w-4 ml-1 text-muted-foreground" />
+                                          </div>
+                                       </TooltipTrigger>
+                                       <TooltipContent>
+                                          <p>
+                                             Profit is the difference between
+                                             the list price and the cost. It
+                                             indicates the actual monetary gain
+                                             from a sale.
+                                          </p>
+                                       </TooltipContent>
+                                    </Tooltip>
+                                 </TooltipProvider>
+                                 {isLoadingCurrency && (
+                                    <Skeleton className="w-[80px] h-[24px]" />
+                                 )}
+                                 {!isLoadingCurrency && (
+                                    <p className="text-sm">
+                                       {isNaN(profit)
+                                          ? '--'
+                                          : fmt.format(profit)}
+                                    </p>
+                                 )}
+                              </div>
+
+                              <div className="grid grid-rows-2 space-y-2">
+                                 <TooltipProvider>
+                                    <Tooltip>
+                                       <TooltipTrigger asChild>
+                                          <div className="flex items-center">
+                                             <p className="text-sm text-muted-foreground">
+                                                Margin
+                                             </p>
+                                             <InfoCircledIcon className="h-4 w-4 ml-1 text-muted-foreground" />
+                                          </div>
+                                       </TooltipTrigger>
+                                       <TooltipContent>
+                                          <p>
+                                             Margin is calculated as the
+                                             difference between the list price
+                                             and the cost, divided by the list
+                                             price, expressed as a percentage.
+                                             It represents the portion of the
+                                             list price that turns into profit.
+                                          </p>
+                                       </TooltipContent>
+                                    </Tooltip>
+                                 </TooltipProvider>
+                                 <p className="text-sm">
+                                    {isNaN(margin) ? '--' : `${margin}%`}
+                                 </p>
+                              </div>
+                           </div>
+                        </ProductInfoCard>
+                     </CardContainer>
+
+                     <CardContainer>
+                        <ProductInfoCard
+                           title="Inventory"
+                           className="grid-cols-2"
+                        >
+                           <FormField
+                              control={form.control}
+                              name="category_id"
+                              render={({ field }) => (
+                                 <FormItem>
+                                    <FormLabel>Category</FormLabel>
+                                    <Select
+                                       disabled={loading}
+                                       onValueChange={(value: string) => {
+                                          if (value == 'add-new-category') {
+                                             router.push(
+                                                `${baseStoreURL}/inventory/categories/new?return_url=${pathName}${updateReturnURL()}`,
+                                             );
+                                          } else {
+                                             field.onChange(value);
+                                             form.resetField('subcategory_id');
+
+                                             if (initialData) {
+                                                if (
+                                                   initialData.category_id !==
+                                                   value
+                                                ) {
+                                                   setInvalidatedSubcategory(
+                                                      true,
+                                                   );
+                                                } else {
+                                                   setInvalidatedSubcategory(
+                                                      false,
+                                                   );
+                                                }
                                              }
-                                          }
 
-                                          setValidSubcategories(
-                                             subcategories.filter(
-                                                (subcategory) =>
-                                                   subcategory.category_id ==
-                                                      value ||
-                                                   subcategory.id ==
-                                                      'add-new-subcategory',
-                                             ),
-                                          );
-                                          autosaveProduct();
-                                       }
-                                    }}
-                                    value={field.value}
-                                    defaultValue={field.value}
-                                 >
-                                    <FormControl>
-                                       <SelectTrigger>
-                                          <SelectValue
-                                             defaultValue={field.value}
-                                             placeholder="Select a category"
-                                          />
-                                       </SelectTrigger>
-                                    </FormControl>
-                                    <SelectContent>
-                                       {categories.map((category) => (
-                                          <SelectItem
-                                             key={category.id}
-                                             value={category.id}
-                                          >
-                                             {category.id.includes(
-                                                'add-new',
-                                             ) ? (
-                                                <div className="flex items-center">
-                                                   <PlusCircle className="mr-2 h-4 w-4" />
-                                                   <p className="text-primary">
-                                                      Add new category
-                                                   </p>
-                                                </div>
-                                             ) : (
-                                                category.name
-                                             )}
-                                          </SelectItem>
-                                       ))}
-                                    </SelectContent>
-                                 </Select>
-                                 <FormMessage />
-                              </FormItem>
-                           )}
-                        />
-                        <FormField
-                           control={form.control}
-                           name="subcategory_id"
-                           render={({ field }) => (
-                              <FormItem>
-                                 <FormLabel>Subcategory</FormLabel>
-                                 <Select
-                                    disabled={loading}
-                                    onValueChange={(value: string) => {
-                                       if (value == 'add-new-subcategory') {
-                                          router.push(
-                                             `${baseStoreURL}/inventory/subcategories/new?return_url=${pathName}${updateReturnURL()}`,
-                                          );
-                                       } else {
-                                          field.onChange(value);
-                                          autosaveProduct();
-
-                                          if (
-                                             initialData &&
-                                             invalidatedSubcategory
-                                          ) {
-                                             setInvalidatedSubcategory(false);
+                                             setValidSubcategories(
+                                                subcategories.filter(
+                                                   (subcategory) =>
+                                                      subcategory.category_id ==
+                                                         value ||
+                                                      subcategory.id ==
+                                                         'add-new-subcategory',
+                                                ),
+                                             );
+                                             autosaveProduct();
                                           }
-                                       }
-                                    }}
-                                    value={field.value}
-                                    defaultValue={field.value}
-                                 >
-                                    <FormControl>
-                                       <SelectTrigger>
-                                          <SelectValue
-                                             defaultValue={field.value}
-                                             placeholder="Select a subcategory"
-                                          />
-                                       </SelectTrigger>
-                                    </FormControl>
-                                    <SelectContent>
-                                       {validSubcategories.map(
-                                          (subcategory) => (
+                                       }}
+                                       value={field.value}
+                                       defaultValue={field.value}
+                                    >
+                                       <FormControl>
+                                          <SelectTrigger>
+                                             <SelectValue
+                                                defaultValue={field.value}
+                                                placeholder="Select a category"
+                                             />
+                                          </SelectTrigger>
+                                       </FormControl>
+                                       <SelectContent>
+                                          {categories.map((category) => (
                                              <SelectItem
-                                                key={subcategory.id}
-                                                value={subcategory.id}
+                                                key={category.id}
+                                                value={category.id}
                                              >
-                                                {subcategory.id.includes(
+                                                {category.id.includes(
                                                    'add-new',
                                                 ) ? (
                                                    <div className="flex items-center">
                                                       <PlusCircle className="mr-2 h-4 w-4" />
                                                       <p className="text-primary">
-                                                         Add new subcategory
+                                                         Add new category
                                                       </p>
                                                    </div>
                                                 ) : (
-                                                   subcategory.name
+                                                   category.name
                                                 )}
                                              </SelectItem>
-                                          ),
-                                       )}
-                                    </SelectContent>
-                                 </Select>
-                                 <FormMessage />
-                              </FormItem>
-                           )}
-                        />
-                        <FormField
-                           control={form.control}
-                           name="inventory_count"
-                           render={({ field }) => (
-                              <FormItem>
-                                 <FormLabel>Count</FormLabel>
-                                 <FormControl>
-                                    <Input
-                                       type="number"
+                                          ))}
+                                       </SelectContent>
+                                    </Select>
+                                    <FormMessage />
+                                 </FormItem>
+                              )}
+                           />
+                           <FormField
+                              control={form.control}
+                              name="subcategory_id"
+                              render={({ field }) => (
+                                 <FormItem>
+                                    <FormLabel>Subcategory</FormLabel>
+                                    <Select
                                        disabled={loading}
-                                       placeholder="0"
-                                       {...field}
-                                       onChange={(e) => {
-                                          field.onChange(e);
-                                          autosaveProduct();
+                                       onValueChange={(value: string) => {
+                                          if (value == 'add-new-subcategory') {
+                                             router.push(
+                                                `${baseStoreURL}/inventory/subcategories/new?return_url=${pathName}${updateReturnURL()}`,
+                                             );
+                                          } else {
+                                             field.onChange(value);
+                                             autosaveProduct();
+
+                                             if (
+                                                initialData &&
+                                                invalidatedSubcategory
+                                             ) {
+                                                setInvalidatedSubcategory(
+                                                   false,
+                                                );
+                                             }
+                                          }
                                        }}
-                                    />
-                                 </FormControl>
-                                 <FormMessage />
-                              </FormItem>
-                           )}
-                        />
-                        <FormField
-                           control={form.control}
-                           name="sku"
-                           render={({ field }) => (
-                              <FormItem>
-                                 <FormLabel>SKU</FormLabel>
-                                 <FormControl>
-                                    <Input
+                                       value={field.value}
+                                       defaultValue={field.value}
+                                    >
+                                       <FormControl>
+                                          <SelectTrigger>
+                                             <SelectValue
+                                                defaultValue={field.value}
+                                                placeholder="Select a subcategory"
+                                             />
+                                          </SelectTrigger>
+                                       </FormControl>
+                                       <SelectContent>
+                                          {validSubcategories.map(
+                                             (subcategory) => (
+                                                <SelectItem
+                                                   key={subcategory.id}
+                                                   value={subcategory.id}
+                                                >
+                                                   {subcategory.id.includes(
+                                                      'add-new',
+                                                   ) ? (
+                                                      <div className="flex items-center">
+                                                         <PlusCircle className="mr-2 h-4 w-4" />
+                                                         <p className="text-primary">
+                                                            Add new subcategory
+                                                         </p>
+                                                      </div>
+                                                   ) : (
+                                                      subcategory.name
+                                                   )}
+                                                </SelectItem>
+                                             ),
+                                          )}
+                                       </SelectContent>
+                                    </Select>
+                                    <FormMessage />
+                                 </FormItem>
+                              )}
+                           />
+                           <FormField
+                              control={form.control}
+                              name="inventory_count"
+                              render={({ field }) => (
+                                 <FormItem>
+                                    <FormLabel>Count</FormLabel>
+                                    <FormControl>
+                                       <Input
+                                          type="number"
+                                          disabled={loading}
+                                          placeholder="0"
+                                          {...field}
+                                          onChange={(e) => {
+                                             field.onChange(e);
+                                             autosaveProduct();
+                                          }}
+                                       />
+                                    </FormControl>
+                                    <FormMessage />
+                                 </FormItem>
+                              )}
+                           />
+                           <FormField
+                              control={form.control}
+                              name="sku"
+                              render={({ field }) => (
+                                 <FormItem>
+                                    <FormLabel>SKU</FormLabel>
+                                    <FormControl>
+                                       <Input
+                                          disabled={loading}
+                                          placeholder="Product SKU"
+                                          {...field}
+                                          onChange={(e) => {
+                                             field.onChange(e);
+                                             autosaveProduct();
+                                          }}
+                                       />
+                                    </FormControl>
+                                    <FormDescription>
+                                       auto-generated if left blank
+                                    </FormDescription>
+                                    <FormMessage />
+                                 </FormItem>
+                              )}
+                           />
+                        </ProductInfoCard>
+                     </CardContainer>
+
+                     <CardContainer>
+                        <ProductInfoCard title="Attributes (optional)">
+                           <FormField
+                              control={form.control}
+                              name="size_id"
+                              render={({ field }) => (
+                                 <FormItem>
+                                    <FormLabel>Size</FormLabel>
+                                    <Select
                                        disabled={loading}
-                                       placeholder="Product SKU"
-                                       {...field}
-                                       onChange={(e) => {
-                                          field.onChange(e);
-                                          autosaveProduct();
+                                       onValueChange={(value: string) => {
+                                          if (value == 'add-new-size') {
+                                             router.push(
+                                                `${baseStoreURL}/inventory/sizes/new?return_url=${pathName}${updateReturnURL()}`,
+                                             );
+                                          } else {
+                                             field.onChange(value);
+                                             autosaveProduct();
+                                          }
                                        }}
-                                    />
-                                 </FormControl>
-                                 <FormDescription>
-                                    auto-generated if left blank
-                                 </FormDescription>
-                                 <FormMessage />
-                              </FormItem>
-                           )}
-                        />
-                     </ProductInfoCard>
-                  </CardContainer>
+                                       value={field.value}
+                                       defaultValue={field.value}
+                                    >
+                                       <FormControl>
+                                          <SelectTrigger>
+                                             <SelectValue
+                                                defaultValue={field.value}
+                                                placeholder="Select a size"
+                                             />
+                                          </SelectTrigger>
+                                       </FormControl>
+                                       <SelectContent>
+                                          {sizes.map((size) => (
+                                             <SelectItem
+                                                key={size.id}
+                                                value={size.id}
+                                             >
+                                                {size.id.includes('add-new') ? (
+                                                   <div className="flex items-center">
+                                                      <PlusCircle className="mr-2 h-4 w-4" />
+                                                      <p className="text-primary">
+                                                         Add new size
+                                                      </p>
+                                                   </div>
+                                                ) : (
+                                                   size.name
+                                                )}
+                                             </SelectItem>
+                                          ))}
+                                       </SelectContent>
+                                    </Select>
+                                    <FormMessage />
+                                 </FormItem>
+                              )}
+                           />
+                           <FormField
+                              control={form.control}
+                              name="color_id"
+                              render={({ field }) => (
+                                 <FormItem>
+                                    <FormLabel>Color</FormLabel>
+                                    <Select
+                                       disabled={loading}
+                                       onValueChange={(value: string) => {
+                                          if (value == 'add-new-color') {
+                                             router.push(
+                                                `${baseStoreURL}/inventory/colors/new?return_url=${pathName}${updateReturnURL()}`,
+                                             );
+                                          } else {
+                                             field.onChange(value);
+                                             autosaveProduct();
+                                          }
+                                       }}
+                                       value={field.value}
+                                       defaultValue={field.value}
+                                    >
+                                       <FormControl>
+                                          <SelectTrigger>
+                                             <SelectValue
+                                                defaultValue={field.value}
+                                                placeholder="Select a color"
+                                             />
+                                          </SelectTrigger>
+                                       </FormControl>
+                                       <SelectContent>
+                                          {colors.map((color) => (
+                                             <SelectItem
+                                                key={color.id}
+                                                value={color.id}
+                                             >
+                                                {color.id.includes(
+                                                   'add-new',
+                                                ) ? (
+                                                   <div className="flex items-center">
+                                                      <PlusCircle className="mr-2 h-4 w-4" />
+                                                      <p className="text-primary">
+                                                         Add new color
+                                                      </p>
+                                                   </div>
+                                                ) : (
+                                                   color.name
+                                                )}
+                                             </SelectItem>
+                                          ))}
+                                       </SelectContent>
+                                    </Select>
+                                    <FormMessage />
+                                 </FormItem>
+                              )}
+                           />
+                        </ProductInfoCard>
+                     </CardContainer>
 
-                  <CardContainer>
-                     <ProductInfoCard title="Attributes (optional)">
-                        <FormField
-                           control={form.control}
-                           name="size_id"
-                           render={({ field }) => (
-                              <FormItem>
-                                 <FormLabel>Size</FormLabel>
-                                 <Select
-                                    disabled={loading}
-                                    onValueChange={(value: string) => {
-                                       if (value == 'add-new-size') {
-                                          router.push(
-                                             `${baseStoreURL}/inventory/sizes/new?return_url=${pathName}${updateReturnURL()}`,
-                                          );
-                                       } else {
-                                          field.onChange(value);
-                                          autosaveProduct();
-                                       }
-                                    }}
-                                    value={field.value}
-                                    defaultValue={field.value}
-                                 >
-                                    <FormControl>
-                                       <SelectTrigger>
-                                          <SelectValue
-                                             defaultValue={field.value}
-                                             placeholder="Select a size"
-                                          />
-                                       </SelectTrigger>
-                                    </FormControl>
-                                    <SelectContent>
-                                       {sizes.map((size) => (
-                                          <SelectItem
-                                             key={size.id}
-                                             value={size.id}
-                                          >
-                                             {size.id.includes('add-new') ? (
-                                                <div className="flex items-center">
-                                                   <PlusCircle className="mr-2 h-4 w-4" />
-                                                   <p className="text-primary">
-                                                      Add new size
-                                                   </p>
-                                                </div>
-                                             ) : (
-                                                size.name
-                                             )}
-                                          </SelectItem>
-                                       ))}
-                                    </SelectContent>
-                                 </Select>
-                                 <FormMessage />
-                              </FormItem>
-                           )}
-                        />
-                        <FormField
-                           control={form.control}
-                           name="color_id"
-                           render={({ field }) => (
-                              <FormItem>
-                                 <FormLabel>Color</FormLabel>
-                                 <Select
-                                    disabled={loading}
-                                    onValueChange={(value: string) => {
-                                       if (value == 'add-new-color') {
-                                          router.push(
-                                             `${baseStoreURL}/inventory/colors/new?return_url=${pathName}${updateReturnURL()}`,
-                                          );
-                                       } else {
-                                          field.onChange(value);
-                                          autosaveProduct();
-                                       }
-                                    }}
-                                    value={field.value}
-                                    defaultValue={field.value}
-                                 >
-                                    <FormControl>
-                                       <SelectTrigger>
-                                          <SelectValue
-                                             defaultValue={field.value}
-                                             placeholder="Select a color"
-                                          />
-                                       </SelectTrigger>
-                                    </FormControl>
-                                    <SelectContent>
-                                       {colors.map((color) => (
-                                          <SelectItem
-                                             key={color.id}
-                                             value={color.id}
-                                          >
-                                             {color.id.includes('add-new') ? (
-                                                <div className="flex items-center">
-                                                   <PlusCircle className="mr-2 h-4 w-4" />
-                                                   <p className="text-primary">
-                                                      Add new color
-                                                   </p>
-                                                </div>
-                                             ) : (
-                                                color.name
-                                             )}
-                                          </SelectItem>
-                                       ))}
-                                    </SelectContent>
-                                 </Select>
-                                 <FormMessage />
-                              </FormItem>
-                           )}
-                        />
-                     </ProductInfoCard>
-                  </CardContainer>
-
-                  {/* <FormField
+                     {/* <FormField
                      control={form.control}
                      name="isFeatured"
                      render={({ field }) => (
@@ -1160,41 +1179,42 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                         </FormItem>
                      )}
                   /> */}
-                  <FormField
-                     control={form.control}
-                     name="is_archived"
-                     render={({ field }) => (
-                        <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
-                           <FormControl>
-                              <Checkbox
-                                 checked={field.value}
-                                 // @ts-ignore
-                                 onCheckedChange={(e) => {
-                                    field.onChange(e);
-                                    autosaveProduct();
-                                 }}
-                              />
-                           </FormControl>
-                           <div className="space-y-1 leading-none">
-                              <FormLabel>Archived</FormLabel>
-                              <FormDescription>
-                                 Excludes this product from stock count.
-                              </FormDescription>
-                           </div>
-                        </FormItem>
-                     )}
-                  />
-               </div>
-               <LoadingButton
-                  isLoading={loading}
-                  disabled={loading}
-                  className="ml-auto"
-                  type="submit"
-               >
-                  {buttonText}
-               </LoadingButton>
-            </form>
-         </Form>
-      </motion.div>
+                     <FormField
+                        control={form.control}
+                        name="is_archived"
+                        render={({ field }) => (
+                           <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                              <FormControl>
+                                 <Checkbox
+                                    checked={field.value}
+                                    // @ts-ignore
+                                    onCheckedChange={(e) => {
+                                       field.onChange(e);
+                                       autosaveProduct();
+                                    }}
+                                 />
+                              </FormControl>
+                              <div className="space-y-1 leading-none">
+                                 <FormLabel>Archived</FormLabel>
+                                 <FormDescription>
+                                    Excludes this product from stock count.
+                                 </FormDescription>
+                              </div>
+                           </FormItem>
+                        )}
+                     />
+                  </div>
+                  <LoadingButton
+                     isLoading={loading}
+                     disabled={loading}
+                     className="ml-auto"
+                     type="submit"
+                  >
+                     {buttonText}
+                  </LoadingButton>
+               </form>
+            </Form>
+         </motion.div>
+      </div>
    );
 };

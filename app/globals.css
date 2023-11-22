@@ -37,6 +37,12 @@ body,
         --destructive: 0 84.2% 60.2%;
         --destructive-foreground: 210 40% 98%;
 
+        --success: 120 39% 49%;
+        --success-foreground: 120 30% 95%;
+
+        --warning: 48 100% 50%;
+        --warning-foreground: 48 30% 20%;
+
         --ring: 215 0.2% 65.1%;
 
         --radius: 0.5rem;

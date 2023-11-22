@@ -26,7 +26,7 @@ import { useState } from 'react';
 import { DataTableToolbar } from '@/components/ui/data-table-toolbar/products-table-toolbar';
 import useGetBaseStoreUrl from '@/hooks/use-get-base-store-url';
 import { motion } from 'framer-motion';
-import { mainContainerVariants } from '@/lib/constants';
+import { mainContainerVariants, widgetVariants } from '@/lib/constants';
 
 interface SizesClientProps {
    data: SizeColumn[];
@@ -68,13 +68,13 @@ export const SizesClient: React.FC<SizesClientProps> = ({ data }) => {
    const defaultHiddenColumns = ['createdAt', 'updatedAt'];
 
    return (
-      <motion.div
-         variants={mainContainerVariants}
-         initial="hidden"
-         animate="visible"
-         className="space-y-8"
-      >
-         <div className="flex items-center justify-between">
+      <div className="space-y-8">
+         <motion.div
+            className="flex items-center justify-between"
+            variants={widgetVariants}
+            initial="hidden"
+            animate="visible"
+         >
             <Heading
                title={`Sizes`}
                description="Manage sizes for your products"
@@ -86,15 +86,24 @@ export const SizesClient: React.FC<SizesClientProps> = ({ data }) => {
             >
                <Plus className="mr-2 h-4 w-4" /> Add new
             </Button>
-         </div>
+         </motion.div>
+
          <Separator />
-         <DataTableToolbar searchKey="name" table={table} tableKey="sizes" />
-         <DataTable
-            columns={columns}
-            table={table}
-            tableKey="sizes"
-            defaultHiddenColumns={defaultHiddenColumns}
-         />
-      </motion.div>
+
+         <motion.div
+            className="space-y-8"
+            variants={mainContainerVariants}
+            initial="hidden"
+            animate="visible"
+         >
+            <DataTableToolbar searchKey="name" table={table} tableKey="sizes" />
+            <DataTable
+               columns={columns}
+               table={table}
+               tableKey="sizes"
+               defaultHiddenColumns={defaultHiddenColumns}
+            />
+         </motion.div>
+      </div>
    );
 };

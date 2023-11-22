@@ -58,7 +58,8 @@ import {
 import { MetricCard } from '@/components/ui/metric-card';
 import useGetBaseStoreUrl from '@/hooks/use-get-base-store-url';
 import { motion } from 'framer-motion';
-import { widgetVariants } from '@/lib/constants';
+import { mainContainerVariants, widgetVariants } from '@/lib/constants';
+import { Label } from '@/components/ui/label';
 
 interface TransactionsReportClientProps {
    fetchedTransaction?: Transaction;
@@ -243,86 +244,97 @@ export const ViewReportClient: React.FC<TransactionsReportClientProps> = ({
    };
 
    return (
-      <motion.div
-         className="space-y-6"
-         variants={widgetVariants}
-         initial="hidden"
-         animate="visible"
-      >
-         <div className="flex justify-between">
+      <div className="space-y-6">
+         <motion.div
+            className="flex justify-between"
+            variants={widgetVariants}
+            initial="hidden"
+            animate="visible"
+         >
             <div className="flex flex-col space-y-6">
-               <div className="flex space-x-4">
+               <div className="flex space-x-4 items-center">
                   <Button variant={'outline'} onClick={() => router.back()}>
                      <ArrowLeft className="mr-2 h-4 w-4" />
                   </Button>
-                  <Heading
-                     title={transaction?.reportTitle || 'Transaction report'}
-                     description="Insights and sales performance"
-                  />
+                  <Label className="text-lg">
+                     {transaction?.reportTitle || 'Transaction report'}
+                  </Label>
                </div>
                <Alerts />
             </div>
             <ReportActionButtons />
-         </div>
-         <Separator />
+         </motion.div>
 
-         <div className="flex items-center gap-4">
-            <span className="text-muted-foreground">Report date</span>
-            <div className="flex items-center space-x-2 border rounded-md p-2 bg-card">
-               <Calendar className="w-4 h-4 text-muted-foreground" />
-               <p className="text-sm">
-                  {date && `${format(date, 'MMMM dd, yyyy')}`}
-               </p>
+         <motion.div
+            className="space-y-6"
+            variants={mainContainerVariants}
+            initial="hidden"
+            animate="visible"
+         >
+            <div className="flex items-center gap-4">
+               <span className="text-muted-foreground">Report date</span>
+               <div className="flex items-center space-x-2 border rounded-md p-2 bg-card">
+                  <Calendar className="w-4 h-4 text-muted-foreground" />
+                  <p className="text-sm">
+                     {date && `${format(date, 'MMMM dd, yyyy')}`}
+                  </p>
+               </div>
             </div>
-         </div>
 
-         <div className="grid lg:grid-cols-3 lg:pt-6 md:grid-cols-1 gap-8">
-            <MetricCard
-               title={'Gross sales'}
-               value={fmt.format(grossSales)}
-               icon={<DollarSign className="h-4 w-4 text-muted-foreground" />}
-               loading={isCurrencyLoading}
-            />
+            <div className="grid lg:grid-cols-3 lg:pt-6 md:grid-cols-1 gap-8">
+               <MetricCard
+                  title={'Gross sales'}
+                  value={fmt.format(grossSales)}
+                  icon={
+                     <DollarSign className="h-4 w-4 text-muted-foreground" />
+                  }
+                  loading={isCurrencyLoading}
+               />
 
-            <MetricCard
-               title={'Net revenue'}
-               value={fmt.format(netSales)}
-               icon={<DollarSign className="h-4 w-4 text-muted-foreground" />}
-               loading={isCurrencyLoading}
-            />
+               <MetricCard
+                  title={'Net revenue'}
+                  value={fmt.format(netSales)}
+                  icon={
+                     <DollarSign className="h-4 w-4 text-muted-foreground" />
+                  }
+                  loading={isCurrencyLoading}
+               />
 
-            <MetricCard
-               title={'Units sold'}
-               value={unitsSold.toString()}
-               icon={<PackageMinus className="h-4 w-4 text-muted-foreground" />}
-            />
-         </div>
+               <MetricCard
+                  title={'Units sold'}
+                  value={unitsSold.toString()}
+                  icon={
+                     <PackageMinus className="h-4 w-4 text-muted-foreground" />
+                  }
+               />
+            </div>
 
-         <div className="flex justify-between gap-24 pt-4 w-full">
-            {transaction && (
-               <div className="w-full gap-4">
-                  <div className="flex w-full lg:gap-24 lg:flex-row md:flex-col md:gap-12">
-                     <div className={`lg:w-[60%] md:w-full space-y-4`}>
-                        <span className="text-muted-foreground">
-                           Transactions
-                        </span>
-                        <DataTable
-                           table={table}
-                           columns={viewReportColumns}
-                           tableKey="view-transactions"
-                        />
-                     </div>
+            <div className="flex justify-between gap-24 pt-4 w-full">
+               {transaction && (
+                  <div className="w-full gap-4">
+                     <div className="flex w-full lg:gap-24 lg:flex-row md:flex-col md:gap-12">
+                        <div className={`lg:w-[60%] md:w-full space-y-4`}>
+                           <span className="text-muted-foreground">
+                              Transactions
+                           </span>
+                           <DataTable
+                              table={table}
+                              columns={viewReportColumns}
+                              tableKey="view-transactions"
+                           />
+                        </div>
 
-                     <div className="lg:w-[40%] md:w-full space-y-4">
-                        <span className="text-muted-foreground">
-                           Breakdown by category
-                        </span>
-                        <CategoriesTable />
+                        <div className="lg:w-[40%] md:w-full space-y-4">
+                           <span className="text-muted-foreground">
+                              Breakdown by category
+                           </span>
+                           <CategoriesTable />
+                        </div>
                      </div>
                   </div>
-               </div>
-            )}
-         </div>
-      </motion.div>
+               )}
+            </div>
+         </motion.div>
+      </div>
    );
 };

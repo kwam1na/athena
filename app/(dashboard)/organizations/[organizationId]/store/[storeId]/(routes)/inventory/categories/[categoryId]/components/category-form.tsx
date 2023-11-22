@@ -32,9 +32,10 @@ import {
 import useReturnUrl from '@/hooks/use-get-return-url';
 import useGetBaseStoreUrl from '@/hooks/use-get-base-store-url';
 import { motion } from 'framer-motion';
-import { widgetVariants } from '@/lib/constants';
+import { mainContainerVariants, widgetVariants } from '@/lib/constants';
 import logger from '@/lib/logger/console-logger';
 import { wrap } from 'module';
+import { Label } from '@/components/ui/label';
 
 const formSchema = z.object({
    name: z.string().min(2),
@@ -149,25 +150,26 @@ export const CategoryForm: React.FC<CategoryFormProps> = ({ initialData }) => {
    };
 
    return (
-      <motion.div
-         className="space-y-6"
-         variants={widgetVariants}
-         initial="hidden"
-         animate="visible"
-      >
+      <div className="space-y-6">
          <AlertModal
             isOpen={open}
             onClose={() => setOpen(false)}
             onConfirm={onDelete}
             loading={loading}
          />
-         <div className="flex justify-between">
+
+         <motion.div
+            className="flex justify-between"
+            variants={widgetVariants}
+            initial="hidden"
+            animate="visible"
+         >
             <div className="flex flex-col space-y-6">
-               <div className="flex space-x-4">
+               <div className="flex space-x-4 items-center">
                   <Button variant={'outline'} onClick={() => router.back()}>
                      <ArrowLeft className="mr-2 h-4 w-4" />
                   </Button>
-                  <Heading title={title} description={description} />
+                  <Label className="text-lg">{title}</Label>
                </div>
             </div>
             <div className="flex items-center">
@@ -181,43 +183,50 @@ export const CategoryForm: React.FC<CategoryFormProps> = ({ initialData }) => {
                   </Button>
                )}
             </div>
-         </div>
+         </motion.div>
 
          <Separator />
-         <Form {...form}>
-            <form
-               onSubmit={form.handleSubmit(onSubmit)}
-               className="space-y-8 w-full"
-            >
-               <div className="md:grid md:grid-cols-3 gap-8">
-                  <FormField
-                     control={form.control}
-                     name="name"
-                     render={({ field }) => (
-                        <FormItem>
-                           <FormLabel>Name</FormLabel>
-                           <FormControl>
-                              <Input
-                                 disabled={loading}
-                                 placeholder="Category name"
-                                 {...field}
-                              />
-                           </FormControl>
-                           <FormMessage />
-                        </FormItem>
-                     )}
-                  />
-               </div>
-               <LoadingButton
-                  isLoading={loading}
-                  disabled={loading}
-                  className="ml-auto"
-                  type="submit"
+
+         <motion.div
+            variants={mainContainerVariants}
+            initial="hidden"
+            animate="visible"
+         >
+            <Form {...form}>
+               <form
+                  onSubmit={form.handleSubmit(onSubmit)}
+                  className="space-y-8 w-full"
                >
-                  {buttonText}
-               </LoadingButton>
-            </form>
-         </Form>
-      </motion.div>
+                  <div className="md:grid md:grid-cols-3 gap-8">
+                     <FormField
+                        control={form.control}
+                        name="name"
+                        render={({ field }) => (
+                           <FormItem>
+                              <FormLabel>Name</FormLabel>
+                              <FormControl>
+                                 <Input
+                                    disabled={loading}
+                                    placeholder="Category name"
+                                    {...field}
+                                 />
+                              </FormControl>
+                              <FormMessage />
+                           </FormItem>
+                        )}
+                     />
+                  </div>
+                  <LoadingButton
+                     isLoading={loading}
+                     disabled={loading}
+                     className="ml-auto"
+                     type="submit"
+                  >
+                     {buttonText}
+                  </LoadingButton>
+               </form>
+            </Form>
+         </motion.div>
+      </div>
    );
 };
