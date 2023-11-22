@@ -29,6 +29,7 @@ import {
    FormMessage,
 } from '@/components/ui/form';
 import { apiCreateStore } from '@/lib/api/stores';
+import { useWrappedUser } from '@/providers/wrapped-user-provider';
 
 const formSchema = z.object({
    name: z.string().min(1),
@@ -56,7 +57,7 @@ export const StoreModal = () => {
          const body = { ...values, organization_id: params.organizationId };
          const response = await apiCreateStore(body);
          window.location.assign(
-            `/organizations/${params.organizationId}/store/${response.id}`,
+            `/organizations/${response.organization_id}/store/${response.id}`,
          );
       } catch (error) {
          toast({

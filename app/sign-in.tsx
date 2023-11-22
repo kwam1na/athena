@@ -9,7 +9,6 @@ import {
    FormControl,
    FormField,
    FormItem,
-   FormLabel,
    FormMessage,
 } from '@/components/ui/form';
 import { useEffect, useState } from 'react';
@@ -136,42 +135,6 @@ export const SignIn: React.FC<SignInProps> = ({ setIsSignUp }) => {
                   className="space-y-8 w-full"
                >
                   <div className="space-y-4">
-                     {/* <div className="md:grid md:grid-cols-2 gap-4">
-                        <FormField
-                           control={form.control}
-                           name="firstName"
-                           render={({ field }) => (
-                              <FormItem>
-                                 <FormControl>
-                                    <Input
-                                       disabled={loading}
-                                       placeholder="First name"
-                                       {...field}
-                                    />
-                                 </FormControl>
-                                 <FormMessage />
-                              </FormItem>
-                           )}
-                        />
-
-                        <FormField
-                           control={form.control}
-                           name="lastName"
-                           render={({ field }) => (
-                              <FormItem>
-                                 <FormControl>
-                                    <Input
-                                       disabled={loading}
-                                       placeholder="Last name"
-                                       {...field}
-                                    />
-                                 </FormControl>
-                                 <FormMessage />
-                              </FormItem>
-                           )}
-                        />
-                     </div> */}
-
                      <div className="space-y-4">
                         <FormField
                            control={form.control}

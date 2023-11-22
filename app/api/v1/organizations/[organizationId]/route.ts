@@ -114,14 +114,14 @@ export async function DELETE(
 
 export async function GET(
     req: NextRequest,
+    { params }: { params: { organizationId: string } },
 ) {
     try {
-        const body = await req.json();
-        if (!body.organization_id) {
+        if (!params.organizationId) {
             return new NextResponse('Organization id is required', { status: 400 });
         }
 
-        const organization = await getOrganization(body.organization_id)
+        const organization = await getOrganization(parseInt(params.organizationId))
         return NextResponse.json(organization);
     } catch (error) {
         console.log('[ORGANIZATION_GET]', error);

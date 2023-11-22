@@ -17,7 +17,7 @@ interface TopSellingProductssWidgetProps {
    topSellingProducts?: Record<string, any>[];
 }
 
-export const TopSellingProductssWidget: React.FC<
+export const TopSellingProductsWidget: React.FC<
    TopSellingProductssWidgetProps
 > = ({ topSellingProducts }) => {
    const [_topSellingProducts, settopSellingProducts] = useState<

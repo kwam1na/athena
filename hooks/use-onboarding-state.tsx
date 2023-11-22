@@ -3,67 +3,6 @@
 import { currencies } from '@/lib/constants';
 import { useEffect, useState } from 'react';
 
-// export const useOnboardingState = () => {
-//    const [isSubmitting, setIsSubmitting] = useState(false);
-//    const [name, setName] = useState('');
-//    const [organizationName, setOrganizationName] = useState('');
-//    const [useSuggestedOrgName, setUseSuggestedOrgName] = useState(false);
-//    const [storeName, setStoreName] = useState('');
-//    const [currency, setCurrency] = useState('');
-//    const [activeStep, setActiveStep] = useState(0);
-//    const [isInvalidName, setIsInvalidName] = useState(false);
-//    const [isInvalidStoreName, setIsInvalidStoreName] = useState(false);
-//    const [isInvalidOrganizationName, setIsInvalidOrganizationName] =
-//       useState(false);
-//    const [isRedirecting, setIsRedirecting] = useState(false);
-//    const TOTAL_STEPS = 3;
-
-//    useEffect(() => {
-//       const searchParams = new URLSearchParams(window.location.search);
-//       setName(searchParams.get('name') || '');
-//       searchParams.delete('name');
-//       window.history.replaceState(
-//          null,
-//          '',
-//          searchParams.toString() || window.location.pathname,
-//       );
-//    }, []);
-
-//    useEffect(() => {
-//       if (useSuggestedOrgName) {
-//          setOrganizationName(`${name}'s organization`);
-//       } else {
-//          setOrganizationName('');
-//       }
-//    }, [useSuggestedOrgName, name]);
-
-//    return {
-//       isSubmitting,
-//       setIsSubmitting,
-//       name,
-//       setName,
-//       organizationName,
-//       setOrganizationName,
-//       useSuggestedOrgName,
-//       setUseSuggestedOrgName,
-//       storeName,
-//       setStoreName,
-//       currency,
-//       setCurrency,
-//       activeStep,
-//       setActiveStep,
-//       isInvalidName,
-//       setIsInvalidName,
-//       isInvalidStoreName,
-//       setIsInvalidStoreName,
-//       isInvalidOrganizationName,
-//       setIsInvalidOrganizationName,
-//       isRedirecting,
-//       setIsRedirecting,
-//       TOTAL_STEPS,
-//    };
-// };
-
 type OnboardingState = {
    currentStep: number;
    TOTAL_STEPS: number;
@@ -74,6 +13,8 @@ type OnboardingState = {
    isInvalidOrganizationName: boolean;
    suggestedOrgName: string;
    storeName: string;
+   lowStockThreshold?: number;
+   isInvalidLowStockThreshold: boolean;
    isInvalidStoreName: boolean;
    currency: string;
    currencies: { label: string; value: string }[];
@@ -93,6 +34,8 @@ export const useOnboarding = () => {
       suggestedOrgName: '',
       storeName: '',
       isInvalidStoreName: false,
+      lowStockThreshold: undefined,
+      isInvalidLowStockThreshold: false,
       currency: '',
       currencies: currencies,
       isSubmitting: false,
@@ -168,12 +111,20 @@ export const useOnboarding = () => {
       }));
    };
 
+   const handleEnteredLowStockThreshold = (threshold: string) => {
+      setState((prevState) => ({
+         ...prevState,
+         lowStockThreshold: parseInt(threshold),
+         isInvalidLowStockThreshold: false,
+      }));
+   };
+
    const handleCurrencyChange = (currency: string) => {
       setState((prevState) => ({ ...prevState, currency }));
    };
 
    const toggleInvalidInput = (
-      inputType: 'name' | 'storeName' | 'orgName',
+      inputType: 'name' | 'storeName' | 'orgName' | 'lowStockThreshold',
       isValid: boolean,
    ) => {
       switch (inputType) {
@@ -192,6 +143,13 @@ export const useOnboarding = () => {
                isInvalidOrganizationName: isValid,
             }));
             break;
+
+         case 'lowStockThreshold':
+            setState((prevState) => ({
+               ...prevState,
+               isInvalidLowStockThreshold: isValid,
+            }));
+            break;
          default:
             break;
       }
@@ -206,6 +164,7 @@ export const useOnboarding = () => {
       handleUseSuggestedToggle,
       handleStoreNameChange,
       handleCurrencyChange,
+      handleEnteredLowStockThreshold,
       toggleInvalidInput,
    };
 };

@@ -33,6 +33,7 @@ import { OverlayModal } from './modals/overlay-modal';
 import { Icons } from './ui/icons';
 import axios from 'axios';
 import { set } from 'date-fns';
+import { apiGetOrganization } from '@/lib/api/organizations';
 
 type PopoverTriggerProps = React.ComponentPropsWithoutRef<
    typeof PopoverTrigger
@@ -47,19 +48,19 @@ export default function OrganizationSwitcher({
    items = [],
 }: StoreSwitcherProps) {
    const [isSwitching, setIsSwitching] = React.useState(false);
-   const storeModal = useStoreModal();
+   const { setStoreCurrency } = useStoreCurrency();
    const params = useParams();
    const router = useRouter();
+   const storeModal = useStoreModal();
 
    const formattedItems = items.map((item) => ({
       label: item.name,
       value: item.id,
    }));
 
-   // const currentOrganization = formattedItems.find(
-   //    (item) => item.value === params.storeId,
-   // );
-   const currentOrganization = formattedItems[0];
+   const currentOrganization = formattedItems.find(
+      (item) => item.value === parseInt(params.organizationId),
+   );
 
    const [open, setOpen] = React.useState(false);
 
@@ -70,13 +71,22 @@ export default function OrganizationSwitcher({
       setIsSwitching(true);
 
       try {
-         const res = await axios.get(
-            `/api/v1/organizations/${organization.value}`,
+         const res = await apiGetOrganization(organization.value);
+         const { stores } = res;
+
+         if (!stores?.length) {
+            storeModal.onOpen();
+            return;
+         }
+
+         const store = stores[0];
+         setStoreCurrency(store.currency);
+         router.replace(
+            `/organizations/${organization.value}/store/${store.id}`,
          );
       } catch (error) {
          console.error(error);
       } finally {
-         router.push(`/${organization.value}`);
          setOpen(false);
          setIsSwitching(false);
       }
@@ -122,9 +132,9 @@ export default function OrganizationSwitcher({
                         {formattedItems.map((organization) => (
                            <CommandItem
                               key={organization.value}
-                              // onSelect={() =>
-                              //    onOrganizationSelect(organization)
-                              // }
+                              onSelect={() =>
+                                 onOrganizationSelect(organization)
+                              }
                               className="text-sm"
                            >
                               <Building className="mr-2 h-4 w-4" />

@@ -1,5 +1,7 @@
+import { AxiosError } from 'axios';
 import { type ClassValue, clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { ServiceError } from './error';
 
 type PromiseResult<T> =
     | { status: "fulfilled"; value: T }
@@ -57,3 +59,11 @@ export const reflect = <T>(promise: Promise<T>): Promise<PromiseResult<T>> => {
         (error): PromiseResult<T> => ({ status: "rejected", reason: error })
     );
 };
+
+export const translateAxiosErorToServiceError = (error: any) => {
+    const { response } = error as AxiosError;
+    const { data } = response || {};
+    const { message } = data as Record<string, any> || {};
+
+    return new ServiceError(message || 'Internal error', response?.status || 500);
+}

@@ -1,7 +1,7 @@
 import React from 'react';
 import { ProgressItem } from './progess-item';
 
-interface ProgressData {
+export interface ProgressData {
    title: string;
    percentage: number;
 }

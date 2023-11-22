@@ -47,7 +47,13 @@ export default async function SetupLayout({
       redirect('/auth');
    }
 
-   const dbUser = await getUser(user.id);
+   let dbUser;
+
+   try {
+      dbUser = await getUser(user.id);
+   } catch (error) {
+      console.log('error fetching dbUser:', error);
+   }
 
    if (!dbUser?.is_onboarded) {
       redirect('/onboarding');

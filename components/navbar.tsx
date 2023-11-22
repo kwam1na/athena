@@ -8,7 +8,11 @@ import { createServerClient } from '@supabase/ssr';
 import OrganizationSwitcher from './organization-switcher';
 import { fetchOrganizations } from '@/lib/repositories/organizationsRepository';
 
-const Navbar = async () => {
+const Navbar = async ({
+   params,
+}: {
+   params: { organizationId: string; storeId: string };
+}) => {
    const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -35,7 +39,7 @@ const Navbar = async () => {
       redirect('/auth');
    }
 
-   const stores = await fetchStores(user.id);
+   const stores = await fetchStores(user.id, parseInt(params.organizationId));
    const organizations = await fetchOrganizations(user.id);
 
    return (
