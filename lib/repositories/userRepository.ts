@@ -14,6 +14,10 @@ export const getUser = async (id: string) => {
     })
 }
 
+export const getUsers = async () => {
+    return await prismadb.user.findMany();
+}
+
 export const findUser = async (keys: any) => {
     return await prismadb.user.findFirst({
         where: keys,

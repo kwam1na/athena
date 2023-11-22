@@ -42,10 +42,11 @@ export const deleteStore = async (id: number, user_id: string) => {
     })
 }
 
-export const fetchStores = async (userId: string, include?: Record<string, boolean>) => {
+export const fetchStores = async (userId: string, organization_id?: number, include?: Record<string, boolean>) => {
     return await prismadb.store.findMany({
         where: {
             created_by: userId,
+            organization_id,
         },
         include,
     });

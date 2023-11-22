@@ -1,4 +1,5 @@
-import axios from 'axios';
+import axios, { AxiosError } from 'axios';
+import { ServiceError } from '../error';
 
 // Configure base settings
 const api = axios.create({
@@ -14,7 +15,11 @@ export const apiCreateSubcategory = async (
       const response = await api.post(`/${storeId}/subcategories`, data);
       return response.data;
    } catch (error) {
-      throw error;
+      const { response } = error as AxiosError;
+      const { data } = response || {};
+      const { message } = data as Record<string, any> || {};
+
+      throw new ServiceError(message || 'Internal error', response?.status || 500);
    }
 };
 
@@ -51,7 +56,11 @@ export const apiUpdateSubcategory = async (
       );
       return response.data;
    } catch (error) {
-      throw error;
+      const { response } = error as AxiosError;
+      const { data } = response || {};
+      const { message } = data as Record<string, any> || {};
+
+      throw new ServiceError(message || 'Internal error', response?.status || 500);
    }
 };
 

@@ -10,6 +10,7 @@ import { ExchangeRateProvider } from '@/providers/exchange-rate-provider';
 import { cookies } from 'next/headers';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import AuthListener from '@/providers/auth-listener';
+import { redirect } from 'next/navigation';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -38,10 +39,16 @@ export default async function RootLayout({
       },
    );
 
-   const {
-      data: { session },
-   } = await supabase.auth.getSession();
-   const user = session?.user;
+   let user;
+
+   try {
+      const {
+         data: { session },
+      } = await supabase.auth.getSession();
+      user = session?.user;
+   } catch (error) {
+      console.log('error', error);
+   }
 
    return (
       <html lang="en">

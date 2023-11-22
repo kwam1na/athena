@@ -1,8 +1,5 @@
 import { redirect } from 'next/navigation';
 import Navbar from '@/components/navbar';
-import prismadb from '@/lib/prismadb';
-import { getSession } from '@auth0/nextjs-auth0';
-import { Sidebar } from './(routes)/inventory/components/sidebar';
 import { EmptyState } from '@/components/states/empty/empty-state';
 import { Monitor } from 'lucide-react';
 import { AppSideBar } from '@/components/app-side-bar';
@@ -12,11 +9,13 @@ import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { CurrencyProvider } from '@/providers/currency-provider';
 import { WrappedUserProvider } from '@/providers/wrapped-user-provider';
 import AuthListener from '@/providers/auth-listener';
-import AppSkeleton from '@/components/states/loading/app-skeleton';
-import DashboardSkeleton from '@/components/states/loading/dashboard-skeleton';
 import { getUser } from '@/lib/repositories/userRepository';
 import { getStore } from '@/lib/repositories/storesRepository';
 import { LayoutAnimation } from '@/providers/layout-animation';
+import {
+   fetchOrganizations,
+   getOrganization,
+} from '@/lib/repositories/organizationsRepository';
 
 export default async function DashboardLayout({
    children,
@@ -51,6 +50,9 @@ export default async function DashboardLayout({
 
    const dbUser = await getUser(user.id);
    const store = await getStore(parseInt(params.storeId));
+   const organizations = await fetchOrganizations(user.id);
+
+   // console.log('[DashboardLayout] organization:', organizations);
 
    if (store) {
       const { organization_id } = store;
@@ -63,8 +65,11 @@ export default async function DashboardLayout({
    }
 
    if (dbUser) {
-      const { organization_id } = dbUser;
-      if (organization_id !== parseInt(params.organizationId)) {
+      if (
+         !organizations.some(
+            (org) => org.id === parseInt(params.organizationId),
+         )
+      ) {
          console.log(
             '[DashboardLayout] user is not authorized to access this organization.',
          );
@@ -95,10 +100,10 @@ export default async function DashboardLayout({
                   </aside>
                   <div className="flex-grow flex-col px-6 h-full pt-12">
                      <div className="hidden md:block">
-                        <Navbar />
+                        <Navbar params={params} />
                      </div>
                      <main className="flex-grow pt-12 pb-24 h-full">
-                        <LayoutAnimation>{children}</LayoutAnimation>
+                        {children}
                      </main>
                   </div>
                </div>

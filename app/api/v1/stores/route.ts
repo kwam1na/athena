@@ -3,6 +3,7 @@ import prismadb from '@/lib/prismadb';
 import { createStore } from '@/lib/repositories/storesRepository';
 import { cookies } from 'next/headers';
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
+import { getUser } from '@/lib/repositories/userRepository';
 
 export async function POST(req: NextRequest) {
     try {
@@ -58,10 +59,18 @@ export async function POST(req: NextRequest) {
 
         // set the low_stock_threshold to 10 by default for all new stores
         const settings = {
-            low_stock_threshold: 10,
+            low_stock_threshold: parseInt(body.low_stock_threshold) || 10,
         }
 
-        const createParams = { ...body, organization_id: parseInt(body.organization_id), created_by: user.id, settings }
+        const createParams = {
+            name: body.name,
+            currency: body.currency,
+            organization: {
+                connect: { id: parseInt(body.organization_id) },
+            },
+            created_by: user.id,
+            settings
+        }
         const store = await createStore(createParams);
 
         await prismadb.user.update({
@@ -72,6 +81,7 @@ export async function POST(req: NextRequest) {
                 store_id: store.id,
             }
         })
+
 
         return NextResponse.json(store, res);
     } catch (error) {

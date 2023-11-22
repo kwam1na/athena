@@ -21,11 +21,17 @@ import { OrganizationStep } from './steps/organization-step';
 import { StoreStep } from './steps/store-step';
 import { postLog } from '@/lib/api/logger';
 import { useLogger } from 'next-axiom';
+import { LocalStorageSync } from '@/lib/local-storage-sync';
+import { useTheme } from 'next-themes';
+import { useRouter } from 'next/navigation';
 
 export default function Onboarding() {
    const [isSubmitting, setIsSubmitting] = useState(false);
    const [isRedirecting, setIsRedirecting] = useState(false);
+   const router = useRouter();
+   const { theme } = useTheme();
    const logger = useLogger();
+   const onboardingAutoSaver = new LocalStorageSync('onboarding');
 
    const {
       currentStep,
@@ -36,6 +42,7 @@ export default function Onboarding() {
       handleUseSuggestedToggle,
       handleStoreNameChange,
       handleCurrencyChange,
+      handleEnteredLowStockThreshold,
       toggleInvalidInput,
       ...state
    } = useOnboarding();
@@ -103,7 +110,7 @@ export default function Onboarding() {
       if (serviceError.status === 401) {
          message = 'Session timed out. Please sign in again.';
          setTimeout(() => {
-            window.location.href = '/auth';
+            router.replace('/auth');
          }, 2000);
       }
 
@@ -155,7 +162,7 @@ export default function Onboarding() {
 
          if (serviceError.status === 401) {
             setTimeout(() => {
-               window.location.href = '/auth';
+               router.replace('/auth');
             }, 2000);
          }
       } finally {
@@ -227,6 +234,11 @@ export default function Onboarding() {
          return;
       }
 
+      if (!state.lowStockThreshold) {
+         toggleInvalidInput('lowStockThreshold', true);
+         return;
+      }
+
       const storedOrgId = sessionStorage.getItem('organizationId');
 
       try {
@@ -239,6 +251,7 @@ export default function Onboarding() {
             name: state.storeName,
             currency: state.currency,
             organization_id: storedOrgId,
+            low_stock_threshold: state.lowStockThreshold,
          });
 
          await apiUpdateUser({ is_onboarded: true });
@@ -248,9 +261,11 @@ export default function Onboarding() {
          });
          sessionStorage.removeItem('organizationId');
          setIsRedirecting(true);
-         window.location.assign(
-            `/organizations/${storedOrgId}/store/${response.id}`,
-         );
+         onboardingAutoSaver.save({
+            storeId: response.id,
+            organizationId: storedOrgId,
+         });
+         router.replace(`/onboarding/create`);
       } catch (error) {
          captureException(error);
 
@@ -341,8 +356,11 @@ export default function Onboarding() {
                storeName={state.storeName}
                isInvalidStoreName={state.isInvalidStoreName}
                currency={state.currency}
+               lowStockThreshold={state.lowStockThreshold}
+               isInvalidLowStockThreshold={state.isInvalidLowStockThreshold}
                onStoreNameChange={handleStoreNameChange}
                onCurrencyChange={handleCurrencyChange}
+               onLowStockThresholdChange={handleEnteredLowStockThreshold}
                currencies={state.currencies}
                disabled={isSubmitting || isRedirecting}
             />

@@ -132,7 +132,7 @@ export async function PATCH(
         });
 
         if (!storeByUserId) {
-            return new NextResponse('Unauthorized', { status: 405 });
+            return new NextResponse('Unauthorized to perform this action for this store', { status: 405 });
         }
 
         const category = await updateCategory(params.categoryId, body)
