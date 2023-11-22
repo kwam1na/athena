@@ -15,14 +15,14 @@ import {
    DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
-import { ProductColumn } from './columns';
+import { UserColumn } from './columns';
 import { useToast } from '@/components/ui/use-toast';
 import { apiDeleteProduct } from '@/lib/api/products';
 import useGetBaseStoreUrl from '@/hooks/use-get-base-store-url';
 import logger from '@/lib/logger/console-logger';
 
 interface CellActionProps {
-   data: ProductColumn;
+   data: UserColumn;
 }
 
 export const CellAction: React.FC<CellActionProps> = ({ data }) => {
