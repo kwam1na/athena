@@ -26,7 +26,7 @@ import { useState } from 'react';
 import { DataTableToolbar } from '@/components/ui/data-table-toolbar/products-table-toolbar';
 import useGetBaseStoreUrl from '@/hooks/use-get-base-store-url';
 import { motion } from 'framer-motion';
-import { mainContainerVariants } from '@/lib/constants';
+import { mainContainerVariants, widgetVariants } from '@/lib/constants';
 
 interface SubcategoriesClientProps {
    data: SubcategoryColumn[];
@@ -78,13 +78,13 @@ export const SubcategoriesClient: React.FC<SubcategoriesClientProps> = ({
    const defaultHiddenColumns = ['createdAt', 'updatedAt'];
 
    return (
-      <motion.div
-         variants={mainContainerVariants}
-         initial="hidden"
-         animate="visible"
-         className="space-y-8"
-      >
-         <div className="flex items-center justify-between">
+      <div className="space-y-8">
+         <motion.div
+            className="flex items-center justify-between"
+            variants={widgetVariants}
+            initial="hidden"
+            animate="visible"
+         >
             <Heading
                title={`Subcategories`}
                description={`Manage subcategories for ${storeName}`}
@@ -96,20 +96,29 @@ export const SubcategoriesClient: React.FC<SubcategoriesClientProps> = ({
             >
                <Plus className="mr-2 h-4 w-4" /> Add new
             </Button>
-         </div>
+         </motion.div>
+
          <Separator />
-         <DataTableToolbar
-            searchKey="name"
-            tableKey="subcategories"
-            table={table}
-            categoryOptions={categoryOptions}
-         />
-         <DataTable
-            table={table}
-            columns={columns}
-            tableKey="subcategories"
-            defaultHiddenColumns={defaultHiddenColumns}
-         />
-      </motion.div>
+
+         <motion.div
+            className="space-y-8"
+            variants={mainContainerVariants}
+            initial="hidden"
+            animate="visible"
+         >
+            <DataTableToolbar
+               searchKey="name"
+               tableKey="subcategories"
+               table={table}
+               categoryOptions={categoryOptions}
+            />
+            <DataTable
+               table={table}
+               columns={columns}
+               tableKey="subcategories"
+               defaultHiddenColumns={defaultHiddenColumns}
+            />
+         </motion.div>
+      </div>
    );
 };

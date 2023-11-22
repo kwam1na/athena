@@ -94,15 +94,15 @@ export default async function DashboardLayout({
                      text="athena is currently only available on desktop or larger screens."
                   />
                </div>
-               <div className="hidden md:flex gap-8 flex-grow h-full">
+               <div className="hidden md:flex flex-grow h-full">
                   <aside className="sticky top-0 h-screen w-[300px] bg-zinc-200 dark:bg-card px-6">
-                     <AppSideBar className="hidden md:block w-full pt-10" />
+                     <AppSideBar className="hidden md:block w-full pt-6" />
                   </aside>
-                  <div className="flex-grow flex-col px-6 h-full pt-12">
-                     <div className="hidden md:block">
+                  <div className="flex-grow flex-col h-full pt-6">
+                     <div className="hidden md:block border-b pb-4 px-6">
                         <Navbar params={params} />
                      </div>
-                     <main className="flex-grow pt-12 pb-24 h-full">
+                     <main className="flex-grow pt-6 pb-24 px-6 h-full">
                         {children}
                      </main>
                   </div>

@@ -1,13 +1,11 @@
 import prismadb from '@/lib/prismadb';
-import { ProductForm } from './components/product-form';
 import { getProduct } from '@/lib/repositories/productsRepository';
 import { fetchCategories } from '@/lib/repositories/categoriesRepository';
 import { fetchSubcategories } from '@/lib/repositories/subcategoriesRepository';
 import { fetchSizes } from '@/lib/repositories/sizesRepository';
-import { ViewProductPage } from '../components/view-product-page';
-import { getStore } from '@/lib/repositories/storesRepository';
+import { ProductForm } from '../components/product-form';
 
-const ProductPage = async ({
+const EditProductPage = async ({
    params,
 }: {
    params: { productId: string; storeId: string };
@@ -17,9 +15,6 @@ const ProductPage = async ({
    const categories = await fetchCategories(storeId);
    const subcategories = await fetchSubcategories(storeId);
    const sizes = await fetchSizes(storeId);
-   const store = await getStore(storeId);
-   const low_stock_threshold = (store?.settings as Record<string, any>)
-      ?.low_stock_threshold;
 
    categories.unshift({
       id: 'add-new-category',
@@ -89,23 +84,16 @@ const ProductPage = async ({
    return (
       <div className="flex-col">
          <div className="flex-1 space-y-6">
-            {params.productId === 'new' ? (
-               <ProductForm
-                  categories={categories}
-                  subcategories={subcategories}
-                  colors={colors}
-                  sizes={sizes}
-                  initialData={null}
-               />
-            ) : (
-               <ViewProductPage
-                  product={product}
-                  low_stock_threshold={low_stock_threshold}
-               />
-            )}
+            <ProductForm
+               categories={categories}
+               subcategories={subcategories}
+               colors={colors}
+               sizes={sizes}
+               initialData={product}
+            />
          </div>
       </div>
    );
 };
 
-export default ProductPage;
+export default EditProductPage;

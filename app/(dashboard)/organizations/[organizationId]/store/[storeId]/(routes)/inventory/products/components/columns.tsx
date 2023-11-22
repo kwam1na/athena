@@ -2,6 +2,11 @@
 
 import { ColumnDef } from '@tanstack/react-table';
 import { CellAction } from './cell-action';
+import {
+   InStockBadge,
+   LowStockBadge,
+   SoldOutBadge,
+} from '@/components/ui/stock-status-badge';
 
 export type ProductColumn = {
    id: string;
@@ -54,22 +59,28 @@ export const columns: ColumnDef<ProductColumn>[] = [
    {
       accessorKey: 'stockStatus',
       header: 'Stock status',
-      cell: ({ row }) => (
-         <div className="flex items-center gap-x-2">
-            <div
-               className="h-2 w-2 rounded-full"
-               style={{
-                  backgroundColor:
-                     row.original.stockStatus === 'Out of stock'
-                        ? 'darkred'
-                        : row.original.stockStatus === 'Low in stock'
-                        ? 'darkorange'
-                        : 'darkgreen',
-               }}
-            />
-            {row.original.stockStatus}
-         </div>
-      ),
+      cell: ({ row }) => {
+         let BadgeComponent;
+         switch (row.original.stockStatus) {
+            case 'In stock':
+               BadgeComponent = InStockBadge;
+               break;
+            case 'Low in stock':
+               BadgeComponent = LowStockBadge;
+               break;
+            case 'Out of stock':
+               BadgeComponent = SoldOutBadge;
+               break;
+            default:
+               BadgeComponent = null;
+         }
+
+         return (
+            <div className="flex items-center gap-x-2">
+               {BadgeComponent ? <BadgeComponent /> : row.original.stockStatus}
+            </div>
+         );
+      },
    },
    {
       accessorKey: 'category',

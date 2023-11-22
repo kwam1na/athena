@@ -26,7 +26,7 @@ import { useState } from 'react';
 import { DataTableToolbar } from '@/components/ui/data-table-toolbar/products-table-toolbar';
 import useGetBaseStoreUrl from '@/hooks/use-get-base-store-url';
 import { motion } from 'framer-motion';
-import { mainContainerVariants } from '@/lib/constants';
+import { mainContainerVariants, widgetVariants } from '@/lib/constants';
 
 interface ColorClientProps {
    data: ColorColumn[];
@@ -69,13 +69,13 @@ export const ColorClient: React.FC<ColorClientProps> = ({ data }) => {
    const defaultHiddenColumns = ['createdAt', 'updatedAt'];
 
    return (
-      <motion.div
-         variants={mainContainerVariants}
-         initial="hidden"
-         animate="visible"
-         className="space-y-8"
-      >
-         <div className="flex items-center justify-between">
+      <div className="space-y-8">
+         <motion.div
+            className="flex items-center justify-between"
+            variants={widgetVariants}
+            initial="hidden"
+            animate="visible"
+         >
             <Heading
                title={`Colors`}
                description="Manage colors for your products"
@@ -87,15 +87,28 @@ export const ColorClient: React.FC<ColorClientProps> = ({ data }) => {
             >
                <Plus className="mr-2 h-4 w-4" /> Add new
             </Button>
-         </div>
+         </motion.div>
+
          <Separator />
-         <DataTableToolbar searchKey="name" tableKey="colors" table={table} />
-         <DataTable
-            columns={columns}
-            table={table}
-            tableKey="colors"
-            defaultHiddenColumns={defaultHiddenColumns}
-         />
-      </motion.div>
+
+         <motion.div
+            className="space-y-8"
+            variants={mainContainerVariants}
+            initial="hidden"
+            animate="visible"
+         >
+            <DataTableToolbar
+               searchKey="name"
+               tableKey="colors"
+               table={table}
+            />
+            <DataTable
+               columns={columns}
+               table={table}
+               tableKey="colors"
+               defaultHiddenColumns={defaultHiddenColumns}
+            />
+         </motion.div>
+      </div>
    );
 };

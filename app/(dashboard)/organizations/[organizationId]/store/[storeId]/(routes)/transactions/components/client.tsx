@@ -3,7 +3,6 @@
 import * as z from 'zod';
 import { captureException } from '@sentry/nextjs';
 import { DataTable } from '@/components/ui/data-table';
-import { Heading } from '@/components/ui/heading';
 import { Separator } from '@/components/ui/separator';
 
 import {
@@ -36,6 +35,7 @@ import {
    Banknote,
    Calendar,
    DollarSign,
+   Lightbulb,
    PackageCheck,
    PackageMinus,
    Plus,
@@ -119,7 +119,7 @@ import { apiUpdateProduct } from '@/lib/api/products';
 import useGetBaseStoreUrl from '@/hooks/use-get-base-store-url';
 import { TransactionsAutosaver } from '../utils/transactions-autosaver';
 import { motion } from 'framer-motion';
-import { widgetVariants } from '@/lib/constants';
+import { mainContainerVariants, widgetVariants } from '@/lib/constants';
 import logger from '@/lib/logger/console-logger';
 
 interface IndividualSearchResultProps {
@@ -244,7 +244,7 @@ export const TransactionsReportClient: React.FC<
    >('outline');
    const [alertModalCTAText, setAlertModalCTAText] = useState('Continue');
    const [headerText, setHeaderText] = useState(
-      fetchedTransaction ? 'Edit sales report' : 'Create new sales report',
+      fetchedTransaction ? 'Edit sales report' : 'Create a new sales report',
    );
    const [reportEntryAction, setReportEntryAction] =
       useState<ReportEntryAction>(fetchedTransaction ? 'editing' : 'new');
@@ -1804,9 +1804,14 @@ export const TransactionsReportClient: React.FC<
             loading={isDeletingReport}
          />
 
-         <div className="flex justify-between">
+         <motion.div
+            className="flex justify-between"
+            variants={widgetVariants}
+            initial="hidden"
+            animate="visible"
+         >
             <div className="flex flex-col space-y-6">
-               <div className="flex space-x-4">
+               <div className="flex space-x-4 items-center">
                   <Button
                      variant={'outline'}
                      onClick={onGoBack}
@@ -1814,18 +1819,20 @@ export const TransactionsReportClient: React.FC<
                   >
                      <ArrowLeft className="mr-2 h-4 w-4" />
                   </Button>
-                  <Heading
-                     title={headerText}
-                     description="Track the daily sales operations of your store"
-                  />
+                  <Label className="text-lg">{headerText}</Label>
                </div>
             </div>
             <ReportActionButtons />
-         </div>
+         </motion.div>
 
-         <Separator />
+         {/* <Separator /> */}
 
-         <div>
+         <motion.div
+            className="space-y-6"
+            variants={mainContainerVariants}
+            initial="hidden"
+            animate="visible"
+         >
             <div className="grid lg:grid-cols-3 lg:pt-6 md:grid-cols-1 gap-8">
                <MetricCard
                   title={'Gross sales'}
@@ -1849,189 +1856,192 @@ export const TransactionsReportClient: React.FC<
                   }
                />
             </div>
-         </div>
 
-         <div className="flex py-4 gap-8">
-            <div className="flex flex-col lg:w-[80%] md:w-full gap-16">
-               <Form {...searchQueryForm}>
-                  <form
-                     onSubmit={searchQueryForm.handleSubmit(
-                        onSubmitSearchQuery,
-                     )}
-                     className="flex-col space-y-8 pt-8 lg:w-[85%] md:w-full"
-                  >
-                     <div className="flex gap-8 justify-center">
-                        <div className="w-full">
-                           <FormField
-                              control={searchQueryForm.control}
-                              name="query"
-                              render={({ field }) => (
-                                 <FormItem>
-                                    <FormControl>
-                                       <Input
-                                          disabled={
-                                             searching ||
-                                             isAddingTransactionItem ||
-                                             isPublishingReport
-                                          }
-                                          placeholder="Enter product name or SKU..."
-                                          {...field}
-                                       />
-                                    </FormControl>
-                                    <FormMessage />
-                                 </FormItem>
-                              )}
-                           />
-                        </div>
-
-                        <Button
-                           type="submit"
-                           disabled={
-                              searching ||
-                              isAddingTransactionItem ||
-                              isPublishingReport
-                           }
-                        >
-                           <Search className="mr-2 h-4 w-4" /> Search
-                        </Button>
-                     </div>
-                  </form>
-               </Form>
-
-               <div className="w-full">
-                  {(searching || searchResults) && (
-                     <Card className="bg-background w-full">
-                        <CardHeader>
-                           <CardDescription className="flex items-center">
-                              <div className="flex justify-between items-center w-full">
-                                 {!searching && searchResults
-                                    ? 'Search results'
-                                    : 'Searching...'}
-                                 <Button
-                                    variant={'outline'}
-                                    onClick={() => {
-                                       setIsSearching(false);
-                                       setSearchResults(undefined);
-                                    }}
-                                    disabled={Object.values(
-                                       addingItemButtonStates,
-                                    ).some((isLoading) => isLoading)}
-                                 >
-                                    <X className="h-4 w-4" />
-                                 </Button>
-                              </div>
-                           </CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                           <div className="flex justify-between">
-                              {searching ? (
-                                 <div className="flex w-full flex-col gap-2">
-                                    <Skeleton className="w-[80%] h-[32px]" />
-                                    <Skeleton className="w-[40%] h-[32px]" />
-                                 </div>
-                              ) : (
-                                 <>
-                                    {displayProductInfo && (
-                                       <div
-                                          className="flex flex-col w-full gap-8"
-                                          style={{
-                                             pointerEvents: Object.values(
-                                                addingItemButtonStates,
-                                             ).some((isLoading) => isLoading)
-                                                ? 'none'
-                                                : 'auto',
-                                             opacity: Object.values(
-                                                addingItemButtonStates,
-                                             ).some((isLoading) => isLoading)
-                                                ? 0.5
-                                                : 1,
-                                          }}
-                                       >
-                                          {searchResults.map(
-                                             (result, index) => {
-                                                return (
-                                                   <>
-                                                      <IndividualSearchResult
-                                                         index={index}
-                                                         key={index}
-                                                         result={result}
-                                                      />
-                                                      {index <
-                                                         searchResults.length -
-                                                            1 && <Separator />}
-                                                   </>
-                                                );
-                                             },
-                                          )}
-                                       </div>
-                                    )}
-                                 </>
-                              )}
+            <div className="flex py-4 gap-8">
+               <div className="flex flex-col lg:w-[80%] md:w-full gap-16">
+                  <Form {...searchQueryForm}>
+                     <form
+                        onSubmit={searchQueryForm.handleSubmit(
+                           onSubmitSearchQuery,
+                        )}
+                        className="flex-col space-y-8 pt-8 lg:w-[85%] md:w-full"
+                     >
+                        <div className="flex gap-8 justify-center">
+                           <div className="w-full">
+                              <FormField
+                                 control={searchQueryForm.control}
+                                 name="query"
+                                 render={({ field }) => (
+                                    <FormItem>
+                                       <FormControl>
+                                          <Input
+                                             disabled={
+                                                searching ||
+                                                isAddingTransactionItem ||
+                                                isPublishingReport
+                                             }
+                                             placeholder="Enter product name or SKU..."
+                                             {...field}
+                                          />
+                                       </FormControl>
+                                       <FormMessage />
+                                    </FormItem>
+                                 )}
+                              />
                            </div>
 
-                           {!searching && searchResults?.length == 0 && (
-                              <div className="flex flex-col justify-center items-center pb-4 gap-2">
-                                 <span className="flex justify-center">
-                                    No results found.
-                                 </span>
-                                 <Button
-                                    variant={'outline'}
-                                    onClick={() =>
-                                       router.push(
-                                          `${baseStoreURL}/inventory/products/new?return_url=${pathName}&query=${
-                                             searchQueryForm.watch().query
-                                          }&${getTransactionAndReportActionInUrl()}`,
-                                       )
-                                    }
-                                 >
-                                    <PlusCircle className="mr-2 h-4 w-4" />
-                                    {`Add ${
-                                       searchQueryForm.watch().query
-                                    } as new product`}
-                                 </Button>
-                              </div>
-                           )}
-                        </CardContent>
-                     </Card>
-                  )}
-               </div>
-            </div>
+                           <Button
+                              type="submit"
+                              disabled={
+                                 searching ||
+                                 isAddingTransactionItem ||
+                                 isPublishingReport
+                              }
+                           >
+                              <Search className="mr-2 h-4 w-4" /> Search
+                           </Button>
+                        </div>
+                     </form>
+                  </Form>
 
-            {!showDatePicker && (
-               <TooltipProvider>
-                  <Tooltip>
-                     <TooltipTrigger asChild>
-                        <Button
-                           className="mt-8 space-x-2"
-                           variant={dateButtonVariant}
-                           onClick={toggleDatePicker}
-                           disabled={isPublishingReport}
-                        >
-                           <Calendar className="w-4 h-4 text-muted-foreground" />
-                           <p>{date && `${format(date, 'MMMM dd, yyyy')}`}</p>
-                        </Button>
-                     </TooltipTrigger>
-                     <TooltipContent>
-                        <p>Report date</p>
-                     </TooltipContent>
-                  </Tooltip>
-               </TooltipProvider>
-            )}
-            {showDatePicker && (
-               <div className="flex flex-col">
-                  <CalendarDatePicker date={date} setDate={setDate} />
-                  <Button
-                     className="mt-8 space-x-2"
-                     variant={'outline'}
-                     onClick={() => setShowDatePicker(false)}
-                     disabled={isPublishingReport}
-                  >
-                     Cancel
-                  </Button>
+                  <div className="w-full">
+                     {(searching || searchResults) && (
+                        <Card className="bg-background w-full">
+                           <CardHeader>
+                              <CardDescription className="flex items-center">
+                                 <div className="flex justify-between items-center w-full">
+                                    {!searching && searchResults
+                                       ? 'Search results'
+                                       : 'Searching...'}
+                                    <Button
+                                       variant={'outline'}
+                                       onClick={() => {
+                                          setIsSearching(false);
+                                          setSearchResults(undefined);
+                                       }}
+                                       disabled={Object.values(
+                                          addingItemButtonStates,
+                                       ).some((isLoading) => isLoading)}
+                                    >
+                                       <X className="h-4 w-4" />
+                                    </Button>
+                                 </div>
+                              </CardDescription>
+                           </CardHeader>
+                           <CardContent>
+                              <div className="flex justify-between">
+                                 {searching ? (
+                                    <div className="flex w-full flex-col gap-2">
+                                       <Skeleton className="w-[80%] h-[32px]" />
+                                       <Skeleton className="w-[40%] h-[32px]" />
+                                    </div>
+                                 ) : (
+                                    <>
+                                       {displayProductInfo && (
+                                          <div
+                                             className="flex flex-col w-full gap-8"
+                                             style={{
+                                                pointerEvents: Object.values(
+                                                   addingItemButtonStates,
+                                                ).some((isLoading) => isLoading)
+                                                   ? 'none'
+                                                   : 'auto',
+                                                opacity: Object.values(
+                                                   addingItemButtonStates,
+                                                ).some((isLoading) => isLoading)
+                                                   ? 0.5
+                                                   : 1,
+                                             }}
+                                          >
+                                             {searchResults.map(
+                                                (result, index) => {
+                                                   return (
+                                                      <>
+                                                         <IndividualSearchResult
+                                                            index={index}
+                                                            key={index}
+                                                            result={result}
+                                                         />
+                                                         {index <
+                                                            searchResults.length -
+                                                               1 && (
+                                                            <Separator />
+                                                         )}
+                                                      </>
+                                                   );
+                                                },
+                                             )}
+                                          </div>
+                                       )}
+                                    </>
+                                 )}
+                              </div>
+
+                              {!searching && searchResults?.length == 0 && (
+                                 <div className="flex flex-col justify-center items-center pb-4 gap-2">
+                                    <span className="flex justify-center">
+                                       No results found.
+                                    </span>
+                                    <Button
+                                       variant={'outline'}
+                                       onClick={() =>
+                                          router.push(
+                                             `${baseStoreURL}/inventory/products/new?return_url=${pathName}&query=${
+                                                searchQueryForm.watch().query
+                                             }&${getTransactionAndReportActionInUrl()}`,
+                                          )
+                                       }
+                                    >
+                                       <PlusCircle className="mr-2 h-4 w-4" />
+                                       {`Add ${
+                                          searchQueryForm.watch().query
+                                       } as new product`}
+                                    </Button>
+                                 </div>
+                              )}
+                           </CardContent>
+                        </Card>
+                     )}
+                  </div>
                </div>
-            )}
-            {/* Toggle Exchange rate */}
-            {/* <div className="mt-8 space-x-2 flex">
+
+               {!showDatePicker && (
+                  <TooltipProvider>
+                     <Tooltip>
+                        <TooltipTrigger asChild>
+                           <Button
+                              className="mt-8 space-x-2"
+                              variant={dateButtonVariant}
+                              onClick={toggleDatePicker}
+                              disabled={isPublishingReport}
+                           >
+                              <Calendar className="w-4 h-4 text-muted-foreground" />
+                              <p>
+                                 {date && `${format(date, 'MMMM dd, yyyy')}`}
+                              </p>
+                           </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                           <p>Report date</p>
+                        </TooltipContent>
+                     </Tooltip>
+                  </TooltipProvider>
+               )}
+               {showDatePicker && (
+                  <div className="flex flex-col">
+                     <CalendarDatePicker date={date} setDate={setDate} />
+                     <Button
+                        className="mt-8 space-x-2"
+                        variant={'outline'}
+                        onClick={() => setShowDatePicker(false)}
+                        disabled={isPublishingReport}
+                     >
+                        Cancel
+                     </Button>
+                  </div>
+               )}
+               {/* Toggle Exchange rate */}
+               {/* <div className="mt-8 space-x-2 flex">
                <DollarSign className="mt-2 w-4 h-4 text-muted-foreground" />
                <CurrencyToggle
                   currency={reportFormatCurrency}
@@ -2053,144 +2063,105 @@ export const TransactionsReportClient: React.FC<
                   </Tooltip>
                </TooltipProvider>
             </div> */}
-         </div>
+            </div>
 
-         <div className="flex justify-between gap-24 pt-4 w-full">
-            {transaction && (
-               <div className="w-full space-y-4">
-                  <div className="flex gap-4 items-center">
-                     <TooltipProvider>
-                        <Tooltip>
-                           <TooltipTrigger asChild>
-                              <div className="flex">
-                                 {!isEditingReportTitle && (
-                                    <span className="text-xl font-bold">
-                                       {transaction.reportTitle ||
-                                          getAutosavedReportTitle(
-                                             transaction.id,
-                                             transaction.transactionDate,
-                                          )}
-                                    </span>
-                                 )}
+            <div className="flex justify-between gap-24 pt-4 w-full">
+               {transaction && (
+                  <div className="w-full space-y-4">
+                     <div className="flex gap-4 items-center">
+                        <TooltipProvider>
+                           <Tooltip>
+                              <TooltipTrigger asChild>
+                                 <div className="flex">
+                                    {!isEditingReportTitle && (
+                                       <span className="text-xl font-bold">
+                                          {transaction.reportTitle ||
+                                             getAutosavedReportTitle(
+                                                transaction.id,
+                                                transaction.transactionDate,
+                                             )}
+                                       </span>
+                                    )}
 
-                                 {isEditingReportTitle && (
-                                    <Input
-                                       placeholder="Enter report title..."
-                                       disabled={isPublishingReport}
-                                       onChange={(e) =>
-                                          setEnteredReportTitle(e.target.value)
-                                       }
-                                       value={enteredReportTitle}
-                                    />
-                                 )}
-                              </div>
-                           </TooltipTrigger>
-                           <TooltipContent>
-                              <p>Report title</p>
-                           </TooltipContent>
-                        </Tooltip>
-                     </TooltipProvider>
+                                    {isEditingReportTitle && (
+                                       <Input
+                                          placeholder="Enter report title..."
+                                          disabled={isPublishingReport}
+                                          onChange={(e) =>
+                                             setEnteredReportTitle(
+                                                e.target.value,
+                                             )
+                                          }
+                                          value={enteredReportTitle}
+                                       />
+                                    )}
+                                 </div>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                 <p>Report title</p>
+                              </TooltipContent>
+                           </Tooltip>
+                        </TooltipProvider>
 
-                     <ReportTitleActionButtons />
-                  </div>
-
-                  <Separator />
-
-                  <div className="flex w-full lg:gap-24 md:gap-16 lg:flex-row md:flex-col-reverse">
-                     <div
-                        className={`lg:w-[60%] md:w-full space-y-4 ${
-                           isPublishingReport
-                              ? 'pointer-events-none opacity-50'
-                              : ''
-                        }`}
-                     >
-                        <span className="text-muted-foreground">
-                           Transactions
-                        </span>
-                        <DataTableToolbar
-                           searchKey="productName"
-                           tableKey="transactions-transaction-items"
-                           placeholder="Filter transactions..."
-                           table={table}
-                        />
-                        <DataTable
-                           table={table}
-                           columns={columns}
-                           tableKey="transactions-transaction-items"
-                        />
+                        <ReportTitleActionButtons />
                      </div>
 
-                     {Object.keys(categorySales).length > 0 && (
-                        <div className="lg:w-[40%] md:w-full space-y-4">
+                     <Separator />
+
+                     <div className="flex w-full lg:gap-24 md:gap-16 lg:flex-row md:flex-col-reverse">
+                        <div
+                           className={`lg:w-[60%] md:w-full space-y-4 ${
+                              isPublishingReport
+                                 ? 'pointer-events-none opacity-50'
+                                 : ''
+                           }`}
+                        >
                            <span className="text-muted-foreground">
-                              Breakdown by category
+                              Transactions
                            </span>
-                           <CategoriesTable />
-                        </div>
-                     )}
-
-                     {/* <div
-                        className={`space-y-8 w-[40%] pt-2 ${
-                           isPublishingReport
-                              ? 'pointer-events-none opacity-50'
-                              : ''
-                        }`}
-                     >
-                        <span className="text-muted-foreground">
-                           Report summary
-                        </span>
-                        <div className="grid grid-cols-2 space-x-8 pt-6">
-                           <Card>
-                              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                 <CardTitle className="text-sm font-medium">
-                                    Gross Sales
-                                 </CardTitle>
-                                 <DollarSign className="h-4 w-4 text-muted-foreground" />
-                              </CardHeader>
-                              <CardContent>
-                                 <div className="text-2xl font-bold">
-                                    {fmt.format(grossSales)}
-                                 </div>
-                              </CardContent>
-                           </Card>
-
-                           <Card>
-                              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                 <CardTitle className="text-sm font-medium">
-                                    Net Revenue
-                                 </CardTitle>
-                                 <DollarSign className="h-4 w-4 text-muted-foreground" />
-                              </CardHeader>
-                              <CardContent>
-                                 <div className="text-2xl font-bold">
-                                    {fmt.format(netSales)}
-                                 </div>
-                              </CardContent>
-                           </Card>
+                           <DataTableToolbar
+                              searchKey="productName"
+                              tableKey="transactions-transaction-items"
+                              placeholder="Filter transactions..."
+                              table={table}
+                           />
+                           <DataTable
+                              table={table}
+                              columns={columns}
+                              tableKey="transactions-transaction-items"
+                           />
                         </div>
 
-                        <div className="grid grid-cols-2 space-x-8 pt-6">
-                           <Card>
-                              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                 <CardTitle className="text-sm font-medium">
-                                    Units sold
-                                 </CardTitle>
-                                 <PackageCheck className="h-4 w-4 text-muted-foreground" />
-                              </CardHeader>
-                              <CardContent>
-                                 <div className="text-2xl font-bold">
-                                    {unitsSold}
-                                 </div>
-                              </CardContent>
-                           </Card>
-                        </div>
-
-                        <CategoriesTable />
-                     </div> */}
+                        {Object.keys(categorySales).length > 0 && (
+                           <div className="lg:w-[40%] md:w-full space-y-4">
+                              <span className="text-muted-foreground">
+                                 Breakdown by category
+                              </span>
+                              <CategoriesTable />
+                           </div>
+                        )}
+                     </div>
                   </div>
-               </div>
-            )}
-         </div>
+               )}
+
+               {!transaction && (
+                  <div className="flex justify-center items-center w-full h-[400px]">
+                     <Alert className="flex justify-between w-[40%] h-[180px]">
+                        <div className="flex gap-2 pt-4 pb-4">
+                           <Lightbulb className="h-4 w-4" />
+                           <div className="grid grid-rows-2">
+                              <AlertTitle>{'Tip'}</AlertTitle>
+                              <AlertDescription className="pr-8">
+                                 Remember to double-check the quantity entered
+                                 for each item to maintain accurate sales data.
+                              </AlertDescription>
+                           </div>
+                        </div>
+                     </Alert>
+                  </div>
+               )}
+            </div>
+         </motion.div>
       </motion.div>
    );
 };
