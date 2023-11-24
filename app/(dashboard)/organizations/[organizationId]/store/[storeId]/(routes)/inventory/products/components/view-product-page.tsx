@@ -137,7 +137,7 @@ export const ViewProductPage: React.FC<ProductPageProps> = ({
 
                      <div className="grid grid-cols-2">
                         <ProductDetail
-                           title="List price"
+                           title="Price"
                            detail={product?.price && fmt.format(product?.price)}
                         />
 
@@ -181,12 +181,12 @@ export const ViewProductPage: React.FC<ProductPageProps> = ({
                         <ProductDetail
                            title="Category"
                            // @ts-expect-error: fix type to include category
-                           detail={product?.category?.name}
+                           detail={product?.category?.name || 'N/A'}
                         />
                         <ProductDetail
                            title="Subcategory"
                            // @ts-expect-error: fix type to include category
-                           detail={product?.subcategory?.name}
+                           detail={product?.subcategory?.name || 'N/A'}
                         />
                      </div>
 
@@ -195,7 +195,10 @@ export const ViewProductPage: React.FC<ProductPageProps> = ({
                            title="Inventory count"
                            detail={product?.inventory_count}
                         />
-                        <ProductDetail title="SKU" detail={product?.sku} />
+                        <ProductDetail
+                           title="SKU"
+                           detail={product?.sku || 'N/A'}
+                        />
                      </div>
 
                      {typeof product?.inventory_count == 'number' &&

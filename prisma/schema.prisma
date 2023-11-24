@@ -121,10 +121,10 @@ model product {
   organization_id Int
   store_id        Int
   store           store        @relation("StoreToProduct", fields: [store_id], references: [id], onDelete: Cascade)
-  category_id     String
-  category        category     @relation("CategoryToProduct", fields: [category_id], references: [id])
-  subcategory_id  String
-  subcategory     subcategory  @relation("SubcategoryToProduct", fields: [subcategory_id], references: [id], onDelete: Cascade)
+  category_id     String?
+  category        category?    @relation("CategoryToProduct", fields: [category_id], references: [id])
+  subcategory_id  String?
+  subcategory     subcategory? @relation("SubcategoryToProduct", fields: [subcategory_id], references: [id], onDelete: Cascade)
   name            String
   price           Float
   cost_per_item   Float

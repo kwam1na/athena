@@ -47,9 +47,9 @@ const ProductsPage = async ({
       margin: (((item.price - item.cost_per_item) / item.price) * 100).toFixed(
          2,
       ),
-      category: item.category.name,
-      subcategory: item.subcategory.name,
-      sku: item.sku,
+      category: item.category?.name || 'N/A',
+      subcategory: item.subcategory?.name || 'N/A',
+      sku: item.sku || 'No SKU',
       stockStatus:
          item.inventory_count === 0
             ? 'Out of stock'

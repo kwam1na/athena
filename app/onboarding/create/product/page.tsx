@@ -155,7 +155,7 @@ export default function CreateProduct() {
                               name="price"
                               render={({ field }) => (
                                  <FormItem>
-                                    <FormLabel>List price</FormLabel>
+                                    <FormLabel>Price</FormLabel>
                                     <FormControl>
                                        <Input
                                           type="number"

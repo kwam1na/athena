@@ -4,6 +4,8 @@ import { deleteProduct, getProduct, updateProduct } from '@/lib/repositories/pro
 import { findStore } from '@/lib/repositories/storesRepository';
 import { cookies } from 'next/headers';
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
+import { createSKUCounter, getSKUCounter, updateSKUCounter } from '@/lib/repositories/skuCounterRepository';
+import { generateSKU } from '@/app/api/utils';
 
 export async function GET(
     req: Request,
@@ -200,6 +202,17 @@ export async function PATCH(
         //         },
         //     },
         // });
+
+        if (!body.sku && category_id && subcategory_id) {
+
+            let skuCounter = await getSKUCounter(category_id, subcategory_id)
+            if (!skuCounter) {
+                skuCounter = await createSKUCounter({ category_id, subcategory_id })
+            }
+            body.sku = generateSKU(category_id, subcategory_id, skuCounter.last_used)
+            await updateSKUCounter(skuCounter.id, { last_used: skuCounter.last_used + 1 })
+        }
+
         const product = await updateProduct(params.productId, body)
 
         return NextResponse.json(product);

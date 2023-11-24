@@ -25,15 +25,6 @@ type OnboardingDataContextType = {
    setSubcategoryName: React.Dispatch<React.SetStateAction<string | undefined>>;
 };
 
-type OnboardingData = {
-   categoryId?: string;
-   categoryName?: string;
-   organizationId?: string;
-   storeId?: number;
-   subcategoryId?: string;
-   subcategoryName?: string;
-};
-
 const OnboardingDataContext = createContext<OnboardingDataContextType | null>(
    null,
 );

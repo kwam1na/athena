@@ -1,22 +1,3 @@
-export const defaultOptions: Record<string, any> = {
-    method: 'GET',
-    headers: {
-        'Content-Type': 'application/json',
-    },
-};
-
-export const currencies = [
-    {
-        label: 'US Dollar',
-        value: 'usd'
-    },
-    {
-        label: 'Ghanaian Cedi',
-        value: 'ghs'
-    },
-]
-
-// animation variants
 export const mainContainerVariants = {
     hidden: {
         opacity: 0,
@@ -45,7 +26,7 @@ export const widgetVariants = {
     },
 }
 
-export const containerVariants = {
+export const onboardingContainerVariants = {
     hidden: {
         opacity: 0,
         y: 16,
@@ -60,7 +41,7 @@ export const containerVariants = {
     },
 };
 
-export const buttonVariants = {
+export const onboardingButtonVariants = {
     hidden: {
         opacity: 0,
         x: -24,
@@ -76,7 +57,7 @@ export const buttonVariants = {
     },
 };
 
-export const blurbVariants = {
+export const onboardingBlurbVariants = {
     hidden: {
         opacity: 0,
         y: 8,

@@ -73,13 +73,10 @@ export default function OnboardingCreate() {
 
             <div className="flex flex-col gap-16">
                <h2 className="text-lg leading-relaxed">
-                  In athena, managing your inventory is as straightforward as
-                  organizing a library. Think of categories as the main genres
-                  like Science or History, each holding a variety of items.
-                  Subcategories are like specific bookshelves, organizing these
-                  items for easy access. And your products? They are the
-                  individual books, each with unique details. Let's create your
-                  first category and fill your shelves with products.
+                  In Athena, inventory management is like organizing a library.
+                  Categories are your genres, subcategories are bookshelves, and
+                  products are the books. Let's set up your first category and
+                  stock your shelves.
                </h2>
 
                <motion.div

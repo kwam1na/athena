@@ -1,16 +1,12 @@
 'use client';
 
 import Link from 'next/link';
-import { useParams, usePathname } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 
 import { cn } from '@/lib/utils';
 import { Banknote, LayoutDashboard, Package, Settings } from 'lucide-react';
 import useGetBaseStoreUrl from '@/hooks/use-get-base-store-url';
 import { AthenLogo } from '@/app/assets/athena-logo';
-import Navbar from './navbar';
-import OrganizationSwitcher from './organization-switcher';
-import StoreSwitcher from './store-switcher';
-import { UserNav } from './user-nav';
 
 export function AppSideBar({
    className,

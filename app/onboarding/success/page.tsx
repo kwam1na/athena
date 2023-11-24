@@ -6,16 +6,24 @@ import { LocalStorageSync } from '@/lib/local-storage-sync';
 import { useRouter } from 'next/navigation';
 import { useOnboardingData } from '@/providers/onboarding-data-provider';
 import { onboardingContainerVariants } from '@/lib/animation/constants';
+import { useEffect, useState } from 'react';
 
 export default function OnboardingSuccess() {
    const router = useRouter();
-   const onboardingAutoSaver = new LocalStorageSync('onboarding');
+   const [navigated, setNavigated] = useState(false);
    const { organizationId, storeId } = useOnboardingData();
 
    const navigateToDashboard = () => {
       router.replace(`/organizations/${organizationId}/store/${storeId}`);
-      onboardingAutoSaver.clearAll();
+      setNavigated(true);
    };
+
+   useEffect(() => {
+      if (navigated) {
+         const onboardingAutoSaver = new LocalStorageSync('onboarding');
+         onboardingAutoSaver.clearAll();
+      }
+   }, [navigated]);
 
    return (
       <div className="flex h-full">
@@ -27,12 +35,11 @@ export default function OnboardingSuccess() {
          >
             <div className="flex flex-col gap-4 pt-32">
                <h1 className="text-3xl">
-                  Congratulations! You've successfully added your first product
-                  to your inventory.
+                  Congratulations! You've successfully added your first store.
                </h1>
                <h2 className="text-lg text-muted-foreground">
-                  Keep the momentum going! Continue adding more items to keep
-                  track of your store's operations.
+                  Keep the momentum going! Add products to your store and manage
+                  your operations.
                </h2>
             </div>
 

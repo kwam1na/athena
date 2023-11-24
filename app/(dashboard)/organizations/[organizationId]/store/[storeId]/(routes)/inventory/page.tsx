@@ -41,8 +41,8 @@ const StorePage = async ({ params }: { params: { storeId: string } }) => {
       margin: (((item.price - item.cost_per_item) / item.price) * 100).toFixed(
          2,
       ),
-      category: item.category.name,
-      subcategory: item.subcategory.name,
+      category: item.category?.name || 'N/A',
+      subcategory: item.subcategory?.name || 'N/A',
       sku: item.sku,
       size: item.size?.name || 'N/A',
       stockStatus:
