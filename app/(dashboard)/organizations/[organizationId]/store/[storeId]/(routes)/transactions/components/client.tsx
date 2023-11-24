@@ -121,6 +121,7 @@ import { TransactionsAutosaver } from '../utils/transactions-autosaver';
 import { motion } from 'framer-motion';
 import { mainContainerVariants, widgetVariants } from '@/lib/constants';
 import logger from '@/lib/logger/console-logger';
+import ProductTip from '@/components/ui/product-tip';
 
 interface IndividualSearchResultProps {
    index: number;
@@ -650,7 +651,7 @@ export const TransactionsReportClient: React.FC<
          price: fmt.format(parseFloat(item.price || '0')),
          productId: item.productId,
          productName: item.productName,
-         sku: item.sku,
+         sku: item.sku || 'N/A',
          storeId: item.storeId,
          unitsSold: item.unitsSold,
          transactionDate: item.transactionDate,
@@ -1550,7 +1551,7 @@ export const TransactionsReportClient: React.FC<
                         value={result.product_name}
                      />
                      <ProductInfoLabel
-                        title="List price"
+                        title="Price"
                         value={fmt.format(parseFloat(String(result.price)))}
                      />
                      <ProductInfoLabel
@@ -2146,18 +2147,12 @@ export const TransactionsReportClient: React.FC<
 
                {!transaction && (
                   <div className="flex justify-center items-center w-full h-[400px]">
-                     <Alert className="flex justify-between w-[40%] h-[180px]">
-                        <div className="flex gap-2 pt-4 pb-4">
-                           <Lightbulb className="h-4 w-4" />
-                           <div className="grid grid-rows-2">
-                              <AlertTitle>{'Tip'}</AlertTitle>
-                              <AlertDescription className="pr-8">
-                                 Remember to double-check the quantity entered
-                                 for each item to maintain accurate sales data.
-                              </AlertDescription>
-                           </div>
-                        </div>
-                     </Alert>
+                     <ProductTip
+                        className="w-[40%]"
+                        tip={
+                           'Remember to double-check the quantity entered for each item to maintain accurate sales data.'
+                        }
+                     />
                   </div>
                )}
             </div>

@@ -75,22 +75,6 @@ export async function POST(
             return new NextResponse('Cost per item is required', { status: 400 });
         }
 
-        if (!category_id) {
-            return new NextResponse('Category id is required', { status: 400 });
-        }
-
-        if (!subcategory_id) {
-            return new NextResponse('Subcategory id is required', { status: 400 });
-        }
-
-        // if (!colorId) {
-        //     return new NextResponse('Color id is required', { status: 400 });
-        // }
-
-        // if (!sizeId) {
-        //     return new NextResponse('Size id is required', { status: 400 });
-        // }
-
         if (!params.storeId) {
             return new NextResponse('Store id is required', { status: 400 });
         }
@@ -132,7 +116,7 @@ export async function POST(
         //         },
         //     },
         // });
-        if (!sku) {
+        if (!sku && category_id && subcategory_id) {
 
             let skuCounter = await getSKUCounter(category_id, subcategory_id)
             if (!skuCounter) {

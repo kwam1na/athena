@@ -95,10 +95,10 @@ export default async function DashboardLayout({
                   />
                </div>
                <div className="hidden md:flex flex-grow h-full">
-                  <aside className="sticky top-0 h-screen w-[300px] bg-zinc-200 dark:bg-card px-6">
+                  <aside className="sticky top-0 h-screen w-[15%] bg-zinc-200 dark:bg-card px-6">
                      <AppSideBar className="hidden md:block w-full pt-6" />
                   </aside>
-                  <div className="flex-grow flex-col h-full pt-6">
+                  <div className="flex-grow flex-col w-[85%] h-full pt-6">
                      <div className="hidden md:block border-b pb-4 px-6">
                         <Navbar params={params} />
                      </div>

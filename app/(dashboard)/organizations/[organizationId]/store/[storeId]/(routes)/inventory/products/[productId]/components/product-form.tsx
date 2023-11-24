@@ -5,7 +5,7 @@ import { captureException, init } from '@sentry/nextjs';
 import { useEffect, useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
-import { ArrowLeft, Info, PlusCircle, Trash } from 'lucide-react';
+import { ArrowLeft, Info, Lightbulb, PlusCircle, Trash } from 'lucide-react';
 import {
    category,
    color,
@@ -72,6 +72,10 @@ import {
 import { InfoCircledIcon } from '@radix-ui/react-icons';
 import logger from '@/lib/logger/console-logger';
 import { Label } from '@/components/ui/label';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import ProductTip from '@/components/ui/product-tip';
+import { LocalStorageSync } from '@/lib/local-storage-sync';
+import InfoTooltip from '@/components/ui/info-tooltip';
 
 enum ActionContext {
    NONE,
@@ -84,8 +88,8 @@ const formSchema = z.object({
    // images: z.object({ url: z.string() }).array(),
    price: z.coerce.number().min(1),
    cost_per_item: z.coerce.number().min(1),
-   category_id: z.string().min(1),
-   subcategory_id: z.string().min(1),
+   category_id: z.string().optional(),
+   subcategory_id: z.string().optional(),
    sku: z.string().optional(),
    color_id: z.string().optional(),
    size_id: z.string().optional(),
@@ -194,7 +198,6 @@ export const ProductForm: React.FC<ProductFormProps> = ({
    const { toast } = useToast();
 
    const title = initialData ? 'Edit product' : 'Create product';
-   const description = initialData ? 'Edit a product.' : 'Add a new product';
    const action = initialData ? 'Save changes' : 'Create';
    const loadingAction = loading ? (initialData ? 'Saving' : 'Creating') : '';
    const buttonText = loading ? loadingAction : action;
@@ -642,7 +645,6 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                   </Button>
                   <Label className="text-lg">{title}</Label>
                </div>
-               <Alerts />
             </div>
             <div className="flex items-center">
                {initialData && (
@@ -695,7 +697,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                      </FormItem>
                   )}
                /> */}
-                  <div className="md:grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+                  <div className="grid grid-cols-2 gap-8">
                      <CardContainer>
                         <ProductInfoCard title="Product information">
                            <FormField
@@ -725,7 +727,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                                  name="price"
                                  render={({ field }) => (
                                     <FormItem>
-                                       <FormLabel> List price</FormLabel>
+                                       <FormLabel>Price</FormLabel>
                                        <FormControl>
                                           <Input
                                              type="number"
@@ -781,26 +783,17 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                            </div>
                            <div className="grid grid-cols-2">
                               <div className="grid grid-rows-2 space-y-2">
-                                 <TooltipProvider>
-                                    <Tooltip>
-                                       <TooltipTrigger asChild>
-                                          <div className="flex items-center">
-                                             <p className="text-sm text-muted-foreground">
-                                                Profit
-                                             </p>
-                                             <InfoCircledIcon className="h-4 w-4 ml-1 text-muted-foreground" />
-                                          </div>
-                                       </TooltipTrigger>
-                                       <TooltipContent>
-                                          <p>
-                                             Profit is the difference between
-                                             the list price and the cost. It
+                                 <InfoTooltip
+                                    label={
+                                       <p className="text-sm text-muted-foreground">
+                                          Profit
+                                       </p>
+                                    }
+                                    tooltip="Profit is the difference between
+                                             the price and the cost. It
                                              indicates the actual monetary gain
-                                             from a sale.
-                                          </p>
-                                       </TooltipContent>
-                                    </Tooltip>
-                                 </TooltipProvider>
+                                             from a sale."
+                                 />
                                  {isLoadingCurrency && (
                                     <Skeleton className="w-[80px] h-[24px]" />
                                  )}
@@ -814,28 +807,19 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                               </div>
 
                               <div className="grid grid-rows-2 space-y-2">
-                                 <TooltipProvider>
-                                    <Tooltip>
-                                       <TooltipTrigger asChild>
-                                          <div className="flex items-center">
-                                             <p className="text-sm text-muted-foreground">
-                                                Margin
-                                             </p>
-                                             <InfoCircledIcon className="h-4 w-4 ml-1 text-muted-foreground" />
-                                          </div>
-                                       </TooltipTrigger>
-                                       <TooltipContent>
-                                          <p>
-                                             Margin is calculated as the
-                                             difference between the list price
-                                             and the cost, divided by the list
-                                             price, expressed as a percentage.
-                                             It represents the portion of the
-                                             list price that turns into profit.
-                                          </p>
-                                       </TooltipContent>
-                                    </Tooltip>
-                                 </TooltipProvider>
+                                 <InfoTooltip
+                                    label={
+                                       <p className="text-sm text-muted-foreground">
+                                          Margin
+                                       </p>
+                                    }
+                                    tooltip="Margin is calculated as the
+                                             difference between the price and
+                                             the cost, divided by the price,
+                                             expressed as a percentage. It
+                                             represents the portion of the price
+                                             that turns into profit."
+                                 />
                                  <p className="text-sm">
                                     {isNaN(margin) ? '--' : `${margin}%`}
                                  </p>
@@ -844,11 +828,57 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                         </ProductInfoCard>
                      </CardContainer>
 
-                     <CardContainer>
+                     <CardContainer className="flex gap-4 items-start">
                         <ProductInfoCard
-                           title="Inventory"
+                           title="Inventory and organization"
                            className="grid-cols-2"
                         >
+                           <FormField
+                              control={form.control}
+                              name="inventory_count"
+                              render={({ field }) => (
+                                 <FormItem>
+                                    <FormLabel>Stock count</FormLabel>
+                                    <FormControl>
+                                       <Input
+                                          type="number"
+                                          disabled={loading}
+                                          placeholder="0"
+                                          {...field}
+                                          onChange={(e) => {
+                                             field.onChange(e);
+                                             autosaveProduct();
+                                          }}
+                                       />
+                                    </FormControl>
+                                    <FormMessage />
+                                 </FormItem>
+                              )}
+                           />
+                           <FormField
+                              control={form.control}
+                              name="sku"
+                              render={({ field }) => (
+                                 <FormItem>
+                                    <FormLabel>SKU</FormLabel>
+                                    <FormControl>
+                                       <Input
+                                          disabled={loading}
+                                          placeholder="Product SKU"
+                                          {...field}
+                                          onChange={(e) => {
+                                             field.onChange(e);
+                                             autosaveProduct();
+                                          }}
+                                       />
+                                    </FormControl>
+                                    <FormDescription>
+                                       auto-generated if left blank
+                                    </FormDescription>
+                                    <FormMessage />
+                                 </FormItem>
+                              )}
+                           />
                            <FormField
                               control={form.control}
                               name="category_id"
@@ -996,53 +1026,13 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                                  </FormItem>
                               )}
                            />
-                           <FormField
-                              control={form.control}
-                              name="inventory_count"
-                              render={({ field }) => (
-                                 <FormItem>
-                                    <FormLabel>Count</FormLabel>
-                                    <FormControl>
-                                       <Input
-                                          type="number"
-                                          disabled={loading}
-                                          placeholder="0"
-                                          {...field}
-                                          onChange={(e) => {
-                                             field.onChange(e);
-                                             autosaveProduct();
-                                          }}
-                                       />
-                                    </FormControl>
-                                    <FormMessage />
-                                 </FormItem>
-                              )}
-                           />
-                           <FormField
-                              control={form.control}
-                              name="sku"
-                              render={({ field }) => (
-                                 <FormItem>
-                                    <FormLabel>SKU</FormLabel>
-                                    <FormControl>
-                                       <Input
-                                          disabled={loading}
-                                          placeholder="Product SKU"
-                                          {...field}
-                                          onChange={(e) => {
-                                             field.onChange(e);
-                                             autosaveProduct();
-                                          }}
-                                       />
-                                    </FormControl>
-                                    <FormDescription>
-                                       auto-generated if left blank
-                                    </FormDescription>
-                                    <FormMessage />
-                                 </FormItem>
-                              )}
-                           />
                         </ProductInfoCard>
+
+                        <ProductTip
+                           tip={
+                              'Providing a category and subcategory helps you organize your products. It also helps athena auto-generate a SKU for your product.'
+                           }
+                        />
                      </CardContainer>
 
                      <CardContainer>
@@ -1158,51 +1148,32 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                         </ProductInfoCard>
                      </CardContainer>
 
-                     {/* <FormField
-                     control={form.control}
-                     name="isFeatured"
-                     render={({ field }) => (
-                        <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
-                           <FormControl>
-                              <Checkbox
-                                 checked={field.value}
-                                 // @ts-ignore
-                                 onCheckedChange={field.onChange}
-                              />
-                           </FormControl>
-                           <div className="space-y-1 leading-none">
-                              <FormLabel>Featured</FormLabel>
-                              <FormDescription>
-                                 This product will appear on the home page
-                              </FormDescription>
-                           </div>
-                        </FormItem>
-                     )}
-                  /> */}
-                     <FormField
-                        control={form.control}
-                        name="is_archived"
-                        render={({ field }) => (
-                           <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
-                              <FormControl>
-                                 <Checkbox
-                                    checked={field.value}
-                                    // @ts-ignore
-                                    onCheckedChange={(e) => {
-                                       field.onChange(e);
-                                       autosaveProduct();
-                                    }}
-                                 />
-                              </FormControl>
-                              <div className="space-y-1 leading-none">
-                                 <FormLabel>Archived</FormLabel>
-                                 <FormDescription>
-                                    Excludes this product from stock count.
-                                 </FormDescription>
-                              </div>
-                           </FormItem>
-                        )}
-                     />
+                     <div className="w-[320px]">
+                        <FormField
+                           control={form.control}
+                           name="is_archived"
+                           render={({ field }) => (
+                              <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                                 <FormControl>
+                                    <Checkbox
+                                       checked={field.value}
+                                       // @ts-ignore
+                                       onCheckedChange={(e) => {
+                                          field.onChange(e);
+                                          autosaveProduct();
+                                       }}
+                                    />
+                                 </FormControl>
+                                 <div className="space-y-1 leading-none">
+                                    <FormLabel>Archived</FormLabel>
+                                    <FormDescription>
+                                       Excludes this product from stock count.
+                                    </FormDescription>
+                                 </div>
+                              </FormItem>
+                           )}
+                        />
+                     </div>
                   </div>
                   <LoadingButton
                      isLoading={loading}

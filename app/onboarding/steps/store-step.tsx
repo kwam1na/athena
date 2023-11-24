@@ -98,14 +98,14 @@ export const StoreStep: React.FC<StoreStepProps> = ({
                      </TooltipTrigger>
                      <TooltipContent>
                         <p>
-                           This is a value that will be used to determine when
+                           This is a number that will be used to determine when
                            to alert you that you are running low on stock.
                         </p>
                      </TooltipContent>
                   </Tooltip>
                </TooltipProvider>
                <Input
-                  placeholder="Enter value"
+                  placeholder="Enter number"
                   type="number"
                   onChange={(e) => onLowStockThresholdChange(e.target.value)}
                   value={lowStockThreshold}
@@ -113,7 +113,7 @@ export const StoreStep: React.FC<StoreStepProps> = ({
                />
                {isInvalidLowStockThreshold && (
                   <p className="text-sm text-destructive">
-                     Please enter a valid value
+                     Please enter a valid number
                   </p>
                )}
             </div>

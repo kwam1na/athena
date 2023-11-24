@@ -24,14 +24,20 @@ import { useLogger } from 'next-axiom';
 import { LocalStorageSync } from '@/lib/local-storage-sync';
 import { useTheme } from 'next-themes';
 import { useRouter } from 'next/navigation';
+import {
+   onboardingBlurbVariants,
+   onboardingButtonVariants,
+   onboardingContainerVariants,
+} from '@/lib/animation/constants';
+import { useOnboardingData } from '@/providers/onboarding-data-provider';
 
 export default function Onboarding() {
    const [isSubmitting, setIsSubmitting] = useState(false);
    const [isRedirecting, setIsRedirecting] = useState(false);
    const router = useRouter();
-   const { theme } = useTheme();
    const logger = useLogger();
    const onboardingAutoSaver = new LocalStorageSync('onboarding');
+   const { setOrganizationId, setStoreId } = useOnboardingData();
 
    const {
       currentStep,
@@ -195,6 +201,7 @@ export default function Onboarding() {
                name: state.organizationName,
             });
             sessionStorage.setItem('organizationId', newOrg.id);
+            setOrganizationId(newOrg.id);
          }
 
          await postLog('info', 'action: saveOrganizationName', {
@@ -261,11 +268,8 @@ export default function Onboarding() {
          });
          sessionStorage.removeItem('organizationId');
          setIsRedirecting(true);
-         onboardingAutoSaver.save({
-            storeId: response.id,
-            organizationId: storedOrgId,
-         });
-         router.replace(`/onboarding/create`);
+         setStoreId(response.id);
+         router.replace(`/onboarding/success`);
       } catch (error) {
          captureException(error);
 
@@ -342,10 +346,10 @@ export default function Onboarding() {
          onProceed: saveOrganizationName,
          blurb: (
             <p className="text-3xl leading-relaxed self-center my-auto">
-               Think of your organization as your brand's main identity. It
-               could be your company name, a holding entity, or a larger group.
-               Choose a name that represents the umbrella for all your business
-               activities. (You can update this later.)
+               Consider your organization as your brand's primary identity, such
+               as your company name or holding group. Select a name that
+               encompasses all your business operations. (You can change it
+               later.)
             </p>
          ),
       },
@@ -368,67 +372,19 @@ export default function Onboarding() {
          onProceed: saveStoreName,
          blurb: (
             <p className="text-3xl leading-relaxed self-center my-auto">
-               Stores are the individual marketplaces where your products meet
-               your customers. They sit under the organization's umbrella, each
-               with its unique brand and identity, yet unified by your
-               overarching business strategy.
+               Stores are distinct marketplaces under your organization where
+               products connect with customers, each with its own brand yet
+               aligned with your overall business strategy.
             </p>
          ),
       },
    ];
 
-   const containerVariants = {
-      hidden: {
-         opacity: 0,
-         y: 16,
-      },
-      visible: {
-         opacity: 1,
-         y: 0,
-         transition: {
-            type: 'easeIn',
-            duration: 0.8,
-         },
-      },
-   };
-
-   const buttonVariants = {
-      hidden: {
-         opacity: 0,
-         x: -24,
-      },
-      visible: {
-         opacity: 1,
-         x: 0,
-         transition: {
-            type: 'easeIn',
-            duration: 0.5,
-            delay: 0.9,
-         },
-      },
-   };
-
-   const blurbVariants = {
-      hidden: {
-         opacity: 0,
-         y: 8,
-      },
-      visible: {
-         opacity: 1,
-         y: 0,
-         transition: {
-            type: 'easeIn',
-            duration: 0.7,
-            delay: 0.9,
-         },
-      },
-   };
-
    return (
       <div className="flex h-full">
          <div className="flex flex-col h-full w-[50%] justify-center gap-8 px-16">
             <motion.div
-               variants={containerVariants}
+               variants={onboardingContainerVariants}
                key={`container-${currentStep}`}
                initial="hidden"
                animate="visible"
@@ -437,7 +393,7 @@ export default function Onboarding() {
                {steps[currentStep].component}
             </motion.div>
             <motion.div
-               variants={buttonVariants}
+               variants={onboardingButtonVariants}
                key={`button-${currentStep}`}
                initial="hidden"
                animate="visible"
@@ -449,7 +405,7 @@ export default function Onboarding() {
          <div className="flex w-[50%] p-32 bg-card">
             <motion.div
                className="flex flex-col justify-between w-full h-full"
-               variants={blurbVariants}
+               variants={onboardingBlurbVariants}
                key={`blurb-${currentStep}`}
                initial="hidden"
                animate="visible"

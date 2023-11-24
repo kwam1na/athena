@@ -135,7 +135,7 @@ export const ViewReportClient: React.FC<TransactionsReportClientProps> = ({
          price: fmt.format(parseFloat(item.price || '0')),
          productId: item.productId,
          productName: item.productName,
-         sku: item.sku,
+         sku: item.sku || 'No SKU',
          storeId: item.storeId,
          unitsSold: item.unitsSold,
          transactionDate: item.transactionDate,

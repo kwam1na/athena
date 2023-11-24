@@ -42,7 +42,7 @@ export const columns: ColumnDef<ProductColumn>[] = [
    },
    {
       accessorKey: 'price',
-      header: 'List Price',
+      header: 'Price',
    },
    {
       accessorKey: 'costPerItem',

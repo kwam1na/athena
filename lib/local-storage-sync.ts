@@ -1,4 +1,4 @@
-export class LocalStorageSync<T extends { [key: string]: any }> { // Now T is expected to be an object with string keys.
+export class LocalStorageSync<T extends { [key: string]: any }> {
     key: string;
 
     constructor(key: string) {

@@ -37,7 +37,7 @@ export const columns: ColumnDef<TransactionItemColumn>[] = [
    },
    {
       accessorKey: 'price',
-      header: 'List price',
+      header: 'Price',
    },
    {
       accessorKey: 'costPerItem',
@@ -68,7 +68,7 @@ export const viewReportColumns: ColumnDef<ViewTransactionItemColumn>[] = [
    },
    {
       accessorKey: 'price',
-      header: 'List price',
+      header: 'Price',
    },
    {
       accessorKey: 'costPerItem',
