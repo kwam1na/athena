@@ -28,7 +28,7 @@ import {
 import { useState } from 'react';
 import { DataTableToolbar } from '@/components/ui/data-table-toolbar/products-table-toolbar';
 import { transaction, transaction_item } from '@prisma/client';
-import { useWrappedUser } from '@/providers/wrapped-user-provider';
+import { useUser } from '@/providers/user-provider';
 import { ProgressList } from '@/components/ui/progress-list';
 import { GrossRevenueWidget } from '@/components/widgets/gross-revenue-widget';
 import { NetRevenueWidget } from '@/components/widgets/net-revenue-widget';
@@ -72,7 +72,7 @@ export const TransactionsReportsClient: React.FC<
    const baseStoreURL = useGetBaseStoreUrl();
    const router = useRouter();
 
-   const { wrappedUser, isLoading: isLoadingUser } = useWrappedUser();
+   const { user, isLoading: isLoadingUser } = useUser();
 
    const [sorting, setSorting] = useState<SortingState>([]);
    const [rowSelection, setRowSelection] = useState({});
@@ -144,7 +144,7 @@ export const TransactionsReportsClient: React.FC<
             )}
             {!isLoadingUser && (
                <Heading
-                  title={`Hi, ${wrappedUser?.name}`}
+                  title={`Hi, ${user?.name}`}
                   description={
                      store
                         ? `Manage the sales operations of ${store}`

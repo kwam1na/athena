@@ -56,7 +56,11 @@ export const deleteOrganization = async (id: number) => {
 export const fetchOrganizations = async (userId: string, include?: Record<string, boolean>) => {
     return await prismadb.organization.findMany({
         where: {
-            created_by: userId,
+            members: {
+                some: {
+                    user_id: userId
+                }
+            }
         },
         include,
     });

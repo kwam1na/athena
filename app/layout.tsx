@@ -5,7 +5,7 @@ import { ThemeProvider } from '@/providers/theme-provider';
 import { Toaster } from '@/components/ui/toaster';
 import './globals.css';
 import { CurrencyProvider } from '@/providers/currency-provider';
-import { WrappedUserProvider } from '@/providers/wrapped-user-provider';
+import { UserProvider } from '@/providers/user-provider';
 import { ExchangeRateProvider } from '@/providers/exchange-rate-provider';
 import { cookies } from 'next/headers';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
@@ -58,11 +58,11 @@ export default async function RootLayout({
                <ModalProvider />
                <AuthListener />
                {user ? (
-                  <WrappedUserProvider>
+                  <UserProvider>
                      <CurrencyProvider>
                         <ExchangeRateProvider>{children}</ExchangeRateProvider>
                      </CurrencyProvider>
-                  </WrappedUserProvider>
+                  </UserProvider>
                ) : (
                   children
                )}

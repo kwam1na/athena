@@ -5,12 +5,12 @@ import { LogOut } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Card, CardContent } from './ui/card';
 import { Skeleton } from './ui/skeleton';
-import { useWrappedUser } from '@/providers/wrapped-user-provider';
+import { useUser } from '@/providers/user-provider';
 
 export function UserInfo() {
-   const { wrappedUser, isLoading } = useWrappedUser();
+   const { user, isLoading } = useUser();
 
-   const name = wrappedUser?.name;
+   const name = user?.name;
    let fallback;
 
    const names = name?.split(' ');
@@ -46,7 +46,7 @@ export function UserInfo() {
                               {name}
                            </p>
                            <p className="text-xs leading-none text-muted-foreground">
-                              {wrappedUser?.email}
+                              {user?.email}
                            </p>
                         </>
                      )}

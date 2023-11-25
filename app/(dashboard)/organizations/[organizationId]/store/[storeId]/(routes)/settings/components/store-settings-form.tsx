@@ -36,6 +36,7 @@ import { revalidatePath } from 'next/cache';
 import { useStoreCurrency } from '@/providers/currency-provider';
 import { LoadingButton } from '@/components/ui/loading-button';
 import { apiDeleteStore, apiUpdateStore } from '@/lib/api/stores';
+import { Label } from '@/components/ui/label';
 
 const formSchema = z.object({
    name: z.string().min(2),
@@ -49,7 +50,9 @@ interface SettingsFormProps {
    initialData: store;
 }
 
-export const SettingsForm: React.FC<SettingsFormProps> = ({ initialData }) => {
+export const StoreSettingsForm: React.FC<SettingsFormProps> = ({
+   initialData,
+}) => {
    const params = useParams();
    const router = useRouter();
    const origin = useOrigin();
@@ -125,12 +128,7 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ initialData }) => {
             onConfirm={onDelete}
             loading={loading}
          />
-         <div className="flex items-center justify-between">
-            <Heading
-               title="Store settings"
-               description="Manage store preferences"
-            />
-         </div>
+         <Label className="text-lg">Store settings</Label>
          <Separator />
          <Form {...form}>
             <div className="space-y-4">

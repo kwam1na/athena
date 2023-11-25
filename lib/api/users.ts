@@ -6,7 +6,6 @@ const api = axios.create({
    baseURL: `/api/v1`,
 });
 
-// Function to create a new product
 export const apiCreateUser = async (
    data: Record<string, any>,
 ) => {
@@ -18,7 +17,6 @@ export const apiCreateUser = async (
    }
 };
 
-// Function to update a product by ID
 export const apiGetUser = async () => {
    try {
       const response = await api.get(`/users`);
@@ -28,7 +26,6 @@ export const apiGetUser = async () => {
    }
 };
 
-// Function to update a product by ID
 export const apiGetUsers = async () => {
    try {
       const response = await api.get(`/users`);
@@ -38,7 +35,6 @@ export const apiGetUsers = async () => {
    }
 };
 
-// Function to update a product by ID
 export const apiUpdateUser = async (
    updatedData: Record<string, any>,
 ) => {
@@ -54,7 +50,6 @@ export const apiUpdateUser = async (
    }
 };
 
-// Function to delete a product by ID
 export const apiDeleteUser = async () => {
    try {
       const response = await api.delete(`/users`);

@@ -4,6 +4,7 @@ import { cookies } from 'next/headers';
 import { createServerClient } from '@supabase/ssr';
 import { ThemeProvider } from '@/providers/theme-provider';
 import { OnboardingDataProvider } from '@/providers/onboarding-data-provider';
+import { UserProvider } from '@/providers/user-provider';
 export const dynamic = 'force-dynamic';
 
 export default async function OnboardingLayout({
@@ -36,7 +37,9 @@ export default async function OnboardingLayout({
 
    return (
       <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-         <OnboardingDataProvider>{children}</OnboardingDataProvider>
+         <UserProvider>
+            <OnboardingDataProvider>{children}</OnboardingDataProvider>
+         </UserProvider>
       </ThemeProvider>
    );
 }

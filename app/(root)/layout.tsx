@@ -7,7 +7,7 @@ import { findUserOrganization } from '@/lib/repositories/organizationsRepository
 import { ThemeProvider } from '@/providers/theme-provider';
 import { Toaster } from '@/components/ui/toaster';
 import { ModalProvider } from '@/providers/modal-provider';
-import { WrappedUserProvider } from '@/providers/wrapped-user-provider';
+import { UserProvider } from '@/providers/user-provider';
 import { CurrencyProvider } from '@/providers/currency-provider';
 import { ExchangeRateProvider } from '@/providers/exchange-rate-provider';
 import AuthListener from '@/providers/auth-listener';
@@ -90,11 +90,11 @@ export default async function SetupLayout({
                <ModalProvider />
                <AuthListener />
                {user ? (
-                  <WrappedUserProvider>
+                  <UserProvider>
                      <CurrencyProvider>
                         <ExchangeRateProvider>{children}</ExchangeRateProvider>
                      </CurrencyProvider>
-                  </WrappedUserProvider>
+                  </UserProvider>
                ) : (
                   children
                )}

@@ -7,22 +7,21 @@ import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/components/ui/use-toast';
 import {
    apiCreateOrganization,
+   apiGetOrganizationMemberStatus,
    apiUpdateOrganization,
+   apiUpdateOrganizationMember,
 } from '@/lib/api/organizations';
 import { apiCreateStore } from '@/lib/api/stores';
 import { apiUpdateUser } from '@/lib/api/users';
 import { ServiceError } from '@/lib/error';
 import { captureException } from '@sentry/nextjs';
 import { ArrowLeft, ArrowRight } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useOnboarding } from '@/hooks/use-onboarding-state';
 import { NameStep } from './steps/name-step';
 import { OrganizationStep } from './steps/organization-step';
 import { StoreStep } from './steps/store-step';
 import { postLog } from '@/lib/api/logger';
-import { useLogger } from 'next-axiom';
-import { LocalStorageSync } from '@/lib/local-storage-sync';
-import { useTheme } from 'next-themes';
 import { useRouter } from 'next/navigation';
 import {
    onboardingBlurbVariants,
@@ -30,14 +29,20 @@ import {
    onboardingContainerVariants,
 } from '@/lib/animation/constants';
 import { useOnboardingData } from '@/providers/onboarding-data-provider';
+import { useUser } from '@/providers/user-provider';
+import { Loader } from '@/components/ui/loader';
 
 export default function Onboarding() {
    const [isSubmitting, setIsSubmitting] = useState(false);
    const [isRedirecting, setIsRedirecting] = useState(false);
+   const [isOrganizationMember, setIsOrganizationMember] = useState(false);
+   const [
+      isFetchingOrganizationMemberStatus,
+      setIsFetchingOrganizationMemberStatus,
+   ] = useState(false);
    const router = useRouter();
-   const logger = useLogger();
-   const onboardingAutoSaver = new LocalStorageSync('onboarding');
    const { setOrganizationId, setStoreId } = useOnboardingData();
+   const { user, isLoading: isLoadingUser } = useUser();
 
    const {
       currentStep,
@@ -55,76 +60,6 @@ export default function Onboarding() {
 
    const { toast } = useToast();
 
-   const saveName1 = async () => {
-      if (!state.name.trim()) {
-         toggleInvalidInput('name', true);
-         return;
-      }
-
-      setIsSubmitting(true);
-
-      // Log the beginning of the action
-      const beginLogPromise = postLog('info', 'action: began saveName', {
-         name: state.name,
-         component: 'onboarding',
-      });
-
-      // Perform the API update
-      const updateUserPromise = apiUpdateUser({ name: state.name });
-
-      try {
-         // Wait for both the log and the update to complete
-         const results = await Promise.allSettled([
-            beginLogPromise,
-            updateUserPromise,
-         ]);
-
-         // Check if the API update was successful
-         const updateResult = results.find(
-            (result) =>
-               result.status === 'fulfilled' &&
-               result.value === updateUserPromise,
-         );
-         if (updateResult) {
-            handleNext();
-         }
-
-         // Log the end of the action
-         await postLog('info', 'action: saveName', {
-            name: state.name,
-            component: 'onboarding',
-         });
-      } catch (error) {
-         captureException(error);
-
-         // Error logging is independent and should not affect the control flow
-         postLog('error', 'action: saveName', {
-            name: state.name,
-            component: 'onboarding',
-            error: (error as Error).message,
-         }).catch(captureException);
-
-         handleAPIError(error);
-      } finally {
-         setIsSubmitting(false);
-      }
-   };
-
-   const handleAPIError = (error: unknown) => {
-      const serviceError = error as ServiceError;
-      let message = serviceError.message;
-      if (serviceError.status === 401) {
-         message = 'Session timed out. Please sign in again.';
-         setTimeout(() => {
-            router.replace('/auth');
-         }, 2000);
-      }
-
-      toast({
-         title: message,
-      });
-   };
-
    const saveName = async () => {
       if (!state.name.trim()) {
          toggleInvalidInput('name', true);
@@ -132,29 +67,16 @@ export default function Onboarding() {
       }
 
       try {
-         // logger.info('action: began saveName', {
-         //    name: state.name,
-         //    component: 'onboarding',
-         // });
          setIsSubmitting(true);
          await apiUpdateUser({ name: state.name });
          await postLog('info', 'action: saveName', {
             name: state.name,
             component: 'onboarding',
          });
-         // logger.info('action: saveName', {
-         //    name: state.name,
-         //    component: 'onboarding',
-         // });
+
          handleNext();
       } catch (error) {
          captureException(error);
-
-         // await postLog('error', 'action: saveName', {
-         //    name: state.name,
-         //    component: 'onboarding',
-         //    error: (error as Error).message,
-         // });
 
          const serviceError = error as ServiceError;
          let message = serviceError.message;
@@ -174,6 +96,60 @@ export default function Onboarding() {
       } finally {
          setIsSubmitting(false);
       }
+   };
+
+   const saveNameAndProceedToComplete = async () => {
+      if (!state.name.trim()) {
+         toggleInvalidInput('name', true);
+         return;
+      }
+
+      const storedOrgId = sessionStorage.getItem('organizationId');
+
+      setIsSubmitting(true);
+      const results = await Promise.allSettled([
+         apiUpdateUser({
+            name: state.name,
+            organization_id: storedOrgId ? parseInt(storedOrgId) : undefined,
+            is_onboarded: true,
+         }),
+         apiUpdateOrganizationMember({
+            email: user?.email,
+            user_name: state.name,
+            is_onboarded: true,
+            user_id: user?.id,
+         }),
+      ]);
+
+      // Process the results
+      const hasError = results.some((result) => result.status === 'rejected');
+      if (hasError) {
+         results.forEach((result) => {
+            if (result.status === 'rejected') {
+               console.error('Promise rejected:', result.reason);
+               // Handle each error accordingly
+               captureException(result.reason);
+
+               const serviceError = result.reason as ServiceError;
+               let message = serviceError.message;
+               if (serviceError.status === 401) {
+                  message = 'Session timed out. Please sign in again.';
+                  toast({ title: message });
+                  setTimeout(() => {
+                     router.replace('/auth');
+                  }, 2000);
+               } else {
+                  // For other errors, you might want to show a toast message or similar
+                  toast({ title: message });
+               }
+            }
+         });
+      } else {
+         // If there are no errors, proceed to the complete page
+         router.replace('/onboarding/complete');
+      }
+
+      setIsSubmitting(false);
    };
 
    const saveOrganizationName = async () => {
@@ -287,32 +263,6 @@ export default function Onboarding() {
       }
    };
 
-   const Buttons = ({ onProceed }: { onProceed: () => void }) => {
-      return (
-         <div className="mr-auto space-x-4">
-            {currentStep > 0 && (
-               <Button
-                  variant={'outline'}
-                  disabled={isSubmitting || isRedirecting}
-                  onClick={() => handleBack()}
-               >
-                  <ArrowLeft className="h-4 w-4" />
-               </Button>
-            )}
-            <LoadingButton
-               variant={'outline'}
-               isLoading={isSubmitting}
-               disabled={isSubmitting || isRedirecting}
-               onClick={() => {
-                  onProceed();
-               }}
-            >
-               <ArrowRight className="h-4 w-4" />
-            </LoadingButton>
-         </div>
-      );
-   };
-
    const steps = [
       {
          title: 'Name',
@@ -380,48 +330,134 @@ export default function Onboarding() {
       },
    ];
 
+   const addedMemberSteps = [
+      {
+         title: 'Name',
+         component: (
+            <NameStep
+               name={state.name}
+               isInvalidName={state.isInvalidName}
+               onNameChange={handleEnteredName}
+            />
+         ),
+         onProceed: saveNameAndProceedToComplete,
+         blurb: (
+            <p className="text-3xl leading-relaxed self-center my-auto">
+               Knowing your name helps us personalize your experience. What
+               should we call you?
+            </p>
+         ),
+      },
+   ];
+
+   const onboardingSteps = isOrganizationMember ? addedMemberSteps : steps;
+
+   useEffect(() => {
+      const checkMembershipStatus = async () => {
+         setIsFetchingOrganizationMemberStatus(true);
+         try {
+            if (user?.email) {
+               const response = await apiGetOrganizationMemberStatus(
+                  user.email,
+               );
+               const { exists, organization_name, organization_id } = response;
+               if (exists) {
+                  setIsOrganizationMember(true);
+                  sessionStorage.setItem('organizationName', organization_name);
+                  sessionStorage.setItem('organizationId', organization_id);
+               }
+            }
+         } catch (error) {
+            // Handle any errors
+         } finally {
+            setIsFetchingOrganizationMemberStatus(false);
+         }
+      };
+
+      checkMembershipStatus();
+   }, [user?.email]);
+
+   const Buttons = ({ onProceed }: { onProceed: () => void }) => {
+      return (
+         <div className="mr-auto space-x-4">
+            {currentStep > 0 && (
+               <Button
+                  variant={'outline'}
+                  disabled={isSubmitting || isRedirecting}
+                  onClick={() => handleBack()}
+               >
+                  <ArrowLeft className="h-4 w-4" />
+               </Button>
+            )}
+            <LoadingButton
+               variant={'outline'}
+               isLoading={isSubmitting}
+               disabled={isSubmitting || isRedirecting}
+               onClick={() => {
+                  onProceed();
+               }}
+            >
+               <ArrowRight className="h-4 w-4" />
+            </LoadingButton>
+         </div>
+      );
+   };
+
    return (
       <div className="flex h-full">
-         <div className="flex flex-col h-full w-[50%] justify-center gap-8 px-16">
-            <motion.div
-               variants={onboardingContainerVariants}
-               key={`container-${currentStep}`}
-               initial="hidden"
-               animate="visible"
-               className="space-y-8"
-            >
-               {steps[currentStep].component}
-            </motion.div>
-            <motion.div
-               variants={onboardingButtonVariants}
-               key={`button-${currentStep}`}
-               initial="hidden"
-               animate="visible"
-            >
-               <Buttons onProceed={steps[currentStep].onProceed} />
-            </motion.div>
-         </div>
-
-         <div className="flex w-[50%] p-32 bg-card">
-            <motion.div
-               className="flex flex-col justify-between w-full h-full"
-               variants={onboardingBlurbVariants}
-               key={`blurb-${currentStep}`}
-               initial="hidden"
-               animate="visible"
-            >
-               {steps[currentStep].blurb}
-               <div className="flex flex-col gap-4 w-full">
-                  <Progress
-                     className="bg-background"
-                     value={((currentStep + 1) / state.TOTAL_STEPS) * 100}
-                  />
-                  <p className="text-muted-foreground text-sm ml-auto">
-                     {`Step ${currentStep + 1} of ${state.TOTAL_STEPS}`}
-                  </p>
+         {(isLoadingUser || isFetchingOrganizationMemberStatus) && <Loader />}
+         {!isLoadingUser && !isFetchingOrganizationMemberStatus && (
+            <>
+               <div className="flex flex-col h-full w-[50%] justify-center gap-8 px-16">
+                  <motion.div
+                     variants={onboardingContainerVariants}
+                     key={`container-${currentStep}`}
+                     initial="hidden"
+                     animate="visible"
+                     className="space-y-8"
+                  >
+                     {onboardingSteps[currentStep]?.component}
+                  </motion.div>
+                  <motion.div
+                     variants={onboardingButtonVariants}
+                     key={`button-${currentStep}`}
+                     initial="hidden"
+                     animate="visible"
+                  >
+                     <Buttons
+                        onProceed={onboardingSteps[currentStep]?.onProceed}
+                     />
+                  </motion.div>
                </div>
-            </motion.div>
-         </div>
+
+               <div className="flex w-[50%] p-32 bg-card">
+                  <motion.div
+                     className="flex flex-col justify-between w-full h-full"
+                     variants={onboardingBlurbVariants}
+                     key={`blurb-${currentStep}`}
+                     initial="hidden"
+                     animate="visible"
+                  >
+                     {onboardingSteps[currentStep]?.blurb}
+                     {onboardingSteps.length > 1 && (
+                        <div className="flex flex-col gap-4 w-full">
+                           <Progress
+                              className="bg-background"
+                              value={
+                                 ((currentStep + 1) / state.TOTAL_STEPS) * 100
+                              }
+                           />
+                           <p className="text-muted-foreground text-sm ml-auto">
+                              {`Step ${currentStep + 1} of ${
+                                 state.TOTAL_STEPS
+                              }`}
+                           </p>
+                        </div>
+                     )}
+                  </motion.div>
+               </div>
+            </>
+         )}
       </div>
    );
 }

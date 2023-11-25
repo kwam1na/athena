@@ -27,9 +27,11 @@ export const ActionAlert: React.FC<ActionAlertProps> = ({
    isLoading,
 }) => {
    return (
-      <Alert className="border rounded-lg border-destructive bg-red-950">
-         <AlertTitle className="mt-4 flex items-center">{title}</AlertTitle>
-         <AlertDescription className="mb-4 flex items-center justify-between">
+      <Alert className="border rounded-lg border-destructive">
+         <AlertTitle className="mt-4 flex items-center text-destructive">
+            {title}
+         </AlertTitle>
+         <AlertDescription className="mb-4 flex items-center justify-between text-destructive">
             {description}
             <Button
                variant={variant == 'danger' ? 'destructive' : 'default'}

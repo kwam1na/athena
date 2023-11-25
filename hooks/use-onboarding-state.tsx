@@ -44,13 +44,19 @@ export const useOnboarding = () => {
 
    useEffect(() => {
       const searchParams = new URLSearchParams(window.location.search);
-      handleEnteredName(searchParams.get('name') || '');
-      searchParams.delete('name');
-      window.history.replaceState(
-         null,
-         '',
-         searchParams.toString() || window.location.pathname,
-      );
+      const initialName = searchParams.get('name');
+      if (initialName) {
+         handleEnteredName(initialName);
+         // Optionally, update the URL
+         searchParams.delete('name');
+         window.history.replaceState(
+            null,
+            '',
+            `${window.location.pathname}${
+               searchParams.toString() ? `?${searchParams}` : ''
+            }`,
+         );
+      }
    }, []);
 
    useEffect(() => {

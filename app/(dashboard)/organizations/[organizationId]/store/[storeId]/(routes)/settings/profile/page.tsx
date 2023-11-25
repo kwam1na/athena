@@ -35,7 +35,6 @@ const SettingsPage = async ({ params }: { params: { storeId: string } }) => {
 
    const store = await findStore({
       id: parseInt(params.storeId),
-      created_by: u.id,
    });
 
    if (!store) {

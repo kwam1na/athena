@@ -7,7 +7,7 @@ import { LoadingButton } from '../ui/loading-button';
 interface ActionModalProps {
    isOpen: boolean;
    title: string;
-   description: string;
+   description?: string;
    onClose: () => void;
    onConfirm?: () => void;
    confirmButtonDisabled?: boolean;

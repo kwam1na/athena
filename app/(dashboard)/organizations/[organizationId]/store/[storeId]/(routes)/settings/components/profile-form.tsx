@@ -7,6 +7,7 @@ import { useForm } from 'react-hook-form';
 import { captureException } from '@sentry/nextjs';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { motion } from 'framer-motion';
 
 import { Input } from '@/components/ui/input';
 import {
@@ -22,8 +23,13 @@ import { Heading } from '@/components/ui/heading';
 import { AlertModal } from '@/components/modals/alert-modal';
 import { useOrigin } from '@/hooks/use-origin';
 import { useToast } from '@/components/ui/use-toast';
-import { useWrappedUser } from '@/providers/wrapped-user-provider';
+import { useUser } from '@/providers/user-provider';
 import { LoadingButton } from '@/components/ui/loading-button';
+import { Label } from '@/components/ui/label';
+import {
+   mainContainerVariants,
+   widgetVariants,
+} from '@/lib/animation/constants';
 
 const formSchema = z.object({
    name: z.string().min(1),
@@ -52,7 +58,7 @@ export const ProfileForm: React.FC<ProfileFormProps> = ({ initialData }) => {
    const origin = useOrigin();
    const { toast } = useToast();
 
-   const { setWrappedUser } = useWrappedUser();
+   const { setUser } = useUser();
 
    const [isClient, setIsClient] = useState(false);
 
@@ -74,7 +80,7 @@ export const ProfileForm: React.FC<ProfileFormProps> = ({ initialData }) => {
       try {
          setLoading(true);
          const res = await axios.patch(`/api/v1/users`, data);
-         setWrappedUser(res.data);
+         setUser(res.data);
          router.refresh();
          toast({
             title: 'Profile updated.',
@@ -119,66 +125,76 @@ export const ProfileForm: React.FC<ProfileFormProps> = ({ initialData }) => {
                   onConfirm={onDelete}
                   loading={loading}
                />
-               <div className="flex items-center justify-between">
-                  <Heading
-                     title="Profile settings"
-                     description="Update your profile"
-                  />
-               </div>
-               <Separator />
-               <Form {...form}>
-                  <form
-                     onSubmit={form.handleSubmit(onSubmit)}
-                     className="space-y-8 w-full"
-                  >
-                     <div className="md:grid md:grid-cols-3 gap-8">
-                        <FormField
-                           control={form.control}
-                           name="name"
-                           render={({ field }) => (
-                              <FormItem>
-                                 <FormLabel>Name</FormLabel>
-                                 <FormControl>
-                                    <Input
-                                       disabled={loading}
-                                       placeholder="Name"
-                                       {...field}
-                                    />
-                                 </FormControl>
-                                 <FormMessage />
-                              </FormItem>
-                           )}
-                        />
+               <motion.div
+                  className="space-y-4"
+                  variants={widgetVariants}
+                  initial="hidden"
+                  animate="visible"
+               >
+                  <Label className="text-lg">Profile settings</Label>
+                  <Separator />
+               </motion.div>
 
-                        <FormField
-                           control={form.control}
-                           name="email"
-                           render={({ field }) => (
-                              <FormItem>
-                                 <FormLabel>Email</FormLabel>
-                                 <FormControl>
-                                    <Input
-                                       type="email"
-                                       disabled={loading}
-                                       placeholder="Email"
-                                       {...field}
-                                    />
-                                 </FormControl>
-                                 <FormMessage />
-                              </FormItem>
-                           )}
-                        />
-                     </div>
-                     <LoadingButton
-                        isLoading={loading}
-                        disabled={loading}
-                        className="ml-auto"
-                        type="submit"
+               <motion.div
+                  className="space-y-8"
+                  variants={mainContainerVariants}
+                  initial="hidden"
+                  animate="visible"
+               >
+                  <Form {...form}>
+                     <form
+                        onSubmit={form.handleSubmit(onSubmit)}
+                        className="space-y-8 w-full"
                      >
-                        {loading ? 'Saving' : 'Save changes'}
-                     </LoadingButton>
-                  </form>
-               </Form>
+                        <div className="md:grid md:grid-cols-3 gap-8">
+                           <FormField
+                              control={form.control}
+                              name="name"
+                              render={({ field }) => (
+                                 <FormItem>
+                                    <FormLabel>Name</FormLabel>
+                                    <FormControl>
+                                       <Input
+                                          disabled={loading}
+                                          placeholder="Name"
+                                          {...field}
+                                       />
+                                    </FormControl>
+                                    <FormMessage />
+                                 </FormItem>
+                              )}
+                           />
+
+                           <FormField
+                              control={form.control}
+                              name="email"
+                              render={({ field }) => (
+                                 <FormItem>
+                                    <FormLabel>Email</FormLabel>
+                                    <FormControl>
+                                       <Input
+                                          type="email"
+                                          disabled={loading}
+                                          placeholder="Email"
+                                          {...field}
+                                       />
+                                    </FormControl>
+                                    <FormMessage />
+                                 </FormItem>
+                              )}
+                           />
+                        </div>
+                        <LoadingButton
+                           isLoading={loading}
+                           disabled={loading}
+                           className="ml-auto"
+                           type="submit"
+                        >
+                           {loading ? 'Saving' : 'Save changes'}
+                        </LoadingButton>
+                     </form>
+                  </Form>
+               </motion.div>
             </>
          ) : null}
       </>

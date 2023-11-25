@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 import { cn } from '@/lib/utils';
-import { CreditCard, List, Store, User } from 'lucide-react';
+import { Building, CreditCard, List, Store, User } from 'lucide-react';
 import useGetBaseStoreUrl from '@/hooks/use-get-base-store-url';
 
 export function SettingsNav({
@@ -20,6 +20,12 @@ export function SettingsNav({
          label: 'Profile',
          active: pathname.includes('/settings/profile'),
          icon: <User className="mr-2 h-4 w-4" />,
+      },
+      {
+         href: `${baseStoreURL}/settings/organization`,
+         label: 'Organization',
+         active: pathname.includes('/settings/organization'),
+         icon: <Building className="mr-2 h-4 w-4" />,
       },
       {
          href: `${baseStoreURL}/settings/store`,
