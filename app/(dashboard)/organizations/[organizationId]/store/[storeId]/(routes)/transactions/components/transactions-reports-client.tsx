@@ -72,7 +72,7 @@ export const TransactionsReportsClient: React.FC<
    const baseStoreURL = useGetBaseStoreUrl();
    const router = useRouter();
 
-   const { user, isLoading: isLoadingUser } = useUser();
+   const { user, isLoadingUser } = useUser();
 
    const [sorting, setSorting] = useState<SortingState>([]);
    const [rowSelection, setRowSelection] = useState({});

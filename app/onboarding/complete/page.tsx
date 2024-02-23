@@ -10,11 +10,13 @@ export default function OnboardingSuccess() {
 
    const navigateToDashboard = () => {
       router.replace(`/`);
-      sessionStorage.removeItem('organizationName');
-      sessionStorage.removeItem('organizationId');
+      sessionStorage.removeItem('added-member-data');
    };
 
-   const organizationName = sessionStorage.getItem('organizationName');
+   const added_member_data = JSON.parse(
+      sessionStorage.getItem('added-member-data') || '{}',
+   );
+   const { organization_name } = added_member_data;
 
    return (
       <div className="flex h-full">
@@ -27,8 +29,8 @@ export default function OnboardingSuccess() {
             <div className="flex flex-col gap-4 pt-32">
                <h1 className="text-3xl">All set!</h1>
                <h2 className="text-lg text-muted-foreground">
-                  {organizationName
-                     ? `You were added to the ${organizationName} organization.`
+                  {organization_name
+                     ? `You were added to the '${organization_name}' organization.`
                      : 'You were added to an organization.'}
                </h2>
             </div>

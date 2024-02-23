@@ -1,5 +1,6 @@
 import axios, { AxiosError } from 'axios';
 import { ServiceError } from '../error';
+import { translateAxiosErorToServiceError } from '../utils';
 
 // Configure base settings
 const api = axios.create({
@@ -13,7 +14,8 @@ export const apiCreateUser = async (
       const response = await api.post(`/users`, data);
       return response.data;
    } catch (error) {
-      throw error;
+      const translatedError = translateAxiosErorToServiceError(error)
+      throw translatedError;
    }
 };
 
@@ -22,7 +24,8 @@ export const apiGetUser = async () => {
       const response = await api.get(`/users`);
       return response.data;
    } catch (error) {
-      throw error;
+      const translatedError = translateAxiosErorToServiceError(error)
+      throw translatedError;
    }
 };
 
@@ -31,7 +34,8 @@ export const apiGetUsers = async () => {
       const response = await api.get(`/users`);
       return response.data;
    } catch (error) {
-      throw error;
+      const translatedError = translateAxiosErorToServiceError(error)
+      throw translatedError;
    }
 };
 
@@ -42,11 +46,8 @@ export const apiUpdateUser = async (
       const response = await api.patch(`/users`, updatedData);
       return response.data;
    } catch (error) {
-      const { response } = error as AxiosError;
-      const { data } = response || {};
-      const { message } = data as Record<string, any> || {};
-
-      throw new ServiceError(message || 'Internal error', response?.status || 500);
+      const translatedError = translateAxiosErorToServiceError(error)
+      throw translatedError;
    }
 };
 
@@ -55,6 +56,7 @@ export const apiDeleteUser = async () => {
       const response = await api.delete(`/users`);
       return response.data;
    } catch (error) {
-      throw error;
+      const translatedError = translateAxiosErorToServiceError(error)
+      throw translatedError;
    }
 };

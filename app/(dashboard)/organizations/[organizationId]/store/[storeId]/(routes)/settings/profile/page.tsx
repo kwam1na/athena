@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 
 import { findStore } from '@/lib/repositories/storesRepository';
-import { ProfileForm } from '../components/profile-form';
+import { ProfileForm } from './components/profile-form';
 import { getUser } from '@/lib/repositories/userRepository';
 import { cookies } from 'next/headers';
 import { createServerClient } from '@supabase/ssr';

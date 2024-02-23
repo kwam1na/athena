@@ -53,6 +53,7 @@ export async function POST(req: NextRequest) {
             },
             data: {
                 organization_id: organization.id,
+                role: 'owner',
             }
         })
 

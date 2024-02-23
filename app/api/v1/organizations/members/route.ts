@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
         }
 
         // Create the organization member and update the organization
-        const organizationMember = await prismadb.organization.update({
+        const result = await prismadb.organization.update({
             where: {
                 id: organization_id,
             },
@@ -64,12 +64,19 @@ export async function POST(req: NextRequest) {
                     },
                 },
             },
-            include: {
-                members: true,
+            select: {
+                members: {
+                    where: {
+                        user_email: email,
+                    },
+                    take: 1,
+                },
             },
         });
 
-        return NextResponse.json(organizationMember, res);
+        const newMember = result.members[0];
+
+        return NextResponse.json(newMember, res);
     } catch (error) {
         console.log('[ORGANIZATION_MEMBER_POST]', error);
         return new NextResponse('Internal error', { status: 500 });
@@ -130,13 +137,14 @@ export async function GET(req: NextRequest) {
 
         if (memberWithOrganization) {
             return NextResponse.json({
-                exists: true,
+                is_member: true,
                 // @ts-ignore
                 organization_name: memberWithOrganization.organization?.name,
                 organization_id: memberWithOrganization.organization_id,
+                role: memberWithOrganization.role,
             }, res);
         } else {
-            return NextResponse.json({ exists: false }, res);
+            return NextResponse.json({ is_member: false }, res);
         }
 
     } catch (error) {

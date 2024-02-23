@@ -31,7 +31,7 @@ import useGetBaseStoreUrl from '@/hooks/use-get-base-store-url';
 
 export function UserNav() {
    const baseStoreURL = useGetBaseStoreUrl();
-   const { user, isLoading } = useUser();
+   const { user } = useUser();
 
    const name = user?.name;
    let fallback;

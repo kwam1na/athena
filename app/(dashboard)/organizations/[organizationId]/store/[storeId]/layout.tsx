@@ -100,7 +100,7 @@ export default async function DashboardLayout({
                      <div className="hidden md:block border-b pb-4 px-6">
                         <Navbar params={params} />
                      </div>
-                     <main className="flex-grow pt-6 pb-24 px-6 h-full">
+                     <main className="flex-grow pt-6 pb-24 px-64 h-full">
                         {children}
                      </main>
                   </div>

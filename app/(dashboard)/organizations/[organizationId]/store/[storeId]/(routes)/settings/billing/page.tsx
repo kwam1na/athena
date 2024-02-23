@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 
-import { SettingsForm } from '../components/store-settings-form';
+import { SettingsForm } from '../store/components/store-settings-form';
 import { findStore } from '@/lib/repositories/storesRepository';
 // import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';

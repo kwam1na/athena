@@ -39,7 +39,9 @@ export const OrganizationMembers = ({
             <div className="flex flex-col gap-8 border rounded-lg p-8">
                {members.map((member: OrganizationMember) => (
                   <OrganizationMemberRow
+                     key={member.id}
                      id={member.id}
+                     user_id={member.user_id}
                      user_name={member.user_name}
                      user_email={member.user_email}
                      role={member.role}

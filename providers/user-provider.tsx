@@ -16,10 +16,11 @@ export interface UserProfile {
    store_id?: string;
    created_at?: Date;
    updated_at?: Date;
+   role?: string;
 }
 
 type UserContextType = {
-   isLoading: boolean;
+   isLoadingUser: boolean;
    user: UserProfile;
    setUser: React.Dispatch<React.SetStateAction<UserProfile>>;
 };
@@ -36,16 +37,19 @@ export const useUser = () => {
 
 export const UserProvider = ({ children }: { children: React.ReactNode }) => {
    const [user, setUser] = useState<UserProfile>({});
-   const [isLoading, setIsLoading] = useState(true);
-   const contextValue = useMemo(() => ({ isLoading, user, setUser }), [user]);
+   const [isLoadingUser, setIsLoadingUser] = useState(true);
+   const contextValue = useMemo(
+      () => ({ isLoadingUser, user, setUser }),
+      [user],
+   );
 
    useEffect(() => {
       const fetchUser = async () => {
-         setIsLoading(true);
+         setIsLoadingUser(true);
          const res = await axios.get(`/api/v1/users`);
          const user = res?.data || {};
          setUser(user);
-         setIsLoading(false);
+         setIsLoadingUser(false);
       };
 
       fetchUser();

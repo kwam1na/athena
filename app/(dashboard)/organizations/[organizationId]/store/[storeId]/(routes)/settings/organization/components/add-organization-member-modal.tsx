@@ -14,6 +14,7 @@ import {
    SelectValue,
 } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
+import { useUser } from '@/providers/user-provider';
 
 const addMemberSchema = z.object({
    email: z.string().email(),
@@ -30,6 +31,7 @@ export const AddOrganizationMemberModal: React.FC<
 > = ({ organizationName, isModalOpen, setIsModalOpen }) => {
    const params = useParams();
    const router = useRouter();
+   const { user, isLoadingUser } = useUser();
    const { toast } = useToast();
 
    const [newMemberEmail, setNewMemberEmail] = useState('');
@@ -40,10 +42,13 @@ export const AddOrganizationMemberModal: React.FC<
 
    const addOrganizationMember = async () => {
       setIsAddingOrganizationMember(true);
+      console.log(user);
+
       const body = {
          email: newMemberEmail,
          role: memberRole,
          organization_id: parseInt(params.organizationId),
+         added_by: user.id,
       };
       try {
          await apiAddOrganizationMember(body);
@@ -80,9 +85,11 @@ export const AddOrganizationMemberModal: React.FC<
       <ActionModal
          isOpen={isModalOpen}
          title={`Add a member to ${organizationName}`}
+         description=" "
          confirmText="Add member"
          onConfirm={addOrganizationMember}
          confirmButtonDisabled={invalidEmail || !newMemberEmail}
+         shimmerButtons={isLoadingUser}
          loading={isAddingOrganizationMember}
          onClose={onCloseAddOrganizationMemberModal}
       >

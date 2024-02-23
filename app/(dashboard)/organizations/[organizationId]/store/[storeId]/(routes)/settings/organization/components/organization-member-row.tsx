@@ -7,9 +7,14 @@ import { useState } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { capitalizeWord } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { useUser } from '@/providers/user-provider';
+import { Skeleton } from '@/components/ui/skeleton';
+import { motion } from 'framer-motion';
+import { mainContainerVariants } from '@/lib/animation/constants';
 
 export interface OrganizationMember {
    id: number;
+   user_id: string;
    user_name: string;
    user_email: string;
    role: string;
@@ -18,6 +23,7 @@ export interface OrganizationMember {
 
 export const OrganizationMemberRow: React.FC<OrganizationMember> = ({
    id,
+   user_id,
    user_name,
    user_email,
    is_onboarded,
@@ -29,6 +35,7 @@ export const OrganizationMemberRow: React.FC<OrganizationMember> = ({
    const [open, setOpen] = useState(false);
    const [removingOrganizationMember, setRemovingOrganizationMember] =
       useState(false);
+   const { user, isLoadingUser } = useUser();
 
    const name = user_name || user_email;
    const names = name?.split(' ');
@@ -60,6 +67,12 @@ export const OrganizationMemberRow: React.FC<OrganizationMember> = ({
       }
    };
 
+   const canRemoveMember =
+      role !== 'owner' &&
+      user.role &&
+      ['admin', 'owner'].includes(user.role) &&
+      user_id !== user.id;
+
    return (
       <>
          <AlertModal
@@ -70,25 +83,54 @@ export const OrganizationMemberRow: React.FC<OrganizationMember> = ({
          />
          <div className="flex justify-between">
             <div className="flex gap-8 items-center">
-               <Avatar className="h-8 w-8">
-                  <AvatarImage src={''} alt="user profile image" />
-                  <AvatarFallback>
-                     {fallback && fallback.toUpperCase()}
-                  </AvatarFallback>
-               </Avatar>
-               <div>
-                  <p className="text-md">{name}</p>
-                  <p className="text-sm text-muted-foreground">
-                     {capitalizeWord(role)}
-                  </p>
-                  {!is_onboarded && (
-                     <p className="text-sm text-muted-foreground">
-                        Pending account creation
-                     </p>
-                  )}
-               </div>
+               {isLoadingUser ? (
+                  <motion.div
+                     className="flex items-center space-x-4"
+                     variants={mainContainerVariants}
+                     initial="hidden"
+                     animate="visible"
+                  >
+                     <Skeleton className="w-[40px] h-[40px] rounded-full" />
+                     <div className="flex flex-col gap-1">
+                        <Skeleton className="w-[64px] h-[16px]" />
+                        <Skeleton className="w-[96px] h-[16px]" />
+                     </div>
+                  </motion.div>
+               ) : (
+                  <motion.div
+                     className="flex items-center space-x-4"
+                     variants={mainContainerVariants}
+                     initial="hidden"
+                     animate={'visible'}
+                  >
+                     <Avatar className="h-8 w-8">
+                        <AvatarImage src={''} alt="user profile image" />
+                        <AvatarFallback>
+                           {fallback && fallback.toUpperCase()}
+                        </AvatarFallback>
+                     </Avatar>
+                     <div>
+                        <div className="flex gap-1 items-center">
+                           <p className="text-md">{name}</p>
+                           {user_id === user.id && (
+                              <p className="text-sm text-muted-foreground">
+                                 (you)
+                              </p>
+                           )}
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                           {capitalizeWord(role)}
+                        </p>
+                        {!is_onboarded && (
+                           <p className="text-sm text-muted-foreground">
+                              Pending account creation
+                           </p>
+                        )}
+                     </div>
+                  </motion.div>
+               )}
             </div>
-            {role !== 'owner' && (
+            {canRemoveMember && (
                <Button variant={'outline'} onClick={() => setOpen(true)}>
                   Remove member
                </Button>

@@ -19,7 +19,6 @@ import {
    FormMessage,
 } from '@/components/ui/form';
 import { Separator } from '@/components/ui/separator';
-import { Heading } from '@/components/ui/heading';
 import { AlertModal } from '@/components/modals/alert-modal';
 import { useOrigin } from '@/hooks/use-origin';
 import { useToast } from '@/components/ui/use-toast';
@@ -30,6 +29,7 @@ import {
    mainContainerVariants,
    widgetVariants,
 } from '@/lib/animation/constants';
+import { apiUpdateUser } from '@/lib/api/users';
 
 const formSchema = z.object({
    name: z.string().min(1),
@@ -79,8 +79,8 @@ export const ProfileForm: React.FC<ProfileFormProps> = ({ initialData }) => {
    const onSubmit = async (data: ProfileFormValues) => {
       try {
          setLoading(true);
-         const res = await axios.patch(`/api/v1/users`, data);
-         setUser(res.data);
+         const response = await apiUpdateUser(data);
+         setUser(response);
          router.refresh();
          toast({
             title: 'Profile updated.',

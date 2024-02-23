@@ -12,7 +12,11 @@ export const getOrganization = async (id: number) => {
             id,
         },
         include: {
-            members: true,
+            members: {
+                orderBy: {
+                    created_at: 'asc'
+                }
+            },
             stores: true,
         },
     })

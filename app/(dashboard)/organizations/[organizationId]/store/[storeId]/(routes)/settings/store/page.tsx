@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 
-import { StoreSettingsForm } from '../components/store-settings-form';
+import { StoreSettingsForm } from './components/store-settings-form';
 import { findStore } from '@/lib/repositories/storesRepository';
 import { cookies } from 'next/headers';
 import { createServerClient } from '@supabase/ssr';

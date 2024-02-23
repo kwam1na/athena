@@ -42,7 +42,7 @@ export default function Onboarding() {
    ] = useState(false);
    const router = useRouter();
    const { setOrganizationId, setStoreId } = useOnboardingData();
-   const { user, isLoading: isLoadingUser } = useUser();
+   const { user, isLoadingUser } = useUser();
 
    const {
       currentStep,
@@ -104,52 +104,46 @@ export default function Onboarding() {
          return;
       }
 
-      const storedOrgId = sessionStorage.getItem('organizationId');
+      const added_member_data = JSON.parse(
+         sessionStorage.getItem('added-member-data') || '{}',
+      );
 
-      setIsSubmitting(true);
-      const results = await Promise.allSettled([
-         apiUpdateUser({
-            name: state.name,
-            organization_id: storedOrgId ? parseInt(storedOrgId) : undefined,
-            is_onboarded: true,
-         }),
+      const { organization_id, role } = added_member_data;
+
+      try {
+         setIsSubmitting(true);
          apiUpdateOrganizationMember({
             email: user?.email,
             user_name: state.name,
             is_onboarded: true,
             user_id: user?.id,
-         }),
-      ]);
-
-      // Process the results
-      const hasError = results.some((result) => result.status === 'rejected');
-      if (hasError) {
-         results.forEach((result) => {
-            if (result.status === 'rejected') {
-               console.error('Promise rejected:', result.reason);
-               // Handle each error accordingly
-               captureException(result.reason);
-
-               const serviceError = result.reason as ServiceError;
-               let message = serviceError.message;
-               if (serviceError.status === 401) {
-                  message = 'Session timed out. Please sign in again.';
-                  toast({ title: message });
-                  setTimeout(() => {
-                     router.replace('/auth');
-                  }, 2000);
-               } else {
-                  // For other errors, you might want to show a toast message or similar
-                  toast({ title: message });
-               }
-            }
          });
-      } else {
-         // If there are no errors, proceed to the complete page
+         apiUpdateUser({
+            name: state.name,
+            organization_id: organization_id
+               ? parseInt(organization_id)
+               : undefined,
+            is_onboarded: true,
+            role,
+         });
          router.replace('/onboarding/complete');
-      }
+      } catch (error) {
+         captureException(error);
 
-      setIsSubmitting(false);
+         const serviceError = error as ServiceError;
+         let message = serviceError.message;
+         if (serviceError.status === 401) {
+            message = 'Session timed out. Please sign in again.';
+            toast({ title: message });
+            setTimeout(() => {
+               router.replace('/auth');
+            }, 2000);
+         } else {
+            toast({ title: message });
+         }
+      } finally {
+         setIsSubmitting(false);
+      }
    };
 
    const saveOrganizationName = async () => {
@@ -360,11 +354,18 @@ export default function Onboarding() {
                const response = await apiGetOrganizationMemberStatus(
                   user.email,
                );
-               const { exists, organization_name, organization_id } = response;
-               if (exists) {
+               const { is_member, organization_name, organization_id, role } =
+                  response;
+               if (is_member) {
                   setIsOrganizationMember(true);
-                  sessionStorage.setItem('organizationName', organization_name);
-                  sessionStorage.setItem('organizationId', organization_id);
+                  sessionStorage.setItem(
+                     'added-member-data',
+                     JSON.stringify({
+                        organization_name,
+                        organization_id,
+                        role,
+                     }),
+                  );
                }
             }
          } catch (error) {

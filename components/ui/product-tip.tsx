@@ -9,7 +9,7 @@ interface ProductTipProps {
 
 const ProductTip: React.FC<ProductTipProps> = ({ className, tip }) => {
    return (
-      <Alert className={cn('flex justify-between h-[180px]', className)}>
+      <Alert className={cn('flex justify-between h-auto pb-16', className)}>
          <div className="flex flex-col gap-8 pt-4">
             <div className="flex gap-1">
                <Lightbulb className="h-4 w-4 text-[#ffd700]" />
