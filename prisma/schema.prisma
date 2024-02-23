@@ -76,11 +76,15 @@ model organization {
 
 model organization_member {
   id              Int          @id @default(autoincrement())
-  user_id         String
+  added_by        String?
   created_at      DateTime     @default(now())
+  is_onboarded    Boolean      @default(false)
   organization_id Int
   organization    organization @relation("OrganizationToOrganizationMember", fields: [organization_id], references: [id])
   role            String
+  user_email      String?      @unique
+  user_id         String?      @unique
+  user_name       String?
   updated_at      DateTime     @updatedAt
 
   @@index([organization_id])
@@ -267,6 +271,7 @@ model user {
   name            String?
   email           String
   is_onboarded    Boolean  @default(false)
+  role            String?
   store_id        Int?
   organization_id Int?
   created_at      DateTime @default(now())

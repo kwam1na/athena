@@ -4,8 +4,11 @@ import { ColumnDef } from '@tanstack/react-table';
 import { ViewDataTableCellAction } from './view-data-table-cell-action';
 import {
    InStockBadge,
+   InStockIndicator,
    LowStockBadge,
+   LowStockIndicator,
    SoldOutBadge,
+   SoldOutIndicator,
 } from '@/components/ui/stock-status-badge';
 
 export type UnitsSoldColumn = {
@@ -54,13 +57,13 @@ export const lowStockProductsColumns: ColumnDef<LowStockProductsColumn>[] = [
          let BadgeComponent;
          switch (row.original.stockStatus) {
             case 'In stock':
-               BadgeComponent = InStockBadge;
+               BadgeComponent = InStockIndicator;
                break;
             case 'Low in stock':
-               BadgeComponent = LowStockBadge;
+               BadgeComponent = LowStockIndicator;
                break;
             case 'Out of stock':
-               BadgeComponent = SoldOutBadge;
+               BadgeComponent = SoldOutIndicator;
                break;
             default:
                BadgeComponent = null;

@@ -24,16 +24,16 @@ import {
    DropdownMenuShortcut,
    DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { useWrappedUser } from '@/providers/wrapped-user-provider';
+import { useUser } from '@/providers/user-provider';
 import Link from 'next/link';
 import axios from 'axios';
 import useGetBaseStoreUrl from '@/hooks/use-get-base-store-url';
 
 export function UserNav() {
    const baseStoreURL = useGetBaseStoreUrl();
-   const { wrappedUser, isLoading } = useWrappedUser();
+   const { user } = useUser();
 
-   const name = wrappedUser?.name;
+   const name = user?.name;
    let fallback;
 
    const names = name?.split(' ');
@@ -70,7 +70,7 @@ export function UserNav() {
                <div className="flex flex-col space-y-2">
                   <p className="text-sm font-medium leading-none">{name}</p>
                   <p className="text-xs leading-none text-muted-foreground">
-                     {wrappedUser?.email}
+                     {user?.email}
                   </p>
                </div>
             </DropdownMenuLabel>

@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import prismadb from '@/lib/prismadb';
 import { cookies } from 'next/headers';
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
-import { createOrganization } from '@/lib/repositories/organizationsRepository';
+import { revalidatePath } from 'next/cache';
 
-export async function POST(req: NextRequest) {
+export async function DELETE(req: NextRequest, { params }: { params: { memberId: string } },) {
     try {
         const res = new NextResponse();
         const cookieStore = cookies();
@@ -32,48 +32,22 @@ export async function POST(req: NextRequest) {
 
         const user = session?.user;
 
-        const body = await req.json();
-
-        const { name } = body;
-
         if (!user) {
             return new NextResponse('Unauthorized', { status: 403 });
         }
 
-        if (!name) {
-            return new NextResponse('Name is required', { status: 400 });
-        }
-
-        const createParams = { ...body, created_by: user.id }
-        const organization = await createOrganization(createParams);
-
-        const dbUser = await prismadb.user.update({
+        // Delete the organization member
+        const deletedMember = await prismadb.organization_member.delete({
             where: {
-                id: user.id,
-            },
-            data: {
-                organization_id: organization.id,
-                role: 'owner',
-            }
-        })
-
-        await prismadb.organization_member.create({
-            data: {
-                organization_id: organization.id,
-                user_id: user.id,
-                role: 'owner',
-                user_name: dbUser.name,
-                user_email: dbUser.email,
+                id: parseInt(params.memberId),
             },
         });
 
-        return NextResponse.json(organization, res);
+        // revalidatePath(`/organizations/${deletedMember.organization_id}`);
+
+        return NextResponse.json(deletedMember, res);
     } catch (error) {
-        console.log('[ORGANIZATIONS_POST]', error);
+        console.log('[ORGANIZATION_MEMBER_DELETE]', error);
         return new NextResponse('Internal error', { status: 500 });
     }
 }
-
-
-
-

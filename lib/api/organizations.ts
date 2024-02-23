@@ -5,7 +5,6 @@ const api = axios.create({
    baseURL: `/api/v1`,
 });
 
-// Function to create a new product
 export const apiCreateOrganization = async (
    data: Record<string, any>,
 ) => {
@@ -17,7 +16,37 @@ export const apiCreateOrganization = async (
    }
 };
 
-// Function to update a product by ID
+export const apiAddOrganizationMember = async (
+   data: Record<string, any>,
+) => {
+   try {
+      const response = await api.post(`/organizations/members`, data);
+      return response.data;
+   } catch (error) {
+      throw error;
+   }
+};
+
+export const apiGetOrganizationMemberStatus = async (email: string) => {
+   try {
+      const response = await api.get(`/organizations/members?email=${email}`);
+      return response.data;
+   } catch (error) {
+      throw error;
+   }
+};
+
+export const apiUpdateOrganizationMember = async (
+   updatedData: Record<string, any>,
+) => {
+   try {
+      const response = await api.patch(`/organizations/members`, updatedData);
+      return response.data;
+   } catch (error) {
+      throw error;
+   }
+};
+
 export const apiGetOrganization = async (id: string) => {
    try {
       const response = await api.get(`/organizations/${id}`);
@@ -27,7 +56,6 @@ export const apiGetOrganization = async (id: string) => {
    }
 };
 
-// Function to update a product by ID
 export const apiGetOrganizations = async () => {
    try {
       const response = await api.get(`/organizations`);
@@ -37,7 +65,6 @@ export const apiGetOrganizations = async () => {
    }
 };
 
-// Function to update a product by ID
 export const apiUpdateOrganization = async (
    id: string,
    updatedData: Record<string, any>,
@@ -50,10 +77,18 @@ export const apiUpdateOrganization = async (
    }
 };
 
-// Function to delete a product by ID
 export const apiDeleteOrganization = async (id: string) => {
    try {
       const response = await api.delete(`/organizations/${id}`);
+      return response.data;
+   } catch (error) {
+      throw error;
+   }
+};
+
+export const apiDeleteOrganizationMember = async (id: string) => {
+   try {
+      const response = await api.delete(`/organizations/members/${id}`);
       return response.data;
    } catch (error) {
       throw error;

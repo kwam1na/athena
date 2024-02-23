@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 
 import { findStore } from '@/lib/repositories/storesRepository';
-import { ProfileForm } from '../components/profile-form';
+import { ProfileForm } from './components/profile-form';
 import { getUser } from '@/lib/repositories/userRepository';
 import { cookies } from 'next/headers';
 import { createServerClient } from '@supabase/ssr';
@@ -35,7 +35,6 @@ const SettingsPage = async ({ params }: { params: { storeId: string } }) => {
 
    const store = await findStore({
       id: parseInt(params.storeId),
-      created_by: u.id,
    });
 
    if (!store) {

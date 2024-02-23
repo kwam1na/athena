@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 
-import { SettingsForm } from './components/settings-form';
+import { StoreSettingsForm } from './store/components/store-settings-form';
 import { findStore } from '@/lib/repositories/storesRepository';
 // import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
 import { Database } from '@/lib/database.types';
@@ -31,18 +31,12 @@ const SettingsPage = async ({ params }: { params: { storeId: string } }) => {
       redirect('/auth');
    }
 
-   // const {
-   //    data: { session },
-   // } = await supabase.auth.getSession();
-   // const user = session?.user;
-
    if (!user) {
       redirect('/auth');
    }
 
    const store = await findStore({
       id: parseInt(params.storeId),
-      created_by: user.id,
    });
 
    if (!store) {
@@ -52,7 +46,7 @@ const SettingsPage = async ({ params }: { params: { storeId: string } }) => {
    return (
       <div className="flex-col">
          <div className="flex-1 space-y-4">
-            <SettingsForm initialData={store} />
+            <StoreSettingsForm initialData={store} />
          </div>
       </div>
    );

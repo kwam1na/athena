@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button';
 
 interface ModalProps {
    title: string;
-   description: string;
+   description?: string;
    isOpen: boolean;
    onClose: () => void;
    children?: React.ReactNode;
@@ -43,7 +43,9 @@ export const Modal: React.FC<ModalProps> = ({
                {!!withoutHeader == false && (
                   <DialogHeader className="flex gap-6">
                      <DialogTitle className="mt-6">{title}</DialogTitle>
-                     <DialogDescription>{description}</DialogDescription>
+                     {description && (
+                        <DialogDescription>{description}</DialogDescription>
+                     )}
                   </DialogHeader>
                )}
                <div>{children}</div>
@@ -54,7 +56,9 @@ export const Modal: React.FC<ModalProps> = ({
                {!!withoutHeader == false && (
                   <DialogHeader className="flex gap-6">
                      <DialogTitle className="mt-6">{title}</DialogTitle>
-                     <DialogDescription>{description}</DialogDescription>
+                     {description && (
+                        <DialogDescription>{description}</DialogDescription>
+                     )}
                   </DialogHeader>
                )}
                <div>{children}</div>

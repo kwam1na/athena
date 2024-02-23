@@ -29,7 +29,6 @@ import {
    FormMessage,
 } from '@/components/ui/form';
 import { apiCreateStore } from '@/lib/api/stores';
-import { useWrappedUser } from '@/providers/wrapped-user-provider';
 
 const formSchema = z.object({
    name: z.string().min(1),

@@ -12,7 +12,11 @@ export const getOrganization = async (id: number) => {
             id,
         },
         include: {
-            members: true,
+            members: {
+                orderBy: {
+                    created_at: 'asc'
+                }
+            },
             stores: true,
         },
     })
@@ -56,7 +60,11 @@ export const deleteOrganization = async (id: number) => {
 export const fetchOrganizations = async (userId: string, include?: Record<string, boolean>) => {
     return await prismadb.organization.findMany({
         where: {
-            created_by: userId,
+            members: {
+                some: {
+                    user_id: userId
+                }
+            }
         },
         include,
     });

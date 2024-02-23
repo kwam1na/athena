@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { deleteUser, getUser, updateUser } from '@/lib/repositories/userRepository';
 import { cookies } from 'next/headers';
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
+import prismadb from '@/lib/prismadb';
 
 export async function PATCH(
     req: NextRequest,
@@ -47,6 +48,13 @@ export async function PATCH(
 
 
         const user = await updateUser(loggedInUser.id, body)
+
+        if (body.name) {
+            await prismadb.organization_member.update({
+                where: { user_id: loggedInUser.id },
+                data: { user_name: body.name },
+            });
+        }
         return NextResponse.json(user, res);
     } catch (error) {
         console.log('[USER_PATCH]', (error as Error).message);

@@ -39,7 +39,7 @@ const Navbar = async ({
       redirect('/auth');
    }
 
-   const stores = await fetchStores(user.id, parseInt(params.organizationId));
+   const stores = await fetchStores(parseInt(params.organizationId));
    const organizations = await fetchOrganizations(user.id);
 
    return (

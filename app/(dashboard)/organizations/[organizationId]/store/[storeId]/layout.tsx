@@ -7,7 +7,7 @@ import { Separator } from '@/components/ui/separator';
 import { cookies } from 'next/headers';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { CurrencyProvider } from '@/providers/currency-provider';
-import { WrappedUserProvider } from '@/providers/wrapped-user-provider';
+import { UserProvider } from '@/providers/user-provider';
 import AuthListener from '@/providers/auth-listener';
 import { getUser } from '@/lib/repositories/userRepository';
 import { getStore } from '@/lib/repositories/storesRepository';
@@ -52,8 +52,6 @@ export default async function DashboardLayout({
    const store = await getStore(parseInt(params.storeId));
    const organizations = await fetchOrganizations(user.id);
 
-   // console.log('[DashboardLayout] organization:', organizations);
-
    if (store) {
       const { organization_id } = store;
       if (organization_id !== parseInt(params.organizationId)) {
@@ -78,7 +76,7 @@ export default async function DashboardLayout({
    }
 
    return (
-      <WrappedUserProvider>
+      <UserProvider>
          <AuthListener />
          <CurrencyProvider>
             <div className="flex flex-col h-full md:h-[auto]">
@@ -102,13 +100,13 @@ export default async function DashboardLayout({
                      <div className="hidden md:block border-b pb-4 px-6">
                         <Navbar params={params} />
                      </div>
-                     <main className="flex-grow pt-6 pb-24 px-6 h-full">
+                     <main className="flex-grow pt-6 pb-24 px-64 h-full">
                         {children}
                      </main>
                   </div>
                </div>
             </div>
          </CurrencyProvider>
-      </WrappedUserProvider>
+      </UserProvider>
    );
 }
