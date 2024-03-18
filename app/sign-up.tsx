@@ -13,13 +13,13 @@ import {
 } from '@/components/ui/form';
 import { useEffect, useState } from 'react';
 import { captureException } from '@sentry/nextjs';
-import { useToast } from '@/components/ui/use-toast';
 import { LoadingButton } from '@/components/ui/loading-button';
 import { createBrowserClient } from '@supabase/ssr';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import axios from 'axios';
 import { mainContainerVariants } from '@/lib/constants';
+import { toast } from 'sonner';
 
 const formSchema = z.object({
    email: z.string().email(),
@@ -34,7 +34,6 @@ type SignUpFormValues = {
 export const SignUp = () => {
    const [loading, setLoading] = useState(false);
    const [isMounted, setIsMounted] = useState(false);
-   const { toast } = useToast();
    const router = useRouter();
    const supabase = createBrowserClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -67,9 +66,7 @@ export const SignUp = () => {
 
          if (error) {
             captureException(error);
-            toast({
-               title: (error as any).message,
-            });
+            toast((error as any).message);
             return;
          }
 
@@ -91,13 +88,12 @@ export const SignUp = () => {
             if (sessionStorage.getItem('organizationId')) {
                sessionStorage.removeItem('organizationId');
             }
-            router.push(`/onboarding`);
+            // router.push(`/onboarding`);
+            router.push(`/services`);
          }
       } catch (error: any) {
          captureException(error);
-         toast({
-            title: 'Something went wrong. Try again.',
-         });
+         toast('Something went wrong. Try again.');
       } finally {
          setLoading(false);
       }

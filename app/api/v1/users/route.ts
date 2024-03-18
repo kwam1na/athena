@@ -33,6 +33,8 @@ export async function PATCH(
 
         const loggedInUser = session?.user;
 
+        console.log('loggedInUser...', loggedInUser)
+
         const body = await req.json();
 
         if (!loggedInUser) {

@@ -14,6 +14,8 @@ import {
 } from '@/components/ui/table';
 import { DataTablePagination } from './data-table-pagination';
 import { useParams } from 'next/navigation';
+import { EmptyState } from '../states/empty/empty-state';
+import { Search } from 'lucide-react';
 
 interface DataTableProps<TData, TValue> {
    columns: ColumnDef<TData, TValue>[];
@@ -21,6 +23,7 @@ interface DataTableProps<TData, TValue> {
    tableKey: string;
    showHeader?: boolean;
    showPagination?: boolean;
+   showRowsPerPageSelector?: boolean;
    defaultHiddenColumns?: string[];
 }
 
@@ -28,6 +31,7 @@ export function DataTable<TData, TValue>({
    columns,
    showHeader = true,
    showPagination = true,
+   showRowsPerPageSelector,
    table,
    tableKey,
    defaultHiddenColumns,
@@ -117,9 +121,18 @@ export function DataTable<TData, TValue>({
                         <TableRow>
                            <TableCell
                               colSpan={columns.length}
-                              className="h-24 text-center"
+                              className="h-12 text-center"
                            >
-                              No results.
+                              <EmptyState
+                                 icon={
+                                    <Search
+                                       size={'80px'}
+                                       color="#5C5C5C"
+                                       strokeWidth={'1px'}
+                                    />
+                                 }
+                                 text="No results found"
+                              />
                            </TableCell>
                         </TableRow>
                      )}
@@ -127,7 +140,12 @@ export function DataTable<TData, TValue>({
                )}
             </Table>
          </div>
-         {showPagination && <DataTablePagination table={table} />}
+         {showPagination && (
+            <DataTablePagination
+               table={table}
+               showRowsPerPageSelector={showRowsPerPageSelector}
+            />
+         )}
       </div>
    );
 }

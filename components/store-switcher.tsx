@@ -52,7 +52,7 @@ export default function StoreSwitcher({
    }));
 
    const currentStore = formattedItems.find(
-      (item) => item.value === parseInt(params.storeId),
+      (item) => item.value === parseInt('1'),
    );
 
    const [open, setOpen] = React.useState(false);

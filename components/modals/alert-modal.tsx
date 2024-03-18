@@ -44,7 +44,7 @@ export const AlertModal: React.FC<AlertModalProps> = ({
    return (
       <Modal
          title={title || 'Are you sure?'}
-         description={description || 'This action cannot be undone.'}
+         description={description}
          isOpen={isOpen}
          onClose={!loading ? onClose : () => {}}
       >
@@ -64,7 +64,6 @@ export const AlertModal: React.FC<AlertModalProps> = ({
             <LoadingButton
                isLoading={loading}
                disabled={loading}
-               variant="destructive"
                onClick={onConfirm}
             >
                {ctaText || 'Continue'}

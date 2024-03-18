@@ -10,6 +10,7 @@ import { DataTableFacetedFilter } from './products-table-faceted-filter';
 import { X } from 'lucide-react';
 
 interface DataTableToolbarProps<TData> {
+   hideDataTableViewOptions?: boolean;
    searchKey: string;
    table: Table<TData>;
    tableKey: string;
@@ -33,6 +34,7 @@ export function DataTableToolbar<TData>({
    table,
    tableKey,
    placeholder,
+   hideDataTableViewOptions,
    categoryOptions,
    subcategoryOptions,
 }: DataTableToolbarProps<TData>) {
@@ -46,12 +48,14 @@ export function DataTableToolbar<TData>({
                value={
                   (table.getColumn(searchKey)?.getFilterValue() as string) ?? ''
                }
-               onChange={(event: any) =>
-                  table.getColumn(searchKey)?.setFilterValue(event.target.value)
-               }
+               onChange={(event: any) => {
+                  table
+                     .getColumn(searchKey)
+                     ?.setFilterValue(event.target.value);
+               }}
                className="h-8 w-[150px] lg:w-[250px]"
             />
-            {table.getColumn('category') && (
+            {/* {table.getColumn('category') && (
                <DataTableFacetedFilter
                   column={table.getColumn('category')}
                   title="Category"
@@ -64,7 +68,7 @@ export function DataTableToolbar<TData>({
                   title="Subcategory"
                   options={subcategoryOptions || []}
                />
-            )}
+            )} */}
             {isFiltered && (
                <Button
                   variant="ghost"
@@ -76,7 +80,9 @@ export function DataTableToolbar<TData>({
                </Button>
             )}
          </div>
-         <DataTableViewOptions table={table} tableKey={tableKey} />
+         {!hideDataTableViewOptions && (
+            <DataTableViewOptions table={table} tableKey={tableKey} />
+         )}
       </div>
    );
 }

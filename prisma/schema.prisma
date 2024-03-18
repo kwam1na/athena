@@ -8,6 +8,28 @@ datasource db {
   relationMode = "prisma"
 }
 
+model appointment {
+  id               String    @id @default(uuid())
+  check_in_time    DateTime?
+  customer_id      String?
+  customer         customer? @relation(fields: [customer_id], references: [id])
+  end_time         DateTime?
+  canceled_at_time DateTime?
+  time_slot        String
+  date             DateTime
+  service_id       String
+  service          service   @relation(fields: [service_id], references: [id])
+  status           String    @default("pending")
+  store_id         Int
+  store            store     @relation("StoreToAppointment", fields: [store_id], references: [id], onDelete: Cascade)
+  created_at       DateTime  @default(now())
+  updated_at       DateTime  @updatedAt
+
+  @@index([customer_id])
+  @@index([store_id])
+  @@index([service_id])
+}
+
 model billboard {
   id          String        @id @default(uuid())
   store_id    Int
@@ -52,6 +74,19 @@ model color {
   @@index([store_id])
 }
 
+model customer {
+  id           String        @id @default(uuid())
+  email        String
+  first_name   String
+  last_name    String
+  phone_number String
+  store_id     Int
+  store        store         @relation(fields: [store_id], references: [id])
+  appointments appointment[]
+
+  @@index([store_id])
+}
+
 model image {
   id                String   @id @default(uuid())
   productId         String
@@ -76,11 +111,15 @@ model organization {
 
 model organization_member {
   id              Int          @id @default(autoincrement())
-  user_id         String
+  added_by        String?
   created_at      DateTime     @default(now())
+  is_onboarded    Boolean      @default(false)
   organization_id Int
   organization    organization @relation("OrganizationToOrganizationMember", fields: [organization_id], references: [id])
   role            String
+  user_email      String?      @unique
+  user_id         String?      @unique
+  user_name       String?
   updated_at      DateTime     @updatedAt
 
   @@index([organization_id])
@@ -148,6 +187,26 @@ model product {
   @@index([color_id])
 }
 
+model service {
+  id              String        @id @default(uuid())
+  interval_type   String
+  name            String
+  price           Float
+  created_at      DateTime      @default(now())
+  currency        String
+  is_archived     Boolean       @default(false)
+  is_active       Boolean       @default(false)
+  organization_id Int
+  start_time      String
+  end_time        String
+  store_id        Int
+  store           store         @relation("StoreToService", fields: [store_id], references: [id], onDelete: Cascade)
+  updated_at      DateTime      @updatedAt
+  appointments    appointment[]
+
+  @@index([store_id])
+}
+
 model size {
   id         String    @id @default(uuid())
   store_id   Int
@@ -174,24 +233,30 @@ model sku_counter {
 }
 
 model store {
-  id               Int                @id @default(autoincrement())
-  name             String
-  currency         String
-  created_by       String
-  settings         Json?
-  organization_id  Int
-  organization     organization       @relation("OrganizationToStore", fields: [organization_id], references: [id])
-  billboards       billboard[]        @relation("StoreToBillboard")
-  categories       category[]         @relation("StoreToCategory")
-  subcategories    subcategory[]      @relation("StoreToSubcategory")
-  products         product[]          @relation("StoreToProduct")
-  sizes            size[]             @relation("StoreToSize")
-  colors           color[]            @relation("StoreToColor")
-  orders           order[]            @relation("StoreToOrder")
-  created_at       DateTime           @default(now())
-  updated_at       DateTime           @updatedAt
-  transaction_item transaction_item[] @relation("StoreToTransactionItem")
-  transaction      transaction[]      @relation("StoreToTransaction")
+  id                 Int                @id @default(autoincrement())
+  name               String
+  currency           String
+  created_by         String
+  settings           Json?
+  store_hours        Json[]
+  store_location     Json
+  store_phone_number String?
+  organization_id    Int
+  organization       organization       @relation("OrganizationToStore", fields: [organization_id], references: [id])
+  billboards         billboard[]        @relation("StoreToBillboard")
+  categories         category[]         @relation("StoreToCategory")
+  subcategories      subcategory[]      @relation("StoreToSubcategory")
+  products           product[]          @relation("StoreToProduct")
+  services           service[]          @relation("StoreToService")
+  sizes              size[]             @relation("StoreToSize")
+  colors             color[]            @relation("StoreToColor")
+  orders             order[]            @relation("StoreToOrder")
+  created_at         DateTime           @default(now())
+  updated_at         DateTime           @updatedAt
+  transaction_item   transaction_item[] @relation("StoreToTransactionItem")
+  transaction        transaction[]      @relation("StoreToTransaction")
+  appointments       appointment[]      @relation("StoreToAppointment")
+  customer           customer[]
 
   @@index([organization_id])
 }
@@ -267,6 +332,7 @@ model user {
   name            String?
   email           String
   is_onboarded    Boolean  @default(false)
+  role            String?
   store_id        Int?
   organization_id Int?
   created_at      DateTime @default(now())

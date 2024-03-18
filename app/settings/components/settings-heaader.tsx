@@ -1,0 +1,33 @@
+'use client';
+
+import { Button } from '@/components/ui/button';
+import { ChevronLeft, Plus } from 'lucide-react';
+import { usePathname, useRouter } from 'next/navigation';
+
+export const SettingsHeader = () => {
+   const router = useRouter();
+   const pathname = usePathname();
+
+   const pathIncludes = (subPath: string) => pathname.includes(subPath);
+   const isOnNewOrEditPage =
+      pathIncludes('/services/new') || pathIncludes('/edit');
+
+   return (
+      <div className="w-full h-12 flex items-center bg-background p-8 border-b">
+         <div className="flex items-center gap-2">
+            {isOnNewOrEditPage && (
+               <Button
+                  variant={'ghost'}
+                  size={'sm'}
+                  onClick={() => router.back()}
+               >
+                  <ChevronLeft className="h-4 w-4" />
+               </Button>
+            )}
+            <p className="text-sm font-semibold flex gap-2 items-center">
+               Settings
+            </p>
+         </div>
+      </div>
+   );
+};
