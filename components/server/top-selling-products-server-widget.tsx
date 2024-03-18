@@ -1,4 +1,4 @@
-import { UnitsSoldColumn } from '@/app/(dashboard)/organizations/[organizationId]/store/[storeId]/(routes)/_components/view-data-table-columns';
+import { UnitsSoldColumn } from '@/[storeId]/(routes)/_components/view-data-table-columns';
 import { getTopProductsForMonth } from '@/actions/get-transactions-metrics';
 import { TopSellingProductsWidget } from '../widgets/top-selling-products-widget';
 

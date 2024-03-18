@@ -22,7 +22,7 @@ export default function Home() {
       },
    };
    return (
-      <div className="h-full flex">
+      <div className="h-screen flex">
          <div className="w-[50%] flex flex-col items-center justify-center h-full gap-12">
             <motion.div
                className="absolute right-4 bottom-8"

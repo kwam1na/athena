@@ -13,7 +13,7 @@ import { apiGetMetric } from '@/lib/api/metrics';
 import { set } from 'date-fns';
 import useGetBaseStoreUrl from '@/hooks/use-get-base-store-url';
 import { motion } from 'framer-motion';
-import { widgetVariants } from '@/lib/constants';
+import { fadeInAnimation } from '@/lib/constants';
 
 interface AverageUnitsPerTransactionWidgetProps {
    averageUnitsPerTransaction?: number;

@@ -74,7 +74,7 @@ export function UserNav() {
                   </p>
                </div>
             </DropdownMenuLabel>
-            <DropdownMenuSeparator />
+            {/* <DropdownMenuSeparator />
             <DropdownMenuGroup>
                <Link href={`${baseStoreURL}/settings/profile`}>
                   <DropdownMenuItem className="pt-2 pb-2">
@@ -83,7 +83,7 @@ export function UserNav() {
                      <DropdownMenuShortcut>⇧⌘P</DropdownMenuShortcut>
                   </DropdownMenuItem>
                </Link>
-               {/* <DropdownMenuItem className="pt-2 pb-2">
+               <DropdownMenuItem className="pt-2 pb-2">
                   <CreditCard className="mr-2 h-4 w-4" />
                   <span>Billing</span>
                   <DropdownMenuShortcut>⌘B</DropdownMenuShortcut>
@@ -96,8 +96,8 @@ export function UserNav() {
                <DropdownMenuItem className="pt-2 pb-2">
                   <PlusCircle className="mr-2 h-4 w-4" />
                   <span>New Team</span>
-               </DropdownMenuItem> */}
-            </DropdownMenuGroup>
+               </DropdownMenuItem>
+            </DropdownMenuGroup> */}
             <DropdownMenuSeparator />
 
             <DropdownMenuItem className="pt-2 pb-2">

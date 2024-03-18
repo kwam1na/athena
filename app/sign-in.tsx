@@ -13,7 +13,6 @@ import {
 } from '@/components/ui/form';
 import { useEffect, useState } from 'react';
 import { captureException } from '@sentry/nextjs';
-import { useToast } from '@/components/ui/use-toast';
 import { LoadingButton } from '@/components/ui/loading-button';
 import { createBrowserClient } from '@supabase/ssr';
 import { motion } from 'framer-motion';
@@ -22,6 +21,7 @@ import { apiGetUser } from '@/lib/api/users';
 import { Button } from '@/components/ui/button';
 import axios from 'axios';
 import { mainContainerVariants } from '@/lib/constants';
+import { toast } from 'sonner';
 
 const formSchema = z.object({
    email: z.string().email(),
@@ -40,7 +40,6 @@ interface SignInProps {
 export const SignIn: React.FC<SignInProps> = ({ setIsSignUp }) => {
    const [loading, setLoading] = useState(false);
    const [isMounted, setIsMounted] = useState(false);
-   const { toast } = useToast();
    const router = useRouter();
    const supabase = createBrowserClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -70,9 +69,7 @@ export const SignIn: React.FC<SignInProps> = ({ setIsSignUp }) => {
 
          if (error) {
             captureException(error);
-            toast({
-               title: (error as any).message,
-            });
+            toast((error as any).message);
             return;
          }
 
@@ -107,9 +104,7 @@ export const SignIn: React.FC<SignInProps> = ({ setIsSignUp }) => {
          }
       } catch (error: any) {
          captureException(error);
-         toast({
-            title: 'Something went wrong. Try again.',
-         });
+         toast('Something went wrong. Try again.');
       } finally {
          setLoading(false);
       }

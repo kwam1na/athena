@@ -1,18 +1,18 @@
-import { Inter } from 'next/font/google';
-
 import { ModalProvider } from '@/providers/modal-provider';
 import { ThemeProvider } from '@/providers/theme-provider';
-import { Toaster } from '@/components/ui/toaster';
 import './globals.css';
 import { CurrencyProvider } from '@/providers/currency-provider';
 import { WrappedUserProvider } from '@/providers/wrapped-user-provider';
 import { ExchangeRateProvider } from '@/providers/exchange-rate-provider';
 import { cookies } from 'next/headers';
-import { createServerClient, type CookieOptions } from '@supabase/ssr';
+import { createServerClient } from '@supabase/ssr';
 import AuthListener from '@/providers/auth-listener';
-import { redirect } from 'next/navigation';
-
-const inter = Inter({ subsets: ['latin'] });
+import { Toaster } from '@/components/ui/sonner';
+import { MainHeader } from '@/components/main-header';
+import { Sidebar } from '@/components/sidebar';
+import { CalendarCheck, Scissors, Settings } from 'lucide-react';
+import { Footer } from '@/components/footer';
+import { ReactQueryClientProvider } from '@/providers/query-client-provider';
 
 export const metadata = {
    title: 'athena',
@@ -24,8 +24,6 @@ export default async function RootLayout({
 }: {
    children: React.ReactNode;
 }) {
-   console.debug('[RootLayout] beginning operations');
-
    const cookieStore = cookies();
    const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -50,23 +48,66 @@ export default async function RootLayout({
       console.log('error', error);
    }
 
+   const Authenticated = () => {
+      return (
+         <WrappedUserProvider>
+            <CurrencyProvider>
+               <ExchangeRateProvider>
+                  <MainHeader />
+                  <main>
+                     <Sidebar
+                        collapsible
+                        withAnimation
+                        defaultCollapsed
+                        routes={[
+                           {
+                              href: `/services`,
+                              label: 'Services',
+                              icon: <Scissors className="mr-2 h-5 w-5" />,
+                           },
+                           {
+                              href: `/appointments`,
+                              label: 'Appointments',
+                              icon: <CalendarCheck className="mr-2 h-5 w-5" />,
+                           },
+                           {
+                              href: `/settings`,
+                              label: 'Settings',
+                              icon: <Settings className="mr-2 mr-2 h-5 w-5" />,
+                           },
+                        ]}
+                     >
+                        {children}
+                     </Sidebar>
+                  </main>
+                  <Footer />
+               </ExchangeRateProvider>
+            </CurrencyProvider>
+         </WrappedUserProvider>
+      );
+   };
+
+   console.log('user...', user);
+
    return (
       <html lang="en">
-         <body className={inter.className}>
-            <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-               <Toaster />
-               <ModalProvider />
-               <AuthListener />
-               {user ? (
-                  <WrappedUserProvider>
-                     <CurrencyProvider>
-                        <ExchangeRateProvider>{children}</ExchangeRateProvider>
-                     </CurrencyProvider>
-                  </WrappedUserProvider>
-               ) : (
-                  children
-               )}
-            </ThemeProvider>
+         <body>
+            <ReactQueryClientProvider>
+               <ThemeProvider
+                  attribute="class"
+                  defaultTheme="system"
+                  enableSystem
+               >
+                  <Toaster />
+                  <ModalProvider />
+                  <AuthListener />
+                  {user ? (
+                     <Authenticated />
+                  ) : (
+                     <main className="h-screen">{children}</main>
+                  )}
+               </ThemeProvider>
+            </ReactQueryClientProvider>
          </body>
       </html>
    );

@@ -1,15 +1,7 @@
 'use client';
 
-import axios from 'axios';
 import { useParams } from 'next/navigation';
-import React, {
-   createContext,
-   useState,
-   useEffect,
-   useContext,
-   useMemo,
-} from 'react';
-import { useStoreCurrency } from './currency-provider';
+import React, { createContext, useState, useContext, useMemo } from 'react';
 
 type ExhangeRateContextType = {
    exchangeRate: number;

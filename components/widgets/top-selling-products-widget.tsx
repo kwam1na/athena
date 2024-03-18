@@ -9,10 +9,10 @@ import { DollarSign, RotateCcw } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useState } from 'react';
-import { ViewDataTableClient } from '../../app/(dashboard)/organizations/[organizationId]/store/[storeId]/(routes)/_components/view-data-table-client';
-import { unitsSoldColumns } from '../../app/(dashboard)/organizations/[organizationId]/store/[storeId]/(routes)/_components/view-data-table-columns';
+import { ViewDataTableClient } from '../../[storeId]/(routes)/_components/view-data-table-client';
+import { unitsSoldColumns } from '../../[storeId]/(routes)/_components/view-data-table-columns';
 import { motion } from 'framer-motion';
-import { widgetVariants } from '@/lib/constants';
+import { fadeInAnimation } from '@/lib/constants';
 interface TopSellingProductssWidgetProps {
    topSellingProducts?: Record<string, any>[];
 }

@@ -14,7 +14,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { widgetVariants } from '@/lib/constants';
+import { fadeInAnimation } from '@/lib/constants';
 interface SalesRevenueGraphWidgetProps {
    graphData?: GraphData[];
 }
