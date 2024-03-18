@@ -1,20 +1,5 @@
-import { fetchServices } from '@/lib/repositories/servicesRepository';
 import { getStore } from '@/lib/repositories/storesRepository';
-import { formatter } from '@/lib/utils';
-import { ServicesClient } from '../components/client';
 import { SettingsForm } from '../components/settings-form';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import {
-   Card,
-   CardContent,
-   CardDescription,
-   CardFooter,
-   CardHeader,
-   CardTitle,
-} from '@/components/ui/card';
-import { Label } from '@/components/ui/label';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
 import { BusinessHours, Store } from '@/lib/types';
 
 export default async function StoreSettingsPage() {
