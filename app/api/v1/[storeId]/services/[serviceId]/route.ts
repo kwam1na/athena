@@ -87,8 +87,6 @@ export async function PATCH(
    req: NextRequest,
    { params }: { params: { serviceId: string; storeId: string } },
 ) {
-   revalidatePath('/services');
-
    try {
       const res = new NextResponse();
       const cookieStore = cookies();
@@ -130,9 +128,9 @@ export async function PATCH(
          created_by: user.id,
       });
 
-      if (!storeByUserId) {
-         return new NextResponse('Unauthorized', { status: 405 });
-      }
+      // if (!storeByUserId) {
+      //    return new NextResponse('Unauthorized', { status: 405 });
+      // }
 
       const service = await updateService(params.serviceId, body);
 

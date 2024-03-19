@@ -23,6 +23,7 @@ export default async function StoreSettingsPage() {
          city: location?.city,
          country: location?.country,
       },
+      store_phone_number: store?.store_phone_number,
    };
 
    return (

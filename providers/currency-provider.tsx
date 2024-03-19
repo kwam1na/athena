@@ -38,20 +38,14 @@ export const CurrencyProvider = ({
       () => ({ loading, storeCurrency, setStoreCurrency }),
       [storeCurrency],
    );
-   const params = useParams();
 
    useEffect(() => {
       fetchStoreCurrency();
    }, []);
 
    const fetchStoreCurrency = async () => {
-      if (!params.storeId) {
-         setLoading(false);
-         return;
-      }
-
       try {
-         const res = await axios.get(`/api/v1/stores/${params.storeId}`);
+         const res = await axios.get(`/api/v1/stores/1`);
          const { currency } = res?.data || {};
          setStoreCurrency(currency);
       } catch (error) {

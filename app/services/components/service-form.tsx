@@ -5,12 +5,9 @@ import { captureException } from '@sentry/nextjs';
 import { useEffect, useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
-import { ArrowLeft, Ban, CheckCircle2, Trash } from 'lucide-react';
-import { image, product, service } from '@prisma/client';
-import { useParams, usePathname, useRouter } from 'next/navigation';
-
+import { Ban, CheckCircle2 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
 import {
    Form,
    FormControl,
@@ -20,25 +17,16 @@ import {
    FormLabel,
    FormMessage,
 } from '@/components/ui/form';
-import { Separator } from '@/components/ui/separator';
 import { AlertModal } from '@/components/modals/alert-modal';
 import { Checkbox } from '@/components/ui/checkbox';
-import { useToast } from '@/components/ui/use-toast';
 import { CardContainer } from '@/components/ui/card-container';
-import {
-   Card,
-   CardContent,
-   CardDescription,
-   CardHeader,
-   CardTitle,
-} from '@/components/ui/card';
-import { cn, formatter } from '@/lib/utils';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { cn } from '@/lib/utils';
 import { useStoreCurrency } from '@/providers/currency-provider';
 import { LoadingButton } from '@/components/ui/loading-button';
-import useGetBaseStoreUrl from '@/hooks/use-get-base-store-url';
 import { ActionModal } from '@/components/modals/action-modal';
 import { motion } from 'framer-motion';
-import { hours, mainContainerVariants, fadeInAnimation } from '@/lib/constants';
+import { hours, mainContainerVariants } from '@/lib/constants';
 import { Label } from '@/components/ui/label';
 import { ServicesAutosaver } from '../utils/services-autosaver';
 import {
@@ -50,7 +38,6 @@ import { Switch } from '@/components/ui/switch';
 import {
    Select,
    SelectContent,
-   SelectGroup,
    SelectItem,
    SelectTrigger,
    SelectValue,

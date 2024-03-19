@@ -37,6 +37,7 @@ export type Store = {
    name?: string;
    store_hours: BusinessHours;
    store_location: StoreLocation;
+   store_phone_number?: string | null;
 };
 
 export type AppointmentStatus =

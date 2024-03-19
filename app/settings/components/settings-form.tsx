@@ -353,6 +353,7 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ store }) => {
          street_address: store_location?.street_address,
          city: store_location?.city,
          country: store_location?.country,
+         phone_number: store?.store_phone_number,
       };
    };
 

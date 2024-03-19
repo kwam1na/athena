@@ -4,9 +4,11 @@ import { Service } from '@/lib/types';
 import { formatter } from '@/lib/utils';
 import { Banknote, Clock } from 'lucide-react';
 import { ServiceSheet } from './service-sheet';
+import { useStoreCurrency } from '@/providers/currency-provider';
 
 export const ServiceCell = ({ service }: { service: Service }) => {
-   const fmt = formatter(service.currency);
+   const { storeCurrency } = useStoreCurrency();
+   const fmt = formatter(storeCurrency);
    return (
       <ServiceSheet service={service}>
          <div className="w-full space-y-4 border bg-background shadow-sm rounded-md p-6 cursor-pointer">
