@@ -419,6 +419,14 @@ export const ServiceForm: React.FC<ServiceFormProps> = ({
                   className="space-y-8 w-full"
                >
                   <div className="grid gap-8">
+                     <LoadingButton
+                        isLoading={isMutating}
+                        disabled={isMutating || !isValidAppointmentTime}
+                        className="ml-auto"
+                        type="submit"
+                     >
+                        {buttonText}
+                     </LoadingButton>
                      <CardContainer>
                         <ServiceInfoCard
                            title="Service availability"
@@ -597,14 +605,6 @@ export const ServiceForm: React.FC<ServiceFormProps> = ({
                         </FormItem>
                      )}
                   />
-                  <LoadingButton
-                     isLoading={isMutating}
-                     disabled={isMutating || !isValidAppointmentTime}
-                     className="ml-auto"
-                     type="submit"
-                  >
-                     {buttonText}
-                  </LoadingButton>
                </form>
             </Form>
          </motion.div>
