@@ -6,7 +6,7 @@ export function middleware(req: NextRequest) {
 
    const allowedOrigins = [
       'http://localhost:3000',
-      'https://agora-xi.vercel.app/',
+      'https://agora-xi.vercel.app',
    ];
 
    const origin = req.headers.get('Origin');
