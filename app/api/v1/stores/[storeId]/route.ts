@@ -6,7 +6,6 @@ import {
 } from '@/lib/repositories/storesRepository';
 import { cookies } from 'next/headers';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
-import cors from '@/lib/cors';
 
 export async function PATCH(
    req: NextRequest,
@@ -145,7 +144,6 @@ export async function GET(
       const store = await getStore(parseInt(params.storeId));
 
       return NextResponse.json(store);
-      // return cors(req, NextResponse.json(store));
    } catch (error) {
       console.log('[STORES_GET]', error);
       return new NextResponse('Internal error', { status: 500 });

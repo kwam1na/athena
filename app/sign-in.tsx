@@ -91,7 +91,7 @@ export const SignIn: React.FC<SignInProps> = ({ setIsSignUp }) => {
 
             if (data) {
                if (data.is_onboarded) {
-                  router.push('/');
+                  router.push('/services');
                } else {
                   if (data.name) router.push(`/onboarding?name=${data.name}`);
                   else router.push(`/onboarding`);

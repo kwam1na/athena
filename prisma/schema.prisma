@@ -239,7 +239,7 @@ model store {
   created_by         String
   settings           Json?
   store_hours        Json[]
-  store_location     Json
+  store_location     Json?
   store_phone_number String?
   organization_id    Int
   organization       organization       @relation("OrganizationToStore", fields: [organization_id], references: [id])
