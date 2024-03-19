@@ -1,5 +1,5 @@
 import { Appointment } from '@/lib/types';
-import { format, isToday } from 'date-fns';
+import { format, isToday, isTomorrow } from 'date-fns';
 import { Calendar, Scissors, User } from 'lucide-react';
 import { AppointmentSheet } from './appointment-sheet';
 import { AppointmentStatusBadge } from './appointment-info';
@@ -40,6 +40,8 @@ export const AppointmentCell = ({
                text={
                   isToday(appointment.date)
                      ? `Today at ${appointment.time_slot}`
+                     : isTomorrow(appointment.date)
+                     ? `Tomorrow at ${appointment.time_slot}`
                      : format(appointment.date, "MMMM dd, yyyy 'at' h:mm aaa")
                }
                isMuted
