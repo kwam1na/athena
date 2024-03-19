@@ -58,7 +58,7 @@ export async function GET(
 ) {
    try {
       const { searchParams } = new URL(req.url);
-      const customer_email = searchParams.get('customer_email') || undefined;
+      const customer_emails = searchParams.get('customer_emails') || undefined;
       const status = searchParams.get('status') || undefined;
 
       if (!params.storeId) {
@@ -66,10 +66,11 @@ export async function GET(
       }
 
       const statuses = status?.split(',');
+      const emailAddresses = customer_emails?.split(',');
 
       const appointments = await fetchAppointments({
          store_id: parseInt(params.storeId),
-         customer_email,
+         customer_emails: emailAddresses,
          status: statuses,
       });
 
