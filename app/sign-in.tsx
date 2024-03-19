@@ -74,6 +74,7 @@ export const SignIn: React.FC<SignInProps> = ({ setIsSignUp }) => {
          }
 
          const { user, session } = data;
+
          if (session) {
             try {
                const { access_token, refresh_token } = session;
@@ -90,12 +91,13 @@ export const SignIn: React.FC<SignInProps> = ({ setIsSignUp }) => {
             const data = await apiGetUser();
 
             if (data) {
-               if (data.is_onboarded) {
-                  router.push('/services');
-               } else {
-                  if (data.name) router.push(`/onboarding?name=${data.name}`);
-                  else router.push(`/onboarding`);
-               }
+               router.push('/');
+               // if (data.is_onboarded) {
+               //    router.push('/');
+               // } else {
+               //    if (data.name) router.push(`/onboarding?name=${data.name}`);
+               //    else router.push(`/onboarding`);
+               // }
             }
 
             if (error) {

@@ -239,7 +239,7 @@ export const ServiceForm: React.FC<ServiceFormProps> = ({
    const updateMutation = useMutation({
       mutationFn: (data: object) => submitData(data),
       onSuccess: () => {
-         toast('Operation successful', {
+         toast(`Service ${service ? 'updated' : 'created'}`, {
             icon: <CheckCircle2 className="w-4 h-4" />,
          });
          router.refresh();

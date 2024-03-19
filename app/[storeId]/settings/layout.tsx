@@ -1,5 +1,6 @@
 import { Sidebar } from '@/components/sidebar';
 import { SettingsHeader } from './components/settings-heaader';
+import { CurrencyProvider } from '@/providers/currency-provider';
 
 export default async function SettingsLayout({
    children,
@@ -13,12 +14,12 @@ export default async function SettingsLayout({
             sideNavClassName="bg-card"
             routes={[
                {
-                  href: `/settings/store`,
-                  aliases: ['/settings'],
+                  href: `/1/settings/store`,
+                  aliases: ['/1/settings'],
                   label: 'Store',
                },
                {
-                  href: `/settings/profile`,
+                  href: `/1/settings/profile`,
                   label: 'Profile',
                },
             ]}

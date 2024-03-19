@@ -14,17 +14,19 @@ import { apiUpdateAppointment } from '@/lib/api/appointments';
 import { useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { formatter } from '@/lib/utils';
-import { format, isToday } from 'date-fns';
+import { format, isToday, isTomorrow } from 'date-fns';
 import { InfoLine } from '@/components/info-line';
 import { useRouter } from 'next/navigation';
 import { LoadingButton } from '@/components/ui/loading-button';
 
 const AppointmentDetailsBody = ({
    appointment,
+   currency,
 }: {
    appointment: Appointment;
+   currency: string;
 }) => {
-   const fmt = formatter(appointment.service?.currency || 'usd');
+   const fmt = formatter(currency);
    return (
       <div className="flex flex-col gap-4">
          <InfoLine
@@ -42,6 +44,8 @@ const AppointmentDetailsBody = ({
             text={
                isToday(appointment.date)
                   ? `Today at ${appointment.time_slot}`
+                  : isTomorrow(appointment.date)
+                  ? `Tomorrow at ${appointment.time_slot}`
                   : format(appointment.date, "MMMM dd, yyyy 'at' h:mm aaa")
             }
          />
@@ -60,9 +64,11 @@ const AppointmentDetailsBody = ({
 
 export const AppointmentDetails = ({
    appointment,
+   currency,
    setOpen,
 }: {
    appointment: Appointment;
+   currency: string;
    setOpen: (open: boolean) => void;
 }) => {
    const router = useRouter();
@@ -142,7 +148,10 @@ export const AppointmentDetails = ({
                <AppointmentStatusBadge status={appointment.status} />
             </div>
 
-            <AppointmentDetailsBody appointment={appointment} />
+            <AppointmentDetailsBody
+               appointment={appointment}
+               currency={currency}
+            />
 
             <div className="flex gap-2 w-full">
                {appointment.status == 'pending' && (

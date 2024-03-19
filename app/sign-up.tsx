@@ -89,7 +89,7 @@ export const SignUp = () => {
                sessionStorage.removeItem('organizationId');
             }
             // router.push(`/onboarding`);
-            router.push(`/services`);
+            router.push(`/`);
          }
       } catch (error: any) {
          captureException(error);

@@ -3,13 +3,11 @@
 import * as z from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
-import { store } from '@prisma/client';
-import { useParams, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { captureException } from '@sentry/nextjs';
 
 import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
 import {
    Form,
    FormControl,
@@ -18,11 +16,7 @@ import {
    FormLabel,
    FormMessage,
 } from '@/components/ui/form';
-import { Separator } from '@/components/ui/separator';
-import { Heading } from '@/components/ui/heading';
 import { AlertModal } from '@/components/modals/alert-modal';
-import { useOrigin } from '@/hooks/use-origin';
-import { ActionAlert } from '@/components/ui/action-alert';
 import {
    Select,
    SelectContent,
@@ -31,15 +25,13 @@ import {
    SelectValue,
 } from '@/components/ui/select';
 import { currencies, hours } from '@/lib/constants';
-import { useToast } from '@/components/ui/use-toast';
-import { revalidatePath } from 'next/cache';
 import { useStoreCurrency } from '@/providers/currency-provider';
 import { LoadingButton } from '@/components/ui/loading-button';
 import { apiDeleteStore, apiUpdateStore } from '@/lib/api/stores';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { CheckCircle2, CheckIcon, Clock, Info, MapPin } from 'lucide-react';
+import { CheckCircle2, Clock, Info, MapPin } from 'lucide-react';
 import { Store } from '@/lib/types';
 import { InfoLine } from '@/components/info-line';
 

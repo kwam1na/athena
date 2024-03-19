@@ -6,7 +6,7 @@ import { ThemeToggle } from './theme-toggle';
 
 export const MainHeader = async () => {
    const stores = await fetchStores(
-      'aa5f4c83-2e95-4429-bc47-9b90ece4a724',
+      '26bc4dfe-8ed9-4558-bbd5-bb451694d74e',
       parseInt('1'),
    );
 

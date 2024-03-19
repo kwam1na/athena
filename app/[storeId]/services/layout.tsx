@@ -1,6 +1,7 @@
 import { Sidebar } from '@/components/sidebar';
 import { fetchServices } from '@/lib/repositories/servicesRepository';
 import { ServicesHeader } from './components/services-heaader';
+import { CurrencyProvider } from '@/providers/currency-provider';
 
 export default async function ServicesLayout({
    children,
@@ -23,13 +24,13 @@ export default async function ServicesLayout({
             sideNavClassName="bg-card"
             routes={[
                {
-                  href: `/services/active`,
-                  aliases: ['/services'],
+                  href: `/1/services/active`,
+                  aliases: ['/1/services'],
                   label: 'Active',
                   secondaryLabel: `${UpcomingAppointmentsCount}`,
                },
                {
-                  href: `/services/archived`,
+                  href: `/1/services/archived`,
                   label: 'Archived',
                   secondaryLabel: `${archivedServicesCount}`,
                },

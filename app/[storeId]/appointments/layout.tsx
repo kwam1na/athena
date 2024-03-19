@@ -25,18 +25,18 @@ export default async function AppointmentsLayout({
             sideNavClassName="bg-card"
             routes={[
                {
-                  href: `/appointments/upcoming`,
-                  aliases: ['/appointments'],
+                  href: `/1/appointments/upcoming`,
+                  aliases: ['/1/appointments'],
                   label: 'Upcoming',
                   secondaryLabel: `${upcomingAppointmentsCount}`,
                },
                {
-                  href: `/appointments/in-progress`,
+                  href: `/1/appointments/in-progress`,
                   label: 'In progress',
                   secondaryLabel: `${inProgressAppointments}`,
                },
                {
-                  href: `/appointments/ended`,
+                  href: `/1/appointments/ended`,
                   label: 'Ended',
                   secondaryLabel: `${pastAppointments}`,
                },
