@@ -33,19 +33,19 @@ export const deleteAppointment = async (id: string) => {
 
 export const fetchAppointments = async (keys: {
    store_id: number;
-   customer_email?: string;
+   customer_emails?: string[];
    status?: string[];
    includeForeignKeys?: string[];
    orderBy?: { [key: string]: 'asc' | 'desc' };
 }) => {
-   const { store_id, customer_email, status, orderBy } = keys;
+   const { store_id, customer_emails, status, orderBy } = keys;
 
    const where: any = {
       store_id,
-      ...(customer_email && {
+      ...(customer_emails && {
          customer: {
             email: {
-               equals: customer_email,
+               in: customer_emails,
             },
          },
       }),
