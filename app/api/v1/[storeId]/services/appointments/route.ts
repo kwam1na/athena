@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { getService } from '@/lib/repositories/servicesRepository';
-import cors from '@/lib/cors';
 import {
    createAppointment,
    fetchAppointments,
@@ -48,54 +47,6 @@ export async function POST(
          return new NextResponse('Last name is required', { status: 400 });
       }
 
-      // if (!body.email) {
-      //    return cors(
-      //       req,
-      //       NextResponse.json(
-      //          { error: 'Customer email is required.' },
-      //          {
-      //             status: 400,
-      //          },
-      //       ),
-      //    );
-      // }
-
-      // if (!body.phone_number) {
-      //    return cors(
-      //       req,
-      //       NextResponse.json(
-      //          { error: 'Phone number is required.' },
-      //          {
-      //             status: 400,
-      //          },
-      //       ),
-      //    );
-      // }
-
-      // if (!body.first_name) {
-      //    return cors(
-      //       req,
-      //       NextResponse.json(
-      //          { error: 'First name is required.' },
-      //          {
-      //             status: 400,
-      //          },
-      //       ),
-      //    );
-      // }
-
-      // if (!body.last_name) {
-      //    return cors(
-      //       req,
-      //       NextResponse.json(
-      //          { error: 'Last name is required.' },
-      //          {
-      //             status: 400,
-      //          },
-      //       ),
-      //    );
-      // }
-
       if (!body.service_id) {
          return new NextResponse('Service id is required', { status: 400 });
       }
@@ -130,14 +81,11 @@ export async function POST(
       });
 
       if (service?.appointments && service?.appointments.length > 0) {
-         return cors(
-            req,
-            NextResponse.json(
-               { error: 'Already booked.' },
-               {
-                  status: 400,
-               },
-            ),
+         return NextResponse.json(
+            {
+               message: 'Already booked',
+            },
+            { status: 400 },
          );
       }
 
@@ -151,11 +99,14 @@ export async function POST(
 
       const appointment = await createAppointment(createParams);
       return NextResponse.json(appointment, res);
-
-      // return cors(req, NextResponse.json(appointment, res));
    } catch (error) {
       console.log('[SERVICES_APPOINTMENTS_POST]', (error as Error).message);
-      return new NextResponse('Internal error', { status: 500 });
+      return NextResponse.json(
+         {
+            error,
+         },
+         { status: 500 },
+      );
    }
 }
 
@@ -187,23 +138,13 @@ export async function GET(
       });
 
       return NextResponse.json(appointments);
-
-      // return cors(req, NextResponse.json(appointments));
    } catch (error) {
       console.log('[SERVICES_APPOINTMENTS_GET]', (error as Error).message);
-      // Add CORS headers to the error response
-      return new NextResponse('Internal error', {
-         status: 500,
-         headers: response.headers,
-      });
+      return NextResponse.json(
+         {
+            error,
+         },
+         { status: 500 },
+      );
    }
 }
-
-// export async function OPTIONS(request: NextRequest) {
-//    return cors(
-//       request,
-//       new NextResponse(null, {
-//          status: 204,
-//       }),
-//    );
-// }

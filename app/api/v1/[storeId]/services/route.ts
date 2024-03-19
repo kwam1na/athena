@@ -6,7 +6,6 @@ import {
    createService,
    fetchServices,
 } from '@/lib/repositories/servicesRepository';
-import cors from '@/lib/cors';
 
 const addCorsHeaders = (response: NextResponse) => {
    response.headers.set('Access-Control-Allow-Origin', '*');
@@ -116,9 +115,6 @@ export async function GET(
    req: NextRequest,
    { params }: { params: { storeId: string } },
 ) {
-   // Create a new NextResponse object
-   const response = new NextResponse();
-
    try {
       const { searchParams } = new URL(req.url);
       const is_archived = searchParams.get('isArchived');
@@ -141,22 +137,13 @@ export async function GET(
       });
 
       return NextResponse.json(services);
-      // return cors(req, NextResponse.json(services));
    } catch (error) {
       console.log('[SERVICES_GET]', (error as Error).message);
-      // Add CORS headers to the error response
-      return new NextResponse('Internal error', {
-         status: 500,
-         headers: response.headers,
-      });
+      return NextResponse.json(
+         { error },
+         {
+            status: 500,
+         },
+      );
    }
 }
-
-// export async function OPTIONS(request: NextRequest) {
-//    return cors(
-//       request,
-//       new NextResponse(null, {
-//          status: 204,
-//       }),
-//    );
-// }
