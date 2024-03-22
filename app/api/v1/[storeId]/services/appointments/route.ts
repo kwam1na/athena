@@ -9,6 +9,9 @@ import {
    createCustomer,
    findCustomer,
 } from '@/lib/repositories/customersRepository';
+import { sendMessage } from '../../../external/sendgrid';
+import { format } from 'date-fns';
+import { getStore } from '@/lib/repositories/storesRepository';
 
 export async function POST(
    req: NextRequest,
@@ -52,6 +55,8 @@ export async function POST(
       }
 
       const storeId = parseInt(params.storeId);
+
+      const store = await getStore(storeId);
 
       const customer = await findCustomer({ email: body.email });
 
@@ -98,6 +103,26 @@ export async function POST(
       };
 
       const appointment = await createAppointment(createParams);
+
+      const storeLocation: any = store?.store_location;
+
+      try {
+         const appointmentDetails = {
+            customerName: `${body.first_name} ${body.last_name}`,
+            customerEmail: body.email,
+            appointmentTime: format(
+               new Date(body.date),
+               "MMMM dd, yyyy 'at' h:mm aaa",
+            ),
+            serviceName: service?.name,
+            location: `${store?.name}, ${storeLocation?.street_address}, ${storeLocation?.city}, ${storeLocation?.country}`,
+            storePhoneNumber: store?.store_phone_number,
+         };
+         sendMessage(appointmentDetails);
+      } catch (error) {
+         console.log(`error sending message to ${body.email}..`, error);
+      }
+
       return NextResponse.json(appointment, res);
    } catch (error) {
       console.log('[SERVICES_APPOINTMENTS_POST]', (error as Error).message);
