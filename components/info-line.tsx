@@ -3,14 +3,16 @@ export const InfoLine = ({
    isBold,
    isMuted,
    icon,
+   className,
 }: {
    text?: string;
    isBold?: boolean;
    isMuted?: boolean;
    icon?: React.ReactNode;
+   className?: string;
 }) => {
    return (
-      <div className="flex items-center gap-2">
+      <div className={`flex items-center gap-2 ${className}`}>
          {icon}
          <p
             className={`text-sm ${isBold ? 'font-semibold' : ''} ${

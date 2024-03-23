@@ -83,6 +83,8 @@ model customer {
   store_id     Int
   store        store         @relation(fields: [store_id], references: [id])
   appointments appointment[]
+  created_at   DateTime      @default(now())
+  updated_at   DateTime      @updatedAt
 
   @@index([store_id])
 }

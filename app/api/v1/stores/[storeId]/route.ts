@@ -73,11 +73,7 @@ export async function PATCH(
          store_phone_number: body.store_phone_number,
       };
 
-      const store = await updateStore(
-         parseInt(params.storeId),
-         user.id,
-         storeData,
-      );
+      const store = await updateStore(parseInt(params.storeId), storeData);
 
       return NextResponse.json(store, res);
    } catch (error) {

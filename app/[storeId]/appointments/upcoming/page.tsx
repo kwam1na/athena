@@ -2,7 +2,7 @@ import { AppointmentsClient } from '../components/client';
 import { fetchAppointments } from '@/lib/repositories/appointmentsRepository';
 import { Appointment, AppointmentStatus } from '@/lib/types';
 import { EmptyState } from '@/components/states/empty/empty-state';
-import { CalendarX2 } from 'lucide-react';
+import { Calendar } from 'lucide-react';
 
 export default async function UpcomingAppointments() {
    const appointments = await fetchAppointments({
@@ -46,7 +46,7 @@ export default async function UpcomingAppointments() {
             {formatted.length == 0 && (
                <EmptyState
                   icon={
-                     <CalendarX2
+                     <Calendar
                         size={'112px'}
                         color="#5C5C5C"
                         strokeWidth={'1px'}
