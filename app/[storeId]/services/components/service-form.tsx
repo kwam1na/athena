@@ -243,6 +243,7 @@ export const ServiceForm: React.FC<ServiceFormProps> = ({
             icon: <CheckCircle2 className="w-4 h-4" />,
          });
          router.refresh();
+         serviceAutosaver.clearAll();
       },
       onError: () => {
          toast('Something went wrong', { icon: <Ban className="w-4 h-4" /> });

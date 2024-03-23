@@ -22,6 +22,7 @@ import { Button } from '@/components/ui/button';
 import axios from 'axios';
 import { mainContainerVariants } from '@/lib/constants';
 import { toast } from 'sonner';
+import { Ban } from 'lucide-react';
 
 const formSchema = z.object({
    email: z.string().email(),
@@ -98,6 +99,8 @@ export const SignIn: React.FC<SignInProps> = ({ setIsSignUp }) => {
                //    if (data.name) router.push(`/onboarding?name=${data.name}`);
                //    else router.push(`/onboarding`);
                // }
+            } else {
+               toast('No user found', { icon: <Ban className="w-4 h-4" /> });
             }
 
             if (error) {

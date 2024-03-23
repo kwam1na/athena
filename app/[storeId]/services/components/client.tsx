@@ -41,7 +41,7 @@ export const ServicesClient: React.FC<ServiceClientProps> = ({ data }) => {
       },
       initialState: {
          pagination: {
-            pageSize: 4,
+            pageSize: 5,
          },
       },
       enableRowSelection: true,

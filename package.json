@@ -4,7 +4,7 @@
     "private": true,
     "scripts": {
         "dev": "next dev -p 8080",
-        "dev-1": "export $(cat .env.dev | xargs) && next dev",
+        "dev-1": "next dev -p 8081",
         "build": "next build",
         "start": "next start",
         "lint": "next lint",

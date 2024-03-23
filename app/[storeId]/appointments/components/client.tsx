@@ -47,7 +47,7 @@ export const AppointmentsClient: React.FC<AppointmentsClientProps> = ({
       },
       initialState: {
          pagination: {
-            pageSize: 4,
+            pageSize: 5,
          },
       },
       enableRowSelection: true,
