@@ -2,7 +2,7 @@ import { AppointmentsClient } from '../components/client';
 import { fetchAppointments } from '@/lib/repositories/appointmentsRepository';
 import { Appointment, AppointmentStatus } from '@/lib/types';
 import { EmptyState } from '@/components/states/empty/empty-state';
-import { Calendar, CalendarCheck, CalendarCheck2 } from 'lucide-react';
+import { CalendarCheck2 } from 'lucide-react';
 
 export default async function UpcomingAppointments() {
    const appointments = await fetchAppointments({
