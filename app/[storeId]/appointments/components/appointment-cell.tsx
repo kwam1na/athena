@@ -14,16 +14,18 @@ export const AppointmentCell = ({
    return (
       <AppointmentSheet appointment={appointment}>
          <div className="w-full flex items-center justify-between border bg-background shadow-sm rounded-md p-4 cursor-pointer">
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-4 w-[70%]">
                <InfoLine
                   icon={<User className="w-4 h-4 text-muted-foreground" />}
                   text={`${appointment.customer?.first_name} ${appointment.customer?.last_name}`}
                   isBold
+                  className="w-[40%]"
                />
 
                <InfoLine
                   icon={<Scissors className="text-muted-foreground w-4 h-4" />}
                   text={appointment.service?.name}
+                  className="w-[30%]"
                />
 
                <InfoLine

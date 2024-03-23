@@ -68,11 +68,6 @@ interface ServiceFormProps {
    onFormSubmit?: Function;
 }
 
-interface TimeOption {
-   label: string; // Human-readable time
-   value: number; // Timestamp
-}
-
 const ServiceInfoCard = ({
    title,
    description,

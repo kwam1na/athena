@@ -1,7 +1,7 @@
 import { fetchAppointments } from '@/lib/repositories/appointmentsRepository';
 import { Appointment, AppointmentStatus } from '@/lib/types';
 import { EmptyState } from '@/components/states/empty/empty-state';
-import { Archive } from 'lucide-react';
+import { Calendar } from 'lucide-react';
 import { AppointmentsClient } from '../components/client';
 
 export default async function EndedAppointments() {
@@ -46,13 +46,13 @@ export default async function EndedAppointments() {
             {formatted.length == 0 && (
                <EmptyState
                   icon={
-                     <Archive
+                     <Calendar
                         size={'112px'}
                         color="#5C5C5C"
                         strokeWidth={'1px'}
                      />
                   }
-                  text="No archived services"
+                  text="No ended services"
                />
             )}
          </div>

@@ -4,10 +4,7 @@ import StoreSwitcher from './store-switcher';
 import { fetchStores } from '@/lib/repositories/storesRepository';
 
 export const MainHeader = async () => {
-   const stores = await fetchStores(
-      '26bc4dfe-8ed9-4558-bbd5-bb451694d74e',
-      parseInt('1'),
-   );
+   const stores = await fetchStores(parseInt('1'));
 
    return (
       <div className="w-full h-16 flex items-center justify-between border-b px-4">

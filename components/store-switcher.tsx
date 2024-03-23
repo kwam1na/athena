@@ -67,9 +67,7 @@ export default function StoreSwitcher({
       } catch (error) {
          console.error(error);
       } finally {
-         router.push(
-            `/organizations/${params.organizationId}/store/${store.value}`,
-         );
+         router.push(`/${store.value}/services`);
          setOpen(false);
          setIsSwitching(false);
       }
@@ -133,7 +131,7 @@ export default function StoreSwitcher({
                      </CommandGroup>
                   </CommandList>
                   <CommandSeparator />
-                  <CommandList>
+                  {/* <CommandList>
                      <CommandGroup>
                         <CommandItem
                            onSelect={() => {
@@ -145,7 +143,7 @@ export default function StoreSwitcher({
                            Create store
                         </CommandItem>
                      </CommandGroup>
-                  </CommandList>
+                  </CommandList> */}
                </Command>
             </PopoverContent>
          </Popover>
