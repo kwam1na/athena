@@ -2,7 +2,6 @@ import Link from 'next/link';
 import { UserNav } from './user-nav';
 import StoreSwitcher from './store-switcher';
 import { fetchStores } from '@/lib/repositories/storesRepository';
-import { ThemeToggle } from './theme-toggle';
 
 export const MainHeader = async () => {
    const stores = await fetchStores(
