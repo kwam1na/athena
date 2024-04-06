@@ -17,7 +17,7 @@ export default async function ServicesLayout({
    ).length;
 
    return (
-      <section className="w-full h-screen">
+      <section className="w-full">
          <ServicesHeader />
          <Sidebar
             hideWhenOnRoutes={['/services/new', '/edit']}

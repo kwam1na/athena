@@ -16,7 +16,6 @@ import {
 } from '@/lib/constants';
 import { SideNavRoute } from '@/lib/types';
 import { usePathname } from 'next/navigation';
-import { Separator } from './ui/separator';
 
 interface SibebarProps {
    children: React.ReactNode;

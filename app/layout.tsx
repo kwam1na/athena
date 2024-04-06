@@ -27,7 +27,7 @@ export default async function RootLayout({
                   <Toaster />
                   <ModalProvider />
                   <AuthListener />
-                  <main className="h-screen">{children}</main>
+                  <main>{children}</main>
                </ThemeProvider>
             </ReactQueryClientProvider>
          </body>

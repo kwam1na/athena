@@ -47,7 +47,7 @@ export default async function EndedAppointments() {
                <EmptyState
                   icon={
                      <Calendar
-                        size={'112px'}
+                        size={'40px'}
                         color="#5C5C5C"
                         strokeWidth={'1px'}
                      />

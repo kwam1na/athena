@@ -19,7 +19,7 @@ export default async function AppointmentsLayout({
    ).length;
 
    return (
-      <section className="w-full h-screen">
+      <section className="w-full">
          <AppointmentsHeader />
          <Sidebar
             sideNavClassName="bg-card"

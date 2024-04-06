@@ -58,7 +58,7 @@ export function SideNav({
 
    return (
       <div
-         className={`flex flex-col items-center py-8 h-full ${className}`}
+         className={`flex flex-col items-center py-8 ${className}`}
          onMouseEnter={collapsible ? expandeSidebar : undefined}
          onMouseLeave={collapsible ? collapseSidebar : undefined}
       >
