@@ -8,6 +8,7 @@ export function middleware(req: NextRequest) {
       'http://localhost:3000',
       'https://rsrv-wigclub.vercel.app',
       'https://wigclub.store',
+      'https://www.wigclub.store',
    ];
 
    const origin = req.headers.get('Origin');
