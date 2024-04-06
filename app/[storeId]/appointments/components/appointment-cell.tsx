@@ -13,19 +13,26 @@ export const AppointmentCell = ({
 }) => {
    return (
       <AppointmentSheet appointment={appointment}>
-         <div className="w-full flex items-center justify-between border bg-background shadow-sm rounded-md p-4 cursor-pointer">
-            <div className="flex items-center gap-4 w-[70%]">
-               <InfoLine
-                  icon={<User className="w-4 h-4 text-muted-foreground" />}
-                  text={`${appointment.customer?.first_name} ${appointment.customer?.last_name}`}
-                  isBold
-                  className="w-[40%]"
-               />
+         <div className="w-full flex items-center justify-between border bg-background shadow-sm rounded-md p-6 cursor-pointer">
+            <div className="flex w-full flex-col gap-4">
+               <div className="w-full flex justify-between">
+                  <InfoLine
+                     icon={<User className="w-4 h-4 text-muted-foreground" />}
+                     text={`${appointment.customer?.first_name} ${appointment.customer?.last_name}`}
+                     isBold
+                  />
+                  <div className="flex gap-2">
+                     <AppointmentIntervalBadge
+                        interval={appointment.service?.interval_type}
+                     />
+
+                     <AppointmentStatusBadge status={appointment.status} />
+                  </div>
+               </div>
 
                <InfoLine
                   icon={<Scissors className="text-muted-foreground w-4 h-4" />}
                   text={appointment.service?.name}
-                  className="w-[30%]"
                />
 
                <InfoLine
@@ -42,14 +49,6 @@ export const AppointmentCell = ({
                   }
                   isMuted
                />
-            </div>
-
-            <div className="flex gap-2">
-               <AppointmentIntervalBadge
-                  interval={appointment.service?.interval_type}
-               />
-
-               <AppointmentStatusBadge status={appointment.status} />
             </div>
          </div>
       </AppointmentSheet>

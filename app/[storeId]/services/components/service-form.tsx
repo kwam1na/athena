@@ -64,7 +64,7 @@ const formSchema = z.object({
 type ServiceFormValues = z.infer<typeof formSchema>;
 
 interface ServiceFormProps {
-   service?: Service;
+   service?: Service | null;
    onFormSubmit?: Function;
 }
 
@@ -153,18 +153,13 @@ export const ServiceForm: React.FC<ServiceFormProps> = ({
    const entryAction = service ? 'edit' : 'new';
    const serviceAutosaver = new ServicesAutosaver('1', entryAction);
 
-   const searchParams = new URLSearchParams(window.location.search);
-   const productName = searchParams.get('query');
-
-   console.log(service);
-
    const defaultValues: Record<string, any> = service
       ? {
            ...service,
            price: parseFloat(String(service?.price)),
         }
       : {
-           name: productName || '',
+           name: '',
            price: Number('a'),
            start_time: '',
            end_time: '',
@@ -283,35 +278,9 @@ export const ServiceForm: React.FC<ServiceFormProps> = ({
    };
 
    useEffect(() => {
-      const autosavedProduct = serviceAutosaver.getAll();
-      if (!service && Object.keys(autosavedProduct).length > 0) {
+      const autoSavedService = serviceAutosaver.getAll();
+      if (!service && Object.keys(autoSavedService).length > 0) {
          setIsAutosavedModalOpen(true);
-      }
-
-      const searchParams = new URLSearchParams(window.location.search);
-      const repopulate = searchParams.get('repopulate');
-
-      searchParams.delete('repopulate');
-
-      if (service && !repopulate) {
-         serviceAutosaver.save(form.getValues());
-      }
-
-      if (Object.keys(autosavedProduct).length > 0) {
-         const urlWithoutParams = window.location.pathname;
-         if (searchParams.toString()) {
-            window.history.replaceState(
-               null,
-               '',
-               `?${searchParams.toString()}`,
-            );
-         } else {
-            window.history.replaceState(null, '', urlWithoutParams);
-         }
-
-         if (repopulate) {
-            useAutosavedService();
-         }
       }
    }, []);
 
@@ -414,15 +383,53 @@ export const ServiceForm: React.FC<ServiceFormProps> = ({
                   onSubmit={form.handleSubmit(onSubmit)}
                   className="space-y-8 w-full"
                >
+                  <div className="flex flex-col gap-6 border rounded-lg p-6 pb-10">
+                     <FormField
+                        control={form.control}
+                        name="name"
+                        render={({ field }) => (
+                           <FormItem>
+                              <FormLabel>Name</FormLabel>
+                              <FormControl>
+                                 <Input
+                                    disabled={isMutating}
+                                    placeholder="Service"
+                                    {...field}
+                                    onChange={(e) => {
+                                       field.onChange(e);
+                                       autosaveService();
+                                    }}
+                                 />
+                              </FormControl>
+                              <FormMessage />
+                           </FormItem>
+                        )}
+                     />
+                     <FormField
+                        control={form.control}
+                        name="price"
+                        render={({ field }) => (
+                           <FormItem>
+                              <FormLabel>{`Price (${storeCurrency.toUpperCase()})`}</FormLabel>
+                              <FormControl>
+                                 <Input
+                                    type="number"
+                                    disabled={isMutating}
+                                    placeholder="9.99"
+                                    {...field}
+                                    onChange={(e) => {
+                                       field.onChange(e);
+                                       autosaveService();
+                                    }}
+                                 />
+                              </FormControl>
+                              <FormMessage />
+                           </FormItem>
+                        )}
+                     />
+                  </div>
+
                   <div className="grid gap-8">
-                     <LoadingButton
-                        isLoading={isMutating}
-                        disabled={isMutating || !isValidAppointmentTime}
-                        className="ml-auto"
-                        type="submit"
-                     >
-                        {buttonText}
-                     </LoadingButton>
                      <CardContainer>
                         <ServiceInfoCard
                            title="Service availability"
@@ -531,52 +538,6 @@ export const ServiceForm: React.FC<ServiceFormProps> = ({
                      </CardContainer>
                   </div>
 
-                  <div className="flex flex-col gap-6 border rounded-lg p-6 pb-10">
-                     <FormField
-                        control={form.control}
-                        name="name"
-                        render={({ field }) => (
-                           <FormItem>
-                              <FormLabel>Name</FormLabel>
-                              <FormControl>
-                                 <Input
-                                    disabled={isMutating}
-                                    placeholder="Service"
-                                    {...field}
-                                    onChange={(e) => {
-                                       field.onChange(e);
-                                       autosaveService();
-                                    }}
-                                 />
-                              </FormControl>
-                              <FormMessage />
-                           </FormItem>
-                        )}
-                     />
-                     <FormField
-                        control={form.control}
-                        name="price"
-                        render={({ field }) => (
-                           <FormItem>
-                              <FormLabel>{`Price (${storeCurrency.toUpperCase()})`}</FormLabel>
-                              <FormControl>
-                                 <Input
-                                    type="number"
-                                    disabled={isMutating}
-                                    placeholder="9.99"
-                                    {...field}
-                                    onChange={(e) => {
-                                       field.onChange(e);
-                                       autosaveService();
-                                    }}
-                                 />
-                              </FormControl>
-                              <FormMessage />
-                           </FormItem>
-                        )}
-                     />
-                  </div>
-
                   <FormField
                      control={form.control}
                      name="is_archived"
@@ -601,6 +562,15 @@ export const ServiceForm: React.FC<ServiceFormProps> = ({
                         </FormItem>
                      )}
                   />
+
+                  <LoadingButton
+                     isLoading={isMutating}
+                     disabled={isMutating || !isValidAppointmentTime}
+                     className="ml-auto"
+                     type="submit"
+                  >
+                     {buttonText}
+                  </LoadingButton>
                </form>
             </Form>
          </motion.div>

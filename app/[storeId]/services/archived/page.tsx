@@ -29,7 +29,7 @@ export default async function ArchivedServices() {
                <EmptyState
                   icon={
                      <Archive
-                        size={'112px'}
+                        size={'40px'}
                         color="#5C5C5C"
                         strokeWidth={'1px'}
                      />

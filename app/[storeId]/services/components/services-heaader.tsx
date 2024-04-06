@@ -1,26 +1,24 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import {
-   Tooltip,
-   TooltipContent,
-   TooltipProvider,
-   TooltipTrigger,
-} from '@/components/ui/tooltip';
 import { ChevronLeft, Plus } from 'lucide-react';
-import { usePathname, useRouter } from 'next/navigation';
-import { ServiceSheet } from './service-sheet';
+import { useParams, usePathname, useRouter } from 'next/navigation';
+import { InnerHeader } from '@/components/ui/inner-header';
+import Link from 'next/link';
 
 export const ServicesHeader = () => {
    const router = useRouter();
+   const params = useParams();
    const pathname = usePathname();
+
+   const id = pathname.split('/').at(-1);
 
    const pathIncludes = (subPath: string) => pathname.includes(subPath);
    const isOnNewOrEditPage =
-      pathIncludes('/services/new') || pathIncludes('/edit');
+      id == 'new' || !['services', 'active', 'archived'].includes(id || '');
 
    return (
-      <div className="w-full h-12 flex items-center bg-background p-8 border-b">
+      <InnerHeader>
          <div className="flex items-center gap-2">
             {isOnNewOrEditPage && (
                <Button
@@ -31,7 +29,11 @@ export const ServicesHeader = () => {
                   <ChevronLeft className="h-4 w-4" />
                </Button>
             )}
-            <p className="text-sm font-semibold flex gap-2 items-center">
+            <p
+               className={`text-sm font-semibold flex gap-2 items-center ${
+                  !isOnNewOrEditPage ? 'pl-12' : ''
+               }`}
+            >
                Services
                {isOnNewOrEditPage && (
                   <span className="text-muted-foreground">
@@ -41,12 +43,12 @@ export const ServicesHeader = () => {
             </p>
          </div>
          {!isOnNewOrEditPage && (
-            <ServiceSheet>
-               <Button className="ml-auto" variant={'ghost'} size={'sm'}>
+            <Link href={`/${params.storeId}/services/new`} className="ml-auto">
+               <Button variant={'ghost'} size={'sm'}>
                   <Plus className="h-4 w-4" />
                </Button>
-            </ServiceSheet>
+            </Link>
          )}
-      </div>
+      </InnerHeader>
    );
 };

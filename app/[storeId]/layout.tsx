@@ -4,12 +4,10 @@ import { ExchangeRateProvider } from '@/providers/exchange-rate-provider';
 import { cookies } from 'next/headers';
 import { createServerClient } from '@supabase/ssr';
 import { MainHeader } from '@/components/main-header';
-import { Sidebar } from '@/components/sidebar';
 import { CalendarCheck, Scissors, Settings } from 'lucide-react';
 import { Footer } from '@/components/footer';
 import { redirect } from 'next/navigation';
 import { SideNav } from '@/components/side-nav';
-import { TooltipProvider } from '@/components/ui/tooltip';
 
 export const metadata = {
    title: 'athena',
@@ -54,35 +52,24 @@ export default async function RootLayout({
                <ExchangeRateProvider>
                   <MainHeader />
                   <main>
-                     <TooltipProvider delayDuration={0}>
-                        <SideNav
-                           className="flex h-screen items-center bg-orange-400 backdrop-blur-md bg-opacity-30 justify-between fixed top-0 left-0 z-40"
-                           routes={[
-                              {
-                                 href: `/1/services`,
-                                 label: 'Services',
-                                 icon: <Scissors className="mr-2 h-5 w-5" />,
-                              },
-                              {
-                                 href: `/1/appointments`,
-                                 label: 'Appointments',
-                                 icon: (
-                                    <CalendarCheck className="mr-2 h-5 w-5" />
-                                 ),
-                              },
-                              {
-                                 href: `/1/settings`,
-                                 label: 'Settings',
-                                 icon: (
-                                    <Settings className="mr-2 mr-2 h-5 w-5" />
-                                 ),
-                              },
-                           ]}
-                           isCollapsed={true}
-                        />
-                     </TooltipProvider>
-
-                     {children}
+                     <SideNav
+                        className="flex h-screen items-center backdrop-blur-md bg-opacity-30 justify-between fixed top-16 left-0 z-90"
+                        routes={[
+                           {
+                              href: `/1/services`,
+                              icon: <Scissors className="mr-2 h-5 w-5" />,
+                           },
+                           {
+                              href: `/1/appointments`,
+                              icon: <CalendarCheck className="mr-2 h-5 w-5" />,
+                           },
+                           {
+                              href: `/1/settings`,
+                              icon: <Settings className="mr-2 mr-2 h-5 w-5" />,
+                           },
+                        ]}
+                     />
+                     <div className="p-16">{children}</div>
                   </main>
                   {/* <Footer /> */}
                </ExchangeRateProvider>
