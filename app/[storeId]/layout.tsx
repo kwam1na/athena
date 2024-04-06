@@ -4,10 +4,10 @@ import { ExchangeRateProvider } from '@/providers/exchange-rate-provider';
 import { cookies } from 'next/headers';
 import { createServerClient } from '@supabase/ssr';
 import { MainHeader } from '@/components/main-header';
-import { Sidebar } from '@/components/sidebar';
 import { CalendarCheck, Scissors, Settings } from 'lucide-react';
 import { Footer } from '@/components/footer';
 import { redirect } from 'next/navigation';
+import { SideNav } from '@/components/side-nav';
 
 export const metadata = {
    title: 'athena',
@@ -52,32 +52,26 @@ export default async function RootLayout({
                <ExchangeRateProvider>
                   <MainHeader />
                   <main>
-                     <Sidebar
-                        collapsible
-                        withAnimation
-                        defaultCollapsed
+                     <SideNav
+                        className="flex h-screen items-center backdrop-blur-md bg-opacity-30 justify-between fixed top-16 left-0 z-90"
                         routes={[
                            {
                               href: `/1/services`,
-                              label: 'Services',
                               icon: <Scissors className="mr-2 h-5 w-5" />,
                            },
                            {
                               href: `/1/appointments`,
-                              label: 'Appointments',
                               icon: <CalendarCheck className="mr-2 h-5 w-5" />,
                            },
                            {
                               href: `/1/settings`,
-                              label: 'Settings',
                               icon: <Settings className="mr-2 mr-2 h-5 w-5" />,
                            },
                         ]}
-                     >
-                        {children}
-                     </Sidebar>
+                     />
+                     <div className="p-16">{children}</div>
                   </main>
-                  <Footer />
+                  {/* <Footer /> */}
                </ExchangeRateProvider>
             </CurrencyProvider>
          </WrappedUserProvider>

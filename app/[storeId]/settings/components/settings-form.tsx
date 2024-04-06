@@ -450,18 +450,6 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ store }) => {
                onSubmit={form.handleSubmit(onSubmit)}
                className="space-y-4 w-full"
             >
-               <div className="flex justify-end w-full">
-                  <LoadingButton
-                     isLoading={loading}
-                     disabled={loading || hasInvalidDays}
-                     className="ml-auto w-[116px]"
-                     type="submit"
-                     variant={'outline'}
-                  >
-                     {!loading && <CheckCircle2 className="w-4 h-4 mr-2" />}
-                     {loading ? 'Saving' : 'Save'}
-                  </LoadingButton>
-               </div>
                <div className="space-y-4 border rounded-lg p-6">
                   <InfoLine
                      icon={<Info className="w-4 h-4 text-muted-foreground" />}
@@ -703,6 +691,16 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ store }) => {
                      />
                   </BusinessHourRow>
                </div>
+
+               <LoadingButton
+                  isLoading={loading}
+                  disabled={loading || hasInvalidDays}
+                  className="ml-auto w-[116px]"
+                  type="submit"
+               >
+                  {!loading && <CheckCircle2 className="w-4 h-4 mr-2" />}
+                  {loading ? 'Saving' : 'Save'}
+               </LoadingButton>
             </form>
          </Form>
          {/* <Separator />

@@ -1,6 +1,6 @@
 export interface SideNavRoute {
    href: string;
-   label: string;
+   label?: string;
    aliases?: string[];
    secondaryLabel?: string;
    icon?: React.ReactNode;

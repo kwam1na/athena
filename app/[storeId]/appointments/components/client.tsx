@@ -45,11 +45,6 @@ export const AppointmentsClient: React.FC<AppointmentsClientProps> = ({
          columnVisibility,
          columnFilters,
       },
-      initialState: {
-         pagination: {
-            pageSize: 5,
-         },
-      },
       enableRowSelection: true,
       onRowSelectionChange: setRowSelection,
       onSortingChange: setSorting,

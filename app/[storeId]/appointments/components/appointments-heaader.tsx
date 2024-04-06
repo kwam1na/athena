@@ -1,6 +1,7 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
+import { InnerHeader } from '@/components/ui/inner-header';
 import { ChevronLeft, Plus } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
 
@@ -13,7 +14,7 @@ export const AppointmentsHeader = () => {
       pathIncludes('/services/new') || pathIncludes('/edit');
 
    return (
-      <div className="w-full h-12 flex items-center bg-background p-8 border-b">
+      <InnerHeader>
          <div className="flex items-center gap-2">
             {isOnNewOrEditPage && (
                <Button
@@ -24,7 +25,7 @@ export const AppointmentsHeader = () => {
                   <ChevronLeft className="h-4 w-4" />
                </Button>
             )}
-            <p className="text-sm font-semibold flex gap-2 items-center">
+            <p className="text-sm font-semibold flex gap-2 items-center pl-12">
                Appointments
                {isOnNewOrEditPage && (
                   <span className="text-muted-foreground">
@@ -33,6 +34,6 @@ export const AppointmentsHeader = () => {
                )}
             </p>
          </div>
-      </div>
+      </InnerHeader>
    );
 };

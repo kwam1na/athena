@@ -42,8 +42,8 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
    };
 
    return (
-      <div className="flex flex-col items-center justify-center h-[50vh] gap-8">
-         <div className="text-7xl">{icon}</div>
+      <div className="flex flex-col items-center justify-center h-[50vh] gap-4">
+         <div>{icon}</div>
          <p className="text-sm text-center text-muted-foreground">{text}</p>
          {action && (
             <Button onClick={onClick}>

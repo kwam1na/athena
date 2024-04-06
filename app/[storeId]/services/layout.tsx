@@ -4,11 +4,14 @@ import { ServicesHeader } from './components/services-heaader';
 import { CurrencyProvider } from '@/providers/currency-provider';
 
 export default async function ServicesLayout({
+   params,
    children,
 }: {
+   params: { storeId: string };
    children: React.ReactNode;
 }) {
-   const services = await fetchServices({ store_id: 1 });
+   const { storeId } = params;
+   const services = await fetchServices({ store_id: parseInt(storeId) });
    const UpcomingAppointmentsCount = services.filter(
       (service) => service.is_active && !service.is_archived,
    ).length;
@@ -17,20 +20,20 @@ export default async function ServicesLayout({
    ).length;
 
    return (
-      <section className="w-full h-screen">
+      <section className="w-full">
          <ServicesHeader />
          <Sidebar
-            hideWhenOnRoutes={['/services/new', '/edit']}
-            sideNavClassName="bg-card"
+            hideWhenOnRoutes={['/services/new']}
+            sideNavClassName="ml-8 w-[280px] rounded-lg flex h-screen items-center backdrop-blur-md bg-opacity-30 justify-between fixed top-32 left-16 z-10"
             routes={[
                {
-                  href: `/1/services/active`,
-                  aliases: ['/1/services'],
+                  href: `/${storeId}/services/active`,
+                  aliases: [`/${storeId}/services`],
                   label: 'Active',
                   secondaryLabel: `${UpcomingAppointmentsCount}`,
                },
                {
-                  href: `/1/services/archived`,
+                  href: `/${storeId}/services/archived`,
                   label: 'Archived',
                   secondaryLabel: `${archivedServicesCount}`,
                },

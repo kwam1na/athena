@@ -39,11 +39,6 @@ export const ServicesClient: React.FC<ServiceClientProps> = ({ data }) => {
          columnVisibility,
          columnFilters,
       },
-      initialState: {
-         pagination: {
-            pageSize: 5,
-         },
-      },
       enableRowSelection: true,
       onRowSelectionChange: setRowSelection,
       onSortingChange: setSorting,

@@ -11,7 +11,7 @@ export default async function SettingsLayout({
       <section className="w-full h-screen">
          <SettingsHeader />
          <Sidebar
-            sideNavClassName="bg-card"
+            sideNavClassName="ml-8 w-[280px] rounded-lg flex h-screen items-center backdrop-blur-md bg-opacity-30 justify-between fixed top-32 left-16 z-10"
             routes={[
                {
                   href: `/1/settings/store`,
