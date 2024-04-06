@@ -112,11 +112,15 @@ export async function POST(
             customerEmail: body.email,
             appointmentTime: format(
                new Date(body.date),
-               "MMMM dd, yyyy 'at' h:mm aaa",
+               "MMMM d, yyyy 'at' h:mm aaa",
             ),
             serviceName: service?.name,
             location: `${store?.name}, ${storeLocation?.street_address}, ${storeLocation?.city}, ${storeLocation?.country}`,
             storePhoneNumber: store?.store_phone_number,
+            senderName: store?.name,
+            senderAddress: storeLocation?.street_address,
+            senderCity: storeLocation?.city,
+            senderCountry: storeLocation?.country,
          };
          sendMessage(appointmentDetails);
       } catch (error) {

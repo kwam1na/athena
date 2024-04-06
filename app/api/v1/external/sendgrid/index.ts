@@ -5,10 +5,14 @@ export const sendMessage = async (appointmentDetails: {
    serviceName?: string;
    location?: string;
    storePhoneNumber?: string | null;
+   senderName?: string | null;
+   senderAddress?: string | null;
+   senderCity?: string | null;
+   senderCountry?: string | null;
 }) => {
    const message = {
       from: {
-         email: 'rsrv@v26design.co',
+         email: 'appointments@wigclub.store',
       },
       personalizations: [
          {
@@ -23,11 +27,17 @@ export const sendMessage = async (appointmentDetails: {
                appointment_date: appointmentDetails.appointmentTime,
                appointment_location: appointmentDetails.location,
                phone_number: appointmentDetails.storePhoneNumber,
+               sender_name: appointmentDetails.senderName,
+               sender_address: appointmentDetails.senderAddress,
+               sender_city: appointmentDetails.senderCity,
+               sender_country: appointmentDetails.senderCountry,
             },
          },
       ],
       template_id: 'd-1b2a1bbb87444ed3a0219ed29c9d0aa0',
    };
+
+   console.log('making request with data..', message);
 
    await fetch('https://api.sendgrid.com/v3/mail/send', {
       method: 'POST',
