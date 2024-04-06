@@ -110,10 +110,10 @@ export async function POST(
          const appointmentDetails = {
             customerName: `${body.first_name} ${body.last_name}`,
             customerEmail: body.email,
-            appointmentTime: format(
+            appointmentTime: `${format(
                new Date(body.date),
-               "MMMM d, yyyy 'at' h:mm aaa",
-            ),
+               'MMMM d, yyyy',
+            )} at ${body.time_slot}`,
             serviceName: service?.name,
             location: `${store?.name}, ${storeLocation?.street_address}, ${storeLocation?.city}, ${storeLocation?.country}`,
             storePhoneNumber: store?.store_phone_number,
