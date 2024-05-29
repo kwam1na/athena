@@ -1,10 +1,11 @@
 export const sendSlackMessage = async (appointmentInfo: {
    customerName: string;
    date: string;
+   service?: string;
 }) => {
    const webhookUrl = process.env.SLACK_WEBHOOK_URL!;
    const message = {
-      text: `New appointment booked for ${appointmentInfo.customerName} at ${appointmentInfo.date}.`,
+      text: `New ${appointmentInfo.service} appointment booked for ${appointmentInfo.customerName} at ${appointmentInfo.date}.`,
    };
 
    await fetch(webhookUrl, {

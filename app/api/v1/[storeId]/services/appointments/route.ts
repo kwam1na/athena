@@ -127,6 +127,7 @@ export async function POST(
          sendSlackMessage({
             customerName: appointmentDetails.customerName,
             date: appointmentDetails.appointmentTime,
+            service: service?.name,
          });
       } catch (error) {
          console.log(`error sending message to ${body.email}..`, error);
