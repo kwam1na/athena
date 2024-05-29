@@ -53,7 +53,7 @@ export default async function RootLayout({
                   <MainHeader />
                   <main>
                      <SideNav
-                        className="flex h-screen items-center backdrop-blur-md bg-opacity-30 justify-between fixed top-16 left-0 z-90"
+                        className="flex h-screen items-center bg-card rounded-lg backdrop-blur-md bg-opacity-30 justify-between fixed top-20 left-2 z-90"
                         routes={[
                            {
                               href: `/1/services`,
