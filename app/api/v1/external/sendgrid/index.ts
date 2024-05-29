@@ -37,8 +37,6 @@ export const sendMessage = async (appointmentDetails: {
       template_id: 'd-1b2a1bbb87444ed3a0219ed29c9d0aa0',
    };
 
-   console.log('making request with data..', message);
-
    await fetch('https://api.sendgrid.com/v3/mail/send', {
       method: 'POST',
       headers: {

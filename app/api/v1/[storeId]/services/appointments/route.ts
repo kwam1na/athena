@@ -12,6 +12,7 @@ import {
 import { sendMessage } from '../../../external/sendgrid';
 import { format } from 'date-fns';
 import { getStore } from '@/lib/repositories/storesRepository';
+import { sendSlackMessage } from '../../../external/slack';
 
 export async function POST(
    req: NextRequest,
@@ -123,6 +124,10 @@ export async function POST(
             senderCountry: storeLocation?.country,
          };
          sendMessage(appointmentDetails);
+         sendSlackMessage({
+            customerName: appointmentDetails.customerName,
+            date: appointmentDetails.appointmentTime,
+         });
       } catch (error) {
          console.log(`error sending message to ${body.email}..`, error);
       }
