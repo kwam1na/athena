@@ -23,23 +23,31 @@ export interface ComboBoxItem<T> {
 export function GenericComboBox<T>({
   items,
   activeItem,
-  setSelectedItem,
+  onValueChange,
   equalityFn = (a: T, b: T) => a === b,
 }: {
   items: ComboBoxItem<T>[];
-  activeItem: T | null;
-  setSelectedItem: (item: T) => void;
+  activeItem?: T;
+  onValueChange: (value: T) => void;
   placeholder?: string;
   equalityFn?: (a: T, b: T) => boolean;
 }) {
   const [open, setOpen] = useState(false);
 
+  const [active, setActive] = useState<T | undefined>(activeItem);
+
+  const actv = activeItem || active;
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button variant="outline" role="combobox" aria-expanded={open}>
-          {activeItem &&
-            items.find((item) => equalityFn(item.value, activeItem))?.label}
+        <Button
+          className="justify-between"
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+        >
+          {actv && items.find((item) => equalityFn(item.value, actv))?.label}
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
@@ -52,14 +60,15 @@ export function GenericComboBox<T>({
                   key={item.label}
                   value={item.label}
                   onSelect={() => {
-                    setSelectedItem(item.value);
+                    onValueChange(item.value);
+                    setActive(item.value);
                     setOpen(false);
                   }}
                 >
                   <Check
                     className={cn(
                       "mr-2 h-4 w-4",
-                      activeItem === item.value ? "opacity-100" : "opacity-0"
+                      actv === item.value ? "opacity-100" : "opacity-0"
                     )}
                   />
                   {item.label}

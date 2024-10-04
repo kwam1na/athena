@@ -10,6 +10,7 @@ import {
 } from "../ui/table";
 import { Input } from "../ui/input";
 import { Skeleton } from "../ui/skeleton";
+import { ProductVariant } from "./ProductStock";
 
 interface AttributesTableProps {
   selectedAttributes: string[];
@@ -26,8 +27,24 @@ function AttributesTable({ selectedAttributes }: AttributesTableProps) {
     updateProductVariant(variantId, { [attribute]: e.target.value });
   };
 
+  const getProductAttribute = (attribute: string, variant: ProductVariant) => {
+    switch (attribute) {
+      case "length":
+        return variant.length;
+
+      case "color":
+        return variant.color;
+
+      case "size":
+        return variant.size;
+
+      default:
+        return "";
+    }
+  };
+
   return (
-    <Table>
+    <Table className="px-4">
       <TableHeader>
         <TableRow>
           <TableHead>Variant</TableHead>
@@ -40,7 +57,10 @@ function AttributesTable({ selectedAttributes }: AttributesTableProps) {
       </TableHeader>
       <TableBody>
         {productVariants.map((variant, index) => (
-          <TableRow key={variant.id}>
+          <TableRow
+            key={variant.id}
+            className={variant.markedForDeletion ? "opacity-50" : ""}
+          >
             <TableCell>{index + 1}</TableCell>
             {selectedAttributes.map((attr) => (
               <TableCell key={`${variant.id}-${attr}`}>
@@ -52,7 +72,8 @@ function AttributesTable({ selectedAttributes }: AttributesTableProps) {
                     type={attr === "length" ? "number" : "text"}
                     placeholder={attr === "length" ? "Length (inches)" : attr}
                     onChange={(e) => handleChange(e, variant.id, attr)}
-                    // value={variant.attributes?.[attr.toLowerCase()] || ""}
+                    value={getProductAttribute(attr, variant) || ""}
+                    disabled={variant.markedForDeletion}
                   />
                 )}
               </TableCell>

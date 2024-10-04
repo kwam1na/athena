@@ -14,24 +14,34 @@ import { ZodError } from "zod";
 import useGetActiveProduct from "@/hooks/useGetActiveProduct";
 
 interface ProductContextType {
-  productData: Partial<Product>;
-  updateProductData: (newData: Partial<Product>) => void;
   activeProductVariant: ProductVariant;
-  setActiveProductVariant: React.Dispatch<React.SetStateAction<ProductVariant>>;
-  productVariants: ProductVariant[];
-  updateProductVariants: React.Dispatch<React.SetStateAction<ProductVariant[]>>;
-  images: ImageFile[];
-  updateImages: React.Dispatch<React.SetStateAction<ImageFile[]>>;
   error: ZodError | null;
+  images: ImageFile[];
+  productData: Partial<Product>;
+  productVariants: ProductVariant[];
+  setActiveProductVariant: React.Dispatch<React.SetStateAction<ProductVariant>>;
   setError: React.Dispatch<React.SetStateAction<ZodError | null>>;
+  updateImages: React.Dispatch<React.SetStateAction<ImageFile[]>>;
+  updateProductVariants: React.Dispatch<React.SetStateAction<ProductVariant[]>>;
   didProvideRequiredData: () => boolean;
   removeProductVariant: (id: number) => void;
-  updateVariantImages: (variantId: number, newImages: ImageFile[]) => void;
+  revertChanges: () => void;
+  updateProductData: (newData: Partial<Product>) => void;
   updateProductVariant: (
     variantId: number,
     attributes: Partial<ProductVariant>
   ) => void;
   isLoading: boolean;
+  updateVariantImages: (variantId: number, newImages: ImageFile[]) => void;
+  updateAppState: (newState: Partial<AppState>) => void;
+
+  // actions
+  appState: AppState;
+}
+
+interface AppState {
+  isInitialLoad: boolean;
+  didRevertChanges: boolean;
 }
 
 const ProductContext = createContext<ProductContextType | undefined>(undefined);
@@ -52,6 +62,13 @@ export function ProductProvider({ children }: { children: ReactNode }) {
     },
   ]);
 
+  const initialAppState: AppState = {
+    isInitialLoad: false,
+    didRevertChanges: false,
+  };
+
+  const [appState, setAppState] = useState<AppState>(initialAppState);
+
   const [activeProductVariant, setActiveProductVariant] =
     useState<ProductVariant>(productVariants[0]);
 
@@ -60,6 +77,10 @@ export function ProductProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(false);
 
   const { activeProduct } = useGetActiveProduct();
+
+  const updateAppState = (newState: Partial<AppState>) => {
+    setAppState((prevState) => ({ ...prevState, ...newState }));
+  };
 
   const removeProductVariant = useCallback(
     (id: number) => {
@@ -142,6 +163,7 @@ export function ProductProvider({ children }: { children: ReactNode }) {
   };
 
   const convertSkuToVariant = (sku: ProductSKU): ProductVariant => ({
+    existsInDB: true,
     id: sku.id,
     sku: sku.sku,
     stock: sku.inventoryCount,
@@ -158,6 +180,21 @@ export function ProductProvider({ children }: { children: ReactNode }) {
 
   const updateProductData = (newData: Partial<Product>) => {
     setProductData((prevData) => ({ ...prevData, ...newData }));
+  };
+
+  const revertChanges = () => {
+    if (!activeProduct) return;
+
+    updateAppState({ didRevertChanges: true });
+
+    setProductData({
+      ...activeProduct,
+      skus: undefined, // Exclude skus from productData
+    });
+
+    const variants = activeProduct.skus.map((sku) => convertSkuToVariant(sku));
+    updateProductVariants(variants);
+    setActiveProductVariant(variants[0] || null);
   };
 
   useEffect(() => {
@@ -196,6 +233,7 @@ export function ProductProvider({ children }: { children: ReactNode }) {
   // console.log(productVariants);
 
   const value = {
+    appState,
     productData,
     updateProductData,
     activeProductVariant,
@@ -208,8 +246,10 @@ export function ProductProvider({ children }: { children: ReactNode }) {
     setError,
     didProvideRequiredData,
     removeProductVariant,
+    revertChanges,
     updateVariantImages,
     updateProductVariant,
+    updateAppState,
     isLoading,
   };
 

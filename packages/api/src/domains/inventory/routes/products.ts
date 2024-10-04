@@ -104,4 +104,14 @@ productRoutes.delete("/", async (c) => {
     : c.json({ error: "No products to delete" }, 404);
 });
 
+productRoutes.delete("/:productId/skus/:skuId", async (c) => {
+  const { skuId } = c.req.param();
+
+  const result = await productsRepository.deleteSku(parseInt(skuId));
+
+  return result
+    ? c.json({ message: "Deleted" })
+    : c.json({ error: "Not found" }, 404);
+});
+
 export { productRoutes };

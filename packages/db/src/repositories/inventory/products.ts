@@ -5,31 +5,34 @@ import {
   type ProductSKU,
   type ProductSKURequest,
 } from "../../index";
-import { eq, sql } from "drizzle-orm";
+import { count, eq, sql } from "drizzle-orm";
 import { products, productSkus } from "../../models/schema";
 
 function generateSKU({
   storeId,
-  categoryId,
-  subcategoryId,
   productId,
-  variantId,
+  skuId,
 }: {
   storeId: number;
-  categoryId: number;
-  subcategoryId: number;
   productId: number;
-  variantId: number;
+  skuId: number;
 }): string {
-  // Format IDs to be fixed-length by padding them
-  const formattedStoreId = storeId.toString().padStart(3, "0");
-  const formattedCategoryId = categoryId.toString().padStart(3, "0");
-  const formattedSubcategoryId = subcategoryId.toString().padStart(3, "0");
-  const formattedProductId = productId.toString().padStart(5, "0");
-  const formattedVariantId = variantId.toString().padStart(3, "0");
+  // Helper function to encode IDs into base36 and pad as needed
+  const encodeBase36 = (id: number, length: number) => {
+    return (id + 10).toString(36).toUpperCase().padStart(length, "0");
+  };
 
-  // Generate the SKU
-  return `${formattedStoreId}-${formattedCategoryId}-${formattedSubcategoryId}-${formattedProductId}-${formattedVariantId}`;
+  // Encode storeId into a one-character base36 code
+  const storeCode = encodeBase36(storeId, 1);
+
+  // Format productId as a three-digit number, padding with zeros
+  const productCode = productId.toString().padStart(3, "0");
+
+  // Format variantId as a three-digit number, padding with zeros
+  const variantCode = skuId.toString().padStart(3, "0");
+
+  // Concatenate the parts to form the SKU
+  return `${storeCode}-${productCode}-${variantCode}`;
 }
 
 // Helper function to calculate total inventory count
@@ -64,7 +67,7 @@ export const productsRepository = {
           'images', product_skus.images,
           'createdAt', product_skus.created_at,
           'updatedAt', product_skus.updated_at
-        )
+        ) ORDER BY product_skus.created_at ASC
       )`.as("skus"),
       })
       .from(products)
@@ -87,7 +90,13 @@ export const productsRepository = {
 
     if (res.length === 0) return null;
 
-    const skus = res.map((r) => r.skus).filter(Boolean);
+    const skus = res
+      .map((r) => r.skus)
+      .filter(Boolean)
+      .sort(
+        (a, b) =>
+          new Date(a!.createdAt).getTime() - new Date(b!.createdAt).getTime()
+      );
 
     const invetoryCount = calculateTotalInventoryCount(skus as ProductSKU[]);
 
@@ -108,7 +117,13 @@ export const productsRepository = {
 
     if (res.length === 0) return null;
 
-    const skus = res.map((r) => r.skus).filter(Boolean);
+    const skus = res
+      .map((r) => r.skus)
+      .filter(Boolean)
+      .sort(
+        (a, b) =>
+          new Date(a!.createdAt).getTime() - new Date(b!.createdAt).getTime()
+      );
 
     const invetoryCount = calculateTotalInventoryCount(skus as ProductSKU[]);
 
@@ -137,33 +152,31 @@ export const productsRepository = {
       throw new Error(`Product with id ${data.productId} not found`);
     }
 
-    // Count existing SKUs for this product to determine the variant ID
-    const existingSkusCount = await db
-      .select({ count: sql<number>`count(*)` })
-      .from(productSkus)
-      .where(eq(productSkus.productId, data.productId));
+    const tempSkuData = {
+      ...data,
+      sku: "TEMP_SKU",
+    };
 
-    const variantId = existingSkusCount[0].count + 1;
+    const [tempSku] = await db
+      .insert(productSkus)
+      .values(tempSkuData)
+      .returning();
 
     // Generate SKU if not provided
     const sku =
       data.sku ||
       generateSKU({
         storeId: product[0].storeId,
-        categoryId: product[0].categoryId,
-        subcategoryId: product[0].subcategoryId,
         productId: product[0].id,
-        variantId: variantId,
+        skuId: tempSku.id,
       });
 
-    // Prepare data for insertion
-    const skuData = {
-      ...data,
-      sku: sku,
-    };
+    const res = await db
+      .update(productSkus)
+      .set({ sku })
+      .where(eq(productSkus.id, tempSku.id))
+      .returning();
 
-    // Insert the new SKU
-    const res = await db.insert(productSkus).values(skuData).returning();
     return res[0];
   },
 
@@ -202,6 +215,15 @@ export const productsRepository = {
     const res = await db
       .delete(products)
       .where(eq(products.id, id))
+      .returning();
+
+    return res[0];
+  },
+
+  deleteSku: async (skuId: number) => {
+    const res = await db
+      .delete(productSkus)
+      .where(eq(productSkus.id, skuId))
       .returning();
 
     return res[0];

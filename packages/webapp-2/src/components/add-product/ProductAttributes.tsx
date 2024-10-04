@@ -4,6 +4,7 @@ import { getErrorForField } from "@/lib/utils";
 import { Skeleton } from "../ui/skeleton";
 import DefaultAttributesToggleGroup from "./DefaultAttributesToggleGroup";
 import AttributesTable from "./AttributesTable";
+import useGetActiveProduct from "@/hooks/useGetActiveProduct";
 
 // Define the allowed attributes
 type AllowedAttribute = "color" | "length" | "size";
@@ -14,9 +15,18 @@ function isAllowedAttribute(attr: string): attr is AllowedAttribute {
 }
 
 function ProductAttributes() {
-  const { error, isLoading, activeProductVariant } = useProduct();
+  const {
+    error,
+    isLoading,
+    activeProductVariant,
+    updateProductVariants,
+    appState,
+    updateAppState,
+  } = useProduct();
 
   const [selectedAttributes, setSelectedAttributes] = useState<string[]>([]);
+
+  const { activeProduct } = useGetActiveProduct();
 
   const [initialLoad, setInitialLoad] = useState(true);
 
@@ -26,7 +36,12 @@ function ProductAttributes() {
       activeProductVariant.length ||
       activeProductVariant.size;
 
-    if (hasAttr && selectedAttributes.length == 0 && initialLoad) {
+    // console.log("[attributes]:", appState);
+
+    if (
+      (hasAttr && selectedAttributes.length == 0 && initialLoad) ||
+      appState.didRevertChanges
+    ) {
       const attr = [];
 
       if (activeProductVariant.color) {
@@ -41,18 +56,46 @@ function ProductAttributes() {
         attr.push("size");
       }
 
+      if (appState.didRevertChanges) {
+        updateAppState({ didRevertChanges: false });
+      }
+
       setInitialLoad(false);
       setSelectedAttributes(attr);
     }
-  }, [activeProductVariant, selectedAttributes, initialLoad]);
+  }, [
+    activeProductVariant,
+    selectedAttributes,
+    initialLoad,
+    appState.didRevertChanges,
+  ]);
+
+  // console.log("active ->", activeProduct);
+
+  useEffect(() => {
+    if (activeProduct) {
+      const hasLength = selectedAttributes.includes("length");
+      const hasColor = selectedAttributes.includes("color");
+      const hasSize = selectedAttributes.includes("size");
+
+      updateProductVariants((prev) =>
+        prev.map((v) => ({
+          ...v,
+          length: hasLength ? v.length : undefined,
+          color: hasColor ? v.color : undefined,
+          size: hasSize ? v.size : undefined,
+        }))
+      );
+    }
+  }, [activeProduct, selectedAttributes]);
 
   const availabilityValidationError = getErrorForField(error, "availability");
 
   return (
-    <div className="flex flex-col gap-8 p-4">
+    <div className="flex flex-col gap-8 py-4">
       {isLoading && <Skeleton className="h-[40px] w-full" />}
 
-      <div className="flex w-full">
+      <div className="flex w-full px-4">
         <DefaultAttributesToggleGroup
           selectedAttributes={selectedAttributes}
           setSelectedAttributes={setSelectedAttributes}

@@ -15,7 +15,17 @@ function DefaultAttributesToggleGroup({
     <ToggleGroup
       type="multiple"
       value={selectedAttributes}
-      onValueChange={(value) => setSelectedAttributes(value)}
+      onValueChange={(value) => {
+        const sortedValue = value.slice().sort((a, b) => {
+          if (a === "color") return -1; // 'color' should always come first
+          if (b === "color") return 1;
+          if (a === "length" && b === "size") return -1; // 'length' should come before 'size'
+          if (a === "size" && b === "length") return 1;
+          return 0;
+        });
+
+        setSelectedAttributes(sortedValue);
+      }}
     >
       <ToggleGroupItem
         value="color"

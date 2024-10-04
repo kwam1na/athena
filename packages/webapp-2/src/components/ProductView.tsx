@@ -4,12 +4,13 @@ import { Button } from "./ui/button";
 import {
   ArrowLeftIcon,
   CheckCircledIcon,
+  PlusIcon,
   TrashIcon,
 } from "@radix-ui/react-icons";
 import { ZodError } from "zod";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Ban } from "lucide-react";
+import { Ban, CheckIcon, Rotate3D, RotateCcw } from "lucide-react";
 import {
   createProduct,
   createProductSku,
@@ -33,6 +34,7 @@ function ProductViewContent() {
   const {
     productData,
     didProvideRequiredData,
+    revertChanges,
     productVariants,
     updateProductVariants,
   } = useProduct();
@@ -49,11 +51,17 @@ function ProductViewContent() {
   const { activeStore } = useGetActiveStore();
   const { activeProduct } = useGetActiveProduct();
 
+  const queryClient = useQueryClient();
+
   const createMutation = useMutation({
     mutationFn: () => saveProduct(),
     onSuccess: () => {
       toast(`Product '${productData.name}' created`, {
         icon: <CheckCircledIcon className="w-4 h-4" />,
+      });
+
+      queryClient.invalidateQueries({
+        queryKey: ["products", activeStore?.id],
       });
 
       navigate({
@@ -80,6 +88,14 @@ function ProductViewContent() {
       toast(`Product '${productData.name}' updated`, {
         // description: <p className="text-destructive">{data?.warning}</p>,
         icon: <CheckCircledIcon className="w-4 h-4" />,
+      });
+
+      queryClient.invalidateQueries({
+        queryKey: ["product", activeProduct?.slug],
+      });
+
+      queryClient.invalidateQueries({
+        queryKey: ["products", activeStore?.id],
       });
 
       navigate({
@@ -119,6 +135,10 @@ function ProductViewContent() {
         icon: <CheckCircledIcon className="w-4 h-4" />,
       });
 
+      queryClient.invalidateQueries({
+        queryKey: ["products", activeStore?.id],
+      });
+
       navigate({
         to: "/$orgUrlSlug/store/$storeUrlSlug/products",
         params: (prev) => ({
@@ -135,70 +155,6 @@ function ProductViewContent() {
       });
     },
   });
-
-  // const saveProduct = async () => {
-  //   if (!activeStore) {
-  //     throw new Error("Missing store data required to save product");
-  //   }
-
-  //   try {
-  //     const mainProductData = {
-  //       ...productData,
-  //       currency: activeStore.currency,
-  //       storeId: activeStore.id,
-  //       organizationId: activeStore.organizationId,
-  //     };
-
-  //     const validatedProductData = productSchema.parse(mainProductData);
-
-  //     const product = await createProduct({
-  //       data: { ...validatedProductData, skus: [], createdByUserId: 1 },
-  //       organizationId: activeStore.organizationId,
-  //       storeId: activeStore.id,
-  //     });
-
-  //     for (const variant of productVariants) {
-  //       const sku = await createProductSku({
-  //         data: {
-  //           productId: product.id,
-  //           sku: variant.sku,
-  //           price: variant.price || 0,
-  //           inventoryCount: variant.stock || 0,
-  //           unitCost: variant.cost || 0,
-  //           images: [],
-  //           length: variant.length || null,
-  //           size: variant.size || null,
-  //           color: variant.color || null,
-  //           attributes: {},
-  //         },
-  //         organizationId: activeStore.organizationId,
-  //         storeId: activeStore.id,
-  //         productId: product.id,
-  //       });
-  //       // Upload and update SKU images
-  //       if (variant.images && variant.images.length > 0) {
-  //         const { imageUrls } = await uploadProductImages(
-  //           variant.images,
-  //           activeStore.id,
-  //           product.id
-  //         );
-  //         await updateProductSku({
-  //           data: { images: imageUrls },
-  //           organizationId: activeStore.organizationId,
-  //           storeId: activeStore.id,
-  //           productId: product.id,
-  //           skuId: sku.id,
-  //         });
-  //       }
-  //     }
-
-  //     return product;
-  //   } catch (error) {
-  //     console.error("Error saving product:", (error as ZodError).message);
-  //     // setError(error);
-  //     throw error;
-  //   }
-  // };
 
   const saveProduct = async () => {
     if (!activeStore) {
@@ -238,12 +194,15 @@ function ProductViewContent() {
     }
 
     try {
-      const updatedProductData = productSchema.parse({
+      const data = {
         ...productData,
+        description: productData.description || undefined,
         currency: activeStore.currency,
         storeId: activeStore.id,
         organizationId: activeStore.organizationId,
-      });
+      };
+
+      const updatedProductData = productSchema.parse(data);
 
       await updateProduct({
         data: updatedProductData,
@@ -252,9 +211,11 @@ function ProductViewContent() {
         productId: activeProduct.id,
       });
 
+      console.log("variants in flow:", productVariants);
+
       await Promise.all(
         productVariants.map((variant) => {
-          if (variant.id) {
+          if (variant.existsInDB) {
             return variant.markedForDeletion
               ? deleteProductSku({
                   organizationId: activeStore.organizationId,
@@ -280,47 +241,6 @@ function ProductViewContent() {
       throw error;
     }
   };
-
-  // const modifyProduct = async () => {
-  //   const pid = activeProduct?.id || _productId;
-
-  //   if (!pid || !activeStore)
-  //     throw new Error("Missing data required to save product");
-
-  //   // updateError(null);
-
-  //   // const { imageUrls, failedDeleteUrls } = await uploadProductImages(
-  //   //   images,
-  //   //   activeStore.id,
-  //   //   pid
-  //   // );
-
-  //   // if (failedDeleteUrls.length > 0) {
-  //   //   setFailedToUploadUrls(failedDeleteUrls);
-  //   //   setIsActionModalOpen(true);
-  //   //   throw new Error("ahhhh");
-  //   // }
-
-  //   try {
-  //     // const data = productSchema.parse({
-  //     //   ...productData,
-  //     //   currency: "usd",
-  //     //   storeId: activeStore.id,
-  //     //   organizationId: activeStore.organizationId,
-  //     //   images: imageUrls,
-  //     // });
-  //     // return await updateProduct({
-  //     //   data,
-  //     //   organizationId: activeStore.organizationId,
-  //     //   storeId: activeStore.id,
-  //     //   productId: pid,
-  //     // });
-  //   } catch (error) {
-  //     // updateError(error as ZodError);
-
-  //     throw error;
-  //   }
-  // };
 
   const createVariantSku = async (productId: number, variant: any) => {
     const sku = await createProductSku({
@@ -413,10 +333,16 @@ function ProductViewContent() {
 
   const Navigation = () => {
     const header = activeProduct ? "Edit Product" : "Add New Product";
-    const ctaText = activeProduct ? "Save Product" : "Add Product";
+    const ctaText = activeProduct ? "Save changes" : "Add Product";
+
+    const ctaIcon = activeProduct ? (
+      <CheckIcon className="w-4 h-4 mr-2" />
+    ) : (
+      <PlusIcon className="w-4 h-4 mr-2" />
+    );
 
     return (
-      <div className="flex gap-2 h-[40px] justify-between">
+      <div className="flex gap-2 h-[40px] items-center justify-between">
         <Link
           to="/$orgUrlSlug/store/$storeUrlSlug/products"
           params={(prev) => ({
@@ -434,20 +360,33 @@ function ProductViewContent() {
 
         <div className="flex space-x-2">
           {activeProduct && (
-            <LoadingButton
-              isLoading={deleteMutation.isPending}
-              variant={"outline"}
-              className="text-destructive"
-              onClick={() => setIsDeleteModalOpen(true)}
-            >
-              <TrashIcon className="w-4 h-4" />
-            </LoadingButton>
+            <>
+              <LoadingButton
+                isLoading={deleteMutation.isPending}
+                variant={"outline"}
+                className="text-destructive"
+                onClick={() => setIsDeleteModalOpen(true)}
+              >
+                <TrashIcon className="w-4 h-4 mr-2" />
+                Delete
+              </LoadingButton>
+
+              <LoadingButton
+                isLoading={deleteMutation.isPending}
+                variant={"outline"}
+                onClick={() => revertChanges()}
+              >
+                <RotateCcw className="w-4 h-4 mr-2" />
+                Revert changes
+              </LoadingButton>
+            </>
           )}
           <LoadingButton
             disabled={!isValid}
             isLoading={createMutation.isPending || updateMutation.isPending}
             onClick={onSubmit}
           >
+            {ctaIcon}
             {ctaText}
           </LoadingButton>
         </div>

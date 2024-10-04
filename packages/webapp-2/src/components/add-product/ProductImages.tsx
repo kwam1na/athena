@@ -47,7 +47,7 @@ const Header = () => {
         <GenericComboBox<ProductVariant>
           activeItem={activeProductVariant}
           items={comboBoxValues}
-          setSelectedItem={handleVariantChange}
+          onValueChange={handleVariantChange}
           equalityFn={variantEqualityFn}
         />
       )}

@@ -9,13 +9,13 @@ export const uploadFile = async (
 ) => {
   return await uploadFileToS3(
     file.file!,
-    config.s3.BUCKET,
+    config.s3.BUCKET!,
     `${storeId}/${productId}/${file.file?.path!}`
   );
 };
 
 export const deleteFile = async (filePath: string) => {
-  return await deleteFileInS3(config.s3.BUCKET, filePath);
+  return await deleteFileInS3(config.s3.BUCKET!, filePath);
 };
 
 export const deleteFiles = async (paths: string[]) => {

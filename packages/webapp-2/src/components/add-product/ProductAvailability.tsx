@@ -28,7 +28,10 @@ export function ProductAvailabilityView() {
 function ProductAvailability() {
   const id = "availability";
 
-  const { error, isLoading, productData, updateProductData } = useProduct();
+  const { error, isLoading, productData, appState, updateProductData } =
+    useProduct();
+
+  // console.log("[availability]:", appState);
 
   const availabilityValidationError = getErrorForField(error, id);
 

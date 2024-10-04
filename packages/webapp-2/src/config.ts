@@ -15,8 +15,7 @@ const config = {
   },
   apiGateway: {
     REGION: import.meta.env.VITE_REGION,
-    // URL: import.meta.env.VITE_API_URL,
-    URL: "http://localhost:4000",
+    URL: import.meta.env.VITE_API_URL,
   },
   cognito: {
     REGION: import.meta.env.VITE_REGION,

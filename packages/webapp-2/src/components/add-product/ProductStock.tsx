@@ -18,6 +18,7 @@ import { CardFooter } from "../ui/card";
 import { useProduct } from "@/contexts/ProductContext";
 import { ImageFile } from "../ui/image-uploader";
 import { RefreshCcw, RotateCcw } from "lucide-react";
+import useGetActiveProduct from "@/hooks/useGetActiveProduct";
 
 export type ProductVariant = {
   id: number;
@@ -29,6 +30,7 @@ export type ProductVariant = {
   color?: string;
   size?: string;
   markedForDeletion?: boolean;
+  existsInDB?: boolean;
   images: ImageFile[];
 };
 
@@ -50,9 +52,10 @@ function Stock() {
     removeProductVariant,
     productVariants,
     updateProductVariants,
-    activeProductVariant,
     setActiveProductVariant,
   } = useProduct();
+
+  const { activeProduct } = useGetActiveProduct();
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement>,
@@ -98,6 +101,12 @@ function Stock() {
     }
   };
 
+  const isLastActiveVariant = (index: number) => {
+    return productVariants.every(
+      (v, idx) => index == idx || v.markedForDeletion
+    );
+  };
+
   return (
     <>
       {productVariants.length > 0 && (
@@ -106,8 +115,8 @@ function Stock() {
             <TableRow>
               <TableHead>SKU</TableHead>
               <TableHead>Stock</TableHead>
-              <TableHead>Cost</TableHead>
               <TableHead>Price</TableHead>
+              <TableHead>Cost</TableHead>
               <TableHead></TableHead>
             </TableRow>
           </TableHeader>
@@ -119,12 +128,9 @@ function Stock() {
                 className={variant.markedForDeletion ? "opacity-50" : ""}
               >
                 <TableCell>
-                  <Label htmlFor={`sku-${index}`} className="sr-only">
-                    SKU
-                  </Label>
                   {isLoading ? (
                     <Skeleton className="h-[40px] w-full" />
-                  ) : (
+                  ) : !activeProduct ? (
                     <Input
                       id={`sku-${index}`}
                       type="text"
@@ -133,6 +139,8 @@ function Stock() {
                       value={variant.sku || ""}
                       disabled={variant.markedForDeletion}
                     />
+                  ) : (
+                    <Label>{variant.sku}</Label>
                   )}
                   {error && getErrorForField(error, "sku") && (
                     <p className="text-red-500 text-sm font-medium">
@@ -162,28 +170,7 @@ function Stock() {
                     </p>
                   )}
                 </TableCell>
-                <TableCell>
-                  <Label htmlFor={`cost-${index}`} className="sr-only">
-                    Cost
-                  </Label>
-                  {isLoading ? (
-                    <Skeleton className="h-[40px] w-full" />
-                  ) : (
-                    <Input
-                      id={`cost-${index}`}
-                      type="number"
-                      placeholder="9.99"
-                      onChange={(e) => handleChange(e, variant.id, "cost")}
-                      value={variant.cost || ""}
-                      disabled={variant.markedForDeletion}
-                    />
-                  )}
-                  {error && getErrorForField(error, "unitCost") && (
-                    <p className="text-red-500 text-sm font-medium">
-                      {getErrorForField(error, "unitCost")?.message}
-                    </p>
-                  )}
-                </TableCell>
+
                 <TableCell>
                   <Label htmlFor={`price-${index}`} className="sr-only">
                     Price
@@ -206,7 +193,30 @@ function Stock() {
                     </p>
                   )}
                 </TableCell>
-                {index !== 0 && (
+
+                <TableCell>
+                  <Label htmlFor={`cost-${index}`} className="sr-only">
+                    Cost
+                  </Label>
+                  {isLoading ? (
+                    <Skeleton className="h-[40px] w-full" />
+                  ) : (
+                    <Input
+                      id={`cost-${index}`}
+                      type="number"
+                      placeholder="9.99"
+                      onChange={(e) => handleChange(e, variant.id, "cost")}
+                      value={variant.cost || ""}
+                      disabled={variant.markedForDeletion}
+                    />
+                  )}
+                  {error && getErrorForField(error, "unitCost") && (
+                    <p className="text-red-500 text-sm font-medium">
+                      {getErrorForField(error, "unitCost")?.message}
+                    </p>
+                  )}
+                </TableCell>
+                {productVariants.length > 1 && (
                   <TableCell>
                     <Button
                       size="sm"
@@ -217,10 +227,7 @@ function Stock() {
                           variant.markedForDeletion
                         )
                       }
-                      // disabled={
-                      //   variant.markedForDeletion &&
-                      //   activeProductVariant.id !== variant.id
-                      // }
+                      disabled={isLastActiveVariant(index)}
                     >
                       {variant.markedForDeletion ? (
                         <RotateCcw className="w-4 h-4" />

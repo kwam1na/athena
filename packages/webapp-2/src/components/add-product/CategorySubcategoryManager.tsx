@@ -82,15 +82,15 @@ function CategoryManager() {
   const [updatedName, setUpdatedName] = useState<string | null>(null);
 
   const categories =
-    categoriesData?.map((category: any) => ({
+    categoriesData?.map((category: Category) => ({
       name: category.name,
-      id: category.id,
+      id: category.id.toString(),
     })) || [];
 
   useEffect(() => {
     const idToUse = categoryId || categoryIdToRename;
 
-    const name = categories.find(({ id }) => id == idToUse)?.name;
+    const name = categories.find(({ id }) => id == idToUse?.toString())?.name;
 
     if (name) setSelectedCategory(name);
   }, [categoryId, categoryIdToRename]);
