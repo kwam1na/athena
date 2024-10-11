@@ -22,7 +22,7 @@ export default function NavigationBar() {
             {/* <Link to="/">
               <p className="">Shop</p>
             </Link> */}
-            {store?.categories.map((category) => (
+            {/* {store?.categories.map((category) => (
               <Link
                 key={category.id}
                 to="/$categorySlug"
@@ -33,7 +33,7 @@ export default function NavigationBar() {
               >
                 <p className="">{category.name}</p>
               </Link>
-            ))}
+            ))} */}
           </div>
         </div>
 

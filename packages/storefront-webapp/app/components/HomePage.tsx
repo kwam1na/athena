@@ -3,7 +3,7 @@ import { getAllProducts } from "@/api/product";
 import { OG_ORGANIZTION_ID, OG_STORE_ID } from "@/lib/constants";
 import { Link } from "@tanstack/react-router";
 import { useStoreContext } from "@/contexts/StoreContext";
-import { Product } from "@athena/db";
+import { Product } from "../../../athena-webapp";
 
 export default function HomePage() {
   const { data, isLoading, isFetching, error } = useQuery({
@@ -52,52 +52,22 @@ function ProductCard({
 }) {
   return (
     <div className="flex flex-col mb-24">
-      <div className="aspect-square w-full mb-2">
+      <div className="mb-2">
         <img
           alt={`${product.name} image`}
-          className="w-full h-full object-cover"
-          src={product.images[0]}
+          className="aspect-square object-cover"
+          src={product.skus[0].images[0]}
         />
       </div>
       <div className="flex flex-col items-start gap-2">
         <p className="text-lg font-medium">{product.name}</p>
         <p className="text-gray-500">
-          {currencyFormatter.format(product.price)}
+          {currencyFormatter.format(product.skus[0].price)}
         </p>
       </div>
     </div>
   );
 }
-
-// function ProductsPage({ products }: { products: Product[] }) {
-//   // replace with empty state
-//   if (products.length == 0) return null;
-
-//   const { formatter } = useStoreContext();
-
-//   return (
-//     <main className="grid grid-cols-3 gap-12">
-//       {products?.map((product) => {
-//         return (
-//           <Link
-//             to="/shop/product/$productSlug"
-//             key={product.id}
-//             params={(params) => ({
-//               ...params,
-//               productSlug: product.slug,
-//             })}
-//           >
-//             <ProductCard
-//               key={product.id}
-//               product={product}
-//               currencyFormatter={formatter}
-//             />
-//           </Link>
-//         );
-//       })}
-//     </main>
-//   );
-// }
 
 function ProductsPage({ products }: { products: Product[] }) {
   if (products.length === 0) return null;

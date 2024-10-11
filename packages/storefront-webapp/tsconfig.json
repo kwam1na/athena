@@ -29,7 +29,8 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["./app/*"],
-      "@athena/db": ["../db/src"]
+      "@athena/db": ["../db/src"],
+      "@athena/webapp-2": ["../athena-webapp"]
     }
   }
 }

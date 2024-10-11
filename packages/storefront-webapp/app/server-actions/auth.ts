@@ -1,7 +1,6 @@
 import { useAppSession } from "@/utils/session";
-import { guestsRepository } from "@athena/db";
 import { createServerFn } from "@tanstack/start";
-import { getCookie, setCookie, setHeader } from "vinxi/http";
+import { getCookie, setCookie } from "vinxi/http";
 
 export const logIn = createServerFn("POST", (data?: Record<string, any>) => {
   // setHeader("athena-user-id", "1");
@@ -16,7 +15,9 @@ export const fetchUser = createServerFn("GET", async (_, ctx) => {
   console.log("retrieved ->", guestId);
 
   if (!guestId) {
-    const newGuest = await guestsRepository.create();
+    const newGuest = {
+      id: 12344,
+    };
 
     setCookie("athena-guest-id", newGuest.id.toString(), {
       httpOnly: true,

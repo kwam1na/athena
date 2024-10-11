@@ -1,7 +1,7 @@
 export type BaseApiParams = {
-  organizationId: number;
+  organizationId: string;
 };
 
 export type OrganizationStoreEntityApiParams = BaseApiParams & {
-  storeId: number;
+  storeId: string;
 };

@@ -1,15 +1,11 @@
 import config from "@/config";
 import type { OrganizationStoreEntityApiParams } from "./types";
-import type { Store, StoreRequest } from "@athena/db";
+import { Store } from "../../../athena-webapp";
 
-type UpdateParams = OrganizationStoreEntityApiParams & {
-  data: Partial<StoreRequest>;
-};
-
-const getBaseUrl = (organizationId: number) =>
+const getBaseUrl = (organizationId: string) =>
   `${config.apiGateway.URL}/organizations/${organizationId}/stores`;
 
-export async function getAllStores(organizationId: number): Promise<Store[]> {
+export async function getAllStores(organizationId: string): Promise<Store[]> {
   const response = await fetch(getBaseUrl(organizationId));
 
   const res = await response.json();
@@ -31,43 +27,6 @@ export async function getStore({
 
   if (!response.ok) {
     throw new Error(res.error || "Error loading store.");
-  }
-
-  return res;
-}
-
-export async function createStore(
-  organizationId: number,
-  data: StoreRequest
-): Promise<Store> {
-  const response = await fetch(getBaseUrl(organizationId), {
-    method: "POST",
-    body: JSON.stringify({ ...data, name: data.name.trim() }),
-  });
-
-  const res = await response.json();
-
-  if (!response.ok) {
-    throw new Error(res.error || "Error creating store.");
-  }
-
-  return res;
-}
-
-export async function updateStore({
-  data,
-  organizationId,
-  storeId,
-}: UpdateParams): Promise<Store> {
-  const response = await fetch(`${getBaseUrl(organizationId)}/${storeId}`, {
-    method: "PUT",
-    body: JSON.stringify({ ...data, name: data.name?.trim() }),
-  });
-
-  const res = await response.json();
-
-  if (!response.ok) {
-    throw new Error(res.error || "Error updating store.");
   }
 
   return res;

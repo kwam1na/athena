@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@athena/db": "workspace:*",
+    "@athena/webapp-2": "workspace:*",
     "@aws-sdk/client-s3": "^3.645.0",
     "@hookform/resolvers": "^3.9.0",
     "@radix-ui/react-accordion": "^1.2.0",

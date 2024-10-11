@@ -26,7 +26,6 @@ import { ActionModal } from "./ui/modals/action-modal";
 import { useGetStoreData } from "./add-product/hooks/useGetStoreData";
 import ProductPage from "./ProductPage";
 import { ProductProvider, useProduct } from "@/contexts/ProductContext";
-import { productRequestSchema } from "@athena/db";
 
 function ProductViewContent() {
   const { images, productData, didProvideRequiredData } = useProduct();

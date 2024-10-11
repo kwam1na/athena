@@ -71,8 +71,6 @@ const queryClient = new QueryClient({
 function RootDocument({ children }: { children: React.ReactNode }) {
   const serverData = Route.useLoaderData();
 
-  console.log(serverData);
-
   return (
     <Html>
       <Head>

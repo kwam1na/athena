@@ -1,30 +1,125 @@
-// import { getProductBySlug } from "@/api/product";
 import { useStoreContext } from "@/contexts/StoreContext";
-import { ProductResponseBody } from "@/lib/schemas/product";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useParams } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
+import { useNavigate, useParams, useSearch } from "@tanstack/react-router";
 import { LoadingButton } from "../ui/loading-button";
-import { useServerFn } from "@tanstack/start";
-import { getProductBySlug } from "@/server-actions/products";
-import { Product } from "@athena/db";
 import { useShoppingBag } from "@/hooks/useShoppingBag";
+import { getProduct } from "@/api/product";
+import { Product, ProductSku } from "@athena/webapp-2";
+import { Button } from "../ui/button";
+
+function ProductAttribute({
+  product,
+  selectedSku,
+}: {
+  product: Product;
+  selectedSku: ProductSku;
+}) {
+  const colors: string[] = Array.from(
+    new Set(product.skus.map((sku: ProductSku) => sku.color))
+  );
+
+  // const lengths: string[] = Array.from(
+  //   new Set(product.skus.map((sku: ProductSku) => sku.length))
+  // );
+
+  const lengths: string[] = Array.from(
+    new Set(
+      product.skus
+        .filter((sk: ProductSku) => sk.color == selectedSku.color)
+        .map((sku: ProductSku) => sku.length)
+    )
+  );
+
+  const navigate = useNavigate();
+
+  const handleClick = (attribute: "color" | "length", value: string) => {
+    let variant;
+
+    if (attribute == "color") {
+      variant =
+        product.skus.find(
+          (sk: ProductSku) =>
+            sk.color == value && sk.length == selectedSku.length
+        ) || product.skus.find((sk: ProductSku) => sk.color == value);
+    } else {
+      variant =
+        product.skus.find(
+          (sk: ProductSku) =>
+            sk.length == value && sk.color == selectedSku.color
+        ) || product.skus.find((sk: ProductSku) => sk.length == value);
+    }
+
+    navigate({
+      to: "/shop/product/$productSlug",
+      params: (prev) => ({ productSlug: prev.productSlug! }),
+      search: {
+        variant: variant._id,
+      },
+    });
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="space-y-4">
+        <p className="text-muted-foreground">Color</p>
+
+        <div className="flex gap-2">
+          {colors.map((color, index) => {
+            return (
+              <Button
+                variant={"ghost"}
+                key={index}
+                className={`${selectedSku?.color == color ? "border border-2 border-black" : ""}`}
+                onClick={() => handleClick("color", color)}
+              >
+                {color}
+              </Button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="space-y-4">
+        <p className="text-muted-foreground">Length</p>
+
+        <div className="flex gap-2">
+          {lengths.map((length, index) => {
+            return (
+              <Button
+                variant={"ghost"}
+                key={index}
+                className={`${selectedSku?.length == length ? "border border-2 border-black" : ""}`}
+                onClick={() => handleClick("length", length)}
+              >
+                {`${length}''`}
+              </Button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function ProductPage() {
   const { productSlug } = useParams({ strict: false });
 
-  const { formatter } = useStoreContext();
+  const { formatter, store } = useStoreContext();
 
   const { bag, addProductToBag, updateBag, isUpdatingBag } = useShoppingBag();
 
-  const fetchProductBySlug = useServerFn(getProductBySlug);
-
   const { data: product } = useQuery({
     queryKey: ["product", productSlug],
-    queryFn: () => fetchProductBySlug(productSlug!),
-    enabled: Boolean(productSlug),
+    queryFn: () =>
+      getProduct({
+        organizationId: store!.organizationId,
+        storeId: store!._id,
+        productId: productSlug!,
+      }),
+    enabled: Boolean(productSlug && store),
   });
 
-  const bagItem = bag?.items.find((it) => it.id == product?.id);
+  const bagItem = bag?.items?.find((it) => it.id == product?.id);
 
   const handleUpdateBag = () => {
     if (bagItem && product) {
@@ -38,7 +133,17 @@ export default function ProductPage() {
     }
   };
 
+  const { variant } = useSearch({ strict: false });
+
+  const selectedSku = product?.skus.find(
+    (sku: ProductSku) => sku._id == variant
+  );
+
   if (!product) return null;
+
+  let productSku: ProductSku = product.skus[0];
+
+  if (selectedSku) productSku = selectedSku;
 
   return (
     <main className="w-full h-full px-[240px] mt-[80px]">
@@ -47,11 +152,11 @@ export default function ProductPage() {
           <img
             alt={`$ image`}
             className={`aspect-square w-96 h-96 rounded-md object-cover`}
-            src={product.images[0]}
+            src={productSku.images[0]}
           />
 
           <div className="flex gap-2">
-            {product.images.slice(1).map((url, index) => (
+            {productSku.images.slice(1).map((url: string, index: number) => (
               <img
                 key={index}
                 alt={`$ image`}
@@ -66,9 +171,11 @@ export default function ProductPage() {
           <div className="space-y-4">
             <p className="text-3xl font-medium">{product.name}</p>
             <p className="text-lg font-medium">
-              {formatter.format(product.price)}
+              {formatter.format(productSku.price)}
             </p>
           </div>
+
+          <ProductAttribute product={product} selectedSku={productSku} />
 
           <LoadingButton
             isLoading={false}
@@ -76,7 +183,7 @@ export default function ProductPage() {
             onClick={handleUpdateBag}
           >
             {/* <ShoppingBasket className="w-4 h-4 mr-2" /> */}
-            Add to bag
+            ADD TO BAG
           </LoadingButton>
         </div>
       </div>
