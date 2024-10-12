@@ -47,11 +47,20 @@ export default function ShoppingBag() {
         <div className="md:col-span-2 space-y-16">
           {bag?.items.map((item: ProductSku) => (
             <div key={item.id} className="flex items-center space-x-4">
-              <img
-                src={item.productImage || placeholder}
-                alt={item.productName || "product image"}
-                className="w-40 h-40 object-cover rounded-lg"
-              />
+              <Link
+                key={item.id}
+                to={"/shop/product/$productSlug"}
+                params={() => ({ productSlug: item.productSlug })}
+                search={{
+                  variant: item.productSku,
+                }}
+              >
+                <img
+                  src={item.productImage || placeholder}
+                  alt={item.productName || "product image"}
+                  className="w-40 h-40 object-cover rounded-lg"
+                />
+              </Link>
               <div className="flex-1 space-y-6">
                 <div className="flex flex-col ml-2">
                   <h2 className="text-lg font-semibold">

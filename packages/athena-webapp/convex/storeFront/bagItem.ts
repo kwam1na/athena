@@ -7,7 +7,8 @@ export const addItemToBag = mutation({
   args: {
     bagId: v.id("bag"),
     productId: v.id("product"),
-    productSku: v.id("productSku"),
+    productSkuId: v.id("productSku"),
+    productSku: v.string(),
     customerId: v.union(v.id("customer"), v.id("guest")),
     quantity: v.number(),
   },

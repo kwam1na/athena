@@ -111,7 +111,8 @@ storeRoutes.post(
   "/:storeId/customers/:customerId/bags/:bagId/items",
   async (c) => {
     const { bagId, customerId } = c.req.param();
-    const { productId, productSkuId, quantity, price } = await c.req.json();
+    const { productId, productSkuId, quantity, productSku } =
+      await c.req.json();
 
     // console.table({ productId, quantity, price });
 
@@ -120,11 +121,11 @@ storeRoutes.post(
       quantity,
       customerId: customerId as Id<"customer"> | Id<"guest">,
       bagId: bagId as Id<"bag">,
-      productSku: productSkuId as Id<"productSku">,
+      productSkuId: productSkuId as Id<"productSku">,
+      productSku,
     });
 
-    // Check if the item is already in the bag
-    return c.json({});
+    return c.json(b);
   }
 );
 

@@ -31,10 +31,12 @@ export const useShoppingBag = () => {
     mutationFn: ({
       productId,
       productSkuId,
+      productSku,
       quantity,
     }: {
       productId: string;
       productSkuId: string;
+      productSku: string;
       quantity: number;
     }) =>
       addItemToBag({
@@ -43,6 +45,7 @@ export const useShoppingBag = () => {
         storeId: OG_STORE_ID,
         productId,
         productSkuId,
+        productSku,
         bagId: bag!._id,
         quantity,
       }),
@@ -95,15 +98,18 @@ export const useShoppingBag = () => {
     quantity,
     productId,
     productSkuId,
+    productSku,
   }: {
     quantity: number;
     productId: string;
     productSkuId: string;
+    productSku: string;
   }) => {
     await addNewItem.mutateAsync({
       productId,
       quantity,
       productSkuId,
+      productSku,
     });
   };
 

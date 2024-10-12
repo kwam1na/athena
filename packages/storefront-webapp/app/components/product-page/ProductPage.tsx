@@ -136,6 +136,7 @@ export default function ProductPage() {
         quantity: 1,
         productId: product._id,
         productSkuId: productSku._id,
+        productSku: productSku.sku,
       });
     }
   };
@@ -151,7 +152,7 @@ export default function ProductPage() {
   if (selectedSku) productSku = selectedSku;
 
   const bagItem = bag?.items?.find(
-    (it: BagItem) => it.productSku == productSku._id
+    (it: BagItem) => it.productSku == productSku.sku
   );
 
   return (

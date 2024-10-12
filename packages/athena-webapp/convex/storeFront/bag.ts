@@ -42,7 +42,7 @@ export const getById = query({
     const itemsWithProductDetails = await Promise.all(
       items.map(async (item) => {
         const [sku, product] = await Promise.all([
-          ctx.db.get(item.productSku),
+          ctx.db.get(item.productSkuId),
           ctx.db.get(item.productId),
         ]);
 
@@ -94,7 +94,7 @@ export const getByCustomerId = query({
     const itemsWithProductDetails = await Promise.all(
       items.map(async (item) => {
         const [sku, product] = await Promise.all([
-          ctx.db.get(item.productSku),
+          ctx.db.get(item.productSkuId),
           ctx.db.get(item.productId),
         ]);
 
@@ -113,6 +113,7 @@ export const getByCustomerId = query({
           productName: product?.name,
           productCategory: category,
           productImage: sku?.images?.[0],
+          productSlug: product?.slug,
         };
       })
     );

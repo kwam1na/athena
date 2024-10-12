@@ -119,10 +119,12 @@ export async function addItemToBag({
   bagId,
   productId,
   productSkuId,
+  productSku,
   quantity,
 }: GetBagItemsParams & {
   productId: string;
   productSkuId: string;
+  productSku: string;
   quantity: number;
 }): Promise<Bag> {
   const response = await fetch(
@@ -132,6 +134,7 @@ export async function addItemToBag({
       body: JSON.stringify({
         productId,
         productSkuId,
+        productSku,
         quantity,
         customerId,
       }),
