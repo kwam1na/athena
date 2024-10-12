@@ -4,6 +4,8 @@ import {
   removeItemFromBag,
   updateBagItem,
 } from "@/api/bag";
+import { OG_ORGANIZTION_ID, OG_STORE_ID } from "@/lib/constants";
+import { ProductSku } from "@athena/webapp-2";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 export const useShoppingBag = () => {
@@ -16,25 +18,32 @@ export const useShoppingBag = () => {
 
   const { data: bag } = useQuery({
     queryKey: ["active-bag"],
-    queryFn: () => getActiveBag(parseInt(userId!)),
+    queryFn: () =>
+      getActiveBag({
+        customerId: userId!,
+        organizationId: OG_ORGANIZTION_ID,
+        storeId: OG_STORE_ID,
+      }),
     enabled: Boolean(userId),
   });
 
   const addNewItem = useMutation({
     mutationFn: ({
       productId,
+      productSkuId,
       quantity,
-      price,
     }: {
-      productId: number;
+      productId: string;
+      productSkuId: string;
       quantity: number;
-      price: number;
     }) =>
       addItemToBag({
-        customerId: 1,
-        price,
+        customerId: userId!,
+        organizationId: OG_ORGANIZTION_ID,
+        storeId: OG_STORE_ID,
         productId,
-        bagId: bag!.id,
+        productSkuId,
+        bagId: bag!._id,
         quantity,
       }),
     onSuccess: () => {
@@ -44,7 +53,14 @@ export const useShoppingBag = () => {
 
   const updateItemMutation = useMutation({
     mutationFn: ({ itemId, quantity }: { itemId: number; quantity: number }) =>
-      updateBagItem({ customerId: 1, bagId: bag!.id, quantity, itemId }),
+      updateBagItem({
+        customerId: userId!,
+        bagId: bag!._id,
+        quantity,
+        itemId,
+        organizationId: OG_ORGANIZTION_ID,
+        storeId: OG_STORE_ID,
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["active-bag"] });
     },
@@ -53,9 +69,11 @@ export const useShoppingBag = () => {
   const removeItem = useMutation({
     mutationFn: ({ itemId }: { itemId: number }) =>
       removeItemFromBag({
-        customerId: parseInt(userId!),
-        bagId: bag!.id,
+        customerId: userId!,
+        bagId: bag!._id,
         itemId: itemId,
+        organizationId: OG_ORGANIZTION_ID,
+        storeId: OG_STORE_ID,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["active-bag"] });
@@ -74,18 +92,18 @@ export const useShoppingBag = () => {
   };
 
   const addProductToBag = async ({
-    price,
     quantity,
     productId,
+    productSkuId,
   }: {
-    price: number;
     quantity: number;
-    productId: number;
+    productId: string;
+    productSkuId: string;
   }) => {
     await addNewItem.mutateAsync({
       productId,
-      price,
       quantity,
+      productSkuId,
     });
   };
 
@@ -94,7 +112,10 @@ export const useShoppingBag = () => {
   };
 
   const bagCount =
-    bag?.items?.reduce((total, item) => total + item.quantity, 0) || 0;
+    bag?.items?.reduce(
+      (total: number, item: ProductSku) => total + item.quantity,
+      0
+    ) || 0;
 
   const isUpdatingBag =
     addNewItem.isPending ||

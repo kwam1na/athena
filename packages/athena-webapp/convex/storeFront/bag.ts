@@ -12,12 +12,16 @@ export const getAll = query({
 export const create = mutation({
   args: {
     storeId: v.id("store"),
-    customerId: v.id("customer"),
+    customerId: v.union(v.id("customer"), v.id("guest")),
   },
   handler: async (ctx, args) => {
-    const id = await ctx.db.insert(entity, { ...args, _updatedAt: Date.now() });
+    const id = await ctx.db.insert(entity, { ...args, updatedAt: Date.now() });
 
-    return await ctx.db.get(id);
+    const bag = await ctx.db.get(id);
+    return {
+      ...bag,
+      items: [],
+    };
   },
 });
 
@@ -37,22 +41,25 @@ export const getById = query({
     // For each item, retrieve the associated product and its SKUs
     const itemsWithProductDetails = await Promise.all(
       items.map(async (item) => {
-        // Fetch the product by its ID
-        const product = await ctx.db
-          .query("product")
-          .filter((q) => q.eq(q.field("_id"), item.productId))
-          .first();
+        const [sku, product] = await Promise.all([
+          ctx.db.get(item.productSku),
+          ctx.db.get(item.productId),
+        ]);
 
-        if (!product) return { ...item, productImage: null }; // If no product, return null for productImage
+        let category: string | undefined;
 
-        // Fetch the SKUs for the product
-        const sku = await ctx.db
-          .query("productSku")
-          .filter((q) => q.eq(q.field("productId"), product._id))
-          .first();
+        if (product) {
+          const productCategory = await ctx.db.get(product.categoryId);
+          category = productCategory?.name;
+        }
 
         return {
           ...item,
+          price: sku?.price,
+          length: sku?.length,
+          color: sku?.color,
+          productName: product?.name,
+          productCategory: category,
           productImage: sku?.images?.[0],
         };
       })
@@ -68,7 +75,7 @@ export const getById = query({
 
 export const getByCustomerId = query({
   args: {
-    customerId: v.id("customer"),
+    customerId: v.union(v.id("customer"), v.id("guest")),
   },
   handler: async (ctx, args) => {
     const bag = await ctx.db
@@ -86,22 +93,25 @@ export const getByCustomerId = query({
     // For each item, retrieve the associated product and its SKUs
     const itemsWithProductDetails = await Promise.all(
       items.map(async (item) => {
-        // Fetch the product by its ID
-        const product = await ctx.db
-          .query("product")
-          .filter((q) => q.eq(q.field("_id"), item.productId))
-          .first();
+        const [sku, product] = await Promise.all([
+          ctx.db.get(item.productSku),
+          ctx.db.get(item.productId),
+        ]);
 
-        if (!product) return { ...item, productImage: null }; // If no product, return null for productImage
+        let category: string | undefined;
 
-        // Fetch the SKUs for the product
-        const sku = await ctx.db
-          .query("productSku")
-          .filter((q) => q.eq(q.field("productId"), product._id))
-          .first();
+        if (product) {
+          const productCategory = await ctx.db.get(product.categoryId);
+          category = productCategory?.name;
+        }
 
         return {
           ...item,
+          price: sku?.price,
+          length: sku?.length,
+          color: sku?.color,
+          productName: product?.name,
+          productCategory: category,
           productImage: sku?.images?.[0],
         };
       })

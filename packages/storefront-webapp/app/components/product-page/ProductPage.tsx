@@ -4,8 +4,9 @@ import { useNavigate, useParams, useSearch } from "@tanstack/react-router";
 import { LoadingButton } from "../ui/loading-button";
 import { useShoppingBag } from "@/hooks/useShoppingBag";
 import { getProduct } from "@/api/product";
-import { Product, ProductSku } from "@athena/webapp-2";
+import { BagItem, Product, ProductSku } from "@athena/webapp-2";
 import { Button } from "../ui/button";
+import { capitalizeFirstLetter } from "@/lib/utils";
 
 function ProductAttribute({
   product,
@@ -53,7 +54,7 @@ function ProductAttribute({
       to: "/shop/product/$productSlug",
       params: (prev) => ({ productSlug: prev.productSlug! }),
       search: {
-        variant: variant._id,
+        variant: variant.sku,
       },
     });
   };
@@ -69,10 +70,10 @@ function ProductAttribute({
               <Button
                 variant={"ghost"}
                 key={index}
-                className={`${selectedSku?.color == color ? "border border-2 border-black" : ""}`}
+                className={`${selectedSku?.color == color ? "border border-2 border-black" : "border border-2 border-background-muted"}`}
                 onClick={() => handleClick("color", color)}
               >
-                {color}
+                {capitalizeFirstLetter(color)}
               </Button>
             );
           })}
@@ -88,7 +89,7 @@ function ProductAttribute({
               <Button
                 variant={"ghost"}
                 key={index}
-                className={`${selectedSku?.length == length ? "border border-2 border-black" : ""}`}
+                className={`${selectedSku?.length == length ? "border border-2 border-black" : "border border-2 border-background-muted"}`}
                 onClick={() => handleClick("length", length)}
               >
                 {`${length}''`}
@@ -119,31 +120,39 @@ export default function ProductPage() {
     enabled: Boolean(productSlug && store),
   });
 
-  const bagItem = bag?.items?.find((it) => it.id == product?.id);
+  const getProductName = (item: ProductSku) => {
+    if (item.productCategory == "Wigs") {
+      return `${item.length}'' ${capitalizeFirstLetter(item.color)} ${item.productName}`;
+    }
+
+    return item.productName;
+  };
 
   const handleUpdateBag = () => {
-    if (bagItem && product) {
-      updateBag({ itemId: bagItem.id, quantity: bagItem.quantity + 1 });
-    } else if (product) {
+    if (bagItem && productSku) {
+      updateBag({ itemId: bagItem._id, quantity: bagItem.quantity + 1 });
+    } else if (productSku) {
       addProductToBag({
-        price: product.price,
         quantity: 1,
-        productId: product.id,
+        productId: product._id,
+        productSkuId: productSku._id,
       });
     }
   };
 
   const { variant } = useSearch({ strict: false });
 
-  const selectedSku = product?.skus.find(
-    (sku: ProductSku) => sku._id == variant
-  );
+  const selectedSku = product?.skus.find((sk: ProductSku) => sk.sku == variant);
 
   if (!product) return null;
 
   let productSku: ProductSku = product.skus[0];
 
   if (selectedSku) productSku = selectedSku;
+
+  const bagItem = bag?.items?.find(
+    (it: BagItem) => it.productSku == productSku._id
+  );
 
   return (
     <main className="w-full h-full px-[240px] mt-[80px]">
@@ -169,7 +178,7 @@ export default function ProductPage() {
 
         <div className="space-y-12">
           <div className="space-y-4">
-            <p className="text-3xl font-medium">{product.name}</p>
+            <p className="text-3xl font-medium">{getProductName(productSku)}</p>
             <p className="text-lg font-medium">
               {formatter.format(productSku.price)}
             </p>

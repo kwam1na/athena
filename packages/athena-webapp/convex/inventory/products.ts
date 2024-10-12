@@ -102,10 +102,23 @@ export const getById = query({
       )
       .collect();
 
+    let category: string | undefined;
+
+    if (product) {
+      const productCategory = await ctx.db.get(product.categoryId);
+      category = productCategory?.name;
+    }
+
+    const skusWithCategory = skus.map((sku) => ({
+      ...sku,
+      productCategory: category,
+      productName: product?.name,
+    }));
+
     return {
       ...product,
       inventoryCount: calculateTotalInventoryCount(skus),
-      skus,
+      skus: skusWithCategory,
     };
   },
 });
@@ -140,10 +153,23 @@ export const getBySlug = query({
       )
       .collect();
 
+    let category: string | undefined;
+
+    if (product) {
+      const productCategory = await ctx.db.get(product.categoryId);
+      category = productCategory?.name;
+    }
+
+    const skusWithCategory = skus.map((sku) => ({
+      ...sku,
+      productCategory: category,
+      productName: product?.name,
+    }));
+
     return {
       ...product,
       inventoryCount: calculateTotalInventoryCount(skus),
-      skus,
+      skus: skusWithCategory,
     };
   },
 });
@@ -184,10 +210,23 @@ export const getByIdOrSlug = query({
       )
       .collect();
 
+    let category: string | undefined;
+
+    if (product) {
+      const productCategory = await ctx.db.get(product.categoryId);
+      category = productCategory?.name;
+    }
+
+    const skusWithCategory = skus.map((sku) => ({
+      ...sku,
+      productCategory: category,
+      productName: product?.name,
+    }));
+
     return {
       ...product,
       inventoryCount: calculateTotalInventoryCount(skus),
-      skus,
+      skus: skusWithCategory,
     };
   },
 });

@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 
 export const bagSchema = v.object({
-  customerId: v.id("customer"),
+  customerId: v.union(v.id("customer"), v.id("guest")),
   storeId: v.id("store"),
-  _updatedAt: v.number(),
+  updatedAt: v.number(),
 });

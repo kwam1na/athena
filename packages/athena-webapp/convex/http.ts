@@ -12,6 +12,7 @@ import {
 } from "./http/domains/inventory/routes";
 import { bagRoutes } from "./http/domains/storeFront/routes";
 import { httpRouter } from "convex/server";
+import { guestRoutes } from "./http/domains/storeFront/routes/guest";
 
 const app: HonoWithConvex<ActionCtx> = new Hono();
 
@@ -48,7 +49,12 @@ app.route(
   subcategoryRoutes
 );
 
-app.route("/customers/:customerId/bags", bagRoutes);
+// app.route(
+//   "/organizations/:organizationId/customers/:customerId/bags",
+//   bagRoutes
+// );
+
+app.route("/organizations/:organizationId/guests", guestRoutes);
 
 app.get("/.well-known/openid-configuration", async (c) => {
   const [httpAction] = http.lookup(

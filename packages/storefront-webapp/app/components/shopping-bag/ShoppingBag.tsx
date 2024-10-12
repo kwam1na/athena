@@ -6,15 +6,28 @@ import { useStoreContext } from "@/contexts/StoreContext";
 import { Link } from "@tanstack/react-router";
 import placeholder from "@/assets/placeholder.png";
 import { useShoppingBag } from "@/hooks/useShoppingBag";
+import { ProductSku } from "@athena/webapp-2";
+import { capitalizeFirstLetter } from "@/lib/utils";
 
 export default function ShoppingBag() {
   const { formatter } = useStoreContext();
   const { bag, deleteItemFromBag, updateBag, isUpdatingBag } = useShoppingBag();
 
   const subtotal =
-    bag?.items.reduce((sum, item) => sum + item.price * item.quantity, 0) || 0;
+    bag?.items.reduce(
+      (sum: number, item: ProductSku) => sum + item.price * item.quantity,
+      0
+    ) || 0;
   const shipping = 5.99;
   const total = subtotal + shipping;
+
+  const getProductName = (item: ProductSku) => {
+    if (item.productCategory == "Wigs") {
+      return `${item.length}'' ${capitalizeFirstLetter(item.color)} ${item.productName}`;
+    }
+
+    return item.productName;
+  };
 
   if (bag?.items.length === 0) {
     return (
@@ -32,7 +45,7 @@ export default function ShoppingBag() {
       <h1 className="text-2xl font-bold mb-8">Shopping Bag</h1>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
         <div className="md:col-span-2 space-y-16">
-          {bag?.items.map((item) => (
+          {bag?.items.map((item: ProductSku) => (
             <div key={item.id} className="flex items-center space-x-4">
               <img
                 src={item.productImage || placeholder}
@@ -41,15 +54,18 @@ export default function ShoppingBag() {
               />
               <div className="flex-1 space-y-6">
                 <div className="flex flex-col ml-2">
-                  <h2 className="text-lg font-semibold">{item.productName}</h2>
+                  <h2 className="text-lg font-semibold">
+                    {getProductName(item)}
+                  </h2>
                   <select
                     value={item.quantity}
                     onChange={(e) =>
                       updateBag({
                         quantity: parseInt(e.target.value),
-                        itemId: item.id,
+                        itemId: item._id,
                       })
                     }
+                    disabled={isUpdatingBag}
                     className="w-12 py-2 bg-white text-black"
                   >
                     {[...Array(10)].map((_, i) => (
@@ -69,7 +85,7 @@ export default function ShoppingBag() {
                     variant="ghost"
                     size="icon"
                     disabled={isUpdatingBag}
-                    onClick={() => deleteItemFromBag(item.id)}
+                    onClick={() => deleteItemFromBag(item._id)}
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>

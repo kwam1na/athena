@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { HonoWithConvex } from "convex-helpers/server/hono";
 import { ActionCtx } from "../../../../_generated/server";
+import { api } from "../../../../_generated/api";
 
 const bagRoutes: HonoWithConvex<ActionCtx> = new Hono();
 
@@ -38,20 +39,6 @@ bagRoutes.get("/:bagId/items", async (c) => {
   const { bagId } = c.req.param();
   return c.json({});
 });
-
-// Add an item to a bag
-// bagRoutes.post("/:bagId/items", async (c) => {
-//   const { bagId } = c.req.param();
-//   const { productId, customerId, quantity, price } = await c.req.json();
-//   const newItem = await bagItemRepository.addItemToBag({
-//     bagId: parseInt(bagId),
-//     productId,
-//     customerId,
-//     quantity,
-//     price,
-//   });
-//   return c.json(newItem, 201);
-// });
 
 bagRoutes.post("/:bagId/items", async (c) => {
   const { bagId } = c.req.param();

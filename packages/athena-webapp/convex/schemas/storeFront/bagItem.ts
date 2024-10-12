@@ -2,9 +2,9 @@ import { v } from "convex/values";
 
 export const bagItemSchema = v.object({
   bagId: v.id("bag"),
-  customerId: v.id("customer"),
-  price: v.number(),
+  customerId: v.union(v.id("customer"), v.id("guest")),
   productId: v.id("product"),
+  productSku: v.id("productSku"),
   quantity: v.number(),
-  _updatedAt: v.number(),
+  updatedAt: v.number(),
 });

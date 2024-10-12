@@ -25,6 +25,7 @@ import type * as http_domains_inventory_routes_products from "../http/domains/in
 import type * as http_domains_inventory_routes_stores from "../http/domains/inventory/routes/stores.js";
 import type * as http_domains_inventory_routes_subcategories from "../http/domains/inventory/routes/subcategories.js";
 import type * as http_domains_storeFront_routes_bag from "../http/domains/storeFront/routes/bag.js";
+import type * as http_domains_storeFront_routes_guest from "../http/domains/storeFront/routes/guest.js";
 import type * as http_domains_storeFront_routes_index from "../http/domains/storeFront/routes/index.js";
 import type * as http from "../http.js";
 import type * as inventory_categories from "../inventory/categories.js";
@@ -68,6 +69,7 @@ declare const fullApi: ApiFromModules<{
   "http/domains/inventory/routes/stores": typeof http_domains_inventory_routes_stores;
   "http/domains/inventory/routes/subcategories": typeof http_domains_inventory_routes_subcategories;
   "http/domains/storeFront/routes/bag": typeof http_domains_storeFront_routes_bag;
+  "http/domains/storeFront/routes/guest": typeof http_domains_storeFront_routes_guest;
   "http/domains/storeFront/routes/index": typeof http_domains_storeFront_routes_index;
   http: typeof http;
   "inventory/categories": typeof inventory_categories;

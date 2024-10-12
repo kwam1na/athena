@@ -10,6 +10,7 @@ import { StoreProvider } from "@/contexts/StoreContext";
 import { Body, Head, Html, Meta, Scripts } from "@tanstack/start";
 import { Toaster } from "@/components/ui/sonner";
 import { fetchUser } from "@/server-actions/auth";
+import { OG_ORGANIZTION_ID } from "@/lib/constants";
 
 export const Route = createRootRouteWithContext<{
   queryClient: QueryClient;
@@ -28,7 +29,7 @@ export const Route = createRootRouteWithContext<{
   ],
 
   loader: async () => {
-    const user = await fetchUser();
+    const user = await fetchUser(OG_ORGANIZTION_ID);
 
     return {
       user,

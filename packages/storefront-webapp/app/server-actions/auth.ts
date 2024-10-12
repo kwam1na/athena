@@ -1,3 +1,4 @@
+import { createGuest } from "@/api/guest";
 import { useAppSession } from "@/utils/session";
 import { createServerFn } from "@tanstack/start";
 import { getCookie, setCookie } from "vinxi/http";
@@ -7,37 +8,36 @@ export const logIn = createServerFn("POST", (data?: Record<string, any>) => {
   return { success: true };
 });
 
-export const fetchUser = createServerFn("GET", async (_, ctx) => {
-  // const session = await useAppSession();
-  const customerId = getCookie("athena-customer-id");
-  let guestId = getCookie("athena-guest-id");
+export const fetchUser = createServerFn(
+  "GET",
+  async (organizationId: string, ctx) => {
+    // const session = await useAppSession();
+    const customerId = getCookie("athena-customer-id");
+    let guestId = getCookie("athena-guest-id");
 
-  console.log("retrieved ->", guestId);
+    if (!guestId) {
+      const newGuest = await createGuest(organizationId);
 
-  if (!guestId) {
-    const newGuest = {
-      id: 12344,
+      setCookie("athena-guest-id", newGuest.id.toString(), {
+        httpOnly: true,
+        secure: false,
+        sameSite: "strict",
+      });
+
+      guestId = newGuest.id;
+    }
+
+    // if (!session.data.userEmail) {
+    //   return null;
+    // }
+
+    return {
+      // email: session.data.userEmail,
+      customerId,
+      guestId,
     };
-
-    setCookie("athena-guest-id", newGuest.id.toString(), {
-      httpOnly: true,
-      secure: false,
-      sameSite: "strict",
-    });
-
-    guestId = newGuest.id.toString();
   }
-
-  // if (!session.data.userEmail) {
-  //   return null;
-  // }
-
-  return {
-    // email: session.data.userEmail,
-    customerId,
-    guestId,
-  };
-});
+);
 
 export const loginFn = createServerFn(
   "POST",

@@ -7,12 +7,12 @@ export const addItemToBag = mutation({
   args: {
     bagId: v.id("bag"),
     productId: v.id("product"),
-    customerId: v.id("customer"),
+    productSku: v.id("productSku"),
+    customerId: v.union(v.id("customer"), v.id("guest")),
     quantity: v.number(),
-    price: v.number(),
   },
   handler: async (ctx, args) => {
-    const newItem = { ...args, _updatedAt: Date.now() };
+    const newItem = { ...args, updatedAt: Date.now() };
     return await ctx.db.insert(entity, newItem);
   },
 });
