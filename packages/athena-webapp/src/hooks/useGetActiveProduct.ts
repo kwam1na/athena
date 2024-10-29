@@ -9,9 +9,9 @@ export default function useGetActiveProduct() {
   const { activeStore } = useGetActiveStore();
 
   const product = useQuery(
-    api.inventory.products.getBySlug,
+    api.inventory.products.getByIdOrSlug,
     activeStore?._id && productSlug
-      ? { storeId: activeStore._id, slug: productSlug }
+      ? { storeId: activeStore._id, identifier: productSlug }
       : "skip"
   );
 

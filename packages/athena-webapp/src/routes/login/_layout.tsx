@@ -38,7 +38,6 @@ function LoginLayout() {
 
   console.table({ isAuthenticated, isLoading });
   if (isLoading && !isAuthenticated) {
-    console.log("null..");
     return null;
   }
   return (

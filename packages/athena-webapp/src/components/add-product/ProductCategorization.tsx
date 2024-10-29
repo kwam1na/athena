@@ -9,9 +9,6 @@ import {
 } from "../ui/select";
 import View from "../View";
 import { getErrorForField } from "@/lib/utils";
-// import { useQuery } from "@tanstack/react-query";
-import { getAllCategories } from "@/api/category";
-import { getAllSubcategories } from "@/api/subcategory";
 import {
   Dialog,
   DialogContent,
@@ -85,7 +82,7 @@ function ProductCategorization({
               className="text-muted-foreground"
             >
               <Plus className="w-3 h-3 mr-2" />
-              Add category
+              New
             </Button>
           </div>
           {showCategoriesSkeleton && <Skeleton className="h-[40px]" />}
@@ -130,7 +127,7 @@ function ProductCategorization({
               className="text-muted-foreground"
             >
               <Plus className="w-3 h-3 mr-2" />
-              Add subcategory
+              New
             </Button>
           </div>
           {showSubcategoriesSkeleton && <Skeleton className="h-[40px]" />}

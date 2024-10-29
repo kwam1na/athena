@@ -19,6 +19,7 @@ import type * as app from "../app.js";
 import type * as auth from "../auth.js";
 import type * as env from "../env.js";
 import type * as http_domains_inventory_routes_categories from "../http/domains/inventory/routes/categories.js";
+import type * as http_domains_inventory_routes_colors from "../http/domains/inventory/routes/colors.js";
 import type * as http_domains_inventory_routes_index from "../http/domains/inventory/routes/index.js";
 import type * as http_domains_inventory_routes_organizations from "../http/domains/inventory/routes/organizations.js";
 import type * as http_domains_inventory_routes_products from "../http/domains/inventory/routes/products.js";
@@ -29,6 +30,7 @@ import type * as http_domains_storeFront_routes_guest from "../http/domains/stor
 import type * as http_domains_storeFront_routes_index from "../http/domains/storeFront/routes/index.js";
 import type * as http from "../http.js";
 import type * as inventory_categories from "../inventory/categories.js";
+import type * as inventory_colors from "../inventory/colors.js";
 import type * as inventory_organizations from "../inventory/organizations.js";
 import type * as inventory_products from "../inventory/products.js";
 import type * as inventory_stores from "../inventory/stores.js";
@@ -36,6 +38,7 @@ import type * as inventory_subcategories from "../inventory/subcategories.js";
 import type * as otp_ResendOTP from "../otp/ResendOTP.js";
 import type * as otp_VerificationCodeEmail from "../otp/VerificationCodeEmail.js";
 import type * as schemas_inventory_category from "../schemas/inventory/category.js";
+import type * as schemas_inventory_color from "../schemas/inventory/color.js";
 import type * as schemas_inventory_index from "../schemas/inventory/index.js";
 import type * as schemas_inventory_organization from "../schemas/inventory/organization.js";
 import type * as schemas_inventory_product from "../schemas/inventory/product.js";
@@ -63,6 +66,7 @@ declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   env: typeof env;
   "http/domains/inventory/routes/categories": typeof http_domains_inventory_routes_categories;
+  "http/domains/inventory/routes/colors": typeof http_domains_inventory_routes_colors;
   "http/domains/inventory/routes/index": typeof http_domains_inventory_routes_index;
   "http/domains/inventory/routes/organizations": typeof http_domains_inventory_routes_organizations;
   "http/domains/inventory/routes/products": typeof http_domains_inventory_routes_products;
@@ -73,6 +77,7 @@ declare const fullApi: ApiFromModules<{
   "http/domains/storeFront/routes/index": typeof http_domains_storeFront_routes_index;
   http: typeof http;
   "inventory/categories": typeof inventory_categories;
+  "inventory/colors": typeof inventory_colors;
   "inventory/organizations": typeof inventory_organizations;
   "inventory/products": typeof inventory_products;
   "inventory/stores": typeof inventory_stores;
@@ -80,6 +85,7 @@ declare const fullApi: ApiFromModules<{
   "otp/ResendOTP": typeof otp_ResendOTP;
   "otp/VerificationCodeEmail": typeof otp_VerificationCodeEmail;
   "schemas/inventory/category": typeof schemas_inventory_category;
+  "schemas/inventory/color": typeof schemas_inventory_color;
   "schemas/inventory/index": typeof schemas_inventory_index;
   "schemas/inventory/organization": typeof schemas_inventory_organization;
   "schemas/inventory/product": typeof schemas_inventory_product;

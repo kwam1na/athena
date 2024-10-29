@@ -13,6 +13,7 @@ import {
 import { bagRoutes } from "./http/domains/storeFront/routes";
 import { httpRouter } from "convex/server";
 import { guestRoutes } from "./http/domains/storeFront/routes/guest";
+import { colorRoutes } from "./http/domains/inventory/routes/colors";
 
 const app: HonoWithConvex<ActionCtx> = new Hono();
 
@@ -48,6 +49,8 @@ app.route(
   "/organizations/:organizationId/stores/:storeId/subcategories",
   subcategoryRoutes
 );
+
+app.route("/organizations/:organizationId/stores/:storeId/colors", colorRoutes);
 
 // app.route(
 //   "/organizations/:organizationId/customers/:customerId/bags",

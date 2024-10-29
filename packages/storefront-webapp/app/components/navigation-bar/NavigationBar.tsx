@@ -9,8 +9,8 @@ export default function NavigationBar() {
   const { bagCount } = useShoppingBag();
 
   return (
-    <nav className="w-full h-[48px] flex flex-shrink-0 gap-8 items-center justify-center bg-zinc-100 p-2 ">
-      <div className="flex items-center justify-between w-[60%]">
+    <nav className="w-full h-[48px] flex flex-shrink-0 gap-8 items-center justify-center px-16">
+      <div className="flex items-center justify-between w-full">
         <div className="flex items-center gap-8">
           <div>
             <Link to="/">

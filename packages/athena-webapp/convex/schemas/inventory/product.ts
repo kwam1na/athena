@@ -6,6 +6,7 @@ export const productSchema = v.object({
     v.literal("draft"),
     v.literal("live")
   ),
+  attributes: v.optional(v.record(v.string(), v.any())),
   currency: v.string(),
   createdByUserId: v.id("users"),
   categoryId: v.id("category"),
@@ -19,8 +20,8 @@ export const productSchema = v.object({
 });
 
 export const productSkuSchema = v.object({
-  attributes: v.object({}),
-  color: v.optional(v.string()),
+  attributes: v.optional(v.record(v.string(), v.any())),
+  color: v.optional(v.id("color")),
   sku: v.optional(v.string()),
   length: v.optional(v.number()),
   size: v.optional(v.string()),

@@ -26,7 +26,7 @@ export const columns: ColumnDef<Product>[] = [
               ...prev,
               orgUrlSlug: prev.orgUrlSlug!,
               storeUrlSlug: prev.storeUrlSlug!,
-              productSlug: row.original.slug,
+              productSlug: row.original._id,
             })}
             className="flex items-center gap-8"
           >

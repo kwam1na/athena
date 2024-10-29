@@ -13,7 +13,7 @@ export default function View({
   hideHeaderBottomBorder?: boolean;
 }) {
   return (
-    <section className={cn("flex-grow h-full", className)}>
+    <section className={cn("", className)}>
       <div className="flex flex-col h-full border border-1 rounded-md pb-8">
         {header && (
           <header
@@ -22,7 +22,7 @@ export default function View({
             {header}
           </header>
         )}
-        <main className="flex-grow overflow-auto">{children}</main>
+        <main>{children}</main>
       </div>
     </section>
   );

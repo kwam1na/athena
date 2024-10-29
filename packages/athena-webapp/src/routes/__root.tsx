@@ -26,6 +26,7 @@ import { DefaultCatchBoundary } from "@/components/auth/DefaultCatchBoundary";
 import NotFound from "@/components/states/not-found/NotFound";
 import { getCookie } from "vinxi/http";
 import { NotFoundView } from "@/components/states/not-found/NotFoundView";
+import Navbar from "../components/Navbar";
 
 export const Route = createRootRouteWithContext<{
   queryClient: QueryClient;
@@ -68,17 +69,23 @@ export const Route = createRootRouteWithContext<{
 function RootComponent() {
   return (
     <RootDocument>
-      <div className="flex gap-4 h-screen p-4 bg-zinc-50">
+      <Navbar />
+      <div className="p-8">
         <Outlet />
-        {/* <ReactQueryDevtools buttonPosition="top-right" /> */}
-        {/* <TanStackRouterDevtools position="bottom-right" /> */}
       </div>
+      {/* <div className="h-screen"> */}
+      {/* <Navbar />
+        <Outlet /> */}
+      {/* <div className="flex gap-4 h-screen p-4 bg-zinc-50"> */}
+      {/* <ReactQueryDevtools buttonPosition="top-right" /> */}
+      {/* <TanStackRouterDevtools position="bottom-right" /> */}
+      {/* </div> */}
+      {/* </div> */}
     </RootDocument>
   );
 }
 
 function RootDocument({ children }: { children: React.ReactNode }) {
-  console.log("root");
   return (
     <Html>
       <Head>

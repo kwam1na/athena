@@ -14,16 +14,34 @@ productRoutes.post("/", async (c) => {
 
 productRoutes.get("/", async (c) => {
   const storeId = c.req.param("storeId");
+  const params = c.req.queries();
+
+  console.log("params ->", params.color?.[0]?.split(","));
 
   if (!storeId) {
     return c.json({ error: "Store id missing" }, 404);
   }
 
+  const colors = params.color?.[0]?.split(",") as Id<"color">[];
+
   const products = await c.env.runQuery(api.inventory.products.getAll, {
     storeId: storeId as Id<"store">,
+    color: colors,
   });
 
   return c.json({ products });
+});
+
+productRoutes.get("/colors", async (c) => {
+  const storeId = c.req.param("storeId");
+
+  if (!storeId) {
+    return c.json({ error: "Store id missing" }, 404);
+  }
+
+  console.log("hit colors...");
+
+  return c.json({});
 });
 
 productRoutes.get("/:productId", async (c) => {

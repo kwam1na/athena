@@ -27,17 +27,12 @@ function Login() {
 
   const navigate = useNavigate();
 
-  console.log("rendering login...");
-
   useEffect(() => {
     if ((isLoading && !isAuthenticated) || !user) {
       return;
     }
 
-    // if (!isLoading && isAuthenticated && !user.name) {
-    //   navigate({ to: OnboardingUsernameRoute.fullPath });
-    //   return;
-    // }
+    console.table({ isLoading, isAuthenticated, user });
 
     if (!isLoading && isAuthenticated) {
       navigate({
@@ -46,7 +41,7 @@ function Login() {
       });
       return;
     }
-  }, [user]);
+  }, [user, isLoading, isAuthenticated]);
 
   if (step === "signIn") {
     return <LoginForm onSubmit={(email) => setStep({ email })} />;
@@ -66,7 +61,6 @@ function LoginForm({ onSubmit }: { onSubmit: (email: string) => void }) {
 
     onSubmit: async ({ value }) => {
       setIsSubmitting(true);
-      console.log("sging in ..", value);
       await signIn("resend-otp", value);
       onSubmit(value.email);
       setIsSubmitting(false);
@@ -193,10 +187,11 @@ import {
   InputOTPGroup,
   InputOTPSlot,
 } from "@/components/ui/input-otp";
+import { LoadingButton } from "~/src/components/ui/loading-button";
 
 const FormSchema = z.object({
-  pin: z.string().min(8, {
-    message: "Your one-time verification code must be 8 characters.",
+  pin: z.string().min(6, {
+    message: "Your one-time verification code must be 6 characters.",
   }),
 });
 
@@ -208,10 +203,25 @@ export function InputOTPForm({ email }: { email: string }) {
     },
   });
 
+  const [isSigningIn, setIsSigningIn] = useState(false);
+
   const { signIn } = useAuthActions();
 
+  const navigate = useNavigate();
+
   async function onSubmit(data: z.infer<typeof FormSchema>) {
+    setIsSigningIn(true);
     await signIn("resend-otp", { email, code: data.pin });
+    setIsSigningIn(false);
+
+    console.log("navigating to store url..");
+
+    setTimeout(() => {
+      navigate({
+        to: "/$orgUrlSlug/store/$storeUrlSlug",
+        params: { orgUrlSlug: "wigclub", storeUrlSlug: "wigclub" },
+      });
+    }, 1500);
   }
 
   return (
@@ -228,7 +238,7 @@ export function InputOTPForm({ email }: { email: string }) {
               <FormItem>
                 <FormLabel>One-Time Password</FormLabel>
                 <FormControl>
-                  <InputOTP maxLength={8} {...field}>
+                  <InputOTP maxLength={6} {...field}>
                     <InputOTPGroup>
                       <InputOTPSlot index={0} />
                       <InputOTPSlot index={1} />
@@ -236,8 +246,6 @@ export function InputOTPForm({ email }: { email: string }) {
                       <InputOTPSlot index={3} />
                       <InputOTPSlot index={4} />
                       <InputOTPSlot index={5} />
-                      <InputOTPSlot index={6} />
-                      <InputOTPSlot index={7} />
                     </InputOTPGroup>
                   </InputOTP>
                 </FormControl>
@@ -249,7 +257,9 @@ export function InputOTPForm({ email }: { email: string }) {
             )}
           />
 
-          <Button type="submit">Continue</Button>
+          <LoadingButton isLoading={isSigningIn} type="submit">
+            Continue
+          </LoadingButton>
         </form>
       </Form>
     </div>

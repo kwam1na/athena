@@ -9,4 +9,5 @@ export const productSchema = z.object({
   subcategoryId: z.string(),
   name: z.string().min(2),
   description: z.string().optional(),
+  attributes: z.record(z.string(), z.any()).optional(),
 });

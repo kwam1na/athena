@@ -1,6 +1,6 @@
 import React from "react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { Palette, Ruler, Shirt } from "lucide-react";
+import { DraftingCompass, Palette, Ruler, Shirt } from "lucide-react";
 
 interface DefaultAttributesToggleGroupProps {
   selectedAttributes: string[];
@@ -48,7 +48,7 @@ function DefaultAttributesToggleGroup({
         className="text-muted-foreground"
         aria-label="Toggle size"
       >
-        <Shirt className="w-4 h-4 mr-2" />
+        <DraftingCompass className="w-4 h-4 mr-2" />
         Size
       </ToggleGroupItem>
     </ToggleGroup>

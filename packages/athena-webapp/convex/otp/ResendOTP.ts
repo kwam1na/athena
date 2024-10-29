@@ -9,7 +9,7 @@ export const ResendOTP = Email({
   apiKey: AUTH_RESEND_KEY,
   maxAge: 60 * 20,
   async generateVerificationToken() {
-    return generateRandomString(8, alphabet("0-9"));
+    return generateRandomString(6, alphabet("0-9"));
   },
   async sendVerificationRequest({
     identifier: email,
@@ -20,11 +20,9 @@ export const ResendOTP = Email({
     console.log(provider.apiKey);
     const resend = new ResendAPI("re_ExacZJiD_BpHB6Yyc8vcnZvk7LVJYWRBr");
     const { error } = await resend.emails.send({
-      // TODO: Update with your app name and email address
       from: AUTH_EMAIL ?? "athena <onboarding@resend.dev>",
       to: [email],
-      // TODO: Update with your app name
-      subject: `Sign in to Convex SaaS`,
+      subject: `Sign in to athena`,
       react: VerificationCodeEmail({ code: token, expires }),
     });
 

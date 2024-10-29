@@ -11,6 +11,7 @@ import {
 } from "@tanstack/react-router";
 import { useConvexAuth } from "convex/react";
 import { useEffect } from "react";
+import Navbar from "../components/Navbar";
 
 export const Route = createFileRoute("/_authed")({
   component: AuthedComponent,
@@ -31,17 +32,15 @@ function AuthedComponent() {
   }
 
   return (
-    <div className="flex w-full gap-4 p-4 bg-zinc-50">
-      <AppLayoutProvider>
-        <Sidebar />
-        <div className="flex-grow">
-          <StoreModal />
-          <OrganizationModal />
-          <Outlet />
-        </div>
-        {/* <ReactQueryDevtools buttonPosition="top-right" /> */}
-        {/* <TanStackRouterDevtools position="bottom-right" /> */}
-      </AppLayoutProvider>
-    </div>
+    <AppLayoutProvider>
+      {/* <Sidebar /> */}
+      {/* <div className="flex-grow bg-red-50"> */}
+      {/* <StoreModal /> */}
+      {/* <OrganizationModal /> */}
+      {/* </div> */}
+      <StoreModal />
+      <OrganizationModal />
+      <Outlet />
+    </AppLayoutProvider>
   );
 }

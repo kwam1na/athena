@@ -119,6 +119,7 @@ function ProductViewContent() {
         categoryId: validatedProductData.categoryId as Id<"category">,
         subcategoryId: validatedProductData.subcategoryId as Id<"subcategory">,
         inventoryCount: 0,
+        attributes: validatedProductData.attributes || {},
       });
 
       if (product) setProductid(product?._id);
@@ -350,7 +351,7 @@ function ProductViewContent() {
             isLoading={isCreateMutationPending || isUpdateMutationPending}
             onClick={onSubmit}
           >
-            {ctaIcon}
+            {/* {ctaIcon} */}
             {ctaText}
           </LoadingButton>
         </div>

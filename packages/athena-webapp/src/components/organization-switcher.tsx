@@ -24,6 +24,7 @@ import { useEffect, useState } from "react";
 import { useOrganizationModal } from "@/hooks/useOrganizationModal";
 import { Organization } from "~/types";
 import { useGetStores } from "../hooks/useGetActiveStore";
+import { useAuthActions } from "@convex-dev/auth/react";
 // import { Organization } from "@athena/db";
 
 type PopoverTriggerProps = React.ComponentPropsWithoutRef<
@@ -97,6 +98,14 @@ export default function OrganizationSwitcher({
   const onOrganizationSelect = async (organization: OrganizationSelectItem) => {
     setSelectedOrganization(organization);
     setOpen(false);
+  };
+
+  const { signOut } = useAuthActions();
+
+  const handleSignOut = async () => {
+    await signOut();
+
+    navigate({ to: "/login" });
   };
 
   return (
@@ -173,6 +182,15 @@ export default function OrganizationSwitcher({
                 >
                   {/* <Cog className="mr-2 h-4 w-4 text-muted-foreground" /> */}
                   Organization settings
+                </CommandItem>
+                <CommandItem
+                  onSelect={() => {
+                    handleSignOut();
+                    setOpen(false);
+                  }}
+                >
+                  {/* <Cog className="mr-2 h-4 w-4 text-muted-foreground" /> */}
+                  Sign out
                 </CommandItem>
               </CommandGroup>
             </CommandList>

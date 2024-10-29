@@ -3,6 +3,7 @@ import { authTables } from "@convex-dev/auth/server";
 import { v, Infer } from "convex/values";
 import {
   categorySchema,
+  colorSchema,
   organizationSchema,
   productSchema,
   productSkuSchema,
@@ -19,6 +20,7 @@ import {
 const schema = defineSchema({
   ...authTables,
   category: defineTable(categorySchema),
+  color: defineTable(colorSchema),
   subcategory: defineTable(subcategorySchema),
   store: defineTable(storeSchema),
   organization: defineTable(organizationSchema),

@@ -1,4 +1,3 @@
-// import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import {
@@ -13,19 +12,7 @@ import { useEffect, useState } from "react";
 import { LoadingButton } from "../ui/loading-button";
 import { CheckCircledIcon } from "@radix-ui/react-icons";
 import { toast } from "sonner";
-// import {
-//   createSubcategory,
-//   deleteSubategory,
-//   getAllSubcategories,
-//   updateSubcategory,
-// } from "@/api/subcategory";
 import { Ban } from "lucide-react";
-// import {
-//   createCategory,
-//   deleteCategory,
-//   getAllCategories,
-//   updateCategory,
-// } from "@/api/category";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "~/convex/_generated/api";

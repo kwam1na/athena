@@ -1,3 +1,4 @@
+import { api } from "../_generated/api";
 import { mutation, query } from "../_generated/server";
 import { v } from "convex/values";
 
@@ -46,6 +47,13 @@ export const getById = query({
           ctx.db.get(item.productId),
         ]);
 
+        let colorName;
+
+        if (sku?.color) {
+          const color = await ctx.db.get(sku.color);
+          colorName = color?.name;
+        }
+
         let category: string | undefined;
 
         if (product) {
@@ -57,10 +65,11 @@ export const getById = query({
           ...item,
           price: sku?.price,
           length: sku?.length,
-          color: sku?.color,
+          colorName,
           productName: product?.name,
           productCategory: category,
           productImage: sku?.images?.[0],
+          productSlug: product?.slug,
         };
       })
     );
@@ -98,6 +107,13 @@ export const getByCustomerId = query({
           ctx.db.get(item.productId),
         ]);
 
+        let colorName;
+
+        if (sku?.color) {
+          const color = await ctx.db.get(sku.color);
+          colorName = color?.name;
+        }
+
         let category: string | undefined;
 
         if (product) {
@@ -109,7 +125,7 @@ export const getByCustomerId = query({
           ...item,
           price: sku?.price,
           length: sku?.length,
-          color: sku?.color,
+          colorName,
           productName: product?.name,
           productCategory: category,
           productImage: sku?.images?.[0],

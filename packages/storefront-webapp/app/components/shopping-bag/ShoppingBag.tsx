@@ -7,7 +7,7 @@ import { Link } from "@tanstack/react-router";
 import placeholder from "@/assets/placeholder.png";
 import { useShoppingBag } from "@/hooks/useShoppingBag";
 import { ProductSku } from "@athena/webapp-2";
-import { capitalizeFirstLetter } from "@/lib/utils";
+import { capitalizeWords } from "@/lib/utils";
 
 export default function ShoppingBag() {
   const { formatter } = useStoreContext();
@@ -23,7 +23,7 @@ export default function ShoppingBag() {
 
   const getProductName = (item: ProductSku) => {
     if (item.productCategory == "Wigs") {
-      return `${item.length}'' ${capitalizeFirstLetter(item.color)} ${item.productName}`;
+      return `${item.length}'' ${capitalizeWords(item.colorName)} ${item.productName}`;
     }
 
     return item.productName;
@@ -50,7 +50,7 @@ export default function ShoppingBag() {
               <Link
                 key={item.id}
                 to={"/shop/product/$productSlug"}
-                params={() => ({ productSlug: item.productSlug })}
+                params={() => ({ productSlug: item.productId })}
                 search={{
                   variant: item.productSku,
                 }}

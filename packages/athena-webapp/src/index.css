@@ -9,8 +9,8 @@
   font-weight: 400;
 
   color-scheme: light dark;
-  background-color: #343434;
-  overflow: hidden;
+  /* background-color: #343434; */
+  overflow: auto;
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;

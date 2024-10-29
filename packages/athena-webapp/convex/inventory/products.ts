@@ -2,6 +2,7 @@ import { mutation, query } from "../_generated/server";
 import { v } from "convex/values";
 import { productSchema, productSkuSchema } from "../schemas/inventory";
 import { ProductSku } from "../../types";
+import { Id } from "../_generated/dataModel";
 
 const entity = "product";
 
@@ -31,12 +32,14 @@ function generateSKU({
 
 // Helper function to calculate total inventory count
 const calculateTotalInventoryCount = (skus: ProductSku[]): number => {
+  if (!skus) return 0;
   return skus.reduce((total, sku) => total + (sku.inventoryCount || 0), 0);
 };
 
 export const getAll = query({
   args: {
     storeId: v.id("store"),
+    color: v.optional(v.array(v.id("color"))),
   },
   handler: async (ctx, args) => {
     const products = await ctx.db
@@ -44,10 +47,29 @@ export const getAll = query({
       .filter((q) => q.eq(q.field("storeId"), args.storeId))
       .collect();
 
-    const skus = await ctx.db
-      .query("productSku")
-      .filter((q) => q.eq(q.field("storeId"), args.storeId))
-      .collect();
+    // const skus = await ctx.db
+    //   .query("productSku")
+    //   .filter((q) => q.eq(q.field("storeId"), args.storeId))
+    //   .collect();
+
+    const skusQuery = ctx.db.query("productSku").filter((q) => {
+      if (args.color) {
+        return q.and(
+          q.eq(q.field("storeId"), args.storeId),
+          q.or(...args?.color!.map((color) => q.eq(q.field("color"), color)))
+        );
+      }
+      return q.eq(q.field("storeId"), args.storeId);
+    });
+
+    // if (args.color && args.color.length > 0) {
+    //   console.log("setting .");
+    //   skusQuery.filter((q) =>
+    //     q.or(...args?.color!.map((color) => q.eq(q.field("color"), color)))
+    //   );
+    // }
+
+    const skus = await skusQuery.collect();
 
     type SkusByProductId = { [key: string]: (typeof skus)[0][] };
 
@@ -64,13 +86,15 @@ export const getAll = query({
     );
 
     // Add SKUs to their corresponding products
-    const productsWithSkus = products.map((product) => ({
-      ...product,
-      inventoryCount: calculateTotalInventoryCount(
-        skusByProductId[product._id]
-      ),
-      skus: skusByProductId[product._id] || [],
-    }));
+    const productsWithSkus = products
+      .map((product) => ({
+        ...product,
+        inventoryCount: calculateTotalInventoryCount(
+          skusByProductId[product._id]
+        ),
+        skus: skusByProductId[product._id] || [],
+      }))
+      .filter((p) => p.skus.length > 0);
 
     return productsWithSkus;
   },
@@ -102,6 +126,24 @@ export const getById = query({
       )
       .collect();
 
+    const colorIds = skus
+      .map((sku) => sku.color)
+      .filter((color): color is Id<"color"> => color !== undefined);
+
+    const colors = await Promise.all(
+      colorIds.map((colorId) => ctx.db.get(colorId))
+    );
+
+    const colorMap = colors.reduce(
+      (acc: Record<Id<"color">, string>, color) => {
+        if (color) {
+          acc[color._id] = color.name;
+        }
+        return acc;
+      },
+      {} as Record<Id<"color">, string>
+    );
+
     let category: string | undefined;
 
     if (product) {
@@ -113,6 +155,7 @@ export const getById = query({
       ...sku,
       productCategory: category,
       productName: product?.name,
+      colorName: sku.color ? colorMap[sku.color] : null,
     }));
 
     return {
@@ -153,6 +196,24 @@ export const getBySlug = query({
       )
       .collect();
 
+    const colorIds = skus
+      .map((sku) => sku.color)
+      .filter((color): color is Id<"color"> => color !== undefined);
+
+    const colors = await Promise.all(
+      colorIds.map((colorId) => ctx.db.get(colorId))
+    );
+
+    const colorMap = colors.reduce(
+      (acc: Record<Id<"color">, string>, color) => {
+        if (color) {
+          acc[color._id] = color.name; // Now TypeScript knows _id is a valid key
+        }
+        return acc;
+      },
+      {} as Record<Id<"color">, string>
+    );
+
     let category: string | undefined;
 
     if (product) {
@@ -164,6 +225,7 @@ export const getBySlug = query({
       ...sku,
       productCategory: category,
       productName: product?.name,
+      colorName: sku.color ? colorMap[sku.color] : null,
     }));
 
     return {
@@ -210,6 +272,24 @@ export const getByIdOrSlug = query({
       )
       .collect();
 
+    const colorIds = skus
+      .map((sku) => sku.color)
+      .filter((color): color is Id<"color"> => color !== undefined);
+
+    const colors = await Promise.all(
+      colorIds.map((colorId) => ctx.db.get(colorId))
+    );
+
+    const colorMap = colors.reduce(
+      (acc: Record<Id<"color">, string>, color) => {
+        if (color) {
+          acc[color._id] = color.name; // Now TypeScript knows _id is a valid key
+        }
+        return acc;
+      },
+      {} as Record<Id<"color">, string>
+    );
+
     let category: string | undefined;
 
     if (product) {
@@ -221,6 +301,7 @@ export const getByIdOrSlug = query({
       ...sku,
       productCategory: category,
       productName: product?.name,
+      colorName: sku.color ? colorMap[sku.color] : null,
     }));
 
     return {
@@ -277,18 +358,39 @@ export const createSku = mutation({
   },
 });
 
+export const getProductSku = query({
+  args: {
+    id: v.id("productSku"),
+  },
+  handler: async (ctx, args) => {
+    const productSku = await ctx.db.get(args.id);
+
+    let colorName;
+
+    if (productSku?.color) {
+      const color = await ctx.db.get(productSku.color);
+      colorName = color?.name;
+    }
+
+    return {
+      ...productSku,
+      colorName,
+    };
+  },
+});
+
 export const updateSku = mutation({
   args: {
     id: v.id("productSku"),
     images: v.optional(v.array(v.string())),
     length: v.optional(v.number()),
     size: v.optional(v.string()),
-    color: v.optional(v.string()),
+    color: v.optional(v.id("color")),
     sku: v.optional(v.string()),
     price: v.optional(v.number()),
     inventoryCount: v.optional(v.number()),
     unitCost: v.optional(v.number()),
-    attributes: v.optional(v.object({})),
+    attributes: v.optional(v.record(v.string(), v.any())),
   },
   handler: async (ctx, args) => {
     const { id, ...rest } = args;
@@ -309,6 +411,7 @@ export const update = mutation({
     availability: v.optional(
       v.union(v.literal("draft"), v.literal("live"), v.literal("archived"))
     ),
+    attributes: v.optional(v.record(v.string(), v.any())),
     name: v.optional(v.string()),
     slug: v.optional(v.string()),
     currency: v.optional(v.string()),

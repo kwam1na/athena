@@ -11,6 +11,13 @@ import { Body, Head, Html, Meta, Scripts } from "@tanstack/start";
 import { Toaster } from "@/components/ui/sonner";
 import { fetchUser } from "@/server-actions/auth";
 import { OG_ORGANIZTION_ID } from "@/lib/constants";
+import Footer from "@/components/footer/Footer";
+import { z } from "zod";
+
+const productsPageSchema = z.object({
+  color: z.string().optional(),
+  length: z.string().optional(),
+});
 
 export const Route = createRootRouteWithContext<{
   queryClient: QueryClient;
@@ -36,6 +43,8 @@ export const Route = createRootRouteWithContext<{
     };
   },
 
+  validateSearch: productsPageSchema,
+
   component: RootComponent,
 
   notFoundComponent: () => {
@@ -56,6 +65,7 @@ function RootComponent() {
         <main className="flex-grow overflow-auto">
           <Outlet />
         </main>
+        {/* <Footer /> */}
       </div>
     </RootDocument>
   );

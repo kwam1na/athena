@@ -18,10 +18,10 @@ import { relations } from "drizzle-orm";
 export const productAvailabilityEnum = pgEnum("availability", [
   "archived",
   "draft",
-  "published",
+  "live",
 ]);
 
-export type ProductAvailability = "archived" | "draft" | "published";
+export type ProductAvailability = "archived" | "draft" | "live";
 
 export const products = pgTable("products", {
   id: serial("id").primaryKey(),

@@ -20,6 +20,7 @@ import { ImageFile } from "../ui/image-uploader";
 import { RefreshCcw, RotateCcw } from "lucide-react";
 import useGetActiveProduct from "@/hooks/useGetActiveProduct";
 import { Id } from "~/convex/_generated/dataModel";
+import useGetActiveStore from "~/src/hooks/useGetActiveStore";
 
 export type ProductVariant = {
   id: string;
@@ -57,6 +58,8 @@ function Stock() {
   } = useProduct();
 
   const { activeProduct } = useGetActiveProduct();
+
+  const { activeStore } = useGetActiveStore();
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement>,
@@ -116,8 +119,8 @@ function Stock() {
             <TableRow>
               <TableHead>SKU</TableHead>
               <TableHead>Stock</TableHead>
-              <TableHead>Price</TableHead>
-              <TableHead>Cost</TableHead>
+              <TableHead>{`Price (${activeStore?.currency.toUpperCase()})`}</TableHead>
+              <TableHead>{`Cost (${activeStore?.currency.toUpperCase()})`}</TableHead>
               <TableHead></TableHead>
             </TableRow>
           </TableHeader>
@@ -174,7 +177,7 @@ function Stock() {
 
                 <TableCell>
                   <Label htmlFor={`price-${index}`} className="sr-only">
-                    Price
+                    {`Price ${activeStore?.currency}`}
                   </Label>
                   {isLoading ? (
                     <Skeleton className="h-[40px] w-full" />
@@ -182,7 +185,7 @@ function Stock() {
                     <Input
                       id={`price-${index}`}
                       type="number"
-                      placeholder="9.99"
+                      placeholder="999"
                       onChange={(e) => handleChange(e, variant.id, "price")}
                       value={variant.price || ""}
                       disabled={variant.markedForDeletion}
@@ -205,7 +208,7 @@ function Stock() {
                     <Input
                       id={`cost-${index}`}
                       type="number"
-                      placeholder="9.99"
+                      placeholder="999"
                       onChange={(e) => handleChange(e, variant.id, "cost")}
                       value={variant.cost || ""}
                       disabled={variant.markedForDeletion}

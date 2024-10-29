@@ -6,7 +6,7 @@ import { useShoppingBag } from "@/hooks/useShoppingBag";
 import { getProduct } from "@/api/product";
 import { BagItem, Product, ProductSku } from "@athena/webapp-2";
 import { Button } from "../ui/button";
-import { capitalizeFirstLetter } from "@/lib/utils";
+import { capitalizeWords } from "@/lib/utils";
 
 function ProductAttribute({
   product,
@@ -16,18 +16,19 @@ function ProductAttribute({
   selectedSku: ProductSku;
 }) {
   const colors: string[] = Array.from(
-    new Set(product.skus.map((sku: ProductSku) => sku.color))
+    new Set(product.skus.map((sku: ProductSku) => sku.colorName))
   );
 
   // const lengths: string[] = Array.from(
   //   new Set(product.skus.map((sku: ProductSku) => sku.length))
   // );
 
-  const lengths: string[] = Array.from(
+  const lengths: number[] = Array.from(
     new Set(
       product.skus
-        .filter((sk: ProductSku) => sk.color == selectedSku.color)
+        .filter((sk: ProductSku) => sk.colorName == selectedSku.colorName)
         .map((sku: ProductSku) => sku.length)
+        .sort()
     )
   );
 
@@ -40,13 +41,13 @@ function ProductAttribute({
       variant =
         product.skus.find(
           (sk: ProductSku) =>
-            sk.color == value && sk.length == selectedSku.length
-        ) || product.skus.find((sk: ProductSku) => sk.color == value);
+            sk.colorName == value && sk.length == selectedSku.length
+        ) || product.skus.find((sk: ProductSku) => sk.colorName == value);
     } else {
       variant =
         product.skus.find(
           (sk: ProductSku) =>
-            sk.length == value && sk.color == selectedSku.color
+            sk.length == value && sk.colorName == selectedSku.colorName
         ) || product.skus.find((sk: ProductSku) => sk.length == value);
     }
 
@@ -70,10 +71,10 @@ function ProductAttribute({
               <Button
                 variant={"ghost"}
                 key={index}
-                className={`${selectedSku?.color == color ? "border border-2 border-black" : "border border-2 border-background-muted"}`}
+                className={`${selectedSku?.colorName == color ? "border border-2 border-black" : "border border-2 border-background-muted"}`}
                 onClick={() => handleClick("color", color)}
               >
-                {capitalizeFirstLetter(color)}
+                {capitalizeWords(color)}
               </Button>
             );
           })}
@@ -90,7 +91,7 @@ function ProductAttribute({
                 variant={"ghost"}
                 key={index}
                 className={`${selectedSku?.length == length ? "border border-2 border-black" : "border border-2 border-background-muted"}`}
-                onClick={() => handleClick("length", length)}
+                onClick={() => handleClick("length", length.toString())}
               >
                 {`${length}''`}
               </Button>
@@ -122,7 +123,7 @@ export default function ProductPage() {
 
   const getProductName = (item: ProductSku) => {
     if (item.productCategory == "Wigs") {
-      return `${item.length}'' ${capitalizeFirstLetter(item.color)} ${item.productName}`;
+      return `${item.length}'' ${capitalizeWords(item.colorName)} ${item.productName}`;
     }
 
     return item.productName;
@@ -158,10 +159,10 @@ export default function ProductPage() {
   return (
     <main className="w-full h-full px-[240px] mt-[80px]">
       <div className="flex gap-12">
-        <div className="space-y-4">
+        <div className="space-y-4 w-[50%]">
           <img
-            alt={`$ image`}
-            className={`aspect-square w-96 h-96 rounded-md object-cover`}
+            alt={`${productSku.productName} image`}
+            className={`aspect-square rounded-md object-cover`}
             src={productSku.images[0]}
           />
 
@@ -188,7 +189,7 @@ export default function ProductPage() {
           <ProductAttribute product={product} selectedSku={productSku} />
 
           <LoadingButton
-            isLoading={false}
+            isLoading={isUpdatingBag}
             disabled={isUpdatingBag}
             onClick={handleUpdateBag}
           >

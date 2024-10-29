@@ -14,6 +14,8 @@ export type ProductSku = Doc<"productSku">;
 
 export type Product = Doc<"product"> & { skus: ProductSku[] };
 
+export type Color = Doc<"color">;
+
 // Store front
 export type Bag = Doc<"bag">;
 
