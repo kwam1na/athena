@@ -2,15 +2,64 @@
 @tailwind components;
 @tailwind utilities;
 
+@font-face {
+  font-family: "Martel";
+  src: url("./assets/fonts/Martel/Martel-Light.ttf") format("truetype");
+  font-weight: 300;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "Martel";
+  src: url("./assets/fonts/Martel/Martel-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "Martel";
+  src: url("./assets/fonts/Martel/Martel-DemiBold.ttf") format("truetype");
+  font-weight: 500;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "Martel";
+  src: url("./assets/fonts/Martel/Martel-Bold.ttf") format("truetype");
+  font-weight: 700;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "Martel";
+  src: url("./assets/fonts/Martel/Martel-ExtraBold.ttf") format("truetype");
+  font-weight: 800;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "Martel";
+  src: url("./assets/fonts/Martel/Martel-Heavy.ttf") format("truetype");
+  font-weight: 900;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "Martel";
+  src: url("/assets/fonts/Martel/Martel-UltraLight.ttf") format("truetype");
+  font-weight: 200;
+  font-style: normal;
+}
+
 
 :root {
-  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  font-family: "Martel", sans-serif;
   line-height: 1.5;
   font-weight: 400;
 
   color-scheme: light dark;
-  background-color: #343434;
-  overflow: hidden;
+  /* background-color: #343434; */
+  overflow: auto;
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -35,6 +84,8 @@
     --muted-foreground: 240 3.8% 46.1%;
     --accent: 240 4.8% 95.9%;
     --accent-foreground: 240 5.9% 10%;
+    --accent-2: 338 81% 69%; /* Updated to match the HSL value in the screenshot */
+    --accent-2-foreground: 240 5.9% 10%;
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 98%;
     --border: 240 5.9% 90%;
@@ -62,6 +113,8 @@
     --muted-foreground: 240 5% 64.9%;
     --accent: 240 3.7% 15.9%;
     --accent-foreground: 0 0% 98%;
+    --accent-2: 338 81% 69%; /* Update the dark theme as well, if needed */
+    --accent-2-foreground: 0 0% 98%;
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 98%;
     --border: 240 3.7% 15.9%;
@@ -84,4 +137,3 @@
     @apply bg-background text-foreground;
   }
 }
-

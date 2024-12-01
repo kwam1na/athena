@@ -18,7 +18,9 @@ import { Ban } from "lucide-react";
 import { useState } from "react";
 import { AlertModal } from "@/components/ui/modals/alert-modal";
 import { ProductResponseBody } from "@/lib/schemas/product";
-import { Product } from "@athena/db";
+// import { Product } from "@athena/db";
+import { useDeleteProduct } from "../../product-actions";
+import { Product } from "~/types";
 
 interface DataTableRowActionsProps<TData> {
   row: Row<TData>;
@@ -28,6 +30,7 @@ export function DataTableRowActions<TData>({
   row,
 }: DataTableRowActionsProps<TData>) {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isDeleteMutationPending, setIsDeleteMutationPending] = useState(false);
 
   const queryClient = useQueryClient();
 
@@ -35,17 +38,13 @@ export function DataTableRowActions<TData>({
 
   const product = row.original as Product;
 
-  const deleteItem = async () => {
-    await deleteProduct({
-      organizationId: product.organizationId,
-      storeId: product.storeId,
-      productId: product.id,
-    });
-  };
+  const deleteRowItem = useDeleteProduct(product._id);
 
-  const deleteMutation = useMutation({
-    mutationFn: deleteItem,
-    onSuccess: () => {
+  const deleteItem = async () => {
+    try {
+      setIsDeleteMutationPending(true);
+      await deleteRowItem();
+
       toast(`Product '${product.name}' deleted`, {
         icon: <CheckCircledIcon className="w-4 h-4" />,
       });
@@ -58,25 +57,51 @@ export function DataTableRowActions<TData>({
           storeUrlSlug: prev.storeUrlSlug!,
         }),
       });
-
+    } catch (e) {
+      toast("Something went wrong", {
+        icon: <Ban className="w-4 h-4" />,
+        description: (e as Error).message,
+      });
+    } finally {
+      setIsDeleteMutationPending(false);
       setIsDeleteModalOpen(false);
-    },
-    onError: () => {
-      toast("Something went wrong", { icon: <Ban className="w-4 h-4" /> });
-    },
-  });
+    }
+  };
+
+  // const deleteMutation = useMutation({
+  //   mutationFn: deleteItem,
+  //   onSuccess: () => {
+  //     toast(`Product '${product.name}' deleted`, {
+  //       icon: <CheckCircledIcon className="w-4 h-4" />,
+  //     });
+
+  //     navigate({
+  //       to: "/$orgUrlSlug/store/$storeUrlSlug/products",
+  //       params: (prev) => ({
+  //         ...prev,
+  //         orgUrlSlug: prev.orgUrlSlug!,
+  //         storeUrlSlug: prev.storeUrlSlug!,
+  //       }),
+  //     });
+
+  //     setIsDeleteModalOpen(false);
+  //   },
+  //   onError: () => {
+  //     toast("Something went wrong", { icon: <Ban className="w-4 h-4" /> });
+  //   },
+  // });
 
   return (
     <>
       <AlertModal
         title="Delete product?"
         isOpen={isDeleteModalOpen}
-        loading={deleteMutation.isPending}
+        loading={isDeleteMutationPending}
         onClose={() => {
           setIsDeleteModalOpen(false);
         }}
         onConfirm={() => {
-          deleteMutation.mutate();
+          deleteItem();
         }}
       />
       <DropdownMenu>

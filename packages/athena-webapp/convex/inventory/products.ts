@@ -40,34 +40,74 @@ export const getAll = query({
   args: {
     storeId: v.id("store"),
     color: v.optional(v.array(v.id("color"))),
+    length: v.optional(v.array(v.number())),
+    subcategory: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
-    const products = await ctx.db
-      .query(entity)
-      .filter((q) => q.eq(q.field("storeId"), args.storeId))
-      .collect();
-
     // const skus = await ctx.db
     //   .query("productSku")
     //   .filter((q) => q.eq(q.field("storeId"), args.storeId))
     //   .collect();
 
+    let subcategoryId: Id<"subcategory"> | undefined;
+
+    console.log("params ->", args.subcategory);
+
+    if (args.subcategory) {
+      const s = await ctx.db
+        .query("subcategory")
+        .filter((q) => q.eq(q.field("name"), args.subcategory?.[0]))
+        .first();
+      subcategoryId = s?._id;
+    }
+
+    console.log("s id ->", subcategoryId);
+
+    const products = await ctx.db
+      .query(entity)
+      .filter((q) => {
+        if (subcategoryId) {
+          return q.and(
+            q.eq(q.field("storeId"), args.storeId),
+            q.eq(q.field("subcategoryId"), subcategoryId)
+          );
+        }
+
+        return q.eq(q.field("storeId"), args.storeId);
+      })
+      .collect();
+
     const skusQuery = ctx.db.query("productSku").filter((q) => {
+      if (args.color && args.length) {
+        return q.and(
+          q.eq(q.field("storeId"), args.storeId),
+          q.or(
+            q.or(...args?.color!.map((color) => q.eq(q.field("color"), color))),
+            q.or(
+              ...args?.length!.map((length) => q.eq(q.field("length"), length))
+            )
+          )
+        );
+      }
+
       if (args.color) {
         return q.and(
           q.eq(q.field("storeId"), args.storeId),
           q.or(...args?.color!.map((color) => q.eq(q.field("color"), color)))
         );
       }
+
+      if (args.length) {
+        return q.and(
+          q.eq(q.field("storeId"), args.storeId),
+          q.or(
+            ...args?.length!.map((length) => q.eq(q.field("length"), length))
+          )
+        );
+      }
+
       return q.eq(q.field("storeId"), args.storeId);
     });
-
-    // if (args.color && args.color.length > 0) {
-    //   console.log("setting .");
-    //   skusQuery.filter((q) =>
-    //     q.or(...args?.color!.map((color) => q.eq(q.field("color"), color)))
-    //   );
-    // }
 
     const skus = await skusQuery.collect();
 

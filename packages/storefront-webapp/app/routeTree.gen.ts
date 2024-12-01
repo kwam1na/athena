@@ -11,12 +11,21 @@
 // Import Routes
 
 import { Route as rootRoute } from './routes/__root'
+import { Route as LayoutImport } from './routes/_layout'
 import { Route as CategorySlugImport } from './routes/$categorySlug'
 import { Route as IndexImport } from './routes/index'
+import { Route as LayoutShopLayoutImport } from './routes/_layout/_shopLayout'
 import { Route as ShopBagIndexImport } from './routes/shop/bag/index'
 import { Route as ShopProductProductSlugImport } from './routes/shop/product/$productSlug'
+import { Route as LayoutShopLayoutShopHairIndexImport } from './routes/_layout/_shopLayout/shop/hair/index'
+import { Route as LayoutShopLayoutShopHairSubcategorySlugImport } from './routes/_layout/_shopLayout/shop/hair/$subcategorySlug'
 
 // Create/Update Routes
+
+const LayoutRoute = LayoutImport.update({
+  id: '/_layout',
+  getParentRoute: () => rootRoute,
+} as any)
 
 const CategorySlugRoute = CategorySlugImport.update({
   path: '/$categorySlug',
@@ -28,6 +37,11 @@ const IndexRoute = IndexImport.update({
   getParentRoute: () => rootRoute,
 } as any)
 
+const LayoutShopLayoutRoute = LayoutShopLayoutImport.update({
+  id: '/_shopLayout',
+  getParentRoute: () => LayoutRoute,
+} as any)
+
 const ShopBagIndexRoute = ShopBagIndexImport.update({
   path: '/shop/bag/',
   getParentRoute: () => rootRoute,
@@ -37,6 +51,18 @@ const ShopProductProductSlugRoute = ShopProductProductSlugImport.update({
   path: '/shop/product/$productSlug',
   getParentRoute: () => rootRoute,
 } as any)
+
+const LayoutShopLayoutShopHairIndexRoute =
+  LayoutShopLayoutShopHairIndexImport.update({
+    path: '/shop/hair/',
+    getParentRoute: () => LayoutShopLayoutRoute,
+  } as any)
+
+const LayoutShopLayoutShopHairSubcategorySlugRoute =
+  LayoutShopLayoutShopHairSubcategorySlugImport.update({
+    path: '/shop/hair/$subcategorySlug',
+    getParentRoute: () => LayoutShopLayoutRoute,
+  } as any)
 
 // Populate the FileRoutesByPath interface
 
@@ -56,6 +82,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CategorySlugImport
       parentRoute: typeof rootRoute
     }
+    '/_layout': {
+      id: '/_layout'
+      path: ''
+      fullPath: ''
+      preLoaderRoute: typeof LayoutImport
+      parentRoute: typeof rootRoute
+    }
+    '/_layout/_shopLayout': {
+      id: '/_layout/_shopLayout'
+      path: ''
+      fullPath: ''
+      preLoaderRoute: typeof LayoutShopLayoutImport
+      parentRoute: typeof LayoutImport
+    }
     '/shop/product/$productSlug': {
       id: '/shop/product/$productSlug'
       path: '/shop/product/$productSlug'
@@ -70,50 +110,118 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ShopBagIndexImport
       parentRoute: typeof rootRoute
     }
+    '/_layout/_shopLayout/shop/hair/$subcategorySlug': {
+      id: '/_layout/_shopLayout/shop/hair/$subcategorySlug'
+      path: '/shop/hair/$subcategorySlug'
+      fullPath: '/shop/hair/$subcategorySlug'
+      preLoaderRoute: typeof LayoutShopLayoutShopHairSubcategorySlugImport
+      parentRoute: typeof LayoutShopLayoutImport
+    }
+    '/_layout/_shopLayout/shop/hair/': {
+      id: '/_layout/_shopLayout/shop/hair/'
+      path: '/shop/hair'
+      fullPath: '/shop/hair'
+      preLoaderRoute: typeof LayoutShopLayoutShopHairIndexImport
+      parentRoute: typeof LayoutShopLayoutImport
+    }
   }
 }
 
 // Create and export the route tree
 
+interface LayoutShopLayoutRouteChildren {
+  LayoutShopLayoutShopHairSubcategorySlugRoute: typeof LayoutShopLayoutShopHairSubcategorySlugRoute
+  LayoutShopLayoutShopHairIndexRoute: typeof LayoutShopLayoutShopHairIndexRoute
+}
+
+const LayoutShopLayoutRouteChildren: LayoutShopLayoutRouteChildren = {
+  LayoutShopLayoutShopHairSubcategorySlugRoute:
+    LayoutShopLayoutShopHairSubcategorySlugRoute,
+  LayoutShopLayoutShopHairIndexRoute: LayoutShopLayoutShopHairIndexRoute,
+}
+
+const LayoutShopLayoutRouteWithChildren =
+  LayoutShopLayoutRoute._addFileChildren(LayoutShopLayoutRouteChildren)
+
+interface LayoutRouteChildren {
+  LayoutShopLayoutRoute: typeof LayoutShopLayoutRouteWithChildren
+}
+
+const LayoutRouteChildren: LayoutRouteChildren = {
+  LayoutShopLayoutRoute: LayoutShopLayoutRouteWithChildren,
+}
+
+const LayoutRouteWithChildren =
+  LayoutRoute._addFileChildren(LayoutRouteChildren)
+
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/$categorySlug': typeof CategorySlugRoute
+  '': typeof LayoutShopLayoutRouteWithChildren
   '/shop/product/$productSlug': typeof ShopProductProductSlugRoute
   '/shop/bag': typeof ShopBagIndexRoute
+  '/shop/hair/$subcategorySlug': typeof LayoutShopLayoutShopHairSubcategorySlugRoute
+  '/shop/hair': typeof LayoutShopLayoutShopHairIndexRoute
 }
 
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/$categorySlug': typeof CategorySlugRoute
+  '': typeof LayoutShopLayoutRouteWithChildren
   '/shop/product/$productSlug': typeof ShopProductProductSlugRoute
   '/shop/bag': typeof ShopBagIndexRoute
+  '/shop/hair/$subcategorySlug': typeof LayoutShopLayoutShopHairSubcategorySlugRoute
+  '/shop/hair': typeof LayoutShopLayoutShopHairIndexRoute
 }
 
 export interface FileRoutesById {
   __root__: typeof rootRoute
   '/': typeof IndexRoute
   '/$categorySlug': typeof CategorySlugRoute
+  '/_layout': typeof LayoutRouteWithChildren
+  '/_layout/_shopLayout': typeof LayoutShopLayoutRouteWithChildren
   '/shop/product/$productSlug': typeof ShopProductProductSlugRoute
   '/shop/bag/': typeof ShopBagIndexRoute
+  '/_layout/_shopLayout/shop/hair/$subcategorySlug': typeof LayoutShopLayoutShopHairSubcategorySlugRoute
+  '/_layout/_shopLayout/shop/hair/': typeof LayoutShopLayoutShopHairIndexRoute
 }
 
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/$categorySlug' | '/shop/product/$productSlug' | '/shop/bag'
+  fullPaths:
+    | '/'
+    | '/$categorySlug'
+    | ''
+    | '/shop/product/$productSlug'
+    | '/shop/bag'
+    | '/shop/hair/$subcategorySlug'
+    | '/shop/hair'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/$categorySlug' | '/shop/product/$productSlug' | '/shop/bag'
+  to:
+    | '/'
+    | '/$categorySlug'
+    | ''
+    | '/shop/product/$productSlug'
+    | '/shop/bag'
+    | '/shop/hair/$subcategorySlug'
+    | '/shop/hair'
   id:
     | '__root__'
     | '/'
     | '/$categorySlug'
+    | '/_layout'
+    | '/_layout/_shopLayout'
     | '/shop/product/$productSlug'
     | '/shop/bag/'
+    | '/_layout/_shopLayout/shop/hair/$subcategorySlug'
+    | '/_layout/_shopLayout/shop/hair/'
   fileRoutesById: FileRoutesById
 }
 
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   CategorySlugRoute: typeof CategorySlugRoute
+  LayoutRoute: typeof LayoutRouteWithChildren
   ShopProductProductSlugRoute: typeof ShopProductProductSlugRoute
   ShopBagIndexRoute: typeof ShopBagIndexRoute
 }
@@ -121,6 +229,7 @@ export interface RootRouteChildren {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   CategorySlugRoute: CategorySlugRoute,
+  LayoutRoute: LayoutRouteWithChildren,
   ShopProductProductSlugRoute: ShopProductProductSlugRoute,
   ShopBagIndexRoute: ShopBagIndexRoute,
 }
@@ -139,6 +248,7 @@ export const routeTree = rootRoute
       "children": [
         "/",
         "/$categorySlug",
+        "/_layout",
         "/shop/product/$productSlug",
         "/shop/bag/"
       ]
@@ -149,11 +259,33 @@ export const routeTree = rootRoute
     "/$categorySlug": {
       "filePath": "$categorySlug.tsx"
     },
+    "/_layout": {
+      "filePath": "_layout.tsx",
+      "children": [
+        "/_layout/_shopLayout"
+      ]
+    },
+    "/_layout/_shopLayout": {
+      "filePath": "_layout/_shopLayout.tsx",
+      "parent": "/_layout",
+      "children": [
+        "/_layout/_shopLayout/shop/hair/$subcategorySlug",
+        "/_layout/_shopLayout/shop/hair/"
+      ]
+    },
     "/shop/product/$productSlug": {
       "filePath": "shop/product/$productSlug.tsx"
     },
     "/shop/bag/": {
       "filePath": "shop/bag/index.tsx"
+    },
+    "/_layout/_shopLayout/shop/hair/$subcategorySlug": {
+      "filePath": "_layout/_shopLayout/shop/hair/$subcategorySlug.tsx",
+      "parent": "/_layout/_shopLayout"
+    },
+    "/_layout/_shopLayout/shop/hair/": {
+      "filePath": "_layout/_shopLayout/shop/hair/index.tsx",
+      "parent": "/_layout/_shopLayout"
     }
   }
 }

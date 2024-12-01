@@ -15,6 +15,7 @@ subcategoryRoutes.post("/", async (c) => {
 subcategoryRoutes.get("/", async (c) => {
   const organizationId = c.req.param("organizationId");
   const storeId = c.req.param("storeId");
+  const params = c.req.queries();
 
   if (!organizationId || !storeId)
     return c.json({ error: "Missing data to retrieve subcategories" }, 400);
@@ -23,6 +24,7 @@ subcategoryRoutes.get("/", async (c) => {
     api.inventory.subcategories.getAll,
     {
       storeId: storeId as Id<"store">,
+      categoryId: params.categoryId?.[0] as Id<"category">,
     }
   );
 

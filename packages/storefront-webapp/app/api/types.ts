@@ -5,3 +5,10 @@ export type BaseApiParams = {
 export type OrganizationStoreEntityApiParams = BaseApiParams & {
   storeId: string;
 };
+
+export type FilterParams = {
+  color?: string;
+  length?: string;
+  type?: string;
+  subcategory?: string;
+};

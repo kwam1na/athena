@@ -1,19 +1,21 @@
 import config from "@/config";
-import { OrganizationStoreEntityApiParams } from "./types";
-import { Subcategory, SubcategoryRequest } from "@athena/db";
+import { FilterParams, OrganizationStoreEntityApiParams } from "./types";
+import { Subcategory } from "@athena/webapp-2";
 
 type GetParams = OrganizationStoreEntityApiParams & {
-  subcategoryId: number;
+  subcategoryId: string;
 };
 
-type CreateParams = OrganizationStoreEntityApiParams & {
-  data: SubcategoryRequest;
-};
-
-type UpdateParams = GetParams & { data: Partial<SubcategoryRequest> };
-
-const getBaseUrl = (organizationId: number, storeId: number) =>
+const getBaseUrl = (organizationId: string, storeId: string) =>
   `${config.apiGateway.URL}/organizations/${organizationId}/stores/${storeId}/subcategories`;
+
+const buildQueryString = (params?: FilterParams) => {
+  if (!params) return null;
+  const query = new URLSearchParams();
+  if (params.color) query.append("color", params.color); // Expecting comma-separated string for color
+  if (params.length) query.append("length", params.length); // Expecting comma-separated string for length
+  return query.toString();
+};
 
 export async function getAllSubcategories({
   organizationId,
@@ -43,75 +45,6 @@ export async function getSubategory({
 
   if (!response.ok) {
     throw new Error(res.error || "Error loading subcategory.");
-  }
-
-  return res;
-}
-
-export async function createSubcategory({
-  data,
-  organizationId,
-  storeId,
-}: CreateParams): Promise<Subcategory> {
-  const response = await fetch(getBaseUrl(organizationId, storeId), {
-    method: "POST",
-    body: JSON.stringify({
-      ...data,
-      name: data.name.trim(),
-    }),
-  });
-
-  const res = await response.json();
-
-  if (!response.ok) {
-    throw new Error(res.error || "Error creating subcategory.");
-  }
-
-  return res;
-}
-
-export async function updateSubcategory({
-  data,
-  organizationId,
-  storeId,
-  subcategoryId,
-}: UpdateParams): Promise<Subcategory> {
-  const response = await fetch(
-    `${getBaseUrl(organizationId, storeId)}/${subcategoryId}`,
-    {
-      method: "PUT",
-      body: JSON.stringify({
-        ...data,
-        name: data.name?.trim(),
-      }),
-    }
-  );
-
-  const res = await response.json();
-
-  if (!response.ok) {
-    throw new Error(res.error || "Error updating subcategory.");
-  }
-
-  return res;
-}
-
-export async function deleteSubategory({
-  organizationId,
-  storeId,
-  subcategoryId,
-}: GetParams) {
-  const response = await fetch(
-    `${getBaseUrl(organizationId, storeId)}/${subcategoryId}`,
-    {
-      method: "DELETE",
-    }
-  );
-
-  const res = await response.json();
-
-  if (!response.ok) {
-    throw new Error(res.error || "Error deleting subcategory.");
   }
 
   return res;

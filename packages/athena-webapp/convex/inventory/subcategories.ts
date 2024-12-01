@@ -7,11 +7,21 @@ const entity = "subcategory";
 export const getAll = query({
   args: {
     storeId: v.id("store"),
+    categoryId: v.optional(v.id("category")),
   },
   handler: async (ctx, args) => {
     const categories = await ctx.db
       .query(entity)
-      .filter((q) => q.eq(q.field("storeId"), args.storeId))
+      .filter((q) => {
+        if (args.categoryId) {
+          return q.and(
+            q.eq(q.field("storeId"), args.storeId),
+            q.eq(q.field("categoryId"), args.categoryId)
+          );
+        }
+
+        return q.eq(q.field("storeId"), args.storeId);
+      })
       .collect();
 
     return categories;

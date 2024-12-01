@@ -16,16 +16,6 @@ export default function useGetActiveStore() {
       : "skip"
   );
 
-  // const {
-  //   data: stores,
-  //   isLoading: isLoadingStores,
-  //   isFetching,
-  // } = useQuery({
-  //   queryKey: ["stores", activeOrganization?.id],
-  //   queryFn: () => getAllStores(activeOrganization!.id),
-  //   enabled: Boolean(activeOrganization),
-  // });
-
   const { storeUrlSlug } = useParams({ strict: false });
 
   const activeStore = stores?.find((store) => store.slug == storeUrlSlug);

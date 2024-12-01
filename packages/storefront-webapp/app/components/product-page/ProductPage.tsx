@@ -93,7 +93,7 @@ function ProductAttribute({
                 className={`${selectedSku?.length == length ? "border border-2 border-black" : "border border-2 border-background-muted"}`}
                 onClick={() => handleClick("length", length.toString())}
               >
-                {`${length}''`}
+                {`${length}"`}
               </Button>
             );
           })}
@@ -123,7 +123,7 @@ export default function ProductPage() {
 
   const getProductName = (item: ProductSku) => {
     if (item.productCategory == "Wigs") {
-      return `${item.length}'' ${capitalizeWords(item.colorName)} ${item.productName}`;
+      return `${item.length}" ${capitalizeWords(item.colorName)} ${item.productName}`;
     }
 
     return item.productName;
@@ -189,12 +189,13 @@ export default function ProductPage() {
           <ProductAttribute product={product} selectedSku={productSku} />
 
           <LoadingButton
+            className="w-[300px]"
             isLoading={isUpdatingBag}
             disabled={isUpdatingBag}
             onClick={handleUpdateBag}
           >
             {/* <ShoppingBasket className="w-4 h-4 mr-2" /> */}
-            ADD TO BAG
+            Add to Bag
           </LoadingButton>
         </div>
       </div>

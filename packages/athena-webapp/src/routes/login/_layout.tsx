@@ -36,7 +36,6 @@ export const Route = createFileRoute("/login/_layout")({
 function LoginLayout() {
   const { isAuthenticated, isLoading } = useConvexAuth();
 
-  console.table({ isAuthenticated, isLoading });
   if (isLoading && !isAuthenticated) {
     return null;
   }

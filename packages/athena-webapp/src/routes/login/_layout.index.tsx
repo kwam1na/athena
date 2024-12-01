@@ -21,27 +21,27 @@ export const Route = createFileRoute("/login/_layout/")({
 function Login() {
   const [step, setStep] = useState<"signIn" | { email: string }>("signIn");
 
-  const { isAuthenticated, isLoading } = useConvexAuth();
+  // const { isAuthenticated, isLoading } = useConvexAuth();
 
-  const user = useQuery(api.app.getCurrentUser);
+  // const user = useQuery(api.app.getCurrentUser);
 
-  const navigate = useNavigate();
+  // const navigate = useNavigate();
 
-  useEffect(() => {
-    if ((isLoading && !isAuthenticated) || !user) {
-      return;
-    }
+  // useEffect(() => {
+  //   if ((isLoading && !isAuthenticated) || !user) {
+  //     return;
+  //   }
 
-    console.table({ isLoading, isAuthenticated, user });
+  //   console.table({ isLoading, isAuthenticated, user });
 
-    if (!isLoading && isAuthenticated) {
-      navigate({
-        to: "/$orgUrlSlug/store/$storeUrlSlug",
-        params: { orgUrlSlug: "wigclub", storeUrlSlug: "wigclub" },
-      });
-      return;
-    }
-  }, [user, isLoading, isAuthenticated]);
+  //   if (!isLoading && isAuthenticated) {
+  //     navigate({
+  //       to: "/$orgUrlSlug/store/$storeUrlSlug",
+  //       params: { orgUrlSlug: "wigclub", storeUrlSlug: "wigclub" },
+  //     });
+  //     return;
+  //   }
+  // }, [user, isLoading, isAuthenticated]);
 
   if (step === "signIn") {
     return <LoginForm onSubmit={(email) => setStep({ email })} />;
@@ -204,24 +204,38 @@ export function InputOTPForm({ email }: { email: string }) {
   });
 
   const [isSigningIn, setIsSigningIn] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const { signIn } = useAuthActions();
 
   const navigate = useNavigate();
 
+  // Automatically submit the form when 6 digits are entered
+  const handlePinChange = (newValue: string) => {
+    form.setValue("pin", newValue);
+
+    if (newValue.length === 6) {
+      form.handleSubmit(onSubmit)();
+    }
+  };
+
   async function onSubmit(data: z.infer<typeof FormSchema>) {
-    setIsSigningIn(true);
-    await signIn("resend-otp", { email, code: data.pin });
-    setIsSigningIn(false);
+    try {
+      setIsSigningIn(true);
+      await signIn("resend-otp", { email, code: data.pin });
 
-    console.log("navigating to store url..");
-
-    setTimeout(() => {
-      navigate({
-        to: "/$orgUrlSlug/store/$storeUrlSlug",
-        params: { orgUrlSlug: "wigclub", storeUrlSlug: "wigclub" },
-      });
-    }, 1500);
+      setTimeout(() => {
+        setIsSigningIn(false);
+        navigate({
+          to: "/",
+        });
+      }, 2500);
+    } catch (e) {
+      if ((e as Error).message.includes("Could not verify code")) {
+        setErrorMessage("Invalid code entered");
+      }
+      setIsSigningIn(false);
+    }
   }
 
   return (
@@ -238,7 +252,7 @@ export function InputOTPForm({ email }: { email: string }) {
               <FormItem>
                 <FormLabel>One-Time Password</FormLabel>
                 <FormControl>
-                  <InputOTP maxLength={6} {...field}>
+                  <InputOTP maxLength={6} {...field} onChange={handlePinChange}>
                     <InputOTPGroup>
                       <InputOTPSlot index={0} />
                       <InputOTPSlot index={1} />
@@ -250,7 +264,9 @@ export function InputOTPForm({ email }: { email: string }) {
                   </InputOTP>
                 </FormControl>
                 <FormDescription>
-                  {`Please enter the one-time code sent to ${email}`}
+                  {errorMessage
+                    ? errorMessage
+                    : `Please enter the one-time code sent to ${email}`}
                 </FormDescription>
                 <FormMessage />
               </FormItem>
@@ -262,88 +278,7 @@ export function InputOTPForm({ email }: { email: string }) {
           </LoadingButton>
         </form>
       </Form>
-    </div>
-  );
-}
 
-function VerifyForm({ email }: { email: string }) {
-  const { signIn } = useAuthActions();
-  const form = useForm({
-    validatorAdapter: zodValidator(),
-    defaultValues: {
-      code: "",
-    },
-    onSubmit: async ({ value }) => {
-      await signIn("resend-otp", { email, code: value.code });
-    },
-  });
-  return (
-    <div className="mx-auto flex h-full w-full max-w-96 flex-col items-center justify-center gap-6">
-      <div className="mb-2 flex flex-col gap-2">
-        <p className="text-center text-2xl text-primary">Check your inbox!</p>
-        <p className="text-center text-base font-normal text-primary/60">
-          We've just emailed you a temporary password.
-          <br />
-          Please enter it below.
-        </p>
-      </div>
-      <form
-        className="flex w-full flex-col items-start gap-1"
-        onSubmit={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          form.handleSubmit();
-        }}
-      >
-        <div className="flex w-full flex-col gap-1.5">
-          <label htmlFor="code" className="sr-only">
-            Code
-          </label>
-          <form.Field
-            name="code"
-            validators={{
-              onSubmit: z
-                .string()
-                .min(8, "Code must be at least 8 characters."),
-            }}
-            children={(field) => {
-              return (
-                <Input
-                  placeholder="Code"
-                  value={field.state.value}
-                  onBlur={field.handleBlur}
-                  onChange={(e) => field.handleChange(e.target.value)}
-                  className={`bg-transparent ${
-                    field.state.meta?.errors.length > 0 &&
-                    "border-destructive focus-visible:ring-destructive"
-                  }`}
-                />
-              );
-            }}
-          />
-        </div>
-
-        <div className="flex flex-col">
-          {form.state.fieldMeta.code?.errors.length > 0 && (
-            <span className="mb-2 text-sm text-destructive dark:text-destructive-foreground">
-              {form.state.fieldMeta.code?.errors.join(" ")}
-            </span>
-          )}
-          {/*
-          {!authEmail && authError && (
-            <span className="mb-2 text-sm text-destructive dark:text-destructive-foreground">
-              {authError.message}
-            </span>
-          )}
-          */}
-        </div>
-
-        <Button type="submit" className="w-full">
-          Continue
-        </Button>
-      </form>
-
-      {/* Request New Code. */}
       <div className="flex w-full flex-col">
         <p className="text-center text-sm font-normal text-primary/60">
           Did not receive the code?

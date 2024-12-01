@@ -1,21 +1,28 @@
 import { useQuery } from "@tanstack/react-query";
 import { getAllProducts } from "@/api/product";
 import { OG_ORGANIZTION_ID, OG_STORE_ID } from "@/lib/constants";
-import { Link, useSearch } from "@tanstack/react-router";
+import { Link, useParams, useSearch } from "@tanstack/react-router";
 import { useStoreContext } from "@/contexts/StoreContext";
 import { Product } from "../../../athena-webapp";
+import { capitalizeFirstLetter } from "@/lib/utils";
 
-export default function HomePage() {
+export default function EntityPage() {
   const search = useSearch({ from: "/_layout/_shopLayout" });
 
+  const { subcategorySlug } = useParams({ strict: false });
+
   const { data } = useQuery({
-    queryKey: ["products", "filter"],
+    queryKey: ["products", "filter", subcategorySlug],
     queryFn: () =>
       getAllProducts({
         organizationId: OG_ORGANIZTION_ID,
         storeId: OG_STORE_ID,
-        filters: search,
+        filters: {
+          subcategory: capitalizeFirstLetter(subcategorySlug!),
+          ...search,
+        },
       }),
+    enabled: Boolean(subcategorySlug),
   });
 
   return <ProductsPage products={data || []} />;
@@ -37,8 +44,8 @@ function ProductCard({
           src={product.skus[0].images[0]}
         />
       </div>
-      <div className="flex flex-col items-start gap-4">
-        <p className="font-medium">{product.name}</p>
+      <div className="flex flex-col items-start gap-2">
+        <p className="text-lg font-medium">{product.name}</p>
         <p className="text-gray-500">
           {currencyFormatter.format(product.skus[0].price)}
         </p>

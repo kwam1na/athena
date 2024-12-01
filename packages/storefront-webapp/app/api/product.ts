@@ -1,14 +1,9 @@
 import config from "@/config";
-import { OrganizationStoreEntityApiParams } from "./types";
+import { FilterParams, OrganizationStoreEntityApiParams } from "./types";
 import { Product } from "../../../athena-webapp";
 
 type GetParams = OrganizationStoreEntityApiParams & {
   productId: string;
-};
-
-type FilterParams = {
-  color?: string;
-  length?: string;
 };
 
 const buildQueryString = (params?: FilterParams) => {
@@ -16,6 +11,7 @@ const buildQueryString = (params?: FilterParams) => {
   const query = new URLSearchParams();
   if (params.color) query.append("color", params.color); // Expecting comma-separated string for color
   if (params.length) query.append("length", params.length); // Expecting comma-separated string for length
+  if (params.subcategory) query.append("subcategory", params.subcategory); // Expecting comma-separated string for length
   return query.toString();
 };
 
