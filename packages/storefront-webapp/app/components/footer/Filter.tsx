@@ -65,10 +65,6 @@ function FilterComponent({
         }),
         params: (prev) => ({ ...prev, subcategorySlug }),
       });
-
-      queryClient.refetchQueries({
-        queryKey: ["products", "filter", subcategorySlug],
-      });
     } else {
       navigate({
         to: "/shop/hair",
@@ -77,8 +73,6 @@ function FilterComponent({
           [type]: queryValue,
         }),
       });
-
-      queryClient.refetchQueries({ queryKey: ["products", "filter"] });
     }
   };
 

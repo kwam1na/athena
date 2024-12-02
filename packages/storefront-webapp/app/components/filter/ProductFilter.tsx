@@ -25,6 +25,9 @@ export default function ProductFilter() {
     .sort((a, b) => a.label.localeCompare(b.label));
 
   const lengths = [
+    { value: "8", label: '8"' },
+    { value: "10", label: '10"' },
+    { value: "12", label: '12"' },
     { value: "18", label: '18"' },
     { value: "20", label: '20"' },
     { value: "22", label: '22"' },
