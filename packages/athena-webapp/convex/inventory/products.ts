@@ -44,15 +44,11 @@ export const getAll = query({
     subcategory: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
-    // const skus = await ctx.db
-    //   .query("productSku")
-    //   .filter((q) => q.eq(q.field("storeId"), args.storeId))
-    //   .collect();
-
     let subcategoryId: Id<"subcategory"> | undefined;
 
-    console.log("params ->", args.subcategory);
-
+    // this will fetch all products with the given subcategory.
+    // not problematic because the subcategory name is the same as
+    // the one in the db because the it's not set by the frontend
     if (args.subcategory) {
       const s = await ctx.db
         .query("subcategory")
@@ -60,8 +56,6 @@ export const getAll = query({
         .first();
       subcategoryId = s?._id;
     }
-
-    console.log("s id ->", subcategoryId);
 
     const products = await ctx.db
       .query(entity)

@@ -1,6 +1,7 @@
 import { mutation, query } from "../_generated/server";
 import { v } from "convex/values";
 import { categorySchema } from "../schemas/inventory";
+import { Id } from "../_generated/dataModel";
 
 const entity = "category";
 
@@ -15,6 +16,48 @@ export const getAll = query({
       .collect();
 
     return categories;
+  },
+});
+
+export const getCategoriesWithSubcategories = query({
+  args: {
+    storeId: v.id("store"),
+  },
+  handler: async (ctx, args) => {
+    // Fetch all categories for the given storeId
+    const categories = await ctx.db
+      .query("category")
+      .filter((q) => q.eq(q.field("storeId"), args.storeId))
+      .collect();
+
+    // Fetch all subcategories for the storeId in a single query
+    const subcategories = await ctx.db
+      .query("subcategory")
+      .filter((q) => q.eq(q.field("storeId"), args.storeId))
+      .collect();
+
+    // Group subcategories by their categoryId
+    const subcategoriesByCategoryId: Record<
+      Id<"category">,
+      (typeof subcategories)[0][]
+    > = subcategories.reduce(
+      (map, subcategory) => {
+        if (!map[subcategory.categoryId]) {
+          map[subcategory.categoryId] = [];
+        }
+        map[subcategory.categoryId].push(subcategory);
+        return map;
+      },
+      {} as Record<Id<"category">, (typeof subcategories)[0][]>
+    );
+
+    // Map categories to include their subcategories
+    const categoriesWithSubcategories = categories.map((category) => ({
+      ...category,
+      subcategories: subcategoriesByCategoryId[category._id] || [],
+    }));
+
+    return categoriesWithSubcategories;
   },
 });
 

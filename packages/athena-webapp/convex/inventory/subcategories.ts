@@ -1,6 +1,7 @@
 import { mutation, query } from "../_generated/server";
 import { v } from "convex/values";
 import { subcategorySchema } from "../schemas/inventory";
+import { toSlug } from "../utils";
 
 const entity = "subcategory";
 
@@ -10,7 +11,7 @@ export const getAll = query({
     categoryId: v.optional(v.id("category")),
   },
   handler: async (ctx, args) => {
-    const categories = await ctx.db
+    const subcategories = await ctx.db
       .query(entity)
       .filter((q) => {
         if (args.categoryId) {
@@ -24,7 +25,7 @@ export const getAll = query({
       })
       .collect();
 
-    return categories;
+    return subcategories;
   },
 });
 
@@ -34,7 +35,7 @@ export const getById = query({
     storeId: v.id("store"),
   },
   handler: async (ctx, args) => {
-    const categories = await ctx.db
+    const subcategory = await ctx.db
       .query(entity)
       .filter((q) =>
         q.and(
@@ -44,7 +45,7 @@ export const getById = query({
       )
       .collect();
 
-    return categories;
+    return subcategory;
   },
 });
 

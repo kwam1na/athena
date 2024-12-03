@@ -18,6 +18,7 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "~/convex/_generated/api";
 import { Category } from "~/types";
 import { Id } from "~/convex/_generated/dataModel";
+import { toSlug } from "~/src/lib/utils";
 
 export type CategoryManageOption = "category" | "subcategory";
 
@@ -96,7 +97,11 @@ function CategoryManager() {
 
     try {
       setIsCreateMutationPending(true);
-      await createCategory({ name, storeId: activeStore._id });
+      await createCategory({
+        name,
+        slug: toSlug(name),
+        storeId: activeStore._id,
+      });
 
       toast(`Category '${name}' created`, {
         icon: <CheckCircledIcon className="w-4 h-4" />,
@@ -346,7 +351,12 @@ function SubcategoryManager() {
 
     try {
       setIsCreateMutationPending(true);
-      await createSubcategory({ name, storeId: activeStore._id, categoryId });
+      await createSubcategory({
+        name,
+        slug: toSlug(name),
+        storeId: activeStore._id,
+        categoryId,
+      });
 
       toast(`Category '${name}' created`, {
         icon: <CheckCircledIcon className="w-4 h-4" />,

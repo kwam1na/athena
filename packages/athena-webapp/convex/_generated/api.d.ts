@@ -52,6 +52,7 @@ import type * as schemas_storeFront_index from "../schemas/storeFront/index.js";
 import type * as storeFront_bag from "../storeFront/bag.js";
 import type * as storeFront_bagItem from "../storeFront/bagItem.js";
 import type * as storeFront_guest from "../storeFront/guest.js";
+import type * as utils from "../utils.js";
 
 /**
  * A utility for referencing Convex functions in your app's API.
@@ -99,6 +100,7 @@ declare const fullApi: ApiFromModules<{
   "storeFront/bag": typeof storeFront_bag;
   "storeFront/bagItem": typeof storeFront_bagItem;
   "storeFront/guest": typeof storeFront_guest;
+  utils: typeof utils;
 }>;
 export declare const api: FilterApi<
   typeof fullApi,

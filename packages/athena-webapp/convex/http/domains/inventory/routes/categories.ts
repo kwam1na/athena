@@ -18,8 +18,21 @@ categoryRoutes.get("/", async (c) => {
   const organizationId = c.req.param("organizationId");
   const storeId = c.req.param("storeId");
 
+  const queryParams = c.req.queries();
+
   if (!organizationId || !storeId)
     return c.json({ error: "Missing data to retrieve categories" }, 400);
+
+  if (queryParams.withSubcategories) {
+    const categories = await c.env.runQuery(
+      api.inventory.categories.getCategoriesWithSubcategories,
+      {
+        storeId: storeId as Id<"store">,
+      }
+    );
+
+    return c.json({ categories });
+  }
 
   const categories = await c.env.runQuery(api.inventory.categories.getAll, {
     storeId: storeId as Id<"store">,

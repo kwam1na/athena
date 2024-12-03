@@ -1,26 +1,44 @@
 import config from "@/config";
-import { CategoryResponse, CategoryType } from "@/lib/schemas/category";
-import { OrganizationStoreEntityApiParams } from "./types";
-import { Category, CategoryRequest } from "@athena/db";
+import { FilterParams, OrganizationStoreEntityApiParams } from "./types";
+import { Category } from "@athena/webapp-2";
 
 type GetParams = OrganizationStoreEntityApiParams & {
-  categoryId: number;
+  categoryId: string;
 };
 
-type CreateParams = OrganizationStoreEntityApiParams & {
-  data: CategoryRequest;
-};
-
-type UpdateParams = GetParams & { data: Partial<CategoryRequest> };
-
-const getBaseUrl = (organizationId: number, storeId: number) =>
+const getBaseUrl = (organizationId: string, storeId: string) =>
   `${config.apiGateway.URL}/organizations/${organizationId}/stores/${storeId}/categories`;
+
+const buildQueryString = (params?: FilterParams) => {
+  if (!params) return null;
+  const query = new URLSearchParams();
+  if (params.color) query.append("color", params.color); // Expecting comma-separated string for color
+  if (params.length) query.append("length", params.length); // Expecting comma-separated string for length
+  return query.toString();
+};
 
 export async function getAllCategories({
   organizationId,
   storeId,
 }: OrganizationStoreEntityApiParams): Promise<Category[]> {
   const response = await fetch(getBaseUrl(organizationId, storeId));
+
+  const res = await response.json();
+
+  if (!response.ok) {
+    throw new Error(res.error || "Error loading categories.");
+  }
+
+  return res.categories;
+}
+
+export async function getAllCategoriesWithSubcategories({
+  organizationId,
+  storeId,
+}: OrganizationStoreEntityApiParams): Promise<Category[]> {
+  const response = await fetch(
+    `${getBaseUrl(organizationId, storeId)}?withSubcategories='true'`
+  );
 
   const res = await response.json();
 
@@ -44,72 +62,6 @@ export async function getCategory({
 
   if (!response.ok) {
     throw new Error(res.error || "Error loading category.");
-  }
-
-  return res;
-}
-
-export async function createCategory({
-  data,
-  organizationId,
-  storeId,
-}: CreateParams): Promise<Category> {
-  const response = await fetch(getBaseUrl(organizationId, storeId), {
-    method: "POST",
-    body: JSON.stringify({ ...data, name: data.name.trim() }),
-  });
-
-  const res = await response.json();
-
-  if (!response.ok) {
-    throw new Error(res.error || "Error creating category.");
-  }
-
-  return res;
-}
-
-export async function updateCategory({
-  data,
-  categoryId,
-  organizationId,
-  storeId,
-}: UpdateParams): Promise<Category> {
-  const response = await fetch(
-    `${getBaseUrl(organizationId, storeId)}/${categoryId}`,
-    {
-      method: "PUT",
-      body: JSON.stringify({
-        ...data,
-        name: data?.name?.trim(),
-      }),
-    }
-  );
-
-  const res = await response.json();
-
-  if (!response.ok) {
-    throw new Error(res.error || "Error updating category.");
-  }
-
-  return res;
-}
-
-export async function deleteCategory({
-  categoryId,
-  organizationId,
-  storeId,
-}: GetParams) {
-  const response = await fetch(
-    `${getBaseUrl(organizationId, storeId)}/${categoryId}`,
-    {
-      method: "DELETE",
-    }
-  );
-
-  const res = await response.json();
-
-  if (!response.ok) {
-    throw new Error(res.error || "Error deleting category.");
   }
 
   return res;
