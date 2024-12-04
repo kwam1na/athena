@@ -1,7 +1,7 @@
 import { useParams } from "@tanstack/react-router";
 import { Button } from "../ui/button";
 import { SlidersHorizontal } from "lucide-react";
-import { capitalizeFirstLetter } from "@/lib/utils";
+import { capitalizeFirstLetter, slugToWords } from "@/lib/utils";
 
 export default function ProductFilterBar({
   showFilters,
@@ -15,7 +15,7 @@ export default function ProductFilterBar({
   return (
     <div className="flex justify-between bg-background w-full sticky top-0 py-4 px-12">
       <div className="flex items-center">
-        <p className="pl-4 text-sm">{`Shop all ${capitalizeFirstLetter(subcategorySlug || "")}`}</p>
+        <p className="pl-4 text-sm">{`Shop all ${capitalizeFirstLetter(slugToWords(subcategorySlug || ""))}`}</p>
       </div>
       <Button
         variant="clear"

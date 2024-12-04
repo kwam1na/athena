@@ -41,10 +41,24 @@ export const getAll = query({
     storeId: v.id("store"),
     color: v.optional(v.array(v.id("color"))),
     length: v.optional(v.array(v.number())),
+    category: v.optional(v.array(v.string())),
     subcategory: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
+    let categoryId: Id<"category"> | undefined;
     let subcategoryId: Id<"subcategory"> | undefined;
+
+    if (args.category) {
+      const s = await ctx.db
+        .query("category")
+        .filter((q) => q.eq(q.field("name"), args.subcategory?.[0]))
+        .first();
+      categoryId = s?._id;
+    }
+
+    if (args.category && !categoryId) {
+      return [];
+    }
 
     // this will fetch all products with the given subcategory.
     // not problematic because the subcategory name is the same as
@@ -52,9 +66,21 @@ export const getAll = query({
     if (args.subcategory) {
       const s = await ctx.db
         .query("subcategory")
-        .filter((q) => q.eq(q.field("name"), args.subcategory?.[0]))
+        .filter((q) => {
+          if (categoryId) {
+            return q.and(
+              q.eq(q.field("name"), args.subcategory?.[0]),
+              q.eq(q.field("categoryId"), categoryId)
+            );
+          }
+          return q.eq(q.field("name"), args.subcategory?.[0]);
+        })
         .first();
       subcategoryId = s?._id;
+    }
+
+    if (args.subcategory && !subcategoryId) {
+      return [];
     }
 
     const products = await ctx.db

@@ -11,6 +11,7 @@ const buildQueryString = (params?: FilterParams) => {
   const query = new URLSearchParams();
   if (params.color) query.append("color", params.color); // Expecting comma-separated string for color
   if (params.length) query.append("length", params.length); // Expecting comma-separated string for length
+  if (params.category) query.append("category", params.category); // Expecting comma-separated string for length
   if (params.subcategory) query.append("subcategory", params.subcategory); // Expecting comma-separated string for length
   return query.toString();
 };

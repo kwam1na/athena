@@ -1,10 +1,6 @@
 import { useStoreContext } from "@/contexts/StoreContext";
 import { Link } from "@tanstack/react-router";
-import { ShoppingBasket } from "lucide-react";
-import { Badge } from "../ui/badge";
-import { useShoppingBag } from "@/hooks/useShoppingBag";
-import { useGetStoreSubcategories } from "../navigation/hooks";
-import { capitalizeFirstLetter } from "@/lib/utils";
+import { useGetStoreCategories } from "../navigation/hooks";
 
 interface FooterLinkGroup {
   header: string;
@@ -13,7 +9,7 @@ interface FooterLinkGroup {
 
 function LinkGroup({ group }: { group: FooterLinkGroup }) {
   return (
-    <ul className="space-y-4 text-sm">
+    <ul className="space-y-4">
       <li>
         <p className="font-bold">{group.header}</p>
       </li>
@@ -29,10 +25,19 @@ function LinkGroup({ group }: { group: FooterLinkGroup }) {
 export default function Footer() {
   const { store } = useStoreContext();
 
-  const subcategories = useGetStoreSubcategories();
+  const { categories } = useGetStoreCategories();
 
-  const storeLinks = subcategories?.map((subcategory) => (
-    <Link>{capitalizeFirstLetter(subcategory.label)}</Link>
+  const storeLinks = categories?.map((s) => (
+    <Link
+      key={s.value}
+      to="/shop/$categorySlug"
+      params={(p) => ({
+        ...p,
+        categorySlug: s.value,
+      })}
+    >
+      {s.label}
+    </Link>
   ));
 
   const linkGroups: FooterLinkGroup[] = [
@@ -64,7 +69,7 @@ export default function Footer() {
   ];
 
   return (
-    <footer className="w-full flex flex-col gap-12 justify-center px-16 pb-8">
+    <footer className="w-full flex flex-col gap-12 justify-center px-16 pb-8 text-sm font-light">
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
         {linkGroups.map((group, idx) => (
           <LinkGroup key={idx} group={group} />

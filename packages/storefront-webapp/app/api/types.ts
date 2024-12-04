@@ -10,5 +10,6 @@ export type FilterParams = {
   color?: string;
   length?: string;
   type?: string;
+  category?: string;
   subcategory?: string;
 };

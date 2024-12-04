@@ -64,8 +64,8 @@ function RootComponent() {
         <NavigationBar />
         <main className="flex-grow overflow-auto">
           <Outlet />
+          {/* <Footer /> */}
         </main>
-        {/* <Footer /> */}
       </div>
     </RootDocument>
   );

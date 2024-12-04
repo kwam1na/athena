@@ -7,7 +7,7 @@ import ProductsPage from "./ProductsPage";
 export default function HomePage() {
   const search = useSearch({ from: "/_layout/_shopLayout" });
 
-  const { data } = useQuery(
+  const { data, isLoading } = useQuery(
     productQueries.list({
       organizationId: OG_ORGANIZTION_ID,
       storeId: OG_STORE_ID,
@@ -15,5 +15,5 @@ export default function HomePage() {
     })
   );
 
-  return <ProductsPage products={data || []} />;
+  return <ProductsPage products={data} isLoading={isLoading} />;
 }

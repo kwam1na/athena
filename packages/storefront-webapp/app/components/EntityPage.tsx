@@ -8,13 +8,16 @@ import ProductsPage from "./ProductsPage";
 export default function EntityPage() {
   const search = useSearch({ from: "/_layout/_shopLayout" });
 
-  const { subcategorySlug } = useParams({ strict: false });
+  const { categorySlug, subcategorySlug } = useParams({ strict: false });
 
-  const { data } = useQuery(
+  const { data, isLoading } = useQuery(
     productQueries.list({
       organizationId: OG_ORGANIZTION_ID,
       storeId: OG_STORE_ID,
       filters: {
+        category: categorySlug
+          ? capitalizeFirstLetter(categorySlug)
+          : undefined,
         subcategory: subcategorySlug
           ? capitalizeFirstLetter(subcategorySlug)
           : undefined,
@@ -23,5 +26,5 @@ export default function EntityPage() {
     })
   );
 
-  return <ProductsPage products={data || []} />;
+  return <ProductsPage products={data} isLoading={isLoading} />;
 }

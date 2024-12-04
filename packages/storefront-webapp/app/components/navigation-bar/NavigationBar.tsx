@@ -19,18 +19,7 @@ export default function NavigationBar() {
   const { bagCount } = useShoppingBag();
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
 
-  // const { data, isLoading } = useQuery({
-  //   queryKey: ["subcategories"],
-  //   queryFn: () =>
-  //     getAllSubcategories({
-  //       organizationId: OG_ORGANIZTION_ID,
-  //       storeId: OG_STORE_ID,
-  //     }),
-  // });
-
   const { categories, categoryToSubcategoriesMap } = useGetStoreCategories();
-
-  const subcategories = useGetStoreSubcategories();
 
   const LinkSubmenu = ({
     slug,
@@ -77,59 +66,6 @@ export default function NavigationBar() {
     );
   };
 
-  const WigSubMenu = () => {
-    // const subcategories: Array<{ value: string; label: string }> | undefined =
-    //   data
-    //     ?.map((s) => ({ value: s._id, label: s.name }))
-    //     .sort((a, b) => a.label.localeCompare(b.label));
-
-    return (
-      <div
-        className="absolute w-full left-0 bg-white bg-opacity-95 shadow-lg px-8 animate-fadeIn z-50"
-        onMouseEnter={() => setActiveMenu("wigs")}
-        onMouseLeave={() => setActiveMenu(null)}
-      >
-        <div className="max-w-7xl mx-auto px-8 py-8">
-          <div className="flex flex-col font-medium gap-4">
-            <Link
-              to="/shop/hair"
-              className="text-xs hover:text-gray-600 transition-colors"
-            >
-              Shop all
-            </Link>
-            {subcategories?.map((s) => (
-              <Link
-                key={s.value}
-                to="/shop/hair/$subcategorySlug"
-                params={(p) => ({
-                  ...p,
-                  subcategorySlug: s.label,
-                })}
-                className="text-xs hover:text-gray-600 transition-colors"
-              >
-                {s.label}
-              </Link>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  const WigCareSubMenu = () => {
-    return (
-      <div
-        className="absolute w-full left-0 bg-white bg-opacity-95 shadow-lg animate-fadeIn z-50"
-        onMouseEnter={() => setActiveMenu("wig-care-and-accessories")}
-        onMouseLeave={() => setActiveMenu(null)}
-      >
-        <div className="flex h-[320px] gap-8 w-full py-4 px-8 max-w-7xl mx-auto">
-          {/* Your existing wig care submenu content */}
-        </div>
-      </div>
-    );
-  };
-
   return (
     <div className="relative">
       {/* Navigation Container */}
@@ -145,7 +81,6 @@ export default function NavigationBar() {
                 </Link>
               </div>
               <div className="flex gap-12">
-                {/* Navigation Items */}
                 {categories?.map((s) => (
                   <div
                     key={s.value}
