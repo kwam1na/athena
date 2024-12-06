@@ -123,9 +123,13 @@ function CategoryManager() {
 
     try {
       setIsUpdateMutationPending(true);
-      await updateCategory({ id: categoryIdToRename, name: updatedName });
+      await updateCategory({
+        id: categoryIdToRename,
+        name: updatedName,
+        slug: toSlug(updatedName),
+      });
 
-      toast(`Category '${name}' updated`, {
+      toast(`Category updated to '${updatedName}'`, {
         icon: <CheckCircledIcon className="w-4 h-4" />,
       });
     } catch (e) {
@@ -378,9 +382,13 @@ function SubcategoryManager() {
 
     try {
       setIsUpdateMutationPending(true);
-      await updateSubcategory({ id: subcategoryIdToRename, name: updatedName });
+      await updateSubcategory({
+        id: subcategoryIdToRename,
+        name: updatedName,
+        slug: toSlug(updatedName),
+      });
 
-      toast(`Subcategory '${name}' updated`, {
+      toast(`Subcategory updated to '${updatedName}'`, {
         icon: <CheckCircledIcon className="w-4 h-4" />,
       });
     } catch (e) {

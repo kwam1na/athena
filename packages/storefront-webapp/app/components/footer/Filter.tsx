@@ -4,7 +4,11 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getAllProducts } from "@/api/product";
 import { OG_ORGANIZTION_ID, OG_STORE_ID } from "@/lib/constants";
-import { capitalizeFirstLetter, capitalizeWords } from "@/lib/utils";
+import {
+  capitalizeFirstLetter,
+  capitalizeWords,
+  slugToWords,
+} from "@/lib/utils";
 
 type FilterItem = {
   label: string;
@@ -58,16 +62,21 @@ function FilterComponent({
 
     if (subcategorySlug) {
       navigate({
-        to: "/shop/hair/$subcategorySlug",
+        to: "/shop/$categorySlug/$subcategorySlug",
         search: (prev) => ({
           ...prev,
           [type]: queryValue,
         }),
-        params: (prev) => ({ ...prev, subcategorySlug }),
+        params: (prev) => ({
+          ...prev,
+          categorySlug: prev.categorySlug!,
+          subcategorySlug,
+        }),
       });
     } else {
       navigate({
-        to: "/shop/hair",
+        to: "/shop/$categorySlug",
+        params: (p) => ({ ...p, categorySlug: p.categorySlug! }),
         search: (prev) => ({
           ...prev,
           [type]: queryValue,

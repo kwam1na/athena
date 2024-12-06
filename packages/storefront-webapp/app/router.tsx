@@ -46,6 +46,7 @@ export function createRouter() {
       queries: {
         queryKeyHashFn: convexQueryClient.hashFn(),
         queryFn: convexQueryClient.queryFn(),
+        staleTime: 1 * 5 * 1000,
       },
     },
     mutationCache: new MutationCache({

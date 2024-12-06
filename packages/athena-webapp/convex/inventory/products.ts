@@ -51,10 +51,13 @@ export const getAll = query({
     if (args.category) {
       const s = await ctx.db
         .query("category")
-        .filter((q) => q.eq(q.field("name"), args.subcategory?.[0]))
+        .filter((q) => q.eq(q.field("slug"), args.category?.[0]))
         .first();
       categoryId = s?._id;
     }
+
+    console.log("args in ->", args);
+    console.log("cateId in ->", categoryId);
 
     if (args.category && !categoryId) {
       return [];
@@ -69,7 +72,7 @@ export const getAll = query({
         .filter((q) => {
           if (categoryId) {
             return q.and(
-              q.eq(q.field("name"), args.subcategory?.[0]),
+              q.eq(q.field("slug"), args.subcategory?.[0]),
               q.eq(q.field("categoryId"), categoryId)
             );
           }
@@ -93,18 +96,27 @@ export const getAll = query({
           );
         }
 
+        if (categoryId) {
+          return q.and(
+            q.eq(q.field("storeId"), args.storeId),
+            q.eq(q.field("categoryId"), categoryId)
+          );
+        }
+
         return q.eq(q.field("storeId"), args.storeId);
       })
       .collect();
+
+    console.log("prods ->", products);
 
     const skusQuery = ctx.db.query("productSku").filter((q) => {
       if (args.color && args.length) {
         return q.and(
           q.eq(q.field("storeId"), args.storeId),
-          q.or(
-            q.or(...args?.color!.map((color) => q.eq(q.field("color"), color))),
+          q.and(
+            q.or(...args.color.map((color) => q.eq(q.field("color"), color))),
             q.or(
-              ...args?.length!.map((length) => q.eq(q.field("length"), length))
+              ...args.length.map((length) => q.eq(q.field("length"), length))
             )
           )
         );

@@ -74,7 +74,7 @@ export default function NavigationBar() {
           <div className="flex items-center justify-between w-full">
             <div className="flex gap-24">
               <div>
-                <Link to="/shop/hair">
+                <Link to="/">
                   <h1 className="text-lg font-medium tracking-widest">
                     {store?.name && (store?.name as string).toUpperCase()}
                   </h1>

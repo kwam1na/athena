@@ -94,9 +94,10 @@ export const update = mutation({
   args: {
     id: v.id(entity),
     name: v.string(),
+    slug: v.string(),
   },
   handler: async (ctx, args) => {
-    await ctx.db.patch(args.id, { name: args.name });
+    await ctx.db.patch(args.id, { name: args.name, slug: args.slug });
 
     return await ctx.db.get(args.id);
   },

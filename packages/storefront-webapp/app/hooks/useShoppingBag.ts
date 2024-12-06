@@ -7,9 +7,12 @@ import {
 import { OG_ORGANIZTION_ID, OG_STORE_ID } from "@/lib/constants";
 import { ProductSku } from "@athena/webapp-2";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 
 export const useShoppingBag = () => {
   const queryClient = useQueryClient();
+
+  const [operationSuccessful, setOperationSuccessful] = useState(false);
 
   const userId =
     typeof window == "object"
@@ -50,6 +53,7 @@ export const useShoppingBag = () => {
         quantity,
       }),
     onSuccess: () => {
+      setOperationSuccessful(true);
       queryClient.invalidateQueries({ queryKey: ["active-bag"] });
     },
   });
@@ -65,6 +69,7 @@ export const useShoppingBag = () => {
         storeId: OG_STORE_ID,
       }),
     onSuccess: () => {
+      setOperationSuccessful(true);
       queryClient.invalidateQueries({ queryKey: ["active-bag"] });
     },
   });
@@ -91,6 +96,9 @@ export const useShoppingBag = () => {
     quantity: number;
   }) => {
     if (quantity == 0) return await deleteItemFromBag(itemId);
+
+    setOperationSuccessful(false);
+
     await updateItemMutation.mutateAsync({ itemId, quantity });
   };
 
@@ -105,6 +113,7 @@ export const useShoppingBag = () => {
     productSkuId: string;
     productSku: string;
   }) => {
+    setOperationSuccessful(false);
     await addNewItem.mutateAsync({
       productId,
       quantity,
@@ -135,5 +144,6 @@ export const useShoppingBag = () => {
     deleteItemFromBag,
     isUpdatingBag,
     updateBag,
+    addedItemSuccessfully: operationSuccessful,
   };
 };

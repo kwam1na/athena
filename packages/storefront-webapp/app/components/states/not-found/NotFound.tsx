@@ -1,23 +1,24 @@
-import { capitalizeFirstLetter } from "@/lib/utils";
-import { InfoIcon } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Link } from "@tanstack/react-router";
 
-export default function NotFound({
-  entity,
-  entityName,
-}: {
-  entity: string;
-  entityName: string;
-}) {
+export default function NotFound() {
   return (
-    <div className="h-full flex items-center justify-center">
-      <div className="space-y-2">
-        <div className="flex items-center gap-1 justify-center">
-          <InfoIcon className="w-4 h-4" />
-          <p className="font-medium">{`${capitalizeFirstLetter(entity)} not found`}</p>
-        </div>
-        <div className="flex gap-1">
-          <p className="text-muted-foreground">{`There is no ${entity} with the name`}</p>
-          <p>{`${entityName}.`}</p>
+    <div className="h-full flex justify-center">
+      <div className="flex flex-col gap-16 mt-24 w-[80%]">
+        <p className="text-3xl font-light">
+          The page you're looking for does not exist
+        </p>
+
+        <div className="flex gap-4">
+          <Button className="w-[320px]" onClick={() => window.history.back()}>
+            Take me back
+          </Button>
+
+          <Link to="/">
+            <Button className="w-[320px]" variant={"outline"}>
+              Go to home page
+            </Button>
+          </Link>
         </div>
       </div>
     </div>

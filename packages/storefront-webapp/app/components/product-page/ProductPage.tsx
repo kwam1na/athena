@@ -1,13 +1,31 @@
 import { useStoreContext } from "@/contexts/StoreContext";
 import { useQuery } from "@tanstack/react-query";
-import { useNavigate, useParams, useSearch } from "@tanstack/react-router";
+import {
+  Link,
+  useNavigate,
+  useParams,
+  useSearch,
+} from "@tanstack/react-router";
 import { LoadingButton } from "../ui/loading-button";
 import { useShoppingBag } from "@/hooks/useShoppingBag";
 import { getProduct } from "@/api/product";
-import { BagItem, Product, ProductSku } from "@athena/webapp-2";
+import { Product, ProductSku } from "@athena/webapp-2";
 import { Button } from "../ui/button";
 import { capitalizeWords } from "@/lib/utils";
+import { HeartIcon } from "lucide-react";
+import React, { useEffect, useRef, useState } from "react";
 
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import NotFound from "../states/not-found/NotFound";
+import GalleryViewer from "./GalleryViewer";
+
+// Helper Function
+const getProductName = (item: ProductSku) =>
+  item.productCategory === "Hair"
+    ? `${item.length}" ${capitalizeWords(item.colorName)} ${item.productName}`
+    : item.productName;
+
+// Product Attribute Selector
 function ProductAttribute({
   product,
   selectedSku,
@@ -19,16 +37,12 @@ function ProductAttribute({
     new Set(product.skus.map((sku: ProductSku) => sku.colorName))
   );
 
-  // const lengths: string[] = Array.from(
-  //   new Set(product.skus.map((sku: ProductSku) => sku.length))
-  // );
-
   const lengths: number[] = Array.from(
     new Set(
       product.skus
         .filter((sk: ProductSku) => sk.colorName == selectedSku.colorName)
-        .map((sku: ProductSku) => sku.length)
-        .sort()
+        .map((sku: ProductSku) => parseInt(sku.length))
+        .sort((a: number, b: number) => a - b)
     )
   );
 
@@ -61,17 +75,17 @@ function ProductAttribute({
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-8">
       <div className="space-y-4">
-        <p className="text-muted-foreground">Color</p>
+        <p className="text-sm">Color</p>
 
-        <div className="flex gap-2">
+        <div className="flex gap-4">
           {colors.map((color, index) => {
             return (
               <Button
                 variant={"ghost"}
                 key={index}
-                className={`${selectedSku?.colorName == color ? "border border-2 border-black" : "border border-2 border-background-muted"}`}
+                className={`${selectedSku?.colorName == color ? "border border-black" : "border border-background-muted"}`}
                 onClick={() => handleClick("color", color)}
               >
                 {capitalizeWords(color)}
@@ -82,15 +96,15 @@ function ProductAttribute({
       </div>
 
       <div className="space-y-4">
-        <p className="text-muted-foreground">Length</p>
+        <p className="text-sm">Length</p>
 
-        <div className="flex gap-2">
+        <div className="flex gap-4">
           {lengths.map((length, index) => {
             return (
               <Button
                 variant={"ghost"}
                 key={index}
-                className={`${selectedSku?.length == length ? "border border-2 border-black" : "border border-2 border-background-muted"}`}
+                className={`${selectedSku?.length == length ? "border border-black" : "border border-background-muted"}`}
                 onClick={() => handleClick("length", length.toString())}
               >
                 {`${length}"`}
@@ -103,14 +117,126 @@ function ProductAttribute({
   );
 }
 
+// Product Details Section
+function ProductDetails({
+  showShippingPolicy,
+}: {
+  showShippingPolicy: () => void;
+}) {
+  return (
+    <div className="text-sm space-y-8">
+      <div className="space-y-4">
+        <p className="font-bold">Free store pickup</p>
+        <div className="flex gap-4">
+          <p>Wigclub Hair Studio</p>
+          <a href="https://google.com" className="font-bold underline">
+            Get directions
+          </a>
+        </div>
+      </div>
+      <SheetTrigger asChild onClick={showShippingPolicy}>
+        <p className="font-bold cursor-pointer">
+          Shipping, returns, and exchanges
+        </p>
+      </SheetTrigger>
+    </div>
+  );
+}
+
+// Bag Product Summary
+function BagProduct({ product }: { product: ProductSku }) {
+  return (
+    <div className="flex flex-col gap-12 pt-12">
+      <div className="space-y-8">
+        <p className="text-md">Added to your bag</p>
+        <div className="flex gap-4">
+          <img
+            alt={`Bag image`}
+            className="w-[140px] h-[180px] aspect-square object-cover"
+            src={product.images[0]}
+          />
+          <p className="text-sm">{getProductName(product)}</p>
+        </div>
+      </div>
+      <Link to="/shop/bag">
+        <Button variant="outline" className="w-full">
+          See Bag
+        </Button>
+      </Link>
+    </div>
+  );
+}
+
+// Shipping Policy Section
+function ShippingPolicy() {
+  return (
+    <div className="space-y-12 pt-12">
+      <div className="space-y-4">
+        <p className="text-md">Shipping</p>
+        <p className="text-sm text-muted-foreground">
+          Orders take 24 - 48 hours to process. You will receive an email when
+          your order has been shipped.
+        </p>
+      </div>
+      <div className="space-y-4">
+        <p className="text-md">Returns and exchanges</p>
+        <p className="text-sm text-muted-foreground">
+          You have 7 days from the date your order is received to return your
+          purchase.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function Reviews() {
+  return (
+    <div className="space-y-4">
+      <p className="font-bold">Reviews (3)</p>
+
+      <div className="space-y-16">
+        <ProductReview />
+        <ProductReview />
+        <ProductReview />
+      </div>
+    </div>
+  );
+}
+
+function ProductReview() {
+  return (
+    <div className="space-y-8">
+      <div className="space-y-4">
+        <div className="bg-gray-100 rounded-md w-full h-[24px]"></div>
+        <div className="bg-gray-100 rounded-md w-full h-[80px]"></div>
+      </div>
+      <div className="bg-gray-100 rounded-md w-[80%] h-[24px]"></div>
+    </div>
+  );
+}
+
+// Main Product Page Component
 export default function ProductPage() {
   const { productSlug } = useParams({ strict: false });
+  const { store, formatter } = useStoreContext();
+  const {
+    bag,
+    addProductToBag,
+    updateBag,
+    isUpdatingBag,
+    addedItemSuccessfully,
+  } = useShoppingBag();
 
-  const { formatter, store } = useStoreContext();
+  const [isSheetOpen, setIsSheetOpen] = useState(false);
+  const [activeImage, setActiveImage] = useState(0);
+  const imageRefs = useRef<HTMLImageElement[] | null[]>([]);
+  const [isRefsReady, setRefsReady] = useState(false);
+  const [isScrolling, setIsScrolling] = useState(false);
+  const pageRef = useRef<HTMLDivElement | null>(null);
 
-  const { bag, addProductToBag, updateBag, isUpdatingBag } = useShoppingBag();
+  const sheetContent = useRef<React.ReactNode | null>(null);
 
-  const { data: product } = useQuery({
+  const { data: product, error } = useQuery({
     queryKey: ["product", productSlug],
     queryFn: () =>
       getProduct({
@@ -119,86 +245,158 @@ export default function ProductPage() {
         productId: productSlug!,
       }),
     enabled: Boolean(productSlug && store),
+    retry: false,
   });
 
-  const getProductName = (item: ProductSku) => {
-    if (item.productCategory == "Wigs") {
-      return `${item.length}" ${capitalizeWords(item.colorName)} ${item.productName}`;
+  const { variant } = useSearch({ strict: false });
+
+  const selectedSku = product?.skus?.find(
+    (sku: ProductSku) => sku.sku === variant
+  );
+
+  // Setup Intersection Observer
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            const index = imageRefs.current.findIndex(
+              (img) => img === entry.target
+            );
+            setActiveImage(index);
+          }
+        });
+      },
+      {
+        threshold: 0.5,
+      }
+    );
+
+    imageRefs.current.forEach((img) => {
+      if (img) observer.observe(img);
+    });
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [imageRefs.current, isRefsReady, selectedSku]);
+
+  useEffect(() => {
+    if (imageRefs.current.length === selectedSku?.images?.length) {
+      setRefsReady(true);
+    }
+  }, [selectedSku, activeImage]);
+
+  useEffect(() => {
+    if (addedItemSuccessfully) {
+      sheetContent.current = <BagProduct product={selectedSku} />;
     }
 
-    return item.productName;
-  };
+    const t = setTimeout(() => {
+      if (addedItemSuccessfully) {
+        setIsSheetOpen(false);
+      }
+    }, 3500);
 
-  const handleUpdateBag = () => {
-    if (bagItem && productSku) {
-      updateBag({ itemId: bagItem._id, quantity: bagItem.quantity + 1 });
-    } else if (productSku) {
-      addProductToBag({
+    return () => clearTimeout(t);
+  }, [addedItemSuccessfully]);
+
+  const bagItem = bag?.items?.find(
+    (item: ProductSku) => item.productSku === selectedSku?.sku
+  );
+
+  const handleUpdateBag = async () => {
+    sheetContent.current = null;
+    if (bagItem) {
+      await updateBag({ itemId: bagItem._id, quantity: bagItem.quantity + 1 });
+    } else {
+      await addProductToBag({
         quantity: 1,
         productId: product._id,
-        productSkuId: productSku._id,
-        productSku: productSku.sku,
+        productSkuId: selectedSku._id,
+        productSku: selectedSku.sku,
+      });
+    }
+    setIsSheetOpen(true);
+  };
+
+  const showShippingPolicy = () => {
+    sheetContent.current = <ShippingPolicy />;
+  };
+
+  const handlePreviewClick = (index: number) => {
+    const targetImage = imageRefs.current[index];
+    if (targetImage) {
+      targetImage.scrollIntoView({
+        behavior: "smooth", // Smooth scrolling
+        block: "center", // Scroll so the image is centered in the viewport
       });
     }
   };
 
-  const { variant } = useSearch({ strict: false });
-
-  const selectedSku = product?.skus.find((sk: ProductSku) => sk.sku == variant);
+  if (error || (product && !selectedSku)) {
+    return <NotFound />;
+  }
 
   if (!product) return null;
 
-  let productSku: ProductSku = product.skus[0];
-
-  if (selectedSku) productSku = selectedSku;
-
-  const bagItem = bag?.items?.find(
-    (it: BagItem) => it.productSku == productSku.sku
-  );
-
   return (
-    <main className="w-full h-full px-[240px] mt-[80px]">
-      <div className="flex gap-12">
-        <div className="space-y-4 w-[50%]">
-          <img
-            alt={`${productSku.productName} image`}
-            className={`aspect-square rounded-md object-cover`}
-            src={productSku.images[0]}
-          />
+    <>
+      <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
+        <SheetContent>
+          {/* {addedItemSuccessfully ? (
+            <BagProduct product={selectedSku} />
+          ) : (
+            <ShippingPolicy />
+          )} */}
+          {sheetContent.current}
+        </SheetContent>
 
-          <div className="flex gap-2">
-            {productSku.images.slice(1).map((url: string, index: number) => (
-              <img
-                key={index}
-                alt={`$ image`}
-                className={`aspect-square w-16 h-16 rounded-md object-cover cursor-pointer`}
-                src={url}
-              />
-            ))}
-          </div>
-        </div>
-
-        <div className="space-y-12">
-          <div className="space-y-4">
-            <p className="text-3xl font-medium">{getProductName(productSku)}</p>
-            <p className="text-lg font-medium">
-              {formatter.format(productSku.price)}
-            </p>
+        <main
+          className="grid grid-cols-4 gap-12 px-48 pt-16 pb-16"
+          ref={pageRef}
+        >
+          <div className="col-span-2">
+            <GalleryViewer images={selectedSku.images} />
           </div>
 
-          <ProductAttribute product={product} selectedSku={productSku} />
+          <div className="col-span-2 pt-8 px-16 space-y-8">
+            <div className="space-y-8">
+              <div className="space-y-6">
+                <p className="text-xl">{getProductName(selectedSku)}</p>
+                <p className="text-muted-foreground">
+                  {formatter.format(selectedSku.price)}
+                </p>
+              </div>
+              <ProductAttribute product={product} selectedSku={selectedSku} />
+            </div>
 
-          <LoadingButton
-            className="w-[300px]"
-            isLoading={isUpdatingBag}
-            disabled={isUpdatingBag}
-            onClick={handleUpdateBag}
-          >
-            {/* <ShoppingBasket className="w-4 h-4 mr-2" /> */}
-            Add to Bag
-          </LoadingButton>
-        </div>
-      </div>
-    </main>
+            <div className="flex gap-4">
+              <LoadingButton
+                className="w-[288px]"
+                isLoading={isUpdatingBag}
+                disabled={isUpdatingBag}
+                onClick={handleUpdateBag}
+              >
+                {isUpdatingBag ? "Adding to Bag.." : "Add to Bag"}
+              </LoadingButton>
+
+              <LoadingButton
+                variant={"outline"}
+                isLoading={false}
+                disabled={isUpdatingBag}
+                onClick={handleUpdateBag}
+              >
+                <HeartIcon className="w-4 h-4 text-muted-foreground" />
+              </LoadingButton>
+            </div>
+
+            <ProductDetails showShippingPolicy={showShippingPolicy} />
+
+            <Reviews />
+          </div>
+        </main>
+      </Sheet>
+    </>
   );
 }
