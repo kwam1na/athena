@@ -18,11 +18,7 @@ import {
   useGetStoreSubcategories,
 } from "../navigation/hooks";
 import { Button } from "../ui/button";
-import {
-  capitalizeFirstLetter,
-  capitalizeWords,
-  slugToWords,
-} from "@/lib/utils";
+import { capitalizeWords, slugToWords } from "@/lib/utils";
 
 type SubMenu = "wigs" | "wig-care-and-accessories";
 
@@ -110,6 +106,8 @@ export default function NavigationBar() {
 
   const { categories, categoryToSubcategoriesMap } = useGetStoreCategories();
 
+  const { navBarClassname, showNavbar, hideNavbar } = useStoreContext();
+
   const LinkSubmenu = ({
     slug,
     subMenuItems,
@@ -155,28 +153,21 @@ export default function NavigationBar() {
     );
   };
 
-  const hiddenNavClassname =
-    "hidden w-full flex flex-col items-center justify-center p-6 lg:px-16 lg:py-6";
-  const navClassname =
-    "w-full flex flex-col items-center justify-center p-6 lg:px-16 lg:py-6";
-
-  const [activeNavClassname, setActiveClassname] = useState(navClassname);
-
-  const hideNavbar = () => {
+  const onHideNavbarClick = () => {
     setIsMobileMenuShowing(true);
-    setActiveClassname(hiddenNavClassname);
+    hideNavbar();
   };
 
-  const showNavbar = () => {
+  const onShowNavbarClick = () => {
     setIsMobileMenuShowing(false);
-    setActiveClassname(navClassname);
+    showNavbar();
   };
 
   return (
-    <div className="relative bg-background">
+    <div className="relative bg-background border border-b">
       {/* Navigation Container */}
       <div className="relative z-50">
-        <nav className={activeNavClassname}>
+        <nav className={navBarClassname}>
           <div className="flex items-center justify-between w-full">
             <div className="flex gap-24">
               <div>
@@ -216,7 +207,10 @@ export default function NavigationBar() {
               <Link to="/shop/bag" className="flex gap-2">
                 <CartIcon notificationCount={bagCount} />
               </Link>
-              <AlignLeft className="lg:hidden w-5 h-5" onClick={hideNavbar} />
+              <AlignLeft
+                className="lg:hidden w-5 h-5"
+                onClick={onHideNavbarClick}
+              />
             </div>
           </div>
         </nav>
@@ -238,7 +232,7 @@ export default function NavigationBar() {
         />
       )}
 
-      {isMobileMenuShowing && <MobileMenu onCloseClick={showNavbar} />}
+      {isMobileMenuShowing && <MobileMenu onCloseClick={onShowNavbarClick} />}
     </div>
   );
 }

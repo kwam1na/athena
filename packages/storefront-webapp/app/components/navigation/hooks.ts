@@ -5,6 +5,7 @@ import {
 import { getAllSubcategories } from "@/api/subcategory";
 import { OG_ORGANIZTION_ID, OG_STORE_ID } from "@/lib/constants";
 import { useQuery } from "@tanstack/react-query";
+import { getRouteApi } from "@tanstack/react-router";
 
 // value=id and label=name
 export function useGetStoreSubcategories() {
@@ -64,3 +65,9 @@ export function useGetStoreCategories() {
 
   return { categories, categoryToSubcategoriesMap };
 }
+
+const routeApi = getRouteApi("/_layout/_shopLayout");
+
+export const useGetShopSearchParams = () => {
+  return routeApi.useSearch();
+};

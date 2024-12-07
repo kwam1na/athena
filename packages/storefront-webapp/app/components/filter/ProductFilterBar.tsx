@@ -6,9 +6,11 @@ import { capitalizeFirstLetter, slugToWords } from "@/lib/utils";
 export default function ProductFilterBar({
   showFilters,
   setShowFilters,
+  onFilterClickOnMobile,
 }: {
   showFilters: boolean;
   setShowFilters: (show: boolean) => void;
+  onFilterClickOnMobile: () => void;
 }) {
   const { categorySlug, subcategorySlug } = useParams({ strict: false });
 
@@ -20,7 +22,16 @@ export default function ProductFilterBar({
       <Button
         variant="clear"
         onClick={() => setShowFilters(!showFilters)}
-        className="ml-auto"
+        className="hidden lg:flex ml-auto"
+      >
+        <p>{showFilters ? "Hide filters" : "Show filters"}</p>
+        <SlidersHorizontal className="w-4 h-4 ml-2" />
+      </Button>
+
+      <Button
+        variant="clear"
+        onClick={onFilterClickOnMobile}
+        className="lg:hidden ml-auto"
       >
         <p>{showFilters ? "Hide filters" : "Show filters"}</p>
         <SlidersHorizontal className="w-4 h-4 ml-2" />

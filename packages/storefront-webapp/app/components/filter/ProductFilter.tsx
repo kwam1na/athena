@@ -9,6 +9,9 @@ import { getAllColors } from "@/api/color";
 import { OG_ORGANIZTION_ID, OG_STORE_ID } from "@/lib/constants";
 import FilterComponent from "../footer/Filter";
 import { Separator } from "../ui/separator";
+import { useState } from "react";
+import { getRouteApi } from "@tanstack/react-router";
+import { useGetShopSearchParams } from "../navigation/hooks";
 
 export default function ProductFilter() {
   const { data, isLoading, isFetching, error } = useQuery({
@@ -19,6 +22,15 @@ export default function ProductFilter() {
         storeId: OG_STORE_ID,
       }),
   });
+
+  const searchParams = useGetShopSearchParams();
+
+  const [selectedColors, setSelectedColors] = useState(
+    searchParams?.color?.split(",")?.length || 0
+  );
+  const [selectedLength, setSelectedLengths] = useState(
+    searchParams?.length?.split(",")?.length || 0
+  );
 
   const colors = data
     ?.map((col) => ({ label: col.name, value: col._id }))
@@ -43,11 +55,17 @@ export default function ProductFilter() {
       <Accordion type="single" collapsible className="w-full space-y-4">
         <AccordionItem value="color" className="border-none">
           <AccordionTrigger className="w-[160px]">
-            <p className="text-sm">Color</p>
+            <p className="text-sm">
+              {selectedColors > 0 ? `Color (${selectedColors})` : "Color"}
+            </p>
           </AccordionTrigger>
 
           <AccordionContent>
-            <FilterComponent filters={colors || []} type="color" />
+            <FilterComponent
+              filters={colors || []}
+              type="color"
+              setSelectedCount={setSelectedColors}
+            />
           </AccordionContent>
         </AccordionItem>
 
@@ -55,11 +73,17 @@ export default function ProductFilter() {
 
         <AccordionItem value="length" className="border-none">
           <AccordionTrigger className="w-[160px]">
-            <p className="text-sm">Length</p>
+            <p className="text-sm">
+              {selectedLength > 0 ? `Length (${selectedLength})` : "Length"}
+            </p>
           </AccordionTrigger>
 
           <AccordionContent>
-            <FilterComponent filters={lengths || []} type="length" />
+            <FilterComponent
+              filters={lengths || []}
+              type="length"
+              setSelectedCount={setSelectedLengths}
+            />
           </AccordionContent>
         </AccordionItem>
       </Accordion>

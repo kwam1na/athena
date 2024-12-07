@@ -20,31 +20,17 @@ const routeApi = getRouteApi("/_layout/_shopLayout");
 function FilterComponent({
   filters,
   type,
+  setSelectedCount,
 }: {
   filters: FilterItem[];
   type: "color" | "length";
+  setSelectedCount: (selected: number) => void;
 }) {
   const searchParams = routeApi.useSearch();
 
-  console.log("params ->", searchParams);
-
   const { subcategorySlug } = useParams({ strict: false });
 
-  const [query, setQuery] = useState<string | undefined>(searchParams[type]);
-
   const navigate = useNavigate();
-
-  const queryClient = useQueryClient();
-
-  const { data, isLoading, isFetching, error, refetch } = useQuery({
-    queryKey: ["products", "filter", { [type]: query }],
-    queryFn: () =>
-      getAllProducts({
-        organizationId: OG_ORGANIZTION_ID,
-        storeId: OG_STORE_ID,
-        filters: { [type]: query },
-      }),
-  });
 
   const handleCheckboxChange = (value: string) => {
     const currentFilters = searchParams[type]?.split(",") || [];
@@ -58,7 +44,7 @@ function FilterComponent({
     const queryValue =
       updatedFilters.length > 0 ? updatedFilters.join(",") : undefined; // Join with comma or remove if empty
 
-    setQuery(queryValue);
+    setSelectedCount(updatedFilters.length);
 
     if (subcategorySlug) {
       navigate({

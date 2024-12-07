@@ -3,13 +3,16 @@ import { OG_ORGANIZTION_ID, OG_STORE_ID } from "@/lib/constants";
 import { currencyFormatter } from "@/lib/utils";
 import { Store } from "../../../athena-webapp";
 import { useQuery } from "@tanstack/react-query";
-import React, { createContext, useContext } from "react";
+import React, { createContext, useContext, useState } from "react";
 
 type StoreContextType = {
   organizationId: string;
   storeId: string;
   formatter: Intl.NumberFormat;
   store?: Store;
+  navBarClassname: string;
+  showNavbar: () => void;
+  hideNavbar: () => void;
 };
 
 const StoreContext = createContext<StoreContextType | undefined>(undefined);
@@ -25,6 +28,21 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
       getStore({ organizationId: OG_ORGANIZTION_ID, storeId: OG_STORE_ID }),
   });
 
+  const hiddenNavClassname =
+    "hidden w-full flex flex-col items-center justify-center p-6 lg:px-16 lg:py-6";
+  const navClassname =
+    "w-full flex flex-col items-center justify-center p-6 lg:px-16 lg:py-6";
+
+  const [activeNavClassname, setActiveClassname] = useState(navClassname);
+
+  const hideNavbar = () => {
+    setActiveClassname(hiddenNavClassname);
+  };
+
+  const showNavbar = () => {
+    setActiveClassname(navClassname);
+  };
+
   const formatter = currencyFormatter(store?.currency || storeCurrency);
 
   return (
@@ -34,6 +52,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
         storeId: OG_STORE_ID,
         formatter,
         store,
+        navBarClassname: activeNavClassname,
+        showNavbar,
+        hideNavbar,
       }}
     >
       {children}

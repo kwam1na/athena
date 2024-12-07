@@ -20,7 +20,7 @@ function ProductCard({
           src={product.skus[0].images[0]}
         />
       </div>
-      <div className="flex flex-col items-start gap-4">
+      <div className="flex flex-col px-4 lg:px-0 items-start gap-4">
         <p className="font-medium">{product.name}</p>
         <p className="text-gray-500">
           {currencyFormatter.format(product.skus[0].price)}
