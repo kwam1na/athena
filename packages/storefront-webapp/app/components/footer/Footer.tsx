@@ -69,8 +69,8 @@ export default function Footer() {
   ];
 
   return (
-    <footer className="w-full flex flex-col gap-12 justify-center px-16 pb-8 text-sm font-light">
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
+    <footer className="w-full flex flex-col gap-12 justify-center px-6 lg:px-16 pb-8 text-sm font-light">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-8">
         {linkGroups.map((group, idx) => (
           <LinkGroup key={idx} group={group} />
         ))}

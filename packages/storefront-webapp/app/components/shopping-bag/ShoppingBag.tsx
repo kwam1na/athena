@@ -15,13 +15,15 @@ export default function ShoppingBag() {
 
   const subtotal =
     bag?.items.reduce(
-      (sum: number, item: ProductSku) => sum + item.price * item.quantity,
+      (sum: number, item: ProductSku) =>
+        sum + (item.price || 0) * item.quantity,
       0
     ) || 0;
   const total = subtotal;
 
   const getProductName = (item: ProductSku) => {
     if (item.productCategory == "Hair") {
+      if (!item.colorName) return capitalizeWords(item.productName);
       return `${item.length}" ${capitalizeWords(item.colorName)} ${item.productName}`;
     }
 
@@ -46,10 +48,10 @@ export default function ShoppingBag() {
       {!isBagEmpty && total !== 0 && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           <div className="md:col-span-2 space-y-16">
-            {bag?.items.map((item: ProductSku) => (
-              <div key={item.id} className="flex items-center space-x-4">
+            {bag?.items.map((item: ProductSku, index: number) => (
+              <div key={index} className="flex items-center space-x-4">
                 <Link
-                  key={item.id}
+                  key={index}
                   to={"/shop/product/$productSlug"}
                   params={() => ({ productSlug: item.productId })}
                   search={{
@@ -64,9 +66,11 @@ export default function ShoppingBag() {
                 </Link>
                 <div className="flex-1 space-y-6">
                   <div className="flex flex-col ml-2 gap-2">
-                    <h2>{getProductName(item)}</h2>
+                    <h2>{item && getProductName(item)}</h2>
                     <p className="text-sm text-muted-foreground">
-                      {formatter.format(item.price * item.quantity)}
+                      {item.price
+                        ? formatter.format(item.price * item.quantity)
+                        : "Product unavailable"}
                     </p>
                     <select
                       value={item.quantity}
@@ -76,7 +80,7 @@ export default function ShoppingBag() {
                           itemId: item._id,
                         })
                       }
-                      disabled={isUpdatingBag}
+                      disabled={isUpdatingBag || !item.price}
                       className="w-12 py-2 bg-white text-black"
                     >
                       {[...Array(10)].map((_, i) => (
@@ -91,7 +95,7 @@ export default function ShoppingBag() {
                     <Button
                       variant="ghost"
                       size="icon"
-                      disabled={isUpdatingBag}
+                      disabled={isUpdatingBag || !item.price}
                     >
                       <Heart className="h-4 w-4" />
                     </Button>

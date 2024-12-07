@@ -10,12 +10,15 @@ export default function NotFound() {
         </p>
 
         <div className="flex gap-4">
-          <Button className="w-[320px]" onClick={() => window.history.back()}>
+          <Button
+            className="lg:w-[320px]"
+            onClick={() => window.history.back()}
+          >
             Take me back
           </Button>
 
           <Link to="/">
-            <Button className="w-[320px]" variant={"outline"}>
+            <Button className="lg:w-[320px]" variant={"outline"}>
               Go to home page
             </Button>
           </Link>

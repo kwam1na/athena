@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { ScrollArea } from "../ui/scroll-area";
+import placeholder from "@/assets/placeholder.png";
 
 interface GalleryViewerProps {
   images: string[];
@@ -13,20 +14,20 @@ const GalleryViewer: React.FC<GalleryViewerProps> = ({ images }) => {
       {/* Main Gallery */}
 
       {/* Preview Panel */}
-      <ScrollArea className="w-[800px] h-[800px] overflow-auto">
+      <ScrollArea className="w-[400px] h-[400px] lg:w-[800px] lg:h-[800px] overflow-auto">
         <div className="flex flex-col gap-16">
           {images.map((img, index) => (
             <img
               key={index}
               alt={`image`}
-              className={`aspect-square w-[800px] h-[800px] object-cover cursor-pointer`}
+              className={`aspect-square w-[400px] h-[400px] lg:w-[800px] lg:h-[800px] object-cover cursor-pointer`}
               src={img}
             />
           ))}
         </div>
       </ScrollArea>
 
-      <div className="mt-auto">
+      <div className="hidden lg:flex lg:flex-col lg:mt-auto">
         {images.map((img, index) => (
           <div
             key={index}

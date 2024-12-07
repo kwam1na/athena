@@ -21,7 +21,7 @@ function LayoutComponent() {
   return (
     <>
       <div className="grid grid-cols-12 gap-4 pb-40">
-        <div className="col-span-12 sticky top-0 z-30 bg-white">
+        <div className="col-span-12 sticky top-0 z-30">
           <ProductFilterBar
             showFilters={showFilters}
             setShowFilters={setShowFilters}
@@ -29,13 +29,15 @@ function LayoutComponent() {
         </div>
 
         {showFilters && (
-          <div className="col-span-2 h-[calc(100vh-124px)] sticky top-16 py-16 px-16 overflow-auto">
+          <div className="col-span-2 h-[calc(100vh-124px)] sticky top-16 lg:py-16 lg:px-16 overflow-auto">
             <ProductFilter />
           </div>
         )}
 
         <div
-          className={showFilters ? "col-span-10 px-12" : "col-span-12 px-12"}
+          className={
+            showFilters ? "col-span-10 px-12" : "col-span-12 px-6 lg:px-12"
+          }
         >
           <Outlet />
         </div>

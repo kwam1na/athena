@@ -13,7 +13,7 @@ export default function ProductFilterBar({
   const { categorySlug, subcategorySlug } = useParams({ strict: false });
 
   return (
-    <div className="flex justify-between bg-background w-full sticky top-0 py-4 px-12">
+    <div className="flex justify-between bg-background w-full sticky p-4 lg:px-12">
       <div className="flex items-center">
         <p className="pl-4 text-sm">{`Shop all ${capitalizeFirstLetter(slugToWords(subcategorySlug || categorySlug || ""))}`}</p>
       </div>

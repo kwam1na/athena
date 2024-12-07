@@ -61,20 +61,6 @@ export default function ProductsPage({
               <div className="w-[180px] h-[24px] bg-zinc-100 rounded"></div>
             </div>
           </div>
-
-          <div className="space-y-4">
-            <div className="w-[30vw] h-[30vw] bg-zinc-100 rounded-md"></div>
-            <div className="space-y-4">
-              <div className="w-[180px] h-[24px] bg-zinc-100 rounded"></div>
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            <div className="w-[30vw] h-[30vw] bg-zinc-100 rounded-md"></div>
-            <div className="space-y-4">
-              <div className="w-[180px] h-[24px] bg-zinc-100 rounded"></div>
-            </div>
-          </div>
         </div>
 
         <div>
@@ -87,7 +73,7 @@ export default function ProductsPage({
   }
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 px-8">
+    <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 lg:px-8">
       {isLoading && (
         <>
           <ProductCardLoadingSkeleton />

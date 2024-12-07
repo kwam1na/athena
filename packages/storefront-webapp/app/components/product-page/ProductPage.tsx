@@ -14,6 +14,7 @@ import { Button } from "../ui/button";
 import { capitalizeWords } from "@/lib/utils";
 import { HeartIcon } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
+import placeholder from "@/assets/placeholder.png";
 
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import NotFound from "../states/not-found/NotFound";
@@ -79,7 +80,7 @@ function ProductAttribute({
       <div className="space-y-4">
         <p className="text-sm">Color</p>
 
-        <div className="flex gap-4">
+        <div className="grid grid-cols-5 gap-4">
           {colors.map((color, index) => {
             return (
               <Button
@@ -98,7 +99,7 @@ function ProductAttribute({
       <div className="space-y-4">
         <p className="text-sm">Length</p>
 
-        <div className="flex gap-4">
+        <div className="grid grid-cols-5 gap-4">
           {lengths.map((length, index) => {
             return (
               <Button
@@ -153,7 +154,7 @@ function BagProduct({ product }: { product: ProductSku }) {
           <img
             alt={`Bag image`}
             className="w-[140px] h-[180px] aspect-square object-cover"
-            src={product.images[0]}
+            src={product.images[0] || placeholder}
           />
           <p className="text-sm">{getProductName(product)}</p>
         </div>
@@ -192,7 +193,7 @@ function ShippingPolicy() {
 function Reviews() {
   return (
     <div className="space-y-4">
-      <p className="font-bold">Reviews (3)</p>
+      <p>Reviews (3)</p>
 
       <div className="space-y-16">
         <ProductReview />
@@ -353,14 +354,14 @@ export default function ProductPage() {
         </SheetContent>
 
         <main
-          className="grid grid-cols-4 gap-12 px-48 pt-16 pb-16"
+          className="grid grid-cols-1 xl:grid-cols-4 gap-12 px-6 xl:px-48 pt-16 pb-16"
           ref={pageRef}
         >
-          <div className="col-span-2">
+          <div className="col-span-1 md:col-span-2">
             <GalleryViewer images={selectedSku.images} />
           </div>
 
-          <div className="col-span-2 pt-8 px-16 space-y-8">
+          <div className="col-span-1 md:col-span-2 pt-8 lg:px-16 space-y-12">
             <div className="space-y-8">
               <div className="space-y-6">
                 <p className="text-xl">{getProductName(selectedSku)}</p>
