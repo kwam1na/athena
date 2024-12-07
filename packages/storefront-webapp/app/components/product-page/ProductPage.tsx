@@ -232,7 +232,6 @@ export default function ProductPage() {
   const [activeImage, setActiveImage] = useState(0);
   const imageRefs = useRef<HTMLImageElement[] | null[]>([]);
   const [isRefsReady, setRefsReady] = useState(false);
-  const [isScrolling, setIsScrolling] = useState(false);
   const pageRef = useRef<HTMLDivElement | null>(null);
 
   const sheetContent = useRef<React.ReactNode | null>(null);
@@ -302,6 +301,10 @@ export default function ProductPage() {
     return () => clearTimeout(t);
   }, [addedItemSuccessfully]);
 
+  useEffect(() => {
+    pageRef.current?.scrollIntoView();
+  }, [pageRef.current]);
+
   const bagItem = bag?.items?.find(
     (item: ProductSku) => item.productSku === selectedSku?.sku
   );
@@ -325,16 +328,6 @@ export default function ProductPage() {
     sheetContent.current = <ShippingPolicy />;
   };
 
-  const handlePreviewClick = (index: number) => {
-    const targetImage = imageRefs.current[index];
-    if (targetImage) {
-      targetImage.scrollIntoView({
-        behavior: "smooth", // Smooth scrolling
-        block: "center", // Scroll so the image is centered in the viewport
-      });
-    }
-  };
-
   if (error || (product && !selectedSku)) {
     return <NotFound />;
   }
@@ -344,18 +337,11 @@ export default function ProductPage() {
   return (
     <>
       <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
-        <SheetContent>
-          {/* {addedItemSuccessfully ? (
-            <BagProduct product={selectedSku} />
-          ) : (
-            <ShippingPolicy />
-          )} */}
-          {sheetContent.current}
-        </SheetContent>
+        <SheetContent>{sheetContent.current}</SheetContent>
 
         <main
-          className="grid grid-cols-1 xl:grid-cols-4 gap-12 px-6 xl:px-48 pt-16 pb-16"
           ref={pageRef}
+          className="grid grid-cols-1 xl:grid-cols-4 gap-12 px-6 xl:px-48 pt-16 pb-16"
         >
           <div className="col-span-1 md:col-span-2">
             <GalleryViewer images={selectedSku.images} />

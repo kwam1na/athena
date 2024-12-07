@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Heart, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
 import { useStoreContext } from "@/contexts/StoreContext";
 import { Link } from "@tanstack/react-router";
 import placeholder from "@/assets/placeholder.png";
@@ -10,7 +9,7 @@ import { ProductSku } from "@athena/webapp-2";
 import { capitalizeWords } from "@/lib/utils";
 
 export default function ShoppingBag() {
-  const { formatter } = useStoreContext();
+  const { formatter, isNavbarShowing } = useStoreContext();
   const { bag, deleteItemFromBag, updateBag, isUpdatingBag } = useShoppingBag();
 
   const subtotal =
@@ -46,7 +45,7 @@ export default function ShoppingBag() {
       )}
 
       {!isBagEmpty && total !== 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 pb-40">
           <div className="md:col-span-2 space-y-16">
             {bag?.items.map((item: ProductSku, index: number) => (
               <div key={index} className="flex items-center space-x-4">
@@ -113,9 +112,10 @@ export default function ShoppingBag() {
               </div>
             ))}
           </div>
-          <div>
-            <div className="p-6 space-y-16 rounded-lg sticky top-4">
-              {/* <h2 className="text-xl font-semibold mb-4">Order Summary</h2> */}
+
+          {/* Cart Summary */}
+          <div className="hidden md:block relative">
+            <div className="p-6 space-y-16 rounded-lg sticky top-8">
               <div className="space-y-4">
                 <div className="flex justify-between mb-2">
                   <span>Subtotal</span>
@@ -126,7 +126,6 @@ export default function ShoppingBag() {
                   <span>Calculated at checkout</span>
                 </div>
               </div>
-              {/* <Separator className="my-4" /> */}
               <div className="flex justify-between text-lg font-semibold">
                 <span>Total</span>
                 <span>{formatter.format(total)}</span>
@@ -134,6 +133,17 @@ export default function ShoppingBag() {
               <Button className="w-full mt-6">Checkout</Button>
             </div>
           </div>
+
+          {/* Mobile Cart Summary */}
+          {isNavbarShowing && (
+            <div className="block md:hidden absolute bottom-0 left-0 w-full bg-white p-6 shadow-md">
+              <div className="flex justify-between text-lg font-semibold mb-4">
+                <span>Total</span>
+                <span>{formatter.format(total)}</span>
+              </div>
+              <Button className="w-full">Checkout</Button>
+            </div>
+          )}
         </div>
       )}
     </div>

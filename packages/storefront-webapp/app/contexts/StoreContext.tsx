@@ -11,6 +11,7 @@ type StoreContextType = {
   formatter: Intl.NumberFormat;
   store?: Store;
   navBarClassname: string;
+  isNavbarShowing: boolean;
   showNavbar: () => void;
   hideNavbar: () => void;
 };
@@ -52,6 +53,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
         storeId: OG_STORE_ID,
         formatter,
         store,
+        isNavbarShowing: activeNavClassname == navClassname,
         navBarClassname: activeNavClassname,
         showNavbar,
         hideNavbar,
