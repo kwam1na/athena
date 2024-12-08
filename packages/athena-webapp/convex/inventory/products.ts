@@ -363,21 +363,39 @@ export const getByIdOrSlug = query({
     );
 
     let category: string | undefined;
+    let subcategory: string | undefined;
+    let categorySlug: string | undefined;
+    let subcategorySlug: string | undefined;
 
     if (product) {
-      const productCategory = await ctx.db.get(product.categoryId);
+      const [productCategory, productSubcategory] = await Promise.all([
+        await ctx.db.get(product.categoryId),
+        ctx.db.get(product.subcategoryId),
+      ]);
+
       category = productCategory?.name;
+      subcategory = productSubcategory?.name;
+
+      categorySlug = productCategory?.slug;
+      subcategorySlug = productSubcategory?.slug;
     }
 
     const skusWithCategory = skus.map((sku) => ({
       ...sku,
       productCategory: category,
+      productSubcategory: subcategory,
       productName: product?.name,
+      productCategorySlug: categorySlug,
+      productSubcategorySlug: subcategorySlug,
       colorName: sku.color ? colorMap[sku.color] : null,
     }));
 
     return {
       ...product,
+      categoryName: category,
+      subcategoryName: subcategory,
+      categorySlug,
+      subcategorySlug,
       inventoryCount: calculateTotalInventoryCount(skus),
       skus: skusWithCategory,
     };

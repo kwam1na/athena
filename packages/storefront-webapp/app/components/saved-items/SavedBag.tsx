@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Heart, Trash2 } from "lucide-react";
+import { Heart, ShoppingBasket, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useStoreContext } from "@/contexts/StoreContext";
 import { Link } from "@tanstack/react-router";
@@ -8,23 +8,15 @@ import { useShoppingBag } from "@/hooks/useShoppingBag";
 import { ProductSku } from "@athena/webapp-2";
 import { capitalizeWords } from "@/lib/utils";
 
-export default function ShoppingBag() {
-  const { formatter, isNavbarShowing } = useStoreContext();
+export default function SavedBag() {
+  const { formatter } = useStoreContext();
   const {
-    bag,
-    deleteItemFromBag,
-    updateBag,
-    isUpdatingBag,
-    moveItemFromBagToSaved,
+    savedBag,
+    deleteItemFromSavedBag,
+    updateSavedBag,
+    isUpdatingSavedBag,
+    moveItemFromSavedToBag,
   } = useShoppingBag();
-
-  const subtotal =
-    bag?.items.reduce(
-      (sum: number, item: ProductSku) =>
-        sum + (item.price || 0) * item.quantity,
-      0
-    ) || 0;
-  const total = subtotal;
 
   const getProductName = (item: ProductSku) => {
     if (item.productCategory == "Hair") {
@@ -35,25 +27,25 @@ export default function ShoppingBag() {
     return item.productName;
   };
 
-  const isBagEmpty = bag?.items.length === 0;
+  const isSavedEmpty = savedBag?.items.length === 0;
 
   return (
     <div className="container mx-auto px-4 py-8">
-      {!isBagEmpty && <h1 className="text-2xl font-light mb-8">Bag</h1>}
+      {!isSavedEmpty && <h1 className="text-2xl font-light mb-8">Saved</h1>}
 
-      {isBagEmpty && (
+      {isSavedEmpty && (
         <div className="flex flex-col items-center mt-40 lg:items-start gap-16 lg:mt-12 lg:min-h-[50vh]">
-          <p className="text-sm">You don't have any items in your bag.</p>
+          <p className="text-sm">You don't have any saved items.</p>
           <Link to="/">
             <Button className="w-[320px]">Continue Shopping</Button>
           </Link>
         </div>
       )}
 
-      {!isBagEmpty && total !== 0 && (
+      {!isSavedEmpty && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 pb-40">
           <div className="md:col-span-2 space-y-16">
-            {bag?.items.map((item: ProductSku, index: number) => (
+            {savedBag?.items.map((item: ProductSku, index: number) => (
               <div key={index} className="flex items-center space-x-4">
                 <Link
                   key={index}
@@ -80,12 +72,12 @@ export default function ShoppingBag() {
                     <select
                       value={item.quantity}
                       onChange={(e) =>
-                        updateBag({
+                        updateSavedBag({
                           quantity: parseInt(e.target.value),
                           itemId: item._id,
                         })
                       }
-                      disabled={isUpdatingBag || !item.price}
+                      disabled={isUpdatingSavedBag || !item.price}
                       className="w-12 py-2 bg-white text-black"
                     >
                       {[...Array(10)].map((_, i) => (
@@ -100,17 +92,17 @@ export default function ShoppingBag() {
                     <Button
                       variant="ghost"
                       size="icon"
-                      disabled={isUpdatingBag || !item.price}
-                      onClick={() => moveItemFromBagToSaved(item)}
+                      disabled={isUpdatingSavedBag || !item.price}
+                      onClick={() => moveItemFromSavedToBag(item)}
                     >
-                      <Heart className="h-4 w-4" />
+                      <ShoppingBasket className="h-4 w-4" />
                     </Button>
 
                     <Button
                       variant="ghost"
                       size="icon"
-                      disabled={isUpdatingBag}
-                      onClick={() => deleteItemFromBag(item._id)}
+                      disabled={isUpdatingSavedBag}
+                      onClick={() => deleteItemFromSavedBag(item._id)}
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
@@ -119,38 +111,6 @@ export default function ShoppingBag() {
               </div>
             ))}
           </div>
-
-          {/* Cart Summary */}
-          <div className="hidden md:block relative">
-            <div className="p-6 space-y-16 rounded-lg sticky top-8">
-              <div className="space-y-4">
-                <div className="flex justify-between mb-2">
-                  <span>Subtotal</span>
-                  <span>{formatter.format(subtotal)}</span>
-                </div>
-                <div className="flex justify-between mb-2">
-                  <span>Shipping</span>
-                  <span>Calculated at checkout</span>
-                </div>
-              </div>
-              <div className="flex justify-between text-lg font-semibold">
-                <span>Total</span>
-                <span>{formatter.format(total)}</span>
-              </div>
-              <Button className="w-full mt-6">Checkout</Button>
-            </div>
-          </div>
-
-          {/* Mobile Cart Summary */}
-          {isNavbarShowing && (
-            <div className="block md:hidden absolute bottom-0 left-0 w-full bg-white p-6 shadow-md">
-              <div className="flex justify-between text-lg font-semibold mb-4">
-                <span>Total</span>
-                <span>{formatter.format(total)}</span>
-              </div>
-              <Button className="w-full">Checkout</Button>
-            </div>
-          )}
         </div>
       )}
     </div>

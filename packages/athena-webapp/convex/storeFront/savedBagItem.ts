@@ -1,11 +1,11 @@
 import { mutation, query } from "../_generated/server";
 import { v } from "convex/values";
 
-const entity = "bagItem";
+const entity = "savedBagItem";
 
 export const addItemToBag = mutation({
   args: {
-    bagId: v.id("bag"),
+    savedBagId: v.id("savedBag"),
     productId: v.id("product"),
     productSkuId: v.id("productSku"),
     productSku: v.string(),
@@ -45,12 +45,12 @@ export const updateItemInBag = mutation({
   },
 });
 
-export const deleteItemFromBag = mutation({
+export const deleteItemFromSavedBag = mutation({
   args: {
     itemId: v.id(entity),
   },
   handler: async (ctx, args) => {
     await ctx.db.delete(args.itemId);
-    return { message: "Item deleted from bag" };
+    return { message: "Item deleted from saved bag" };
   },
 });

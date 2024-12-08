@@ -1,4 +1,5 @@
 import ProductPage from "@/components/product-page/ProductPage";
+import { ProductNavigationBar } from "@/components/product-page/ProductsNavigationBar";
 import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 
@@ -8,5 +9,14 @@ const productPageSchema = z.object({
 
 export const Route = createFileRoute("/shop/product/$productSlug")({
   validateSearch: productPageSchema,
-  component: ProductPage,
+  component: () => <Component />,
 });
+
+const Component = () => {
+  return (
+    <div>
+      <ProductNavigationBar />
+      <ProductPage />
+    </div>
+  );
+};

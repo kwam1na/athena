@@ -13,6 +13,8 @@ import {
 import {
   bagItemSchema,
   bagSchema,
+  savedBagSchema,
+  savedBagItemSchema,
   customerSchema,
   guestSchema,
 } from "./schemas/storeFront";
@@ -28,6 +30,8 @@ const schema = defineSchema({
   productSku: defineTable(productSkuSchema),
   bag: defineTable(bagSchema),
   bagItem: defineTable(bagItemSchema),
+  savedBag: defineTable(savedBagSchema),
+  savedBagItem: defineTable(savedBagItemSchema),
   customer: defineTable(customerSchema),
   guest: defineTable(guestSchema),
 });

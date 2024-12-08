@@ -158,4 +158,123 @@ storeRoutes.delete(
   }
 );
 
+// Get a specific saved bag
+storeRoutes.get(
+  "/:storeId/customers/:customerId/savedBags/:savedBagId",
+  async (c) => {
+    const { savedBagId, storeId } = c.req.param();
+
+    if (savedBagId == "active") {
+      const customerId = c.req.param("customerId");
+
+      if (!customerId) {
+        return c.json({ error: "Customer id missing" }, 404);
+      }
+
+      const savedBag = await c.env.runQuery(
+        api.storeFront.savedBag.getByCustomerId,
+        {
+          customerId: customerId as Id<"customer"> | Id<"guest">,
+        }
+      );
+
+      if (!savedBag) {
+        const b = await c.env.runMutation(api.storeFront.savedBag.create, {
+          customerId: customerId as Id<"customer"> | Id<"guest">,
+          storeId: storeId as Id<"store">,
+        });
+
+        return c.json(b);
+      }
+      return c.json(savedBag);
+    }
+
+    return c.json({});
+  }
+);
+
+// Create a new bag
+storeRoutes.post("/:storeId/customers/:customerId/savedBags", async (c) => {
+  const { customerId } = await c.req.json();
+  return c.json({});
+});
+
+// Delete a bag
+storeRoutes.delete(
+  "/:storeId/customers/:customerId/savedBags/:savedBagId",
+  async (c) => {
+    const { savedBagId } = c.req.param();
+    return c.json({});
+  }
+);
+
+// Get all items in a bag
+storeRoutes.get(
+  "/:storeId/customers/:customerId/savedBags/:savedBagId/items",
+  async (c) => {
+    const { savedBagId } = c.req.param();
+    return c.json({});
+  }
+);
+
+storeRoutes.post(
+  "/:storeId/customers/:customerId/savedBags/:savedBagId/items",
+  async (c) => {
+    const { savedBagId, customerId } = c.req.param();
+    const { productId, productSkuId, quantity, productSku } =
+      await c.req.json();
+
+    // console.table({ productId, quantity, price });
+
+    const b = await c.env.runMutation(
+      api.storeFront.savedBagItem.addItemToBag,
+      {
+        productId: productId as Id<"product">,
+        quantity,
+        customerId: customerId as Id<"customer"> | Id<"guest">,
+        savedBagId: savedBagId as Id<"savedBag">,
+        productSkuId: productSkuId as Id<"productSku">,
+        productSku,
+      }
+    );
+
+    return c.json(b);
+  }
+);
+
+// Update an item in a bag
+storeRoutes.put(
+  "/:storeId/customers/:customerId/savedBags/:savedBagId/items/:itemId",
+  async (c) => {
+    const { savedBagId, itemId } = c.req.param();
+    const { quantity } = await c.req.json();
+
+    const b = await c.env.runMutation(
+      api.storeFront.savedBagItem.updateItemInBag,
+      {
+        quantity,
+        itemId: itemId as Id<"savedBagItem">,
+      }
+    );
+    return c.json(b);
+  }
+);
+
+// Delete an item from a bag
+storeRoutes.delete(
+  "/:storeId/customers/:customerId/savedBags/:savedBagId/items/:itemId",
+  async (c) => {
+    const { itemId } = c.req.param();
+
+    await c.env.runMutation(
+      api.storeFront.savedBagItem.deleteItemFromSavedBag,
+      {
+        itemId: itemId as Id<"savedBagItem">,
+      }
+    );
+
+    return c.json({ success: true });
+  }
+);
+
 export { storeRoutes };

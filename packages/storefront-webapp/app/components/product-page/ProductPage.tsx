@@ -16,9 +16,15 @@ import { HeartIcon } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 import placeholder from "@/assets/placeholder.png";
 
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import {
+  Sheet,
+  SheetContent,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 import NotFound from "../states/not-found/NotFound";
 import GalleryViewer from "./GalleryViewer";
+import { useGetProductQuery } from "@/hooks/useGetProduct";
 
 // Helper Function
 const getProductName = (item: ProductSku) =>
@@ -168,6 +174,30 @@ function BagProduct({ product }: { product: ProductSku }) {
   );
 }
 
+// Bag Product Summary
+function SavedProduct({ product }: { product: ProductSku }) {
+  return (
+    <div className="flex flex-col gap-12 pt-12">
+      <div className="space-y-8">
+        <p className="text-md">Added to your saved items</p>
+        <div className="flex gap-4">
+          <img
+            alt={`Bag image`}
+            className="w-[140px] h-[180px] aspect-square object-cover"
+            src={product.images[0] || placeholder}
+          />
+          <p className="text-sm">{getProductName(product)}</p>
+        </div>
+      </div>
+      <Link to="/shop/saved">
+        <Button variant="outline" className="w-full">
+          See Saved
+        </Button>
+      </Link>
+    </div>
+  );
+}
+
 // Shipping Policy Section
 function ShippingPolicy() {
   return (
@@ -219,13 +249,18 @@ function ProductReview() {
 // Main Product Page Component
 export default function ProductPage() {
   const { productSlug } = useParams({ strict: false });
-  const { store, formatter } = useStoreContext();
+  const { formatter } = useStoreContext();
   const {
     bag,
+    bagAction,
     addProductToBag,
     updateBag,
     isUpdatingBag,
     addedItemSuccessfully,
+    savedBag,
+    addProductToSavedBag,
+    isUpdatingSavedBag,
+    updateSavedBag,
   } = useShoppingBag();
 
   const [isSheetOpen, setIsSheetOpen] = useState(false);
@@ -236,17 +271,7 @@ export default function ProductPage() {
 
   const sheetContent = useRef<React.ReactNode | null>(null);
 
-  const { data: product, error } = useQuery({
-    queryKey: ["product", productSlug],
-    queryFn: () =>
-      getProduct({
-        organizationId: store!.organizationId,
-        storeId: store!._id,
-        productId: productSlug!,
-      }),
-    enabled: Boolean(productSlug && store),
-    retry: false,
-  });
+  const { data: product, error } = useGetProductQuery(productSlug);
 
   const { variant } = useSearch({ strict: false });
 
@@ -289,7 +314,12 @@ export default function ProductPage() {
 
   useEffect(() => {
     if (addedItemSuccessfully) {
-      sheetContent.current = <BagProduct product={selectedSku} />;
+      sheetContent.current =
+        bagAction == "adding-to-bag" ? (
+          <BagProduct product={selectedSku} />
+        ) : (
+          <SavedProduct product={selectedSku} />
+        );
     }
 
     const t = setTimeout(() => {
@@ -299,18 +329,19 @@ export default function ProductPage() {
     }, 3500);
 
     return () => clearTimeout(t);
-  }, [addedItemSuccessfully]);
-
-  useEffect(() => {
-    pageRef.current?.scrollIntoView();
-  }, [pageRef.current]);
+  }, [addedItemSuccessfully, bagAction]);
 
   const bagItem = bag?.items?.find(
     (item: ProductSku) => item.productSku === selectedSku?.sku
   );
 
+  const savedBagItem = savedBag?.items?.find(
+    (item: ProductSku) => item.productSku === selectedSku?.sku
+  );
+
   const handleUpdateBag = async () => {
     sheetContent.current = null;
+
     if (bagItem) {
       await updateBag({ itemId: bagItem._id, quantity: bagItem.quantity + 1 });
     } else {
@@ -321,6 +352,27 @@ export default function ProductPage() {
         productSku: selectedSku.sku,
       });
     }
+
+    setIsSheetOpen(true);
+  };
+
+  const handleUpdateSavedBag = async () => {
+    sheetContent.current = null;
+
+    if (savedBagItem) {
+      await updateSavedBag({
+        itemId: savedBagItem._id,
+        quantity: savedBagItem.quantity + 1,
+      });
+    } else {
+      await addProductToSavedBag({
+        quantity: 1,
+        productId: product._id,
+        productSkuId: selectedSku._id,
+        productSku: selectedSku.sku,
+      });
+    }
+
     setIsSheetOpen(true);
   };
 
@@ -337,17 +389,18 @@ export default function ProductPage() {
   return (
     <>
       <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
+        <SheetTitle />
         <SheetContent>{sheetContent.current}</SheetContent>
 
         <main
           ref={pageRef}
-          className="grid grid-cols-1 xl:grid-cols-4 gap-12 px-6 xl:px-48 pt-16 pb-16"
+          className="grid grid-cols-1 xl:grid-cols-4 gap-12 xl:px-48 pb-16"
         >
           <div className="col-span-1 md:col-span-2">
             <GalleryViewer images={selectedSku.images} />
           </div>
 
-          <div className="col-span-1 md:col-span-2 pt-8 lg:px-16 space-y-12">
+          <div className="col-span-1 md:col-span-2 pt-8 px-6 lg:px-16 space-y-12">
             <div className="space-y-8">
               <div className="space-y-6">
                 <p className="text-xl">{getProductName(selectedSku)}</p>
@@ -370,9 +423,9 @@ export default function ProductPage() {
 
               <LoadingButton
                 variant={"outline"}
-                isLoading={false}
-                disabled={isUpdatingBag}
-                onClick={handleUpdateBag}
+                isLoading={isUpdatingSavedBag}
+                disabled={isUpdatingSavedBag}
+                onClick={handleUpdateSavedBag}
               >
                 <HeartIcon className="w-4 h-4 text-muted-foreground" />
               </LoadingButton>

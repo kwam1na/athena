@@ -46,7 +46,6 @@ const GalleryViewer: React.FC<GalleryViewerProps> = ({ images }) => {
 
     const selectedImage = imageRefs.current[index];
     if (selectedImage && scroller.current) {
-      // Scroll to the selected image within the viewport
       const offset = selectedImage.offsetTop - scroller.current.offsetTop;
 
       scroller.current.scrollTo({
@@ -66,14 +65,14 @@ const GalleryViewer: React.FC<GalleryViewerProps> = ({ images }) => {
     <div className="w-full flex flex-row items-center gap-8">
       <ScrollArea
         ref={scroller}
-        className="snap-mandatory snap-y w-[400px] h-[400px] lg:w-[800px] lg:h-[800px]"
+        className="snap-mandatory snap-y w-full h-[600px] lg:w-[800px] lg:h-[800px]"
       >
         {images.map((img, index) => (
           <div className="snap-center" key={index}>
             <img
               ref={(el) => (imageRefs.current[index] = el)}
               alt={`image`}
-              className={`aspect-square w-[400px] h-[400px] lg:w-[800px] lg:h-[800px] object-cover cursor-pointer`}
+              className={`aspect-square w-full h-[600px] lg:w-[800px] lg:h-[800px] object-cover cursor-pointer`}
               src={img}
             />
           </div>

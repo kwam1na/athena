@@ -12,9 +12,9 @@
 
 import { Route as rootRoute } from './routes/__root'
 import { Route as LayoutImport } from './routes/_layout'
-import { Route as CategorySlugImport } from './routes/$categorySlug'
 import { Route as IndexImport } from './routes/index'
 import { Route as LayoutShopLayoutImport } from './routes/_layout/_shopLayout'
+import { Route as ShopSavedIndexImport } from './routes/shop/saved/index'
 import { Route as ShopBagIndexImport } from './routes/shop/bag/index'
 import { Route as ShopProductProductSlugImport } from './routes/shop/product/$productSlug'
 import { Route as LayoutShopLayoutShopCategorySlugIndexImport } from './routes/_layout/_shopLayout/shop/$categorySlug/index'
@@ -27,11 +27,6 @@ const LayoutRoute = LayoutImport.update({
   getParentRoute: () => rootRoute,
 } as any)
 
-const CategorySlugRoute = CategorySlugImport.update({
-  path: '/$categorySlug',
-  getParentRoute: () => rootRoute,
-} as any)
-
 const IndexRoute = IndexImport.update({
   path: '/',
   getParentRoute: () => rootRoute,
@@ -40,6 +35,11 @@ const IndexRoute = IndexImport.update({
 const LayoutShopLayoutRoute = LayoutShopLayoutImport.update({
   id: '/_shopLayout',
   getParentRoute: () => LayoutRoute,
+} as any)
+
+const ShopSavedIndexRoute = ShopSavedIndexImport.update({
+  path: '/shop/saved/',
+  getParentRoute: () => rootRoute,
 } as any)
 
 const ShopBagIndexRoute = ShopBagIndexImport.update({
@@ -75,13 +75,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexImport
       parentRoute: typeof rootRoute
     }
-    '/$categorySlug': {
-      id: '/$categorySlug'
-      path: '/$categorySlug'
-      fullPath: '/$categorySlug'
-      preLoaderRoute: typeof CategorySlugImport
-      parentRoute: typeof rootRoute
-    }
     '/_layout': {
       id: '/_layout'
       path: ''
@@ -108,6 +101,13 @@ declare module '@tanstack/react-router' {
       path: '/shop/bag'
       fullPath: '/shop/bag'
       preLoaderRoute: typeof ShopBagIndexImport
+      parentRoute: typeof rootRoute
+    }
+    '/shop/saved/': {
+      id: '/shop/saved/'
+      path: '/shop/saved'
+      fullPath: '/shop/saved'
+      preLoaderRoute: typeof ShopSavedIndexImport
       parentRoute: typeof rootRoute
     }
     '/_layout/_shopLayout/shop/$categorySlug/$subcategorySlug': {
@@ -157,20 +157,20 @@ const LayoutRouteWithChildren =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/$categorySlug': typeof CategorySlugRoute
   '': typeof LayoutShopLayoutRouteWithChildren
   '/shop/product/$productSlug': typeof ShopProductProductSlugRoute
   '/shop/bag': typeof ShopBagIndexRoute
+  '/shop/saved': typeof ShopSavedIndexRoute
   '/shop/$categorySlug/$subcategorySlug': typeof LayoutShopLayoutShopCategorySlugSubcategorySlugRoute
   '/shop/$categorySlug': typeof LayoutShopLayoutShopCategorySlugIndexRoute
 }
 
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/$categorySlug': typeof CategorySlugRoute
   '': typeof LayoutShopLayoutRouteWithChildren
   '/shop/product/$productSlug': typeof ShopProductProductSlugRoute
   '/shop/bag': typeof ShopBagIndexRoute
+  '/shop/saved': typeof ShopSavedIndexRoute
   '/shop/$categorySlug/$subcategorySlug': typeof LayoutShopLayoutShopCategorySlugSubcategorySlugRoute
   '/shop/$categorySlug': typeof LayoutShopLayoutShopCategorySlugIndexRoute
 }
@@ -178,11 +178,11 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRoute
   '/': typeof IndexRoute
-  '/$categorySlug': typeof CategorySlugRoute
   '/_layout': typeof LayoutRouteWithChildren
   '/_layout/_shopLayout': typeof LayoutShopLayoutRouteWithChildren
   '/shop/product/$productSlug': typeof ShopProductProductSlugRoute
   '/shop/bag/': typeof ShopBagIndexRoute
+  '/shop/saved/': typeof ShopSavedIndexRoute
   '/_layout/_shopLayout/shop/$categorySlug/$subcategorySlug': typeof LayoutShopLayoutShopCategorySlugSubcategorySlugRoute
   '/_layout/_shopLayout/shop/$categorySlug/': typeof LayoutShopLayoutShopCategorySlugIndexRoute
 }
@@ -191,29 +191,29 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/$categorySlug'
     | ''
     | '/shop/product/$productSlug'
     | '/shop/bag'
+    | '/shop/saved'
     | '/shop/$categorySlug/$subcategorySlug'
     | '/shop/$categorySlug'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/$categorySlug'
     | ''
     | '/shop/product/$productSlug'
     | '/shop/bag'
+    | '/shop/saved'
     | '/shop/$categorySlug/$subcategorySlug'
     | '/shop/$categorySlug'
   id:
     | '__root__'
     | '/'
-    | '/$categorySlug'
     | '/_layout'
     | '/_layout/_shopLayout'
     | '/shop/product/$productSlug'
     | '/shop/bag/'
+    | '/shop/saved/'
     | '/_layout/_shopLayout/shop/$categorySlug/$subcategorySlug'
     | '/_layout/_shopLayout/shop/$categorySlug/'
   fileRoutesById: FileRoutesById
@@ -221,18 +221,18 @@ export interface FileRouteTypes {
 
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  CategorySlugRoute: typeof CategorySlugRoute
   LayoutRoute: typeof LayoutRouteWithChildren
   ShopProductProductSlugRoute: typeof ShopProductProductSlugRoute
   ShopBagIndexRoute: typeof ShopBagIndexRoute
+  ShopSavedIndexRoute: typeof ShopSavedIndexRoute
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  CategorySlugRoute: CategorySlugRoute,
   LayoutRoute: LayoutRouteWithChildren,
   ShopProductProductSlugRoute: ShopProductProductSlugRoute,
   ShopBagIndexRoute: ShopBagIndexRoute,
+  ShopSavedIndexRoute: ShopSavedIndexRoute,
 }
 
 export const routeTree = rootRoute
@@ -248,17 +248,14 @@ export const routeTree = rootRoute
       "filePath": "__root.tsx",
       "children": [
         "/",
-        "/$categorySlug",
         "/_layout",
         "/shop/product/$productSlug",
-        "/shop/bag/"
+        "/shop/bag/",
+        "/shop/saved/"
       ]
     },
     "/": {
       "filePath": "index.tsx"
-    },
-    "/$categorySlug": {
-      "filePath": "$categorySlug.tsx"
     },
     "/_layout": {
       "filePath": "_layout.tsx",
@@ -279,6 +276,9 @@ export const routeTree = rootRoute
     },
     "/shop/bag/": {
       "filePath": "shop/bag/index.tsx"
+    },
+    "/shop/saved/": {
+      "filePath": "shop/saved/index.tsx"
     },
     "/_layout/_shopLayout/shop/$categorySlug/$subcategorySlug": {
       "filePath": "_layout/_shopLayout/shop/$categorySlug/$subcategorySlug.tsx",

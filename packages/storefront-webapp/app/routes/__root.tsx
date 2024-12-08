@@ -13,6 +13,7 @@ import { fetchUser } from "@/server-actions/auth";
 import { OG_ORGANIZTION_ID } from "@/lib/constants";
 import Footer from "@/components/footer/Footer";
 import { z } from "zod";
+import NotFound from "@/components/states/not-found/NotFound";
 
 const productsPageSchema = z.object({
   color: z.string().optional(),
@@ -48,12 +49,7 @@ export const Route = createRootRouteWithContext<{
   component: RootComponent,
 
   notFoundComponent: () => {
-    return (
-      <div>
-        <p>This is the notFoundComponent configured on root route</p>
-        <Link to="/">Start Over</Link>
-      </div>
-    );
+    return <NotFound />;
   },
 });
 

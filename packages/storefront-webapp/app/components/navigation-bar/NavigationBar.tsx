@@ -201,7 +201,7 @@ export default function NavigationBar() {
               </div>
             </div>
             <div className="flex gap-4">
-              <Link to="/shop/bag" className="flex items-center">
+              <Link to="/shop/saved" className="flex items-center">
                 <HeartIcon className="w-5 h-5" />
               </Link>
               <Link to="/shop/bag" className="flex gap-2">

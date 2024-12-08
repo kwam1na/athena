@@ -28,6 +28,7 @@ import type * as http_domains_inventory_routes_subcategories from "../http/domai
 import type * as http_domains_storeFront_routes_bag from "../http/domains/storeFront/routes/bag.js";
 import type * as http_domains_storeFront_routes_guest from "../http/domains/storeFront/routes/guest.js";
 import type * as http_domains_storeFront_routes_index from "../http/domains/storeFront/routes/index.js";
+import type * as http_domains_storeFront_routes_savedBag from "../http/domains/storeFront/routes/savedBag.js";
 import type * as http from "../http.js";
 import type * as inventory_categories from "../inventory/categories.js";
 import type * as inventory_colors from "../inventory/colors.js";
@@ -49,9 +50,13 @@ import type * as schemas_storeFront_bagItem from "../schemas/storeFront/bagItem.
 import type * as schemas_storeFront_customer from "../schemas/storeFront/customer.js";
 import type * as schemas_storeFront_guest from "../schemas/storeFront/guest.js";
 import type * as schemas_storeFront_index from "../schemas/storeFront/index.js";
+import type * as schemas_storeFront_savedBag from "../schemas/storeFront/savedBag.js";
+import type * as schemas_storeFront_savedBagItem from "../schemas/storeFront/savedBagItem.js";
 import type * as storeFront_bag from "../storeFront/bag.js";
 import type * as storeFront_bagItem from "../storeFront/bagItem.js";
 import type * as storeFront_guest from "../storeFront/guest.js";
+import type * as storeFront_savedBag from "../storeFront/savedBag.js";
+import type * as storeFront_savedBagItem from "../storeFront/savedBagItem.js";
 import type * as utils from "../utils.js";
 
 /**
@@ -76,6 +81,7 @@ declare const fullApi: ApiFromModules<{
   "http/domains/storeFront/routes/bag": typeof http_domains_storeFront_routes_bag;
   "http/domains/storeFront/routes/guest": typeof http_domains_storeFront_routes_guest;
   "http/domains/storeFront/routes/index": typeof http_domains_storeFront_routes_index;
+  "http/domains/storeFront/routes/savedBag": typeof http_domains_storeFront_routes_savedBag;
   http: typeof http;
   "inventory/categories": typeof inventory_categories;
   "inventory/colors": typeof inventory_colors;
@@ -97,9 +103,13 @@ declare const fullApi: ApiFromModules<{
   "schemas/storeFront/customer": typeof schemas_storeFront_customer;
   "schemas/storeFront/guest": typeof schemas_storeFront_guest;
   "schemas/storeFront/index": typeof schemas_storeFront_index;
+  "schemas/storeFront/savedBag": typeof schemas_storeFront_savedBag;
+  "schemas/storeFront/savedBagItem": typeof schemas_storeFront_savedBagItem;
   "storeFront/bag": typeof storeFront_bag;
   "storeFront/bagItem": typeof storeFront_bagItem;
   "storeFront/guest": typeof storeFront_guest;
+  "storeFront/savedBag": typeof storeFront_savedBag;
+  "storeFront/savedBagItem": typeof storeFront_savedBagItem;
   utils: typeof utils;
 }>;
 export declare const api: FilterApi<
