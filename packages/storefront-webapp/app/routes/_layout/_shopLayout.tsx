@@ -90,9 +90,7 @@ function LayoutComponent() {
         </div>
 
         {showFilters && (
-          <div className="hidden lg:grid col-span-2 h-[calc(100vh-124px)] sticky top-16 lg:py-16 lg:px-16 overflow-auto">
-            <ProductFilter />
-
+          <div className="hidden lg:flex flex-col gap-16 col-span-2 h-[calc(100vh-124px)] sticky top-16 lg:py-16 lg:px-16 overflow-auto">
             {hasActiveFilters && (
               <Button
                 variant={"outline"}
@@ -102,6 +100,8 @@ function LayoutComponent() {
                 {`Clear (${getSelectedFiltersCount()})`}
               </Button>
             )}
+
+            <ProductFilter />
           </div>
         )}
 

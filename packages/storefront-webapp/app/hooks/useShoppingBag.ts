@@ -16,13 +16,20 @@ import { ProductSku } from "@athena/webapp-2";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
-type BagAction = "adding-to-bag" | "adding-to-saved-bag";
+export type ShoppingBagAction =
+  | "idle"
+  | "adding-to-bag"
+  | "adding-to-saved-bag"
+  | "deleting-from-bag"
+  | "deleting-from-saved-bag"
+  | "moving-to-saved-bag"
+  | "moving-to--bag";
 
 export const useShoppingBag = () => {
   const queryClient = useQueryClient();
 
   const [operationSuccessful, setOperationSuccessful] = useState(false);
-  const [action, setAction] = useState<BagAction>("adding-to-bag");
+  const [action, setAction] = useState<ShoppingBagAction>("idle");
 
   const userId =
     typeof window == "object"
@@ -132,6 +139,7 @@ export const useShoppingBag = () => {
   };
 
   const deleteItemFromSavedBag = async (itemId: number) => {
+    setAction("deleting-from-saved-bag");
     await removeSavedBagItemMutation.mutateAsync({ itemId });
   };
 
@@ -249,6 +257,7 @@ export const useShoppingBag = () => {
   };
 
   const deleteItemFromBag = async (itemId: number) => {
+    setAction("deleting-from-bag");
     await removeBagItem.mutateAsync({ itemId });
   };
 

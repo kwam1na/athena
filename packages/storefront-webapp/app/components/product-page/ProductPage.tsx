@@ -25,6 +25,7 @@ import {
 import NotFound from "../states/not-found/NotFound";
 import GalleryViewer from "./GalleryViewer";
 import { useGetProductQuery } from "@/hooks/useGetProduct";
+import { HeartIconFilled } from "@/assets/icons/HeartIconFilled";
 
 // Helper Function
 const getProductName = (item: ProductSku) =>
@@ -252,7 +253,7 @@ export default function ProductPage() {
   const { formatter } = useStoreContext();
   const {
     bag,
-    bagAction,
+    deleteItemFromSavedBag,
     addProductToBag,
     updateBag,
     isUpdatingBag,
@@ -314,12 +315,7 @@ export default function ProductPage() {
 
   useEffect(() => {
     if (addedItemSuccessfully) {
-      sheetContent.current =
-        bagAction == "adding-to-bag" ? (
-          <BagProduct product={selectedSku} />
-        ) : (
-          <SavedProduct product={selectedSku} />
-        );
+      sheetContent.current = <BagProduct product={selectedSku} />;
     }
 
     const t = setTimeout(() => {
@@ -329,7 +325,7 @@ export default function ProductPage() {
     }, 3500);
 
     return () => clearTimeout(t);
-  }, [addedItemSuccessfully, bagAction]);
+  }, [addedItemSuccessfully]);
 
   const bagItem = bag?.items?.find(
     (item: ProductSku) => item.productSku === selectedSku?.sku
@@ -357,13 +353,8 @@ export default function ProductPage() {
   };
 
   const handleUpdateSavedBag = async () => {
-    sheetContent.current = null;
-
     if (savedBagItem) {
-      await updateSavedBag({
-        itemId: savedBagItem._id,
-        quantity: savedBagItem.quantity + 1,
-      });
+      await deleteItemFromSavedBag(savedBagItem._id);
     } else {
       await addProductToSavedBag({
         quantity: 1,
@@ -372,8 +363,6 @@ export default function ProductPage() {
         productSku: selectedSku.sku,
       });
     }
-
-    setIsSheetOpen(true);
   };
 
   const showShippingPolicy = () => {
@@ -414,7 +403,7 @@ export default function ProductPage() {
             <div className="flex gap-4">
               <LoadingButton
                 className="w-[288px]"
-                isLoading={isUpdatingBag}
+                isLoading={false}
                 disabled={isUpdatingBag}
                 onClick={handleUpdateBag}
               >
@@ -423,11 +412,14 @@ export default function ProductPage() {
 
               <LoadingButton
                 variant={"outline"}
-                isLoading={isUpdatingSavedBag}
+                isLoading={false}
                 disabled={isUpdatingSavedBag}
                 onClick={handleUpdateSavedBag}
               >
-                <HeartIcon className="w-4 h-4 text-muted-foreground" />
+                {!savedBagItem && (
+                  <HeartIcon className="w-4 h-4 text-muted-foreground" />
+                )}
+                {savedBagItem && <HeartIconFilled width={16} height={16} />}
               </LoadingButton>
             </div>
 

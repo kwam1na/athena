@@ -19,6 +19,7 @@ import {
 } from "../navigation/hooks";
 import { Button } from "../ui/button";
 import { capitalizeWords, slugToWords } from "@/lib/utils";
+import { HeartIconFilled } from "@/assets/icons/HeartIconFilled";
 
 type SubMenu = "wigs" | "wig-care-and-accessories";
 
@@ -100,7 +101,7 @@ function MobileMenu({ onCloseClick }: { onCloseClick: () => void }) {
 
 export default function NavigationBar() {
   const { store } = useStoreContext();
-  const { bagCount } = useShoppingBag();
+  const { bagCount, savedBagCount } = useShoppingBag();
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [isMobileMenuShowing, setIsMobileMenuShowing] = useState(false);
 
@@ -202,7 +203,11 @@ export default function NavigationBar() {
             </div>
             <div className="flex gap-4">
               <Link to="/shop/saved" className="flex items-center">
-                <HeartIcon className="w-5 h-5" />
+                {savedBagCount ? (
+                  <HeartIconFilled width={20} height={20} />
+                ) : (
+                  <HeartIcon className="w-5 h-5" />
+                )}
               </Link>
               <Link to="/shop/bag" className="flex gap-2">
                 <CartIcon notificationCount={bagCount} />
