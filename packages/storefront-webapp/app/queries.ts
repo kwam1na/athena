@@ -38,6 +38,7 @@ export const productQueries = {
 };
 
 export const bagQueries = {
+  activeSavedBagKey: () => ["active-saved-bag"],
   activeSavedBag: ({
     userId,
     organizationId,
@@ -48,7 +49,7 @@ export const bagQueries = {
     storeId: string;
   }) =>
     queryOptions({
-      queryKey: ["active-saved-bag"],
+      queryKey: [...bagQueries.activeSavedBagKey()],
       queryFn: () =>
         getActiveSavedBag({
           customerId: userId!,
@@ -57,6 +58,7 @@ export const bagQueries = {
         }),
       enabled: Boolean(userId),
     }),
+  activeBagKey: () => ["active-bag"],
   activeBag: ({
     userId,
     organizationId,
@@ -67,7 +69,7 @@ export const bagQueries = {
     storeId: string;
   }) =>
     queryOptions({
-      queryKey: ["active-bag"],
+      queryKey: [...bagQueries.activeBagKey()],
       queryFn: () =>
         getActiveBag({
           customerId: userId!,

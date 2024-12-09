@@ -1,12 +1,6 @@
-import {
-  addItemToBag,
-  getActiveBag,
-  removeItemFromBag,
-  updateBagItem,
-} from "@/api/bag";
+import { addItemToBag, removeItemFromBag, updateBagItem } from "@/api/bag";
 import {
   addItemToSavedBag,
-  getActiveSavedBag,
   removeItemFromSavedBag,
   updateSavedBagItem,
 } from "@/api/savedBag";
@@ -23,7 +17,7 @@ export type ShoppingBagAction =
   | "deleting-from-bag"
   | "deleting-from-saved-bag"
   | "moving-to-saved-bag"
-  | "moving-to--bag";
+  | "moving-to-bag";
 
 export const useShoppingBag = () => {
   const queryClient = useQueryClient();
@@ -68,7 +62,9 @@ export const useShoppingBag = () => {
       }),
     onSuccess: () => {
       setOperationSuccessful(true);
-      queryClient.invalidateQueries({ queryKey: ["active-saved-bag"] });
+      queryClient.invalidateQueries({
+        queryKey: bagQueries.activeSavedBagKey(),
+      });
     },
   });
 
@@ -84,7 +80,9 @@ export const useShoppingBag = () => {
       }),
     onSuccess: () => {
       setOperationSuccessful(true);
-      queryClient.invalidateQueries({ queryKey: ["active-saved-bag"] });
+      queryClient.invalidateQueries({
+        queryKey: bagQueries.activeSavedBagKey(),
+      });
     },
   });
 
@@ -98,7 +96,9 @@ export const useShoppingBag = () => {
         storeId: OG_STORE_ID,
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["active-saved-bag"] });
+      queryClient.invalidateQueries({
+        queryKey: bagQueries.activeSavedBagKey(),
+      });
     },
   });
 
@@ -186,7 +186,7 @@ export const useShoppingBag = () => {
       }),
     onSuccess: () => {
       setOperationSuccessful(true);
-      queryClient.invalidateQueries({ queryKey: ["active-bag"] });
+      queryClient.invalidateQueries({ queryKey: bagQueries.activeBagKey() });
     },
   });
 
@@ -202,7 +202,7 @@ export const useShoppingBag = () => {
       }),
     onSuccess: () => {
       setOperationSuccessful(true);
-      queryClient.invalidateQueries({ queryKey: ["active-bag"] });
+      queryClient.invalidateQueries({ queryKey: bagQueries.activeBagKey() });
     },
   });
 
@@ -216,7 +216,7 @@ export const useShoppingBag = () => {
         storeId: OG_STORE_ID,
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["active-bag"] });
+      queryClient.invalidateQueries({ queryKey: bagQueries.activeBagKey() });
     },
   });
 

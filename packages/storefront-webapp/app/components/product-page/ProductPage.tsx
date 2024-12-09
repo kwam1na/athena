@@ -1,5 +1,4 @@
 import { useStoreContext } from "@/contexts/StoreContext";
-import { useQuery } from "@tanstack/react-query";
 import {
   Link,
   useNavigate,
@@ -8,13 +7,13 @@ import {
 } from "@tanstack/react-router";
 import { LoadingButton } from "../ui/loading-button";
 import { useShoppingBag } from "@/hooks/useShoppingBag";
-import { getProduct } from "@/api/product";
 import { Product, ProductSku } from "@athena/webapp-2";
 import { Button } from "../ui/button";
 import { capitalizeWords } from "@/lib/utils";
 import { HeartIcon } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 import placeholder from "@/assets/placeholder.png";
+import { motion } from "framer-motion";
 
 import {
   Sheet,
@@ -381,15 +380,26 @@ export default function ProductPage() {
         <SheetTitle />
         <SheetContent>{sheetContent.current}</SheetContent>
 
-        <main
+        <motion.main
           ref={pageRef}
           className="grid grid-cols-1 xl:grid-cols-4 gap-12 xl:px-48 pb-16"
         >
-          <div className="col-span-1 md:col-span-2">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1, transition: { duration: 0.1 } }}
+            className="col-span-1 md:col-span-2"
+          >
             <GalleryViewer images={selectedSku.images} />
-          </div>
+          </motion.div>
 
-          <div className="col-span-1 md:col-span-2 pt-8 px-6 lg:px-16 space-y-12">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{
+              opacity: 1,
+              transition: { duration: 0.4, delay: 0.1, ease: "easeInOut" },
+            }}
+            className="col-span-1 md:col-span-2 pt-8 px-6 lg:px-16 space-y-12"
+          >
             <div className="space-y-8">
               <div className="space-y-6">
                 <p className="text-xl">{getProductName(selectedSku)}</p>
@@ -426,8 +436,8 @@ export default function ProductPage() {
             <ProductDetails showShippingPolicy={showShippingPolicy} />
 
             <Reviews />
-          </div>
-        </main>
+          </motion.div>
+        </motion.main>
       </Sheet>
     </>
   );

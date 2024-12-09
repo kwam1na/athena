@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Heart, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useStoreContext } from "@/contexts/StoreContext";
@@ -92,7 +92,7 @@ export default function ShoppingBag() {
                     transition={{ duration: 0.4, delay: 0.1 }}
                   >
                     {bagAction == "deleting-from-bag" ? (
-                      <Trash2 className="text-muted-foreground w-16 h-16" />
+                      <Trash2 className="text-gray-300 w-16 h-16" />
                     ) : (
                       <HeartIconFilled width={56} height={56} />
                     )}

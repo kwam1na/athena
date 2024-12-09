@@ -31,7 +31,7 @@ export function ProductNavigationBar() {
         <p>/</p>
         {product?.categoryName && (
           <BreadcrumbItem>
-            <BreadcrumbLink>
+            <BreadcrumbLink asChild>
               <Link
                 to="/shop/$categorySlug"
                 params={{
@@ -50,7 +50,7 @@ export function ProductNavigationBar() {
             <p>/</p>
             <BreadcrumbItem>
               <Link></Link>
-              <BreadcrumbLink>
+              <BreadcrumbLink asChild>
                 <Link
                   to="/shop/$categorySlug/$subcategorySlug"
                   params={{

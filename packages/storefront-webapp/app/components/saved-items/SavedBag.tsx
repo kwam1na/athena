@@ -1,18 +1,16 @@
 import { useState } from "react";
-import { Heart, ShoppingBag, ShoppingBasket, Trash2 } from "lucide-react";
+import { ShoppingBasket, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useStoreContext } from "@/contexts/StoreContext";
 import { Link } from "@tanstack/react-router";
 import placeholder from "@/assets/placeholder.png";
-import { useShoppingBag } from "@/hooks/useShoppingBag";
+import { ShoppingBagAction, useShoppingBag } from "@/hooks/useShoppingBag";
 import { ProductSku } from "@athena/webapp-2";
 import { capitalizeWords } from "@/lib/utils";
 import { AnimatePresence, easeInOut, motion } from "framer-motion";
 
-type BagAction = "moved-to-bag" | "deleted-item" | "idle";
-
 export default function SavedBag() {
-  const [bagAction, setBagAction] = useState<BagAction>("idle");
+  const [bagAction, setBagAction] = useState<ShoppingBagAction>("idle");
   const { formatter } = useStoreContext();
   const {
     savedBag,
@@ -34,16 +32,16 @@ export default function SavedBag() {
   const isSavedEmpty = savedBag?.items.length === 0;
 
   const cellVariants = {
-    exit: (bagAction: BagAction) => ({
+    exit: (bagAction: ShoppingBagAction) => ({
       opacity: 0,
-      x: bagAction == "deleted-item" ? 0 : 24,
+      x: bagAction == "deleting-from-saved-bag" ? 0 : 24,
     }),
   };
 
   const backgroundSvgVariants = {
-    exit: (bagAction: BagAction) => ({
+    exit: (bagAction: ShoppingBagAction) => ({
       opacity: 0,
-      x: bagAction == "deleted-item" ? 0 : 24,
+      x: bagAction == "deleting-from-saved-bag" ? 0 : 24,
     }),
   };
 
@@ -83,10 +81,10 @@ export default function SavedBag() {
                     exit={"exit"}
                     transition={{ duration: 0.4, delay: 0.1 }}
                   >
-                    {bagAction == "deleted-item" ? (
-                      <Trash2 className="text-muted-foreground w-16 h-16" />
+                    {bagAction == "deleting-from-saved-bag" ? (
+                      <Trash2 className="text-gray-300 w-16 h-16" />
                     ) : (
-                      <ShoppingBasket className="text-muted-foreground w-16 h-16" />
+                      <ShoppingBasket className="text-gray-300 w-16 h-16" />
                     )}
                   </motion.div>
 
@@ -143,7 +141,7 @@ export default function SavedBag() {
                           size="icon"
                           disabled={isUpdatingSavedBag || !item.price}
                           onClick={() => {
-                            setBagAction("moved-to-bag");
+                            setBagAction("moving-to-bag");
                             moveItemFromSavedToBag(item);
                           }}
                         >
@@ -155,7 +153,7 @@ export default function SavedBag() {
                           size="icon"
                           disabled={isUpdatingSavedBag}
                           onClick={() => {
-                            setBagAction("deleted-item");
+                            setBagAction("deleting-from-saved-bag");
                             deleteItemFromSavedBag(item._id);
                           }}
                         >
