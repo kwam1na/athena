@@ -6,7 +6,7 @@ import { Link } from "@tanstack/react-router";
 import placeholder from "@/assets/placeholder.png";
 import { ShoppingBagAction, useShoppingBag } from "@/hooks/useShoppingBag";
 import { ProductSku } from "@athena/webapp-2";
-import { capitalizeWords } from "@/lib/utils";
+import { getProductName } from "@/lib/utils";
 import { motion, AnimatePresence, easeInOut } from "framer-motion";
 import { HeartIconFilled } from "@/assets/icons/HeartIconFilled";
 
@@ -28,15 +28,6 @@ export default function ShoppingBag() {
       0
     ) || 0;
   const total = subtotal;
-
-  const getProductName = (item: ProductSku) => {
-    if (item.productCategory == "Hair") {
-      if (!item.colorName) return capitalizeWords(item.productName);
-      return `${item.length}" ${capitalizeWords(item.colorName)} ${item.productName}`;
-    }
-
-    return item.productName;
-  };
 
   const isBagEmpty = bag?.items.length === 0;
 
@@ -195,7 +186,9 @@ export default function ShoppingBag() {
                 <span>Total</span>
                 <span>{formatter.format(total)}</span>
               </div>
-              <Button className="w-full mt-6">Checkout</Button>
+              <Link to="/shop/checkout">
+                <Button className="w-full mt-6">Checkout</Button>
+              </Link>
             </div>
           </div>
 
@@ -206,7 +199,9 @@ export default function ShoppingBag() {
                 <span>Total</span>
                 <span>{formatter.format(total)}</span>
               </div>
-              <Button className="w-full">Checkout</Button>
+              <Button className="w-full">
+                <Link to="/shop/checkout">Checkout</Link>
+              </Button>
             </div>
           )}
         </div>

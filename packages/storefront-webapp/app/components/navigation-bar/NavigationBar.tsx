@@ -163,17 +163,18 @@ export default function NavigationBar() {
   }) => {
     return (
       <motion.div
+        layoutId="link-submenu"
         key="link-menu"
         variants={container}
         initial="hidden"
         animate="show"
         exit={"exit"}
-        className="absolute w-full left-0 bg-white bg-opacity-95 shadow-lg px-8 animate-fadeIn z-50"
+        className="absolute w-full left-0 bg-white bg-opacity-95 px-8 animate-fadeIn z-50"
         onMouseEnter={() => setActiveMenu(slug)}
         onMouseLeave={() => setActiveMenu(null)}
       >
         <div className="max-w-7xl mx-auto px-8 py-8">
-          <div className="flex flex-col font-medium gap-4">
+          <div className="flex flex-col font-bold gap-4">
             <motion.div variants={item}>
               <Link
                 to="/shop/$categorySlug"
@@ -284,8 +285,25 @@ export default function NavigationBar() {
 
         {/* Content Overlay */}
         {activeMenu && (
-          <div
-            className="fixed inset-0 mt-20 bg-white bg-opacity-20 backdrop-blur-sm z-40"
+          <motion.div
+            key="overlay"
+            initial={{ opacity: 0 }}
+            animate={{
+              opacity: 1,
+              transition: {
+                duration: 0.175,
+                delay: 0.2,
+                ease: "easeOut",
+              },
+            }}
+            exit={{
+              opacity: 0,
+              transition: {
+                duration: 0.2,
+                ease: "easeInOut",
+              },
+            }}
+            className="fixed inset-0 mt-20 bg-white bg-opacity-20 backdrop-blur-md z-40"
             onMouseEnter={() => setActiveMenu(null)}
           />
         )}

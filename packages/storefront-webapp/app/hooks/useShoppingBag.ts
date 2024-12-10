@@ -267,6 +267,13 @@ export const useShoppingBag = () => {
       0
     ) || 0;
 
+  const bagSubtotal =
+    bag?.items.reduce(
+      (sum: number, item: ProductSku) =>
+        sum + (item.price || 0) * item.quantity,
+      0
+    ) || 0;
+
   const isUpdatingBag =
     addNewBagItem.isPending ||
     updateBagItemMutation.isPending ||
@@ -299,6 +306,7 @@ export const useShoppingBag = () => {
     addProductToBag,
     bag,
     bagCount,
+    bagSubtotal,
     deleteItemFromBag,
     isUpdatingBag,
     updateBag,

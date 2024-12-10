@@ -15,6 +15,7 @@ import { Route as LayoutImport } from './routes/_layout'
 import { Route as IndexImport } from './routes/index'
 import { Route as LayoutShopLayoutImport } from './routes/_layout/_shopLayout'
 import { Route as ShopSavedIndexImport } from './routes/shop/saved/index'
+import { Route as ShopCheckoutIndexImport } from './routes/shop/checkout/index'
 import { Route as ShopBagIndexImport } from './routes/shop/bag/index'
 import { Route as ShopProductProductSlugImport } from './routes/shop/product/$productSlug'
 import { Route as LayoutShopLayoutShopCategorySlugIndexImport } from './routes/_layout/_shopLayout/shop/$categorySlug/index'
@@ -39,6 +40,11 @@ const LayoutShopLayoutRoute = LayoutShopLayoutImport.update({
 
 const ShopSavedIndexRoute = ShopSavedIndexImport.update({
   path: '/shop/saved/',
+  getParentRoute: () => rootRoute,
+} as any)
+
+const ShopCheckoutIndexRoute = ShopCheckoutIndexImport.update({
+  path: '/shop/checkout/',
   getParentRoute: () => rootRoute,
 } as any)
 
@@ -103,6 +109,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ShopBagIndexImport
       parentRoute: typeof rootRoute
     }
+    '/shop/checkout/': {
+      id: '/shop/checkout/'
+      path: '/shop/checkout'
+      fullPath: '/shop/checkout'
+      preLoaderRoute: typeof ShopCheckoutIndexImport
+      parentRoute: typeof rootRoute
+    }
     '/shop/saved/': {
       id: '/shop/saved/'
       path: '/shop/saved'
@@ -160,6 +173,7 @@ export interface FileRoutesByFullPath {
   '': typeof LayoutShopLayoutRouteWithChildren
   '/shop/product/$productSlug': typeof ShopProductProductSlugRoute
   '/shop/bag': typeof ShopBagIndexRoute
+  '/shop/checkout': typeof ShopCheckoutIndexRoute
   '/shop/saved': typeof ShopSavedIndexRoute
   '/shop/$categorySlug/$subcategorySlug': typeof LayoutShopLayoutShopCategorySlugSubcategorySlugRoute
   '/shop/$categorySlug': typeof LayoutShopLayoutShopCategorySlugIndexRoute
@@ -170,6 +184,7 @@ export interface FileRoutesByTo {
   '': typeof LayoutShopLayoutRouteWithChildren
   '/shop/product/$productSlug': typeof ShopProductProductSlugRoute
   '/shop/bag': typeof ShopBagIndexRoute
+  '/shop/checkout': typeof ShopCheckoutIndexRoute
   '/shop/saved': typeof ShopSavedIndexRoute
   '/shop/$categorySlug/$subcategorySlug': typeof LayoutShopLayoutShopCategorySlugSubcategorySlugRoute
   '/shop/$categorySlug': typeof LayoutShopLayoutShopCategorySlugIndexRoute
@@ -182,6 +197,7 @@ export interface FileRoutesById {
   '/_layout/_shopLayout': typeof LayoutShopLayoutRouteWithChildren
   '/shop/product/$productSlug': typeof ShopProductProductSlugRoute
   '/shop/bag/': typeof ShopBagIndexRoute
+  '/shop/checkout/': typeof ShopCheckoutIndexRoute
   '/shop/saved/': typeof ShopSavedIndexRoute
   '/_layout/_shopLayout/shop/$categorySlug/$subcategorySlug': typeof LayoutShopLayoutShopCategorySlugSubcategorySlugRoute
   '/_layout/_shopLayout/shop/$categorySlug/': typeof LayoutShopLayoutShopCategorySlugIndexRoute
@@ -194,6 +210,7 @@ export interface FileRouteTypes {
     | ''
     | '/shop/product/$productSlug'
     | '/shop/bag'
+    | '/shop/checkout'
     | '/shop/saved'
     | '/shop/$categorySlug/$subcategorySlug'
     | '/shop/$categorySlug'
@@ -203,6 +220,7 @@ export interface FileRouteTypes {
     | ''
     | '/shop/product/$productSlug'
     | '/shop/bag'
+    | '/shop/checkout'
     | '/shop/saved'
     | '/shop/$categorySlug/$subcategorySlug'
     | '/shop/$categorySlug'
@@ -213,6 +231,7 @@ export interface FileRouteTypes {
     | '/_layout/_shopLayout'
     | '/shop/product/$productSlug'
     | '/shop/bag/'
+    | '/shop/checkout/'
     | '/shop/saved/'
     | '/_layout/_shopLayout/shop/$categorySlug/$subcategorySlug'
     | '/_layout/_shopLayout/shop/$categorySlug/'
@@ -224,6 +243,7 @@ export interface RootRouteChildren {
   LayoutRoute: typeof LayoutRouteWithChildren
   ShopProductProductSlugRoute: typeof ShopProductProductSlugRoute
   ShopBagIndexRoute: typeof ShopBagIndexRoute
+  ShopCheckoutIndexRoute: typeof ShopCheckoutIndexRoute
   ShopSavedIndexRoute: typeof ShopSavedIndexRoute
 }
 
@@ -232,6 +252,7 @@ const rootRouteChildren: RootRouteChildren = {
   LayoutRoute: LayoutRouteWithChildren,
   ShopProductProductSlugRoute: ShopProductProductSlugRoute,
   ShopBagIndexRoute: ShopBagIndexRoute,
+  ShopCheckoutIndexRoute: ShopCheckoutIndexRoute,
   ShopSavedIndexRoute: ShopSavedIndexRoute,
 }
 
@@ -251,6 +272,7 @@ export const routeTree = rootRoute
         "/_layout",
         "/shop/product/$productSlug",
         "/shop/bag/",
+        "/shop/checkout/",
         "/shop/saved/"
       ]
     },
@@ -276,6 +298,9 @@ export const routeTree = rootRoute
     },
     "/shop/bag/": {
       "filePath": "shop/bag/index.tsx"
+    },
+    "/shop/checkout/": {
+      "filePath": "shop/checkout/index.tsx"
     },
     "/shop/saved/": {
       "filePath": "shop/saved/index.tsx"
