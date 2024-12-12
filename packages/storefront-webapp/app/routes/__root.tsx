@@ -58,7 +58,7 @@ function RootComponent() {
     <RootDocument>
       <div className="flex flex-col h-screen">
         <NavigationBar />
-        <main className="flex-grow overflow-auto">
+        <main className="flex-grow">
           <Outlet />
           {/* <Footer /> */}
         </main>

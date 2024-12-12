@@ -199,9 +199,9 @@ export default function ShoppingBag() {
                 <span>Total</span>
                 <span>{formatter.format(total)}</span>
               </div>
-              <Button className="w-full">
-                <Link to="/shop/checkout">Checkout</Link>
-              </Button>
+              <Link to="/shop/checkout">
+                <Button className="w-full">Checkout</Button>
+              </Link>
             </div>
           )}
         </div>

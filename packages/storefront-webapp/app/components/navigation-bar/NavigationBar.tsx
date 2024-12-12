@@ -135,7 +135,7 @@ export default function NavigationBar() {
   const { navBarClassname, showNavbar, hideNavbar } = useStoreContext();
 
   const container = {
-    hidden: { opacity: 0 },
+    hidden: { opacity: 1 },
     show: {
       opacity: 1,
       transition: {

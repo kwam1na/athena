@@ -1,16 +1,19 @@
-import { ALL_COUNTRIES } from "@/lib/countries";
+import { GHANA_REGIONS } from "@/lib/ghanaRegions";
 
-export const CountrySelect = ({
+export const GhanaRegionSelect = ({
   value,
   onSelect,
+  disabled,
 }: {
+  disabled?: boolean;
   value?: string;
-  onSelect: (country: string) => void;
+  onSelect: (region: string) => void;
 }) => {
   return (
     <div className="space-y-4">
-      <p className="text-xs text-muted-foreground">Country</p>
+      <p className="text-xs text-muted-foreground">Region</p>
       <select
+        disabled={disabled}
         value={value || ""}
         onChange={(e) => {
           onSelect(e.target.value);
@@ -19,11 +22,11 @@ export const CountrySelect = ({
       >
         {/* Placeholder option */}
         <option value="" disabled>
-          Select a country
+          Select region
         </option>
-        {ALL_COUNTRIES.map((country) => (
-          <option key={country.code} value={country.code}>
-            {country.name}
+        {GHANA_REGIONS.map((region) => (
+          <option key={region.code} value={region.code}>
+            {region.name}
           </option>
         ))}
       </select>

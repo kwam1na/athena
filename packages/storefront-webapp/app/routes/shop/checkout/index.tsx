@@ -1,300 +1,238 @@
-import { GhostButton } from "@/components/ui/ghost-button";
-import { Input } from "@/components/ui/input";
-import { Separator } from "@/components/ui/separator";
-import { ALL_COUNTRIES } from "@/lib/countries";
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
-import placeholder from "@/assets/placeholder.png";
-
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { ProductSku } from "@athena/webapp-2";
-import { getProductName } from "@/lib/productUtils";
-import { useStoreContext } from "@/contexts/StoreContext";
-import { useShoppingBag } from "@/hooks/useShoppingBag";
 import {
   CheckoutProvider,
   useCheckout,
 } from "@/components/checkout/CheckoutProvider";
 import { CustomerDetailsForm } from "@/components/checkout/CustomerDetails";
 import { DeliveryDetailsForm } from "@/components/checkout/DeliveryDetails";
-import { CountrySelect } from "@/components/ui/country-select";
 import { Link } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import { BillingDetailsForm } from "@/components/checkout/BillingDetails";
-
-export function StoreSelector() {
-  const { updateState } = useCheckout();
-
-  useEffect(() => {
-    updateState({ deliveryFee: null, deliveryOption: null });
-  }, []);
-
-  return (
-    <RadioGroup value="default" defaultValue="comfortable">
-      <div className="flex items-center space-x-4">
-        <RadioGroupItem value="default" id="r1" />
-        <div className="space-y-2">
-          <p>Wigclub Hair Studio</p>
-          <p className="text-sm text-muted-foreground">
-            2 Jungle Ave, East Legon, Accra
-          </p>
-        </div>
-      </div>
-    </RadioGroup>
-  );
-}
-
-export function DeliveryOptionsSelector() {
-  const { checkoutState, updateState } = useCheckout();
-
-  const previousCountryRef = useRef(checkoutState.country);
-
-  const handleChange = (value: string) => {
-    if (value == "intl") {
-      updateState({ deliveryFee: 800, deliveryOption: "intl" });
-    } else if (value == "within-accra") {
-      updateState({ deliveryFee: 30, deliveryOption: "within-accra" });
-    } else {
-      updateState({ deliveryFee: 70, deliveryOption: "outside-accra" });
-    }
-  };
-
-  const isOrderWithGhana = checkoutState.country == "GH";
-
-  useEffect(() => {
-    const previousCountry = previousCountryRef.current;
-    const currentCountry = checkoutState.country;
-
-    if (
-      (currentCountry === "GH" && previousCountry !== "GH") || // Non-GH to GH
-      (currentCountry !== "GH" && previousCountry === "GH") // GH to Non-GH
-    ) {
-      updateState({ deliveryFee: null, deliveryOption: null });
-    }
-
-    previousCountryRef.current = currentCountry; // Update ref to track current country
-  }, [checkoutState.country, updateState]);
-
-  return (
-    <RadioGroup
-      className="space-y-4"
-      value={checkoutState.deliveryOption || undefined}
-      onValueChange={handleChange}
-    >
-      {isOrderWithGhana && (
-        <>
-          <div className="flex items-center space-x-4">
-            <RadioGroupItem value="within-accra" id="r1" />
-            <div className="flex w-[50%] justify-between">
-              <p>Delivery within Accra</p>
-              <p className="text-muted-foreground">GHS 30</p>
-            </div>
-          </div>
-
-          <div className="flex items-center space-x-4">
-            <RadioGroupItem value="outside-accra" id="r2" />
-            <div className="flex w-[50%] justify-between">
-              <p>Delivery outside Accra</p>
-              <p className="text-muted-foreground">GHS 70</p>
-            </div>
-          </div>
-        </>
-      )}
-
-      {!isOrderWithGhana && (
-        <div className="flex items-center space-x-4">
-          <RadioGroupItem value="intl" id="r2" />
-          <div className="flex w-[50%] justify-between">
-            <p>Express shipping</p>
-            <p className="text-muted-foreground">GHS 800</p>
-          </div>
-        </div>
-      )}
-    </RadioGroup>
-  );
-}
+import BagSummary from "@/components/checkout/BagSummary";
+import { DeliverySection } from "@/components/checkout/DeliverySection";
+import { Checkbox } from "@/components/ui/checkbox";
+import { CheckedState } from "@radix-ui/react-checkbox";
+import { useState } from "react";
+import { Separator } from "@/components/ui/separator";
+import { ArrowRight } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
 
 export const Route = createFileRoute("/shop/checkout/")({
-  component: () => <Checkout />,
+  component: () => <CheckoutWrapper />,
 });
 
-const Delivery = () => {
-  const { checkoutState, updateState } = useCheckout();
+const Payment = () => {
+  const { canPlaceOrder, actionsState, updateActionsState, checkoutState } =
+    useCheckout();
 
-  const isDelivery = checkoutState.deliveryMethod == "delivery";
-  const isPickup = checkoutState.deliveryMethod == "pickup";
+  const [didAcceptStoreTerms, setDidAcceptStoreTerms] = useState(false);
+  const [didAcceptCommsTerms, setDidAcceptCommsTerms] = useState(false);
 
-  const onCountrySelect = (country: string) => {
-    updateState({ country });
+  const onSubmit = async () => {
+    const canProceedToPayment = canPlaceOrder();
+
+    console.log(checkoutState);
+
+    if (canProceedToPayment) {
+      console.log("redirecting to payment...");
+    } else {
+      console.log("somethings not right...");
+    }
   };
 
+  const handleAcceptedTerms = (
+    option: "store-terms" | "comms-terms",
+    checked: CheckedState
+  ) => {
+    if (option == "store-terms") {
+      setDidAcceptStoreTerms(checked as boolean);
+    } else {
+      setDidAcceptCommsTerms(checked as boolean);
+    }
+  };
+
+  const didAcceptTerms = didAcceptStoreTerms && didAcceptCommsTerms;
+
+  const showPaymentHeader =
+    (checkoutState.deliveryMethod === "pickup" &&
+      !actionsState.isEditingDeliveryDetails) || // Pickup always shows payment section
+    (checkoutState.customerDetails &&
+      !actionsState.isEditingCustomerDetails &&
+      checkoutState.deliveryDetails &&
+      !actionsState.isEditingDeliveryDetails);
+
+  if (!showPaymentHeader) {
+    return (
+      <motion.p
+        initial={{ opacity: 0 }}
+        animate={{
+          opacity: 1,
+          transition: { duration: 0.4 },
+        }}
+      >
+        Payment
+      </motion.p>
+    );
+  }
+
+  const showPayment =
+    checkoutState.billingDetails && !actionsState.isEditingBillingDetails;
+
   return (
-    <div className="space-y-8">
-      <p>Delivery / Pickup</p>
-
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1, transition: { duration: 0.4 } }}
+      className="w-full flex flex-col space-y-12"
+    >
       <div className="space-y-12">
-        <div className="flex gap-4 w-[40%]">
-          <GhostButton
-            onClick={() => {
-              updateState({ deliveryMethod: "delivery" });
-            }}
-            selected={isDelivery}
-            className="w-[50%]"
-          >
-            Delivery
-          </GhostButton>
-          <GhostButton
-            onClick={() => {
-              updateState({ deliveryMethod: "pickup" });
-            }}
-            selected={isPickup}
-            className="w-[50%]"
-          >
-            Store pickup
-          </GhostButton>
-        </div>
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{
+            opacity: 1,
+            y: 0,
+            transition: { duration: 0.3, ease: "easeOut" },
+          }}
+          exit={{
+            opacity: 0,
+            transition: { duration: 0.3, ease: "easeOut" },
+          }}
+          className="flex items-center"
+        >
+          <p>Payment</p>
+          {Boolean(
+            !checkoutState.billingDetails?.billingAddressSameAsDelivery &&
+              checkoutState.billingDetails?.address
+          ) && (
+            <Button
+              onClick={() => {
+                updateActionsState({
+                  isEditingBillingDetails:
+                    !actionsState.isEditingBillingDetails,
+                });
+              }}
+              variant={"clear"}
+              type="button"
+              className="ml-auto"
+            >
+              <p className="underline">
+                {actionsState.isEditingBillingDetails
+                  ? "Cancel editing"
+                  : "Edit"}
+              </p>
+            </Button>
+          )}
+        </motion.div>
 
-        {isDelivery && (
-          <>
-            <CountrySelect
-              defaultValue={checkoutState.country || undefined}
-              value={checkoutState.country || undefined}
-              onSelect={onCountrySelect}
-            />
+        <BillingDetailsForm />
 
-            <div className="pr-24">
-              <Separator />
+        {showPayment && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{
+              opacity: 1,
+              transition: { duration: 0.4, ease: "easeOut" },
+            }}
+            exit={{ opacity: 0, transition: { duration: 0.4 } }}
+            className="space-y-12"
+          >
+            <Separator />
+
+            <div className="space-y-8">
+              <div className="w-full xl:w-auto flex items-center gap-4">
+                <Checkbox
+                  checked={didAcceptStoreTerms}
+                  onCheckedChange={(e) => handleAcceptedTerms("store-terms", e)}
+                  className="h-4 w-4 text-primary border-gray-300 focus:ring-primary"
+                />
+                <label htmlFor="terms" className="text-sm">
+                  I agree to the return and refund policy
+                </label>
+              </div>
+              <div className="w-full xl:w-auto flex items-center gap-4">
+                <Checkbox
+                  checked={didAcceptCommsTerms}
+                  onCheckedChange={(e) => handleAcceptedTerms("comms-terms", e)}
+                  className="h-4 w-4 text-primary border-gray-300 focus:ring-primary"
+                />
+                <label htmlFor="terms" className="text-sm">
+                  I agree to receive communications via email and/or SMS to any
+                  emails and phone numbers added above
+                </label>
+              </div>
             </div>
-
-            <DeliveryOptionsSelector />
-          </>
+          </motion.div>
         )}
-
-        {isPickup && <StoreSelector />}
       </div>
+
+      {showPayment && (
+        <Button
+          onClick={onSubmit}
+          className="w-full"
+          disabled={!didAcceptTerms}
+        >
+          Continue to payment
+          <ArrowRight className="w-4 h-4 ml-2" />
+        </Button>
+      )}
+    </motion.div>
+  );
+};
+
+const Checkout = () => {
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-12 w-full min-h-screen">
+      {/* Left Panel */}
+      <AnimatePresence>
+        <motion.div
+          key={"left"}
+          initial={{ opacity: 0, x: -4 }}
+          animate={{
+            opacity: 1,
+            x: 0,
+            transition: { duration: 0.2, ease: "easeOut" },
+          }}
+          className="grid order-2 pb-16 lg:order-1 lg:col-span-6 px-6 lg:pl-16"
+        >
+          <div className="py-8 space-y-12">
+            <p className="text-lg">Checkout</p>
+            <div className="space-y-32">
+              <div className="lg:pr-24">
+                <CustomerDetailsForm />
+              </div>
+
+              <div className="lg:pr-24 space-y-32">
+                <DeliverySection />
+
+                <Payment />
+              </div>
+            </div>
+          </div>
+        </motion.div>
+
+        {/* Right Panel */}
+        <motion.div
+          key={"right"}
+          initial={{ opacity: 0, x: 8 }}
+          animate={{
+            opacity: 1,
+            x: 0,
+            transition: { ease: "easeOut" },
+          }}
+          className="relative order-1 lg:order-2 lg:col-span-6 bg-[#F6F6F6]"
+        >
+          <div className="sticky top-0 pt-32 pb-24 flex items-start justify-center min-h-screen flex-grow">
+            <BagSummary />
+          </div>
+        </motion.div>
+      </AnimatePresence>
     </div>
   );
 };
 
-function SummaryItem({
-  item,
-  formatter,
-}: {
-  item: ProductSku;
-  formatter: Intl.NumberFormat;
-}) {
-  return (
-    <div className="flex items-center justify-between">
-      <div className="flex items-center space-x-4">
-        <div className="h-12 w-12 rounded-lg overflow-hidden">
-          <img
-            src={item.productImage || placeholder}
-            alt={item.productName || "product image"}
-            className="aspect-square object-cover rounded-lg"
-          />
-        </div>
-        <div className="space-y-2">
-          <p className="text-sm">{getProductName(item)}</p>
-          <p className="text-sm text-muted-foreground">
-            {formatter.format(item.price * item.quantity)}
-          </p>
-        </div>
-      </div>
-      <p className="text-muted-foreground">{`x${item.quantity}`}</p>
-    </div>
-  );
-}
-
-function Summary() {
-  const { formatter } = useStoreContext();
-  const { bag, bagSubtotal } = useShoppingBag();
-  const { checkoutState } = useCheckout();
-
-  const total = checkoutState.deliveryFee + bagSubtotal;
-
-  return (
-    <div className="py-6 bg-white shadow-sm w-[30vw] space-y-12">
-      {/* Order Summary */}
-      <div className="flex items-center px-6 w-full">
-        <p>Order summary</p>
-        <div className="ml-auto">
-          <Link to="/shop/bag">
-            <Button variant={"clear"}>
-              <p>Update</p>
-            </Button>
-          </Link>
-        </div>
-      </div>
-
-      {/* Items */}
-      <div className="px-8 space-y-8 my-4 w-full">
-        {bag?.items.map((item: ProductSku, index: number) => (
-          <SummaryItem formatter={formatter} item={item} key={index} />
-        ))}
-      </div>
-
-      {/* Promo Code */}
-      <div className="px-8 space-y-2">
-        <p className="text-sm font-medium">Promo code</p>
-        <div>
-          <Input type="text" placeholder="Enter promo code" />
-        </div>
-      </div>
-
-      <Separator className="bg-[#F6F6F6]" />
-
-      {/* Summary */}
-      <div className="px-8 space-y-8 pt-4 mt-4">
-        <div className="flex justify-between">
-          <p className="text-sm">Subtotal</p>
-          <p className="text-sm">{formatter.format(bagSubtotal)}</p>
-        </div>
-        {checkoutState.deliveryFee && (
-          <div className="flex justify-between">
-            <p className="text-sm">Shipping</p>
-            <p className="text-sm">
-              {formatter.format(checkoutState.deliveryFee)}
-            </p>
-          </div>
-        )}
-        <div className="flex justify-between font-semibold">
-          <p className="text-lg">Total</p>
-          <p className="text-lg">{formatter.format(total)}</p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-const Checkout = () => {
+const CheckoutWrapper = () => {
   return (
     <CheckoutProvider>
-      <div className="grid grid-cols-12 w-full min-h-screen">
-        {/* Left Panel */}
-        <div className="grid col-span-6 pl-16">
-          <div className="py-8 space-y-12">
-            <p className="text-lg">Checkout</p>
-            <div className="space-y-32">
-              <div className="pr-24">
-                <CustomerDetailsForm />
-              </div>
-
-              <div className="pr-24 space-y-32">
-                <Delivery />
-                <DeliveryDetailsForm />
-                <BillingDetailsForm />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Right Panel */}
-        <div className="relative col-span-6 bg-[#F6F6F6]">
-          <div className="sticky top-0 pt-32 pb-40 flex items-start justify-center min-h-screen flex-grow">
-            <Summary />
-          </div>
-        </div>
-      </div>
+      <Checkout />
     </CheckoutProvider>
   );
 };

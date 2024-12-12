@@ -1,0 +1,18 @@
+export const GHANA_REGIONS = [
+  { code: "AH", name: "Ahafo" },
+  { code: "AA", name: "Ashanti" },
+  { code: "BA", name: "Bono" },
+  { code: "BE", name: "Bono East" },
+  { code: "CP", name: "Central" },
+  { code: "EP", name: "Eastern" },
+  { code: "GA", name: "Greater Accra" },
+  { code: "NE", name: "North East" },
+  { code: "NR", name: "Northern" },
+  { code: "OT", name: "Oti" },
+  { code: "SV", name: "Savannah" },
+  { code: "UE", name: "Upper East" },
+  { code: "UW", name: "Upper West" },
+  { code: "VR", name: "Volta" },
+  { code: "WN", name: "Western North" },
+  { code: "WR", name: "Western" },
+];

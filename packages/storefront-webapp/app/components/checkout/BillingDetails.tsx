@@ -1,8 +1,8 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useCheckout } from "./CheckoutProvider";
+import { Address, defaultRegion, useCheckout } from "./CheckoutProvider";
 import {
   Form,
   FormControl,
@@ -15,70 +15,171 @@ import { Input } from "../ui/input";
 import { CountrySelect } from "../ui/country-select";
 import { Checkbox } from "../ui/checkbox";
 import { CheckedState } from "@radix-ui/react-checkbox";
+import { LoadingButton } from "../ui/loading-button";
+import { motion } from "framer-motion";
 
-const schema = z.object({
-  address: z.string().min(1, "Address is required"),
-  city: z.string().min(1, "City is required"),
-  state: z.string().min(2, "Invalid state"),
-  zip: z.coerce.number().min(5),
+export const billingDetailsSchema = z.object({
+  address: z
+    .string()
+    .min(1, "Address is required")
+    .refine(
+      (value) => value.trim().length > 0,
+      "Address name cannot be empty or whitespace"
+    ),
+  city: z
+    .string()
+    .min(1, "City is required")
+    .refine(
+      (value) => value.trim().length > 0,
+      "City name cannot be empty or whitespace"
+    ),
+  state: z
+    .string()
+    .min(2, "Invalid state")
+    .refine(
+      (value) => value.trim().length > 0,
+      "State name cannot be empty or whitespace"
+    )
+    .optional(),
+  zip: z.coerce
+    .string()
+    .refine(
+      (value) => /^\d{5}$/.test(value),
+      "Zip code must be a 5-digit number"
+    )
+    .refine(
+      (value) => value.trim().length > 0,
+      "Zip name cannot be empty or whitespace"
+    )
+    .optional(),
 });
 
+const billingDetailsWithoutStateAndZipSchema = z.object({
+  address: z
+    .string()
+    .min(1, "Address is required")
+    .refine(
+      (value) => value.trim().length > 0,
+      "Address cannot be empty or whitespace"
+    ),
+  city: z
+    .string()
+    .min(1, "City is required")
+    .refine(
+      (value) => value.trim().length > 0,
+      "City cannot be empty or whitespace"
+    ),
+});
+
+const EnteredBillingAddressDetails = () => {
+  const { checkoutState } = useCheckout();
+
+  if (!checkoutState.billingDetails) return null;
+
+  const isUSAddress = checkoutState.billingCountry == "US";
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1, transition: { ease: "easeOut" } }}
+      exit={{ opacity: 0 }}
+      className="space-y-4 text-sm"
+    >
+      <p>{`Billing address:`}</p>
+      <div className="space-y-2">
+        <p>{checkoutState.billingDetails.address}</p>
+        {isUSAddress && (
+          <p>{`${checkoutState.billingDetails.city}, ${checkoutState.billingDetails.state}, ${checkoutState.billingDetails.zip}`}</p>
+        )}
+        {!isUSAddress && <p>{`${checkoutState.billingDetails.city}`}</p>}
+        <p>{checkoutState.billingCountry}</p>
+      </div>
+    </motion.div>
+  );
+};
+
 export const BillingDetailsForm = () => {
-  const { checkoutState, updateState } = useCheckout();
+  const { checkoutState, actionsState, updateActionsState, updateState } =
+    useCheckout();
+
+  const schema =
+    checkoutState.billingCountry == "US"
+      ? billingDetailsSchema
+      : billingDetailsWithoutStateAndZipSchema;
+
   const form = useForm({
     resolver: zodResolver(schema),
     defaultValues: checkoutState.billingDetails || {
       address: "",
+      state: "",
       city: "",
-      zip: undefined,
+      zip: "",
     },
   });
 
-  const onSubmit = (data: z.infer<typeof schema>) => {
-    updateState({ deliveryDetails: data });
+  const onSubmit = (data: z.infer<typeof billingDetailsSchema>) => {
+    updateState({ billingDetails: data });
+    updateActionsState({ isEditingBillingDetails: false });
   };
 
   const onCountrySelect = (country: string) => {
-    updateState({ billingCountry: country });
+    updateState({ billingCountry: country, billingDetails: null });
   };
+
+  // const defaultRegion = new Intl.Locale(navigator.language).region || "GH";
 
   const toggleSameAsDelivery = (checked: CheckedState) => {
-    updateState({ billingAddressSameAsDelivery: checked as boolean });
+    updateState({
+      billingCountry: (checked as boolean)
+        ? checkoutState.country
+        : defaultRegion,
+      billingDetails: (checked as boolean)
+        ? {
+            ...checkoutState.deliveryDetails!,
+            billingAddressSameAsDelivery: true,
+          }
+        : null,
+    });
+
+    // if the form is in the edit state and the check box is checked, cancel the edit mode
+    if (checked) {
+      updateActionsState({ isEditingBillingDetails: false });
+    }
   };
-
-  const hasNotSelectedDeliveryMethod = !Boolean(
-    checkoutState.deliveryMethod && checkoutState.deliveryOption
-  );
-
-  const hasNotEnteredDeliveryDetails = !Boolean(checkoutState.deliveryDetails);
-
-  if (
-    checkoutState.deliveryMethod !== "delivery" ||
-    !checkoutState.deliveryOption
-  )
-    return null;
 
   const isOrderToUS = checkoutState.billingCountry == "US";
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="w-full space-y-6">
+      <form
+        onSubmit={form.handleSubmit(onSubmit)}
+        className="w-full space-y-12"
+      >
         <div className="flex flex-col gap-8">
-          <p>Billing details</p>
+          <p className="text-xs text-muted-foreground">Billing details</p>
 
-          <div className="w-full xl:w-auto pb-8 flex items-center gap-4">
-            <Checkbox
-              disabled={hasNotEnteredDeliveryDetails}
-              checked={checkoutState.billingAddressSameAsDelivery}
-              onCheckedChange={(e) => toggleSameAsDelivery(e)}
-              className="h-4 w-4 text-primary border-gray-300 focus:ring-primary"
-            />
-            <label htmlFor="same-as-delivery" className="text-sm">
-              Same as delivery address
-            </label>
-          </div>
+          {checkoutState.deliveryMethod == "delivery" && (
+            <div className="w-full xl:w-auto pb-8 flex items-center gap-4">
+              <Checkbox
+                checked={Boolean(
+                  checkoutState.billingDetails?.billingAddressSameAsDelivery
+                )}
+                onCheckedChange={(e) => toggleSameAsDelivery(e)}
+                className="h-4 w-4 text-primary border-gray-300 focus:ring-primary"
+              />
+              <label htmlFor="same-as-delivery" className="text-sm">
+                Same as delivery address
+              </label>
+            </div>
+          )}
 
-          {!checkoutState.billingAddressSameAsDelivery && (
+          {!checkoutState.billingDetails?.billingAddressSameAsDelivery &&
+            !actionsState.isEditingBillingDetails && (
+              <EnteredBillingAddressDetails />
+            )}
+
+          {(!checkoutState.billingDetails ||
+            actionsState.isEditingBillingDetails) && (
             <>
               <div className="flex flex-col xl:flex-row gap-16">
                 <div className="w-full xl:w-auto">
@@ -90,7 +191,6 @@ export const BillingDetailsForm = () => {
 
                 <div className="w-full xl:w-[70%]">
                   <FormField
-                    disabled={hasNotSelectedDeliveryMethod}
                     control={form.control}
                     name="address"
                     render={({ field }) => (
@@ -101,7 +201,7 @@ export const BillingDetailsForm = () => {
                         <FormControl>
                           <Input {...field} />
                         </FormControl>
-                        <FormMessage />
+                        <FormMessage className="text-xs" />
                       </FormItem>
                     )}
                   />
@@ -111,7 +211,6 @@ export const BillingDetailsForm = () => {
               <div className="flex flex-col xl:flex-row gap-4">
                 <div className={`${isOrderToUS ? "w-full" : "w-auto"}`}>
                   <FormField
-                    disabled={hasNotSelectedDeliveryMethod}
                     control={form.control}
                     name="city"
                     render={({ field }) => (
@@ -122,7 +221,7 @@ export const BillingDetailsForm = () => {
                         <FormControl>
                           <Input {...field} />
                         </FormControl>
-                        <FormMessage />
+                        <FormMessage className="text-xs" />
                       </FormItem>
                     )}
                   />
@@ -132,7 +231,6 @@ export const BillingDetailsForm = () => {
                   <>
                     <div className="w-full">
                       <FormField
-                        disabled={hasNotSelectedDeliveryMethod}
                         control={form.control}
                         name="state"
                         render={({ field }) => (
@@ -143,7 +241,7 @@ export const BillingDetailsForm = () => {
                             <FormControl>
                               <Input {...field} />
                             </FormControl>
-                            <FormMessage />
+                            <FormMessage className="text-xs" />
                           </FormItem>
                         )}
                       />
@@ -151,7 +249,6 @@ export const BillingDetailsForm = () => {
 
                     <div className="w-full">
                       <FormField
-                        disabled={hasNotSelectedDeliveryMethod}
                         control={form.control}
                         name="zip"
                         render={({ field }) => (
@@ -160,9 +257,9 @@ export const BillingDetailsForm = () => {
                               Zip Code
                             </FormLabel>
                             <FormControl>
-                              <Input type="number" {...field} />
+                              <Input {...field} />
                             </FormControl>
-                            <FormMessage />
+                            <FormMessage className="text-xs" />
                           </FormItem>
                         )}
                       />
@@ -173,6 +270,13 @@ export const BillingDetailsForm = () => {
             </>
           )}
         </div>
+
+        {(actionsState.isEditingBillingDetails ||
+          !checkoutState.billingDetails) && (
+          <LoadingButton className="w-[50%]" isLoading={false} type="submit">
+            {actionsState.isEditingBillingDetails ? "Save" : "Continue"}
+          </LoadingButton>
+        )}
       </form>
     </Form>
   );

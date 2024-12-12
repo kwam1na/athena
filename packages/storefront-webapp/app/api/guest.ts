@@ -22,8 +22,6 @@ export async function createGuest(organizationId: string) {
 
   const res = await response.json();
 
-  console.log("res for guest ->", res);
-
   if (!response.ok) {
     throw new Error(res.error || "Error creating guest.");
   }
