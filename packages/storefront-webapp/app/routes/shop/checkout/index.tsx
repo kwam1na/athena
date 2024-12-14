@@ -53,15 +53,17 @@ const Payment = () => {
 
   const didAcceptTerms = didAcceptStoreTerms && didAcceptCommsTerms;
 
-  const showPaymentHeader =
-    (checkoutState.deliveryMethod === "pickup" &&
-      !actionsState.isEditingDeliveryDetails) || // Pickup always shows payment section
-    (checkoutState.customerDetails &&
-      !actionsState.isEditingCustomerDetails &&
-      checkoutState.deliveryDetails &&
-      !actionsState.isEditingDeliveryDetails);
+  const isEditingCustomerDetails =
+    Boolean(checkoutState.customerDetails) &&
+    actionsState.isEditingCustomerDetails;
 
-  if (!showPaymentHeader) {
+  const isEditingDeliveryDetails =
+    (Boolean(checkoutState.deliveryDetails) || checkoutState.isPickupOrder) &&
+    actionsState.isEditingDeliveryDetails;
+
+  const onlyShowHeader = isEditingCustomerDetails || isEditingDeliveryDetails;
+
+  if (onlyShowHeader) {
     return (
       <motion.p
         initial={{ opacity: 0 }}
@@ -76,7 +78,12 @@ const Payment = () => {
   }
 
   const showPayment =
-    checkoutState.billingDetails && !actionsState.isEditingBillingDetails;
+    checkoutState.didEnterDeliveryDetails ||
+    checkoutState.didSelectPickupLocation;
+
+  const showProceedSection =
+    checkoutState.didEnterBillingDetails &&
+    !actionsState.isEditingBillingDetails;
 
   return (
     <motion.div
@@ -123,9 +130,9 @@ const Payment = () => {
           )}
         </motion.div>
 
-        <BillingDetailsForm />
+        {showPayment && <BillingDetailsForm />}
 
-        {showPayment && (
+        {showProceedSection && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{
@@ -164,7 +171,13 @@ const Payment = () => {
         )}
       </div>
 
-      {showPayment && (
+      {checkoutState.failedFinalValidation && (
+        <p className="text-xs text-destructive">
+          Please provide all the required information
+        </p>
+      )}
+
+      {showProceedSection && (
         <Button
           onClick={onSubmit}
           className="w-full"
@@ -208,6 +221,8 @@ const Checkout = () => {
             </div>
           </div>
         </motion.div>
+
+        {/* <div className="order-1 lg:order-2 lg:col-span-6 bg-[#F6F6F6]" /> */}
 
         {/* Right Panel */}
         <motion.div

@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -12,71 +12,101 @@ import {
   FormMessage,
 } from "../ui/form";
 import { Input } from "../ui/input";
-import { CountrySelect } from "../ui/country-select";
 import { Checkbox } from "../ui/checkbox";
 import { CheckedState } from "@radix-ui/react-checkbox";
 import { LoadingButton } from "../ui/loading-button";
 import { motion } from "framer-motion";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../ui/select";
+import { ALL_COUNTRIES } from "@/lib/countries";
 
-export const billingDetailsSchema = z.object({
-  address: z
-    .string()
-    .min(1, "Address is required")
-    .refine(
-      (value) => value.trim().length > 0,
-      "Address name cannot be empty or whitespace"
-    ),
-  city: z
-    .string()
-    .min(1, "City is required")
-    .refine(
-      (value) => value.trim().length > 0,
-      "City name cannot be empty or whitespace"
-    ),
-  state: z
-    .string()
-    .min(2, "Invalid state")
-    .refine(
-      (value) => value.trim().length > 0,
-      "State name cannot be empty or whitespace"
-    )
-    .optional(),
-  zip: z.coerce
-    .string()
-    .refine(
-      (value) => /^\d{5}$/.test(value),
-      "Zip code must be a 5-digit number"
-    )
-    .refine(
-      (value) => value.trim().length > 0,
-      "Zip name cannot be empty or whitespace"
-    )
-    .optional(),
-});
+export const billingDetailsSchema = z
+  .object({
+    address: z
+      .string()
+      .min(1, "Address is required")
+      .refine(
+        (value) => value.trim().length > 0,
+        "Address cannot be empty or whitespace"
+      ),
+    city: z
+      .string()
+      .min(1, "City is required")
+      .refine(
+        (value) => value.trim().length > 0,
+        "City cannot be empty or whitespace"
+      ),
+    state: z.string().optional(),
+    zip: z.string().optional(),
+    country: z
+      .string()
+      .min(1, "Country is required")
+      .refine(
+        (value) => value.trim().length > 0,
+        "Country cannot be empty or whitespace"
+      ),
+  })
+  .superRefine((data, ctx) => {
+    if (data.country === "US") {
+      const { state, zip } = data;
 
-const billingDetailsWithoutStateAndZipSchema = z.object({
-  address: z
-    .string()
-    .min(1, "Address is required")
-    .refine(
-      (value) => value.trim().length > 0,
-      "Address cannot be empty or whitespace"
-    ),
-  city: z
-    .string()
-    .min(1, "City is required")
-    .refine(
-      (value) => value.trim().length > 0,
-      "City cannot be empty or whitespace"
-    ),
-});
+      if (!state) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["state"],
+          message: "State is required",
+        });
+      }
+
+      if (state?.trim().length == 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["state"],
+          message: "State cannot be empty or whitespace",
+        });
+      }
+
+      if (!zip) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["zip"],
+          message: "Zip code is required",
+        });
+      }
+
+      if (zip?.trim().length == 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["zip"],
+          message: "Zip code cannot be empty or whitespace",
+        });
+      }
+
+      if (zip && !/^\d{5}$/.test(zip)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["zip"],
+          message: "Zip code must be a 5-digit number",
+        });
+      }
+    }
+  });
 
 const EnteredBillingAddressDetails = () => {
   const { checkoutState } = useCheckout();
 
   if (!checkoutState.billingDetails) return null;
 
-  const isUSAddress = checkoutState.billingCountry == "US";
+  const isUSAddress = checkoutState.billingDetails.country == "US";
+
+  const country = ALL_COUNTRIES.find(
+    (c) => c.code == checkoutState.billingDetails?.country
+  )?.name;
 
   return (
     <motion.div
@@ -92,7 +122,7 @@ const EnteredBillingAddressDetails = () => {
           <p>{`${checkoutState.billingDetails.city}, ${checkoutState.billingDetails.state}, ${checkoutState.billingDetails.zip}`}</p>
         )}
         {!isUSAddress && <p>{`${checkoutState.billingDetails.city}`}</p>}
-        <p>{checkoutState.billingCountry}</p>
+        <p>{country}</p>
       </div>
     </motion.div>
   );
@@ -102,18 +132,14 @@ export const BillingDetailsForm = () => {
   const { checkoutState, actionsState, updateActionsState, updateState } =
     useCheckout();
 
-  const schema =
-    checkoutState.billingCountry == "US"
-      ? billingDetailsSchema
-      : billingDetailsWithoutStateAndZipSchema;
-
   const form = useForm({
-    resolver: zodResolver(schema),
+    resolver: zodResolver(billingDetailsSchema),
     defaultValues: checkoutState.billingDetails || {
       address: "",
       state: "",
       city: "",
       zip: "",
+      country: "",
     },
   });
 
@@ -122,17 +148,8 @@ export const BillingDetailsForm = () => {
     updateActionsState({ isEditingBillingDetails: false });
   };
 
-  const onCountrySelect = (country: string) => {
-    updateState({ billingCountry: country, billingDetails: null });
-  };
-
-  // const defaultRegion = new Intl.Locale(navigator.language).region || "GH";
-
   const toggleSameAsDelivery = (checked: CheckedState) => {
     updateState({
-      billingCountry: (checked as boolean)
-        ? checkoutState.country
-        : defaultRegion,
       billingDetails: (checked as boolean)
         ? {
             ...checkoutState.deliveryDetails!,
@@ -147,7 +164,42 @@ export const BillingDetailsForm = () => {
     }
   };
 
-  const isOrderToUS = checkoutState.billingCountry == "US";
+  const { country } = form.getValues();
+
+  const clearForm = () => {
+    form.setValue("address", "");
+    form.setValue("city", "");
+    form.setValue("state", "");
+    form.setValue("zip", "");
+  };
+
+  const previousCountryRef = useRef(
+    checkoutState.billingDetails?.country || undefined
+  );
+
+  useEffect(() => {
+    // effect to clear state and the form when the country changes
+
+    const previousCountry = previousCountryRef.current;
+
+    if (country !== previousCountry) {
+      clearForm();
+
+      // clear the state for delivery and billing details
+      updateState({
+        billingDetails: { country } as Address,
+      });
+    }
+
+    previousCountryRef.current = country;
+  }, [country]);
+
+  const isUSAddress = checkoutState.billingDetails?.country == "US";
+
+  const showEnteredBillingDetails =
+    checkoutState.didEnterBillingDetails &&
+    !checkoutState.billingDetails?.billingAddressSameAsDelivery &&
+    !actionsState.isEditingBillingDetails;
 
   return (
     <Form {...form}>
@@ -173,19 +225,59 @@ export const BillingDetailsForm = () => {
             </div>
           )}
 
-          {!checkoutState.billingDetails?.billingAddressSameAsDelivery &&
-            !actionsState.isEditingBillingDetails && (
-              <EnteredBillingAddressDetails />
-            )}
+          {showEnteredBillingDetails && <EnteredBillingAddressDetails />}
 
-          {(!checkoutState.billingDetails ||
+          {(!checkoutState.didEnterBillingDetails ||
             actionsState.isEditingBillingDetails) && (
-            <>
-              <div className="flex flex-col xl:flex-row gap-16">
-                <div className="w-full xl:w-auto">
-                  <CountrySelect
-                    onSelect={onCountrySelect}
-                    value={checkoutState.billingCountry || undefined}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{
+                opacity: 1,
+                transition: { ease: "easeOut", duration: 0.4 },
+              }}
+              className="space-y-8"
+            >
+              <div className="flex flex-col xl:flex-row gap-8">
+                <div className="w-full xl:w-[40%]">
+                  <FormField
+                    control={form.control}
+                    name="country"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-muted-foreground text-xs">
+                          Country
+                        </FormLabel>
+                        <Select
+                          onValueChange={(e) => {
+                            updateState({
+                              billingDetails: {
+                                ...checkoutState.billingDetails,
+                                country: e,
+                              } as Address,
+                            });
+                            field.onChange(e);
+                          }}
+                          value={field.value}
+                        >
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select country" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {ALL_COUNTRIES.map((country) => (
+                              <SelectItem
+                                key={country.code}
+                                value={country.code}
+                              >
+                                {country.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage className="text-xs" />
+                      </FormItem>
+                    )}
                   />
                 </div>
 
@@ -209,7 +301,7 @@ export const BillingDetailsForm = () => {
               </div>
 
               <div className="flex flex-col xl:flex-row gap-4">
-                <div className={`${isOrderToUS ? "w-full" : "w-auto"}`}>
+                <div className={`${isUSAddress ? "w-full" : "w-auto"}`}>
                   <FormField
                     control={form.control}
                     name="city"
@@ -227,7 +319,7 @@ export const BillingDetailsForm = () => {
                   />
                 </div>
 
-                {isOrderToUS && (
+                {isUSAddress && (
                   <>
                     <div className="w-full">
                       <FormField
@@ -267,12 +359,12 @@ export const BillingDetailsForm = () => {
                   </>
                 )}
               </div>
-            </>
+            </motion.div>
           )}
         </div>
 
         {(actionsState.isEditingBillingDetails ||
-          !checkoutState.billingDetails) && (
+          !checkoutState.didEnterBillingDetails) && (
           <LoadingButton className="w-[50%]" isLoading={false} type="submit">
             {actionsState.isEditingBillingDetails ? "Save" : "Continue"}
           </LoadingButton>
