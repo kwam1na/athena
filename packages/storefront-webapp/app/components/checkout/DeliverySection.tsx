@@ -287,12 +287,6 @@ export const DeliverySection = () => {
     isEditingAndHasNotSelectedShippingOption ||
     isEditingAndHasNotEnteredAllDetails;
 
-  //   console.table({
-  //     isEditingAndHasNotEnteredAllDetails,
-  //     isEditingAndHasNotSelectedPickupLocation,
-  //     isEditingAndHasNotSelectedShippingOption,
-  //   });
-
   const didFillOutSection =
     Boolean(
       checkoutState.didEnterDeliveryDetails && checkoutState.deliveryOption
@@ -303,16 +297,8 @@ export const DeliverySection = () => {
 
   const showInputForm = isInitialEdit || actionsState.isEditingDeliveryDetails;
 
-  //   console.table({
-  //     showInputForm,
-  //     isInitialEdit,
-  //     isEditingSection: actionsState.isEditingDeliveryDetails,
-  //   });
-
   const showEnteredDetails =
     didFillOutSection && !actionsState.isEditingDeliveryDetails;
-
-  //   console.log(checkoutState);
 
   return (
     <motion.div
