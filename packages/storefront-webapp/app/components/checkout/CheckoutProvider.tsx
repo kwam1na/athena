@@ -3,14 +3,17 @@ import { z, ZodError } from "zod";
 import { customerDetailsSchema } from "./CustomerDetails";
 import { deliveryDetailsSchema } from "./DeliveryDetails";
 import { billingDetailsSchema } from "./BillingDetails";
-import { deliveryMethodSchema, deliveryOptionSchema } from "./DeliverySection";
 
 export type Address = {
   address: string;
   city: string;
   state?: string;
   zip?: string;
+  country: string;
+  region?: string;
 };
+
+type BillingAddress = Address & { billingAddressSameAsDelivery?: boolean };
 
 export type CustomerDetails = {
   firstName: string;
@@ -37,46 +40,70 @@ const webOrderSchema = z.object({
 });
 
 type CheckoutState = {
-  billingCountry: string | null;
-  billingDetails: (Address & { billingAddressSameAsDelivery?: boolean }) | null;
-  country: string | null;
-  region_gh: string | null;
-  region_gh_name: string | null;
+  billingDetails: BillingAddress | null;
   customerDetails: CustomerDetails | null;
   deliveryMethod: "delivery" | "pickup" | null;
   deliveryOption: "within-accra" | "outside-accra" | "intl" | null;
   deliveryFee: number | null;
   deliveryDetails: Address | null;
   pickupLocation: string | null;
+
+  didEnterDeliveryDetails: boolean;
+  didSelectPickupLocation: boolean;
+
+  isUSOrder: boolean;
+  isGhanaOrder: boolean;
+  isROWOrder: boolean;
+  isPickupOrder: boolean;
+  isDeliveryOrder: boolean;
 };
 
 type CheckoutActions = {
   isEditingCustomerDetails: boolean;
   isEditingDeliveryDetails: boolean;
   isEditingBillingDetails: boolean;
+
+  didEnterDeliveryDetails: boolean;
 };
 
 const initialActionsState: CheckoutActions = {
   isEditingCustomerDetails: false,
   isEditingDeliveryDetails: false,
   isEditingBillingDetails: false,
+
+  didEnterDeliveryDetails: false,
 };
 
+// const initialState: CheckoutState = {
+//   deliveryMethod: "delivery",
+//   deliveryOption: "intl",
+//   billingDetails: null,
+//   deliveryFee: 800,
+//   country: "GH",
+//   region_gh: "GA",
+//   region_gh_name: "Greater Accra",
+//   billingCountry: null,
+//   deliveryDetails: {
+//     address: "124 Haudo Ct",
+//     city: "Laurel",
+//     state: "MD",
+//     zip: "20707",
+//   },
+//   customerDetails: {
+//     firstName: "Jon",
+//     lastName: "Snow",
+//     email: "j@sn.ow",
+//     phoneNumber: "9013293309",
+//   },
+//   pickupLocation: null,
+// };
+
 const initialState: CheckoutState = {
-  deliveryMethod: "delivery",
-  deliveryOption: "intl",
+  deliveryMethod: null,
+  deliveryOption: null,
   billingDetails: null,
-  deliveryFee: 800,
-  country: "GH",
-  region_gh: "GA",
-  region_gh_name: "Greater Accra",
-  billingCountry: null,
-  deliveryDetails: {
-    address: "124 Haudo Ct",
-    city: "Laurel",
-    state: "MD",
-    zip: "20707",
-  },
+  deliveryFee: null,
+  deliveryDetails: null,
   customerDetails: {
     firstName: "Jon",
     lastName: "Snow",
@@ -84,21 +111,16 @@ const initialState: CheckoutState = {
     phoneNumber: "9013293309",
   },
   pickupLocation: null,
-};
 
-// const initialState: CheckoutState = {
-//   deliveryMethod: null,
-//   deliveryOption: null,
-//   billingDetails: null,
-//   deliveryFee: null,
-//   country: null,
-//   region_gh: null,
-//   region_gh_name: null,
-//   billingCountry: null,
-//   deliveryDetails: null,
-//   customerDetails: null,
-//   pickupLocation: null,
-// };
+  didEnterDeliveryDetails: false,
+  didSelectPickupLocation: false,
+
+  isUSOrder: false,
+  isGhanaOrder: false,
+  isROWOrder: false,
+  isPickupOrder: false,
+  isDeliveryOrder: false,
+};
 
 type CheckoutStateErrors = {
   billingCountry: {
@@ -302,14 +324,10 @@ export const CheckoutProvider = ({
         const region = new Intl.Locale(navigator.language).region || "GH";
         setCheckoutState((prev) => ({
           ...prev,
-          country: region,
-          billingCountry: region,
         }));
       } catch {
         setCheckoutState((prev) => ({
           ...prev,
-          country: "GH",
-          billingCountry: "GH",
         }));
       }
     };
@@ -318,7 +336,62 @@ export const CheckoutProvider = ({
   }, []);
 
   const updateState = (updates: Partial<CheckoutState>) => {
-    setCheckoutState((prev) => ({ ...prev, ...updates }));
+    setCheckoutState((prev) => {
+      const newUpdates = { ...prev, ...updates };
+
+      const isDeliveryOrder = newUpdates.deliveryMethod == "delivery";
+
+      const isPickupOrder = newUpdates.deliveryMethod == "pickup";
+
+      const isUSOrder =
+        isDeliveryOrder && newUpdates.deliveryDetails?.country == "US";
+
+      const isGhanaOrder =
+        isPickupOrder ||
+        (isDeliveryOrder && newUpdates.deliveryDetails?.country == "GH");
+
+      const isROWOrder = isDeliveryOrder && !isUSOrder && !isGhanaOrder;
+
+      const didSelectPickupLocation = Boolean(
+        isPickupOrder && newUpdates.pickupLocation
+      );
+
+      const didProvideAllUSAddressFields = Boolean(
+        newUpdates.deliveryDetails?.address &&
+          newUpdates.deliveryDetails?.city &&
+          newUpdates.deliveryDetails?.state &&
+          newUpdates.deliveryDetails?.zip
+      );
+
+      const didProvideAllRestOfWorldFields = Boolean(
+        newUpdates.deliveryDetails?.address && newUpdates.deliveryDetails?.city
+      );
+
+      const didProvideAllGhanaAddressFields = Boolean(
+        newUpdates.deliveryDetails?.address &&
+          newUpdates.deliveryDetails?.city &&
+          newUpdates.deliveryDetails?.region
+      );
+
+      const didEnterDeliveryDetails =
+        (isUSOrder
+          ? didProvideAllUSAddressFields
+          : isGhanaOrder && isDeliveryOrder
+            ? didProvideAllGhanaAddressFields
+            : didProvideAllRestOfWorldFields) &&
+        Boolean(newUpdates.deliveryOption);
+
+      return {
+        ...newUpdates,
+        didEnterDeliveryDetails,
+        didSelectPickupLocation,
+        isGhanaOrder,
+        isUSOrder,
+        isROWOrder,
+        isPickupOrder,
+        isDeliveryOrder,
+      };
+    });
   };
 
   const updateActionsState = (actions: Partial<CheckoutActions>) => {

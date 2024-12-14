@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { CountrySelect } from "../ui/country-select";
 import { GhostButton } from "../ui/ghost-button";
 import { Separator } from "../ui/separator";
-import { defaultRegion, useCheckout } from "./CheckoutProvider";
+import { Address, defaultRegion, useCheckout } from "./CheckoutProvider";
 import { RadioGroup, RadioGroupItem } from "../ui/radio-group";
 import { z } from "zod";
 import { DeliveryDetailsForm } from "./DeliveryDetails";
@@ -11,6 +11,8 @@ import { Button } from "../ui/button";
 import { capitalizeWords } from "@/lib/utils";
 import { motion } from "framer-motion";
 import { useStoreContext } from "@/contexts/StoreContext";
+import { ALL_COUNTRIES } from "@/lib/countries";
+import { GHANA_REGIONS } from "@/lib/ghanaRegions";
 
 export const deliveryMethodSchema = z.object({
   deliveryMethod: z
@@ -35,7 +37,6 @@ export function StoreSelector() {
       deliveryFee: null,
       deliveryOption: null,
       billingDetails: null,
-      billingCountry: defaultRegion,
     });
   }, []);
 
@@ -48,7 +49,7 @@ export function StoreSelector() {
       }}
       defaultValue="comfortable"
     >
-      <div className="flex items-center space-x-4">
+      <div className="flex items-center space-x-4 text-sm">
         <RadioGroupItem value="wigclub-hair-studio" id="r1" />
         <div className="space-y-2">
           <p>Wigclub Hair Studio</p>
@@ -64,7 +65,9 @@ export function StoreSelector() {
 export function DeliveryOptionsSelector() {
   const { checkoutState, updateState } = useCheckout();
 
-  const previousCountryRef = useRef(checkoutState.country);
+  const previousCountryRef = useRef(
+    checkoutState.deliveryDetails?.country || undefined
+  );
 
   const handleChange = (value: string) => {
     const base = { pickupLocation: null };
@@ -74,30 +77,33 @@ export function DeliveryOptionsSelector() {
         ...base,
         deliveryFee: 800,
         deliveryOption: "intl",
-        region_gh: null,
       });
     } else if (value == "within-accra") {
       updateState({
         ...base,
         deliveryFee: 30,
         deliveryOption: "within-accra",
-        region_gh: "GA",
+        deliveryDetails: {
+          ...checkoutState.deliveryDetails,
+          region: "GA",
+        } as Address,
       });
     } else {
       updateState({
         ...base,
         deliveryFee: 70,
         deliveryOption: "outside-accra",
-        region_gh: null,
+        deliveryDetails: {
+          ...checkoutState.deliveryDetails,
+          region: undefined,
+        } as Address,
       });
     }
   };
 
-  const isOrderWithGhana = checkoutState.country == "GH";
-
   useEffect(() => {
     const previousCountry = previousCountryRef.current;
-    const currentCountry = checkoutState.country;
+    const currentCountry = checkoutState.deliveryDetails?.country;
 
     if (
       (currentCountry === "GH" && previousCountry !== "GH") || // Non-GH to GH
@@ -109,25 +115,18 @@ export function DeliveryOptionsSelector() {
       });
     }
 
-    if (currentCountry !== previousCountry) {
-      updateState({
-        billingDetails: null,
-        deliveryDetails: null,
-      });
-    }
-
     previousCountryRef.current = currentCountry; // Update ref to track current country
-  }, [checkoutState.country, updateState]);
+  }, [checkoutState.deliveryDetails, updateState]);
 
   useEffect(() => {
     // automatically select the within-accra delivery option if the accra option is selected
     if (
       checkoutState.deliveryOption == "outside-accra" &&
-      checkoutState.region_gh == "GA"
+      checkoutState.deliveryDetails?.region == "GA"
     ) {
       updateState({ deliveryOption: "within-accra", deliveryFee: 30 });
     }
-  }, [checkoutState.region_gh]);
+  }, [checkoutState.deliveryDetails?.region]);
 
   return (
     <RadioGroup
@@ -135,9 +134,9 @@ export function DeliveryOptionsSelector() {
       value={checkoutState.deliveryOption || undefined}
       onValueChange={handleChange}
     >
-      {isOrderWithGhana && (
+      {checkoutState.isGhanaOrder && (
         <>
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-4 text-sm">
             <RadioGroupItem value="within-accra" id="r1" />
             <div className="flex w-full lg:w-[50%] justify-between">
               <p>Delivery within Accra</p>
@@ -145,7 +144,7 @@ export function DeliveryOptionsSelector() {
             </div>
           </div>
 
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-4 text-sm">
             <RadioGroupItem value="outside-accra" id="r2" />
             <div className="flex w-full lg:w-[50%] justify-between">
               <p>Delivery outside Accra</p>
@@ -155,8 +154,8 @@ export function DeliveryOptionsSelector() {
         </>
       )}
 
-      {!isOrderWithGhana && (
-        <div className="flex items-center space-x-4">
+      {!checkoutState.isGhanaOrder && (
+        <div className="flex items-center space-x-4 text-sm">
           <RadioGroupItem value="intl" id="r2" />
           <div className="flex w-full lg:w-[50%] justify-between">
             <p>Express shipping</p>
@@ -175,13 +174,21 @@ const EnteredDeliveryDetails = () => {
   if (!checkoutState.deliveryDetails || !checkoutState.deliveryMethod)
     return null;
 
-  const isUSAddress = checkoutState.country == "US";
+  const isUSAddress = checkoutState.deliveryDetails?.country == "US";
 
   const isDelivery = checkoutState.deliveryMethod == "delivery";
 
   const isPickup = checkoutState.deliveryMethod == "pickup";
 
-  const isLocalOrder = checkoutState.country == "GH";
+  const isLocalOrder = checkoutState.deliveryDetails?.country == "GH";
+
+  const country = ALL_COUNTRIES.find(
+    (c) => c.code == checkoutState.deliveryDetails?.country
+  )?.name;
+
+  const region = GHANA_REGIONS.find(
+    (r) => r.code == checkoutState.deliveryDetails?.region
+  )?.name;
 
   const shippingText = isLocalOrder
     ? `Flat rate delivery at ${formatter.format(checkoutState.deliveryFee || 0)}`
@@ -207,10 +214,8 @@ const EnteredDeliveryDetails = () => {
                 <p>{`${checkoutState.deliveryDetails.city}, ${checkoutState.deliveryDetails.state}, ${checkoutState.deliveryDetails.zip}`}</p>
               )}
               {!isUSAddress && <p>{`${checkoutState.deliveryDetails.city}`}</p>}
-              {checkoutState.region_gh_name && (
-                <p>{`${checkoutState.region_gh_name}`}</p>
-              )}
-              <p>{checkoutState.country}</p>
+              {region && <p>{`${region}`}</p>}
+              <p>{country}</p>
             </div>
 
             <p className="pt-8 text-muted-foreground">{shippingText}</p>
@@ -240,8 +245,6 @@ const PickupOptions = () => {
             deliveryMethod: "delivery",
             deliveryFee: null,
             pickupLocation: null,
-            region_gh: null,
-            region_gh_name: null,
           });
         }}
         disabled={!didEnterCustomerDetails}
@@ -265,21 +268,13 @@ const PickupOptions = () => {
 };
 
 export const DeliverySection = () => {
-  const { checkoutState, updateState, updateActionsState, actionsState } =
-    useCheckout();
+  const { checkoutState, updateActionsState, actionsState } = useCheckout();
 
   const isDelivery = checkoutState.deliveryMethod === "delivery";
+
   const isPickup = checkoutState.deliveryMethod === "pickup";
 
   const didEnterCustomerDetails = Boolean(checkoutState.customerDetails);
-
-  const onCountrySelect = (country: string) => {
-    updateState({ country });
-  };
-
-  const showEditButton =
-    !actionsState.isEditingDeliveryDetails &&
-    Boolean(checkoutState.deliveryDetails);
 
   const isEditingAndHasNotSelectedPickupLocation =
     actionsState.isEditingDeliveryDetails &&
@@ -291,9 +286,35 @@ export const DeliverySection = () => {
     checkoutState.deliveryMethod == "delivery" &&
     !checkoutState.deliveryOption;
 
+  const isEditingAndHasNotEnteredAllDetails =
+    actionsState.isEditingDeliveryDetails &&
+    !checkoutState.didEnterDeliveryDetails;
+
   const shouldDisableEditButton =
     isEditingAndHasNotSelectedPickupLocation ||
-    isEditingAndHasNotSelectedShippingOption;
+    isEditingAndHasNotSelectedShippingOption ||
+    isEditingAndHasNotEnteredAllDetails;
+
+  const didFillOutSection =
+    Boolean(
+      checkoutState.didEnterDeliveryDetails && checkoutState.deliveryOption
+    ) || checkoutState.didSelectPickupLocation;
+
+  const isInitialEdit =
+    didEnterCustomerDetails && !checkoutState.didEnterDeliveryDetails;
+
+  const showInputForm = isInitialEdit || actionsState.isEditingDeliveryDetails;
+
+  //   console.table({
+  //     showInputForm,
+  //     isInitialEdit,
+  //     isEditingSection: actionsState.isEditingDeliveryDetails,
+  //   });
+
+  const showEnteredDetails =
+    didFillOutSection && !actionsState.isEditingDeliveryDetails;
+
+  //   console.log(checkoutState);
 
   return (
     <motion.div
@@ -305,7 +326,7 @@ export const DeliverySection = () => {
       <div className="space-y-24">
         <div className="flex items-center">
           <p>Delivery / Pickup</p>
-          {Boolean(checkoutState.deliveryDetails) && (
+          {(didFillOutSection || actionsState.isEditingDeliveryDetails) && (
             <Button
               onClick={() => {
                 updateActionsState({
@@ -329,48 +350,47 @@ export const DeliverySection = () => {
       </div>
 
       {/* Display entered delivery details when not editing */}
-      {showEditButton && <EnteredDeliveryDetails />}
+      {showEnteredDetails ? (
+        <EnteredDeliveryDetails />
+      ) : (
+        showInputForm && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{
+              opacity: 1,
+              transition: { ease: "easeOut", duration: 0.4 },
+            }}
+            className="space-y-16"
+          >
+            <PickupOptions />
 
-      {!showEditButton && didEnterCustomerDetails && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{
-            opacity: 1,
-            transition: { ease: "easeOut", duration: 0.4 },
-          }}
-          className="space-y-16"
-        >
-          <PickupOptions />
+            {isDelivery && (
+              <motion.div
+                key={"delivery-input"}
+                initial={{ opacity: 0 }}
+                animate={{
+                  opacity: 1,
+                  transition: { ease: "easeOut", duration: 0.4 },
+                }}
+                className="space-y-16"
+              >
+                <DeliveryDetailsForm />
+              </motion.div>
+            )}
 
-          {isDelivery && (
-            <motion.div
-              key={"delivery-input"}
-              initial={{ opacity: 0 }}
-              animate={{
-                opacity: 1,
-                transition: { ease: "easeOut", duration: 0.4 },
-              }}
-              className="space-y-16"
-            >
-              <CountrySelect
-                value={checkoutState.country || undefined}
-                onSelect={onCountrySelect}
-              />
-
-              <div className="space-y-8">
-                <p className="text-xs text-muted-foreground">
-                  Delivery options
-                </p>
-                <DeliveryOptionsSelector />
-              </div>
-            </motion.div>
-          )}
-
-          {isPickup && <StoreSelector />}
-
-          <DeliveryDetailsForm />
-        </motion.div>
+            {isPickup && <StoreSelector />}
+          </motion.div>
+        )
       )}
     </motion.div>
+  );
+};
+
+export const DeliveryOptions = () => {
+  return (
+    <div className="space-y-8">
+      <p className="text-xs text-muted-foreground">Delivery options</p>
+      <DeliveryOptionsSelector />
+    </div>
   );
 };

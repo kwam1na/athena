@@ -53,6 +53,7 @@ const Payment = () => {
 
   const didAcceptTerms = didAcceptStoreTerms && didAcceptCommsTerms;
 
+  // TODO: make this readable!
   const showPaymentHeader =
     (checkoutState.deliveryMethod === "pickup" &&
       !actionsState.isEditingDeliveryDetails) || // Pickup always shows payment section
@@ -76,7 +77,11 @@ const Payment = () => {
   }
 
   const showPayment =
-    checkoutState.billingDetails && !actionsState.isEditingBillingDetails;
+    (checkoutState.didEnterDeliveryDetails ||
+      checkoutState.didSelectPickupLocation) &&
+    !actionsState.isEditingBillingDetails;
+
+  console.log(checkoutState);
 
   return (
     <motion.div
@@ -123,7 +128,7 @@ const Payment = () => {
           )}
         </motion.div>
 
-        <BillingDetailsForm />
+        {showPayment && <BillingDetailsForm />}
 
         {showPayment && (
           <motion.div
@@ -208,6 +213,8 @@ const Checkout = () => {
             </div>
           </div>
         </motion.div>
+
+        {/* <div className="order-1 lg:order-2 lg:col-span-6 bg-[#F6F6F6]" /> */}
 
         {/* Right Panel */}
         <motion.div

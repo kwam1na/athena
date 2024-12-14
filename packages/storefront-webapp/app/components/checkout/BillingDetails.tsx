@@ -76,7 +76,7 @@ const EnteredBillingAddressDetails = () => {
 
   if (!checkoutState.billingDetails) return null;
 
-  const isUSAddress = checkoutState.billingCountry == "US";
+  const isUSAddress = checkoutState.billingDetails.country == "US";
 
   return (
     <motion.div
@@ -92,7 +92,7 @@ const EnteredBillingAddressDetails = () => {
           <p>{`${checkoutState.billingDetails.city}, ${checkoutState.billingDetails.state}, ${checkoutState.billingDetails.zip}`}</p>
         )}
         {!isUSAddress && <p>{`${checkoutState.billingDetails.city}`}</p>}
-        <p>{checkoutState.billingCountry}</p>
+        <p>{checkoutState.billingDetails.country}</p>
       </div>
     </motion.div>
   );
@@ -103,7 +103,7 @@ export const BillingDetailsForm = () => {
     useCheckout();
 
   const schema =
-    checkoutState.billingCountry == "US"
+    checkoutState.billingDetails?.country == "US"
       ? billingDetailsSchema
       : billingDetailsWithoutStateAndZipSchema;
 
@@ -118,28 +118,28 @@ export const BillingDetailsForm = () => {
   });
 
   const onSubmit = (data: z.infer<typeof billingDetailsSchema>) => {
-    updateState({ billingDetails: data });
+    // updateState({ billingDetails: data });
     updateActionsState({ isEditingBillingDetails: false });
   };
 
   const onCountrySelect = (country: string) => {
-    updateState({ billingCountry: country, billingDetails: null });
+    // updateState({ billingCountry: country, billingDetails: null });
   };
 
   // const defaultRegion = new Intl.Locale(navigator.language).region || "GH";
 
   const toggleSameAsDelivery = (checked: CheckedState) => {
-    updateState({
-      billingCountry: (checked as boolean)
-        ? checkoutState.country
-        : defaultRegion,
-      billingDetails: (checked as boolean)
-        ? {
-            ...checkoutState.deliveryDetails!,
-            billingAddressSameAsDelivery: true,
-          }
-        : null,
-    });
+    // updateState({
+    //   billingCountry: (checked as boolean)
+    //     ? checkoutState.country
+    //     : defaultRegion,
+    //   billingDetails: (checked as boolean)
+    //     ? {
+    //         ...checkoutState.deliveryDetails!,
+    //         billingAddressSameAsDelivery: true,
+    //       }
+    //     : null,
+    // });
 
     // if the form is in the edit state and the check box is checked, cancel the edit mode
     if (checked) {
@@ -147,7 +147,7 @@ export const BillingDetailsForm = () => {
     }
   };
 
-  const isOrderToUS = checkoutState.billingCountry == "US";
+  const isOrderToUS = checkoutState.deliveryDetails?.country == "US";
 
   return (
     <Form {...form}>
@@ -183,10 +183,10 @@ export const BillingDetailsForm = () => {
             <>
               <div className="flex flex-col xl:flex-row gap-16">
                 <div className="w-full xl:w-auto">
-                  <CountrySelect
+                  {/* <CountrySelect
                     onSelect={onCountrySelect}
                     value={checkoutState.billingCountry || undefined}
-                  />
+                  /> */}
                 </div>
 
                 <div className="w-full xl:w-[70%]">
