@@ -138,15 +138,7 @@ export const DeliveryDetailsForm = () => {
     });
   };
 
-  const hasNotSelectedDeliveryMethod = !Boolean(
-    checkoutState.deliveryMethod && checkoutState.deliveryOption
-  );
-
   if (checkoutState.deliveryMethod !== "delivery") return null;
-
-  const shouldDisableRegionSelect =
-    checkoutState.deliveryDetails?.region == "GA" &&
-    checkoutState.deliveryOption == "within-accra";
 
   const { country } = form.getValues();
 
@@ -176,7 +168,19 @@ export const DeliveryDetailsForm = () => {
     previousCountryRef.current = country;
   }, [country]);
 
-  console.log(checkoutState);
+  // console.log(checkoutState);
+
+  useEffect(() => {
+    const { region } = form.getValues();
+
+    if (checkoutState.deliveryOption == "outside-accra" && region == "GA") {
+      form.setValue("region", "");
+    }
+
+    if (checkoutState.deliveryOption == "within-accra") {
+      form.setValue("region", "GA");
+    }
+  }, [checkoutState.deliveryOption]);
 
   const canShowContinueButton = Boolean(
     checkoutState.deliveryDetails && checkoutState.deliveryOption
@@ -225,7 +229,7 @@ export const DeliveryDetailsForm = () => {
                         ))}
                       </SelectContent>
                     </Select>
-                    <FormMessage />
+                    <FormMessage className="text-xs" />
                   </FormItem>
                 )}
               />
@@ -302,14 +306,21 @@ export const DeliveryDetailsForm = () => {
                         Region
                       </FormLabel>
                       <Select
-                        onValueChange={(e) => {
+                        onValueChange={(region) => {
+                          const deliveryOption =
+                            region == "GA" ? "within-accra" : "outside-accra";
+
+                          const deliveryFee = region == "GA" ? 30 : 70;
+
                           updateState({
                             deliveryDetails: {
                               ...checkoutState.deliveryDetails,
-                              region: e,
+                              region,
                             } as Address,
+                            deliveryFee,
+                            deliveryOption,
                           });
-                          field.onChange(e);
+                          field.onChange(region);
                         }}
                         value={field.value}
                       >

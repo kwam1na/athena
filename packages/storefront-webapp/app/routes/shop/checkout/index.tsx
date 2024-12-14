@@ -53,16 +53,17 @@ const Payment = () => {
 
   const didAcceptTerms = didAcceptStoreTerms && didAcceptCommsTerms;
 
-  // TODO: make this readable!
-  const showPaymentHeader =
-    (checkoutState.deliveryMethod === "pickup" &&
-      !actionsState.isEditingDeliveryDetails) || // Pickup always shows payment section
-    (checkoutState.customerDetails &&
-      !actionsState.isEditingCustomerDetails &&
-      checkoutState.deliveryDetails &&
-      !actionsState.isEditingDeliveryDetails);
+  const isEditingCustomerDetails =
+    Boolean(checkoutState.customerDetails) &&
+    actionsState.isEditingCustomerDetails;
 
-  if (!showPaymentHeader) {
+  const isEditingDeliveryDetails =
+    (Boolean(checkoutState.deliveryDetails) || checkoutState.isPickupOrder) &&
+    actionsState.isEditingDeliveryDetails;
+
+  const onlyShowHeader = isEditingCustomerDetails || isEditingDeliveryDetails;
+
+  if (onlyShowHeader) {
     return (
       <motion.p
         initial={{ opacity: 0 }}
@@ -77,11 +78,12 @@ const Payment = () => {
   }
 
   const showPayment =
-    (checkoutState.didEnterDeliveryDetails ||
-      checkoutState.didSelectPickupLocation) &&
-    !actionsState.isEditingBillingDetails;
+    checkoutState.didEnterDeliveryDetails ||
+    checkoutState.didSelectPickupLocation;
 
-  console.log(checkoutState);
+  const showProceedSection =
+    checkoutState.didEnterBillingDetails &&
+    !actionsState.isEditingBillingDetails;
 
   return (
     <motion.div
@@ -130,7 +132,7 @@ const Payment = () => {
 
         {showPayment && <BillingDetailsForm />}
 
-        {showPayment && (
+        {showProceedSection && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{
@@ -169,7 +171,13 @@ const Payment = () => {
         )}
       </div>
 
-      {showPayment && (
+      {checkoutState.failedFinalValidation && (
+        <p className="text-xs text-destructive">
+          Please provide all the required information
+        </p>
+      )}
+
+      {showProceedSection && (
         <Button
           onClick={onSubmit}
           className="w-full"

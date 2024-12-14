@@ -22,22 +22,121 @@ export type CustomerDetails = {
   phoneNumber: string;
 };
 
-const webOrderSchema = z.object({
-  billingCountry: z.string().min(1),
-  billingDetails: billingDetailsSchema,
-  country: z.string().min(1),
-  customerDetails: customerDetailsSchema,
-  deliveryMethod: z
-    .enum(["pickup", "delivery"])
-    .refine((value) => !!value, { message: "Delivery method is required" }),
-  deliveryOption: z
-    .enum(["within-accra", "outside-accra", "intl"])
-    .refine((value) => !!value, { message: "Delivery option is required" })
-    .nullable(),
-  deliveryFee: z.number().nullable(),
-  pickupLocation: z.string().min(1).nullable(),
-  deliveryDetails: deliveryDetailsSchema,
-});
+const webOrderSchema = z
+  .object({
+    billingDetails: billingDetailsSchema,
+    customerDetails: customerDetailsSchema,
+    deliveryMethod: z
+      .enum(["pickup", "delivery"])
+      .refine((value) => !!value, { message: "Delivery method is required" }),
+    deliveryOption: z
+      .enum(["within-accra", "outside-accra", "intl"])
+      .refine((value) => !!value, { message: "Delivery option is required" })
+      .nullable(),
+    deliveryFee: z.number().nullable(),
+    pickupLocation: z.string().min(1).nullable(),
+    deliveryDetails: deliveryDetailsSchema.nullable(),
+  })
+  .superRefine((data, ctx) => {
+    const { deliveryMethod, deliveryDetails } = data;
+
+    if (deliveryMethod == "delivery") {
+      if (!deliveryDetails) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["deliveryDetails"],
+          message: "Delivery details are required",
+        });
+      }
+
+      const { address, city, state, zip, region, country } =
+        deliveryDetails || {};
+
+      if (!address) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["deliveryDetails", "address"],
+          message: "Address is required",
+        });
+      }
+
+      if (address?.trim().length == 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["deliveryDetails", "address"],
+          message: "Address cannot be empty or whitespace",
+        });
+      }
+
+      if (!city) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["deliveryDetails", "city"],
+          message: "City is required",
+        });
+      }
+
+      if (city?.trim().length == 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["deliveryDetails", "city"],
+          message: "City cannot be empty or whitespace",
+        });
+      }
+
+      if (!country) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["deliveryDetails", "country"],
+          message: "Country is required",
+        });
+      }
+
+      if (country == "US") {
+        if (!state) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["deliveryDetails", "state"],
+            message: "State is required",
+          });
+        }
+
+        if (!zip) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["deliveryDetails", "zip"],
+            message: "Zip is required",
+          });
+        }
+
+        if (zip?.trim().length == 0) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["zip"],
+            message: "Zip code cannot be empty or whitespace",
+          });
+        }
+
+        if (zip && !/^\d{5}$/.test(zip)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["zip"],
+            message: "Zip code must be a 5-digit number",
+          });
+        }
+      }
+
+      if (country == "GH") {
+        if (!region) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["region"],
+            message: "Region is required",
+          });
+        }
+      }
+    }
+  });
 
 type CheckoutState = {
   billingDetails: BillingAddress | null;
@@ -50,12 +149,15 @@ type CheckoutState = {
 
   didEnterDeliveryDetails: boolean;
   didSelectPickupLocation: boolean;
+  didEnterBillingDetails: boolean;
 
   isUSOrder: boolean;
   isGhanaOrder: boolean;
   isROWOrder: boolean;
   isPickupOrder: boolean;
   isDeliveryOrder: boolean;
+
+  failedFinalValidation: boolean;
 };
 
 type CheckoutActions = {
@@ -64,6 +166,7 @@ type CheckoutActions = {
   isEditingBillingDetails: boolean;
 
   didEnterDeliveryDetails: boolean;
+  didEnterBillingDetails: boolean;
 };
 
 const initialActionsState: CheckoutActions = {
@@ -72,47 +175,20 @@ const initialActionsState: CheckoutActions = {
   isEditingBillingDetails: false,
 
   didEnterDeliveryDetails: false,
+  didEnterBillingDetails: false,
 };
 
-// const initialState: CheckoutState = {
-//   deliveryMethod: "delivery",
-//   deliveryOption: "intl",
-//   billingDetails: null,
-//   deliveryFee: 800,
-//   country: "GH",
-//   region_gh: "GA",
-//   region_gh_name: "Greater Accra",
-//   billingCountry: null,
-//   deliveryDetails: {
-//     address: "124 Haudo Ct",
-//     city: "Laurel",
-//     state: "MD",
-//     zip: "20707",
-//   },
-//   customerDetails: {
-//     firstName: "Jon",
-//     lastName: "Snow",
-//     email: "j@sn.ow",
-//     phoneNumber: "9013293309",
-//   },
-//   pickupLocation: null,
-// };
-
 const initialState: CheckoutState = {
-  deliveryMethod: null,
-  deliveryOption: null,
   billingDetails: null,
   deliveryFee: null,
+  deliveryMethod: null,
+  deliveryOption: null,
   deliveryDetails: null,
-  customerDetails: {
-    firstName: "Jon",
-    lastName: "Snow",
-    email: "j@sn.ow",
-    phoneNumber: "9013293309",
-  },
+  customerDetails: null,
   pickupLocation: null,
 
   didEnterDeliveryDetails: false,
+  didEnterBillingDetails: false,
   didSelectPickupLocation: false,
 
   isUSOrder: false,
@@ -120,7 +196,42 @@ const initialState: CheckoutState = {
   isROWOrder: false,
   isPickupOrder: false,
   isDeliveryOrder: false,
+
+  failedFinalValidation: false,
 };
+
+// const initialState: CheckoutState = {
+//   billingDetails: null,
+//   deliveryFee: 800,
+//   deliveryMethod: "delivery",
+//   deliveryOption: "intl",
+
+//   deliveryDetails: {
+//     address: "124 Haudo Ct",
+//     city: "Laurel",
+//     state: "MD",
+//     zip: "20707",
+//     country: "US",
+//   },
+
+//   customerDetails: {
+//     firstName: "Jon",
+//     lastName: "Snow",
+//     email: "j@sn.ow",
+//     phoneNumber: "9013293309",
+//   },
+//   pickupLocation: null,
+
+//   didEnterDeliveryDetails: true,
+//   didEnterBillingDetails: false,
+//   didSelectPickupLocation: false,
+
+//   isUSOrder: true,
+//   isGhanaOrder: false,
+//   isROWOrder: false,
+//   isPickupOrder: false,
+//   isDeliveryOrder: true,
+// };
 
 type CheckoutStateErrors = {
   billingCountry: {
@@ -381,9 +492,34 @@ export const CheckoutProvider = ({
             : didProvideAllRestOfWorldFields) &&
         Boolean(newUpdates.deliveryOption);
 
+      const didProvideAllUSBillingAddressFields = Boolean(
+        newUpdates.billingDetails?.address &&
+          newUpdates.billingDetails?.city &&
+          newUpdates.billingDetails?.state &&
+          newUpdates.billingDetails?.zip
+      );
+
+      const didProvideAllRestOfWorldBillingFields = Boolean(
+        newUpdates.billingDetails?.address && newUpdates.billingDetails?.city
+      );
+
+      const didProvideAllGhanaBillingAddressFields = Boolean(
+        newUpdates.billingDetails?.address && newUpdates.billingDetails?.city
+      );
+
+      const isGhanaBillingAddrss = newUpdates.billingDetails?.country == "GH";
+      const isUSBillingAddrss = newUpdates.billingDetails?.country == "US";
+
+      const didEnterBillingDetails = isGhanaBillingAddrss
+        ? didProvideAllGhanaBillingAddressFields
+        : isUSBillingAddrss
+          ? didProvideAllUSBillingAddressFields
+          : didProvideAllRestOfWorldBillingFields;
+
       return {
         ...newUpdates,
         didEnterDeliveryDetails,
+        didEnterBillingDetails,
         didSelectPickupLocation,
         isGhanaOrder,
         isUSOrder,
@@ -402,6 +538,8 @@ export const CheckoutProvider = ({
     try {
       // Parse the state using the schema
       webOrderSchema.parse(checkoutState);
+
+      updateState({ failedFinalValidation: false });
 
       // If validation succeeds, clear all errors
       setCheckoutErrors(initialCheckoutErrorsState);
@@ -434,6 +572,8 @@ export const CheckoutProvider = ({
       } else {
         console.error("Unexpected error during validation:", e);
       }
+
+      updateState({ failedFinalValidation: true });
     }
   };
 
@@ -441,10 +581,12 @@ export const CheckoutProvider = ({
     try {
       // Parse the state using the schema
       webOrderSchema.parse(checkoutState);
+      updateState({ failedFinalValidation: false });
 
       return true;
     } catch (e) {
       console.log((e as ZodError).errors);
+      updateState({ failedFinalValidation: true });
       return false;
     }
   };

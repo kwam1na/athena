@@ -171,17 +171,6 @@ const EnteredDeliveryDetails = () => {
   const { checkoutState } = useCheckout();
   const { formatter } = useStoreContext();
 
-  if (!checkoutState.deliveryDetails || !checkoutState.deliveryMethod)
-    return null;
-
-  const isUSAddress = checkoutState.deliveryDetails?.country == "US";
-
-  const isDelivery = checkoutState.deliveryMethod == "delivery";
-
-  const isPickup = checkoutState.deliveryMethod == "pickup";
-
-  const isLocalOrder = checkoutState.deliveryDetails?.country == "GH";
-
   const country = ALL_COUNTRIES.find(
     (c) => c.code == checkoutState.deliveryDetails?.country
   )?.name;
@@ -190,7 +179,7 @@ const EnteredDeliveryDetails = () => {
     (r) => r.code == checkoutState.deliveryDetails?.region
   )?.name;
 
-  const shippingText = isLocalOrder
+  const shippingText = checkoutState.isGhanaOrder
     ? `Flat rate delivery at ${formatter.format(checkoutState.deliveryFee || 0)}`
     : `Express international shipping at ${formatter.format(checkoutState.deliveryFee || 0)}`;
 
@@ -205,15 +194,17 @@ const EnteredDeliveryDetails = () => {
         animate={{ opacity: 1, transition: { ease: "easeOut" } }}
         exit={{ opacity: 0 }}
       >
-        {isDelivery && (
+        {checkoutState.isDeliveryOrder && (
           <div className="space-y-4 text-sm">
-            <p>{`${capitalizeWords(checkoutState.deliveryMethod)} address:`}</p>
+            <p>{`${capitalizeWords(checkoutState.deliveryMethod || "")} address:`}</p>
             <div className="space-y-2">
-              <p>{checkoutState.deliveryDetails.address}</p>
-              {isUSAddress && (
-                <p>{`${checkoutState.deliveryDetails.city}, ${checkoutState.deliveryDetails.state}, ${checkoutState.deliveryDetails.zip}`}</p>
+              <p>{checkoutState.deliveryDetails?.address}</p>
+              {checkoutState.isUSOrder && (
+                <p>{`${checkoutState.deliveryDetails?.city}, ${checkoutState.deliveryDetails?.state}, ${checkoutState.deliveryDetails?.zip}`}</p>
               )}
-              {!isUSAddress && <p>{`${checkoutState.deliveryDetails.city}`}</p>}
+              {!checkoutState.isUSOrder && (
+                <p>{`${checkoutState.deliveryDetails?.city}`}</p>
+              )}
               {region && <p>{`${region}`}</p>}
               <p>{country}</p>
             </div>
@@ -222,7 +213,7 @@ const EnteredDeliveryDetails = () => {
           </div>
         )}
 
-        {isPickup && <StoreSelector />}
+        {checkoutState.isPickupOrder && <StoreSelector />}
       </motion.div>
     </div>
   );
@@ -288,12 +279,19 @@ export const DeliverySection = () => {
 
   const isEditingAndHasNotEnteredAllDetails =
     actionsState.isEditingDeliveryDetails &&
-    !checkoutState.didEnterDeliveryDetails;
+    !checkoutState.didEnterDeliveryDetails &&
+    checkoutState.deliveryMethod == "delivery";
 
   const shouldDisableEditButton =
     isEditingAndHasNotSelectedPickupLocation ||
     isEditingAndHasNotSelectedShippingOption ||
     isEditingAndHasNotEnteredAllDetails;
+
+  //   console.table({
+  //     isEditingAndHasNotEnteredAllDetails,
+  //     isEditingAndHasNotSelectedPickupLocation,
+  //     isEditingAndHasNotSelectedShippingOption,
+  //   });
 
   const didFillOutSection =
     Boolean(
