@@ -56,9 +56,6 @@ export const getAll = query({
       categoryId = s?._id;
     }
 
-    console.log("args in ->", args);
-    console.log("cateId in ->", categoryId);
-
     if (args.category && !categoryId) {
       return [];
     }
@@ -106,8 +103,6 @@ export const getAll = query({
         return q.eq(q.field("storeId"), args.storeId);
       })
       .collect();
-
-    console.log("prods ->", products);
 
     const skusQuery = ctx.db.query("productSku").filter((q) => {
       if (args.color && args.length) {
@@ -477,6 +472,7 @@ export const updateSku = mutation({
     size: v.optional(v.string()),
     color: v.optional(v.id("color")),
     sku: v.optional(v.string()),
+    quantityAvailable: v.optional(v.number()),
     price: v.optional(v.number()),
     inventoryCount: v.optional(v.number()),
     unitCost: v.optional(v.number()),

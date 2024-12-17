@@ -17,6 +17,8 @@ import {
   savedBagItemSchema,
   customerSchema,
   guestSchema,
+  checkoutSessionSchema,
+  checkoutSessionItemSchema,
 } from "./schemas/storeFront";
 
 const schema = defineSchema({
@@ -34,6 +36,8 @@ const schema = defineSchema({
   savedBagItem: defineTable(savedBagItemSchema),
   customer: defineTable(customerSchema),
   guest: defineTable(guestSchema),
+  checkoutSession: defineTable(checkoutSessionSchema),
+  checkoutSessionItem: defineTable(checkoutSessionItemSchema),
 });
 
 export default schema;

@@ -10,7 +10,7 @@ import {
   storeRoutes,
   subcategoryRoutes,
 } from "./http/domains/inventory/routes";
-import { bagRoutes } from "./http/domains/storeFront/routes";
+import { bagRoutes, checkoutRoutes } from "./http/domains/storeFront/routes";
 import { httpRouter } from "convex/server";
 import { guestRoutes } from "./http/domains/storeFront/routes/guest";
 import { colorRoutes } from "./http/domains/inventory/routes/colors";
@@ -58,6 +58,11 @@ app.route("/organizations/:organizationId/stores/:storeId/colors", colorRoutes);
 // );
 
 app.route("/organizations/:organizationId/guests", guestRoutes);
+
+app.route(
+  "/organizations/:organizationId/stores/:storeId/checkout",
+  checkoutRoutes
+);
 
 app.get("/.well-known/openid-configuration", async (c) => {
   const [httpAction] = http.lookup(

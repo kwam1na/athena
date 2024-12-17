@@ -277,4 +277,30 @@ storeRoutes.delete(
   }
 );
 
+storeRoutes.post("/:storeId/customers/:customerId/checkout", async (c) => {
+  const { storeId } = c.req.param();
+
+  const customerId = c.req.param("customerId");
+
+  if (!customerId) {
+    return c.json({ error: "Customer id missing" }, 404);
+  }
+
+  const { products, bagId } = await c.req.json();
+
+  // console.log("items received ->", items);
+
+  const session = await c.env.runMutation(
+    api.storeFront.checkoutSession.create,
+    {
+      storeId: storeId as Id<"store">,
+      customerId: customerId as Id<"customer"> | Id<"guest">,
+      products,
+      bagId,
+    }
+  );
+
+  return c.json(session);
+});
+
 export { storeRoutes };

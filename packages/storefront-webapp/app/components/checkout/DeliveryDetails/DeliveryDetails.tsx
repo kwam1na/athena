@@ -1,7 +1,7 @@
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Address, useCheckout } from "./CheckoutProvider";
+import { Address, useCheckout } from "../CheckoutProvider";
 import {
   Form,
   FormControl,
@@ -10,11 +10,9 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-} from "../ui/form";
-import { Input } from "../ui/input";
-import { CountrySelect } from "../ui/country-select";
-import { LoadingButton } from "../ui/loading-button";
-import { GhanaRegionSelect } from "../ui/ghana-region-select";
+} from "../../ui/form";
+import { Input } from "../../ui/input";
+import { LoadingButton } from "../../ui/loading-button";
 import { GHANA_REGIONS } from "@/lib/ghanaRegions";
 import {
   Select,
@@ -24,95 +22,11 @@ import {
   SelectLabel,
   SelectTrigger,
   SelectValue,
-} from "../ui/select";
+} from "../../ui/select";
 import { ALL_COUNTRIES } from "@/lib/countries";
 import { useEffect, useRef } from "react";
-import { DeliveryOptions } from "./DeliveryDetails/DeliverySection";
-
-export const deliveryDetailsSchema = z
-  .object({
-    address: z
-      .string()
-      .min(1, "Address is required")
-      .refine(
-        (value) => value.trim().length > 0,
-        "Address cannot be empty or whitespace"
-      ),
-    city: z
-      .string()
-      .min(1, "City is required")
-      .refine(
-        (value) => value.trim().length > 0,
-        "City cannot be empty or whitespace"
-      ),
-    state: z.string().optional(),
-    zip: z.string().optional(),
-    region: z.string().optional(),
-    country: z
-      .string()
-      .min(1, "Country is required")
-      .refine(
-        (value) => value.trim().length > 0,
-        "Country cannot be empty or whitespace"
-      ),
-  })
-  .superRefine((data, ctx) => {
-    if (data.country === "US") {
-      const { state, zip } = data;
-
-      if (!state) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["state"],
-          message: "State is required",
-        });
-      }
-
-      if (state?.trim().length == 0) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["state"],
-          message: "State cannot be empty or whitespace",
-        });
-      }
-
-      if (!zip) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["zip"],
-          message: "Zip code is required",
-        });
-      }
-
-      if (zip?.trim().length == 0) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["zip"],
-          message: "Zip code cannot be empty or whitespace",
-        });
-      }
-
-      if (zip && !/^\d{5}$/.test(zip)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["zip"],
-          message: "Zip code must be a 5-digit number",
-        });
-      }
-    }
-
-    if (data.country == "GH") {
-      const { region } = data;
-
-      if (!region) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["region"],
-          message: "Region is required",
-        });
-      }
-    }
-  });
+import { DeliveryOptions } from "./DeliverySection";
+import { deliveryDetailsSchema } from "./schema";
 
 export const DeliveryDetailsForm = () => {
   const { checkoutState, actionsState, updateActionsState, updateState } =
@@ -405,67 +319,3 @@ export const DeliveryDetailsForm = () => {
     </Form>
   );
 };
-
-export function SelectScrollable() {
-  return (
-    <Select>
-      <SelectTrigger className="w-[280px]">
-        <SelectValue placeholder="Select a timezone" />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectGroup>
-          <SelectLabel>North America</SelectLabel>
-          <SelectItem value="est">Eastern Standard Time (EST)</SelectItem>
-          <SelectItem value="cst">Central Standard Time (CST)</SelectItem>
-          <SelectItem value="mst">Mountain Standard Time (MST)</SelectItem>
-          <SelectItem value="pst">Pacific Standard Time (PST)</SelectItem>
-          <SelectItem value="akst">Alaska Standard Time (AKST)</SelectItem>
-          <SelectItem value="hst">Hawaii Standard Time (HST)</SelectItem>
-        </SelectGroup>
-        <SelectGroup>
-          <SelectLabel>Europe & Africa</SelectLabel>
-          <SelectItem value="gmt">Greenwich Mean Time (GMT)</SelectItem>
-          <SelectItem value="cet">Central European Time (CET)</SelectItem>
-          <SelectItem value="eet">Eastern European Time (EET)</SelectItem>
-          <SelectItem value="west">
-            Western European Summer Time (WEST)
-          </SelectItem>
-          <SelectItem value="cat">Central Africa Time (CAT)</SelectItem>
-          <SelectItem value="eat">East Africa Time (EAT)</SelectItem>
-        </SelectGroup>
-        <SelectGroup>
-          <SelectLabel>Asia</SelectLabel>
-          <SelectItem value="msk">Moscow Time (MSK)</SelectItem>
-          <SelectItem value="ist">India Standard Time (IST)</SelectItem>
-          <SelectItem value="cst_china">China Standard Time (CST)</SelectItem>
-          <SelectItem value="jst">Japan Standard Time (JST)</SelectItem>
-          <SelectItem value="kst">Korea Standard Time (KST)</SelectItem>
-          <SelectItem value="ist_indonesia">
-            Indonesia Central Standard Time (WITA)
-          </SelectItem>
-        </SelectGroup>
-        <SelectGroup>
-          <SelectLabel>Australia & Pacific</SelectLabel>
-          <SelectItem value="awst">
-            Australian Western Standard Time (AWST)
-          </SelectItem>
-          <SelectItem value="acst">
-            Australian Central Standard Time (ACST)
-          </SelectItem>
-          <SelectItem value="aest">
-            Australian Eastern Standard Time (AEST)
-          </SelectItem>
-          <SelectItem value="nzst">New Zealand Standard Time (NZST)</SelectItem>
-          <SelectItem value="fjt">Fiji Time (FJT)</SelectItem>
-        </SelectGroup>
-        <SelectGroup>
-          <SelectLabel>South America</SelectLabel>
-          <SelectItem value="art">Argentina Time (ART)</SelectItem>
-          <SelectItem value="bot">Bolivia Time (BOT)</SelectItem>
-          <SelectItem value="brt">Brasilia Time (BRT)</SelectItem>
-          <SelectItem value="clt">Chile Standard Time (CLT)</SelectItem>
-        </SelectGroup>
-      </SelectContent>
-    </Select>
-  );
-}

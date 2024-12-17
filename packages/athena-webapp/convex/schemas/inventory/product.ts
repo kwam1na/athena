@@ -29,6 +29,7 @@ export const productSkuSchema = v.object({
   storeId: v.id("store"),
   images: v.array(v.string()),
   inventoryCount: v.number(),
+  quantityAvailable: v.number(),
   price: v.number(),
   unitCost: v.optional(v.number()),
 });

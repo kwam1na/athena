@@ -1,4 +1,5 @@
 import { addItemToBag, removeItemFromBag, updateBagItem } from "@/api/bag";
+import { createCheckoutSession } from "@/api/checkoutSession";
 import {
   addItemToSavedBag,
   removeItemFromSavedBag,
@@ -19,11 +20,18 @@ export type ShoppingBagAction =
   | "moving-to-saved-bag"
   | "moving-to-bag";
 
+type UnavailableProducts = {
+  available: number;
+  productSkuId: string;
+}[];
+
 export const useShoppingBag = () => {
   const queryClient = useQueryClient();
 
   const [operationSuccessful, setOperationSuccessful] = useState(false);
   const [action, setAction] = useState<ShoppingBagAction>("idle");
+  const [unavailableProducts, setUnavailableProducts] =
+    useState<UnavailableProducts>([]);
 
   const userId =
     typeof window == "object"
@@ -301,6 +309,53 @@ export const useShoppingBag = () => {
     await deleteItemFromSavedBag(item._id);
   };
 
+  const obtainCheckoutSessionMutation = useMutation({
+    mutationFn: ({
+      bagId,
+      bagItems,
+    }: {
+      bagId: string;
+      bagItems: { quantity: number; productSkuId: string }[];
+    }) =>
+      createCheckoutSession({
+        bagId,
+        customerId: userId!,
+        storeId: OG_STORE_ID,
+        organizationId: OG_ORGANIZTION_ID,
+        bagItems,
+      }),
+    onSuccess: (res) => {
+      setOperationSuccessful(true);
+      // queryClient.invalidateQueries({
+      //   queryKey: bagQueries.activeSavedBagKey(),
+      // });
+      console.log("res after post ->", res);
+      if (res.unavailableProducts) {
+        setUnavailableProducts(res.unavailableProducts);
+      } else {
+        setUnavailableProducts([]);
+      }
+    },
+  });
+
+  const areProductsUnavailable = unavailableProducts.some(
+    (p) => p.available == 0
+  );
+
+  const obtainCheckoutSession = async ({
+    bagId,
+    bagItems,
+  }: {
+    bagId: string;
+    bagItems: { quantity: number; productSkuId: string }[];
+  }) => {
+    setOperationSuccessful(false);
+    return await obtainCheckoutSessionMutation.mutateAsync({
+      bagId,
+      bagItems,
+    });
+  };
+
   return {
     bagAction: action,
     addProductToBag,
@@ -319,5 +374,8 @@ export const useShoppingBag = () => {
     moveItemFromBagToSaved,
     moveItemFromSavedToBag,
     addedItemSuccessfully: operationSuccessful,
+    obtainCheckoutSession,
+    unavailableProducts,
+    areProductsUnavailable,
   };
 };

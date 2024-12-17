@@ -1,8 +1,8 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { z, ZodError } from "zod";
 import { customerDetailsSchema } from "./CustomerDetails";
-import { deliveryDetailsSchema } from "./DeliveryDetails";
 import { billingDetailsSchema } from "./BillingDetails";
+import { deliveryDetailsSchema } from "./DeliveryDetails/schema";
 
 export type Address = {
   address: string;

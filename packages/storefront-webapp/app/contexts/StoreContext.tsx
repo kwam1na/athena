@@ -8,6 +8,7 @@ import React, { createContext, useContext, useState } from "react";
 type StoreContextType = {
   organizationId: string;
   storeId: string;
+  userId?: string;
   formatter: Intl.NumberFormat;
   store?: Store;
   navBarClassname: string;
@@ -46,6 +47,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const formatter = currencyFormatter(store?.currency || storeCurrency);
 
+  const userId =
+    typeof window == "object"
+      ? window.serverData.customerId || window.serverData.guestId
+      : undefined;
+
   return (
     <StoreContext.Provider
       value={{
@@ -57,6 +63,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
         navBarClassname: activeNavClassname,
         showNavbar,
         hideNavbar,
+        userId,
       }}
     >
       {children}

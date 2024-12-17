@@ -19,13 +19,13 @@ import { useProduct } from "@/contexts/ProductContext";
 import { ImageFile } from "../ui/image-uploader";
 import { RefreshCcw, RotateCcw } from "lucide-react";
 import useGetActiveProduct from "@/hooks/useGetActiveProduct";
-import { Id } from "~/convex/_generated/dataModel";
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
 
 export type ProductVariant = {
   id: string;
   sku?: string;
   stock?: number;
+  quantityAvailable?: number;
   cost?: number;
   price?: number;
   length?: number;
@@ -64,7 +64,7 @@ function Stock() {
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement>,
     variantId: string,
-    field: "sku" | "stock" | "cost" | "price"
+    field: "sku" | "stock" | "cost" | "price" | "quantityAvailable"
   ) => {
     const value = field === "sku" ? e.target.value : parseFloat(e.target.value);
     updateProductVariants((prevVariants) =>
@@ -79,6 +79,7 @@ function Stock() {
       id: Date.now().toString(),
       sku: undefined,
       stock: undefined,
+      quantityAvailable: undefined,
       cost: undefined,
       price: undefined,
       images: [],
@@ -119,6 +120,7 @@ function Stock() {
             <TableRow>
               <TableHead>SKU</TableHead>
               <TableHead>Stock</TableHead>
+              <TableHead># Available</TableHead>
               <TableHead>{`Price (${activeStore?.currency.toUpperCase()})`}</TableHead>
               <TableHead>{`Cost (${activeStore?.currency.toUpperCase()})`}</TableHead>
               <TableHead></TableHead>
@@ -152,6 +154,7 @@ function Stock() {
                     </p>
                   )}
                 </TableCell>
+
                 <TableCell>
                   <Label htmlFor={`stock-${index}`} className="sr-only">
                     Stock
@@ -171,6 +174,31 @@ function Stock() {
                   {error && getErrorForField(error, "inventoryCount") && (
                     <p className="text-red-500 text-sm font-medium">
                       {getErrorForField(error, "inventoryCount")?.message}
+                    </p>
+                  )}
+                </TableCell>
+
+                <TableCell>
+                  <Label htmlFor={`stock-${index}`} className="sr-only">
+                    # Available
+                  </Label>
+                  {isLoading ? (
+                    <Skeleton className="h-[40px] w-full" />
+                  ) : (
+                    <Input
+                      id={`quantity-available-${index}`}
+                      type="number"
+                      placeholder="1"
+                      onChange={(e) =>
+                        handleChange(e, variant.id, "quantityAvailable")
+                      }
+                      value={variant.quantityAvailable || ""}
+                      disabled={variant.markedForDeletion}
+                    />
+                  )}
+                  {error && getErrorForField(error, "quantityAvailable") && (
+                    <p className="text-red-500 text-sm font-medium">
+                      {getErrorForField(error, "quantityAvailable")?.message}
                     </p>
                   )}
                 </TableCell>

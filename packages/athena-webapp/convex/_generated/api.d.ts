@@ -26,6 +26,7 @@ import type * as http_domains_inventory_routes_products from "../http/domains/in
 import type * as http_domains_inventory_routes_stores from "../http/domains/inventory/routes/stores.js";
 import type * as http_domains_inventory_routes_subcategories from "../http/domains/inventory/routes/subcategories.js";
 import type * as http_domains_storeFront_routes_bag from "../http/domains/storeFront/routes/bag.js";
+import type * as http_domains_storeFront_routes_checkout from "../http/domains/storeFront/routes/checkout.js";
 import type * as http_domains_storeFront_routes_guest from "../http/domains/storeFront/routes/guest.js";
 import type * as http_domains_storeFront_routes_index from "../http/domains/storeFront/routes/index.js";
 import type * as http_domains_storeFront_routes_savedBag from "../http/domains/storeFront/routes/savedBag.js";
@@ -47,6 +48,8 @@ import type * as schemas_inventory_store from "../schemas/inventory/store.js";
 import type * as schemas_inventory_subcategory from "../schemas/inventory/subcategory.js";
 import type * as schemas_storeFront_bag from "../schemas/storeFront/bag.js";
 import type * as schemas_storeFront_bagItem from "../schemas/storeFront/bagItem.js";
+import type * as schemas_storeFront_checkoutSession from "../schemas/storeFront/checkoutSession.js";
+import type * as schemas_storeFront_checkoutSessionItem from "../schemas/storeFront/checkoutSessionItem.js";
 import type * as schemas_storeFront_customer from "../schemas/storeFront/customer.js";
 import type * as schemas_storeFront_guest from "../schemas/storeFront/guest.js";
 import type * as schemas_storeFront_index from "../schemas/storeFront/index.js";
@@ -54,6 +57,7 @@ import type * as schemas_storeFront_savedBag from "../schemas/storeFront/savedBa
 import type * as schemas_storeFront_savedBagItem from "../schemas/storeFront/savedBagItem.js";
 import type * as storeFront_bag from "../storeFront/bag.js";
 import type * as storeFront_bagItem from "../storeFront/bagItem.js";
+import type * as storeFront_checkoutSession from "../storeFront/checkoutSession.js";
 import type * as storeFront_guest from "../storeFront/guest.js";
 import type * as storeFront_savedBag from "../storeFront/savedBag.js";
 import type * as storeFront_savedBagItem from "../storeFront/savedBagItem.js";
@@ -79,6 +83,7 @@ declare const fullApi: ApiFromModules<{
   "http/domains/inventory/routes/stores": typeof http_domains_inventory_routes_stores;
   "http/domains/inventory/routes/subcategories": typeof http_domains_inventory_routes_subcategories;
   "http/domains/storeFront/routes/bag": typeof http_domains_storeFront_routes_bag;
+  "http/domains/storeFront/routes/checkout": typeof http_domains_storeFront_routes_checkout;
   "http/domains/storeFront/routes/guest": typeof http_domains_storeFront_routes_guest;
   "http/domains/storeFront/routes/index": typeof http_domains_storeFront_routes_index;
   "http/domains/storeFront/routes/savedBag": typeof http_domains_storeFront_routes_savedBag;
@@ -100,6 +105,8 @@ declare const fullApi: ApiFromModules<{
   "schemas/inventory/subcategory": typeof schemas_inventory_subcategory;
   "schemas/storeFront/bag": typeof schemas_storeFront_bag;
   "schemas/storeFront/bagItem": typeof schemas_storeFront_bagItem;
+  "schemas/storeFront/checkoutSession": typeof schemas_storeFront_checkoutSession;
+  "schemas/storeFront/checkoutSessionItem": typeof schemas_storeFront_checkoutSessionItem;
   "schemas/storeFront/customer": typeof schemas_storeFront_customer;
   "schemas/storeFront/guest": typeof schemas_storeFront_guest;
   "schemas/storeFront/index": typeof schemas_storeFront_index;
@@ -107,6 +114,7 @@ declare const fullApi: ApiFromModules<{
   "schemas/storeFront/savedBagItem": typeof schemas_storeFront_savedBagItem;
   "storeFront/bag": typeof storeFront_bag;
   "storeFront/bagItem": typeof storeFront_bagItem;
+  "storeFront/checkoutSession": typeof storeFront_checkoutSession;
   "storeFront/guest": typeof storeFront_guest;
   "storeFront/savedBag": typeof storeFront_savedBag;
   "storeFront/savedBagItem": typeof storeFront_savedBagItem;

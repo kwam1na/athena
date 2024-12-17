@@ -18,6 +18,7 @@ import NotFound from "@/components/states/not-found/NotFound";
 const productsPageSchema = z.object({
   color: z.string().optional(),
   length: z.string().optional(),
+  checkoutSessionId: z.string().optional(),
 });
 
 export const Route = createRootRouteWithContext<{

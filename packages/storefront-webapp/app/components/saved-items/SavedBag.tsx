@@ -105,7 +105,7 @@ export default function SavedBag() {
                       <img
                         src={item.productImage || placeholder}
                         alt={item.productName || "product image"}
-                        className="w-40 h-40 object-cover rounded-lg"
+                        className="w-48 h-48 object-cover rounded-lg"
                       />
                     </Link>
                     <div className="flex-1 space-y-6">
