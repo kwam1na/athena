@@ -315,7 +315,12 @@ export const useShoppingBag = () => {
       bagItems,
     }: {
       bagId: string;
-      bagItems: { quantity: number; productSkuId: string }[];
+      bagItems: {
+        quantity: number;
+        productSkuId: string;
+        productSku: string;
+        productId: string;
+      }[];
     }) =>
       createCheckoutSession({
         bagId,
@@ -347,7 +352,12 @@ export const useShoppingBag = () => {
     bagItems,
   }: {
     bagId: string;
-    bagItems: { quantity: number; productSkuId: string }[];
+    bagItems: {
+      quantity: number;
+      productSkuId: string;
+      productSku: string;
+      productId: string;
+    }[];
   }) => {
     setOperationSuccessful(false);
     return await obtainCheckoutSessionMutation.mutateAsync({

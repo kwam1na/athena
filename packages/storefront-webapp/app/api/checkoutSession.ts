@@ -28,7 +28,12 @@ export async function createCheckoutSession({
   bagId: string;
   organizationId: string;
   storeId: string;
-  bagItems: { quantity: number; productSkuId: string }[];
+  bagItems: {
+    quantity: number;
+    productSkuId: string;
+    productSku: string;
+    productId: string;
+  }[];
 }) {
   const response = await fetch(
     getBaseUrl(organizationId, storeId, customerId),

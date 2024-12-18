@@ -55,6 +55,8 @@ export default function ShoppingBag() {
     const bagItems = bag.items.map((item: any) => ({
       productSkuId: item.productSkuId,
       quantity: item.quantity,
+      productSku: item.productSku,
+      productId: item.productId,
     }));
 
     const res = await obtainCheckoutSession({ bagItems, bagId: bag._id });
