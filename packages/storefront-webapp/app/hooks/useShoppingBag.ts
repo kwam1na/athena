@@ -1,5 +1,8 @@
 import { addItemToBag, removeItemFromBag, updateBagItem } from "@/api/bag";
-import { createCheckoutSession } from "@/api/checkoutSession";
+import {
+  createCheckoutSession,
+  updateCheckoutSession as updateCheckoutSessionAPI,
+} from "@/api/checkoutSession";
 import {
   addItemToSavedBag,
   removeItemFromSavedBag,
@@ -331,15 +334,31 @@ export const useShoppingBag = () => {
       }),
     onSuccess: (res) => {
       setOperationSuccessful(true);
-      // queryClient.invalidateQueries({
-      //   queryKey: bagQueries.activeSavedBagKey(),
-      // });
-      console.log("res after post ->", res);
       if (res.unavailableProducts) {
         setUnavailableProducts(res.unavailableProducts);
       } else {
         setUnavailableProducts([]);
       }
+    },
+  });
+
+  const updateCheckoutSessionMutation = useMutation({
+    mutationFn: ({
+      sessionId,
+      isFinalizingPayment,
+    }: {
+      isFinalizingPayment?: boolean;
+      sessionId: string;
+    }) =>
+      updateCheckoutSessionAPI({
+        customerId: userId!,
+        storeId: OG_STORE_ID,
+        organizationId: OG_ORGANIZTION_ID,
+        isFinalizingPayment,
+        sessionId,
+      }),
+    onSuccess: () => {
+      setOperationSuccessful(true);
     },
   });
 
@@ -366,6 +385,21 @@ export const useShoppingBag = () => {
     });
   };
 
+  const updateCheckoutSession = async ({
+    isFinalizingPayment,
+    sessionId,
+  }: {
+    isFinalizingPayment?: boolean;
+    sessionId: string;
+  }) => {
+    setOperationSuccessful(false);
+
+    await updateCheckoutSessionMutation.mutateAsync({
+      isFinalizingPayment,
+      sessionId,
+    });
+  };
+
   return {
     bagAction: action,
     addProductToBag,
@@ -387,5 +421,6 @@ export const useShoppingBag = () => {
     obtainCheckoutSession,
     unavailableProducts,
     areProductsUnavailable,
+    updateCheckoutSession,
   };
 };

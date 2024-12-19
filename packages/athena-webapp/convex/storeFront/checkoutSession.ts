@@ -1,6 +1,6 @@
 import { CheckoutSessionItem, ProductSku } from "../../types";
 import { Id } from "../_generated/dataModel";
-import { mutation, query } from "../_generated/server";
+import { internalMutation, mutation, query } from "../_generated/server";
 import { v } from "convex/values";
 
 const entity = "checkoutSession";
@@ -33,6 +33,7 @@ export const create = mutation({
   handler: async (ctx, args) => {
     const now = Date.now();
     const sessionLimit = sessionLimitMinutes * 60 * 1000; // 15 minutes in ms
+    const expiresAt = now + sessionLimit;
 
     // Fetch product SKUs
     const productSkus = await fetchProductSkus(ctx, args.products);
@@ -71,6 +72,8 @@ export const create = mutation({
     }
 
     if (existingSession) {
+      await ctx.db.patch(existingSession._id, { expiresAt });
+
       // Update the active session and product availability
       return await updateExistingSession(
         ctx,
@@ -85,7 +88,7 @@ export const create = mutation({
       bagId: args.bagId,
       customerId: args.customerId,
       storeId: args.storeId,
-      expiresAt: now + sessionLimit,
+      expiresAt,
     });
 
     // Create session items
@@ -102,6 +105,122 @@ export const create = mutation({
         items: args.products,
       },
     };
+  },
+});
+
+// Mutation to release held quantities from expired checkout sessions
+export const releaseCheckoutItems = internalMutation({
+  handler: async (ctx) => {
+    const now = Date.now();
+
+    // 1. Fetch all expired checkout sessions
+    const expiredSessions = await ctx.db
+      .query("checkoutSession")
+      .filter((q) =>
+        q.and(
+          q.lt(q.field("expiresAt"), now),
+          q.or(
+            q.eq(q.field("isFinalizingPayment"), false), // Explicitly false
+            q.not(q.field("isFinalizingPayment")) // Undefined
+          )
+        )
+      )
+      .collect();
+
+    if (expiredSessions.length === 0) {
+      console.log("No expired sessions found.");
+      return;
+    }
+
+    // 2. Process each expired session
+    for (const session of expiredSessions) {
+      // Fetch all items within the expired session
+      const sessionItems = await ctx.db
+        .query("checkoutSessionItem")
+        .filter((q) => q.eq(q.field("sesionId"), session._id))
+        .collect();
+
+      const availabilityUpdates = new Map<Id<"productSku">, number>();
+
+      // Calculate the quantities to release
+      for (const item of sessionItems) {
+        const currentQuantity = availabilityUpdates.get(item.productSkuId) || 0;
+        availabilityUpdates.set(
+          item.productSkuId,
+          currentQuantity + item.quantity
+        );
+      }
+
+      // Update product SKU availability in bulk
+      await Promise.all(
+        Array.from(availabilityUpdates.entries()).map(
+          async ([skuId, quantityToRelease]) => {
+            const productSku = await ctx.db.get(skuId);
+            if (productSku) {
+              await ctx.db.patch(skuId, {
+                quantityAvailable:
+                  productSku.quantityAvailable + quantityToRelease,
+              });
+            }
+          }
+        )
+      );
+
+      // Delete session items and the expired session
+      await Promise.all([
+        ...sessionItems.map((item) => ctx.db.delete(item._id)),
+        ctx.db.delete(session._id),
+      ]);
+
+      console.log(`Released quantities for session: ${session._id}`);
+    }
+  },
+});
+
+export const getActiveChekoutSession = query({
+  args: {
+    customerId: v.union(v.id("customer"), v.id("guest")),
+  },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+
+    // Query for the first active session for the given customerId
+    const activeSession = await ctx.db
+      .query("checkoutSession")
+      .filter((q) =>
+        q.and(
+          q.eq(q.field("customerId"), args.customerId),
+          q.or(
+            q.gt(q.field("expiresAt"), now),
+            q.eq(q.field("isFinalizingPayment"), true)
+          )
+        )
+      )
+      .first();
+
+    if (activeSession) {
+      return {
+        session: activeSession,
+      };
+    }
+
+    return {
+      message: "No active session found.",
+    };
+  },
+});
+
+export const updateCheckoutSession = mutation({
+  args: {
+    id: v.id("checkoutSession"),
+    isFinalizingPayment: v.optional(v.boolean()),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.id, {
+      isFinalizingPayment: args.isFinalizingPayment,
+    });
+
+    return { success: true };
   },
 });
 

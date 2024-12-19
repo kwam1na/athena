@@ -10,13 +10,9 @@
  * @module
  */
 
-import type {
-  ApiFromModules,
-  FilterApi,
-  FunctionReference,
-} from "convex/server";
 import type * as app from "../app.js";
 import type * as auth from "../auth.js";
+import type * as crons from "../crons.js";
 import type * as env from "../env.js";
 import type * as http_domains_inventory_routes_categories from "../http/domains/inventory/routes/categories.js";
 import type * as http_domains_inventory_routes_colors from "../http/domains/inventory/routes/colors.js";
@@ -63,6 +59,11 @@ import type * as storeFront_savedBag from "../storeFront/savedBag.js";
 import type * as storeFront_savedBagItem from "../storeFront/savedBagItem.js";
 import type * as utils from "../utils.js";
 
+import type {
+  ApiFromModules,
+  FilterApi,
+  FunctionReference,
+} from "convex/server";
 /**
  * A utility for referencing Convex functions in your app's API.
  *
@@ -74,6 +75,7 @@ import type * as utils from "../utils.js";
 declare const fullApi: ApiFromModules<{
   app: typeof app;
   auth: typeof auth;
+  crons: typeof crons;
   env: typeof env;
   "http/domains/inventory/routes/categories": typeof http_domains_inventory_routes_categories;
   "http/domains/inventory/routes/colors": typeof http_domains_inventory_routes_colors;
@@ -120,13 +122,69 @@ declare const fullApi: ApiFromModules<{
   "storeFront/savedBagItem": typeof storeFront_savedBagItem;
   utils: typeof utils;
 }>;
+declare const fullApiWithMounts: typeof fullApi;
+
 export declare const api: FilterApi<
-  typeof fullApi,
+  typeof fullApiWithMounts,
   FunctionReference<any, "public">
 >;
 export declare const internal: FilterApi<
-  typeof fullApi,
+  typeof fullApiWithMounts,
   FunctionReference<any, "internal">
 >;
+
+export declare const components: {
+  crons: {
+    public: {
+      del: FunctionReference<
+        "mutation",
+        "internal",
+        { identifier: { id: string } | { name: string } },
+        null
+      >;
+      get: FunctionReference<
+        "query",
+        "internal",
+        { identifier: { id: string } | { name: string } },
+        {
+          args: Record<string, any>;
+          functionHandle: string;
+          id: string;
+          name?: string;
+          schedule:
+            | { kind: "interval"; ms: number }
+            | { cronspec: string; kind: "cron" };
+        } | null
+      >;
+      list: FunctionReference<
+        "query",
+        "internal",
+        {},
+        Array<{
+          args: Record<string, any>;
+          functionHandle: string;
+          id: string;
+          name?: string;
+          schedule:
+            | { kind: "interval"; ms: number }
+            | { cronspec: string; kind: "cron" };
+        }>
+      >;
+      register: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          args: Record<string, any>;
+          functionHandle: string;
+          name?: string;
+          schedule:
+            | { kind: "interval"; ms: number }
+            | { cronspec: string; kind: "cron" };
+        },
+        string
+      >;
+    };
+  };
+};
 
 /* prettier-ignore-end */

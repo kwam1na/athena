@@ -9,10 +9,12 @@ import { ProductSku } from "@athena/webapp-2";
 import { getProductName } from "@/lib/utils";
 import { motion, AnimatePresence, easeInOut } from "framer-motion";
 import { HeartIconFilled } from "@/assets/icons/HeartIconFilled";
+import { useQueryClient } from "@tanstack/react-query";
+import { LoadingButton } from "../ui/loading-button";
 
 export default function ShoppingBag() {
   const [bagAction, setBagAction] = useState<ShoppingBagAction>("idle");
-  const { formatter, isNavbarShowing } = useStoreContext();
+  const { formatter, userId, isNavbarShowing } = useStoreContext();
   const {
     bag,
     deleteItemFromBag,
@@ -24,7 +26,12 @@ export default function ShoppingBag() {
     areProductsUnavailable,
   } = useShoppingBag();
 
+  const [isProcessingCheckoutRequest, setIsProcessingCheckoutRequest] =
+    useState(false);
+
   const navigate = useNavigate();
+
+  const queryClient = useQueryClient();
 
   const subtotal =
     bag?.items.reduce(
@@ -59,13 +66,19 @@ export default function ShoppingBag() {
       productId: item.productId,
     }));
 
+    setIsProcessingCheckoutRequest(true);
+
     const res = await obtainCheckoutSession({ bagItems, bagId: bag._id });
 
     if (res.session) {
+      queryClient.setQueryData(["active-checkout-session", userId], {
+        session: res.session,
+      });
       navigate({
         to: "/shop/checkout",
-        search: { checkoutSessionId: res.session._id },
       });
+    } else {
+      setIsProcessingCheckoutRequest(false);
     }
   };
 
@@ -236,9 +249,13 @@ export default function ShoppingBag() {
                     </p>
                   </div>
                 )}
-                <Button onClick={handleOnCheckoutClick} className="w-full">
+                <LoadingButton
+                  isLoading={isProcessingCheckoutRequest}
+                  onClick={handleOnCheckoutClick}
+                  className="w-full"
+                >
                   Checkout
-                </Button>
+                </LoadingButton>
               </div>
             </div>
           </div>
@@ -260,9 +277,13 @@ export default function ShoppingBag() {
                     </p>
                   </div>
                 )}
-                <Button onClick={handleOnCheckoutClick} className="w-full">
+                <LoadingButton
+                  isLoading={isProcessingCheckoutRequest}
+                  onClick={handleOnCheckoutClick}
+                  className="w-full"
+                >
                   Checkout
-                </Button>
+                </LoadingButton>
               </div>
             </div>
           )}

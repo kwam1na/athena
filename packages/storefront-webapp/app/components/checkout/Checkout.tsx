@@ -4,11 +4,10 @@ import { CustomerDetailsForm } from "./CustomerDetails";
 import { DeliverySection } from "./DeliveryDetails/DeliverySection";
 import BagSummary from "./BagSummary";
 import { PaymentSection } from "./PaymentSection";
+import { useGetActiveCheckoutSession } from "@/hooks/useGetActiveCheckoutSession";
+import CheckoutExpired from "../states/checkout-expired/CheckoutExpired";
 
 const MainComponent = () => {
-  if (typeof window !== undefined) {
-    console.log(window?.serverData);
-  }
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 w-full min-h-screen">
       {/* Left Panel */}

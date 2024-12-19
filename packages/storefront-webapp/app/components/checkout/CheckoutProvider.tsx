@@ -3,6 +3,10 @@ import { z, ZodError } from "zod";
 import { customerDetailsSchema } from "./CustomerDetails";
 import { billingDetailsSchema } from "./BillingDetails";
 import { deliveryDetailsSchema } from "./DeliveryDetails/schema";
+import { useSearch } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
+import { useGetActiveCheckoutSession } from "@/hooks/useGetActiveCheckoutSession";
+import CheckoutExpired from "../states/checkout-expired/CheckoutExpired";
 
 export type Address = {
   address: string;
@@ -233,174 +237,11 @@ const initialState: CheckoutState = {
 //   isDeliveryOrder: true,
 // };
 
-type CheckoutStateErrors = {
-  billingCountry: {
-    hasError: boolean;
-    message: string;
-  };
-  billingDetails: {
-    billingAddressSameAsDelivery?: {
-      hasError: boolean;
-      message: string;
-    };
-    address: {
-      hasError: boolean;
-      message: string;
-    };
-    city: {
-      hasError: boolean;
-      message: string;
-    };
-    state: {
-      hasError: boolean;
-      message: string;
-    };
-    zip: {
-      hasError: boolean;
-      message: string;
-    };
-  };
-  country: {
-    hasError: boolean;
-    message: string;
-  };
-  customerDetails: {
-    firstName: {
-      hasError: boolean;
-      message: string;
-    };
-    lastName: {
-      hasError: boolean;
-      message: string;
-    };
-    email: {
-      hasError: boolean;
-      message: string;
-    };
-    phoneNumber: {
-      hasError: boolean;
-      message: string;
-    };
-  };
-  deliveryMethod: {
-    hasError: boolean;
-    message: string;
-  };
-  deliveryOption: {
-    hasError: boolean;
-    message: string;
-  };
-  deliveryFee: {
-    hasError: boolean;
-    message: string;
-  };
-  deliveryDetails: {
-    address: {
-      hasError: boolean;
-      message: string;
-    };
-    city: {
-      hasError: boolean;
-      message: string;
-    };
-    state: {
-      hasError: boolean;
-      message: string;
-    };
-    zip: {
-      hasError: boolean;
-      message: string;
-    };
-  };
-};
-
-const initialCheckoutErrorsState: CheckoutStateErrors = {
-  billingCountry: {
-    hasError: false,
-    message: "",
-  },
-  billingDetails: {
-    billingAddressSameAsDelivery: {
-      hasError: false,
-      message: "",
-    },
-    address: {
-      hasError: false,
-      message: "",
-    },
-    city: {
-      hasError: false,
-      message: "",
-    },
-    state: {
-      hasError: false,
-      message: "",
-    },
-    zip: {
-      hasError: false,
-      message: "",
-    },
-  },
-  country: {
-    hasError: false,
-    message: "",
-  },
-  customerDetails: {
-    firstName: {
-      hasError: false,
-      message: "",
-    },
-    lastName: {
-      hasError: false,
-      message: "",
-    },
-    email: {
-      hasError: false,
-      message: "",
-    },
-    phoneNumber: {
-      hasError: false,
-      message: "",
-    },
-  },
-  deliveryMethod: {
-    hasError: false,
-    message: "",
-  },
-  deliveryOption: {
-    hasError: false,
-    message: "",
-  },
-  deliveryFee: {
-    hasError: false,
-    message: "",
-  },
-  deliveryDetails: {
-    address: {
-      hasError: false,
-      message: "",
-    },
-    city: {
-      hasError: false,
-      message: "",
-    },
-    state: {
-      hasError: false,
-      message: "",
-    },
-    zip: {
-      hasError: false,
-      message: "",
-    },
-  },
-};
-
 type CheckoutContextType = {
+  activeSession: any;
   actionsState: CheckoutActions;
   checkoutState: CheckoutState;
-  checkoutErrors: CheckoutStateErrors;
   canPlaceOrder: () => boolean;
-  validate: () => void;
   updateState: (newState: Partial<CheckoutState>) => void;
   updateActionsState: (newState: Partial<CheckoutActions>) => void;
 };
@@ -422,12 +263,20 @@ export const CheckoutProvider = ({
 }: {
   children: React.ReactNode;
 }) => {
-  const [checkoutState, setCheckoutState] = useState(initialState);
-  const [checkoutErrors, setCheckoutErrors] = useState(
-    initialCheckoutErrorsState
-  );
+  const LOCAL_STORAGE_KEY = "checkoutState";
+
+  // Load initial state from localStorage or fallback to the default state
+  const [checkoutState, setCheckoutState] = useState<CheckoutState>(() => {
+    const savedState = localStorage.getItem(LOCAL_STORAGE_KEY);
+    return savedState ? JSON.parse(savedState) : initialState;
+  });
 
   const [actionsState, setActionsState] = useState(initialActionsState);
+
+  useEffect(() => {
+    // Save the current state to localStorage whenever it changes
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(checkoutState));
+  }, [checkoutState]);
 
   useEffect(() => {
     const determineRegion = () => {
@@ -534,49 +383,6 @@ export const CheckoutProvider = ({
     setActionsState((prev) => ({ ...prev, ...actions }));
   };
 
-  const validate = () => {
-    try {
-      // Parse the state using the schema
-      webOrderSchema.parse(checkoutState);
-
-      updateState({ failedFinalValidation: false });
-
-      // If validation succeeds, clear all errors
-      setCheckoutErrors(initialCheckoutErrorsState);
-    } catch (e) {
-      if (e instanceof z.ZodError) {
-        // Create a mutable errors object
-        const errors = JSON.parse(JSON.stringify(initialCheckoutErrorsState));
-
-        // Map through Zod errors to populate the errors object
-        e.errors.forEach((error) => {
-          const [field, subField] = error.path;
-
-          if (subField) {
-            // Handle nested errors (e.g., billingDetails.address)
-            (errors as any)[field][subField] = {
-              hasError: true,
-              message: error.message,
-            };
-          } else {
-            // Handle top-level errors
-            (errors as any)[field] = {
-              hasError: true,
-              message: error.message,
-            };
-          }
-        });
-
-        // Update the errors state
-        setCheckoutErrors(errors);
-      } else {
-        console.error("Unexpected error during validation:", e);
-      }
-
-      updateState({ failedFinalValidation: true });
-    }
-  };
-
   const canPlaceOrder = () => {
     try {
       // Parse the state using the schema
@@ -591,16 +397,23 @@ export const CheckoutProvider = ({
     }
   };
 
+  const { data, isLoading } = useGetActiveCheckoutSession();
+
+  if (isLoading || !data) return null;
+
+  if (data?.message?.includes("No active session found")) {
+    return <CheckoutExpired />;
+  }
+
   return (
     <CheckoutContext.Provider
       value={{
         actionsState,
         checkoutState,
-        checkoutErrors,
         canPlaceOrder,
-        validate,
         updateState,
         updateActionsState,
+        activeSession: data?.session,
       }}
     >
       {children}

@@ -7,21 +7,42 @@ import { Separator } from "../ui/separator";
 import { Checkbox } from "../ui/checkbox";
 import { ArrowRight } from "lucide-react";
 import { motion } from "framer-motion";
+import { LoadingButton } from "../ui/loading-button";
+import { useNavigate } from "@tanstack/react-router";
+import { useMutation } from "@tanstack/react-query";
+import { useShoppingBag } from "@/hooks/useShoppingBag";
 
 export const PaymentSection = () => {
-  const { canPlaceOrder, actionsState, updateActionsState, checkoutState } =
-    useCheckout();
+  const {
+    activeSession,
+    canPlaceOrder,
+    actionsState,
+    updateActionsState,
+    checkoutState,
+  } = useCheckout();
+
+  const { updateCheckoutSession } = useShoppingBag();
 
   const [didAcceptStoreTerms, setDidAcceptStoreTerms] = useState(false);
   const [didAcceptCommsTerms, setDidAcceptCommsTerms] = useState(false);
 
+  const navigate = useNavigate();
+
   const onSubmit = async () => {
+    console.log(activeSession);
     const canProceedToPayment = canPlaceOrder();
 
-    console.log(checkoutState);
+    // console.log(checkoutState);
 
-    if (canProceedToPayment) {
+    if (canProceedToPayment && activeSession._id) {
+      await updateCheckoutSession({
+        isFinalizingPayment: true,
+        sessionId: activeSession._id,
+      });
+
       console.log("redirecting to payment...");
+
+      navigate({ to: "/shop/checkout/complete" });
     } else {
       console.log("somethings not right...");
     }
@@ -165,14 +186,15 @@ export const PaymentSection = () => {
       )}
 
       {showProceedSection && (
-        <Button
+        <LoadingButton
+          isLoading={false}
           onClick={onSubmit}
           className="w-full"
           disabled={!didAcceptTerms}
         >
           Continue to payment
           <ArrowRight className="w-4 h-4 ml-2" />
-        </Button>
+        </LoadingButton>
       )}
     </motion.div>
   );

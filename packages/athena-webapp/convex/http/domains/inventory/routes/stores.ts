@@ -303,4 +303,47 @@ storeRoutes.post("/:storeId/customers/:customerId/checkout", async (c) => {
   return c.json(session);
 });
 
+storeRoutes.post(
+  "/:storeId/customers/:customerId/checkout/:checkoutSessionId",
+  async (c) => {
+    const { checkoutSessionId } = c.req.param();
+
+    const customerId = c.req.param("customerId");
+
+    if (!customerId) {
+      return c.json({ error: "Customer id missing" }, 404);
+    }
+
+    const { isFinalizingPayment } = await c.req.json();
+
+    // console.log("items received ->", items);
+
+    const session = await c.env.runMutation(
+      api.storeFront.checkoutSession.updateCheckoutSession,
+      {
+        id: checkoutSessionId as Id<"checkoutSession">,
+        isFinalizingPayment,
+      }
+    );
+
+    return c.json(session);
+  }
+);
+
+storeRoutes.get(
+  "/:storeId/customers/:customerId/checkout/active",
+  async (c) => {
+    const { customerId } = c.req.param();
+
+    const session = await c.env.runQuery(
+      api.storeFront.checkoutSession.getActiveChekoutSession,
+      {
+        customerId: customerId as Id<"customer"> | Id<"guest">,
+      }
+    );
+
+    return c.json(session);
+  }
+);
+
 export { storeRoutes };

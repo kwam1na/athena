@@ -5,4 +5,5 @@ export const checkoutSessionSchema = v.object({
   storeId: v.id("store"),
   bagId: v.id("bag"),
   expiresAt: v.number(),
+  isFinalizingPayment: v.optional(v.boolean()),
 });

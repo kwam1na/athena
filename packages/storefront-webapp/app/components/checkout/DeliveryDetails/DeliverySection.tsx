@@ -13,9 +13,8 @@ import {
   StoreSelector,
 } from "./DeliveryOptionsSelector";
 
-const EnteredDeliveryDetails = () => {
+export const DeliveryDetails = () => {
   const { checkoutState } = useCheckout();
-  const { formatter } = useStoreContext();
 
   const country = ALL_COUNTRIES.find(
     (c) => c.code == checkoutState.deliveryDetails?.country
@@ -24,6 +23,25 @@ const EnteredDeliveryDetails = () => {
   const region = GHANA_REGIONS.find(
     (r) => r.code == checkoutState.deliveryDetails?.region
   )?.name;
+
+  return (
+    <div className="space-y-2">
+      <p>{checkoutState.deliveryDetails?.address}</p>
+      {checkoutState.isUSOrder && (
+        <p>{`${checkoutState.deliveryDetails?.city}, ${checkoutState.deliveryDetails?.state}, ${checkoutState.deliveryDetails?.zip}`}</p>
+      )}
+      {!checkoutState.isUSOrder && (
+        <p>{`${checkoutState.deliveryDetails?.city}`}</p>
+      )}
+      {region && <p>{`${region}`}</p>}
+      <p>{country}</p>
+    </div>
+  );
+};
+
+const EnteredDeliveryDetails = () => {
+  const { checkoutState } = useCheckout();
+  const { formatter } = useStoreContext();
 
   const shippingText = checkoutState.isGhanaOrder
     ? `Flat rate delivery at ${formatter.format(checkoutState.deliveryFee || 0)}`
@@ -43,17 +61,7 @@ const EnteredDeliveryDetails = () => {
         {checkoutState.isDeliveryOrder && (
           <div className="space-y-4 text-sm">
             <p>{`${capitalizeWords(checkoutState.deliveryMethod || "")} address:`}</p>
-            <div className="space-y-2">
-              <p>{checkoutState.deliveryDetails?.address}</p>
-              {checkoutState.isUSOrder && (
-                <p>{`${checkoutState.deliveryDetails?.city}, ${checkoutState.deliveryDetails?.state}, ${checkoutState.deliveryDetails?.zip}`}</p>
-              )}
-              {!checkoutState.isUSOrder && (
-                <p>{`${checkoutState.deliveryDetails?.city}`}</p>
-              )}
-              {region && <p>{`${region}`}</p>}
-              <p>{country}</p>
-            </div>
+            <DeliveryDetails />
 
             <p className="pt-8 text-muted-foreground">{shippingText}</p>
           </div>

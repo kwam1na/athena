@@ -38,6 +38,19 @@ function SummaryItem({
   );
 }
 
+export function BagSummaryItems() {
+  const { formatter } = useStoreContext();
+  const { bag } = useShoppingBag();
+
+  return (
+    <div className="space-y-12 w-full">
+      {bag?.items.map((item: ProductSku, index: number) => (
+        <SummaryItem formatter={formatter} item={item} key={index} />
+      ))}
+    </div>
+  );
+}
+
 function BagSummary() {
   const { formatter } = useStoreContext();
   const { bag, bagSubtotal } = useShoppingBag();
@@ -60,7 +73,7 @@ function BagSummary() {
       </div>
 
       {/* Items */}
-      <div className="px-8 space-y-8 my-4 w-full">
+      <div className="px-8 space-y-12 my-4 w-full">
         {bag?.items.map((item: ProductSku, index: number) => (
           <SummaryItem formatter={formatter} item={item} key={index} />
         ))}
