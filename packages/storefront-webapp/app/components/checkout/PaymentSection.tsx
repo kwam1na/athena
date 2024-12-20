@@ -21,12 +21,12 @@ export const PaymentSection = () => {
     checkoutState,
   } = useCheckout();
 
-  const { updateCheckoutSession } = useShoppingBag();
+  const { updateCheckoutSession, bagSubtotal } = useShoppingBag();
+  const [isProceedingToPayment, setIsProceedingToPayment] = useState(false);
 
-  const [didAcceptStoreTerms, setDidAcceptStoreTerms] = useState(false);
-  const [didAcceptCommsTerms, setDidAcceptCommsTerms] = useState(false);
-
-  const navigate = useNavigate();
+  const [didAcceptStoreTerms, setDidAcceptStoreTerms] = useState(true);
+  const [didAcceptCommsTerms, setDidAcceptCommsTerms] = useState(true);
+  const [errorFinalizingPayment, setErrorFinalizingPayment] = useState(false);
 
   const onSubmit = async () => {
     console.log(activeSession);
@@ -34,15 +34,24 @@ export const PaymentSection = () => {
 
     // console.log(checkoutState);
 
+    const total = (bagSubtotal + (checkoutState?.deliveryFee ?? 0)) * 100;
+
     if (canProceedToPayment && activeSession._id) {
-      await updateCheckoutSession({
+      setIsProceedingToPayment(true);
+      const res = await updateCheckoutSession({
         isFinalizingPayment: true,
         sessionId: activeSession._id,
+        customerEmail: checkoutState.customerDetails?.email || "",
+        amount: total,
       });
 
-      console.log("redirecting to payment...");
-
-      navigate({ to: "/shop/checkout/complete" });
+      if (res?.authorization_url) {
+        window.open(res.authorization_url, "_self");
+        setIsProceedingToPayment(false);
+      } else {
+        setIsProceedingToPayment(false);
+        setErrorFinalizingPayment(true);
+      }
     } else {
       console.log("somethings not right...");
     }
@@ -185,9 +194,15 @@ export const PaymentSection = () => {
         </p>
       )}
 
+      {errorFinalizingPayment && (
+        <p className="text-xs text-destructive">
+          There was an error finalizing your payment. Please try again.
+        </p>
+      )}
+
       {showProceedSection && (
         <LoadingButton
-          isLoading={false}
+          isLoading={isProceedingToPayment}
           onClick={onSubmit}
           className="w-full"
           disabled={!didAcceptTerms}

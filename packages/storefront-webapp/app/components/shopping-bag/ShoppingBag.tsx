@@ -17,6 +17,7 @@ export default function ShoppingBag() {
   const { formatter, userId, isNavbarShowing } = useStoreContext();
   const {
     bag,
+    bagSubtotal,
     deleteItemFromBag,
     updateBag,
     isUpdatingBag,
@@ -33,13 +34,7 @@ export default function ShoppingBag() {
 
   const queryClient = useQueryClient();
 
-  const subtotal =
-    bag?.items.reduce(
-      (sum: number, item: ProductSku) =>
-        sum + (item.price || 0) * item.quantity,
-      0
-    ) || 0;
-  const total = subtotal;
+  const total = bagSubtotal;
 
   const isBagEmpty = bag?.items.length === 0;
 
@@ -68,7 +63,11 @@ export default function ShoppingBag() {
 
     setIsProcessingCheckoutRequest(true);
 
-    const res = await obtainCheckoutSession({ bagItems, bagId: bag._id });
+    const res = await obtainCheckoutSession({
+      bagItems,
+      bagId: bag._id,
+      bagSubtotal,
+    });
 
     if (res.session) {
       queryClient.setQueryData(["active-checkout-session", userId], {
@@ -228,7 +227,7 @@ export default function ShoppingBag() {
               <div className="space-y-4">
                 <div className="flex justify-between mb-2">
                   <span>Subtotal</span>
-                  <span>{formatter.format(subtotal)}</span>
+                  <span>{formatter.format(bagSubtotal)}</span>
                 </div>
                 <div className="flex justify-between mb-2">
                   <span>Shipping</span>

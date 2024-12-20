@@ -1,6 +1,5 @@
 import { defineSchema, defineTable } from "convex/server";
 import { authTables } from "@convex-dev/auth/server";
-import { v, Infer } from "convex/values";
 import {
   categorySchema,
   colorSchema,
@@ -19,6 +18,8 @@ import {
   guestSchema,
   checkoutSessionSchema,
   checkoutSessionItemSchema,
+  onlineOrderSchema,
+  onlineOrderItemSchema,
 } from "./schemas/storeFront";
 
 const schema = defineSchema({
@@ -38,6 +39,8 @@ const schema = defineSchema({
   guest: defineTable(guestSchema),
   checkoutSession: defineTable(checkoutSessionSchema),
   checkoutSessionItem: defineTable(checkoutSessionItemSchema),
+  onlineOrder: defineTable(onlineOrderSchema),
+  onlineOrderItem: defineTable(onlineOrderItemSchema),
 });
 
 export default schema;

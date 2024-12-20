@@ -4,7 +4,6 @@ import { createServerFn } from "@tanstack/start";
 import { getCookie, setCookie } from "vinxi/http";
 
 export const logIn = createServerFn("POST", (data?: Record<string, any>) => {
-  // setHeader("athena-user-id", "1");
   return { success: true };
 });
 
@@ -18,21 +17,18 @@ export const fetchUser = createServerFn(
     if (!guestId) {
       const newGuest = await createGuest(organizationId);
 
+      console.log("no guest id. creating new one..");
+
       setCookie("athena-guest-id", newGuest.id.toString(), {
         httpOnly: true,
-        secure: false,
-        sameSite: "strict",
+        secure: true,
+        sameSite: "none",
       });
 
       guestId = newGuest.id;
     }
 
-    // if (!session.data.userEmail) {
-    //   return null;
-    // }
-
     return {
-      // email: session.data.userEmail,
       customerId,
       guestId,
     };

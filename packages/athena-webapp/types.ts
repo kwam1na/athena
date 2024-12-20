@@ -28,3 +28,7 @@ export type Guest = Doc<"guest">;
 export type CheckoutSessionItem = Doc<"checkoutSessionItem">;
 
 export type CheckoutSession = Doc<"checkoutSession">;
+
+export type OnlineOrderItem = Doc<"onlineOrderItem">;
+
+export type OnlineOrder = Doc<"onlineOrder">;

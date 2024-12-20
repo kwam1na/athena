@@ -1,7 +1,14 @@
-import { CheckoutSessionItem, ProductSku } from "../../types";
+import { CheckoutSession, CheckoutSessionItem, ProductSku } from "../../types";
+import { api } from "../_generated/api";
 import { Id } from "../_generated/dataModel";
-import { internalMutation, mutation, query } from "../_generated/server";
+import {
+  action,
+  internalMutation,
+  mutation,
+  query,
+} from "../_generated/server";
 import { v } from "convex/values";
+import { addressSchema, customerDetailsSchema } from "../schemas/storeFront";
 
 const entity = "checkoutSession";
 
@@ -21,6 +28,7 @@ export const create = mutation({
     storeId: v.id("store"),
     customerId: v.union(v.id("customer"), v.id("guest")),
     bagId: v.id("bag"),
+    amount: v.number(),
     products: v.array(
       v.object({
         productId: v.id("product"),
@@ -39,7 +47,10 @@ export const create = mutation({
     const productSkus = await fetchProductSkus(ctx, args.products);
 
     // Check for existing session
-    const existingSession = await getActiveSession(ctx, args.customerId, now);
+    const { session: existingSession } = await getActiveCheckoutSession(
+      ctx,
+      args
+    );
 
     let sessionItemsMap = new Map<string, number>();
 
@@ -85,10 +96,15 @@ export const create = mutation({
 
     // Create new session
     const sessionId = await ctx.db.insert(entity, {
+      amount: args.amount,
       bagId: args.bagId,
       customerId: args.customerId,
       storeId: args.storeId,
       expiresAt,
+      isFinalizingPayment: false,
+      hasCompletedPayment: false,
+      hasCompletedCheckoutSession: false,
+      hasVerifiedPayment: false,
     });
 
     // Create session items
@@ -177,7 +193,7 @@ export const releaseCheckoutItems = internalMutation({
   },
 });
 
-export const getActiveChekoutSession = query({
+export const getActiveCheckoutSession = query({
   args: {
     customerId: v.union(v.id("customer"), v.id("guest")),
   },
@@ -185,15 +201,21 @@ export const getActiveChekoutSession = query({
     const now = Date.now();
 
     // Query for the first active session for the given customerId
+
+    // a session is active if:
+    // it has not expired, or isFinalizingPayment is true, or has
     const activeSession = await ctx.db
       .query("checkoutSession")
       .filter((q) =>
         q.and(
-          q.eq(q.field("customerId"), args.customerId),
-          q.or(
-            q.gt(q.field("expiresAt"), now),
-            q.eq(q.field("isFinalizingPayment"), true)
-          )
+          q.and(
+            q.eq(q.field("customerId"), args.customerId),
+            q.or(
+              q.gt(q.field("expiresAt"), now),
+              q.eq(q.field("isFinalizingPayment"), true)
+            )
+          ),
+          q.eq(q.field("hasCompletedCheckoutSession"), false)
         )
       )
       .first();
@@ -210,17 +232,118 @@ export const getActiveChekoutSession = query({
   },
 });
 
-export const updateCheckoutSession = mutation({
+export const updateCheckoutSession = internalMutation({
   args: {
     id: v.id("checkoutSession"),
+    externalReference: v.optional(v.string()),
     isFinalizingPayment: v.optional(v.boolean()),
+    hasCompletedPayment: v.optional(v.boolean()),
+    hasCompletedCheckoutSession: v.optional(v.boolean()),
+    hasVerifiedPayment: v.optional(v.boolean()),
+    amount: v.optional(v.number()),
+    orderDetails: v.optional(
+      v.object({
+        billingDetails: addressSchema,
+        customerDetails: customerDetailsSchema,
+        deliveryDetails: v.union(addressSchema, v.null()),
+        deliveryMethod: v.string(),
+        deliveryOption: v.union(v.string(), v.null()),
+        deliveryFee: v.union(v.number(), v.null()),
+        pickupLocation: v.union(v.string(), v.null()),
+      })
+    ),
   },
   handler: async (ctx, args) => {
-    await ctx.db.patch(args.id, {
-      isFinalizingPayment: args.isFinalizingPayment,
-    });
+    const patchObject: Record<string, any> = {};
+    if (args.isFinalizingPayment !== undefined) {
+      patchObject.isFinalizingPayment = args.isFinalizingPayment;
+    }
 
-    return { success: true };
+    if (args.hasCompletedPayment !== undefined) {
+      patchObject.hasCompletedPayment = args.hasCompletedPayment;
+    }
+
+    if (args.hasCompletedCheckoutSession !== undefined) {
+      patchObject.hasCompletedCheckoutSession =
+        args.hasCompletedCheckoutSession;
+    }
+
+    if (args.externalReference) {
+      patchObject.externalReference = args.externalReference;
+    }
+
+    if (args.hasVerifiedPayment !== undefined) {
+      patchObject.hasVerifiedPayment = args.hasVerifiedPayment;
+    }
+
+    if (args.amount) {
+      patchObject.amount = args.amount;
+    }
+
+    try {
+      await ctx.db.patch(args.id, patchObject);
+
+      if (args.hasCompletedCheckoutSession && args.orderDetails) {
+        const [session, onlineOrderResponse] = await Promise.all([
+          ctx.db.get(args.id),
+          ctx.runMutation(api.storeFront.onlineOrder.create, {
+            checkoutSessionId: args.id,
+            billingDetails: args.orderDetails.billingDetails,
+            customerDetails: args.orderDetails.customerDetails,
+            deliveryDetails: args.orderDetails.deliveryDetails,
+            deliveryMethod: args.orderDetails.deliveryMethod,
+            deliveryOption: args.orderDetails.deliveryOption,
+            deliveryFee: args.orderDetails.deliveryFee,
+            pickupLocation: args.orderDetails.pickupLocation,
+          }),
+        ]);
+
+        if (!onlineOrderResponse.success) {
+          console.error(
+            `Failed to create online order for session: ${args.id} with error: ${onlineOrderResponse.error}`
+          );
+          return { success: false, message: "Failed to create online order." };
+        }
+
+        console.log(
+          `Online order created for ${args.orderDetails.customerDetails.email}`
+        );
+
+        if (session) {
+          // clear all items in the current active bag
+          await ctx.runMutation(api.storeFront.bag.clearBag, {
+            id: session.bagId,
+          });
+        }
+      }
+
+      return { success: true };
+    } catch (e) {
+      console.error(e);
+      return { success: false };
+    }
+  },
+});
+
+export const getCheckoutSession = query({
+  args: {
+    customerId: v.union(v.id("customer"), v.id("guest")),
+    externalReference: v.optional(v.string()),
+    sessionId: v.optional(v.id("checkoutSession")),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("checkoutSession")
+      .filter((q) =>
+        q.and(
+          q.eq(q.field("customerId"), args.customerId),
+          q.or(
+            q.eq(q.field("externalReference"), args.externalReference),
+            q.eq(q.field("_id"), args.sessionId)
+          )
+        )
+      )
+      .first();
   },
 });
 
@@ -234,21 +357,6 @@ async function fetchProductSkus(ctx: any, products: Product[]) {
       q.or(...productSkuIds.map((id) => q.eq(q.field("_id"), id)))
     )
     .collect();
-}
-
-function checkAvailability(products: Product[], productSkus: any[]) {
-  const unavailable = [];
-  for (const { productSkuId, quantity } of products) {
-    const sku = productSkus.find((p) => p._id === productSkuId);
-    if (!sku || sku.quantityAvailable < quantity) {
-      unavailable.push({
-        productSkuId,
-        requested: quantity,
-        available: sku?.quantityAvailable ?? 0,
-      });
-    }
-  }
-  return unavailable;
 }
 
 // Adjusted availability check
@@ -272,22 +380,6 @@ function checkAdjustedAvailability(
     }
   }
   return unavailable;
-}
-
-async function getActiveSession(
-  ctx: any,
-  customerId: Id<"customer" | "guest">,
-  now: number
-) {
-  return ctx.db
-    .query(entity)
-    .filter((q: any) =>
-      q.and(
-        q.eq(q.field("customerId"), customerId),
-        q.gt(q.field("expiresAt"), now)
-      )
-    )
-    .first();
 }
 
 async function updateExistingSession(

@@ -10,7 +10,10 @@ import {
   storeRoutes,
   subcategoryRoutes,
 } from "./http/domains/inventory/routes";
-import { bagRoutes, checkoutRoutes } from "./http/domains/storeFront/routes";
+import {
+  checkoutRoutes,
+  paystackRoutes,
+} from "./http/domains/storeFront/routes";
 import { httpRouter } from "convex/server";
 import { guestRoutes } from "./http/domains/storeFront/routes/guest";
 import { colorRoutes } from "./http/domains/inventory/routes/colors";
@@ -27,9 +30,11 @@ app.use(
     origin: (origin) => {
       return origin;
     },
-    allowMethods: ["GET", "POST", "PUT", "DELETE"],
+    allowMethods: ["OPTIONS", "GET", "POST", "PUT", "DELETE"],
   })
 );
+
+app.route("/webhooks/paystack", paystackRoutes);
 
 app.route("/organizations", orgRoutes);
 

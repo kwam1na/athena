@@ -316,6 +316,7 @@ export const useShoppingBag = () => {
     mutationFn: ({
       bagId,
       bagItems,
+      bagSubtotal,
     }: {
       bagId: string;
       bagItems: {
@@ -324,6 +325,7 @@ export const useShoppingBag = () => {
         productSku: string;
         productId: string;
       }[];
+      bagSubtotal: number;
     }) =>
       createCheckoutSession({
         bagId,
@@ -331,6 +333,7 @@ export const useShoppingBag = () => {
         storeId: OG_STORE_ID,
         organizationId: OG_ORGANIZTION_ID,
         bagItems,
+        bagSubtotal,
       }),
     onSuccess: (res) => {
       setOperationSuccessful(true);
@@ -346,9 +349,13 @@ export const useShoppingBag = () => {
     mutationFn: ({
       sessionId,
       isFinalizingPayment,
+      customerEmail,
+      amount,
     }: {
       isFinalizingPayment?: boolean;
       sessionId: string;
+      customerEmail: string;
+      amount: number;
     }) =>
       updateCheckoutSessionAPI({
         customerId: userId!,
@@ -356,6 +363,9 @@ export const useShoppingBag = () => {
         organizationId: OG_ORGANIZTION_ID,
         isFinalizingPayment,
         sessionId,
+        customerEmail,
+        amount,
+        action: "finalize-payment",
       }),
     onSuccess: () => {
       setOperationSuccessful(true);
@@ -369,6 +379,7 @@ export const useShoppingBag = () => {
   const obtainCheckoutSession = async ({
     bagId,
     bagItems,
+    bagSubtotal,
   }: {
     bagId: string;
     bagItems: {
@@ -377,26 +388,34 @@ export const useShoppingBag = () => {
       productSku: string;
       productId: string;
     }[];
+    bagSubtotal: number;
   }) => {
     setOperationSuccessful(false);
     return await obtainCheckoutSessionMutation.mutateAsync({
       bagId,
       bagItems,
+      bagSubtotal,
     });
   };
 
   const updateCheckoutSession = async ({
     isFinalizingPayment,
     sessionId,
+    customerEmail,
+    amount,
   }: {
     isFinalizingPayment?: boolean;
     sessionId: string;
+    customerEmail: string;
+    amount: number;
   }) => {
     setOperationSuccessful(false);
 
-    await updateCheckoutSessionMutation.mutateAsync({
+    return await updateCheckoutSessionMutation.mutateAsync({
       isFinalizingPayment,
       sessionId,
+      customerEmail,
+      amount,
     });
   };
 

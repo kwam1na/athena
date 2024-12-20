@@ -40,11 +40,11 @@ function SummaryItem({
 
 export function BagSummaryItems() {
   const { formatter } = useStoreContext();
-  const { bag } = useShoppingBag();
+  const { checkoutState } = useCheckout();
 
   return (
     <div className="space-y-12 w-full">
-      {bag?.items.map((item: ProductSku, index: number) => (
+      {checkoutState.bag?.items.map((item: ProductSku, index: number) => (
         <SummaryItem formatter={formatter} item={item} key={index} />
       ))}
     </div>
@@ -53,7 +53,7 @@ export function BagSummaryItems() {
 
 function BagSummary() {
   const { formatter } = useStoreContext();
-  const { bag, bagSubtotal } = useShoppingBag();
+  const { bagSubtotal } = useShoppingBag();
   const { checkoutState } = useCheckout();
 
   const total = checkoutState.deliveryFee + bagSubtotal;
@@ -73,10 +73,8 @@ function BagSummary() {
       </div>
 
       {/* Items */}
-      <div className="px-8 space-y-12 my-4 w-full">
-        {bag?.items.map((item: ProductSku, index: number) => (
-          <SummaryItem formatter={formatter} item={item} key={index} />
-        ))}
+      <div className="px-8">
+        <BagSummaryItems />
       </div>
 
       {/* Promo Code */}

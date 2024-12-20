@@ -3,10 +3,9 @@ import { z, ZodError } from "zod";
 import { customerDetailsSchema } from "./CustomerDetails";
 import { billingDetailsSchema } from "./BillingDetails";
 import { deliveryDetailsSchema } from "./DeliveryDetails/schema";
-import { useSearch } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
 import { useGetActiveCheckoutSession } from "@/hooks/useGetActiveCheckoutSession";
-import CheckoutExpired from "../states/checkout-expired/CheckoutExpired";
+import { CheckoutExpired } from "../states/checkout-expired/CheckoutExpired";
+import { useShoppingBag } from "@/hooks/useShoppingBag";
 
 export type Address = {
   address: string;
@@ -26,7 +25,7 @@ export type CustomerDetails = {
   phoneNumber: string;
 };
 
-const webOrderSchema = z
+export const webOrderSchema = z
   .object({
     billingDetails: billingDetailsSchema,
     customerDetails: customerDetailsSchema,
@@ -162,6 +161,8 @@ type CheckoutState = {
   isDeliveryOrder: boolean;
 
   failedFinalValidation: boolean;
+
+  bag: any;
 };
 
 type CheckoutActions = {
@@ -202,40 +203,8 @@ const initialState: CheckoutState = {
   isDeliveryOrder: false,
 
   failedFinalValidation: false,
+  bag: null,
 };
-
-// const initialState: CheckoutState = {
-//   billingDetails: null,
-//   deliveryFee: 800,
-//   deliveryMethod: "delivery",
-//   deliveryOption: "intl",
-
-//   deliveryDetails: {
-//     address: "124 Haudo Ct",
-//     city: "Laurel",
-//     state: "MD",
-//     zip: "20707",
-//     country: "US",
-//   },
-
-//   customerDetails: {
-//     firstName: "Jon",
-//     lastName: "Snow",
-//     email: "j@sn.ow",
-//     phoneNumber: "9013293309",
-//   },
-//   pickupLocation: null,
-
-//   didEnterDeliveryDetails: true,
-//   didEnterBillingDetails: false,
-//   didSelectPickupLocation: false,
-
-//   isUSOrder: true,
-//   isGhanaOrder: false,
-//   isROWOrder: false,
-//   isPickupOrder: false,
-//   isDeliveryOrder: true,
-// };
 
 type CheckoutContextType = {
   activeSession: any;
@@ -263,20 +232,36 @@ export const CheckoutProvider = ({
 }: {
   children: React.ReactNode;
 }) => {
-  const LOCAL_STORAGE_KEY = "checkoutState";
+  const SESSION_STORAGE_KEY = "checkoutState";
 
-  // Load initial state from localStorage or fallback to the default state
+  // Load initial state from sessionStorage or fallback to the default state
   const [checkoutState, setCheckoutState] = useState<CheckoutState>(() => {
-    const savedState = localStorage.getItem(LOCAL_STORAGE_KEY);
+    const savedState = sessionStorage.getItem(SESSION_STORAGE_KEY);
     return savedState ? JSON.parse(savedState) : initialState;
   });
 
   const [actionsState, setActionsState] = useState(initialActionsState);
 
+  const { bag } = useShoppingBag();
+
   useEffect(() => {
-    // Save the current state to localStorage whenever it changes
-    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(checkoutState));
-  }, [checkoutState]);
+    // Save the current state to sessionStorage whenever it changes and bag is not empty
+    if (bag?.items.length > 0) {
+      sessionStorage.setItem(
+        SESSION_STORAGE_KEY,
+        JSON.stringify({ ...checkoutState, bag })
+      );
+    }
+  }, [checkoutState, bag]);
+
+  useEffect(() => {
+    if (bag?.items.length > 0) {
+      setCheckoutState((prev) => ({
+        ...prev,
+        bag,
+      }));
+    }
+  }, [bag]);
 
   useEffect(() => {
     const determineRegion = () => {

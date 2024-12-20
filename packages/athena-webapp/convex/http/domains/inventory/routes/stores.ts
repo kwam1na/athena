@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { HonoWithConvex } from "convex-helpers/server/hono";
 import { ActionCtx } from "../../../../_generated/server";
-import { api } from "../../../../_generated/api";
+import { api, internal } from "../../../../_generated/api";
 import { Id } from "../../../../_generated/dataModel";
 
 const storeRoutes: HonoWithConvex<ActionCtx> = new Hono();
@@ -286,7 +286,7 @@ storeRoutes.post("/:storeId/customers/:customerId/checkout", async (c) => {
     return c.json({ error: "Customer id missing" }, 404);
   }
 
-  const { products, bagId } = await c.req.json();
+  const { products, bagId, amount } = await c.req.json();
 
   // console.log("items received ->", items);
 
@@ -297,6 +297,7 @@ storeRoutes.post("/:storeId/customers/:customerId/checkout", async (c) => {
       customerId: customerId as Id<"customer"> | Id<"guest">,
       products,
       bagId,
+      amount,
     }
   );
 
@@ -314,19 +315,39 @@ storeRoutes.post(
       return c.json({ error: "Customer id missing" }, 404);
     }
 
-    const { isFinalizingPayment } = await c.req.json();
+    const {
+      customerEmail,
+      amount,
+      hasCompletedCheckoutSession,
+      action,
+      orderDetails,
+    } = await c.req.json();
 
-    // console.log("items received ->", items);
+    if (action == "finalize-payment") {
+      const payment = await c.env.runAction(
+        api.storeFront.payment.createTransaction,
+        {
+          customerEmail,
+          amount,
+          checkoutSessionId: checkoutSessionId as Id<"checkoutSession">,
+        }
+      );
 
-    const session = await c.env.runMutation(
-      api.storeFront.checkoutSession.updateCheckoutSession,
-      {
-        id: checkoutSessionId as Id<"checkoutSession">,
-        isFinalizingPayment,
-      }
-    );
+      return c.json(payment);
+    }
 
-    return c.json(session);
+    if (action == "complete-checkout") {
+      const res = await c.env.runMutation(
+        internal.storeFront.checkoutSession.updateCheckoutSession,
+        {
+          id: checkoutSessionId as Id<"checkoutSession">,
+          hasCompletedCheckoutSession,
+          orderDetails,
+        }
+      );
+    }
+
+    return c.json({});
   }
 );
 
@@ -336,13 +357,27 @@ storeRoutes.get(
     const { customerId } = c.req.param();
 
     const session = await c.env.runQuery(
-      api.storeFront.checkoutSession.getActiveChekoutSession,
+      api.storeFront.checkoutSession.getActiveCheckoutSession,
       {
         customerId: customerId as Id<"customer"> | Id<"guest">,
       }
     );
 
     return c.json(session);
+  }
+);
+
+storeRoutes.get(
+  "/:storeId/customers/:customerId/checkout/verify/:reference",
+  async (c) => {
+    const { customerId, reference } = c.req.param();
+
+    const res = await c.env.runAction(api.storeFront.payment.verifyPayment, {
+      customerId: customerId as Id<"customer"> | Id<"guest">,
+      externalReference: reference,
+    });
+
+    return c.json(res);
   }
 );
 

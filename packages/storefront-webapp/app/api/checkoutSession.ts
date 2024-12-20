@@ -14,6 +14,7 @@ export async function createCheckoutSession({
   storeId,
   bagId,
   bagItems,
+  bagSubtotal,
 }: {
   customerId: string;
   bagId: string;
@@ -25,6 +26,7 @@ export async function createCheckoutSession({
     productSku: string;
     productId: string;
   }[];
+  bagSubtotal: number;
 }) {
   const response = await fetch(
     getBaseUrl(organizationId, storeId, customerId),
@@ -35,6 +37,7 @@ export async function createCheckoutSession({
         bagId,
         customerId,
         products: bagItems,
+        amount: bagSubtotal,
       }),
       headers: {
         "Content-Type": "application/json",
@@ -74,24 +77,42 @@ export async function getActiveCheckoutSession({
 }
 
 export async function updateCheckoutSession({
+  action,
   organizationId,
   storeId,
   customerId,
   sessionId,
   isFinalizingPayment,
+  hasCompletedCheckoutSession,
+  externalReference,
+  customerEmail,
+  amount,
+  orderDetails,
 }: {
+  action: "finalize-payment" | "complete-checkout";
   organizationId: string;
   storeId: string;
   customerId: string;
   sessionId: string;
   isFinalizingPayment?: boolean;
+  hasCompletedCheckoutSession?: boolean;
+  externalReference?: string;
+  customerEmail?: string;
+  amount?: number;
+  orderDetails?: any;
 }) {
   const response = await fetch(
     `${getBaseUrl(organizationId, storeId, customerId)}/${sessionId}`,
     {
       method: "POST",
       body: JSON.stringify({
+        action,
         isFinalizingPayment,
+        customerEmail,
+        amount,
+        externalReference,
+        hasCompletedCheckoutSession,
+        orderDetails,
       }),
       headers: {
         "Content-Type": "application/json",
@@ -103,6 +124,30 @@ export async function updateCheckoutSession({
 
   if (!response.ok) {
     throw new Error(res.error || "Error updating.");
+  }
+
+  return res;
+}
+
+export async function verifyCheckoutSessionPayment({
+  customerId,
+  organizationId,
+  storeId,
+  externalReference,
+}: {
+  customerId: string;
+  organizationId: string;
+  storeId: string;
+  externalReference: string;
+}): Promise<Bag> {
+  const response = await fetch(
+    `${getBaseUrl(organizationId, storeId, customerId)}/verify/${externalReference}`
+  );
+
+  const res = await response.json();
+
+  if (!response.ok) {
+    throw new Error(res.error || "Error loading active session.");
   }
 
   return res;

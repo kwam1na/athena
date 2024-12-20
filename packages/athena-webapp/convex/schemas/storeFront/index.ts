@@ -6,3 +6,5 @@ export * from "./customer";
 export * from "./guest";
 export * from "./checkoutSession";
 export * from "./checkoutSessionItem";
+export * from "./onlineOrder/onlineOrder";
+export * from "./onlineOrder/onlineOrderItem";

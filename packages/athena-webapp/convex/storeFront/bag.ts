@@ -159,3 +159,19 @@ export const deleteBag = mutation({
     return { message: "Bag and its items deleted" };
   },
 });
+
+export const clearBag = mutation({
+  args: {
+    id: v.id(entity),
+  },
+  handler: async (ctx, args) => {
+    const items = await ctx.db
+      .query("bagItem")
+      .filter((q) => q.eq(q.field("bagId"), args.id))
+      .collect();
+
+    await Promise.all(items.map((item) => ctx.db.delete(item._id)));
+
+    return { message: "Items in bag cleared" };
+  },
+});

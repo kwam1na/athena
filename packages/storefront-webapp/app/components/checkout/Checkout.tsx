@@ -4,8 +4,6 @@ import { CustomerDetailsForm } from "./CustomerDetails";
 import { DeliverySection } from "./DeliveryDetails/DeliverySection";
 import BagSummary from "./BagSummary";
 import { PaymentSection } from "./PaymentSection";
-import { useGetActiveCheckoutSession } from "@/hooks/useGetActiveCheckoutSession";
-import CheckoutExpired from "../states/checkout-expired/CheckoutExpired";
 
 const MainComponent = () => {
   return (

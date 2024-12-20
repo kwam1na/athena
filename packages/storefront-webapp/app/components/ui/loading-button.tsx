@@ -12,7 +12,11 @@ export const LoadingButton: React.FC<LoadingButtonProps> = ({
   ...props
 }) => {
   return (
-    <Button {...props} disabled={props.disabled}>
+    <Button
+      {...props}
+      className={`${props.className || ""} ${isLoading ? "pointer-events-none" : ""}`}
+      disabled={props.disabled}
+    >
       {!isLoading && children}
       {isLoading && <Icons.spinner className="ml-2 h-4 w-4 animate-spin" />}
     </Button>

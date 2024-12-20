@@ -1,15 +1,21 @@
+import { updateCheckoutSession } from "@/api/checkoutSession";
 import { BagSummaryItems } from "@/components/checkout/BagSummary";
 import {
   CheckoutProvider,
   useCheckout,
+  webOrderSchema,
 } from "@/components/checkout/CheckoutProvider";
 import { DeliveryDetails } from "@/components/checkout/DeliveryDetails/DeliverySection";
-import CheckoutExpired from "@/components/states/checkout-expired/CheckoutExpired";
+import { CheckoutCompleted } from "@/components/states/checkout-expired/CheckoutExpired";
 import { Button } from "@/components/ui/button";
+import { useStoreContext } from "@/contexts/StoreContext";
 import { useGetActiveCheckoutSession } from "@/hooks/useGetActiveCheckoutSession";
 import { capitalizeFirstLetter } from "@/lib/utils";
+import { bagQueries } from "@/queries";
+import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
+import { useEffect } from "react";
 
 export const Route = createFileRoute("/shop/checkout/complete/")({
   component: () => <CheckoutCompleteView />,
@@ -43,7 +49,37 @@ const PickupDetails = () => {
 };
 
 const CheckoutComplete = () => {
-  const { checkoutState } = useCheckout();
+  const { checkoutState, activeSession } = useCheckout();
+  const { userId, storeId, organizationId } = useStoreContext();
+
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    const completeCheckoutSession = async () => {
+      const { data } = webOrderSchema.safeParse(checkoutState);
+
+      console.log("details ->", data);
+
+      if (data) {
+        console.log("updating with details...");
+        await updateCheckoutSession({
+          action: "complete-checkout",
+          organizationId,
+          storeId,
+          customerId: userId!,
+          sessionId: activeSession._id,
+          hasCompletedCheckoutSession: true,
+          orderDetails: data,
+        });
+
+        queryClient.invalidateQueries({ queryKey: bagQueries.activeBagKey() });
+      }
+    };
+
+    if (activeSession && userId) {
+      completeCheckoutSession();
+    }
+  }, [activeSession]);
 
   return (
     <AnimatePresence>
@@ -127,6 +163,14 @@ const CheckoutComplete = () => {
 };
 
 const CheckoutCompleteView = () => {
+  const { data, isLoading } = useGetActiveCheckoutSession();
+
+  if (isLoading || !data) return null;
+
+  if (data?.message?.includes("No active session found")) {
+    return <CheckoutCompleted />;
+  }
+
   return (
     <CheckoutProvider>
       <CheckoutComplete />
