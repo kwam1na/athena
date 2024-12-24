@@ -157,6 +157,7 @@ export const DeliveryDetailsForm = () => {
       form.setValue("city", "");
       form.setValue("state", "");
       form.setValue("zip", "");
+      form.setValue("region", "");
 
       // clear the state for delivery and billing details
       updateState({

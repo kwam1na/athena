@@ -1,11 +1,23 @@
-import { CheckoutProvider } from "./CheckoutProvider";
+import { CheckoutProvider, useCheckout } from "./CheckoutProvider";
 import { AnimatePresence, motion } from "framer-motion";
 import { CustomerDetailsForm } from "./CustomerDetails";
 import { DeliverySection } from "./DeliveryDetails/DeliverySection";
 import BagSummary from "./BagSummary";
 import { PaymentSection } from "./PaymentSection";
+import { useEffect } from "react";
 
 const MainComponent = () => {
+  const { activeSession } = useCheckout();
+
+  useEffect(() => {
+    if (activeSession.externalReference) {
+      window.open(
+        `/shop/checkout/verify?reference=${activeSession.externalReference}`,
+        "_self"
+      );
+    }
+  }, [activeSession]);
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 w-full min-h-screen">
       {/* Left Panel */}

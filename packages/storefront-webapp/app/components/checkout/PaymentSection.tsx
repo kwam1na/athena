@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useCheckout } from "./CheckoutProvider";
+import { useCheckout, webOrderSchema } from "./CheckoutProvider";
 import { CheckedState } from "@radix-ui/react-checkbox";
 import { Button } from "../ui/button";
 import { BillingDetailsForm } from "./BillingDetails";
@@ -31,18 +31,20 @@ export const PaymentSection = () => {
   const onSubmit = async () => {
     console.log(activeSession);
     const canProceedToPayment = canPlaceOrder();
+    const { data } = webOrderSchema.safeParse(checkoutState);
 
     // console.log(checkoutState);
 
     const total = (bagSubtotal + (checkoutState?.deliveryFee ?? 0)) * 100;
 
-    if (canProceedToPayment && activeSession._id) {
+    if (canProceedToPayment && data && activeSession._id) {
       setIsProceedingToPayment(true);
       const res = await updateCheckoutSession({
         isFinalizingPayment: true,
         sessionId: activeSession._id,
         customerEmail: checkoutState.customerDetails?.email || "",
         amount: total,
+        orderDetails: data,
       });
 
       if (res?.authorization_url) {

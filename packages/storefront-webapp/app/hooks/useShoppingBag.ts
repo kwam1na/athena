@@ -351,11 +351,13 @@ export const useShoppingBag = () => {
       isFinalizingPayment,
       customerEmail,
       amount,
+      orderDetails,
     }: {
       isFinalizingPayment?: boolean;
       sessionId: string;
       customerEmail: string;
       amount: number;
+      orderDetails: any;
     }) =>
       updateCheckoutSessionAPI({
         customerId: userId!,
@@ -366,6 +368,7 @@ export const useShoppingBag = () => {
         customerEmail,
         amount,
         action: "finalize-payment",
+        orderDetails,
       }),
     onSuccess: () => {
       setOperationSuccessful(true);
@@ -403,11 +406,13 @@ export const useShoppingBag = () => {
     sessionId,
     customerEmail,
     amount,
+    orderDetails,
   }: {
     isFinalizingPayment?: boolean;
     sessionId: string;
     customerEmail: string;
     amount: number;
+    orderDetails: any;
   }) => {
     setOperationSuccessful(false);
 
@@ -416,6 +421,7 @@ export const useShoppingBag = () => {
       sessionId,
       customerEmail,
       amount,
+      orderDetails,
     });
   };
 

@@ -8,6 +8,8 @@ import { ShoppingBagAction, useShoppingBag } from "@/hooks/useShoppingBag";
 import { ProductSku } from "@athena/webapp-2";
 import { capitalizeWords } from "@/lib/utils";
 import { AnimatePresence, easeInOut, motion } from "framer-motion";
+import { EmptyState } from "../states/empty/empty-state";
+import { FadeIn } from "../common/FadeIn";
 
 export default function SavedBag() {
   const [bagAction, setBagAction] = useState<ShoppingBagAction>("idle");
@@ -46,24 +48,10 @@ export default function SavedBag() {
   };
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      {!isSavedEmpty && <h1 className="text-2xl font-light mb-8">Saved</h1>}
+    <FadeIn className="container mx-auto space-y-24 px-4 py-16">
+      {<h1 className="text-2xl font-light mb-8">Saved</h1>}
 
-      <AnimatePresence initial={false}>
-        {isSavedEmpty && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ ease: easeInOut }}
-            className="flex flex-col items-center mt-40 lg:items-start gap-16 lg:mt-12 lg:min-h-[50vh]"
-          >
-            <p className="text-sm">You don't have any saved items.</p>
-            <Link to="/">
-              <Button className="w-[320px]">Continue Shopping</Button>
-            </Link>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {isSavedEmpty && <EmptyState message="You don't have any saved items." />}
 
       {!isSavedEmpty && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 pb-40">
@@ -108,8 +96,9 @@ export default function SavedBag() {
                         className="w-48 h-48 object-cover rounded-lg"
                       />
                     </Link>
-                    <div className="flex-1 space-y-6">
-                      <div className="flex flex-col ml-2 gap-2">
+
+                    <div className="flex-1 space-y-6 text-sm">
+                      <div className="flex flex-col ml-2 gap-4">
                         <h2>{item && getProductName(item)}</h2>
                         <p className="text-sm text-muted-foreground">
                           {item.price
@@ -168,6 +157,6 @@ export default function SavedBag() {
           </div>
         </div>
       )}
-    </div>
+    </FadeIn>
   );
 }

@@ -38,13 +38,16 @@ function SummaryItem({
   );
 }
 
-export function BagSummaryItems() {
+export function BagSummaryItems({ items }: { items: ProductSku[] }) {
   const { formatter } = useStoreContext();
-  const { checkoutState } = useCheckout();
+
+  // console.log("items in sm -", items);
+
+  // if (!items) return null;
 
   return (
     <div className="space-y-12 w-full">
-      {checkoutState.bag?.items.map((item: ProductSku, index: number) => (
+      {items?.map((item: ProductSku, index: number) => (
         <SummaryItem formatter={formatter} item={item} key={index} />
       ))}
     </div>
@@ -74,7 +77,7 @@ function BagSummary() {
 
       {/* Items */}
       <div className="px-8">
-        <BagSummaryItems />
+        <BagSummaryItems items={checkoutState.bag.items} />
       </div>
 
       {/* Promo Code */}

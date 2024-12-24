@@ -260,7 +260,6 @@ export default function ProductPage() {
     savedBag,
     addProductToSavedBag,
     isUpdatingSavedBag,
-    updateSavedBag,
   } = useShoppingBag();
 
   const [isSheetOpen, setIsSheetOpen] = useState(false);

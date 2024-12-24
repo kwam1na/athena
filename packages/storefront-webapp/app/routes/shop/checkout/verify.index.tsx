@@ -64,7 +64,9 @@ const Verify = () => {
         </div>
 
         <div className="w-full flex gap-1 text-muted-foreground">
-          <p className="text-sm">If you are not redirected in minute, click</p>
+          <p className="text-sm">
+            If you are not redirected in the next minute, click
+          </p>
           <Link to="/shop/checkout/complete">
             <p className="text-sm underline">here</p>
           </Link>

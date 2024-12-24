@@ -6,13 +6,20 @@ import { capitalizeFirstLetter, slugToWords } from "@/lib/utils";
 export default function ProductFilterBar({
   showFilters,
   setShowFilters,
+  selectedFiltersCount,
   onFilterClickOnMobile,
 }: {
   showFilters: boolean;
+  selectedFiltersCount: number;
   setShowFilters: (show: boolean) => void;
   onFilterClickOnMobile: () => void;
 }) {
   const { categorySlug, subcategorySlug } = useParams({ strict: false });
+
+  const showFiltersText =
+    selectedFiltersCount == 0
+      ? "Show filters"
+      : `Show filters (${selectedFiltersCount})`;
 
   return (
     <div className="flex justify-between bg-background w-full sticky p-4 lg:px-12">
@@ -24,7 +31,7 @@ export default function ProductFilterBar({
         onClick={() => setShowFilters(!showFilters)}
         className="hidden lg:flex ml-auto"
       >
-        <p>{showFilters ? "Hide filters" : "Show filters"}</p>
+        <p>{showFilters ? "Hide filters" : showFiltersText}</p>
         <SlidersHorizontal className="w-4 h-4 ml-2" />
       </Button>
 
@@ -33,7 +40,7 @@ export default function ProductFilterBar({
         onClick={onFilterClickOnMobile}
         className="lg:hidden ml-auto"
       >
-        <p>{showFilters ? "Hide filters" : "Show filters"}</p>
+        <p>{showFilters ? "Hide filters" : showFiltersText}</p>
         <SlidersHorizontal className="w-4 h-4 ml-2" />
       </Button>
     </div>

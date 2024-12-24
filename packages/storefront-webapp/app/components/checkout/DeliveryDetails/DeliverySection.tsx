@@ -1,5 +1,5 @@
 import { GhostButton } from "../../ui/ghost-button";
-import { useCheckout } from "../CheckoutProvider";
+import { Address, useCheckout } from "../CheckoutProvider";
 import { DeliveryDetailsForm } from "../DeliveryDetails";
 import { Store, Truck } from "lucide-react";
 import { Button } from "../../ui/button";
@@ -13,26 +13,46 @@ import {
   StoreSelector,
 } from "./DeliveryOptionsSelector";
 
-export const DeliveryDetails = () => {
-  const { checkoutState } = useCheckout();
+// export const DeliveryDetails = () => {
+//   const { checkoutState } = useCheckout();
 
-  const country = ALL_COUNTRIES.find(
-    (c) => c.code == checkoutState.deliveryDetails?.country
-  )?.name;
+//   const country = ALL_COUNTRIES.find(
+//     (c) => c.code == checkoutState.deliveryDetails?.country
+//   )?.name;
 
-  const region = GHANA_REGIONS.find(
-    (r) => r.code == checkoutState.deliveryDetails?.region
-  )?.name;
+//   const region = GHANA_REGIONS.find(
+//     (r) => r.code == checkoutState.deliveryDetails?.region
+//   )?.name;
+
+//   return (
+//     <div className="space-y-2">
+//       <p>{checkoutState.deliveryDetails?.address}</p>
+//       {checkoutState.isUSOrder && (
+//         <p>{`${checkoutState.deliveryDetails?.city}, ${checkoutState.deliveryDetails?.state}, ${checkoutState.deliveryDetails?.zip}`}</p>
+//       )}
+//       {!checkoutState.isUSOrder && (
+//         <p>{`${checkoutState.deliveryDetails?.city}`}</p>
+//       )}
+//       {region && <p>{`${region}`}</p>}
+//       <p>{country}</p>
+//     </div>
+//   );
+// };
+
+export const DeliveryDetails = ({ address }: { address: Address }) => {
+  const country = ALL_COUNTRIES.find((c) => c.code == address.country)?.name;
+
+  const region = GHANA_REGIONS.find((r) => r.code == address.region)?.name;
+
+  const isUSOrder = address.country === "US";
 
   return (
-    <div className="space-y-2">
-      <p>{checkoutState.deliveryDetails?.address}</p>
-      {checkoutState.isUSOrder && (
-        <p>{`${checkoutState.deliveryDetails?.city}, ${checkoutState.deliveryDetails?.state}, ${checkoutState.deliveryDetails?.zip}`}</p>
+    <div className="space-y-2 text-sm">
+      {/* <p>{address.address}</p> */}
+      {isUSOrder && (
+        <p>{`${address.address}, ${address.city}, ${address.state}, ${address.zip}`}</p>
       )}
-      {!checkoutState.isUSOrder && (
-        <p>{`${checkoutState.deliveryDetails?.city}`}</p>
-      )}
+      {!isUSOrder && <p>{`${address.address}, ${address.city}`}</p>}
       {region && <p>{`${region}`}</p>}
       <p>{country}</p>
     </div>
@@ -58,12 +78,12 @@ const EnteredDeliveryDetails = () => {
         animate={{ opacity: 1, transition: { ease: "easeOut" } }}
         exit={{ opacity: 0 }}
       >
-        {checkoutState.isDeliveryOrder && (
+        {checkoutState.isDeliveryOrder && checkoutState.deliveryDetails && (
           <div className="space-y-4 text-sm">
             <p>{`${capitalizeWords(checkoutState.deliveryMethod || "")} address:`}</p>
-            <DeliveryDetails />
+            <DeliveryDetails address={checkoutState.deliveryDetails} />
 
-            <p className="pt-8 text-muted-foreground">{shippingText}</p>
+            {/* <p className="pt-8 text-muted-foreground">{shippingText}</p> */}
           </div>
         )}
 
@@ -74,8 +94,9 @@ const EnteredDeliveryDetails = () => {
 };
 
 const PickupOptions = () => {
-  const { checkoutState, updateState, updateActionsState, actionsState } =
-    useCheckout();
+  const { checkoutState, updateState } = useCheckout();
+
+  const { formatter } = useStoreContext();
 
   const isDelivery = checkoutState.deliveryMethod === "delivery";
   const isPickup = checkoutState.deliveryMethod === "pickup";
@@ -83,7 +104,7 @@ const PickupOptions = () => {
   const didEnterCustomerDetails = Boolean(checkoutState.customerDetails);
 
   return (
-    <div className="flex gap-4 w-full lg:w-[40%]">
+    <div className="flex gap-4 w-full">
       <GhostButton
         onClick={() => {
           updateState({
@@ -94,9 +115,20 @@ const PickupOptions = () => {
         }}
         disabled={!didEnterCustomerDetails}
         selected={isDelivery}
+        className="h-[64px] w-[50%]"
       >
-        <Truck className="w-4 h-4 mr-2" />
-        Delivery
+        <div className="w-full space-y-2">
+          <div className="flex items-center">
+            <Truck className="w-4 h-4 mr-2" />
+            Delivery
+          </div>
+
+          {Boolean(checkoutState.deliveryFee) && (
+            <p className="text-xs text-muted-foreground text-start w-full">
+              {formatter.format(checkoutState.deliveryFee || 0)}
+            </p>
+          )}
+        </div>
       </GhostButton>
       <GhostButton
         onClick={() => {
@@ -104,9 +136,20 @@ const PickupOptions = () => {
         }}
         disabled={!didEnterCustomerDetails}
         selected={isPickup}
+        className="h-[64px] w-[50%] justify-start"
       >
-        <Store className="w-4 h-4 mr-2" />
-        Store pickup
+        <div className="w-full space-y-2">
+          <div className="flex items-center">
+            <Store className="w-4 h-4 mr-2" />
+            Store pickup
+          </div>
+
+          {Boolean(checkoutState.isPickupOrder) && (
+            <p className="text-xs text-muted-foreground text-start w-full">
+              Free
+            </p>
+          )}
+        </div>
       </GhostButton>
     </div>
   );

@@ -1,8 +1,19 @@
 import { v } from "convex/values";
-import { mutation } from "../_generated/server";
-import { addressSchema, customerDetailsSchema } from "../schemas/storeFront";
+import { mutation, query } from "../_generated/server";
+import {
+  addressSchema,
+  customerDetailsSchema,
+  paymentMethodSchema,
+} from "../schemas/storeFront";
 
 const entity = "onlineOrder";
+
+function generateOrderNumber() {
+  const timestamp = Math.floor(Date.now() / 1000); // Get current timestamp in seconds
+  const baseOrderNumber = timestamp % 10000000; // Reduce to 7 digits
+  const randomPadding = Math.floor(Math.random() * 10); // Add random digit if needed
+  return (baseOrderNumber * 10 + randomPadding).toString().padStart(7, "0"); // Ensure 7 digits
+}
 
 export const create = mutation({
   args: {
@@ -14,6 +25,7 @@ export const create = mutation({
     deliveryOption: v.union(v.string(), v.null()),
     deliveryFee: v.union(v.number(), v.null()),
     pickupLocation: v.union(v.string(), v.null()),
+    paymentMethod: v.optional(paymentMethodSchema),
   },
   handler: async (ctx, args) => {
     // get the session
@@ -41,6 +53,8 @@ export const create = mutation({
       deliveryFee: args.deliveryFee,
       pickupLocation: args.pickupLocation,
       hasVerifiedPayment: session.hasVerifiedPayment,
+      paymentMethod: args.paymentMethod,
+      orderNumber: generateOrderNumber(),
     });
 
     // get the session items using the session id to create the online order items
@@ -66,5 +80,94 @@ export const create = mutation({
       success: true,
       orderId,
     };
+  },
+});
+
+export const getAll = query({
+  args: { customerId: v.union(v.id("customer"), v.id("guest")) },
+  handler: async (ctx, args) => {
+    const orders = await ctx.db
+      .query(entity)
+      .filter((q) => q.eq(q.field("customerId"), args.customerId))
+      .order("desc")
+      .collect();
+
+    const ordersWithItems = await Promise.all(
+      orders.map(async (order) => {
+        const items = await ctx.db
+          .query("onlineOrderItem")
+          .filter((q) => q.eq(q.field("orderId"), order._id))
+          .collect();
+        return { ...order, items };
+      })
+    );
+    const ordersWithItemsAndImages = await Promise.all(
+      ordersWithItems.map(async (order) => {
+        const itemsWithImages = await Promise.all(
+          order.items.map(async (item) => {
+            const [product, productSku] = await Promise.all([
+              ctx.db.get(item.productId),
+              ctx.db.get(item.productSkuId),
+            ]);
+
+            return {
+              ...item,
+              productName: product?.name,
+              productImage: productSku?.images?.[0] ?? null,
+            };
+          })
+        );
+        return { ...order, items: itemsWithImages };
+      })
+    );
+    return ordersWithItemsAndImages;
+  },
+});
+
+export const getById = query({
+  args: { orderId: v.id("onlineOrder") },
+  handler: async (ctx, args) => {
+    const order = await ctx.db.get(args.orderId);
+    if (!order) return null;
+
+    const items = await ctx.db
+      .query("onlineOrderItem")
+      .filter((q) => q.eq(q.field("orderId"), args.orderId))
+      .collect();
+
+    const itemsWithImages = await Promise.all(
+      items.map(async (item) => {
+        const [product, productSku] = await Promise.all([
+          ctx.db.get(item.productId),
+          ctx.db.get(item.productSkuId),
+        ]);
+
+        let category: string | undefined;
+
+        let colorName;
+
+        if (productSku?.color) {
+          const color = await ctx.db.get(productSku.color);
+          colorName = color?.name;
+        }
+
+        if (product) {
+          const productCategory = await ctx.db.get(product.categoryId);
+          category = productCategory?.name;
+        }
+
+        return {
+          ...item,
+          productCategory: category,
+          length: productSku?.length,
+          price: productSku?.price,
+          colorName,
+          productName: product?.name,
+          productImage: productSku?.images?.[0] ?? null,
+        };
+      })
+    );
+
+    return { ...order, items: itemsWithImages };
   },
 });

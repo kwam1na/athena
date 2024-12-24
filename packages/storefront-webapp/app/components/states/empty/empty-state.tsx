@@ -1,59 +1,21 @@
 import { Button } from "@/components/ui/button";
-import { Plus } from "lucide-react";
+import { Link } from "@tanstack/react-router";
+import { AnimatePresence, motion } from "framer-motion";
 
-interface EmptyStateProps {
-  icon: React.ReactNode;
-  text: React.ReactNode | string;
-  hideButtonIcon?: boolean;
-  cta?: React.ReactNode;
-  action?: {
-    type: "navigate" | "custom";
-    params?: Record<string, any>;
-    handler?: Function;
-    ctaText: string;
-  };
-}
-
-export const EmptyState: React.FC<EmptyStateProps> = ({
-  cta,
-  icon,
-  text,
-  action,
-  hideButtonIcon,
-}) => {
-  const { type, params, handler } = action || {};
-
-  const onClick = () => {
-    switch (type) {
-      case "navigate":
-        const { url } = params || {};
-        // router.push(url);
-        break;
-
-      case "custom":
-        handler?.();
-        break;
-
-      default:
-        break;
-    }
-  };
-
+export const EmptyState = ({ message }: { message: string }) => {
   return (
-    <div className="flex flex-col items-center justify-center h-[50vh] gap-4">
-      <div>{icon}</div>
-      {typeof text == "string" ? (
-        <p className="text-sm text-center text-muted-foreground">{text}</p>
-      ) : (
-        text
-      )}
-      {action && (
-        <Button onClick={onClick}>
-          {!hideButtonIcon && <Plus className="mr-2 h-4 w-4" />}{" "}
-          {action.ctaText}
-        </Button>
-      )}
-      {cta}
-    </div>
+    <AnimatePresence initial={false}>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ ease: "easeInOut" }}
+        className="flex flex-col items-center mt-40 lg:items-start gap-16 lg:mt-12 lg:min-h-[50vh]"
+      >
+        <p className="text-sm">{message}</p>
+        <Link to="/">
+          <Button className="w-[320px]">Continue Shopping</Button>
+        </Link>
+      </motion.div>
+    </AnimatePresence>
   );
 };

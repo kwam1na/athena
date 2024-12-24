@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ArrowRight, Heart, InfoIcon, Trash2 } from "lucide-react";
+import { Heart, Info, InfoIcon, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useStoreContext } from "@/contexts/StoreContext";
 import { Link, useNavigate } from "@tanstack/react-router";
@@ -9,12 +9,39 @@ import { ProductSku } from "@athena/webapp-2";
 import { getProductName } from "@/lib/utils";
 import { motion, AnimatePresence, easeInOut } from "framer-motion";
 import { HeartIconFilled } from "@/assets/icons/HeartIconFilled";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { LoadingButton } from "../ui/loading-button";
+import { EmptyState } from "../states/empty/empty-state";
+import { FadeIn } from "../common/FadeIn";
+import { checkoutSessionQueries } from "@/queries";
+import { ArrowRightIcon } from "@radix-ui/react-icons";
+
+const PendingItem = ({ session }: { session: any }) => {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 4 }}
+      animate={{ opacity: 1, y: 0, transition: { ease: easeInOut } }}
+      className="flex items-center"
+    >
+      <InfoIcon className="w-4 h-4" />
+      <Link
+        to="/shop/checkout/$sessionIdSlug"
+        params={{ sessionIdSlug: session._id }}
+        className="flex items-center"
+      >
+        <Button variant={"link"}>
+          <p className="text-xs underline">You have a pending order</p>
+        </Button>
+        <ArrowRightIcon className="w-4 h-4" />
+      </Link>
+    </motion.div>
+  );
+};
 
 export default function ShoppingBag() {
   const [bagAction, setBagAction] = useState<ShoppingBagAction>("idle");
-  const { formatter, userId, isNavbarShowing } = useStoreContext();
+  const { formatter, userId, organizationId, storeId, isNavbarShowing } =
+    useStoreContext();
   const {
     bag,
     bagSubtotal,
@@ -52,6 +79,14 @@ export default function ShoppingBag() {
     }),
   };
 
+  const { data } = useQuery(
+    checkoutSessionQueries.pendingSessions({
+      userId: userId!,
+      organizationId,
+      storeId,
+    })
+  );
+
   const handleOnCheckoutClick = async () => {
     // send post
     const bagItems = bag.items.map((item: any) => ({
@@ -66,7 +101,7 @@ export default function ShoppingBag() {
     const res = await obtainCheckoutSession({
       bagItems,
       bagId: bag._id,
-      bagSubtotal,
+      bagSubtotal: bagSubtotal * 100,
     });
 
     if (res.session) {
@@ -86,24 +121,15 @@ export default function ShoppingBag() {
   };
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      {!isBagEmpty && <h1 className="text-2xl font-light mb-8">Bag</h1>}
+    <FadeIn className="container mx-auto space-y-24 px-4 py-16">
+      <div className="space-y-2">
+        <h1 className="text-2xl font-light">Bag</h1>
+        {data && data.length > 0 && <PendingItem session={data[0]} />}
+      </div>
 
-      <AnimatePresence initial={false}>
-        {isBagEmpty && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ ease: easeInOut }}
-            className="flex flex-col items-center mt-40 lg:items-start gap-16 lg:mt-12 lg:min-h-[50vh]"
-          >
-            <p className="text-sm">You don't have any items in your bag.</p>
-            <Link to="/">
-              <Button className="w-[320px]">Continue Shopping</Button>
-            </Link>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {isBagEmpty && (
+        <EmptyState message="You don't have any items in your bag." />
+      )}
 
       {!isBagEmpty && total !== 0 && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 pb-40">
@@ -118,7 +144,6 @@ export default function ShoppingBag() {
                     layout
                     className="relative flex items-center space-x-4"
                   >
-                    {/* Larger Heart SVG behind */}
                     <motion.div
                       className="absolute inset-0 flex px-16 items-center pointer-events-none"
                       variants={backgroundSvgVariants}
@@ -132,7 +157,6 @@ export default function ShoppingBag() {
                       )}
                     </motion.div>
 
-                    {/* Bag Content */}
                     <motion.div
                       exit="exit"
                       variants={cellVariants}
@@ -153,8 +177,8 @@ export default function ShoppingBag() {
                         />
                       </Link>
 
-                      <div className="flex-1 space-y-6">
-                        <div className="flex flex-col ml-2 gap-2">
+                      <div className="flex-1 space-y-6 text-sm">
+                        <div className="flex flex-col ml-2 gap-4">
                           <h2>{item && getProductName(item)}</h2>
                           <p className="text-sm text-muted-foreground">
                             {item.price
@@ -180,11 +204,14 @@ export default function ShoppingBag() {
                           </select>
 
                           {unavailableSku && (
-                            <p className="text-xs text-destructive">
+                            <motion.p
+                              // variants={cellVariants}
+                              className="text-xs text-destructive"
+                            >
                               {unavailableSku.available === 0
                                 ? "Currently unavailable"
                                 : `Only ${unavailableSku.available} left`}
-                            </p>
+                            </motion.p>
                           )}
                         </div>
 
@@ -224,7 +251,7 @@ export default function ShoppingBag() {
           {/* Cart Summary */}
           <div className="hidden md:block relative">
             <div className="p-6 space-y-16 rounded-lg sticky top-8">
-              <div className="space-y-4">
+              <div className="space-y-4 text-sm">
                 <div className="flex justify-between mb-2">
                   <span>Subtotal</span>
                   <span>{formatter.format(bagSubtotal)}</span>
@@ -234,7 +261,7 @@ export default function ShoppingBag() {
                   <span>Calculated at checkout</span>
                 </div>
               </div>
-              <div className="flex justify-between text-lg font-semibold">
+              <div className="flex justify-between font-semibold">
                 <span>Total</span>
                 <span>{formatter.format(total)}</span>
               </div>
@@ -288,6 +315,6 @@ export default function ShoppingBag() {
           )}
         </div>
       )}
-    </div>
+    </FadeIn>
   );
 }

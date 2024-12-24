@@ -1,14 +1,9 @@
-import { CheckoutSession, CheckoutSessionItem, ProductSku } from "../../types";
+import { CheckoutSessionItem, ProductSku } from "../../types";
 import { api } from "../_generated/api";
 import { Id } from "../_generated/dataModel";
-import {
-  action,
-  internalMutation,
-  mutation,
-  query,
-} from "../_generated/server";
+import { internalMutation, mutation, query } from "../_generated/server";
 import { v } from "convex/values";
-import { addressSchema, customerDetailsSchema } from "../schemas/storeFront";
+import { orderDetailsSchema } from "../schemas/storeFront";
 
 const entity = "checkoutSession";
 
@@ -105,6 +100,12 @@ export const create = mutation({
       hasCompletedPayment: false,
       hasCompletedCheckoutSession: false,
       hasVerifiedPayment: false,
+      billingDetails: null,
+      customerDetails: null,
+      deliveryDetails: null,
+      deliveryOption: null,
+      deliveryFee: null,
+      pickupLocation: null,
     });
 
     // Create session items
@@ -235,25 +236,27 @@ export const getActiveCheckoutSession = query({
 export const updateCheckoutSession = internalMutation({
   args: {
     id: v.id("checkoutSession"),
+    action: v.optional(v.string()),
     externalReference: v.optional(v.string()),
     isFinalizingPayment: v.optional(v.boolean()),
     hasCompletedPayment: v.optional(v.boolean()),
     hasCompletedCheckoutSession: v.optional(v.boolean()),
     hasVerifiedPayment: v.optional(v.boolean()),
     amount: v.optional(v.number()),
-    orderDetails: v.optional(
+    orderDetails: v.optional(orderDetailsSchema),
+    paymentMethod: v.optional(
       v.object({
-        billingDetails: addressSchema,
-        customerDetails: customerDetailsSchema,
-        deliveryDetails: v.union(addressSchema, v.null()),
-        deliveryMethod: v.string(),
-        deliveryOption: v.union(v.string(), v.null()),
-        deliveryFee: v.union(v.number(), v.null()),
-        pickupLocation: v.union(v.string(), v.null()),
+        last4: v.optional(v.string()),
+        brand: v.optional(v.string()),
+        bank: v.optional(v.string()),
+        channel: v.optional(v.string()),
       })
     ),
   },
-  handler: async (ctx, args) => {
+  handler: async (
+    ctx,
+    args
+  ): Promise<{ success: boolean; message?: string; orderId?: string }> => {
     const patchObject: Record<string, any> = {};
     if (args.isFinalizingPayment !== undefined) {
       patchObject.isFinalizingPayment = args.isFinalizingPayment;
@@ -280,23 +283,73 @@ export const updateCheckoutSession = internalMutation({
       patchObject.amount = args.amount;
     }
 
+    if (args.paymentMethod) {
+      patchObject.paymentMethod = args.paymentMethod;
+    }
+
+    if (args.orderDetails) {
+      patchObject.billingDetails = args.orderDetails.billingDetails;
+      patchObject.customerDetails = args.orderDetails.customerDetails;
+      patchObject.deliveryDetails = args.orderDetails.deliveryDetails;
+      patchObject.deliveryMethod = args.orderDetails.deliveryMethod;
+      patchObject.deliveryOption = args.orderDetails.deliveryOption;
+      patchObject.deliveryFee = args.orderDetails.deliveryFee;
+      patchObject.pickupLocation = args.orderDetails.pickupLocation;
+    }
+
     try {
       await ctx.db.patch(args.id, patchObject);
 
-      if (args.hasCompletedCheckoutSession && args.orderDetails) {
-        const [session, onlineOrderResponse] = await Promise.all([
-          ctx.db.get(args.id),
-          ctx.runMutation(api.storeFront.onlineOrder.create, {
-            checkoutSessionId: args.id,
-            billingDetails: args.orderDetails.billingDetails,
-            customerDetails: args.orderDetails.customerDetails,
-            deliveryDetails: args.orderDetails.deliveryDetails,
-            deliveryMethod: args.orderDetails.deliveryMethod,
-            deliveryOption: args.orderDetails.deliveryOption,
-            deliveryFee: args.orderDetails.deliveryFee,
-            pickupLocation: args.orderDetails.pickupLocation,
-          }),
-        ]);
+      // Move online order creation up in dance
+      const session = await ctx.db.get(args.id);
+
+      if (args.action == "place-order" && session) {
+        // check that an order has not already been placed for this session
+        if (session.placedOrderId) {
+          console.log(`Order has already been placed for session: ${args.id}`);
+          return {
+            success: false,
+            orderId: session.placedOrderId,
+            message: "Order has already been placed for this session.",
+          };
+        }
+
+        const onlineOrderResponse:
+          | {
+              error: string;
+              success: boolean;
+              orderId?: undefined;
+            }
+          | {
+              success: boolean;
+              orderId: Id<"onlineOrder">;
+              error?: undefined;
+            } = await ctx.runMutation(api.storeFront.onlineOrder.create, {
+          checkoutSessionId: args.id,
+          billingDetails: {
+            zip: session?.billingDetails?.zip,
+            country: session?.billingDetails?.country,
+            address: session?.billingDetails?.address,
+            city: session?.billingDetails?.city,
+          },
+          customerDetails: {
+            email: session?.customerDetails?.email,
+            firstName: session?.customerDetails?.firstName,
+            lastName: session?.customerDetails?.lastName,
+            phoneNumber: session?.customerDetails?.phoneNumber,
+          },
+          deliveryDetails: {
+            zip: session?.deliveryDetails?.zip,
+            country: session?.deliveryDetails?.country,
+            address: session?.deliveryDetails?.address,
+            city: session?.deliveryDetails?.city,
+          },
+          deliveryMethod: session.deliveryMethod || "",
+          deliveryOption: session.deliveryOption,
+          deliveryFee: session.deliveryFee,
+          pickupLocation: session.pickupLocation,
+          paymentMethod: session?.paymentMethod,
+        });
 
         if (!onlineOrderResponse.success) {
           console.error(
@@ -306,8 +359,68 @@ export const updateCheckoutSession = internalMutation({
         }
 
         console.log(
-          `Online order created for ${args.orderDetails.customerDetails.email}`
+          `online order created for ${session?._id} | ${session?.customerDetails?.email}`
         );
+
+        await ctx.db.patch(args.id, {
+          placedOrderId: onlineOrderResponse.orderId,
+        });
+
+        return { success: true, orderId: onlineOrderResponse.orderId };
+      }
+
+      if (args.orderDetails && session?.hasCompletedPayment) {
+        if (!session) {
+          console.error(`Invalid session: ${args.id}`);
+          return { success: false, message: "Invalid session." };
+        }
+
+        // check that an order has not already been placed for this session
+        if (session.placedOrderId) {
+          console.log(`Order has already been placed for session: ${args.id}`);
+          return {
+            success: false,
+            orderId: session.placedOrderId,
+            message: "Order has already been placed for this session.",
+          };
+        }
+
+        const onlineOrderResponse:
+          | {
+              error: string;
+              success: boolean;
+              orderId?: undefined;
+            }
+          | {
+              success: boolean;
+              orderId: Id<"onlineOrder">;
+              error?: undefined;
+            } = await ctx.runMutation(api.storeFront.onlineOrder.create, {
+          checkoutSessionId: args.id,
+          billingDetails: args.orderDetails.billingDetails,
+          customerDetails: args.orderDetails.customerDetails,
+          deliveryDetails: args.orderDetails.deliveryDetails,
+          deliveryMethod: args.orderDetails.deliveryMethod,
+          deliveryOption: args.orderDetails.deliveryOption,
+          deliveryFee: args.orderDetails.deliveryFee,
+          pickupLocation: args.orderDetails.pickupLocation,
+          paymentMethod: session?.paymentMethod,
+        });
+
+        if (!onlineOrderResponse.success) {
+          console.error(
+            `Failed to create online order for session: ${args.id} with error: ${onlineOrderResponse.error}`
+          );
+          return { success: false, message: "Failed to create online order." };
+        }
+
+        console.log(
+          `online order created for ${session?._id} | ${args.orderDetails.customerDetails.email}`
+        );
+
+        await ctx.db.patch(args.id, {
+          placedOrderId: onlineOrderResponse.orderId,
+        });
 
         if (session) {
           // clear all items in the current active bag
@@ -315,9 +428,11 @@ export const updateCheckoutSession = internalMutation({
             id: session.bagId,
           });
         }
+
+        return { success: true, orderId: onlineOrderResponse.orderId };
       }
 
-      return { success: true };
+      return { success: true, orderId: session?.placedOrderId };
     } catch (e) {
       console.error(e);
       return { success: false };
@@ -344,6 +459,77 @@ export const getCheckoutSession = query({
         )
       )
       .first();
+  },
+});
+
+export const getPendingCheckoutSessions = query({
+  args: { customerId: v.union(v.id("customer"), v.id("guest")) },
+  handler: async (ctx, args) => {
+    const threshold = Date.now() - 10 * 60 * 1000;
+
+    return await ctx.db
+      .query("checkoutSession")
+      .filter((q) =>
+        q.and(
+          q.eq(q.field("customerId"), args.customerId),
+          q.eq(q.field("hasCompletedPayment"), true),
+          q.eq(q.field("hasCompletedCheckoutSession"), true),
+          q.eq(q.field("placedOrderId"), undefined)
+          // q.lt(q.field("expiresAt"), threshold)
+        )
+      )
+      .collect();
+  },
+});
+
+export const getById = query({
+  args: { sessionId: v.id("checkoutSession") },
+  handler: async (ctx, args) => {
+    const session = await ctx.db.get(args.sessionId);
+    if (!session) return null;
+
+    const sessionItems = await ctx.db
+      .query("checkoutSessionItem")
+      .filter((q) => q.eq(q.field("sesionId"), args.sessionId))
+      .collect();
+
+    const sessionItemsWithImages = await Promise.all(
+      sessionItems.map(async (item) => {
+        const [product, productSku] = await Promise.all([
+          ctx.db.get(item.productId),
+          ctx.db.get(item.productSkuId),
+        ]);
+
+        let category: string | undefined;
+
+        let colorName;
+
+        if (productSku?.color) {
+          const color = await ctx.db.get(productSku.color);
+          colorName = color?.name;
+        }
+
+        if (product) {
+          const productCategory = await ctx.db.get(product.categoryId);
+          category = productCategory?.name;
+        }
+
+        return {
+          ...item,
+          productCategory: category,
+          length: productSku?.length,
+          price: productSku?.price,
+          colorName,
+          productName: product?.name,
+          productImage: productSku?.images?.[0] ?? null,
+        };
+      })
+    );
+
+    return {
+      ...session,
+      items: sessionItemsWithImages,
+    };
   },
 });
 

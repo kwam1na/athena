@@ -76,6 +76,52 @@ export async function getActiveCheckoutSession({
   return res;
 }
 
+export async function getPendingCheckoutSessions({
+  customerId,
+  organizationId,
+  storeId,
+}: {
+  customerId: string;
+  organizationId: string;
+  storeId: string;
+}): Promise<Bag> {
+  const response = await fetch(
+    `${getBaseUrl(organizationId, storeId, customerId)}/pending`
+  );
+
+  const res = await response.json();
+
+  if (!response.ok) {
+    throw new Error(res.error || "Error loading active session.");
+  }
+
+  return res;
+}
+
+export async function getCheckoutSession({
+  customerId,
+  organizationId,
+  sessionId,
+  storeId,
+}: {
+  sessionId: string;
+  customerId: string;
+  organizationId: string;
+  storeId: string;
+}): Promise<Bag> {
+  const response = await fetch(
+    `${getBaseUrl(organizationId, storeId, customerId)}/${sessionId}`
+  );
+
+  const res = await response.json();
+
+  if (!response.ok) {
+    throw new Error(res.error || "Error loading session.");
+  }
+
+  return res;
+}
+
 export async function updateCheckoutSession({
   action,
   organizationId,
@@ -89,7 +135,7 @@ export async function updateCheckoutSession({
   amount,
   orderDetails,
 }: {
-  action: "finalize-payment" | "complete-checkout";
+  action: "finalize-payment" | "complete-checkout" | "place-order";
   organizationId: string;
   storeId: string;
   customerId: string;

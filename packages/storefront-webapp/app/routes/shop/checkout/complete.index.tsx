@@ -6,8 +6,12 @@ import {
   webOrderSchema,
 } from "@/components/checkout/CheckoutProvider";
 import { DeliveryDetails } from "@/components/checkout/DeliveryDetails/DeliverySection";
-import { CheckoutCompleted } from "@/components/states/checkout-expired/CheckoutExpired";
+import {
+  CheckoutCompleted,
+  CheckoutMissingPayment,
+} from "@/components/states/checkout-expired/CheckoutExpired";
 import { Button } from "@/components/ui/button";
+import { LoadingButton } from "@/components/ui/loading-button";
 import { useStoreContext } from "@/contexts/StoreContext";
 import { useGetActiveCheckoutSession } from "@/hooks/useGetActiveCheckoutSession";
 import { capitalizeFirstLetter } from "@/lib/utils";
@@ -15,7 +19,7 @@ import { bagQueries } from "@/queries";
 import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 export const Route = createFileRoute("/shop/checkout/complete/")({
   component: () => <CheckoutCompleteView />,
@@ -26,7 +30,7 @@ const PickupDetails = () => {
 
   if (checkoutState.isPickupOrder) {
     return (
-      <div className="space-y-8">
+      <div className="space-y-8 text-sm">
         <p className="text-xs">Picking up at</p>
 
         <div className="space-y-2">
@@ -39,11 +43,36 @@ const PickupDetails = () => {
     );
   }
 
+  if (!checkoutState.deliveryDetails) return null;
+
   return (
     <div className="space-y-8">
       <p className="text-xs">Delivering to</p>
 
-      <DeliveryDetails />
+      <DeliveryDetails address={checkoutState.deliveryDetails} />
+    </div>
+  );
+};
+
+const PaymentDetails = () => {
+  const { activeSession } = useCheckout();
+
+  if (!activeSession?.paymentMethod) {
+    return null;
+  }
+
+  const { paymentMethod } = activeSession;
+
+  const text =
+    paymentMethod?.channel == "mobile_money"
+      ? `${paymentMethod?.bank} Mobile Money ending in ${paymentMethod?.last4}`
+      : `Card ending in ${paymentMethod?.last4}`;
+
+  return (
+    <div className="space-y-8">
+      <p className="text-xs">Payment</p>
+
+      <p className="text-sm">{text}</p>
     </div>
   );
 };
@@ -51,18 +80,20 @@ const PickupDetails = () => {
 const CheckoutComplete = () => {
   const { checkoutState, activeSession } = useCheckout();
   const { userId, storeId, organizationId } = useStoreContext();
+  const [orderId, setOrderId] = useState<string | null>(null);
+  const [attemptedOrderCreation, setAttemptedOrderCreation] = useState(false);
+  const [isPlacingOrder, setIsPlacingOrder] = useState(false);
 
   const queryClient = useQueryClient();
+
+  console.log("session ->", activeSession);
 
   useEffect(() => {
     const completeCheckoutSession = async () => {
       const { data } = webOrderSchema.safeParse(checkoutState);
 
-      console.log("details ->", data);
-
-      if (data) {
-        console.log("updating with details...");
-        await updateCheckoutSession({
+      if (data && activeSession.hasCompletedPayment) {
+        const res = await updateCheckoutSession({
           action: "complete-checkout",
           organizationId,
           storeId,
@@ -72,7 +103,12 @@ const CheckoutComplete = () => {
           orderDetails: data,
         });
 
+        setOrderId(res.orderId);
+        setAttemptedOrderCreation(true);
+
         queryClient.invalidateQueries({ queryKey: bagQueries.activeBagKey() });
+
+        // sessionStorage.removeItem("checkoutState");
       }
     };
 
@@ -80,6 +116,78 @@ const CheckoutComplete = () => {
       completeCheckoutSession();
     }
   }, [activeSession]);
+
+  const placeOrder = async () => {
+    const { data } = webOrderSchema.safeParse(checkoutState);
+    setAttemptedOrderCreation(false);
+
+    try {
+      setIsPlacingOrder(true);
+
+      const res = await updateCheckoutSession({
+        action: "complete-checkout",
+        organizationId,
+        storeId,
+        customerId: userId!,
+        sessionId: activeSession._id,
+        hasCompletedCheckoutSession: true,
+        orderDetails: data,
+      });
+
+      setOrderId(res.orderId);
+      setAttemptedOrderCreation(true);
+      setIsPlacingOrder(false);
+
+      queryClient.invalidateQueries({ queryKey: bagQueries.activeBagKey() });
+    } catch (e) {
+      setIsPlacingOrder(false);
+    }
+  };
+
+  if (!activeSession.hasCompletedPayment) {
+    return (
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{
+          opacity: 1,
+          transition: { ease: "easeOut", duration: 0.4 },
+        }}
+      >
+        <CheckoutMissingPayment />
+      </motion.div>
+    );
+  }
+
+  if ((!orderId && attemptedOrderCreation) || isPlacingOrder) {
+    return (
+      <div className="px-48 pt-24 pb-40 space-y-24">
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{
+            opacity: 1,
+            transition: { ease: "easeOut", duration: 0.6, delay: 0.3 },
+          }}
+          className="space-y-12"
+        >
+          <p className="text-xl font-light">
+            There was an issue finalizing your order
+          </p>
+
+          <p className="text-xs">{`Session id: ${activeSession._id}`}</p>
+
+          <LoadingButton
+            isLoading={isPlacingOrder}
+            onClick={placeOrder}
+            className="w-[240px]"
+          >
+            Try again
+          </LoadingButton>
+        </motion.div>
+      </div>
+    );
+  }
+
+  if (!orderId && !attemptedOrderCreation) return null;
 
   return (
     <AnimatePresence>
@@ -95,14 +203,14 @@ const CheckoutComplete = () => {
           <p className="text-4xl font-light">{`Get excited, ${capitalizeFirstLetter(checkoutState.customerDetails?.firstName || "")}!`}</p>
 
           {checkoutState.isDeliveryOrder && (
-            <p>
+            <p className="text-sm">
               We're processing your order. You will receive an email once it is
               out for delivery.
             </p>
           )}
 
           {checkoutState.isPickupOrder && (
-            <p>
+            <p className="text-sm">
               We're processing your order. You will receive an email once it is
               ready for pickup.
             </p>
@@ -116,11 +224,11 @@ const CheckoutComplete = () => {
             y: 0,
             transition: { ease: "easeOut", duration: 0.8, delay: 0.9 },
           }}
-          className="space-y-8 w-[30%]"
+          className="space-y-8 w-[40%]"
         >
           <p className="text-xs">Your order</p>
 
-          <BagSummaryItems />
+          <BagSummaryItems items={checkoutState.bag.items} />
         </motion.div>
 
         <motion.div
@@ -134,11 +242,7 @@ const CheckoutComplete = () => {
         >
           <PickupDetails />
 
-          <div className="space-y-8">
-            <p className="text-xs">Payment</p>
-
-            <p>MTN Momo</p>
-          </div>
+          <PaymentDetails />
         </motion.div>
 
         <motion.div
@@ -153,9 +257,11 @@ const CheckoutComplete = () => {
             <Button className="w-[240px]">Continue shopping</Button>
           </Link>
 
-          <Link>
-            <Button variant={"link"}>View order</Button>
-          </Link>
+          {orderId && (
+            <Link to="/shop/orders/$orderId" params={{ orderId }}>
+              <Button variant={"clear"}>View order</Button>
+            </Link>
+          )}
         </motion.div>
       </div>
     </AnimatePresence>

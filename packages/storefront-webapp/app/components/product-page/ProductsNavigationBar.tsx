@@ -11,11 +11,11 @@ import { useEffect, useRef } from "react";
 
 export function ProductNavigationBar() {
   const { productSlug } = useParams({ strict: false });
-  const { data: product, error } = useGetProductQuery(productSlug);
+  const { data: product } = useGetProductQuery(productSlug);
   const ref = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
-    ref.current?.scrollIntoView();
+    // ref.current?.scrollIntoView();
   }, []);
 
   if (!product) return null;

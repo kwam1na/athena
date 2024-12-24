@@ -6,6 +6,10 @@ import { deliveryDetailsSchema } from "./DeliveryDetails/schema";
 import { useGetActiveCheckoutSession } from "@/hooks/useGetActiveCheckoutSession";
 import { CheckoutExpired } from "../states/checkout-expired/CheckoutExpired";
 import { useShoppingBag } from "@/hooks/useShoppingBag";
+import { useParams } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
+import { checkoutSessionQueries } from "@/queries";
+import { useStoreContext } from "@/contexts/StoreContext";
 
 export type Address = {
   address: string;
@@ -385,6 +389,8 @@ export const CheckoutProvider = ({
   const { data, isLoading } = useGetActiveCheckoutSession();
 
   if (isLoading || !data) return null;
+
+  console.log("checkout session ->", data);
 
   if (data?.message?.includes("No active session found")) {
     return <CheckoutExpired />;

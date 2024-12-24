@@ -330,6 +330,7 @@ storeRoutes.post(
           customerEmail,
           amount,
           checkoutSessionId: checkoutSessionId as Id<"checkoutSession">,
+          orderDetails,
         }
       );
 
@@ -345,6 +346,21 @@ storeRoutes.post(
           orderDetails,
         }
       );
+
+      return c.json(res);
+    }
+
+    if (action == "place-order") {
+      const res = await c.env.runMutation(
+        internal.storeFront.checkoutSession.updateCheckoutSession,
+        {
+          id: checkoutSessionId as Id<"checkoutSession">,
+          hasCompletedCheckoutSession,
+          action,
+        }
+      );
+
+      return c.json(res);
     }
 
     return c.json({});
@@ -368,6 +384,34 @@ storeRoutes.get(
 );
 
 storeRoutes.get(
+  "/:storeId/customers/:customerId/checkout/pending",
+  async (c) => {
+    const { customerId } = c.req.param();
+
+    const session = await c.env.runQuery(
+      api.storeFront.checkoutSession.getPendingCheckoutSessions,
+      { customerId: customerId as Id<"customer"> | Id<"guest"> }
+    );
+
+    return c.json(session);
+  }
+);
+
+storeRoutes.get(
+  "/:storeId/customers/:customerId/checkout/:sessionId",
+  async (c) => {
+    const { sessionId } = c.req.param();
+
+    const session = await c.env.runQuery(
+      api.storeFront.checkoutSession.getById,
+      { sessionId: sessionId as Id<"checkoutSession"> }
+    );
+
+    return c.json(session);
+  }
+);
+
+storeRoutes.get(
   "/:storeId/customers/:customerId/checkout/verify/:reference",
   async (c) => {
     const { customerId, reference } = c.req.param();
@@ -378,6 +422,29 @@ storeRoutes.get(
     });
 
     return c.json(res);
+  }
+);
+
+storeRoutes.get("/:storeId/customers/:customerId/orders", async (c) => {
+  const { customerId } = c.req.param();
+
+  const orders = await c.env.runQuery(api.storeFront.onlineOrder.getAll, {
+    customerId: customerId as Id<"customer"> | Id<"guest">,
+  });
+
+  return c.json(orders);
+});
+
+storeRoutes.get(
+  "/:storeId/customers/:customerId/orders/:orderId",
+  async (c) => {
+    const { orderId } = c.req.param();
+
+    const order = await c.env.runQuery(api.storeFront.onlineOrder.getById, {
+      orderId: orderId as Id<"onlineOrder">,
+    });
+
+    return c.json(order);
   }
 );
 

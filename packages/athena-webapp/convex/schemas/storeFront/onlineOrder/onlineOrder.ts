@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { paymentMethodSchema } from "../checkoutSession";
 
 export const addressSchema = v.object({
   address: v.string(),
@@ -16,6 +17,16 @@ export const customerDetailsSchema = v.object({
   phoneNumber: v.string(),
 });
 
+export const orderDetailsSchema = v.object({
+  billingDetails: addressSchema,
+  customerDetails: customerDetailsSchema,
+  deliveryDetails: v.union(addressSchema, v.null()),
+  deliveryMethod: v.string(),
+  deliveryOption: v.union(v.string(), v.null()),
+  deliveryFee: v.union(v.number(), v.null()),
+  pickupLocation: v.union(v.string(), v.null()),
+});
+
 export const onlineOrderSchema = v.object({
   customerId: v.union(v.id("customer"), v.id("guest")),
   storeId: v.id("store"),
@@ -31,4 +42,6 @@ export const onlineOrderSchema = v.object({
   deliveryFee: v.union(v.number(), v.null()),
   pickupLocation: v.union(v.string(), v.null()),
   hasVerifiedPayment: v.boolean(),
+  paymentMethod: v.optional(paymentMethodSchema),
+  orderNumber: v.string(),
 });

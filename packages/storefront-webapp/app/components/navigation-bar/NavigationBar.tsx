@@ -2,13 +2,19 @@ import { useStoreContext } from "@/contexts/StoreContext";
 import { Link } from "@tanstack/react-router";
 import { AlignLeft, ChevronLeft, HeartIcon, XIcon } from "lucide-react";
 import { useShoppingBag } from "@/hooks/useShoppingBag";
-import { useState } from "react";
+import React, { useState } from "react";
 import { useGetStoreCategories } from "../navigation/hooks";
 import { Button } from "../ui/button";
 import { capitalizeWords, slugToWords } from "@/lib/utils";
 import CartIcon from "../shopping-bag/CartIcon";
 import SavedIcon from "../saved-items/SavedIcon";
 import { AnimatePresence, easeInOut, motion } from "framer-motion";
+
+const item = {
+  hidden: { y: -2, opacity: 0 },
+  show: { y: 0, opacity: 1 },
+  exit: { y: 0, opacity: 0 },
+};
 
 function MobileMenu({ onCloseClick }: { onCloseClick: () => void }) {
   const { categories, categoryToSubcategoriesMap } = useGetStoreCategories();
@@ -148,18 +154,75 @@ export default function NavigationBar() {
     },
   };
 
-  const item = {
-    hidden: { y: -2, opacity: 0 },
-    show: { y: 0, opacity: 1 },
-    exit: { y: 0, opacity: 0 },
+  const StoreCategoriesSubmenu = () => {
+    if (!activeMenu) return null;
+
+    const subMenuItems = categoryToSubcategoriesMap[activeMenu];
+
+    return (
+      <>
+        <motion.div variants={item}>
+          <Link
+            to="/shop/$categorySlug"
+            params={(p) => ({
+              ...p,
+              categorySlug: activeMenu,
+            })}
+            className="text-xs hover:text-gray-600 transition-colors"
+            onClick={() => setActiveMenu(null)}
+          >
+            Shop all
+          </Link>
+        </motion.div>
+        {subMenuItems?.map((s) => (
+          <motion.div variants={item} key={s.value}>
+            <Link
+              key={s.value}
+              to="/shop/$categorySlug/$subcategorySlug"
+              params={(p) => ({
+                ...p,
+                categorySlug: activeMenu,
+                subcategorySlug: s.value,
+              })}
+              className="text-xs hover:text-gray-600 transition-colors"
+              onClick={() => setActiveMenu(null)}
+            >
+              {s.label}
+            </Link>
+          </motion.div>
+        ))}
+      </>
+    );
+  };
+
+  const ProfileSubmenu = () => {
+    if (!activeMenu) return null;
+
+    return (
+      <div className="ml-auto">
+        <motion.div variants={item}>
+          <Link
+            to="/shop/orders"
+            params={(p) => ({
+              ...p,
+              categorySlug: activeMenu,
+            })}
+            className="text-xs hover:text-gray-600 transition-colors"
+            onClick={() => setActiveMenu(null)}
+          >
+            Orders
+          </Link>
+        </motion.div>
+      </div>
+    );
   };
 
   const LinkSubmenu = ({
     slug,
-    subMenuItems,
+    children,
   }: {
     slug: string;
-    subMenuItems: Array<{ value: string; label: string }>;
+    children: React.ReactNode;
   }) => {
     return (
       <motion.div
@@ -169,43 +232,12 @@ export default function NavigationBar() {
         initial="hidden"
         animate="show"
         exit={"exit"}
-        className="absolute w-full left-0 bg-white bg-opacity-95 px-8 animate-fadeIn z-50"
+        className="absolute w-full left-0 bg-white bg-opacity-95 animate-fadeIn z-50"
         onMouseEnter={() => setActiveMenu(slug)}
         onMouseLeave={() => setActiveMenu(null)}
       >
-        <div className="max-w-7xl mx-auto px-8 py-8">
-          <div className="flex flex-col font-bold gap-4">
-            <motion.div variants={item}>
-              <Link
-                to="/shop/$categorySlug"
-                params={(p) => ({
-                  ...p,
-                  categorySlug: slug,
-                })}
-                className="text-xs hover:text-gray-600 transition-colors"
-                onClick={() => setActiveMenu(null)}
-              >
-                Shop all
-              </Link>
-            </motion.div>
-            {subMenuItems?.map((s) => (
-              <motion.div variants={item} key={s.value}>
-                <Link
-                  key={s.value}
-                  to="/shop/$categorySlug/$subcategorySlug"
-                  params={(p) => ({
-                    ...p,
-                    categorySlug: slug,
-                    subcategorySlug: s.value,
-                  })}
-                  className="text-xs hover:text-gray-600 transition-colors"
-                  onClick={() => setActiveMenu(null)}
-                >
-                  {s.label}
-                </Link>
-              </motion.div>
-            ))}
-          </div>
+        <div className="w-full py-8 pr-32 pl-64">
+          <div className="flex flex-col font-bold gap-4">{children}</div>
         </div>
       </motion.div>
     );
@@ -259,27 +291,39 @@ export default function NavigationBar() {
                   ))}
                 </div>
               </div>
-              <div className="flex gap-4">
-                <Link to="/shop/saved" className="flex items-center">
-                  <SavedIcon notificationCount={savedBagCount} />
+              <div className="flex gap-8">
+                <Link
+                  onMouseEnter={() => setActiveMenu("profile")}
+                  to="/shop/saved"
+                  className="flex items-center"
+                >
+                  <p className="text-xs font-bold">kwamina</p>
                 </Link>
-                <Link to="/shop/bag" className="flex gap-2">
-                  <CartIcon notificationCount={bagCount} />
-                </Link>
-                <AlignLeft
-                  className="lg:hidden w-5 h-5"
-                  onClick={onHideNavbarClick}
-                />
+                <div className="flex items-center gap-4">
+                  <Link to="/shop/saved" className="flex items-center">
+                    <SavedIcon notificationCount={savedBagCount} />
+                  </Link>
+                  <Link to="/shop/bag" className="flex gap-2">
+                    <CartIcon notificationCount={bagCount} />
+                  </Link>
+                  <AlignLeft
+                    className="lg:hidden w-5 h-5"
+                    onClick={onHideNavbarClick}
+                  />
+                </div>
               </div>
             </div>
           </nav>
 
           {/* Submenus */}
           {activeMenu && (
-            <LinkSubmenu
-              slug={activeMenu}
-              subMenuItems={categoryToSubcategoriesMap[activeMenu]}
-            />
+            <LinkSubmenu slug={activeMenu}>
+              {activeMenu == "profile" ? (
+                <ProfileSubmenu />
+              ) : (
+                <StoreCategoriesSubmenu />
+              )}
+            </LinkSubmenu>
           )}
         </div>
 

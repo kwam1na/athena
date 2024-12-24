@@ -78,6 +78,8 @@ function LayoutComponent() {
     setShowFilters(false);
   };
 
+  const selectedFiltersCount = getSelectedFiltersCount();
+
   return (
     <>
       <div className="grid grid-cols-12 gap-4 pb-40">
@@ -86,6 +88,7 @@ function LayoutComponent() {
             showFilters={showFilters}
             setShowFilters={setShowFilters}
             onFilterClickOnMobile={onClickOnMobileFilters}
+            selectedFiltersCount={selectedFiltersCount}
           />
         </div>
 
@@ -97,7 +100,7 @@ function LayoutComponent() {
                 className="px-16"
                 onClick={clearFilters}
               >
-                {`Clear (${getSelectedFiltersCount()})`}
+                {`Clear (${selectedFiltersCount})`}
               </Button>
             )}
 
@@ -130,7 +133,7 @@ function LayoutComponent() {
                     className="px-16"
                     onClick={clearFilters}
                   >
-                    {`Clear (${getSelectedFiltersCount()})`}
+                    {`Clear (${selectedFiltersCount})`}
                   </Button>
                 )}
 

@@ -3,6 +3,12 @@ import { getAllProducts, getProduct } from "./api/product";
 import { FilterParams } from "./api/types";
 import { getActiveSavedBag } from "./api/savedBag";
 import { getActiveBag } from "./api/bag";
+import { getOrder, getOrders } from "./api/onlineOrder";
+import {
+  getActiveCheckoutSession,
+  getCheckoutSession,
+  getPendingCheckoutSessions,
+} from "./api/checkoutSession";
 
 export const productQueries = {
   all: () => ["products"],
@@ -77,5 +83,106 @@ export const bagQueries = {
           storeId,
         }),
       enabled: Boolean(userId),
+    }),
+};
+
+export const onlineOrderQueries = {
+  all: () => ["online-orders"],
+  lists: () => [...onlineOrderQueries.all(), "list"],
+  list: ({
+    customerId,
+    organizationId,
+    storeId,
+  }: {
+    customerId: string;
+    organizationId: string;
+    storeId: string;
+  }) =>
+    queryOptions({
+      queryKey: [...onlineOrderQueries.lists()],
+      queryFn: () => getOrders({ customerId, organizationId, storeId }),
+    }),
+  details: () => [...onlineOrderQueries.all(), "detail"],
+  detail: ({
+    customerId,
+    organizationId,
+    storeId,
+    orderId,
+  }: {
+    customerId: string;
+    organizationId: string;
+    storeId: string;
+    orderId: string;
+  }) =>
+    queryOptions({
+      queryKey: [...onlineOrderQueries.details(), orderId],
+      queryFn: () => getOrder({ customerId, organizationId, storeId, orderId }),
+    }),
+};
+
+export const checkoutSessionQueries = {
+  activeSessionKey: () => ["active-checkout-session"],
+  activeSession: ({
+    organizationId,
+    storeId,
+    userId,
+  }: {
+    organizationId: string;
+    storeId: string;
+    userId?: string;
+  }) =>
+    queryOptions({
+      queryKey: [...checkoutSessionQueries.activeSessionKey()],
+      queryFn: () =>
+        getActiveCheckoutSession({
+          organizationId,
+          storeId,
+          customerId: userId!,
+        }),
+      enabled: Boolean(userId),
+    }),
+  pendingSessionsKey: () => ["pending-checkout-sessions"],
+  pendingSessions: ({
+    organizationId,
+    storeId,
+    userId,
+  }: {
+    organizationId: string;
+    storeId: string;
+    userId?: string;
+  }) =>
+    queryOptions({
+      queryKey: [...checkoutSessionQueries.pendingSessionsKey()],
+      queryFn: () =>
+        getPendingCheckoutSessions({
+          organizationId,
+          storeId,
+          customerId: userId!,
+        }),
+      enabled: Boolean(userId),
+    }),
+  sessionKey: () => ["checkout-session"],
+  session: ({
+    organizationId,
+    storeId,
+    userId,
+    sessionId,
+  }: {
+    organizationId: string;
+    storeId: string;
+    userId?: string;
+    sessionId?: string;
+  }) =>
+    queryOptions({
+      queryKey: [...checkoutSessionQueries.sessionKey(), sessionId],
+      queryFn: () =>
+        getCheckoutSession({
+          organizationId,
+          storeId,
+          customerId: userId!,
+          sessionId: sessionId!,
+        }),
+      enabled: Boolean(userId && sessionId),
+      retry: false,
     }),
 };
