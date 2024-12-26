@@ -73,6 +73,31 @@ const Header = () => {
         </Link>
         <p className="text-muted-foreground">/</p>
         <OrganizationSwitcher items={organizations || []} />
+
+        <div className="flex items-center gap-8 text-sm ml-8">
+          <Link
+            to="/$orgUrlSlug/store/$storeUrlSlug/products"
+            params={(p) => ({
+              ...p,
+              orgUrlSlug: p.orgUrlSlug!,
+              storeUrlSlug: p.storeUrlSlug!,
+            })}
+            className="flex items-center"
+          >
+            <p className="font-medium">Storefront</p>
+          </Link>
+          <Link
+            to="/$orgUrlSlug/store/$storeUrlSlug/orders"
+            params={(p) => ({
+              ...p,
+              orgUrlSlug: p.orgUrlSlug!,
+              storeUrlSlug: p.storeUrlSlug!,
+            })}
+            className="flex items-center"
+          >
+            <p className="font-medium">Orders</p>
+          </Link>
+        </div>
       </div>
     </div>
   );

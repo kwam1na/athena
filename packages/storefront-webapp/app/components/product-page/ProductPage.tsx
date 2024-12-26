@@ -381,7 +381,7 @@ export default function ProductPage() {
 
         <motion.main
           ref={pageRef}
-          className="grid grid-cols-1 xl:grid-cols-4 gap-12 xl:px-48 pb-16"
+          className="container mx-auto grid grid-cols-1 xl:grid-cols-4 gap-12 pb-16"
         >
           <motion.div
             initial={{ opacity: 0 }}

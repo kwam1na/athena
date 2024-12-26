@@ -29,7 +29,7 @@ export default function ProductPage() {
   }, []);
 
   return (
-    <div className="h-full w-full p-8 space-x-8 flex">
+    <div className="h-full container mx-auto w-full p-8 space-x-8 flex">
       <div className="w-full space-y-8">
         <ProductImagesView />
         <ProductStockView />

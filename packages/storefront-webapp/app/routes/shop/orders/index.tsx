@@ -35,7 +35,7 @@ const OrderItem = ({
       </div>
 
       <div className="flex gap-4">
-        {order?.items.map((item: any, idx: number) => (
+        {order?.items.slice(0, 3).map((item: any, idx: number) => (
           <div key={idx} className="h-32 w-32">
             <img
               src={item.productImage || placeholder}
@@ -44,6 +44,11 @@ const OrderItem = ({
             />
           </div>
         ))}
+        {order?.items.length > 3 && (
+          <div className="h-32 w-32 bg-gray-100 rounded-sm flex items-center justify-center">
+            <span className="text-gray-600">+{order.items.length - 3}</span>
+          </div>
+        )}
       </div>
     </div>
   );

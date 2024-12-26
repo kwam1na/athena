@@ -24,8 +24,10 @@ import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugIndexImport } from './routes/
 import { Route as AuthedOrgUrlSlugSettingsOrganizationIndexImport } from './routes/_authed/$orgUrlSlug/settings/organization/index'
 import { Route as AuthedOrgUrlSlugSettingsStoresStoreUrlSlugImport } from './routes/_authed/$orgUrlSlug/settings/stores/$storeUrlSlug'
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugProductsIndexImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/products/index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugOrdersIndexImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/index'
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugProductsNewImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/products/new'
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugProductsProductSlugIndexImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOrderSlugIndexImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug/index'
 
 // Create Virtual Routes
 
@@ -100,6 +102,12 @@ const AuthedOrgUrlSlugStoreStoreUrlSlugProductsIndexRoute =
     getParentRoute: () => AuthedRoute,
   } as any)
 
+const AuthedOrgUrlSlugStoreStoreUrlSlugOrdersIndexRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugOrdersIndexImport.update({
+    path: '/$orgUrlSlug/store/$storeUrlSlug/orders/',
+    getParentRoute: () => AuthedRoute,
+  } as any)
+
 const AuthedOrgUrlSlugStoreStoreUrlSlugProductsNewRoute =
   AuthedOrgUrlSlugStoreStoreUrlSlugProductsNewImport.update({
     path: '/$orgUrlSlug/store/$storeUrlSlug/products/new',
@@ -109,6 +117,12 @@ const AuthedOrgUrlSlugStoreStoreUrlSlugProductsNewRoute =
 const AuthedOrgUrlSlugStoreStoreUrlSlugProductsProductSlugIndexRoute =
   AuthedOrgUrlSlugStoreStoreUrlSlugProductsProductSlugIndexImport.update({
     path: '/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/',
+    getParentRoute: () => AuthedRoute,
+  } as any)
+
+const AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOrderSlugIndexRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOrderSlugIndexImport.update({
+    path: '/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug/',
     getParentRoute: () => AuthedRoute,
   } as any)
 
@@ -200,11 +214,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsNewImport
       parentRoute: typeof AuthedImport
     }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/orders'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/orders'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersIndexImport
+      parentRoute: typeof AuthedImport
+    }
     '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/': {
       id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/'
       path: '/$orgUrlSlug/store/$storeUrlSlug/products'
       fullPath: '/$orgUrlSlug/store/$storeUrlSlug/products'
       preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsIndexImport
+      parentRoute: typeof AuthedImport
+    }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOrderSlugIndexImport
       parentRoute: typeof AuthedImport
     }
     '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/': {
@@ -227,7 +255,9 @@ interface AuthedRouteChildren {
   AuthedOrgUrlSlugSettingsOrganizationIndexRoute: typeof AuthedOrgUrlSlugSettingsOrganizationIndexRoute
   AuthedOrgUrlSlugStoreStoreUrlSlugIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugIndexRoute
   AuthedOrgUrlSlugStoreStoreUrlSlugProductsNewRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsNewRoute
+  AuthedOrgUrlSlugStoreStoreUrlSlugOrdersIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersIndexRoute
   AuthedOrgUrlSlugStoreStoreUrlSlugProductsIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsIndexRoute
+  AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOrderSlugIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOrderSlugIndexRoute
   AuthedOrgUrlSlugStoreStoreUrlSlugProductsProductSlugIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsProductSlugIndexRoute
 }
 
@@ -243,8 +273,12 @@ const AuthedRouteChildren: AuthedRouteChildren = {
     AuthedOrgUrlSlugStoreStoreUrlSlugIndexRoute,
   AuthedOrgUrlSlugStoreStoreUrlSlugProductsNewRoute:
     AuthedOrgUrlSlugStoreStoreUrlSlugProductsNewRoute,
+  AuthedOrgUrlSlugStoreStoreUrlSlugOrdersIndexRoute:
+    AuthedOrgUrlSlugStoreStoreUrlSlugOrdersIndexRoute,
   AuthedOrgUrlSlugStoreStoreUrlSlugProductsIndexRoute:
     AuthedOrgUrlSlugStoreStoreUrlSlugProductsIndexRoute,
+  AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOrderSlugIndexRoute:
+    AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOrderSlugIndexRoute,
   AuthedOrgUrlSlugStoreStoreUrlSlugProductsProductSlugIndexRoute:
     AuthedOrgUrlSlugStoreStoreUrlSlugProductsProductSlugIndexRoute,
 }
@@ -286,7 +320,9 @@ export interface FileRoutesByFullPath {
   '/$orgUrlSlug/settings/organization': typeof AuthedOrgUrlSlugSettingsOrganizationIndexRoute
   '/$orgUrlSlug/store/$storeUrlSlug': typeof AuthedOrgUrlSlugStoreStoreUrlSlugIndexRoute
   '/$orgUrlSlug/store/$storeUrlSlug/products/new': typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsNewRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/orders': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersIndexRoute
   '/$orgUrlSlug/store/$storeUrlSlug/products': typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsIndexRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOrderSlugIndexRoute
   '/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug': typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsProductSlugIndexRoute
 }
 
@@ -301,7 +337,9 @@ export interface FileRoutesByTo {
   '/$orgUrlSlug/settings/organization': typeof AuthedOrgUrlSlugSettingsOrganizationIndexRoute
   '/$orgUrlSlug/store/$storeUrlSlug': typeof AuthedOrgUrlSlugStoreStoreUrlSlugIndexRoute
   '/$orgUrlSlug/store/$storeUrlSlug/products/new': typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsNewRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/orders': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersIndexRoute
   '/$orgUrlSlug/store/$storeUrlSlug/products': typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsIndexRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOrderSlugIndexRoute
   '/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug': typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsProductSlugIndexRoute
 }
 
@@ -319,7 +357,9 @@ export interface FileRoutesById {
   '/_authed/$orgUrlSlug/settings/organization/': typeof AuthedOrgUrlSlugSettingsOrganizationIndexRoute
   '/_authed/$orgUrlSlug/store/$storeUrlSlug/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugIndexRoute
   '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/new': typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsNewRoute
+  '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersIndexRoute
   '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsIndexRoute
+  '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOrderSlugIndexRoute
   '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsProductSlugIndexRoute
 }
 
@@ -337,7 +377,9 @@ export interface FileRouteTypes {
     | '/$orgUrlSlug/settings/organization'
     | '/$orgUrlSlug/store/$storeUrlSlug'
     | '/$orgUrlSlug/store/$storeUrlSlug/products/new'
+    | '/$orgUrlSlug/store/$storeUrlSlug/orders'
     | '/$orgUrlSlug/store/$storeUrlSlug/products'
+    | '/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug'
     | '/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -351,7 +393,9 @@ export interface FileRouteTypes {
     | '/$orgUrlSlug/settings/organization'
     | '/$orgUrlSlug/store/$storeUrlSlug'
     | '/$orgUrlSlug/store/$storeUrlSlug/products/new'
+    | '/$orgUrlSlug/store/$storeUrlSlug/orders'
     | '/$orgUrlSlug/store/$storeUrlSlug/products'
+    | '/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug'
     | '/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug'
   id:
     | '__root__'
@@ -367,7 +411,9 @@ export interface FileRouteTypes {
     | '/_authed/$orgUrlSlug/settings/organization/'
     | '/_authed/$orgUrlSlug/store/$storeUrlSlug/'
     | '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/new'
+    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/'
     | '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/'
+    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug/'
     | '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/'
   fileRoutesById: FileRoutesById
 }
@@ -414,7 +460,9 @@ export const routeTree = rootRoute
         "/_authed/$orgUrlSlug/settings/organization/",
         "/_authed/$orgUrlSlug/store/$storeUrlSlug/",
         "/_authed/$orgUrlSlug/store/$storeUrlSlug/products/new",
+        "/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/",
         "/_authed/$orgUrlSlug/store/$storeUrlSlug/products/",
+        "/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug/",
         "/_authed/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/"
       ]
     },
@@ -463,8 +511,16 @@ export const routeTree = rootRoute
       "filePath": "_authed/$orgUrlSlug/store/$storeUrlSlug/products/new.tsx",
       "parent": "/_authed"
     },
+    "/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/": {
+      "filePath": "_authed/$orgUrlSlug/store/$storeUrlSlug/orders/index.tsx",
+      "parent": "/_authed"
+    },
     "/_authed/$orgUrlSlug/store/$storeUrlSlug/products/": {
       "filePath": "_authed/$orgUrlSlug/store/$storeUrlSlug/products/index.tsx",
+      "parent": "/_authed"
+    },
+    "/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug/": {
+      "filePath": "_authed/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug/index.tsx",
       "parent": "/_authed"
     },
     "/_authed/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/": {

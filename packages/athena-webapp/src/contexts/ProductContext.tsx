@@ -195,7 +195,9 @@ export function ProductProvider({ children }: { children: ReactNode }) {
       skus: undefined, // Exclude skus from productData
     });
 
-    const variants = activeProduct.skus.map((sku) => convertSkuToVariant(sku));
+    const variants = activeProduct.skus.map((sku: ProductSku) =>
+      convertSkuToVariant(sku)
+    );
     updateProductVariants(variants);
     setActiveProductVariant(variants[0] || null);
   };

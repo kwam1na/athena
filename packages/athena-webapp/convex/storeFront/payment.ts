@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { action } from "../_generated/server";
 import { api, internal } from "../_generated/api";
-import { CheckoutSession } from "../../types";
+import { CheckoutSession, OnlineOrder } from "../../types";
 import { orderDetailsSchema } from "../schemas/storeFront";
 
 export const createTransaction = action({
@@ -73,6 +73,8 @@ export const verifyPayment = action({
     if (response.ok) {
       const res = await response.json();
 
+      // console.log("response from verification", res);
+
       // Query for the first active session for the given customerId
       const session: CheckoutSession | null = await ctx.runQuery(
         api.storeFront.checkoutSession.getCheckoutSession,
@@ -82,20 +84,46 @@ export const verifyPayment = action({
         }
       );
 
+      const order: OnlineOrder | null = await ctx.runQuery(
+        api.storeFront.onlineOrder.getByExternalReference,
+        {
+          externalReference: args.externalReference,
+        }
+      );
+
+      const amount = session?.amount || order?.amount;
+
+      // console.log("session", session);
+
       const isVerified = Boolean(
-        res.data.status == "success" && res.data.amount == session?.amount
+        res.data.status == "success" && res.data.amount == amount
       );
 
       if (isVerified) {
-        await ctx.runMutation(
-          internal.storeFront.checkoutSession.updateCheckoutSession,
-          {
-            id: session?._id,
-            hasVerifiedPayment: true,
-          }
-        );
+        if (session) {
+          await ctx.runMutation(
+            internal.storeFront.checkoutSession.updateCheckoutSession,
+            {
+              id: session?._id,
+              hasVerifiedPayment: true,
+            }
+          );
+        }
 
-        console.log(`verified payment for session: ${session?._id}`);
+        await ctx.runMutation(api.storeFront.onlineOrder.update, {
+          externalReference: args.externalReference,
+          update: { hasVerifiedPayment: true },
+        });
+
+        console.log(
+          `verified payment for session. [session: ${session?._id}, order: ${order?._id}, customer: ${args.customerId}, externalReference: ${args.externalReference}]`
+        );
+      }
+
+      if (!isVerified) {
+        console.log(
+          `unable to verify payment. [session: ${session?._id}, order: ${order?._id}, customer: ${args.customerId}, externalReference: ${args.externalReference}]`
+        );
       }
 
       return { verified: isVerified };

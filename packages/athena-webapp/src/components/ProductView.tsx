@@ -309,7 +309,7 @@ function ProductViewContent() {
     );
 
     return (
-      <div className="flex gap-2 h-[40px] items-center justify-between">
+      <div className="container mx-auto flex gap-2 h-[40px] items-center justify-between">
         <Link
           to="/$orgUrlSlug/store/$storeUrlSlug/products"
           params={(prev) => ({
@@ -362,7 +362,12 @@ function ProductViewContent() {
   };
 
   return (
-    <View className="bg-background" header={<Navigation />}>
+    <View
+      hideBorder
+      hideHeaderBottomBorder
+      className="bg-background"
+      header={<Navigation />}
+    >
       <AlertModal
         title="Delete product?"
         isOpen={isDeleteModalOpen}

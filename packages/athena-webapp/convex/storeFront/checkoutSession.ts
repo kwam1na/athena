@@ -78,7 +78,10 @@ export const create = mutation({
     }
 
     if (existingSession) {
-      await ctx.db.patch(existingSession._id, { expiresAt });
+      await ctx.db.patch(existingSession._id, {
+        expiresAt,
+        amount: args.amount,
+      });
 
       // Update the active session and product availability
       return await updateExistingSession(

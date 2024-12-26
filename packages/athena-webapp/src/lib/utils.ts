@@ -27,6 +27,8 @@ export function currencyFormatter(currency: string) {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency,
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
   });
 }
 
@@ -37,4 +39,21 @@ export function toSlug(str: string) {
     .replace(/[^\w\s-]/g, "") // Remove non-word characters (except space and hyphen)
     .replace(/\s+/g, "-") // Replace spaces with hyphens
     .replace(/-+/g, "-"); // Replace multiple hyphens with a single hyphen
+}
+
+export function getRelativeTime(timestamp: number) {
+  const now = Date.now();
+  const diff = now - timestamp; // Difference in milliseconds
+
+  const rtf = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
+
+  const seconds = Math.floor(diff / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+
+  if (seconds < 60) return rtf.format(-seconds, "seconds");
+  if (minutes < 60) return rtf.format(-minutes, "minutes");
+  if (hours < 24) return rtf.format(-hours, "hours");
+  return rtf.format(-days, "days");
 }

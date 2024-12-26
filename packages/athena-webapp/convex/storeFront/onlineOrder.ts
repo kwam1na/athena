@@ -10,9 +10,9 @@ const entity = "onlineOrder";
 
 function generateOrderNumber() {
   const timestamp = Math.floor(Date.now() / 1000); // Get current timestamp in seconds
-  const baseOrderNumber = timestamp % 10000000; // Reduce to 7 digits
+  const baseOrderNumber = timestamp % 100000; // Reduce to 5 digits
   const randomPadding = Math.floor(Math.random() * 10); // Add random digit if needed
-  return (baseOrderNumber * 10 + randomPadding).toString().padStart(7, "0"); // Ensure 7 digits
+  return (baseOrderNumber * 10 + randomPadding).toString().padStart(5, "0"); // Ensure 7 digits
 }
 
 export const create = mutation({
@@ -169,5 +169,81 @@ export const getById = query({
     );
 
     return { ...order, items: itemsWithImages };
+  },
+});
+
+export const getByExternalReference = query({
+  args: { externalReference: v.string() },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query(entity)
+      .filter((q) => q.eq(q.field("externalReference"), args.externalReference))
+      .first();
+  },
+});
+
+export const getAllOnlineOrders = query({
+  args: { storeId: v.id("store") },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query(entity)
+      .filter((q) => q.eq(q.field("storeId"), args.storeId))
+      // .order("desc")
+      .collect();
+
+    // const ordersWithItems = await Promise.all(
+    //   orders.map(async (order) => {
+    //     const items = await ctx.db
+    //       .query("onlineOrderItem")
+    //       .filter((q) => q.eq(q.field("orderId"), order._id))
+    //       .collect();
+
+    //     const itemsWithImages = await Promise.all(
+    //       items.map(async (item) => {
+    //         const [product, productSku] = await Promise.all([
+    //           ctx.db.get(item.productId),
+    //           ctx.db.get(item.productSkuId),
+    //         ]);
+
+    //         return {
+    //           ...item,
+    //           productName: product?.name,
+    //           productImage: productSku?.images?.[0] ?? null,
+    //         };
+    //       })
+    //     );
+    //     return { ...order, items: itemsWithImages };
+    //   })
+    // );
+
+    // return ordersWithItems;
+  },
+});
+
+export const update = mutation({
+  args: {
+    orderId: v.optional(v.id("onlineOrder")),
+    externalReference: v.optional(v.string()),
+    update: v.record(v.string(), v.any()),
+  },
+  handler: async (ctx, args) => {
+    if (args.orderId) {
+      await ctx.db.patch(args.orderId, args.update);
+      return true;
+    }
+
+    if (args.externalReference) {
+      const order = await ctx.db
+        .query(entity)
+        .filter((q) =>
+          q.eq(q.field("externalReference"), args.externalReference)
+        )
+        .first();
+
+      if (!order) return false;
+
+      await ctx.db.patch(order._id, args.update);
+      return true;
+    }
   },
 });

@@ -1,10 +1,11 @@
 import { useQuery } from "convex/react";
-import Products from "./Products";
-import View from "./View";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { api } from "~/convex/_generated/api";
+import View from "../View";
+import Orders from "./Orders";
+import { currencyFormatter } from "~/src/lib/utils";
 
-export default function ProductsView() {
+export default function OrdersView() {
   const Navigation = () => {
     return (
       <div className="flex gap-2 h-[40px]">
@@ -15,12 +16,21 @@ export default function ProductsView() {
 
   const { activeStore } = useGetActiveStore();
 
-  const products = useQuery(
-    api.inventory.products.getAll,
+  const orders = useQuery(
+    api.storeFront.onlineOrder.getAllOnlineOrders,
     activeStore?._id ? { storeId: activeStore._id } : "skip"
   );
 
-  if (!activeStore || !products) return null;
+  if (!activeStore || !orders) return null;
+
+  const formatter = currencyFormatter(activeStore.currency);
+
+  const ordersFormatted = orders.map((order: any) => {
+    return {
+      ...order,
+      amount: formatter.format(order.amount / 100),
+    };
+  });
 
   return (
     <View
@@ -29,7 +39,7 @@ export default function ProductsView() {
       className="bg-background"
       header={<Navigation />}
     >
-      <Products store={activeStore} products={products} />
+      <Orders store={activeStore} orders={ordersFormatted} />
     </View>
   );
 }

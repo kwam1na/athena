@@ -2,7 +2,7 @@ import { ColumnDef } from "@tanstack/react-table";
 
 import { Badge } from "../../ui/badge";
 
-import placeholder from "@/assets/placeholder.png";
+import placeholder from "../../../assets/placeholder.png";
 import { DataTableColumnHeader } from "./data-table-column-header";
 import { DataTableRowActions } from "./data-table-row-actions";
 import { capitalizeFirstLetter } from "@/lib/utils";
@@ -65,6 +65,17 @@ export const columns: ColumnDef<Product>[] = [
     ),
     cell: ({ row }) => (
       <div className="w-[80px]">{row.getValue("inventoryCount")}</div>
+    ),
+    enableSorting: false,
+    enableHiding: false,
+  },
+  {
+    accessorKey: "quantityAvailable",
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="# Available" />
+    ),
+    cell: ({ row }) => (
+      <div className="w-[80px]">{row.getValue("quantityAvailable")}</div>
     ),
     enableSorting: false,
     enableHiding: false,

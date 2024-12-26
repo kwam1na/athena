@@ -20,9 +20,9 @@ function ProductCard({
           src={product.skus[0].images[0]}
         />
       </div>
-      <div className="flex flex-col px-4 lg:px-0 items-start gap-4">
+      <div className="text-sm flex flex-col px-4 lg:px-0 items-start gap-4">
         <p className="font-medium">{product.name}</p>
-        <p className="text-gray-500">
+        <p className="text-xs">
           {currencyFormatter.format(product.skus[0].price)}
         </p>
       </div>
@@ -73,7 +73,7 @@ export default function ProductsPage({
   }
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 lg:px-8">
+    <div className="container mx-auto grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-8">
       {isLoading && (
         <>
           <ProductCardLoadingSkeleton />

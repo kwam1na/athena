@@ -6,15 +6,19 @@ export default function View({
   className,
   header,
   hideHeaderBottomBorder = false,
+  hideBorder = false,
 }: {
   children: React.ReactNode;
   className?: string;
   header?: React.ReactNode;
   hideHeaderBottomBorder?: boolean;
+  hideBorder?: boolean;
 }) {
   return (
     <section className={cn("", className)}>
-      <div className="flex flex-col h-full border border-1 rounded-md pb-8">
+      <div
+        className={`flex flex-col h-full ${hideBorder ? "" : "border border-1"} rounded-md pb-8`}
+      >
         {header && (
           <header
             className={`${hideHeaderBottomBorder ? "" : "border-b"} px-8 py-2`}

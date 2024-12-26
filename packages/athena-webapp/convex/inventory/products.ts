@@ -36,6 +36,11 @@ const calculateTotalInventoryCount = (skus: ProductSku[]): number => {
   return skus.reduce((total, sku) => total + (sku.inventoryCount || 0), 0);
 };
 
+const calculateTotalAvailableCount = (skus: ProductSku[]): number => {
+  if (!skus) return 0;
+  return skus.reduce((total, sku) => total + (sku.quantityAvailable || 0), 0);
+};
+
 export const getAll = query({
   args: {
     storeId: v.id("store"),
@@ -157,6 +162,9 @@ export const getAll = query({
       .map((product) => ({
         ...product,
         inventoryCount: calculateTotalInventoryCount(
+          skusByProductId[product._id]
+        ),
+        quantityAvailable: calculateTotalAvailableCount(
           skusByProductId[product._id]
         ),
         skus: skusByProductId[product._id] || [],

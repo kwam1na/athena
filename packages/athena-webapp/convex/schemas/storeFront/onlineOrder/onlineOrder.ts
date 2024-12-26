@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { paymentMethodSchema } from "../checkoutSession";
+import { onlineOrderItemSchema } from "./onlineOrderItem";
 
 export const addressSchema = v.object({
   address: v.string(),
@@ -44,4 +45,5 @@ export const onlineOrderSchema = v.object({
   hasVerifiedPayment: v.boolean(),
   paymentMethod: v.optional(paymentMethodSchema),
   orderNumber: v.string(),
+  items: v.optional(v.array(onlineOrderItemSchema)),
 });
