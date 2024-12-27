@@ -24,6 +24,7 @@ export const checkoutSessionSchema = v.object({
   expiresAt: v.number(),
   isFinalizingPayment: v.boolean(),
   externalReference: v.optional(v.string()),
+  externalTransactionId: v.optional(v.string()),
   hasCompletedPayment: v.boolean(),
   hasCompletedCheckoutSession: v.boolean(),
   hasVerifiedPayment: v.boolean(),

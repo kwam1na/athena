@@ -12,6 +12,7 @@ interface AlertModalProps {
   secondaryLoading?: boolean;
   secondaryCtaText?: string;
   title?: string;
+  showCancel?: boolean;
   onClose: () => void;
   onConfirm: () => void;
   onSecondaryConfirm?: () => void;
@@ -26,6 +27,7 @@ export const AlertModal: React.FC<AlertModalProps> = ({
   onClose,
   onConfirm,
   onSecondaryConfirm,
+  showCancel = true,
   secondaryLoading,
   secondaryCtaText,
 }) => {
@@ -47,14 +49,17 @@ export const AlertModal: React.FC<AlertModalProps> = ({
       onClose={!loading ? onClose : () => {}}
     >
       <div className="pt-6 space-x-2 flex items-center justify-end w-full">
-        <Button disabled={loading} variant="outline" onClick={onClose}>
-          Cancel
-        </Button>
+        {showCancel && (
+          <Button disabled={loading} variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+        )}
         {onSecondaryConfirm && (
           <LoadingButton
             isLoading={!!secondaryLoading}
             disabled={secondaryLoading}
             onClick={onSecondaryConfirm}
+            variant={"outline"}
           >
             {secondaryCtaText || "Continue"}
           </LoadingButton>

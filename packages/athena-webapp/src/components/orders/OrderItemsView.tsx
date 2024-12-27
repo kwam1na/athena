@@ -1,4 +1,4 @@
-import { Ban, Check, Hand } from "lucide-react";
+import { Ban, Check, Hand, StopCircle, XCircle } from "lucide-react";
 import View from "../View";
 import { Button } from "../ui/button";
 import { useOnlineOrder } from "~/src/contexts/OnlineOrderContext";
@@ -7,8 +7,33 @@ import useGetActiveStore from "~/src/hooks/useGetActiveStore";
 import { currencyFormatter } from "~/src/lib/utils";
 import placeholder from "~/src/assets/placeholder.png";
 import { Link } from "@tanstack/react-router";
+import { useState } from "react";
+import { useMutation } from "convex/react";
+import { api } from "~/convex/_generated/api";
+import { LoadingButton } from "../ui/loading-button";
+import { HandIcon } from "@radix-ui/react-icons";
 
 function OrderItem({ item }: { item: any }) {
+  const [isUpdatingOrderItem, setIsUpdatingOrderItem] = useState(false);
+
+  const updateOrderItem = useMutation(api.storeFront.onlineOrderItem.update);
+
+  const { order } = useOnlineOrder();
+
+  const handleUpdateOrderItem = async (isReady: boolean) => {
+    try {
+      setIsUpdatingOrderItem(true);
+      await updateOrderItem({
+        id: item._id,
+        updates: { isReady },
+      });
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setIsUpdatingOrderItem(false);
+    }
+  };
+
   return (
     <div className="flex gap-4">
       <Link
@@ -33,22 +58,36 @@ function OrderItem({ item }: { item: any }) {
           <p className="text-xs text-muted-foreground">{`x${item.quantity}`}</p>
         </div>
 
-        <div className="flex items-center gap-4">
-          <Button variant="outline">
-            <Check className="h-4 w-4 mr-2" />
-            Ready
-          </Button>
+        {order?.status == "open" && (
+          <div className="flex items-center gap-4">
+            {!item?.isReady && (
+              <LoadingButton
+                isLoading={isUpdatingOrderItem}
+                onClick={() => handleUpdateOrderItem(true)}
+                variant="outline"
+              >
+                <Check className="h-4 w-4 mr-2" />
+                Ready
+              </LoadingButton>
+            )}
 
-          <Button variant="outline">
-            <Hand className="h-4 w-4 mr-2" />
-            Not ready
-          </Button>
+            {item?.isReady && (
+              <LoadingButton
+                isLoading={isUpdatingOrderItem}
+                onClick={() => handleUpdateOrderItem(false)}
+                variant="outline"
+              >
+                <XCircle className="h-4 w-4 mr-2" />
+                Not ready
+              </LoadingButton>
+            )}
 
-          <Button className="text-red-700" variant="outline">
-            <Ban className="h-4 w-4 mr-2" />
-            Unavailable
-          </Button>
-        </div>
+            <Button className="text-red-700" variant="outline">
+              <Ban className="h-4 w-4 mr-2" />
+              Unavailable
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -74,13 +113,25 @@ export function OrderItemsView() {
     order?.items?.reduce((acc: number, item: any) => acc + item.quantity, 0) ||
     0;
 
+  const itemsTotal =
+    order?.items?.reduce(
+      (acc: number, item: any) => acc + item.price * item.quantity,
+      0
+    ) || 0;
+
   return (
     <View
       className="h-auto w-full"
       header={
-        <p className="text-sm text-sm text-muted-foreground">
-          {itemsCount > 1 ? `${itemsCount} items` : `${itemsCount} item`}
-        </p>
+        <div className="flex gap-8">
+          <p className="text-sm text-sm text-muted-foreground">
+            {itemsCount > 1 ? `${itemsCount} items` : `${itemsCount} item`}
+          </p>
+          {/* <p className="text-sm text-sm text-muted-foreground">|</p>
+          <p className="text-sm text-sm text-muted-foreground">
+            {formatter.format(itemsTotal)}
+          </p> */}
+        </div>
       }
     >
       <div className="p-8 space-y-16">

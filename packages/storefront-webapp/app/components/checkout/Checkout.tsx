@@ -10,7 +10,7 @@ const MainComponent = () => {
   const { activeSession } = useCheckout();
 
   useEffect(() => {
-    if (activeSession.externalReference) {
+    if (activeSession.externalReference && activeSession.hasCompletedPayment) {
       window.open(
         `/shop/checkout/verify?reference=${activeSession.externalReference}`,
         "_self"

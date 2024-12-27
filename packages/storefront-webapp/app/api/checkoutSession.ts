@@ -1,5 +1,5 @@
 import config from "@/config";
-import { Bag } from "@athena/webapp-2";
+import { Bag, CheckoutSession } from "@athena/webapp-2";
 
 const getBaseUrl = (
   organizationId: string,
@@ -62,7 +62,7 @@ export async function getActiveCheckoutSession({
   customerId: string;
   organizationId: string;
   storeId: string;
-}): Promise<Bag> {
+}): Promise<CheckoutSession> {
   const response = await fetch(
     `${getBaseUrl(organizationId, storeId, customerId)}/active`
   );

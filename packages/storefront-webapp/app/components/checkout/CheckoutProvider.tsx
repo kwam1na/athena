@@ -214,7 +214,7 @@ type CheckoutContextType = {
   activeSession: any;
   actionsState: CheckoutActions;
   checkoutState: CheckoutState;
-  canPlaceOrder: () => boolean;
+  canPlaceOrder: () => Promise<boolean>;
   updateState: (newState: Partial<CheckoutState>) => void;
   updateActionsState: (newState: Partial<CheckoutActions>) => void;
 };
@@ -372,7 +372,13 @@ export const CheckoutProvider = ({
     setActionsState((prev) => ({ ...prev, ...actions }));
   };
 
-  const canPlaceOrder = () => {
+  const canPlaceOrder = async () => {
+    const { data } = await refetch();
+
+    if (data?.message?.includes("No active session found")) {
+      return false;
+    }
+
     try {
       // Parse the state using the schema
       webOrderSchema.parse(checkoutState);
@@ -386,11 +392,11 @@ export const CheckoutProvider = ({
     }
   };
 
-  const { data, isLoading } = useGetActiveCheckoutSession();
+  const { data, isLoading, refetch } = useGetActiveCheckoutSession();
 
   if (isLoading || !data) return null;
 
-  console.log("checkout session ->", data);
+  // console.log("checkout session ->", data);
 
   if (data?.message?.includes("No active session found")) {
     return <CheckoutExpired />;

@@ -14,8 +14,9 @@ export const useGetActiveCheckoutSession = () => {
         organizationId: store!.organizationId,
       }),
     enabled: Boolean(store && userId),
-    staleTime: 2 * 60 * 1000,
+    staleTime: 1 * 60 * 1000,
     retry: false,
     refetchOnMount: "always",
+    refetchOnWindowFocus: "always",
   });
 };

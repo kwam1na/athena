@@ -20,10 +20,21 @@ const OrderItem = ({
 }) => {
   const amount = order.amount / 100;
 
+  const isPickupOrder = order.deliveryMethod == "pickup";
+
+  const isOrderOpen = order.status == "open";
+
+  const isOrderReady = order.status == "ready";
+
+  const readyText = isPickupOrder
+    ? "Ready for pickup"
+    : "Preparing for delivery";
+
   return (
     <div className="space-y-8 text-sm">
       <div className="space-y-4">
-        <p className="font-bold">Processing</p>
+        {isOrderOpen && <p className="font-bold">Processing</p>}
+        {isOrderReady && <p className="font-bold">{readyText}</p>}
         <p>{new Date(order._creationTime).toDateString()}</p>
       </div>
 

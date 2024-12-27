@@ -1,4 +1,4 @@
-import { PackageXIcon } from "lucide-react";
+import { PackageXIcon, ShoppingBag } from "lucide-react";
 import { Link, useLoaderData } from "@tanstack/react-router";
 import { PlusIcon } from "@radix-ui/react-icons";
 import { StoreResponse } from "@/lib/schemas/store";
@@ -25,27 +25,12 @@ export default function Orders({
       )}
       {orders && orders.length == 0 && (
         <EmptyState
-          icon={<PackageXIcon className="w-16 h-16 text-muted-foreground" />}
+          icon={<ShoppingBag className="w-16 h-16 text-muted-foreground" />}
           text={
             <div className="flex gap-1 text-sm">
-              <p className="text-muted-foreground">No products in</p>
+              <p className="text-muted-foreground">No orders for</p>
               <p className="font-medium">{store.name}</p>
             </div>
-          }
-          cta={
-            <Link
-              to="/$orgUrlSlug/store/$storeUrlSlug/products/new"
-              params={(prev) => ({
-                ...prev,
-                storeUrlSlug: prev.storeUrlSlug!,
-                orgUrlSlug: prev.orgUrlSlug!,
-              })}
-            >
-              <Button variant={"outline"}>
-                <PlusIcon className="w-3 h-3 mr-2" />
-                Add product
-              </Button>
-            </Link>
           }
         />
       )}

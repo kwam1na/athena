@@ -11,6 +11,7 @@ import { LoadingButton } from "../ui/loading-button";
 import { useNavigate } from "@tanstack/react-router";
 import { useMutation } from "@tanstack/react-query";
 import { useShoppingBag } from "@/hooks/useShoppingBag";
+import { set } from "zod";
 
 export const PaymentSection = () => {
   const {
@@ -29,16 +30,17 @@ export const PaymentSection = () => {
   const [errorFinalizingPayment, setErrorFinalizingPayment] = useState(false);
 
   const onSubmit = async () => {
-    console.log(activeSession);
-    const canProceedToPayment = canPlaceOrder();
-    const { data } = webOrderSchema.safeParse(checkoutState);
+    setErrorFinalizingPayment(false);
 
-    // console.log(checkoutState);
+    const canProceedToPayment = await canPlaceOrder();
+
+    const { data } = webOrderSchema.safeParse(checkoutState);
 
     const total = (bagSubtotal + (checkoutState?.deliveryFee ?? 0)) * 100;
 
     if (canProceedToPayment && data && activeSession._id) {
       setIsProceedingToPayment(true);
+
       const res = await updateCheckoutSession({
         isFinalizingPayment: true,
         sessionId: activeSession._id,
@@ -55,7 +57,7 @@ export const PaymentSection = () => {
         setErrorFinalizingPayment(true);
       }
     } else {
-      console.log("somethings not right...");
+      setErrorFinalizingPayment(true);
     }
   };
 

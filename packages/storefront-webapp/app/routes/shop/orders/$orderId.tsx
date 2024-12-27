@@ -146,8 +146,24 @@ const OrderDetail = () => {
     return <NotFound />;
   }
 
-  console.log("order ->", data);
+  // console.log("order ->", data);
   const isPickupOrder = data.deliveryMethod == "pickup";
+
+  const isOrderOpen = data.status == "open";
+
+  const isOrderReady = data.status == "ready";
+
+  const readyText = isPickupOrder
+    ? "Ready for pickup"
+    : "Preparing for delivery";
+
+  const openText = isPickupOrder
+    ? "We're currently processing this order. You'll receive an email when it's ready for pickup."
+    : "We're currently processing this order. You'll receive an email when it's dispatched.";
+
+  const preparingText = isPickupOrder
+    ? "Your order is ready for pickup."
+    : "Your order is being prepared for delivery.";
 
   return (
     <FadeIn className="container mx-auto space-y-40 py-8 pb-32 w-full">
@@ -161,7 +177,9 @@ const OrderDetail = () => {
         </div>
 
         <div className="space-y-8 text-sm">
-          <p className="font-bold">Processing</p>
+          {isOrderOpen && <p className="font-bold">Processing</p>}
+
+          {isOrderReady && <p className="font-bold">{readyText}</p>}
 
           <div className="flex items-center justify-between w-[30%]">
             <p>Purchase date</p>
@@ -175,18 +193,10 @@ const OrderDetail = () => {
         </div>
       </div>
 
-      <div className="flex gap-56 text-sm">
-        {isPickupOrder ? (
-          <p>
-            We’re currently processing this order. You’ll receive an email when
-            it’s ready for pickup.
-          </p>
-        ) : (
-          <p>
-            We’re currently processing this order. You’ll receive an email when
-            it’s dispatched.
-          </p>
-        )}
+      <div className="grid grid-cols-2 text-sm">
+        {isOrderOpen && <p>{openText}</p>}
+
+        {isOrderReady && <p>{preparingText}</p>}
 
         <OrderItems order={data} />
       </div>

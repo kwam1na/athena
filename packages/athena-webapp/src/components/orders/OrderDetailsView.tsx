@@ -12,7 +12,8 @@ export function OrderDetailsView() {
 
   const formatter = currencyFormatter(activeStore.currency);
 
-  // console.log(order);
+  // const paymentStatus = order.status == 'refunded' ? 'Refunded' : 'Fully paid';
+  const isOrderRefunded = order.status == "refunded";
 
   const { paymentMethod } = order;
 
@@ -37,12 +38,14 @@ export function OrderDetailsView() {
 
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">Payment status</p>
-          {order.hasVerifiedPayment && (
+          {order.hasVerifiedPayment && !isOrderRefunded && (
             <div className="flex gap-2 items-center">
-              <p className="text-sm">Verified</p>
+              <p className="text-sm">Fully paid</p>
               <Check className="h-4 w-4 text-green-700" />
             </div>
           )}
+
+          {isOrderRefunded && <p className="text-sm">Refunded</p>}
 
           {!order.hasVerifiedPayment && (
             <div className="flex gap-2 items-center">

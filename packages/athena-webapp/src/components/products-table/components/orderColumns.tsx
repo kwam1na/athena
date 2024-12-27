@@ -45,7 +45,19 @@ export const orderColumns: ColumnDef<OnlineOrder>[] = [
     ),
     cell: ({ row }) => {
       const customer = row.getValue("customerDetails") as Record<string, any>;
-      return <div>{customer?.email}</div>;
+      return (
+        <Link
+          to="/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug"
+          params={(prev) => ({
+            ...prev,
+            orgUrlSlug: prev.orgUrlSlug!,
+            storeUrlSlug: prev.storeUrlSlug!,
+            orderSlug: row.original._id,
+          })}
+        >
+          {customer?.email}
+        </Link>
+      );
     },
     enableSorting: false,
     enableHiding: false,
@@ -80,15 +92,19 @@ export const orderColumns: ColumnDef<OnlineOrder>[] = [
     enableSorting: false,
     enableHiding: false,
   },
-  //   {
-  //     accessorKey: "status",
-  //     header: ({ column }) => (
-  //       <DataTableColumnHeader column={column} title="Status" />
-  //     ),
-  //     cell: ({ row }) => <Badge variant="outline">Open</Badge>,
-  //     enableSorting: false,
-  //     enableHiding: false,
-  //   },
+  {
+    accessorKey: "status",
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Status" />
+    ),
+    cell: ({ row }) => (
+      <Badge variant="outline">
+        {capitalizeFirstLetter(row.getValue("status"))}
+      </Badge>
+    ),
+    enableSorting: false,
+    enableHiding: false,
+  },
   {
     accessorKey: "_creationTime",
     header: ({ column }) => (

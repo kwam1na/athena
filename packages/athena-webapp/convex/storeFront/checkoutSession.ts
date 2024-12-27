@@ -241,6 +241,7 @@ export const updateCheckoutSession = internalMutation({
     id: v.id("checkoutSession"),
     action: v.optional(v.string()),
     externalReference: v.optional(v.string()),
+    externalTransactionId: v.optional(v.string()),
     isFinalizingPayment: v.optional(v.boolean()),
     hasCompletedPayment: v.optional(v.boolean()),
     hasCompletedCheckoutSession: v.optional(v.boolean()),
@@ -276,6 +277,10 @@ export const updateCheckoutSession = internalMutation({
 
     if (args.externalReference) {
       patchObject.externalReference = args.externalReference;
+    }
+
+    if (args.externalTransactionId) {
+      patchObject.externalTransactionId = args.externalTransactionId;
     }
 
     if (args.hasVerifiedPayment !== undefined) {

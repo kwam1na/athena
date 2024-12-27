@@ -86,8 +86,6 @@ const CheckoutComplete = () => {
 
   const queryClient = useQueryClient();
 
-  console.log("session ->", activeSession);
-
   useEffect(() => {
     const completeCheckoutSession = async () => {
       const { data } = webOrderSchema.safeParse(checkoutState);

@@ -134,3 +134,37 @@ export const verifyPayment = action({
     };
   },
 });
+
+export const refundPayment = action({
+  args: {
+    externalTransactionId: v.string(),
+    amount: v.optional(v.number()),
+    returnItemsToStock: v.boolean(),
+  },
+  handler: async (ctx, args) => {
+    const response = await fetch(`https://api.paystack.co/refund`, {
+      method: "POST",
+      headers: {
+        Authorization:
+          "Bearer sk_test_4460590841638115d8dae604191fdf38844042d0",
+      },
+      body: JSON.stringify({
+        transaction: args.externalTransactionId,
+        amount: args.amount,
+      }),
+    });
+
+    if (response.ok) {
+      const res = await response.json();
+      console.log("response from refund", res);
+
+      if (args.returnItemsToStock) {
+        await ctx.runMutation(api.storeFront.onlineOrder.returnItemsToStock, {
+          externalTransactionId: args.externalTransactionId,
+        });
+
+        console.log("returned items to stock");
+      }
+    }
+  },
+});
