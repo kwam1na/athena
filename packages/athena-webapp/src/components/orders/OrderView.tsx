@@ -32,7 +32,8 @@ import {
 } from "@/components/ui/popover";
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
 import { AlertModal } from "../ui/modals/alert-modal";
-import { set } from "zod";
+import { RefundsView } from "./RefundsView";
+import { ActivityView } from "./ActivityView";
 
 export function RefundOptions() {
   const { order } = useOnlineOrder();
@@ -195,23 +196,44 @@ const Header = () => {
 
   if (!order) return null;
 
+  // console.log(order);
+
+  const amountRefunded =
+    order?.refunds?.reduce((acc, refund) => acc + refund.amount, 0) || 0;
+
+  const isFullyRefunded = amountRefunded === order.amount;
+
+  const isPartiallyRefunded =
+    amountRefunded > 0 && amountRefunded < order.amount;
+
   const hasIssuedRefund = order.status === "refunded";
 
   const isRefundPending = ["refund-pending", "refund-processing"].includes(
     order.status
   );
 
-  const refundText = isRefundPending ? "Refund pending" : "Refunded";
+  const refundText = isFullyRefunded
+    ? "Refunded"
+    : isPartiallyRefunded
+      ? "Partially refunded"
+      : "Refund pending";
 
   const isInRefundState = isRefundPending || hasIssuedRefund;
 
-  const canRefund = !hasIssuedRefund && !isRefundPending;
-
-  const isReady = order?.items?.every((item) => item.isReady);
+  const isReady = order?.items
+    ?.filter((i) => !Boolean(i.isRefunded))
+    .every((item) => item.isReady);
 
   const isOrderOpen = order?.status === "open";
 
+  const isOrderReady = order?.status === "ready";
+
   const orderStatus = isDelivery ? "Ready for delivery" : "Ready for pickup";
+
+  const canPerformInitialTransition =
+    (order.items?.some((item) => !Boolean(item.isRefunded)) &&
+      hasIssuedRefund) ||
+    isOrderOpen;
 
   return (
     <div className="container mx-auto flex gap-2 h-[40px] items-center justify-between">
@@ -244,9 +266,7 @@ const Header = () => {
       </div>
 
       <div className="flex gap-4">
-        {canRefund && <RefundOptions />}
-
-        {isDelivery && isOrderOpen && (
+        {isDelivery && canPerformInitialTransition && (
           <LoadingButton
             isLoading={isUpdatingOrder}
             disabled={!isReady}
@@ -258,7 +278,19 @@ const Header = () => {
           </LoadingButton>
         )}
 
-        {isPickup && isOrderOpen && (
+        {isDelivery && isOrderReady && (
+          <LoadingButton
+            isLoading={isUpdatingOrder}
+            disabled={!isReady}
+            onClick={handleUpdateOrder}
+            className="px-2 lg:px-3"
+          >
+            <Truck className="h-4 w-4 mr-2" />
+            <p className="text-sm">Out for delivery</p>
+          </LoadingButton>
+        )}
+
+        {isPickup && canPerformInitialTransition && (
           <LoadingButton
             isLoading={isUpdatingOrder}
             disabled={!isReady}
@@ -267,6 +299,18 @@ const Header = () => {
           >
             <Store className="h-4 w-4 mr-2" />
             <p className="text-sm">Ready for pickup</p>
+          </LoadingButton>
+        )}
+
+        {isPickup && isOrderReady && (
+          <LoadingButton
+            isLoading={isUpdatingOrder}
+            disabled={!isReady}
+            onClick={handleUpdateOrder}
+            className="px-2 lg:px-3"
+          >
+            <Store className="h-4 w-4 mr-2" />
+            <p className="text-sm">Picked up</p>
           </LoadingButton>
         )}
       </div>
@@ -341,18 +385,25 @@ export const OrderView = () => {
   return (
     <OnlineOrderProvider>
       <View hideBorder hideHeaderBottomBorder header={<Header />}>
-        <div className="container mx-auto h-full w-full p-8 space-y-8">
+        <div className="container mx-auto h-full w-full p-8 space-y-12">
           <Alerts />
-          <OrderDetailsView />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <OrderDetailsView />
+            <OrderItemsView />
+          </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             <div className="space-y-8">
-              <CustomerDetailsView />
-              <PickupDetailsView />
+              <div className="grid grid-cols-1 gap-8">
+                <CustomerDetailsView />
+                <PickupDetailsView />
+              </div>
             </div>
 
-            <OrderItemsView />
+            <RefundsView />
           </div>
+
+          <ActivityView />
         </div>
       </View>
     </OnlineOrderProvider>

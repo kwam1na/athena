@@ -1,4 +1,4 @@
-import { Ban, Check, Hand, StopCircle, XCircle } from "lucide-react";
+import { Ban, Check, Hand, RotateCcw, StopCircle, XCircle } from "lucide-react";
 import View from "../View";
 import { Button } from "../ui/button";
 import { useOnlineOrder } from "~/src/contexts/OnlineOrderContext";
@@ -34,6 +34,15 @@ function OrderItem({ item }: { item: any }) {
     }
   };
 
+  const hasIssuedRefund = order?.status == "refunded";
+
+  const isOrderOpen = order?.status == "open";
+
+  const canPerformInitialTransition =
+    (order?.items?.some((item) => !Boolean(item.isRefunded)) &&
+      hasIssuedRefund) ||
+    isOrderOpen;
+
   return (
     <div className="flex gap-4">
       <Link
@@ -58,7 +67,14 @@ function OrderItem({ item }: { item: any }) {
           <p className="text-xs text-muted-foreground">{`x${item.quantity}`}</p>
         </div>
 
-        {order?.status == "open" && (
+        {item.isRefunded && (
+          <div className="flex ml-auto items-center gap-2 text-muted-foreground">
+            <RotateCcw className="h-3 w-3" />
+            <p className="text-xs">Refunded</p>
+          </div>
+        )}
+
+        {canPerformInitialTransition && !item.isRefunded && (
           <div className="flex items-center gap-4">
             {!item?.isReady && (
               <LoadingButton

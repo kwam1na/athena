@@ -28,6 +28,7 @@ export default function OrdersView() {
   const ordersFormatted = orders.map((order: any) => {
     return {
       ...order,
+      amountValue: order.amount,
       amount: formatter.format(order.amount / 100),
     };
   });

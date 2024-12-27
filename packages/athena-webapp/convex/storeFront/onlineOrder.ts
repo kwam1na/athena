@@ -282,7 +282,7 @@ export const update = mutation({
       const refunds = [
         ...(order?.refunds ?? []),
         ...(refund_id && refund_amount
-          ? [{ id: refund_id, amount: refund_amount }]
+          ? [{ id: refund_id, amount: refund_amount, date: Date.now() }]
           : []),
       ];
 
@@ -308,38 +308,67 @@ export const update = mutation({
 export const returnItemsToStock = mutation({
   args: {
     externalTransactionId: v.string(),
+    onlineOrderItemIds: v.optional(v.array(v.id("onlineOrderItem"))),
   },
   handler: async (ctx, args) => {
-    const order = await ctx.db
-      .query(entity)
-      .filter((q) =>
-        q.eq(q.field("externalTransactionId"), args.externalTransactionId)
-      )
-      .first();
+    if (args.externalTransactionId) {
+      const order = await ctx.db
+        .query(entity)
+        .filter((q) =>
+          q.eq(q.field("externalTransactionId"), args.externalTransactionId)
+        )
+        .first();
 
-    if (!order) return false;
+      if (!order) return false;
 
-    const shouldUpdateStockCount = Boolean(order.readyAt);
+      const shouldUpdateStockCount = Boolean(order.readyAt);
 
-    const orderItems = await ctx.db
-      .query("onlineOrderItem")
-      .filter((q) => q.eq(q.field("orderId"), order._id))
-      .collect();
+      if (args.onlineOrderItemIds?.length) {
+        await Promise.all(
+          args.onlineOrderItemIds.map(async (itemId) => {
+            await ctx.db.patch(itemId, { isRefunded: true });
+            const onlineOrderItem = await ctx.db.get(itemId);
 
-    await Promise.all(
-      orderItems.map(async (item) => {
-        const productSku = await ctx.db.get(item.productSkuId);
-        if (productSku) {
-          await ctx.db.patch(item.productSkuId, {
-            quantityAvailable: productSku.quantityAvailable + item.quantity,
-            inventoryCount: shouldUpdateStockCount
-              ? productSku.inventoryCount + item.quantity
-              : productSku.inventoryCount,
-          });
-        }
-      })
-    );
+            if (onlineOrderItem) {
+              const productSku = await ctx.db.get(onlineOrderItem.productSkuId);
 
-    return true;
+              if (productSku) {
+                await ctx.db.patch(onlineOrderItem.productSkuId, {
+                  quantityAvailable:
+                    productSku.quantityAvailable + onlineOrderItem.quantity,
+                  inventoryCount: shouldUpdateStockCount
+                    ? productSku.inventoryCount + onlineOrderItem.quantity
+                    : productSku.inventoryCount,
+                });
+              }
+            }
+          })
+        );
+
+        return true;
+      }
+
+      const orderItems = await ctx.db
+        .query("onlineOrderItem")
+        .filter((q) => q.eq(q.field("orderId"), order._id))
+        .collect();
+
+      await Promise.all(
+        orderItems.map(async (item) => {
+          await ctx.db.patch(item._id, { isRefunded: true });
+          const productSku = await ctx.db.get(item.productSkuId);
+          if (productSku) {
+            await ctx.db.patch(item.productSkuId, {
+              quantityAvailable: productSku.quantityAvailable + item.quantity,
+              inventoryCount: shouldUpdateStockCount
+                ? productSku.inventoryCount + item.quantity
+                : productSku.inventoryCount,
+            });
+          }
+        })
+      );
+
+      return true;
+    }
   },
 });

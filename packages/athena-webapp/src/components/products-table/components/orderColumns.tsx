@@ -2,9 +2,7 @@ import { ColumnDef } from "@tanstack/react-table";
 
 import { Badge } from "../../ui/badge";
 
-import placeholder from "../../../assets/placeholder.png";
 import { DataTableColumnHeader } from "./data-table-column-header";
-import { DataTableRowActions } from "./data-table-row-actions";
 import { capitalizeFirstLetter, getRelativeTime } from "@/lib/utils";
 import { Link } from "@tanstack/react-router";
 import { OnlineOrder } from "~/types";
@@ -97,11 +95,25 @@ export const orderColumns: ColumnDef<OnlineOrder>[] = [
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Status" />
     ),
-    cell: ({ row }) => (
-      <Badge variant="outline">
-        {capitalizeFirstLetter(row.getValue("status"))}
-      </Badge>
-    ),
+    cell: ({ row }) => {
+      const order = row.original;
+
+      const amountRefunded =
+        order?.refunds?.reduce((acc, refund) => acc + refund.amount, 0) || 0;
+
+      const isPartiallyRefunded =
+        amountRefunded > 0 && amountRefunded < (order as any).amountValue;
+
+      let status: string = row.getValue("status");
+
+      if (status == "refunded") {
+        if (isPartiallyRefunded) {
+          status = "partially refunded";
+        }
+      }
+
+      return <Badge variant="outline">{capitalizeFirstLetter(status)}</Badge>;
+    },
     enableSorting: false,
     enableHiding: false,
   },

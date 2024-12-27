@@ -53,6 +53,6 @@ export const onlineOrderSchema = v.object({
   ),
   readyAt: v.optional(v.number()),
   refunds: v.optional(
-    v.array(v.object({ amount: v.number(), id: v.string() }))
+    v.array(v.object({ amount: v.number(), id: v.string(), date: v.number() }))
   ),
 });

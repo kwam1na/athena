@@ -140,6 +140,7 @@ export const refundPayment = action({
     externalTransactionId: v.string(),
     amount: v.optional(v.number()),
     returnItemsToStock: v.boolean(),
+    onlineOrderItemIds: v.optional(v.array(v.id("onlineOrderItem"))),
   },
   handler: async (ctx, args) => {
     const response = await fetch(`https://api.paystack.co/refund`, {
@@ -154,17 +155,22 @@ export const refundPayment = action({
       }),
     });
 
-    if (response.ok) {
-      const res = await response.json();
-      console.log("response from refund", res);
+    const res = await response.json();
+    console.log("response from refund", res);
 
+    if (response.ok) {
       if (args.returnItemsToStock) {
         await ctx.runMutation(api.storeFront.onlineOrder.returnItemsToStock, {
           externalTransactionId: args.externalTransactionId,
+          onlineOrderItemIds: args.onlineOrderItemIds,
         });
 
         console.log("returned items to stock");
       }
+
+      return { success: true, message: res.message };
     }
+
+    return { success: false, message: res.message };
   },
 });

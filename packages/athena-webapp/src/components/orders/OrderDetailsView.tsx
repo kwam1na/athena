@@ -12,25 +12,35 @@ export function OrderDetailsView() {
 
   const formatter = currencyFormatter(activeStore.currency);
 
-  // const paymentStatus = order.status == 'refunded' ? 'Refunded' : 'Fully paid';
-  const isOrderRefunded = order.status == "refunded";
+  const amountRefunded =
+    order?.refunds?.reduce((acc, refund) => acc + refund.amount, 0) || 0;
+
+  const isFullyRefunded = amountRefunded === order.amount;
+
+  const isPartiallyRefunded =
+    amountRefunded > 0 && amountRefunded < order.amount;
+
+  const isOrderRefunded = isFullyRefunded || isPartiallyRefunded;
+
+  const refundText = isFullyRefunded
+    ? "Refunded"
+    : isPartiallyRefunded
+      ? "Partially refunded"
+      : "Refund pending";
 
   const { paymentMethod } = order;
 
   const paymentChannel =
     paymentMethod?.channel == "mobile_money" ? "Mobile Money" : "Card";
 
+  const netAmount = order.amount - amountRefunded;
+
   return (
     <View
       className="h-auto w-full"
       header={<p className="text-sm text-sm text-muted-foreground">Details</p>}
     >
-      <div className="p-8 flex items-center justify-between">
-        {/* <div className="space-y-4">
-          <p className="text-sm text-muted-foreground">Placed</p>
-          <p className="text-sm">{getRelativeTime(order._creationTime)}</p>
-        </div> */}
-
+      <div className="p-8 grid grid-cols-2 gap-16">
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">Total</p>
           <p className="text-sm">{formatter.format(order.amount / 100)}</p>
@@ -45,7 +55,7 @@ export function OrderDetailsView() {
             </div>
           )}
 
-          {isOrderRefunded && <p className="text-sm">Refunded</p>}
+          {Boolean(amountRefunded) && <p className="text-sm">{refundText}</p>}
 
           {!order.hasVerifiedPayment && (
             <div className="flex gap-2 items-center">
@@ -54,10 +64,24 @@ export function OrderDetailsView() {
           )}
         </div>
 
+        {Boolean(amountRefunded) && (
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">Refunded</p>
+            <p className="text-sm">{`- ${formatter.format(amountRefunded / 100)}`}</p>
+          </div>
+        )}
+
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">Payment channel</p>
           <p className="text-sm">{`${paymentMethod?.bank} ${paymentChannel}`}</p>
         </div>
+
+        {Boolean(amountRefunded) && Boolean(netAmount) && (
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">Net</p>
+            <p className="text-sm">{formatter.format(netAmount / 100)}</p>
+          </div>
+        )}
 
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">Payment method</p>
