@@ -55,21 +55,33 @@ paystackRoutes.post("/", async (c) => {
   if (payload?.event == "refund.processing") {
     await c.env.runMutation(api.storeFront.onlineOrder.update, {
       externalReference: payload?.data?.transaction_reference,
-      update: { status: "refund-processing" },
+      update: {
+        status: "refund-processing",
+        refund_id: payload?.data?.id,
+        refund_amount: payload?.data?.amount,
+      },
     });
   }
 
   if (payload?.event == "refund.pending") {
     await c.env.runMutation(api.storeFront.onlineOrder.update, {
       externalReference: payload?.data?.transaction_reference,
-      update: { status: "refund-pending" },
+      update: {
+        status: "refund-pending",
+        refund_id: payload?.data?.id,
+        refund_amount: payload?.data?.amount,
+      },
     });
   }
 
   if (payload?.event == "refund.failed") {
     await c.env.runMutation(api.storeFront.onlineOrder.update, {
       externalReference: payload?.data?.transaction_reference,
-      update: { status: "refund-failed" },
+      update: {
+        status: "refund-failed",
+        refund_id: payload?.data?.id,
+        refund_amount: payload?.data?.amount,
+      },
     });
   }
 

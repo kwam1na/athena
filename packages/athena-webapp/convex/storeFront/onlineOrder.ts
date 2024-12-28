@@ -190,7 +190,7 @@ export const getAllOnlineOrders = query({
     return await ctx.db
       .query(entity)
       .filter((q) => q.eq(q.field("storeId"), args.storeId))
-      // .order("desc")
+      .order("desc")
       .collect();
 
     // const ordersWithItems = await Promise.all(
@@ -229,51 +229,48 @@ export const update = mutation({
     update: v.record(v.string(), v.any()),
   },
   handler: async (ctx, args) => {
+    console.log("in update with args", args);
+
     if (args.orderId) {
       const order = await ctx.db.get(args.orderId);
+      if (!order) return false;
 
+      // Initialize base updates from args
+      let updates = { ...args.update };
+
+      // Add transition if status is being updated
       if (args.update.status) {
-        const updates = {
-          ...args.update,
-          transitions: [
-            ...(order?.transitions ?? []),
-            { status: args.update.status, date: Date.now() },
-          ],
-        };
-        await ctx.db.patch(args.orderId, updates);
-      } else {
-        await ctx.db.patch(args.orderId, args.update);
+        updates.transitions = [
+          ...(order.transitions ?? []),
+          {
+            status: args.update.status,
+            date: Date.now(),
+          },
+        ];
       }
 
-      if (args.update.status === "ready") {
-        const orderItems = await ctx.db
-          .query("onlineOrderItem")
-          .filter((q) => q.eq(q.field("orderId"), args.orderId))
-          .collect();
-
-        // Update inventory count for each item
-        await Promise.all([
-          ...orderItems.map(async (item) => {
-            const productSku = await ctx.db.get(item.productSkuId);
-            if (productSku) {
-              await ctx.db.patch(item.productSkuId, {
-                inventoryCount: productSku.inventoryCount - item.quantity,
-              });
-            }
-          }),
-          ctx.db.patch(args.orderId, { readyAt: Date.now() }),
-        ]);
+      // Add readyAt timestamp for specific status updates
+      const readyStatuses = ["ready-for-pickup", "ready-for-delivery"];
+      if (readyStatuses.includes(args.update.status)) {
+        updates.readyAt = Date.now();
       }
+
+      await ctx.db.patch(args.orderId, updates);
       return true;
     }
 
+    // external reference is passed in as args from the verifyPayment action
     if (args.externalReference) {
+      console.log("received external reference", args.externalReference);
+
       const order = await ctx.db
         .query(entity)
         .filter((q) =>
           q.eq(q.field("externalReference"), args.externalReference)
         )
         .first();
+
+      console.log("found order", order);
 
       if (!order) return false;
 
@@ -321,12 +318,10 @@ export const returnItemsToStock = mutation({
 
       if (!order) return false;
 
-      const shouldUpdateStockCount = Boolean(order.readyAt);
-
       if (args.onlineOrderItemIds?.length) {
         await Promise.all(
           args.onlineOrderItemIds.map(async (itemId) => {
-            await ctx.db.patch(itemId, { isRefunded: true });
+            await ctx.db.patch(itemId, { isRefunded: true, isRestocked: true });
             const onlineOrderItem = await ctx.db.get(itemId);
 
             if (onlineOrderItem) {
@@ -336,7 +331,7 @@ export const returnItemsToStock = mutation({
                 await ctx.db.patch(onlineOrderItem.productSkuId, {
                   quantityAvailable:
                     productSku.quantityAvailable + onlineOrderItem.quantity,
-                  inventoryCount: shouldUpdateStockCount
+                  inventoryCount: onlineOrderItem.isReady
                     ? productSku.inventoryCount + onlineOrderItem.quantity
                     : productSku.inventoryCount,
                 });
@@ -355,12 +350,12 @@ export const returnItemsToStock = mutation({
 
       await Promise.all(
         orderItems.map(async (item) => {
-          await ctx.db.patch(item._id, { isRefunded: true });
+          await ctx.db.patch(item._id, { isRefunded: true, isRestocked: true });
           const productSku = await ctx.db.get(item.productSkuId);
           if (productSku) {
             await ctx.db.patch(item.productSkuId, {
               quantityAvailable: productSku.quantityAvailable + item.quantity,
-              inventoryCount: shouldUpdateStockCount
+              inventoryCount: item.isReady
                 ? productSku.inventoryCount + item.quantity
                 : productSku.inventoryCount,
             });
@@ -370,5 +365,52 @@ export const returnItemsToStock = mutation({
 
       return true;
     }
+  },
+});
+
+export const updateOrderItems = mutation({
+  args: {
+    orderItemIds: v.array(v.id("onlineOrderItem")),
+    updates: v.record(v.string(), v.any()),
+  },
+  handler: async (ctx, args) => {
+    await Promise.all(
+      args.orderItemIds.map(async (itemId) => {
+        await ctx.db.patch(itemId, args.updates);
+      })
+    );
+    return true;
+  },
+});
+
+export const returnAllItemsToStock = mutation({
+  args: { orderId: v.id("onlineOrder") },
+  handler: async (ctx, args) => {
+    const orderItems = await ctx.db
+      .query("onlineOrderItem")
+      .filter((q) => q.eq(q.field("orderId"), args.orderId))
+      .collect();
+
+    await Promise.all(
+      orderItems.map(async (item) => {
+        if (item.isRestocked) {
+          console.log("item already restocked", item._id);
+          return true;
+        }
+
+        await ctx.db.patch(item._id, { isRefunded: true, isRestocked: true });
+        const productSku = await ctx.db.get(item.productSkuId);
+        if (productSku) {
+          await ctx.db.patch(item.productSkuId, {
+            quantityAvailable: productSku.quantityAvailable + item.quantity,
+            inventoryCount: item.isReady
+              ? productSku.inventoryCount + item.quantity
+              : productSku.inventoryCount,
+          });
+        }
+      })
+    );
+
+    return true;
   },
 });

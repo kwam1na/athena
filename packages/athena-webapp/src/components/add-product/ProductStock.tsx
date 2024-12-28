@@ -36,12 +36,31 @@ export type ProductVariant = {
   images: ImageFile[];
 };
 
+const StockHeader = () => {
+  const { updateProductVariants } = useProduct();
+
+  const restock = () => {
+    updateProductVariants((prevVariants) =>
+      prevVariants.map((variant) => ({
+        ...variant,
+        stock: 5,
+        quantityAvailable: 5,
+      }))
+    );
+  };
+  return (
+    <div className="flex items-center justify-between">
+      <p className="text-sm text-muted-foreground">Variants</p>
+      <Button onClick={restock} variant={"ghost"} size={"sm"}>
+        Restock
+      </Button>
+    </div>
+  );
+};
+
 export function ProductStockView() {
   return (
-    <View
-      className="h-auto"
-      header={<p className="text-sm text-muted-foreground">Variants</p>}
-    >
+    <View className="h-auto" header={<StockHeader />}>
       <Stock />
     </View>
   );

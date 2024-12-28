@@ -84,7 +84,7 @@ const Header = () => {
             })}
             className="flex items-center"
           >
-            <p className="font-medium">Storefront</p>
+            <p className="font-medium">Store</p>
           </Link>
           <Link
             to="/$orgUrlSlug/store/$storeUrlSlug/orders"

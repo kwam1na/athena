@@ -20,6 +20,8 @@ export function PickupDetailsView() {
   if (deliveryMethod == "pickup") {
     return (
       <View
+        hideBorder
+        hideHeaderBottomBorder
         className="h-auto w-full"
         header={
           <p className="text-sm text-sm text-muted-foreground">Store pickup</p>
@@ -39,6 +41,8 @@ export function PickupDetailsView() {
 
   return (
     <View
+      hideBorder
+      hideHeaderBottomBorder
       className="h-auto w-full"
       header={<p className="text-sm text-sm text-muted-foreground">Delivery</p>}
     >

@@ -37,6 +37,7 @@ export function RefundsView() {
     deliveryFees: boolean;
     subtotal: boolean;
     partial: boolean;
+    remainingAmount: boolean;
     amountToRefund: number;
     returnToStock: boolean;
     showModal: boolean;
@@ -49,6 +50,7 @@ export function RefundsView() {
     amountToRefund: 0,
     returnToStock: false,
     showModal: false,
+    remainingAmount: false,
     onlineOrderItemIds: [],
   });
 
@@ -68,13 +70,21 @@ export function RefundsView() {
   const handleRefundOrder = async () => {
     console.table(state);
 
+    // return;
+
     try {
       setIsRefundingOrder(true);
+
+      const ids =
+        state.subtotal || state.entireOrder || state.remainingAmount
+          ? order.items?.map((item: any) => item._id)
+          : state.onlineOrderItemIds;
+
       const res = await refundOrder({
         externalTransactionId: order?.externalTransactionId,
         amount: state.amountToRefund,
         returnItemsToStock: state.returnToStock,
-        onlineOrderItemIds: state.onlineOrderItemIds,
+        onlineOrderItemIds: ids,
       });
 
       if (res.success) {
@@ -112,17 +122,28 @@ export function RefundsView() {
 
   const canRefund = amountRefunded < order.amount || isPartiallyRefunded;
 
+  const netAmount = order.amount - amountRefunded;
+
+  const isFullRefund = state.deliveryFees && state.subtotal;
+
+  const isEntireOrderRefund =
+    !state.deliveryFees && !state.partial && !state.remainingAmount;
+
+  const shouldShowInventoryOption = isFullRefund || isEntireOrderRefund;
+
   if (!canRefund) return null;
 
   return (
     <View
+      hideBorder
+      hideHeaderBottomBorder
       className="h-auto w-full"
       header={<p className="text-sm text-sm text-muted-foreground">Refund</p>}
     >
       <ActionModal
         isOpen={state.showModal}
         loading={isRefundingOrder}
-        title={`Refunding ${formatter.format(state.amountToRefund! / 100)}`}
+        title={`Refund ${formatter.format(state.amountToRefund! / 100)}`}
         description=""
         declineText="Cancel"
         confirmText="Proceed"
@@ -135,31 +156,35 @@ export function RefundsView() {
         }
         onConfirm={() => handleRefundOrder()}
       >
-        <div className="flex">
-          <div className="ml-auto flex items-center gap-4">
-            <Switch
-              id="inventory"
-              checked={state.returnToStock}
-              disabled={!state.entireOrder && !state.subtotal && !state.partial}
-              onCheckedChange={(checked) => {
-                setState((prev) => ({
-                  ...prev,
-                  returnToStock: checked,
-                }));
-              }}
-            />
-            <Label className="text-muted-foreground" htmlFor="inventory">
-              Return items to inventory
-            </Label>
+        {shouldShowInventoryOption && (
+          <div className="flex">
+            <div className="ml-auto flex items-center gap-4">
+              <Switch
+                id="inventory"
+                checked={state.returnToStock}
+                disabled={
+                  !state.entireOrder && !state.subtotal && !state.partial
+                }
+                onCheckedChange={(checked) => {
+                  setState((prev) => ({
+                    ...prev,
+                    returnToStock: checked,
+                  }));
+                }}
+              />
+              <Label className="text-muted-foreground" htmlFor="inventory">
+                Return items to inventory
+              </Label>
+            </div>
           </div>
-        </div>
+        )}
       </ActionModal>
       <div className="p-8 space-y-12">
         <div className="space-y-4">
           <div className="flex items-center gap-2">
             <Checkbox
               checked={state.entireOrder}
-              disabled={!canRefund}
+              disabled={!canRefund || state.remainingAmount}
               onCheckedChange={() => {
                 setState((prev) => ({
                   ...prev,
@@ -177,7 +202,9 @@ export function RefundsView() {
           {order.deliveryFee && (
             <div className="flex items-center gap-2">
               <Checkbox
-                disabled={state.entireOrder || state.partial || !canRefund}
+                disabled={
+                  state.entireOrder || state.remainingAmount || !canRefund
+                }
                 checked={state.deliveryFees}
                 onCheckedChange={() => {
                   setState((prev) => ({
@@ -195,7 +222,12 @@ export function RefundsView() {
 
           <div className="flex items-center gap-2">
             <Checkbox
-              disabled={state.entireOrder || state.partial || !canRefund}
+              disabled={
+                state.entireOrder ||
+                state.partial ||
+                state.remainingAmount ||
+                !canRefund
+              }
               checked={state.subtotal}
               onCheckedChange={() => {
                 setState((prev) => ({
@@ -218,8 +250,8 @@ export function RefundsView() {
             <Checkbox
               disabled={
                 state.entireOrder ||
-                state.deliveryFees ||
                 state.subtotal ||
+                state.remainingAmount ||
                 !canRefund
               }
               checked={state.partial}
@@ -241,10 +273,7 @@ export function RefundsView() {
                   <div key={item.productId} className="flex items-center gap-4">
                     <Checkbox
                       disabled={
-                        state.entireOrder ||
-                        state.deliveryFees ||
-                        state.subtotal ||
-                        item.isRefunded
+                        state.entireOrder || state.subtotal || item.isRefunded
                       }
                       onCheckedChange={(checked) => {
                         setState((prev) => ({
@@ -285,6 +314,27 @@ export function RefundsView() {
               })}
             </div>
           )}
+
+          <div className="flex items-center gap-2">
+            <Checkbox
+              disabled={
+                state.entireOrder ||
+                state.deliveryFees ||
+                state.subtotal ||
+                state.partial ||
+                !canRefund
+              }
+              checked={state.remainingAmount}
+              onCheckedChange={(checked) => {
+                setState((prev) => ({
+                  ...prev,
+                  remainingAmount: checked as boolean,
+                  amountToRefund: checked ? netAmount : 0,
+                }));
+              }}
+            />
+            <p className="text-sm">Remaining amount</p>
+          </div>
         </div>
 
         <div className="flex">

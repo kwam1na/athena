@@ -41,6 +41,10 @@ export function toSlug(str: string) {
     .replace(/-+/g, "-"); // Replace multiple hyphens with a single hyphen
 }
 
+export function slugToWords(input: string): string {
+  return input.replace(/-/g, " ");
+}
+
 export function getRelativeTime(timestamp: number) {
   const now = Date.now();
   const diff = now - timestamp; // Difference in milliseconds

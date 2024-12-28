@@ -51,9 +51,20 @@ export const columns: ColumnDef<Product>[] = [
       <DataTableColumnHeader column={column} title="Status" />
     ),
     cell: ({ row }) => (
-      <Badge variant="outline">
-        {capitalizeFirstLetter(row.original.availability)}
-      </Badge>
+      <Link
+        to="/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug"
+        params={(prev) => ({
+          ...prev,
+          orgUrlSlug: prev.orgUrlSlug!,
+          storeUrlSlug: prev.storeUrlSlug!,
+          productSlug: row.original._id,
+        })}
+        className="flex items-center gap-8"
+      >
+        <Badge variant="outline">
+          {capitalizeFirstLetter(row.original.availability)}
+        </Badge>
+      </Link>
     ),
     enableSorting: false,
     enableHiding: false,
@@ -64,7 +75,18 @@ export const columns: ColumnDef<Product>[] = [
       <DataTableColumnHeader column={column} title="Stock" />
     ),
     cell: ({ row }) => (
-      <div className="w-[80px]">{row.getValue("inventoryCount")}</div>
+      <Link
+        to="/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug"
+        params={(prev) => ({
+          ...prev,
+          orgUrlSlug: prev.orgUrlSlug!,
+          storeUrlSlug: prev.storeUrlSlug!,
+          productSlug: row.original._id,
+        })}
+        className="flex items-center gap-8"
+      >
+        <div className="w-[80px]">{row.getValue("inventoryCount")}</div>
+      </Link>
     ),
     enableSorting: false,
     enableHiding: false,
@@ -75,7 +97,18 @@ export const columns: ColumnDef<Product>[] = [
       <DataTableColumnHeader column={column} title="# Available" />
     ),
     cell: ({ row }) => (
-      <div className="w-[80px]">{row.getValue("quantityAvailable")}</div>
+      <Link
+        to="/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug"
+        params={(prev) => ({
+          ...prev,
+          orgUrlSlug: prev.orgUrlSlug!,
+          storeUrlSlug: prev.storeUrlSlug!,
+          productSlug: row.original._id,
+        })}
+        className="flex items-center gap-8"
+      >
+        <div className="w-[80px]">{row.getValue("quantityAvailable")}</div>
+      </Link>
     ),
     enableSorting: false,
     enableHiding: false,

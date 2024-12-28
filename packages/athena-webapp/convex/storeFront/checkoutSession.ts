@@ -565,11 +565,19 @@ function checkAdjustedAvailability(
     const existingQuantity = sessionItemsMap.get(productSkuId) || 0; // User's current session quantity
     const adjustedRequested = quantity - existingQuantity; // Net new quantity to request
 
-    if (!sku || sku.quantityAvailable < adjustedRequested) {
+    // Check both quantityAvailable and inventoryCount
+    if (
+      !sku ||
+      sku.quantityAvailable < adjustedRequested ||
+      (typeof sku.inventoryCount === "number" && sku.inventoryCount < quantity)
+    ) {
       unavailable.push({
         productSkuId,
         requested: quantity,
-        available: sku?.quantityAvailable + existingQuantity || 0,
+        available: Math.min(
+          sku?.quantityAvailable + existingQuantity || 0,
+          sku?.inventoryCount || 0
+        ),
       });
     }
   }

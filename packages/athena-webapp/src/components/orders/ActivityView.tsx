@@ -1,6 +1,10 @@
 import View from "../View";
 import { useOnlineOrder } from "~/src/contexts/OnlineOrderContext";
-import { currencyFormatter, getRelativeTime } from "~/src/lib/utils";
+import {
+  currencyFormatter,
+  getRelativeTime,
+  slugToWords,
+} from "~/src/lib/utils";
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
 import { Circle } from "lucide-react";
 
@@ -45,23 +49,30 @@ export function ActivityView() {
               <div className="flex items-center">
                 <Circle className="h-2 w-2 mt-1 mr-2 text-muted-foreground" />
                 {activity.type === "refund" && (
-                  <p className="text-sm">{`refunded ${formatter.format((activity as any).amount / 100)}`}</p>
+                  <div className="flex items-center gap-1">
+                    <p className="text-sm font-medium">refunded</p>
+                    <p className="text-sm text-red-700">
+                      - {formatter.format((activity as any).amount / 100)}
+                    </p>
+                  </div>
                 )}
                 {activity.type === "transition" && (
                   <div className="flex items-center gap-1">
                     {(activity as any).status == "created" ? (
-                      <p className="text-sm">order was</p>
+                      <p className="text-sm text-muted-foreground">order was</p>
                     ) : (
-                      <p className="text-sm">order transitioned &rarr;</p>
+                      <p className="text-sm text-muted-foreground">
+                        order transitioned &rarr;
+                      </p>
                     )}
 
                     <p className="text-sm font-medium">
-                      {(activity as any).status}
+                      {slugToWords((activity as any).status)}
                     </p>
                   </div>
                 )}
               </div>
-              <p className="text-sm ml-4 text-muted-foreground">
+              <p className="text-xs ml-4 text-muted-foreground">
                 {getRelativeTime(activity.date)}
               </p>
             </div>

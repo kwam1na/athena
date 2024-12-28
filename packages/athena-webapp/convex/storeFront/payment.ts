@@ -159,6 +159,15 @@ export const refundPayment = action({
     console.log("response from refund", res);
 
     if (response.ok) {
+      await ctx.runMutation(api.storeFront.onlineOrder.update, {
+        externalReference: res.data?.transaction?.reference,
+        update: {
+          status: "refund-submitted",
+        },
+      });
+
+      console.log('updated order status to "refund-submitted"');
+
       if (args.returnItemsToStock) {
         await ctx.runMutation(api.storeFront.onlineOrder.returnItemsToStock, {
           externalTransactionId: args.externalTransactionId,
@@ -166,10 +175,21 @@ export const refundPayment = action({
         });
 
         console.log("returned items to stock");
+        return { success: true, message: res.message };
       }
 
+      if (args.onlineOrderItemIds) {
+        await ctx.runMutation(api.storeFront.onlineOrder.updateOrderItems, {
+          orderItemIds: args.onlineOrderItemIds,
+          updates: { isRefunded: true },
+        });
+
+        console.log("updated order items to refunded");
+      }
       return { success: true, message: res.message };
     }
+
+    console.log("response from refund failed", res);
 
     return { success: false, message: res.message };
   },

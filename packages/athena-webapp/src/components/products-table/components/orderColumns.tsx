@@ -3,9 +3,16 @@ import { ColumnDef } from "@tanstack/react-table";
 import { Badge } from "../../ui/badge";
 
 import { DataTableColumnHeader } from "./data-table-column-header";
-import { capitalizeFirstLetter, getRelativeTime } from "@/lib/utils";
+import {
+  capitalizeFirstLetter,
+  getRelativeTime,
+  slugToWords,
+} from "@/lib/utils";
 import { Link } from "@tanstack/react-router";
 import { OnlineOrder } from "~/types";
+import { CheckCircle, CheckCircle2, Circle, RotateCcw } from "lucide-react";
+import { CheckCircledIcon, CheckIcon } from "@radix-ui/react-icons";
+import { getOrderState } from "../../orders/utils";
 
 export const orderColumns: ColumnDef<OnlineOrder>[] = [
   {
@@ -65,7 +72,19 @@ export const orderColumns: ColumnDef<OnlineOrder>[] = [
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Amount" />
     ),
-    cell: ({ row }) => <div>{row.getValue("amount")}</div>,
+    cell: ({ row }) => (
+      <Link
+        to="/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug"
+        params={(prev) => ({
+          ...prev,
+          orgUrlSlug: prev.orgUrlSlug!,
+          storeUrlSlug: prev.storeUrlSlug!,
+          orderSlug: row.original._id,
+        })}
+      >
+        <div>{row.getValue("amount")}</div>
+      </Link>
+    ),
     enableSorting: false,
     enableHiding: false,
   },
@@ -77,15 +96,29 @@ export const orderColumns: ColumnDef<OnlineOrder>[] = [
     cell: ({ row }) => {
       const method = row.getValue("deliveryMethod");
 
+      let content = <div>{row.getValue("deliveryMethod")}</div>;
+
       if (method == "delivery") {
-        return <div>Delivery</div>;
+        content = <div>Delivery</div>;
       }
 
       if (method == "pickup") {
-        return <div>Pickup</div>;
+        content = <div>Pickup</div>;
       }
 
-      return <div>{row.getValue("deliveryMethod")}</div>;
+      return (
+        <Link
+          to="/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug"
+          params={(prev) => ({
+            ...prev,
+            orgUrlSlug: prev.orgUrlSlug!,
+            storeUrlSlug: prev.storeUrlSlug!,
+            orderSlug: row.original._id,
+          })}
+        >
+          {content}
+        </Link>
+      );
     },
     enableSorting: false,
     enableHiding: false,
@@ -112,7 +145,30 @@ export const orderColumns: ColumnDef<OnlineOrder>[] = [
         }
       }
 
-      return <Badge variant="outline">{capitalizeFirstLetter(status)}</Badge>;
+      const { isOrderReady, hasOrderTransitioned } = getOrderState(order);
+
+      return (
+        <Link
+          to="/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug"
+          params={(prev) => ({
+            ...prev,
+            orgUrlSlug: prev.orgUrlSlug!,
+            storeUrlSlug: prev.storeUrlSlug!,
+            orderSlug: row.original._id,
+          })}
+        >
+          <div className="flex items-center">
+            {(isOrderReady || hasOrderTransitioned) && (
+              <CheckCircle2 className="h-3 w-3 mr-2" />
+            )}
+            {status.includes("refunded") && (
+              <RotateCcw className="h-3 w-3 mr-2" />
+            )}
+            {status.includes("open") && <Circle className="h-3 w-3 mr-2" />}
+            <p>{capitalizeFirstLetter(slugToWords(status))}</p>
+          </div>
+        </Link>
+      );
     },
     enableSorting: false,
     enableHiding: false,
@@ -123,8 +179,17 @@ export const orderColumns: ColumnDef<OnlineOrder>[] = [
       <DataTableColumnHeader column={column} title="Placed" />
     ),
     cell: ({ row }) => (
-      //   <div >{row.getValue("_creationTime")}</div>
-      <div>{getRelativeTime(row.getValue("_creationTime"))}</div>
+      <Link
+        to="/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug"
+        params={(prev) => ({
+          ...prev,
+          orgUrlSlug: prev.orgUrlSlug!,
+          storeUrlSlug: prev.storeUrlSlug!,
+          orderSlug: row.original._id,
+        })}
+      >
+        <div>{getRelativeTime(row.getValue("_creationTime"))}</div>
+      </Link>
     ),
     enableSorting: false,
     enableHiding: false,

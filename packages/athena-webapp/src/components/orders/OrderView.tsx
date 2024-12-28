@@ -20,7 +20,11 @@ import { LoadingButton } from "../ui/loading-button";
 import { useState } from "react";
 import { useAction, useMutation } from "convex/react";
 import { api } from "~/convex/_generated/api";
-import { currencyFormatter, getRelativeTime } from "~/src/lib/utils";
+import {
+  currencyFormatter,
+  getRelativeTime,
+  slugToWords,
+} from "~/src/lib/utils";
 import { toast } from "sonner";
 
 import { Input } from "@/components/ui/input";
@@ -34,6 +38,7 @@ import useGetActiveStore from "~/src/hooks/useGetActiveStore";
 import { AlertModal } from "../ui/modals/alert-modal";
 import { RefundsView } from "./RefundsView";
 import { ActivityView } from "./ActivityView";
+import { getOrderState } from "./utils";
 
 export function RefundOptions() {
   const { order } = useOnlineOrder();
@@ -177,14 +182,14 @@ const Header = () => {
   const isDelivery = order?.deliveryMethod === "delivery";
   const isPickup = order?.deliveryMethod === "pickup";
 
-  const handleUpdateOrder = async () => {
+  const handleUpdateOrder = async (update: Record<string, any>) => {
     try {
       setIsUpdatingOrder(true);
       await updateOrder({
         orderId: order?._id,
-        update: { status: "ready" },
+        update,
       });
-      toast("Order marked as ready", {
+      toast(`Order marked as ${slugToWords(update.status)}`, {
         icon: <CheckCircledIcon className="w-4 h-4" />,
       });
     } catch (error) {
@@ -224,9 +229,12 @@ const Header = () => {
     ?.filter((i) => !Boolean(i.isRefunded))
     .every((item) => item.isReady);
 
-  const isOrderOpen = order?.status === "open";
-
-  const isOrderReady = order?.status === "ready";
+  const {
+    isOrderOpen,
+    isOrderReady,
+    isOrderOutForDelivery,
+    hasOrderTransitioned,
+  } = getOrderState(order);
 
   const orderStatus = isDelivery ? "Ready for delivery" : "Ready for pickup";
 
@@ -256,8 +264,11 @@ const Header = () => {
 
         <Badge className="rounded-lg text-muted-foreground" variant={"outline"}>
           {isOrderOpen && <p>OPEN</p>}
-          {order.status == "ready" && <p>{orderStatus.toUpperCase()}</p>}
+          {isOrderReady && <p>{orderStatus.toUpperCase()}</p>}
           {isInRefundState && <p>{refundText.toUpperCase()}</p>}
+          {hasOrderTransitioned && (
+            <p>{slugToWords(order.status).toUpperCase()}</p>
+          )}
         </Badge>
 
         <p className="text-xs text-muted-foreground">
@@ -270,11 +281,11 @@ const Header = () => {
           <LoadingButton
             isLoading={isUpdatingOrder}
             disabled={!isReady}
-            onClick={handleUpdateOrder}
-            className="px-2 lg:px-3"
+            onClick={() => handleUpdateOrder({ status: "ready-for-delivery" })}
+            variant={"outline"}
           >
             <Truck className="h-4 w-4 mr-2" />
-            <p className="text-sm">Ready for delivery</p>
+            <p className="text-sm">Move &rarr; Ready for delivery</p>
           </LoadingButton>
         )}
 
@@ -282,11 +293,23 @@ const Header = () => {
           <LoadingButton
             isLoading={isUpdatingOrder}
             disabled={!isReady}
-            onClick={handleUpdateOrder}
-            className="px-2 lg:px-3"
+            onClick={() => handleUpdateOrder({ status: "out-for-delivery" })}
+            variant={"outline"}
           >
             <Truck className="h-4 w-4 mr-2" />
-            <p className="text-sm">Out for delivery</p>
+            <p className="text-sm">Move &rarr; Out for delivery</p>
+          </LoadingButton>
+        )}
+
+        {isOrderOutForDelivery && (
+          <LoadingButton
+            isLoading={isUpdatingOrder}
+            disabled={!isReady}
+            onClick={() => handleUpdateOrder({ status: "delivered" })}
+            variant={"outline"}
+          >
+            <Truck className="h-4 w-4 mr-2" />
+            <p className="text-sm">Move &rarr; Delivered</p>
           </LoadingButton>
         )}
 
@@ -294,11 +317,11 @@ const Header = () => {
           <LoadingButton
             isLoading={isUpdatingOrder}
             disabled={!isReady}
-            onClick={handleUpdateOrder}
-            className="px-2 lg:px-3"
+            onClick={() => handleUpdateOrder({ status: "ready-for-pickup" })}
+            variant={"outline"}
           >
             <Store className="h-4 w-4 mr-2" />
-            <p className="text-sm">Ready for pickup</p>
+            <p className="text-sm">Move &rarr; Ready for pickup</p>
           </LoadingButton>
         )}
 
@@ -306,11 +329,11 @@ const Header = () => {
           <LoadingButton
             isLoading={isUpdatingOrder}
             disabled={!isReady}
-            onClick={handleUpdateOrder}
-            className="px-2 lg:px-3"
+            onClick={() => handleUpdateOrder({ status: "picked-up" })}
+            variant={"outline"}
           >
             <Store className="h-4 w-4 mr-2" />
-            <p className="text-sm">Picked up</p>
+            <p className="text-sm">Move &rarr; Picked up</p>
           </LoadingButton>
         )}
       </div>
