@@ -68,9 +68,9 @@ export function RefundsView() {
       : "Refund";
 
   const handleRefundOrder = async () => {
-    console.table(state);
+    // console.table(state);
 
-    // return;
+    const refundItems = [state.deliveryFees && "delivery-fee"].filter(Boolean);
 
     try {
       setIsRefundingOrder(true);
@@ -85,6 +85,7 @@ export function RefundsView() {
         amount: state.amountToRefund,
         returnItemsToStock: state.returnToStock,
         onlineOrderItemIds: ids,
+        refundItems,
       });
 
       if (res.success) {
@@ -203,9 +204,14 @@ export function RefundsView() {
             <div className="flex items-center gap-2">
               <Checkbox
                 disabled={
-                  state.entireOrder || state.remainingAmount || !canRefund
+                  state.entireOrder ||
+                  state.remainingAmount ||
+                  !canRefund ||
+                  order.didRefundDeliveryFee
                 }
-                checked={state.deliveryFees}
+                checked={
+                  state.deliveryFees || Boolean(order.didRefundDeliveryFee)
+                }
                 onCheckedChange={() => {
                   setState((prev) => ({
                     ...prev,
@@ -270,7 +276,7 @@ export function RefundsView() {
             <div className="ml-4 space-y-4">
               {order.items?.map((item: any) => {
                 return (
-                  <div key={item.productId} className="flex items-center gap-4">
+                  <div key={item._id} className="flex items-center gap-4">
                     <Checkbox
                       disabled={
                         state.entireOrder || state.subtotal || item.isRefunded

@@ -40,7 +40,7 @@ export default function ProductPage() {
         <ProductAttributesView />
         <ProductCategorizationView />
         <div className="grid grid-cols-2 gap-8">
-          {category?.name == "Wigs" && <WigTypeView />}
+          {category?.name == "Hair" && <WigTypeView />}
           <ProductAvailabilityView />
         </div>
       </div>

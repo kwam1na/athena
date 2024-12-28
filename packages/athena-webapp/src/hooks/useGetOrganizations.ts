@@ -18,7 +18,7 @@ export function useGetActiveOrganization() {
   const { orgUrlSlug } = useParams({ strict: false });
 
   const activeOrganization = organizations?.find(
-    (org) => org.slug == orgUrlSlug
+    (org: any) => org.slug == orgUrlSlug
   );
 
   return {

@@ -211,7 +211,7 @@ const Header = () => {
   const isPartiallyRefunded =
     amountRefunded > 0 && amountRefunded < order.amount;
 
-  const hasIssuedRefund = order.status === "refunded";
+  const hasIssuedRefund = order.status.includes("refund");
 
   const isRefundPending = ["refund-pending", "refund-processing"].includes(
     order.status
@@ -284,8 +284,8 @@ const Header = () => {
             onClick={() => handleUpdateOrder({ status: "ready-for-delivery" })}
             variant={"outline"}
           >
-            <Truck className="h-4 w-4 mr-2" />
-            <p className="text-sm">Move &rarr; Ready for delivery</p>
+            <Truck className="h-4 w-4 mr-1" />
+            <p className="text-sm">&rarr; Ready for delivery</p>
           </LoadingButton>
         )}
 
@@ -296,8 +296,8 @@ const Header = () => {
             onClick={() => handleUpdateOrder({ status: "out-for-delivery" })}
             variant={"outline"}
           >
-            <Truck className="h-4 w-4 mr-2" />
-            <p className="text-sm">Move &rarr; Out for delivery</p>
+            <Truck className="h-4 w-4 mr-1" />
+            <p className="text-sm">&rarr; Out for delivery</p>
           </LoadingButton>
         )}
 
@@ -308,8 +308,8 @@ const Header = () => {
             onClick={() => handleUpdateOrder({ status: "delivered" })}
             variant={"outline"}
           >
-            <Truck className="h-4 w-4 mr-2" />
-            <p className="text-sm">Move &rarr; Delivered</p>
+            <Truck className="h-4 w-4 mr-1" />
+            <p className="text-sm">&rarr; Delivered</p>
           </LoadingButton>
         )}
 
@@ -320,8 +320,8 @@ const Header = () => {
             onClick={() => handleUpdateOrder({ status: "ready-for-pickup" })}
             variant={"outline"}
           >
-            <Store className="h-4 w-4 mr-2" />
-            <p className="text-sm">Move &rarr; Ready for pickup</p>
+            <Store className="h-4 w-4 mr-1" />
+            <p className="text-sm">&rarr; Ready for pickup</p>
           </LoadingButton>
         )}
 
@@ -332,8 +332,8 @@ const Header = () => {
             onClick={() => handleUpdateOrder({ status: "picked-up" })}
             variant={"outline"}
           >
-            <Store className="h-4 w-4 mr-2" />
-            <p className="text-sm">Move &rarr; Picked up</p>
+            <Store className="h-4 w-4 mr-1" />
+            <p className="text-sm">&rarr; Picked up</p>
           </LoadingButton>
         )}
       </div>

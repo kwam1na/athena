@@ -1,7 +1,5 @@
 import { ColumnDef } from "@tanstack/react-table";
 
-import { Badge } from "../../ui/badge";
-
 import { DataTableColumnHeader } from "./data-table-column-header";
 import {
   capitalizeFirstLetter,
@@ -10,19 +8,16 @@ import {
 } from "@/lib/utils";
 import { Link } from "@tanstack/react-router";
 import { OnlineOrder } from "~/types";
-import { CheckCircle, CheckCircle2, Circle, RotateCcw } from "lucide-react";
-import { CheckCircledIcon, CheckIcon } from "@radix-ui/react-icons";
-import { getOrderState } from "../../orders/utils";
+import { CheckCircle2, Circle, RotateCcw } from "lucide-react";
+import { getOrderState } from "../../../orders/utils";
 
 export const orderColumns: ColumnDef<OnlineOrder>[] = [
   {
     accessorKey: "orderNumber",
     header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Order" />
+      <DataTableColumnHeader column={column} title="Orders" />
     ),
     cell: ({ row }) => {
-      //   const sku = row.original.skus[0];
-
       return (
         <div className="flex space-x-2">
           <Link
@@ -85,8 +80,9 @@ export const orderColumns: ColumnDef<OnlineOrder>[] = [
         <div>{row.getValue("amount")}</div>
       </Link>
     ),
-    enableSorting: false,
-    enableHiding: false,
+    sortingFn: (a, b) => {
+      return (a.original as any).amountValue - (b.original as any).amountValue;
+    },
   },
   {
     accessorKey: "deliveryMethod",
@@ -122,6 +118,9 @@ export const orderColumns: ColumnDef<OnlineOrder>[] = [
     },
     enableSorting: false,
     enableHiding: false,
+    filterFn: (row, id, value) => {
+      return value.includes(row.getValue(id));
+    },
   },
   {
     accessorKey: "status",
@@ -172,6 +171,9 @@ export const orderColumns: ColumnDef<OnlineOrder>[] = [
     },
     enableSorting: false,
     enableHiding: false,
+    filterFn: (row, id, value) => {
+      return value.includes(row.getValue(id));
+    },
   },
   {
     accessorKey: "_creationTime",
@@ -191,7 +193,5 @@ export const orderColumns: ColumnDef<OnlineOrder>[] = [
         <div>{getRelativeTime(row.getValue("_creationTime"))}</div>
       </Link>
     ),
-    enableSorting: false,
-    enableHiding: false,
   },
 ];

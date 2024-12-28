@@ -92,7 +92,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         <Meta />
       </Head>
       <Body>
-        <Toaster />
+        <Toaster expand />
         {children}
         <ScrollRestoration />
         <Scripts />

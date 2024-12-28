@@ -55,4 +55,5 @@ export const onlineOrderSchema = v.object({
   refunds: v.optional(
     v.array(v.object({ amount: v.number(), id: v.string(), date: v.number() }))
   ),
+  didRefundDeliveryFee: v.optional(v.boolean()),
 });

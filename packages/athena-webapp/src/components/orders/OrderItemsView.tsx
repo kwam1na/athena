@@ -96,7 +96,8 @@ function OrderItem({ item, order }: { item: any; order: any }) {
       <div className="space-y-8">
         <div className="space-y-2">
           <p className="text-sm">{getProductName(item)}</p>
-          <p className="text-sm text-muted-foreground">{item.price}</p>
+          <p className="text-xs text-muted-foreground">{item.productSku}</p>
+          <p className="text-xs text-muted-foreground">{item.price}</p>
           <p className="text-xs text-muted-foreground">{`x${item.quantity}`}</p>
         </div>
 

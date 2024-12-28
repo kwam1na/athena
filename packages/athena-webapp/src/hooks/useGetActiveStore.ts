@@ -18,7 +18,7 @@ export default function useGetActiveStore() {
 
   const { storeUrlSlug } = useParams({ strict: false });
 
-  const activeStore = stores?.find((store) => store.slug == storeUrlSlug);
+  const activeStore = stores?.find((store: any) => store.slug == storeUrlSlug);
 
   return {
     activeStore,

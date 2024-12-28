@@ -1,13 +1,9 @@
-import { PackageXIcon, ShoppingBag } from "lucide-react";
-import { Link, useLoaderData } from "@tanstack/react-router";
-import { PlusIcon } from "@radix-ui/react-icons";
-import { StoreResponse } from "@/lib/schemas/store";
-import { OnlineOrder, Product, Store } from "~/types";
-import { Button } from "../ui/button";
-import { columns } from "../products-table/components/columns";
+import { ShoppingBag } from "lucide-react";
+import { OnlineOrder, Store } from "~/types";
 import { DataTable } from "../products-table/components/data-table";
 import { EmptyState } from "../states/empty/empty-state";
-import { orderColumns } from "../products-table/components/orderColumns";
+import { OrderDataTable } from "./orders-table/components/data-table";
+import { orderColumns } from "./orders-table/components/orderColumns";
 
 export default function Orders({
   store,
@@ -20,7 +16,7 @@ export default function Orders({
     <div className="container mx-auto">
       {orders && orders.length > 0 && (
         <div className="p-8">
-          <DataTable data={orders} columns={orderColumns} showToolbar={false} />
+          <OrderDataTable data={orders} columns={orderColumns} />
         </div>
       )}
       {orders && orders.length == 0 && (

@@ -141,6 +141,7 @@ export const refundPayment = action({
     amount: v.optional(v.number()),
     returnItemsToStock: v.boolean(),
     onlineOrderItemIds: v.optional(v.array(v.id("onlineOrderItem"))),
+    refundItems: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
     const response = await fetch(`https://api.paystack.co/refund`, {
@@ -163,6 +164,7 @@ export const refundPayment = action({
         externalReference: res.data?.transaction?.reference,
         update: {
           status: "refund-submitted",
+          didRefundDeliveryFee: args.refundItems?.includes("delivery-fee"),
         },
       });
 

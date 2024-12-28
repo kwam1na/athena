@@ -414,3 +414,16 @@ export const returnAllItemsToStock = mutation({
     return true;
   },
 });
+
+export const newOrder = query({
+  args: { storeId: v.id("store") },
+  handler: async (ctx, args) => {
+    const order = await ctx.db
+      .query(entity)
+      .filter((q) => q.eq(q.field("storeId"), args.storeId))
+      .order("desc")
+      .first();
+
+    return order;
+  },
+});

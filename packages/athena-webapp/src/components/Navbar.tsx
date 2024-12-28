@@ -5,7 +5,6 @@ import {
   useParams,
   useRouterState,
 } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
 import { StoresAccordion } from "./StoresAccordion";
 import { getAllOrganizations } from "@/api/organization";
 import OrganizationSwitcher from "./organization-switcher";
@@ -20,6 +19,12 @@ import { ArrowLeftToLine, ArrowRightFromLine } from "lucide-react";
 import { StoresDropdown } from "./StoresDropdown";
 import { StoreDropdown } from "./StoreDropdown";
 import { useGetOrganizations } from "@/hooks/useGetOrganizations";
+import useGetActiveStore from "../hooks/useGetActiveStore";
+import { useQuery } from "convex/react";
+import { api } from "~/convex/_generated/api";
+import { useEffect } from "react";
+import { toast } from "sonner";
+import { currencyFormatter } from "../lib/utils";
 
 function SettingsHeader() {
   const navigate = useNavigate();
@@ -109,6 +114,35 @@ const Navbar = () => {
   const currentPath = router.location.pathname;
 
   const isOnSettings = currentPath.includes("settings");
+
+  const { activeStore } = useGetActiveStore();
+
+  const ORDER_ID_LOCAL_STORAGE_KEY = "order_id";
+
+  const newOrder = useQuery(
+    api.storeFront.onlineOrder.newOrder,
+    activeStore?._id ? { storeId: activeStore._id } : "skip"
+  );
+
+  const formatter = currencyFormatter(activeStore?.currency || "USD");
+
+  useEffect(() => {
+    if (newOrder) {
+      const { customerDetails } = newOrder;
+
+      const previousOrderId = localStorage.getItem(ORDER_ID_LOCAL_STORAGE_KEY);
+
+      if (previousOrderId == newOrder._id) return;
+
+      localStorage.setItem(ORDER_ID_LOCAL_STORAGE_KEY, newOrder._id);
+
+      toast(`Order for ${formatter.format(newOrder.amount / 100)} received`, {
+        description: `${customerDetails.email} placed an order`,
+        position: "top-right",
+        duration: 4000,
+      });
+    }
+  }, [newOrder]);
 
   return (
     <section className={`px-8 border-b w-full flex-none space-y-4`}>
