@@ -104,7 +104,7 @@ function BagSummary() {
             </p>
           </div>
         )}
-        <div className="flex justify-between font-semibold">
+        <div className="flex justify-between font-medium">
           <p className="text-lg">Total</p>
           <p className="text-lg">{formatter.format(total)}</p>
         </div>

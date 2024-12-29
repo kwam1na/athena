@@ -10,6 +10,8 @@ import { DeliveryDetails } from "@/components/checkout/DeliveryDetails/DeliveryS
 import { motion } from "framer-motion";
 import NotFound from "@/components/states/not-found/NotFound";
 import { FadeIn } from "@/components/common/FadeIn";
+import { capitalizeFirstLetter, slugToWords } from "@/lib/utils";
+import { CircleCheck, Hourglass, RotateCcw, Truck } from "lucide-react";
 
 export const Route = createFileRoute("/shop/orders/$orderId")({
   component: () => <OrderDetail />,
@@ -53,7 +55,7 @@ const OrderSummary = ({ order }: { order: any }) => {
 
         <div className="grid grid-cols-2">
           <p className="text-sm">Total</p>
-          <p className="text-sm font-bold">
+          <p className="text-sm font-medium">
             {formatter.format(order.amount / 100)}
           </p>
         </div>
@@ -146,40 +148,100 @@ const OrderDetail = () => {
     return <NotFound />;
   }
 
-  // console.log("order ->", data);
+  console.log("order ->", data);
   const isPickupOrder = data.deliveryMethod == "pickup";
 
   const isOrderOpen = data.status == "open";
 
   const isOrderReady = data.status == "ready";
 
-  const readyText = isPickupOrder
-    ? "Ready for pickup"
-    : "Preparing for delivery";
-
   const openText = isPickupOrder
     ? "We're currently processing this order. You'll receive an email when it's ready for pickup."
     : "We're currently processing this order. You'll receive an email when it's dispatched.";
 
-  const preparingText = isPickupOrder
-    ? "Your order is ready for pickup."
-    : "Your order is being prepared for delivery.";
+  const getOrderMessage = () => {
+    const getNextPhase = () => {
+      if (isPickupOrder) {
+        return "ready for pickup";
+      }
+
+      return "out for delivery";
+    };
+
+    let message = `We're currently processing this order. You'll receive an email when it's ${getNextPhase()}.`;
+
+    switch (data.status) {
+      case "open":
+        break;
+
+      case "ready-for-pickup":
+        message = `Your order is ready for pickup. Visit our store to pick it up anytime during our working hours.`;
+        break;
+
+      case "ready-for-delivery":
+        message = `We're preparing your order for delivery. You'll receive an email when we send it out.`;
+        break;
+
+      case "out-for-delivery":
+        message = `Your order is out for delivery. Expect it soon!`;
+        break;
+
+      case "picked-up":
+        message = `Your order has been picked up. Thank you for shopping with us!`;
+        break;
+
+      case "delivered":
+        message = `Your order has been delivered. Thank you for shopping with us!`;
+        break;
+
+      case "refunded":
+        message = `Your order has been refunded. Please allow 7-10 business days for the refund to reflect in your account.`;
+        break;
+
+      default:
+        break;
+    }
+
+    return message;
+  };
 
   return (
-    <FadeIn className="container mx-auto space-y-40 py-8 pb-32 w-full">
+    <FadeIn className="container mx-auto max-w-[1024px] space-y-40 py-8 pb-32 w-full">
       <div className="space-y-16">
         <div className="space-y-12">
           <Link to="/shop/orders" className="flex items-center gap-2">
-            <ArrowLeftIcon className="w-4 h-4" />
-            <h1 className="text-sm font-light">All purchases</h1>
+            <ArrowLeftIcon className="w-3.5 h-3.5" />
+            <h1 className="text-xs font-light">All purchases</h1>
           </Link>
           {/* <h1 className="text-sm font-light">Back to orders</h1> */}
         </div>
 
         <div className="space-y-8 text-sm">
-          {isOrderOpen && <p className="font-bold">Processing</p>}
+          {isOrderOpen ? (
+            <div className="flex items-center gap-2">
+              {data.status == "open" && <Hourglass className="w-3.5 h-3.5" />}
+              <p className="font-medium">Processing</p>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              {data.status == "out-for-delivery" && (
+                <Truck className="w-3.5 h-3.5" />
+              )}
 
-          {isOrderReady && <p className="font-bold">{readyText}</p>}
+              {data.status == "refunded" && <RotateCcw className="w-3 h-3" />}
+
+              {data.status == "picked-up" && (
+                <CircleCheck className="w-3.5 h-3.5" />
+              )}
+
+              {data.status == "delivered" && (
+                <CircleCheck className="w-3.5 h-3.5" />
+              )}
+              <p className="font-medium">
+                {capitalizeFirstLetter(slugToWords(data.status))}
+              </p>
+            </div>
+          )}
 
           <div className="flex items-center justify-between w-[30%]">
             <p>Purchase date</p>
@@ -193,10 +255,8 @@ const OrderDetail = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 text-sm">
-        {isOrderOpen && <p>{openText}</p>}
-
-        {isOrderReady && <p>{preparingText}</p>}
+      <div className="grid grid-cols-2 gap-24 text-sm">
+        <p>{getOrderMessage()}</p>
 
         <OrderItems order={data} />
       </div>

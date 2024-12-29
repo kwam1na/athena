@@ -6,6 +6,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import placeholder from "@/assets/placeholder.png";
 import { EmptyState } from "@/components/states/empty/empty-state";
 import { motion } from "framer-motion";
+import { capitalizeFirstLetter, slugToWords } from "@/lib/utils";
 
 export const Route = createFileRoute("/shop/orders/")({
   component: () => <Purchases />,
@@ -33,8 +34,13 @@ const OrderItem = ({
   return (
     <div className="space-y-8 text-sm">
       <div className="space-y-4">
-        {isOrderOpen && <p className="font-bold">Processing</p>}
-        {isOrderReady && <p className="font-bold">{readyText}</p>}
+        {isOrderOpen ? (
+          <p className="font-medium">Processing</p>
+        ) : (
+          <p className="font-medium">
+            {capitalizeFirstLetter(slugToWords(order.status))}
+          </p>
+        )}
         <p>{new Date(order._creationTime).toDateString()}</p>
       </div>
 
@@ -82,7 +88,6 @@ const Orders = () => {
     return <EmptyState message="You haven't placed any orders." />;
   }
 
-  console.log("orders -> ", data);
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -100,7 +105,7 @@ const Orders = () => {
 };
 const Purchases = () => {
   return (
-    <div className="container mx-auto px-4 space-y-40 py-12 pb-40">
+    <div className="container mx-auto max-w-[1024px] space-y-40 py-12 pb-40">
       <h1 className="text-2xl font-light">Orders</h1>
 
       <Orders />

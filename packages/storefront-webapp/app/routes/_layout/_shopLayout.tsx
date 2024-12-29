@@ -82,8 +82,8 @@ function LayoutComponent() {
 
   return (
     <>
-      <div className="grid grid-cols-12 gap-4 pb-40">
-        <div className="col-span-12 sticky top-0 z-20">
+      <div className="pb-40 h-[100vh]">
+        <div className="bg-background border-b col-span-12 sticky top-0 z-20">
           <ProductFilterBar
             showFilters={showFilters}
             setShowFilters={setShowFilters}
@@ -92,21 +92,26 @@ function LayoutComponent() {
           />
         </div>
 
-        {showFilters && (
-          <div className="hidden lg:flex flex-col gap-16 col-span-2 h-[calc(100vh-124px)] sticky top-16 lg:py-16 lg:px-16 overflow-auto">
-            {hasActiveFilters && (
-              <Button
-                variant={"outline"}
-                className="px-16"
-                onClick={clearFilters}
-              >
-                {`Clear (${selectedFiltersCount})`}
-              </Button>
-            )}
+        <div className="container mx-auto max-w-[1024px] flex py-8 gap-4">
+          {showFilters && (
+            <div>
+              {hasActiveFilters && (
+                <Button
+                  variant={"outline"}
+                  className="px-16"
+                  onClick={clearFilters}
+                >
+                  {`Clear (${selectedFiltersCount})`}
+                </Button>
+              )}
 
-            <ProductFilter />
+              <ProductFilter />
+            </div>
+          )}
+          <div className={"col-span-12 container mx-auto max-w-[1024px]"}>
+            <Outlet />
           </div>
-        )}
+        </div>
 
         {showMobileFilters && (
           <div className="absolute z-40 w-full h-screen bg-background">
@@ -144,19 +149,13 @@ function LayoutComponent() {
             </div>
           </div>
         )}
-
-        <div
-          className={
-            showFilters
-              ? "col-span-12 px-6 lg:col-span-10 lg:px-12"
-              : "col-span-12 lg:px-12"
-          }
-        >
-          <Outlet />
-        </div>
       </div>
 
       <Footer />
     </>
   );
+}
+
+{
+  /* <div className="hidden lg:flex flex-col gap-16 col-span-2 h-[calc(100vh-124px)] sticky top-16 lg:py-16 lg:px-16 overflow-auto bg-red-200"></div> */
 }

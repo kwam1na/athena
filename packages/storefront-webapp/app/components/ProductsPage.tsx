@@ -53,7 +53,7 @@ export default function ProductsPage({
 
   if (products?.length == 0) {
     return (
-      <div className="space-y-8 px-8">
+      <div className="space-y-8 container mx-auto max-w-[1024px]">
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
           <div className="space-y-4">
             <div className="w-[30vw] h-[30vw] bg-zinc-100 rounded-md"></div>

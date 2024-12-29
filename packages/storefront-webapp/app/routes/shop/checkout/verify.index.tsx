@@ -49,7 +49,7 @@ const Verify = () => {
   }
 
   return (
-    <div className="w-full flex items-center justify-center min-h-[80vh] p-40">
+    <div className="container mx-auto max-w-[1024px] flex items-center justify-center min-h-[80vh] p-40">
       <motion.div
         initial={{ opacity: 0 }}
         animate={{

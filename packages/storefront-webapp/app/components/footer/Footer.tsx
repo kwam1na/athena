@@ -11,7 +11,7 @@ function LinkGroup({ group }: { group: FooterLinkGroup }) {
   return (
     <ul className="space-y-4">
       <li>
-        <p className="font-bold">{group.header}</p>
+        <p className="font-medium">{group.header}</p>
       </li>
       <ul className="space-y-2">
         {group.links.map((link, idx) => (
@@ -69,7 +69,7 @@ export default function Footer() {
   ];
 
   return (
-    <footer className="w-full flex flex-col gap-12 justify-center px-6 lg:px-16 pb-8 text-xs font-light">
+    <footer className="container mx-auto max-w-[1024px] flex flex-col gap-12 justify-center pb-8 text-xs font-light">
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-8">
         {linkGroups.map((group, idx) => (
           <LinkGroup key={idx} group={group} />

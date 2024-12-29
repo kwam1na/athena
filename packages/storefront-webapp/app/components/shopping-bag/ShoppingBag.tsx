@@ -121,7 +121,7 @@ export default function ShoppingBag() {
   };
 
   return (
-    <FadeIn className="container mx-auto space-y-24 px-4 py-16">
+    <FadeIn className="container mx-auto max-w-[1024px] space-y-24 py-16">
       <div className="space-y-2">
         <h1 className="text-2xl font-light">Bag</h1>
         {data && data.length > 0 && <PendingItem session={data[0]} />}
@@ -250,7 +250,7 @@ export default function ShoppingBag() {
 
           {/* Cart Summary */}
           <div className="hidden md:block relative">
-            <div className="p-6 space-y-16 rounded-lg sticky top-8">
+            <div className="space-y-16 rounded-lg sticky top-8">
               <div className="space-y-4 text-sm">
                 <div className="flex justify-between mb-2">
                   <span>Subtotal</span>
@@ -261,7 +261,7 @@ export default function ShoppingBag() {
                   <span>Calculated at checkout</span>
                 </div>
               </div>
-              <div className="flex justify-between font-semibold">
+              <div className="flex justify-between font-medium">
                 <span>Total</span>
                 <span>{formatter.format(total)}</span>
               </div>
@@ -289,7 +289,7 @@ export default function ShoppingBag() {
           {/* Mobile Cart Summary */}
           {isNavbarShowing && (
             <div className="block md:hidden absolute bottom-0 left-0 w-full bg-white p-6 shadow-md">
-              <div className="flex justify-between text-lg font-semibold mb-4">
+              <div className="flex justify-between text-lg font-medium mb-4">
                 <span>Total</span>
                 <span>{formatter.format(total)}</span>
               </div>

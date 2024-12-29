@@ -189,7 +189,7 @@ const CheckoutComplete = () => {
 
   return (
     <AnimatePresence>
-      <div className="px-48 pt-24 pb-40 space-y-24">
+      <div className="container mx-auto max-w-[1024px] pt-24 pb-40 space-y-24">
         <motion.div
           initial={{ opacity: 0 }}
           animate={{

@@ -232,12 +232,12 @@ export default function NavigationBar() {
         initial="hidden"
         animate="show"
         exit={"exit"}
-        className="absolute w-full left-0 bg-white bg-opacity-95 animate-fadeIn z-50"
+        className="absolute w-full left-0 bg-background bg-opacity-95 animate-fadeIn z-50"
         onMouseEnter={() => setActiveMenu(slug)}
         onMouseLeave={() => setActiveMenu(null)}
       >
-        <div className="w-full py-8 pr-32 pl-64">
-          <div className="flex flex-col font-bold gap-4">{children}</div>
+        <div className="w-full py-8 container mx-auto max-w-[1024px]">
+          <div className="flex flex-col font-medium gap-4">{children}</div>
         </div>
       </motion.div>
     );
@@ -254,15 +254,17 @@ export default function NavigationBar() {
   };
 
   return (
-    <div className="relative bg-background border border-b">
+    <div className="relative bg-background">
       <AnimatePresence initial={false}>
         <div className="relative z-50">
-          <nav className={navBarClassname}>
+          <nav
+            className={`${navBarClassname} container mx-auto max-w-[1024px]`}
+          >
             <div className="flex items-center justify-between w-full">
-              <div className="flex gap-24">
+              <div className="flex gap-16">
                 <div>
                   <Link to="/">
-                    <h1 className="text-lg font-medium tracking-widest">
+                    <h1 className="text-md font-medium tracking-widest">
                       {store?.name && (store?.name as string).toUpperCase()}
                     </h1>
                   </Link>
@@ -291,13 +293,14 @@ export default function NavigationBar() {
                   ))}
                 </div>
               </div>
+
               <div className="flex gap-8">
                 <Link
                   onMouseEnter={() => setActiveMenu("profile")}
                   to="/shop/saved"
                   className="flex items-center"
                 >
-                  <p className="text-xs font-bold">kwamina</p>
+                  <p className="text-xs font-medium">Kwamina</p>
                 </Link>
                 <div className="flex items-center gap-4">
                   <Link to="/shop/saved" className="flex items-center">

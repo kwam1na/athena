@@ -57,7 +57,7 @@ export const Route = createRootRouteWithContext<{
 function RootComponent() {
   return (
     <RootDocument>
-      <div className="flex flex-col h-screen">
+      <div className="flex gap-2 flex-col h-screen">
         <NavigationBar />
         <main className="flex-grow">
           <Outlet />

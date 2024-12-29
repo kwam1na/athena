@@ -133,16 +133,16 @@ function ProductDetails({
   return (
     <div className="text-sm space-y-8">
       <div className="space-y-4">
-        <p className="font-bold">Free store pickup</p>
+        <p className="font-medium">Free store pickup</p>
         <div className="flex gap-4">
           <p>Wigclub Hair Studio</p>
-          <a href="https://google.com" className="font-bold underline">
+          <a href="https://google.com" className="font-medium underline">
             Get directions
           </a>
         </div>
       </div>
       <SheetTrigger asChild onClick={showShippingPolicy}>
-        <p className="font-bold cursor-pointer">
+        <p className="font-medium cursor-pointer">
           Shipping, returns, and exchanges
         </p>
       </SheetTrigger>

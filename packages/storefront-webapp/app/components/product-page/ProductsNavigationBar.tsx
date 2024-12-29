@@ -21,7 +21,7 @@ export function ProductNavigationBar() {
   if (!product) return null;
 
   return (
-    <Breadcrumb className="p-8 lg:px-16" ref={ref}>
+    <Breadcrumb className="container mx-auto py-8" ref={ref}>
       <BreadcrumbList>
         <BreadcrumbItem>
           <BreadcrumbLink href="/">

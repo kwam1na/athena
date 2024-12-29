@@ -30,7 +30,7 @@ const MainComponent = () => {
             x: 0,
             transition: { duration: 0.2, ease: "easeOut" },
           }}
-          className="grid order-2 pb-16 lg:order-1 lg:col-span-6 px-6 lg:pl-16"
+          className="grid order-2 pb-16 lg:order-1 lg:col-span-6 px-16"
         >
           <div className="py-8 space-y-12 container mx-auto">
             <p className="text-lg">Checkout</p>
@@ -61,7 +61,7 @@ const MainComponent = () => {
           }}
           className="crelative order-1 lg:order-2 lg:col-span-6 bg-[#F6F6F6]"
         >
-          <div className="ontainer mx-auto  sticky top-0 pt-32 pb-24 flex items-start justify-center min-h-screen flex-grow">
+          <div className="sticky top-0 pt-32 pb-24 flex items-start justify-center min-h-screen flex-grow">
             <BagSummary />
           </div>
         </motion.div>

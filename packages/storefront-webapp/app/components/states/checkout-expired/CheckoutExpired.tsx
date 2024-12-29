@@ -4,7 +4,7 @@ import { Link } from "@tanstack/react-router";
 
 export function CheckoutExpired() {
   return (
-    <div className="h-full flex justify-center">
+    <div className="container mx-auto max-w-[1024px] h-full flex justify-center">
       <div className="flex flex-col gap-16 mt-24 w-[80%]">
         <div className="space-y-4">
           <p className="text-3xl font-light">
@@ -27,7 +27,7 @@ export function CheckoutExpired() {
 
 export function CheckoutCompleted() {
   return (
-    <div className="h-full flex justify-center">
+    <div className="container mx-auto max-w-[1024px] h-full flex justify-center">
       <div className="flex flex-col gap-16 mt-24 w-[80%]">
         <div className="space-y-4">
           <p className="text-3xl font-light">
@@ -51,7 +51,7 @@ export function CheckoutCompleted() {
 
 export function CheckoutMissingPayment() {
   return (
-    <div className="h-full flex justify-center">
+    <div className="container mx-auto max-w-[1024px] h-full flex justify-center">
       <div className="flex flex-col gap-16 mt-24 w-[80%]">
         <div className="space-y-4">
           <p className="text-sm">This checkout session is missing payment</p>
@@ -69,7 +69,7 @@ export function CheckoutMissingPayment() {
 
 export function CheckoutNotComplete() {
   return (
-    <div className="h-full flex justify-center">
+    <div className="container mx-auto max-w-[1024px] h-full flex justify-center">
       <div className="flex flex-col gap-16 mt-24 w-[80%]">
         <div className="space-y-4">
           <p className="text-sm">This checkout session is not complete</p>
