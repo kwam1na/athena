@@ -4,6 +4,7 @@ import { api } from "~/convex/_generated/api";
 import View from "../View";
 import Orders from "./Orders";
 import { currencyFormatter } from "~/src/lib/utils";
+import { OrdersTableToolbarProvider } from "./orders-table/components/data-table-toolbar-provider";
 
 export default function OrdersView() {
   const Navigation = () => {
@@ -40,7 +41,9 @@ export default function OrdersView() {
       className="bg-background"
       header={<Navigation />}
     >
-      <Orders store={activeStore} orders={ordersFormatted} />
+      <OrdersTableToolbarProvider>
+        <Orders store={activeStore} orders={ordersFormatted} />
+      </OrdersTableToolbarProvider>
     </View>
   );
 }

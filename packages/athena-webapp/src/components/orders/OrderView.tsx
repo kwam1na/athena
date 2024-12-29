@@ -1,4 +1,4 @@
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import View from "../View";
 import { CustomerDetailsView } from "./CustomerDetailsView";
 import { OrderDetailsView } from "./OrderDetailsView";
@@ -182,6 +182,25 @@ const Header = () => {
   const isDelivery = order?.deliveryMethod === "delivery";
   const isPickup = order?.deliveryMethod === "pickup";
 
+  const { o } = useSearch({ strict: false });
+
+  const navigate = useNavigate();
+
+  const handleBackClick = () => {
+    if (o) {
+      navigate({ to: o });
+    } else {
+      navigate({
+        to: "/$orgUrlSlug/store/$storeUrlSlug/orders",
+        params: (prev) => ({
+          ...prev,
+          storeUrlSlug: prev.storeUrlSlug!,
+          orgUrlSlug: prev.orgUrlSlug!,
+        }),
+      });
+    }
+  };
+
   const handleUpdateOrder = async (update: Record<string, any>) => {
     try {
       setIsUpdatingOrder(true);
@@ -246,19 +265,15 @@ const Header = () => {
   return (
     <div className="container mx-auto flex gap-2 h-[40px] items-center justify-between">
       <div className="flex gap-4 items-center">
-        <Link
-          to="/$orgUrlSlug/store/$storeUrlSlug/orders"
-          params={(prev) => ({
-            ...prev,
-            storeUrlSlug: prev.storeUrlSlug!,
-            orgUrlSlug: prev.orgUrlSlug!,
-          })}
-          className="flex items-center gap-2"
-        >
-          <Button variant="ghost" className="h-8 px-2 lg:px-3 ">
+        <div className="flex items-center gap-2">
+          <Button
+            onClick={handleBackClick}
+            variant="ghost"
+            className="h-8 px-2 lg:px-3 "
+          >
             <ArrowLeftIcon className="h-4 w-4" />
           </Button>
-        </Link>
+        </div>
 
         <p className="text-sm">{`Order #${order?.orderNumber}`}</p>
 

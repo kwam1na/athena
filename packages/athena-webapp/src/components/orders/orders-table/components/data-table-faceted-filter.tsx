@@ -1,6 +1,4 @@
-import * as React from "react";
-import { CheckIcon, PlusCircledIcon } from "@radix-ui/react-icons";
-import { Column } from "@tanstack/react-table";
+import { Column, Table } from "@tanstack/react-table";
 
 import { Badge } from "../../../ui/badge";
 import { Button } from "../../../ui/button";
@@ -17,6 +15,9 @@ import { Popover, PopoverContent, PopoverTrigger } from "../../../ui/popover";
 import { Separator } from "../../../ui/separator";
 import { cn } from "../../../../lib/utils";
 import { Check, PlusCircle } from "lucide-react";
+import { useEffect, useState } from "react";
+import { set } from "zod";
+import { useOrdersTableToolbar } from "./data-table-toolbar-provider";
 
 interface DataTableFacetedFilterProps<TData, TValue> {
   column?: Column<TData, TValue>;
@@ -26,15 +27,44 @@ interface DataTableFacetedFilterProps<TData, TValue> {
     value: string;
     icon?: React.ComponentType<{ className?: string }>;
   }[];
+  selectedValues: Set<string>;
+  setSelectedValues: React.Dispatch<React.SetStateAction<Set<string>>>;
+  table: Table<TData>;
 }
 
 export function DataTableFacetedFilter<TData, TValue>({
   column,
   title,
   options,
+  selectedValues,
+  setSelectedValues,
+  table,
 }: DataTableFacetedFilterProps<TData, TValue>) {
   const facets = column?.getFacetedUniqueValues();
-  const selectedValues = new Set(column?.getFilterValue() as string[]);
+
+  const { setFiltersLoaded } = useOrdersTableToolbar();
+
+  // Load selected values from localStorage on mount
+  useEffect(() => {
+    const savedFilters = localStorage.getItem(`filters-${column?.id}`);
+    if (savedFilters) {
+      const parsedFilters = JSON.parse(savedFilters) as string[];
+      setSelectedValues(new Set(parsedFilters));
+      column?.setFilterValue(parsedFilters.length ? parsedFilters : undefined);
+    }
+
+    setTimeout(() => {
+      setFiltersLoaded(true);
+    }, 0);
+  }, [column, title]);
+
+  // Save selected values to localStorage whenever they change
+  useEffect(() => {
+    localStorage.setItem(
+      `filters-${column?.id}`,
+      JSON.stringify(Array.from(selectedValues))
+    );
+  }, [selectedValues, title]);
 
   return (
     <Popover>
@@ -89,12 +119,16 @@ export function DataTableFacetedFilter<TData, TValue>({
                   <CommandItem
                     key={option.value}
                     onSelect={() => {
+                      table.setPageIndex(0);
+
+                      const newSelectedValues = new Set(selectedValues);
                       if (isSelected) {
-                        selectedValues.delete(option.value);
+                        newSelectedValues.delete(option.value);
                       } else {
-                        selectedValues.add(option.value);
+                        newSelectedValues.add(option.value);
                       }
-                      const filterValues = Array.from(selectedValues);
+                      setSelectedValues(newSelectedValues);
+                      const filterValues = Array.from(newSelectedValues);
                       column?.setFilterValue(
                         filterValues.length ? filterValues : undefined
                       );
@@ -128,7 +162,10 @@ export function DataTableFacetedFilter<TData, TValue>({
                 <CommandSeparator />
                 <CommandGroup>
                   <CommandItem
-                    onSelect={() => column?.setFilterValue(undefined)}
+                    onSelect={() => {
+                      setSelectedValues(new Set());
+                      column?.setFilterValue(undefined);
+                    }}
                     className="justify-center text-center"
                   >
                     Clear filters

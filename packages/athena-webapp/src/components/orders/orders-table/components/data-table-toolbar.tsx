@@ -14,6 +14,7 @@ import { X } from "lucide-react";
 
 import { DataTableFacetedFilter } from "./data-table-faceted-filter";
 import { deliveryMethods, statuses } from "./data";
+import { useOrdersTableToolbar } from "./data-table-toolbar-provider";
 
 interface DataTableToolbarProps<TData> {
   table: Table<TData>;
@@ -23,6 +24,26 @@ export function DataTableToolbar<TData>({
   table,
 }: DataTableToolbarProps<TData>) {
   const isFiltered = table.getState().columnFilters.length > 0;
+
+  const {
+    selectedStatuses,
+    selectedDeliveryMethods,
+    setSelectedStatuses,
+    setSelectedDeliveryMethods,
+  } = useOrdersTableToolbar();
+
+  const handleClearFilters = () => {
+    const ids = table.getState().columnFilters.map((filter) => filter.id);
+
+    for (const id of ids) {
+      localStorage.removeItem(`filters-${id}`);
+    }
+
+    setSelectedStatuses(new Set());
+    setSelectedDeliveryMethods(new Set());
+
+    table.resetColumnFilters();
+  };
 
   return (
     <div className="flex items-center justify-between">
@@ -42,6 +63,9 @@ export function DataTableToolbar<TData>({
             column={table.getColumn("status")}
             title="Status"
             options={statuses}
+            selectedValues={selectedStatuses}
+            setSelectedValues={setSelectedStatuses}
+            table={table}
           />
         )}
         {table.getColumn("deliveryMethod") && (
@@ -49,12 +73,15 @@ export function DataTableToolbar<TData>({
             column={table.getColumn("deliveryMethod")}
             title="Delivery method"
             options={deliveryMethods}
+            selectedValues={selectedDeliveryMethods}
+            setSelectedValues={setSelectedDeliveryMethods}
+            table={table}
           />
         )}
         {isFiltered && (
           <Button
             variant="ghost"
-            onClick={() => table.resetColumnFilters()}
+            onClick={handleClearFilters}
             className="h-8 px-2 lg:px-3"
           >
             Reset

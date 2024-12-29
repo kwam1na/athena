@@ -86,6 +86,12 @@ function OrderItem({ item, order }: { item: any; order: any }) {
           storeUrlSlug: prev.storeUrlSlug!,
           productSlug: item.productId,
         })}
+        search={{
+          o: encodeURIComponent(
+            `${window.location.pathname}${window.location.search}`
+          ),
+          variant: item.productSku,
+        }}
       >
         <img
           src={item.productImage || placeholder}
@@ -94,12 +100,27 @@ function OrderItem({ item, order }: { item: any; order: any }) {
         />
       </Link>
       <div className="space-y-8">
-        <div className="space-y-2">
+        <Link
+          to="/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug"
+          params={(prev) => ({
+            ...prev,
+            orgUrlSlug: prev.orgUrlSlug!,
+            storeUrlSlug: prev.storeUrlSlug!,
+            productSlug: item.productId,
+          })}
+          search={{
+            o: encodeURIComponent(
+              `${window.location.pathname}${window.location.search}`
+            ),
+            variant: item.productSku,
+          }}
+          className="space-y-2"
+        >
           <p className="text-sm">{getProductName(item)}</p>
           <p className="text-xs text-muted-foreground">{item.productSku}</p>
           <p className="text-xs text-muted-foreground">{item.price}</p>
           <p className="text-xs text-muted-foreground">{`x${item.quantity}`}</p>
-        </div>
+        </Link>
 
         <div className="space-y-2">
           {hasOrderTransitioned && !item.isRefunded && (

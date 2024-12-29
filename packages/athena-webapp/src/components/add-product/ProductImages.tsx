@@ -12,17 +12,20 @@ import { useProduct } from "@/contexts/ProductContext";
 import { useEffect } from "react";
 import { GenericComboBox } from "../GenericComboBox";
 import { ProductVariant } from "./ProductStock";
+import { useSearch } from "@tanstack/react-router";
 
 const Header = () => {
   const { activeProductVariant, productVariants, setActiveProductVariant } =
     useProduct();
 
+  const { variant } = useSearch({ strict: false });
+
   useEffect(() => {
     // Ensure there's always an active variant if variants exist
-    if (productVariants.length > 0 && !activeProductVariant) {
+    if (productVariants.length > 0 && !activeProductVariant && !variant) {
       setActiveProductVariant(productVariants[0]);
     }
-  }, [productVariants, activeProductVariant, setActiveProductVariant]);
+  }, [productVariants, activeProductVariant, setActiveProductVariant, variant]);
 
   const handleVariantChange = (value: ProductVariant) => {
     const selectedVariant = productVariants.find((v) => v.id === value.id);
@@ -31,6 +34,16 @@ const Header = () => {
       setActiveProductVariant(selectedVariant);
     }
   };
+
+  useEffect(() => {
+    if (variant) {
+      const selectedVariant = productVariants.find((v) => v.sku === variant);
+
+      if (selectedVariant) {
+        setActiveProductVariant(selectedVariant);
+      }
+    }
+  }, [variant, productVariants]);
 
   const comboBoxValues = productVariants.map((v, i) => ({
     value: v,

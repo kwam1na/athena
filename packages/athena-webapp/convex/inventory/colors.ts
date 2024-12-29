@@ -24,6 +24,7 @@ export const getById = query({
     storeId: v.string(),
   },
   handler: async (ctx, args) => {
+    return await ctx.db.get(args.id);
     const categories = await ctx.db
       .query(entity)
       .filter((q) =>

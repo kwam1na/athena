@@ -28,8 +28,7 @@ export function ProductAvailabilityView() {
 function ProductAvailability() {
   const id = "availability";
 
-  const { error, isLoading, productData, appState, updateProductData } =
-    useProduct();
+  const { error, isLoading, productData, updateProductData } = useProduct();
 
   // console.log("[availability]:", appState);
 
@@ -57,7 +56,7 @@ function ProductAvailability() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="draft">Draft</SelectItem>
-              <SelectItem value="published">Active</SelectItem>
+              <SelectItem value="live">Live</SelectItem>
               <SelectItem value="archived">Archived</SelectItem>
             </SelectContent>
           </Select>

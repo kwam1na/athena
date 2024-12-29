@@ -27,6 +27,12 @@ import NotFound from "@/components/states/not-found/NotFound";
 import { getCookie } from "vinxi/http";
 import { NotFoundView } from "@/components/states/not-found/NotFoundView";
 import Navbar from "../components/Navbar";
+import { z } from "zod";
+
+const rootPageSchema = z.object({
+  o: z.string().optional(),
+  variant: z.string().optional(),
+});
 
 export const Route = createRootRouteWithContext<{
   queryClient: QueryClient;
@@ -53,6 +59,8 @@ export const Route = createRootRouteWithContext<{
   },
 
   component: RootComponent,
+
+  validateSearch: rootPageSchema,
 
   errorComponent: (props) => {
     return (

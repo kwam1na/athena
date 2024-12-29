@@ -8,7 +8,7 @@ import {
 } from "@/lib/utils";
 import { Link } from "@tanstack/react-router";
 import { OnlineOrder } from "~/types";
-import { CheckCircle2, Circle, RotateCcw } from "lucide-react";
+import { CheckCircle2, Circle, CircleDashed, RotateCcw } from "lucide-react";
 import { getOrderState } from "../../../orders/utils";
 
 export const orderColumns: ColumnDef<OnlineOrder>[] = [
@@ -163,7 +163,9 @@ export const orderColumns: ColumnDef<OnlineOrder>[] = [
             {status.includes("refunded") && (
               <RotateCcw className="h-3 w-3 mr-2" />
             )}
-            {status.includes("open") && <Circle className="h-3 w-3 mr-2" />}
+            {status.includes("open") && (
+              <CircleDashed className="h-3 w-3 mr-2" />
+            )}
             <p>{capitalizeFirstLetter(slugToWords(status))}</p>
           </div>
         </Link>

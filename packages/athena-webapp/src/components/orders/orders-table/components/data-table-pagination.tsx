@@ -14,6 +14,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "~/src/components/ui/select";
+import { useEffect } from "react";
+import { PAGE_INDEX_KEY, PAGE_SIZE_KEY } from "./constants";
 
 interface DataTablePaginationProps<TData> {
   table: Table<TData>;
@@ -22,6 +24,18 @@ interface DataTablePaginationProps<TData> {
 export function DataTablePagination<TData>({
   table,
 }: DataTablePaginationProps<TData>) {
+  const pageIndex = table.getState().pagination.pageIndex;
+
+  const pageSize = table.getState().pagination.pageSize;
+
+  useEffect(() => {
+    localStorage.setItem(PAGE_INDEX_KEY, String(pageIndex));
+  }, [pageIndex]);
+
+  useEffect(() => {
+    localStorage.setItem(PAGE_SIZE_KEY, String(pageSize));
+  }, [pageSize]);
+
   return (
     <div className="flex items-center justify-between px-2">
       {/* <div className="flex-1 text-sm text-muted-foreground">
@@ -49,10 +63,12 @@ export function DataTablePagination<TData>({
             </SelectContent>
           </Select>
         </div>
-        <div className="flex w-[100px] items-center justify-center text-sm font-medium">
-          Page {table.getState().pagination.pageIndex + 1} of{" "}
-          {table.getPageCount()}
-        </div>
+        {Boolean(table.getPageCount()) && (
+          <div className="flex w-[100px] items-center justify-center text-sm font-medium">
+            Page {table.getState().pagination.pageIndex + 1} of{" "}
+            {table.getPageCount()}
+          </div>
+        )}
         <div className="flex items-center space-x-2">
           <Button
             variant="outline"

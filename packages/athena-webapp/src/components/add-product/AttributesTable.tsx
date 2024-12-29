@@ -39,7 +39,7 @@ function AttributesTable({ selectedAttributes }: AttributesTableProps) {
   );
 
   const colors =
-    colorsData?.map((color) => ({
+    colorsData?.map((color: any) => ({
       name: color.name,
       id: color._id,
     })) || [];
@@ -103,7 +103,7 @@ function AttributesTable({ selectedAttributes }: AttributesTableProps) {
 
                     <SelectContent>
                       <SelectGroup>
-                        {colors.map((color) => {
+                        {colors.map((color: any) => {
                           return (
                             <SelectItem key={color.id} value={color.id}>
                               {capitalizeWords(color.name)}

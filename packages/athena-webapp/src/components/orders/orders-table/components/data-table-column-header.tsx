@@ -10,6 +10,7 @@ import {
   DropdownMenuTrigger,
 } from "../../../ui/dropdown-menu";
 import { Button } from "../../../ui/button";
+import { useEffect } from "react";
 
 interface DataTableColumnHeaderProps<TData, TValue>
   extends React.HTMLAttributes<HTMLDivElement> {
@@ -22,6 +23,24 @@ export function DataTableColumnHeader<TData, TValue>({
   title,
   className,
 }: DataTableColumnHeaderProps<TData, TValue>) {
+  // Load initial sorting preference from localStorage
+  useEffect(() => {
+    const savedSort = localStorage.getItem(`table-sort-${title}`);
+    if (savedSort) {
+      column.toggleSorting(savedSort === "desc", true);
+    }
+  }, [column, title]);
+
+  // Save sorting preference when it changes
+  useEffect(() => {
+    const currentSort = column.getIsSorted();
+    if (currentSort) {
+      localStorage.setItem(`table-sort-${title}`, currentSort);
+    } else {
+      localStorage.removeItem(`table-sort-${title}`);
+    }
+  }, [column.getIsSorted(), title]);
+
   if (!column.getCanSort()) {
     return <div className={cn(className)}>{title}</div>;
   }

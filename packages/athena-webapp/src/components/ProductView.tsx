@@ -1,4 +1,9 @@
-import { Link, useNavigate } from "@tanstack/react-router";
+import {
+  Link,
+  useNavigate,
+  useParams,
+  useSearch,
+} from "@tanstack/react-router";
 import View from "./View";
 import { Button } from "./ui/button";
 import {
@@ -28,13 +33,8 @@ import { Id } from "~/convex/_generated/dataModel";
 import { deleteDirectoryInS3 } from "../lib/aws";
 
 function ProductViewContent() {
-  const {
-    productData,
-    didProvideRequiredData,
-    revertChanges,
-    productVariants,
-    updateProductVariants,
-  } = useProduct();
+  const { productData, revertChanges, productVariants, updateProductVariants } =
+    useProduct();
 
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isActionModalOpen, setIsActionModalOpen] = useState(false);
@@ -299,31 +299,42 @@ function ProductViewContent() {
   const isValid = true;
 
   const Navigation = () => {
-    const header = activeProduct ? "Edit Product" : "Add New Product";
-    const ctaText = activeProduct ? "Save changes" : "Add Product";
+    const { o } = useSearch({ strict: false });
 
-    const ctaIcon = activeProduct ? (
-      <CheckIcon className="w-4 h-4 mr-2" />
-    ) : (
-      <PlusIcon className="w-4 h-4 mr-2" />
-    );
+    const { productSlug } = useParams({ strict: false });
 
-    return (
-      <div className="container mx-auto flex gap-2 h-[40px] items-center justify-between">
-        <Link
-          to="/$orgUrlSlug/store/$storeUrlSlug/products"
-          params={(prev) => ({
+    const header = productSlug ? "Edit Product" : "Add New Product";
+    const ctaText = productSlug ? "Save changes" : "Add Product";
+
+    const navigate = useNavigate();
+
+    const handleBackClick = () => {
+      if (o) {
+        navigate({ to: decodeURIComponent(o) });
+      } else {
+        navigate({
+          to: "/$orgUrlSlug/store/$storeUrlSlug/products",
+          params: (prev) => ({
             ...prev,
             storeUrlSlug: prev.storeUrlSlug!,
             orgUrlSlug: prev.orgUrlSlug!,
-          })}
-          className="flex items-center gap-2"
-        >
-          <Button variant="ghost" className="h-8 px-2 lg:px-3 ">
+          }),
+        });
+      }
+    };
+
+    return (
+      <div className="container mx-auto flex gap-2 h-[40px] items-center justify-between">
+        <div className="flex items-center gap-4">
+          <Button
+            onClick={handleBackClick}
+            variant="ghost"
+            className="h-8 px-2 lg:px-3 "
+          >
             <ArrowLeftIcon className="h-4 w-4" />
           </Button>
           <p className="text-sm">{header}</p>
-        </Link>
+        </div>
 
         <div className="flex space-x-2">
           {activeProduct && (
