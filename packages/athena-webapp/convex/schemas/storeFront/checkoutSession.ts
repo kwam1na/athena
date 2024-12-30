@@ -31,7 +31,7 @@ export const checkoutSessionSchema = v.object({
   paymentMethod: v.optional(paymentMethodSchema),
   billingDetails: v.union(v.record(v.string(), v.any()), v.null()),
   customerDetails: v.union(v.record(v.string(), v.any()), v.null()),
-  deliveryDetails: v.union(v.record(v.string(), v.any()), v.null()),
+  deliveryDetails: v.union(v.record(v.string(), v.any()), v.null(), v.string()),
   deliveryMethod: v.optional(v.string()),
   deliveryOption: v.union(v.string(), v.null()),
   deliveryFee: v.union(v.number(), v.null()),

@@ -77,7 +77,7 @@ export const Route = createRootRouteWithContext<{
 function RootComponent() {
   return (
     <RootDocument>
-      <Navbar />
+      {/* <Navbar /> */}
       <div className="p-8">
         <Outlet />
       </div>

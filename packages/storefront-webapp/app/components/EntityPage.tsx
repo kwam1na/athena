@@ -1,7 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { OG_ORGANIZTION_ID, OG_STORE_ID } from "@/lib/constants";
 import { useParams, useSearch } from "@tanstack/react-router";
-import { capitalizeFirstLetter, slugToWords } from "@/lib/utils";
 import { productQueries } from "@/queries";
 import ProductsPage from "./ProductsPage";
 
@@ -10,7 +9,7 @@ export default function EntityPage() {
 
   const { categorySlug, subcategorySlug } = useParams({ strict: false });
 
-  const { data, isLoading } = useQuery(
+  const { data: products, isLoading: isLoadingProducts } = useQuery(
     productQueries.list({
       organizationId: OG_ORGANIZTION_ID,
       storeId: OG_STORE_ID,
@@ -21,6 +20,21 @@ export default function EntityPage() {
       },
     })
   );
+
+  const { data: bestSellers, isLoading: isLoadingBestSellers } = useQuery(
+    productQueries.bestSellers({
+      organizationId: OG_ORGANIZTION_ID,
+      storeId: OG_STORE_ID,
+    })
+  );
+
+  let data = products;
+
+  if (bestSellers?.length) {
+    data = bestSellers;
+  }
+
+  const isLoading = isLoadingProducts || isLoadingBestSellers;
 
   return <ProductsPage products={data} isLoading={isLoading} />;
 }

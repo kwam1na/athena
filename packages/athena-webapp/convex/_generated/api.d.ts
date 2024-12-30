@@ -28,6 +28,7 @@ import type * as http_domains_storeFront_routes_index from "../http/domains/stor
 import type * as http_domains_storeFront_routes_paystack from "../http/domains/storeFront/routes/paystack.js";
 import type * as http_domains_storeFront_routes_savedBag from "../http/domains/storeFront/routes/savedBag.js";
 import type * as http from "../http.js";
+import type * as inventory_bestSeller from "../inventory/bestSeller.js";
 import type * as inventory_categories from "../inventory/categories.js";
 import type * as inventory_colors from "../inventory/colors.js";
 import type * as inventory_organizations from "../inventory/organizations.js";
@@ -36,6 +37,7 @@ import type * as inventory_stores from "../inventory/stores.js";
 import type * as inventory_subcategories from "../inventory/subcategories.js";
 import type * as otp_ResendOTP from "../otp/ResendOTP.js";
 import type * as otp_VerificationCodeEmail from "../otp/VerificationCodeEmail.js";
+import type * as schemas_inventory_bestSeller from "../schemas/inventory/bestSeller.js";
 import type * as schemas_inventory_category from "../schemas/inventory/category.js";
 import type * as schemas_inventory_color from "../schemas/inventory/color.js";
 import type * as schemas_inventory_index from "../schemas/inventory/index.js";
@@ -97,6 +99,7 @@ declare const fullApi: ApiFromModules<{
   "http/domains/storeFront/routes/paystack": typeof http_domains_storeFront_routes_paystack;
   "http/domains/storeFront/routes/savedBag": typeof http_domains_storeFront_routes_savedBag;
   http: typeof http;
+  "inventory/bestSeller": typeof inventory_bestSeller;
   "inventory/categories": typeof inventory_categories;
   "inventory/colors": typeof inventory_colors;
   "inventory/organizations": typeof inventory_organizations;
@@ -105,6 +108,7 @@ declare const fullApi: ApiFromModules<{
   "inventory/subcategories": typeof inventory_subcategories;
   "otp/ResendOTP": typeof otp_ResendOTP;
   "otp/VerificationCodeEmail": typeof otp_VerificationCodeEmail;
+  "schemas/inventory/bestSeller": typeof schemas_inventory_bestSeller;
   "schemas/inventory/category": typeof schemas_inventory_category;
   "schemas/inventory/color": typeof schemas_inventory_color;
   "schemas/inventory/index": typeof schemas_inventory_index;

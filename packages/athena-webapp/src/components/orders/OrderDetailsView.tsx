@@ -52,7 +52,7 @@ export function OrderDetailsView() {
           <p className="text-sm text-muted-foreground">Payment status</p>
           {order.hasVerifiedPayment && !isOrderRefunded && (
             <div className="flex gap-2 items-center">
-              <p className="text-sm">Fully paid</p>
+              <p className="text-sm">Complete</p>
               <Check className="h-4 w-4 text-green-700" />
             </div>
           )}

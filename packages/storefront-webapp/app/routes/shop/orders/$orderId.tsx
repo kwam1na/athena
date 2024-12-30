@@ -12,6 +12,7 @@ import NotFound from "@/components/states/not-found/NotFound";
 import { FadeIn } from "@/components/common/FadeIn";
 import { capitalizeFirstLetter, slugToWords } from "@/lib/utils";
 import { CircleCheck, Hourglass, RotateCcw, Truck } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/shop/orders/$orderId")({
   component: () => <OrderDetail />,
@@ -209,10 +210,18 @@ const OrderDetail = () => {
     <FadeIn className="container mx-auto max-w-[1024px] space-y-40 py-8 pb-32 w-full">
       <div className="space-y-16">
         <div className="space-y-12">
-          <Link to="/shop/orders" className="flex items-center gap-2">
+          {/* <Link to="/shop/orders" className="flex items-center gap-2">
             <ArrowLeftIcon className="w-3.5 h-3.5" />
             <h1 className="text-xs font-light">All purchases</h1>
-          </Link>
+          </Link> */}
+          <Button
+            variant={"clear"}
+            onClick={() => window.history.back()}
+            className="flex items-center gap-2 p-0"
+          >
+            <ArrowLeftIcon className="w-3.5 h-3.5" />
+            <h1 className="text-xs font-light">All purchases</h1>
+          </Button>
           {/* <h1 className="text-sm font-light">Back to orders</h1> */}
         </div>
 

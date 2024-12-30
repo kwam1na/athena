@@ -11,6 +11,7 @@ import { CategorizationView } from "./CategorizationView";
 import useGetActiveProduct from "~/src/hooks/useGetActiveProduct";
 import { ImagesView } from "./ImagesView";
 import { PenIcon } from "lucide-react";
+import { ProductStatus } from "./ProductStatus";
 
 const ProductDetailViewHeader = () => {
   const { o } = useSearch({ strict: false });
@@ -46,12 +47,16 @@ const ProductDetailViewHeader = () => {
 
         <p className="text-sm">{activeProduct?.name}</p>
 
-        <Badge
+        {/* <Badge
           className="rounded-lg text-xs text-muted-foreground"
           variant={"outline"}
         >
           <p>{activeProduct?.availability.toUpperCase()}</p>
-        </Badge>
+        </Badge> */}
+
+        <div className="text-xs text-muted-foreground">
+          <ProductStatus product={activeProduct} />
+        </div>
       </div>
 
       <Link

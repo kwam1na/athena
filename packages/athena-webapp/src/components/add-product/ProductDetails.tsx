@@ -19,6 +19,8 @@ export function ProductDetailsView() {
 
   return (
     <View
+      hideBorder
+      hideHeaderBottomBorder
       className="h-auto"
       header={<p className="text-sm text-sm text-muted-foreground">Details</p>}
     >

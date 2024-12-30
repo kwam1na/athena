@@ -1,5 +1,5 @@
 import View from "./View";
-import { useLoaderData, useNavigate, useParams } from "@tanstack/react-router";
+import { useNavigate } from "@tanstack/react-router";
 import { EmptyState } from "./states/empty/empty-state";
 import { StoreIcon } from "lucide-react";
 import { Button } from "./ui/button";
@@ -30,14 +30,14 @@ export default function StoreView() {
     if (stores && stores.length > 0) {
       const s = stores?.[0];
 
-      navigate({
-        to: "/$orgUrlSlug/store/$storeUrlSlug/products",
-        params: (prev) => ({
-          ...prev,
-          orgUrlSlug: prev.orgUrlSlug!,
-          storeUrlSlug: s.slug,
-        }),
-      });
+      // navigate({
+      //   to: "/$orgUrlSlug/store/$storeUrlSlug/products",
+      //   params: (prev) => ({
+      //     ...prev,
+      //     orgUrlSlug: prev.orgUrlSlug!,
+      //     storeUrlSlug: s.slug,
+      //   }),
+      // });
     }
   }, [stores]);
 

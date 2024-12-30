@@ -288,20 +288,22 @@ storeRoutes.post("/:storeId/customers/:customerId/checkout", async (c) => {
 
   const { products, bagId, amount } = await c.req.json();
 
-  // console.log("items received ->", items);
+  try {
+    const session = await c.env.runMutation(
+      api.storeFront.checkoutSession.create,
+      {
+        storeId: storeId as Id<"store">,
+        customerId: customerId as Id<"customer"> | Id<"guest">,
+        products,
+        bagId,
+        amount,
+      }
+    );
 
-  const session = await c.env.runMutation(
-    api.storeFront.checkoutSession.create,
-    {
-      storeId: storeId as Id<"store">,
-      customerId: customerId as Id<"customer"> | Id<"guest">,
-      products,
-      bagId,
-      amount,
-    }
-  );
-
-  return c.json(session);
+    return c.json(session);
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, 400);
+  }
 });
 
 storeRoutes.post(
@@ -323,47 +325,51 @@ storeRoutes.post(
       orderDetails,
     } = await c.req.json();
 
-    if (action == "finalize-payment") {
-      const payment = await c.env.runAction(
-        api.storeFront.payment.createTransaction,
-        {
-          customerEmail,
-          amount,
-          checkoutSessionId: checkoutSessionId as Id<"checkoutSession">,
-          orderDetails,
-        }
-      );
+    try {
+      if (action == "finalize-payment") {
+        const payment = await c.env.runAction(
+          api.storeFront.payment.createTransaction,
+          {
+            customerEmail,
+            amount,
+            checkoutSessionId: checkoutSessionId as Id<"checkoutSession">,
+            orderDetails,
+          }
+        );
 
-      return c.json(payment);
+        return c.json(payment);
+      }
+
+      if (action == "complete-checkout") {
+        const res = await c.env.runMutation(
+          internal.storeFront.checkoutSession.updateCheckoutSession,
+          {
+            id: checkoutSessionId as Id<"checkoutSession">,
+            hasCompletedCheckoutSession,
+            orderDetails,
+          }
+        );
+
+        return c.json(res);
+      }
+
+      if (action == "place-order") {
+        const res = await c.env.runMutation(
+          internal.storeFront.checkoutSession.updateCheckoutSession,
+          {
+            id: checkoutSessionId as Id<"checkoutSession">,
+            hasCompletedCheckoutSession,
+            action,
+          }
+        );
+
+        return c.json(res);
+      }
+
+      return c.json({});
+    } catch (e) {
+      return c.json({ error: (e as Error).message }, 400);
     }
-
-    if (action == "complete-checkout") {
-      const res = await c.env.runMutation(
-        internal.storeFront.checkoutSession.updateCheckoutSession,
-        {
-          id: checkoutSessionId as Id<"checkoutSession">,
-          hasCompletedCheckoutSession,
-          orderDetails,
-        }
-      );
-
-      return c.json(res);
-    }
-
-    if (action == "place-order") {
-      const res = await c.env.runMutation(
-        internal.storeFront.checkoutSession.updateCheckoutSession,
-        {
-          id: checkoutSessionId as Id<"checkoutSession">,
-          hasCompletedCheckoutSession,
-          action,
-        }
-      );
-
-      return c.json(res);
-    }
-
-    return c.json({});
   }
 );
 

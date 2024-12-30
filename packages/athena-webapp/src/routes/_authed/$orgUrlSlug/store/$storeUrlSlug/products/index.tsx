@@ -3,6 +3,8 @@ import { NotFoundView } from "@/components/states/not-found/NotFoundView";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { useGetActiveOrganization } from "@/hooks/useGetOrganizations";
 import { createFileRoute, notFound } from "@tanstack/react-router";
+import { AppSidebar } from "~/src/components/app-sidebar";
+import { SidebarProvider, SidebarTrigger } from "~/src/components/ui/sidebar";
 
 export const Route = createFileRoute(
   "/_authed/$orgUrlSlug/store/$storeUrlSlug/products/"
@@ -33,3 +35,15 @@ export const Route = createFileRoute(
     return <NotFoundView entity={entity} entityIdentifier={name} />;
   },
 });
+
+// export default function Layout() {
+//   return (
+//     <SidebarProvider>
+//       <AppSidebar />
+//       <main className="w-full">
+//         {/* <SidebarTrigger /> */}
+//         <ProductsView />
+//       </main>
+//     </SidebarProvider>
+//   );
+// }

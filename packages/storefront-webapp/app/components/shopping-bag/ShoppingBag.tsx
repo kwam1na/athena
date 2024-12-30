@@ -15,6 +15,7 @@ import { EmptyState } from "../states/empty/empty-state";
 import { FadeIn } from "../common/FadeIn";
 import { checkoutSessionQueries } from "@/queries";
 import { ArrowRightIcon } from "@radix-ui/react-icons";
+import { set } from "zod";
 
 const PendingItem = ({ session }: { session: any }) => {
   return (
@@ -57,6 +58,8 @@ export default function ShoppingBag() {
   const [isProcessingCheckoutRequest, setIsProcessingCheckoutRequest] =
     useState(false);
 
+  const [error, setError] = useState<string | null>(null);
+
   const navigate = useNavigate();
 
   const queryClient = useQueryClient();
@@ -94,24 +97,31 @@ export default function ShoppingBag() {
       quantity: item.quantity,
       productSku: item.productSku,
       productId: item.productId,
+      price: item.price,
     }));
 
     setIsProcessingCheckoutRequest(true);
+    setError(null);
 
-    const res = await obtainCheckoutSession({
-      bagItems,
-      bagId: bag._id,
-      bagSubtotal: bagSubtotal * 100,
-    });
+    try {
+      const res = await obtainCheckoutSession({
+        bagItems,
+        bagId: bag._id,
+        bagSubtotal: bagSubtotal * 100,
+      });
 
-    if (res.session) {
-      queryClient.setQueryData(["active-checkout-session", userId], {
-        session: res.session,
-      });
-      navigate({
-        to: "/shop/checkout",
-      });
-    } else {
+      if (res.session) {
+        queryClient.setQueryData(["active-checkout-session", userId], {
+          session: res.session,
+        });
+        navigate({
+          to: "/shop/checkout",
+        });
+      } else {
+        setIsProcessingCheckoutRequest(false);
+      }
+    } catch (e) {
+      setError((e as Error).message);
       setIsProcessingCheckoutRequest(false);
     }
   };
@@ -275,6 +285,13 @@ export default function ShoppingBag() {
                     </p>
                   </div>
                 )}
+
+                {error && (
+                  <div className="flex text-destructive">
+                    <InfoIcon className="w-4 h-4 mr-2" />
+                    <p className="text-xs">{error}</p>
+                  </div>
+                )}
                 <LoadingButton
                   isLoading={isProcessingCheckoutRequest}
                   onClick={handleOnCheckoutClick}
@@ -301,6 +318,13 @@ export default function ShoppingBag() {
                       Some items are no longer available. Update your bag to
                       continue.
                     </p>
+                  </div>
+                )}
+
+                {error && (
+                  <div className="flex text-destructive">
+                    <InfoIcon className="w-4 h-4 mr-2" />
+                    <p className="text-xs">{error}</p>
                   </div>
                 )}
                 <LoadingButton

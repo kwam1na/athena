@@ -7,6 +7,8 @@ import { useProduct } from "~/src/contexts/ProductContext";
 export function WigTypeView() {
   return (
     <View
+      hideBorder
+      hideHeaderBottomBorder
       className="h-auto"
       header={<p className="text-sm text-sm text-muted-foreground">Wig make</p>}
     >

@@ -208,6 +208,8 @@ export function ProductCategorizationView() {
   return (
     <View
       className="h-auto"
+      hideBorder
+      hideHeaderBottomBorder
       header={
         <div className="flex items-center justify-between">
           <p className="text-sm text-sm text-muted-foreground">

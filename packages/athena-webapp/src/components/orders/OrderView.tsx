@@ -39,6 +39,7 @@ import { AlertModal } from "../ui/modals/alert-modal";
 import { RefundsView } from "./RefundsView";
 import { ActivityView } from "./ActivityView";
 import { getOrderState } from "./utils";
+import { OrderStatus } from "./OrderStatus";
 
 export function RefundOptions() {
   const { order } = useOnlineOrder();
@@ -277,14 +278,9 @@ const Header = () => {
 
         <p className="text-sm">{`Order #${order?.orderNumber}`}</p>
 
-        <Badge className="rounded-lg text-muted-foreground" variant={"outline"}>
-          {isOrderOpen && <p>OPEN</p>}
-          {isOrderReady && <p>{orderStatus.toUpperCase()}</p>}
-          {isInRefundState && <p>{refundText.toUpperCase()}</p>}
-          {hasOrderTransitioned && (
-            <p>{slugToWords(order.status).toUpperCase()}</p>
-          )}
-        </Badge>
+        <div className="text-xs text-muted-foreground">
+          <OrderStatus order={order} />
+        </div>
 
         <p className="text-xs text-muted-foreground">
           {`placed ${getRelativeTime(order._creationTime)}`}

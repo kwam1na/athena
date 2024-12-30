@@ -48,7 +48,7 @@ export async function createCheckoutSession({
   const res = await response.json();
 
   if (!response.ok) {
-    throw new Error(res.error || "Error creating checkout session.");
+    throw new Error("Error initializing checkout session");
   }
 
   return res;
@@ -70,7 +70,7 @@ export async function getActiveCheckoutSession({
   const res = await response.json();
 
   if (!response.ok) {
-    throw new Error(res.error || "Error loading active session.");
+    throw new Error("Error loading active session.");
   }
 
   return res;

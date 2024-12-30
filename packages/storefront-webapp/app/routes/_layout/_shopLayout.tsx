@@ -82,7 +82,7 @@ function LayoutComponent() {
 
   return (
     <>
-      <div className="pb-40 h-[100vh]">
+      <div className="pb-40">
         <div className="bg-background border-b col-span-12 sticky top-0 z-20">
           <ProductFilterBar
             showFilters={showFilters}
@@ -154,8 +154,4 @@ function LayoutComponent() {
       <Footer />
     </>
   );
-}
-
-{
-  /* <div className="hidden lg:flex flex-col gap-16 col-span-2 h-[calc(100vh-124px)] sticky top-16 lg:py-16 lg:px-16 overflow-auto bg-red-200"></div> */
 }

@@ -251,7 +251,7 @@ const CheckoutComplete = () => {
           }}
           className="space-x-12 pt-8"
         >
-          <Link>
+          <Link to="/">
             <Button className="w-[240px]">Continue shopping</Button>
           </Link>
 

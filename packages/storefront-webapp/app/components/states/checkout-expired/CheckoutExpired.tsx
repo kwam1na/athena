@@ -1,3 +1,4 @@
+import { useCheckout } from "@/components/checkout/CheckoutProvider";
 import { Button } from "@/components/ui/button";
 import { ArrowLeftIcon } from "@radix-ui/react-icons";
 import { Link } from "@tanstack/react-router";
@@ -50,11 +51,17 @@ export function CheckoutCompleted() {
 }
 
 export function CheckoutMissingPayment() {
+  const { activeSession } = useCheckout();
   return (
     <div className="container mx-auto max-w-[1024px] h-full flex justify-center">
       <div className="flex flex-col gap-16 mt-24 w-[80%]">
         <div className="space-y-4">
-          <p className="text-sm">This checkout session is missing payment</p>
+          <p className="text-sm">
+            This checkout session is missing payment. If you think this is
+            incorrect, contact us for support.
+          </p>
+
+          <p className="text-xs text-muted-foreground">{`SessionId: ${activeSession._id}`}</p>
         </div>
 
         <div className="space-x-12">

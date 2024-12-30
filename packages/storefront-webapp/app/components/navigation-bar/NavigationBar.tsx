@@ -262,7 +262,7 @@ export default function NavigationBar() {
           >
             <div className="flex items-center justify-between w-full">
               <div className="flex gap-16">
-                <div>
+                <div onMouseEnter={() => setActiveMenu(null)}>
                   <Link to="/">
                     <h1 className="text-md font-medium tracking-widest">
                       {store?.name && (store?.name as string).toUpperCase()}
@@ -302,7 +302,10 @@ export default function NavigationBar() {
                 >
                   <p className="text-xs font-medium">Kwamina</p>
                 </Link>
-                <div className="flex items-center gap-4">
+                <div
+                  onMouseEnter={() => setActiveMenu(null)}
+                  className="flex items-center gap-4"
+                >
                   <Link to="/shop/saved" className="flex items-center">
                     <SavedIcon notificationCount={savedBagCount} />
                   </Link>

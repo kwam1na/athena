@@ -10,12 +10,13 @@ import { Link } from "@tanstack/react-router";
 import { OnlineOrder } from "~/types";
 import { CheckCircle2, Circle, CircleDashed, RotateCcw } from "lucide-react";
 import { getOrderState } from "../../../orders/utils";
+import { OrderStatus } from "../../OrderStatus";
 
 export const orderColumns: ColumnDef<OnlineOrder>[] = [
   {
     accessorKey: "orderNumber",
     header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Orders" />
+      <DataTableColumnHeader column={column} title="Order" />
     ),
     cell: ({ row }) => {
       return (
@@ -156,18 +157,7 @@ export const orderColumns: ColumnDef<OnlineOrder>[] = [
             orderSlug: row.original._id,
           })}
         >
-          <div className="flex items-center">
-            {(isOrderReady || hasOrderTransitioned) && (
-              <CheckCircle2 className="h-3 w-3 mr-2" />
-            )}
-            {status.includes("refunded") && (
-              <RotateCcw className="h-3 w-3 mr-2" />
-            )}
-            {status.includes("open") && (
-              <CircleDashed className="h-3 w-3 mr-2" />
-            )}
-            <p>{capitalizeFirstLetter(slugToWords(status))}</p>
-          </div>
+          <OrderStatus order={order} />
         </Link>
       );
     },

@@ -6,5 +6,6 @@ export const checkoutSessionItemSchema = v.object({
   productId: v.id("product"),
   productSkuId: v.id("productSku"),
   productSku: v.string(),
+  price: v.number(),
   quantity: v.number(),
 });

@@ -14,6 +14,7 @@ type Product = {
   productSku: string;
   productSkuId: Id<"productSku">;
   quantity: number;
+  price: number;
 };
 
 type AvailabilityUpdate = { id: Id<"productSku">; change: number };
@@ -30,6 +31,7 @@ export const create = mutation({
         productSku: v.string(),
         productSkuId: v.id("productSku"),
         quantity: v.number(),
+        price: v.number(),
       })
     ),
   },
@@ -322,6 +324,9 @@ export const updateCheckoutSession = internalMutation({
           };
         }
 
+        const { address, city, country, zip, region } =
+          (session?.deliveryDetails as Record<string, any>) || {};
+
         const onlineOrderResponse:
           | {
               error: string;
@@ -347,10 +352,11 @@ export const updateCheckoutSession = internalMutation({
             phoneNumber: session?.customerDetails?.phoneNumber,
           },
           deliveryDetails: {
-            zip: session?.deliveryDetails?.zip,
-            country: session?.deliveryDetails?.country,
-            address: session?.deliveryDetails?.address,
-            city: session?.deliveryDetails?.city,
+            zip,
+            country,
+            address,
+            city,
+            region,
           },
           deliveryMethod: session.deliveryMethod || "",
           deliveryOption: session.deliveryOption,
@@ -674,6 +680,7 @@ async function createSessionItems(
         sesionId: sessionId,
         productId: product.productId,
         productSku: product.productSku,
+        price: product.price,
         productSkuId: product.productSkuId,
         quantity: product.quantity,
         customerId: customerId,

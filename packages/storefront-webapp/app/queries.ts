@@ -1,5 +1,5 @@
 import { queryOptions, useMutation } from "@tanstack/react-query";
-import { getAllProducts, getProduct } from "./api/product";
+import { getAllProducts, getBestSellers, getProduct } from "./api/product";
 import { FilterParams } from "./api/types";
 import { getActiveSavedBag } from "./api/savedBag";
 import { getActiveBag } from "./api/bag";
@@ -12,6 +12,17 @@ import {
 
 export const productQueries = {
   all: () => ["products"],
+  bestSellers: ({
+    organizationId,
+    storeId,
+  }: {
+    organizationId: string;
+    storeId: string;
+  }) =>
+    queryOptions({
+      queryKey: ["bestSellers"],
+      queryFn: () => getBestSellers({ organizationId, storeId }),
+    }),
   lists: () => [...productQueries.all(), "list"],
   list: ({
     organizationId,

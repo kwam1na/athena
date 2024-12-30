@@ -266,7 +266,7 @@ export function InputOTPForm({ email }: { email: string }) {
                 <FormDescription>
                   {errorMessage
                     ? errorMessage
-                    : `Please enter the one-time code sent to ${email}`}
+                    : `Enter the one-time code sent to ${email}`}
                 </FormDescription>
                 <FormMessage />
               </FormItem>

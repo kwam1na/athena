@@ -3,32 +3,7 @@ import { Product } from "../../../athena-webapp";
 import { Link } from "@tanstack/react-router";
 import { Button } from "./ui/button";
 import { Skeleton } from "./ui/skeleton";
-
-function ProductCard({
-  product,
-  currencyFormatter,
-}: {
-  product: Product;
-  currencyFormatter: Intl.NumberFormat;
-}) {
-  return (
-    <div className="flex flex-col mb-24">
-      <div className="mb-2">
-        <img
-          alt={`${product.name} image`}
-          className="aspect-square object-cover"
-          src={product.skus[0].images[0]}
-        />
-      </div>
-      <div className="text-sm flex flex-col px-4 lg:px-0 items-start gap-4">
-        <p className="font-medium">{product.name}</p>
-        <p className="text-xs">
-          {currencyFormatter.format(product.skus[0].price)}
-        </p>
-      </div>
-    </div>
-  );
-}
+import { ProductCard } from "./ProductCard";
 
 function ProductCardLoadingSkeleton() {
   return (
@@ -53,7 +28,7 @@ export default function ProductsPage({
 
   if (products?.length == 0) {
     return (
-      <div className="space-y-8 container mx-auto max-w-[1024px]">
+      <div className="space-y-8 container mx-auto max-w-[1024px] h-screen">
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
           <div className="space-y-4">
             <div className="w-[30vw] h-[30vw] bg-zinc-100 rounded-md"></div>

@@ -12,9 +12,11 @@ import {
 import { useConvexAuth } from "convex/react";
 import { useEffect } from "react";
 import Navbar from "../components/Navbar";
+import { SidebarProvider } from "../components/ui/sidebar";
+import { AppSidebar } from "../components/app-sidebar";
 
 export const Route = createFileRoute("/_authed")({
-  component: AuthedComponent,
+  component: Layout,
 });
 
 function AuthedComponent() {
@@ -42,5 +44,17 @@ function AuthedComponent() {
       <OrganizationModal />
       <Outlet />
     </AppLayoutProvider>
+  );
+}
+
+export default function Layout() {
+  return (
+    <SidebarProvider>
+      <AppSidebar />
+      <main className="w-full">
+        {/* <SidebarTrigger /> */}
+        <AuthedComponent />
+      </main>
+    </SidebarProvider>
   );
 }

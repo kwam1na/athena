@@ -15,7 +15,6 @@ import { useAppLayout } from "../contexts/AppLayoutContext";
 export default function ProductPage() {
   const { productData } = useProduct();
   const { activeStore } = useGetActiveStore();
-  const { setSidebarState } = useAppLayout();
 
   const category = useQuery(
     api.inventory.categories.getById,
@@ -24,24 +23,22 @@ export default function ProductPage() {
       : "skip"
   )?.[0];
 
-  useEffect(() => {
-    setSidebarState("collapsed");
-  }, []);
-
   return (
-    <div className="h-full container mx-auto w-full p-8 space-x-8 flex">
+    <div className="h-full container mx-auto w-full p-8 space-x-32 flex">
       <div className="w-full space-y-8">
         <ProductImagesView />
         <ProductStockView />
       </div>
 
       <div className="w-full space-y-8">
-        <ProductDetailsView />
+        <div className="grid grid-cols-2 gap-8">
+          <ProductDetailsView />
+          <ProductAvailabilityView />
+        </div>
         <ProductAttributesView />
         <ProductCategorizationView />
         <div className="grid grid-cols-2 gap-8">
           {category?.name == "Hair" && <WigTypeView />}
-          <ProductAvailabilityView />
         </div>
       </div>
     </div>

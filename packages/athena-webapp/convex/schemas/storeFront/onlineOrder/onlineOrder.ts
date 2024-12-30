@@ -21,7 +21,7 @@ export const customerDetailsSchema = v.object({
 export const orderDetailsSchema = v.object({
   billingDetails: addressSchema,
   customerDetails: customerDetailsSchema,
-  deliveryDetails: v.union(addressSchema, v.null()),
+  deliveryDetails: v.union(addressSchema, v.null(), v.string()),
   deliveryMethod: v.string(),
   deliveryOption: v.union(v.string(), v.null()),
   deliveryFee: v.union(v.number(), v.null()),
@@ -29,6 +29,7 @@ export const orderDetailsSchema = v.object({
 });
 
 export const onlineOrderSchema = v.object({
+  completedAt: v.optional(v.number()),
   customerId: v.union(v.id("customer"), v.id("guest")),
   storeId: v.id("store"),
   checkoutSessionId: v.id("checkoutSession"),
@@ -38,7 +39,7 @@ export const onlineOrderSchema = v.object({
   amount: v.number(),
   billingDetails: addressSchema,
   customerDetails: customerDetailsSchema,
-  deliveryDetails: v.union(addressSchema, v.null()),
+  deliveryDetails: v.union(addressSchema, v.null(), v.string()),
   deliveryMethod: v.string(),
   deliveryOption: v.union(v.string(), v.null()),
   deliveryFee: v.union(v.number(), v.null()),

@@ -83,6 +83,10 @@ function RootDocument({ children }: { children: React.ReactNode }) {
     <Html>
       <Head>
         <Meta />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Lavishly+Yours&display=swap"
+          rel="stylesheet"
+        />
       </Head>
       <Body>
         <QueryClientProvider client={queryClient}>

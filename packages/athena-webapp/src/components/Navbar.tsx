@@ -67,7 +67,21 @@ function SettingsHeader() {
   );
 }
 
-const Header = () => {
+export const AppHeader = () => {
+  const organizations = useGetOrganizations();
+
+  return (
+    <div className="flex items-center gap-2">
+      <Link href={"/"} className="flex items-center">
+        <p className="font-medium">athena</p>
+      </Link>
+      <p className="text-muted-foreground">/</p>
+      <OrganizationSwitcher items={organizations || []} />
+    </div>
+  );
+};
+
+export const Header = () => {
   const organizations = useGetOrganizations();
 
   return (
@@ -81,7 +95,7 @@ const Header = () => {
 
         <div className="flex items-center gap-8 text-sm ml-8">
           <Link
-            to="/$orgUrlSlug/store/$storeUrlSlug/products"
+            to="/$orgUrlSlug/store/$storeUrlSlug"
             params={(p) => ({
               ...p,
               orgUrlSlug: p.orgUrlSlug!,

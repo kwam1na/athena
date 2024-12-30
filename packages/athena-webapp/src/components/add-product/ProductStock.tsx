@@ -60,7 +60,12 @@ const StockHeader = () => {
 
 export function ProductStockView() {
   return (
-    <View className="h-auto" header={<StockHeader />}>
+    <View
+      hideBorder
+      hideHeaderBottomBorder
+      className="h-auto"
+      header={<StockHeader />}
+    >
       <Stock />
     </View>
   );

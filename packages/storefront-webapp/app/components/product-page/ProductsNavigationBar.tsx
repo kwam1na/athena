@@ -24,8 +24,10 @@ export function ProductNavigationBar() {
     <Breadcrumb className="container mx-auto py-8" ref={ref}>
       <BreadcrumbList>
         <BreadcrumbItem>
-          <BreadcrumbLink href="/">
-            <p className="text-xs">Shop</p>
+          <BreadcrumbLink>
+            <Link to="/">
+              <p className="text-xs">Shop</p>
+            </Link>
           </BreadcrumbLink>
         </BreadcrumbItem>
         <p>/</p>

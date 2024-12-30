@@ -20,7 +20,7 @@ export const create = mutation({
     checkoutSessionId: v.id("checkoutSession"),
     billingDetails: addressSchema,
     customerDetails: customerDetailsSchema,
-    deliveryDetails: v.union(addressSchema, v.null()),
+    deliveryDetails: v.union(addressSchema, v.null(), v.string()),
     deliveryMethod: v.string(),
     deliveryOption: v.union(v.string(), v.null()),
     deliveryFee: v.union(v.number(), v.null()),
@@ -74,6 +74,7 @@ export const create = mutation({
           productSku: item.productSku,
           productSkuId: item.productSkuId,
           customerId: item.customerId,
+          price: item.price,
         });
       })
     );
@@ -162,7 +163,6 @@ export const getById = query({
           ...item,
           productCategory: category,
           length: productSku?.length,
-          price: productSku?.price,
           colorName,
           productName: product?.name,
           productImage: productSku?.images?.[0] ?? null,
@@ -253,6 +253,11 @@ export const update = mutation({
       const readyStatuses = ["ready-for-pickup", "ready-for-delivery"];
       if (readyStatuses.includes(args.update.status)) {
         updates.readyAt = Date.now();
+      }
+
+      const completedStatuses = ["delivered", "picked-up"];
+      if (completedStatuses.includes(args.update.status)) {
+        updates.completedAt = Date.now();
       }
 
       await ctx.db.patch(args.orderId, updates);

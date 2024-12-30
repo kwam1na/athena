@@ -6,6 +6,8 @@ import { useGetActiveOrganization } from "@/hooks/useGetOrganizations";
 // import { getProducts } from '@/server-actions/products'
 // import { getStore } from '@/server-actions/stores'
 import { createFileRoute, notFound } from "@tanstack/react-router";
+import { AppSidebar } from "~/src/components/app-sidebar";
+import { SidebarProvider } from "~/src/components/ui/sidebar";
 
 export const Route = createFileRoute(
   "/_authed/$orgUrlSlug/store/$storeUrlSlug/"

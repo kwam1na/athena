@@ -72,7 +72,12 @@ export default function ProductImagesView() {
   const { activeProductVariant, isLoading, updateVariantImages } = useProduct();
 
   return (
-    <View className="h-auto" header={<Header />}>
+    <View
+      hideBorder
+      hideHeaderBottomBorder
+      className="h-auto"
+      header={<Header />}
+    >
       {!isLoading && (
         <ImageUploader
           images={activeProductVariant?.images}

@@ -56,3 +56,23 @@ export async function getProduct({
 
   return res;
 }
+
+export async function getBestSellers({
+  organizationId,
+  storeId,
+}: {
+  organizationId: string;
+  storeId: string;
+}): Promise<Product> {
+  const response = await fetch(
+    `${getBaseUrl(organizationId, storeId)}/bestSellers`
+  );
+
+  const res = await response.json();
+
+  if (!response.ok) {
+    throw new Error(res.error || "Error loading best sellers.");
+  }
+
+  return res;
+}

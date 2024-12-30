@@ -24,7 +24,7 @@ export function VerificationCodeEmail({
             Sign in to athena
           </Heading>
           <Text className="text-sm">
-            Please enter the following code on the sign in page.
+            Enter the following code on the sign in page.
           </Text>
           <Section className="text-center">
             <Text className="font-semibold">Verification code</Text>

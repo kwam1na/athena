@@ -105,7 +105,7 @@ const Orders = () => {
 };
 const Purchases = () => {
   return (
-    <div className="container mx-auto max-w-[1024px] space-y-40 py-12 pb-40">
+    <div className="container mx-auto max-w-[1024px] space-y-16 py-12 pb-40">
       <h1 className="text-2xl font-light">Orders</h1>
 
       <Orders />

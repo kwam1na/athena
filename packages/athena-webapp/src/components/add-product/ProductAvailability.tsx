@@ -15,6 +15,8 @@ import { ProductAvailability as ProductAvailabilityType } from "@athena/db";
 export function ProductAvailabilityView() {
   return (
     <View
+      hideBorder
+      hideHeaderBottomBorder
       className="h-auto"
       header={
         <p className="text-sm text-sm text-muted-foreground">Availability</p>

@@ -19,6 +19,8 @@ export function ProductAttributesView() {
 
   return (
     <View
+      hideBorder
+      hideHeaderBottomBorder
       className="h-auto"
       header={
         <div className="flex items-center justify-between">
