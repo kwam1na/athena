@@ -10,6 +10,20 @@ export const create = mutation({
     storeId: v.id("store"),
   },
   handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query(entity)
+      .filter((q) => {
+        return q.and(
+          q.eq(q.field("productId"), args.productId),
+          q.eq(q.field("storeId"), args.storeId)
+        );
+      })
+      .first();
+
+    if (existing) {
+      return;
+    }
+
     const id = await ctx.db.insert(entity, {
       productId: args.productId,
       storeId: args.storeId,
@@ -49,15 +63,39 @@ export const getAll = query({
       .filter((q) => q.eq(q.field("storeId"), args.storeId))
       .collect();
 
-    const res: any[] = await Promise.all(
-      items.map((item) =>
-        ctx.runQuery(api.inventory.products.getByIdOrSlug, {
-          identifier: item.productId,
-          storeId: args.storeId,
-        })
-      )
+    const enrichedItems: any[] = await Promise.all(
+      items.map(async (item) => {
+        const product = await ctx.runQuery(
+          api.inventory.products.getByIdOrSlug,
+          {
+            identifier: item.productId,
+            storeId: args.storeId,
+          }
+        );
+        return {
+          ...item,
+          product,
+        };
+      })
     );
 
-    return res;
+    return enrichedItems;
+  },
+});
+
+export const updateRanks = mutation({
+  args: {
+    ranks: v.array(v.object({ id: v.id(entity), rank: v.number() })),
+  },
+  handler: async (ctx, args) => {
+    await Promise.all(
+      args.ranks.map(async (item) => {
+        await ctx.db.patch(item.id, {
+          rank: item.rank,
+        });
+      })
+    );
+
+    return true;
   },
 });

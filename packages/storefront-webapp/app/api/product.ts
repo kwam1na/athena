@@ -76,3 +76,23 @@ export async function getBestSellers({
 
   return res;
 }
+
+export async function getFeatured({
+  organizationId,
+  storeId,
+}: {
+  organizationId: string;
+  storeId: string;
+}): Promise<Product> {
+  const response = await fetch(
+    `${getBaseUrl(organizationId, storeId)}/featured`
+  );
+
+  const res = await response.json();
+
+  if (!response.ok) {
+    throw new Error(res.error || "Error loading featured.");
+  }
+
+  return res;
+}

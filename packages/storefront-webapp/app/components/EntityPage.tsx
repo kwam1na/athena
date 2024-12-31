@@ -30,8 +30,8 @@ export default function EntityPage() {
 
   let data = products;
 
-  if (bestSellers?.length) {
-    data = bestSellers;
+  if (bestSellers?.length && categorySlug === "best-sellers") {
+    data = bestSellers.map((bestSeller: any) => bestSeller.product);
   }
 
   const isLoading = isLoadingProducts || isLoadingBestSellers;

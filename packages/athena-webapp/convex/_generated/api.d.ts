@@ -31,6 +31,7 @@ import type * as http from "../http.js";
 import type * as inventory_bestSeller from "../inventory/bestSeller.js";
 import type * as inventory_categories from "../inventory/categories.js";
 import type * as inventory_colors from "../inventory/colors.js";
+import type * as inventory_featuredItem from "../inventory/featuredItem.js";
 import type * as inventory_organizations from "../inventory/organizations.js";
 import type * as inventory_products from "../inventory/products.js";
 import type * as inventory_stores from "../inventory/stores.js";
@@ -40,6 +41,7 @@ import type * as otp_VerificationCodeEmail from "../otp/VerificationCodeEmail.js
 import type * as schemas_inventory_bestSeller from "../schemas/inventory/bestSeller.js";
 import type * as schemas_inventory_category from "../schemas/inventory/category.js";
 import type * as schemas_inventory_color from "../schemas/inventory/color.js";
+import type * as schemas_inventory_featuredItem from "../schemas/inventory/featuredItem.js";
 import type * as schemas_inventory_index from "../schemas/inventory/index.js";
 import type * as schemas_inventory_organization from "../schemas/inventory/organization.js";
 import type * as schemas_inventory_product from "../schemas/inventory/product.js";
@@ -102,6 +104,7 @@ declare const fullApi: ApiFromModules<{
   "inventory/bestSeller": typeof inventory_bestSeller;
   "inventory/categories": typeof inventory_categories;
   "inventory/colors": typeof inventory_colors;
+  "inventory/featuredItem": typeof inventory_featuredItem;
   "inventory/organizations": typeof inventory_organizations;
   "inventory/products": typeof inventory_products;
   "inventory/stores": typeof inventory_stores;
@@ -111,6 +114,7 @@ declare const fullApi: ApiFromModules<{
   "schemas/inventory/bestSeller": typeof schemas_inventory_bestSeller;
   "schemas/inventory/category": typeof schemas_inventory_category;
   "schemas/inventory/color": typeof schemas_inventory_color;
+  "schemas/inventory/featuredItem": typeof schemas_inventory_featuredItem;
   "schemas/inventory/index": typeof schemas_inventory_index;
   "schemas/inventory/organization": typeof schemas_inventory_organization;
   "schemas/inventory/product": typeof schemas_inventory_product;

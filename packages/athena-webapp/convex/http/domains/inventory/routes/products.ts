@@ -62,6 +62,20 @@ productRoutes.get("/bestSellers", async (c) => {
   return c.json(res);
 });
 
+productRoutes.get("/featured", async (c) => {
+  const storeId = c.req.param("storeId");
+
+  if (!storeId) {
+    return c.json({ error: "Store id missing" }, 404);
+  }
+
+  const res = await c.env.runQuery(api.inventory.featuredItem.getAll, {
+    storeId: storeId as Id<"store">,
+  });
+
+  return c.json(res);
+});
+
 productRoutes.get("/:productId", async (c) => {
   const storeId = c.req.param("storeId");
   const { productId } = c.req.param();
