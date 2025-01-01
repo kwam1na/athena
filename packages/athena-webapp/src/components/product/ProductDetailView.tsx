@@ -12,6 +12,7 @@ import useGetActiveProduct from "~/src/hooks/useGetActiveProduct";
 import { ImagesView } from "./ImagesView";
 import { PenIcon } from "lucide-react";
 import { ProductStatus } from "./ProductStatus";
+import { ProductStockStatus } from "./ProductStock";
 
 const ProductDetailViewHeader = () => {
   const { o } = useSearch({ strict: false });
@@ -54,8 +55,9 @@ const ProductDetailViewHeader = () => {
           <p>{activeProduct?.availability.toUpperCase()}</p>
         </Badge> */}
 
-        <div className="text-xs text-muted-foreground">
+        <div className="text-xs flex items-center gap-4">
           <ProductStatus product={activeProduct} />
+          <ProductStockStatus productVariant={activeProductVariant} />
         </div>
       </div>
 

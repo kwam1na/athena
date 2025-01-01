@@ -22,7 +22,7 @@ export default function ProductFilterBar({
       : `Show filters (${selectedFiltersCount})`;
 
   return (
-    <div className="flex justify-between container mx-auto max-w-[1024px] sticky">
+    <div className="flex justify-between container mx-auto max-w-[1024px] px-6 lg:px-0 sticky">
       <div className="flex items-center py-4">
         <p className="text-md font-medium">{`${capitalizeFirstLetter(slugToWords(subcategorySlug || categorySlug || ""))}`}</p>
       </div>
@@ -35,14 +35,14 @@ export default function ProductFilterBar({
         <SlidersHorizontal className="w-4 h-4 ml-2" />
       </Button> */}
 
-      <Button
+      {/* <Button
         variant="clear"
         onClick={onFilterClickOnMobile}
         className="lg:hidden ml-auto"
       >
         <p>{showFilters ? "Hide filters" : showFiltersText}</p>
         <SlidersHorizontal className="w-4 h-4 ml-2" />
-      </Button>
+      </Button> */}
     </div>
   );
 }

@@ -131,9 +131,9 @@ export default function ShoppingBag() {
   };
 
   return (
-    <FadeIn className="container mx-auto max-w-[1024px] space-y-24 py-16">
+    <FadeIn className="container mx-auto max-w-[1024px] px-6 xl:px-0 space-y-8 lg:space-y-24 py-8">
       <div className="space-y-2">
-        <h1 className="text-2xl font-light">Bag</h1>
+        <h1 className="text-lg font-light">Bag</h1>
         {data && data.length > 0 && <PendingItem session={data[0]} />}
       </div>
 
@@ -142,8 +142,8 @@ export default function ShoppingBag() {
       )}
 
       {!isBagEmpty && total !== 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 pb-40">
-          <div className="md:col-span-2 space-y-16">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 pb-56">
+          <div className="md:col-span-2 space-y-24">
             <AnimatePresence initial={false} custom={bagAction}>
               {bag?.items.map((item: ProductSku, index: number) => {
                 const unavailableSku = isSkuUnavailable(item.productSkuId);
@@ -151,8 +151,8 @@ export default function ShoppingBag() {
                 return (
                   <motion.div
                     key={item._id}
-                    layout
-                    className="relative flex items-center space-x-4"
+                    layout={isNavbarShowing}
+                    className="relative flex space-x-4"
                   >
                     <motion.div
                       className="absolute inset-0 flex px-16 items-center pointer-events-none"
@@ -183,12 +183,12 @@ export default function ShoppingBag() {
                         <img
                           src={item.productImage || placeholder}
                           alt={item.productName || "product image"}
-                          className="w-48 h-48 object-cover rounded-lg"
+                          className="w-32 h-32 lg:w-48 lg:h-48 object-cover rounded-lg"
                         />
                       </Link>
 
-                      <div className="flex-1 space-y-6 text-sm">
-                        <div className="flex flex-col ml-2 gap-4">
+                      <div className="flex-1 space-y-2 lg:space-y-6 text-sm">
+                        <div className="flex flex-col gap-2 lg:gap-4">
                           <h2>{item && getProductName(item)}</h2>
                           <p className="text-sm text-muted-foreground">
                             {item.price
@@ -305,7 +305,7 @@ export default function ShoppingBag() {
 
           {/* Mobile Cart Summary */}
           {isNavbarShowing && (
-            <div className="block md:hidden absolute bottom-0 left-0 w-full bg-white p-6 shadow-md">
+            <div className="block md:hidden fixed bottom-0 left-0 w-full bg-background p-8 shadow-md z-50">
               <div className="flex justify-between text-lg font-medium mb-4">
                 <span>Total</span>
                 <span>{formatter.format(total)}</span>

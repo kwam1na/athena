@@ -295,13 +295,12 @@ export default function NavigationBar() {
               </div>
 
               <div className="flex gap-8">
-                <Link
+                <span
                   onMouseEnter={() => setActiveMenu("profile")}
-                  to="/shop/saved"
-                  className="flex items-center"
+                  className="hidden md:flex items-center cursor-pointer"
                 >
-                  <p className="text-xs font-medium">Kwamina</p>
-                </Link>
+                  <p className="text-xs font-medium">Ato</p>
+                </span>
                 <div
                   onMouseEnter={() => setActiveMenu(null)}
                   className="flex items-center gap-4"

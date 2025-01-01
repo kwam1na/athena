@@ -396,8 +396,6 @@ export const CheckoutProvider = ({
 
   if (isLoading || !data) return null;
 
-  // console.log("checkout session ->", data);
-
   if (data?.message?.includes("No active session found")) {
     return <CheckoutExpired />;
   }

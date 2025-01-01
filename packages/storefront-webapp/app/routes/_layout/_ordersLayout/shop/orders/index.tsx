@@ -8,7 +8,7 @@ import { EmptyState } from "@/components/states/empty/empty-state";
 import { motion } from "framer-motion";
 import { capitalizeFirstLetter, slugToWords } from "@/lib/utils";
 
-export const Route = createFileRoute("/shop/orders/")({
+export const Route = createFileRoute("/_layout/_ordersLayout/shop/orders/")({
   component: () => <Purchases />,
 });
 
@@ -21,15 +21,7 @@ const OrderItem = ({
 }) => {
   const amount = order.amount / 100;
 
-  const isPickupOrder = order.deliveryMethod == "pickup";
-
   const isOrderOpen = order.status == "open";
-
-  const isOrderReady = order.status == "ready";
-
-  const readyText = isPickupOrder
-    ? "Ready for pickup"
-    : "Preparing for delivery";
 
   return (
     <div className="space-y-8 text-sm">
@@ -51,7 +43,7 @@ const OrderItem = ({
         </Link>
       </div>
 
-      <div className="flex gap-4">
+      <div className="hidden md:flex gap-4">
         {order?.items.slice(0, 3).map((item: any, idx: number) => (
           <div key={idx} className="h-32 w-32">
             <img
@@ -64,6 +56,23 @@ const OrderItem = ({
         {order?.items.length > 3 && (
           <div className="h-32 w-32 bg-gray-100 rounded-sm flex items-center justify-center">
             <span className="text-gray-600">+{order.items.length - 3}</span>
+          </div>
+        )}
+      </div>
+
+      <div className="block md:hidden grid grid-cols-3 gap-4">
+        {order?.items.slice(0, 2).map((item: any, idx: number) => (
+          <div key={idx} className="h-32 w-32">
+            <img
+              src={item.productImage || placeholder}
+              alt={"product image"}
+              className="aspect-square object-cover rounded-sm"
+            />
+          </div>
+        ))}
+        {order?.items.length > 2 && (
+          <div className="h-32 w-32 bg-gray-100 rounded-sm flex items-center justify-center">
+            <span className="text-gray-600">+{order.items.length - 2}</span>
           </div>
         )}
       </div>
@@ -82,7 +91,7 @@ const Orders = () => {
     })
   );
 
-  if (isLoading) return null;
+  if (isLoading) return <div className="h-screen"></div>;
 
   if (data.length === 0) {
     return <EmptyState message="You haven't placed any orders." />;
@@ -95,7 +104,7 @@ const Orders = () => {
         opacity: 1,
         transition: { ease: "easeOut", duration: 0.2 },
       }}
-      className="space-y-40"
+      className="space-y-24 lg:space-y-32"
     >
       {data?.map((order: any) => (
         <OrderItem key={order._id} order={order} formatter={formatter} />
@@ -105,8 +114,8 @@ const Orders = () => {
 };
 const Purchases = () => {
   return (
-    <div className="container mx-auto max-w-[1024px] space-y-16 py-12 pb-40">
-      <h1 className="text-2xl font-light">Orders</h1>
+    <div className="pb-56 space-y-8 lg:space-y-24 py-8">
+      <h1 className="text-lg">Orders</h1>
 
       <Orders />
     </div>

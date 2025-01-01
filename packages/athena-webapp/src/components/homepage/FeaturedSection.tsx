@@ -31,7 +31,7 @@ export const FeaturedSection = () => {
   useEffect(() => {
     if (
       (featuredItemsQuery && !featuredItems) ||
-      featuredItemsQuery.length !== featuredItems?.length
+      featuredItemsQuery?.length !== featuredItems?.length
     ) {
       const sortedItems = featuredItemsQuery.sort(
         (a: any, b: any) => a.rank - b.rank

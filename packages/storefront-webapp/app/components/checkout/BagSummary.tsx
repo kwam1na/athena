@@ -41,9 +41,7 @@ function SummaryItem({
 export function BagSummaryItems({ items }: { items: ProductSku[] }) {
   const { formatter } = useStoreContext();
 
-  // console.log("items in sm -", items);
-
-  // if (!items) return null;
+  if (!items) return null;
 
   return (
     <div className="space-y-12 w-full">
@@ -61,9 +59,10 @@ function BagSummary() {
 
   const total = checkoutState.deliveryFee + bagSubtotal;
 
+  // console.log("bag in summary -", checkoutState.bag);
+
   return (
     <motion.div className="py-6 bg-white shadow-sm w-[80vw] lg:w-[30vw] space-y-12">
-      {/* Order Summary */}
       <div className="flex items-center px-6 w-full">
         <p>Order summary</p>
         <div className="ml-auto">
@@ -75,9 +74,8 @@ function BagSummary() {
         </div>
       </div>
 
-      {/* Items */}
       <div className="px-8">
-        <BagSummaryItems items={checkoutState.bag.items} />
+        <BagSummaryItems items={checkoutState?.bag?.items} />
       </div>
 
       {/* Promo Code */}

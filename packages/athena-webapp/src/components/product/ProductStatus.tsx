@@ -1,3 +1,4 @@
+import { AlertOctagonIcon, AlertTriangle } from "lucide-react";
 import { capitalizeFirstLetter, slugToWords } from "~/src/lib/utils";
 import { Product } from "~/types";
 
@@ -14,7 +15,7 @@ export const ProductStatus = ({ product }: { product: Product }) => {
   if (product.inventoryCount == 0) {
     return (
       <div className="flex items-center">
-        <div className="h-2 w-2 mr-2 rounded bg-red-700" />
+        <AlertTriangle className="w-3.5 h-3.5 text-red-600 mr-2" />
         <p className="text-red-700">Out of stock</p>
       </div>
     );
@@ -23,8 +24,8 @@ export const ProductStatus = ({ product }: { product: Product }) => {
   if (product.inventoryCount <= 2) {
     return (
       <div className="flex items-center">
-        <div className="h-2 w-2 mr-2 rounded bg-yellow-500" />
-        <p className="text-yellow-800">Low stock</p>
+        <AlertOctagonIcon className="w-3.5 h-3.5 text-yellow-600 mr-2" />
+        <p className="text-yellow-700">Low stock</p>
       </div>
     );
   }

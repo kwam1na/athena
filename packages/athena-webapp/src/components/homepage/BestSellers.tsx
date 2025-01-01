@@ -31,7 +31,7 @@ export const BestSellers = () => {
   useEffect(() => {
     if (
       (bestSellersQuery && !bestSellers) ||
-      bestSellersQuery.length !== bestSellers?.length
+      bestSellersQuery?.length !== bestSellers?.length
     ) {
       const bestSellersSorted = bestSellersQuery.sort(
         (a: any, b: any) => a.rank - b.rank

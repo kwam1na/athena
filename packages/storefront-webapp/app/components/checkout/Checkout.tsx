@@ -5,9 +5,12 @@ import { DeliverySection } from "./DeliveryDetails/DeliverySection";
 import BagSummary from "./BagSummary";
 import { PaymentSection } from "./PaymentSection";
 import { useEffect } from "react";
+import MobileBagSummary from "./MobileBagSummary";
 
 const MainComponent = () => {
-  const { activeSession } = useCheckout();
+  const { activeSession, checkoutState } = useCheckout();
+
+  console.log(checkoutState);
 
   useEffect(() => {
     if (activeSession.externalReference && activeSession.hasCompletedPayment) {
@@ -30,10 +33,10 @@ const MainComponent = () => {
             x: 0,
             transition: { duration: 0.2, ease: "easeOut" },
           }}
-          className="grid order-2 pb-16 lg:order-1 lg:col-span-6 px-16"
+          className="grid order-2 pb-16 lg:order-1 lg:col-span-6 px-6 lg:px-16"
         >
           <div className="py-8 space-y-12 container mx-auto">
-            <p className="text-lg">Checkout</p>
+            <p>Checkout</p>
             <div className="space-y-32">
               <div className="lg:pr-24">
                 <CustomerDetailsForm />
@@ -50,6 +53,10 @@ const MainComponent = () => {
 
         {/* <div className="order-1 lg:order-2 lg:col-span-6 bg-[#F6F6F6]" /> */}
 
+        <div className="block md:hidden px-6 bg-[#F6F6F6] border">
+          <MobileBagSummary />
+        </div>
+
         {/* Right Panel */}
         <motion.div
           key={"right"}
@@ -59,7 +66,7 @@ const MainComponent = () => {
             x: 0,
             transition: { ease: "easeOut" },
           }}
-          className="crelative order-1 lg:order-2 lg:col-span-6 bg-[#F6F6F6]"
+          className="hidden md:block relative order-1 lg:order-2 lg:col-span-6 bg-[#F6F6F6]"
         >
           <div className="sticky top-0 pt-32 pb-24 flex items-start justify-center min-h-screen flex-grow">
             <BagSummary />

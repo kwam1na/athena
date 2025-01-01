@@ -1,3 +1,4 @@
+import MobileProductPage from "@/components/product-page/MobileProductPage";
 import ProductPage from "@/components/product-page/ProductPage";
 import { ProductNavigationBar } from "@/components/product-page/ProductsNavigationBar";
 import { createFileRoute } from "@tanstack/react-router";
@@ -10,13 +11,19 @@ const productPageSchema = z.object({
 export const Route = createFileRoute("/shop/product/$productSlug")({
   validateSearch: productPageSchema,
   component: () => <Component />,
+  // component: () => <MobileProductPage />,
 });
 
 const Component = () => {
   return (
     <div>
       <ProductNavigationBar />
-      <ProductPage />
+      <div className="hidden lg:block">
+        <ProductPage />
+      </div>
+      <div className="lg:hidden">
+        <MobileProductPage />
+      </div>
     </div>
   );
 };

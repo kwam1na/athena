@@ -1,38 +1,34 @@
 import { useStoreContext } from "@/contexts/StoreContext";
-import {
-  Link,
-  useNavigate,
-  useParams,
-  useSearch,
-} from "@tanstack/react-router";
-import { LoadingButton } from "../ui/loading-button";
-import { useShoppingBag } from "@/hooks/useShoppingBag";
-import { Product, ProductSku } from "@athena/webapp-2";
-import { Button } from "../ui/button";
-import { capitalizeWords, getProductName } from "@/lib/utils";
-import { HeartIcon } from "lucide-react";
-import React, { useEffect, useRef, useState } from "react";
-import placeholder from "@/assets/placeholder.png";
-import { motion } from "framer-motion";
-
-import {
-  Sheet,
-  SheetContent,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet";
-import NotFound from "../states/not-found/NotFound";
-import GalleryViewer from "./GalleryViewer";
 import { useGetProductQuery } from "@/hooks/useGetProduct";
+import { getProductName } from "@/lib/productUtils";
+import { ProductSku } from "@athena/webapp-2";
+import { Link, useSearch } from "@tanstack/react-router";
+import { useParams } from "@tanstack/react-router";
+import { motion } from "framer-motion";
+import { LoadingButton } from "../ui/loading-button";
+import { ProductAttribute } from "./ProductAttribute";
+import { useShoppingBag } from "@/hooks/useShoppingBag";
+import { useEffect, useRef, useState } from "react";
+
+import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "../ui/sheet";
+import { Button } from "../ui/button";
+import NotFound from "../states/not-found/NotFound";
+import { HeartIcon } from "lucide-react";
 import { HeartIconFilled } from "@/assets/icons/HeartIconFilled";
 import { BagProduct, PickupDetails, ShippingPolicy } from "./ProductDetails";
-import { ProductAttribute } from "./ProductAttribute";
 import { Reviews } from "./ProductReviews";
 
-// Main Product Page Component
-export default function ProductPage() {
+export default function MobileProductPage() {
+  const [isSheetOpen, setIsSheetOpen] = useState(false);
+
   const { productSlug } = useParams({ strict: false });
+
+  const { data: product, error } = useGetProductQuery(productSlug);
+
+  const { variant } = useSearch({ strict: false });
+
   const { formatter } = useStoreContext();
+
   const {
     bag,
     deleteItemFromSavedBag,
@@ -45,19 +41,14 @@ export default function ProductPage() {
     isUpdatingSavedBag,
   } = useShoppingBag();
 
-  const [isSheetOpen, setIsSheetOpen] = useState(false);
-  const [activeImage, setActiveImage] = useState(0);
-  const imageRefs = useRef<HTMLImageElement[] | null[]>([]);
-  const [isRefsReady, setRefsReady] = useState(false);
-  const pageRef = useRef<HTMLDivElement | null>(null);
-
   const sheetContent = useRef<React.ReactNode | null>(null);
 
-  const { data: product, error } = useGetProductQuery(productSlug);
-
-  const { variant } = useSearch({ strict: false });
-
   const [selectedSku, setSelectedSku] = useState<ProductSku | null>(null);
+
+  //   const selectedSku =
+  //     product?.skus?.find((sku: ProductSku) => sku.sku === variant) ||
+  //     product?.skus?.[0];
+  //   let selectedSku: any;
 
   useEffect(() => {
     if (product && variant) {
@@ -83,39 +74,6 @@ export default function ProductPage() {
     }
   }, [variant, selectedSku]);
 
-  // Setup Intersection Observer
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            const index = imageRefs.current.findIndex(
-              (img) => img === entry.target
-            );
-            setActiveImage(index);
-          }
-        });
-      },
-      {
-        threshold: 0.5,
-      }
-    );
-
-    imageRefs.current.forEach((img) => {
-      if (img) observer.observe(img);
-    });
-
-    return () => {
-      observer.disconnect();
-    };
-  }, [imageRefs.current, isRefsReady, selectedSku]);
-
-  useEffect(() => {
-    if (imageRefs.current.length === selectedSku?.images?.length) {
-      setRefsReady(true);
-    }
-  }, [selectedSku, activeImage]);
-
   useEffect(() => {
     if (addedItemSuccessfully) {
       sheetContent.current = <BagProduct product={selectedSku} />;
@@ -129,14 +87,6 @@ export default function ProductPage() {
 
     return () => clearTimeout(t);
   }, [addedItemSuccessfully]);
-
-  const bagItem = bag?.items?.find(
-    (item: ProductSku) => item.productSku === selectedSku?.sku
-  );
-
-  const savedBagItem = savedBag?.items?.find(
-    (item: ProductSku) => item.productSku === selectedSku?.sku
-  );
 
   const handleUpdateBag = async () => {
     sheetContent.current = null;
@@ -172,6 +122,14 @@ export default function ProductPage() {
     sheetContent.current = <ShippingPolicy />;
   };
 
+  const bagItem = bag?.items?.find(
+    (item: ProductSku) => item.productSku === selectedSku?.sku
+  );
+
+  const savedBagItem = savedBag?.items?.find(
+    (item: ProductSku) => item.productSku === selectedSku?.sku
+  );
+
   if (!selectedSku) return null;
 
   if (error || (product && !selectedSku)) {
@@ -179,23 +137,27 @@ export default function ProductPage() {
   }
 
   return (
-    <>
-      <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
-        <SheetTitle />
-        <SheetContent>{sheetContent.current}</SheetContent>
+    <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
+      <SheetTitle />
+      <SheetContent>{sheetContent.current}</SheetContent>
 
-        <motion.main
-          ref={pageRef}
-          className="container mx-auto grid grid-cols-1 xl:grid-cols-4 gap-12 pb-16"
+      <div className="h-screen pb-40">
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1, transition: { duration: 0.1 } }}
+          className="h-[60vh] overflow-y-auto"
         >
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1, transition: { duration: 0.1 } }}
-            className="col-span-1 md:col-span-2"
-          >
-            <GalleryViewer images={selectedSku.images} />
-          </motion.div>
+          {selectedSku.images.map((img: any, index: number) => (
+            <img
+              key={index}
+              alt={`image`}
+              className={`aspect-square w-full h-full object-cover cursor-pointer`}
+              src={img}
+            />
+          ))}
+        </motion.div>
 
+        <div className="h-screen bg-background">
           <motion.div
             initial={{ opacity: 0 }}
             animate={{
@@ -245,8 +207,8 @@ export default function ProductPage() {
 
             <Reviews />
           </motion.div>
-        </motion.main>
-      </Sheet>
-    </>
+        </div>
+      </div>
+    </Sheet>
   );
 }

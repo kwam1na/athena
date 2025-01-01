@@ -1,22 +1,41 @@
 import { useStoreContext } from "@/contexts/StoreContext";
 import { onlineOrderQueries } from "@/queries";
-import { ArrowLeftIcon } from "@radix-ui/react-icons";
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, Link, useParams } from "@tanstack/react-router";
+import { createFileRoute, useParams } from "@tanstack/react-router";
 import placeholder from "@/assets/placeholder.png";
 import { getProductName } from "@/lib/productUtils";
 import { Separator } from "@/components/ui/separator";
 import { DeliveryDetails } from "@/components/checkout/DeliveryDetails/DeliverySection";
-import { motion } from "framer-motion";
 import NotFound from "@/components/states/not-found/NotFound";
 import { FadeIn } from "@/components/common/FadeIn";
 import { capitalizeFirstLetter, slugToWords } from "@/lib/utils";
 import { CircleCheck, Hourglass, RotateCcw, Truck } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+} from "@/components/ui/breadcrumb";
 
-export const Route = createFileRoute("/shop/orders/$orderId")({
+export const Route = createFileRoute(
+  "/_layout/_ordersLayout/shop/orders/$orderId"
+)({
   component: () => <OrderDetail />,
 });
+
+export function OrderNavigation() {
+  return (
+    <Breadcrumb className="container mx-auto xl:px-0 py-2 lg:py-8">
+      <BreadcrumbList>
+        <BreadcrumbItem>
+          <BreadcrumbLink onClick={() => window.history.back()}>
+            <p className="text-xs cursor-pointer">Back</p>
+          </BreadcrumbLink>
+        </BreadcrumbItem>
+      </BreadcrumbList>
+    </Breadcrumb>
+  );
+}
 
 const OrderSummary = ({ order }: { order: any }) => {
   const { formatter } = useStoreContext();
@@ -30,7 +49,7 @@ const OrderSummary = ({ order }: { order: any }) => {
 
   const paymentText =
     order.paymentMethod?.channel == "mobile_money"
-      ? `Paid with ${order.paymentMethod?.bank} Mobile Money ending in ${order.paymentMethod?.last4}`
+      ? `Paid with ${order.paymentMethod?.bank} Mobile Money account ending in ${order.paymentMethod?.last4}`
       : `Paid with card ending in ${order.paymentMethod?.last4}`;
 
   return (
@@ -143,22 +162,15 @@ const OrderDetail = () => {
     })
   );
 
-  if (isLoading) return null;
+  if (isLoading) return <div className="h-screen"></div>;
 
   if (!data) {
     return <NotFound />;
   }
 
-  console.log("order ->", data);
   const isPickupOrder = data.deliveryMethod == "pickup";
 
   const isOrderOpen = data.status == "open";
-
-  const isOrderReady = data.status == "ready";
-
-  const openText = isPickupOrder
-    ? "We're currently processing this order. You'll receive an email when it's ready for pickup."
-    : "We're currently processing this order. You'll receive an email when it's dispatched.";
 
   const getOrderMessage = () => {
     const getNextPhase = () => {
@@ -207,23 +219,9 @@ const OrderDetail = () => {
   };
 
   return (
-    <FadeIn className="container mx-auto max-w-[1024px] space-y-40 py-8 pb-32 w-full">
+    <FadeIn className="space-y-24 lg:space-y-40 py-8 pb-32 w-full">
       <div className="space-y-16">
-        <div className="space-y-12">
-          {/* <Link to="/shop/orders" className="flex items-center gap-2">
-            <ArrowLeftIcon className="w-3.5 h-3.5" />
-            <h1 className="text-xs font-light">All purchases</h1>
-          </Link> */}
-          <Button
-            variant={"clear"}
-            onClick={() => window.history.back()}
-            className="flex items-center gap-2 p-0"
-          >
-            <ArrowLeftIcon className="w-3.5 h-3.5" />
-            <h1 className="text-xs font-light">All purchases</h1>
-          </Button>
-          {/* <h1 className="text-sm font-light">Back to orders</h1> */}
-        </div>
+        <OrderNavigation />
 
         <div className="space-y-8 text-sm">
           {isOrderOpen ? (
@@ -252,19 +250,19 @@ const OrderDetail = () => {
             </div>
           )}
 
-          <div className="flex items-center justify-between w-[30%]">
+          <div className="flex items-center justify-between w-full lg:w-[30%]">
             <p>Purchase date</p>
             <p>{new Date(data._creationTime).toDateString()}</p>
           </div>
 
-          <div className="flex items-center justify-between w-[30%]">
+          <div className="flex items-center justify-between w-full lg:w-[30%]">
             <p>Order #</p>
             <p>{data?.orderNumber}</p>
           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-24 text-sm">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-24 text-sm">
         <p>{getOrderMessage()}</p>
 
         <OrderItems order={data} />
@@ -272,7 +270,7 @@ const OrderDetail = () => {
 
       <Separator className="bg-[#F6F6F6]" />
 
-      <div className="grid grid-cols-2">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-16">
         <PickupDetails order={data} />
 
         <div className="space-y-12 text-sm">

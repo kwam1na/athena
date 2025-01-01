@@ -196,7 +196,7 @@ export const DeliveryDetailsForm = () => {
         <div className="flex flex-col space-y-8">
           <p className="text-xs text-muted-foreground">Delivery details</p>
           <div className="flex flex-col xl:flex-row gap-8">
-            <div className="w-full xl:w-[40%]">
+            <div className="hidden md:block w-full xl:w-[40%]">
               <FormField
                 control={form.control}
                 name="country"
@@ -230,6 +230,46 @@ export const DeliveryDetailsForm = () => {
                         ))}
                       </SelectContent>
                     </Select>
+                    <FormMessage className="text-xs" />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <div className="block md:hidden w-full xl:w-[40%]">
+              <FormField
+                control={form.control}
+                name="country"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-muted-foreground text-xs">
+                      Country
+                    </FormLabel>
+                    <FormControl>
+                      <select
+                        className="block w-full px-3 py-8 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary text-sm"
+                        value={field.value}
+                        onChange={(e) => {
+                          const selectedValue = e.target.value;
+                          updateState({
+                            deliveryDetails: {
+                              ...checkoutState.deliveryDetails,
+                              country: selectedValue,
+                            } as Address,
+                          });
+                          field.onChange(selectedValue);
+                        }}
+                      >
+                        <option value="" disabled>
+                          Select country
+                        </option>
+                        {ALL_COUNTRIES.map((country) => (
+                          <option key={country.code} value={country.code}>
+                            {country.name}
+                          </option>
+                        ))}
+                      </select>
+                    </FormControl>
                     <FormMessage className="text-xs" />
                   </FormItem>
                 )}

@@ -25,8 +25,8 @@ export const PaymentSection = () => {
   const { updateCheckoutSession, bagSubtotal } = useShoppingBag();
   const [isProceedingToPayment, setIsProceedingToPayment] = useState(false);
 
-  const [didAcceptStoreTerms, setDidAcceptStoreTerms] = useState(true);
-  const [didAcceptCommsTerms, setDidAcceptCommsTerms] = useState(true);
+  const [didAcceptStoreTerms, setDidAcceptStoreTerms] = useState(false);
+  const [didAcceptCommsTerms, setDidAcceptCommsTerms] = useState(false);
   const [errorFinalizingPayment, setErrorFinalizingPayment] = useState(false);
 
   const onSubmit = async () => {

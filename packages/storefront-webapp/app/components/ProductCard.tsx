@@ -8,15 +8,15 @@ export function ProductCard({
   currencyFormatter: Intl.NumberFormat;
 }) {
   return (
-    <div className="flex flex-col mb-24">
-      <div className="mb-2">
+    <div className="flex flex-col">
+      <div className="mb-2 overflow-hidden">
         <img
           alt={`${product.name} image`}
-          className="aspect-square object-cover"
+          className="aspect-square object-cover rounded"
           src={product.skus[0].images[0]}
         />
       </div>
-      <div className="text-sm flex flex-col px-4 lg:px-0 items-start gap-4">
+      <div className="text-sm flex flex-col items-start gap-4">
         <p className="font-medium">{product.name}</p>
         <p className="text-xs">
           {currencyFormatter.format(product.skus[0].price)}

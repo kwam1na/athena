@@ -108,7 +108,9 @@ function LayoutComponent() {
               <ProductFilter />
             </div>
           )}
-          <div className={"col-span-12 container mx-auto max-w-[1024px]"}>
+          <div
+            className={"col-span-12 container mx-auto px-6 lg:px-0 h-screen"}
+          >
             <Outlet />
           </div>
         </div>

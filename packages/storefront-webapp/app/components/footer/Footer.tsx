@@ -22,7 +22,7 @@ function LinkGroup({ group }: { group: FooterLinkGroup }) {
   );
 }
 
-export default function Footer() {
+export function FooterInner() {
   const { store } = useStoreContext();
 
   const { categories } = useGetStoreCategories();
@@ -81,5 +81,15 @@ export default function Footer() {
         </p>
       </div>
     </footer>
+  );
+}
+
+export default function Footer() {
+  return (
+    <div className="border-t pt-8">
+      <div className="container mx-auto max-w-[1024px] px-6 lg:px-0">
+        <FooterInner />
+      </div>
+    </div>
   );
 }

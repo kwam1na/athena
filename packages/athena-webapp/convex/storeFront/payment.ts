@@ -4,6 +4,9 @@ import { api, internal } from "../_generated/api";
 import { CheckoutSession, OnlineOrder } from "../../types";
 import { orderDetailsSchema } from "../schemas/storeFront";
 
+// const appUrl = "https://gilbert-continues-underground-outlet.trycloudflare.com";
+const appUrl = "http://localhost:3000";
+
 export const createTransaction = action({
   args: {
     checkoutSessionId: v.id("checkoutSession"),
@@ -19,9 +22,9 @@ export const createTransaction = action({
         body: JSON.stringify({
           email: args.customerEmail,
           amount: args.amount.toString(),
-          callback_url: "http://localhost:3000/shop/checkout/verify",
+          callback_url: `${appUrl}/shop/checkout/verify`,
           metadata: {
-            cancel_action: "http://localhost:3000/shop/checkout",
+            cancel_action: `${appUrl}/shop/checkout`,
             checkout_session_id: args.checkoutSessionId,
             checkout_session_amount: args.amount.toString(),
             order_details: args.orderDetails,

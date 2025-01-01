@@ -13,7 +13,7 @@ import { FadeIn } from "../common/FadeIn";
 
 export default function SavedBag() {
   const [bagAction, setBagAction] = useState<ShoppingBagAction>("idle");
-  const { formatter } = useStoreContext();
+  const { formatter, isNavbarShowing } = useStoreContext();
   const {
     savedBag,
     deleteItemFromSavedBag,
@@ -48,20 +48,20 @@ export default function SavedBag() {
   };
 
   return (
-    <FadeIn className="container mx-auto max-w-[1024px] space-y-24 py-16">
-      {<h1 className="text-2xl font-light mb-8">Saved</h1>}
+    <FadeIn className="container mx-auto max-w-[1024px] px-6 xl:px-0 space-y-8 lg:space-y-24 py-8">
+      {<h1 className="text-lg font-light mb-8">Saved</h1>}
 
       {isSavedEmpty && <EmptyState message="You don't have any saved items." />}
 
       {!isSavedEmpty && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 pb-40">
-          <div className="md:col-span-2 space-y-16">
+          <div className="md:col-span-2 space-y-24">
             <AnimatePresence initial={false} custom={bagAction}>
               {savedBag?.items.map((item: ProductSku, index: number) => (
                 <motion.div
                   key={item._id}
-                  layout
-                  className="relative flex items-center space-x-4"
+                  layout={isNavbarShowing}
+                  className="relative flex space-x-4"
                 >
                   <motion.div
                     className="absolute inset-0 flex px-16 items-center pointer-events-none"
@@ -93,12 +93,12 @@ export default function SavedBag() {
                       <img
                         src={item.productImage || placeholder}
                         alt={item.productName || "product image"}
-                        className="w-48 h-48 object-cover rounded-lg"
+                        className="w-32 h-32 lg:w-48 lg:h-48 object-cover rounded-lg"
                       />
                     </Link>
 
-                    <div className="flex-1 space-y-6 text-sm">
-                      <div className="flex flex-col ml-2 gap-4">
+                    <div className="flex-1 space-y-2 lg:space-y-6 text-sm">
+                      <div className="flex flex-col ml-2 gap-2 lg:gap-4">
                         <h2>{item && getProductName(item)}</h2>
                         <p className="text-sm text-muted-foreground">
                           {item.price

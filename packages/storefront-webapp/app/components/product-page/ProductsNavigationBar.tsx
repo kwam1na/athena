@@ -15,13 +15,16 @@ export function ProductNavigationBar() {
   const ref = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
-    // ref.current?.scrollIntoView();
+    ref.current?.scrollIntoView();
   }, []);
 
   if (!product) return null;
 
   return (
-    <Breadcrumb className="container mx-auto py-8" ref={ref}>
+    <Breadcrumb
+      className="container mx-auto px-6 xl:px-0 py-2 lg:py-8"
+      ref={ref}
+    >
       <BreadcrumbList>
         <BreadcrumbItem>
           <BreadcrumbLink>

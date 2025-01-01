@@ -48,7 +48,7 @@ export default function ProductsPage({
   }
 
   return (
-    <div className="container mx-auto grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-8">
+    <div className="container mx-auto grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-2 lg:gap-8">
       {isLoading && (
         <>
           <ProductCardLoadingSkeleton />
@@ -69,7 +69,7 @@ export default function ProductsPage({
               productSlug: product._id,
             })}
             search={{ variant: product.skus[0].sku }}
-            className="block"
+            className="block mb-4"
           >
             <ProductCard
               key={product.id}

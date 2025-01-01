@@ -189,7 +189,7 @@ const CheckoutComplete = () => {
 
   return (
     <AnimatePresence>
-      <div className="container mx-auto max-w-[1024px] pt-24 pb-40 space-y-24">
+      <div className="container mx-auto max-w-[1024px] pt-24 pb-40 px-6 lg:px-0 space-y-24">
         <motion.div
           initial={{ opacity: 0 }}
           animate={{
@@ -198,19 +198,19 @@ const CheckoutComplete = () => {
           }}
           className="space-y-12"
         >
-          <p className="text-4xl font-light">{`Get excited, ${capitalizeFirstLetter(checkoutState.customerDetails?.firstName || "")}!`}</p>
+          <p className="text-3xl font-light">{`Get excited, ${capitalizeFirstLetter(checkoutState.customerDetails?.firstName || "")}!`}</p>
 
           {checkoutState.isDeliveryOrder && (
             <p className="text-sm">
-              We're processing your order. You will receive an email once it is
-              out for delivery.
+              Your order will be processed in 24 - 48 hours. We'll email you
+              when it's out for delivery.
             </p>
           )}
 
           {checkoutState.isPickupOrder && (
             <p className="text-sm">
-              We're processing your order. You will receive an email once it is
-              ready for pickup.
+              Your order will be processed in 24 - 48 hours. We'll email you
+              when it's ready for pickup.
             </p>
           )}
         </motion.div>
@@ -222,9 +222,9 @@ const CheckoutComplete = () => {
             y: 0,
             transition: { ease: "easeOut", duration: 0.8, delay: 0.9 },
           }}
-          className="space-y-8 w-[40%]"
+          className="space-y-8 w-full lg:w-[40%]"
         >
-          <p className="text-xs">Your order</p>
+          {/* <p className="text-xs">Your order</p> */}
 
           <BagSummaryItems items={checkoutState.bag.items} />
         </motion.div>
@@ -236,7 +236,7 @@ const CheckoutComplete = () => {
             y: 0,
             transition: { ease: "easeOut", duration: 0.8, delay: 1.1 },
           }}
-          className="grid grid-cols-2 w-[80%]"
+          className="grid grid-cols-1 lg:grid-cols-2 w-full lg:w-[80%] gap-8"
         >
           <PickupDetails />
 
@@ -249,15 +249,17 @@ const CheckoutComplete = () => {
             opacity: 1,
             transition: { ease: "easeOut", duration: 0.4, delay: 1.5 },
           }}
-          className="space-x-12 pt-8"
+          className="flex flex-col gap-4 lg:flex-row pt-8"
         >
           <Link to="/">
-            <Button className="w-[240px]">Continue shopping</Button>
+            <Button className="w-full lg:w-[240px]">Continue shopping</Button>
           </Link>
 
           {orderId && (
             <Link to="/shop/orders/$orderId" params={{ orderId }}>
-              <Button variant={"clear"}>View order</Button>
+              <Button className="w-full lg:w-[240px]" variant={"clear"}>
+                <p className="w-full text-center">View order</p>
+              </Button>
             </Link>
           )}
         </motion.div>

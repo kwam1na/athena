@@ -630,6 +630,7 @@ async function updateExistingSession(
         productSku: product.productSku,
         productSkuId: product.productSkuId,
         quantity: product.quantity,
+        price: product.price,
         customerId: customerId,
       });
       availabilityUpdates.push({
