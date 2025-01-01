@@ -49,7 +49,7 @@ export default function SavedBag() {
 
   return (
     <FadeIn className="container mx-auto max-w-[1024px] px-6 xl:px-0 space-y-8 lg:space-y-24 py-8">
-      {<h1 className="text-lg font-light mb-8">Saved</h1>}
+      {!isSavedEmpty && <h1 className="text-lg font-light mb-8">Saved</h1>}
 
       {isSavedEmpty && <EmptyState message="You don't have any saved items." />}
 

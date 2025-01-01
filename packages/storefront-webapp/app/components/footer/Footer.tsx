@@ -48,9 +48,15 @@ export function FooterInner() {
     {
       header: "Follow us",
       links: [
-        <a href="https://instagram.com">Instagram</a>,
-        <a href="https://instagram.com">Tiktok</a>,
-        <a href="https://instagram.com">X</a>,
+        <a href="https://www.instagram.com/wigclub/" target="_blank">
+          Instagram
+        </a>,
+        <a href="https://www.tiktok.com/@wigclubshop" target="_blank">
+          Tiktok
+        </a>,
+        <a href="https://x.com/WigClub_" target="_blank">
+          X
+        </a>,
       ],
     },
     {

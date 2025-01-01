@@ -9,9 +9,9 @@ export const EmptyState = ({ message }: { message: string }) => {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ ease: "easeInOut" }}
-        className="flex flex-col items-center mt-40 lg:items-start gap-16 lg:mt-12 lg:min-h-[50vh]"
+        className="flex flex-col items-center mt-40 lg:items-start gap-16 lg:mt-12 h-screen"
       >
-        <p className="text-sm">{message}</p>
+        <p className="text-lg font-medium">{message}</p>
         <Link to="/">
           <Button className="w-[320px]">Continue Shopping</Button>
         </Link>

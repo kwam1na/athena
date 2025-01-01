@@ -130,7 +130,7 @@ export default function MobileProductPage() {
     (item: ProductSku) => item.productSku === selectedSku?.sku
   );
 
-  if (!selectedSku) return null;
+  if (!selectedSku || !product) return null;
 
   if (error || (product && !selectedSku)) {
     return <NotFound />;

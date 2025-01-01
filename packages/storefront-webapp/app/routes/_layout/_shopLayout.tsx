@@ -109,7 +109,7 @@ function LayoutComponent() {
             </div>
           )}
           <div
-            className={"col-span-12 container mx-auto px-6 lg:px-0 h-screen"}
+            className={"col-span-12 container mx-auto px-6 lg:px-0 lg:h-screen"}
           >
             <Outlet />
           </div>

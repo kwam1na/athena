@@ -123,12 +123,6 @@ export const Header = () => {
 };
 
 const Navbar = () => {
-  const router = useRouterState();
-
-  const currentPath = router.location.pathname;
-
-  const isOnSettings = currentPath.includes("settings");
-
   const { activeStore } = useGetActiveStore();
 
   const ORDER_ID_LOCAL_STORAGE_KEY = "order_id";

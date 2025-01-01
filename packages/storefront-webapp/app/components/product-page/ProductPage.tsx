@@ -172,7 +172,7 @@ export default function ProductPage() {
     sheetContent.current = <ShippingPolicy />;
   };
 
-  if (!selectedSku) return null;
+  if (!selectedSku || !product) return null;
 
   if (error || (product && !selectedSku)) {
     return <NotFound />;

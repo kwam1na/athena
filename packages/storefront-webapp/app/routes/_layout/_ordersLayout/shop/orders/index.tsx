@@ -112,10 +112,23 @@ const Orders = () => {
     </motion.div>
   );
 };
+
 const Purchases = () => {
+  const { userId, storeId, organizationId, formatter } = useStoreContext();
+
+  const { data, isLoading } = useQuery(
+    onlineOrderQueries.list({
+      organizationId: organizationId,
+      storeId: storeId,
+      customerId: userId || "",
+    })
+  );
+
+  if (isLoading) return <div className="h-screen"></div>;
+
   return (
     <div className="pb-56 space-y-8 lg:space-y-24 py-8">
-      <h1 className="text-lg">Orders</h1>
+      {data?.length != 0 && <h1 className="text-lg">Orders</h1>}
 
       <Orders />
     </div>

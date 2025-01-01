@@ -8,8 +8,8 @@ interface SavedIconProps {
 const SavedIcon: React.FC<SavedIconProps> = ({ notificationCount }) => {
   return (
     <div className="relative inline-block">
-      {Boolean(notificationCount) && <HeartIconFilled width={20} height={20} />}
-      {!Boolean(notificationCount) && <HeartIcon className="w-5 h-5" />}
+      {Boolean(notificationCount) && <HeartIconFilled width={16} height={16} />}
+      {!Boolean(notificationCount) && <HeartIcon className="w-4 h-4" />}
 
       {/* Notification Dot */}
       {/* {Boolean(notificationCount) && (

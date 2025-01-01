@@ -132,14 +132,14 @@ export default function ShoppingBag() {
 
   return (
     <FadeIn className="container mx-auto max-w-[1024px] px-6 xl:px-0 space-y-8 lg:space-y-24 py-8">
-      <div className="space-y-2">
-        <h1 className="text-lg font-light">Bag</h1>
-        {data && data.length > 0 && <PendingItem session={data[0]} />}
-      </div>
-
-      {isBagEmpty && (
-        <EmptyState message="You don't have any items in your bag." />
+      {!isBagEmpty && (
+        <div className="space-y-2">
+          <h1 className="text-lg font-light">Bag</h1>
+          {data && data.length > 0 && <PendingItem session={data[0]} />}
+        </div>
       )}
+
+      {isBagEmpty && <EmptyState message="Your bag is empty." />}
 
       {!isBagEmpty && total !== 0 && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 pb-56">
@@ -305,7 +305,7 @@ export default function ShoppingBag() {
 
           {/* Mobile Cart Summary */}
           {isNavbarShowing && (
-            <div className="block md:hidden fixed bottom-0 left-0 w-full bg-background p-8 shadow-md z-50">
+            <div className="flex flex-col md:hidden fixed bottom-0 left-0 w-full bg-background p-8 shadow-md z-50 min-h-auto">
               <div className="flex justify-between text-lg font-medium mb-4">
                 <span>Total</span>
                 <span>{formatter.format(total)}</span>

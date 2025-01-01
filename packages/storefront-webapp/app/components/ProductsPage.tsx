@@ -8,7 +8,7 @@ import { ProductCard } from "./ProductCard";
 function ProductCardLoadingSkeleton() {
   return (
     <div className="space-y-4">
-      <Skeleton className="w-[30vw] h-[30vw] bg-zinc-100 rounded-md"></Skeleton>
+      <Skeleton className="w-[96px] h-[96px] bg-zinc-100 rounded-md"></Skeleton>
       <div className="space-y-4">
         <Skeleton className="w-[180px] h-[24px] bg-zinc-100 rounded"></Skeleton>
         <Skeleton className="w-[96px] h-[24px] bg-zinc-100 rounded"></Skeleton>
@@ -31,10 +31,7 @@ export default function ProductsPage({
       <div className="space-y-8 container mx-auto max-w-[1024px] h-screen">
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
           <div className="space-y-4">
-            <div className="w-[30vw] h-[30vw] bg-zinc-100 rounded-md"></div>
-            <div className="space-y-4">
-              <div className="w-[180px] h-[24px] bg-zinc-100 rounded"></div>
-            </div>
+            <div className="w-[80px] h-[24px] bg-zinc-100 rounded" />
           </div>
         </div>
 
@@ -54,9 +51,9 @@ export default function ProductsPage({
           <ProductCardLoadingSkeleton />
           <ProductCardLoadingSkeleton />
           <ProductCardLoadingSkeleton />
-          <ProductCardLoadingSkeleton />
-          <ProductCardLoadingSkeleton />
-          <ProductCardLoadingSkeleton />
+          {/* <ProductCardLoadingSkeleton /> */}
+          {/* <ProductCardLoadingSkeleton /> */}
+          {/* <ProductCardLoadingSkeleton /> */}
         </>
       )}
       {!isLoading &&

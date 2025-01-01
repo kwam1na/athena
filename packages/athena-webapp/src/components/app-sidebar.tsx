@@ -25,6 +25,7 @@ import { AppHeader } from "./Navbar";
 import { Link } from "@tanstack/react-router";
 import useGetActiveStore from "../hooks/useGetActiveStore";
 import { useGetActiveOrganization } from "../hooks/useGetOrganizations";
+import { useNewOrderNotification } from "../hooks/useNewOrderNotification";
 
 export function AppSidebar() {
   // Menu items.
@@ -54,6 +55,8 @@ export function AppSidebar() {
 
   const { activeStore } = useGetActiveStore();
   const { activeOrganization } = useGetActiveOrganization();
+
+  useNewOrderNotification();
 
   if (!activeStore || !activeOrganization) {
     return null;
