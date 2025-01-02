@@ -46,7 +46,7 @@ export default function NavigationBar() {
         type: "spring",
         ease: easeInOut,
         delay: 0.05,
-        staggerChildren: 0.075,
+        staggerChildren: 0.025,
         bounce: 0,
       },
     },
@@ -72,23 +72,27 @@ export default function NavigationBar() {
             Shop all
           </Link>
         </motion.div>
-        {subMenuItems?.map((s) => (
-          <motion.div variants={item} key={s.value}>
-            <Link
-              key={s.value}
-              to="/shop/$categorySlug/$subcategorySlug"
-              params={(p) => ({
-                ...p,
-                categorySlug: activeMenu,
-                subcategorySlug: s.value,
-              })}
-              className="text-xs hover:text-gray-600 transition-colors"
-              onClick={() => setActiveMenu(null)}
-            >
-              {s.label}
-            </Link>
-          </motion.div>
-        ))}
+        <div
+          className={`grid ${subMenuItems?.length > 5 ? "grid-cols-2" : "grid-cols-1"} gap-4`}
+        >
+          {subMenuItems?.map((s) => (
+            <motion.div variants={item} key={s.value}>
+              <Link
+                key={s.value}
+                to="/shop/$categorySlug/$subcategorySlug"
+                params={(p) => ({
+                  ...p,
+                  categorySlug: activeMenu,
+                  subcategorySlug: s.value,
+                })}
+                className="text-xs hover:text-gray-600 transition-colors"
+                onClick={() => setActiveMenu(null)}
+              >
+                {s.label}
+              </Link>
+            </motion.div>
+          ))}
+        </div>
       </>
     );
   };

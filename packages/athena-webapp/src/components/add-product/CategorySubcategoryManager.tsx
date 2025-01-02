@@ -211,7 +211,7 @@ function CategoryManager() {
                   <SelectValue placeholder="Select category" />
                 </SelectTrigger>
                 <SelectContent>
-                  {categories.map((category) => {
+                  {categories.map((category: any) => {
                     return (
                       <SelectItem key={category.id} value={category.id}>
                         {category.name}
@@ -263,7 +263,7 @@ function CategoryManager() {
                 <SelectValue placeholder="Select category" />
               </SelectTrigger>
               <SelectContent>
-                {categories.map((category) => {
+                {categories.map((category: any) => {
                   return (
                     <SelectItem key={category.id} value={category.id}>
                       {category.name}
@@ -307,6 +307,7 @@ function SubcategoryManager() {
 
   const [subcategoryIdToRename, setSubcategoryIdToRename] =
     useState<Id<"subcategory"> | null>(null);
+
   const [newCategoryId, setNewCategoryId] = useState<Id<"category"> | null>(
     null
   );
@@ -322,13 +323,13 @@ function SubcategoryManager() {
   const [isDeleteMutationPending, setIsDeleteMutationPending] = useState(false);
 
   const subcategories =
-    subcategoriesData?.map((subcategory) => ({
+    subcategoriesData?.map((subcategory: any) => ({
       name: subcategory.name,
       id: subcategory._id,
     })) || [];
 
   const categories =
-    categoriesData?.map((category) => ({
+    categoriesData?.map((category: any) => ({
       name: category.name,
       id: category._id,
     })) || [];
@@ -376,19 +377,22 @@ function SubcategoryManager() {
   };
 
   const update = async () => {
-    if (!subcategoryIdToRename || !updatedName || !activeStore) {
-      throw new Error("Missing data to update category");
+    if (!subcategoryIdToRename || !activeStore) {
+      toast("Missing data to update subcategory", {
+        icon: <Ban className="w-4 h-4" />,
+      });
+      return;
     }
 
     try {
       setIsUpdateMutationPending(true);
       await updateSubcategory({
         id: subcategoryIdToRename,
-        name: updatedName,
-        slug: toSlug(updatedName),
+        name: updatedName ? updatedName : undefined,
+        categoryId: newCategoryId ? newCategoryId : undefined,
       });
 
-      toast(`Subcategory updated to '${updatedName}'`, {
+      toast(`Subcategory updated`, {
         icon: <CheckCircledIcon className="w-4 h-4" />,
       });
     } catch (e) {
@@ -452,7 +456,7 @@ function SubcategoryManager() {
                   <SelectValue placeholder="Select category" />
                 </SelectTrigger>
                 <SelectContent>
-                  {categories.map((category) => {
+                  {categories.map((category: any) => {
                     return (
                       <SelectItem key={category.id} value={category.id}>
                         {category.name}
@@ -495,7 +499,7 @@ function SubcategoryManager() {
                   <SelectValue placeholder="Select subcategory" />
                 </SelectTrigger>
                 <SelectContent>
-                  {subcategories.map((subcategory) => {
+                  {subcategories.map((subcategory: any) => {
                     return (
                       <SelectItem
                         key={subcategory.id}
@@ -536,7 +540,7 @@ function SubcategoryManager() {
                   <SelectValue placeholder="Select category" />
                 </SelectTrigger>
                 <SelectContent>
-                  {categories.map((category) => {
+                  {categories.map((category: any) => {
                     return (
                       <SelectItem key={category.id} value={category.id}>
                         {category.name}
@@ -547,7 +551,7 @@ function SubcategoryManager() {
               </Select>
               <LoadingButton
                 className="ml-auto"
-                disabled={!subcategoryIdToRename || !newCategoryId}
+                disabled={!subcategoryIdToRename}
                 isLoading={isUpdateMutationPending}
                 onClick={() => update()}
                 variant={"outline"}
@@ -578,7 +582,7 @@ function SubcategoryManager() {
                 <SelectValue placeholder="Select subcategory" />
               </SelectTrigger>
               <SelectContent>
-                {subcategories.map((subcategory) => {
+                {subcategories.map((subcategory: any) => {
                   return (
                     <SelectItem
                       key={subcategory.id}

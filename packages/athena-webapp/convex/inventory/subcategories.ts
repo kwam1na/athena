@@ -61,11 +61,24 @@ export const create = mutation({
 export const update = mutation({
   args: {
     id: v.id(entity),
-    name: v.string(),
-    slug: v.string(),
+    name: v.optional(v.string()),
+    categoryId: v.optional(v.id("category")),
   },
   handler: async (ctx, args) => {
-    await ctx.db.patch(args.id, { name: args.name, slug: args.slug });
+    const updates: Record<string, any> = {};
+
+    if (args.name) {
+      updates.name = args.name;
+      updates.slug = toSlug(args.name);
+    }
+
+    if (args.categoryId) {
+      updates.categoryId = args.categoryId;
+    }
+
+    if (Object.keys(updates).length > 0) {
+      await ctx.db.patch(args.id, updates);
+    }
 
     return await ctx.db.get(args.id);
   },
