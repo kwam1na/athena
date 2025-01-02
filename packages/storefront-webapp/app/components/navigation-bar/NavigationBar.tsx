@@ -190,7 +190,7 @@ export default function NavigationBar() {
                   className="flex items-center gap-4"
                 >
                   <span
-                    className="hidden lg:flex"
+                    className="hidden lg:flex cursor-pointer"
                     onClick={() => setActiveMenu("bag")}
                   >
                     <CartIcon notificationCount={bagCount} />

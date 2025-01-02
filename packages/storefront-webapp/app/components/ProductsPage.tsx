@@ -51,9 +51,6 @@ export default function ProductsPage({
           <ProductCardLoadingSkeleton />
           <ProductCardLoadingSkeleton />
           <ProductCardLoadingSkeleton />
-          {/* <ProductCardLoadingSkeleton /> */}
-          {/* <ProductCardLoadingSkeleton /> */}
-          {/* <ProductCardLoadingSkeleton /> */}
         </>
       )}
       {!isLoading &&

@@ -8,17 +8,16 @@ const productPageSchema = z.object({
   variant: z.string().optional().catch(""),
 });
 
-export const Route = createFileRoute("/shop/product/$productSlug")({
+export const Route = createFileRoute("/_layout/shop/product/$productSlug")({
   validateSearch: productPageSchema,
   component: () => <Component />,
-  // component: () => <MobileProductPage />,
 });
 
 const Component = () => {
   return (
     <div>
       <ProductNavigationBar />
-      <div className="hidden lg:block">
+      <div className="hidden lg:flex">
         <ProductPage />
       </div>
       <div className="lg:hidden">

@@ -61,7 +61,10 @@ export function FooterInner() {
     },
     {
       header: "Company",
-      links: [<Link>About us</Link>, <Link>Contact us</Link>],
+      links: [
+        // <Link>About us</Link>,
+        <Link to="/contact-us">Contact us</Link>,
+      ],
     },
     {
       header: "Policies",

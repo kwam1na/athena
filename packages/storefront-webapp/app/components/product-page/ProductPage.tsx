@@ -10,7 +10,7 @@ import { useShoppingBag } from "@/hooks/useShoppingBag";
 import { Product, ProductSku } from "@athena/webapp-2";
 import { Button } from "../ui/button";
 import { capitalizeWords, getProductName } from "@/lib/utils";
-import { HeartIcon } from "lucide-react";
+import { AlertCircleIcon, HeartIcon } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 import placeholder from "@/assets/placeholder.png";
 import { motion } from "framer-motion";
@@ -172,7 +172,7 @@ export default function ProductPage() {
     sheetContent.current = <ShippingPolicy />;
   };
 
-  if (!selectedSku || !product) return null;
+  if (!selectedSku || !product) return <div className="h-screen" />;
 
   if (error || (product && !selectedSku)) {
     return <NotFound />;
@@ -218,27 +218,38 @@ export default function ProductPage() {
               />
             </div>
 
-            <div className="flex gap-4">
-              <LoadingButton
-                className="w-[288px]"
-                isLoading={false}
-                disabled={isUpdatingBag}
-                onClick={handleUpdateBag}
-              >
-                {isUpdatingBag ? "Adding to Bag.." : "Add to Bag"}
-              </LoadingButton>
+            <div className="space-y-4">
+              <div className="flex gap-4">
+                <LoadingButton
+                  className="w-[288px]"
+                  isLoading={false}
+                  disabled={isUpdatingBag}
+                  onClick={handleUpdateBag}
+                >
+                  {isUpdatingBag ? "Adding to Bag.." : "Add to Bag"}
+                </LoadingButton>
 
-              <LoadingButton
-                variant={"outline"}
-                isLoading={false}
-                disabled={isUpdatingSavedBag}
-                onClick={handleUpdateSavedBag}
-              >
-                {!savedBagItem && (
-                  <HeartIcon className="w-4 h-4 text-muted-foreground" />
-                )}
-                {savedBagItem && <HeartIconFilled width={16} height={16} />}
-              </LoadingButton>
+                <LoadingButton
+                  variant={"outline"}
+                  isLoading={false}
+                  disabled={isUpdatingSavedBag}
+                  onClick={handleUpdateSavedBag}
+                >
+                  {!savedBagItem && (
+                    <HeartIcon className="w-4 h-4 text-muted-foreground" />
+                  )}
+                  {savedBagItem && <HeartIconFilled width={16} height={16} />}
+                </LoadingButton>
+              </div>
+
+              {addedItemSuccessfully == false && (
+                <div className="flex gap-1 items-center text-destructive">
+                  <AlertCircleIcon className="w-4 h-4" />
+                  <p className="text-xs">
+                    An error occured processing your last request
+                  </p>
+                </div>
+              )}
             </div>
 
             <PickupDetails showShippingPolicy={showShippingPolicy} />

@@ -178,7 +178,7 @@ export default function HomePage() {
   if (isLoading) return <div className="h-screen"></div>;
 
   return (
-    <AnimatePresence>
+    <>
       <div className="container mx-auto px-4 lg:px-0 overflow-hidden">
         <div className="space-y-32 pb-56">
           <motion.div
@@ -248,6 +248,6 @@ export default function HomePage() {
       </div>
 
       <Footer />
-    </AnimatePresence>
+    </>
   );
 }

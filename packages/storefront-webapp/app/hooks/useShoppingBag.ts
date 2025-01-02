@@ -31,7 +31,8 @@ type UnavailableProducts = {
 export const useShoppingBag = () => {
   const queryClient = useQueryClient();
 
-  const [operationSuccessful, setOperationSuccessful] = useState(false);
+  const [operationSuccessful, setOperationSuccessful] =
+    useState<Boolean | null>(null);
   const [action, setAction] = useState<ShoppingBagAction>("idle");
   const [unavailableProducts, setUnavailableProducts] =
     useState<UnavailableProducts>([]);
@@ -77,6 +78,9 @@ export const useShoppingBag = () => {
         queryKey: bagQueries.activeSavedBagKey(),
       });
     },
+    onError: () => {
+      setOperationSuccessful(false);
+    },
   });
 
   const updateSavedBagItemMutation = useMutation({
@@ -95,6 +99,9 @@ export const useShoppingBag = () => {
         queryKey: bagQueries.activeSavedBagKey(),
       });
     },
+    onError: () => {
+      setOperationSuccessful(false);
+    },
   });
 
   const removeSavedBagItemMutation = useMutation({
@@ -111,6 +118,9 @@ export const useShoppingBag = () => {
         queryKey: bagQueries.activeSavedBagKey(),
       });
     },
+    onError: () => {
+      setOperationSuccessful(false);
+    },
   });
 
   const updateSavedBag = async ({
@@ -123,7 +133,7 @@ export const useShoppingBag = () => {
     setAction("adding-to-saved-bag");
     if (quantity == 0) return await deleteItemFromSavedBag(itemId);
 
-    setOperationSuccessful(false);
+    setOperationSuccessful(null);
 
     await updateSavedBagItemMutation.mutateAsync({ itemId, quantity });
   };
@@ -140,7 +150,7 @@ export const useShoppingBag = () => {
     productSku: string;
   }) => {
     setAction("adding-to-saved-bag");
-    setOperationSuccessful(false);
+    setOperationSuccessful(null);
     await addNewSavedBagItemMutation.mutateAsync({
       productId,
       quantity,
@@ -199,6 +209,9 @@ export const useShoppingBag = () => {
       setOperationSuccessful(true);
       queryClient.invalidateQueries({ queryKey: bagQueries.activeBagKey() });
     },
+    onError: () => {
+      setOperationSuccessful(false);
+    },
   });
 
   const updateBagItemMutation = useMutation({
@@ -215,6 +228,9 @@ export const useShoppingBag = () => {
       setOperationSuccessful(true);
       queryClient.invalidateQueries({ queryKey: bagQueries.activeBagKey() });
     },
+    onError: () => {
+      setOperationSuccessful(false);
+    },
   });
 
   const removeBagItem = useMutation({
@@ -229,6 +245,9 @@ export const useShoppingBag = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: bagQueries.activeBagKey() });
     },
+    onError: () => {
+      setOperationSuccessful(false);
+    },
   });
 
   const updateBag = async ({
@@ -241,7 +260,7 @@ export const useShoppingBag = () => {
     setAction("adding-to-bag");
     if (quantity == 0) return await deleteItemFromBag(itemId);
 
-    setOperationSuccessful(false);
+    setOperationSuccessful(null);
 
     await updateBagItemMutation.mutateAsync({ itemId, quantity });
   };
@@ -258,7 +277,7 @@ export const useShoppingBag = () => {
     productSku: string;
   }) => {
     setAction("adding-to-bag");
-    setOperationSuccessful(false);
+    setOperationSuccessful(null);
     await addNewBagItem.mutateAsync({
       productId,
       quantity,
@@ -335,6 +354,9 @@ export const useShoppingBag = () => {
         bagItems,
         bagSubtotal,
       }),
+    onError: () => {
+      setOperationSuccessful(false);
+    },
     onSuccess: (res) => {
       setOperationSuccessful(true);
       if (res.unavailableProducts) {
@@ -370,6 +392,9 @@ export const useShoppingBag = () => {
         action: "finalize-payment",
         orderDetails,
       }),
+    onError: () => {
+      setOperationSuccessful(false);
+    },
     onSuccess: () => {
       setOperationSuccessful(true);
     },
@@ -393,7 +418,7 @@ export const useShoppingBag = () => {
     }[];
     bagSubtotal: number;
   }) => {
-    setOperationSuccessful(false);
+    setOperationSuccessful(null);
     return await obtainCheckoutSessionMutation.mutateAsync({
       bagId,
       bagItems,
@@ -414,7 +439,7 @@ export const useShoppingBag = () => {
     amount: number;
     orderDetails: any;
   }) => {
-    setOperationSuccessful(false);
+    setOperationSuccessful(null);
 
     return await updateCheckoutSessionMutation.mutateAsync({
       isFinalizingPayment,

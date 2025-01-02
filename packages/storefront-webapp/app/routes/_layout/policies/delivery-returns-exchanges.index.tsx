@@ -1,3 +1,4 @@
+import { FadeIn } from "@/components/common/FadeIn";
 import { useStoreContext } from "@/contexts/StoreContext";
 import { capitalizeFirstLetter, capitalizeWords } from "@/lib/utils";
 import { createFileRoute } from "@tanstack/react-router";
@@ -14,7 +15,7 @@ const OnlineOrderPolicy = () => {
   if (!store) return <div className="h-screen" />;
 
   return (
-    <div className="container mx-auto max-w-[1024px] h-screen pb-56 py-8 px-6 xl:px-0">
+    <FadeIn className="container mx-auto max-w-[1024px] h-screen pb-56 py-8 px-6 xl:px-0">
       <div className="space-y-8">
         <h1 className="text-lg">Deliveries, Returns and Exchanges</h1>
 
@@ -107,6 +108,6 @@ const OnlineOrderPolicy = () => {
           </div>
         </div>
       </div>
-    </div>
+    </FadeIn>
   );
 };

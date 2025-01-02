@@ -181,6 +181,7 @@ export const PaymentSection = () => {
                   <Link
                     to="/policies/delivery-returns-exchanges"
                     className="underline"
+                    target="_blank"
                   >
                     exchange, return and refund policies.
                   </Link>
@@ -194,7 +195,7 @@ export const PaymentSection = () => {
                 />
                 <label htmlFor="terms" className="text-sm">
                   I agree to receive communications via email and/or SMS to any
-                  emails and phone numbers added above
+                  emails and phone numbers added above.
                 </label>
               </div>
             </div>

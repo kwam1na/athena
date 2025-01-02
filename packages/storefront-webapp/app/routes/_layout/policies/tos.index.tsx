@@ -1,3 +1,4 @@
+import { FadeIn } from "@/components/common/FadeIn";
 import { createFileRoute, Link } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/_layout/policies/tos/")({
@@ -133,7 +134,7 @@ const TOS = () => {
   ];
 
   return (
-    <div className="container mx-auto max-w-[1024px] pb-56 py-8 px-6 xl:px-0">
+    <FadeIn className="container mx-auto max-w-[1024px] pb-56 py-8 px-6 xl:px-0">
       <div className="space-y-8">
         <h1 className="text-lg">Terms of Service</h1>
 
@@ -153,6 +154,6 @@ const TOS = () => {
           ))}
         </div>
       </div>
-    </div>
+    </FadeIn>
   );
 };

@@ -13,7 +13,7 @@ import { useEffect, useRef, useState } from "react";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "../ui/sheet";
 import { Button } from "../ui/button";
 import NotFound from "../states/not-found/NotFound";
-import { HeartIcon } from "lucide-react";
+import { AlertCircleIcon, HeartIcon } from "lucide-react";
 import { HeartIconFilled } from "@/assets/icons/HeartIconFilled";
 import { BagProduct, PickupDetails, ShippingPolicy } from "./ProductDetails";
 import { Reviews } from "./ProductReviews";
@@ -23,7 +23,7 @@ export default function MobileProductPage() {
 
   const { productSlug } = useParams({ strict: false });
 
-  const { data: product, error } = useGetProductQuery(productSlug);
+  const { data: product, isLoading, error } = useGetProductQuery(productSlug);
 
   const { variant } = useSearch({ strict: false });
 
@@ -130,7 +130,7 @@ export default function MobileProductPage() {
     (item: ProductSku) => item.productSku === selectedSku?.sku
   );
 
-  if (!selectedSku || !product) return null;
+  if (!selectedSku || !product) return <div className="h-screen" />;
 
   if (error || (product && !selectedSku)) {
     return <NotFound />;
@@ -141,7 +141,7 @@ export default function MobileProductPage() {
       <SheetTitle />
       <SheetContent>{sheetContent.current}</SheetContent>
 
-      <div className="h-screen pb-40">
+      <div className="min-h-screen pb-40">
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1, transition: { duration: 0.1 } }}
@@ -157,29 +157,29 @@ export default function MobileProductPage() {
           ))}
         </motion.div>
 
-        <div className="h-screen bg-background">
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{
-              opacity: 1,
-              transition: { duration: 0.4, delay: 0.1, ease: "easeInOut" },
-            }}
-            className="col-span-1 md:col-span-2 pt-8 px-6 lg:px-16 space-y-12"
-          >
-            <div className="space-y-8">
-              <div className="space-y-6">
-                <p className="text-xl">{getProductName(selectedSku)}</p>
-                <p className="text-muted-foreground">
-                  {formatter.format(selectedSku.price)}
-                </p>
-              </div>
-              <ProductAttribute
-                product={product}
-                selectedSku={selectedSku}
-                setSelectedSku={setSelectedSku}
-              />
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{
+            opacity: 1,
+            transition: { duration: 0.4, delay: 0.1, ease: "easeInOut" },
+          }}
+          className="col-span-1 md:col-span-2 pt-8 px-6 lg:px-16 space-y-12"
+        >
+          <div className="space-y-8">
+            <div className="space-y-6">
+              <p className="text-xl">{getProductName(selectedSku)}</p>
+              <p className="text-muted-foreground">
+                {formatter.format(selectedSku.price)}
+              </p>
             </div>
+            <ProductAttribute
+              product={product}
+              selectedSku={selectedSku}
+              setSelectedSku={setSelectedSku}
+            />
+          </div>
 
+          <div className="space-y-4">
             <div className="flex gap-4">
               <LoadingButton
                 className="w-[288px]"
@@ -203,11 +203,20 @@ export default function MobileProductPage() {
               </LoadingButton>
             </div>
 
-            <PickupDetails showShippingPolicy={showShippingPolicy} />
+            {addedItemSuccessfully == false && (
+              <div className="flex gap-1 items-center text-destructive">
+                <AlertCircleIcon className="w-4 h-4" />
+                <p className="text-xs">
+                  An error occured processing your last request
+                </p>
+              </div>
+            )}
+          </div>
 
-            <Reviews />
-          </motion.div>
-        </div>
+          <PickupDetails showShippingPolicy={showShippingPolicy} />
+
+          <Reviews />
+        </motion.div>
       </div>
     </Sheet>
   );

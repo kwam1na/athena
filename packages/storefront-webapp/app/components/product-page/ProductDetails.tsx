@@ -4,6 +4,7 @@ import { getProductName } from "@/lib/productUtils";
 import { Link } from "@tanstack/react-router";
 import { Button } from "../ui/button";
 import placeholder from "@/assets/placeholder.png";
+import { WIGLUB_HAIR_STUDIO_LOCATION_URL } from "@/lib/constants";
 
 // Product Details Section
 export function PickupDetails({
@@ -17,7 +18,11 @@ export function PickupDetails({
         <p className="font-medium">Free store pickup</p>
         <div className="flex gap-4">
           <p>Wigclub Hair Studio</p>
-          <a href="https://google.com" className="font-medium underline">
+          <a
+            href={WIGLUB_HAIR_STUDIO_LOCATION_URL}
+            target="_blank"
+            className="font-medium underline"
+          >
             Get directions
           </a>
         </div>
