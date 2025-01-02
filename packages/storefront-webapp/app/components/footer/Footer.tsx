@@ -66,10 +66,12 @@ export function FooterInner() {
     {
       header: "Policies",
       links: [
-        <Link>Privacy policy</Link>,
-        <Link>Delivery, returns and exchanges</Link>,
-        <Link>Terms of service</Link>,
-        <Link>FAQs</Link>,
+        <Link to="/policies/privacy">Privacy policy</Link>,
+        <Link to="/policies/delivery-returns-exchanges">
+          Delivery, returns and exchanges
+        </Link>,
+        <Link to="/policies/tos">Terms of service</Link>,
+        // <Link>FAQs</Link>,
       ],
     },
   ];

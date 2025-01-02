@@ -22,6 +22,9 @@ import { Route as ShopProductProductSlugImport } from './routes/shop/product/$pr
 import { Route as ShopCheckoutVerifyIndexImport } from './routes/shop/checkout/verify.index'
 import { Route as ShopCheckoutCompleteIndexImport } from './routes/shop/checkout/complete.index'
 import { Route as ShopCheckoutSessionIdSlugIndexImport } from './routes/shop/checkout/$sessionIdSlug/index'
+import { Route as LayoutPoliciesTosIndexImport } from './routes/_layout/policies/tos.index'
+import { Route as LayoutPoliciesPrivacyIndexImport } from './routes/_layout/policies/privacy.index'
+import { Route as LayoutPoliciesDeliveryReturnsExchangesIndexImport } from './routes/_layout/policies/delivery-returns-exchanges.index'
 import { Route as ShopCheckoutSessionIdSlugCompleteImport } from './routes/shop/checkout/$sessionIdSlug/complete'
 import { Route as LayoutShopLayoutShopCategorySlugIndexImport } from './routes/_layout/_shopLayout/shop/$categorySlug/index'
 import { Route as LayoutOrdersLayoutShopOrdersIndexImport } from './routes/_layout/_ordersLayout/shop/orders/index'
@@ -84,6 +87,24 @@ const ShopCheckoutSessionIdSlugIndexRoute =
   ShopCheckoutSessionIdSlugIndexImport.update({
     path: '/shop/checkout/$sessionIdSlug/',
     getParentRoute: () => rootRoute,
+  } as any)
+
+const LayoutPoliciesTosIndexRoute = LayoutPoliciesTosIndexImport.update({
+  path: '/policies/tos/',
+  getParentRoute: () => LayoutRoute,
+} as any)
+
+const LayoutPoliciesPrivacyIndexRoute = LayoutPoliciesPrivacyIndexImport.update(
+  {
+    path: '/policies/privacy/',
+    getParentRoute: () => LayoutRoute,
+  } as any,
+)
+
+const LayoutPoliciesDeliveryReturnsExchangesIndexRoute =
+  LayoutPoliciesDeliveryReturnsExchangesIndexImport.update({
+    path: '/policies/delivery-returns-exchanges/',
+    getParentRoute: () => LayoutRoute,
   } as any)
 
 const ShopCheckoutSessionIdSlugCompleteRoute =
@@ -183,6 +204,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ShopCheckoutSessionIdSlugCompleteImport
       parentRoute: typeof rootRoute
     }
+    '/_layout/policies/delivery-returns-exchanges/': {
+      id: '/_layout/policies/delivery-returns-exchanges/'
+      path: '/policies/delivery-returns-exchanges'
+      fullPath: '/policies/delivery-returns-exchanges'
+      preLoaderRoute: typeof LayoutPoliciesDeliveryReturnsExchangesIndexImport
+      parentRoute: typeof LayoutImport
+    }
+    '/_layout/policies/privacy/': {
+      id: '/_layout/policies/privacy/'
+      path: '/policies/privacy'
+      fullPath: '/policies/privacy'
+      preLoaderRoute: typeof LayoutPoliciesPrivacyIndexImport
+      parentRoute: typeof LayoutImport
+    }
+    '/_layout/policies/tos/': {
+      id: '/_layout/policies/tos/'
+      path: '/policies/tos'
+      fullPath: '/policies/tos'
+      preLoaderRoute: typeof LayoutPoliciesTosIndexImport
+      parentRoute: typeof LayoutImport
+    }
     '/shop/checkout/$sessionIdSlug/': {
       id: '/shop/checkout/$sessionIdSlug/'
       path: '/shop/checkout/$sessionIdSlug'
@@ -270,11 +312,18 @@ const LayoutShopLayoutRouteWithChildren =
 interface LayoutRouteChildren {
   LayoutOrdersLayoutRoute: typeof LayoutOrdersLayoutRouteWithChildren
   LayoutShopLayoutRoute: typeof LayoutShopLayoutRouteWithChildren
+  LayoutPoliciesDeliveryReturnsExchangesIndexRoute: typeof LayoutPoliciesDeliveryReturnsExchangesIndexRoute
+  LayoutPoliciesPrivacyIndexRoute: typeof LayoutPoliciesPrivacyIndexRoute
+  LayoutPoliciesTosIndexRoute: typeof LayoutPoliciesTosIndexRoute
 }
 
 const LayoutRouteChildren: LayoutRouteChildren = {
   LayoutOrdersLayoutRoute: LayoutOrdersLayoutRouteWithChildren,
   LayoutShopLayoutRoute: LayoutShopLayoutRouteWithChildren,
+  LayoutPoliciesDeliveryReturnsExchangesIndexRoute:
+    LayoutPoliciesDeliveryReturnsExchangesIndexRoute,
+  LayoutPoliciesPrivacyIndexRoute: LayoutPoliciesPrivacyIndexRoute,
+  LayoutPoliciesTosIndexRoute: LayoutPoliciesTosIndexRoute,
 }
 
 const LayoutRouteWithChildren =
@@ -288,6 +337,9 @@ export interface FileRoutesByFullPath {
   '/shop/checkout': typeof ShopCheckoutIndexRoute
   '/shop/saved': typeof ShopSavedIndexRoute
   '/shop/checkout/$sessionIdSlug/complete': typeof ShopCheckoutSessionIdSlugCompleteRoute
+  '/policies/delivery-returns-exchanges': typeof LayoutPoliciesDeliveryReturnsExchangesIndexRoute
+  '/policies/privacy': typeof LayoutPoliciesPrivacyIndexRoute
+  '/policies/tos': typeof LayoutPoliciesTosIndexRoute
   '/shop/checkout/$sessionIdSlug': typeof ShopCheckoutSessionIdSlugIndexRoute
   '/shop/checkout/complete': typeof ShopCheckoutCompleteIndexRoute
   '/shop/checkout/verify': typeof ShopCheckoutVerifyIndexRoute
@@ -305,6 +357,9 @@ export interface FileRoutesByTo {
   '/shop/checkout': typeof ShopCheckoutIndexRoute
   '/shop/saved': typeof ShopSavedIndexRoute
   '/shop/checkout/$sessionIdSlug/complete': typeof ShopCheckoutSessionIdSlugCompleteRoute
+  '/policies/delivery-returns-exchanges': typeof LayoutPoliciesDeliveryReturnsExchangesIndexRoute
+  '/policies/privacy': typeof LayoutPoliciesPrivacyIndexRoute
+  '/policies/tos': typeof LayoutPoliciesTosIndexRoute
   '/shop/checkout/$sessionIdSlug': typeof ShopCheckoutSessionIdSlugIndexRoute
   '/shop/checkout/complete': typeof ShopCheckoutCompleteIndexRoute
   '/shop/checkout/verify': typeof ShopCheckoutVerifyIndexRoute
@@ -325,6 +380,9 @@ export interface FileRoutesById {
   '/shop/checkout/': typeof ShopCheckoutIndexRoute
   '/shop/saved/': typeof ShopSavedIndexRoute
   '/shop/checkout/$sessionIdSlug/complete': typeof ShopCheckoutSessionIdSlugCompleteRoute
+  '/_layout/policies/delivery-returns-exchanges/': typeof LayoutPoliciesDeliveryReturnsExchangesIndexRoute
+  '/_layout/policies/privacy/': typeof LayoutPoliciesPrivacyIndexRoute
+  '/_layout/policies/tos/': typeof LayoutPoliciesTosIndexRoute
   '/shop/checkout/$sessionIdSlug/': typeof ShopCheckoutSessionIdSlugIndexRoute
   '/shop/checkout/complete/': typeof ShopCheckoutCompleteIndexRoute
   '/shop/checkout/verify/': typeof ShopCheckoutVerifyIndexRoute
@@ -344,6 +402,9 @@ export interface FileRouteTypes {
     | '/shop/checkout'
     | '/shop/saved'
     | '/shop/checkout/$sessionIdSlug/complete'
+    | '/policies/delivery-returns-exchanges'
+    | '/policies/privacy'
+    | '/policies/tos'
     | '/shop/checkout/$sessionIdSlug'
     | '/shop/checkout/complete'
     | '/shop/checkout/verify'
@@ -360,6 +421,9 @@ export interface FileRouteTypes {
     | '/shop/checkout'
     | '/shop/saved'
     | '/shop/checkout/$sessionIdSlug/complete'
+    | '/policies/delivery-returns-exchanges'
+    | '/policies/privacy'
+    | '/policies/tos'
     | '/shop/checkout/$sessionIdSlug'
     | '/shop/checkout/complete'
     | '/shop/checkout/verify'
@@ -378,6 +442,9 @@ export interface FileRouteTypes {
     | '/shop/checkout/'
     | '/shop/saved/'
     | '/shop/checkout/$sessionIdSlug/complete'
+    | '/_layout/policies/delivery-returns-exchanges/'
+    | '/_layout/policies/privacy/'
+    | '/_layout/policies/tos/'
     | '/shop/checkout/$sessionIdSlug/'
     | '/shop/checkout/complete/'
     | '/shop/checkout/verify/'
@@ -446,7 +513,10 @@ export const routeTree = rootRoute
       "filePath": "_layout.tsx",
       "children": [
         "/_layout/_ordersLayout",
-        "/_layout/_shopLayout"
+        "/_layout/_shopLayout",
+        "/_layout/policies/delivery-returns-exchanges/",
+        "/_layout/policies/privacy/",
+        "/_layout/policies/tos/"
       ]
     },
     "/_layout/_ordersLayout": {
@@ -479,6 +549,18 @@ export const routeTree = rootRoute
     },
     "/shop/checkout/$sessionIdSlug/complete": {
       "filePath": "shop/checkout/$sessionIdSlug/complete.tsx"
+    },
+    "/_layout/policies/delivery-returns-exchanges/": {
+      "filePath": "_layout/policies/delivery-returns-exchanges.index.tsx",
+      "parent": "/_layout"
+    },
+    "/_layout/policies/privacy/": {
+      "filePath": "_layout/policies/privacy.index.tsx",
+      "parent": "/_layout"
+    },
+    "/_layout/policies/tos/": {
+      "filePath": "_layout/policies/tos.index.tsx",
+      "parent": "/_layout"
     },
     "/shop/checkout/$sessionIdSlug/": {
       "filePath": "shop/checkout/$sessionIdSlug/index.tsx"

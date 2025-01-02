@@ -21,7 +21,12 @@ interface AttributesTableProps {
 }
 
 function AttributesTable({ selectedAttributes }: AttributesTableProps) {
-  const { isLoading, productVariants, updateProductVariant } = useProduct();
+  const {
+    isLoading,
+    productVariants,
+    updateProductVariant,
+    activeProductVariant,
+  } = useProduct();
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement>,
@@ -81,7 +86,13 @@ function AttributesTable({ selectedAttributes }: AttributesTableProps) {
             key={variant.id}
             className={variant.markedForDeletion ? "opacity-50" : ""}
           >
-            <TableCell>{index + 1}</TableCell>
+            <TableCell>
+              <p
+                className={`${variant.id == activeProductVariant.id ? "font-bold" : "text-muted-foreground"}`}
+              >
+                {index + 1}
+              </p>
+            </TableCell>
             {selectedAttributes.map((attr) => (
               <TableCell key={`${variant.id}-${attr}`}>
                 {isLoading ? (

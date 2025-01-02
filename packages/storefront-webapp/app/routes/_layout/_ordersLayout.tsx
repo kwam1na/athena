@@ -7,11 +7,8 @@ export const Route = createFileRoute("/_layout/_ordersLayout")({
 
 function LayoutComponent() {
   return (
-    <>
-      <div className="container mx-auto mx-auto max-w-[1024px] px-6 xl:px-0">
-        <Outlet />
-      </div>
-      <Footer />
-    </>
+    <div className="container mx-auto mx-auto max-w-[1024px] px-6 xl:px-0">
+      <Outlet />
+    </div>
   );
 }

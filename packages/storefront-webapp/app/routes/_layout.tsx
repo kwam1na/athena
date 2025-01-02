@@ -1,10 +1,12 @@
+import Footer from "@/components/footer/Footer";
 import { createFileRoute, Outlet } from "@tanstack/react-router";
 
 function LayoutComponent() {
   return (
-    <div>
+    <>
       <Outlet />
-    </div>
+      <Footer />
+    </>
   );
 }
 

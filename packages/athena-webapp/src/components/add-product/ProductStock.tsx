@@ -78,6 +78,7 @@ function Stock() {
     removeProductVariant,
     productVariants,
     updateProductVariants,
+    activeProductVariant,
     setActiveProductVariant,
   } = useProduct();
 
@@ -170,7 +171,11 @@ function Stock() {
                       disabled={variant.markedForDeletion}
                     />
                   ) : (
-                    <Label>{variant.sku}</Label>
+                    <p
+                      className={`${variant.id == activeProductVariant.id ? "font-bold" : "text-muted-foreground"}`}
+                    >
+                      {variant.sku}
+                    </p>
                   )}
                   {error && getErrorForField(error, "sku") && (
                     <p className="text-red-500 text-sm font-medium">

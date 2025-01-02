@@ -12,6 +12,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { useMutation } from "@tanstack/react-query";
 import { useShoppingBag } from "@/hooks/useShoppingBag";
 import { set } from "zod";
+import { Link } from "@tanstack/react-router";
 
 export const PaymentSection = () => {
   const {
@@ -172,8 +173,17 @@ export const PaymentSection = () => {
                   onCheckedChange={(e) => handleAcceptedTerms("store-terms", e)}
                   className="h-4 w-4 text-primary border-gray-300 focus:ring-primary"
                 />
-                <label htmlFor="terms" className="text-sm">
-                  I agree to the return and refund policy
+                <label
+                  htmlFor="terms"
+                  className="text-sm flex flex-wrap items-center gap-1"
+                >
+                  <div>I agree to the</div>
+                  <Link
+                    to="/policies/delivery-returns-exchanges"
+                    className="underline"
+                  >
+                    exchange, return and refund policies.
+                  </Link>
                 </label>
               </div>
               <div className="w-full xl:w-auto flex items-center gap-4">

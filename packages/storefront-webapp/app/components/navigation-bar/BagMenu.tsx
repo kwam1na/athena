@@ -24,12 +24,12 @@ export const BagMenu = ({
   const { bag, savedBagCount } = useShoppingBag();
 
   const handleOnLinkClick = () => {
-    setActiveMenu(null);
     onCloseClick && onCloseClick();
+    setActiveMenu(null);
   };
 
   return (
-    <motion.div variants={item} className="w-full space-y-12 pb-16">
+    <motion.div variants={item} className="space-y-12 pb-16">
       {bag.items?.length > 0 && (
         <div className="space-y-8">
           <p className="text-lg">Bag</p>
@@ -80,7 +80,7 @@ export const BagMenu = ({
         <p className="text-lg font-medium">Your bag is empty.</p>
       )}
 
-      <div className="space-y-4">
+      <div className="space-y-4 max-w-[180px]">
         <Link
           to="/shop/orders"
           className="flex items-center gap-4"

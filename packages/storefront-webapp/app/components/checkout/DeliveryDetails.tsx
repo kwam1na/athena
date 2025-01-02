@@ -337,7 +337,55 @@ export const DeliveryDetailsForm = () => {
             </div>
 
             {checkoutState.isGhanaOrder && (
-              <div className="w-[40%]">
+              <div className="block md:hidden w-full xl:w-[40%]">
+                <FormField
+                  control={form.control}
+                  name="region"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-muted-foreground text-xs">
+                        Region
+                      </FormLabel>
+                      <FormControl>
+                        <select
+                          className="block w-full px-3 py-8 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary text-sm"
+                          value={field.value}
+                          onChange={(e) => {
+                            const region = e.target.value;
+                            const deliveryOption =
+                              region == "GA" ? "within-accra" : "outside-accra";
+                            const deliveryFee = region == "GA" ? 30 : 70;
+
+                            updateState({
+                              deliveryDetails: {
+                                ...checkoutState.deliveryDetails,
+                                region,
+                              } as Address,
+                              deliveryFee,
+                              deliveryOption,
+                            });
+                            field.onChange(region);
+                          }}
+                        >
+                          <option value="" disabled>
+                            Select region
+                          </option>
+                          {GHANA_REGIONS.map((region) => (
+                            <option key={region.code} value={region.code}>
+                              {region.name}
+                            </option>
+                          ))}
+                        </select>
+                      </FormControl>
+                      <FormMessage className="text-xs" />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            )}
+
+            {checkoutState.isGhanaOrder && (
+              <div className="w-full xl:w-[40%]">
                 <FormField
                   control={form.control}
                   name="region"

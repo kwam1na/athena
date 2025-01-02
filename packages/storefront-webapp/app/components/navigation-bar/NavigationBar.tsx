@@ -112,7 +112,7 @@ export default function NavigationBar() {
         onMouseEnter={() => setActiveMenu(slug)}
         onMouseLeave={() => setActiveMenu(null)}
       >
-        <div className="w-full py-8 container mx-auto max-w-[1024px]">
+        <div className="py-8 container mx-auto max-w-[1024px]">
           <div className="flex flex-col font-medium gap-4">{children}</div>
         </div>
       </motion.div>
