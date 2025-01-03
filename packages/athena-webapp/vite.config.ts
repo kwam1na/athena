@@ -11,8 +11,6 @@ export default defineConfig({
       "~": __dirname,
       "@": path.resolve(__dirname, "./src"),
       "@cvx": path.resolve(__dirname, "./convex"),
-      "@athena/api": path.resolve(__dirname, "../api"),
-      "@athena/db": path.resolve(__dirname, "../db/src"),
     },
   },
 });

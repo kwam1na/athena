@@ -8,8 +8,6 @@ import React, {
 } from "react";
 import { ProductVariant } from "@/components/add-product/ProductStock";
 import { ImageFile } from "@/components/ui/image-uploader";
-import { productSchema } from "@athena/api";
-// import { Product, ProductSKU } from "@athena/db";
 import { ZodError } from "zod";
 import useGetActiveProduct from "@/hooks/useGetActiveProduct";
 import { Product, ProductSku } from "~/types";

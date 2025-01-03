@@ -1,20 +1,14 @@
-import {
-  Link,
-  useNavigate,
-  useParams,
-  useSearch,
-} from "@tanstack/react-router";
+import { useNavigate, useParams, useSearch } from "@tanstack/react-router";
 import View from "./View";
 import { Button } from "./ui/button";
 import {
   ArrowLeftIcon,
   CheckCircledIcon,
-  PlusIcon,
   TrashIcon,
 } from "@radix-ui/react-icons";
 import { ZodError } from "zod";
 import { toast } from "sonner";
-import { Ban, CheckIcon, Rotate3D, RotateCcw } from "lucide-react";
+import { Ban, RotateCcw } from "lucide-react";
 import { LoadingButton } from "./ui/loading-button";
 import { useState } from "react";
 import { deleteFiles, uploadProductImages } from "@/lib/imageUtils";
@@ -22,7 +16,6 @@ import { AlertModal } from "./ui/modals/alert-modal";
 import { ActionModal } from "./ui/modals/action-modal";
 import ProductPage from "./ProductPage";
 import { ProductProvider, useProduct } from "@/contexts/ProductContext";
-import { productSchema } from "@athena/api";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import useGetActiveProduct from "@/hooks/useGetActiveProduct";
 import { useMutation } from "convex/react";
