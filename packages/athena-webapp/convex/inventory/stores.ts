@@ -38,6 +38,17 @@ export const getById = query({
   },
 });
 
+export const findById = query({
+  args: {
+    id: v.id(entity),
+  },
+  handler: async (ctx, args) => {
+    const store = await ctx.db.get(args.id);
+
+    return store;
+  },
+});
+
 export const getByIdOrSlug = query({
   args: {
     identifier: v.union(v.id(entity), v.string()),

@@ -58,6 +58,10 @@ import type * as schemas_storeFront_onlineOrder_onlineOrder from "../schemas/sto
 import type * as schemas_storeFront_onlineOrder_onlineOrderItem from "../schemas/storeFront/onlineOrder/onlineOrderItem.js";
 import type * as schemas_storeFront_savedBag from "../schemas/storeFront/savedBag.js";
 import type * as schemas_storeFront_savedBagItem from "../schemas/storeFront/savedBagItem.js";
+import type * as schemas_storeFront_storeFrontUser from "../schemas/storeFront/storeFrontUser.js";
+import type * as schemas_storeFront_storeFrontVerificationCode from "../schemas/storeFront/storeFrontVerificationCode.js";
+import type * as sendgrid_index from "../sendgrid/index.js";
+import type * as storeFront_auth from "../storeFront/auth.js";
 import type * as storeFront_bag from "../storeFront/bag.js";
 import type * as storeFront_bagItem from "../storeFront/bagItem.js";
 import type * as storeFront_checkoutSession from "../storeFront/checkoutSession.js";
@@ -131,6 +135,10 @@ declare const fullApi: ApiFromModules<{
   "schemas/storeFront/onlineOrder/onlineOrderItem": typeof schemas_storeFront_onlineOrder_onlineOrderItem;
   "schemas/storeFront/savedBag": typeof schemas_storeFront_savedBag;
   "schemas/storeFront/savedBagItem": typeof schemas_storeFront_savedBagItem;
+  "schemas/storeFront/storeFrontUser": typeof schemas_storeFront_storeFrontUser;
+  "schemas/storeFront/storeFrontVerificationCode": typeof schemas_storeFront_storeFrontVerificationCode;
+  "sendgrid/index": typeof sendgrid_index;
+  "storeFront/auth": typeof storeFront_auth;
   "storeFront/bag": typeof storeFront_bag;
   "storeFront/bagItem": typeof storeFront_bagItem;
   "storeFront/checkoutSession": typeof storeFront_checkoutSession;

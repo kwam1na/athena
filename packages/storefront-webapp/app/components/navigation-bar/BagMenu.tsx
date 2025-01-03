@@ -109,7 +109,7 @@ export const BagMenu = ({
         </Link>
 
         <Link
-          to="/shop/saved"
+          to="/login"
           className="flex items-center gap-4"
           onClick={handleOnLinkClick}
         >

@@ -31,3 +31,36 @@ export async function getStore({
 
   return res;
 }
+
+export async function verifyUserAccount({
+  organizationId,
+  storeId,
+  email,
+  code,
+  firstName,
+  lastName,
+}: OrganizationStoreEntityApiParams & {
+  email?: string;
+  code?: string;
+  firstName?: string;
+  lastName?: string;
+}) {
+  const response = await fetch(
+    `${getBaseUrl(organizationId)}/${storeId}/auth/verify`,
+    {
+      method: "POST",
+      body: JSON.stringify({ email, code, firstName, lastName }),
+      headers: {
+        "Content-Type": "application/json",
+      },
+    }
+  );
+
+  const res = await response.json();
+
+  if (!response.ok) {
+    throw new Error(res.error || "Error verifying account.");
+  }
+
+  return res;
+}

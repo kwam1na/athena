@@ -52,6 +52,41 @@ storeRoutes.delete("/:storeId", async (c) => {
   return c.json({});
 });
 
+storeRoutes.post("/:storeId/auth/verify", async (c) => {
+  const { storeId } = c.req.param();
+  const { email, firstName, lastName, code } = await c.req.json();
+
+  if (code) {
+    try {
+      const res = await c.env.runMutation(api.storeFront.auth.verifyCode, {
+        code,
+        email,
+        storeId: storeId as Id<"store">,
+      });
+
+      return c.json(res);
+    } catch (e) {
+      return c.json({ error: (e as Error).message }, 400);
+    }
+  }
+
+  if (email) {
+    const res = await c.env.runAction(
+      api.storeFront.auth.sendVerificationCodeViaProvider,
+      {
+        email,
+        firstName,
+        lastName,
+        storeId: storeId as Id<"store">,
+      }
+    );
+
+    return c.json(res);
+  }
+
+  return c.json({});
+});
+
 // customers
 storeRoutes.get("/:storeId/customers", async (c) => {
   return c.json({});

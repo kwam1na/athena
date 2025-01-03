@@ -8,3 +8,5 @@ export * from "./checkoutSession";
 export * from "./checkoutSessionItem";
 export * from "./onlineOrder/onlineOrder";
 export * from "./onlineOrder/onlineOrderItem";
+export * from "./storeFrontVerificationCode";
+export * from "./storeFrontUser";

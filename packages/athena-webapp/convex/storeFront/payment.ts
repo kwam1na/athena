@@ -4,8 +4,8 @@ import { api, internal } from "../_generated/api";
 import { CheckoutSession, OnlineOrder } from "../../types";
 import { orderDetailsSchema } from "../schemas/storeFront";
 
-const appUrl = "https://transmit-constitutes-kit-latvia.trycloudflare.com";
-// const appUrl = "http://localhost:3000";
+// const appUrl = "https://transmit-constitutes-kit-latvia.trycloudflare.com";
+const appUrl = "http://localhost:3000";
 
 export const createTransaction = action({
   args: {
@@ -15,6 +15,7 @@ export const createTransaction = action({
     orderDetails: orderDetailsSchema,
   },
   handler: async (ctx, args) => {
+    // throw new Error("Not implemented");
     const response = await fetch(
       "https://api.paystack.co/transaction/initialize",
       {
@@ -53,6 +54,8 @@ export const createTransaction = action({
       console.log(`finalizing payment for session: ${args.checkoutSessionId}`);
 
       return res.data;
+    } else {
+      console.error("Failed to create transaction", response);
     }
   },
 });
@@ -75,8 +78,6 @@ export const verifyPayment = action({
 
     if (response.ok) {
       const res = await response.json();
-
-      // console.log("response from verification", res);
 
       // Query for the first active session for the given customerId
       const session: CheckoutSession | null = await ctx.runQuery(
@@ -130,6 +131,8 @@ export const verifyPayment = action({
       }
 
       return { verified: isVerified };
+    } else {
+      console.error("Failed to create transaction", response);
     }
 
     return {
@@ -160,7 +163,6 @@ export const refundPayment = action({
     });
 
     const res = await response.json();
-    console.log("response from refund", res);
 
     if (response.ok) {
       await ctx.runMutation(api.storeFront.onlineOrder.update, {
@@ -192,9 +194,9 @@ export const refundPayment = action({
         console.log("updated order items to refunded");
       }
       return { success: true, message: res.message };
+    } else {
+      console.error("Failed to refund payment", response);
     }
-
-    console.log("response from refund failed", res);
 
     return { success: false, message: res.message };
   },

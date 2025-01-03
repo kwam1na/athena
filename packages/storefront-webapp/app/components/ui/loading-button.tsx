@@ -18,7 +18,7 @@ export const LoadingButton: React.FC<LoadingButtonProps> = ({
       disabled={props.disabled}
     >
       {!isLoading && children}
-      {isLoading && <Icons.spinner className="ml-2 h-4 w-4 animate-spin" />}
+      {isLoading && <Icons.spinner className="h-4 w-4 animate-spin" />}
     </Button>
   );
 };
