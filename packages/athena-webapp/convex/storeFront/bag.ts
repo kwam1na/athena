@@ -175,3 +175,78 @@ export const clearBag = mutation({
     return { message: "Items in bag cleared" };
   },
 });
+
+export const updateOwner = mutation({
+  args: {
+    currentOwner: v.id("guest"),
+    newOwner: v.id("storeFrontUser"),
+  },
+  handler: async (ctx, args) => {
+    const bag = await ctx.db
+      .query(entity)
+      .filter((q) => q.eq(q.field("storeFrontUserId"), args.currentOwner))
+      .first();
+
+    const newOwnerBag = await ctx.db
+      .query(entity)
+      .filter((q) => q.eq(q.field("storeFrontUserId"), args.newOwner))
+      .first();
+
+    if (!bag) {
+      return null; // No guest bag exists
+    }
+
+    if (newOwnerBag) {
+      // Get items from current bag
+      const currentItems = await ctx.db
+        .query("bagItem")
+        .filter((q) => q.eq(q.field("bagId"), bag._id))
+        .collect();
+
+      // Get items from new owner's bag
+      const newOwnerItems = await ctx.db
+        .query("bagItem")
+        .filter((q) => q.eq(q.field("bagId"), newOwnerBag._id))
+        .collect();
+
+      // Process each item from current bag
+      await Promise.all(
+        currentItems.map(async (item) => {
+          // Check if item already exists in new owner's bag
+          const existingItem = newOwnerItems.find(
+            (newItem) =>
+              newItem.productId === item.productId &&
+              newItem.productSkuId === item.productSkuId
+          );
+
+          if (existingItem) {
+            // Update quantity of existing item
+            await ctx.db.patch(existingItem._id, {
+              quantity: existingItem.quantity + item.quantity,
+              bagId: newOwnerBag._id,
+              storeFrontUserId: args.newOwner,
+            });
+            // Delete the duplicate item
+            await ctx.db.delete(item._id);
+          } else {
+            // Move item to new owner's bag
+            await ctx.db.patch(item._id, {
+              bagId: newOwnerBag._id,
+              storeFrontUserId: args.newOwner,
+            });
+          }
+        })
+      );
+
+      await ctx.db.delete(bag._id);
+      return await ctx.db.get(newOwnerBag._id);
+    } else {
+      // If new owner doesn't have a bag, update the ownership of existing bag
+      await ctx.db.patch(bag._id, {
+        storeFrontUserId: args.newOwner,
+        updatedAt: Date.now(),
+      });
+      return await ctx.db.get(bag._id);
+    }
+  },
+});

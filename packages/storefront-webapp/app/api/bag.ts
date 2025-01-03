@@ -4,7 +4,7 @@ import { BagItemResponseBody } from "@/lib/schemas/bagItem";
 import { Bag } from "@athena/webapp-2";
 
 type GetBagItemsParams = {
-  customerId: string;
+  storeFrontUserId: string;
   organizationId: string;
   storeId: string;
   bagId: string;
@@ -13,25 +13,25 @@ type GetBagItemsParams = {
 const getBaseUrl = (
   organizationId: string,
   storeId: string,
-  customerId: string
+  storeFrontUserId: string
 ) =>
-  `${config.apiGateway.URL}/organizations/${organizationId}/stores/${storeId}/users/${customerId}/bags`;
+  `${config.apiGateway.URL}/organizations/${organizationId}/stores/${storeId}/users/${storeFrontUserId}/bags`;
 
 export async function createBag({
-  customerId,
+  storeFrontUserId,
   organizationId,
   storeId,
 }: {
-  customerId: string;
+  storeFrontUserId: string;
   organizationId: string;
   storeId: string;
 }) {
   const response = await fetch(
-    getBaseUrl(organizationId, storeId, customerId),
+    getBaseUrl(organizationId, storeId, storeFrontUserId),
     {
       method: "POST",
       body: JSON.stringify({
-        customerId,
+        storeFrontUserId,
       }),
       headers: {
         "Content-Type": "application/json",
@@ -50,15 +50,17 @@ export async function createBag({
 
 // Fetch all bags for a customer
 export async function getAllBags({
-  customerId,
+  storeFrontUserId,
   organizationId,
   storeId,
 }: {
-  customerId: string;
+  storeFrontUserId: string;
   organizationId: string;
   storeId: string;
 }): Promise<BagResponseBody[]> {
-  const response = await fetch(getBaseUrl(organizationId, storeId, customerId));
+  const response = await fetch(
+    getBaseUrl(organizationId, storeId, storeFrontUserId)
+  );
 
   const res = await response.json();
 
@@ -71,13 +73,13 @@ export async function getAllBags({
 
 // Fetch details of a specific bag
 export async function getBag({
-  customerId,
+  storeFrontUserId,
   organizationId,
   storeId,
   bagId,
 }: GetBagItemsParams): Promise<BagResponseBody> {
   const response = await fetch(
-    `${getBaseUrl(organizationId, storeId, customerId)}/${bagId}`
+    `${getBaseUrl(organizationId, storeId, storeFrontUserId)}/${bagId}`
   );
 
   const res = await response.json();
@@ -90,16 +92,16 @@ export async function getBag({
 }
 
 export async function getActiveBag({
-  customerId,
+  storeFrontUserId,
   organizationId,
   storeId,
 }: {
-  customerId: string;
+  storeFrontUserId: string;
   organizationId: string;
   storeId: string;
 }): Promise<Bag> {
   const response = await fetch(
-    `${getBaseUrl(organizationId, storeId, customerId)}/active`
+    `${getBaseUrl(organizationId, storeId, storeFrontUserId)}/active`
   );
 
   const res = await response.json();
@@ -113,7 +115,7 @@ export async function getActiveBag({
 
 // Add an item to a bag
 export async function addItemToBag({
-  customerId,
+  storeFrontUserId,
   organizationId,
   storeId,
   bagId,
@@ -128,7 +130,7 @@ export async function addItemToBag({
   quantity: number;
 }): Promise<Bag> {
   const response = await fetch(
-    `${getBaseUrl(organizationId, storeId, customerId)}/${bagId}/items`,
+    `${getBaseUrl(organizationId, storeId, storeFrontUserId)}/${bagId}/items`,
     {
       method: "POST",
       body: JSON.stringify({
@@ -136,7 +138,7 @@ export async function addItemToBag({
         productSkuId,
         productSku,
         quantity,
-        customerId,
+        storeFrontUserId,
       }),
       headers: {
         "Content-Type": "application/json",
@@ -155,7 +157,7 @@ export async function addItemToBag({
 
 // Update an item in a bag
 export async function updateBagItem({
-  customerId,
+  storeFrontUserId,
   organizationId,
   storeId,
   bagId,
@@ -166,7 +168,7 @@ export async function updateBagItem({
   quantity: number;
 }): Promise<BagItemResponseBody> {
   const response = await fetch(
-    `${getBaseUrl(organizationId, storeId, customerId)}/${bagId}/items/${itemId}`,
+    `${getBaseUrl(organizationId, storeId, storeFrontUserId)}/${bagId}/items/${itemId}`,
     {
       method: "PUT",
       body: JSON.stringify({ quantity }),
@@ -187,14 +189,14 @@ export async function updateBagItem({
 
 // Remove an item from a bag
 export async function removeItemFromBag({
-  customerId,
+  storeFrontUserId,
   organizationId,
   storeId,
   bagId,
   itemId,
 }: GetBagItemsParams & { itemId: number }): Promise<void> {
   const response = await fetch(
-    `${getBaseUrl(organizationId, storeId, customerId)}/${bagId}/items/${itemId}`,
+    `${getBaseUrl(organizationId, storeId, storeFrontUserId)}/${bagId}/items/${itemId}`,
     {
       method: "DELETE",
     }
@@ -204,4 +206,37 @@ export async function removeItemFromBag({
     const res = await response.json();
     throw new Error(res.error || "Error removing item from bag.");
   }
+}
+
+export async function updateBagOwner({
+  currentOwnerId,
+  newOwnerId,
+  organizationId,
+  storeId,
+  bagId,
+}: {
+  currentOwnerId: string;
+  newOwnerId: string;
+  organizationId: string;
+  storeId: string;
+  bagId: string;
+}): Promise<Bag> {
+  const response = await fetch(
+    `${getBaseUrl(organizationId, storeId, currentOwnerId)}/${bagId}/owner`,
+    {
+      method: "POST",
+      body: JSON.stringify({ currentOwnerId, newOwnerId }),
+      headers: {
+        "Content-Type": "application/json",
+      },
+    }
+  );
+
+  const res = await response.json();
+
+  if (!response.ok) {
+    throw new Error(res.error || "Error transferring bag");
+  }
+
+  return res;
 }

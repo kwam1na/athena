@@ -9,8 +9,6 @@ import { useQuery } from "convex/react";
 import { api } from "~/convex/_generated/api";
 import { WigTypeView } from "./add-product/WigType";
 import useGetActiveStore from "../hooks/useGetActiveStore";
-import { useEffect } from "react";
-import { useAppLayout } from "../contexts/AppLayoutContext";
 
 export default function ProductPage() {
   const { productData } = useProduct();

@@ -125,6 +125,8 @@ storeRoutes.get("/:storeId/users/:userId/bags/:bagId", async (c) => {
 
 // Create a new bag
 storeRoutes.post("/:storeId/users/:userId/bags", async (c) => {
+  console.log("hit post bags endpoint");
+
   const { userId } = await c.req.json();
   return c.json({});
 });
@@ -159,11 +161,29 @@ storeRoutes.post("/:storeId/users/:userId/bags/:bagId/items", async (c) => {
   return c.json(b);
 });
 
+// Update the owner of the bag
+storeRoutes.post("/:storeId/users/:userId/bags/:bagId/owner", async (c) => {
+  console.log("hit endpont...");
+
+  try {
+    const { currentOwnerId, newOwnerId } = await c.req.json();
+
+    const b = await c.env.runMutation(api.storeFront.bag.updateOwner, {
+      currentOwner: currentOwnerId as Id<"guest">,
+      newOwner: newOwnerId as Id<"storeFrontUser">,
+    });
+    return c.json(b);
+  } catch (e) {
+    console.error(e);
+    return c.json({ error: "Internal server error" }, 400);
+  }
+});
+
 // Update an item in a bag
 storeRoutes.put(
   "/:storeId/users/:userId/bags/:bagId/items/:itemId",
   async (c) => {
-    const { bagId, itemId } = c.req.param();
+    const { itemId } = c.req.param();
     const { quantity } = await c.req.json();
 
     const b = await c.env.runMutation(api.storeFront.bagItem.updateItemInBag, {
@@ -232,7 +252,7 @@ storeRoutes.delete(
   }
 );
 
-// Get all items in a bag
+// Get all items in a saved bag
 storeRoutes.get(
   "/:storeId/users/:userId/savedBags/:savedBagId/items",
   async (c) => {
@@ -247,8 +267,6 @@ storeRoutes.post(
     const { savedBagId, userId } = c.req.param();
     const { productId, productSkuId, quantity, productSku } =
       await c.req.json();
-
-    // console.table({ productId, quantity, price });
 
     const b = await c.env.runMutation(
       api.storeFront.savedBagItem.addItemToBag,
@@ -266,7 +284,7 @@ storeRoutes.post(
   }
 );
 
-// Update an item in a bag
+// Update an item in a saved bag
 storeRoutes.put(
   "/:storeId/users/:userId/savedBags/:savedBagId/items/:itemId",
   async (c) => {
@@ -281,6 +299,25 @@ storeRoutes.put(
       }
     );
     return c.json(b);
+  }
+);
+
+// Update the owner of the bag
+storeRoutes.post(
+  "/:storeId/users/:userId/savedBags/:savedBagId/owner",
+  async (c) => {
+    try {
+      const { currentOwnerId, newOwnerId } = await c.req.json();
+
+      const b = await c.env.runMutation(api.storeFront.savedBag.updateOwner, {
+        currentOwner: currentOwnerId as Id<"guest">,
+        newOwner: newOwnerId as Id<"storeFrontUser">,
+      });
+      return c.json(b);
+    } catch (e) {
+      console.error(e);
+      return c.json({ error: "Internal server error" }, 400);
+    }
   }
 );
 

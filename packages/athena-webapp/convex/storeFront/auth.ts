@@ -2,7 +2,9 @@ import { v } from "convex/values";
 import { action, mutation } from "../_generated/server";
 import { sendVerificationCode } from "../sendgrid";
 import { api } from "../_generated/api";
-import { SignJWT, jwtVerify } from "jose";
+import { SignJWT } from "jose";
+
+const expirationTimeInMinutes = 10;
 
 export const requestVerificationCode = mutation({
   args: {
@@ -17,7 +19,8 @@ export const requestVerificationCode = mutation({
     ).toString();
 
     // set an expiration time 10 minutes from now
-    const expiration = new Date().getTime() + 10 * 60 * 1000;
+    const expiration =
+      new Date().getTime() + expirationTimeInMinutes * 60 * 1000;
 
     const id = await ctx.db.insert("storeFrontVerificationCode", {
       email: args.email,
@@ -168,7 +171,7 @@ export const sendVerificationCodeViaProvider = action({
     //   customerEmail: args.email,
     //   verificationCode: data.code,
     //   storeName: store.name,
-    //   validTime: "10 minutes",
+    //   validTime: `${expirationTimeInMinutes} minutes`,
     // });
 
     // if (response.ok) {

@@ -1,10 +1,7 @@
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Ban, CheckCircle2 } from "lucide-react";
-import { deleteStore, getAllStores } from "@/api/stores";
 import {
   Form,
   FormControl,
@@ -15,15 +12,15 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { LoadingButton } from "@/components/ui/loading-button";
-import { StoreResponse } from "@/lib/schemas/store";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { Separator } from "@/components/ui/separator";
-import { updateOrganization } from "@/api/organization";
 import { OrganizationResponse } from "@/lib/schemas/organization";
 import View from "@/components/View";
 import { useGetActiveOrganization } from "@/hooks/useGetOrganizations";
-import { Store } from "@athena/db";
+import { Store } from "~/types";
+import { useMutation, useQuery } from "convex/react";
+import { api } from "~/convex/_generated/api";
 
 const OrganizationSettings = () => {
   const { activeOrganization } = useGetActiveOrganization();
@@ -56,9 +53,8 @@ const GeneralSettings = ({
 }: {
   organization: OrganizationResponse;
 }) => {
-  const queryClient = useQueryClient();
-
   const navigate = useNavigate();
+  const [isUpdatingOrganization, setIsUpdatingOrganization] = useState(false);
 
   const FormSchema = z.object({
     name: z.string().min(1, {
@@ -81,38 +77,32 @@ const GeneralSettings = ({
     const data = {
       name: form.getValues().name,
     };
-    return await updateOrganization(organization.id, data);
-  };
 
-  const mutation = useMutation({
-    mutationFn: saveStoreChanges,
-    onSuccess: (newOrganization) => {
-      toast("Organization updated", {
-        icon: <CheckCircle2 className="h-4 w-4" />,
-        description: `Organization name has been updated`,
-      });
-      queryClient.invalidateQueries({
-        queryKey: ["organizations"],
-      });
+    setIsUpdatingOrganization(true);
 
+    try {
+      const updated = await updateOrganization(organization.id, data);
+      toast.success("Organization updated");
       navigate({
         to: "/$orgUrlSlug/settings/organization",
         params: (prev) => ({
           ...prev,
-          orgUrlSlug: newOrganization.slug,
+          orgUrlSlug: updated.slug,
         }),
       });
-    },
-    onError: (e) => {
-      toast("Something went wrong", {
-        icon: <Ban className="h-4 w-4" />,
-        description: e.message,
+    } catch (e) {
+      toast.error("Something went wrong", {
+        description: (e as Error).message,
       });
-    },
-  });
+    } finally {
+      setIsUpdatingOrganization(false);
+    }
+  };
 
-  function onSubmit() {
-    mutation.mutate();
+  const updateOrganization = useMutation(api.inventory.organizations.update);
+
+  async function onSubmit() {
+    await saveStoreChanges();
   }
 
   return (
@@ -142,7 +132,7 @@ const GeneralSettings = ({
             <div
               className={`h-full flex self-end transition-opacity duration-300 ${form.formState.isDirty ? "opacity-100" : "opacity-0 pointer-events-none"}`}
             >
-              <LoadingButton isLoading={mutation.isPending} type="submit">
+              <LoadingButton isLoading={isUpdatingOrganization} type="submit">
                 Save
               </LoadingButton>
             </div>
@@ -154,46 +144,29 @@ const GeneralSettings = ({
 };
 
 const DeleteStore = ({ store }: { store: Store }) => {
-  const queryClient = useQueryClient();
+  const [isDeletingStore, setIsDeletingStore] = useState(false);
 
-  const navigate = useNavigate();
-
-  const { data: stores } = useQuery({
-    queryKey: ["stores", store.organizationId],
-    queryFn: () => getAllStores(store.organizationId),
+  const stores = useQuery(api.inventory.stores.getAll, {
+    organizationId: store.organizationId,
   });
+
+  const deleteStore = useMutation(api.inventory.stores.remove);
 
   const handleDeleteStore = async () => {
-    return await deleteStore({
-      organizationId: store.organizationId,
-      storeId: store.id,
-    });
+    setIsDeletingStore(true);
+    try {
+      await deleteStore({
+        organizationId: store.organizationId,
+        storeId: store._id,
+      });
+
+      toast.success("Store deleted");
+    } catch (e) {
+      toast.error("Something went wrong");
+    } finally {
+      setIsDeletingStore(false);
+    }
   };
-
-  const deleteMutation = useMutation({
-    mutationFn: handleDeleteStore,
-    onSuccess: () => {
-      toast("Store deleted", {
-        icon: <CheckCircle2 className="h-4 w-4" />,
-      });
-      queryClient.invalidateQueries({
-        queryKey: ["stores", store.organizationId],
-      });
-
-      navigate({
-        to: "/$orgUrlSlug/settings",
-        params: (prev) => ({
-          ...prev,
-          orgUrlSlug: prev.orgUrlSlug!,
-        }),
-      });
-    },
-    onError: () => {
-      toast("Something went wrong", {
-        icon: <Ban className="h-4 w-4" />,
-      });
-    },
-  });
 
   return (
     <div className="space-y-4">
@@ -212,8 +185,8 @@ const DeleteStore = ({ store }: { store: Store }) => {
       <LoadingButton
         variant={"destructive"}
         disabled={stores && stores.length == 1}
-        isLoading={deleteMutation.isPending}
-        onClick={() => deleteMutation.mutate()}
+        isLoading={isDeletingStore}
+        onClick={handleDeleteStore}
       >
         Delete store
       </LoadingButton>

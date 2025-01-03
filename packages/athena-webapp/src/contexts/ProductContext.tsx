@@ -11,6 +11,7 @@ import { ImageFile } from "@/components/ui/image-uploader";
 import { ZodError } from "zod";
 import useGetActiveProduct from "@/hooks/useGetActiveProduct";
 import { Product, ProductSku } from "~/types";
+import { productSchema } from "../lib/schemas/product";
 
 interface ProductContextType {
   activeProductVariant: ProductVariant;
@@ -207,7 +208,7 @@ export function ProductProvider({ children }: { children: ReactNode }) {
         skus: undefined, // Exclude skus from productData
       });
 
-      const variants = activeProduct.skus.map((sku) =>
+      const variants = activeProduct.skus.map((sku: any) =>
         convertSkuToVariant(sku)
       );
       updateProductVariants(variants);

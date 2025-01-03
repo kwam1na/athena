@@ -3,21 +3,21 @@ import config from "@/config";
 const getBaseUrl = (
   organizationId: string,
   storeId: string,
-  customerId: string
+  storeFrontUserId: string
 ) =>
-  `${config.apiGateway.URL}/organizations/${organizationId}/stores/${storeId}/users/${customerId}/orders`;
+  `${config.apiGateway.URL}/organizations/${organizationId}/stores/${storeId}/users/${storeFrontUserId}/orders`;
 
 export async function getOrders({
-  customerId,
+  storeFrontUserId,
   organizationId,
   storeId,
 }: {
-  customerId: string;
+  storeFrontUserId: string;
   organizationId: string;
   storeId: string;
 }) {
   const response = await fetch(
-    getBaseUrl(organizationId, storeId, customerId),
+    getBaseUrl(organizationId, storeId, storeFrontUserId),
     {
       method: "GET",
       headers: {
@@ -36,18 +36,18 @@ export async function getOrders({
 }
 
 export async function getOrder({
-  customerId,
+  storeFrontUserId,
   organizationId,
   storeId,
   orderId,
 }: {
-  customerId: string;
+  storeFrontUserId: string;
   organizationId: string;
   storeId: string;
   orderId: string;
 }) {
   const response = await fetch(
-    `${getBaseUrl(organizationId, storeId, customerId)}/${orderId}`,
+    `${getBaseUrl(organizationId, storeId, storeFrontUserId)}/${orderId}`,
     {
       method: "GET",
       headers: {

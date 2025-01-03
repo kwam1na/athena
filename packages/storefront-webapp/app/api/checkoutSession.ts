@@ -4,19 +4,19 @@ import { Bag, CheckoutSession } from "@athena/webapp-2";
 const getBaseUrl = (
   organizationId: string,
   storeId: string,
-  customerId: string
+  storeFrontUserId: string
 ) =>
-  `${config.apiGateway.URL}/organizations/${organizationId}/stores/${storeId}/users/${customerId}/checkout`;
+  `${config.apiGateway.URL}/organizations/${organizationId}/stores/${storeId}/users/${storeFrontUserId}/checkout`;
 
 export async function createCheckoutSession({
-  customerId,
+  storeFrontUserId,
   organizationId,
   storeId,
   bagId,
   bagItems,
   bagSubtotal,
 }: {
-  customerId: string;
+  storeFrontUserId: string;
   bagId: string;
   organizationId: string;
   storeId: string;
@@ -29,13 +29,13 @@ export async function createCheckoutSession({
   bagSubtotal: number;
 }) {
   const response = await fetch(
-    getBaseUrl(organizationId, storeId, customerId),
+    getBaseUrl(organizationId, storeId, storeFrontUserId),
     {
       method: "POST",
       body: JSON.stringify({
         storeId,
         bagId,
-        customerId,
+        storeFrontUserId,
         products: bagItems,
         amount: bagSubtotal,
       }),
@@ -55,16 +55,16 @@ export async function createCheckoutSession({
 }
 
 export async function getActiveCheckoutSession({
-  customerId,
+  storeFrontUserId,
   organizationId,
   storeId,
 }: {
-  customerId: string;
+  storeFrontUserId: string;
   organizationId: string;
   storeId: string;
 }): Promise<CheckoutSession> {
   const response = await fetch(
-    `${getBaseUrl(organizationId, storeId, customerId)}/active`
+    `${getBaseUrl(organizationId, storeId, storeFrontUserId)}/active`
   );
 
   const res = await response.json();
@@ -77,16 +77,16 @@ export async function getActiveCheckoutSession({
 }
 
 export async function getPendingCheckoutSessions({
-  customerId,
+  storeFrontUserId,
   organizationId,
   storeId,
 }: {
-  customerId: string;
+  storeFrontUserId: string;
   organizationId: string;
   storeId: string;
 }): Promise<Bag> {
   const response = await fetch(
-    `${getBaseUrl(organizationId, storeId, customerId)}/pending`
+    `${getBaseUrl(organizationId, storeId, storeFrontUserId)}/pending`
   );
 
   const res = await response.json();
@@ -99,18 +99,18 @@ export async function getPendingCheckoutSessions({
 }
 
 export async function getCheckoutSession({
-  customerId,
+  storeFrontUserId,
   organizationId,
   sessionId,
   storeId,
 }: {
   sessionId: string;
-  customerId: string;
+  storeFrontUserId: string;
   organizationId: string;
   storeId: string;
 }): Promise<Bag> {
   const response = await fetch(
-    `${getBaseUrl(organizationId, storeId, customerId)}/${sessionId}`
+    `${getBaseUrl(organizationId, storeId, storeFrontUserId)}/${sessionId}`
   );
 
   const res = await response.json();
@@ -126,7 +126,7 @@ export async function updateCheckoutSession({
   action,
   organizationId,
   storeId,
-  customerId,
+  storeFrontUserId,
   sessionId,
   isFinalizingPayment,
   hasCompletedCheckoutSession,
@@ -138,7 +138,7 @@ export async function updateCheckoutSession({
   action: "finalize-payment" | "complete-checkout" | "place-order";
   organizationId: string;
   storeId: string;
-  customerId: string;
+  storeFrontUserId: string;
   sessionId: string;
   isFinalizingPayment?: boolean;
   hasCompletedCheckoutSession?: boolean;
@@ -148,7 +148,7 @@ export async function updateCheckoutSession({
   orderDetails?: any;
 }) {
   const response = await fetch(
-    `${getBaseUrl(organizationId, storeId, customerId)}/${sessionId}`,
+    `${getBaseUrl(organizationId, storeId, storeFrontUserId)}/${sessionId}`,
     {
       method: "POST",
       body: JSON.stringify({
@@ -176,18 +176,18 @@ export async function updateCheckoutSession({
 }
 
 export async function verifyCheckoutSessionPayment({
-  customerId,
+  storeFrontUserId,
   organizationId,
   storeId,
   externalReference,
 }: {
-  customerId: string;
+  storeFrontUserId: string;
   organizationId: string;
   storeId: string;
   externalReference: string;
 }): Promise<Bag> {
   const response = await fetch(
-    `${getBaseUrl(organizationId, storeId, customerId)}/verify/${externalReference}`
+    `${getBaseUrl(organizationId, storeId, storeFrontUserId)}/verify/${externalReference}`
   );
 
   const res = await response.json();

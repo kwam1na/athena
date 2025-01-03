@@ -61,7 +61,7 @@ export const useShoppingBag = () => {
       quantity: number;
     }) =>
       addItemToSavedBag({
-        customerId: userId!,
+        storeFrontUserId: userId!,
         organizationId: OG_ORGANIZTION_ID,
         storeId: OG_STORE_ID,
         productId,
@@ -84,7 +84,7 @@ export const useShoppingBag = () => {
   const updateSavedBagItemMutation = useMutation({
     mutationFn: ({ itemId, quantity }: { itemId: number; quantity: number }) =>
       updateSavedBagItem({
-        customerId: userId!,
+        storeFrontUserId: userId!,
         savedBagId: savedBag!._id,
         quantity,
         itemId,
@@ -105,7 +105,7 @@ export const useShoppingBag = () => {
   const removeSavedBagItemMutation = useMutation({
     mutationFn: ({ itemId }: { itemId: number }) =>
       removeItemFromSavedBag({
-        customerId: userId!,
+        storeFrontUserId: userId!,
         savedBagId: savedBag!._id,
         itemId: itemId,
         organizationId: OG_ORGANIZTION_ID,
@@ -194,7 +194,7 @@ export const useShoppingBag = () => {
       quantity: number;
     }) =>
       addItemToBag({
-        customerId: userId!,
+        storeFrontUserId: userId!,
         organizationId: OG_ORGANIZTION_ID,
         storeId: OG_STORE_ID,
         productId,
@@ -215,7 +215,7 @@ export const useShoppingBag = () => {
   const updateBagItemMutation = useMutation({
     mutationFn: ({ itemId, quantity }: { itemId: number; quantity: number }) =>
       updateBagItem({
-        customerId: userId!,
+        storeFrontUserId: userId!,
         bagId: bag!._id,
         quantity,
         itemId,
@@ -234,7 +234,7 @@ export const useShoppingBag = () => {
   const removeBagItem = useMutation({
     mutationFn: ({ itemId }: { itemId: number }) =>
       removeItemFromBag({
-        customerId: userId!,
+        storeFrontUserId: userId!,
         bagId: bag!._id,
         itemId: itemId,
         organizationId: OG_ORGANIZTION_ID,
@@ -346,7 +346,7 @@ export const useShoppingBag = () => {
     }) =>
       createCheckoutSession({
         bagId,
-        customerId: userId!,
+        storeFrontUserId: userId!,
         storeId: OG_STORE_ID,
         organizationId: OG_ORGANIZTION_ID,
         bagItems,
@@ -380,7 +380,7 @@ export const useShoppingBag = () => {
       orderDetails: any;
     }) =>
       updateCheckoutSessionAPI({
-        customerId: userId!,
+        storeFrontUserId: userId!,
         storeId: OG_STORE_ID,
         organizationId: OG_ORGANIZTION_ID,
         isFinalizingPayment,

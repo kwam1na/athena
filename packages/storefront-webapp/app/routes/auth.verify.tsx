@@ -1,8 +1,7 @@
-import { getActiveBag } from "@/api/bag";
-import { getActiveSavedBag } from "@/api/savedBag";
+import { updateBagOwner } from "@/api/bag";
+import { updateSavedBagOwner } from "@/api/savedBag";
 import { verifyUserAccount } from "@/api/stores";
 import { FadeIn } from "@/components/common/FadeIn";
-import { Button } from "@/components/ui/button";
 import {
   Form,
   FormControl,
@@ -12,7 +11,6 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
 import {
   InputOTP,
   InputOTPGroup,
@@ -20,17 +18,12 @@ import {
 } from "@/components/ui/input-otp";
 import { LoadingButton } from "@/components/ui/loading-button";
 import { useStoreContext } from "@/contexts/StoreContext";
-import { bagQueries } from "@/queries";
+import { useShoppingBag } from "@/hooks/useShoppingBag";
 import { loginFn } from "@/server-actions/auth";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ArrowLeftIcon } from "@radix-ui/react-icons";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import {
-  createFileRoute,
-  Link,
-  useNavigate,
-  useSearch,
-} from "@tanstack/react-router";
+import { useMutation } from "@tanstack/react-query";
+import { createFileRoute, Link, useSearch } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/start";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
@@ -47,7 +40,7 @@ export const Route = createFileRoute("/auth/verify")({
   component: InputOTPForm,
 });
 
-const WAIT_TIME = 120; // 10 minutes in seconds
+const WAIT_TIME = 120; // 2 minutes in seconds
 
 function InputOTPForm() {
   const form = useForm<z.infer<typeof FormSchema>>({
@@ -63,7 +56,16 @@ function InputOTPForm() {
   const [showCountdown, setShowCountdown] = useState(true);
 
   const { email } = useSearch({ strict: false });
-  const { store } = useStoreContext();
+  const { store, userId } = useStoreContext();
+  const { bag, savedBag } = useShoppingBag();
+
+  const updateBagOwnerMutation = useMutation({
+    mutationFn: updateBagOwner,
+  });
+
+  const updateSavedBagOwnerMutation = useMutation({
+    mutationFn: updateSavedBagOwner,
+  });
 
   // Initialize and handle countdown
   useEffect(() => {
@@ -107,7 +109,8 @@ function InputOTPForm() {
 
       if (res.success) {
         toast.success("Verification code sent to your email.");
-        setCountdown(600); // Reset countdown to 10 minutes
+        form.setValue("code", "");
+        setCountdown(WAIT_TIME);
         setShowCountdown(true);
       }
     },
@@ -128,8 +131,6 @@ function InputOTPForm() {
         code: data.code,
       });
 
-      console.log("res from server fn", res);
-
       if (res.error) {
         setErrorMessage(res.message);
       } else {
@@ -137,11 +138,29 @@ function InputOTPForm() {
       }
 
       if (res.success) {
+        await updateBagOwnerMutation.mutateAsync({
+          currentOwnerId: userId || "",
+          newOwnerId: res.user._id,
+          organizationId: store.organizationId,
+          storeId: store._id,
+          bagId: bag._id,
+        });
+
+        await updateSavedBagOwnerMutation.mutateAsync({
+          currentOwnerId: userId || "",
+          newOwnerId: res.user._id,
+          organizationId: store.organizationId,
+          storeId: store._id,
+          savedBagId: savedBag._id,
+        });
+
         window.location.href = "/";
       }
     } catch (e) {
+      console.error(e);
       setErrorMessage(
-        "There was an error verifying your account. Please try again."
+        (e as Error).message ??
+          "There was an error verifying your account. Please try again."
       );
     } finally {
       setIsVerifying(false);

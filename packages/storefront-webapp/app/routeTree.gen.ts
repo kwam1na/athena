@@ -17,6 +17,7 @@ import { Route as LayoutImport } from './routes/_layout'
 import { Route as IndexImport } from './routes/index'
 import { Route as AuthVerifyImport } from './routes/auth.verify'
 import { Route as LayoutContactUsImport } from './routes/_layout/contact-us'
+import { Route as LayoutAccountImport } from './routes/_layout/account'
 import { Route as LayoutShopLayoutImport } from './routes/_layout/_shopLayout'
 import { Route as LayoutOrdersLayoutImport } from './routes/_layout/_ordersLayout'
 import { Route as ShopCheckoutIndexImport } from './routes/shop/checkout/index'
@@ -64,6 +65,11 @@ const AuthVerifyRoute = AuthVerifyImport.update({
 
 const LayoutContactUsRoute = LayoutContactUsImport.update({
   path: '/contact-us',
+  getParentRoute: () => LayoutRoute,
+} as any)
+
+const LayoutAccountRoute = LayoutAccountImport.update({
+  path: '/account',
   getParentRoute: () => LayoutRoute,
 } as any)
 
@@ -206,6 +212,13 @@ declare module '@tanstack/react-router' {
       path: ''
       fullPath: ''
       preLoaderRoute: typeof LayoutShopLayoutImport
+      parentRoute: typeof LayoutImport
+    }
+    '/_layout/account': {
+      id: '/_layout/account'
+      path: '/account'
+      fullPath: '/account'
+      preLoaderRoute: typeof LayoutAccountImport
       parentRoute: typeof LayoutImport
     }
     '/_layout/contact-us': {
@@ -365,6 +378,7 @@ const LayoutShopLayoutRouteWithChildren =
 interface LayoutRouteChildren {
   LayoutOrdersLayoutRoute: typeof LayoutOrdersLayoutRouteWithChildren
   LayoutShopLayoutRoute: typeof LayoutShopLayoutRouteWithChildren
+  LayoutAccountRoute: typeof LayoutAccountRoute
   LayoutContactUsRoute: typeof LayoutContactUsRoute
   LayoutShopProductProductSlugRoute: typeof LayoutShopProductProductSlugRoute
   LayoutPoliciesDeliveryReturnsExchangesIndexRoute: typeof LayoutPoliciesDeliveryReturnsExchangesIndexRoute
@@ -376,6 +390,7 @@ interface LayoutRouteChildren {
 const LayoutRouteChildren: LayoutRouteChildren = {
   LayoutOrdersLayoutRoute: LayoutOrdersLayoutRouteWithChildren,
   LayoutShopLayoutRoute: LayoutShopLayoutRouteWithChildren,
+  LayoutAccountRoute: LayoutAccountRoute,
   LayoutContactUsRoute: LayoutContactUsRoute,
   LayoutShopProductProductSlugRoute: LayoutShopProductProductSlugRoute,
   LayoutPoliciesDeliveryReturnsExchangesIndexRoute:
@@ -393,6 +408,7 @@ export interface FileRoutesByFullPath {
   '': typeof LayoutShopLayoutRouteWithChildren
   '/login': typeof LoginRoute
   '/signup': typeof SignupRoute
+  '/account': typeof LayoutAccountRoute
   '/contact-us': typeof LayoutContactUsRoute
   '/auth/verify': typeof AuthVerifyRoute
   '/shop/bag': typeof ShopBagIndexRoute
@@ -417,6 +433,7 @@ export interface FileRoutesByTo {
   '': typeof LayoutShopLayoutRouteWithChildren
   '/login': typeof LoginRoute
   '/signup': typeof SignupRoute
+  '/account': typeof LayoutAccountRoute
   '/contact-us': typeof LayoutContactUsRoute
   '/auth/verify': typeof AuthVerifyRoute
   '/shop/bag': typeof ShopBagIndexRoute
@@ -444,6 +461,7 @@ export interface FileRoutesById {
   '/signup': typeof SignupRoute
   '/_layout/_ordersLayout': typeof LayoutOrdersLayoutRouteWithChildren
   '/_layout/_shopLayout': typeof LayoutShopLayoutRouteWithChildren
+  '/_layout/account': typeof LayoutAccountRoute
   '/_layout/contact-us': typeof LayoutContactUsRoute
   '/auth/verify': typeof AuthVerifyRoute
   '/shop/bag/': typeof ShopBagIndexRoute
@@ -470,6 +488,7 @@ export interface FileRouteTypes {
     | ''
     | '/login'
     | '/signup'
+    | '/account'
     | '/contact-us'
     | '/auth/verify'
     | '/shop/bag'
@@ -493,6 +512,7 @@ export interface FileRouteTypes {
     | ''
     | '/login'
     | '/signup'
+    | '/account'
     | '/contact-us'
     | '/auth/verify'
     | '/shop/bag'
@@ -518,6 +538,7 @@ export interface FileRouteTypes {
     | '/signup'
     | '/_layout/_ordersLayout'
     | '/_layout/_shopLayout'
+    | '/_layout/account'
     | '/_layout/contact-us'
     | '/auth/verify'
     | '/shop/bag/'
@@ -600,6 +621,7 @@ export const routeTree = rootRoute
       "children": [
         "/_layout/_ordersLayout",
         "/_layout/_shopLayout",
+        "/_layout/account",
         "/_layout/contact-us",
         "/_layout/shop/product/$productSlug",
         "/_layout/policies/delivery-returns-exchanges/",
@@ -629,6 +651,10 @@ export const routeTree = rootRoute
         "/_layout/_shopLayout/shop/$categorySlug/$subcategorySlug",
         "/_layout/_shopLayout/shop/$categorySlug/"
       ]
+    },
+    "/_layout/account": {
+      "filePath": "_layout/account.tsx",
+      "parent": "/_layout"
     },
     "/_layout/contact-us": {
       "filePath": "_layout/contact-us.tsx",

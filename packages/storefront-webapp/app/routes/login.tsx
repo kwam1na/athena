@@ -10,10 +10,17 @@ import {
 import { Input } from "@/components/ui/input";
 import { LoadingButton } from "@/components/ui/loading-button";
 import { useStoreContext } from "@/contexts/StoreContext";
+import { OG_ORGANIZTION_ID, OG_STORE_ID } from "@/lib/constants";
 import { capitalizeWords } from "@/lib/utils";
+import { fetchUser } from "@/server-actions/auth";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import {
+  createFileRoute,
+  Link,
+  redirect,
+  useNavigate,
+} from "@tanstack/react-router";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
@@ -28,6 +35,17 @@ export const customerDetailsSchema = z.object({
 });
 
 export const Route = createFileRoute("/login")({
+  beforeLoad: async () => {
+    const user = await fetchUser({
+      organizationId: OG_ORGANIZTION_ID,
+      storeId: OG_STORE_ID,
+    });
+
+    if (user.userId) {
+      return redirect({ to: "/account" });
+    }
+  },
+
   component: () => <Login />,
 });
 

@@ -5,14 +5,12 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { useGetActiveOrganization } from "@/hooks/useGetOrganizations";
-// import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "@tanstack/react-router";
 import { Store } from "lucide-react";
 import { Button } from "./ui/button";
 import { useStoreModal } from "@/hooks/use-store-modal";
 import { PlusIcon } from "@radix-ui/react-icons";
 import { StoreActions } from "./StoreActions";
-import { useOrganizationModal } from "@/hooks/useOrganizationModal";
 import { useQuery } from "convex/react";
 import { api } from "~/convex/_generated/api";
 
@@ -55,7 +53,7 @@ export function StoresAccordion() {
             </div>
           )}
         </div>
-        {stores?.map((store) => {
+        {stores?.map((store: any) => {
           return (
             <AccordionContent
               key={store._id}

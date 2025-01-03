@@ -24,6 +24,7 @@ import { useGetAuthedUser } from "../hooks/useGetAuthedUser";
 import { toSlug } from "../lib/utils";
 import { Id } from "~/convex/_generated/dataModel";
 import { deleteDirectoryInS3 } from "../lib/aws";
+import { productSchema } from "../lib/schemas/product";
 
 function ProductViewContent() {
   const { productData, revertChanges, productVariants, updateProductVariants } =

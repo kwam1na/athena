@@ -85,7 +85,7 @@ export const bagQueries = {
       queryKey: [...bagQueries.activeSavedBagKey()],
       queryFn: () =>
         getActiveSavedBag({
-          customerId: userId!,
+          storeFrontUserId: userId!,
           organizationId,
           storeId,
         }),
@@ -105,7 +105,7 @@ export const bagQueries = {
       queryKey: [...bagQueries.activeBagKey()],
       queryFn: () =>
         getActiveBag({
-          customerId: userId!,
+          storeFrontUserId: userId!,
           organizationId,
           storeId,
         }),
@@ -117,33 +117,34 @@ export const onlineOrderQueries = {
   all: () => ["online-orders"],
   lists: () => [...onlineOrderQueries.all(), "list"],
   list: ({
-    customerId,
+    storeFrontUserId,
     organizationId,
     storeId,
   }: {
-    customerId: string;
+    storeFrontUserId: string;
     organizationId: string;
     storeId: string;
   }) =>
     queryOptions({
       queryKey: [...onlineOrderQueries.lists()],
-      queryFn: () => getOrders({ customerId, organizationId, storeId }),
+      queryFn: () => getOrders({ storeFrontUserId, organizationId, storeId }),
     }),
   details: () => [...onlineOrderQueries.all(), "detail"],
   detail: ({
-    customerId,
+    storeFrontUserId,
     organizationId,
     storeId,
     orderId,
   }: {
-    customerId: string;
+    storeFrontUserId: string;
     organizationId: string;
     storeId: string;
     orderId: string;
   }) =>
     queryOptions({
       queryKey: [...onlineOrderQueries.details(), orderId],
-      queryFn: () => getOrder({ customerId, organizationId, storeId, orderId }),
+      queryFn: () =>
+        getOrder({ storeFrontUserId, organizationId, storeId, orderId }),
     }),
 };
 
@@ -164,7 +165,7 @@ export const checkoutSessionQueries = {
         getActiveCheckoutSession({
           organizationId,
           storeId,
-          customerId: userId!,
+          storeFrontUserId: userId!,
         }),
       enabled: Boolean(userId),
     }),
@@ -184,7 +185,7 @@ export const checkoutSessionQueries = {
         getPendingCheckoutSessions({
           organizationId,
           storeId,
-          customerId: userId!,
+          storeFrontUserId: userId!,
         }),
       enabled: Boolean(userId),
     }),
@@ -206,7 +207,7 @@ export const checkoutSessionQueries = {
         getCheckoutSession({
           organizationId,
           storeId,
-          customerId: userId!,
+          storeFrontUserId: userId!,
           sessionId: sessionId!,
         }),
       enabled: Boolean(userId && sessionId),
