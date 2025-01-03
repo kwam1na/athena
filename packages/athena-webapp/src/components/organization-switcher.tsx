@@ -19,7 +19,6 @@ import { Icons } from "./ui/icons";
 import { OverlayModal } from "./ui/modals/overlay-modal";
 import { useNavigate, useParams } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { getAllStores } from "@/api/stores";
 import { useEffect, useState } from "react";
 import { useOrganizationModal } from "@/hooks/useOrganizationModal";
 import { Organization } from "~/types";

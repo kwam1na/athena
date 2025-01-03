@@ -1,4 +1,3 @@
-import { getAllStores } from "@/api/stores";
 import {
   Accordion,
   AccordionContent,
@@ -28,7 +27,7 @@ export function StoreAccordion() {
 
   const { storeUrlSlug } = useParams({ strict: false });
 
-  const matchedStore = stores?.find((s) => s.slug == storeUrlSlug);
+  const matchedStore = stores?.find((s: any) => s.slug == storeUrlSlug);
 
   if (stores?.length == 0 || !stores || !matchedStore) return null;
 

@@ -1,4 +1,3 @@
-import { getAllStores } from "@/api/stores";
 import {
   Accordion,
   AccordionContent,

@@ -1,6 +1,4 @@
-import { getAllOrganizations } from "@/api/organization";
 import View from "./View";
-import { useQuery } from "@tanstack/react-query";
 import { useLoaderData, useNavigate, useParams } from "@tanstack/react-router";
 import NotFound from "./states/not-found/NotFound";
 import SingleLineError from "./states/error/SingleLineError";

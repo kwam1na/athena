@@ -7,14 +7,12 @@ import {
 } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { StoresAccordion } from "./StoresAccordion";
-import { getAllOrganizations } from "@/api/organization";
 import OrganizationSwitcher from "./organization-switcher";
 import { StoreAccordion } from "./StoreAccordion";
 import { Button } from "./ui/button";
 import { ArrowLeftIcon, ChevronLeftIcon } from "@radix-ui/react-icons";
 import { StoresSettingsAccordion } from "../settings/store/StoresSettingsAccordion";
 import { OrganizationSettingsAccordion } from "@/settings/organization/components/OrganizationsSettingsAccordion";
-import { Organization } from "@athena/db";
 import { useAppLayout } from "@/contexts/AppLayoutContext";
 import { ArrowLeftToLine, ArrowRightFromLine } from "lucide-react";
 import { StoresDropdown } from "./StoresDropdown";

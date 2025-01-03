@@ -1,7 +1,6 @@
 import { columns } from "./products-table/components/columns";
 import { DataTable } from "./products-table/components/data-table";
 import { useQuery } from "@tanstack/react-query";
-import { getAllProducts } from "@/api/product.ts";
 import { ErrorPage } from "./states/error";
 import TableSkeleton from "./states/loading/table-skeleton";
 import { EmptyState } from "./states/empty/empty-state";

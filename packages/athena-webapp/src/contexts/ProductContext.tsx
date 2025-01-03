@@ -89,7 +89,7 @@ export function ProductProvider({ children }: { children: ReactNode }) {
           // If there's an active product, mark the variant for deletion
           // Check if the variant exists in the active product
           const variantExistsInActiveProduct = activeProduct.skus.some(
-            (v) => v._id === id
+            (v: any) => v._id === id
           );
 
           if (variantExistsInActiveProduct) {
