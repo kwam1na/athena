@@ -141,6 +141,7 @@ export const sendVerificationCodeViaProvider = action({
         },
       };
     } else {
+      console.error("Failed to send verification code", response);
       return {
         success: false,
         message: "Could not send verification code",
