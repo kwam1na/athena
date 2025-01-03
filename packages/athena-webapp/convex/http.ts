@@ -13,6 +13,7 @@ import {
 import {
   checkoutRoutes,
   paystackRoutes,
+  userRoutes,
 } from "./http/domains/storeFront/routes";
 import { httpRouter } from "convex/server";
 import { guestRoutes } from "./http/domains/storeFront/routes/guest";
@@ -31,6 +32,7 @@ app.use(
       return origin;
     },
     allowMethods: ["OPTIONS", "GET", "POST", "PUT", "DELETE"],
+    credentials: true,
   })
 );
 
@@ -57,12 +59,9 @@ app.route(
 
 app.route("/organizations/:organizationId/stores/:storeId/colors", colorRoutes);
 
-// app.route(
-//   "/organizations/:organizationId/customers/:customerId/bags",
-//   bagRoutes
-// );
+app.route("/organizations/:organizationId/stores/:storeId/guests", guestRoutes);
 
-app.route("/organizations/:organizationId/guests", guestRoutes);
+app.route("/organizations/:organizationId/stores/:storeId/users", userRoutes);
 
 app.route(
   "/organizations/:organizationId/stores/:storeId/checkout",

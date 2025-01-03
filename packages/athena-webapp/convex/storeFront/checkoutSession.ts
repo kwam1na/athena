@@ -22,7 +22,7 @@ type AvailabilityUpdate = { id: Id<"productSku">; change: number };
 export const create = mutation({
   args: {
     storeId: v.id("store"),
-    customerId: v.union(v.id("customer"), v.id("guest")),
+    storeFrontUserId: v.union(v.id("storeFrontUser"), v.id("guest")),
     bagId: v.id("bag"),
     amount: v.number(),
     products: v.array(
@@ -89,7 +89,7 @@ export const create = mutation({
       return await updateExistingSession(
         ctx,
         existingSession,
-        args.customerId,
+        args.storeFrontUserId,
         args.products
       );
     }
@@ -98,7 +98,7 @@ export const create = mutation({
     const sessionId = await ctx.db.insert(entity, {
       amount: args.amount,
       bagId: args.bagId,
-      customerId: args.customerId,
+      storeFrontUserId: args.storeFrontUserId,
       storeId: args.storeId,
       expiresAt,
       isFinalizingPayment: false,
@@ -114,7 +114,12 @@ export const create = mutation({
     });
 
     // Create session items
-    await createSessionItems(ctx, sessionId, args.customerId, args.products);
+    await createSessionItems(
+      ctx,
+      sessionId,
+      args.storeFrontUserId,
+      args.products
+    );
 
     // Update availability counts
     await updateProductAvailability(ctx, args.products, productSkus);
@@ -201,12 +206,12 @@ export const releaseCheckoutItems = internalMutation({
 
 export const getActiveCheckoutSession = query({
   args: {
-    customerId: v.union(v.id("customer"), v.id("guest")),
+    storeFrontUserId: v.union(v.id("storeFrontUser"), v.id("guest")),
   },
   handler: async (ctx, args) => {
     const now = Date.now();
 
-    // Query for the first active session for the given customerId
+    // Query for the first active session for the given storeFrontUserId
 
     // a session is active if:
     // it has not expired, or isFinalizingPayment is true, or has
@@ -215,7 +220,7 @@ export const getActiveCheckoutSession = query({
       .filter((q) =>
         q.and(
           q.and(
-            q.eq(q.field("customerId"), args.customerId),
+            q.eq(q.field("storeFrontUserId"), args.storeFrontUserId),
             q.or(
               q.gt(q.field("expiresAt"), now),
               q.eq(q.field("isFinalizingPayment"), true)
@@ -456,7 +461,7 @@ export const updateCheckoutSession = internalMutation({
 
 export const getCheckoutSession = query({
   args: {
-    customerId: v.union(v.id("customer"), v.id("guest")),
+    storeFrontUserId: v.union(v.id("storeFrontUser"), v.id("guest")),
     externalReference: v.optional(v.string()),
     sessionId: v.optional(v.id("checkoutSession")),
   },
@@ -465,7 +470,7 @@ export const getCheckoutSession = query({
       .query("checkoutSession")
       .filter((q) =>
         q.and(
-          q.eq(q.field("customerId"), args.customerId),
+          q.eq(q.field("storeFrontUserId"), args.storeFrontUserId),
           q.or(
             q.eq(q.field("externalReference"), args.externalReference),
             q.eq(q.field("_id"), args.sessionId)
@@ -477,7 +482,7 @@ export const getCheckoutSession = query({
 });
 
 export const getPendingCheckoutSessions = query({
-  args: { customerId: v.union(v.id("customer"), v.id("guest")) },
+  args: { storeFrontUserId: v.union(v.id("storeFrontUser"), v.id("guest")) },
   handler: async (ctx, args) => {
     const threshold = Date.now() - 10 * 60 * 1000;
 
@@ -485,7 +490,7 @@ export const getPendingCheckoutSessions = query({
       .query("checkoutSession")
       .filter((q) =>
         q.and(
-          q.eq(q.field("customerId"), args.customerId),
+          q.eq(q.field("storeFrontUserId"), args.storeFrontUserId),
           q.eq(q.field("hasCompletedPayment"), true),
           q.eq(q.field("hasCompletedCheckoutSession"), true),
           q.eq(q.field("placedOrderId"), undefined)
@@ -593,7 +598,7 @@ function checkAdjustedAvailability(
 async function updateExistingSession(
   ctx: any,
   session: any,
-  customerId: string,
+  storeFrontUserId: string,
   products: Product[]
 ) {
   const sessionItems: CheckoutSessionItem[] = await ctx.db
@@ -631,7 +636,7 @@ async function updateExistingSession(
         productSkuId: product.productSkuId,
         quantity: product.quantity,
         price: product.price,
-        customerId: customerId,
+        storeFrontUserId: storeFrontUserId,
       });
       availabilityUpdates.push({
         id: product.productSkuId,
@@ -672,7 +677,7 @@ async function updateExistingSession(
 async function createSessionItems(
   ctx: any,
   sessionId: Id<"checkoutSession">,
-  customerId: Id<"customer"> | Id<"guest">,
+  storeFrontUserId: Id<"storeFrontUser"> | Id<"guest">,
   products: Product[]
 ) {
   return Promise.all(
@@ -684,7 +689,7 @@ async function createSessionItems(
         price: product.price,
         productSkuId: product.productSkuId,
         quantity: product.quantity,
-        customerId: customerId,
+        storeFrontUserId: storeFrontUserId,
       })
     )
   );

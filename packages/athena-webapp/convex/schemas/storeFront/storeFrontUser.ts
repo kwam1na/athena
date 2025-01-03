@@ -6,4 +6,5 @@ export const storeFrontUserSchema = v.object({
   lastName: v.optional(v.string()),
   phoneNumber: v.optional(v.string()),
   storeId: v.id("store"),
+  organizationId: v.id("organization"),
 });

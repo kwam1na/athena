@@ -5,7 +5,7 @@ const getBaseUrl = (
   storeId: string,
   customerId: string
 ) =>
-  `${config.apiGateway.URL}/organizations/${organizationId}/stores/${storeId}/customers/${customerId}/orders`;
+  `${config.apiGateway.URL}/organizations/${organizationId}/stores/${storeId}/users/${customerId}/orders`;
 
 export async function getOrders({
   customerId,

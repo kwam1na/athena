@@ -1,4 +1,5 @@
-import { createGuest } from "@/api/guest";
+import { createGuest, getActiveUser } from "@/api/guest";
+import { verifyUserAccount } from "@/api/stores";
 import { useAppSession } from "@/utils/session";
 import { createServerFn } from "@tanstack/start";
 import { getCookie, setCookie } from "vinxi/http";
@@ -9,15 +10,13 @@ export const logIn = createServerFn("POST", (data?: Record<string, any>) => {
 
 export const fetchUser = createServerFn(
   "GET",
-  async (organizationId: string, ctx) => {
-    // const session = await useAppSession();
-    const customerId = getCookie("athena-customer-id");
+  async (params: { organizationId: string; storeId: string }, ctx) => {
     let guestId = getCookie("athena-guest-id");
 
-    if (!guestId) {
-      const newGuest = await createGuest(organizationId);
+    const userId = getCookie("athena-storefront-user-id");
 
-      console.log("no guest id. creating new one..");
+    if (!userId && !guestId) {
+      const newGuest = await createGuest(params.organizationId, params.storeId);
 
       setCookie("athena-guest-id", newGuest.id.toString(), {
         httpOnly: true,
@@ -29,7 +28,7 @@ export const fetchUser = createServerFn(
     }
 
     return {
-      customerId,
+      userId,
       guestId,
     };
   }
@@ -37,56 +36,68 @@ export const fetchUser = createServerFn(
 
 export const loginFn = createServerFn(
   "POST",
-  async (
-    payload: {
-      email: string;
-      password: string;
-    },
-    { request }
-  ) => {
-    // Find the user
-    const user = {};
+  async (payload: {
+    email?: string;
+    organizationId: string;
+    storeId: string;
+    code?: string;
+  }) => {
+    const res = await verifyUserAccount({
+      organizationId: payload.organizationId,
+      storeId: payload.storeId,
+      email: payload.email,
+      code: payload.code,
+    });
 
-    // Check if the user exists
-    if (!user) {
-      return {
-        error: true,
-        userNotFound: true,
-        message: "User not found",
-      };
+    if (res.accessToken && res.refreshToken) {
+      setCookie("athena-access-token", res.accessToken, {
+        httpOnly: true,
+        secure: true,
+        sameSite: "none",
+        maxAge: 900, // 7 days
+      });
+
+      setCookie("athena-refresh-token", res.refreshToken, {
+        httpOnly: true,
+        secure: true,
+        sameSite: "none",
+        maxAge: 604800, // 7 days
+      });
     }
 
-    const salt = "salt";
+    if (res.user) {
+      setCookie("athena-storefront-user-id", res.user._id, {
+        httpOnly: true,
+        secure: true,
+        sameSite: "none",
+        maxAge: 604800, // 7 days, matching refresh token
+      });
+    }
 
-    // Check if the password is correct
-    // const hashedPassword = await hashPassword(payload.password, salt)
-
-    // if (user.password !== hashedPassword) {
-    //   return {
-    //     error: true,
-    //     message: 'Incorrect password',
-    //   }
-    // }
-
-    // Create a session
-    const session = await useAppSession();
-
-    // Store the user's email in the session
-    await session.update({
-      userEmail: "email",
-    });
-
-    setCookie("athena-user-id", "1", {
-      httpOnly: true, // Makes the cookie inaccessible to JavaScript (for security)
-      secure: true, // Ensures the cookie is sent over HTTPS only
-      sameSite: "strict", // Controls cross-site request behavior
-      maxAge: 60 * 60 * 24 * 7, // Set expiration (1 week in this case)
-    });
-
-    return {
-      error: false,
-      userNotFound: false,
-      message: "Logged in",
-    };
+    return res;
   }
 );
+
+export const logoutFn = createServerFn("POST", async () => {
+  // delete cookies
+  setCookie("athena-access-token", "", {
+    httpOnly: true,
+    secure: true,
+    sameSite: "none",
+    maxAge: 0,
+  });
+
+  setCookie("athena-refresh-token", "", {
+    httpOnly: true,
+    secure: true,
+    sameSite: "none",
+    maxAge: 0,
+  });
+
+  setCookie("athena-storefront-user-id", "", {
+    httpOnly: true,
+    secure: true,
+    sameSite: "none",
+    maxAge: 0,
+  });
+});

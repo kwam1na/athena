@@ -13,7 +13,7 @@ export const getAll = query({
 export const create = mutation({
   args: {
     storeId: v.id("store"),
-    customerId: v.union(v.id("customer"), v.id("guest")),
+    storeFrontUserId: v.union(v.id("storeFrontUser"), v.id("guest")),
   },
   handler: async (ctx, args) => {
     const id = await ctx.db.insert(entity, { ...args, updatedAt: Date.now() });
@@ -82,14 +82,14 @@ export const getById = query({
   },
 });
 
-export const getByCustomerId = query({
+export const getByUserId = query({
   args: {
-    customerId: v.union(v.id("customer"), v.id("guest")),
+    storeFrontUserId: v.union(v.id("storeFrontUser"), v.id("guest")),
   },
   handler: async (ctx, args) => {
     const bag = await ctx.db
       .query(entity)
-      .filter((q) => q.eq(q.field("customerId"), args.customerId))
+      .filter((q) => q.eq(q.field("storeFrontUserId"), args.storeFrontUserId))
       .first();
 
     if (!bag) return null;

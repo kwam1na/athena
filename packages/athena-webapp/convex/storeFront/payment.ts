@@ -62,7 +62,7 @@ export const createTransaction = action({
 
 export const verifyPayment = action({
   args: {
-    customerId: v.union(v.id("customer"), v.id("guest")),
+    storeFrontUserId: v.union(v.id("storeFrontUser"), v.id("guest")),
     externalReference: v.string(),
   },
   handler: async (ctx, args) => {
@@ -79,11 +79,11 @@ export const verifyPayment = action({
     if (response.ok) {
       const res = await response.json();
 
-      // Query for the first active session for the given customerId
+      // Query for the first active session for the given storeFrontUserId
       const session: CheckoutSession | null = await ctx.runQuery(
         api.storeFront.checkoutSession.getCheckoutSession,
         {
-          customerId: args.customerId,
+          storeFrontUserId: args.storeFrontUserId,
           externalReference: args.externalReference,
         }
       );
@@ -120,13 +120,13 @@ export const verifyPayment = action({
         });
 
         console.log(
-          `verified payment for session. [session: ${session?._id}, order: ${order?._id}, customer: ${args.customerId}, externalReference: ${args.externalReference}]`
+          `verified payment for session. [session: ${session?._id}, order: ${order?._id}, customer: ${args.storeFrontUserId}, externalReference: ${args.externalReference}]`
         );
       }
 
       if (!isVerified) {
         console.log(
-          `unable to verify payment. [session: ${session?._id}, order: ${order?._id}, customer: ${args.customerId}, externalReference: ${args.externalReference}]`
+          `unable to verify payment. [session: ${session?._id}, order: ${order?._id}, customer: ${args.storeFrontUserId}, externalReference: ${args.externalReference}]`
         );
       }
 

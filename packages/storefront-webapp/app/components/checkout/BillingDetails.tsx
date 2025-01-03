@@ -297,7 +297,7 @@ export const BillingDetailsForm = () => {
                             onChange={(e) => {
                               const selectedValue = e.target.value;
                               updateState({
-                                deliveryDetails: {
+                                billingDetails: {
                                   ...checkoutState.deliveryDetails,
                                   country: selectedValue,
                                 } as Address,

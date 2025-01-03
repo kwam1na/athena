@@ -9,7 +9,7 @@ export const addItemToBag = mutation({
     productId: v.id("product"),
     productSkuId: v.id("productSku"),
     productSku: v.string(),
-    customerId: v.union(v.id("customer"), v.id("guest")),
+    storeFrontUserId: v.union(v.id("storeFrontUser"), v.id("guest")),
     quantity: v.number(),
   },
   handler: async (ctx, args) => {
@@ -20,7 +20,7 @@ export const addItemToBag = mutation({
       .filter((q) =>
         q.and(
           q.eq(q.field("productSkuId"), args.productSkuId),
-          q.eq(q.field("customerId"), args.customerId)
+          q.eq(q.field("storeFrontUserId"), args.storeFrontUserId)
         )
       )
       .first();

@@ -53,6 +53,7 @@ storeRoutes.delete("/:storeId", async (c) => {
 });
 
 storeRoutes.post("/:storeId/auth/verify", async (c) => {
+  const organizationId = c.req.param("organizationId");
   const { storeId } = c.req.param();
   const { email, firstName, lastName, code } = await c.req.json();
 
@@ -62,6 +63,7 @@ storeRoutes.post("/:storeId/auth/verify", async (c) => {
         code,
         email,
         storeId: storeId as Id<"store">,
+        organizationId: organizationId as Id<"organization">,
       });
 
       return c.json(res);
@@ -87,29 +89,29 @@ storeRoutes.post("/:storeId/auth/verify", async (c) => {
   return c.json({});
 });
 
-// customers
-storeRoutes.get("/:storeId/customers", async (c) => {
+// users
+storeRoutes.get("/:storeId/users", async (c) => {
   return c.json({});
 });
 
 // Get a specific bag
-storeRoutes.get("/:storeId/customers/:customerId/bags/:bagId", async (c) => {
+storeRoutes.get("/:storeId/users/:userId/bags/:bagId", async (c) => {
   const { bagId, storeId } = c.req.param();
 
   if (bagId == "active") {
-    const customerId = c.req.param("customerId");
+    const userId = c.req.param("userId");
 
-    if (!customerId) {
+    if (!userId) {
       return c.json({ error: "Customer id missing" }, 404);
     }
 
-    const bag = await c.env.runQuery(api.storeFront.bag.getByCustomerId, {
-      customerId: customerId as Id<"customer"> | Id<"guest">,
+    const bag = await c.env.runQuery(api.storeFront.bag.getByUserId, {
+      storeFrontUserId: userId as Id<"storeFrontUser"> | Id<"guest">,
     });
 
     if (!bag) {
       const b = await c.env.runMutation(api.storeFront.bag.create, {
-        customerId: customerId as Id<"customer"> | Id<"guest">,
+        storeFrontUserId: userId as Id<"storeFrontUser"> | Id<"guest">,
         storeId: storeId as Id<"store">,
       });
 
@@ -122,51 +124,44 @@ storeRoutes.get("/:storeId/customers/:customerId/bags/:bagId", async (c) => {
 });
 
 // Create a new bag
-storeRoutes.post("/:storeId/customers/:customerId/bags", async (c) => {
-  const { customerId } = await c.req.json();
+storeRoutes.post("/:storeId/users/:userId/bags", async (c) => {
+  const { userId } = await c.req.json();
   return c.json({});
 });
 
 // Delete a bag
-storeRoutes.delete("/:storeId/customers/:customerId/bags/:bagId", async (c) => {
+storeRoutes.delete("/:storeId/users/:userId/bags/:bagId", async (c) => {
   const { bagId } = c.req.param();
   return c.json({});
 });
 
 // Get all items in a bag
-storeRoutes.get(
-  "/:storeId/customers/:customerId/bags/:bagId/items",
-  async (c) => {
-    const { bagId } = c.req.param();
-    return c.json({});
-  }
-);
+storeRoutes.get("/:storeId/users/:userId/bags/:bagId/items", async (c) => {
+  const { bagId } = c.req.param();
+  return c.json({});
+});
 
-storeRoutes.post(
-  "/:storeId/customers/:customerId/bags/:bagId/items",
-  async (c) => {
-    const { bagId, customerId } = c.req.param();
-    const { productId, productSkuId, quantity, productSku } =
-      await c.req.json();
+storeRoutes.post("/:storeId/users/:userId/bags/:bagId/items", async (c) => {
+  const { bagId, userId } = c.req.param();
+  const { productId, productSkuId, quantity, productSku } = await c.req.json();
 
-    // console.table({ productId, quantity, price });
+  // console.table({ productId, quantity, price });
 
-    const b = await c.env.runMutation(api.storeFront.bagItem.addItemToBag, {
-      productId: productId as Id<"product">,
-      quantity,
-      customerId: customerId as Id<"customer"> | Id<"guest">,
-      bagId: bagId as Id<"bag">,
-      productSkuId: productSkuId as Id<"productSku">,
-      productSku,
-    });
+  const b = await c.env.runMutation(api.storeFront.bagItem.addItemToBag, {
+    productId: productId as Id<"product">,
+    quantity,
+    storeFrontUserId: userId as Id<"storeFrontUser"> | Id<"guest">,
+    bagId: bagId as Id<"bag">,
+    productSkuId: productSkuId as Id<"productSku">,
+    productSku,
+  });
 
-    return c.json(b);
-  }
-);
+  return c.json(b);
+});
 
 // Update an item in a bag
 storeRoutes.put(
-  "/:storeId/customers/:customerId/bags/:bagId/items/:itemId",
+  "/:storeId/users/:userId/bags/:bagId/items/:itemId",
   async (c) => {
     const { bagId, itemId } = c.req.param();
     const { quantity } = await c.req.json();
@@ -181,7 +176,7 @@ storeRoutes.put(
 
 // Delete an item from a bag
 storeRoutes.delete(
-  "/:storeId/customers/:customerId/bags/:bagId/items/:itemId",
+  "/:storeId/users/:userId/bags/:bagId/items/:itemId",
   async (c) => {
     const { itemId } = c.req.param();
 
@@ -194,49 +189,43 @@ storeRoutes.delete(
 );
 
 // Get a specific saved bag
-storeRoutes.get(
-  "/:storeId/customers/:customerId/savedBags/:savedBagId",
-  async (c) => {
-    const { savedBagId, storeId } = c.req.param();
+storeRoutes.get("/:storeId/users/:userId/savedBags/:savedBagId", async (c) => {
+  const { savedBagId, storeId } = c.req.param();
 
-    if (savedBagId == "active") {
-      const customerId = c.req.param("customerId");
+  if (savedBagId == "active") {
+    const userId = c.req.param("userId");
 
-      if (!customerId) {
-        return c.json({ error: "Customer id missing" }, 404);
-      }
-
-      const savedBag = await c.env.runQuery(
-        api.storeFront.savedBag.getByCustomerId,
-        {
-          customerId: customerId as Id<"customer"> | Id<"guest">,
-        }
-      );
-
-      if (!savedBag) {
-        const b = await c.env.runMutation(api.storeFront.savedBag.create, {
-          customerId: customerId as Id<"customer"> | Id<"guest">,
-          storeId: storeId as Id<"store">,
-        });
-
-        return c.json(b);
-      }
-      return c.json(savedBag);
+    if (!userId) {
+      return c.json({ error: "Customer id missing" }, 404);
     }
 
-    return c.json({});
+    const savedBag = await c.env.runQuery(api.storeFront.savedBag.getByUserId, {
+      storeFrontUserId: userId as Id<"storeFrontUser"> | Id<"guest">,
+    });
+
+    if (!savedBag) {
+      const b = await c.env.runMutation(api.storeFront.savedBag.create, {
+        storeFrontUserId: userId as Id<"storeFrontUser"> | Id<"guest">,
+        storeId: storeId as Id<"store">,
+      });
+
+      return c.json(b);
+    }
+    return c.json(savedBag);
   }
-);
+
+  return c.json({});
+});
 
 // Create a new bag
-storeRoutes.post("/:storeId/customers/:customerId/savedBags", async (c) => {
-  const { customerId } = await c.req.json();
+storeRoutes.post("/:storeId/users/:userId/savedBags", async (c) => {
+  const { userId } = await c.req.json();
   return c.json({});
 });
 
 // Delete a bag
 storeRoutes.delete(
-  "/:storeId/customers/:customerId/savedBags/:savedBagId",
+  "/:storeId/users/:userId/savedBags/:savedBagId",
   async (c) => {
     const { savedBagId } = c.req.param();
     return c.json({});
@@ -245,7 +234,7 @@ storeRoutes.delete(
 
 // Get all items in a bag
 storeRoutes.get(
-  "/:storeId/customers/:customerId/savedBags/:savedBagId/items",
+  "/:storeId/users/:userId/savedBags/:savedBagId/items",
   async (c) => {
     const { savedBagId } = c.req.param();
     return c.json({});
@@ -253,9 +242,9 @@ storeRoutes.get(
 );
 
 storeRoutes.post(
-  "/:storeId/customers/:customerId/savedBags/:savedBagId/items",
+  "/:storeId/users/:userId/savedBags/:savedBagId/items",
   async (c) => {
-    const { savedBagId, customerId } = c.req.param();
+    const { savedBagId, userId } = c.req.param();
     const { productId, productSkuId, quantity, productSku } =
       await c.req.json();
 
@@ -266,7 +255,7 @@ storeRoutes.post(
       {
         productId: productId as Id<"product">,
         quantity,
-        customerId: customerId as Id<"customer"> | Id<"guest">,
+        storeFrontUserId: userId as Id<"storeFrontUser"> | Id<"guest">,
         savedBagId: savedBagId as Id<"savedBag">,
         productSkuId: productSkuId as Id<"productSku">,
         productSku,
@@ -279,7 +268,7 @@ storeRoutes.post(
 
 // Update an item in a bag
 storeRoutes.put(
-  "/:storeId/customers/:customerId/savedBags/:savedBagId/items/:itemId",
+  "/:storeId/users/:userId/savedBags/:savedBagId/items/:itemId",
   async (c) => {
     const { savedBagId, itemId } = c.req.param();
     const { quantity } = await c.req.json();
@@ -297,7 +286,7 @@ storeRoutes.put(
 
 // Delete an item from a bag
 storeRoutes.delete(
-  "/:storeId/customers/:customerId/savedBags/:savedBagId/items/:itemId",
+  "/:storeId/users/:userId/savedBags/:savedBagId/items/:itemId",
   async (c) => {
     const { itemId } = c.req.param();
 
@@ -312,12 +301,12 @@ storeRoutes.delete(
   }
 );
 
-storeRoutes.post("/:storeId/customers/:customerId/checkout", async (c) => {
+storeRoutes.post("/:storeId/users/:userId/checkout", async (c) => {
   const { storeId } = c.req.param();
 
-  const customerId = c.req.param("customerId");
+  const userId = c.req.param("userId");
 
-  if (!customerId) {
+  if (!userId) {
     return c.json({ error: "Customer id missing" }, 404);
   }
 
@@ -328,7 +317,7 @@ storeRoutes.post("/:storeId/customers/:customerId/checkout", async (c) => {
       api.storeFront.checkoutSession.create,
       {
         storeId: storeId as Id<"store">,
-        customerId: customerId as Id<"customer"> | Id<"guest">,
+        storeFrontUserId: userId as Id<"storeFrontUser"> | Id<"guest">,
         products,
         bagId,
         amount,
@@ -342,13 +331,13 @@ storeRoutes.post("/:storeId/customers/:customerId/checkout", async (c) => {
 });
 
 storeRoutes.post(
-  "/:storeId/customers/:customerId/checkout/:checkoutSessionId",
+  "/:storeId/users/:userId/checkout/:checkoutSessionId",
   async (c) => {
     const { checkoutSessionId } = c.req.param();
 
-    const customerId = c.req.param("customerId");
+    const userId = c.req.param("userId");
 
-    if (!customerId) {
+    if (!userId) {
       return c.json({ error: "Customer id missing" }, 404);
     }
 
@@ -408,57 +397,47 @@ storeRoutes.post(
   }
 );
 
-storeRoutes.get(
-  "/:storeId/customers/:customerId/checkout/active",
-  async (c) => {
-    const { customerId } = c.req.param();
+storeRoutes.get("/:storeId/users/:userId/checkout/active", async (c) => {
+  const { userId } = c.req.param();
 
-    const session = await c.env.runQuery(
-      api.storeFront.checkoutSession.getActiveCheckoutSession,
-      {
-        customerId: customerId as Id<"customer"> | Id<"guest">,
-      }
-    );
+  const session = await c.env.runQuery(
+    api.storeFront.checkoutSession.getActiveCheckoutSession,
+    {
+      storeFrontUserId: userId as Id<"storeFrontUser"> | Id<"guest">,
+    }
+  );
 
-    return c.json(session);
-  }
-);
+  return c.json(session);
+});
 
-storeRoutes.get(
-  "/:storeId/customers/:customerId/checkout/pending",
-  async (c) => {
-    const { customerId } = c.req.param();
+storeRoutes.get("/:storeId/users/:userId/checkout/pending", async (c) => {
+  const { userId } = c.req.param();
 
-    const session = await c.env.runQuery(
-      api.storeFront.checkoutSession.getPendingCheckoutSessions,
-      { customerId: customerId as Id<"customer"> | Id<"guest"> }
-    );
+  const session = await c.env.runQuery(
+    api.storeFront.checkoutSession.getPendingCheckoutSessions,
+    { storeFrontUserId: userId as Id<"storeFrontUser"> | Id<"guest"> }
+  );
 
-    return c.json(session);
-  }
-);
+  return c.json(session);
+});
 
-storeRoutes.get(
-  "/:storeId/customers/:customerId/checkout/:sessionId",
-  async (c) => {
-    const { sessionId } = c.req.param();
+storeRoutes.get("/:storeId/users/:userId/checkout/:sessionId", async (c) => {
+  const { sessionId } = c.req.param();
 
-    const session = await c.env.runQuery(
-      api.storeFront.checkoutSession.getById,
-      { sessionId: sessionId as Id<"checkoutSession"> }
-    );
+  const session = await c.env.runQuery(api.storeFront.checkoutSession.getById, {
+    sessionId: sessionId as Id<"checkoutSession">,
+  });
 
-    return c.json(session);
-  }
-);
+  return c.json(session);
+});
 
 storeRoutes.get(
-  "/:storeId/customers/:customerId/checkout/verify/:reference",
+  "/:storeId/users/:userId/checkout/verify/:reference",
   async (c) => {
-    const { customerId, reference } = c.req.param();
+    const { userId, reference } = c.req.param();
 
     const res = await c.env.runAction(api.storeFront.payment.verifyPayment, {
-      customerId: customerId as Id<"customer"> | Id<"guest">,
+      storeFrontUserId: userId as Id<"storeFrontUser"> | Id<"guest">,
       externalReference: reference,
     });
 
@@ -466,27 +445,24 @@ storeRoutes.get(
   }
 );
 
-storeRoutes.get("/:storeId/customers/:customerId/orders", async (c) => {
-  const { customerId } = c.req.param();
+storeRoutes.get("/:storeId/users/:userId/orders", async (c) => {
+  const { userId } = c.req.param();
 
   const orders = await c.env.runQuery(api.storeFront.onlineOrder.getAll, {
-    customerId: customerId as Id<"customer"> | Id<"guest">,
+    storeFrontUserId: userId as Id<"storeFrontUser"> | Id<"guest">,
   });
 
   return c.json(orders);
 });
 
-storeRoutes.get(
-  "/:storeId/customers/:customerId/orders/:orderId",
-  async (c) => {
-    const { orderId } = c.req.param();
+storeRoutes.get("/:storeId/users/:userId/orders/:orderId", async (c) => {
+  const { orderId } = c.req.param();
 
-    const order = await c.env.runQuery(api.storeFront.onlineOrder.getById, {
-      orderId: orderId as Id<"onlineOrder">,
-    });
+  const order = await c.env.runQuery(api.storeFront.onlineOrder.getById, {
+    orderId: orderId as Id<"onlineOrder">,
+  });
 
-    return c.json(order);
-  }
-);
+  return c.json(order);
+});
 
 export { storeRoutes };

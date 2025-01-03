@@ -24,6 +24,7 @@ import {
   onlineOrderItemSchema,
   storeFrontVerificationCode,
   storeFrontUserSchema,
+  storeFrontSessionSchema,
 } from "./schemas/storeFront";
 
 const schema = defineSchema({
@@ -35,6 +36,7 @@ const schema = defineSchema({
   subcategory: defineTable(subcategorySchema),
   store: defineTable(storeSchema),
   storeFrontUser: defineTable(storeFrontUserSchema),
+  storeFrontSession: defineTable(storeFrontSessionSchema),
   storeFrontVerificationCode: defineTable(storeFrontVerificationCode),
   organization: defineTable(organizationSchema),
   product: defineTable(productSchema),

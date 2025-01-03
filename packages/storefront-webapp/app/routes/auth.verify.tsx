@@ -1,3 +1,5 @@
+import { getActiveBag } from "@/api/bag";
+import { getActiveSavedBag } from "@/api/savedBag";
 import { verifyUserAccount } from "@/api/stores";
 import { FadeIn } from "@/components/common/FadeIn";
 import { Button } from "@/components/ui/button";
@@ -18,16 +20,19 @@ import {
 } from "@/components/ui/input-otp";
 import { LoadingButton } from "@/components/ui/loading-button";
 import { useStoreContext } from "@/contexts/StoreContext";
+import { bagQueries } from "@/queries";
+import { loginFn } from "@/server-actions/auth";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ArrowLeftIcon } from "@radix-ui/react-icons";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   createFileRoute,
   Link,
   useNavigate,
   useSearch,
 } from "@tanstack/react-router";
-import { useState } from "react";
+import { useServerFn } from "@tanstack/start";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { set, z } from "zod";
@@ -42,6 +47,8 @@ export const Route = createFileRoute("/auth/verify")({
   component: InputOTPForm,
 });
 
+const WAIT_TIME = 120; // 10 minutes in seconds
+
 function InputOTPForm() {
   const form = useForm<z.infer<typeof FormSchema>>({
     resolver: zodResolver(FormSchema),
@@ -50,16 +57,33 @@ function InputOTPForm() {
     },
   });
 
-  // const [isSigningIn, setIsSigningIn] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-
-  // const { signIn } = useAuthActions();
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [countdown, setCountdown] = useState<number>(WAIT_TIME); // 10 minutes in seconds
+  const [showCountdown, setShowCountdown] = useState(true);
 
   const { email } = useSearch({ strict: false });
-
-  const navigate = useNavigate();
-
   const { store } = useStoreContext();
+
+  // Initialize and handle countdown
+  useEffect(() => {
+    if (countdown > 0 && showCountdown) {
+      const timer = setInterval(() => {
+        setCountdown((prev) => prev - 1);
+      }, 1000);
+
+      return () => clearInterval(timer);
+    } else if (countdown === 0) {
+      setShowCountdown(false);
+    }
+  }, [countdown, showCountdown]);
+
+  // Format countdown time
+  const formatTime = (seconds: number) => {
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`;
+  };
 
   // Automatically submit the form when 6 digits are entered
   const handleCodeChange = (newValue: string) => {
@@ -70,36 +94,11 @@ function InputOTPForm() {
     }
   };
 
-  const verifyMutation = useMutation({
-    mutationFn: verifyUserAccount,
-    onSuccess: (res) => {
-      if (res.error) {
-        setErrorMessage(res.message);
-      } else {
-        setErrorMessage(null);
-      }
-
-      console.log("res", res);
-      if (res.success) {
-        toast.success("Successfully logged you in.");
-      }
-      //   navigate({
-      //     to: "/auth/verify",
-      //   });
-    },
-    onError: (error) => {
-      console.log("error", error);
-      setErrorMessage(
-        "There was an error verifying your account. Please try again."
-      );
-    },
-  });
+  const verifyCode = useServerFn(loginFn);
 
   const resendVerificationCodeMutation = useMutation({
     mutationFn: verifyUserAccount,
     onSuccess: (res) => {
-      console.log("res", res);
-
       if (res.error) {
         setErrorMessage(res.message);
       } else {
@@ -108,10 +107,9 @@ function InputOTPForm() {
 
       if (res.success) {
         toast.success("Verification code sent to your email.");
+        setCountdown(600); // Reset countdown to 10 minutes
+        setShowCountdown(true);
       }
-      //   navigate({
-      //     to: "/auth/verify",
-      //   });
     },
     onError: (error) => {
       console.log("error", error);
@@ -120,12 +118,34 @@ function InputOTPForm() {
   });
 
   const onSubmit = async (data: z.infer<typeof FormSchema>) => {
-    verifyMutation.mutate({
-      organizationId: store.organizationId,
-      storeId: store._id,
-      email,
-      code: data.code,
-    });
+    setIsVerifying(true);
+
+    try {
+      const res = await verifyCode({
+        email,
+        organizationId: store.organizationId,
+        storeId: store._id,
+        code: data.code,
+      });
+
+      console.log("res from server fn", res);
+
+      if (res.error) {
+        setErrorMessage(res.message);
+      } else {
+        setErrorMessage(null);
+      }
+
+      if (res.success) {
+        window.location.href = "/";
+      }
+    } catch (e) {
+      setErrorMessage(
+        "There was an error verifying your account. Please try again."
+      );
+    } finally {
+      setIsVerifying(false);
+    }
   };
 
   const resendVerificationCode = async () => {
@@ -155,7 +175,6 @@ function InputOTPForm() {
               name="code"
               render={({ field }) => (
                 <FormItem className="space-y-4 flex flex-col items-center">
-                  {/* <FormLabel>One-Time Code</FormLabel> */}
                   <FormControl>
                     <InputOTP
                       maxLength={6}
@@ -184,7 +203,7 @@ function InputOTPForm() {
 
             <LoadingButton
               className="w-[96px]"
-              isLoading={verifyMutation.isPending}
+              isLoading={isVerifying}
               type="submit"
             >
               Continue
@@ -193,16 +212,19 @@ function InputOTPForm() {
         </Form>
 
         <div className="flex w-full flex-col gap-4 items-center">
-          <p className="text-center text-sm font-normal text-primary/60">
-            Did not receive a code?
-          </p>
-          <LoadingButton
-            onClick={resendVerificationCode}
-            isLoading={resendVerificationCodeMutation.isPending}
-            variant="ghost"
-          >
-            <p className="text-sm">Request New Code</p>
-          </LoadingButton>
+          {showCountdown ? (
+            <p className="text-sm text-muted-foreground">
+              Request new code in {formatTime(countdown)}
+            </p>
+          ) : (
+            <LoadingButton
+              onClick={resendVerificationCode}
+              isLoading={resendVerificationCodeMutation.isPending}
+              variant="ghost"
+            >
+              <p className="text-sm">Request New Code</p>
+            </LoadingButton>
+          )}
           <Link
             className="flex items-center gap-2 text-muted-foreground hover:underline hover:cursor-pointer"
             to="/login"

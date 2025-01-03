@@ -31,7 +31,7 @@ export default function SavedBag() {
     return item.productName;
   };
 
-  const isSavedEmpty = savedBag?.items.length === 0;
+  const isSavedEmpty = savedBag?.items?.length === 0;
 
   const cellVariants = {
     exit: (bagAction: ShoppingBagAction) => ({
@@ -57,7 +57,7 @@ export default function SavedBag() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 pb-40">
           <div className="md:col-span-2 space-y-24">
             <AnimatePresence initial={false} custom={bagAction}>
-              {savedBag?.items.map((item: ProductSku, index: number) => (
+              {savedBag?.items?.map((item: ProductSku, index: number) => (
                 <motion.div
                   key={item._id}
                   layout={isNavbarShowing}

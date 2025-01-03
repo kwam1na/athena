@@ -8,10 +8,7 @@ import { Checkbox } from "../ui/checkbox";
 import { ArrowRight } from "lucide-react";
 import { motion } from "framer-motion";
 import { LoadingButton } from "../ui/loading-button";
-import { useNavigate } from "@tanstack/react-router";
-import { useMutation } from "@tanstack/react-query";
 import { useShoppingBag } from "@/hooks/useShoppingBag";
-import { set } from "zod";
 import { Link } from "@tanstack/react-router";
 
 export const PaymentSection = () => {

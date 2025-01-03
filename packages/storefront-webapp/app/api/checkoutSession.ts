@@ -6,7 +6,7 @@ const getBaseUrl = (
   storeId: string,
   customerId: string
 ) =>
-  `${config.apiGateway.URL}/organizations/${organizationId}/stores/${storeId}/customers/${customerId}/checkout`;
+  `${config.apiGateway.URL}/organizations/${organizationId}/stores/${storeId}/users/${customerId}/checkout`;
 
 export async function createCheckoutSession({
   customerId,

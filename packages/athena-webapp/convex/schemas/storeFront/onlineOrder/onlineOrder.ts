@@ -30,7 +30,7 @@ export const orderDetailsSchema = v.object({
 
 export const onlineOrderSchema = v.object({
   completedAt: v.optional(v.number()),
-  customerId: v.union(v.id("customer"), v.id("guest")),
+  storeFrontUserId: v.union(v.id("storeFrontUser"), v.id("guest")),
   storeId: v.id("store"),
   checkoutSessionId: v.id("checkoutSession"),
   externalReference: v.optional(v.string()),

@@ -8,9 +8,7 @@ import { useEffect } from "react";
 import MobileBagSummary from "./MobileBagSummary";
 
 const MainComponent = () => {
-  const { activeSession, checkoutState } = useCheckout();
-
-  console.log(checkoutState);
+  const { activeSession } = useCheckout();
 
   useEffect(() => {
     if (activeSession.externalReference && activeSession.hasCompletedPayment) {

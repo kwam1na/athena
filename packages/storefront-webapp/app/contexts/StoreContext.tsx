@@ -1,14 +1,16 @@
 import { getStore } from "@/api/stores";
 import { OG_ORGANIZTION_ID, OG_STORE_ID } from "@/lib/constants";
 import { currencyFormatter } from "@/lib/utils";
-import { Store } from "../../../athena-webapp";
+import { Store, StoreFrontUser } from "../../../athena-webapp";
 import { useQuery } from "@tanstack/react-query";
 import React, { createContext, useContext, useState } from "react";
+import { getActiveUser } from "@/api/guest";
 
 type StoreContextType = {
   organizationId: string;
   storeId: string;
   userId?: string;
+  user?: StoreFrontUser;
   formatter: Intl.NumberFormat;
   store?: Store;
   navBarClassname: string;
@@ -30,6 +32,23 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
       getStore({ organizationId: OG_ORGANIZTION_ID, storeId: OG_STORE_ID }),
   });
 
+  const userId =
+    typeof window == "object" ? window.serverData.userId : undefined;
+
+  const guestId =
+    typeof window == "object" ? window.serverData.guestId : undefined;
+
+  const { data: user } = useQuery({
+    queryKey: ["user"],
+    queryFn: () =>
+      getActiveUser({
+        organizationId: OG_ORGANIZTION_ID,
+        storeId: OG_STORE_ID,
+        userId: userId!,
+      }),
+    enabled: !!userId,
+  });
+
   const hiddenNavClassname =
     "hidden w-full flex flex-col items-center justify-center py-2";
   const navClassname =
@@ -47,11 +66,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const formatter = currencyFormatter(store?.currency || storeCurrency);
 
-  const userId =
-    typeof window == "object"
-      ? window.serverData.customerId || window.serverData.guestId
-      : undefined;
-
   return (
     <StoreContext.Provider
       value={{
@@ -63,7 +77,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
         navBarClassname: activeNavClassname,
         showNavbar,
         hideNavbar,
-        userId,
+        userId: userId ?? guestId,
+        user,
       }}
     >
       {children}

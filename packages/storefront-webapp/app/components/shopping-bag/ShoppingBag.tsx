@@ -66,7 +66,7 @@ export default function ShoppingBag() {
 
   const total = bagSubtotal;
 
-  const isBagEmpty = bag?.items.length === 0;
+  const isBagEmpty = bag?.items?.length === 0;
 
   const cellVariants = {
     exit: (bagAction: ShoppingBagAction) => ({

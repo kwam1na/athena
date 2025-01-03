@@ -1,5 +1,5 @@
 interface ServerData {
-  customerId?: string;
+  userId?: string;
   guestId?: string;
 }
 

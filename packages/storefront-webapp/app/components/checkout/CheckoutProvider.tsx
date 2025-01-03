@@ -250,7 +250,7 @@ export const CheckoutProvider = ({
 
   useEffect(() => {
     // Save the current state to sessionStorage whenever it changes and bag is not empty
-    if (bag?.items.length > 0) {
+    if (bag?.items?.length > 0) {
       sessionStorage.setItem(
         SESSION_STORAGE_KEY,
         JSON.stringify({ ...checkoutState, bag })
@@ -259,7 +259,7 @@ export const CheckoutProvider = ({
   }, [checkoutState, bag]);
 
   useEffect(() => {
-    if (bag?.items.length > 0) {
+    if (bag?.items?.length > 0) {
       setCheckoutState((prev) => ({
         ...prev,
         bag,
@@ -386,7 +386,7 @@ export const CheckoutProvider = ({
 
       return true;
     } catch (e) {
-      console.log((e as ZodError).errors);
+      console.log((e as ZodError).flatten());
       updateState({ failedFinalValidation: true });
       return false;
     }

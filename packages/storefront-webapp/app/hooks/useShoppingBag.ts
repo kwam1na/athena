@@ -8,6 +8,7 @@ import {
   removeItemFromSavedBag,
   updateSavedBagItem,
 } from "@/api/savedBag";
+import { useStoreContext } from "@/contexts/StoreContext";
 import { OG_ORGANIZTION_ID, OG_STORE_ID } from "@/lib/constants";
 import { bagQueries } from "@/queries";
 import { ProductSku } from "@athena/webapp-2";
@@ -37,10 +38,7 @@ export const useShoppingBag = () => {
   const [unavailableProducts, setUnavailableProducts] =
     useState<UnavailableProducts>([]);
 
-  const userId =
-    typeof window == "object"
-      ? window.serverData.customerId || window.serverData.guestId
-      : "1";
+  const { userId } = useStoreContext();
 
   const { data: savedBag } = useQuery(
     bagQueries.activeSavedBag({
@@ -298,7 +296,7 @@ export const useShoppingBag = () => {
     ) || 0;
 
   const bagSubtotal =
-    bag?.items.reduce(
+    bag?.items?.reduce(
       (sum: number, item: ProductSku) =>
         sum + (item.price || 0) * item.quantity,
       0

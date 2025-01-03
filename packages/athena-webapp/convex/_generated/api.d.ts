@@ -27,6 +27,7 @@ import type * as http_domains_storeFront_routes_guest from "../http/domains/stor
 import type * as http_domains_storeFront_routes_index from "../http/domains/storeFront/routes/index.js";
 import type * as http_domains_storeFront_routes_paystack from "../http/domains/storeFront/routes/paystack.js";
 import type * as http_domains_storeFront_routes_savedBag from "../http/domains/storeFront/routes/savedBag.js";
+import type * as http_domains_storeFront_routes_user from "../http/domains/storeFront/routes/user.js";
 import type * as http from "../http.js";
 import type * as inventory_bestSeller from "../inventory/bestSeller.js";
 import type * as inventory_categories from "../inventory/categories.js";
@@ -58,6 +59,7 @@ import type * as schemas_storeFront_onlineOrder_onlineOrder from "../schemas/sto
 import type * as schemas_storeFront_onlineOrder_onlineOrderItem from "../schemas/storeFront/onlineOrder/onlineOrderItem.js";
 import type * as schemas_storeFront_savedBag from "../schemas/storeFront/savedBag.js";
 import type * as schemas_storeFront_savedBagItem from "../schemas/storeFront/savedBagItem.js";
+import type * as schemas_storeFront_storeFrontSession from "../schemas/storeFront/storeFrontSession.js";
 import type * as schemas_storeFront_storeFrontUser from "../schemas/storeFront/storeFrontUser.js";
 import type * as schemas_storeFront_storeFrontVerificationCode from "../schemas/storeFront/storeFrontVerificationCode.js";
 import type * as sendgrid_index from "../sendgrid/index.js";
@@ -71,6 +73,7 @@ import type * as storeFront_onlineOrderItem from "../storeFront/onlineOrderItem.
 import type * as storeFront_payment from "../storeFront/payment.js";
 import type * as storeFront_savedBag from "../storeFront/savedBag.js";
 import type * as storeFront_savedBagItem from "../storeFront/savedBagItem.js";
+import type * as storeFront_user from "../storeFront/user.js";
 import type * as utils from "../utils.js";
 
 import type {
@@ -104,6 +107,7 @@ declare const fullApi: ApiFromModules<{
   "http/domains/storeFront/routes/index": typeof http_domains_storeFront_routes_index;
   "http/domains/storeFront/routes/paystack": typeof http_domains_storeFront_routes_paystack;
   "http/domains/storeFront/routes/savedBag": typeof http_domains_storeFront_routes_savedBag;
+  "http/domains/storeFront/routes/user": typeof http_domains_storeFront_routes_user;
   http: typeof http;
   "inventory/bestSeller": typeof inventory_bestSeller;
   "inventory/categories": typeof inventory_categories;
@@ -135,6 +139,7 @@ declare const fullApi: ApiFromModules<{
   "schemas/storeFront/onlineOrder/onlineOrderItem": typeof schemas_storeFront_onlineOrder_onlineOrderItem;
   "schemas/storeFront/savedBag": typeof schemas_storeFront_savedBag;
   "schemas/storeFront/savedBagItem": typeof schemas_storeFront_savedBagItem;
+  "schemas/storeFront/storeFrontSession": typeof schemas_storeFront_storeFrontSession;
   "schemas/storeFront/storeFrontUser": typeof schemas_storeFront_storeFrontUser;
   "schemas/storeFront/storeFrontVerificationCode": typeof schemas_storeFront_storeFrontVerificationCode;
   "sendgrid/index": typeof sendgrid_index;
@@ -148,6 +153,7 @@ declare const fullApi: ApiFromModules<{
   "storeFront/payment": typeof storeFront_payment;
   "storeFront/savedBag": typeof storeFront_savedBag;
   "storeFront/savedBagItem": typeof storeFront_savedBagItem;
+  "storeFront/user": typeof storeFront_user;
   utils: typeof utils;
 }>;
 declare const fullApiWithMounts: typeof fullApi;

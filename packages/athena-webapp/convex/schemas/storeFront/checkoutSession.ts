@@ -1,12 +1,4 @@
 import { v } from "convex/values";
-import {
-  addressSchema,
-  customerDetailsSchema,
-} from "./onlineOrder/onlineOrder";
-// import {
-//   addressSchema,
-//   customerDetailsSchema,
-// } from "./onlineOrder/onlineOrder";
 
 export const paymentMethodSchema = v.object({
   last4: v.optional(v.string()),
@@ -16,7 +8,7 @@ export const paymentMethodSchema = v.object({
 });
 
 export const checkoutSessionSchema = v.object({
-  customerId: v.union(v.id("customer"), v.id("guest")),
+  storeFrontUserId: v.union(v.id("storeFrontUser"), v.id("guest")),
   placedOrderId: v.optional(v.id("onlineOrder")),
   storeId: v.id("store"),
   bagId: v.id("bag"),

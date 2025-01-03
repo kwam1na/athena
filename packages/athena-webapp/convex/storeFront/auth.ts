@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { action, mutation } from "../_generated/server";
 import { sendVerificationCode } from "../sendgrid";
 import { api } from "../_generated/api";
+import { SignJWT, jwtVerify } from "jose";
 
 export const requestVerificationCode = mutation({
   args: {
@@ -37,6 +38,7 @@ export const verifyCode = mutation({
     code: v.string(),
     email: v.string(),
     storeId: v.id("store"),
+    organizationId: v.id("organization"),
   },
   handler: async (ctx, args) => {
     const verificationCode = await ctx.db
@@ -84,6 +86,7 @@ export const verifyCode = mutation({
       const id = await ctx.db.insert("storeFrontUser", {
         email: verificationCode.email,
         storeId: args.storeId,
+        organizationId: args.organizationId,
         firstName: verificationCode.firstName,
         lastName: verificationCode.lastName,
       });
@@ -91,9 +94,37 @@ export const verifyCode = mutation({
       user = await ctx.db.get(id);
     }
 
+    if (!user) {
+      return {
+        error: true,
+        message: "Could not retrieve user",
+      };
+    }
+
+    // 2. Generate keys for signing tokens
+    const secret = new TextEncoder().encode("your-secret-key");
+
+    // 3. Generate tokens
+    const accessToken = await new SignJWT({ userId: user._id })
+      .setProtectedHeader({ alg: "HS256" })
+      .setExpirationTime("15m")
+      .sign(secret);
+
+    const refreshToken = await new SignJWT({ userId: user._id })
+      .setProtectedHeader({ alg: "HS256" })
+      .setExpirationTime("7d")
+      .sign(secret);
+
+    await ctx.db.insert("storeFrontSession", {
+      userId: user._id,
+      refreshToken,
+    });
+
     return {
       success: true,
       user,
+      accessToken,
+      refreshToken,
     };
   },
 });
@@ -125,27 +156,35 @@ export const sendVerificationCodeViaProvider = action({
       };
     }
 
-    const response = await sendVerificationCode({
-      customerEmail: args.email,
-      verificationCode: data.code,
-      storeName: store.name,
-      validTime: "10 minutes",
-    });
+    return {
+      success: true,
+      message: "Verification code sent",
+      data: {
+        email: args.email,
+      },
+    };
 
-    if (response.ok) {
-      return {
-        success: true,
-        message: "Verification code sent",
-        data: {
-          email: args.email,
-        },
-      };
-    } else {
-      console.error("Failed to send verification code", response);
-      return {
-        success: false,
-        message: "Could not send verification code",
-      };
-    }
+    // const response = await sendVerificationCode({
+    //   customerEmail: args.email,
+    //   verificationCode: data.code,
+    //   storeName: store.name,
+    //   validTime: "10 minutes",
+    // });
+
+    // if (response.ok) {
+    //   return {
+    //     success: true,
+    //     message: "Verification code sent",
+    //     data: {
+    //       email: args.email,
+    //     },
+    //   };
+    // } else {
+    //   console.error("Failed to send verification code", response);
+    //   return {
+    //     success: false,
+    //     message: "Could not send verification code",
+    //   };
+    // }
   },
 });

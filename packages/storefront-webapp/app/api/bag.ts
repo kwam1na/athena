@@ -15,7 +15,7 @@ const getBaseUrl = (
   storeId: string,
   customerId: string
 ) =>
-  `${config.apiGateway.URL}/organizations/${organizationId}/stores/${storeId}/customers/${customerId}/bags`;
+  `${config.apiGateway.URL}/organizations/${organizationId}/stores/${storeId}/users/${customerId}/bags`;
 
 export async function createBag({
   customerId,

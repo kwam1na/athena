@@ -10,7 +10,7 @@ import { StoreProvider } from "@/contexts/StoreContext";
 import { Body, Head, Html, Meta, Scripts } from "@tanstack/start";
 import { Toaster } from "@/components/ui/sonner";
 import { fetchUser } from "@/server-actions/auth";
-import { OG_ORGANIZTION_ID } from "@/lib/constants";
+import { OG_ORGANIZTION_ID, OG_STORE_ID } from "@/lib/constants";
 import Footer from "@/components/footer/Footer";
 import { z } from "zod";
 import NotFound from "@/components/states/not-found/NotFound";
@@ -39,7 +39,10 @@ export const Route = createRootRouteWithContext<{
   ],
 
   loader: async () => {
-    const user = await fetchUser(OG_ORGANIZTION_ID);
+    const user = await fetchUser({
+      organizationId: OG_ORGANIZTION_ID,
+      storeId: OG_STORE_ID,
+    });
 
     return {
       user,
@@ -104,7 +107,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         <script
           dangerouslySetInnerHTML={{
             __html: `window.serverData = ${JSON.stringify({
-              customerId: serverData?.user?.customerId,
+              userId: serverData?.user?.userId,
               guestId: serverData?.user?.guestId,
             })};`,
           }}

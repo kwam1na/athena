@@ -38,7 +38,7 @@ app.route(
   subcategoryRoutes
 );
 
-app.route("/customers/:customerId/bags", bagRoutes);
+app.route("/users/:userId/bags", bagRoutes);
 
 export default {
   port: 4000,

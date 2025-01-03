@@ -39,7 +39,7 @@ export const create = mutation({
     }
 
     const orderId = await ctx.db.insert(entity, {
-      customerId: session?.customerId,
+      storeFrontUserId: session?.storeFrontUserId,
       storeId: session?.storeId,
       checkoutSessionId: args.checkoutSessionId,
       externalReference: session?.externalReference,
@@ -73,7 +73,7 @@ export const create = mutation({
           quantity: item.quantity,
           productSku: item.productSku,
           productSkuId: item.productSkuId,
-          customerId: item.customerId,
+          storeFrontUserId: item.storeFrontUserId,
           price: item.price,
         });
       })
@@ -87,11 +87,11 @@ export const create = mutation({
 });
 
 export const getAll = query({
-  args: { customerId: v.union(v.id("customer"), v.id("guest")) },
+  args: { storeFrontUserId: v.union(v.id("storeFrontUser"), v.id("guest")) },
   handler: async (ctx, args) => {
     const orders = await ctx.db
       .query(entity)
-      .filter((q) => q.eq(q.field("customerId"), args.customerId))
+      .filter((q) => q.eq(q.field("storeFrontUserId"), args.storeFrontUserId))
       .order("desc")
       .collect();
 
