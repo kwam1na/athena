@@ -1,4 +1,4 @@
-import { createGuest, getActiveUser } from "@/api/guest";
+import { createGuest, getActiveUser } from "@/api/storeFrontUser";
 import { verifyUserAccount } from "@/api/stores";
 import { useAppSession } from "@/utils/session";
 import { createServerFn } from "@tanstack/start";

@@ -210,7 +210,7 @@ function InputOTPForm() {
                       </InputOTPGroup>
                     </InputOTP>
                   </FormControl>
-                  <FormDescription>
+                  <FormDescription className="text-center">
                     {errorMessage
                       ? errorMessage
                       : `Enter the one-time code sent to ${email ?? "your email address"}`}
@@ -233,7 +233,7 @@ function InputOTPForm() {
         <div className="flex w-full flex-col gap-4 items-center">
           {showCountdown ? (
             <p className="text-sm text-muted-foreground">
-              Request new code in {formatTime(countdown)}
+              Request a new code in {formatTime(countdown)}
             </p>
           ) : (
             <LoadingButton

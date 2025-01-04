@@ -10,6 +10,7 @@ import { useParams } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { checkoutSessionQueries } from "@/queries";
 import { useStoreContext } from "@/contexts/StoreContext";
+import { SESSION_STORAGE_KEY } from "@/lib/constants";
 
 export type Address = {
   address: string;
@@ -236,8 +237,6 @@ export const CheckoutProvider = ({
 }: {
   children: React.ReactNode;
 }) => {
-  const SESSION_STORAGE_KEY = "checkoutState";
-
   // Load initial state from sessionStorage or fallback to the default state
   const [checkoutState, setCheckoutState] = useState<CheckoutState>(() => {
     const savedState = sessionStorage.getItem(SESSION_STORAGE_KEY);

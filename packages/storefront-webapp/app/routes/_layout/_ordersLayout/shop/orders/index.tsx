@@ -87,7 +87,7 @@ const Orders = () => {
     onlineOrderQueries.list({
       organizationId: organizationId,
       storeId: storeId,
-      customerId: userId || "",
+      storeFrontUserId: userId || "",
     })
   );
 
@@ -114,13 +114,13 @@ const Orders = () => {
 };
 
 const Purchases = () => {
-  const { userId, storeId, organizationId, formatter } = useStoreContext();
+  const { userId, storeId, organizationId } = useStoreContext();
 
   const { data, isLoading } = useQuery(
     onlineOrderQueries.list({
       organizationId: organizationId,
       storeId: storeId,
-      customerId: userId || "",
+      storeFrontUserId: userId || "",
     })
   );
 

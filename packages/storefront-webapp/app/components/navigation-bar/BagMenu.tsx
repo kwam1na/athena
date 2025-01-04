@@ -11,6 +11,8 @@ import { useStoreContext } from "@/contexts/StoreContext";
 import { useServerFn } from "@tanstack/start";
 import { logoutFn } from "@/server-actions/auth";
 import { useQueryClient } from "@tanstack/react-query";
+import { SESSION_STORAGE_KEY } from "@/lib/constants";
+import { useLogout } from "@/hooks/useLogout";
 
 export const BagMenu = ({
   setActiveMenu,
@@ -29,6 +31,8 @@ export const BagMenu = ({
 
   const { user } = useStoreContext();
 
+  const handleLogout = useLogout();
+
   const handleOnLinkClick = async ({
     isLogout = false,
   }: { isLogout?: boolean } = {}) => {
@@ -38,20 +42,6 @@ export const BagMenu = ({
     if (isLogout) {
       await handleLogout();
     }
-  };
-
-  const logout = useServerFn(logoutFn);
-
-  const queryClient = useQueryClient();
-
-  const handleLogout = async () => {
-    await logout();
-
-    if (typeof window === "object") {
-      window.serverData = {};
-    }
-
-    window.location.reload();
   };
 
   return (
@@ -126,7 +116,7 @@ export const BagMenu = ({
         </Link>
 
         <Link
-          to="/shop/saved"
+          to="/account"
           className="flex items-center gap-4"
           onClick={() => handleOnLinkClick()}
         >

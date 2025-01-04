@@ -1,33 +1,27 @@
-import { useForm } from "react-hook-form";
-import { z } from "zod";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { Address, useCheckout } from "./CheckoutProvider";
+import { Button } from "@/components/ui/button";
 import {
   Form,
   FormControl,
-  FormDescription,
   FormField,
   FormItem,
   FormLabel,
   FormMessage,
-} from "../ui/form";
-import { Input } from "../ui/input";
-import { CountrySelect } from "../ui/country-select";
-import { LoadingButton } from "../ui/loading-button";
-import { GhanaRegionSelect } from "../ui/ghana-region-select";
-import { GHANA_REGIONS } from "@/lib/ghanaRegions";
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { LoadingButton } from "@/components/ui/loading-button";
 import {
   Select,
   SelectContent,
-  SelectGroup,
   SelectItem,
-  SelectLabel,
   SelectTrigger,
   SelectValue,
-} from "../ui/select";
+} from "@/components/ui/select";
 import { ALL_COUNTRIES } from "@/lib/countries";
-import { useEffect, useRef } from "react";
-import { DeliveryOptions } from "./DeliveryDetails/DeliverySection";
+import { GHANA_REGIONS } from "@/lib/ghanaRegions";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useEffect, useRef, useState } from "react";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
 
 export const deliveryDetailsSchema = z
   .object({
@@ -114,76 +108,67 @@ export const deliveryDetailsSchema = z
     }
   });
 
-export const DeliveryDetailsForm = () => {
-  const { checkoutState, actionsState, updateActionsState, updateState } =
-    useCheckout();
-
+export const DeliveryDetailsForm = ({
+  defaultValues,
+  onCancelClick,
+  title,
+  onSubmitClick,
+}: {
+  defaultValues?: z.infer<typeof deliveryDetailsSchema>;
+  title: string;
+  onCancelClick: () => void;
+  onSubmitClick: (data: z.infer<typeof deliveryDetailsSchema>) => Promise<void>;
+}) => {
   const form = useForm({
     resolver: zodResolver(deliveryDetailsSchema),
-    defaultValues: checkoutState.deliveryDetails || {
+    defaultValues: defaultValues || {
       address: "",
       state: "",
       city: "",
       zip: "",
       region: "",
+      country: "",
     },
   });
 
-  const onSubmit = (data: z.infer<typeof deliveryDetailsSchema>) => {
-    console.log("on submit in delivery details ->", data);
-    updateState({ deliveryDetails: data });
-    updateActionsState({
-      isEditingDeliveryDetails: false,
-      didEnterDeliveryDetails: true,
-    });
-  };
+  const country = form.watch("country");
 
-  if (checkoutState.deliveryMethod !== "delivery") return null;
+  const isUSOrder = country === "US";
 
-  const { country } = form.getValues();
+  const isGhanaOrder = country === "GH";
 
-  const previousCountryRef = useRef(
-    checkoutState.deliveryDetails?.country || undefined
-  );
+  const previousCountryRef = useRef<string>();
+
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     // effect to clear state and the form when the country changes
 
     const previousCountry = previousCountryRef.current;
 
-    if (country !== previousCountry) {
+    if (previousCountry && country !== previousCountry) {
       // clear the form
       form.setValue("address", "");
       form.setValue("city", "");
       form.setValue("state", "");
       form.setValue("zip", "");
       form.setValue("region", "");
-
-      // clear the state for delivery and billing details
-      updateState({
-        deliveryDetails: { country } as Address,
-        billingDetails: null,
-      });
     }
 
     previousCountryRef.current = country;
   }, [country]);
 
-  useEffect(() => {
-    const { region } = form.getValues();
-
-    if (checkoutState.deliveryOption == "outside-accra" && region == "GA") {
-      form.setValue("region", "");
+  const onSubmit = async (data: z.infer<typeof deliveryDetailsSchema>) => {
+    try {
+      setIsSubmitting(true);
+      await onSubmitClick(data);
+      onCancelClick();
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsSubmitting(false);
     }
-
-    if (checkoutState.deliveryOption == "within-accra") {
-      form.setValue("region", "GA");
-    }
-  }, [checkoutState.deliveryOption]);
-
-  const canShowContinueButton = Boolean(
-    checkoutState.deliveryDetails && checkoutState.deliveryOption
-  );
+  };
 
   return (
     <Form {...form}>
@@ -192,9 +177,9 @@ export const DeliveryDetailsForm = () => {
         className="w-full space-y-16"
       >
         <div className="flex flex-col space-y-8">
-          <p className="text-xs text-muted-foreground">Delivery details</p>
-          <div className="flex flex-col xl:flex-row gap-8">
-            <div className="hidden md:block w-full xl:w-[40%]">
+          <p className="text-xs text-muted-foreground">{title}</p>
+          <div className="flex flex-col gap-8">
+            <div className="hidden md:block">
               <FormField
                 control={form.control}
                 name="country"
@@ -205,12 +190,6 @@ export const DeliveryDetailsForm = () => {
                     </FormLabel>
                     <Select
                       onValueChange={(e) => {
-                        updateState({
-                          deliveryDetails: {
-                            ...checkoutState.deliveryDetails,
-                            country: e,
-                          } as Address,
-                        });
                         field.onChange(e);
                       }}
                       value={field.value}
@@ -234,7 +213,7 @@ export const DeliveryDetailsForm = () => {
               />
             </div>
 
-            <div className="block md:hidden w-full xl:w-[40%]">
+            <div className="block md:hidden">
               <FormField
                 control={form.control}
                 name="country"
@@ -249,12 +228,6 @@ export const DeliveryDetailsForm = () => {
                         value={field.value}
                         onChange={(e) => {
                           const selectedValue = e.target.value;
-                          updateState({
-                            deliveryDetails: {
-                              ...checkoutState.deliveryDetails,
-                              country: selectedValue,
-                            } as Address,
-                          });
                           field.onChange(selectedValue);
                         }}
                       >
@@ -274,7 +247,7 @@ export const DeliveryDetailsForm = () => {
               />
             </div>
 
-            <div className="w-full xl:w-[60%]">
+            <div>
               <FormField
                 control={form.control}
                 name="address"
@@ -284,18 +257,7 @@ export const DeliveryDetailsForm = () => {
                       Address
                     </FormLabel>
                     <FormControl>
-                      <Input
-                        {...field}
-                        onChange={(e) => {
-                          updateState({
-                            deliveryDetails: {
-                              ...checkoutState.deliveryDetails,
-                              address: e.target.value,
-                            } as Address,
-                          });
-                          field.onChange(e);
-                        }}
-                      />
+                      <Input {...field} />
                     </FormControl>
                     <FormMessage className="text-xs" />
                   </FormItem>
@@ -304,8 +266,8 @@ export const DeliveryDetailsForm = () => {
             </div>
           </div>
 
-          <div className="flex flex-col xl:flex-row gap-8">
-            <div className={`${checkoutState.isUSOrder ? "w-full" : "w-auto"}`}>
+          <div className="flex flex-col gap-8">
+            <div>
               <FormField
                 control={form.control}
                 name="city"
@@ -315,18 +277,7 @@ export const DeliveryDetailsForm = () => {
                       City
                     </FormLabel>
                     <FormControl>
-                      <Input
-                        {...field}
-                        onChange={(e) => {
-                          updateState({
-                            deliveryDetails: {
-                              ...checkoutState.deliveryDetails,
-                              city: e.target.value,
-                            } as Address,
-                          });
-                          field.onChange(e);
-                        }}
-                      />
+                      <Input {...field} />
                     </FormControl>
                     <FormMessage className="text-xs" />
                   </FormItem>
@@ -334,8 +285,8 @@ export const DeliveryDetailsForm = () => {
               />
             </div>
 
-            {checkoutState.isGhanaOrder && (
-              <div className="block md:hidden w-full xl:w-[40%]">
+            {isGhanaOrder && (
+              <div className="block md:hidden">
                 <FormField
                   control={form.control}
                   name="region"
@@ -350,18 +301,6 @@ export const DeliveryDetailsForm = () => {
                           value={field.value}
                           onChange={(e) => {
                             const region = e.target.value;
-                            const deliveryOption =
-                              region == "GA" ? "within-accra" : "outside-accra";
-                            const deliveryFee = region == "GA" ? 30 : 70;
-
-                            updateState({
-                              deliveryDetails: {
-                                ...checkoutState.deliveryDetails,
-                                region,
-                              } as Address,
-                              deliveryFee,
-                              deliveryOption,
-                            });
                             field.onChange(region);
                           }}
                         >
@@ -382,8 +321,8 @@ export const DeliveryDetailsForm = () => {
               </div>
             )}
 
-            {checkoutState.isGhanaOrder && (
-              <div className="hidden md:block w-full xl:w-[40%]">
+            {isGhanaOrder && (
+              <div className="hidden md:block w-full">
                 <FormField
                   control={form.control}
                   name="region"
@@ -394,19 +333,6 @@ export const DeliveryDetailsForm = () => {
                       </FormLabel>
                       <Select
                         onValueChange={(region) => {
-                          const deliveryOption =
-                            region == "GA" ? "within-accra" : "outside-accra";
-
-                          const deliveryFee = region == "GA" ? 30 : 70;
-
-                          updateState({
-                            deliveryDetails: {
-                              ...checkoutState.deliveryDetails,
-                              region,
-                            } as Address,
-                            deliveryFee,
-                            deliveryOption,
-                          });
                           field.onChange(region);
                         }}
                         value={field.value}
@@ -431,8 +357,8 @@ export const DeliveryDetailsForm = () => {
               </div>
             )}
 
-            {checkoutState.isUSOrder && (
-              <>
+            {isUSOrder && (
+              <div className="flex gap-8">
                 <div className="w-full">
                   <FormField
                     control={form.control}
@@ -468,18 +394,30 @@ export const DeliveryDetailsForm = () => {
                     )}
                   />
                 </div>
-              </>
+              </div>
             )}
           </div>
         </div>
 
-        {checkoutState.deliveryDetails?.country && <DeliveryOptions />}
-
-        {canShowContinueButton && (
-          <LoadingButton className="w-[50%]" isLoading={false} type="submit">
-            {actionsState.isEditingDeliveryDetails ? "Save" : "Continue"}
+        <div className="flex gap-4">
+          <LoadingButton
+            isLoading={isSubmitting}
+            className="w-[50%]"
+            type="submit"
+          >
+            Save
           </LoadingButton>
-        )}
+
+          <Button
+            className="w-[50%]"
+            type="button"
+            onClick={onCancelClick}
+            disabled={isSubmitting}
+            variant={"ghost"}
+          >
+            Cancel
+          </Button>
+        </div>
       </form>
     </Form>
   );

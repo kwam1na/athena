@@ -5,7 +5,6 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { motion } from "framer-motion";
-import { CheckoutProvider } from "@/components/checkout/CheckoutProvider";
 import { useGetActiveCheckoutSession } from "@/hooks/useGetActiveCheckoutSession";
 import { CheckoutCompleted } from "@/components/states/checkout-expired/CheckoutExpired";
 
@@ -24,7 +23,7 @@ const Verify = () => {
     queryKey: ["verified-payment"],
     queryFn: () =>
       verifyCheckoutSessionPayment({
-        customerId: userId!,
+        storeFrontUserId: userId!,
         storeId,
         organizationId,
         externalReference: externalReference!,

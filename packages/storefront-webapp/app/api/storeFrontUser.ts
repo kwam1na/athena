@@ -78,3 +78,34 @@ export async function getActiveUser({
 
   return res;
 }
+
+export async function updateUser({
+  storeId,
+  organizationId,
+  userId,
+  data,
+}: {
+  storeId: string;
+  organizationId: string;
+  userId: string;
+  data: Partial<StoreFrontUser>;
+}): Promise<StoreFrontUser> {
+  const response = await fetch(
+    `${getBaseUrl(organizationId, storeId)}/users/${userId}`,
+    {
+      method: "PUT",
+      body: JSON.stringify(data),
+      headers: {
+        "Content-Type": "application/json",
+      },
+    }
+  );
+
+  const res = await response.json();
+
+  if (!response.ok) {
+    throw new Error(res.error || "Error updating user.");
+  }
+
+  return res;
+}

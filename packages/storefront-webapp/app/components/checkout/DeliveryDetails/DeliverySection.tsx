@@ -13,32 +13,6 @@ import {
   StoreSelector,
 } from "./DeliveryOptionsSelector";
 
-// export const DeliveryDetails = () => {
-//   const { checkoutState } = useCheckout();
-
-//   const country = ALL_COUNTRIES.find(
-//     (c) => c.code == checkoutState.deliveryDetails?.country
-//   )?.name;
-
-//   const region = GHANA_REGIONS.find(
-//     (r) => r.code == checkoutState.deliveryDetails?.region
-//   )?.name;
-
-//   return (
-//     <div className="space-y-2">
-//       <p>{checkoutState.deliveryDetails?.address}</p>
-//       {checkoutState.isUSOrder && (
-//         <p>{`${checkoutState.deliveryDetails?.city}, ${checkoutState.deliveryDetails?.state}, ${checkoutState.deliveryDetails?.zip}`}</p>
-//       )}
-//       {!checkoutState.isUSOrder && (
-//         <p>{`${checkoutState.deliveryDetails?.city}`}</p>
-//       )}
-//       {region && <p>{`${region}`}</p>}
-//       <p>{country}</p>
-//     </div>
-//   );
-// };
-
 export const DeliveryDetails = ({ address }: { address: Address }) => {
   const country = ALL_COUNTRIES.find((c) => c.code == address.country)?.name;
 
@@ -48,7 +22,6 @@ export const DeliveryDetails = ({ address }: { address: Address }) => {
 
   return (
     <div className="space-y-2 text-sm">
-      {/* <p>{address.address}</p> */}
       {isUSOrder && (
         <p>{`${address.address}, ${address.city}, ${address.state}, ${address.zip}`}</p>
       )}
@@ -61,11 +34,6 @@ export const DeliveryDetails = ({ address }: { address: Address }) => {
 
 const EnteredDeliveryDetails = () => {
   const { checkoutState } = useCheckout();
-  const { formatter } = useStoreContext();
-
-  const shippingText = checkoutState.isGhanaOrder
-    ? `Flat rate delivery at ${formatter.format(checkoutState.deliveryFee || 0)}`
-    : `Express international shipping at ${formatter.format(checkoutState.deliveryFee || 0)}`;
 
   return (
     <div className="space-y-16">

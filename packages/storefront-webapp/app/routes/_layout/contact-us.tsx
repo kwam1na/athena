@@ -42,10 +42,10 @@ const ContactUs = () => {
               <p>East Legon, Accra, Ghana</p>
               <div>
                 <a
-                  href="tel:0249771887"
+                  href="tel:+233249771887"
                   className="hover:underline text-blue-500"
                 >
-                  0249771887
+                  +233249771887
                 </a>
               </div>
             </div>

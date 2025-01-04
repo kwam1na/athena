@@ -4,7 +4,7 @@ import { currencyFormatter } from "@/lib/utils";
 import { Store, StoreFrontUser } from "../../../athena-webapp";
 import { useQuery } from "@tanstack/react-query";
 import React, { createContext, useContext, useState } from "react";
-import { getActiveUser } from "@/api/guest";
+import { getActiveUser } from "@/api/storeFrontUser";
 
 type StoreContextType = {
   organizationId: string;

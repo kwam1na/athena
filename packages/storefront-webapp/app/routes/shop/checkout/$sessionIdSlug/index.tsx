@@ -49,7 +49,7 @@ const CheckoutSession = () => {
         action: "place-order",
         organizationId,
         storeId,
-        customerId: userId!,
+        storeFrontUserId: userId!,
         sessionId: sessionIdSlug,
         hasCompletedCheckoutSession: true,
       });

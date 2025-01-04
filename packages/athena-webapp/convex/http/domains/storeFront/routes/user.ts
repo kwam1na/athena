@@ -16,4 +16,29 @@ userRoutes.get("/:userId", async (c) => {
   return c.json(user);
 });
 
+userRoutes.put("/:userId", async (c) => {
+  const { userId } = c.req.param();
+
+  const {
+    email,
+    firstName,
+    lastName,
+    phoneNumber,
+    shippingAddress,
+    billingAddress,
+  } = await c.req.json();
+
+  const user = await c.env.runMutation(api.storeFront.user.update, {
+    id: userId as Id<"storeFrontUser">,
+    email,
+    firstName,
+    lastName,
+    shippingAddress,
+    billingAddress,
+    phoneNumber,
+  });
+
+  return c.json(user);
+});
+
 export { userRoutes };

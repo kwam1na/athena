@@ -9,7 +9,7 @@ export const useGetActiveCheckoutSession = () => {
     queryKey: ["active-checkout-session", userId],
     queryFn: () =>
       getActiveCheckoutSession({
-        customerId: userId!,
+        storeFrontUserId: userId!,
         storeId: store!._id,
         organizationId: store!.organizationId,
       }),

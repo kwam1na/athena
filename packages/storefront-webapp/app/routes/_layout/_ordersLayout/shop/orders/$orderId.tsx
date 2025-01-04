@@ -158,7 +158,7 @@ const OrderDetail = () => {
       orderId: orderId || "",
       organizationId: organizationId,
       storeId: storeId,
-      customerId: userId || "",
+      storeFrontUserId: userId || "",
     })
   );
 
