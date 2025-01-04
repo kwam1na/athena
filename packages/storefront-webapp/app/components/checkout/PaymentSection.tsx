@@ -10,6 +10,8 @@ import { motion } from "framer-motion";
 import { LoadingButton } from "../ui/loading-button";
 import { useShoppingBag } from "@/hooks/useShoppingBag";
 import { Link } from "@tanstack/react-router";
+import { updateUser } from "@/api/storeFrontUser";
+import { useStoreContext } from "@/contexts/StoreContext";
 
 export const PaymentSection = () => {
   const {
@@ -20,9 +22,11 @@ export const PaymentSection = () => {
     checkoutState,
   } = useCheckout();
 
-  const { updateCheckoutSession, bagSubtotal } = useShoppingBag();
-  const [isProceedingToPayment, setIsProceedingToPayment] = useState(false);
+  const { store, userId, user } = useStoreContext();
 
+  const { updateCheckoutSession, bagSubtotal } = useShoppingBag();
+
+  const [isProceedingToPayment, setIsProceedingToPayment] = useState(false);
   const [didAcceptStoreTerms, setDidAcceptStoreTerms] = useState(false);
   const [didAcceptCommsTerms, setDidAcceptCommsTerms] = useState(false);
   const [errorFinalizingPayment, setErrorFinalizingPayment] = useState(false);
@@ -39,6 +43,7 @@ export const PaymentSection = () => {
     if (canProceedToPayment && data && activeSession._id) {
       setIsProceedingToPayment(true);
 
+      // Update checkout session
       const res = await updateCheckoutSession({
         isFinalizingPayment: true,
         sessionId: activeSession._id,
@@ -47,6 +52,71 @@ export const PaymentSection = () => {
         orderDetails: data,
       });
 
+      // Update user details if they are not already set
+      try {
+        const { email, phoneNumber, firstName, lastName } =
+          checkoutState.customerDetails || {};
+
+        const {
+          address: shippingAddress,
+          city: shippingCity,
+          zip: shippingZip,
+          state: shippingState,
+          country: shippingCountry,
+          region: shippingRegion,
+        } = checkoutState.deliveryDetails || {};
+
+        const {
+          address: billingAddress,
+          city: billingCity,
+          zip: billingZip,
+          state: billingState,
+          country: billingCountry,
+          region: billingRegion,
+        } = checkoutState.billingDetails || {};
+
+        const updateData = {
+          ...(!user?.email && email && { email }),
+          ...(!user?.phoneNumber && phoneNumber && { phoneNumber }),
+          ...(!user?.firstName && firstName && { firstName }),
+          ...(!user?.lastName && lastName && { lastName }),
+          ...(!user?.shippingAddress &&
+            checkoutState.deliveryDetails && {
+              shippingAddress: {
+                address: shippingAddress,
+                city: shippingCity,
+                zip: shippingZip,
+                state: shippingState,
+                country: shippingCountry,
+                region: shippingRegion,
+              },
+            }),
+          ...(!user?.billingAddress &&
+            checkoutState.billingDetails && {
+              billingAddress: {
+                address: billingAddress,
+                city: billingCity,
+                zip: billingZip,
+                state: billingState,
+                country: billingCountry,
+                region: billingRegion,
+              },
+            }),
+        };
+
+        if (Object.keys(updateData).length > 0) {
+          await updateUser({
+            data: updateData,
+            storeId: store.storeId,
+            userId: userId || "",
+            organizationId: store.organizationId,
+          });
+        }
+      } catch (e) {
+        console.error("Error updating user details:", e);
+      }
+
+      // Redirect to payment page
       if (res?.authorization_url) {
         window.open(res.authorization_url, "_self");
         setIsProceedingToPayment(false);

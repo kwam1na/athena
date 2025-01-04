@@ -273,7 +273,10 @@ export const CheckoutProvider = ({
     if (user) {
       const { shippingAddress, billingAddress } = user;
 
-      const { address, city, zip, state, country, region } = shippingAddress;
+      if (!shippingAddress || !billingAddress) return;
+
+      const { address, city, zip, state, country, region } =
+        shippingAddress || {};
 
       const {
         address: billingAddr,
@@ -282,7 +285,7 @@ export const CheckoutProvider = ({
         state: billingState,
         country: billingCountry,
         region: billingRegion,
-      } = billingAddress;
+      } = billingAddress || {};
 
       const { email, firstName, lastName, phoneNumber } = user;
 
