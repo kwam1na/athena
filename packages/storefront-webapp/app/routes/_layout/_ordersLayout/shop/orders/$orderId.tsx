@@ -16,6 +16,7 @@ import {
   BreadcrumbLink,
   BreadcrumbList,
 } from "@/components/ui/breadcrumb";
+import { WIGLUB_HAIR_STUDIO_LOCATION_URL } from "@/lib/constants";
 
 export const Route = createFileRoute(
   "/_layout/_ordersLayout/shop/orders/$orderId"
@@ -141,7 +142,16 @@ const PickupDetails = ({ order }: { order: any }) => {
         {order.pickupLocation && (
           <div className="space-y-4">
             <p className="text-sm">Wigclub Hair Studio</p>
-            <p className="text-sm">2 Jungle Ave., East Legon</p>
+            <p className="text-sm">2 Jungle Avenue, East Legon, Accra</p>
+            <div>
+              <a
+                href={WIGLUB_HAIR_STUDIO_LOCATION_URL}
+                target="_blank"
+                className="font-medium underline"
+              >
+                See map and directions
+              </a>
+            </div>
           </div>
         )}
       </div>

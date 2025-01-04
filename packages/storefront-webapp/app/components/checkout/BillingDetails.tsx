@@ -24,6 +24,7 @@ import {
   SelectValue,
 } from "../ui/select";
 import { ALL_COUNTRIES } from "@/lib/countries";
+import { useStoreContext } from "@/contexts/StoreContext";
 
 export const billingDetailsSchema = z
   .object({
@@ -132,6 +133,8 @@ export const BillingDetailsForm = () => {
   const { checkoutState, actionsState, updateActionsState, updateState } =
     useCheckout();
 
+  const { user } = useStoreContext();
+
   const form = useForm({
     resolver: zodResolver(billingDetailsSchema),
     defaultValues: checkoutState.billingDetails || {
@@ -182,7 +185,7 @@ export const BillingDetailsForm = () => {
 
     const previousCountry = previousCountryRef.current;
 
-    if (country !== previousCountry) {
+    if (previousCountry && country !== previousCountry) {
       clearForm();
 
       // clear the state for delivery and billing details
@@ -194,12 +197,33 @@ export const BillingDetailsForm = () => {
     previousCountryRef.current = country;
   }, [country]);
 
+  const handleUseBillingAddressOnFile = (checked: CheckedState) => {
+    if (checked as Boolean) {
+      updateState({
+        billingDetails: user?.billingAddress,
+      });
+
+      const { address, city, state, zip, country } = user?.billingAddress || {};
+
+      form.setValue("address", address);
+      form.setValue("city", city);
+      form.setValue("state", state);
+      form.setValue("zip", zip);
+      form.setValue("country", country);
+    }
+  };
+
   const isUSAddress = checkoutState.billingDetails?.country == "US";
 
   const showEnteredBillingDetails =
     checkoutState.didEnterBillingDetails &&
     !checkoutState.billingDetails?.billingAddressSameAsDelivery &&
     !actionsState.isEditingBillingDetails;
+
+  const hasEnteredBillingDetails =
+    checkoutState.billingDetails?.address &&
+    checkoutState.billingDetails?.city &&
+    checkoutState.billingDetails?.country;
 
   return (
     <Form {...form}>
@@ -208,10 +232,24 @@ export const BillingDetailsForm = () => {
         className="w-full space-y-12"
       >
         <div className="flex flex-col gap-8">
-          <p className="text-xs text-muted-foreground">Billing details</p>
+          <div className="flex items-center">
+            <p className="text-xs text-muted-foreground">Billing details</p>
+
+            {!hasEnteredBillingDetails && user?.billingAddress && (
+              <div className="ml-auto flex items-center gap-2">
+                <Checkbox
+                  className="h-4 w-4 text-primary border-gray-300 focus:ring-primary"
+                  onCheckedChange={(e) => handleUseBillingAddressOnFile(e)}
+                />
+                <label htmlFor="same-as-delivery" className="text-sm">
+                  Use billing address on file
+                </label>
+              </div>
+            )}
+          </div>
 
           {checkoutState.deliveryMethod == "delivery" && (
-            <div className="w-full xl:w-auto pb-8 flex items-center gap-4">
+            <div className="w-full xl:w-auto pb-8 flex items-center gap-2">
               <Checkbox
                 checked={Boolean(
                   checkoutState.billingDetails?.billingAddressSameAsDelivery
@@ -238,7 +276,7 @@ export const BillingDetailsForm = () => {
               className="space-y-8"
             >
               <div className="flex flex-col xl:flex-row gap-8">
-                <div className="hidden md:flex w-full xl:w-[40%]">
+                <div className="hidden md:block w-full md:w-[40%]">
                   <FormField
                     control={form.control}
                     name="country"
@@ -281,7 +319,7 @@ export const BillingDetailsForm = () => {
                   />
                 </div>
 
-                <div className="flex md:hidden w-full xl:w-[40%]">
+                <div className="block md:hidden w-full">
                   <FormField
                     control={form.control}
                     name="country"

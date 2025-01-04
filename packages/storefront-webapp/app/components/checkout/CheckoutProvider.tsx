@@ -145,12 +145,13 @@ export const webOrderSchema = z
       }
     }
   });
+type DeliveryOption = "within-accra" | "outside-accra" | "intl";
 
 type CheckoutState = {
   billingDetails: BillingAddress | null;
   customerDetails: CustomerDetails | null;
   deliveryMethod: "delivery" | "pickup" | null;
-  deliveryOption: "within-accra" | "outside-accra" | "intl" | null;
+  deliveryOption: DeliveryOption | null;
   deliveryFee: number | null;
   deliveryDetails: Address | null;
   pickupLocation: string | null;
@@ -247,6 +248,8 @@ export const CheckoutProvider = ({
 
   const { bag } = useShoppingBag();
 
+  const { user } = useStoreContext();
+
   useEffect(() => {
     // Save the current state to sessionStorage whenever it changes and bag is not empty
     if (bag?.items?.length > 0) {
@@ -265,6 +268,68 @@ export const CheckoutProvider = ({
       }));
     }
   }, [bag]);
+
+  useEffect(() => {
+    if (user) {
+      const { shippingAddress, billingAddress } = user;
+
+      const { address, city, zip, state, country, region } = shippingAddress;
+
+      const {
+        address: billingAddr,
+        city: billingCity,
+        zip: billingZip,
+        state: billingState,
+        country: billingCountry,
+        region: billingRegion,
+      } = billingAddress;
+
+      const { email, firstName, lastName, phoneNumber } = user;
+
+      const isGhanaAddress = country == "GH";
+
+      const isGreaterAccraAddress = region == "GA";
+
+      let deliveryOption: DeliveryOption = "intl";
+      let deliveryFee = 800;
+
+      if (isGhanaAddress) {
+        deliveryOption = isGreaterAccraAddress
+          ? "within-accra"
+          : "outside-accra";
+
+        deliveryFee = isGreaterAccraAddress ? 30 : 70;
+      }
+
+      updateState({
+        customerDetails: {
+          email,
+          firstName,
+          lastName,
+          phoneNumber,
+        },
+        deliveryMethod: shippingAddress ? "delivery" : null,
+        deliveryOption,
+        deliveryFee,
+        deliveryDetails: {
+          address,
+          city,
+          zip,
+          state,
+          country,
+          region,
+        },
+        billingDetails: {
+          address: billingAddr,
+          city: billingCity,
+          zip: billingZip,
+          state: billingState,
+          country: billingCountry,
+          region: billingRegion,
+        },
+      });
+    }
+  }, [user]);
 
   useEffect(() => {
     const determineRegion = () => {

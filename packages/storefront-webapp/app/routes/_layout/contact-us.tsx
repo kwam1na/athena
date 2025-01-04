@@ -43,7 +43,7 @@ const ContactUs = () => {
               <div>
                 <a
                   href="tel:+233249771887"
-                  className="hover:underline text-blue-500"
+                  className="hover:underline font-medium"
                 >
                   +233249771887
                 </a>
@@ -54,7 +54,7 @@ const ContactUs = () => {
               <a
                 href={WIGLUB_HAIR_STUDIO_LOCATION_URL}
                 target="_blank"
-                className="text-blue-500"
+                className="font-medium"
               >
                 See map and directions
               </a>
