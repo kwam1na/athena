@@ -402,6 +402,7 @@ storeRoutes.post(
       }
 
       if (action == "complete-checkout") {
+        console.log("sending complete checkout action"), orderDetails;
         const res = await c.env.runMutation(
           internal.storeFront.checkoutSession.updateCheckoutSession,
           {

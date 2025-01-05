@@ -33,6 +33,13 @@ paystackRoutes.post("/", async (c) => {
         },
         orderDetails: {
           ...order_details,
+          // deliveryInstructions: order_details.deliveryInstructions || "",
+          billingDetails: {
+            ...order_details.billingDetails,
+            billingAddressSameAsDelivery: Boolean(
+              order_details.billingDetails.billingAddressSameAsDelivery
+            ),
+          },
           deliveryFee: order_details.deliveryFee
             ? parseFloat(order_details.deliveryFee)
             : null,

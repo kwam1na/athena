@@ -1,32 +1,43 @@
-import { GhostButton } from "../../ui/ghost-button";
 import { Address, useCheckout } from "../CheckoutProvider";
-import { DeliveryDetailsForm } from "../DeliveryDetails";
-import { Store, Truck } from "lucide-react";
-import { Button } from "../../ui/button";
 import { capitalizeWords } from "@/lib/utils";
 import { motion } from "framer-motion";
-import { useStoreContext } from "@/contexts/StoreContext";
 import { ALL_COUNTRIES } from "@/lib/countries";
 import { GHANA_REGIONS } from "@/lib/ghanaRegions";
 import {
   DeliveryOptionsSelector,
   StoreSelector,
 } from "./DeliveryOptionsSelector";
+import { Textarea } from "@/components/ui/textarea";
+import { PickupOptions } from "./PickupOptions";
+import { accraNeighborhoods } from "@/lib/ghana";
 
 export const DeliveryDetails = ({ address }: { address: Address }) => {
   const country = ALL_COUNTRIES.find((c) => c.code == address.country)?.name;
 
   const region = GHANA_REGIONS.find((r) => r.code == address.region)?.name;
 
+  const neighborhood = accraNeighborhoods.find(
+    (n) => n.value == address?.neighborhood
+  )?.label;
+
   const isUSOrder = address.country === "US";
+
+  const isGHOrder = address.country === "GH";
+
+  const isROWOrder = !isUSOrder && !isGHOrder;
 
   return (
     <div className="space-y-2 text-sm">
       {isUSOrder && (
         <p>{`${address.address}, ${address.city}, ${address.state}, ${address.zip}`}</p>
       )}
-      {!isUSOrder && <p>{`${address.address}, ${address.city}`}</p>}
-      {region && <p>{`${region}`}</p>}
+
+      {isROWOrder && <p>{`${address.address}, ${address.city}`}</p>}
+
+      {isGHOrder && (
+        <p>{`${address?.houseNumber} ${address?.street}, ${neighborhood}, ${region}`}</p>
+      )}
+
       <p>{country}</p>
     </div>
   );
@@ -50,8 +61,6 @@ const EnteredDeliveryDetails = () => {
           <div className="space-y-4 text-sm">
             <p>{`${capitalizeWords(checkoutState.deliveryMethod || "")} address:`}</p>
             <DeliveryDetails address={checkoutState.deliveryDetails} />
-
-            {/* <p className="pt-8 text-muted-foreground">{shippingText}</p> */}
           </div>
         )}
 
@@ -61,73 +70,19 @@ const EnteredDeliveryDetails = () => {
   );
 };
 
-const PickupOptions = () => {
-  const { checkoutState, updateState } = useCheckout();
-
-  const { formatter } = useStoreContext();
-
-  const isDelivery = checkoutState.deliveryMethod === "delivery";
-  const isPickup = checkoutState.deliveryMethod === "pickup";
-
-  const didEnterCustomerDetails = Boolean(checkoutState.customerDetails);
-
-  return (
-    <div className="flex gap-4 w-full">
-      <GhostButton
-        onClick={() => {
-          updateState({
-            deliveryMethod: "delivery",
-            deliveryFee: null,
-            pickupLocation: null,
-          });
-        }}
-        disabled={!didEnterCustomerDetails}
-        selected={isDelivery}
-        className="h-[64px] w-[50%]"
-      >
-        <div className="w-full space-y-2">
-          <div className="flex items-center">
-            <Truck className="w-4 h-4 mr-2" />
-            Delivery
-          </div>
-
-          {Boolean(checkoutState.deliveryFee) && (
-            <p className="text-xs text-muted-foreground text-start w-full">
-              {formatter.format(checkoutState.deliveryFee || 0)}
-            </p>
-          )}
-        </div>
-      </GhostButton>
-      <GhostButton
-        onClick={() => {
-          updateState({ deliveryMethod: "pickup" });
-        }}
-        disabled={!didEnterCustomerDetails}
-        selected={isPickup}
-        className="h-[64px] w-[50%] justify-start"
-      >
-        <div className="w-full space-y-2">
-          <div className="flex items-center">
-            <Store className="w-4 h-4 mr-2" />
-            Store pickup
-          </div>
-
-          {Boolean(checkoutState.isPickupOrder) && (
-            <p className="text-xs text-muted-foreground text-start w-full">
-              Free
-            </p>
-          )}
-        </div>
-      </GhostButton>
-    </div>
-  );
-};
-
 export const DeliveryOptions = () => {
   return (
     <div className="space-y-8">
       <p className="text-xs text-muted-foreground">Delivery options</p>
       <DeliveryOptionsSelector />
+    </div>
+  );
+};
+
+export const DeliveryInstructions = () => {
+  return (
+    <div className="space-y-8">
+      <Textarea placeholder="Add delivery instructions" />
     </div>
   );
 };
@@ -184,7 +139,7 @@ export const DeliverySection = () => {
       <div className="space-y-24">
         <div className="flex items-center">
           <p>Delivery / Pickup</p>
-          {(didFillOutSection || actionsState.isEditingDeliveryDetails) && (
+          {/* {(didFillOutSection || actionsState.isEditingDeliveryDetails) && (
             <Button
               onClick={() => {
                 updateActionsState({
@@ -203,12 +158,12 @@ export const DeliverySection = () => {
                   : "Edit"}
               </p>
             </Button>
-          )}
+          )} */}
         </div>
       </div>
 
       {/* Display entered delivery details when not editing */}
-      {showEnteredDetails ? (
+      {/* {showEnteredDetails ? (
         <EnteredDeliveryDetails />
       ) : (
         showInputForm && (
@@ -239,7 +194,38 @@ export const DeliverySection = () => {
             {isPickup && <StoreSelector />}
           </motion.div>
         )
-      )}
+      )} */}
+
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{
+          opacity: 1,
+          transition: { ease: "easeOut", duration: 0.4 },
+        }}
+        className="space-y-16"
+      >
+        <PickupOptions />
+
+        {isPickup && <StoreSelector />}
+
+        {/* <DeliveryDetailsForm /> */}
+
+        {isDelivery && (
+          <motion.div
+            key={"delivery-input"}
+            initial={{ opacity: 0 }}
+            animate={{
+              opacity: 1,
+              transition: { ease: "easeOut", duration: 0.4 },
+            }}
+            className="space-y-16"
+          >
+            {/* <DeliveryDetailsForm /> */}
+          </motion.div>
+        )}
+
+        {isPickup && <StoreSelector />}
+      </motion.div>
     </motion.div>
   );
 };

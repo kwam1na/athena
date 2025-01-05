@@ -16,6 +16,7 @@ export const fetchUser = createServerFn(
     const userId = getCookie("athena-storefront-user-id");
 
     if (!userId && !guestId) {
+      console.info("no user id or guest id found, creating guest");
       const newGuest = await createGuest(params.organizationId, params.storeId);
 
       setCookie("athena-guest-id", newGuest.id.toString(), {

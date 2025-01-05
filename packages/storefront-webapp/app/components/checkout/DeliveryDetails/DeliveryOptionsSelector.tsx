@@ -9,7 +9,6 @@ export function StoreSelector() {
     updateState({
       deliveryFee: null,
       deliveryOption: null,
-      billingDetails: null,
     });
   }, []);
 
@@ -78,17 +77,31 @@ export function DeliveryOptionsSelector() {
     const previousCountry = previousCountryRef.current;
     const currentCountry = checkoutState.deliveryDetails?.country;
 
-    if (
-      (currentCountry === "GH" && previousCountry !== "GH") || // Non-GH to GH
-      (currentCountry !== "GH" && previousCountry === "GH") // GH to Non-GH
-    ) {
-      updateState({
-        deliveryFee: null,
-        deliveryOption: null,
-      });
-    }
+    if (previousCountry !== currentCountry) {
+      previousCountryRef.current = currentCountry;
 
-    previousCountryRef.current = currentCountry; // Update ref to track current country
+      if (currentCountry === "GH" && previousCountry !== "GH") {
+        if (
+          checkoutState.deliveryOption !== null ||
+          checkoutState.deliveryFee !== null
+        ) {
+          updateState({
+            deliveryFee: null,
+            deliveryOption: null,
+          });
+        }
+      } else if (currentCountry !== "GH" && previousCountry === "GH") {
+        if (
+          checkoutState.deliveryOption !== "intl" ||
+          checkoutState.deliveryFee !== 800
+        ) {
+          updateState({
+            deliveryFee: 800,
+            deliveryOption: "intl",
+          });
+        }
+      }
+    }
   }, [checkoutState.deliveryDetails, updateState]);
 
   useEffect(() => {
@@ -103,16 +116,16 @@ export function DeliveryOptionsSelector() {
 
   return (
     <RadioGroup
-      className="space-y-4"
+      className="space-y-4 flex justify-center items-center w-full"
       value={checkoutState.deliveryOption || undefined}
       onValueChange={handleChange}
     >
       {checkoutState.isGhanaOrder && (
-        <>
+        <div className="w-full space-y-4">
           <div className="flex items-center space-x-4 text-sm">
             <RadioGroupItem value="within-accra" id="r1" />
             <div className="flex w-full lg:w-[50%] justify-between">
-              <p>Delivery within Accra</p>
+              <p>Delivery within Greater Accra</p>
               <p className="text-muted-foreground">GHS 30</p>
             </div>
           </div>
@@ -120,15 +133,15 @@ export function DeliveryOptionsSelector() {
           <div className="flex items-center space-x-4 text-sm">
             <RadioGroupItem value="outside-accra" id="r2" />
             <div className="flex w-full lg:w-[50%] justify-between">
-              <p>Delivery outside Accra</p>
+              <p>Delivery to other regions</p>
               <p className="text-muted-foreground">GHS 70</p>
             </div>
           </div>
-        </>
+        </div>
       )}
 
       {!checkoutState.isGhanaOrder && (
-        <div className="flex items-center space-x-4 text-sm">
+        <div className="flex items-center space-x-4 text-sm w-full">
           <RadioGroupItem value="intl" id="r2" />
           <div className="flex w-full lg:w-[50%] justify-between">
             <p>Express shipping</p>

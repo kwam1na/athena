@@ -15,9 +15,8 @@ import { EmptyState } from "../states/empty/empty-state";
 import { FadeIn } from "../common/FadeIn";
 import { checkoutSessionQueries } from "@/queries";
 import { ArrowRightIcon } from "@radix-ui/react-icons";
-import { set } from "zod";
 
-const PendingItem = ({ session }: { session: any }) => {
+const PendingItem = ({ session, count }: { session: any; count: number }) => {
   return (
     <motion.div
       initial={{ opacity: 0, y: 4 }}
@@ -31,7 +30,11 @@ const PendingItem = ({ session }: { session: any }) => {
         className="flex items-center"
       >
         <Button variant={"link"}>
-          <p className="text-xs underline">You have a pending order</p>
+          <p className="text-xs underline">
+            {count > 1
+              ? `You have ${count} pending orders`
+              : "You have a pending order"}
+          </p>
         </Button>
         <ArrowRightIcon className="w-4 h-4" />
       </Link>
@@ -135,7 +138,9 @@ export default function ShoppingBag() {
       {!isBagEmpty && (
         <div className="space-y-2">
           <h1 className="text-lg font-light">Bag</h1>
-          {data && data.length > 0 && <PendingItem session={data[0]} />}
+          {data && data.length > 0 && (
+            <PendingItem session={data[0]} count={data.length} />
+          )}
         </div>
       )}
 

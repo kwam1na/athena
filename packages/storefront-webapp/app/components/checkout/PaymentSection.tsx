@@ -12,8 +12,10 @@ import { useShoppingBag } from "@/hooks/useShoppingBag";
 import { Link } from "@tanstack/react-router";
 import { updateUser } from "@/api/storeFrontUser";
 import { useStoreContext } from "@/contexts/StoreContext";
+import { BillingDetailsSection } from "./BillingDetailsSection";
+import { CheckoutFormSectionProps } from "./CustomerInfoSection";
 
-export const PaymentSection = () => {
+export const PaymentSection = ({ form }: CheckoutFormSectionProps) => {
   const {
     activeSession,
     canPlaceOrder,
@@ -27,107 +29,97 @@ export const PaymentSection = () => {
   const { updateCheckoutSession, bagSubtotal } = useShoppingBag();
 
   const [isProceedingToPayment, setIsProceedingToPayment] = useState(false);
-  const [didAcceptStoreTerms, setDidAcceptStoreTerms] = useState(false);
-  const [didAcceptCommsTerms, setDidAcceptCommsTerms] = useState(false);
+  const [didAcceptStoreTerms, setDidAcceptStoreTerms] = useState(true);
+  const [didAcceptCommsTerms, setDidAcceptCommsTerms] = useState(true);
   const [errorFinalizingPayment, setErrorFinalizingPayment] = useState(false);
 
   const onSubmit = async () => {
     setErrorFinalizingPayment(false);
 
-    const canProceedToPayment = await canPlaceOrder();
+    try {
+      const canProceedToPayment = await canPlaceOrder();
+      const { data } = webOrderSchema.safeParse(checkoutState);
+      const total = (bagSubtotal + (checkoutState?.deliveryFee ?? 0)) * 100;
 
-    const { data } = webOrderSchema.safeParse(checkoutState);
+      if (!canProceedToPayment || !data || !activeSession._id) {
+        throw new Error("Invalid order state");
+      }
 
-    const total = (bagSubtotal + (checkoutState?.deliveryFee ?? 0)) * 100;
-
-    if (canProceedToPayment && data && activeSession._id) {
       setIsProceedingToPayment(true);
 
-      // Update checkout session
-      const res = await updateCheckoutSession({
-        isFinalizingPayment: true,
-        sessionId: activeSession._id,
-        customerEmail: checkoutState.customerDetails?.email || "",
-        amount: total,
-        orderDetails: data,
-      });
+      // Process checkout session
+      const paymentResponse = await processCheckoutSession(data, total);
 
-      // Update user details if they are not already set
-      try {
-        const { email, phoneNumber, firstName, lastName } =
-          checkoutState.customerDetails || {};
+      if (user)
+        // Update user information if needed
+        await updateUserInformation();
 
-        const {
-          address: shippingAddress,
-          city: shippingCity,
-          zip: shippingZip,
-          state: shippingState,
-          country: shippingCountry,
-          region: shippingRegion,
-        } = checkoutState.deliveryDetails || {};
-
-        const {
-          address: billingAddress,
-          city: billingCity,
-          zip: billingZip,
-          state: billingState,
-          country: billingCountry,
-          region: billingRegion,
-        } = checkoutState.billingDetails || {};
-
-        const updateData = {
-          ...(!user?.email && email && { email }),
-          ...(!user?.phoneNumber && phoneNumber && { phoneNumber }),
-          ...(!user?.firstName && firstName && { firstName }),
-          ...(!user?.lastName && lastName && { lastName }),
-          ...(!user?.shippingAddress &&
-            checkoutState.deliveryDetails && {
-              shippingAddress: {
-                address: shippingAddress,
-                city: shippingCity,
-                zip: shippingZip,
-                state: shippingState,
-                country: shippingCountry,
-                region: shippingRegion,
-              },
-            }),
-          ...(!user?.billingAddress &&
-            checkoutState.billingDetails && {
-              billingAddress: {
-                address: billingAddress,
-                city: billingCity,
-                zip: billingZip,
-                state: billingState,
-                country: billingCountry,
-                region: billingRegion,
-              },
-            }),
-        };
-
-        if (Object.keys(updateData).length > 0) {
-          await updateUser({
-            data: updateData,
-            storeId: store.storeId,
-            userId: userId || "",
-            organizationId: store.organizationId,
-          });
-        }
-      } catch (e) {
-        console.error("Error updating user details:", e);
-      }
-
-      // Redirect to payment page
-      if (res?.authorization_url) {
-        window.open(res.authorization_url, "_self");
-        setIsProceedingToPayment(false);
+      // Handle payment redirect
+      if (paymentResponse?.authorization_url) {
+        window.open(paymentResponse.authorization_url, "_self");
       } else {
-        setIsProceedingToPayment(false);
-        setErrorFinalizingPayment(true);
+        throw new Error("No authorization URL received");
       }
-    } else {
+    } catch (error) {
+      console.error("Payment error:", error);
       setErrorFinalizingPayment(true);
+    } finally {
+      setIsProceedingToPayment(false);
     }
   };
+
+  const processCheckoutSession = async (orderData: any, total: number) => {
+    return await updateCheckoutSession({
+      isFinalizingPayment: true,
+      sessionId: activeSession._id,
+      customerEmail: checkoutState.customerDetails?.email || "",
+      amount: total,
+      orderDetails: orderData,
+    });
+  };
+
+  const updateUserInformation = async () => {
+    const { customerDetails, deliveryDetails, billingDetails } = checkoutState;
+
+    const updateData = {
+      ...(!user?.email &&
+        customerDetails?.email && { email: customerDetails.email }),
+      ...(!user?.phoneNumber &&
+        customerDetails?.phoneNumber && {
+          phoneNumber: customerDetails.phoneNumber,
+        }),
+      ...(!user?.firstName &&
+        customerDetails?.firstName && { firstName: customerDetails.firstName }),
+      ...(!user?.lastName &&
+        customerDetails?.lastName && { lastName: customerDetails.lastName }),
+      ...(!user?.shippingAddress &&
+        deliveryDetails && {
+          shippingAddress: createAddressObject(deliveryDetails),
+        }),
+      ...(!user?.billingAddress &&
+        billingDetails && {
+          billingAddress: createAddressObject(billingDetails),
+        }),
+    };
+
+    if (Object.keys(updateData).length > 0) {
+      await updateUser({
+        data: updateData,
+        storeId: store.storeId,
+        userId: userId || "",
+        organizationId: store.organizationId,
+      });
+    }
+  };
+
+  const createAddressObject = (details: any) => ({
+    address: details.address,
+    city: details.city,
+    zip: details.zip,
+    state: details.state,
+    country: details.country,
+    region: details.region,
+  });
 
   const handleAcceptedTerms = (
     option: "store-terms" | "comms-terms",
@@ -142,37 +134,9 @@ export const PaymentSection = () => {
 
   const didAcceptTerms = didAcceptStoreTerms && didAcceptCommsTerms;
 
-  const isEditingCustomerDetails =
-    Boolean(checkoutState.customerDetails) &&
-    actionsState.isEditingCustomerDetails;
+  const showPayment = true;
 
-  const isEditingDeliveryDetails =
-    (Boolean(checkoutState.deliveryDetails) || checkoutState.isPickupOrder) &&
-    actionsState.isEditingDeliveryDetails;
-
-  const onlyShowHeader = isEditingCustomerDetails || isEditingDeliveryDetails;
-
-  if (onlyShowHeader) {
-    return (
-      <motion.p
-        initial={{ opacity: 0 }}
-        animate={{
-          opacity: 1,
-          transition: { duration: 0.4 },
-        }}
-      >
-        Payment
-      </motion.p>
-    );
-  }
-
-  const showPayment =
-    checkoutState.didEnterDeliveryDetails ||
-    checkoutState.didSelectPickupLocation;
-
-  const showProceedSection =
-    checkoutState.didEnterBillingDetails &&
-    !actionsState.isEditingBillingDetails;
+  const showProceedSection = true;
 
   return (
     <motion.div
@@ -219,7 +183,8 @@ export const PaymentSection = () => {
           )}
         </motion.div>
 
-        {showPayment && <BillingDetailsForm />}
+        {/* {showPayment && <BillingDetailsForm />} */}
+        {showPayment && <BillingDetailsSection form={form} />}
 
         {showProceedSection && (
           <motion.div
@@ -271,27 +236,45 @@ export const PaymentSection = () => {
       </div>
 
       {checkoutState.failedFinalValidation && (
-        <p className="text-xs text-destructive">
+        <motion.p
+          initial={{ opacity: 0, y: -2 }}
+          animate={{
+            opacity: 1,
+            y: 0,
+            transition: { duration: 0.3, ease: "easeInOut" },
+          }}
+          className="text-sm text-red-600 font-medium"
+        >
           Please provide all the required information
-        </p>
+        </motion.p>
       )}
 
       {errorFinalizingPayment && (
-        <p className="text-xs text-destructive">
+        <motion.p
+          initial={{ opacity: 0, y: -2 }}
+          animate={{
+            opacity: 1,
+            y: 0,
+            transition: { duration: 0.3, ease: "easeInOut" },
+          }}
+          className="text-sm text-red-600 font-medium"
+        >
           There was an error finalizing your payment. Please try again.
-        </p>
+        </motion.p>
       )}
 
       {showProceedSection && (
-        <LoadingButton
-          isLoading={isProceedingToPayment}
-          onClick={onSubmit}
-          className="w-full"
-          disabled={!didAcceptTerms}
-        >
-          Continue to payment
-          <ArrowRight className="w-4 h-4 ml-2" />
-        </LoadingButton>
+        <motion.div layout>
+          <LoadingButton
+            isLoading={isProceedingToPayment}
+            onClick={onSubmit}
+            className="w-full"
+            disabled={!didAcceptTerms}
+          >
+            Proceed to payment
+            <ArrowRight className="w-4 h-4 ml-2" />
+          </LoadingButton>
+        </motion.div>
       )}
     </motion.div>
   );

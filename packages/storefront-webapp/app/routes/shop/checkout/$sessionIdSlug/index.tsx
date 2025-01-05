@@ -4,6 +4,7 @@ import {
   PaymentDetails,
   PickupDetails,
 } from "@/components/checkout/OrderDetails";
+import { FadeIn } from "@/components/common/FadeIn";
 import NotFound from "@/components/states/not-found/NotFound";
 import { LoadingButton } from "@/components/ui/loading-button";
 import { useStoreContext } from "@/contexts/StoreContext";
@@ -12,6 +13,7 @@ import { checkoutSessionQueries } from "@/queries";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, useParams } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
+import { AlertCircle } from "lucide-react";
 import { useState } from "react";
 
 export const Route = createFileRoute("/shop/checkout/$sessionIdSlug/")({
@@ -23,12 +25,9 @@ const CheckoutSession = () => {
 
   const { userId, organizationId, storeId } = useStoreContext();
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
+  const [isError, setIsError] = useState(false);
 
-  const {
-    data: sessionData,
-    isLoading,
-    error,
-  } = useQuery(
+  const { data: sessionData, isLoading } = useQuery(
     checkoutSessionQueries.session({
       sessionId: sessionIdSlug,
       userId: userId!,
@@ -58,6 +57,8 @@ const CheckoutSession = () => {
         window.location.href = `/shop/checkout/${sessionIdSlug}/complete`;
       }
 
+      setIsError(!res.success);
+
       // setOrderId(res.orderId);
       // setAttemptedOrderCreation(true);
       setIsPlacingOrder(false);
@@ -76,7 +77,7 @@ const CheckoutSession = () => {
 
   return (
     <AnimatePresence>
-      <div className="px-48 pt-24 pb-40 space-y-24">
+      <FadeIn className="container mx-auto max-w-[1024px] px-6 xl:px-0 pt-24 pb-40 space-y-24">
         <motion.div
           initial={{ opacity: 0 }}
           animate={{
@@ -126,8 +127,23 @@ const CheckoutSession = () => {
             opacity: 1,
             transition: { ease: "easeOut" },
           }}
-          className="space-x-12 pt-8"
+          className="space-y-8 pt-8"
         >
+          {isError && (
+            <div className="flex items-center gap-2 text-red-700 ">
+              <AlertCircle className="w-4 h-4" />
+              <motion.p
+                initial={{ opacity: 0 }}
+                animate={{
+                  opacity: 1,
+                  transition: { ease: "easeOut" },
+                }}
+                className="text-sm"
+              >
+                There was an error submitting your order. Please try again.
+              </motion.p>
+            </div>
+          )}
           <LoadingButton
             isLoading={isPlacingOrder}
             onClick={placeOrder}
@@ -136,7 +152,7 @@ const CheckoutSession = () => {
             Submit order
           </LoadingButton>
         </motion.div>
-      </div>
+      </FadeIn>
     </AnimatePresence>
   );
 };

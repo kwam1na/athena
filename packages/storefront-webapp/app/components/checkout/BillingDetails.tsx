@@ -227,10 +227,7 @@ export const BillingDetailsForm = () => {
 
   return (
     <Form {...form}>
-      <form
-        onSubmit={form.handleSubmit(onSubmit)}
-        className="w-full space-y-12"
-      >
+      <div className="w-full space-y-12">
         <div className="flex flex-col gap-8">
           <div className="flex items-center">
             <p className="text-xs text-muted-foreground">Billing details</p>
@@ -440,14 +437,7 @@ export const BillingDetailsForm = () => {
             </motion.div>
           )}
         </div>
-
-        {(actionsState.isEditingBillingDetails ||
-          !checkoutState.didEnterBillingDetails) && (
-          <LoadingButton className="w-[50%]" isLoading={false} type="submit">
-            {actionsState.isEditingBillingDetails ? "Save" : "Continue"}
-          </LoadingButton>
-        )}
-      </form>
+      </div>
     </Form>
   );
 };

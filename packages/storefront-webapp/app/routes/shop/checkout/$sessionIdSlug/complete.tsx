@@ -4,6 +4,7 @@ import {
   PaymentDetails,
   PickupDetails,
 } from "@/components/checkout/OrderDetails";
+import { FadeIn } from "@/components/common/FadeIn";
 import { CheckoutNotComplete } from "@/components/states/checkout-expired/CheckoutExpired";
 import NotFound from "@/components/states/not-found/NotFound";
 import { Button } from "@/components/ui/button";
@@ -47,7 +48,7 @@ const CheckoutCompleteView = () => {
 
   return (
     <AnimatePresence>
-      <div className="px-48 pt-24 pb-40 space-y-24">
+      <FadeIn className="container mx-auto max-w-[1024px] px-6 xl:px-0 pt-24 pb-40 space-y-24">
         <motion.div
           initial={{ opacity: 0 }}
           animate={{
@@ -120,7 +121,7 @@ const CheckoutCompleteView = () => {
             <Button variant={"clear"}>View order</Button>
           </Link>
         </motion.div>
-      </div>
+      </FadeIn>
     </AnimatePresence>
   );
 };

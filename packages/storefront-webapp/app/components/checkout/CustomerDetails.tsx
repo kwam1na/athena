@@ -16,44 +16,7 @@ import { LoadingButton } from "../ui/loading-button";
 import { Button } from "../ui/button";
 import { ArrowDown } from "lucide-react";
 import { motion } from "framer-motion";
-
-const nameRegex = /^[a-zA-Zà-öø-ÿÀ-ÖØ-ß\-'\.\s]+$/;
-const phoneNumberRegex =
-  /^(\+?\d{1,4}[\s-]?)?(\(?\d{3}\)?[\s-]?)?\d{3}[\s-]?\d{4}$/;
-
-export const customerDetailsSchema = z.object({
-  firstName: z
-    .string()
-    .min(1, "First name is required")
-    .regex(nameRegex, "First name contains invalid characters")
-    .refine(
-      (value) => value.trim().length > 0,
-      "First name cannot be empty or whitespace"
-    ),
-  lastName: z
-    .string()
-    .min(1, "Last name is required")
-    .regex(nameRegex, "Last name contains invalid characters")
-    .refine(
-      (value) => value.trim().length > 0,
-      "Last name cannot be empty or whitespace"
-    ),
-  email: z
-    .string()
-    .email("Invalid email")
-    .refine(
-      (value) => value.trim().length > 0,
-      "Email cannot be empty or whitespace"
-    ),
-  phoneNumber: z
-    .string()
-    .min(10, "Invalid phone number")
-    .regex(phoneNumberRegex, "Invalid phone number")
-    .refine(
-      (value) => value.trim().length > 0,
-      "Phone number cannot be empty or whitespace"
-    ),
-});
+import { customerDetailsSchema } from "./schemas/customerDetailsSchema";
 
 const EnteredCustomerDetails = () => {
   const { checkoutState } = useCheckout();

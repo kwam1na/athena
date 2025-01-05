@@ -108,6 +108,7 @@ export const create = mutation({
       billingDetails: null,
       customerDetails: null,
       deliveryDetails: null,
+      deliveryInstructions: null,
       deliveryOption: null,
       deliveryFee: null,
       pickupLocation: null,
@@ -264,200 +265,145 @@ export const updateCheckoutSession = internalMutation({
       })
     ),
   },
-  handler: async (
-    ctx,
-    args
-  ): Promise<{ success: boolean; message?: string; orderId?: string }> => {
-    const patchObject: Record<string, any> = {};
-    if (args.isFinalizingPayment !== undefined) {
-      patchObject.isFinalizingPayment = args.isFinalizingPayment;
-    }
-
-    if (args.hasCompletedPayment !== undefined) {
-      patchObject.hasCompletedPayment = args.hasCompletedPayment;
-    }
-
-    if (args.hasCompletedCheckoutSession !== undefined) {
-      patchObject.hasCompletedCheckoutSession =
-        args.hasCompletedCheckoutSession;
-    }
-
-    if (args.externalReference) {
-      patchObject.externalReference = args.externalReference;
-    }
-
-    if (args.externalTransactionId) {
-      patchObject.externalTransactionId = args.externalTransactionId;
-    }
-
-    if (args.hasVerifiedPayment !== undefined) {
-      patchObject.hasVerifiedPayment = args.hasVerifiedPayment;
-    }
-
-    if (args.amount) {
-      patchObject.amount = args.amount;
-    }
-
-    if (args.paymentMethod) {
-      patchObject.paymentMethod = args.paymentMethod;
-    }
-
-    if (args.orderDetails) {
-      patchObject.billingDetails = args.orderDetails.billingDetails;
-      patchObject.customerDetails = args.orderDetails.customerDetails;
-      patchObject.deliveryDetails = args.orderDetails.deliveryDetails;
-      patchObject.deliveryMethod = args.orderDetails.deliveryMethod;
-      patchObject.deliveryOption = args.orderDetails.deliveryOption;
-      patchObject.deliveryFee = args.orderDetails.deliveryFee;
-      patchObject.pickupLocation = args.orderDetails.pickupLocation;
-    }
-
+  handler: async (ctx, args) => {
     try {
+      const patchObject = createPatchObject(args);
       await ctx.db.patch(args.id, patchObject);
 
-      // Move online order creation up in dance
       const session = await ctx.db.get(args.id);
-
-      if (args.action == "place-order" && session) {
-        // check that an order has not already been placed for this session
-        if (session.placedOrderId) {
-          console.log(`Order has already been placed for session: ${args.id}`);
-          return {
-            success: false,
-            orderId: session.placedOrderId,
-            message: "Order has already been placed for this session.",
-          };
-        }
-
-        const { address, city, country, zip, region } =
-          (session?.deliveryDetails as Record<string, any>) || {};
-
-        const onlineOrderResponse:
-          | {
-              error: string;
-              success: boolean;
-              orderId?: undefined;
-            }
-          | {
-              success: boolean;
-              orderId: Id<"onlineOrder">;
-              error?: undefined;
-            } = await ctx.runMutation(api.storeFront.onlineOrder.create, {
-          checkoutSessionId: args.id,
-          billingDetails: {
-            zip: session?.billingDetails?.zip,
-            country: session?.billingDetails?.country,
-            address: session?.billingDetails?.address,
-            city: session?.billingDetails?.city,
-          },
-          customerDetails: {
-            email: session?.customerDetails?.email,
-            firstName: session?.customerDetails?.firstName,
-            lastName: session?.customerDetails?.lastName,
-            phoneNumber: session?.customerDetails?.phoneNumber,
-          },
-          deliveryDetails: {
-            zip,
-            country,
-            address,
-            city,
-            region,
-          },
-          deliveryMethod: session.deliveryMethod || "",
-          deliveryOption: session.deliveryOption,
-          deliveryFee: session.deliveryFee,
-          pickupLocation: session.pickupLocation,
-          paymentMethod: session?.paymentMethod,
-        });
-
-        if (!onlineOrderResponse.success) {
-          console.error(
-            `Failed to create online order for session: ${args.id} with error: ${onlineOrderResponse.error}`
-          );
-          return { success: false, message: "Failed to create online order." };
-        }
-
-        console.log(
-          `online order created for ${session?._id} | ${session?.customerDetails?.email}`
-        );
-
-        await ctx.db.patch(args.id, {
-          placedOrderId: onlineOrderResponse.orderId,
-        });
-
-        return { success: true, orderId: onlineOrderResponse.orderId };
+      if (!session) {
+        return { success: false, message: "Invalid session." };
       }
 
-      if (args.orderDetails && session?.hasCompletedPayment) {
-        if (!session) {
-          console.error(`Invalid session: ${args.id}`);
-          return { success: false, message: "Invalid session." };
-        }
-
-        // check that an order has not already been placed for this session
-        if (session.placedOrderId) {
-          console.log(`Order has already been placed for session: ${args.id}`);
-          return {
-            success: false,
-            orderId: session.placedOrderId,
-            message: "Order has already been placed for this session.",
-          };
-        }
-
-        const onlineOrderResponse:
-          | {
-              error: string;
-              success: boolean;
-              orderId?: undefined;
-            }
-          | {
-              success: boolean;
-              orderId: Id<"onlineOrder">;
-              error?: undefined;
-            } = await ctx.runMutation(api.storeFront.onlineOrder.create, {
-          checkoutSessionId: args.id,
-          billingDetails: args.orderDetails.billingDetails,
-          customerDetails: args.orderDetails.customerDetails,
-          deliveryDetails: args.orderDetails.deliveryDetails,
-          deliveryMethod: args.orderDetails.deliveryMethod,
-          deliveryOption: args.orderDetails.deliveryOption,
-          deliveryFee: args.orderDetails.deliveryFee,
-          pickupLocation: args.orderDetails.pickupLocation,
-          paymentMethod: session?.paymentMethod,
-        });
-
-        if (!onlineOrderResponse.success) {
-          console.error(
-            `Failed to create online order for session: ${args.id} with error: ${onlineOrderResponse.error}`
-          );
-          return { success: false, message: "Failed to create online order." };
-        }
-
-        console.log(
-          `online order created for ${session?._id} | ${args.orderDetails.customerDetails.email}`
-        );
-
-        await ctx.db.patch(args.id, {
-          placedOrderId: onlineOrderResponse.orderId,
-        });
-
-        if (session) {
-          // clear all items in the current active bag
-          await ctx.runMutation(api.storeFront.bag.clearBag, {
-            id: session.bagId,
-          });
-        }
-
-        return { success: true, orderId: onlineOrderResponse.orderId };
+      if (args.action === "place-order") {
+        return await handlePlaceOrder(ctx, args.id, session);
       }
 
-      return { success: true, orderId: session?.placedOrderId };
+      if (args.orderDetails && session.hasCompletedPayment) {
+        return await handleOrderCreation(
+          ctx,
+          args.id,
+          session,
+          args.orderDetails
+        );
+      }
+
+      return { success: true, orderId: session.placedOrderId };
     } catch (e) {
       console.error(e);
       return { success: false };
     }
   },
 });
+
+function createPatchObject(args: any) {
+  const patchObject: Record<string, any> = {};
+
+  // Status updates
+  if (args.isFinalizingPayment !== undefined)
+    patchObject.isFinalizingPayment = args.isFinalizingPayment;
+  if (args.hasCompletedPayment !== undefined)
+    patchObject.hasCompletedPayment = args.hasCompletedPayment;
+  if (args.hasCompletedCheckoutSession !== undefined)
+    patchObject.hasCompletedCheckoutSession = args.hasCompletedCheckoutSession;
+  if (args.hasVerifiedPayment !== undefined)
+    patchObject.hasVerifiedPayment = args.hasVerifiedPayment;
+
+  // Reference and amount updates
+  if (args.externalReference)
+    patchObject.externalReference = args.externalReference;
+  if (args.externalTransactionId)
+    patchObject.externalTransactionId = args.externalTransactionId;
+  if (args.amount) patchObject.amount = args.amount;
+
+  // Payment method and order details
+  if (args.paymentMethod) patchObject.paymentMethod = args.paymentMethod;
+  if (args.orderDetails) {
+    Object.assign(patchObject, {
+      billingDetails: args.orderDetails.billingDetails,
+      customerDetails: args.orderDetails.customerDetails,
+      deliveryDetails: args.orderDetails.deliveryDetails,
+      deliveryMethod: args.orderDetails.deliveryMethod,
+      deliveryOption: args.orderDetails.deliveryOption,
+      deliveryFee: args.orderDetails.deliveryFee,
+      pickupLocation: args.orderDetails.pickupLocation,
+    });
+  }
+
+  return patchObject;
+}
+
+async function handlePlaceOrder(ctx: any, sessionId: string, session: any) {
+  if (session.placedOrderId) {
+    console.log(`Order has already been placed for session: ${sessionId}`);
+    return {
+      success: false,
+      orderId: session.placedOrderId,
+      message: "Order has already been placed for this session.",
+    };
+  }
+
+  const orderResponse = await createOnlineOrder(ctx, sessionId, {
+    billingDetails: session.billingDetails,
+    customerDetails: session.customerDetails,
+    deliveryDetails: session.deliveryDetails,
+    deliveryMethod: session.deliveryMethod || "",
+    deliveryOption: session.deliveryOption,
+    deliveryInstructions: session.deliveryInstructions,
+    deliveryFee: session.deliveryFee,
+    pickupLocation: session.pickupLocation,
+    paymentMethod: session.paymentMethod,
+  });
+
+  return orderResponse;
+}
+
+async function handleOrderCreation(
+  ctx: any,
+  sessionId: string,
+  session: any,
+  orderDetails: any
+) {
+  if (session.placedOrderId) {
+    return {
+      success: false,
+      orderId: session.placedOrderId,
+      message: "Order has already been placed for this session.",
+    };
+  }
+
+  const orderResponse = await createOnlineOrder(ctx, sessionId, {
+    ...orderDetails,
+    paymentMethod: session.paymentMethod,
+  });
+
+  if (orderResponse.success) {
+    await ctx.runMutation(api.storeFront.bag.clearBag, { id: session.bagId });
+  }
+
+  return orderResponse;
+}
+
+async function createOnlineOrder(
+  ctx: any,
+  sessionId: string,
+  orderData: any
+): Promise<any> {
+  const response = await ctx.runMutation(api.storeFront.onlineOrder.create, {
+    checkoutSessionId: sessionId,
+    ...orderData,
+  });
+
+  if (!response.success) {
+    console.error(
+      `Failed to create online order for session: ${sessionId} with error: ${response.error}`
+    );
+    return { success: false, message: "Failed to create online order." };
+  }
+
+  await ctx.db.patch(sessionId, { placedOrderId: response.orderId });
+  return { success: true, orderId: response.orderId };
+}
 
 export const getCheckoutSession = query({
   args: {
@@ -484,8 +430,6 @@ export const getCheckoutSession = query({
 export const getPendingCheckoutSessions = query({
   args: { storeFrontUserId: v.union(v.id("storeFrontUser"), v.id("guest")) },
   handler: async (ctx, args) => {
-    const threshold = Date.now() - 10 * 60 * 1000;
-
     return await ctx.db
       .query("checkoutSession")
       .filter((q) =>
@@ -494,7 +438,6 @@ export const getPendingCheckoutSessions = query({
           q.eq(q.field("hasCompletedPayment"), true),
           q.eq(q.field("hasCompletedCheckoutSession"), true),
           q.eq(q.field("placedOrderId"), undefined)
-          // q.lt(q.field("expiresAt"), threshold)
         )
       )
       .collect();

@@ -18,11 +18,15 @@ function generateOrderNumber() {
 export const create = mutation({
   args: {
     checkoutSessionId: v.id("checkoutSession"),
-    billingDetails: addressSchema,
+    billingDetails: v.object({
+      ...addressSchema.fields,
+      billingAddressSameAsDelivery: v.optional(v.boolean()),
+    }),
     customerDetails: customerDetailsSchema,
     deliveryDetails: v.union(addressSchema, v.null(), v.string()),
     deliveryMethod: v.string(),
     deliveryOption: v.union(v.string(), v.null()),
+    deliveryInstructions: v.union(v.string(), v.null()),
     deliveryFee: v.union(v.number(), v.null()),
     pickupLocation: v.union(v.string(), v.null()),
     paymentMethod: v.optional(paymentMethodSchema),
@@ -49,6 +53,7 @@ export const create = mutation({
       billingDetails: args.billingDetails,
       customerDetails: args.customerDetails,
       deliveryDetails: args.deliveryDetails,
+      deliveryInstructions: args.deliveryInstructions,
       deliveryMethod: args.deliveryMethod,
       deliveryOption: args.deliveryOption,
       deliveryFee: args.deliveryFee,

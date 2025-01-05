@@ -466,6 +466,7 @@ export const useShoppingBag = () => {
     moveItemFromBagToSaved,
     moveItemFromSavedToBag,
     addedItemSuccessfully: operationSuccessful,
+    operationSuccessful,
     obtainCheckoutSession,
     unavailableProducts,
     areProductsUnavailable,

@@ -42,14 +42,18 @@ export const createTransaction = action({
     if (response.ok) {
       const res = await response.json();
 
-      await ctx.runMutation(
-        internal.storeFront.checkoutSession.updateCheckoutSession,
-        {
-          id: args.checkoutSessionId,
-          isFinalizingPayment: true,
-          externalReference: res.data.reference,
-        }
-      );
+      try {
+        await ctx.runMutation(
+          internal.storeFront.checkoutSession.updateCheckoutSession,
+          {
+            id: args.checkoutSessionId,
+            isFinalizingPayment: true,
+            externalReference: res.data.reference,
+          }
+        );
+      } catch (error) {
+        console.error("Failed to update checkout session", error);
+      }
 
       console.log(`finalizing payment for session: ${args.checkoutSessionId}`);
 
@@ -125,7 +129,7 @@ export const verifyPayment = action({
       }
 
       if (!isVerified) {
-        console.log(
+        console.error(
           `unable to verify payment. [session: ${session?._id}, order: ${order?._id}, customer: ${args.storeFrontUserId}, externalReference: ${args.externalReference}]`
         );
       }

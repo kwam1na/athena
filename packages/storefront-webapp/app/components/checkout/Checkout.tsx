@@ -6,6 +6,7 @@ import BagSummary from "./BagSummary";
 import { PaymentSection } from "./PaymentSection";
 import { useEffect } from "react";
 import MobileBagSummary from "./MobileBagSummary";
+import { CheckoutForm } from "./CheckoutForm";
 
 const MainComponent = () => {
   const { activeSession } = useCheckout();
@@ -36,7 +37,7 @@ const MainComponent = () => {
           <div className="py-8 space-y-12 container mx-auto">
             <p>Checkout</p>
             <div className="space-y-32">
-              <div className="lg:pr-24">
+              {/* <div className="lg:pr-24">
                 <CustomerDetailsForm />
               </div>
 
@@ -44,6 +45,10 @@ const MainComponent = () => {
                 <DeliverySection />
 
                 <PaymentSection />
+              </div> */}
+
+              <div className="lg:pr-24">
+                <CheckoutForm />
               </div>
             </div>
           </div>

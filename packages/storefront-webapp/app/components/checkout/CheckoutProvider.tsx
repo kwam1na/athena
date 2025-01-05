@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { z, ZodError } from "zod";
-import { customerDetailsSchema } from "./CustomerDetails";
 import { billingDetailsSchema } from "./BillingDetails";
 import { deliveryDetailsSchema } from "./DeliveryDetails/schema";
 import { useGetActiveCheckoutSession } from "@/hooks/useGetActiveCheckoutSession";
@@ -11,17 +10,26 @@ import { useQuery } from "@tanstack/react-query";
 import { checkoutSessionQueries } from "@/queries";
 import { useStoreContext } from "@/contexts/StoreContext";
 import { SESSION_STORAGE_KEY } from "@/lib/constants";
+import { customerDetailsSchema } from "./schemas/customerDetailsSchema";
+import { baseDeliveryDetailsSchema } from "./schemas/deliveryDetailsSchema";
+import { baseBillingDetailsSchema } from "./schemas/billingDetailsSchema";
 
 export type Address = {
-  address: string;
-  city: string;
+  address?: string;
+  city?: string;
   state?: string;
   zip?: string;
   country: string;
   region?: string;
+  street?: string;
+  houseNumber?: string;
+  neighborhood?: string;
+  landmark?: string;
 };
 
-type BillingAddress = Address & { billingAddressSameAsDelivery?: boolean };
+export type BillingAddress = Address & {
+  billingAddressSameAsDelivery?: boolean;
+};
 
 export type CustomerDetails = {
   firstName: string;
@@ -32,7 +40,7 @@ export type CustomerDetails = {
 
 export const webOrderSchema = z
   .object({
-    billingDetails: billingDetailsSchema,
+    billingDetails: baseBillingDetailsSchema,
     customerDetails: customerDetailsSchema,
     deliveryMethod: z
       .enum(["pickup", "delivery"])
@@ -43,12 +51,133 @@ export const webOrderSchema = z
       .nullable(),
     deliveryFee: z.number().nullable(),
     pickupLocation: z.string().min(1).nullable(),
-    deliveryDetails: deliveryDetailsSchema.nullable(),
+    deliveryDetails: baseDeliveryDetailsSchema.nullable(),
+    deliveryInstructions: z.string().optional(),
   })
   .superRefine((data, ctx) => {
-    const { deliveryMethod, deliveryDetails } = data;
+    const { deliveryFee, deliveryMethod, deliveryDetails, billingDetails } =
+      data;
 
     if (deliveryMethod == "delivery") {
+      if (!billingDetails) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["billingDetails"],
+          message: "Billing details are required",
+        });
+      }
+
+      const {
+        address: billingAddress,
+        billingAddressSameAsDelivery,
+        city: billingCity,
+        state: billingState,
+        zip: billingZip,
+        country: billingCountry,
+      } = billingDetails || {};
+
+      const isUSBillingAddress = billingCountry == "US";
+
+      if (!billingAddressSameAsDelivery) {
+        if (!billingAddress) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["billingDetails", "address"],
+            message: "Address is required",
+          });
+        }
+
+        if (billingAddress?.trim().length == 0) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["billingDetails", "address"],
+            message: "Address cannot be empty or whitespace",
+          });
+        }
+
+        if (!billingCity) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["billingDetails", "city"],
+            message: "City is required",
+          });
+        }
+
+        if (billingCity?.trim().length == 0) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["billingDetails", "city"],
+            message: "City cannot be empty or whitespace",
+          });
+        }
+
+        if (!billingCountry) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["billingDetails", "country"],
+            message: "Country is required",
+          });
+        }
+      }
+
+      if (billingCountry?.trim().length == 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["billingDetails", "country"],
+          message: "Country cannot be empty or whitespace",
+        });
+      }
+
+      if (isUSBillingAddress) {
+        if (!billingState) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["billingDetails", "state"],
+            message: "State is required",
+          });
+
+          if (billingState?.trim().length == 0) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: ["billingDetails", "state"],
+              message: "State cannot be empty or whitespace",
+            });
+          }
+        }
+
+        if (!billingZip) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["billingDetails", "zip"],
+            message: "Zip is required",
+          });
+        }
+
+        if (billingZip?.trim().length == 0) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["billingDetails", "zip"],
+            message: "Zip code cannot be empty or whitespace",
+          });
+        }
+
+        if (billingZip && !/^\d{5}$/.test(billingZip)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["billingDetails", "zip"],
+            message: "Zip code must be a 5-digit number",
+          });
+        }
+      }
+
+      if (!deliveryFee) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["billingDetails", "deliveryFee"],
+          message: "Delivery fee is required",
+        });
+      }
+
       if (!deliveryDetails) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
@@ -57,39 +186,55 @@ export const webOrderSchema = z
         });
       }
 
-      const { address, city, state, zip, region, country } =
-        deliveryDetails || {};
+      const {
+        address,
+        city,
+        street,
+        houseNumber,
+        neighborhood,
+        state,
+        zip,
+        region,
+        country,
+      } = deliveryDetails || {};
 
-      if (!address) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["deliveryDetails", "address"],
-          message: "Address is required",
-        });
-      }
+      const isGhanaAddress = country == "GH";
 
-      if (address?.trim().length == 0) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["deliveryDetails", "address"],
-          message: "Address cannot be empty or whitespace",
-        });
-      }
+      const isUSAddress = country == "US";
 
-      if (!city) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["deliveryDetails", "city"],
-          message: "City is required",
-        });
-      }
+      // validate the address fields for US and ROW orders
+      if (!isGhanaAddress) {
+        if (!address) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["deliveryDetails", "address"],
+            message: "Address is required",
+          });
+        }
 
-      if (city?.trim().length == 0) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["deliveryDetails", "city"],
-          message: "City cannot be empty or whitespace",
-        });
+        if (address?.trim().length == 0) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["deliveryDetails", "address"],
+            message: "Address cannot be empty or whitespace",
+          });
+        }
+
+        if (!city) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["deliveryDetails", "city"],
+            message: "City is required",
+          });
+        }
+
+        if (city?.trim().length == 0) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["deliveryDetails", "city"],
+            message: "City cannot be empty or whitespace",
+          });
+        }
       }
 
       if (!country) {
@@ -100,7 +245,7 @@ export const webOrderSchema = z
         });
       }
 
-      if (country == "US") {
+      if (isUSAddress) {
         if (!state) {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
@@ -120,7 +265,7 @@ export const webOrderSchema = z
         if (zip?.trim().length == 0) {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
-            path: ["zip"],
+            path: ["deliveryDetails", "zip"],
             message: "Zip code cannot be empty or whitespace",
           });
         }
@@ -128,32 +273,60 @@ export const webOrderSchema = z
         if (zip && !/^\d{5}$/.test(zip)) {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
-            path: ["zip"],
+            path: ["deliveryDetails", "zip"],
             message: "Zip code must be a 5-digit number",
           });
         }
       }
 
-      if (country == "GH") {
+      if (isGhanaAddress) {
         if (!region) {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
-            path: ["region"],
+            path: ["deliveryDetails", "region"],
             message: "Region is required",
+          });
+        }
+
+        if (!street) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["deliveryDetails", "street"],
+            message: "Street is required",
+          });
+        }
+
+        if (!houseNumber) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["deliveryDetails", "houseNumber"],
+            message: "Apt/House number is required",
+          });
+        }
+
+        if (!neighborhood) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["deliveryDetails", "neighborhood"],
+            message: "Neighborhood is required",
           });
         }
       }
     }
   });
+
 type DeliveryOption = "within-accra" | "outside-accra" | "intl";
+
+export type DeliveryMethod = "delivery" | "pickup";
 
 type CheckoutState = {
   billingDetails: BillingAddress | null;
   customerDetails: CustomerDetails | null;
-  deliveryMethod: "delivery" | "pickup" | null;
+  deliveryMethod: DeliveryMethod | null;
   deliveryOption: DeliveryOption | null;
   deliveryFee: number | null;
   deliveryDetails: Address | null;
+  deliveryInstructions: string;
   pickupLocation: string | null;
 
   didEnterDeliveryDetails: boolean;
@@ -195,6 +368,7 @@ const initialState: CheckoutState = {
   deliveryMethod: null,
   deliveryOption: null,
   deliveryDetails: null,
+  deliveryInstructions: "",
   customerDetails: null,
   pickupLocation: null,
 
@@ -340,6 +514,8 @@ export const CheckoutProvider = ({
         const region = new Intl.Locale(navigator.language).region || "GH";
         setCheckoutState((prev) => ({
           ...prev,
+          // deliveryDetails: { country: region } as Address,
+          // billingDetails: { country: region } as Address,
         }));
       } catch {
         setCheckoutState((prev) => ({
@@ -448,6 +624,7 @@ export const CheckoutProvider = ({
 
     try {
       // Parse the state using the schema
+      // console.log("in can place order", checkoutState);
       webOrderSchema.parse(checkoutState);
       updateState({ failedFinalValidation: false });
 

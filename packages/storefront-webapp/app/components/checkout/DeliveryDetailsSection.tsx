@@ -24,8 +24,9 @@ import {
 import { accraNeighborhoods } from "@/lib/ghana";
 import { Plus } from "lucide-react";
 import { CheckoutFormSectionProps } from "./CustomerInfoSection";
+import { Textarea } from "../ui/textarea";
 
-export const DeliveryDetailsForm = ({ form }: CheckoutFormSectionProps) => {
+export const DeliveryDetailsSection = ({ form }: CheckoutFormSectionProps) => {
   const { checkoutState, actionsState, updateActionsState, updateState } =
     useCheckout();
 
@@ -53,13 +54,12 @@ export const DeliveryDetailsForm = ({ form }: CheckoutFormSectionProps) => {
 
     const previousCountry = previousCountryRef.current;
 
-    if (country !== previousCountry) {
+    if (previousCountry && country && country !== previousCountry) {
       // clear the form
       form.setValue("deliveryDetails.address", "");
       form.setValue("deliveryDetails.city", "");
       form.setValue("deliveryDetails.zip", "");
       form.setValue("deliveryDetails.region", "");
-      form.setValue("deliveryDetails.country", "");
 
       // clear the state for delivery and billing details
       updateState({
@@ -89,7 +89,7 @@ export const DeliveryDetailsForm = ({ form }: CheckoutFormSectionProps) => {
     <div className="w-full space-y-16">
       <div className="flex flex-col space-y-8">
         <p className="text-xs text-muted-foreground">Delivery details</p>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="hidden md:block w-full">
             <FormField
               control={form.control}
@@ -301,14 +301,14 @@ export const DeliveryDetailsForm = ({ form }: CheckoutFormSectionProps) => {
 
         {checkoutState.isGhanaOrder && (
           <div className="flex gap-2">
-            <div className="w-[60%]">
+            <div className="w-[40%]">
               <FormField
                 control={form.control}
-                name="deliveryDetails.address"
+                name="deliveryDetails.houseNumber"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel className="text-muted-foreground text-xs">
-                      Street name
+                      Apt/House number
                     </FormLabel>
                     <FormControl>
                       <Input
@@ -317,7 +317,7 @@ export const DeliveryDetailsForm = ({ form }: CheckoutFormSectionProps) => {
                           updateState({
                             deliveryDetails: {
                               ...checkoutState.deliveryDetails,
-                              address: e.target.value,
+                              houseNumber: e.target.value,
                             } as Address,
                           });
                           field.onChange(e);
@@ -330,14 +330,14 @@ export const DeliveryDetailsForm = ({ form }: CheckoutFormSectionProps) => {
               />
             </div>
 
-            <div className="w-[40%]">
+            <div className="w-[60%]">
               <FormField
                 control={form.control}
-                name="deliveryDetails.address"
+                name="deliveryDetails.street"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel className="text-muted-foreground text-xs">
-                      House/Apt Number
+                      Street name
                     </FormLabel>
                     <FormControl>
                       <Input
@@ -346,7 +346,7 @@ export const DeliveryDetailsForm = ({ form }: CheckoutFormSectionProps) => {
                           updateState({
                             deliveryDetails: {
                               ...checkoutState.deliveryDetails,
-                              address: e.target.value,
+                              street: e.target.value,
                             } as Address,
                           });
                           field.onChange(e);
@@ -398,7 +398,7 @@ export const DeliveryDetailsForm = ({ form }: CheckoutFormSectionProps) => {
               <div className="w-full">
                 <FormField
                   control={form.control}
-                  name="deliveryDetails.country"
+                  name="deliveryDetails.landmark"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel className="text-muted-foreground text-xs">
@@ -411,7 +411,7 @@ export const DeliveryDetailsForm = ({ form }: CheckoutFormSectionProps) => {
                             updateState({
                               deliveryDetails: {
                                 ...checkoutState.deliveryDetails,
-                                address: e.target.value,
+                                landmark: e.target.value,
                               } as Address,
                             });
                             field.onChange(e);
@@ -427,7 +427,7 @@ export const DeliveryDetailsForm = ({ form }: CheckoutFormSectionProps) => {
               <div className="w-full">
                 <FormField
                   control={form.control}
-                  name="deliveryDetails.country"
+                  name="deliveryDetails.neighborhood"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel className="text-muted-foreground text-xs">
@@ -435,8 +435,14 @@ export const DeliveryDetailsForm = ({ form }: CheckoutFormSectionProps) => {
                       </FormLabel>
                       {checkoutState.deliveryOption === "within-accra" ? (
                         <Select
-                          onValueChange={(region) => {
-                            field.onChange(region);
+                          onValueChange={(neighborhood) => {
+                            updateState({
+                              deliveryDetails: {
+                                ...checkoutState.deliveryDetails,
+                                neighborhood: neighborhood,
+                              } as Address,
+                            });
+                            field.onChange(neighborhood);
                           }}
                           value={field.value}
                         >
@@ -466,7 +472,7 @@ export const DeliveryDetailsForm = ({ form }: CheckoutFormSectionProps) => {
                             updateState({
                               deliveryDetails: {
                                 ...checkoutState.deliveryDetails,
-                                address: e.target.value,
+                                neighborhood: e.target.value,
                               } as Address,
                             });
                             field.onChange(e);
@@ -494,7 +500,18 @@ export const DeliveryDetailsForm = ({ form }: CheckoutFormSectionProps) => {
                         State
                       </FormLabel>
                       <FormControl>
-                        <Input {...field} />
+                        <Input
+                          {...field}
+                          onChange={(e) => {
+                            updateState({
+                              deliveryDetails: {
+                                ...checkoutState.deliveryDetails,
+                                state: e.target.value,
+                              } as Address,
+                            });
+                            field.onChange(e);
+                          }}
+                        />
                       </FormControl>
                       <FormMessage className="text-xs" />
                     </FormItem>
@@ -512,7 +529,18 @@ export const DeliveryDetailsForm = ({ form }: CheckoutFormSectionProps) => {
                         Zip Code
                       </FormLabel>
                       <FormControl>
-                        <Input {...field} />
+                        <Input
+                          {...field}
+                          onChange={(e) => {
+                            updateState({
+                              deliveryDetails: {
+                                ...checkoutState.deliveryDetails,
+                                zip: e.target.value,
+                              } as Address,
+                            });
+                            field.onChange(e);
+                          }}
+                        />
                       </FormControl>
                       <FormMessage className="text-xs" />
                     </FormItem>
@@ -524,9 +552,30 @@ export const DeliveryDetailsForm = ({ form }: CheckoutFormSectionProps) => {
         </div>
       </div>
 
-      {checkoutState.deliveryDetails?.country && <DeliveryOptions />}
+      {checkoutState.isGhanaOrder && (
+        <div className="w-full">
+          <FormField
+            control={form.control}
+            name="deliveryInstructions"
+            render={({ field }) => (
+              <FormItem>
+                <Textarea
+                  placeholder="Add delivery instructions"
+                  {...field}
+                  onChange={(e) => {
+                    updateState({
+                      deliveryInstructions: e.target.value,
+                    });
+                    field.onChange(e);
+                  }}
+                />
+              </FormItem>
+            )}
+          />
+        </div>
+      )}
 
-      {checkoutState.isGhanaOrder && <DeliveryInstructions />}
+      {checkoutState.deliveryDetails?.country && <DeliveryOptions />}
     </div>
   );
 };
