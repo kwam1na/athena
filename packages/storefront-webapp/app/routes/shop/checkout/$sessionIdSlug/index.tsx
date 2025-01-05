@@ -1,17 +1,25 @@
-import { updateCheckoutSession } from "@/api/checkoutSession";
+import {
+  getCheckoutSession,
+  updateCheckoutSession,
+} from "@/api/checkoutSession";
 import { BagSummaryItems } from "@/components/checkout/BagSummary";
 import {
   PaymentDetails,
   PickupDetails,
 } from "@/components/checkout/OrderDetails";
 import { FadeIn } from "@/components/common/FadeIn";
+import { CheckoutSessionGeneric } from "@/components/states/checkout-expired/CheckoutExpired";
 import NotFound from "@/components/states/not-found/NotFound";
 import { LoadingButton } from "@/components/ui/loading-button";
 import { useStoreContext } from "@/contexts/StoreContext";
 import { capitalizeFirstLetter } from "@/lib/utils";
 import { checkoutSessionQueries } from "@/queries";
-import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, useParams } from "@tanstack/react-router";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  createFileRoute,
+  useNavigate,
+  useParams,
+} from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
 import { AlertCircle } from "lucide-react";
 import { useState } from "react";
@@ -25,6 +33,7 @@ const CheckoutSession = () => {
 
   const { userId, organizationId, storeId } = useStoreContext();
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
+  const [isCancelingOrder, setIsCancelingOrder] = useState(false);
   const [isError, setIsError] = useState(false);
 
   const { data: sessionData, isLoading } = useQuery(
@@ -36,9 +45,9 @@ const CheckoutSession = () => {
     })
   );
 
-  const placeOrder = async () => {
-    // setAttemptedOrderCreation(false);
+  const queryClient = useQueryClient();
 
+  const placeOrder = async () => {
     if (!sessionData || !sessionIdSlug) return;
 
     try {
@@ -59,13 +68,45 @@ const CheckoutSession = () => {
 
       setIsError(!res.success);
 
-      // setOrderId(res.orderId);
-      // setAttemptedOrderCreation(true);
       setIsPlacingOrder(false);
-
-      // queryClient.invalidateQueries({ queryKey: bagQueries.activeBagKey() });
     } catch (e) {
       setIsPlacingOrder(false);
+    }
+  };
+
+  const navigate = useNavigate();
+
+  const cancelOrder = async () => {
+    if (!sessionData || !sessionIdSlug) return;
+
+    try {
+      setIsCancelingOrder(true);
+
+      const res = await updateCheckoutSession({
+        action: "cancel-order",
+        organizationId,
+        storeId,
+        storeFrontUserId: userId!,
+        sessionId: sessionIdSlug,
+        hasCompletedCheckoutSession: true,
+      });
+
+      if (res.success) {
+        queryClient.invalidateQueries({
+          queryKey: [...checkoutSessionQueries.sessionKey(), sessionIdSlug],
+        });
+
+        navigate({
+          to: "/shop/checkout/$sessionIdSlug/canceled",
+          params: { sessionIdSlug },
+        });
+      }
+
+      setIsError(res.success == false);
+
+      setIsCancelingOrder(false);
+    } catch (e) {
+      setIsCancelingOrder(false);
     }
   };
 
@@ -73,6 +114,10 @@ const CheckoutSession = () => {
 
   if (!sessionData && !isLoading) {
     return null;
+  }
+
+  if (sessionData.isPaymentRefunded) {
+    return <CheckoutSessionGeneric message="This order has been refunded" />;
   }
 
   return (
@@ -100,7 +145,7 @@ const CheckoutSession = () => {
             y: 0,
             transition: { ease: "easeOut" },
           }}
-          className="space-y-8 w-[40%]"
+          className="space-y-8 w-full md:w-[40%]"
         >
           <p className="text-xs">Your order</p>
 
@@ -114,7 +159,7 @@ const CheckoutSession = () => {
             y: 0,
             transition: { ease: "easeOut" },
           }}
-          className="grid grid-cols-2 w-[80%]"
+          className="grid grid-cols-1 md:grid-cols-2 md:w-[80%]"
         >
           <PickupDetails session={sessionData} />
 
@@ -140,17 +185,31 @@ const CheckoutSession = () => {
                 }}
                 className="text-sm"
               >
-                There was an error submitting your order. Please try again.
+                There was an error processing your last request. Please try
+                again.
               </motion.p>
             </div>
           )}
-          <LoadingButton
-            isLoading={isPlacingOrder}
-            onClick={placeOrder}
-            className="w-[240px]"
-          >
-            Submit order
-          </LoadingButton>
+          <div className="flex gap-2">
+            <LoadingButton
+              isLoading={isPlacingOrder}
+              onClick={placeOrder}
+              className="w-[240px]"
+            >
+              Submit
+            </LoadingButton>
+
+            {!sessionData?.isPaymentRefunded && (
+              <LoadingButton
+                isLoading={isCancelingOrder}
+                onClick={cancelOrder}
+                variant={"clear"}
+                className="w-[240px]"
+              >
+                Cancel order
+              </LoadingButton>
+            )}
+          </div>
         </motion.div>
       </FadeIn>
     </AnimatePresence>

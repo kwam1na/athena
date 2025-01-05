@@ -1,9 +1,15 @@
 import { CheckoutSessionItem, ProductSku } from "../../types";
-import { api } from "../_generated/api";
+import { api, internal } from "../_generated/api";
 import { Id } from "../_generated/dataModel";
-import { internalMutation, mutation, query } from "../_generated/server";
+import {
+  action,
+  internalMutation,
+  mutation,
+  query,
+} from "../_generated/server";
 import { v } from "convex/values";
 import { orderDetailsSchema } from "../schemas/storeFront";
+import { returnItemsToStock } from "./onlineOrder";
 
 const entity = "checkoutSession";
 
@@ -244,6 +250,46 @@ export const getActiveCheckoutSession = query({
   },
 });
 
+export const cancelOrder = action({
+  args: { id: v.id("checkoutSession") },
+  handler: async (ctx, args) => {
+    const session = await ctx.runQuery(api.storeFront.checkoutSession.getById, {
+      sessionId: args.id,
+    });
+
+    if (!session) {
+      return { success: false, message: "Invalid session." };
+    }
+
+    const response = await fetch(`https://api.paystack.co/refund`, {
+      method: "POST",
+      headers: {
+        Authorization:
+          "Bearer sk_test_4460590841638115d8dae604191fdf38844042d0",
+      },
+      body: JSON.stringify({
+        transaction: session.externalTransactionId,
+      }),
+    });
+
+    if (response.status == 200) {
+      await ctx.runMutation(
+        internal.storeFront.checkoutSession.updateCheckoutSession,
+        {
+          id: session._id,
+          isFinalizingPayment: false,
+          isPaymentRefunded: true,
+        }
+      );
+
+      return { success: true, message: "Order has been cancelled." };
+    } else {
+      console.error("Failed to refund payment", response);
+      return { success: false, message: "Failed to cancel order." };
+    }
+  },
+});
+
 export const updateCheckoutSession = internalMutation({
   args: {
     id: v.id("checkoutSession"),
@@ -253,6 +299,7 @@ export const updateCheckoutSession = internalMutation({
     isFinalizingPayment: v.optional(v.boolean()),
     hasCompletedPayment: v.optional(v.boolean()),
     hasCompletedCheckoutSession: v.optional(v.boolean()),
+    isPaymentRefunded: v.optional(v.boolean()),
     hasVerifiedPayment: v.optional(v.boolean()),
     amount: v.optional(v.number()),
     orderDetails: v.optional(orderDetailsSchema),
@@ -308,6 +355,9 @@ function createPatchObject(args: any) {
     patchObject.hasCompletedCheckoutSession = args.hasCompletedCheckoutSession;
   if (args.hasVerifiedPayment !== undefined)
     patchObject.hasVerifiedPayment = args.hasVerifiedPayment;
+
+  if (args.isPaymentRefunded !== undefined)
+    patchObject.isPaymentRefunded = args.isPaymentRefunded;
 
   // Reference and amount updates
   if (args.externalReference)
@@ -437,7 +487,8 @@ export const getPendingCheckoutSessions = query({
           q.eq(q.field("storeFrontUserId"), args.storeFrontUserId),
           q.eq(q.field("hasCompletedPayment"), true),
           q.eq(q.field("hasCompletedCheckoutSession"), true),
-          q.eq(q.field("placedOrderId"), undefined)
+          q.eq(q.field("placedOrderId"), undefined),
+          q.neq(q.field("isPaymentRefunded"), true)
         )
       )
       .collect();

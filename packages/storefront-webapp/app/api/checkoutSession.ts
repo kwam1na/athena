@@ -108,7 +108,7 @@ export async function getCheckoutSession({
   storeFrontUserId: string;
   organizationId: string;
   storeId: string;
-}): Promise<Bag> {
+}) {
   const response = await fetch(
     `${getBaseUrl(organizationId, storeId, storeFrontUserId)}/${sessionId}`
   );
@@ -135,7 +135,11 @@ export async function updateCheckoutSession({
   amount,
   orderDetails,
 }: {
-  action: "finalize-payment" | "complete-checkout" | "place-order";
+  action:
+    | "finalize-payment"
+    | "complete-checkout"
+    | "place-order"
+    | "cancel-order";
   organizationId: string;
   storeId: string;
   storeFrontUserId: string;

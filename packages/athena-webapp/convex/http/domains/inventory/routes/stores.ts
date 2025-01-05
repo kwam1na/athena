@@ -428,6 +428,17 @@ storeRoutes.post(
         return c.json(res);
       }
 
+      if (action == "cancel-order") {
+        const res = await c.env.runAction(
+          api.storeFront.checkoutSession.cancelOrder,
+          {
+            id: checkoutSessionId as Id<"checkoutSession">,
+          }
+        );
+
+        return c.json(res);
+      }
+
       return c.json({});
     } catch (e) {
       return c.json({ error: (e as Error).message }, 400);

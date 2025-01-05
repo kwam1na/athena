@@ -22,6 +22,7 @@ import { Route as LayoutShopLayoutImport } from './routes/_layout/_shopLayout'
 import { Route as LayoutOrdersLayoutImport } from './routes/_layout/_ordersLayout'
 import { Route as ShopCheckoutIndexImport } from './routes/shop/checkout/index'
 import { Route as ShopBagIndexImport } from './routes/shop/bag.index'
+import { Route as ShopCheckoutPendingImport } from './routes/shop/checkout/pending'
 import { Route as ShopCheckoutVerifyIndexImport } from './routes/shop/checkout/verify.index'
 import { Route as ShopCheckoutCompleteIndexImport } from './routes/shop/checkout/complete.index'
 import { Route as ShopCheckoutSessionIdSlugIndexImport } from './routes/shop/checkout/$sessionIdSlug/index'
@@ -30,6 +31,7 @@ import { Route as LayoutPoliciesTosIndexImport } from './routes/_layout/policies
 import { Route as LayoutPoliciesPrivacyIndexImport } from './routes/_layout/policies/privacy.index'
 import { Route as LayoutPoliciesDeliveryReturnsExchangesIndexImport } from './routes/_layout/policies/delivery-returns-exchanges.index'
 import { Route as ShopCheckoutSessionIdSlugCompleteImport } from './routes/shop/checkout/$sessionIdSlug/complete'
+import { Route as ShopCheckoutSessionIdSlugCanceledImport } from './routes/shop/checkout/$sessionIdSlug/canceled'
 import { Route as LayoutShopProductProductSlugImport } from './routes/_layout/shop.product.$productSlug'
 import { Route as LayoutShopLayoutShopCategorySlugIndexImport } from './routes/_layout/_shopLayout/shop/$categorySlug/index'
 import { Route as LayoutOrdersLayoutShopOrdersIndexImport } from './routes/_layout/_ordersLayout/shop/orders/index'
@@ -93,6 +95,11 @@ const ShopBagIndexRoute = ShopBagIndexImport.update({
   getParentRoute: () => rootRoute,
 } as any)
 
+const ShopCheckoutPendingRoute = ShopCheckoutPendingImport.update({
+  path: '/shop/checkout/pending',
+  getParentRoute: () => rootRoute,
+} as any)
+
 const ShopCheckoutVerifyIndexRoute = ShopCheckoutVerifyIndexImport.update({
   path: '/shop/checkout/verify/',
   getParentRoute: () => rootRoute,
@@ -135,6 +142,12 @@ const LayoutPoliciesDeliveryReturnsExchangesIndexRoute =
 const ShopCheckoutSessionIdSlugCompleteRoute =
   ShopCheckoutSessionIdSlugCompleteImport.update({
     path: '/shop/checkout/$sessionIdSlug/complete',
+    getParentRoute: () => rootRoute,
+  } as any)
+
+const ShopCheckoutSessionIdSlugCanceledRoute =
+  ShopCheckoutSessionIdSlugCanceledImport.update({
+    path: '/shop/checkout/$sessionIdSlug/canceled',
     getParentRoute: () => rootRoute,
   } as any)
 
@@ -235,6 +248,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthVerifyImport
       parentRoute: typeof rootRoute
     }
+    '/shop/checkout/pending': {
+      id: '/shop/checkout/pending'
+      path: '/shop/checkout/pending'
+      fullPath: '/shop/checkout/pending'
+      preLoaderRoute: typeof ShopCheckoutPendingImport
+      parentRoute: typeof rootRoute
+    }
     '/shop/bag/': {
       id: '/shop/bag/'
       path: '/shop/bag'
@@ -255,6 +275,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/shop/product/$productSlug'
       preLoaderRoute: typeof LayoutShopProductProductSlugImport
       parentRoute: typeof LayoutImport
+    }
+    '/shop/checkout/$sessionIdSlug/canceled': {
+      id: '/shop/checkout/$sessionIdSlug/canceled'
+      path: '/shop/checkout/$sessionIdSlug/canceled'
+      fullPath: '/shop/checkout/$sessionIdSlug/canceled'
+      preLoaderRoute: typeof ShopCheckoutSessionIdSlugCanceledImport
+      parentRoute: typeof rootRoute
     }
     '/shop/checkout/$sessionIdSlug/complete': {
       id: '/shop/checkout/$sessionIdSlug/complete'
@@ -411,9 +438,11 @@ export interface FileRoutesByFullPath {
   '/account': typeof LayoutAccountRoute
   '/contact-us': typeof LayoutContactUsRoute
   '/auth/verify': typeof AuthVerifyRoute
+  '/shop/checkout/pending': typeof ShopCheckoutPendingRoute
   '/shop/bag': typeof ShopBagIndexRoute
   '/shop/checkout': typeof ShopCheckoutIndexRoute
   '/shop/product/$productSlug': typeof LayoutShopProductProductSlugRoute
+  '/shop/checkout/$sessionIdSlug/canceled': typeof ShopCheckoutSessionIdSlugCanceledRoute
   '/shop/checkout/$sessionIdSlug/complete': typeof ShopCheckoutSessionIdSlugCompleteRoute
   '/policies/delivery-returns-exchanges': typeof LayoutPoliciesDeliveryReturnsExchangesIndexRoute
   '/policies/privacy': typeof LayoutPoliciesPrivacyIndexRoute
@@ -436,9 +465,11 @@ export interface FileRoutesByTo {
   '/account': typeof LayoutAccountRoute
   '/contact-us': typeof LayoutContactUsRoute
   '/auth/verify': typeof AuthVerifyRoute
+  '/shop/checkout/pending': typeof ShopCheckoutPendingRoute
   '/shop/bag': typeof ShopBagIndexRoute
   '/shop/checkout': typeof ShopCheckoutIndexRoute
   '/shop/product/$productSlug': typeof LayoutShopProductProductSlugRoute
+  '/shop/checkout/$sessionIdSlug/canceled': typeof ShopCheckoutSessionIdSlugCanceledRoute
   '/shop/checkout/$sessionIdSlug/complete': typeof ShopCheckoutSessionIdSlugCompleteRoute
   '/policies/delivery-returns-exchanges': typeof LayoutPoliciesDeliveryReturnsExchangesIndexRoute
   '/policies/privacy': typeof LayoutPoliciesPrivacyIndexRoute
@@ -464,9 +495,11 @@ export interface FileRoutesById {
   '/_layout/account': typeof LayoutAccountRoute
   '/_layout/contact-us': typeof LayoutContactUsRoute
   '/auth/verify': typeof AuthVerifyRoute
+  '/shop/checkout/pending': typeof ShopCheckoutPendingRoute
   '/shop/bag/': typeof ShopBagIndexRoute
   '/shop/checkout/': typeof ShopCheckoutIndexRoute
   '/_layout/shop/product/$productSlug': typeof LayoutShopProductProductSlugRoute
+  '/shop/checkout/$sessionIdSlug/canceled': typeof ShopCheckoutSessionIdSlugCanceledRoute
   '/shop/checkout/$sessionIdSlug/complete': typeof ShopCheckoutSessionIdSlugCompleteRoute
   '/_layout/policies/delivery-returns-exchanges/': typeof LayoutPoliciesDeliveryReturnsExchangesIndexRoute
   '/_layout/policies/privacy/': typeof LayoutPoliciesPrivacyIndexRoute
@@ -491,9 +524,11 @@ export interface FileRouteTypes {
     | '/account'
     | '/contact-us'
     | '/auth/verify'
+    | '/shop/checkout/pending'
     | '/shop/bag'
     | '/shop/checkout'
     | '/shop/product/$productSlug'
+    | '/shop/checkout/$sessionIdSlug/canceled'
     | '/shop/checkout/$sessionIdSlug/complete'
     | '/policies/delivery-returns-exchanges'
     | '/policies/privacy'
@@ -515,9 +550,11 @@ export interface FileRouteTypes {
     | '/account'
     | '/contact-us'
     | '/auth/verify'
+    | '/shop/checkout/pending'
     | '/shop/bag'
     | '/shop/checkout'
     | '/shop/product/$productSlug'
+    | '/shop/checkout/$sessionIdSlug/canceled'
     | '/shop/checkout/$sessionIdSlug/complete'
     | '/policies/delivery-returns-exchanges'
     | '/policies/privacy'
@@ -541,9 +578,11 @@ export interface FileRouteTypes {
     | '/_layout/account'
     | '/_layout/contact-us'
     | '/auth/verify'
+    | '/shop/checkout/pending'
     | '/shop/bag/'
     | '/shop/checkout/'
     | '/_layout/shop/product/$productSlug'
+    | '/shop/checkout/$sessionIdSlug/canceled'
     | '/shop/checkout/$sessionIdSlug/complete'
     | '/_layout/policies/delivery-returns-exchanges/'
     | '/_layout/policies/privacy/'
@@ -565,8 +604,10 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   SignupRoute: typeof SignupRoute
   AuthVerifyRoute: typeof AuthVerifyRoute
+  ShopCheckoutPendingRoute: typeof ShopCheckoutPendingRoute
   ShopBagIndexRoute: typeof ShopBagIndexRoute
   ShopCheckoutIndexRoute: typeof ShopCheckoutIndexRoute
+  ShopCheckoutSessionIdSlugCanceledRoute: typeof ShopCheckoutSessionIdSlugCanceledRoute
   ShopCheckoutSessionIdSlugCompleteRoute: typeof ShopCheckoutSessionIdSlugCompleteRoute
   ShopCheckoutSessionIdSlugIndexRoute: typeof ShopCheckoutSessionIdSlugIndexRoute
   ShopCheckoutCompleteIndexRoute: typeof ShopCheckoutCompleteIndexRoute
@@ -579,8 +620,11 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   SignupRoute: SignupRoute,
   AuthVerifyRoute: AuthVerifyRoute,
+  ShopCheckoutPendingRoute: ShopCheckoutPendingRoute,
   ShopBagIndexRoute: ShopBagIndexRoute,
   ShopCheckoutIndexRoute: ShopCheckoutIndexRoute,
+  ShopCheckoutSessionIdSlugCanceledRoute:
+    ShopCheckoutSessionIdSlugCanceledRoute,
   ShopCheckoutSessionIdSlugCompleteRoute:
     ShopCheckoutSessionIdSlugCompleteRoute,
   ShopCheckoutSessionIdSlugIndexRoute: ShopCheckoutSessionIdSlugIndexRoute,
@@ -605,8 +649,10 @@ export const routeTree = rootRoute
         "/login",
         "/signup",
         "/auth/verify",
+        "/shop/checkout/pending",
         "/shop/bag/",
         "/shop/checkout/",
+        "/shop/checkout/$sessionIdSlug/canceled",
         "/shop/checkout/$sessionIdSlug/complete",
         "/shop/checkout/$sessionIdSlug/",
         "/shop/checkout/complete/",
@@ -663,6 +709,9 @@ export const routeTree = rootRoute
     "/auth/verify": {
       "filePath": "auth.verify.tsx"
     },
+    "/shop/checkout/pending": {
+      "filePath": "shop/checkout/pending.tsx"
+    },
     "/shop/bag/": {
       "filePath": "shop/bag.index.tsx"
     },
@@ -672,6 +721,9 @@ export const routeTree = rootRoute
     "/_layout/shop/product/$productSlug": {
       "filePath": "_layout/shop.product.$productSlug.tsx",
       "parent": "/_layout"
+    },
+    "/shop/checkout/$sessionIdSlug/canceled": {
+      "filePath": "shop/checkout/$sessionIdSlug/canceled.tsx"
     },
     "/shop/checkout/$sessionIdSlug/complete": {
       "filePath": "shop/checkout/$sessionIdSlug/complete.tsx"

@@ -21,6 +21,7 @@ export const checkoutSessionSchema = v.object({
   hasCompletedPayment: v.boolean(),
   hasCompletedCheckoutSession: v.boolean(),
   hasVerifiedPayment: v.boolean(),
+  isPaymentRefunded: v.optional(v.boolean()),
   paymentMethod: v.optional(paymentMethodSchema),
   billingDetails: v.union(v.record(v.string(), v.any()), v.null()),
   customerDetails: v.union(v.record(v.string(), v.any()), v.null()),

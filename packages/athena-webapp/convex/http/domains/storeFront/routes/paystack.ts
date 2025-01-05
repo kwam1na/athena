@@ -16,8 +16,6 @@ paystackRoutes.post("/", async (c) => {
   if (payload?.event == "charge.success" && checkout_session_id) {
     console.log(`charge successful for session: ${checkout_session_id}`);
 
-    // throw new Error("ahhh");
-
     await c.env.runMutation(
       internal.storeFront.checkoutSession.updateCheckoutSession,
       {
@@ -33,7 +31,7 @@ paystackRoutes.post("/", async (c) => {
         },
         orderDetails: {
           ...order_details,
-          // deliveryInstructions: order_details.deliveryInstructions || "",
+          deliveryInstructions: order_details.deliveryInstructions || "",
           billingDetails: {
             ...order_details.billingDetails,
             billingAddressSameAsDelivery: Boolean(

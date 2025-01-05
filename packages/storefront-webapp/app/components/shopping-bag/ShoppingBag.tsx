@@ -25,7 +25,11 @@ const PendingItem = ({ session, count }: { session: any; count: number }) => {
     >
       <InfoIcon className="w-4 h-4" />
       <Link
-        to="/shop/checkout/$sessionIdSlug"
+        to={
+          count == 1
+            ? "/shop/checkout/$sessionIdSlug"
+            : "/shop/checkout/pending"
+        }
         params={{ sessionIdSlug: session._id }}
         className="flex items-center"
       >
@@ -46,6 +50,7 @@ export default function ShoppingBag() {
   const [bagAction, setBagAction] = useState<ShoppingBagAction>("idle");
   const { formatter, userId, organizationId, storeId, isNavbarShowing } =
     useStoreContext();
+
   const {
     bag,
     bagSubtotal,
@@ -137,14 +142,21 @@ export default function ShoppingBag() {
     <FadeIn className="container mx-auto max-w-[1024px] px-6 xl:px-0 space-y-8 lg:space-y-24 py-8">
       {!isBagEmpty && (
         <div className="space-y-2">
-          <h1 className="text-lg font-light">Bag</h1>
           {data && data.length > 0 && (
             <PendingItem session={data[0]} count={data.length} />
           )}
+          <h1 className="text-lg font-light">Bag</h1>
         </div>
       )}
 
-      {isBagEmpty && <EmptyState message="Your bag is empty." />}
+      {isBagEmpty && (
+        <div className="space-y-8">
+          {data && data.length > 0 && (
+            <PendingItem session={data[0]} count={data.length} />
+          )}
+          <EmptyState message="Your bag is empty." />
+        </div>
+      )}
 
       {!isBagEmpty && total !== 0 && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 pb-56">
