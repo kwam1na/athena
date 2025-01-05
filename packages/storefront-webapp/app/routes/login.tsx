@@ -92,8 +92,8 @@ const Login = () => {
 
   return (
     <FadeIn className="container mx-auto max-w-[1024px] pb-56 py-8 px-6 xl:px-0">
-      <div className="space-y-8">
-        <h1 className="text-xl font-medium">Login for faster checkout.</h1>
+      <div className="space-y-8 py-16">
+        {/* <h1 className="text-xl font-medium">Login for faster checkout.</h1> */}
 
         <Form {...form}>
           <form

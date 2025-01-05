@@ -16,38 +16,634 @@ import {
   SelectValue,
 } from "../ui/select";
 import { ALL_COUNTRIES } from "@/lib/countries";
-import { useEffect, useRef } from "react";
-import {
-  DeliveryInstructions,
-  DeliveryOptions,
-} from "./DeliveryDetails/DeliverySection";
+import { useEffect, useRef, useState } from "react";
+import { DeliveryOptions } from "./DeliveryDetails/DeliverySection";
 import { accraNeighborhoods } from "@/lib/ghana";
-import { Plus } from "lucide-react";
 import { CheckoutFormSectionProps } from "./CustomerInfoSection";
 import { Textarea } from "../ui/textarea";
+import { Button } from "../ui/button";
+
+const CountryFields = ({ form }: CheckoutFormSectionProps) => {
+  const { checkoutState, updateState } = useCheckout();
+  return (
+    <>
+      <div className="hidden md:block w-full">
+        <FormField
+          control={form.control}
+          name="deliveryDetails.country"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-muted-foreground text-xs">
+                Country
+              </FormLabel>
+              <Select
+                onValueChange={(e) => {
+                  updateState({
+                    deliveryDetails: {
+                      ...checkoutState.deliveryDetails,
+                      country: e,
+                    } as Address,
+                  });
+                  field.onChange(e);
+                }}
+                value={field.value}
+              >
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select country" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  {ALL_COUNTRIES.map((country) => (
+                    <SelectItem key={country.code} value={country.code}>
+                      {country.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FormMessage className="text-xs" />
+            </FormItem>
+          )}
+        />
+      </div>
+
+      <div className="block md:hidden w-full">
+        <FormField
+          control={form.control}
+          name="deliveryDetails.country"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-muted-foreground text-xs">
+                Country
+              </FormLabel>
+              <FormControl>
+                <select
+                  className="block w-full px-3 py-8 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary text-sm"
+                  value={field.value}
+                  onChange={(e) => {
+                    const selectedValue = e.target.value;
+                    updateState({
+                      deliveryDetails: {
+                        ...checkoutState.deliveryDetails,
+                        country: selectedValue,
+                      } as Address,
+                    });
+                    field.onChange(selectedValue);
+                  }}
+                >
+                  <option value="" disabled>
+                    Select country
+                  </option>
+                  {ALL_COUNTRIES.map((country) => (
+                    <option key={country.code} value={country.code}>
+                      {country.name}
+                    </option>
+                  ))}
+                </select>
+              </FormControl>
+              <FormMessage className="text-xs" />
+            </FormItem>
+          )}
+        />
+      </div>
+    </>
+  );
+};
+
+const RegionFields = ({ form }: CheckoutFormSectionProps) => {
+  const { checkoutState, updateState } = useCheckout();
+  return (
+    <>
+      <div className="flex items-center">
+        <div className="block md:hidden w-full">
+          <FormField
+            control={form.control}
+            name="deliveryDetails.region"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-muted-foreground text-xs">
+                  Region
+                </FormLabel>
+                <FormControl>
+                  <select
+                    className="block w-full px-3 py-8 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary text-sm"
+                    value={field.value}
+                    onChange={(e) => {
+                      const region = e.target.value;
+                      const deliveryOption =
+                        region == "GA" ? "within-accra" : "outside-accra";
+                      const deliveryFee = region == "GA" ? 30 : 70;
+
+                      updateState({
+                        deliveryDetails: {
+                          ...checkoutState.deliveryDetails,
+                          region,
+                          neighborhood:
+                            deliveryOption == "within-accra"
+                              ? checkoutState?.deliveryDetails?.neighborhood
+                              : "",
+                        } as Address,
+                        deliveryFee,
+                        deliveryOption,
+                      });
+                      field.onChange(region);
+                    }}
+                  >
+                    <option value="" disabled>
+                      Select region
+                    </option>
+                    {GHANA_REGIONS.map((region) => (
+                      <option key={region.code} value={region.code}>
+                        {region.name}
+                      </option>
+                    ))}
+                  </select>
+                </FormControl>
+                <FormMessage className="text-xs" />
+              </FormItem>
+            )}
+          />
+        </div>
+
+        <div className="hidden md:block w-full">
+          <FormField
+            control={form.control}
+            name="deliveryDetails.region"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-muted-foreground text-xs">
+                  Region
+                </FormLabel>
+                <Select
+                  onValueChange={(region) => {
+                    const deliveryOption =
+                      region == "GA" ? "within-accra" : "outside-accra";
+
+                    const deliveryFee = region == "GA" ? 30 : 70;
+
+                    updateState({
+                      deliveryDetails: {
+                        ...checkoutState.deliveryDetails,
+                        region,
+                        neighborhood:
+                          deliveryOption == "within-accra"
+                            ? checkoutState?.deliveryDetails?.neighborhood
+                            : "",
+                      } as Address,
+                      deliveryFee,
+                      deliveryOption,
+                    });
+                    field.onChange(region);
+                  }}
+                  value={field.value}
+                >
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select region" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {GHANA_REGIONS.map((region) => (
+                      <SelectItem key={region.code} value={region.code}>
+                        {region.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormMessage className="text-xs" />
+              </FormItem>
+            )}
+          />
+        </div>
+      </div>
+    </>
+  );
+};
+
+const AddressField = ({ form }: CheckoutFormSectionProps) => {
+  const { checkoutState, updateState } = useCheckout();
+  return (
+    <div className="w-full">
+      <FormField
+        control={form.control}
+        name="deliveryDetails.address"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel className="text-muted-foreground text-xs">
+              Address
+            </FormLabel>
+            <FormControl>
+              <Input
+                {...field}
+                onChange={(e) => {
+                  updateState({
+                    deliveryDetails: {
+                      ...checkoutState.deliveryDetails,
+                      address: e.target.value,
+                    } as Address,
+                  });
+                  field.onChange(e);
+                }}
+              />
+            </FormControl>
+            <FormMessage className="text-xs" />
+          </FormItem>
+        )}
+      />
+    </div>
+  );
+};
+
+const GhanaAddressFields = ({ form }: CheckoutFormSectionProps) => {
+  const { checkoutState, updateState } = useCheckout();
+  return (
+    <div className="flex flex-col md:flex-row gap-4">
+      <div className="w-full md:w-[30%]">
+        <FormField
+          control={form.control}
+          name="deliveryDetails.houseNumber"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-muted-foreground text-xs">
+                Apt/House number
+              </FormLabel>
+              <FormControl>
+                <Input
+                  {...field}
+                  onChange={(e) => {
+                    updateState({
+                      deliveryDetails: {
+                        ...checkoutState.deliveryDetails,
+                        houseNumber: e.target.value,
+                      } as Address,
+                    });
+                    field.onChange(e);
+                  }}
+                />
+              </FormControl>
+              <FormMessage className="text-xs" />
+            </FormItem>
+          )}
+        />
+      </div>
+
+      <div className="w-full md:w-[70%]">
+        <FormField
+          control={form.control}
+          name="deliveryDetails.street"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-muted-foreground text-xs">
+                Street name
+              </FormLabel>
+              <FormControl>
+                <Input
+                  {...field}
+                  onChange={(e) => {
+                    updateState({
+                      deliveryDetails: {
+                        ...checkoutState.deliveryDetails,
+                        street: e.target.value,
+                      } as Address,
+                    });
+                    field.onChange(e);
+                  }}
+                />
+              </FormControl>
+              <FormMessage className="text-xs" />
+            </FormItem>
+          )}
+        />
+      </div>
+    </div>
+  );
+};
+
+const CityField = ({ form }: CheckoutFormSectionProps) => {
+  const { checkoutState, updateState } = useCheckout();
+  return (
+    <div className={`${checkoutState.isUSOrder ? "w-full" : "w-auto"}`}>
+      <FormField
+        control={form.control}
+        name="deliveryDetails.city"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel className="text-muted-foreground text-xs">
+              City
+            </FormLabel>
+            <FormControl>
+              <Input
+                {...field}
+                onChange={(e) => {
+                  updateState({
+                    deliveryDetails: {
+                      ...checkoutState.deliveryDetails,
+                      city: e.target.value,
+                    } as Address,
+                  });
+                  field.onChange(e);
+                }}
+              />
+            </FormControl>
+            <FormMessage className="text-xs" />
+          </FormItem>
+        )}
+      />
+    </div>
+  );
+};
+
+const GhanaAddressLocaleFields = ({
+  form,
+  isEnteringNewNeighborhood,
+  setIsEnteringNewNeighborhood,
+}: CheckoutFormSectionProps & {
+  isEnteringNewNeighborhood: boolean;
+  setIsEnteringNewNeighborhood: (s: boolean) => void;
+}) => {
+  const { checkoutState, updateState } = useCheckout();
+  return (
+    <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="w-full">
+        <FormField
+          control={form.control}
+          name="deliveryDetails.landmark"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-muted-foreground text-xs">
+                Landmark (Optional)
+              </FormLabel>
+              <FormControl>
+                <Input
+                  {...field}
+                  onChange={(e) => {
+                    updateState({
+                      deliveryDetails: {
+                        ...checkoutState.deliveryDetails,
+                        landmark: e.target.value,
+                      } as Address,
+                    });
+                    field.onChange(e);
+                  }}
+                />
+              </FormControl>
+              <FormMessage className="text-xs" />
+            </FormItem>
+          )}
+        />
+      </div>
+
+      <div className="hidden md:block w-full">
+        <FormField
+          control={form.control}
+          name="deliveryDetails.neighborhood"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-muted-foreground text-xs">
+                Neighborhood/Suburb
+              </FormLabel>
+              {checkoutState.deliveryOption === "within-accra" &&
+              !isEnteringNewNeighborhood ? (
+                <Select
+                  onValueChange={(neighborhood) => {
+                    updateState({
+                      deliveryDetails: {
+                        ...checkoutState.deliveryDetails,
+                        neighborhood: neighborhood,
+                      } as Address,
+                    });
+
+                    field.onChange(neighborhood);
+                  }}
+                  value={field.value}
+                >
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select neighborhood" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {accraNeighborhoods.map((n) => (
+                      <SelectItem key={n.value} value={n.value}>
+                        {n.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Input
+                  {...field}
+                  onChange={(e) => {
+                    updateState({
+                      deliveryDetails: {
+                        ...checkoutState.deliveryDetails,
+                        neighborhood: e.target.value,
+                      } as Address,
+                    });
+                    field.onChange(e);
+                  }}
+                />
+              )}
+
+              {checkoutState.deliveryOption == "within-accra" && (
+                <Button
+                  type="button"
+                  variant={"clear"}
+                  onClick={() => {
+                    setIsEnteringNewNeighborhood(!isEnteringNewNeighborhood);
+                  }}
+                  className="text-muted-foreground text-xs p-0"
+                >
+                  {isEnteringNewNeighborhood ? "Choose from list" : "Add"}
+                </Button>
+              )}
+
+              <FormMessage className="text-xs" />
+            </FormItem>
+          )}
+        />
+      </div>
+
+      <div className="block md:hidden w-full">
+        <FormField
+          control={form.control}
+          name="deliveryDetails.neighborhood"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-muted-foreground text-xs">
+                Neighborhood/Suburb
+              </FormLabel>
+              {checkoutState.deliveryOption === "within-accra" &&
+              !isEnteringNewNeighborhood ? (
+                <FormControl>
+                  <select
+                    className="block w-full px-3 py-8 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary text-sm"
+                    value={field.value}
+                    onChange={(e) => {
+                      updateState({
+                        deliveryDetails: {
+                          ...checkoutState.deliveryDetails,
+                          neighborhood: e.target.value,
+                        } as Address,
+                      });
+                      field.onChange(e.target.value);
+                    }}
+                  >
+                    <option value="" disabled>
+                      Select neighborhood
+                    </option>
+                    {accraNeighborhoods.map((n) => (
+                      <option key={n.value} value={n.value}>
+                        {n.label}
+                      </option>
+                    ))}
+                  </select>
+                </FormControl>
+              ) : (
+                <FormControl>
+                  <Input
+                    {...field}
+                    onChange={(e) => {
+                      updateState({
+                        deliveryDetails: {
+                          ...checkoutState.deliveryDetails,
+                          neighborhood: e.target.value,
+                        } as Address,
+                      });
+                      field.onChange(e);
+                    }}
+                  />
+                </FormControl>
+              )}
+
+              {checkoutState.deliveryOption == "within-accra" && (
+                <Button
+                  type="button"
+                  variant={"clear"}
+                  onClick={() => {
+                    setIsEnteringNewNeighborhood(!isEnteringNewNeighborhood);
+                  }}
+                  className="text-muted-foreground text-xs p-0"
+                >
+                  {isEnteringNewNeighborhood ? "Choose from list" : "Add"}
+                </Button>
+              )}
+
+              <FormMessage className="text-xs" />
+            </FormItem>
+          )}
+        />
+      </div>
+    </div>
+  );
+};
+
+const USAddressFields = ({ form }: CheckoutFormSectionProps) => {
+  const { checkoutState, updateState } = useCheckout();
+  return (
+    <>
+      <div className="w-full">
+        <FormField
+          control={form.control}
+          name="deliveryDetails.state"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-muted-foreground text-xs">
+                State
+              </FormLabel>
+              <FormControl>
+                <Input
+                  {...field}
+                  onChange={(e) => {
+                    updateState({
+                      deliveryDetails: {
+                        ...checkoutState.deliveryDetails,
+                        state: e.target.value,
+                      } as Address,
+                    });
+                    field.onChange(e);
+                  }}
+                />
+              </FormControl>
+              <FormMessage className="text-xs" />
+            </FormItem>
+          )}
+        />
+      </div>
+
+      <div className="w-full">
+        <FormField
+          control={form.control}
+          name="deliveryDetails.zip"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-muted-foreground text-xs">
+                Zip Code
+              </FormLabel>
+              <FormControl>
+                <Input
+                  {...field}
+                  onChange={(e) => {
+                    updateState({
+                      deliveryDetails: {
+                        ...checkoutState.deliveryDetails,
+                        zip: e.target.value,
+                      } as Address,
+                    });
+                    field.onChange(e);
+                  }}
+                />
+              </FormControl>
+              <FormMessage className="text-xs" />
+            </FormItem>
+          )}
+        />
+      </div>
+    </>
+  );
+};
+
+const DeliveryInstructions = ({ form }: CheckoutFormSectionProps) => {
+  const { updateState } = useCheckout();
+  return (
+    <div className="w-full">
+      <FormField
+        control={form.control}
+        name="deliveryInstructions"
+        render={({ field }) => (
+          <FormItem>
+            <Textarea
+              placeholder="Add delivery instructions"
+              {...field}
+              onChange={(e) => {
+                updateState({
+                  deliveryInstructions: e.target.value,
+                });
+                field.onChange(e);
+              }}
+            />
+          </FormItem>
+        )}
+      />
+    </div>
+  );
+};
 
 export const DeliveryDetailsSection = ({ form }: CheckoutFormSectionProps) => {
-  const { checkoutState, actionsState, updateActionsState, updateState } =
-    useCheckout();
-
-  // const onSubmit = (data: z.infer<typeof deliveryDetailsSchema>) => {
-  //   console.log("on submit in delivery details ->", data);
-  //   updateState({ deliveryDetails: data });
-  //   updateActionsState({
-  //     isEditingDeliveryDetails: false,
-  //     didEnterDeliveryDetails: true,
-  //   });
-  // };
-
-  // if (checkoutState.deliveryMethod !== "delivery") return null;
+  const { checkoutState, updateState } = useCheckout();
 
   const { deliveryDetails } = form.getValues();
 
-  const { country } = deliveryDetails || {};
+  const { country, region } = deliveryDetails || {};
 
   const previousCountryRef = useRef(
     checkoutState.deliveryDetails?.country || undefined
   );
+
+  const previousRegionRef = useRef(checkoutState.deliveryDetails?.region);
+
+  const [isEnteringNewNeighborhood, setIsEnteringNewNeighborhood] =
+    useState(false);
 
   useEffect(() => {
     // effect to clear state and the form when the country changes
@@ -55,6 +651,31 @@ export const DeliveryDetailsSection = ({ form }: CheckoutFormSectionProps) => {
     const previousCountry = previousCountryRef.current;
 
     if (previousCountry && country && country !== previousCountry) {
+      // clear the form
+      form.setValue("deliveryDetails.landmark", "");
+      form.setValue("deliveryDetails.houseNumber", "");
+      form.setValue("deliveryDetails.street", "");
+
+      // clear the state for delivery and billing details
+      updateState({
+        deliveryDetails: {
+          ...checkoutState.deliveryDetails,
+          street: "",
+          houseNumber: "",
+          landmark: "",
+        } as Address,
+      });
+    }
+
+    previousRegionRef.current = region;
+  }, [region, checkoutState]);
+
+  useEffect(() => {
+    // effect to clear state and the form when the country changes
+
+    const previousRegion = previousRegionRef.current;
+
+    if (previousRegion && region && region !== previousRegion) {
       // clear the form
       form.setValue("deliveryDetails.address", "");
       form.setValue("deliveryDetails.city", "");
@@ -69,7 +690,23 @@ export const DeliveryDetailsSection = ({ form }: CheckoutFormSectionProps) => {
     }
 
     previousCountryRef.current = country;
-  }, [country]);
+  }, [region]);
+
+  useEffect(() => {
+    if (
+      checkoutState.deliveryDetails?.region !== "GA" ||
+      (checkoutState.deliveryDetails?.region == "GA" &&
+        isEnteringNewNeighborhood)
+    ) {
+      form.setValue("deliveryDetails.neighborhood", "");
+
+      // if (isEnteringNewNeighborhood) return;
+
+      // form.setValue("deliveryDetails.landmark", "");
+      // form.setValue("deliveryDetails.houseNumber", "");
+      // form.setValue("deliveryDetails.street", "");
+    }
+  }, [checkoutState.deliveryDetails?.region, isEnteringNewNeighborhood]);
 
   useEffect(() => {
     const { deliveryDetails } = form.getValues();
@@ -90,490 +727,31 @@ export const DeliveryDetailsSection = ({ form }: CheckoutFormSectionProps) => {
       <div className="flex flex-col space-y-8">
         <p className="text-xs text-muted-foreground">Delivery details</p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="hidden md:block w-full">
-            <FormField
-              control={form.control}
-              name="deliveryDetails.country"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="text-muted-foreground text-xs">
-                    Country
-                  </FormLabel>
-                  <Select
-                    onValueChange={(e) => {
-                      updateState({
-                        deliveryDetails: {
-                          ...checkoutState.deliveryDetails,
-                          country: e,
-                        } as Address,
-                      });
-                      field.onChange(e);
-                    }}
-                    value={field.value}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select country" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {ALL_COUNTRIES.map((country) => (
-                        <SelectItem key={country.code} value={country.code}>
-                          {country.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage className="text-xs" />
-                </FormItem>
-              )}
-            />
-          </div>
+          <CountryFields form={form} />
 
-          <div className="block md:hidden w-full">
-            <FormField
-              control={form.control}
-              name="deliveryDetails.country"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="text-muted-foreground text-xs">
-                    Country
-                  </FormLabel>
-                  <FormControl>
-                    <select
-                      className="block w-full px-3 py-8 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary text-sm"
-                      value={field.value}
-                      onChange={(e) => {
-                        const selectedValue = e.target.value;
-                        updateState({
-                          deliveryDetails: {
-                            ...checkoutState.deliveryDetails,
-                            country: selectedValue,
-                          } as Address,
-                        });
-                        field.onChange(selectedValue);
-                      }}
-                    >
-                      <option value="" disabled>
-                        Select country
-                      </option>
-                      {ALL_COUNTRIES.map((country) => (
-                        <option key={country.code} value={country.code}>
-                          {country.name}
-                        </option>
-                      ))}
-                    </select>
-                  </FormControl>
-                  <FormMessage className="text-xs" />
-                </FormItem>
-              )}
-            />
-          </div>
+          {checkoutState.isGhanaOrder && <RegionFields form={form} />}
 
-          {checkoutState.isGhanaOrder && (
-            <div className="flex items-center">
-              <div className="block md:hidden w-full">
-                <FormField
-                  control={form.control}
-                  name="deliveryDetails.region"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-muted-foreground text-xs">
-                        Region
-                      </FormLabel>
-                      <FormControl>
-                        <select
-                          className="block w-full px-3 py-8 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary text-sm"
-                          value={field.value}
-                          onChange={(e) => {
-                            const region = e.target.value;
-                            const deliveryOption =
-                              region == "GA" ? "within-accra" : "outside-accra";
-                            const deliveryFee = region == "GA" ? 30 : 70;
-
-                            updateState({
-                              deliveryDetails: {
-                                ...checkoutState.deliveryDetails,
-                                region,
-                              } as Address,
-                              deliveryFee,
-                              deliveryOption,
-                            });
-                            field.onChange(region);
-                          }}
-                        >
-                          <option value="" disabled>
-                            Select region
-                          </option>
-                          {GHANA_REGIONS.map((region) => (
-                            <option key={region.code} value={region.code}>
-                              {region.name}
-                            </option>
-                          ))}
-                        </select>
-                      </FormControl>
-                      <FormMessage className="text-xs" />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              <div className="hidden md:block w-full">
-                <FormField
-                  control={form.control}
-                  name="deliveryDetails.region"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-muted-foreground text-xs">
-                        Region
-                      </FormLabel>
-                      <Select
-                        onValueChange={(region) => {
-                          const deliveryOption =
-                            region == "GA" ? "within-accra" : "outside-accra";
-
-                          const deliveryFee = region == "GA" ? 30 : 70;
-
-                          updateState({
-                            deliveryDetails: {
-                              ...checkoutState.deliveryDetails,
-                              region,
-                            } as Address,
-                            deliveryFee,
-                            deliveryOption,
-                          });
-                          field.onChange(region);
-                        }}
-                        value={field.value}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select region" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {GHANA_REGIONS.map((region) => (
-                            <SelectItem key={region.code} value={region.code}>
-                              {region.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage className="text-xs" />
-                    </FormItem>
-                  )}
-                />
-              </div>
-            </div>
-          )}
-
-          {!checkoutState.isGhanaOrder && (
-            <div className="w-full">
-              <FormField
-                control={form.control}
-                name="deliveryDetails.address"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-muted-foreground text-xs">
-                      Address
-                    </FormLabel>
-                    <FormControl>
-                      <Input
-                        {...field}
-                        onChange={(e) => {
-                          updateState({
-                            deliveryDetails: {
-                              ...checkoutState.deliveryDetails,
-                              address: e.target.value,
-                            } as Address,
-                          });
-                          field.onChange(e);
-                        }}
-                      />
-                    </FormControl>
-                    <FormMessage className="text-xs" />
-                  </FormItem>
-                )}
-              />
-            </div>
-          )}
+          {!checkoutState.isGhanaOrder && <AddressField form={form} />}
         </div>
 
-        {checkoutState.isGhanaOrder && (
-          <div className="flex gap-2">
-            <div className="w-[40%]">
-              <FormField
-                control={form.control}
-                name="deliveryDetails.houseNumber"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-muted-foreground text-xs">
-                      Apt/House number
-                    </FormLabel>
-                    <FormControl>
-                      <Input
-                        {...field}
-                        onChange={(e) => {
-                          updateState({
-                            deliveryDetails: {
-                              ...checkoutState.deliveryDetails,
-                              houseNumber: e.target.value,
-                            } as Address,
-                          });
-                          field.onChange(e);
-                        }}
-                      />
-                    </FormControl>
-                    <FormMessage className="text-xs" />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <div className="w-[60%]">
-              <FormField
-                control={form.control}
-                name="deliveryDetails.street"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-muted-foreground text-xs">
-                      Street name
-                    </FormLabel>
-                    <FormControl>
-                      <Input
-                        {...field}
-                        onChange={(e) => {
-                          updateState({
-                            deliveryDetails: {
-                              ...checkoutState.deliveryDetails,
-                              street: e.target.value,
-                            } as Address,
-                          });
-                          field.onChange(e);
-                        }}
-                      />
-                    </FormControl>
-                    <FormMessage className="text-xs" />
-                  </FormItem>
-                )}
-              />
-            </div>
-          </div>
-        )}
+        {checkoutState.isGhanaOrder && <GhanaAddressFields form={form} />}
 
         <div className="flex flex-col xl:flex-row gap-8">
-          {!checkoutState.isGhanaOrder && (
-            <div className={`${checkoutState.isUSOrder ? "w-full" : "w-auto"}`}>
-              <FormField
-                control={form.control}
-                name="deliveryDetails.city"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-muted-foreground text-xs">
-                      City
-                    </FormLabel>
-                    <FormControl>
-                      <Input
-                        {...field}
-                        onChange={(e) => {
-                          updateState({
-                            deliveryDetails: {
-                              ...checkoutState.deliveryDetails,
-                              city: e.target.value,
-                            } as Address,
-                          });
-                          field.onChange(e);
-                        }}
-                      />
-                    </FormControl>
-                    <FormMessage className="text-xs" />
-                  </FormItem>
-                )}
-              />
-            </div>
-          )}
+          {!checkoutState.isGhanaOrder && <CityField form={form} />}
 
           {checkoutState.isGhanaOrder && (
-            <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="w-full">
-                <FormField
-                  control={form.control}
-                  name="deliveryDetails.landmark"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-muted-foreground text-xs">
-                        Landmark (Optional)
-                      </FormLabel>
-                      <FormControl>
-                        <Input
-                          {...field}
-                          onChange={(e) => {
-                            updateState({
-                              deliveryDetails: {
-                                ...checkoutState.deliveryDetails,
-                                landmark: e.target.value,
-                              } as Address,
-                            });
-                            field.onChange(e);
-                          }}
-                        />
-                      </FormControl>
-                      <FormMessage className="text-xs" />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              <div className="w-full">
-                <FormField
-                  control={form.control}
-                  name="deliveryDetails.neighborhood"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-muted-foreground text-xs">
-                        Neighborhood/Suburb
-                      </FormLabel>
-                      {checkoutState.deliveryOption === "within-accra" ? (
-                        <Select
-                          onValueChange={(neighborhood) => {
-                            updateState({
-                              deliveryDetails: {
-                                ...checkoutState.deliveryDetails,
-                                neighborhood: neighborhood,
-                              } as Address,
-                            });
-                            field.onChange(neighborhood);
-                          }}
-                          value={field.value}
-                        >
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select neighborhood" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {accraNeighborhoods.map((n) => (
-                              <SelectItem key={n.value} value={n.value}>
-                                {n.label}
-                              </SelectItem>
-                            ))}
-                            <SelectItem value="new-item">
-                              <div className="flex items-center">
-                                <Plus className="h-2.5 w-2.5 mr-2" />
-                                <p className="text-sm">Enter neighborhood</p>
-                              </div>
-                            </SelectItem>
-                          </SelectContent>
-                        </Select>
-                      ) : (
-                        <Input
-                          {...field}
-                          onChange={(e) => {
-                            updateState({
-                              deliveryDetails: {
-                                ...checkoutState.deliveryDetails,
-                                neighborhood: e.target.value,
-                              } as Address,
-                            });
-                            field.onChange(e);
-                          }}
-                        />
-                      )}
-
-                      <FormMessage className="text-xs" />
-                    </FormItem>
-                  )}
-                />
-              </div>
-            </div>
+            <GhanaAddressLocaleFields
+              form={form}
+              isEnteringNewNeighborhood={isEnteringNewNeighborhood}
+              setIsEnteringNewNeighborhood={setIsEnteringNewNeighborhood}
+            />
           )}
 
-          {checkoutState.isUSOrder && (
-            <>
-              <div className="w-full">
-                <FormField
-                  control={form.control}
-                  name="deliveryDetails.state"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-muted-foreground text-xs">
-                        State
-                      </FormLabel>
-                      <FormControl>
-                        <Input
-                          {...field}
-                          onChange={(e) => {
-                            updateState({
-                              deliveryDetails: {
-                                ...checkoutState.deliveryDetails,
-                                state: e.target.value,
-                              } as Address,
-                            });
-                            field.onChange(e);
-                          }}
-                        />
-                      </FormControl>
-                      <FormMessage className="text-xs" />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              <div className="w-full">
-                <FormField
-                  control={form.control}
-                  name="deliveryDetails.zip"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-muted-foreground text-xs">
-                        Zip Code
-                      </FormLabel>
-                      <FormControl>
-                        <Input
-                          {...field}
-                          onChange={(e) => {
-                            updateState({
-                              deliveryDetails: {
-                                ...checkoutState.deliveryDetails,
-                                zip: e.target.value,
-                              } as Address,
-                            });
-                            field.onChange(e);
-                          }}
-                        />
-                      </FormControl>
-                      <FormMessage className="text-xs" />
-                    </FormItem>
-                  )}
-                />
-              </div>
-            </>
-          )}
+          {checkoutState.isUSOrder && <USAddressFields form={form} />}
         </div>
       </div>
 
-      {checkoutState.isGhanaOrder && (
-        <div className="w-full">
-          <FormField
-            control={form.control}
-            name="deliveryInstructions"
-            render={({ field }) => (
-              <FormItem>
-                <Textarea
-                  placeholder="Add delivery instructions"
-                  {...field}
-                  onChange={(e) => {
-                    updateState({
-                      deliveryInstructions: e.target.value,
-                    });
-                    field.onChange(e);
-                  }}
-                />
-              </FormItem>
-            )}
-          />
-        </div>
-      )}
+      {checkoutState.isGhanaOrder && <DeliveryInstructions form={form} />}
 
       {checkoutState.deliveryDetails?.country && <DeliveryOptions />}
     </div>
