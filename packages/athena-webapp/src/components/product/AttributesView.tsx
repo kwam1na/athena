@@ -35,7 +35,7 @@ export function AttributesView() {
         <p className="text-sm text-sm text-muted-foreground">Attributes</p>
       }
     >
-      <div className="p-8 grid grid-cols-3">
+      <div className="py-4 grid grid-cols-3">
         <div className="space-y-4">
           <div className="flex items-center gap-2 text-muted-foreground">
             <Palette className="h-3.5 w-3.5" />

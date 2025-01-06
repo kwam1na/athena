@@ -70,14 +70,16 @@ export const FeaturedSection = () => {
 
   return (
     <View
-      className="p-8"
+      hideBorder
+      hideHeaderBottomBorder
+      className="py-4"
       header={<p className="text-sm text-muted-foreground">Highlighted</p>}
     >
       <FeaturedSectionDialog
         dialogOpen={dialogOpen}
         setDialogOpen={setDialogOpen}
       />
-      <div className="p-8 space-y-8">
+      <div className="py-4 space-y-8">
         <DragDropContext onDragEnd={onDragEnd}>
           <Droppable droppableId="featuredItemsList">
             {(provided) => (
@@ -97,7 +99,7 @@ export const FeaturedSection = () => {
                         ref={provided.innerRef}
                         {...provided.draggableProps}
                         {...provided.dragHandleProps}
-                        className="flex items-center justify-between bg-white p-4"
+                        className="flex items-center justify-between bg-white py-4"
                       >
                         <div className="flex items-center gap-4">
                           {featuredItem?.product && (

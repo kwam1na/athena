@@ -560,8 +560,8 @@ export const CheckoutProvider = ({
       );
 
       const didProvideAllGhanaAddressFields = Boolean(
-        newUpdates.deliveryDetails?.address &&
-          newUpdates.deliveryDetails?.city &&
+        newUpdates.deliveryDetails?.houseNumber &&
+          newUpdates.deliveryDetails?.street &&
           newUpdates.deliveryDetails?.region
       );
 

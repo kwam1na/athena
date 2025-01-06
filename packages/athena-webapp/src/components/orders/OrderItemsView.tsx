@@ -278,7 +278,7 @@ export function OrderItemsView() {
         </div>
       }
     >
-      <div className="p-8 space-y-16">
+      <div className="py-4 space-y-16">
         {itemsFormatted?.map((item: any) => (
           <OrderItem key={item._id} item={item} order={order} />
         ))}

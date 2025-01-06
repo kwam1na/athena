@@ -1,6 +1,7 @@
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useEffect, useRef } from "react";
 import { Address, useCheckout } from "../CheckoutProvider";
+import { useStoreContext } from "@/contexts/StoreContext";
 
 export function StoreSelector() {
   const { updateState, updateActionsState, checkoutState } = useCheckout();
@@ -37,6 +38,12 @@ export function StoreSelector() {
 export function DeliveryOptionsSelector() {
   const { checkoutState, updateState } = useCheckout();
 
+  const { store, formatter } = useStoreContext();
+
+  const { deliveryFees } = store?.config || {};
+
+  const { international, withinAccra, otherRegions } = deliveryFees || {};
+
   const previousCountryRef = useRef(
     checkoutState.deliveryDetails?.country || undefined
   );
@@ -47,13 +54,13 @@ export function DeliveryOptionsSelector() {
     if (value == "intl") {
       updateState({
         ...base,
-        deliveryFee: 800,
+        deliveryFee: deliveryFees?.international || 800,
         deliveryOption: "intl",
       });
     } else if (value == "within-accra") {
       updateState({
         ...base,
-        deliveryFee: 30,
+        deliveryFee: deliveryFees?.withinAccra || 30,
         deliveryOption: "within-accra",
         deliveryDetails: {
           ...checkoutState.deliveryDetails,
@@ -63,7 +70,7 @@ export function DeliveryOptionsSelector() {
     } else {
       updateState({
         ...base,
-        deliveryFee: 70,
+        deliveryFee: deliveryFees?.otherRegions || 70,
         deliveryOption: "outside-accra",
         deliveryDetails: {
           ...checkoutState.deliveryDetails,
@@ -93,10 +100,10 @@ export function DeliveryOptionsSelector() {
       } else if (currentCountry !== "GH" && previousCountry === "GH") {
         if (
           checkoutState.deliveryOption !== "intl" ||
-          checkoutState.deliveryFee !== 800
+          checkoutState.deliveryFee !== deliveryFees?.international
         ) {
           updateState({
-            deliveryFee: 800,
+            deliveryFee: deliveryFees?.international || 800,
             deliveryOption: "intl",
           });
         }
@@ -110,7 +117,10 @@ export function DeliveryOptionsSelector() {
       checkoutState.deliveryOption == "outside-accra" &&
       checkoutState.deliveryDetails?.region == "GA"
     ) {
-      updateState({ deliveryOption: "within-accra", deliveryFee: 30 });
+      updateState({
+        deliveryOption: "within-accra",
+        deliveryFee: deliveryFees?.withinAccra || 30,
+      });
     }
   }, [checkoutState.deliveryDetails?.region]);
 
@@ -126,7 +136,7 @@ export function DeliveryOptionsSelector() {
             <RadioGroupItem value="within-accra" id="r1" />
             <div className="flex w-full lg:w-[50%] justify-between">
               <p>Delivery within Greater Accra</p>
-              <p className="text-muted-foreground">GHS 30</p>
+              <p className="text-muted-foreground">{`${formatter.format(withinAccra || 30)}`}</p>
             </div>
           </div>
 
@@ -134,7 +144,7 @@ export function DeliveryOptionsSelector() {
             <RadioGroupItem value="outside-accra" id="r2" />
             <div className="flex w-full lg:w-[50%] justify-between">
               <p>Delivery to other regions</p>
-              <p className="text-muted-foreground">GHS 70</p>
+              <p className="text-muted-foreground">{`${formatter.format(otherRegions || 70)}`}</p>
             </div>
           </div>
         </div>
@@ -145,7 +155,7 @@ export function DeliveryOptionsSelector() {
           <RadioGroupItem value="intl" id="r2" />
           <div className="flex w-full lg:w-[50%] justify-between">
             <p>Express shipping</p>
-            <p className="text-muted-foreground">GHS 800</p>
+            <p className="text-muted-foreground">{`${formatter.format(international || 800)}`}</p>
           </div>
         </div>
       )}

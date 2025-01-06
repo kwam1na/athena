@@ -7,7 +7,7 @@ import { api } from "~/convex/_generated/api";
 export default function ProductsView() {
   const Navigation = () => {
     return (
-      <div className="flex gap-2 h-[40px]">
+      <div className="container mx-auto flex gap-2 h-[40px]">
         <div className="flex items-center">
           <p className="text-sm">Products</p>
         </div>

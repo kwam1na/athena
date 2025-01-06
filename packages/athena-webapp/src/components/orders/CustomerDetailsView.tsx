@@ -17,7 +17,7 @@ export function CustomerDetailsView() {
       className="h-auto w-full"
       header={<p className="text-sm text-sm text-muted-foreground">Customer</p>}
     >
-      <div className="p-8 space-y-12">
+      <div className="py-4 space-y-12">
         <div className="space-y-4">
           <div className="flex items-center gap-4">
             <UserRound className="h-4 w-4" />

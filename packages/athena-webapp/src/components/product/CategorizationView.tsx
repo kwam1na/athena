@@ -16,7 +16,7 @@ export function CategorizationView() {
         <p className="text-sm text-sm text-muted-foreground">Categorization</p>
       }
     >
-      <div className="p-8 grid grid-cols-3">
+      <div className="py-4 grid grid-cols-3">
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">Category</p>
           <p className="text-sm">{activeProduct.categoryName}</p>

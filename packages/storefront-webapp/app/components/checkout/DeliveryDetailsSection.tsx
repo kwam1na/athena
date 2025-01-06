@@ -364,35 +364,6 @@ const GhanaAddressLocaleFields = ({
   const { checkoutState, updateState } = useCheckout();
   return (
     <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-4">
-      <div className="w-full">
-        <FormField
-          control={form.control}
-          name="deliveryDetails.landmark"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel className="text-muted-foreground text-xs">
-                Landmark (Optional)
-              </FormLabel>
-              <FormControl>
-                <Input
-                  {...field}
-                  onChange={(e) => {
-                    updateState({
-                      deliveryDetails: {
-                        ...checkoutState.deliveryDetails,
-                        landmark: e.target.value,
-                      } as Address,
-                    });
-                    field.onChange(e);
-                  }}
-                />
-              </FormControl>
-              <FormMessage className="text-xs" />
-            </FormItem>
-          )}
-        />
-      </div>
-
       <div className="hidden md:block w-full">
         <FormField
           control={form.control}
@@ -534,6 +505,35 @@ const GhanaAddressLocaleFields = ({
           )}
         />
       </div>
+
+      <div className="w-full">
+        <FormField
+          control={form.control}
+          name="deliveryDetails.landmark"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-muted-foreground text-xs">
+                Landmark (Optional)
+              </FormLabel>
+              <FormControl>
+                <Input
+                  {...field}
+                  onChange={(e) => {
+                    updateState({
+                      deliveryDetails: {
+                        ...checkoutState.deliveryDetails,
+                        landmark: e.target.value,
+                      } as Address,
+                    });
+                    field.onChange(e);
+                  }}
+                />
+              </FormControl>
+              <FormMessage className="text-xs" />
+            </FormItem>
+          )}
+        />
+      </div>
     </div>
   );
 };
@@ -612,8 +612,10 @@ const DeliveryInstructions = ({ form }: CheckoutFormSectionProps) => {
         name="deliveryInstructions"
         render={({ field }) => (
           <FormItem>
+            <FormLabel className="text-muted-foreground text-xs">
+              Delivery instructions (Optional)
+            </FormLabel>
             <Textarea
-              placeholder="Add delivery instructions"
               {...field}
               onChange={(e) => {
                 updateState({
@@ -648,15 +650,15 @@ export const DeliveryDetailsSection = ({ form }: CheckoutFormSectionProps) => {
   useEffect(() => {
     // effect to clear state and the form when the country changes
 
-    const previousCountry = previousCountryRef.current;
+    const previousRegion = previousRegionRef.current;
 
-    if (previousCountry && country && country !== previousCountry) {
+    if (previousRegion && region && region !== previousRegion) {
       // clear the form
       form.setValue("deliveryDetails.landmark", "");
       form.setValue("deliveryDetails.houseNumber", "");
       form.setValue("deliveryDetails.street", "");
 
-      // clear the state for delivery and billing details
+      // clear the state for delivery details
       updateState({
         deliveryDetails: {
           ...checkoutState.deliveryDetails,
@@ -673,13 +675,14 @@ export const DeliveryDetailsSection = ({ form }: CheckoutFormSectionProps) => {
   useEffect(() => {
     // effect to clear state and the form when the country changes
 
-    const previousRegion = previousRegionRef.current;
+    const previousCountry = previousCountryRef.current;
 
-    if (previousRegion && region && region !== previousRegion) {
+    if (previousCountry && country && country !== previousCountry) {
       // clear the form
       form.setValue("deliveryDetails.address", "");
       form.setValue("deliveryDetails.city", "");
       form.setValue("deliveryDetails.zip", "");
+      form.setValue("deliveryDetails.state", "");
       form.setValue("deliveryDetails.region", "");
 
       // clear the state for delivery and billing details
@@ -690,7 +693,7 @@ export const DeliveryDetailsSection = ({ form }: CheckoutFormSectionProps) => {
     }
 
     previousCountryRef.current = country;
-  }, [region]);
+  }, [country]);
 
   useEffect(() => {
     if (
@@ -699,12 +702,6 @@ export const DeliveryDetailsSection = ({ form }: CheckoutFormSectionProps) => {
         isEnteringNewNeighborhood)
     ) {
       form.setValue("deliveryDetails.neighborhood", "");
-
-      // if (isEnteringNewNeighborhood) return;
-
-      // form.setValue("deliveryDetails.landmark", "");
-      // form.setValue("deliveryDetails.houseNumber", "");
-      // form.setValue("deliveryDetails.street", "");
     }
   }, [checkoutState.deliveryDetails?.region, isEnteringNewNeighborhood]);
 

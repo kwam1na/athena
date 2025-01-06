@@ -9,7 +9,7 @@ import { OrdersTableToolbarProvider } from "./orders-table/components/data-table
 export default function OrdersView() {
   const Navigation = () => {
     return (
-      <div className="flex gap-2 h-[40px]">
+      <div className="container mx-auto flex gap-2 h-[40px]">
         <div className="flex items-center">
           <p className="text-sm">Orders</p>
         </div>

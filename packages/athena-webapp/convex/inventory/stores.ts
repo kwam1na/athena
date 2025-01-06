@@ -110,3 +110,15 @@ export const remove = mutation({
     return { message: "OK" };
   },
 });
+
+export const updateConfig = mutation({
+  args: {
+    id: v.id(entity),
+    config: v.record(v.string(), v.any()),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.id, { config: args.config });
+
+    return await ctx.db.get(args.id);
+  },
+});

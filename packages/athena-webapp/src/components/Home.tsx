@@ -6,7 +6,7 @@ import { FeaturedSection } from "./homepage/FeaturedSection";
 export default function Home() {
   const Navigation = () => {
     return (
-      <div className="flex gap-2 h-[40px]">
+      <div className="container mx-auto flex gap-2 h-[40px]">
         <p className="text-sm">Homepage</p>
       </div>
     );
@@ -19,7 +19,7 @@ export default function Home() {
       className="bg-background"
       header={<Navigation />}
     >
-      <div className="grid grid-cols-2 gap-4">
+      <div className="container mx-auto grid grid-cols-2 gap-40">
         <BestSellers />
         <FeaturedSection />
       </div>

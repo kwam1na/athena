@@ -101,11 +101,6 @@ export const BillingDetailsSection = ({ form }: CheckoutFormSectionProps) => {
 
   const isUSAddress = checkoutState.billingDetails?.country == "US";
 
-  const showEnteredBillingDetails =
-    checkoutState.didEnterBillingDetails &&
-    !checkoutState.billingDetails?.billingAddressSameAsDelivery &&
-    !actionsState.isEditingBillingDetails;
-
   const hasEnteredBillingDetails =
     checkoutState.billingDetails?.address &&
     checkoutState.billingDetails?.city &&

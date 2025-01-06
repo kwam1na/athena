@@ -19,7 +19,7 @@ export function ImagesView() {
       className="h-auto w-full"
       header={<p className="text-sm text-sm text-muted-foreground">Images</p>}
     >
-      <div className="p-8 grid grid-cols-2 gap-2">
+      <div className="py-4 grid grid-cols-2 gap-2">
         {activeProductVariant.images.map((image, i) => {
           return (
             <img

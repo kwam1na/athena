@@ -9,9 +9,13 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
 } from "@/components/ui/sidebar";
 import {
   Calendar,
+  ChevronDown,
   Home,
   Inbox,
   PanelTop,
@@ -26,6 +30,11 @@ import { Link } from "@tanstack/react-router";
 import useGetActiveStore from "../hooks/useGetActiveStore";
 import { useGetActiveOrganization } from "../hooks/useGetOrganizations";
 import { useNewOrderNotification } from "../hooks/useNewOrderNotification";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@radix-ui/react-collapsible";
 
 export function AppSidebar() {
   // Menu items.
@@ -72,6 +81,8 @@ export function AppSidebar() {
               <AppHeader />
             </SidebarGroupContent>
           </SidebarGroup>
+
+          {/* Store section */}
           <SidebarGroup>
             <SidebarGroupLabel>Store</SidebarGroupLabel>
             <SidebarGroupContent>
@@ -125,6 +136,27 @@ export function AppSidebar() {
                       <p className="font-medium">Products</p>
                     </Link>
                   </SidebarMenuButton>
+                </SidebarMenuItem>
+
+                <SidebarMenuItem>
+                  <SidebarGroupLabel>Configuration</SidebarGroupLabel>
+                  <SidebarMenuSub>
+                    <SidebarMenuSubItem>
+                      <SidebarMenuButton asChild>
+                        <Link
+                          to="/$orgUrlSlug/store/$storeUrlSlug/configuration"
+                          params={(p) => ({
+                            ...p,
+                            orgUrlSlug: activeOrganization?.slug,
+                            storeUrlSlug: activeStore?.slug,
+                          })}
+                          className="flex items-center"
+                        >
+                          <p className="font-medium">Store</p>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuSubItem>
+                  </SidebarMenuSub>
                 </SidebarMenuItem>
               </SidebarMenu>
             </SidebarGroupContent>

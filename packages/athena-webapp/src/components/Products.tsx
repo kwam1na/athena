@@ -21,7 +21,7 @@ export default function Products({
   return (
     <div className="container mx-auto">
       {products && products.length > 0 && (
-        <div className="p-8">
+        <div className="py-8">
           <DataTable data={products} columns={columns} />
         </div>
       )}

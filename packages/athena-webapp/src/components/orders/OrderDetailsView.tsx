@@ -42,7 +42,7 @@ export function OrderDetailsView() {
       className="h-auto w-full"
       header={<p className="text-sm text-sm text-muted-foreground">Details</p>}
     >
-      <div className="p-8 grid grid-cols-2 gap-16">
+      <div className="py-4 grid grid-cols-2 gap-16">
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">Total</p>
           <p className="text-sm">{formatter.format(order.amount / 100)}</p>

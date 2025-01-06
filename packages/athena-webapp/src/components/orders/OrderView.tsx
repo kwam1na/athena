@@ -1,15 +1,11 @@
-import { Link, useNavigate, useSearch } from "@tanstack/react-router";
+import { useNavigate, useSearch } from "@tanstack/react-router";
 import View from "../View";
 import { CustomerDetailsView } from "./CustomerDetailsView";
 import { OrderDetailsView } from "./OrderDetailsView";
 import { OrderItemsView } from "./OrderItemsView";
 import { PickupDetailsView } from "./PickupDetailsView";
 import { Button } from "../ui/button";
-import {
-  ArrowLeftIcon,
-  ArrowRightIcon,
-  CheckCircledIcon,
-} from "@radix-ui/react-icons";
+import { ArrowLeftIcon, CheckCircledIcon } from "@radix-ui/react-icons";
 import { Badge } from "../ui/badge";
 import { AlertCircleIcon, Ban, RotateCcw, Store, Truck } from "lucide-react";
 import {
@@ -27,8 +23,6 @@ import {
 } from "~/src/lib/utils";
 import { toast } from "sonner";
 
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Popover,
   PopoverContent,
@@ -237,26 +231,12 @@ const Header = () => {
     order.status
   );
 
-  const refundText = isFullyRefunded
-    ? "Refunded"
-    : isPartiallyRefunded
-      ? "Partially refunded"
-      : "Refund pending";
-
-  const isInRefundState = isRefundPending || hasIssuedRefund;
-
   const isReady = order?.items
     ?.filter((i) => !Boolean(i.isRefunded))
     .every((item) => item.isReady);
 
-  const {
-    isOrderOpen,
-    isOrderReady,
-    isOrderOutForDelivery,
-    hasOrderTransitioned,
-  } = getOrderState(order);
-
-  const orderStatus = isDelivery ? "Ready for delivery" : "Ready for pickup";
+  const { isOrderOpen, isOrderReady, isOrderOutForDelivery } =
+    getOrderState(order);
 
   const canPerformInitialTransition =
     (order.items?.some((item) => !Boolean(item.isRefunded)) &&
@@ -366,7 +346,7 @@ const VerifyPaymentAlert = () => {
     try {
       setIsVerifyingPayment(true);
       const res = await verifyPayment({
-        customerId: order.customerId,
+        storeFrontUserId: order.storeFrontUserId,
         externalReference: order.externalReference,
       });
 

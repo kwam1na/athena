@@ -71,14 +71,16 @@ export const BestSellers = () => {
 
   return (
     <View
-      className="p-8"
+      className="py-4"
+      hideBorder
+      hideHeaderBottomBorder
       header={<p className="text-sm text-muted-foreground">Best sellers</p>}
     >
       <BestSellersDialog
         dialogOpen={dialogOpen}
         setDialogOpen={setDialogOpen}
       />
-      <div className="space-y-8 p-8">
+      <div className="space-y-8 py-4">
         <DragDropContext onDragEnd={onDragEnd}>
           <Droppable droppableId="bestSellersList">
             {(provided) => (

@@ -21,7 +21,7 @@ export default function View({
       >
         {header && (
           <header
-            className={`${hideHeaderBottomBorder ? "" : "border-b"} px-8 py-2`}
+            className={`${hideHeaderBottomBorder ? "" : "border-b"} py-2`}
           >
             {header}
           </header>

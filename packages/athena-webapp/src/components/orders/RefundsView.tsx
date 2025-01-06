@@ -180,7 +180,7 @@ export function RefundsView() {
           </div>
         )}
       </ActionModal>
-      <div className="p-8 space-y-12">
+      <div className="py-4 space-y-12">
         <div className="space-y-4">
           <div className="flex items-center gap-2">
             <Checkbox

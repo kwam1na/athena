@@ -15,7 +15,7 @@ export default function Orders({
   return (
     <div className="container mx-auto">
       {orders && orders.length > 0 && (
-        <div className="p-8">
+        <div className="py-8">
           <OrderDataTable data={orders} columns={orderColumns} />
         </div>
       )}

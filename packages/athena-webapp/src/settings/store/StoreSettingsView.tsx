@@ -20,7 +20,6 @@ import { Input } from "../../components/ui/input";
 import { LoadingButton } from "../../components/ui/loading-button";
 import { useEffect, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { deleteAllProducts } from "@/api/product";
 import { Store } from "~/types";
 import { useMutation } from "convex/react";
 import { api } from "~/convex/_generated/api";

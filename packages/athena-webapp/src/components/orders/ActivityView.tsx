@@ -42,7 +42,7 @@ export function ActivityView() {
       hideHeaderBottomBorder
       header={<p className="text-sm text-sm text-muted-foreground">Activity</p>}
     >
-      <div className="container mx-auto h-full w-full p-8 space-y-8">
+      <div className="container mx-auto h-full w-full py-4 space-y-8">
         {activities.map((activity, idx) => (
           <div className="flex items-center" key={idx}>
             <div className="space-y-2">
