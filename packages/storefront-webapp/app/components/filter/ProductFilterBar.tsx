@@ -21,28 +21,35 @@ export default function ProductFilterBar({
       ? "Show filters"
       : `Show filters (${selectedFiltersCount})`;
 
+  // hide the filter button for the best-sellers category
+  const isBestSellersCategory = categorySlug === "best-sellers";
+
   return (
-    <div className="flex justify-between container mx-auto max-w-[1024px] px-6 lg:px-0 sticky">
+    <div className="flex justify-between items-center container mx-auto max-w-[1024px] px-6 lg:px-0 sticky">
       <div className="flex items-center py-4">
         <p className="text-md font-medium">{`${capitalizeFirstLetter(slugToWords(subcategorySlug || categorySlug || ""))}`}</p>
       </div>
-      {/* <Button
-        variant="clear"
-        onClick={() => setShowFilters(!showFilters)}
-        className="hidden text-xs lg:flex ml-auto p-0"
-      >
-        <p>{showFilters ? "Hide filters" : showFiltersText}</p>
-        <SlidersHorizontal className="w-4 h-4 ml-2" />
-      </Button> */}
+      {!isBestSellersCategory && (
+        <>
+          <Button
+            variant="clear"
+            onClick={() => setShowFilters(!showFilters)}
+            className="hidden text-xs lg:flex ml-auto p-0"
+          >
+            <p>{showFilters ? "Hide filters" : showFiltersText}</p>
+            <SlidersHorizontal className="w-4 h-4 ml-2" />
+          </Button>
 
-      {/* <Button
-        variant="clear"
-        onClick={onFilterClickOnMobile}
-        className="lg:hidden ml-auto"
-      >
-        <p>{showFilters ? "Hide filters" : showFiltersText}</p>
-        <SlidersHorizontal className="w-4 h-4 ml-2" />
-      </Button> */}
+          <Button
+            variant="clear"
+            onClick={onFilterClickOnMobile}
+            className="lg:hidden ml-auto p-0"
+          >
+            <p>{showFilters ? "Hide filters" : showFiltersText}</p>
+            <SlidersHorizontal className="w-4 h-4 ml-2" />
+          </Button>
+        </>
+      )}
     </div>
   );
 }

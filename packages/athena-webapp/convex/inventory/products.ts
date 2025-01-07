@@ -167,7 +167,12 @@ export const getAll = query({
         quantityAvailable: calculateTotalAvailableCount(
           skusByProductId[product._id]
         ),
-        skus: skusByProductId[product._id] || [],
+        skus:
+          skusByProductId[product._id]
+            ?.sort((a, b) => {
+              return a.price - b.price;
+            })
+            ?.filter((p) => p.price > 0) || [],
       }))
       .filter((p) => p.skus.length > 0);
 
@@ -383,15 +388,20 @@ export const getByIdOrSlug = query({
       subcategorySlug = productSubcategory?.slug;
     }
 
-    const skusWithCategory = skus.map((sku) => ({
-      ...sku,
-      productCategory: category,
-      productSubcategory: subcategory,
-      productName: product?.name,
-      productCategorySlug: categorySlug,
-      productSubcategorySlug: subcategorySlug,
-      colorName: sku.color ? colorMap[sku.color] : null,
-    }));
+    const skusWithCategory = skus
+      .map((sku) => ({
+        ...sku,
+        productCategory: category,
+        productSubcategory: subcategory,
+        productName: product?.name,
+        productCategorySlug: categorySlug,
+        productSubcategorySlug: subcategorySlug,
+        colorName: sku.color ? colorMap[sku.color] : null,
+      }))
+      ?.sort((a, b) => {
+        return a.price - b.price;
+      });
+    // .filter((p) => p.price > 0);
 
     return {
       ...product,

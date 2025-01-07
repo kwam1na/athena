@@ -33,7 +33,7 @@ function FeaturedProduct({ product }: { product: any }) {
           <Link
             to="/shop/product/$productSlug"
             params={(params) => ({ ...params, productSlug: product._id })}
-            search={{ variant: product.skus[0].sku }}
+            search={{ variant: product.skus?.[0].sku }}
           >
             <Button className="p-0" variant={"link"}>
               <p className="text-xs underline">Shop</p>
@@ -45,7 +45,7 @@ function FeaturedProduct({ product }: { product: any }) {
       <Link
         to="/shop/product/$productSlug"
         params={(params) => ({ ...params, productSlug: product._id })}
-        search={{ variant: product.skus[0].sku }}
+        search={{ variant: product.skus?.[0].sku }}
       >
         <img
           alt={`${product.name} image`}
@@ -69,13 +69,13 @@ function ProductGrid({
       {products?.slice(0, 4).map((product: any) => (
         <Link
           to="/shop/product/$productSlug"
-          key={product._id}
+          key={product?._id}
           className="h-64 w-48 md:h-80 md:w-80 xl:h-96 xl:w-96 flex-shrink-0"
           params={(params) => ({
             ...params,
-            productSlug: product._id,
+            productSlug: product?._id,
           })}
-          search={{ variant: product.skus[0].sku }}
+          search={{ variant: product?.skus?.[0].sku }}
         >
           <ProductCard product={product} currencyFormatter={formatter} />
         </Link>

@@ -13,7 +13,11 @@ export function ProductAttribute({
   setSelectedSku: (sku: ProductSku) => void;
 }) {
   const colors: string[] = Array.from(
-    new Set(product.skus.map((sku: ProductSku) => sku.colorName))
+    new Set(
+      product.skus
+        .map((sku: ProductSku) => sku.colorName)
+        .sort((a: string, b: string) => a.localeCompare(b))
+    )
   );
 
   const lengths: number[] = Array.from(
@@ -50,7 +54,7 @@ export function ProductAttribute({
       <div className="space-y-4">
         <p className="text-sm">Color</p>
 
-        <div className="grid grid-cols-5 gap-4">
+        <div className="flex flex-wrap gap-4">
           {colors.map((color, index) => {
             return (
               <Button
@@ -69,7 +73,7 @@ export function ProductAttribute({
       <div className="space-y-4">
         <p className="text-sm">Length</p>
 
-        <div className="grid grid-cols-5 gap-4">
+        <div className="flex flex-wrap gap-4">
           {lengths.map((length, index) => {
             return (
               <Button

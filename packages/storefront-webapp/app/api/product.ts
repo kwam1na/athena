@@ -60,9 +60,11 @@ export async function getProduct({
 export async function getBestSellers({
   organizationId,
   storeId,
+  filters,
 }: {
   organizationId: string;
   storeId: string;
+  filters?: FilterParams;
 }): Promise<Product> {
   const response = await fetch(
     `${getBaseUrl(organizationId, storeId)}/bestSellers`

@@ -172,6 +172,8 @@ export default function ProductPage() {
     sheetContent.current = <ShippingPolicy />;
   };
 
+  if (error) return <NotFound />;
+
   if (!selectedSku || !product) return <div className="h-screen" />;
 
   if (error || (product && !selectedSku)) {

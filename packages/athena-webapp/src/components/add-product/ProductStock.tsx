@@ -17,7 +17,7 @@ import { Skeleton } from "../ui/skeleton";
 import { CardFooter } from "../ui/card";
 import { useProduct } from "@/contexts/ProductContext";
 import { ImageFile } from "../ui/image-uploader";
-import { RefreshCcw, RotateCcw } from "lucide-react";
+import { RotateCcw } from "lucide-react";
 import useGetActiveProduct from "@/hooks/useGetActiveProduct";
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
 
@@ -156,6 +156,7 @@ function Stock() {
             {productVariants.map((variant, index) => (
               <TableRow
                 key={variant.id}
+                onClick={() => setActiveProductVariant(variant)}
                 className={variant.markedForDeletion ? "opacity-50" : ""}
               >
                 <TableCell>

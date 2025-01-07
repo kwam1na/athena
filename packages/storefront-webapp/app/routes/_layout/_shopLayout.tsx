@@ -4,6 +4,7 @@ import Footer from "@/components/footer/Footer";
 import { useGetShopSearchParams } from "@/components/navigation/hooks";
 import { Button } from "@/components/ui/button";
 import { useStoreContext } from "@/contexts/StoreContext";
+import { useGetProductFilters } from "@/hooks/useGetProductFilters";
 import {
   createFileRoute,
   Outlet,
@@ -11,7 +12,7 @@ import {
   useParams,
 } from "@tanstack/react-router";
 import { XIcon } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { z } from "zod";
 
 const productsPageSchema = z.object({
@@ -23,6 +24,67 @@ export const Route = createFileRoute("/_layout/_shopLayout")({
   component: LayoutComponent,
   validateSearch: productsPageSchema,
 });
+
+function MobileFilters({
+  onMobileFiltersCloseClick,
+  hasActiveFilters,
+  clearFilters,
+  filtersCount,
+}: {
+  onMobileFiltersCloseClick: () => void;
+  hasActiveFilters: boolean;
+  clearFilters: () => void;
+  filtersCount: number;
+}) {
+  useEffect(() => {
+    // Disable scrolling when component mounts
+    document.body.style.overflow = "hidden";
+
+    // Re-enable scrolling when component unmounts
+    return () => {
+      document.body.style.overflow = "unset";
+    };
+  }, []);
+
+  return (
+    <div className="fixed inset-0 z-40 w-full h-screen bg-background">
+      <div className="absolute z-40 w-full h-screen bg-background">
+        <div className="flex pt-4 px-2">
+          <Button
+            className="ml-auto"
+            variant={"clear"}
+            onClick={onMobileFiltersCloseClick}
+          >
+            <XIcon className="w-5 h-5" />
+          </Button>
+        </div>
+
+        <div className="space-y-40">
+          <div className="pt-16 px-12 space-y-12">
+            <p>Filter</p>
+            <ProductFilter />
+          </div>
+
+          <div className="w-full flex gap-4 justify-center">
+            {hasActiveFilters && (
+              <Button
+                variant={"outline"}
+                className="px-16"
+                onClick={clearFilters}
+              >
+                {`Clear (${filtersCount})`}
+              </Button>
+            )}
+
+            <Button className="px-16" onClick={onMobileFiltersCloseClick}>
+              Apply
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function LayoutComponent() {
   const [showFilters, setShowFilters] = useState(false);
@@ -38,14 +100,8 @@ function LayoutComponent() {
 
   const hasActiveFilters = Boolean(searchParams.color || searchParams.length);
 
-  const getSelectedFiltersCount = () => {
-    return (
-      (searchParams?.color?.split(",")?.length || 0) +
-      (searchParams?.length?.split(",")?.length || 0)
-    );
-  };
-
   const onClickOnMobileFilters = () => {
+    console.log("onClickOnMobileFilters");
     setShowMobileFilters(true);
     hideNavbar();
   };
@@ -78,7 +134,7 @@ function LayoutComponent() {
     setShowFilters(false);
   };
 
-  const selectedFiltersCount = getSelectedFiltersCount();
+  const { filtersCount } = useGetProductFilters();
 
   return (
     <div className="pb-40">
@@ -87,26 +143,32 @@ function LayoutComponent() {
           showFilters={showFilters}
           setShowFilters={setShowFilters}
           onFilterClickOnMobile={onClickOnMobileFilters}
-          selectedFiltersCount={selectedFiltersCount}
+          selectedFiltersCount={filtersCount}
         />
       </div>
 
-      <div className="container mx-auto max-w-[1024px] flex py-8 gap-4">
-        {showFilters && (
-          <div>
-            {hasActiveFilters && (
-              <Button
-                variant={"outline"}
-                className="px-16"
-                onClick={clearFilters}
-              >
-                {`Clear (${selectedFiltersCount})`}
-              </Button>
-            )}
+      <div className="hidden xl:block sticky top-0 z-20">
+        <div className="absolute w-[20%] h-[480px]">
+          {showFilters && (
+            <div className="p-16 space-y-8">
+              <p>Filters</p>
+              {hasActiveFilters && (
+                <Button
+                  variant={"outline"}
+                  className="px-16"
+                  onClick={clearFilters}
+                >
+                  {`Clear (${filtersCount})`}
+                </Button>
+              )}
 
-            <ProductFilter />
-          </div>
-        )}
+              <ProductFilter />
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="container mx-auto max-w-[1024px] flex py-8 gap-4">
         <div
           className={"col-span-12 container mx-auto px-6 lg:px-0 lg:h-screen"}
         >
@@ -115,40 +177,12 @@ function LayoutComponent() {
       </div>
 
       {showMobileFilters && (
-        <div className="absolute z-40 w-full h-screen bg-background">
-          <div className="flex pt-4 px-2">
-            <Button
-              className="ml-auto"
-              variant={"clear"}
-              onClick={onMobileFiltersCloseClick}
-            >
-              <XIcon className="w-5 h-5" />
-            </Button>
-          </div>
-
-          <div className="space-y-40">
-            <div className="pt-16 px-12 space-y-12">
-              <p>Filter</p>
-              <ProductFilter />
-            </div>
-
-            <div className="w-full flex gap-4 justify-center">
-              {hasActiveFilters && (
-                <Button
-                  variant={"outline"}
-                  className="px-16"
-                  onClick={clearFilters}
-                >
-                  {`Clear (${selectedFiltersCount})`}
-                </Button>
-              )}
-
-              <Button className="px-16" onClick={onMobileFiltersCloseClick}>
-                Apply
-              </Button>
-            </div>
-          </div>
-        </div>
+        <MobileFilters
+          onMobileFiltersCloseClick={onMobileFiltersCloseClick}
+          hasActiveFilters={hasActiveFilters}
+          clearFilters={clearFilters}
+          filtersCount={filtersCount}
+        />
       )}
     </div>
   );

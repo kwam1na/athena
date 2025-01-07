@@ -15,6 +15,7 @@ import { Link } from "@tanstack/react-router";
 import { Button } from "../ui/button";
 import { TrashIcon } from "@radix-ui/react-icons";
 import { PlusIcon } from "lucide-react";
+import { toast } from "sonner";
 
 export const BestSellers = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -47,9 +48,15 @@ export const BestSellers = () => {
   const updateRanks = useMutation(api.inventory.bestSeller.updateRanks);
 
   const handleRemoveBestSeller = async (bestSeller: any) => {
-    removeBestSeller({
-      id: bestSeller._id,
-    });
+    console.log(bestSeller);
+    try {
+      await removeBestSeller({ id: bestSeller._id });
+      toast.success("Best seller removed");
+    } catch (error) {
+      toast.error("Failed to remove best seller", {
+        description: (error as Error).message,
+      });
+    }
   };
 
   const onDragEnd = (result: DropResult) => {

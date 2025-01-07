@@ -52,7 +52,7 @@ export default function ProductFilter() {
 
   return (
     <div>
-      <Accordion type="single" collapsible className="w-full space-y-4">
+      <Accordion type="multiple" className="w-full space-y-4">
         <AccordionItem value="color" className="border-none">
           <AccordionTrigger className="w-[160px]">
             <p className="text-sm">

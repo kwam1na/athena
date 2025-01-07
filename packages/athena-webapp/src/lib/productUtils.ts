@@ -8,3 +8,11 @@ export const getProductName = (item: any) => {
 
   return item.productName;
 };
+
+export const sortProduct = (a: any, b: any) => {
+  if (a.productCategory == "Hair" && b.productCategory == "Hair") {
+    return a.length - b.length;
+  }
+
+  return a.price - b.price;
+};

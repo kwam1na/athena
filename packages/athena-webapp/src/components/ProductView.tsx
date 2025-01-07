@@ -99,6 +99,7 @@ function ProductViewContent() {
         currency: activeStore.currency,
         storeId: activeStore._id,
         organizationId: activeStore.organizationId,
+        attributes: {},
       };
 
       const validatedProductData = productSchema.parse(mainProductData);

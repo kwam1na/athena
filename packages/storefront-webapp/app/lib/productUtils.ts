@@ -9,3 +9,11 @@ export const getProductName = (item: ProductSku) => {
 
   return item.productName;
 };
+
+export const sortProduct = (a: ProductSku, b: ProductSku) => {
+  if (a.productCategory == "Hair" && b.productCategory == "Hair") {
+    return a.length - b.length;
+  }
+
+  return a.price - b.price;
+};

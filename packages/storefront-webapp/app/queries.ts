@@ -20,12 +20,14 @@ export const productQueries = {
   bestSellers: ({
     organizationId,
     storeId,
+    filters,
   }: {
     organizationId: string;
     storeId: string;
+    filters?: FilterParams;
   }) =>
     queryOptions({
-      queryKey: ["bestSellers"],
+      queryKey: ["bestSellers", filters],
       queryFn: () => getBestSellers({ organizationId, storeId }),
     }),
   featured: ({

@@ -3,7 +3,7 @@ import { Link } from "@tanstack/react-router";
 
 export default function NotFound() {
   return (
-    <div className="container mx-auto max-w-[1024px] h-full flex justify-center">
+    <div className="container mx-auto max-w-[1024px] h-screen flex justify-center">
       <div className="flex flex-col gap-16 mt-24 w-[80%]">
         <p className="text-xl font-light">
           The page you're looking for does not exist

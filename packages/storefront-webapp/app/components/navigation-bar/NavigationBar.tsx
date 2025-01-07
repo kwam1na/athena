@@ -143,6 +143,8 @@ export default function NavigationBar() {
     showNavbar();
   };
 
+  if (!store) return null;
+
   return (
     <div className="relative bg-background">
       <AnimatePresence initial={false}>

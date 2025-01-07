@@ -4,8 +4,8 @@ import { api, internal } from "../_generated/api";
 import { CheckoutSession, OnlineOrder } from "../../types";
 import { orderDetailsSchema } from "../schemas/storeFront";
 
-// const appUrl = "https://transmit-constitutes-kit-latvia.trycloudflare.com";
-const appUrl = "http://localhost:3000";
+const appUrl = "https://fiscal-novels-imperial-amplifier.trycloudflare.com";
+// const appUrl = "http://localhost:3000";
 
 export const createTransaction = action({
   args: {
