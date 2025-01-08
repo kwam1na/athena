@@ -1,4 +1,6 @@
+import { Infer } from "convex/values";
 import { Doc } from "~/convex/_generated/dataModel";
+import { addressSchema } from "./convex/schemas/storeFront";
 
 export type User = Doc<"users">;
 
@@ -24,6 +26,8 @@ export type BagItem = Doc<"bagItem">;
 export type Customer = Doc<"customer">;
 
 export type Guest = Doc<"guest">;
+
+export type Address = Infer<typeof addressSchema>;
 
 export type CheckoutSessionItem = Doc<"checkoutSessionItem">;
 

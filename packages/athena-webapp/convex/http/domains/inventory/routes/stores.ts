@@ -507,7 +507,7 @@ storeRoutes.get("/:storeId/users/:userId/orders", async (c) => {
 storeRoutes.get("/:storeId/users/:userId/orders/:orderId", async (c) => {
   const { orderId } = c.req.param();
 
-  const order = await c.env.runQuery(api.storeFront.onlineOrder.getById, {
+  const order = await c.env.runQuery(api.storeFront.onlineOrder.get, {
     orderId: orderId as Id<"onlineOrder">,
   });
 

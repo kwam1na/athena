@@ -5,6 +5,16 @@ import {
   customerDetailsSchema,
   paymentMethodSchema,
 } from "../schemas/storeFront";
+import { Address, OnlineOrder, Store } from "../../types";
+import {
+  capitalizeWords,
+  currencyFormatter,
+  formatDate,
+  getAddressString,
+} from "../utils";
+import { OrderEmailType, sendOrderEmail } from "../sendgrid";
+import { sendOrderUpdateEmail } from "./onlineOrderUtilFns";
+import { api } from "../_generated/api";
 
 const entity = "onlineOrder";
 
@@ -132,15 +142,30 @@ export const getAll = query({
   },
 });
 
-export const getById = query({
-  args: { orderId: v.id("onlineOrder") },
+export const get = query({
+  args: {
+    orderId: v.optional(v.id("onlineOrder")),
+    externalReference: v.optional(v.string()),
+  },
   handler: async (ctx, args) => {
-    const order = await ctx.db.get(args.orderId);
+    let order: OnlineOrder | null;
+
+    if (args.orderId) {
+      order = await ctx.db.get(args.orderId);
+    } else if (args.externalReference) {
+      order = await ctx.db
+        .query(entity)
+        .filter((q) =>
+          q.eq(q.field("externalReference"), args.externalReference)
+        )
+        .first();
+    }
+
     if (!order) return null;
 
     const items = await ctx.db
       .query("onlineOrderItem")
-      .filter((q) => q.eq(q.field("orderId"), args.orderId))
+      .filter((q) => q.eq(q.field("orderId"), order._id))
       .collect();
 
     const itemsWithImages = await Promise.all(
@@ -238,7 +263,7 @@ export const update = mutation({
 
     if (args.orderId) {
       const order = await ctx.db.get(args.orderId);
-      if (!order) return false;
+      if (!order) return { success: false, message: "Order not found" };
 
       // Initialize base updates from args
       let updates = { ...args.update };
@@ -265,22 +290,36 @@ export const update = mutation({
         updates.completedAt = Date.now();
       }
 
+      const shouldSendOrderUpdateEmail = [
+        ...completedStatuses,
+        "ready-for-pickup",
+        "out-for-delivery",
+      ].includes(args.update.status);
+
+      if (shouldSendOrderUpdateEmail) {
+        // Send email if status is being updated
+        await ctx.scheduler.runAfter(
+          0,
+          api.storeFront.onlineOrderUtilFns.sendOrderUpdateEmail,
+          {
+            orderId: args.orderId,
+            newStatus: args.update.status,
+          }
+        );
+      }
+
       await ctx.db.patch(args.orderId, updates);
-      return true;
+      return { success: true, message: "Order updated" };
     }
 
     // external reference is passed in as args from the verifyPayment action
     if (args.externalReference) {
-      console.log("received external reference", args.externalReference);
-
       const order = await ctx.db
         .query(entity)
         .filter((q) =>
           q.eq(q.field("externalReference"), args.externalReference)
         )
         .first();
-
-      console.log("found order", order);
 
       if (!order) return false;
 
@@ -435,5 +474,17 @@ export const newOrder = query({
       .first();
 
     return order;
+  },
+});
+
+export const getOrderItems = query({
+  args: { orderId: v.id("onlineOrder") },
+  handler: async (ctx, args) => {
+    const items = await ctx.db
+      .query("onlineOrderItem")
+      .filter((q) => q.eq(q.field("orderId"), args.orderId))
+      .collect();
+
+    return items;
   },
 });

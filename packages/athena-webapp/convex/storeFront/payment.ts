@@ -3,9 +3,16 @@ import { action } from "../_generated/server";
 import { api, internal } from "../_generated/api";
 import { CheckoutSession, OnlineOrder } from "../../types";
 import { orderDetailsSchema } from "../schemas/storeFront";
+import { sendOrderEmail } from "../sendgrid";
+import {
+  capitalizeWords,
+  currencyFormatter,
+  formatDate,
+  getAddressString,
+} from "../utils";
 
-const appUrl = "https://fiscal-novels-imperial-amplifier.trycloudflare.com";
-// const appUrl = "http://localhost:3000";
+// const appUrl = "https://fiscal-novels-imperial-amplifier.trycloudflare.com";
+const appUrl = "http://localhost:3000";
 
 export const createTransaction = action({
   args: {
@@ -93,7 +100,7 @@ export const verifyPayment = action({
       );
 
       const order: OnlineOrder | null = await ctx.runQuery(
-        api.storeFront.onlineOrder.getByExternalReference,
+        api.storeFront.onlineOrder.get,
         {
           externalReference: args.externalReference,
         }
@@ -118,9 +125,67 @@ export const verifyPayment = action({
           );
         }
 
+        const update: Record<string, any> = { hasVerifiedPayment: true };
+
+        if (order && !order.didSendConfirmationEmail) {
+          try {
+            const store = await ctx.runQuery(api.inventory.stores.getById, {
+              id: order.storeId,
+            });
+
+            const formatter = currencyFormatter(store?.currency || "USD");
+
+            const orderStatusMessaging =
+              order.deliveryMethod == "pickup"
+                ? "We're processing your order. We'll notify you when your items are ready for pickup."
+                : "We're processing your order. We'll notify you when your items are are on their way.";
+
+            const orderPickupLocation = store?.config?.contactInfo?.location;
+
+            const deliveryAddress = getAddressString(order.deliveryDetails);
+
+            const pickupDetails =
+              order.deliveryMethod == "pickup"
+                ? orderPickupLocation
+                : deliveryAddress;
+
+            const items = order.items?.map((item: any) => ({
+              text: item.productName,
+              image: item.productImage,
+              price: formatter.format(item.price),
+              quantity: item.quantity,
+              color: item.colorName,
+              length: item.length && `${item.length} inches`,
+            }));
+
+            // send confirmation email
+            const emailResponse = await sendOrderEmail({
+              type: "confirmation",
+              customerEmail: order.customerDetails.email,
+              store_name: "Wigclub",
+              order_number: order.orderNumber,
+              order_date: formatDate(order._creationTime),
+              order_status_messaging: orderStatusMessaging,
+              total: formatter.format(order.amount / 100),
+              items,
+              pickup_type: order.deliveryMethod,
+              pickup_details: pickupDetails,
+            });
+
+            if (emailResponse.ok) {
+              console.log(
+                `sent order confirmation for order #${order?.orderNumber} to ${order.customerDetails?.email}`
+              );
+              update.didSendConfirmationEmail = true;
+            }
+          } catch (e) {
+            console.error("Failed to send order confirmation email", e);
+          }
+        }
+
         await ctx.runMutation(api.storeFront.onlineOrder.update, {
           externalReference: args.externalReference,
-          update: { hasVerifiedPayment: true },
+          update,
         });
 
         console.log(

@@ -149,7 +149,7 @@ function ColorManager() {
                   <SelectValue placeholder="Select color" />
                 </SelectTrigger>
                 <SelectContent>
-                  {colors.map((color) => {
+                  {colors.map((color: any) => {
                     return (
                       <SelectItem key={color.id} value={color.id}>
                         {capitalizeWords(color.name)}
@@ -199,7 +199,7 @@ function ColorManager() {
                 <SelectValue placeholder="Select color" />
               </SelectTrigger>
               <SelectContent>
-                {colors.map((color) => {
+                {colors.map((color: any) => {
                   return (
                     <SelectItem key={color.id} value={color.id}>
                       {capitalizeWords(color.name)}
