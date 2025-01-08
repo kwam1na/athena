@@ -514,4 +514,20 @@ storeRoutes.get("/:storeId/users/:userId/orders/:orderId", async (c) => {
   return c.json(order);
 });
 
+// Update the owner of the bag
+storeRoutes.post("/:storeId/users/:userId/orders/owner", async (c) => {
+  try {
+    const { currentOwnerId, newOwnerId } = await c.req.json();
+
+    const b = await c.env.runMutation(api.storeFront.onlineOrder.updateOwner, {
+      currentOwner: currentOwnerId as Id<"guest">,
+      newOwner: newOwnerId as Id<"storeFrontUser">,
+    });
+    return c.json(b);
+  } catch (e) {
+    console.error(e);
+    return c.json({ error: "Internal server error" }, 400);
+  }
+});
+
 export { storeRoutes };

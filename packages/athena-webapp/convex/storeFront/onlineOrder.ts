@@ -488,3 +488,47 @@ export const getOrderItems = query({
     return items;
   },
 });
+
+export const updateOwner = mutation({
+  args: {
+    currentOwner: v.id("guest"),
+    newOwner: v.id("storeFrontUser"),
+  },
+  handler: async (ctx, args) => {
+    const orders = await ctx.db
+      .query(entity)
+      .filter((q) => q.eq(q.field("storeFrontUserId"), args.currentOwner))
+      .collect();
+
+    console.info(
+      `updating owner for orders from ${args.currentOwner} to ${args.newOwner}`
+    );
+
+    // Update all orders
+    await Promise.all(
+      orders.map(async (order) => {
+        await ctx.db.patch(order._id, {
+          storeFrontUserId: args.newOwner,
+        });
+
+        // Get and update all order items for this order
+        const orderItems = await ctx.db
+          .query("onlineOrderItem")
+          .filter((q) => q.eq(q.field("orderId"), order._id))
+          .collect();
+
+        await Promise.all(
+          orderItems.map((item) =>
+            ctx.db.patch(item._id, {
+              storeFrontUserId: args.newOwner,
+            })
+          )
+        );
+      })
+    );
+
+    console.info("successfully updated owner for orders");
+
+    return true;
+  },
+});

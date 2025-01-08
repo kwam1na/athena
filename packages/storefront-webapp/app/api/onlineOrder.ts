@@ -64,3 +64,34 @@ export async function getOrder({
 
   return res;
 }
+
+export async function updateOrdersOwner({
+  currentOwnerId,
+  newOwnerId,
+  organizationId,
+  storeId,
+}: {
+  currentOwnerId: string;
+  newOwnerId: string;
+  organizationId: string;
+  storeId: string;
+}) {
+  const response = await fetch(
+    `${getBaseUrl(organizationId, storeId, currentOwnerId)}/owner`,
+    {
+      method: "POST",
+      body: JSON.stringify({ currentOwnerId, newOwnerId }),
+      headers: {
+        "Content-Type": "application/json",
+      },
+    }
+  );
+
+  const res = await response.json();
+
+  if (!response.ok) {
+    throw new Error(res.error || "Error transferring orders");
+  }
+
+  return res;
+}

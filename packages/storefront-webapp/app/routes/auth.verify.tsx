@@ -1,4 +1,5 @@
 import { updateBagOwner } from "@/api/bag";
+import { updateOrdersOwner } from "@/api/onlineOrder";
 import { updateSavedBagOwner } from "@/api/savedBag";
 import { verifyUserAccount } from "@/api/stores";
 import { FadeIn } from "@/components/common/FadeIn";
@@ -65,6 +66,10 @@ function InputOTPForm() {
 
   const updateSavedBagOwnerMutation = useMutation({
     mutationFn: updateSavedBagOwner,
+  });
+
+  const updateOrdersOwnerMutation = useMutation({
+    mutationFn: updateOrdersOwner,
   });
 
   // Initialize and handle countdown
@@ -152,6 +157,13 @@ function InputOTPForm() {
           organizationId: store.organizationId,
           storeId: store._id,
           savedBagId: savedBag._id,
+        });
+
+        await updateOrdersOwnerMutation.mutateAsync({
+          currentOwnerId: userId || "",
+          newOwnerId: res.user._id,
+          organizationId: store.organizationId,
+          storeId: store._id,
         });
 
         window.location.href = "/";
