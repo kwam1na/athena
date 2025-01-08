@@ -92,10 +92,6 @@ function RootDocument({ children }: { children: React.ReactNode }) {
             content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
           />
         </Meta>
-        <link
-          href="https://fonts.googleapis.com/css2?family=Lavishly+Yours&display=swap"
-          rel="stylesheet"
-        />
       </Head>
       <Body>
         <QueryClientProvider client={queryClient}>

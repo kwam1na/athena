@@ -46,9 +46,17 @@
 
 @font-face {
   font-family: "Martel";
-  src: url("/assets/fonts/Martel/Martel-UltraLight.ttf") format("truetype");
+  src: url("./assets/fonts/Martel/Martel-UltraLight.ttf") format("truetype");
   font-weight: 200;
   font-style: normal;
+}
+
+@font-face {
+  font-family: "Lavishly Yours";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./assets/fonts/LavishlyYours/LavishlyYours-Regular.ttf");
 }
 
 

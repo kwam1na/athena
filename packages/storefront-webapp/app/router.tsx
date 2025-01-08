@@ -9,24 +9,6 @@ import { ConvexQueryClient } from "@convex-dev/react-query";
 import { ConvexProvider } from "convex/react";
 import { routeTree } from "./routeTree.gen";
 import { toast } from "sonner";
-import NotFound from "./components/states/not-found/NotFound";
-
-// const queryClient = new QueryClient({
-//   defaultOptions: {
-//     queries: {
-//       staleTime: Infinity,
-//     },
-//   },
-// });
-
-// export function createRouter() {
-//   const router = createTanStackRouter({
-//     routeTree,
-//     context: { queryClient },
-//   });
-
-//   return router;
-// }
 
 export function createRouter() {
   if (typeof document !== "undefined") {

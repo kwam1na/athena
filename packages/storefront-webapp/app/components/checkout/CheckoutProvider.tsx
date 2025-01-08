@@ -414,8 +414,14 @@ export const CheckoutProvider = ({
 }) => {
   // Load initial state from sessionStorage or fallback to the default state
   const [checkoutState, setCheckoutState] = useState<CheckoutState>(() => {
-    const savedState = sessionStorage.getItem(SESSION_STORAGE_KEY);
-    return savedState ? JSON.parse(savedState) : initialState;
+    if (typeof window === "undefined") return initialState;
+
+    try {
+      const savedState = sessionStorage.getItem(SESSION_STORAGE_KEY);
+      return savedState ? JSON.parse(savedState) : initialState;
+    } catch {
+      return initialState;
+    }
   });
 
   const [actionsState, setActionsState] = useState(initialActionsState);

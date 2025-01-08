@@ -16,6 +16,7 @@ export function ProductAttribute({
     new Set(
       product.skus
         .map((sku: ProductSku) => sku.colorName)
+        .filter((color: any): color is string => color != null)
         .sort((a: string, b: string) => a.localeCompare(b))
     )
   );
@@ -25,6 +26,7 @@ export function ProductAttribute({
       product.skus
         .filter((sk: ProductSku) => sk.colorName == selectedSku.colorName)
         .map((sku: ProductSku) => parseInt(sku.length))
+        .filter((length: any) => !isNaN(length))
         .sort((a: number, b: number) => a - b)
     )
   );
@@ -51,43 +53,47 @@ export function ProductAttribute({
 
   return (
     <div className="space-y-8">
-      <div className="space-y-4">
-        <p className="text-sm">Color</p>
+      {Boolean(colors.length) && (
+        <div className="space-y-4">
+          <p className="text-sm">Color</p>
 
-        <div className="flex flex-wrap gap-4">
-          {colors.map((color, index) => {
-            return (
-              <Button
-                variant={"ghost"}
-                key={index}
-                className={`${selectedSku?.colorName == color ? "border border-black" : "border border-background-muted"}`}
-                onClick={() => handleClick("color", color)}
-              >
-                {capitalizeWords(color)}
-              </Button>
-            );
-          })}
+          <div className="flex flex-wrap gap-4">
+            {colors.map((color, index) => {
+              return (
+                <Button
+                  variant={"ghost"}
+                  key={index}
+                  className={`${selectedSku?.colorName == color ? "border border-black" : "border border-background-muted"}`}
+                  onClick={() => handleClick("color", color)}
+                >
+                  {capitalizeWords(color)}
+                </Button>
+              );
+            })}
+          </div>
         </div>
-      </div>
+      )}
 
-      <div className="space-y-4">
-        <p className="text-sm">Length</p>
+      {Boolean(lengths.length) && (
+        <div className="space-y-4">
+          <p className="text-sm">Length</p>
 
-        <div className="flex flex-wrap gap-4">
-          {lengths.map((length, index) => {
-            return (
-              <Button
-                variant={"ghost"}
-                key={index}
-                className={`${selectedSku?.length == length ? "border border-black" : "border border-background-muted"}`}
-                onClick={() => handleClick("length", length.toString())}
-              >
-                {`${length}"`}
-              </Button>
-            );
-          })}
+          <div className="flex flex-wrap gap-4">
+            {lengths.map((length, index) => {
+              return (
+                <Button
+                  variant={"ghost"}
+                  key={index}
+                  className={`${selectedSku?.length == length ? "border border-black" : "border border-background-muted"}`}
+                  onClick={() => handleClick("length", length.toString())}
+                >
+                  {`${length}"`}
+                </Button>
+              );
+            })}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

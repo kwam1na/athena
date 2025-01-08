@@ -22,9 +22,9 @@ export interface CheckoutFormSectionProps {
     {
       deliveryInstructions: string;
       deliveryMethod: DeliveryMethod | null;
-      customerDetails: CustomerDetails | null;
-      deliveryDetails: Address | null;
-      billingDetails: BillingAddress | null;
+      customerDetails: CustomerDetails;
+      deliveryDetails: Address;
+      billingDetails: BillingAddress;
     },
     any,
     undefined

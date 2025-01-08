@@ -16,9 +16,31 @@ export const CheckoutForm = () => {
   const defaultValues = {
     deliveryInstructions: checkoutState.deliveryInstructions,
     deliveryMethod: checkoutState.deliveryMethod,
-    customerDetails: checkoutState.customerDetails,
-    deliveryDetails: checkoutState.deliveryDetails,
-    billingDetails: checkoutState.billingDetails,
+    customerDetails: checkoutState.customerDetails || {
+      firstName: "",
+      lastName: "",
+      email: "",
+      phoneNumber: "",
+    },
+    deliveryDetails: checkoutState.deliveryDetails || {
+      address: "",
+      city: "",
+      region: "",
+      country: "",
+      zip: "",
+      state: "",
+      street: "",
+      houseNumber: "",
+      neighborhood: "",
+      landmark: "",
+    },
+    billingDetails: checkoutState.billingDetails || {
+      address: "",
+      city: "",
+      state: "",
+      country: "",
+      zip: "",
+    },
   };
 
   const form = useForm({
