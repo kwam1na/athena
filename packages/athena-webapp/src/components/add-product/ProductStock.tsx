@@ -31,6 +31,7 @@ export type ProductVariant = {
   length?: number;
   color?: string;
   size?: string;
+  weight?: string;
   markedForDeletion?: boolean;
   existsInDB?: boolean;
   images: ImageFile[];

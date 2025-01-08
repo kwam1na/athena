@@ -489,6 +489,7 @@ export const updateSku = mutation({
     length: v.optional(v.number()),
     size: v.optional(v.string()),
     color: v.optional(v.id("color")),
+    weight: v.optional(v.string()),
     sku: v.optional(v.string()),
     quantityAvailable: v.optional(v.number()),
     price: v.optional(v.number()),
@@ -503,6 +504,7 @@ export const updateSku = mutation({
       size: args.size ?? undefined,
       length: args.length ?? undefined,
       color: args.color ?? undefined,
+      weight: args.weight ?? undefined,
     });
 
     return await ctx.db.get(args.id);

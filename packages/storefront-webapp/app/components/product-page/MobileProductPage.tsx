@@ -17,6 +17,7 @@ import { AlertCircleIcon, HeartIcon } from "lucide-react";
 import { HeartIconFilled } from "@/assets/icons/HeartIconFilled";
 import { BagProduct, PickupDetails, ShippingPolicy } from "./ProductDetails";
 import { Reviews } from "./ProductReviews";
+import { About } from "./About";
 
 export default function MobileProductPage() {
   const [isSheetOpen, setIsSheetOpen] = useState(false);
@@ -178,6 +179,13 @@ export default function MobileProductPage() {
               setSelectedSku={setSelectedSku}
             />
           </div>
+
+          {selectedSku.productCategory == "Hair" && (
+            <About
+              productAttributes={product.attributes}
+              productSku={selectedSku}
+            />
+          )}
 
           <div className="space-y-4">
             <div className="flex gap-4">

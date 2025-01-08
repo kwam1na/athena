@@ -25,6 +25,7 @@ export const productSkuSchema = v.object({
   sku: v.optional(v.string()),
   length: v.optional(v.number()),
   size: v.optional(v.string()),
+  weight: v.optional(v.string()),
   productId: v.id("product"),
   storeId: v.id("store"),
   images: v.array(v.string()),

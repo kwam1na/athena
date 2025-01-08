@@ -62,7 +62,7 @@ export function BagProduct({ product }: { product: ProductSku }) {
 
 export function ShippingPolicy() {
   return (
-    <div className="space-y-12 pt-12">
+    <div className="space-y-12 pt-12" aria-describedby="shipping policy">
       <div className="space-y-4">
         <p className="text-md">Shipping</p>
         <p className="text-sm text-muted-foreground">

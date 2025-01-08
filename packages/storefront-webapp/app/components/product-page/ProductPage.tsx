@@ -28,6 +28,7 @@ import { HeartIconFilled } from "@/assets/icons/HeartIconFilled";
 import { BagProduct, PickupDetails, ShippingPolicy } from "./ProductDetails";
 import { ProductAttribute } from "./ProductAttribute";
 import { Reviews } from "./ProductReviews";
+import { About } from "./About";
 
 // Main Product Page Component
 export default function ProductPage() {
@@ -219,6 +220,13 @@ export default function ProductPage() {
                 setSelectedSku={setSelectedSku}
               />
             </div>
+
+            {selectedSku.productCategory == "Hair" && (
+              <About
+                productAttributes={product.attributes}
+                productSku={selectedSku}
+              />
+            )}
 
             <div className="space-y-4">
               <div className="flex gap-4">

@@ -60,6 +60,9 @@ function AttributesTable({ selectedAttributes }: AttributesTableProps) {
       case "size":
         return variant.size;
 
+      case "weight":
+        return variant.weight;
+
       default:
         return "";
     }

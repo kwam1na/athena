@@ -8,5 +8,5 @@ export const productSchema = z.object({
   organizationId: z.string(),
   subcategoryId: z.string(),
   name: z.string().min(2),
-  attributes: z.object({}),
+  attributes: z.record(z.string(), z.any()),
 });

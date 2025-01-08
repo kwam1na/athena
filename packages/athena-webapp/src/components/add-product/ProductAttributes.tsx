@@ -7,11 +7,11 @@ import AttributesTable from "./AttributesTable";
 import useGetActiveProduct from "@/hooks/useGetActiveProduct";
 
 // Define the allowed attributes
-type AllowedAttribute = "color" | "length" | "size";
+type AllowedAttribute = "color" | "length" | "size" | "weight";
 
 // Type guard to check if a string is an AllowedAttribute
 function isAllowedAttribute(attr: string): attr is AllowedAttribute {
-  return ["color", "length", "size"].includes(attr);
+  return ["color", "length", "size", "weight"].includes(attr);
 }
 
 function ProductAttributes() {
@@ -34,7 +34,8 @@ function ProductAttributes() {
     const hasAttr =
       activeProductVariant?.color ||
       activeProductVariant?.length ||
-      activeProductVariant?.size;
+      activeProductVariant?.size ||
+      activeProductVariant?.weight;
 
     // console.log("[attributes]:", appState);
 
@@ -56,6 +57,10 @@ function ProductAttributes() {
         attr.push("size");
       }
 
+      if (activeProductVariant.weight) {
+        attr.push("weight");
+      }
+
       if (appState.didRevertChanges) {
         updateAppState({ didRevertChanges: false });
       }
@@ -70,13 +75,12 @@ function ProductAttributes() {
     appState.didRevertChanges,
   ]);
 
-  // console.log("active ->", activeProduct);
-
   useEffect(() => {
     if (activeProduct) {
       const hasLength = selectedAttributes.includes("length");
       const hasColor = selectedAttributes.includes("color");
       const hasSize = selectedAttributes.includes("size");
+      const hasWeight = selectedAttributes.includes("weight");
 
       updateProductVariants((prev) =>
         prev.map((v) => ({
@@ -84,6 +88,7 @@ function ProductAttributes() {
           length: hasLength ? v.length : undefined,
           color: hasColor ? v.color : undefined,
           size: hasSize ? v.size : undefined,
+          weight: hasWeight ? v.weight : undefined,
         }))
       );
     }

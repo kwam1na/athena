@@ -174,6 +174,7 @@ export function ProductProvider({ children }: { children: ReactNode }) {
     size: sku.size || undefined,
     color: sku.color || undefined,
     length: sku.length || undefined,
+    weight: sku.weight || undefined,
     images: sku.images.map((imageUrl) => ({
       preview: imageUrl,
       file: undefined,

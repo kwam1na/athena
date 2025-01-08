@@ -104,6 +104,8 @@ function ProductViewContent() {
 
       const validatedProductData = productSchema.parse(mainProductData);
 
+      console.log("validatedProductData", validatedProductData);
+
       const product = await createProduct({
         ...validatedProductData,
         slug: toSlug(validatedProductData.name),
@@ -240,7 +242,8 @@ function ProductViewContent() {
       length: variant.length ? parseInt(variant.length) : undefined,
       size: variant.size,
       color: variant.color,
-      attributes: {},
+      weight: variant.weight,
+      attributes: variant.attributes || {},
       storeId: activeStore!._id,
       images,
     });
@@ -268,7 +271,8 @@ function ProductViewContent() {
       length: variant.length ? parseInt(variant.length) : undefined,
       size: variant.size,
       color: variant.color,
-      attributes: {},
+      weight: variant.weight,
+      attributes: variant.attributes || {},
       images,
     });
   };

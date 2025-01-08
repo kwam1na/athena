@@ -1,6 +1,6 @@
 import React from "react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { DraftingCompass, Palette, Ruler, Shirt } from "lucide-react";
+import { DraftingCompass, Palette, Ruler, Shirt, Weight } from "lucide-react";
 
 interface DefaultAttributesToggleGroupProps {
   selectedAttributes: string[];
@@ -17,6 +17,8 @@ function DefaultAttributesToggleGroup({
       value={selectedAttributes}
       onValueChange={(value) => {
         const sortedValue = value.slice().sort((a, b) => {
+          if (a === "weight") return 1; // 'weight' should always be last
+          if (b === "weight") return -1;
           if (a === "color") return -1; // 'color' should always come first
           if (b === "color") return 1;
           if (a === "length" && b === "size") return -1; // 'length' should come before 'size'
@@ -50,6 +52,15 @@ function DefaultAttributesToggleGroup({
       >
         <DraftingCompass className="w-4 h-4 mr-2" />
         Size
+      </ToggleGroupItem>
+
+      <ToggleGroupItem
+        value="weight"
+        className="text-muted-foreground"
+        aria-label="Toggle weight"
+      >
+        <Weight className="w-4 h-4 mr-2" />
+        Weight
       </ToggleGroupItem>
     </ToggleGroup>
   );
