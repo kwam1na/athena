@@ -1,6 +1,5 @@
 import ProductFilter from "@/components/filter/ProductFilter";
 import ProductFilterBar from "@/components/filter/ProductFilterBar";
-import Footer from "@/components/footer/Footer";
 import { useGetShopSearchParams } from "@/components/navigation/hooks";
 import { Button } from "@/components/ui/button";
 import { useStoreContext } from "@/contexts/StoreContext";
@@ -14,6 +13,7 @@ import {
 import { XIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { z } from "zod";
+import { AnimatePresence, motion } from "framer-motion";
 
 const productsPageSchema = z.object({
   color: z.string().optional(),
@@ -149,22 +149,33 @@ function LayoutComponent() {
 
       <div className="hidden xl:block sticky top-0 z-20">
         <div className="absolute w-[20%] h-[480px]">
-          {showFilters && (
-            <div className="p-16 space-y-8">
-              <p>Filters</p>
-              {hasActiveFilters && (
-                <Button
-                  variant={"outline"}
-                  className="px-16"
-                  onClick={clearFilters}
-                >
-                  {`Clear (${filtersCount})`}
-                </Button>
-              )}
+          <AnimatePresence initial={false}>
+            {showFilters && (
+              <motion.div
+                initial={{ opacity: 0, x: -8 }}
+                animate={{
+                  opacity: 1,
+                  x: 0,
+                  transition: { ease: "easeInOut" },
+                }}
+                exit={{ opacity: 0, x: -8 }}
+                className="p-16 space-y-8"
+              >
+                <p>Filters</p>
+                {hasActiveFilters && (
+                  <Button
+                    variant={"outline"}
+                    className="px-16"
+                    onClick={clearFilters}
+                  >
+                    {`Clear (${filtersCount})`}
+                  </Button>
+                )}
 
-              <ProductFilter />
-            </div>
-          )}
+                <ProductFilter />
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </div>
 

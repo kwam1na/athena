@@ -1,5 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
-import { OG_ORGANIZTION_ID, OG_STORE_ID } from "@/lib/constants";
+import {
+  INITIAL_LOAD_KEY,
+  OG_ORGANIZTION_ID,
+  OG_STORE_ID,
+  SESSION_STORAGE_KEY,
+} from "@/lib/constants";
 import { productQueries } from "@/queries";
 import Footer from "./footer/Footer";
 import { Link } from "@tanstack/react-router";
@@ -7,6 +12,7 @@ import { Button } from "./ui/button";
 import { useStoreContext } from "@/contexts/StoreContext";
 import { ProductCard } from "./ProductCard";
 import { AnimatePresence, motion } from "framer-motion";
+import { useEffect, useState } from "react";
 
 function FeaturedProduct({ product }: { product: any }) {
   const { formatter } = useStoreContext();
@@ -159,6 +165,31 @@ export default function HomePage() {
     })
   );
 
+  const [firstLoad] = useState(() => {
+    if (typeof window === "undefined") return true;
+
+    try {
+      const savedState = sessionStorage.getItem(INITIAL_LOAD_KEY);
+      return savedState ? savedState == "true" : true;
+    } catch {
+      return true;
+    }
+  });
+
+  useEffect(() => {
+    const savedState = sessionStorage.getItem(INITIAL_LOAD_KEY);
+
+    if (savedState) return;
+
+    sessionStorage.setItem(INITIAL_LOAD_KEY, "true");
+  }, []);
+
+  useEffect(() => {
+    if (firstLoad) {
+      sessionStorage.setItem(INITIAL_LOAD_KEY, "false");
+    }
+  }, [firstLoad]);
+
   const { formatter } = useStoreContext();
 
   const bestSellersSorted = bestSellers?.sort(
@@ -177,32 +208,60 @@ export default function HomePage() {
 
   if (isLoading) return <div className="h-screen"></div>;
 
+  const initialAnimation = firstLoad
+    ? { opacity: 0, y: -8 }
+    : { opacity: 0, y: 0 };
+  const secondAnimation = firstLoad
+    ? { opacity: 0, y: 8 }
+    : { opacity: 0, y: 0 };
+  const sectionAnimation = firstLoad
+    ? { opacity: 0, x: -16 }
+    : { opacity: 0, x: 0 };
+
   return (
     <>
       <div className="container mx-auto px-4 lg:px-0 overflow-hidden">
         <div className="space-y-32 pb-56">
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{
-              opacity: 1,
-              transition: { ease: "easeOut", duration: 0.2 },
-            }}
-            className="px-8 pt-16 xl:p-32"
-          >
+          <div className="px-8 pt-16 xl:p-32">
             <div className="flex flex-col">
-              <p className="text-md text-center">Switch your look</p>
-              <p className="font-lavish text-7xl text-center text-accent2">
+              <motion.p
+                initial={initialAnimation}
+                animate={{
+                  opacity: 1,
+                  y: 0,
+                  transition: firstLoad
+                    ? { ease: "easeOut", duration: 0.4, delay: 0.3 }
+                    : { duration: 0 },
+                }}
+                className="text-md text-center"
+              >
+                Switch your look
+              </motion.p>
+              <motion.p
+                initial={secondAnimation}
+                animate={{
+                  opacity: 1,
+                  y: 0,
+                  transition: firstLoad
+                    ? { ease: "easeOut", duration: 0.4, delay: 0.6 }
+                    : { duration: 0 },
+                }}
+                className="font-lavish text-7xl text-center text-accent2"
+              >
                 to match your mood
-              </p>
+              </motion.p>
             </div>
-          </motion.div>
+          </div>
 
           {Boolean(bestSellersSorted?.length) && (
             <motion.div
-              initial={{ opacity: 0 }}
+              initial={sectionAnimation}
               animate={{
                 opacity: 1,
-                transition: { ease: "easeOut", duration: 0.2 },
+                x: 0,
+                transition: firstLoad
+                  ? { duration: 0.3, delay: 1 }
+                  : { duration: 0 },
               }}
               className="space-y-8"
             >
@@ -232,10 +291,13 @@ export default function HomePage() {
 
           {Boolean(featuredSectionSorted?.length) && (
             <motion.div
-              initial={{ opacity: 0 }}
+              initial={sectionAnimation}
               animate={{
                 opacity: 1,
-                transition: { ease: "easeOut", duration: 0.2 },
+                x: 0,
+                transition: firstLoad
+                  ? { duration: 0.3, delay: 1 }
+                  : { duration: 0 },
               }}
               className="space-y-32"
             >
