@@ -2,7 +2,12 @@ import { v } from "convex/values";
 import { Address, OnlineOrder, Store } from "../../types";
 import { action } from "../_generated/server";
 import { OrderEmailType, sendOrderEmail } from "../sendgrid";
-import { currencyFormatter, formatDate, getAddressString } from "../utils";
+import {
+  capitalizeWords,
+  currencyFormatter,
+  formatDate,
+  getAddressString,
+} from "../utils";
 import { api } from "../_generated/api";
 
 export async function handleOrderStatusUpdate({
@@ -58,12 +63,46 @@ export async function handleOrderStatusUpdate({
     return emailResponse.ok;
   }
 
+  if (newStatus === "open") {
+    try {
+      const statusMessaging =
+        order.deliveryMethod == "pickup"
+          ? "Thank you for shopping with us! We're processing your order. We'll notify you when your items are ready for pickup. Please note it takes 24 - 48 hours to process your order."
+          : "Thank you for shopping with us! We're processing your order. We'll notify you when your items are are on their way. Please note it takes 24 - 48 hours to process your order.";
+
+      const orderPickupLocation = store?.config?.contactInfo?.location;
+
+      const deliveryAddress = getAddressString(order.deliveryDetails);
+
+      const pickupDetails =
+        order.deliveryMethod == "pickup"
+          ? orderPickupLocation
+          : deliveryAddress;
+
+      if (
+        await sendEmail({
+          type: "confirmation",
+          statusMessaging,
+          pickupDetails,
+        })
+      ) {
+        console.info(
+          `sent order confirmation email for order #${order.orderNumber} to ${order.customerDetails.email}`
+        );
+        return { didSendConfirmationEmail: true };
+      }
+    } catch (e) {
+      console.error("failed to send order confirmation email", e);
+    }
+  }
+
   // Handle ready email
   if (!order.didSendReadyEmail) {
     if (newStatus === "ready-for-pickup") {
       try {
-        const statusMessaging =
-          "Your order is ready for pickup. Visit our store during business hours to pick up your order.";
+        const { firstName } = order.customerDetails;
+
+        const statusMessaging = `Get excited, ${capitalizeWords(firstName)}! Your order is ready for pickup. Visit our store any time during our business hours to pick up your items.`;
 
         const pickupLocation =
           store?.config?.contactInfo?.location || "Location not available";
@@ -87,7 +126,9 @@ export async function handleOrderStatusUpdate({
 
     if (newStatus === "out-for-delivery") {
       try {
-        const statusMessaging = "Your order is out for delivery.";
+        const { firstName } = order.customerDetails;
+
+        const statusMessaging = `Get excited, ${capitalizeWords(firstName)}! Your order is out for delivery.`;
         const deliveryAddress =
           order.deliveryDetails &&
           getAddressString(order.deliveryDetails as Address);
@@ -115,8 +156,8 @@ export async function handleOrderStatusUpdate({
     try {
       const isPickupOrder = order.deliveryMethod === "pickup";
       const statusMessaging = isPickupOrder
-        ? "Your order was picked up. Thank you for shopping with us."
-        : "Your order has been delivered. Thank you for shopping with us.";
+        ? "Your order was picked up. Thank you for shopping with us!"
+        : "Your order has been delivered. Thank you for shopping with us!";
 
       const pickupDetails = isPickupOrder
         ? store?.config?.contactInfo?.location
@@ -158,12 +199,27 @@ export const sendOrderUpdateEmail = action({
 
     console.info(`sending order update email for order #${order.orderNumber}`);
 
-    const { didSendCompletedEmail, didSendReadyEmail } =
+    const {
+      didSendCompletedEmail,
+      didSendReadyEmail,
+      didSendConfirmationEmail,
+    } =
       (await handleOrderStatusUpdate({
         order,
         newStatus: args.newStatus,
         store,
       })) || {};
+
+    if (didSendConfirmationEmail) {
+      console.info(
+        `successfully sent confirmation email for order #${order.orderNumber}`
+      );
+
+      await ctx.runMutation(api.storeFront.onlineOrder.update, {
+        orderId: order._id,
+        update: { didSendConfirmationEmail },
+      });
+    }
 
     if (didSendReadyEmail) {
       console.info(

@@ -67,7 +67,7 @@ const ProductDetailViewHeader = () => {
           ...prev,
           orgUrlSlug: prev.orgUrlSlug!,
           storeUrlSlug: prev.storeUrlSlug!,
-          productSlug: activeProduct.slug,
+          productSlug: activeProduct._id,
         })}
         search={{
           o: encodeURIComponent(

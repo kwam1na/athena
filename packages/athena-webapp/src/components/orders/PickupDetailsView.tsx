@@ -12,11 +12,11 @@ export function PickupDetailsView() {
 
   if (!order || !activeStore) return null;
 
-  console.log(order);
-
   const formatter = currencyFormatter(activeStore.currency);
 
   const { deliveryDetails, deliveryMethod } = order;
+
+  const { location } = activeStore?.config?.contactInfo || {};
 
   if (deliveryMethod == "pickup") {
     return (
@@ -32,7 +32,7 @@ export function PickupDetailsView() {
           <div className="space-y-4">
             <div className="text-sm space-y-2">
               <p>{activeStore.name}</p>
-              <p className="text-muted-foreground">{order.pickupLocation}</p>
+              <p className="text-muted-foreground">{location}</p>
             </div>
           </div>
         </div>

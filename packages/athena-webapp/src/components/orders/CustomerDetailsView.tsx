@@ -35,7 +35,7 @@ export function CustomerDetailsView() {
           </div>
         </div>
 
-        <div className="flex items-center w-[50%] gap-4">
+        {/* <div className="flex items-center w-[50%] gap-4">
           <Button variant="outline">
             <Phone className="h-4 w-4 mr-2" />
             Call
@@ -45,7 +45,7 @@ export function CustomerDetailsView() {
             <Send className="h-4 w-4 mr-2" />
             Send message
           </Button>
-        </div>
+        </div> */}
       </div>
     </View>
   );

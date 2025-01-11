@@ -13,6 +13,7 @@ import { useStoreContext } from "@/contexts/StoreContext";
 import { ProductCard } from "./ProductCard";
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useState } from "react";
+import { EmptyState } from "./states/empty/empty-state";
 
 function FeaturedProduct({ product }: { product: any }) {
   const { formatter } = useStoreContext();
@@ -165,6 +166,13 @@ export default function HomePage() {
     })
   );
 
+  const { data: products, isLoading: isLoadingProducts } = useQuery(
+    productQueries.list({
+      organizationId: OG_ORGANIZTION_ID,
+      storeId: OG_STORE_ID,
+    })
+  );
+
   const [firstLoad] = useState(() => {
     if (typeof window === "undefined") return true;
 
@@ -204,7 +212,8 @@ export default function HomePage() {
     (a: any, b: any) => a.rank - b.rank
   );
 
-  const isLoading = isLoadingBestSellers || isLoadingFeatured;
+  const isLoading =
+    isLoadingBestSellers || isLoadingFeatured || isLoadingProducts;
 
   if (isLoading) return <div className="h-screen"></div>;
 
@@ -217,6 +226,23 @@ export default function HomePage() {
   const sectionAnimation = firstLoad
     ? { opacity: 0, x: -16 }
     : { opacity: 0, x: 0 };
+
+  if (products && products.length == 0) {
+    return (
+      <div className="container mx-auto px-4 lg:px-0 overflow-hidden">
+        <div className="flex items-center justify-center h-screen">
+          <div className="space-y-2">
+            <p className="text-xl text-center font-medium">
+              We're updating our store...
+            </p>
+            <p className="text-muted-foreground tex-sm text-center">
+              We're working on bringing you amazing products. Check back soon!
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>

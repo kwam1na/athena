@@ -34,6 +34,7 @@ import { RefundsView } from "./RefundsView";
 import { ActivityView } from "./ActivityView";
 import { getOrderState } from "./utils";
 import { OrderStatus } from "./OrderStatus";
+import { EmailStatusView } from "./EmailStatusView";
 
 export function RefundOptions() {
   const { order } = useOnlineOrder();
@@ -340,6 +341,8 @@ const VerifyPaymentAlert = () => {
 
   if (!order) return null;
 
+  console.log(order);
+
   if (order.hasVerifiedPayment) return null;
 
   const handleVerifyPayment = async () => {
@@ -402,15 +405,21 @@ export const OrderView = () => {
         <div className="container mx-auto h-full w-full p-8 space-y-12">
           <Alerts />
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <OrderDetailsView />
+            <div className="space-y-8">
+              <div className="grid grid-cols-1 gap-8">
+                <OrderDetailsView />
+                <EmailStatusView />
+              </div>
+            </div>
+
             <OrderItemsView />
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             <div className="space-y-8">
               <div className="grid grid-cols-1 gap-8">
-                <CustomerDetailsView />
                 <PickupDetailsView />
+                <CustomerDetailsView />
               </div>
             </div>
 

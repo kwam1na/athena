@@ -26,6 +26,7 @@ function AttributesTable({ selectedAttributes }: AttributesTableProps) {
     productVariants,
     updateProductVariant,
     activeProductVariant,
+    setActiveProductVariant,
   } = useProduct();
 
   const handleChange = (
@@ -88,6 +89,7 @@ function AttributesTable({ selectedAttributes }: AttributesTableProps) {
           <TableRow
             key={variant.id}
             className={variant.markedForDeletion ? "opacity-50" : ""}
+            onClick={() => setActiveProductVariant(variant)}
           >
             <TableCell>
               <p

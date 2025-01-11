@@ -2,7 +2,13 @@ import { Button } from "@/components/ui/button";
 import { Link } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
 
-export const EmptyState = ({ message }: { message: string }) => {
+export const EmptyState = ({
+  message,
+  showButton = true,
+}: {
+  message: string;
+  showButton?: boolean;
+}) => {
   return (
     <AnimatePresence initial={false}>
       <motion.div
@@ -12,9 +18,11 @@ export const EmptyState = ({ message }: { message: string }) => {
         className="flex flex-col items-center mt-40 lg:items-start gap-16 lg:mt-12 h-screen"
       >
         <p className="text-lg font-medium">{message}</p>
-        <Link to="/">
-          <Button className="w-[320px]">Continue Shopping</Button>
-        </Link>
+        {showButton && (
+          <Link to="/">
+            <Button className="w-[320px]">Continue Shopping</Button>
+          </Link>
+        )}
       </motion.div>
     </AnimatePresence>
   );
