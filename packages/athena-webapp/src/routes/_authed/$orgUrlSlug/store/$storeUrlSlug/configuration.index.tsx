@@ -107,7 +107,7 @@ const FeesView = () => {
           <p className="text-sm text-muted-foreground">Within Greater Accra</p>
           <Input
             type="number"
-            value={enteredWithinAccraFee}
+            value={enteredWithinAccraFee || undefined}
             onChange={(e) => setEnteredWithinAccraFee(parseInt(e.target.value))}
           />
         </div>
@@ -116,7 +116,7 @@ const FeesView = () => {
           <p className="text-sm text-muted-foreground">To other regions</p>
           <Input
             type="number"
-            value={enteredOtherRegionsFee}
+            value={enteredOtherRegionsFee || undefined}
             onChange={(e) =>
               setEnteredOtherRegionsFee(parseInt(e.target.value))
             }
@@ -127,7 +127,7 @@ const FeesView = () => {
           <p className="text-sm text-muted-foreground">International</p>
           <Input
             type="number"
-            value={enteredIntlFee}
+            value={enteredIntlFee || undefined}
             onChange={(e) => setEnteredIntlFee(parseInt(e.target.value))}
           />
         </div>
@@ -207,7 +207,7 @@ const ContactView = () => {
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">Phone number</p>
           <Input
-            value={enteredPhoneNumber}
+            value={enteredPhoneNumber || undefined}
             onChange={(e) => setEnteredPhoneNumber(e.target.value)}
           />
         </div>
@@ -215,7 +215,7 @@ const ContactView = () => {
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">Location</p>
           <Input
-            value={enteredLocation}
+            value={enteredLocation || undefined}
             onChange={(e) => setEnteredLocation(e.target.value)}
           />
         </div>

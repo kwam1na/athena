@@ -7,16 +7,6 @@ import { currencyFormatter } from "~/src/lib/utils";
 import { OrdersTableToolbarProvider } from "./orders-table/components/data-table-toolbar-provider";
 
 export default function OrdersView() {
-  const Navigation = () => {
-    return (
-      <div className="container mx-auto flex gap-2 h-[40px]">
-        <div className="flex items-center">
-          <p className="text-sm">Orders</p>
-        </div>
-      </div>
-    );
-  };
-
   const { activeStore } = useGetActiveStore();
 
   const orders = useQuery(
@@ -36,12 +26,24 @@ export default function OrdersView() {
     };
   });
 
+  const hasOrders = orders.length > 0;
+
+  const Navigation = () => {
+    return (
+      <div className="container mx-auto flex gap-2 h-[40px]">
+        <div className="flex items-center">
+          <p className="text-sm">Orders</p>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <View
       hideBorder
       hideHeaderBottomBorder
       className="bg-background"
-      header={<Navigation />}
+      header={hasOrders && <Navigation />}
     >
       <OrdersTableToolbarProvider>
         <Orders store={activeStore} orders={ordersFormatted} />

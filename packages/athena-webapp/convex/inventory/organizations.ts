@@ -6,7 +6,7 @@ const entity = "organization";
 
 export const getAll = query({
   args: {
-    userId: v.id("users"),
+    userId: v.id("athenaUser"),
   },
   handler: async (ctx, args) => {
     const organizations = await ctx.db

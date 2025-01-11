@@ -24,44 +24,15 @@ import {
   ShoppingBag,
   ShoppingBasket,
   ShoppingCart,
+  Store,
 } from "lucide-react";
 import { AppHeader } from "./Navbar";
 import { Link } from "@tanstack/react-router";
 import useGetActiveStore from "../hooks/useGetActiveStore";
 import { useGetActiveOrganization } from "../hooks/useGetOrganizations";
 import { useNewOrderNotification } from "../hooks/useNewOrderNotification";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@radix-ui/react-collapsible";
 
 export function AppSidebar() {
-  // Menu items.
-  const items = [
-    {
-      title: "Homepage",
-      url: "/wigclub/store/home",
-      icon: Home,
-    },
-    {
-      title: "Products",
-      url: "#",
-      icon: ShoppingBasket,
-    },
-    {
-      title: "Orders",
-      url: "#",
-      icon: ShoppingCart,
-    },
-
-    // {
-    //   title: "Appointments",
-    //   url: "#",
-    //   icon: Calendar,
-    // },
-  ];
-
   const { activeStore } = useGetActiveStore();
   const { activeOrganization } = useGetActiveOrganization();
 
@@ -98,7 +69,7 @@ export function AppSidebar() {
                       })}
                       className="flex items-center"
                     >
-                      <PanelTop className="w-4 h-4" />
+                      <Store className="w-4 h-4" />
                       <p className="font-medium">Homepage</p>
                     </Link>
                   </SidebarMenuButton>

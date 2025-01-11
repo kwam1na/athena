@@ -24,7 +24,7 @@ export default function Orders({
           icon={<ShoppingBag className="w-16 h-16 text-muted-foreground" />}
           text={
             <div className="flex gap-1 text-sm">
-              <p className="text-muted-foreground">No orders for</p>
+              <p className="text-muted-foreground">No orders received for</p>
               <p className="font-medium">{store.name}</p>
             </div>
           }

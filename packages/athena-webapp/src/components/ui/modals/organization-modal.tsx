@@ -14,17 +14,15 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { toast } from "sonner";
-// import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { CheckCircledIcon } from "@radix-ui/react-icons";
 import { Ban } from "lucide-react";
 import { useNavigate } from "@tanstack/react-router";
 import { useOrganizationModal } from "@/hooks/useOrganizationModal";
-import { createOrganization } from "@/api/organization";
 import { useMutation } from "convex/react";
 import { api } from "~/convex/_generated/api";
-import { useGetAuthedUser } from "~/src/hooks/useGetAuthedUser";
 import { useState } from "react";
 import { toSlug } from "~/src/lib/utils";
+import { useAuth } from "~/src/hooks/useAuth";
 
 const formSchema = z.object({
   name: z.string().min(1),
@@ -35,7 +33,7 @@ export const OrganizationModal = () => {
 
   const organizationModal = useOrganizationModal();
 
-  const user = useGetAuthedUser();
+  const { user } = useAuth();
 
   const navigate = useNavigate();
 

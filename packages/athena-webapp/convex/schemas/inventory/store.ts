@@ -5,6 +5,6 @@ export const storeSchema = v.object({
   name: v.string(),
   currency: v.string(),
   slug: v.string(),
-  createdByUserId: v.id("users"),
+  createdByUserId: v.id("athenaUser"),
   organizationId: v.id("organization"),
 });

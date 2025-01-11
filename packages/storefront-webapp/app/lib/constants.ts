@@ -1,5 +1,5 @@
-export const OG_ORGANIZTION_ID = "kn7c7ak5fwmv7nc63saf6s2n7s72cgxe";
-export const OG_STORE_ID = "m17592bh9t0z572apd6qgryd5d72caq6";
+export const OG_ORGANIZTION_ID = "kn7fw2ezvfrvp06ctjkb689tpd786c4j";
+export const OG_STORE_ID = "m1773nc3djfy0qg7m0wp4v1bn9786n2y";
 
 export * from "./countries";
 

@@ -8,7 +8,7 @@ export const productSchema = v.object({
   ),
   attributes: v.optional(v.record(v.string(), v.any())),
   currency: v.string(),
-  createdByUserId: v.id("users"),
+  createdByUserId: v.id("athenaUser"),
   categoryId: v.id("category"),
   description: v.optional(v.string()),
   name: v.string(),

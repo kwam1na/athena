@@ -1,32 +1,15 @@
 import {
-  Link,
   Outlet,
   ScrollRestoration,
   createRootRouteWithContext,
-  redirect,
 } from "@tanstack/react-router";
-import {
-  Body,
-  createServerFn,
-  Head,
-  Html,
-  Meta,
-  Scripts,
-} from "@tanstack/start";
+import { Meta, Scripts } from "@tanstack/start";
 import { TanStackRouterDevtools } from "@tanstack/router-devtools";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import Sidebar from "../components/Sidebar";
-import { StoreModal } from "@/components/ui/modals/store-modal";
-import { OrganizationModal } from "@/components/ui/modals/organization-modal";
-import { organizationsRepository } from "@athena/db";
+import { QueryClient } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/sonner";
-import { useAppSession } from "@/utils/session";
 import { DefaultCatchBoundary } from "@/components/auth/DefaultCatchBoundary";
-import NotFound from "@/components/states/not-found/NotFound";
-import { getCookie } from "vinxi/http";
 import { NotFoundView } from "@/components/states/not-found/NotFoundView";
-import Navbar from "../components/Navbar";
 import { z } from "zod";
 
 const rootPageSchema = z.object({
@@ -50,14 +33,6 @@ export const Route = createRootRouteWithContext<{
     },
   ],
 
-  beforeLoad: async () => {
-    const user = {};
-
-    return {
-      user,
-    };
-  },
-
   component: RootComponent,
 
   validateSearch: rootPageSchema,
@@ -77,34 +52,22 @@ export const Route = createRootRouteWithContext<{
 function RootComponent() {
   return (
     <RootDocument>
-      {/* <Navbar /> */}
       <div className="p-8">
         <Outlet />
       </div>
-      {/* <div className="h-screen"> */}
-      {/* <Navbar />
-        <Outlet /> */}
-      {/* <div className="flex gap-4 h-screen p-4 bg-zinc-50"> */}
       {/* <ReactQueryDevtools buttonPosition="top-right" /> */}
       {/* <TanStackRouterDevtools position="bottom-right" /> */}
-      {/* </div> */}
-      {/* </div> */}
     </RootDocument>
   );
 }
 
 function RootDocument({ children }: { children: React.ReactNode }) {
   return (
-    <Html>
-      <Head>
-        <Meta />
-      </Head>
-      <Body>
-        <Toaster expand />
-        {children}
-        <ScrollRestoration />
-        <Scripts />
-      </Body>
-    </Html>
+    <main>
+      <Toaster expand />
+      {children}
+      <ScrollRestoration />
+      <Scripts />
+    </main>
   );
 }

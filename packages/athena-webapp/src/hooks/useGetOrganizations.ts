@@ -1,10 +1,10 @@
 import { useQuery } from "convex/react";
 import { useParams } from "@tanstack/react-router";
 import { api } from "~/convex/_generated/api";
-import { useGetAuthedUser } from "./useGetAuthedUser";
+import { useAuth } from "./useAuth";
 
 export function useGetActiveOrganization() {
-  const user = useGetAuthedUser();
+  const { user } = useAuth();
 
   const organizations = useQuery(
     api.inventory.organizations.getAll,
@@ -29,7 +29,7 @@ export function useGetActiveOrganization() {
 }
 
 export function useGetOrganizations() {
-  const user = useGetAuthedUser();
+  const { user } = useAuth();
 
   const organizations = useQuery(
     api.inventory.organizations.getAll,

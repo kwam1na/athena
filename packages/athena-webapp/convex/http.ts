@@ -4,6 +4,7 @@ import { auth } from "./auth";
 import { HonoWithConvex, HttpRouterWithHono } from "convex-helpers/server/hono";
 import { ActionCtx } from "./_generated/server";
 import {
+  authRoutes,
   categoryRoutes,
   orgRoutes,
   productRoutes,
@@ -32,11 +33,12 @@ app.use(
       return origin;
     },
     allowMethods: ["OPTIONS", "GET", "POST", "PUT", "DELETE"],
-    credentials: true,
   })
 );
 
 app.route("/webhooks/paystack", paystackRoutes);
+
+app.route("/auth", authRoutes);
 
 app.route("/organizations", orgRoutes);
 

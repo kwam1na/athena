@@ -3,9 +3,10 @@ import { useGetOrganizations } from "@/hooks/useGetOrganizations";
 import { EmptyState } from "./states/empty/empty-state";
 import { BuildingIcon, PlusIcon } from "lucide-react";
 import { Button } from "./ui/button";
-import { useNavigate } from "@tanstack/react-router";
+import { useNavigate, useParams } from "@tanstack/react-router";
 import { useOrganizationModal } from "@/hooks/useOrganizationModal";
 import { useEffect } from "react";
+import { useGetStores } from "../hooks/useGetActiveStore";
 
 export default function OrganizationsView() {
   const Navigation = () => {
@@ -14,22 +15,28 @@ export default function OrganizationsView() {
 
   const organizations = useGetOrganizations();
 
-  console.log("organizaions in view ->", organizations);
-
   const organizationModal = useOrganizationModal();
 
   const navigate = useNavigate();
 
-  useEffect(() => {
-    const organization = organizations?.[0];
+  const stores = useGetStores();
 
-    if (organization) {
+  const { orgUrlSlug } = useParams({ strict: false });
+
+  useEffect(() => {
+    if (stores && stores.length > 0 && orgUrlSlug) {
+      const store = stores[0];
+
       navigate({
-        to: "/$orgUrlSlug/store",
-        params: { orgUrlSlug: organization.slug },
+        to: "/$orgUrlSlug/store/$storeUrlSlug/products",
+        params: (prev) => ({
+          ...prev,
+          orgUrlSlug,
+          storeUrlSlug: store.slug,
+        }),
       });
     }
-  }, [organizations]);
+  }, [stores, orgUrlSlug]);
 
   return (
     <View className="bg-background" header={<Navigation />}>

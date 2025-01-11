@@ -30,14 +30,14 @@ export default function StoreView() {
     if (stores && stores.length > 0) {
       const s = stores?.[0];
 
-      // navigate({
-      //   to: "/$orgUrlSlug/store/$storeUrlSlug/products",
-      //   params: (prev) => ({
-      //     ...prev,
-      //     orgUrlSlug: prev.orgUrlSlug!,
-      //     storeUrlSlug: s.slug,
-      //   }),
-      // });
+      navigate({
+        to: "/$orgUrlSlug/store/$storeUrlSlug/products",
+        params: (prev) => ({
+          ...prev,
+          orgUrlSlug: prev.orgUrlSlug!,
+          storeUrlSlug: s.slug,
+        }),
+      });
     }
   }, [stores]);
 

@@ -1,43 +1,37 @@
-import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
-// import { getOrganizations } from "@/server-actions/organizations";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import OrganizationsView from "@/components/OrganizationsView";
 import { OrganizationModal } from "@/components/ui/modals/organization-modal";
-import { Organization } from "@athena/db";
-import { useConvexAuth } from "convex/react";
+import { useConvexAuth, useQuery } from "convex/react";
 import { useEffect } from "react";
+import { useAuth } from "../hooks/useAuth";
+import { api } from "~/convex/_generated/api";
 
 export const Route = createFileRoute("/")({
-  // beforeLoad: async ({ context }) => {
-  //   if (context.user) {
-  //     // const organizations = await getOrganizations();
-
-  //     const organizations: Organization[] = [];
-  //     const store = {};
-  //     const product = {};
-
-  //     if (organizations && organizations.length > 1) {
-  //       throw redirect({
-  //         to: "/$orgUrlSlug",
-  //         params: { orgUrlSlug: organizations[0].slug },
-  //       });
-  //     }
-  //   }
-  // },
-
-  // loader: async () => await getOrganizations(),
-
   component: Index,
 });
 
 function Index() {
-  const { isAuthenticated, isLoading } = useConvexAuth();
+  const { user } = useAuth();
+
+  const userOrgs = useQuery(
+    api.inventory.organizations.getAll,
+    user?._id ? { userId: user._id } : "skip"
+  );
+
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
+    if (userOrgs && userOrgs.length > 0) {
+      const org = userOrgs[0];
+      navigate({ to: "/$orgUrlSlug", params: { orgUrlSlug: org.slug } });
+    }
+  }, [userOrgs]);
+
+  useEffect(() => {
+    if (user === null) {
       navigate({ to: "/login" });
     }
-  }, [isLoading, isAuthenticated]);
+  }, [user]);
 
   return (
     <>

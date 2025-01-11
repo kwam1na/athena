@@ -20,11 +20,11 @@ import useGetActiveStore from "@/hooks/useGetActiveStore";
 import useGetActiveProduct from "@/hooks/useGetActiveProduct";
 import { useMutation } from "convex/react";
 import { api } from "~/convex/_generated/api";
-import { useGetAuthedUser } from "../hooks/useGetAuthedUser";
 import { toSlug } from "../lib/utils";
 import { Id } from "~/convex/_generated/dataModel";
 import { deleteDirectoryInS3 } from "../lib/aws";
 import { productSchema } from "../lib/schemas/product";
+import { useAuth } from "../hooks/useAuth";
 
 function ProductViewContent() {
   const { productData, revertChanges, productVariants, updateProductVariants } =
@@ -44,7 +44,7 @@ function ProductViewContent() {
 
   const { activeStore } = useGetActiveStore();
   const { activeProduct } = useGetActiveProduct();
-  const user = useGetAuthedUser();
+  const { user } = useAuth();
 
   const createProduct = useMutation(api.inventory.products.create);
   const createSku = useMutation(api.inventory.products.createSku);

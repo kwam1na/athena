@@ -3,9 +3,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
   Command,
-  CommandEmpty,
   CommandGroup,
-  CommandInput,
   CommandItem,
   CommandList,
   CommandSeparator,
@@ -18,13 +16,12 @@ import {
 import { Icons } from "./ui/icons";
 import { OverlayModal } from "./ui/modals/overlay-modal";
 import { useNavigate, useParams } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useOrganizationModal } from "@/hooks/useOrganizationModal";
 import { Organization } from "~/types";
 import { useGetStores } from "../hooks/useGetActiveStore";
 import { useAuthActions } from "@convex-dev/auth/react";
-// import { Organization } from "@athena/db";
+import { LOGGED_IN_USER_ID_KEY } from "../lib/constants";
 
 type PopoverTriggerProps = React.ComponentPropsWithoutRef<
   typeof PopoverTrigger
@@ -99,10 +96,8 @@ export default function OrganizationSwitcher({
     setOpen(false);
   };
 
-  const { signOut } = useAuthActions();
-
   const handleSignOut = async () => {
-    await signOut();
+    localStorage.removeItem(LOGGED_IN_USER_ID_KEY);
 
     navigate({ to: "/login" });
   };
@@ -167,7 +162,7 @@ export default function OrganizationSwitcher({
             <CommandSeparator />
             <CommandList>
               <CommandGroup>
-                <CommandItem
+                {/* <CommandItem
                   onSelect={() => {
                     navigate({
                       to: "/$orgUrlSlug/settings/organization",
@@ -179,9 +174,8 @@ export default function OrganizationSwitcher({
                     setOpen(false);
                   }}
                 >
-                  {/* <Cog className="mr-2 h-4 w-4 text-muted-foreground" /> */}
                   Organization settings
-                </CommandItem>
+                </CommandItem> */}
                 <CommandItem
                   onSelect={() => {
                     handleSignOut();

@@ -25,16 +25,14 @@ import {
 import { useStoreModal } from "@/hooks/use-store-modal";
 import { toast } from "sonner";
 import { currencies, OG_ORGANIZTION_ID } from "@/lib/constants";
-// import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { CheckCircledIcon } from "@radix-ui/react-icons";
 import { Ban } from "lucide-react";
-import { createStore } from "@/api/stores";
 import { useNavigate } from "@tanstack/react-router";
 import { useGetActiveOrganization } from "@/hooks/useGetOrganizations";
-import { useGetAuthedUser } from "~/src/hooks/useGetAuthedUser";
 import { useMutation } from "convex/react";
 import { api } from "~/convex/_generated/api";
 import { toSlug } from "~/src/lib/utils";
+import { useAuth } from "~/src/hooks/useAuth";
 
 const formSchema = z.object({
   name: z.string().min(1),
@@ -44,11 +42,9 @@ const formSchema = z.object({
 export const StoreModal = () => {
   const [isCreatingStore, setIsCreatingStore] = useState(false);
 
-  const user = useGetAuthedUser();
+  const { user } = useAuth();
 
   const storeModal = useStoreModal();
-
-  // const queryClient = useQueryClient();
 
   const navigate = useNavigate();
 
@@ -72,7 +68,7 @@ export const StoreModal = () => {
     setIsCreatingStore(true);
 
     try {
-      await createStore({
+      const store = await createStore({
         ...values,
         organizationId: activeOrganization._id,
         createdByUserId: user._id,
@@ -81,6 +77,14 @@ export const StoreModal = () => {
 
       toast(`${values.name} created`, {
         icon: <CheckCircledIcon className="w-4 h-4" />,
+      });
+
+      navigate({
+        to: "/$orgUrlSlug/store/$storeUrlSlug/products",
+        params: {
+          orgUrlSlug: activeOrganization.slug,
+          storeUrlSlug: store?.slug,
+        },
       });
 
       storeModal.onClose();

@@ -15,7 +15,8 @@ const config = {
   },
   apiGateway: {
     REGION: import.meta.env.VITE_REGION,
-    URL: import.meta.env.VITE_API_URL,
+    // URL: import.meta.env.VITE_API_URL,
+    URL: "https://jovial-wildebeest-179.convex.site",
   },
   cognito: {
     REGION: import.meta.env.VITE_REGION,
