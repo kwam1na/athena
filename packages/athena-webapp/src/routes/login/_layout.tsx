@@ -54,14 +54,14 @@ function LoginLayout() {
           athena
         </Link>
 
-        <div className="z-10 flex flex-col items-start gap-2">
+        {/* <div className="z-10 flex flex-col items-start gap-2">
           <p className="text-base font-normal text-primary">
             {randomQuote.quote}
           </p>
           <p className="text-base font-normal text-primary/60">
             -{randomQuote.author}
           </p>
-        </div>
+        </div> */}
         <div className="base-grid absolute left-0 top-0 z-0 h-full w-full opacity-40" />
       </div>
       <div className="flex h-full w-full flex-col border-l border-primary/5 bg-card lg:w-[50%]">
