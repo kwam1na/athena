@@ -32,6 +32,7 @@ export const sendVerificationCode = async (params: {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      Authorization: `Bearer ${process.env.SENDGRID_API_KEY}`,
     },
     body: JSON.stringify(message),
   });
@@ -58,29 +59,6 @@ export const sendOrderEmail = async (params: {
   pickup_type: string;
   pickup_details: string;
 }) => {
-  const getSubject = () => {
-    switch (params.type) {
-      case "confirmation":
-        return `Thank you for shopping with ${params.store_name}`;
-
-      case "ready":
-        return params.pickup_type == "pickup"
-          ? `Your ${params.store_name} order is ready for pickup`
-          : `Your ${params.store_name} order is out for delivery`;
-
-      case "complete":
-        return params.pickup_type == "pickup"
-          ? `Your ${params.store_name} order from has been picked up`
-          : `Your ${params.store_name} order from has been delivered`;
-
-      case "canceled":
-        return `Your ${params.store_name} order has been canceled`;
-
-      default:
-        return `Thank you for shopping with ${params.store_name}!!`;
-    }
-  };
-
   const message = {
     from: {
       email: "orders@wigclub.store",
@@ -117,6 +95,7 @@ export const sendOrderEmail = async (params: {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      Authorization: `Bearer ${process.env.SENDGRID_API_KEY}`,
     },
     body: JSON.stringify(message),
   });
