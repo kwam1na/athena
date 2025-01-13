@@ -1,5 +1,5 @@
 import config from "@/config";
-import { Bag, CheckoutSession } from "@athena/webapp-2";
+import { Bag, CheckoutSession } from "@athena/webapp";
 
 const getBaseUrl = (
   organizationId: string,

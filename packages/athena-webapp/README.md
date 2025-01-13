@@ -1,4 +1,4 @@
-# webapp-2
+# webapp
 
 To install dependencies:
 

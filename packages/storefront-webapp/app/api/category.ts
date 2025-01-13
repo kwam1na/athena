@@ -1,6 +1,6 @@
 import config from "@/config";
 import { FilterParams, OrganizationStoreEntityApiParams } from "./types";
-import { Category } from "@athena/webapp-2";
+import { Category } from "@athena/webapp";
 
 type GetParams = OrganizationStoreEntityApiParams & {
   categoryId: string;

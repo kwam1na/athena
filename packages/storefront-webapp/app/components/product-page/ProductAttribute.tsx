@@ -1,4 +1,4 @@
-import { Product, ProductSku } from "@athena/webapp-2";
+import { Product, ProductSku } from "@athena/webapp";
 import { useNavigate } from "@tanstack/react-router";
 import { Button } from "../ui/button";
 import { capitalizeWords } from "@/lib/utils";

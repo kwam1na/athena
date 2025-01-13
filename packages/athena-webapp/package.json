@@ -1,5 +1,5 @@
 {
-  "name": "@athena/webapp-2",
+  "name": "@athena/webapp",
   "module": "index.ts",
   "type": "module",
   "scripts": {

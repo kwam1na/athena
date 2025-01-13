@@ -1,6 +1,6 @@
 import config from "@/config";
 import { BagResponseBody } from "@/lib/schemas/bag";
-import { StoreFrontUser } from "@athena/webapp-2";
+import { StoreFrontUser } from "@athena/webapp";
 
 type GetGuestParams = {
   guestId: string;

@@ -11,7 +11,7 @@ import {
 import { useStoreContext } from "@/contexts/StoreContext";
 import { OG_ORGANIZTION_ID, OG_STORE_ID } from "@/lib/constants";
 import { bagQueries } from "@/queries";
-import { ProductSku } from "@athena/webapp-2";
+import { ProductSku } from "@athena/webapp";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 

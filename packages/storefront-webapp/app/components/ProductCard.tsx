@@ -1,4 +1,4 @@
-import { Product, ProductSku } from "@athena/webapp-2";
+import { Product, ProductSku } from "@athena/webapp";
 
 export function ProductCard({
   product,

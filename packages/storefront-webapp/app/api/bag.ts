@@ -1,7 +1,7 @@
 import config from "@/config";
 import { BagResponseBody } from "@/lib/schemas/bag";
 import { BagItemResponseBody } from "@/lib/schemas/bagItem";
-import { Bag } from "@athena/webapp-2";
+import { Bag } from "@athena/webapp";
 
 type GetBagItemsParams = {
   storeFrontUserId: string;

@@ -1,4 +1,4 @@
-import { ProductSku } from "@athena/webapp-2";
+import { ProductSku } from "@athena/webapp";
 import { SheetTrigger } from "../ui/sheet";
 import { getProductName } from "@/lib/productUtils";
 import { Link } from "@tanstack/react-router";

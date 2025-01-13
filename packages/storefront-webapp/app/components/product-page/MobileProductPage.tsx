@@ -1,7 +1,7 @@
 import { useStoreContext } from "@/contexts/StoreContext";
 import { useGetProductQuery } from "@/hooks/useGetProduct";
 import { getProductName } from "@/lib/productUtils";
-import { ProductSku } from "@athena/webapp-2";
+import { ProductSku } from "@athena/webapp";
 import { Link, useSearch } from "@tanstack/react-router";
 import { useParams } from "@tanstack/react-router";
 import { motion } from "framer-motion";

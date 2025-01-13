@@ -9,7 +9,7 @@ import { OG_ORGANIZTION_ID, OG_STORE_ID } from "@/lib/constants";
 import { ALL_COUNTRIES } from "@/lib/countries";
 import { GHANA_REGIONS } from "@/lib/ghanaRegions";
 import { fetchUser, logoutFn } from "@/server-actions/auth";
-import { StoreFrontUser } from "@athena/webapp-2";
+import { StoreFrontUser } from "@athena/webapp";
 import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/start";

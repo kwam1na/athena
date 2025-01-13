@@ -1,4 +1,4 @@
-import { ProductSku } from "@athena/webapp-2";
+import { ProductSku } from "@athena/webapp";
 import { capitalizeWords } from "./utils";
 
 export const getProductName = (item: ProductSku) => {

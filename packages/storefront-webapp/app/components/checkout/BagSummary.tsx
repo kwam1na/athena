@@ -1,7 +1,7 @@
 import { useStoreContext } from "@/contexts/StoreContext";
 import { useShoppingBag } from "@/hooks/useShoppingBag";
 import { getProductName } from "@/lib/productUtils";
-import { ProductSku } from "@athena/webapp-2";
+import { ProductSku } from "@athena/webapp";
 import { useCheckout } from "./CheckoutProvider";
 import { Link } from "@tanstack/react-router";
 import { Button } from "../ui/button";

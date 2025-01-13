@@ -1,6 +1,6 @@
 import config from "@/config";
 import { OrganizationStoreEntityApiParams } from "./types";
-import { Color } from "@athena/webapp-2";
+import { Color } from "@athena/webapp";
 
 type GetParams = OrganizationStoreEntityApiParams & {
   productId: string;

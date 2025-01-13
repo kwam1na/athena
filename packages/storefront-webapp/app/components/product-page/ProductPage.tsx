@@ -7,7 +7,7 @@ import {
 } from "@tanstack/react-router";
 import { LoadingButton } from "../ui/loading-button";
 import { useShoppingBag } from "@/hooks/useShoppingBag";
-import { Product, ProductSku } from "@athena/webapp-2";
+import { Product, ProductSku } from "@athena/webapp";
 import { Button } from "../ui/button";
 import { capitalizeWords, getProductName } from "@/lib/utils";
 import { AlertCircleIcon, HeartIcon } from "lucide-react";

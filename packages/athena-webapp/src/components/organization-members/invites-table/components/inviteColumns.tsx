@@ -38,7 +38,7 @@ export const inviteColumns: ColumnDef<InviteCode>[] = [
       return redeemedAt ? (
         <div className="flex items-center text-green-700">
           <Check className="w-4 h-4 mr-2" />
-          Redeemed
+          Accepted
         </div>
       ) : (
         <div className="flex items-center text-muted-foreground">
