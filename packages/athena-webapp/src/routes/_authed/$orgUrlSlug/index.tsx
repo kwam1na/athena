@@ -8,8 +8,6 @@ export const Route = createFileRoute("/_authed/$orgUrlSlug/")({
     // const org = await getOrganization(orgUrlSlug)
 
     const org = {};
-    const store = {};
-    const product = {};
 
     if (!org) throw notFound();
 

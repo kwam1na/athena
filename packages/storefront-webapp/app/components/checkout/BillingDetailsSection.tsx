@@ -22,6 +22,7 @@ import { ALL_COUNTRIES } from "@/lib/countries";
 import { useStoreContext } from "@/contexts/StoreContext";
 import { CheckoutFormSectionProps } from "./CustomerInfoSection";
 import { EnteredBillingAddressDetails } from "./EnteredBillingAddressDetails";
+import { US_STATES } from "@/lib/states";
 
 export const BillingDetailsSection = ({ form }: CheckoutFormSectionProps) => {
   const { checkoutState, actionsState, updateActionsState, updateState } =
@@ -294,32 +295,88 @@ export const BillingDetailsSection = ({ form }: CheckoutFormSectionProps) => {
             {isUSAddress && (
               <>
                 <div className="w-full">
-                  <FormField
-                    control={form.control}
-                    name="billingDetails.state"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-muted-foreground text-xs">
-                          State
-                        </FormLabel>
-                        <FormControl>
-                          <Input
-                            {...field}
-                            onChange={(e) => {
+                  <div className="hidden md:block w-full">
+                    <FormField
+                      control={form.control}
+                      name="billingDetails.state"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-muted-foreground text-xs">
+                            State
+                          </FormLabel>
+                          <Select
+                            onValueChange={(e) => {
                               updateState({
                                 billingDetails: {
                                   ...checkoutState.billingDetails,
-                                  state: e.target.value,
+                                  state: e,
                                 } as Address,
                               });
                               field.onChange(e);
                             }}
-                          />
-                        </FormControl>
-                        <FormMessage className="text-xs" />
-                      </FormItem>
-                    )}
-                  />
+                            value={field.value}
+                          >
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select state" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {US_STATES.map((state) => (
+                                <SelectItem
+                                  key={state.value}
+                                  value={state.value}
+                                >
+                                  {state.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage className="text-xs" />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  <div className="block md:hidden w-full">
+                    <FormField
+                      control={form.control}
+                      name="billingDetails.state"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-muted-foreground text-xs">
+                            State
+                          </FormLabel>
+                          <FormControl>
+                            <select
+                              className="block w-full px-3 py-8 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary text-sm"
+                              value={field.value}
+                              onChange={(e) => {
+                                const selectedValue = e.target.value;
+                                updateState({
+                                  billingDetails: {
+                                    ...checkoutState.deliveryDetails,
+                                    state: selectedValue,
+                                  } as Address,
+                                });
+                                field.onChange(selectedValue);
+                              }}
+                            >
+                              <option value="" disabled>
+                                Select state
+                              </option>
+                              {US_STATES.map((state) => (
+                                <option key={state.value} value={state.value}>
+                                  {state.label}
+                                </option>
+                              ))}
+                            </select>
+                          </FormControl>
+                          <FormMessage className="text-xs" />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
                 </div>
 
                 <div className="w-full">
@@ -355,222 +412,6 @@ export const BillingDetailsSection = ({ form }: CheckoutFormSectionProps) => {
           </div>
         </motion.div>
       )}
-
-      {/* {(!checkoutState.didEnterBillingDetails ||
-        actionsState.isEditingBillingDetails) && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{
-            opacity: 1,
-            transition: { ease: "easeOut", duration: 0.4 },
-          }}
-          className="space-y-8"
-        >
-          <div className="flex flex-col xl:flex-row gap-8">
-            <div className="hidden md:block w-full md:w-[40%]">
-              <FormField
-                control={form.control}
-                name="billingDetails.country"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-muted-foreground text-xs">
-                      Country
-                    </FormLabel>
-                    <Select
-                      onValueChange={(e) => {
-                        updateState({
-                          billingDetails: {
-                            ...checkoutState.billingDetails,
-                            country: e,
-                          } as Address,
-                        });
-                        field.onChange(e);
-                      }}
-                      value={field.value}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select country" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {ALL_COUNTRIES.map((country) => (
-                          <SelectItem key={country.code} value={country.code}>
-                            {country.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage className="text-xs" />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <div className="block md:hidden w-full">
-              <FormField
-                control={form.control}
-                name="billingDetails.country"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-muted-foreground text-xs">
-                      Country
-                    </FormLabel>
-                    <FormControl>
-                      <select
-                        className="block w-full px-3 py-8 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary text-sm"
-                        value={field.value}
-                        onChange={(e) => {
-                          const selectedValue = e.target.value;
-                          updateState({
-                            billingDetails: {
-                              ...checkoutState.deliveryDetails,
-                              country: selectedValue,
-                            } as Address,
-                          });
-                          field.onChange(selectedValue);
-                        }}
-                      >
-                        <option value="" disabled>
-                          Select country
-                        </option>
-                        {ALL_COUNTRIES.map((country) => (
-                          <option key={country.code} value={country.code}>
-                            {country.name}
-                          </option>
-                        ))}
-                      </select>
-                    </FormControl>
-                    <FormMessage className="text-xs" />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <div className="w-full xl:w-[70%]">
-              <FormField
-                control={form.control}
-                name="billingDetails.address"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-muted-foreground text-xs">
-                      Address
-                    </FormLabel>
-                    <FormControl>
-                      <Input
-                        {...field}
-                        onChange={(e) => {
-                          updateState({
-                            billingDetails: {
-                              ...checkoutState.billingDetails,
-                              address: e.target.value,
-                            } as Address,
-                          });
-                          field.onChange(e);
-                        }}
-                      />
-                    </FormControl>
-                    <FormMessage className="text-xs" />
-                  </FormItem>
-                )}
-              />
-            </div>
-          </div>
-
-          <div className="flex flex-col xl:flex-row gap-4">
-            <div className={`${isUSAddress ? "w-full" : "w-auto"}`}>
-              <FormField
-                control={form.control}
-                name="billingDetails.city"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-muted-foreground text-xs">
-                      City
-                    </FormLabel>
-                    <FormControl>
-                      <Input
-                        {...field}
-                        onChange={(e) => {
-                          updateState({
-                            billingDetails: {
-                              ...checkoutState.billingDetails,
-                              city: e.target.value,
-                            } as Address,
-                          });
-                          field.onChange(e);
-                        }}
-                      />
-                    </FormControl>
-                    <FormMessage className="text-xs" />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            {isUSAddress && (
-              <>
-                <div className="w-full">
-                  <FormField
-                    control={form.control}
-                    name="billingDetails.state"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-muted-foreground text-xs">
-                          State
-                        </FormLabel>
-                        <FormControl>
-                          <Input
-                            {...field}
-                            onChange={(e) => {
-                              updateState({
-                                billingDetails: {
-                                  ...checkoutState.billingDetails,
-                                  state: e.target.value,
-                                } as Address,
-                              });
-                              field.onChange(e);
-                            }}
-                          />
-                        </FormControl>
-                        <FormMessage className="text-xs" />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-
-                <div className="w-full">
-                  <FormField
-                    control={form.control}
-                    name="billingDetails.zip"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-muted-foreground text-xs">
-                          Zip Code
-                        </FormLabel>
-                        <FormControl>
-                          <Input
-                            {...field}
-                            onChange={(e) => {
-                              updateState({
-                                billingDetails: {
-                                  ...checkoutState.billingDetails,
-                                  zip: e.target.value,
-                                } as Address,
-                              });
-                              field.onChange(e);
-                            }}
-                          />
-                        </FormControl>
-                        <FormMessage className="text-xs" />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-              </>
-            )}
-          </div>
-        </motion.div>
-      )} */}
     </div>
   );
 };

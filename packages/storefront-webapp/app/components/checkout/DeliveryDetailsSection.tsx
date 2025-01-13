@@ -22,6 +22,7 @@ import { accraNeighborhoods } from "@/lib/ghana";
 import { CheckoutFormSectionProps } from "./CustomerInfoSection";
 import { Textarea } from "../ui/textarea";
 import { Button } from "../ui/button";
+import { US_STATES } from "@/lib/states";
 
 const CountryFields = ({ form }: CheckoutFormSectionProps) => {
   const { checkoutState, updateState } = useCheckout();
@@ -215,6 +216,93 @@ const RegionFields = ({ form }: CheckoutFormSectionProps) => {
             )}
           />
         </div>
+      </div>
+    </>
+  );
+};
+
+const StateFields = ({ form }: CheckoutFormSectionProps) => {
+  const { checkoutState, updateState } = useCheckout();
+  return (
+    <>
+      <div className="hidden md:block w-full">
+        <FormField
+          control={form.control}
+          name="deliveryDetails.state"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-muted-foreground text-xs">
+                State
+              </FormLabel>
+              <Select
+                onValueChange={(e) => {
+                  updateState({
+                    deliveryDetails: {
+                      ...checkoutState.deliveryDetails,
+                      state: e,
+                    } as Address,
+                  });
+                  field.onChange(e);
+                }}
+                value={field.value}
+              >
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select state" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  {US_STATES.map((state) => (
+                    <SelectItem key={state.value} value={state.value}>
+                      {state.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FormMessage className="text-xs" />
+            </FormItem>
+          )}
+        />
+      </div>
+
+      <div className="block md:hidden w-full">
+        <FormField
+          control={form.control}
+          name="deliveryDetails.state"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-muted-foreground text-xs">
+                State
+              </FormLabel>
+              <FormControl>
+                <select
+                  className="block w-full px-3 py-8 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary text-sm"
+                  value={field.value}
+                  onChange={(e) => {
+                    const selectedValue = e.target.value;
+                    updateState({
+                      deliveryDetails: {
+                        ...checkoutState.deliveryDetails,
+                        state: selectedValue,
+                      } as Address,
+                    });
+                    field.onChange(selectedValue);
+                  }}
+                >
+                  <option value="" disabled>
+                    Select state
+                  </option>
+                  {US_STATES.map((state) => (
+                    <option key={state.value} value={state.value}>
+                      {state.label}
+                    </option>
+                  ))}
+                </select>
+              </FormControl>
+              <FormMessage className="text-xs" />
+            </FormItem>
+          )}
+        />
       </div>
     </>
   );
@@ -542,7 +630,7 @@ const USAddressFields = ({ form }: CheckoutFormSectionProps) => {
   const { checkoutState, updateState } = useCheckout();
   return (
     <>
-      <div className="w-full">
+      {/* <div className="w-full">
         <FormField
           control={form.control}
           name="deliveryDetails.state"
@@ -569,7 +657,9 @@ const USAddressFields = ({ form }: CheckoutFormSectionProps) => {
             </FormItem>
           )}
         />
-      </div>
+      </div> */}
+
+      <StateFields form={form} />
 
       <div className="w-full">
         <FormField

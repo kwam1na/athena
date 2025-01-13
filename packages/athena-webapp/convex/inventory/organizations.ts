@@ -9,10 +9,14 @@ export const getAll = query({
     userId: v.id("athenaUser"),
   },
   handler: async (ctx, args) => {
-    const organizations = await ctx.db
-      .query(entity)
-      .filter((q) => q.eq(q.field("createdByUserId"), args.userId))
+    const memberOrgs = await ctx.db
+      .query("organizationMember")
+      .filter((q) => q.eq(q.field("userId"), args.userId))
       .collect();
+
+    const orgs = memberOrgs.map((org) => org.organizationId);
+
+    const organizations = await Promise.all(orgs.map((org) => ctx.db.get(org)));
 
     return organizations;
   },

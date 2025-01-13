@@ -29,7 +29,11 @@ export type Guest = Doc<"guest">;
 
 export type Address = Infer<typeof addressSchema>;
 
+export type AthenaUser = Doc<"athenaUser">;
+
 export type CheckoutSessionItem = Doc<"checkoutSessionItem">;
+
+export type InviteCode = Doc<"inviteCode">;
 
 export type CheckoutSession = Doc<"checkoutSession">;
 

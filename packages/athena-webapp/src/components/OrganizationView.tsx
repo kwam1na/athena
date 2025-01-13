@@ -1,7 +1,7 @@
 import { useEffect } from "react";
-import useGetActiveStore, { useGetStores } from "../hooks/useGetActiveStore";
+import { useGetStores } from "../hooks/useGetActiveStore";
 import View from "./View";
-import { useLoaderData, useNavigate, useParams } from "@tanstack/react-router";
+import { useNavigate, useParams } from "@tanstack/react-router";
 
 export default function OrganizationView() {
   const Navigation = () => {
@@ -35,13 +35,6 @@ export default function OrganizationView() {
 
   return (
     <View className="bg-background" header={<Navigation />}>
-      {/* {!isValidOrganizationName &&
-        orgUrlSlug &&
-        !isLoading &&
-        !fetchOrganizationsError && (
-          <NotFound entity="organization" entityName={orgUrlSlug} />
-        )} */}
-
       <span />
     </View>
   );

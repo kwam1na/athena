@@ -1,12 +1,12 @@
 import { useQuery } from "convex/react";
-import useGetActiveStore from "../hooks/useGetActiveStore";
-import View from "./View";
+import useGetActiveStore from "../../hooks/useGetActiveStore";
+import View from "../View";
 
-import { BestSellers } from "./homepage/BestSellers";
-import { FeaturedSection } from "./homepage/FeaturedSection";
+import { BestSellers } from "./BestSellers";
+import { FeaturedSection } from "./FeaturedSection";
 import { api } from "~/convex/_generated/api";
-import { EmptyState } from "./states/empty/empty-state";
-import { ShoppingBag, Store } from "lucide-react";
+import { EmptyState } from "../states/empty/empty-state";
+import { Store } from "lucide-react";
 
 export default function Home() {
   const { activeStore } = useGetActiveStore();

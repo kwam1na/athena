@@ -38,6 +38,8 @@ import type * as inventory_bestSeller from "../inventory/bestSeller.js";
 import type * as inventory_categories from "../inventory/categories.js";
 import type * as inventory_colors from "../inventory/colors.js";
 import type * as inventory_featuredItem from "../inventory/featuredItem.js";
+import type * as inventory_inviteCode from "../inventory/inviteCode.js";
+import type * as inventory_organizationMembers from "../inventory/organizationMembers.js";
 import type * as inventory_organizations from "../inventory/organizations.js";
 import type * as inventory_products from "../inventory/products.js";
 import type * as inventory_stores from "../inventory/stores.js";
@@ -51,7 +53,9 @@ import type * as schemas_inventory_category from "../schemas/inventory/category.
 import type * as schemas_inventory_color from "../schemas/inventory/color.js";
 import type * as schemas_inventory_featuredItem from "../schemas/inventory/featuredItem.js";
 import type * as schemas_inventory_index from "../schemas/inventory/index.js";
+import type * as schemas_inventory_inviteCode from "../schemas/inventory/inviteCode.js";
 import type * as schemas_inventory_organization from "../schemas/inventory/organization.js";
+import type * as schemas_inventory_organizationMember from "../schemas/inventory/organizationMember.js";
 import type * as schemas_inventory_product from "../schemas/inventory/product.js";
 import type * as schemas_inventory_store from "../schemas/inventory/store.js";
 import type * as schemas_inventory_subcategory from "../schemas/inventory/subcategory.js";
@@ -126,6 +130,8 @@ declare const fullApi: ApiFromModules<{
   "inventory/categories": typeof inventory_categories;
   "inventory/colors": typeof inventory_colors;
   "inventory/featuredItem": typeof inventory_featuredItem;
+  "inventory/inviteCode": typeof inventory_inviteCode;
+  "inventory/organizationMembers": typeof inventory_organizationMembers;
   "inventory/organizations": typeof inventory_organizations;
   "inventory/products": typeof inventory_products;
   "inventory/stores": typeof inventory_stores;
@@ -139,7 +145,9 @@ declare const fullApi: ApiFromModules<{
   "schemas/inventory/color": typeof schemas_inventory_color;
   "schemas/inventory/featuredItem": typeof schemas_inventory_featuredItem;
   "schemas/inventory/index": typeof schemas_inventory_index;
+  "schemas/inventory/inviteCode": typeof schemas_inventory_inviteCode;
   "schemas/inventory/organization": typeof schemas_inventory_organization;
+  "schemas/inventory/organizationMember": typeof schemas_inventory_organizationMember;
   "schemas/inventory/product": typeof schemas_inventory_product;
   "schemas/inventory/store": typeof schemas_inventory_store;
   "schemas/inventory/subcategory": typeof schemas_inventory_subcategory;
