@@ -20,3 +20,5 @@ export const WIGLUB_HAIR_STUDIO_LOCATION_URL =
 export const SESSION_STORAGE_KEY = "checkoutState";
 
 export const INITIAL_LOAD_KEY = "initialLoad";
+
+export const INITIAL_LOAD_TIME_KEY = "initialLoadTime";

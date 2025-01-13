@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import {
   INITIAL_LOAD_KEY,
+  INITIAL_LOAD_TIME_KEY,
   OG_ORGANIZTION_ID,
   OG_STORE_ID,
   SESSION_STORAGE_KEY,
@@ -178,7 +179,16 @@ export default function HomePage() {
 
     try {
       const savedState = sessionStorage.getItem(INITIAL_LOAD_KEY);
-      return savedState ? savedState == "true" : true;
+      const lastLoadTime = sessionStorage.getItem(INITIAL_LOAD_TIME_KEY);
+
+      if (!savedState || !lastLoadTime) return true;
+
+      // Check if last load was more than 24 hours ago
+      const now = new Date().getTime();
+      const timeDiff = now - parseInt(lastLoadTime);
+      const hoursDiff = timeDiff / (1000 * 60 * 60);
+
+      return hoursDiff >= 24 ? true : savedState === "true";
     } catch {
       return true;
     }
@@ -186,15 +196,24 @@ export default function HomePage() {
 
   useEffect(() => {
     const savedState = sessionStorage.getItem(INITIAL_LOAD_KEY);
+    const lastLoadTime = sessionStorage.getItem(INITIAL_LOAD_TIME_KEY);
 
-    if (savedState) return;
-
-    sessionStorage.setItem(INITIAL_LOAD_KEY, "true");
+    if (!savedState || !lastLoadTime) {
+      sessionStorage.setItem(INITIAL_LOAD_KEY, "true");
+      sessionStorage.setItem(
+        SESSION_STORAGE_KEY,
+        new Date().getTime().toString()
+      );
+    }
   }, []);
 
   useEffect(() => {
     if (firstLoad) {
       sessionStorage.setItem(INITIAL_LOAD_KEY, "false");
+      sessionStorage.setItem(
+        INITIAL_LOAD_TIME_KEY,
+        new Date().getTime().toString()
+      );
     }
   }, [firstLoad]);
 
