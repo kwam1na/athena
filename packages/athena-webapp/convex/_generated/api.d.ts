@@ -1,5 +1,3 @@
-/* prettier-ignore-start */
-
 /* eslint-disable */
 /**
  * Generated `api` utility.
@@ -10,6 +8,11 @@
  * @module
  */
 
+import type {
+  ApiFromModules,
+  FilterApi,
+  FunctionReference,
+} from "convex/server";
 import type * as app from "../app.js";
 import type * as auth from "../auth.js";
 import type * as constants_countries from "../constants/countries.js";
@@ -88,11 +91,6 @@ import type * as storeFront_savedBagItem from "../storeFront/savedBagItem.js";
 import type * as storeFront_user from "../storeFront/user.js";
 import type * as utils from "../utils.js";
 
-import type {
-  ApiFromModules,
-  FilterApi,
-  FunctionReference,
-} from "convex/server";
 /**
  * A utility for referencing Convex functions in your app's API.
  *
@@ -180,69 +178,11 @@ declare const fullApi: ApiFromModules<{
   "storeFront/user": typeof storeFront_user;
   utils: typeof utils;
 }>;
-declare const fullApiWithMounts: typeof fullApi;
-
 export declare const api: FilterApi<
-  typeof fullApiWithMounts,
+  typeof fullApi,
   FunctionReference<any, "public">
 >;
 export declare const internal: FilterApi<
-  typeof fullApiWithMounts,
+  typeof fullApi,
   FunctionReference<any, "internal">
 >;
-
-export declare const components: {
-  crons: {
-    public: {
-      del: FunctionReference<
-        "mutation",
-        "internal",
-        { identifier: { id: string } | { name: string } },
-        null
-      >;
-      get: FunctionReference<
-        "query",
-        "internal",
-        { identifier: { id: string } | { name: string } },
-        {
-          args: Record<string, any>;
-          functionHandle: string;
-          id: string;
-          name?: string;
-          schedule:
-            | { kind: "interval"; ms: number }
-            | { cronspec: string; kind: "cron" };
-        } | null
-      >;
-      list: FunctionReference<
-        "query",
-        "internal",
-        {},
-        Array<{
-          args: Record<string, any>;
-          functionHandle: string;
-          id: string;
-          name?: string;
-          schedule:
-            | { kind: "interval"; ms: number }
-            | { cronspec: string; kind: "cron" };
-        }>
-      >;
-      register: FunctionReference<
-        "mutation",
-        "internal",
-        {
-          args: Record<string, any>;
-          functionHandle: string;
-          name?: string;
-          schedule:
-            | { kind: "interval"; ms: number }
-            | { cronspec: string; kind: "cron" };
-        },
-        string
-      >;
-    };
-  };
-};
-
-/* prettier-ignore-end */

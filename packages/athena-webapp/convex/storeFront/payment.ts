@@ -1,18 +1,12 @@
 import { v } from "convex/values";
 import { action } from "../_generated/server";
 import { api, internal } from "../_generated/api";
-import { CheckoutSession, OnlineOrder } from "../../types";
+import { Address, CheckoutSession, OnlineOrder } from "../../types";
 import { orderDetailsSchema } from "../schemas/storeFront";
 import { sendOrderEmail } from "../sendgrid";
-import {
-  capitalizeWords,
-  currencyFormatter,
-  formatDate,
-  getAddressString,
-} from "../utils";
+import { currencyFormatter, formatDate, getAddressString } from "../utils";
 
-// const appUrl = "https://fiscal-novels-imperial-amplifier.trycloudflare.com";
-const appUrl = "http://localhost:3000";
+const appUrl = process.env.APP_URL;
 
 export const createTransaction = action({
   args: {
@@ -76,7 +70,7 @@ export const verifyPayment = action({
     storeFrontUserId: v.union(v.id("storeFrontUser"), v.id("guest")),
     externalReference: v.string(),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<any> => {
     const response = await fetch(
       `https://api.paystack.co/transaction/verify/${args.externalReference}`,
       {
@@ -142,21 +136,24 @@ export const verifyPayment = action({
 
             const orderPickupLocation = store?.config?.contactInfo?.location;
 
-            const deliveryAddress = getAddressString(order.deliveryDetails);
+            const deliveryAddress = order.deliveryDetails
+              ? getAddressString(order.deliveryDetails as Address)
+              : "Details not available";
 
             const pickupDetails =
               order.deliveryMethod == "pickup"
                 ? orderPickupLocation
                 : deliveryAddress;
 
-            const items = order.items?.map((item: any) => ({
-              text: item.productName,
-              image: item.productImage,
-              price: formatter.format(item.price),
-              quantity: item.quantity,
-              color: item.colorName,
-              length: item.length && `${item.length} inches`,
-            }));
+            const items =
+              order.items?.map((item: any) => ({
+                text: item.productName,
+                image: item.productImage,
+                price: formatter.format(item.price),
+                quantity: item.quantity,
+                color: item.colorName,
+                length: item.length && `${item.length} inches`,
+              })) || [];
 
             // send confirmation email
             const emailResponse = await sendOrderEmail({

@@ -6,6 +6,7 @@ export const savedBagItemSchema = v.object({
   productId: v.id("product"),
   productSkuId: v.id("productSku"),
   productSku: v.string(),
+  price: v.optional(v.number()),
   quantity: v.number(),
   updatedAt: v.number(),
 });

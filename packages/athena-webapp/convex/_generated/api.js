@@ -1,5 +1,3 @@
-/* prettier-ignore-start */
-
 /* eslint-disable */
 /**
  * Generated `api` utility.
@@ -10,7 +8,7 @@
  * @module
  */
 
-import { anyApi, componentsGeneric } from "convex/server";
+import { anyApi } from "convex/server";
 
 /**
  * A utility for referencing Convex functions in your app's API.
@@ -22,6 +20,3 @@ import { anyApi, componentsGeneric } from "convex/server";
  */
 export const api = anyApi;
 export const internal = anyApi;
-export const components = componentsGeneric();
-
-/* prettier-ignore-end */

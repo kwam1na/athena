@@ -9,11 +9,15 @@ const userRoutes: HonoWithConvex<ActionCtx> = new Hono();
 userRoutes.get("/:userId", async (c) => {
   const { userId } = c.req.param();
 
-  const user = await c.env.runQuery(api.storeFront.user.getById, {
-    id: userId as Id<"storeFrontUser">,
-  });
+  try {
+    const user = await c.env.runQuery(api.storeFront.user.getById, {
+      id: userId as Id<"storeFrontUser">,
+    });
 
-  return c.json(user);
+    return c.json(user);
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, 400);
+  }
 });
 
 userRoutes.put("/:userId", async (c) => {

@@ -105,19 +105,24 @@ storeRoutes.get("/:storeId/users/:userId/bags/:bagId", async (c) => {
       return c.json({ error: "Customer id missing" }, 404);
     }
 
-    const bag = await c.env.runQuery(api.storeFront.bag.getByUserId, {
-      storeFrontUserId: userId as Id<"storeFrontUser"> | Id<"guest">,
-    });
-
-    if (!bag) {
-      const b = await c.env.runMutation(api.storeFront.bag.create, {
+    try {
+      const bag = await c.env.runQuery(api.storeFront.bag.getByUserId, {
         storeFrontUserId: userId as Id<"storeFrontUser"> | Id<"guest">,
-        storeId: storeId as Id<"store">,
       });
 
-      return c.json(b);
+      if (!bag) {
+        const b = await c.env.runMutation(api.storeFront.bag.create, {
+          storeFrontUserId: userId as Id<"storeFrontUser"> | Id<"guest">,
+          storeId: storeId as Id<"store">,
+        });
+
+        return c.json(b);
+      }
+      return c.json(bag);
+    } catch (e) {
+      console.error(e);
+      return c.json({ error: "Internal server error" }, 400);
     }
-    return c.json(bag);
   }
 
   return c.json({});
@@ -163,8 +168,6 @@ storeRoutes.post("/:storeId/users/:userId/bags/:bagId/items", async (c) => {
 
 // Update the owner of the bag
 storeRoutes.post("/:storeId/users/:userId/bags/:bagId/owner", async (c) => {
-  console.log("hit endpont...");
-
   try {
     const { currentOwnerId, newOwnerId } = await c.req.json();
 
@@ -219,19 +222,27 @@ storeRoutes.get("/:storeId/users/:userId/savedBags/:savedBagId", async (c) => {
       return c.json({ error: "Customer id missing" }, 404);
     }
 
-    const savedBag = await c.env.runQuery(api.storeFront.savedBag.getByUserId, {
-      storeFrontUserId: userId as Id<"storeFrontUser"> | Id<"guest">,
-    });
+    try {
+      const savedBag = await c.env.runQuery(
+        api.storeFront.savedBag.getByUserId,
+        {
+          storeFrontUserId: userId as Id<"storeFrontUser"> | Id<"guest">,
+        }
+      );
 
-    if (!savedBag) {
-      const b = await c.env.runMutation(api.storeFront.savedBag.create, {
-        storeFrontUserId: userId as Id<"storeFrontUser"> | Id<"guest">,
-        storeId: storeId as Id<"store">,
-      });
+      if (!savedBag) {
+        const b = await c.env.runMutation(api.storeFront.savedBag.create, {
+          storeFrontUserId: userId as Id<"storeFrontUser"> | Id<"guest">,
+          storeId: storeId as Id<"store">,
+        });
 
-      return c.json(b);
+        return c.json(b);
+      }
+      return c.json(savedBag);
+    } catch (e) {
+      console.error(e);
+      return c.json({ error: "Internal server error" }, 400);
     }
-    return c.json(savedBag);
   }
 
   return c.json({});
@@ -394,7 +405,10 @@ storeRoutes.post(
             customerEmail,
             amount,
             checkoutSessionId: checkoutSessionId as Id<"checkoutSession">,
-            orderDetails,
+            orderDetails: {
+              ...orderDetails,
+              deliveryDetails: orderDetails.deliveryDetails ?? null,
+            },
           }
         );
 
@@ -408,7 +422,10 @@ storeRoutes.post(
           {
             id: checkoutSessionId as Id<"checkoutSession">,
             hasCompletedCheckoutSession,
-            orderDetails,
+            orderDetails: {
+              ...orderDetails,
+              deliveryDetails: orderDetails.deliveryDetails ?? null,
+            },
           }
         );
 
@@ -449,14 +466,18 @@ storeRoutes.post(
 storeRoutes.get("/:storeId/users/:userId/checkout/active", async (c) => {
   const { userId } = c.req.param();
 
-  const session = await c.env.runQuery(
-    api.storeFront.checkoutSession.getActiveCheckoutSession,
-    {
-      storeFrontUserId: userId as Id<"storeFrontUser"> | Id<"guest">,
-    }
-  );
+  try {
+    const session = await c.env.runQuery(
+      api.storeFront.checkoutSession.getActiveCheckoutSession,
+      {
+        storeFrontUserId: userId as Id<"storeFrontUser"> | Id<"guest">,
+      }
+    );
 
-  return c.json(session);
+    return c.json(session);
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, 400);
+  }
 });
 
 storeRoutes.get("/:storeId/users/:userId/checkout/pending", async (c) => {

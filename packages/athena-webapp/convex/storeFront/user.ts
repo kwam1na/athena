@@ -34,9 +34,33 @@ export const update = mutation({
     billingAddress: v.optional(addressSchema),
   },
   handler: async (ctx, args) => {
-    const { id, ...rest } = args;
+    const updates: Record<string, any> = {};
 
-    await ctx.db.patch(args.id, rest);
+    if (args.email) {
+      updates.email = args.email;
+    }
+
+    if (args.firstName) {
+      updates.firstName = args.firstName;
+    }
+
+    if (args.lastName) {
+      updates.lastName = args.lastName;
+    }
+
+    if (args.phoneNumber) {
+      updates.phoneNumber = args.phoneNumber;
+    }
+
+    if (args.billingAddress) {
+      updates.billingAddress = args.billingAddress;
+    }
+
+    if (args.shippingAddress) {
+      updates.shippingAddress = args.shippingAddress;
+    }
+
+    await ctx.db.patch(args.id, updates);
     return await ctx.db.get(args.id);
   },
 });

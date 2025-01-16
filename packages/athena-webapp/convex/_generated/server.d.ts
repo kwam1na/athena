@@ -1,5 +1,3 @@
-/* prettier-ignore-start */
-
 /* eslint-disable */
 /**
  * Generated utilities for implementing server-side Convex query and mutation functions.
@@ -12,7 +10,6 @@
 
 import {
   ActionBuilder,
-  AnyComponents,
   HttpActionBuilder,
   MutationBuilder,
   QueryBuilder,
@@ -21,14 +18,8 @@ import {
   GenericQueryCtx,
   GenericDatabaseReader,
   GenericDatabaseWriter,
-  FunctionReference,
 } from "convex/server";
 import type { DataModel } from "./dataModel.js";
-
-type GenericCtx =
-  | GenericActionCtx<DataModel>
-  | GenericMutationCtx<DataModel>
-  | GenericQueryCtx<DataModel>;
 
 /**
  * Define a query in this Convex app's public API.
@@ -149,5 +140,3 @@ export type DatabaseReader = GenericDatabaseReader<DataModel>;
  * for the guarantees Convex provides your functions.
  */
 export type DatabaseWriter = GenericDatabaseWriter<DataModel>;
-
-/* prettier-ignore-end */

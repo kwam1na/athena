@@ -16,7 +16,11 @@ export const create = mutation({
     storeFrontUserId: v.union(v.id("storeFrontUser"), v.id("guest")),
   },
   handler: async (ctx, args) => {
-    const id = await ctx.db.insert(entity, { ...args, updatedAt: Date.now() });
+    const id = await ctx.db.insert(entity, {
+      ...args,
+      updatedAt: Date.now(),
+      items: [],
+    });
 
     const bag = await ctx.db.get(id);
     return {

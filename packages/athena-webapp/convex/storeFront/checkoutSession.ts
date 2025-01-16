@@ -50,10 +50,7 @@ export const create = mutation({
     const productSkus = await fetchProductSkus(ctx, args.products);
 
     // Check for existing session
-    const { session: existingSession } = await getActiveCheckoutSession(
-      ctx,
-      args
-    );
+    const existingSession = await getActiveCheckoutSession(ctx, args);
 
     let sessionItemsMap = new Map<string, number>();
 
@@ -239,14 +236,10 @@ export const getActiveCheckoutSession = query({
       .first();
 
     if (activeSession) {
-      return {
-        session: activeSession,
-      };
+      return activeSession;
     }
 
-    return {
-      message: "No active session found.",
-    };
+    return null;
   },
 });
 
@@ -580,7 +573,7 @@ function checkAdjustedAvailability(
         productSkuId,
         requested: quantity,
         available: Math.min(
-          sku?.quantityAvailable + existingQuantity || 0,
+          (sku?.quantityAvailable ?? 0) + existingQuantity || 0,
           sku?.inventoryCount || 0
         ),
       });
@@ -592,7 +585,7 @@ function checkAdjustedAvailability(
 async function updateExistingSession(
   ctx: any,
   session: any,
-  storeFrontUserId: string,
+  storeFrontUserId: Id<"storeFrontUser"> | Id<"guest">,
   products: Product[]
 ) {
   const sessionItems: CheckoutSessionItem[] = await ctx.db
@@ -604,7 +597,8 @@ async function updateExistingSession(
     sessionItems.map((item: any) => [item.productSkuId, item])
   );
 
-  const itemsToInsert: CheckoutSessionItem[] = [];
+  const itemsToInsert: Omit<CheckoutSessionItem, "_id" | "_creationTime">[] =
+    [];
   const itemsToUpdate: { id: Id<"checkoutSessionItem">; quantity: number }[] =
     [];
   const itemsToDelete: Id<"checkoutSessionItem">[] = [];

@@ -1,11 +1,12 @@
 import {
   Outlet,
   ScrollRestoration,
+  createRootRoute,
   createRootRouteWithContext,
 } from "@tanstack/react-router";
-import { Meta, Scripts } from "@tanstack/start";
+import { Scripts } from "@tanstack/start";
 import { TanStackRouterDevtools } from "@tanstack/router-devtools";
-import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
+// import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { QueryClient } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/sonner";
 import { DefaultCatchBoundary } from "@/components/auth/DefaultCatchBoundary";
@@ -20,18 +21,21 @@ const rootPageSchema = z.object({
 export const Route = createRootRouteWithContext<{
   queryClient: QueryClient;
 }>()({
-  meta: () => [
-    {
-      charSet: "utf-8",
-    },
-    {
-      name: "viewport",
-      content: "width=device-width, initial-scale=1",
-    },
-    {
-      title: "Athena | Manage",
-    },
-  ],
+  head: () => ({
+    title: "Athena",
+    meta: [
+      {
+        charSet: "utf-8",
+      },
+      {
+        name: "viewport",
+        content: "width=device-width, initial-scale=1",
+      },
+      {
+        title: "Athena | Manage",
+      },
+    ],
+  }),
 
   component: RootComponent,
 

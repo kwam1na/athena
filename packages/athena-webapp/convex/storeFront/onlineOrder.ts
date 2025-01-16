@@ -148,7 +148,7 @@ export const get = query({
     externalReference: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    let order: OnlineOrder | null;
+    let order: OnlineOrder | null = null;
 
     if (args.orderId) {
       order = await ctx.db.get(args.orderId);

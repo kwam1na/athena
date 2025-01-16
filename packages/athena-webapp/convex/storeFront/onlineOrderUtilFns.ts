@@ -72,7 +72,9 @@ export async function handleOrderStatusUpdate({
 
       const orderPickupLocation = store?.config?.contactInfo?.location;
 
-      const deliveryAddress = getAddressString(order.deliveryDetails);
+      const deliveryAddress = order.deliveryDetails
+        ? getAddressString(order.deliveryDetails as Address)
+        : "Details not available";
 
       const pickupDetails =
         order.deliveryMethod == "pickup"
@@ -190,14 +192,14 @@ export const sendOrderUpdateEmail = action({
     }
 
     const store = await ctx.runQuery(api.inventory.stores.findById, {
-      id: order.storeId,
+      id: order!.storeId,
     });
 
     if (!store) {
       console.error("Store not found in send order update email handler");
     }
 
-    console.info(`sending order update email for order #${order.orderNumber}`);
+    console.info(`sending order update email for order #${order!.orderNumber}`);
 
     const {
       didSendCompletedEmail,
@@ -205,40 +207,40 @@ export const sendOrderUpdateEmail = action({
       didSendConfirmationEmail,
     } =
       (await handleOrderStatusUpdate({
-        order,
+        order: order!,
         newStatus: args.newStatus,
-        store,
+        store: store!,
       })) || {};
 
     if (didSendConfirmationEmail) {
       console.info(
-        `successfully sent confirmation email for order #${order.orderNumber}`
+        `successfully sent confirmation email for order #${order!.orderNumber}`
       );
 
       await ctx.runMutation(api.storeFront.onlineOrder.update, {
-        orderId: order._id,
+        orderId: order!._id,
         update: { didSendConfirmationEmail },
       });
     }
 
     if (didSendReadyEmail) {
       console.info(
-        `successfully sent ready email for order #${order.orderNumber}`
+        `successfully sent ready email for order #${order!.orderNumber}`
       );
 
       await ctx.runMutation(api.storeFront.onlineOrder.update, {
-        orderId: order._id,
+        orderId: order!._id,
         update: { didSendReadyEmail },
       });
     }
 
     if (didSendCompletedEmail) {
       console.info(
-        `successfully sent completed email for order #${order.orderNumber}`
+        `successfully sent completed email for order #${order!.orderNumber}`
       );
 
       await ctx.runMutation(api.storeFront.onlineOrder.update, {
-        orderId: order._id,
+        orderId: order!._id,
         update: { didSendCompletedEmail },
       });
     }
