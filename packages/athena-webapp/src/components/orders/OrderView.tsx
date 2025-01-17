@@ -35,6 +35,7 @@ import { ActivityView } from "./ActivityView";
 import { getOrderState } from "./utils";
 import { OrderStatus } from "./OrderStatus";
 import { EmailStatusView } from "./EmailStatusView";
+import PageHeader from "../common/PageHeader";
 
 export function RefundOptions() {
   const { order } = useOnlineOrder();
@@ -245,7 +246,7 @@ const Header = () => {
     isOrderOpen;
 
   return (
-    <div className="container mx-auto flex gap-2 h-[40px] items-center justify-between">
+    <PageHeader>
       <div className="flex gap-4 items-center">
         <div className="flex items-center gap-2">
           <Button
@@ -329,7 +330,7 @@ const Header = () => {
           </LoadingButton>
         )}
       </div>
-    </div>
+    </PageHeader>
   );
 };
 
@@ -401,7 +402,7 @@ const Alerts = () => {
 export const OrderView = () => {
   return (
     <OnlineOrderProvider>
-      <View hideBorder hideHeaderBottomBorder header={<Header />}>
+      <View header={<Header />}>
         <div className="container mx-auto h-full w-full p-8 space-y-12">
           <Alerts />
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">

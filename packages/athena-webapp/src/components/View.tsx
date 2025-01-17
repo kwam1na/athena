@@ -20,9 +20,7 @@ export default function View({
         className={`flex flex-col h-full ${hideBorder ? "" : "border border-1"} rounded-md pb-8`}
       >
         {header && (
-          <header
-            className={`${hideHeaderBottomBorder ? "" : "border-b"} py-2`}
-          >
+          <header className={`${hideHeaderBottomBorder ? "" : "border-b"}`}>
             {header}
           </header>
         )}

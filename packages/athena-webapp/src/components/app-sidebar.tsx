@@ -27,7 +27,6 @@ import useGetActiveStore from "../hooks/useGetActiveStore";
 import { useGetActiveOrganization } from "../hooks/useGetOrganizations";
 import { useNewOrderNotification } from "../hooks/useNewOrderNotification";
 import { useAuth } from "../hooks/useAuth";
-import { PersonIcon } from "@radix-ui/react-icons";
 
 export function AppSidebar() {
   const { activeStore } = useGetActiveStore();

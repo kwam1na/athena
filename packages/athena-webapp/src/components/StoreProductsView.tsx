@@ -1,10 +1,10 @@
 import { useQuery } from "convex/react";
-import Products from "./Products";
+import StoreProducts from "./StoreProducts";
 import View from "./View";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { api } from "~/convex/_generated/api";
 
-export default function ProductsView() {
+export default function StoreProductsView() {
   const { activeStore } = useGetActiveStore();
 
   const products = useQuery(
@@ -18,7 +18,7 @@ export default function ProductsView() {
     return (
       <div className="container mx-auto flex gap-2 h-[40px]">
         <div className="flex items-center">
-          <p className="text-sm">Products</p>
+          <p className="text-3xl font-medium text-muted-foreground">Products</p>
         </div>
       </div>
     );
@@ -33,7 +33,7 @@ export default function ProductsView() {
       className="bg-background"
       header={hasProducts && <Navigation />}
     >
-      <Products store={activeStore} products={products} />
+      <StoreProducts store={activeStore} products={products} />
     </View>
   );
 }

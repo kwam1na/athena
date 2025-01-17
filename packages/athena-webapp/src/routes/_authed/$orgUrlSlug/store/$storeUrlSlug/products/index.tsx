@@ -1,28 +1,11 @@
-import ProductsView from "@/components/ProductsView";
+import StoreProductsView from "~/src/components/StoreProductsView";
 import { NotFoundView } from "@/components/states/not-found/NotFoundView";
-import useGetActiveStore from "@/hooks/useGetActiveStore";
-import { useGetActiveOrganization } from "@/hooks/useGetOrganizations";
-import { createFileRoute, notFound } from "@tanstack/react-router";
-import { AppSidebar } from "~/src/components/app-sidebar";
-import { SidebarProvider, SidebarTrigger } from "~/src/components/ui/sidebar";
+import { createFileRoute } from "@tanstack/react-router";
 
 export const Route = createFileRoute(
   "/_authed/$orgUrlSlug/store/$storeUrlSlug/products/"
 )({
-  // beforeLoad: () => {
-  //   const { activeOrganization } = useGetActiveOrganization();
-  //   const { activeStore } = useGetActiveStore();
-
-  //   if (!activeOrganization || !activeStore)
-  //     throw notFound({
-  //       data: {
-  //         store: Boolean(activeStore) == false,
-  //         org: Boolean(activeOrganization) == false,
-  //       },
-  //     });
-  // },
-
-  component: ProductsView,
+  component: StoreProductsView,
 
   notFoundComponent: ({ data }) => {
     const { orgUrlSlug, storeUrlSlug } = Route.useParams();
@@ -35,15 +18,3 @@ export const Route = createFileRoute(
     return <NotFoundView entity={entity} entityIdentifier={name} />;
   },
 });
-
-// export default function Layout() {
-//   return (
-//     <SidebarProvider>
-//       <AppSidebar />
-//       <main className="w-full">
-//         {/* <SidebarTrigger /> */}
-//         <ProductsView />
-//       </main>
-//     </SidebarProvider>
-//   );
-// }

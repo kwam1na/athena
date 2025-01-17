@@ -32,7 +32,7 @@ export default function OrdersView() {
     return (
       <div className="container mx-auto flex gap-2 h-[40px]">
         <div className="flex items-center">
-          <p className="text-sm">Orders</p>
+          <p className="text-3xl font-medium text-muted-foreground">Orders</p>
         </div>
       </div>
     );

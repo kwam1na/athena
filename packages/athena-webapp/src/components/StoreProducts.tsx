@@ -1,17 +1,13 @@
 import { columns } from "./products-table/components/columns";
 import { DataTable } from "./products-table/components/data-table";
-import { useQuery } from "@tanstack/react-query";
-import { ErrorPage } from "./states/error";
-import TableSkeleton from "./states/loading/table-skeleton";
 import { EmptyState } from "./states/empty/empty-state";
 import { PackageXIcon } from "lucide-react";
-import { Link, useLoaderData } from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
 import { Button } from "./ui/button";
 import { PlusIcon } from "@radix-ui/react-icons";
-import { StoreResponse } from "@/lib/schemas/store";
 import { Product, Store } from "~/types";
 
-export default function Products({
+export default function StoreProducts({
   store,
   products,
 }: {

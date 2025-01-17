@@ -13,6 +13,7 @@ import { ImagesView } from "./ImagesView";
 import { PenIcon } from "lucide-react";
 import { ProductStatus } from "./ProductStatus";
 import { ProductStockStatus } from "./ProductStock";
+import PageHeader from "../common/PageHeader";
 
 const ProductDetailViewHeader = () => {
   const { o } = useSearch({ strict: false });
@@ -34,7 +35,7 @@ const ProductDetailViewHeader = () => {
   if (!activeProduct) return null;
 
   return (
-    <div className="container mx-auto flex gap-2 h-[40px] items-center justify-between">
+    <PageHeader>
       <div className="flex gap-4 items-center">
         <div className="flex items-center gap-2">
           <Button
@@ -77,22 +78,17 @@ const ProductDetailViewHeader = () => {
         }}
       >
         <Button variant="outline">
-          <PenIcon className="h-3.5 w-3.5 mr-2" />
-          Edit
+          <PenIcon className="h-3.5 w-3.5" />
         </Button>
       </Link>
-    </div>
+    </PageHeader>
   );
 };
 
 export const ProductDetailView = () => {
   return (
     <ProductProvider>
-      <View
-        hideBorder
-        hideHeaderBottomBorder
-        header={<ProductDetailViewHeader />}
-      >
+      <View header={<ProductDetailViewHeader />}>
         <div className="container mx-auto h-full w-full p-8 space-y-12">
           <div className="grid grid-cols-2">
             <div className="space-y-8">

@@ -1,6 +1,6 @@
 import { useNavigate, useParams, useSearch } from "@tanstack/react-router";
-import View from "./View";
-import { Button } from "./ui/button";
+import View from "../View";
+import { Button } from "../ui/button";
 import {
   ArrowLeftIcon,
   CheckCircledIcon,
@@ -8,23 +8,24 @@ import {
 } from "@radix-ui/react-icons";
 import { ZodError } from "zod";
 import { toast } from "sonner";
-import { Ban, RotateCcw } from "lucide-react";
-import { LoadingButton } from "./ui/loading-button";
+import { Ban, Plus, PlusIcon, RotateCcw, Save } from "lucide-react";
+import { LoadingButton } from "../ui/loading-button";
 import { useState } from "react";
 import { deleteFiles, uploadProductImages } from "@/lib/imageUtils";
-import { AlertModal } from "./ui/modals/alert-modal";
-import { ActionModal } from "./ui/modals/action-modal";
+import { AlertModal } from "../ui/modals/alert-modal";
+import { ActionModal } from "../ui/modals/action-modal";
 import ProductPage from "./ProductPage";
 import { ProductProvider, useProduct } from "@/contexts/ProductContext";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import useGetActiveProduct from "@/hooks/useGetActiveProduct";
 import { useMutation } from "convex/react";
 import { api } from "~/convex/_generated/api";
-import { toSlug } from "../lib/utils";
+import { toSlug } from "../../lib/utils";
 import { Id } from "~/convex/_generated/dataModel";
-import { deleteDirectoryInS3 } from "../lib/aws";
-import { productSchema } from "../lib/schemas/product";
-import { useAuth } from "../hooks/useAuth";
+import { deleteDirectoryInS3 } from "../../lib/aws";
+import { productSchema } from "../../lib/schemas/product";
+import { useAuth } from "../../hooks/useAuth";
+import PageHeader from "../common/PageHeader";
 
 function ProductViewContent() {
   const { productData, revertChanges, productVariants, updateProductVariants } =
@@ -308,6 +309,12 @@ function ProductViewContent() {
     const header = productSlug ? "Edit Product" : "Add New Product";
     const ctaText = productSlug ? "Save changes" : "Add Product";
 
+    const ctaIcon = !productSlug ? (
+      <PlusIcon className="w-32 h-32" />
+    ) : (
+      <Save className="w-32 h-32" />
+    );
+
     const navigate = useNavigate();
 
     const handleBackClick = () => {
@@ -326,7 +333,7 @@ function ProductViewContent() {
     };
 
     return (
-      <div className="container mx-auto flex gap-2 h-[40px] items-center justify-between">
+      <PageHeader>
         <div className="flex items-center gap-4">
           <Button
             onClick={handleBackClick}
@@ -343,12 +350,10 @@ function ProductViewContent() {
             <>
               <LoadingButton
                 isLoading={isDeleteMutationPending}
-                variant={"outline"}
-                className="text-destructive"
+                className="text-destructive bg-red-100 hover:bg-red-200"
                 onClick={() => setIsDeleteModalOpen(true)}
               >
-                <TrashIcon className="w-4 h-4 mr-2" />
-                Delete
+                <TrashIcon className="w-4 h-4" />
               </LoadingButton>
 
               <LoadingButton
@@ -356,31 +361,26 @@ function ProductViewContent() {
                 variant={"outline"}
                 onClick={() => revertChanges()}
               >
-                <RotateCcw className="w-4 h-4 mr-2" />
-                Revert changes
+                <RotateCcw className="w-4 h-4" />
               </LoadingButton>
             </>
           )}
           <LoadingButton
+            className="w-[40px]"
             disabled={!isValid}
             isLoading={isCreateMutationPending || isUpdateMutationPending}
             onClick={onSubmit}
+            variant={"outline"}
           >
-            {/* {ctaIcon} */}
-            {ctaText}
+            {ctaIcon}
           </LoadingButton>
         </div>
-      </div>
+      </PageHeader>
     );
   };
 
   return (
-    <View
-      hideBorder
-      hideHeaderBottomBorder
-      className="bg-background"
-      header={<Navigation />}
-    >
+    <View className="bg-background rounded-lg" header={<Navigation />}>
       <AlertModal
         title="Delete product?"
         isOpen={isDeleteModalOpen}

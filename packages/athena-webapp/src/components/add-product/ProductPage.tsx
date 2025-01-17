@@ -1,14 +1,14 @@
-import { ProductStockView } from "./add-product/ProductStock";
-import { ProductCategorizationView } from "./add-product/ProductCategorization";
-import { ProductAvailabilityView } from "./add-product/ProductAvailability";
-import { ProductDetailsView } from "./add-product/ProductDetails";
-import ProductImagesView from "./add-product/ProductImages";
-import { ProductAttributesView } from "./add-product/ProductAttributesView";
-import { useProduct } from "../contexts/ProductContext";
+import { ProductStockView } from "./ProductStock";
+import { ProductCategorizationView } from "./ProductCategorization";
+import { ProductAvailabilityView } from "./ProductAvailability";
+import { ProductDetailsView } from "./ProductDetails";
+import ProductImagesView from "./ProductImages";
+import { ProductAttributesView } from "./ProductAttributesView";
+import { useProduct } from "../../contexts/ProductContext";
 import { useQuery } from "convex/react";
 import { api } from "~/convex/_generated/api";
-import { WigTypeView } from "./add-product/WigType";
-import useGetActiveStore from "../hooks/useGetActiveStore";
+import { WigTypeView } from "./WigType";
+import useGetActiveStore from "../../hooks/useGetActiveStore";
 
 export default function ProductPage() {
   const { productData } = useProduct();
