@@ -15,10 +15,9 @@ import { LoadingButton } from "@/components/ui/loading-button";
 import { useEffect, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { Separator } from "@/components/ui/separator";
-import { OrganizationResponse } from "@/lib/schemas/organization";
 import View from "@/components/View";
 import { useGetActiveOrganization } from "@/hooks/useGetOrganizations";
-import { Store } from "~/types";
+import { Organization, Store } from "~/types";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "~/convex/_generated/api";
 
@@ -48,11 +47,7 @@ const OrganizationSettings = () => {
   );
 };
 
-const GeneralSettings = ({
-  organization,
-}: {
-  organization: OrganizationResponse;
-}) => {
+const GeneralSettings = ({ organization }: { organization: Organization }) => {
   const navigate = useNavigate();
   const [isUpdatingOrganization, setIsUpdatingOrganization] = useState(false);
 
@@ -81,15 +76,21 @@ const GeneralSettings = ({
     setIsUpdatingOrganization(true);
 
     try {
-      const updated = await updateOrganization(organization.id, data);
-      toast.success("Organization updated");
-      navigate({
-        to: "/$orgUrlSlug/settings/organization",
-        params: (prev) => ({
-          ...prev,
-          orgUrlSlug: updated.slug,
-        }),
+      const updated = await updateOrganization({
+        id: organization._id,
+        name: data.name,
       });
+
+      if (updated) {
+        toast.success("Organization updated");
+        navigate({
+          to: "/$orgUrlSlug/settings/organization",
+          params: (prev) => ({
+            ...prev,
+            orgUrlSlug: updated.slug,
+          }),
+        });
+      }
     } catch (e) {
       toast.error("Something went wrong", {
         description: (e as Error).message,
@@ -156,8 +157,7 @@ const DeleteStore = ({ store }: { store: Store }) => {
     setIsDeletingStore(true);
     try {
       await deleteStore({
-        organizationId: store.organizationId,
-        storeId: store._id,
+        id: store._id,
       });
 
       toast.success("Store deleted");

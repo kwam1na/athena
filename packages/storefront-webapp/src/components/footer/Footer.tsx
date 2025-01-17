@@ -97,7 +97,7 @@ export function FooterInner() {
 
 export default function Footer() {
   return (
-    <div className="border-t pt-8">
+    <div className="border-t pt-8 bg-background">
       <div className="container mx-auto max-w-[1024px] px-6 lg:px-0">
         <FooterInner />
       </div>

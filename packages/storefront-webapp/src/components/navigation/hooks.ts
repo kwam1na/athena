@@ -40,16 +40,15 @@ export function useGetStoreCategories() {
     ?.map((category) => ({ value: category.slug, label: category.name }))
     .sort((a, b) => a.label.localeCompare(b.label));
 
-  const categoryToSubcategoriesMap: Record<
-    string,
-    Array<{ value: string; label: string }>
-  > = data?.reduce(
+  const categoryToSubcategoriesMap:
+    | Record<string, Array<{ value: string; label: string }>>
+    | undefined = data?.reduce(
     (map, category) => {
       if (!map[category.slug]) {
         map[category.slug] = [];
       }
 
-      const transformedSubcategories = category?.subcategories
+      const transformedSubcategories = (category as any)?.subcategories
         .map((subcategory: any) => ({
           value: subcategory.slug,
           label: subcategory.name,

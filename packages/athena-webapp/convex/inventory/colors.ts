@@ -21,7 +21,6 @@ export const getAll = query({
 export const getById = query({
   args: {
     id: v.id(entity),
-    storeId: v.string(),
   },
   handler: async (ctx, args) => {
     return await ctx.db.get(args.id);

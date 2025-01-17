@@ -7,7 +7,7 @@ import {
 } from "@tanstack/react-router";
 import { LoadingButton } from "../ui/loading-button";
 import { useShoppingBag } from "@/hooks/useShoppingBag";
-import { Product, ProductSku } from "@athena/webapp";
+import { BagItem, Product, ProductSku, SavedBagItem } from "@athena/webapp";
 import { Button } from "../ui/button";
 import { capitalizeWords, getProductName } from "@/lib/utils";
 import { AlertCircleIcon, HeartIcon } from "lucide-react";
@@ -65,11 +65,10 @@ export default function ProductPage() {
       const selectedSku = product?.skus?.find(
         (sku: ProductSku) => sku.sku === variant
       );
-      setSelectedSku(selectedSku);
+      selectedSku && setSelectedSku(selectedSku);
     } else if (product && !selectedSku) {
       const sortedSkus = product?.skus?.sort(
-        (a: ProductSku, b: ProductSku) =>
-          parseInt(a.length) - parseInt(b.length)
+        (a: ProductSku, b: ProductSku) => (a.length ?? 0) - (b.length ?? 0)
       );
 
       setSelectedSku(sortedSkus?.[0]);
@@ -118,7 +117,7 @@ export default function ProductPage() {
   }, [selectedSku, activeImage]);
 
   useEffect(() => {
-    if (addedItemSuccessfully) {
+    if (addedItemSuccessfully && selectedSku) {
       sheetContent.current = <BagProduct product={selectedSku} />;
     }
 
@@ -132,11 +131,11 @@ export default function ProductPage() {
   }, [addedItemSuccessfully]);
 
   const bagItem = bag?.items?.find(
-    (item: ProductSku) => item.productSku === selectedSku?.sku
+    (item: BagItem) => item.productSku === selectedSku?.sku
   );
 
   const savedBagItem = savedBag?.items?.find(
-    (item: ProductSku) => item.productSku === selectedSku?.sku
+    (item: SavedBagItem) => item.productSku === selectedSku?.sku
   );
 
   const handleUpdateBag = async () => {
@@ -147,9 +146,9 @@ export default function ProductPage() {
     } else {
       await addProductToBag({
         quantity: 1,
-        productId: product._id,
-        productSkuId: selectedSku._id,
-        productSku: selectedSku.sku,
+        productId: product?._id as string,
+        productSkuId: selectedSku?._id as string,
+        productSku: selectedSku?.sku as string,
       });
     }
 
@@ -162,9 +161,9 @@ export default function ProductPage() {
     } else {
       await addProductToSavedBag({
         quantity: 1,
-        productId: product._id,
-        productSkuId: selectedSku._id,
-        productSku: selectedSku.sku,
+        productId: product?._id as string,
+        productSkuId: selectedSku?._id as string,
+        productSku: selectedSku?.sku as string,
       });
     }
   };
@@ -221,9 +220,9 @@ export default function ProductPage() {
               />
             </div>
 
-            {selectedSku.productCategory == "Hair" && (
+            {(selectedSku as any).productCategory == "Hair" && (
               <About
-                productAttributes={product.attributes}
+                productAttributes={product.attributes || {}}
                 productSku={selectedSku}
               />
             )}

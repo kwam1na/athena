@@ -41,9 +41,9 @@ const Verify = () => {
 
   const { data: session, isLoading } = useGetActiveCheckoutSession();
 
-  if (isLoading || !session) return null;
+  if (isLoading || session === undefined) return null;
 
-  if (session?.message?.includes("No active session found")) {
+  if (session === null) {
     return <CheckoutCompleted />;
   }
 

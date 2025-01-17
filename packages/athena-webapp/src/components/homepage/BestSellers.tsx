@@ -34,10 +34,10 @@ export const BestSellers = () => {
       (bestSellersQuery && !bestSellers) ||
       bestSellersQuery?.length !== bestSellers?.length
     ) {
-      const bestSellersSorted = bestSellersQuery.sort(
+      const bestSellersSorted = bestSellersQuery?.sort(
         (a: any, b: any) => a.rank - b.rank
       );
-      setBestSellers(bestSellersSorted);
+      bestSellersSorted && setBestSellers(bestSellersSorted);
     }
   }, [bestSellersQuery, bestSellers]);
 

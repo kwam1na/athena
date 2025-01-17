@@ -43,8 +43,7 @@ export const DeliveryDetailsForm = () => {
     },
   });
 
-  const onSubmit = (data: z.infer<typeof deliveryDetailsSchema>) => {
-    console.log("on submit in delivery details ->", data);
+  const onSubmit = (data: Address) => {
     updateState({ deliveryDetails: data });
     updateActionsState({
       isEditingDeliveryDetails: false,
@@ -81,8 +80,6 @@ export const DeliveryDetailsForm = () => {
 
     previousCountryRef.current = country;
   }, [country]);
-
-  // console.log(checkoutState);
 
   useEffect(() => {
     const { region } = form.getValues();

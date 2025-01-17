@@ -33,10 +33,10 @@ export const FeaturedSection = () => {
       (featuredItemsQuery && !featuredItems) ||
       featuredItemsQuery?.length !== featuredItems?.length
     ) {
-      const sortedItems = featuredItemsQuery.sort(
+      const sortedItems = featuredItemsQuery?.sort(
         (a: any, b: any) => a.rank - b.rank
       );
-      setFeaturedItems(sortedItems);
+      sortedItems && setFeaturedItems(sortedItems);
     }
   }, [featuredItemsQuery, featuredItems]);
 

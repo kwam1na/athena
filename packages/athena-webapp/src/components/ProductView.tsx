@@ -252,12 +252,16 @@ function ProductViewContent() {
     let images: string[] = [];
 
     if (variant.images && variant.images.length > 0) {
-      const { imageUrls } = await uploadProductImages(
+      const res = await uploadProductImages(
         variant.images,
         `stores/${activeStore?._id}/products/${activeProduct?._id}`
       );
 
-      images = imageUrls;
+      if (res.failedUploadUrls.length > 0) {
+        toast.error("Failed to upload images");
+      }
+
+      images = res.imageUrls;
     }
 
     await updateSku({

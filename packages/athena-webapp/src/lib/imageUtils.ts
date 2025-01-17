@@ -6,7 +6,7 @@ export const uploadFile = async (file: ImageFile, path: string) => {
   return await uploadFileToS3(
     file.file!,
     config.s3.BUCKET!,
-    `${path}/${file.file?.path!}`
+    `${path}/${file.file?.name!}`
   );
 };
 

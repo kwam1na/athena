@@ -70,7 +70,7 @@ export function RefundsView() {
   const handleRefundOrder = async () => {
     // console.table(state);
 
-    const refundItems = [state.deliveryFees && "delivery-fee"].filter(Boolean);
+    const refundItems = state.deliveryFees ? ["delivery-fee"] : [];
 
     try {
       setIsRefundingOrder(true);
@@ -81,7 +81,7 @@ export function RefundsView() {
           : state.onlineOrderItemIds;
 
       const res = await refundOrder({
-        externalTransactionId: order?.externalTransactionId,
+        externalTransactionId: order?.externalTransactionId!,
         amount: state.amountToRefund,
         returnItemsToStock: state.returnToStock,
         onlineOrderItemIds: ids,

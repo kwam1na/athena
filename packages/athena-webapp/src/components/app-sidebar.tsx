@@ -148,7 +148,7 @@ export function AppSidebar() {
       </SidebarContent>
 
       <SidebarFooter>
-        <p className="text-xs">{user.email}</p>
+        <p className="text-xs">{user?.email}</p>
       </SidebarFooter>
     </Sidebar>
   );

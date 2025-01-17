@@ -13,8 +13,10 @@ export const getAll = query({
       .filter((q) => q.eq(q.field("organizationId"), args.organizationId))
       .collect();
 
-    return await Promise.all(
+    const res = await Promise.all(
       members.map((member) => ctx.db.get(member.userId))
     );
+
+    return res.filter((o) => !!o);
   },
 });

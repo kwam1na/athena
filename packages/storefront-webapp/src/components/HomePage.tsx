@@ -314,7 +314,7 @@ export default function HomePage() {
 
               <div className="space-y-8 lg:space-y-20">
                 <ProductGrid
-                  products={bestSellersProducts}
+                  products={bestSellersProducts || []}
                   formatter={formatter}
                 />
 

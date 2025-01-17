@@ -17,13 +17,11 @@ import {
   currencyFormatter,
   slugToWords,
 } from "~/src/lib/utils";
-import placeholder from "~/src/assets/placeholder.png";
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { useMutation } from "convex/react";
 import { api } from "~/convex/_generated/api";
 import { LoadingButton } from "../ui/loading-button";
-import { HandIcon } from "@radix-ui/react-icons";
 import { getOrderState } from "./utils";
 
 function OrderItem({ item, order }: { item: any; order: any }) {
@@ -93,11 +91,15 @@ function OrderItem({ item, order }: { item: any; order: any }) {
           variant: item.productSku,
         }}
       >
-        <img
-          src={item.productImage || placeholder}
-          alt={item.productName || "product image"}
-          className="w-40 h-40 aspect-square object-cover rounded-lg"
-        />
+        {item.productImage ? (
+          <img
+            src={item.productImage}
+            alt={item.productName || "product image"}
+            className="w-40 h-40 aspect-square object-cover rounded-lg"
+          />
+        ) : (
+          <div className="w-40 h-40 bg-gray-100 rounded-lg" />
+        )}
       </Link>
       <div className="space-y-8">
         <Link

@@ -104,10 +104,10 @@ const MemberForm = ({ onCancelClick }: { onCancelClick: () => void }) => {
     setIsAddingMember(true);
     try {
       const res = await createInviteCode({
-        organizationId: activeOrganization?._id,
+        organizationId: activeOrganization?._id!,
         recipientEmail: data.email,
         role: "admin",
-        createdByUserId: user._id,
+        createdByUserId: user?._id!,
       });
 
       if (res.success) {

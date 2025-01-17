@@ -5,8 +5,8 @@ import { useStoreContext } from "@/contexts/StoreContext";
 import { Link } from "@tanstack/react-router";
 import placeholder from "@/assets/placeholder.png";
 import { ShoppingBagAction, useShoppingBag } from "@/hooks/useShoppingBag";
-import { ProductSku } from "@athena/webapp";
-import { capitalizeWords } from "@/lib/utils";
+import { ProductSku, SavedBagItem } from "@athena/webapp";
+import { capitalizeWords, getProductName } from "@/lib/utils";
 import { AnimatePresence, easeInOut, motion } from "framer-motion";
 import { EmptyState } from "../states/empty/empty-state";
 import { FadeIn } from "../common/FadeIn";
@@ -22,14 +22,14 @@ export default function SavedBag() {
     moveItemFromSavedToBag,
   } = useShoppingBag();
 
-  const getProductName = (item: ProductSku) => {
-    if (item.productCategory == "Hair") {
-      if (!item.colorName) return capitalizeWords(item.productName);
-      return `${item.length}" ${capitalizeWords(item.colorName)} ${item.productName}`;
-    }
+  // const getProductName = (item: ProductSku) => {
+  //   if ((item as any).productCategory == "Hair") {
+  //     if (!(item as any).colorName) return capitalizeWords((item as any).productName);
+  //     return `${item.length}" ${capitalizeWords((item as any).colorName)} ${(item as any).productName}`;
+  //   }
 
-    return item.productName;
-  };
+  //   return (item as any).productName;
+  // };
 
   const isSavedEmpty = savedBag?.items?.length === 0;
 
@@ -57,7 +57,7 @@ export default function SavedBag() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 pb-40">
           <div className="md:col-span-2 space-y-24">
             <AnimatePresence initial={false} custom={bagAction}>
-              {savedBag?.items?.map((item: ProductSku, index: number) => (
+              {savedBag?.items?.map((item: SavedBagItem, index: number) => (
                 <motion.div
                   key={item._id}
                   layout={isNavbarShowing}
@@ -91,8 +91,8 @@ export default function SavedBag() {
                       }}
                     >
                       <img
-                        src={item.productImage || placeholder}
-                        alt={item.productName || "product image"}
+                        src={(item as any).productImage || placeholder}
+                        alt={(item as any).productName || "product image"}
                         className="w-32 h-32 lg:w-48 lg:h-48 object-cover rounded-lg"
                       />
                     </Link>

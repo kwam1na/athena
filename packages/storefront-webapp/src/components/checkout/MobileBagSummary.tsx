@@ -1,17 +1,10 @@
-import { useQuery } from "@tanstack/react-query";
 import {
   Accordion,
   AccordionContent,
   AccordionItem,
   AccordionTrigger,
 } from "../ui/accordion";
-import { getAllColors } from "@/api/color";
-import { OG_ORGANIZTION_ID, OG_STORE_ID } from "@/lib/constants";
-import FilterComponent from "../footer/Filter";
-import { Separator } from "../ui/separator";
-import { useState } from "react";
-import { getRouteApi, Link } from "@tanstack/react-router";
-import { useGetShopSearchParams } from "../navigation/hooks";
+import { Link } from "@tanstack/react-router";
 import { useStoreContext } from "@/contexts/StoreContext";
 import { useShoppingBag } from "@/hooks/useShoppingBag";
 import { useCheckout } from "./CheckoutProvider";
@@ -23,7 +16,7 @@ export default function MobileBagSummary() {
   const { bagSubtotal } = useShoppingBag();
   const { checkoutState } = useCheckout();
 
-  const total = checkoutState.deliveryFee + bagSubtotal;
+  const total = (checkoutState.deliveryFee ?? 0) + bagSubtotal;
 
   return (
     <div>

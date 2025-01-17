@@ -73,7 +73,7 @@ export const BillingDetailsSection = ({ form }: CheckoutFormSectionProps) => {
       form.setValue("billingDetails.city", city);
       form.setValue("billingDetails.state", state);
       form.setValue("billingDetails.zip", zip);
-      form.setValue("billingDetails.country", country);
+      form.setValue("billingDetails.country", country || "");
     }
   };
 

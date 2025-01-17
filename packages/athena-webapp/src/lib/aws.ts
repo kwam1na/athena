@@ -31,7 +31,7 @@ export const uploadFileToS3 = async (
     await s3.send(new PutObjectCommand(params));
     return {
       success: true,
-      url: `https://${config.s3.BUCKET_DOMAIN}/${key}`,
+      url: `${config.s3.BUCKET_DOMAIN}/${key}`,
       key,
     };
   } catch (error) {
@@ -41,7 +41,7 @@ export const uploadFileToS3 = async (
 };
 
 export const deleteFileInS3 = async (bucketName: string, path: string) => {
-  const key = path.split(`https://${config.s3.BUCKET_DOMAIN}/`)[1];
+  const key = path.split(`${config.s3.BUCKET_DOMAIN}/`)[1];
 
   try {
     const params = {

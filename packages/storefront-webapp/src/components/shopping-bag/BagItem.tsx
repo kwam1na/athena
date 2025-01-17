@@ -2,7 +2,7 @@ import { ProductSku } from "@athena/webapp";
 import { motion } from "framer-motion";
 
 type BagItemProps = {
-  item: ProductSku; // The product item object
+  item: any; // The product item object
   actionIcons: {
     delete: JSX.Element; // Icon for delete action
     move: JSX.Element; // Icon for move action

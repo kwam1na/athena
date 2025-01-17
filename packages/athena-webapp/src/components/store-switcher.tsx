@@ -26,7 +26,6 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Icons } from "./ui/icons";
-import axios from "axios";
 import { useStoreModal } from "@/hooks/use-store-modal";
 import { OverlayModal } from "./ui/modals/overlay-modal";
 import { useStoreCurrency } from "./providers/currency-provider";

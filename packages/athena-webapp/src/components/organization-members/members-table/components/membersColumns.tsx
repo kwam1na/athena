@@ -18,15 +18,4 @@ export const membersColumns: ColumnDef<AthenaUser>[] = [
     enableSorting: false,
     enableHiding: false,
   },
-  // {
-  //   accessorKey: "role",
-  //   header: ({ column }) => (
-  //     <DataTableColumnHeader column={column} title="Role" />
-  //   ),
-  //   cell: ({ row }) => {
-  //     return <span className="font-medium">{row.getValue("role")}</span>;
-  //   },
-  //   enableSorting: false,
-  //   enableHiding: false,
-  // },
 ];

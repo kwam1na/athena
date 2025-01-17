@@ -37,7 +37,7 @@ const FeesView = () => {
 
     try {
       await updateFees({
-        id: activeStore?._id,
+        id: activeStore?._id!,
         config: {
           ...activeStore?.config,
           deliveryFees: updates,
@@ -143,7 +143,7 @@ const ContactView = () => {
 
     try {
       await updateContactInfo({
-        id: activeStore?._id,
+        id: activeStore?._id!,
         config: {
           ...activeStore?.config,
           contactInfo: updates,

@@ -1,12 +1,9 @@
-import { getAllStores } from "@/api/stores";
 import {
   Accordion,
   AccordionContent,
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import { useGetActiveOrganization } from "@/hooks/useGetOrganizations";
-import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "@tanstack/react-router";
 import { Store } from "lucide-react";
 import { Button } from "../../components/ui/button";

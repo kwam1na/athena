@@ -55,7 +55,7 @@ export default function NavigationBar() {
   const StoreCategoriesSubmenu = () => {
     if (!activeMenu) return null;
 
-    const subMenuItems = categoryToSubcategoriesMap[activeMenu];
+    const subMenuItems = categoryToSubcategoriesMap?.[activeMenu];
 
     return (
       <>
@@ -73,7 +73,7 @@ export default function NavigationBar() {
           </Link>
         </motion.div>
         <div
-          className={`grid ${subMenuItems?.length > 5 ? "grid-cols-2" : "grid-cols-1"} gap-4`}
+          className={`grid ${subMenuItems?.length && subMenuItems?.length > 5 ? "grid-cols-2" : "grid-cols-1"} gap-4`}
         >
           {subMenuItems?.map((s) => (
             <motion.div variants={item} key={s.value}>

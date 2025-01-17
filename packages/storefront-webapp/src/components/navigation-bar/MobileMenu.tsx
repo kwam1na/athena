@@ -109,7 +109,7 @@ export function MobileMenu({ onCloseClick }: { onCloseClick: () => void }) {
             {`Shop all ${capitalizeWords(slugToWords(selectedCategory))}`}
           </Link>
 
-          {categoryToSubcategoriesMap[selectedCategory]?.map((s) => (
+          {categoryToSubcategoriesMap?.[selectedCategory]?.map((s) => (
             <Link
               key={s.value}
               onClick={onCloseClick}

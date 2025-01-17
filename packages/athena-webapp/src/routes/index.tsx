@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import OrganizationsView from "@/components/OrganizationsView";
 import { OrganizationModal } from "@/components/ui/modals/organization-modal";
-import { useConvexAuth, useQuery } from "convex/react";
+import { useQuery } from "convex/react";
 import { useEffect } from "react";
 import { useAuth } from "../hooks/useAuth";
 import { api } from "~/convex/_generated/api";

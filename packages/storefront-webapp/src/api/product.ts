@@ -65,7 +65,7 @@ export async function getBestSellers({
   organizationId: string;
   storeId: string;
   filters?: FilterParams;
-}): Promise<Product> {
+}): Promise<Product[]> {
   const response = await fetch(
     `${getBaseUrl(organizationId, storeId)}/bestSellers`
   );
@@ -85,7 +85,7 @@ export async function getFeatured({
 }: {
   organizationId: string;
   storeId: string;
-}): Promise<Product> {
+}): Promise<Product[]> {
   const response = await fetch(
     `${getBaseUrl(organizationId, storeId)}/featured`
   );

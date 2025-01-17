@@ -5,7 +5,7 @@ import { useStoreContext } from "@/contexts/StoreContext";
 import { Link, useNavigate } from "@tanstack/react-router";
 import placeholder from "@/assets/placeholder.png";
 import { ShoppingBagAction, useShoppingBag } from "@/hooks/useShoppingBag";
-import { ProductSku } from "@athena/webapp";
+import { BagItem, ProductSku } from "@athena/webapp";
 import { getProductName } from "@/lib/utils";
 import { motion, AnimatePresence, easeInOut } from "framer-motion";
 import { HeartIconFilled } from "@/assets/icons/HeartIconFilled";
@@ -100,13 +100,14 @@ export default function ShoppingBag() {
 
   const handleOnCheckoutClick = async () => {
     // send post
-    const bagItems = bag.items.map((item: any) => ({
-      productSkuId: item.productSkuId,
-      quantity: item.quantity,
-      productSku: item.productSku,
-      productId: item.productId,
-      price: item.price,
-    }));
+    const bagItems =
+      bag?.items.map((item: any) => ({
+        productSkuId: item.productSkuId,
+        quantity: item.quantity,
+        productSku: item.productSku,
+        productId: item.productId,
+        price: item.price,
+      })) || [];
 
     setIsProcessingCheckoutRequest(true);
     setError(null);
@@ -114,7 +115,7 @@ export default function ShoppingBag() {
     try {
       const res = await obtainCheckoutSession({
         bagItems,
-        bagId: bag._id,
+        bagId: bag?._id as string,
         bagSubtotal: bagSubtotal * 100,
       });
 
@@ -142,8 +143,8 @@ export default function ShoppingBag() {
     <FadeIn className="container mx-auto max-w-[1024px] px-6 xl:px-0 space-y-8 lg:space-y-24 py-8">
       {!isBagEmpty && (
         <div className="space-y-2">
-          {data && data.length > 0 && (
-            <PendingItem session={data[0]} count={data.length} />
+          {Boolean(data && data.length > 0) && (
+            <PendingItem session={data?.[0]} count={data?.length || 0} />
           )}
           <h1 className="text-lg font-light">Bag</h1>
         </div>
@@ -151,8 +152,8 @@ export default function ShoppingBag() {
 
       {isBagEmpty && (
         <div className="space-y-8">
-          {data && data.length > 0 && (
-            <PendingItem session={data[0]} count={data.length} />
+          {Boolean(data && data.length > 0) && (
+            <PendingItem session={data?.[0]} count={data?.length || 0} />
           )}
           <EmptyState message="Your bag is empty." />
         </div>
@@ -162,7 +163,7 @@ export default function ShoppingBag() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 pb-56">
           <div className="md:col-span-2 space-y-24">
             <AnimatePresence initial={false} custom={bagAction}>
-              {bag?.items.map((item: ProductSku, index: number) => {
+              {bag?.items.map((item: BagItem, index: number) => {
                 const unavailableSku = isSkuUnavailable(item.productSkuId);
 
                 return (
@@ -198,8 +199,8 @@ export default function ShoppingBag() {
                         }}
                       >
                         <img
-                          src={item.productImage || placeholder}
-                          alt={item.productName || "product image"}
+                          src={(item as any).productImage || placeholder}
+                          alt={(item as any).productName || "product image"}
                           className="w-32 h-32 lg:w-48 lg:h-48 object-cover rounded-lg"
                         />
                       </Link>

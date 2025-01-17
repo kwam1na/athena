@@ -83,7 +83,7 @@ export const StoreModal = () => {
         to: "/$orgUrlSlug/store/$storeUrlSlug/products",
         params: {
           orgUrlSlug: activeOrganization.slug,
-          storeUrlSlug: store?.slug,
+          storeUrlSlug: store?.slug!,
         },
       });
 

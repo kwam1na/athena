@@ -11,14 +11,10 @@ import {
 } from "../../ui/dropdown-menu";
 
 import { useNavigate } from "@tanstack/react-router";
-import { deleteProduct } from "@/api/product";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Ban } from "lucide-react";
 import { useState } from "react";
 import { AlertModal } from "@/components/ui/modals/alert-modal";
-import { ProductResponseBody } from "@/lib/schemas/product";
-// import { Product } from "@athena/db";
 import { useDeleteProduct } from "../../product-actions";
 import { Product } from "~/types";
 
@@ -31,8 +27,6 @@ export function DataTableRowActions<TData>({
 }: DataTableRowActionsProps<TData>) {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isDeleteMutationPending, setIsDeleteMutationPending] = useState(false);
-
-  const queryClient = useQueryClient();
 
   const navigate = useNavigate();
 

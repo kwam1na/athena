@@ -32,33 +32,35 @@ export function ProductNavigationBar() {
           </Link>
         </BreadcrumbItem>
         <p>/</p>
-        {product?.categoryName && (
+        {(product as any)?.categoryName && (
           <BreadcrumbItem>
             <Link
               to="/shop/$categorySlug"
               params={{
-                categorySlug: product?.categorySlug,
+                categorySlug: (product as any)?.categorySlug,
               }}
             >
               <p className="text-xs">
-                {capitalizeWords(slugToWords(product.categoryName))}
+                {capitalizeWords(slugToWords((product as any).categoryName))}
               </p>
             </Link>
           </BreadcrumbItem>
         )}
-        {product?.subcategoryName && (
+        {(product as any)?.subcategoryName && (
           <>
             <p>/</p>
             <BreadcrumbItem>
               <Link
                 to="/shop/$categorySlug/$subcategorySlug"
                 params={{
-                  subcategorySlug: product?.subcategorySlug,
-                  categorySlug: product?.categorySlug,
+                  subcategorySlug: (product as any)?.subcategorySlug,
+                  categorySlug: (product as any)?.categorySlug,
                 }}
               >
                 <p className="text-xs">
-                  {capitalizeWords(slugToWords(product.subcategoryName))}
+                  {capitalizeWords(
+                    slugToWords((product as any).subcategoryName)
+                  )}
                 </p>
               </Link>
             </BreadcrumbItem>

@@ -9,13 +9,13 @@ export function ProductAttribute({
   setSelectedSku,
 }: {
   product: Product;
-  selectedSku: ProductSku;
+  selectedSku: any;
   setSelectedSku: (sku: ProductSku) => void;
 }) {
   const colors: string[] = Array.from(
     new Set(
       product.skus
-        .map((sku: ProductSku) => sku.colorName)
+        .map((sku: any) => sku.colorName)
         .filter((color: any): color is string => color != null)
         .sort((a: string, b: string) => a.localeCompare(b))
     )
@@ -24,8 +24,8 @@ export function ProductAttribute({
   const lengths: number[] = Array.from(
     new Set(
       product.skus
-        .filter((sk: ProductSku) => sk.colorName == selectedSku.colorName)
-        .map((sku: ProductSku) => parseInt(sku.length))
+        .filter((sk: any) => sk.colorName == selectedSku.colorName)
+        .map((sku: any) => parseInt(sku.length))
         .filter((length: any) => !isNaN(length))
         .sort((a: number, b: number) => a - b)
     )
@@ -37,18 +37,17 @@ export function ProductAttribute({
     if (attribute == "color") {
       variant =
         product.skus.find(
-          (sk: ProductSku) =>
-            sk.colorName == value && sk.length == selectedSku.length
-        ) || product.skus.find((sk: ProductSku) => sk.colorName == value);
+          (sk: any) => sk.colorName == value && sk.length == selectedSku.length
+        ) || product.skus.find((sk: any) => sk.colorName == value);
     } else {
       variant =
         product.skus.find(
-          (sk: ProductSku) =>
+          (sk: any) =>
             sk.length == value && sk.colorName == selectedSku.colorName
-        ) || product.skus.find((sk: ProductSku) => sk.length == value);
+        ) || product.skus.find((sk: any) => sk.length == value);
     }
 
-    setSelectedSku(variant);
+    variant && setSelectedSku(variant);
   };
 
   return (

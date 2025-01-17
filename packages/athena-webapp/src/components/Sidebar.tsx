@@ -76,7 +76,7 @@ const Header = () => {
     <div className="flex items-center justify-between h-[56px]">
       {isSidebarExpanded && (
         <div className="flex items-center gap-2">
-          <Link href={"/"} className="flex items-center">
+          <Link to={"/"} className="flex items-center">
             <p className="font-medium">athena</p>
           </Link>
           <p className="text-muted-foreground">/</p>

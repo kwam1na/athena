@@ -1,7 +1,7 @@
 import { useStoreContext } from "@/contexts/StoreContext";
 import { useGetProductQuery } from "@/hooks/useGetProduct";
 import { getProductName } from "@/lib/productUtils";
-import { ProductSku } from "@athena/webapp";
+import { BagItem, ProductSku, SavedBagItem } from "@athena/webapp";
 import { Link, useSearch } from "@tanstack/react-router";
 import { useParams } from "@tanstack/react-router";
 import { motion } from "framer-motion";
@@ -56,11 +56,10 @@ export default function MobileProductPage() {
       const selectedSku = product?.skus?.find(
         (sku: ProductSku) => sku.sku === variant
       );
-      setSelectedSku(selectedSku);
+      if (selectedSku) setSelectedSku(selectedSku);
     } else if (product && !selectedSku) {
       const sortedSkus = product?.skus?.sort(
-        (a: ProductSku, b: ProductSku) =>
-          parseInt(a.length) - parseInt(b.length)
+        (a: ProductSku, b: ProductSku) => (a?.length ?? 0) - (b?.length ?? 0)
       );
 
       setSelectedSku(sortedSkus?.[0]);
@@ -76,7 +75,7 @@ export default function MobileProductPage() {
   }, [variant, selectedSku]);
 
   useEffect(() => {
-    if (addedItemSuccessfully) {
+    if (addedItemSuccessfully && selectedSku) {
       sheetContent.current = <BagProduct product={selectedSku} />;
     }
 
@@ -97,9 +96,9 @@ export default function MobileProductPage() {
     } else {
       await addProductToBag({
         quantity: 1,
-        productId: product._id,
-        productSkuId: selectedSku._id,
-        productSku: selectedSku.sku,
+        productId: product?._id as string,
+        productSkuId: selectedSku?._id as string,
+        productSku: selectedSku?.sku as string,
       });
     }
 
@@ -112,9 +111,9 @@ export default function MobileProductPage() {
     } else {
       await addProductToSavedBag({
         quantity: 1,
-        productId: product._id,
-        productSkuId: selectedSku._id,
-        productSku: selectedSku.sku,
+        productId: product?._id as string,
+        productSkuId: selectedSku?._id as string,
+        productSku: selectedSku?.sku as string,
       });
     }
   };
@@ -124,11 +123,11 @@ export default function MobileProductPage() {
   };
 
   const bagItem = bag?.items?.find(
-    (item: ProductSku) => item.productSku === selectedSku?.sku
+    (item: BagItem) => item.productSku === selectedSku?.sku
   );
 
   const savedBagItem = savedBag?.items?.find(
-    (item: ProductSku) => item.productSku === selectedSku?.sku
+    (item: SavedBagItem) => item.productSku === selectedSku?.sku
   );
 
   if (!selectedSku || !product) return <div className="h-screen" />;
@@ -180,9 +179,9 @@ export default function MobileProductPage() {
             />
           </div>
 
-          {selectedSku.productCategory == "Hair" && (
+          {(selectedSku as any).productCategory == "Hair" && (
             <About
-              productAttributes={product.attributes}
+              productAttributes={product.attributes || {}}
               productSku={selectedSku}
             />
           )}

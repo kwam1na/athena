@@ -2,29 +2,18 @@ import { useQuery } from "convex/react";
 import View from "../View";
 import { useProduct } from "~/src/contexts/ProductContext";
 import { api } from "~/convex/_generated/api";
-import useGetActiveStore from "~/src/hooks/useGetActiveStore";
-import useGetActiveProduct from "~/src/hooks/useGetActiveProduct";
-import { Compass, DraftingCompass, Palette, Ruler, Shirt } from "lucide-react";
+import { DraftingCompass, Palette, Ruler } from "lucide-react";
+import { Id } from "~/convex/_generated/dataModel";
 
 export function AttributesView() {
   const { activeProductVariant } = useProduct();
-  const { activeProduct } = useGetActiveProduct();
-
-  // console.log("activeProductVariant", activeProduct);
-
-  // const { activeStore } = useGetActiveStore();
 
   const color = useQuery(
     api.inventory.colors.getById,
-    activeProduct && activeProductVariant.color
-      ? {
-          storeId: activeProduct?.storeId,
-          id: activeProductVariant.color,
-        }
+    activeProductVariant.color
+      ? { id: activeProductVariant.color as Id<"color"> }
       : "skip"
   );
-
-  // console.log("color", color);
 
   return (
     <View

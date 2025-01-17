@@ -34,7 +34,7 @@ export const Route = createRootRoute({
         content: "width=device-width, initial-scale=1",
       },
       {
-        title: "Athena | Store",
+        title: "Wigclub",
       },
     ],
   }),
@@ -62,9 +62,9 @@ export const Route = createRootRoute({
 function RootComponent() {
   return (
     <RootDocument>
-      <div className="flex gap-2 flex-col h-screen">
+      <div className="flex gap-2 flex-col h-screen bg-background">
         <NavigationBar />
-        <main className="flex-grow">
+        <main className="flex-grow bg-background">
           <Outlet />
           {/* <Footer /> */}
         </main>

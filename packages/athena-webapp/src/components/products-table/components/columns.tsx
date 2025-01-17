@@ -2,7 +2,6 @@ import { ColumnDef } from "@tanstack/react-table";
 
 import { Badge } from "../../ui/badge";
 
-import placeholder from "../../../assets/placeholder.png";
 import { DataTableColumnHeader } from "./data-table-column-header";
 import { DataTableRowActions } from "./data-table-row-actions";
 import { capitalizeFirstLetter } from "@/lib/utils";
@@ -32,11 +31,15 @@ export const columns: ColumnDef<Product>[] = [
             })}
             className="flex items-center gap-8"
           >
-            <img
-              alt="Uploaded image"
-              className={`aspect-square w-12 h-12 rounded-md object-cover`}
-              src={sku?.images[0] || placeholder}
-            />
+            {sku?.images[0] ? (
+              <img
+                alt="Uploaded image"
+                className={`aspect-square w-12 h-12 rounded-md object-cover`}
+                src={sku?.images[0]}
+              />
+            ) : (
+              <div className="aspect-square w-12 h-12 bg-gray-100 rounded-md" />
+            )}
             <span className="max-w-[500px] truncate font-medium">
               {row.getValue("name")}
             </span>

@@ -59,7 +59,7 @@ export function RefundOptions() {
     try {
       setIsRefundingOrder(true);
       await refundOrder({
-        externalTransactionId: order?.externalTransactionId,
+        externalTransactionId: order?.externalTransactionId!,
         amount: refundOptions.amount,
         returnItemsToStock: returnToStock,
       });
@@ -350,7 +350,7 @@ const VerifyPaymentAlert = () => {
       setIsVerifyingPayment(true);
       const res = await verifyPayment({
         storeFrontUserId: order.storeFrontUserId,
-        externalReference: order.externalReference,
+        externalReference: order.externalReference!,
       });
 
       if (!res.verified) {

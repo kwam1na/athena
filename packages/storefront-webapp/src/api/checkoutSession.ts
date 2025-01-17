@@ -189,7 +189,7 @@ export async function verifyCheckoutSessionPayment({
   organizationId: string;
   storeId: string;
   externalReference: string;
-}): Promise<Bag> {
+}) {
   const response = await fetch(
     `${getBaseUrl(organizationId, storeId, storeFrontUserId)}/verify/${externalReference}`
   );

@@ -18,7 +18,7 @@ export const getAll = query({
 
     const organizations = await Promise.all(orgs.map((org) => ctx.db.get(org)));
 
-    return organizations;
+    return organizations.filter((o) => !!o);
   },
 });
 

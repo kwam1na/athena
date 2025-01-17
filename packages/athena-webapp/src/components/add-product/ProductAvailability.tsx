@@ -10,7 +10,6 @@ import {
 import View from "../View";
 import { Skeleton } from "../ui/skeleton";
 import { useProduct } from "@/contexts/ProductContext";
-import { ProductAvailability as ProductAvailabilityType } from "@athena/db";
 
 export function ProductAvailabilityView() {
   return (
@@ -47,7 +46,11 @@ function ProductAvailability() {
           <Select
             onValueChange={(value: string) => {
               updateProductData({
-                availability: value as ProductAvailabilityType,
+                availability: value as
+                  | "archived"
+                  | "draft"
+                  | "live"
+                  | undefined,
               });
             }}
             defaultValue="draft"

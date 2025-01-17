@@ -209,7 +209,7 @@ export const BillingDetailsForm = () => {
       form.setValue("city", city);
       form.setValue("state", state);
       form.setValue("zip", zip);
-      form.setValue("country", country);
+      form.setValue("country", country || "");
     }
   };
 
