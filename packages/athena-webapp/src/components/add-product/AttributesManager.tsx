@@ -66,10 +66,12 @@ function ColorManager() {
   const [isDeleteMutationPending, setIsDeleteMutationPending] = useState(false);
 
   const colors =
-    colorsData?.map((color: Color) => ({
-      name: color.name,
-      id: color._id,
-    })) || [];
+    colorsData
+      ?.map((color: Color) => ({
+        name: color.name,
+        id: color._id,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name)) || [];
 
   useEffect(() => {
     const idToUse = colorId || colorIdToRename;

@@ -64,6 +64,12 @@ export const create = mutation({
   handler: async (ctx, args) => {
     const id = await ctx.db.insert(entity, args);
 
+    await ctx.db.insert("organizationMember", {
+      userId: args.createdByUserId,
+      organizationId: id,
+      role: "admin",
+    });
+
     return await ctx.db.get(id);
   },
 });

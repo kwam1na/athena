@@ -53,7 +53,7 @@ export const OrganizationModal = () => {
 
     setIsCreatingOrganization(true);
     try {
-      await createOrganization({
+      const org = await createOrganization({
         ...values,
         createdByUserId: user._id,
         slug: toSlug(values.name),
@@ -63,6 +63,8 @@ export const OrganizationModal = () => {
         icon: <CheckCircledIcon className="w-4 h-4" />,
         description: `${values.name} added to your organizations`,
       });
+
+      navigate({ to: "/$orgUrlSlug/store", params: { orgUrlSlug: org!.slug } });
 
       organizationModal.onClose();
     } catch (e) {

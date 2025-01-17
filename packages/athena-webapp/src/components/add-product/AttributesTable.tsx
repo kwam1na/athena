@@ -45,10 +45,12 @@ function AttributesTable({ selectedAttributes }: AttributesTableProps) {
   );
 
   const colors =
-    colorsData?.map((color: any) => ({
-      name: color.name,
-      id: color._id,
-    })) || [];
+    colorsData
+      ?.map((color: any) => ({
+        name: color.name,
+        id: color._id,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name)) || [];
 
   const getProductAttribute = (attribute: string, variant: ProductVariant) => {
     switch (attribute) {

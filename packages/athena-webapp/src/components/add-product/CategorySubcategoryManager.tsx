@@ -323,16 +323,22 @@ function SubcategoryManager() {
   const [isDeleteMutationPending, setIsDeleteMutationPending] = useState(false);
 
   const subcategories =
-    subcategoriesData?.map((subcategory: any) => ({
-      name: subcategory.name,
-      id: subcategory._id,
-    })) || [];
+    subcategoriesData
+      ?.map((subcategory: any) => ({
+        name: subcategory.name,
+        id: subcategory._id,
+        categoryId: subcategory.categoryId,
+      }))
+      .filter((s) => s.categoryId == newCategoryId)
+      .sort((a, b) => a.name.localeCompare(b.name)) || [];
 
   const categories =
-    categoriesData?.map((category: any) => ({
-      name: category.name,
-      id: category._id,
-    })) || [];
+    categoriesData
+      ?.map((category: any) => ({
+        name: category.name,
+        id: category._id,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name)) || [];
 
   useEffect(() => {
     const idToUse = subcategoryId || subcategoryIdToRename;

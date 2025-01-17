@@ -12,13 +12,22 @@ import {
   SidebarMenuSub,
   SidebarMenuSubItem,
 } from "@/components/ui/sidebar";
-import { ShoppingBasket, ShoppingCart, Store, Users } from "lucide-react";
+import {
+  PersonStanding,
+  ShoppingBasket,
+  ShoppingCart,
+  Store,
+  UserCircle,
+  UserCircle2,
+  Users,
+} from "lucide-react";
 import { AppHeader } from "./Navbar";
 import { Link } from "@tanstack/react-router";
 import useGetActiveStore from "../hooks/useGetActiveStore";
 import { useGetActiveOrganization } from "../hooks/useGetOrganizations";
 import { useNewOrderNotification } from "../hooks/useNewOrderNotification";
 import { useAuth } from "../hooks/useAuth";
+import { PersonIcon } from "@radix-ui/react-icons";
 
 export function AppSidebar() {
   const { activeStore } = useGetActiveStore();
@@ -148,7 +157,10 @@ export function AppSidebar() {
       </SidebarContent>
 
       <SidebarFooter>
-        <p className="text-xs">{user?.email}</p>
+        <div className="flex items-center">
+          <UserCircle className="w-4 h-4 mr-1" />
+          <p className="text-sm font-medium">{user?.email}</p>
+        </div>
       </SidebarFooter>
     </Sidebar>
   );

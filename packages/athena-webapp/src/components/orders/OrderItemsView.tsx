@@ -167,7 +167,7 @@ function OrderItem({ item, order }: { item: any; order: any }) {
                   onClick={() => handleUpdateOrderItem(true)}
                   variant="outline"
                 >
-                  <Check className="h-4 w-4 mr-2" />
+                  <Check className="h-4 w-4 mr-2 text-green-700" />
                   Ready
                 </LoadingButton>
               )}
@@ -178,15 +178,15 @@ function OrderItem({ item, order }: { item: any; order: any }) {
                   onClick={() => handleUpdateOrderItem(false)}
                   variant="outline"
                 >
-                  <XCircle className="h-4 w-4 mr-2" />
+                  <XCircle className="h-4 w-4 mr-2 text-red-700" />
                   Not ready
                 </LoadingButton>
               )}
 
-              <Button className="text-red-700" variant="outline">
+              {/* <Button className="text-red-700" variant="outline">
                 <Ban className="h-4 w-4 mr-2" />
                 Unavailable
-              </Button>
+              </Button> */}
             </div>
           )}
       </div>

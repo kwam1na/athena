@@ -6,7 +6,7 @@ import {
   OG_STORE_ID,
 } from "../lib/constants";
 import { useEffect, useState } from "react";
-import { createGuest, getActiveUser } from "@/api/storeFrontUser";
+import { createGuest, getActiveUser, getGuest } from "@/api/storeFrontUser";
 
 export const useAuth = () => {
   const [loggedInUserId, setLoggedInUserId] = useState<string | null>(null);
@@ -34,7 +34,7 @@ export const useAuth = () => {
   const {
     data: user,
     isLoading,
-    error,
+    error: userError,
   } = useQuery({
     queryKey: ["user"],
     queryFn: () =>
@@ -48,11 +48,30 @@ export const useAuth = () => {
   });
 
   useEffect(() => {
-    if (error) {
+    if (userError) {
       localStorage.removeItem(LOGGED_IN_USER_ID_KEY);
       setLoggedInUserId(null);
     }
-  }, [error]);
+  }, [userError]);
+
+  const { error: guestError } = useQuery({
+    queryKey: ["guest"],
+    queryFn: () =>
+      getGuest({
+        storeId: OG_STORE_ID,
+        organizationId: OG_ORGANIZTION_ID,
+        guestId: guestId!,
+      }),
+    enabled: !!guestId,
+    retry: false,
+  });
+
+  useEffect(() => {
+    if (guestError) {
+      localStorage.removeItem(GUEST_ID_KEY);
+      setGuestId(null);
+    }
+  }, [guestError]);
 
   return {
     user,

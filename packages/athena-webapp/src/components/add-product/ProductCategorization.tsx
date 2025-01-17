@@ -54,16 +54,24 @@ function ProductCategorization({
   );
 
   const categories =
-    categoriesData?.map((category) => ({
-      name: category.name,
-      id: category._id,
-    })) || [];
+    categoriesData
+      ?.map((category) => ({
+        name: category.name,
+        id: category._id,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name)) || [];
 
   const subcategories =
-    subcategoriesData?.map((subcategory) => ({
-      name: subcategory.name,
-      id: subcategory._id,
-    })) || [];
+    subcategoriesData
+      ?.map((subcategory) => ({
+        name: subcategory.name,
+        id: subcategory._id,
+        categoryId: subcategory.categoryId,
+      }))
+      .filter(
+        (subcategory) => subcategory.categoryId === productData.categoryId
+      )
+      .sort((a, b) => a.name.localeCompare(b.name)) || [];
 
   const showCategoriesSkeleton = isLoading;
   const showSubcategoriesSkeleton = isLoading;
