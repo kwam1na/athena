@@ -278,7 +278,7 @@ export default function HomePage() {
                     ? { ease: "easeOut", duration: 0.4, delay: 0.3 }
                     : { duration: 0 },
                 }}
-                className="text-md text-center"
+                className="text-2xl text-center"
               >
                 Switch your look
               </motion.p>
@@ -291,7 +291,7 @@ export default function HomePage() {
                     ? { ease: "easeOut", duration: 0.4, delay: 0.6 }
                     : { duration: 0 },
                 }}
-                className="font-lavish text-7xl text-center text-accent2"
+                className="font-lavish text-9xl text-center text-accent2"
               >
                 to match your mood
               </motion.p>

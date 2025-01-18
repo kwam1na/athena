@@ -52,7 +52,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
   const hiddenNavClassname =
     "hidden w-full flex flex-col items-center justify-center py-2";
   const navClassname =
-    "w-full flex flex-col items-center justify-center pt-3 px-6 xl:px-0";
+    "w-full flex flex-col items-center justify-center py-3 px-6 xl:px-0";
 
   const [activeNavClassname, setActiveClassname] = useState(navClassname);
 

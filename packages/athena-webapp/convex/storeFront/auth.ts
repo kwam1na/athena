@@ -159,35 +159,35 @@ export const sendVerificationCodeViaProvider = action({
       };
     }
 
-    return {
-      success: true,
-      message: "Verification code sent",
-      data: {
-        email: args.email,
-      },
-    };
+    // return {
+    //   success: true,
+    //   message: "Verification code sent",
+    //   data: {
+    //     email: args.email,
+    //   },
+    // };
 
-    // const response = await sendVerificationCode({
-    //   customerEmail: args.email,
-    //   verificationCode: data.code,
-    //   storeName: store.name,
-    //   validTime: `${expirationTimeInMinutes} minutes`,
-    // });
+    const response = await sendVerificationCode({
+      customerEmail: args.email,
+      verificationCode: data.code,
+      storeName: store.name,
+      validTime: `${expirationTimeInMinutes} minutes`,
+    });
 
-    // if (response.ok) {
-    //   return {
-    //     success: true,
-    //     message: "Verification code sent",
-    //     data: {
-    //       email: args.email,
-    //     },
-    //   };
-    // } else {
-    //   console.error("Failed to send verification code", response);
-    //   return {
-    //     success: false,
-    //     message: "Could not send verification code",
-    //   };
-    // }
+    if (response.ok) {
+      return {
+        success: true,
+        message: "Verification code sent",
+        data: {
+          email: args.email,
+        },
+      };
+    } else {
+      console.error("Failed to send verification code", response);
+      return {
+        success: false,
+        message: "Could not send verification code",
+      };
+    }
   },
 });

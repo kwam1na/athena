@@ -60,7 +60,7 @@ function BagSummary() {
   const total = (checkoutState.deliveryFee ?? 0) + bagSubtotal;
 
   return (
-    <motion.div className="py-6 bg-white shadow-sm w-[80vw] lg:w-[30vw] space-y-12">
+    <motion.div className="py-6 bg-white shadow-sm rounded-lg w-[80vw] lg:w-[30vw] space-y-12">
       <div className="flex items-center px-6 w-full">
         <p>Order summary</p>
         <div className="ml-auto">
@@ -84,7 +84,7 @@ function BagSummary() {
         </div>
       </div> */}
 
-      <Separator className="bg-[#F6F6F6]" />
+      <Separator className="bg-accent3" />
 
       {/* Summary */}
       <div className="px-8 space-y-8 pt-4 mt-4">

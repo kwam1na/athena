@@ -62,7 +62,7 @@ export const Route = createRootRoute({
 function RootComponent() {
   return (
     <RootDocument>
-      <div className="flex gap-2 flex-col h-screen bg-background">
+      <div className="flex flex-col h-screen bg-background">
         <NavigationBar />
         <main className="flex-grow bg-background">
           <Outlet />

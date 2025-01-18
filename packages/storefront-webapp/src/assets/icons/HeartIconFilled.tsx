@@ -28,7 +28,7 @@ export const HeartIconFilled = ({ width = 1080, height = 1080 }) => {
       <g transform="matrix(45 0 0 45 540 540)">
         <path
           style={{
-            stroke: "rgb(0,0,0)",
+            stroke: "hsl(338 81% 65%)",
             strokeWidth: 2,
             fill: "none",
             fillRule: "nonzero",
@@ -50,7 +50,7 @@ export const HeartIconFilled = ({ width = 1080, height = 1080 }) => {
       </g>
       <g transform="matrix(7.95 0 0 7.95 378.7 415.34)">
         <circle
-          style={{ fill: "rgb(9,9,9)" }}
+          style={{ fill: "hsl(338 81% 65%)" }}
           vectorEffect="non-scaling-stroke"
           cx="0"
           cy="0"
@@ -59,7 +59,7 @@ export const HeartIconFilled = ({ width = 1080, height = 1080 }) => {
       </g>
       <g transform="matrix(7.95 0 0 7.95 696.08 395.02)">
         <circle
-          style={{ fill: "rgb(9,9,9)" }}
+          style={{ fill: "hsl(338 81% 65%)" }}
           vectorEffect="non-scaling-stroke"
           cx="0"
           cy="0"
@@ -68,7 +68,7 @@ export const HeartIconFilled = ({ width = 1080, height = 1080 }) => {
       </g>
       <g transform="matrix(6.97 0 0 6.97 540 644.87)">
         <circle
-          style={{ fill: "rgb(9,9,9)" }}
+          style={{ fill: "hsl(338 81% 65%)" }}
           vectorEffect="non-scaling-stroke"
           cx="0"
           cy="0"

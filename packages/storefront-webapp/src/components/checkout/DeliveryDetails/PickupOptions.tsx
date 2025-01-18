@@ -32,7 +32,7 @@ export const PickupOptions = () => {
           </div>
 
           {Boolean(checkoutState.deliveryFee) && (
-            <p className="text-xs text-muted-foreground text-start w-full">
+            <p className="text-xs text-[#EC4683] text-start w-full">
               {formatter.format(checkoutState.deliveryFee || 0)}
             </p>
           )}
@@ -56,9 +56,7 @@ export const PickupOptions = () => {
           </div>
 
           {Boolean(checkoutState.isPickupOrder) && (
-            <p className="text-xs text-muted-foreground text-start w-full">
-              Free
-            </p>
+            <p className="text-xs text-[#EC4683] text-start w-full">Free</p>
           )}
         </div>
       </GhostButton>

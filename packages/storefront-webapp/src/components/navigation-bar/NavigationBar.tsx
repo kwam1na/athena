@@ -112,7 +112,7 @@ export default function NavigationBar() {
         initial="hidden"
         animate="show"
         exit={"exit"}
-        className="absolute w-full left-0 bg-background bg-opacity-95 animate-fadeIn z-50"
+        className="absolute w-full left-0 bg-accent3 bg-opacity-95 animate-fadeIn z-50"
         onMouseEnter={() => setActiveMenu(slug)}
         onMouseLeave={() => setActiveMenu(null)}
       >
@@ -146,9 +146,9 @@ export default function NavigationBar() {
   if (!store) return null;
 
   return (
-    <div className="relative bg-background">
+    <div className="relative bg-accent3">
       <AnimatePresence initial={false}>
-        <div className="relative z-50">
+        <div key="nav-bar" className="relative z-50">
           <nav
             className={`${navBarClassname} container mx-auto max-w-[1024px]`}
           >
@@ -250,10 +250,13 @@ export default function NavigationBar() {
           />
         )}
 
-        {isMobileMenuShowing && <MobileMenu onCloseClick={onShowNavbarClick} />}
+        {isMobileMenuShowing && (
+          <MobileMenu key={"mobile-menu"} onCloseClick={onShowNavbarClick} />
+        )}
 
         {isMobileBagMenuShowing && (
           <MobileBagMenu
+            key={"mobile-bag-menu"}
             setActiveMenu={setActiveMenu}
             onCloseClick={handleHideMobileBagMenu}
           />

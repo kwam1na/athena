@@ -62,7 +62,7 @@ export function ProductAttribute({
                 <Button
                   variant={"ghost"}
                   key={index}
-                  className={`${selectedSku?.colorName == color ? "border border-black" : "border border-background-muted"}`}
+                  className={`${selectedSku?.colorName == color ? "border border-[#EC4683] text-[#EC4683]" : "border border-background-muted"}`}
                   onClick={() => handleClick("color", color)}
                 >
                   {capitalizeWords(color)}
@@ -83,7 +83,7 @@ export function ProductAttribute({
                 <Button
                   variant={"ghost"}
                   key={index}
-                  className={`${selectedSku?.length == length ? "border border-black" : "border border-background-muted"}`}
+                  className={`${selectedSku?.length == length ? "border border-[#EC4683] text-[#EC4683]" : "border border-background-muted"}`}
                   onClick={() => handleClick("length", length.toString())}
                 >
                   {`${length}"`}
