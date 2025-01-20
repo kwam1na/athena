@@ -107,7 +107,7 @@ export const BestSellers = () => {
                         ref={provided.innerRef}
                         {...provided.draggableProps}
                         {...provided.dragHandleProps}
-                        className="flex items-center justify-between bg-white"
+                        className="flex items-center justify-between bg-background"
                       >
                         <Link
                           to="/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug"

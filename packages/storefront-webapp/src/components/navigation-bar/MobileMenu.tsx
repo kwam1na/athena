@@ -55,7 +55,7 @@ export function MobileMenu({ onCloseClick }: { onCloseClick: () => void }) {
     <motion.div
       initial="hidden"
       animate="show"
-      className="fixed inset-0 z-50 w-full h-screen bg-accent3"
+      className="fixed inset-0 z-50 w-full h-screen bg-background"
     >
       <div className="flex pt-4 px-2">
         {selectedCategory && (

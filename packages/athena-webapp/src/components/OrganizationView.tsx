@@ -34,7 +34,7 @@ export default function OrganizationView() {
   }, [stores, orgUrlSlug]);
 
   return (
-    <View className="bg-background" header={<Navigation />}>
+    <View header={<Navigation />}>
       <span />
     </View>
   );

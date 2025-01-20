@@ -10,9 +10,7 @@ import { LoadingButton } from "../ui/loading-button";
 const Header = () => {
   return (
     <div className="container mx-auto flex gap-2 h-[40px] items-center justify-between">
-      <p className="text-3xl font-medium text-muted-foreground">
-        Store configuration
-      </p>
+      <p className="text-3xl font-medium">Store configuration</p>
     </div>
   );
 };

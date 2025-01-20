@@ -16,21 +16,15 @@ import { BillingDetailsSection } from "./BillingDetailsSection";
 import { CheckoutFormSectionProps } from "./CustomerInfoSection";
 
 export const PaymentSection = ({ form }: CheckoutFormSectionProps) => {
-  const {
-    activeSession,
-    canPlaceOrder,
-    actionsState,
-    updateActionsState,
-    checkoutState,
-  } = useCheckout();
+  const { activeSession, canPlaceOrder, checkoutState } = useCheckout();
 
   const { store, userId, user } = useStoreContext();
 
   const { updateCheckoutSession, bagSubtotal } = useShoppingBag();
 
   const [isProceedingToPayment, setIsProceedingToPayment] = useState(false);
-  const [didAcceptStoreTerms, setDidAcceptStoreTerms] = useState(true);
-  const [didAcceptCommsTerms, setDidAcceptCommsTerms] = useState(true);
+  const [didAcceptStoreTerms, setDidAcceptStoreTerms] = useState(false);
+  const [didAcceptCommsTerms, setDidAcceptCommsTerms] = useState(false);
   const [errorFinalizingPayment, setErrorFinalizingPayment] = useState(false);
 
   const onSubmit = async () => {
@@ -162,28 +156,6 @@ export const PaymentSection = ({ form }: CheckoutFormSectionProps) => {
           className="flex items-center"
         >
           <p>Payment</p>
-          {Boolean(
-            !checkoutState.billingDetails?.billingAddressSameAsDelivery &&
-              checkoutState.billingDetails?.address
-          ) && (
-            <Button
-              onClick={() => {
-                updateActionsState({
-                  isEditingBillingDetails:
-                    !actionsState.isEditingBillingDetails,
-                });
-              }}
-              variant={"clear"}
-              type="button"
-              className="ml-auto"
-            >
-              <p className="underline">
-                {actionsState.isEditingBillingDetails
-                  ? "Cancel editing"
-                  : "Edit"}
-              </p>
-            </Button>
-          )}
         </motion.div>
 
         {/* {showPayment && <BillingDetailsForm />} */}

@@ -9,6 +9,7 @@ import { useQuery } from "convex/react";
 import { api } from "~/convex/_generated/api";
 import { WigTypeView } from "./WigType";
 import useGetActiveStore from "../../hooks/useGetActiveStore";
+import { ScrollArea } from "../ui/scroll-area";
 
 export default function ProductPage() {
   const { productData } = useProduct();
@@ -24,16 +25,16 @@ export default function ProductPage() {
   return (
     <div className="h-full container mx-auto w-full p-8 space-x-32 flex">
       <div className="w-full space-y-8">
-        <ProductImagesView />
         <ProductStockView />
+        <ProductAttributesView />
       </div>
 
-      <div className="w-full space-y-8">
+      <div className="w-full sticky space-y-8">
         <div className="grid grid-cols-2 gap-8">
           <ProductDetailsView />
           <ProductAvailabilityView />
         </div>
-        <ProductAttributesView />
+        <ProductImagesView />
         <ProductCategorizationView />
         <div className="grid grid-cols-2 gap-8">
           {category?.name == "Hair" && <WigTypeView />}

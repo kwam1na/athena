@@ -25,7 +25,7 @@ export function MobileBagMenu({
     <motion.div
       initial="hidden"
       animate="show"
-      className="fixed inset-0 z-50 w-full h-screen bg-accent3"
+      className="fixed inset-0 z-50 w-full h-screen bg-background"
     >
       <div className="flex pt-4 px-2">
         <Button className="ml-auto" variant={"clear"} onClick={onCloseClick}>

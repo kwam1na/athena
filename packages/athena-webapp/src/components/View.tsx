@@ -17,10 +17,12 @@ export default function View({
   return (
     <section className={cn("", className)}>
       <div
-        className={`flex flex-col h-full ${hideBorder ? "" : "border border-1"} rounded-md pb-8`}
+        className={`h-full ${hideBorder ? "" : "border border-1"} rounded-lg`}
       >
         {header && (
-          <header className={`${hideHeaderBottomBorder ? "" : "border-b"}`}>
+          <header
+            className={`${hideHeaderBottomBorder ? "" : "border-b"} overflow-hidden`}
+          >
             {header}
           </header>
         )}

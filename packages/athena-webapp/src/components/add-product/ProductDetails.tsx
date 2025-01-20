@@ -39,13 +39,13 @@ export function ProductDetailsView() {
             </p>
           )}
         </div>
-        <div className="space-y-2">
+        {/* <div className="space-y-2">
           <Label className="text-muted-foreground" htmlFor="description">
             Description
           </Label>
           {isLoading && <Skeleton className="h-[96px] w-full" />}
           {!isLoading && <Textarea />}
-        </div>
+        </div> */}
       </div>
     </View>
   );

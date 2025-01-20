@@ -127,9 +127,7 @@ function ProductViewContent() {
         )
       );
 
-      toast(`Product '${validatedProductData.name}' created`, {
-        icon: <CheckCircledIcon className="w-4 h-4" />,
-      });
+      toast.success(`Product created`);
 
       navigate({
         to: "/$orgUrlSlug/store/$storeUrlSlug/products",
@@ -141,8 +139,8 @@ function ProductViewContent() {
       });
     } catch (error) {
       console.error("Error saving product:", (error as Error).message);
-      toast("Something went wrong", {
-        icon: <Ban className="w-4 h-4" />,
+
+      toast.error("Something went wrong", {
         description: (error as Error).message,
       });
     } finally {
@@ -196,9 +194,7 @@ function ProductViewContent() {
         prevVariants.filter((variant) => !variant.markedForDeletion)
       );
 
-      toast(`Product '${updatedProductData.name}' updated`, {
-        icon: <CheckCircledIcon className="w-4 h-4" />,
-      });
+      toast.success("Changes saved");
 
       navigate({
         to: "/$orgUrlSlug/store/$storeUrlSlug/products",
@@ -211,8 +207,7 @@ function ProductViewContent() {
     } catch (error) {
       console.error("Error modifying product:", (error as ZodError).message);
 
-      toast("Something went wrong", {
-        icon: <Ban className="w-4 h-4" />,
+      toast.error("Something went wrong", {
         description: (error as Error).message,
       });
     } finally {
@@ -307,12 +302,11 @@ function ProductViewContent() {
     const { productSlug } = useParams({ strict: false });
 
     const header = productSlug ? "Edit Product" : "Add New Product";
-    const ctaText = productSlug ? "Save changes" : "Add Product";
 
     const ctaIcon = !productSlug ? (
-      <PlusIcon className="w-32 h-32" />
+      <PlusIcon className="w-4 h-4" />
     ) : (
-      <Save className="w-32 h-32" />
+      <Save className="w-4 h-4" />
     );
 
     const navigate = useNavigate();
@@ -350,7 +344,8 @@ function ProductViewContent() {
             <>
               <LoadingButton
                 isLoading={isDeleteMutationPending}
-                className="text-destructive bg-red-100 hover:bg-red-200"
+                className="text-red-400 hover:bg-red-300 hover:text-red-800"
+                variant={"outline"}
                 onClick={() => setIsDeleteModalOpen(true)}
               >
                 <TrashIcon className="w-4 h-4" />
@@ -366,7 +361,6 @@ function ProductViewContent() {
             </>
           )}
           <LoadingButton
-            className="w-[40px]"
             disabled={!isValid}
             isLoading={isCreateMutationPending || isUpdateMutationPending}
             onClick={onSubmit}
@@ -380,7 +374,7 @@ function ProductViewContent() {
   };
 
   return (
-    <View className="bg-background rounded-lg" header={<Navigation />}>
+    <View header={<Navigation />}>
       <AlertModal
         title="Delete product?"
         isOpen={isDeleteModalOpen}

@@ -44,7 +44,7 @@ export default function StoreView() {
   const noStoresPresent = stores && stores.length == 0;
 
   return (
-    <View className="bg-background" header={<Navigation />}>
+    <View header={<Navigation />}>
       {noStoresPresent && (
         <EmptyState
           icon={<StoreIcon className="w-16 h-16 text-muted-foreground" />}

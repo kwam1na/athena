@@ -112,7 +112,7 @@ export default function NavigationBar() {
         initial="hidden"
         animate="show"
         exit={"exit"}
-        className="absolute w-full left-0 bg-accent3 bg-opacity-95 animate-fadeIn z-50"
+        className="absolute w-full left-0 bg-background bg-opacity-95 animate-fadeIn z-50"
         onMouseEnter={() => setActiveMenu(slug)}
         onMouseLeave={() => setActiveMenu(null)}
       >
@@ -146,7 +146,7 @@ export default function NavigationBar() {
   if (!store) return null;
 
   return (
-    <div className="relative bg-accent3">
+    <div className="relative bg-background">
       <AnimatePresence initial={false}>
         <div key="nav-bar" className="relative z-50">
           <nav

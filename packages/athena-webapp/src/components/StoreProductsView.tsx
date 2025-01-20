@@ -18,7 +18,7 @@ export default function StoreProductsView() {
     return (
       <div className="container mx-auto flex gap-2 h-[40px]">
         <div className="flex items-center">
-          <p className="text-3xl font-medium text-muted-foreground">Products</p>
+          <p className="text-3xl font-medium">Products</p>
         </div>
       </div>
     );

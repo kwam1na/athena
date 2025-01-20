@@ -12,6 +12,7 @@ import { ZodError } from "zod";
 import useGetActiveProduct from "@/hooks/useGetActiveProduct";
 import { Product, ProductSku } from "~/types";
 import { productSchema } from "../lib/schemas/product";
+import { toast } from "sonner";
 
 interface ProductContextType {
   activeProductVariant: ProductVariant;
@@ -200,6 +201,8 @@ export function ProductProvider({ children }: { children: ReactNode }) {
     );
     updateProductVariants(variants);
     setActiveProductVariant(variants[0] || null);
+
+    toast.success("Changes reverted");
   };
 
   useEffect(() => {

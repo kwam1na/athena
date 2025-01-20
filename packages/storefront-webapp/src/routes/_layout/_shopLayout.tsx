@@ -138,7 +138,7 @@ function LayoutComponent() {
 
   return (
     <div className="pb-40">
-      <div className="bg-accent3 border-b col-span-12 sticky top-0 z-20">
+      <div className="bg-background border-b col-span-12 sticky top-0 z-20">
         <ProductFilterBar
           showFilters={showFilters}
           setShowFilters={setShowFilters}

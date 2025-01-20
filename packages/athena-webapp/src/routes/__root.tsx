@@ -6,7 +6,6 @@ import {
 } from "@tanstack/react-router";
 import { Scripts } from "@tanstack/start";
 import { TanStackRouterDevtools } from "@tanstack/router-devtools";
-// import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { QueryClient } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/sonner";
 import { DefaultCatchBoundary } from "@/components/auth/DefaultCatchBoundary";
@@ -68,7 +67,7 @@ function RootComponent() {
 function RootDocument({ children }: { children: React.ReactNode }) {
   return (
     <main>
-      <Toaster expand />
+      <Toaster position="top-right" expand />
       {children}
       <ScrollRestoration />
       <Scripts />

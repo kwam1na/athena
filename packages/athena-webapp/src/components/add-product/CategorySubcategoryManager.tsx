@@ -10,7 +10,7 @@ import {
 import { Separator } from "../ui/separator";
 import { useEffect, useState } from "react";
 import { LoadingButton } from "../ui/loading-button";
-import { CheckCircledIcon } from "@radix-ui/react-icons";
+import { CheckCircledIcon, TrashIcon } from "@radix-ui/react-icons";
 import { toast } from "sonner";
 import { Ban } from "lucide-react";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
@@ -19,6 +19,7 @@ import { api } from "~/convex/_generated/api";
 import { Category } from "~/types";
 import { Id } from "~/convex/_generated/dataModel";
 import { toSlug } from "~/src/lib/utils";
+import { Checkbox } from "../ui/checkbox";
 
 export type CategoryManageOption = "category" | "subcategory";
 
@@ -91,7 +92,6 @@ function CategoryManager() {
 
   const save = async () => {
     if (!name || !activeStore) {
-      console.log("returning because null...");
       throw new Error("Missing data to save category");
     }
 
@@ -322,6 +322,8 @@ function SubcategoryManager() {
   const [isUpdateMutationPending, setIsUpdateMutationPending] = useState(false);
   const [isDeleteMutationPending, setIsDeleteMutationPending] = useState(false);
 
+  const [lockCategory, setLockCategory] = useState(false);
+
   const subcategories =
     subcategoriesData
       ?.map((subcategory: any) => ({
@@ -329,7 +331,16 @@ function SubcategoryManager() {
         id: subcategory._id,
         categoryId: subcategory.categoryId,
       }))
-      .filter((s) => s.categoryId == newCategoryId)
+      .filter((s) => s.categoryId == newCategoryId || !lockCategory)
+      .sort((a, b) => a.name.localeCompare(b.name)) || [];
+
+  const subcategoriesFull =
+    subcategoriesData
+      ?.map((subcategory: any) => ({
+        name: subcategory.name,
+        id: subcategory._id,
+        categoryId: subcategory.categoryId,
+      }))
       .sort((a, b) => a.name.localeCompare(b.name)) || [];
 
   const categories =
@@ -353,6 +364,14 @@ function SubcategoryManager() {
   const updateSubcategory = useMutation(api.inventory.subcategories.update);
 
   const deleteSubcategory = useMutation(api.inventory.subcategories.remove);
+
+  const selectedSubcategoryToDelete: string = subcategoriesFull.find(
+    (s) => s.id === subcategoryId
+  )?.name;
+
+  const selectedSubcategoryToRename: string = subcategories.find(
+    (s) => s.id === subcategoryIdToRename
+  )?.name;
 
   const save = async () => {
     if (!name || !activeStore || !categoryId) {
@@ -436,7 +455,7 @@ function SubcategoryManager() {
   return (
     <div className="space-y-16">
       <div className="space-y-2">
-        <p className="text-muted-foreground text-sm">Add subcategory</p>
+        <p className="text-sm">Add subcategory</p>
         <Separator className="mt-2" />
 
         <div className="grid gap-4 py-4">
@@ -485,100 +504,95 @@ function SubcategoryManager() {
         </div>
       </div>
 
-      <div className="space-y-2">
-        <p className="text-muted-foreground text-sm">Update subcategory</p>
+      <div className="space-y-4">
+        <div className="flex w-full">
+          <p className="text-sm">Update subcategory</p>
+
+          <div className="ml-auto flex items-center gap-2">
+            <Checkbox
+              checked={lockCategory}
+              onCheckedChange={(e) => {
+                setSubcategoryIdToRename(null);
+                setLockCategory(e as boolean);
+              }}
+              className="h-4 w-4 text-primary border-gray-300 focus:ring-primary"
+            />
+            <label htmlFor="same-as-delivery" className="text-sm">
+              Lock category to subcategory
+            </label>
+          </div>
+        </div>
         <Separator className="mt-2" />
 
-        <div className="grid gap-4 py-4">
-          <div className="flex gap-4 items-center">
-            <Label className="text-muted-foreground w-[30%]" htmlFor="category">
-              Subcategory
-            </Label>
+        <div className="grid grid-cols-2 gap-4">
+          <Select
+            onValueChange={(value) => setNewCategoryId(value as Id<"category">)}
+          >
+            <SelectTrigger id="subcategory" aria-label="Select subcategory">
+              <SelectValue placeholder="Select category" />
+            </SelectTrigger>
+            <SelectContent>
+              {categories.map((category: any) => {
+                return (
+                  <SelectItem key={category.id} value={category.id}>
+                    {category.name}
+                  </SelectItem>
+                );
+              })}
+            </SelectContent>
+          </Select>
 
-            <div className="flex gap-4 w-full">
-              <Select
-                onValueChange={(value) =>
-                  setSubcategoryIdToRename(value as Id<"subcategory">)
-                }
-              >
-                <SelectTrigger id="subcategory" aria-label="Select subcategory">
-                  <SelectValue placeholder="Select subcategory" />
-                </SelectTrigger>
-                <SelectContent>
-                  {subcategories.map((subcategory: any) => {
-                    return (
-                      <SelectItem
-                        key={subcategory.id}
-                        value={subcategory.id.toString()}
-                      >
-                        {subcategory.name}
-                      </SelectItem>
-                    );
-                  })}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
+          <Select
+            onValueChange={(value) =>
+              setSubcategoryIdToRename(value as Id<"subcategory">)
+            }
+          >
+            <SelectTrigger id="subcategory" aria-label="Select subcategory">
+              <SelectValue placeholder="Select subcategory" />
+            </SelectTrigger>
+            <SelectContent>
+              {subcategories.map((subcategory: any) => {
+                return (
+                  <SelectItem
+                    key={subcategory.id}
+                    value={subcategory.id.toString()}
+                  >
+                    {subcategory.name}
+                  </SelectItem>
+                );
+              })}
+            </SelectContent>
+          </Select>
+        </div>
 
-          <div className="flex items-center gap-4">
-            <Label className="text-muted-foreground w-[30%]" htmlFor="name">
-              Updated name
-            </Label>
-            <Input
-              id="name"
-              className="col-span-3"
-              onChange={(e) => setUpdatedName(e.target.value)}
-            />
-          </div>
+        <div className="grid grid-cols-1 gap-4 py-4">
+          <Input
+            id="name"
+            placeholder={`Rename ${selectedSubcategoryToRename ?? "subcategory"}`}
+            onChange={(e) => setUpdatedName(e.target.value.trim())}
+          />
 
-          <div className="flex gap-4 items-center">
-            <Label className="text-muted-foreground w-[30%]" htmlFor="category">
-              Category
-            </Label>
-
-            <div className="flex gap-4 w-full">
-              <Select
-                onValueChange={(value) =>
-                  setNewCategoryId(value as Id<"category">)
-                }
-              >
-                <SelectTrigger id="subcategory" aria-label="Select subcategory">
-                  <SelectValue placeholder="Select category" />
-                </SelectTrigger>
-                <SelectContent>
-                  {categories.map((category: any) => {
-                    return (
-                      <SelectItem key={category.id} value={category.id}>
-                        {category.name}
-                      </SelectItem>
-                    );
-                  })}
-                </SelectContent>
-              </Select>
-              <LoadingButton
-                className="ml-auto"
-                disabled={!subcategoryIdToRename}
-                isLoading={isUpdateMutationPending}
-                onClick={() => update()}
-                variant={"outline"}
-              >
-                Update
-              </LoadingButton>
-            </div>
+          <div className="flex gap-4">
+            <LoadingButton
+              disabled={!subcategoryIdToRename}
+              isLoading={isUpdateMutationPending}
+              onClick={() => update()}
+              variant={"outline"}
+            >
+              {updatedName
+                ? "Rename subcategory"
+                : "Update category <-> subcategory link"}
+            </LoadingButton>
           </div>
         </div>
       </div>
 
       <div className="space-y-2">
-        <p className="text-muted-foreground text-sm">Delete subcategory</p>
+        <p className="text-sm">Delete subcategory</p>
         <Separator className="mt-2" />
 
         <div className="flex gap-4 items-center py-4">
-          <Label className="text-muted-foreground w-[30%]" htmlFor="category">
-            Subcategory
-          </Label>
-
-          <div className="flex gap-4 w-full">
+          <div className="grid grid-cols-1 gap-8">
             <Select
               onValueChange={(value) =>
                 setSubcategoryId(value as Id<"subcategory">)
@@ -588,7 +602,7 @@ function SubcategoryManager() {
                 <SelectValue placeholder="Select subcategory" />
               </SelectTrigger>
               <SelectContent>
-                {subcategories.map((subcategory: any) => {
+                {subcategoriesFull.map((subcategory: any) => {
                   return (
                     <SelectItem
                       key={subcategory.id}
@@ -600,14 +614,18 @@ function SubcategoryManager() {
                 })}
               </SelectContent>
             </Select>
-            <LoadingButton
-              variant={"destructive"}
-              disabled={!subcategoryId}
-              isLoading={isDeleteMutationPending}
-              onClick={() => removeSubcategory()}
-            >
-              Delete
-            </LoadingButton>
+
+            <div>
+              <LoadingButton
+                variant={"destructive"}
+                disabled={!subcategoryId}
+                isLoading={isDeleteMutationPending}
+                onClick={() => removeSubcategory()}
+              >
+                <TrashIcon className="w-4 h-4 mr-2" />
+                {`Delete ${selectedSubcategoryToDelete ?? ""}`}
+              </LoadingButton>
+            </div>
           </div>
         </div>
       </div>

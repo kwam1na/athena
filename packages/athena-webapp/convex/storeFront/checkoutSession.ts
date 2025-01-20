@@ -5,7 +5,9 @@ import {
   action,
   internalMutation,
   mutation,
+  MutationCtx,
   query,
+  QueryCtx,
 } from "../_generated/server";
 import { v } from "convex/values";
 import { orderDetailsSchema } from "../schemas/storeFront";
@@ -50,7 +52,10 @@ export const create = mutation({
     const productSkus = await fetchProductSkus(ctx, args.products);
 
     // Check for existing session
-    const existingSession = await getActiveCheckoutSession(ctx, args);
+    const existingSession = await retrieveActiveCheckoutSession(
+      ctx,
+      args.storeFrontUserId
+    );
 
     let sessionItemsMap = new Map<string, number>();
 
@@ -213,33 +218,7 @@ export const getActiveCheckoutSession = query({
     storeFrontUserId: v.union(v.id("storeFrontUser"), v.id("guest")),
   },
   handler: async (ctx, args) => {
-    const now = Date.now();
-
-    // Query for the first active session for the given storeFrontUserId
-
-    // a session is active if:
-    // it has not expired, or isFinalizingPayment is true, or has
-    const activeSession = await ctx.db
-      .query("checkoutSession")
-      .filter((q) =>
-        q.and(
-          q.and(
-            q.eq(q.field("storeFrontUserId"), args.storeFrontUserId),
-            q.or(
-              q.gt(q.field("expiresAt"), now),
-              q.eq(q.field("isFinalizingPayment"), true)
-            )
-          ),
-          q.eq(q.field("hasCompletedCheckoutSession"), false)
-        )
-      )
-      .first();
-
-    if (activeSession) {
-      return activeSession;
-    }
-
-    return null;
+    return await retrieveActiveCheckoutSession(ctx, args.storeFrontUserId);
   },
 });
 
@@ -376,7 +355,11 @@ function createPatchObject(args: any) {
   return patchObject;
 }
 
-async function handlePlaceOrder(ctx: any, sessionId: string, session: any) {
+async function handlePlaceOrder(
+  ctx: MutationCtx,
+  sessionId: Id<"checkoutSession">,
+  session: any
+) {
   if (session.placedOrderId) {
     console.log(`Order has already been placed for session: ${sessionId}`);
     return {
@@ -402,8 +385,8 @@ async function handlePlaceOrder(ctx: any, sessionId: string, session: any) {
 }
 
 async function handleOrderCreation(
-  ctx: any,
-  sessionId: string,
+  ctx: MutationCtx,
+  sessionId: Id<"checkoutSession">,
   session: any,
   orderDetails: any
 ) {
@@ -428,8 +411,8 @@ async function handleOrderCreation(
 }
 
 async function createOnlineOrder(
-  ctx: any,
-  sessionId: string,
+  ctx: MutationCtx,
+  sessionId: Id<"checkoutSession">,
   orderData: any
 ): Promise<any> {
   const response = await ctx.runMutation(api.storeFront.onlineOrder.create, {
@@ -541,7 +524,34 @@ export const getById = query({
 
 // --- Helper Methods ---
 
-async function fetchProductSkus(ctx: any, products: Product[]) {
+async function retrieveActiveCheckoutSession(
+  ctx: QueryCtx,
+  storeFrontUserId: Id<"storeFrontUser"> | Id<"guest">
+) {
+  const now = Date.now();
+
+  // Query for the first active session for the given storeFrontUserId
+
+  // a session is active if:
+  // it has not expired, or isFinalizingPayment is true, or has
+  return await ctx.db
+    .query("checkoutSession")
+    .filter((q) =>
+      q.and(
+        q.and(
+          q.eq(q.field("storeFrontUserId"), storeFrontUserId),
+          q.or(
+            q.gt(q.field("expiresAt"), now),
+            q.eq(q.field("isFinalizingPayment"), true)
+          )
+        ),
+        q.eq(q.field("hasCompletedCheckoutSession"), false)
+      )
+    )
+    .first();
+}
+
+async function fetchProductSkus(ctx: QueryCtx, products: Product[]) {
   const productSkuIds = products.map((p) => p.productSkuId);
   return ctx.db
     .query("productSku")
@@ -583,7 +593,7 @@ function checkAdjustedAvailability(
 }
 
 async function updateExistingSession(
-  ctx: any,
+  ctx: MutationCtx,
   session: any,
   storeFrontUserId: Id<"storeFrontUser"> | Id<"guest">,
   products: Product[]
@@ -663,7 +673,7 @@ async function updateExistingSession(
 }
 
 async function createSessionItems(
-  ctx: any,
+  ctx: MutationCtx,
   sessionId: Id<"checkoutSession">,
   storeFrontUserId: Id<"storeFrontUser"> | Id<"guest">,
   products: Product[]
@@ -684,7 +694,7 @@ async function createSessionItems(
 }
 
 async function updateProductAvailability(
-  ctx: any,
+  ctx: MutationCtx,
   products: Product[],
   productSkus: any[]
 ) {

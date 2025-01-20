@@ -39,7 +39,7 @@ export default function OrganizationsView() {
   }, [stores, orgUrlSlug]);
 
   return (
-    <View className="bg-background" header={<Navigation />}>
+    <View header={<Navigation />}>
       {organizations && organizations?.length == 0 && (
         <EmptyState
           icon={<BuildingIcon className="w-16 h-16 text-muted-foreground" />}

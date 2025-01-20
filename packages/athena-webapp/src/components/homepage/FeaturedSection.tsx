@@ -99,7 +99,7 @@ export const FeaturedSection = () => {
                         ref={provided.innerRef}
                         {...provided.draggableProps}
                         {...provided.dragHandleProps}
-                        className="flex items-center justify-between bg-white py-4"
+                        className="flex items-center justify-between bg-background py-4"
                       >
                         <div className="flex items-center gap-4">
                           {featuredItem?.product && (
