@@ -1,11 +1,10 @@
-import { getStore } from "@/api/stores";
-import { OG_ORGANIZATION_ID, OG_STORE_ID } from "@/lib/constants";
 import { currencyFormatter } from "@/lib/utils";
 import { Store, StoreFrontUser } from "@athena/webapp";
-import { useQuery } from "@tanstack/react-query";
-import React, { createContext, useContext, useState } from "react";
-import { getActiveUser } from "@/api/storeFrontUser";
+import React, { createContext, useContext, useEffect, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
+import { MaintenanceMode } from "@/components/states/maintenance/Maintenance";
+import { useGetStore } from "@/hooks/useGetStore";
+import { ORGANIZATION_ID_KEY, STORE_ID_KEY } from "@/lib/constants";
 
 type StoreContextType = {
   organizationId: string;
@@ -27,25 +26,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
 }) => {
   const storeCurrency = "usd";
 
-  const { data: store } = useQuery({
-    queryKey: ["store"],
-    queryFn: () =>
-      getStore({ organizationId: OG_ORGANIZATION_ID, storeId: OG_STORE_ID }),
-  });
-
-  // const userId =
-  //   typeof window == "object" ? window.serverData?.userId : undefined;
-
-  // const { data: user } = useQuery({
-  //   queryKey: ["user"],
-  //   queryFn: () =>
-  //     getActiveUser({
-  //       organizationId: OG_ORGANIZATION_ID,
-  //       storeId: OG_STORE_ID,
-  //       userId: userId!,
-  //     }),
-  //   enabled: !!userId,
-  // });
+  const { data: store, isLoading } = useGetStore();
 
   const { user, userId, guestId } = useAuth();
 
@@ -66,11 +47,22 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const formatter = currencyFormatter(store?.currency || storeCurrency);
 
+  useEffect(() => {
+    if (store) {
+      localStorage.setItem(ORGANIZATION_ID_KEY, store.organizationId);
+      localStorage.setItem(STORE_ID_KEY, store._id);
+    }
+  }, [store]);
+
+  if (!isLoading && !store) {
+    return <MaintenanceMode />;
+  }
+
   return (
     <StoreContext.Provider
       value={{
-        organizationId: OG_ORGANIZATION_ID,
-        storeId: OG_STORE_ID,
+        organizationId: store?.organizationId as string,
+        storeId: store?._id as string,
         formatter,
         store,
         isNavbarShowing: activeNavClassname == navClassname,

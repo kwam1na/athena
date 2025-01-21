@@ -1,18 +1,20 @@
 import { useQuery } from "@tanstack/react-query";
-import { OG_ORGANIZATION_ID, OG_STORE_ID } from "@/lib/constants";
 import { useParams, useSearch } from "@tanstack/react-router";
 import { productQueries } from "@/queries";
 import ProductsPage from "./ProductsPage";
+import { useStoreContext } from "@/contexts/StoreContext";
 
 export default function EntityPage() {
   const search = useSearch({ from: "/_layout/_shopLayout" });
 
   const { categorySlug, subcategorySlug } = useParams({ strict: false });
 
+  const { organizationId, storeId } = useStoreContext();
+
   const { data: products, isLoading: isLoadingProducts } = useQuery(
     productQueries.list({
-      organizationId: OG_ORGANIZATION_ID,
-      storeId: OG_STORE_ID,
+      organizationId,
+      storeId,
       filters: {
         category: categorySlug,
         subcategory: subcategorySlug,
@@ -23,8 +25,8 @@ export default function EntityPage() {
 
   const { data: bestSellers, isLoading: isLoadingBestSellers } = useQuery(
     productQueries.bestSellers({
-      organizationId: OG_ORGANIZATION_ID,
-      storeId: OG_STORE_ID,
+      organizationId,
+      storeId,
     })
   );
 

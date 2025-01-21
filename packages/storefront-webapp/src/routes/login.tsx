@@ -11,12 +11,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { LoadingButton } from "@/components/ui/loading-button";
 import { useStoreContext } from "@/contexts/StoreContext";
-import {
-  LOGGED_IN_USER_ID_KEY,
-  OG_ORGANIZATION_ID,
-  OG_STORE_ID,
-} from "@/lib/constants";
-import { capitalizeWords } from "@/lib/utils";
+import { LOGGED_IN_USER_ID_KEY } from "@/lib/constants";
+import { capitalizeWords, getStoreDetails } from "@/lib/utils";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
 import {
@@ -42,11 +38,13 @@ export const Route = createFileRoute("/login")({
   beforeLoad: async () => {
     const id = localStorage.getItem(LOGGED_IN_USER_ID_KEY);
 
+    const { storeId, organizationId } = getStoreDetails();
+
     try {
-      if (id) {
+      if (id && storeId && organizationId) {
         const user = await getActiveUser({
-          storeId: OG_STORE_ID,
-          organizationId: OG_ORGANIZATION_ID,
+          storeId,
+          organizationId,
           userId: id || "",
         });
 

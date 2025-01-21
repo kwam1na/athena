@@ -1,20 +1,21 @@
 import { useQuery } from "@tanstack/react-query";
-import {
-  GUEST_ID_KEY,
-  LOGGED_IN_USER_ID_KEY,
-  OG_ORGANIZATION_ID,
-  OG_STORE_ID,
-} from "../lib/constants";
+import { GUEST_ID_KEY, LOGGED_IN_USER_ID_KEY } from "../lib/constants";
 import { useEffect, useState } from "react";
 import { createGuest, getActiveUser, getGuest } from "@/api/storeFrontUser";
+import { useGetStore } from "./useGetStore";
 
 export const useAuth = () => {
   const [loggedInUserId, setLoggedInUserId] = useState<string | null>(null);
   const [guestId, setGuestId] = useState<string | null>(null);
 
+  const { data: store } = useGetStore();
+
+  const organizationId = store?.organizationId as string;
+  const storeId = store?._id as string;
+
   useEffect(() => {
     const createNewGuest = async () => {
-      const res = await createGuest(OG_ORGANIZATION_ID, OG_STORE_ID);
+      const res = await createGuest(organizationId, storeId);
       localStorage.setItem(GUEST_ID_KEY, res.id);
       setGuestId(res.id);
     };
@@ -29,7 +30,7 @@ export const useAuth = () => {
       // no userId and guestId found, create guest
       createNewGuest();
     }
-  }, []);
+  }, [organizationId, storeId]);
 
   const {
     data: user,
@@ -39,11 +40,11 @@ export const useAuth = () => {
     queryKey: ["user"],
     queryFn: () =>
       getActiveUser({
-        storeId: OG_STORE_ID,
-        organizationId: OG_ORGANIZATION_ID,
+        storeId,
+        organizationId,
         userId: loggedInUserId!,
       }),
-    enabled: !!loggedInUserId,
+    enabled: Boolean(loggedInUserId && organizationId && storeId),
     retry: false,
   });
 
@@ -58,11 +59,11 @@ export const useAuth = () => {
     queryKey: ["guest"],
     queryFn: () =>
       getGuest({
-        storeId: OG_STORE_ID,
-        organizationId: OG_ORGANIZATION_ID,
+        storeId,
+        organizationId,
         guestId: guestId!,
       }),
-    enabled: !!guestId,
+    enabled: Boolean(guestId && organizationId && storeId),
     retry: false,
   });
 

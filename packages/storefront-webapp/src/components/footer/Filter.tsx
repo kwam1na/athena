@@ -1,14 +1,6 @@
 import { getRouteApi, useNavigate, useParams } from "@tanstack/react-router";
 import { Checkbox } from "../ui/checkbox";
-import { useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { getAllProducts } from "@/api/product";
-import { OG_ORGANIZATION_ID, OG_STORE_ID } from "@/lib/constants";
-import {
-  capitalizeFirstLetter,
-  capitalizeWords,
-  slugToWords,
-} from "@/lib/utils";
+import { capitalizeWords } from "@/lib/utils";
 
 type FilterItem = {
   label: string;

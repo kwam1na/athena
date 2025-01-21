@@ -1,11 +1,3 @@
-// dev
-export const OG_ORGANIZATION_ID = "kn7fw2ezvfrvp06ctjkb689tpd786c4j";
-export const OG_STORE_ID = "m1773nc3djfy0qg7m0wp4v1bn9786n2y";
-
-// prod
-// export const OG_ORGANIZATION_ID = "mx7cpg1bzfkp4ng6v3aak6p4gn78kpjs";
-// export const OG_STORE_ID = "nn7byz68a3j4tfjvgdf9evpt3n78kk38";
-
 export * from "./countries";
 
 export const currencies = [
@@ -31,3 +23,7 @@ export const INITIAL_LOAD_TIME_KEY = "initialLoadTime";
 export const LOGGED_IN_USER_ID_KEY = "logged_in_user_id";
 
 export const GUEST_ID_KEY = "guest_id";
+
+export const ORGANIZATION_ID_KEY = "organization_id";
+
+export const STORE_ID_KEY = "store_id";

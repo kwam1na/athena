@@ -23,8 +23,6 @@ authRoutes.post("/verify", async (c) => {
   //   }
   // }
 
-  console.log("hit endpoint....");
-
   if (email) {
     const res = await c.env.runAction(
       api.inventory.auth.sendVerificationCodeViaProvider,
@@ -34,8 +32,6 @@ authRoutes.post("/verify", async (c) => {
         lastName,
       }
     );
-
-    console.log("returning response ->", res);
 
     return c.json(res);
   }

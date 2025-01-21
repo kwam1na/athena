@@ -1,6 +1,7 @@
 import { getProduct } from "@/api/product";
 import { useQuery } from "@tanstack/react-query";
 import { useStoreContext } from "@/contexts/StoreContext";
+import { DEFAULT_STALE_TIME } from "@/queries";
 
 export const useGetProductQuery = (id?: string) => {
   const { store } = useStoreContext();
@@ -15,6 +16,6 @@ export const useGetProductQuery = (id?: string) => {
       }),
     enabled: Boolean(id && store),
     retry: false,
-    staleTime: 2 * 60 * 1000,
+    staleTime: DEFAULT_STALE_TIME,
   });
 };

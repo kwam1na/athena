@@ -1,6 +1,7 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { ZodError } from "zod";
+import { ORGANIZATION_ID_KEY, STORE_ID_KEY } from "./constants";
 
 export * from "./productUtils";
 
@@ -36,4 +37,11 @@ export function currencyFormatter(currency: string) {
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   });
+}
+
+export function getStoreDetails() {
+  const storeId = localStorage.getItem(STORE_ID_KEY);
+  const organizationId = localStorage.getItem(ORGANIZATION_ID_KEY);
+
+  return { storeId, organizationId };
 }

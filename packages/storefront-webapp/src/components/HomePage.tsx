@@ -2,8 +2,6 @@ import { useQuery } from "@tanstack/react-query";
 import {
   INITIAL_LOAD_KEY,
   INITIAL_LOAD_TIME_KEY,
-  OG_ORGANIZATION_ID,
-  OG_STORE_ID,
   SESSION_STORAGE_KEY,
 } from "@/lib/constants";
 import { productQueries } from "@/queries";
@@ -12,9 +10,8 @@ import { Link } from "@tanstack/react-router";
 import { Button } from "./ui/button";
 import { useStoreContext } from "@/contexts/StoreContext";
 import { ProductCard } from "./ProductCard";
-import { AnimatePresence, motion } from "framer-motion";
+import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
-import { EmptyState } from "./states/empty/empty-state";
 
 function FeaturedProduct({ product }: { product: any }) {
   const { formatter } = useStoreContext();
@@ -153,24 +150,26 @@ function FeaturedSection({ data }: { data: any }) {
 }
 
 export default function HomePage() {
+  const { organizationId, storeId } = useStoreContext();
+
   const { data: bestSellers, isLoading: isLoadingBestSellers } = useQuery(
     productQueries.bestSellers({
-      organizationId: OG_ORGANIZATION_ID,
-      storeId: OG_STORE_ID,
+      organizationId,
+      storeId,
     })
   );
 
   const { data: featured, isLoading: isLoadingFeatured } = useQuery(
     productQueries.featured({
-      organizationId: OG_ORGANIZATION_ID,
-      storeId: OG_STORE_ID,
+      organizationId,
+      storeId,
     })
   );
 
   const { data: products, isLoading: isLoadingProducts } = useQuery(
     productQueries.list({
-      organizationId: OG_ORGANIZATION_ID,
-      storeId: OG_STORE_ID,
+      organizationId,
+      storeId,
     })
   );
 
@@ -234,7 +233,7 @@ export default function HomePage() {
   const isLoading =
     isLoadingBestSellers || isLoadingFeatured || isLoadingProducts;
 
-  if (isLoading) return <div className="h-screen"></div>;
+  if (isLoading) return <div className="h-screen" />;
 
   const initialAnimation = firstLoad
     ? { opacity: 0, y: -8 }

@@ -1,21 +1,21 @@
-import {
-  getAllCategories,
-  getAllCategoriesWithSubcategories,
-} from "@/api/category";
+import { getAllCategoriesWithSubcategories } from "@/api/category";
 import { getAllSubcategories } from "@/api/subcategory";
-import { OG_ORGANIZATION_ID, OG_STORE_ID } from "@/lib/constants";
+import { useStoreContext } from "@/contexts/StoreContext";
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
 
 // value=id and label=name
 export function useGetStoreSubcategories() {
+  const { organizationId, storeId } = useStoreContext();
+
   const { data } = useQuery({
     queryKey: ["subcategories"],
     queryFn: () =>
       getAllSubcategories({
-        organizationId: OG_ORGANIZATION_ID,
-        storeId: OG_STORE_ID,
+        organizationId,
+        storeId,
       }),
+    enabled: Boolean(organizationId && storeId),
   });
 
   const subcategories: Array<{ value: string; label: string }> | undefined =
@@ -27,13 +27,16 @@ export function useGetStoreSubcategories() {
 }
 
 export function useGetStoreCategories() {
+  const { organizationId, storeId } = useStoreContext();
+
   const { data } = useQuery({
     queryKey: ["categories"],
     queryFn: () =>
       getAllCategoriesWithSubcategories({
-        organizationId: OG_ORGANIZATION_ID,
-        storeId: OG_STORE_ID,
+        organizationId,
+        storeId,
       }),
+    enabled: Boolean(organizationId && storeId),
   });
 
   const categories: Array<{ value: string; label: string }> | undefined = data

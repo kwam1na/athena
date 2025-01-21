@@ -6,21 +6,22 @@ import {
   AccordionTrigger,
 } from "../ui/accordion";
 import { getAllColors } from "@/api/color";
-import { OG_ORGANIZATION_ID, OG_STORE_ID } from "@/lib/constants";
 import FilterComponent from "../footer/Filter";
 import { Separator } from "../ui/separator";
 import { useState } from "react";
-import { getRouteApi } from "@tanstack/react-router";
 import { useGetShopSearchParams } from "../navigation/hooks";
+import { useStoreContext } from "@/contexts/StoreContext";
 
 export default function ProductFilter() {
-  const { data, isLoading, isFetching, error } = useQuery({
+  const { organizationId, storeId } = useStoreContext();
+  const { data } = useQuery({
     queryKey: ["products", "colors"],
     queryFn: () =>
       getAllColors({
-        organizationId: OG_ORGANIZATION_ID,
-        storeId: OG_STORE_ID,
+        organizationId,
+        storeId,
       }),
+    enabled: Boolean(organizationId && storeId),
   });
 
   const searchParams = useGetShopSearchParams();

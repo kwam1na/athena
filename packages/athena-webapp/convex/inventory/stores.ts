@@ -38,6 +38,20 @@ export const findById = query({
   },
 });
 
+export const findByName = query({
+  args: {
+    name: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const store = await ctx.db
+      .query(entity)
+      .filter((q) => q.eq(q.field("name"), args.name))
+      .first();
+
+    return store;
+  },
+});
+
 export const getByIdOrSlug = query({
   args: {
     identifier: v.union(v.id(entity), v.string()),

@@ -5,13 +5,10 @@ import { DeliveryDetailsForm } from "@/components/common/forms/DeliveryDetailsFo
 import { Button } from "@/components/ui/button";
 import { useStoreContext } from "@/contexts/StoreContext";
 import { useLogout } from "@/hooks/useLogout";
-import {
-  LOGGED_IN_USER_ID_KEY,
-  OG_ORGANIZATION_ID,
-  OG_STORE_ID,
-} from "@/lib/constants";
+import { LOGGED_IN_USER_ID_KEY } from "@/lib/constants";
 import { ALL_COUNTRIES } from "@/lib/countries";
 import { GHANA_REGIONS } from "@/lib/ghanaRegions";
+import { getStoreDetails } from "@/lib/utils";
 import { StoreFrontUser } from "@athena/webapp";
 import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, redirect } from "@tanstack/react-router";
@@ -23,12 +20,16 @@ export const Route = createFileRoute("/_layout/account")({
 
     if (!id) return redirect({ to: "/login" });
 
+    const { storeId, organizationId } = getStoreDetails();
+
     try {
-      await getActiveUser({
-        storeId: OG_STORE_ID,
-        organizationId: OG_ORGANIZATION_ID,
-        userId: id || "",
-      });
+      if (storeId && organizationId) {
+        await getActiveUser({
+          storeId,
+          organizationId,
+          userId: id || "",
+        });
+      }
     } catch (e) {
       return redirect({ to: "/login" });
     }

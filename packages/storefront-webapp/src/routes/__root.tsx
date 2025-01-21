@@ -1,18 +1,13 @@
 import {
-  Link,
   Outlet,
   ScrollRestoration,
   createRootRoute,
-  createRootRouteWithContext,
 } from "@tanstack/react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import NavigationBar from "@/components/navigation-bar/NavigationBar";
 import { StoreProvider } from "@/contexts/StoreContext";
-import { Meta, Scripts } from "@tanstack/start";
+import { Scripts } from "@tanstack/start";
 import { Toaster } from "@/components/ui/sonner";
-import { fetchUser } from "@/server-actions/auth";
-import { OG_ORGANIZATION_ID, OG_STORE_ID } from "@/lib/constants";
-import Footer from "@/components/footer/Footer";
 import { z } from "zod";
 import NotFound from "@/components/states/not-found/NotFound";
 import { MaintenanceMode } from "@/components/states/maintenance/Maintenance";
@@ -41,17 +36,6 @@ export const Route = createRootRoute({
     ],
   }),
 
-  loader: async () => {
-    // const user = await fetchUser({
-    //   organizationId: OG_ORGANIZATION_ID,
-    //   storeId: OG_STORE_ID,
-    // });
-
-    return {
-      user: { userId: "1", guestId: "1" },
-    };
-  },
-
   validateSearch: productsPageSchema,
 
   component: RootComponent,
@@ -68,7 +52,6 @@ function RootComponent() {
         <NavigationBar />
         <main className="flex-grow bg-background">
           <Outlet />
-          {/* <Footer /> */}
         </main>
       </div>
     </RootDocument>
@@ -84,8 +67,6 @@ const queryClient = new QueryClient({
 });
 
 function RootDocument({ children }: { children: React.ReactNode }) {
-  const serverData = Route.useLoaderData();
-
   const { user, guestId } = useAuth();
 
   const allowed = [
@@ -112,14 +93,6 @@ function RootDocument({ children }: { children: React.ReactNode }) {
       </QueryClientProvider>
       <ScrollRestoration />
       <Scripts />
-      <script
-        dangerouslySetInnerHTML={{
-          __html: `window.serverData = ${JSON.stringify({
-            userId: serverData?.user?.userId,
-            guestId: serverData?.user?.guestId,
-          })};`,
-        }}
-      />
     </div>
   );
 }

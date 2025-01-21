@@ -34,6 +34,7 @@ import type * as http_domains_storeFront_routes_guest from "../http/domains/stor
 import type * as http_domains_storeFront_routes_index from "../http/domains/storeFront/routes/index.js";
 import type * as http_domains_storeFront_routes_paystack from "../http/domains/storeFront/routes/paystack.js";
 import type * as http_domains_storeFront_routes_savedBag from "../http/domains/storeFront/routes/savedBag.js";
+import type * as http_domains_storeFront_routes_storefront from "../http/domains/storeFront/routes/storefront.js";
 import type * as http_domains_storeFront_routes_user from "../http/domains/storeFront/routes/user.js";
 import type * as http from "../http.js";
 import type * as inventory_athenaUser from "../inventory/athenaUser.js";
@@ -123,6 +124,7 @@ declare const fullApi: ApiFromModules<{
   "http/domains/storeFront/routes/index": typeof http_domains_storeFront_routes_index;
   "http/domains/storeFront/routes/paystack": typeof http_domains_storeFront_routes_paystack;
   "http/domains/storeFront/routes/savedBag": typeof http_domains_storeFront_routes_savedBag;
+  "http/domains/storeFront/routes/storefront": typeof http_domains_storeFront_routes_storefront;
   "http/domains/storeFront/routes/user": typeof http_domains_storeFront_routes_user;
   http: typeof http;
   "inventory/athenaUser": typeof inventory_athenaUser;

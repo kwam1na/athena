@@ -14,6 +14,7 @@ import {
 import {
   checkoutRoutes,
   paystackRoutes,
+  storefrontRoutes,
   userRoutes,
 } from "./http/domains/storeFront/routes";
 import { httpRouter } from "convex/server";
@@ -35,6 +36,8 @@ app.use(
     allowMethods: ["OPTIONS", "GET", "POST", "PUT", "DELETE"],
   })
 );
+
+app.route("/storefront", storefrontRoutes);
 
 app.route("/webhooks/paystack", paystackRoutes);
 

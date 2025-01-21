@@ -15,7 +15,7 @@ import {
   getPendingCheckoutSessions,
 } from "./api/checkoutSession";
 
-const DEFAULT_STALE_TIME = 2 * 60 * 1000;
+export const DEFAULT_STALE_TIME = 2 * 60 * 1000;
 
 export const productQueries = {
   all: () => ["products"],
@@ -31,6 +31,8 @@ export const productQueries = {
     queryOptions({
       queryKey: ["bestSellers", filters],
       queryFn: () => getBestSellers({ organizationId, storeId }),
+      staleTime: DEFAULT_STALE_TIME,
+      enabled: Boolean(organizationId && storeId),
     }),
   featured: ({
     organizationId,
@@ -43,6 +45,7 @@ export const productQueries = {
       queryKey: ["featured"],
       queryFn: () => getFeatured({ organizationId, storeId }),
       staleTime: DEFAULT_STALE_TIME,
+      enabled: Boolean(organizationId && storeId),
     }),
   lists: () => [...productQueries.all(), "list"],
   list: ({
@@ -58,6 +61,7 @@ export const productQueries = {
       queryKey: [...productQueries.lists(), filters],
       queryFn: () => getAllProducts({ organizationId, storeId, filters }),
       staleTime: DEFAULT_STALE_TIME,
+      enabled: Boolean(organizationId && storeId),
     }),
   details: () => [...productQueries.all(), "detail"],
   detail: ({
@@ -73,6 +77,7 @@ export const productQueries = {
       queryKey: [...productQueries.details(), productId],
       queryFn: () => getProduct({ organizationId, storeId, productId }),
       staleTime: DEFAULT_STALE_TIME,
+      enabled: Boolean(organizationId && storeId),
     }),
 };
 
@@ -95,7 +100,7 @@ export const bagQueries = {
           organizationId,
           storeId,
         }),
-      enabled: Boolean(userId),
+      enabled: Boolean(userId && organizationId && storeId),
       retry: false,
       staleTime: DEFAULT_STALE_TIME,
     }),
@@ -117,7 +122,7 @@ export const bagQueries = {
           organizationId,
           storeId,
         }),
-      enabled: Boolean(userId),
+      enabled: Boolean(userId && organizationId && storeId),
       retry: false,
       staleTime: DEFAULT_STALE_TIME,
     }),
@@ -138,7 +143,7 @@ export const onlineOrderQueries = {
     queryOptions({
       queryKey: [...onlineOrderQueries.lists()],
       queryFn: () => getOrders({ storeFrontUserId, organizationId, storeId }),
-      enabled: Boolean(storeFrontUserId),
+      enabled: Boolean(storeFrontUserId && organizationId && storeId),
       staleTime: DEFAULT_STALE_TIME,
     }),
   details: () => [...onlineOrderQueries.all(), "detail"],
@@ -158,6 +163,7 @@ export const onlineOrderQueries = {
       queryFn: () =>
         getOrder({ storeFrontUserId, organizationId, storeId, orderId }),
       staleTime: DEFAULT_STALE_TIME,
+      enabled: Boolean(storeFrontUserId && organizationId && storeId),
     }),
 };
 
@@ -180,7 +186,7 @@ export const checkoutSessionQueries = {
           storeId,
           storeFrontUserId: userId!,
         }),
-      enabled: Boolean(userId),
+      enabled: Boolean(userId && organizationId && storeId),
       staleTime: 1 * 60 * 1000,
     }),
   pendingSessionsKey: () => ["pending-checkout-sessions"],
@@ -201,7 +207,7 @@ export const checkoutSessionQueries = {
           storeId,
           storeFrontUserId: userId!,
         }),
-      enabled: Boolean(userId),
+      enabled: Boolean(userId && organizationId && storeId),
       staleTime: DEFAULT_STALE_TIME,
     }),
   sessionKey: () => ["checkout-session"],
@@ -225,7 +231,7 @@ export const checkoutSessionQueries = {
           storeFrontUserId: userId!,
           sessionId: sessionId!,
         }),
-      enabled: Boolean(userId && sessionId),
+      enabled: Boolean(userId && sessionId && organizationId && storeId),
       retry: false,
       staleTime: DEFAULT_STALE_TIME,
     }),
