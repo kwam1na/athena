@@ -3,7 +3,7 @@ import {
   getAllCategoriesWithSubcategories,
 } from "@/api/category";
 import { getAllSubcategories } from "@/api/subcategory";
-import { OG_ORGANIZTION_ID, OG_STORE_ID } from "@/lib/constants";
+import { OG_ORGANIZATION_ID, OG_STORE_ID } from "@/lib/constants";
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
 
@@ -13,7 +13,7 @@ export function useGetStoreSubcategories() {
     queryKey: ["subcategories"],
     queryFn: () =>
       getAllSubcategories({
-        organizationId: OG_ORGANIZTION_ID,
+        organizationId: OG_ORGANIZATION_ID,
         storeId: OG_STORE_ID,
       }),
   });
@@ -31,7 +31,7 @@ export function useGetStoreCategories() {
     queryKey: ["categories"],
     queryFn: () =>
       getAllCategoriesWithSubcategories({
-        organizationId: OG_ORGANIZTION_ID,
+        organizationId: OG_ORGANIZATION_ID,
         storeId: OG_STORE_ID,
       }),
   });

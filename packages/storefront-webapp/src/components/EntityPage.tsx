@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { OG_ORGANIZTION_ID, OG_STORE_ID } from "@/lib/constants";
+import { OG_ORGANIZATION_ID, OG_STORE_ID } from "@/lib/constants";
 import { useParams, useSearch } from "@tanstack/react-router";
 import { productQueries } from "@/queries";
 import ProductsPage from "./ProductsPage";
@@ -11,7 +11,7 @@ export default function EntityPage() {
 
   const { data: products, isLoading: isLoadingProducts } = useQuery(
     productQueries.list({
-      organizationId: OG_ORGANIZTION_ID,
+      organizationId: OG_ORGANIZATION_ID,
       storeId: OG_STORE_ID,
       filters: {
         category: categorySlug,
@@ -23,7 +23,7 @@ export default function EntityPage() {
 
   const { data: bestSellers, isLoading: isLoadingBestSellers } = useQuery(
     productQueries.bestSellers({
-      organizationId: OG_ORGANIZTION_ID,
+      organizationId: OG_ORGANIZATION_ID,
       storeId: OG_STORE_ID,
     })
   );

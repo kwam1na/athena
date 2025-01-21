@@ -13,7 +13,7 @@ import { LoadingButton } from "@/components/ui/loading-button";
 import { useStoreContext } from "@/contexts/StoreContext";
 import {
   LOGGED_IN_USER_ID_KEY,
-  OG_ORGANIZTION_ID,
+  OG_ORGANIZATION_ID,
   OG_STORE_ID,
 } from "@/lib/constants";
 import { capitalizeWords } from "@/lib/utils";
@@ -65,7 +65,7 @@ export const Route = createFileRoute("/signup")({
       if (id) {
         const user = await getActiveUser({
           storeId: OG_STORE_ID,
-          organizationId: OG_ORGANIZTION_ID,
+          organizationId: OG_ORGANIZATION_ID,
           userId: id || "",
         });
 

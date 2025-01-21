@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState } from "react";
 import { UserType } from "@/lib/schemas/user";
-import { OG_ORGANIZTION_ID } from "@/lib/constants";
+import { OG_ORGANIZATION_ID } from "@/lib/constants";
 
 type UserContextType = {
   user: UserType;
@@ -13,7 +13,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
   const [user, setUser] = useState<UserType>({
-    organizationId: OG_ORGANIZTION_ID,
+    organizationId: OG_ORGANIZATION_ID,
     userName: "The Boy",
     activeStoreId: "1",
   });

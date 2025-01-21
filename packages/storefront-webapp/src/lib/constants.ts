@@ -1,7 +1,9 @@
-export const OG_ORGANIZTION_ID = "kn7fw2ezvfrvp06ctjkb689tpd786c4j";
+// dev
+export const OG_ORGANIZATION_ID = "kn7fw2ezvfrvp06ctjkb689tpd786c4j";
 export const OG_STORE_ID = "m1773nc3djfy0qg7m0wp4v1bn9786n2y";
 
-// export const OG_ORGANIZTION_ID = "mx7cpg1bzfkp4ng6v3aak6p4gn78kpjs";
+// prod
+// export const OG_ORGANIZATION_ID = "mx7cpg1bzfkp4ng6v3aak6p4gn78kpjs";
 // export const OG_STORE_ID = "nn7byz68a3j4tfjvgdf9evpt3n78kk38";
 
 export * from "./countries";

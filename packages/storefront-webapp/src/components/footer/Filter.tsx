@@ -3,7 +3,7 @@ import { Checkbox } from "../ui/checkbox";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getAllProducts } from "@/api/product";
-import { OG_ORGANIZTION_ID, OG_STORE_ID } from "@/lib/constants";
+import { OG_ORGANIZATION_ID, OG_STORE_ID } from "@/lib/constants";
 import {
   capitalizeFirstLetter,
   capitalizeWords,

@@ -9,7 +9,7 @@ import {
   updateSavedBagItem,
 } from "@/api/savedBag";
 import { useStoreContext } from "@/contexts/StoreContext";
-import { OG_ORGANIZTION_ID, OG_STORE_ID } from "@/lib/constants";
+import { OG_ORGANIZATION_ID, OG_STORE_ID } from "@/lib/constants";
 import { bagQueries } from "@/queries";
 import { BagItem, ProductSku, SavedBagItem } from "@athena/webapp";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -43,7 +43,7 @@ export const useShoppingBag = () => {
   const { data: savedBag } = useQuery(
     bagQueries.activeSavedBag({
       userId,
-      organizationId: OG_ORGANIZTION_ID,
+      organizationId: OG_ORGANIZATION_ID,
       storeId: OG_STORE_ID,
     })
   );
@@ -62,7 +62,7 @@ export const useShoppingBag = () => {
     }) =>
       addItemToSavedBag({
         storeFrontUserId: userId!,
-        organizationId: OG_ORGANIZTION_ID,
+        organizationId: OG_ORGANIZATION_ID,
         storeId: OG_STORE_ID,
         productId,
         productSkuId,
@@ -88,7 +88,7 @@ export const useShoppingBag = () => {
         savedBagId: savedBag!._id,
         quantity,
         itemId,
-        organizationId: OG_ORGANIZTION_ID,
+        organizationId: OG_ORGANIZATION_ID,
         storeId: OG_STORE_ID,
       }),
     onSuccess: () => {
@@ -108,7 +108,7 @@ export const useShoppingBag = () => {
         storeFrontUserId: userId!,
         savedBagId: savedBag!._id,
         itemId: itemId,
-        organizationId: OG_ORGANIZTION_ID,
+        organizationId: OG_ORGANIZATION_ID,
         storeId: OG_STORE_ID,
       }),
     onSuccess: () => {
@@ -176,7 +176,7 @@ export const useShoppingBag = () => {
   const { data: bag } = useQuery(
     bagQueries.activeBag({
       userId,
-      organizationId: OG_ORGANIZTION_ID,
+      organizationId: OG_ORGANIZATION_ID,
       storeId: OG_STORE_ID,
     })
   );
@@ -195,7 +195,7 @@ export const useShoppingBag = () => {
     }) =>
       addItemToBag({
         storeFrontUserId: userId!,
-        organizationId: OG_ORGANIZTION_ID,
+        organizationId: OG_ORGANIZATION_ID,
         storeId: OG_STORE_ID,
         productId,
         productSkuId,
@@ -219,7 +219,7 @@ export const useShoppingBag = () => {
         bagId: bag!._id,
         quantity,
         itemId,
-        organizationId: OG_ORGANIZTION_ID,
+        organizationId: OG_ORGANIZATION_ID,
         storeId: OG_STORE_ID,
       }),
     onSuccess: () => {
@@ -237,7 +237,7 @@ export const useShoppingBag = () => {
         storeFrontUserId: userId!,
         bagId: bag!._id,
         itemId: itemId,
-        organizationId: OG_ORGANIZTION_ID,
+        organizationId: OG_ORGANIZATION_ID,
         storeId: OG_STORE_ID,
       }),
     onSuccess: () => {
@@ -347,7 +347,7 @@ export const useShoppingBag = () => {
         bagId,
         storeFrontUserId: userId!,
         storeId: OG_STORE_ID,
-        organizationId: OG_ORGANIZTION_ID,
+        organizationId: OG_ORGANIZATION_ID,
         bagItems,
         bagSubtotal,
       }),
@@ -381,7 +381,7 @@ export const useShoppingBag = () => {
       updateCheckoutSessionAPI({
         storeFrontUserId: userId!,
         storeId: OG_STORE_ID,
-        organizationId: OG_ORGANIZTION_ID,
+        organizationId: OG_ORGANIZATION_ID,
         isFinalizingPayment,
         sessionId,
         customerEmail,

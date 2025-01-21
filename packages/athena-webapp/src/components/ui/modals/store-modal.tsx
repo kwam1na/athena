@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/form";
 import { useStoreModal } from "@/hooks/use-store-modal";
 import { toast } from "sonner";
-import { currencies, OG_ORGANIZTION_ID } from "@/lib/constants";
+import { currencies, OG_ORGANIZATION_ID } from "@/lib/constants";
 import { CheckCircledIcon } from "@radix-ui/react-icons";
 import { Ban } from "lucide-react";
 import { useNavigate } from "@tanstack/react-router";

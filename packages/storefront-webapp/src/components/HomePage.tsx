@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   INITIAL_LOAD_KEY,
   INITIAL_LOAD_TIME_KEY,
-  OG_ORGANIZTION_ID,
+  OG_ORGANIZATION_ID,
   OG_STORE_ID,
   SESSION_STORAGE_KEY,
 } from "@/lib/constants";
@@ -155,21 +155,21 @@ function FeaturedSection({ data }: { data: any }) {
 export default function HomePage() {
   const { data: bestSellers, isLoading: isLoadingBestSellers } = useQuery(
     productQueries.bestSellers({
-      organizationId: OG_ORGANIZTION_ID,
+      organizationId: OG_ORGANIZATION_ID,
       storeId: OG_STORE_ID,
     })
   );
 
   const { data: featured, isLoading: isLoadingFeatured } = useQuery(
     productQueries.featured({
-      organizationId: OG_ORGANIZTION_ID,
+      organizationId: OG_ORGANIZATION_ID,
       storeId: OG_STORE_ID,
     })
   );
 
   const { data: products, isLoading: isLoadingProducts } = useQuery(
     productQueries.list({
-      organizationId: OG_ORGANIZTION_ID,
+      organizationId: OG_ORGANIZATION_ID,
       storeId: OG_STORE_ID,
     })
   );

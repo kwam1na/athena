@@ -6,7 +6,7 @@ import {
   AccordionTrigger,
 } from "../ui/accordion";
 import { getAllColors } from "@/api/color";
-import { OG_ORGANIZTION_ID, OG_STORE_ID } from "@/lib/constants";
+import { OG_ORGANIZATION_ID, OG_STORE_ID } from "@/lib/constants";
 import FilterComponent from "../footer/Filter";
 import { Separator } from "../ui/separator";
 import { useState } from "react";
@@ -18,7 +18,7 @@ export default function ProductFilter() {
     queryKey: ["products", "colors"],
     queryFn: () =>
       getAllColors({
-        organizationId: OG_ORGANIZTION_ID,
+        organizationId: OG_ORGANIZATION_ID,
         storeId: OG_STORE_ID,
       }),
   });

@@ -15,5 +15,6 @@ export const useGetProductQuery = (id?: string) => {
       }),
     enabled: Boolean(id && store),
     retry: false,
+    staleTime: 2 * 60 * 1000,
   });
 };

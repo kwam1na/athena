@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   GUEST_ID_KEY,
   LOGGED_IN_USER_ID_KEY,
-  OG_ORGANIZTION_ID,
+  OG_ORGANIZATION_ID,
   OG_STORE_ID,
 } from "../lib/constants";
 import { useEffect, useState } from "react";
@@ -14,7 +14,7 @@ export const useAuth = () => {
 
   useEffect(() => {
     const createNewGuest = async () => {
-      const res = await createGuest(OG_ORGANIZTION_ID, OG_STORE_ID);
+      const res = await createGuest(OG_ORGANIZATION_ID, OG_STORE_ID);
       localStorage.setItem(GUEST_ID_KEY, res.id);
       setGuestId(res.id);
     };
@@ -40,7 +40,7 @@ export const useAuth = () => {
     queryFn: () =>
       getActiveUser({
         storeId: OG_STORE_ID,
-        organizationId: OG_ORGANIZTION_ID,
+        organizationId: OG_ORGANIZATION_ID,
         userId: loggedInUserId!,
       }),
     enabled: !!loggedInUserId,
@@ -59,7 +59,7 @@ export const useAuth = () => {
     queryFn: () =>
       getGuest({
         storeId: OG_STORE_ID,
-        organizationId: OG_ORGANIZTION_ID,
+        organizationId: OG_ORGANIZATION_ID,
         guestId: guestId!,
       }),
     enabled: !!guestId,

@@ -7,7 +7,7 @@ import { useStoreContext } from "@/contexts/StoreContext";
 import { useLogout } from "@/hooks/useLogout";
 import {
   LOGGED_IN_USER_ID_KEY,
-  OG_ORGANIZTION_ID,
+  OG_ORGANIZATION_ID,
   OG_STORE_ID,
 } from "@/lib/constants";
 import { ALL_COUNTRIES } from "@/lib/countries";
@@ -26,7 +26,7 @@ export const Route = createFileRoute("/_layout/account")({
     try {
       await getActiveUser({
         storeId: OG_STORE_ID,
-        organizationId: OG_ORGANIZTION_ID,
+        organizationId: OG_ORGANIZATION_ID,
         userId: id || "",
       });
     } catch (e) {

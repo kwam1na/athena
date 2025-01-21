@@ -11,10 +11,12 @@ import { StoreProvider } from "@/contexts/StoreContext";
 import { Meta, Scripts } from "@tanstack/start";
 import { Toaster } from "@/components/ui/sonner";
 import { fetchUser } from "@/server-actions/auth";
-import { OG_ORGANIZTION_ID, OG_STORE_ID } from "@/lib/constants";
+import { OG_ORGANIZATION_ID, OG_STORE_ID } from "@/lib/constants";
 import Footer from "@/components/footer/Footer";
 import { z } from "zod";
 import NotFound from "@/components/states/not-found/NotFound";
+import { MaintenanceMode } from "@/components/states/maintenance/Maintenance";
+import { useAuth } from "@/hooks/useAuth";
 
 const productsPageSchema = z.object({
   color: z.string().optional(),
@@ -41,7 +43,7 @@ export const Route = createRootRoute({
 
   loader: async () => {
     // const user = await fetchUser({
-    //   organizationId: OG_ORGANIZTION_ID,
+    //   organizationId: OG_ORGANIZATION_ID,
     //   storeId: OG_STORE_ID,
     // });
 
@@ -83,6 +85,24 @@ const queryClient = new QueryClient({
 
 function RootDocument({ children }: { children: React.ReactNode }) {
   const serverData = Route.useLoaderData();
+
+  const { user, guestId } = useAuth();
+
+  const allowed = [
+    "nn74pawp5hap116qtv8f5hp1th78m3k0",
+    "md7craj8j61apsnhrwgg4apqm178tthf",
+    "md755963ag0sdd03q9zr2r8ahd78vnrn",
+    "kh7013cspvmvgjb7tthev4vs0h78jrzj",
+    "kh79wgd0degj02g3dn5gm5gcgd78vs3g",
+  ];
+
+  const id = user?._id || guestId;
+
+  const isAllowed = id && allowed.includes(id);
+
+  if (!isAllowed) {
+    return <MaintenanceMode />;
+  }
 
   return (
     <div>
