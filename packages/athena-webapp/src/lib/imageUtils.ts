@@ -1,6 +1,7 @@
 import { ImageFile } from "@/components/ui/image-uploader";
 import config from "@/config";
 import { deleteFileInS3, uploadFileToS3 } from "./aws";
+import { arrayBufferToWebP } from "webp-converter-browser";
 
 export const uploadFile = async (file: ImageFile, path: string) => {
   return await uploadFileToS3(
@@ -35,14 +36,7 @@ export const deleteFiles = async (paths: string[]) => {
   return { successfulDeletedKeys, failedDeleteKeys, failedDeleteUrls };
 };
 
-export const uploadProductImages = async (
-  newImageFiles: ImageFile[],
-  path: string
-) => {
-  const successfulUploadUrls: string[] = [];
-  const failedUploadKeys: string[] = [];
-  const failedUploadUrls: string[] = [];
-
+export const getUploadImagesData = (newImageFiles: ImageFile[]) => {
   // urls to keep
   const updatedImageUrls = newImageFiles
     .filter(
@@ -54,36 +48,24 @@ export const uploadProductImages = async (
     .filter((image) => image.markedForDeletion)
     .map((image) => image.preview);
 
-  const { successfulDeletedKeys, failedDeleteKeys, failedDeleteUrls } =
-    await deleteFiles(imageUrlsToDelete);
-
   // get new images being added
   const newImages = newImageFiles.filter((image) => !!image.file);
 
-  const newImageResults = await Promise.all(
-    newImages.map((image) => uploadFile(image, path))
+  return {
+    updatedImageUrls,
+    imageUrlsToDelete,
+    newImages,
+  };
+};
+
+export const convertImagesToWebp = async (images: ImageFile[]) => {
+  const buffers = await Promise.all(
+    images.map((file) => file.file!.arrayBuffer())
   );
 
-  newImageResults.forEach((result) => {
-    if (result.success && result.url) {
-      successfulUploadUrls.push(result.url);
-    } else {
-      failedUploadKeys.push(result.key);
-      result.url && failedUploadUrls.push(result.url);
-    }
-  });
+  const webpBuffers = await Promise.all(
+    buffers.map((b) => arrayBufferToWebP(b, { quality: 0.8 }))
+  );
 
-  const urls = [...updatedImageUrls, ...successfulUploadUrls];
-
-  const result = {
-    imageUrls: urls,
-    successfulUploadUrls,
-    successfulDeletedKeys,
-    failedUploadKeys,
-    failedDeleteKeys,
-    failedDeleteUrls,
-    failedUploadUrls,
-  };
-
-  return result;
+  return await Promise.all(webpBuffers.map((b) => b.arrayBuffer()));
 };

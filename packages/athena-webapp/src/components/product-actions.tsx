@@ -1,4 +1,4 @@
-import { useMutation } from "convex/react";
+import { useAction, useMutation } from "convex/react";
 import useGetActiveStore from "../hooks/useGetActiveStore";
 import { deleteDirectoryInS3 } from "../lib/aws";
 import { api } from "~/convex/_generated/api";
@@ -7,13 +7,10 @@ import { toast } from "sonner";
 import { Ban } from "lucide-react";
 
 export const useDeleteProduct = (productId: Id<"product">) => {
-  const deleteProduct = useMutation(api.inventory.products.remove);
+  const deleteProduct = useAction(api.inventory.products.clear);
   const { activeStore } = useGetActiveStore();
 
   return async () => {
-    await deleteProduct({ id: productId });
-    await deleteDirectoryInS3(
-      `stores/${activeStore?._id}/products/${productId}`
-    );
+    await deleteProduct({ id: productId, storeId: activeStore!._id });
   };
 };

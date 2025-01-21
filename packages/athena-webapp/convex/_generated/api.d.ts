@@ -15,6 +15,7 @@ import type {
 } from "convex/server";
 import type * as app from "../app.js";
 import type * as auth from "../auth.js";
+import type * as aws_aws from "../aws/aws.js";
 import type * as constants_countries from "../constants/countries.js";
 import type * as constants_ghana from "../constants/ghana.js";
 import type * as crons from "../crons.js";
@@ -44,6 +45,7 @@ import type * as inventory_featuredItem from "../inventory/featuredItem.js";
 import type * as inventory_inviteCode from "../inventory/inviteCode.js";
 import type * as inventory_organizationMembers from "../inventory/organizationMembers.js";
 import type * as inventory_organizations from "../inventory/organizations.js";
+import type * as inventory_productSku from "../inventory/productSku.js";
 import type * as inventory_products from "../inventory/products.js";
 import type * as inventory_stores from "../inventory/stores.js";
 import type * as inventory_subcategories from "../inventory/subcategories.js";
@@ -102,6 +104,7 @@ import type * as utils from "../utils.js";
 declare const fullApi: ApiFromModules<{
   app: typeof app;
   auth: typeof auth;
+  "aws/aws": typeof aws_aws;
   "constants/countries": typeof constants_countries;
   "constants/ghana": typeof constants_ghana;
   crons: typeof crons;
@@ -131,6 +134,7 @@ declare const fullApi: ApiFromModules<{
   "inventory/inviteCode": typeof inventory_inviteCode;
   "inventory/organizationMembers": typeof inventory_organizationMembers;
   "inventory/organizations": typeof inventory_organizations;
+  "inventory/productSku": typeof inventory_productSku;
   "inventory/products": typeof inventory_products;
   "inventory/stores": typeof inventory_stores;
   "inventory/subcategories": typeof inventory_subcategories;

@@ -11,21 +11,26 @@ import { toast } from "sonner";
 import { Ban, Plus, PlusIcon, RotateCcw, Save } from "lucide-react";
 import { LoadingButton } from "../ui/loading-button";
 import { useState } from "react";
-import { deleteFiles, uploadProductImages } from "@/lib/imageUtils";
+import {
+  convertImagesToWebp,
+  deleteFiles,
+  getUploadImagesData,
+} from "@/lib/imageUtils";
 import { AlertModal } from "../ui/modals/alert-modal";
 import { ActionModal } from "../ui/modals/action-modal";
 import ProductPage from "./ProductPage";
 import { ProductProvider, useProduct } from "@/contexts/ProductContext";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import useGetActiveProduct from "@/hooks/useGetActiveProduct";
-import { useMutation } from "convex/react";
+import { useAction, useMutation } from "convex/react";
 import { api } from "~/convex/_generated/api";
 import { toSlug } from "../../lib/utils";
 import { Id } from "~/convex/_generated/dataModel";
-import { deleteDirectoryInS3 } from "../../lib/aws";
+// import { deleteDirectoryInS3 } from "../../lib/aws";
 import { productSchema } from "../../lib/schemas/product";
 import { useAuth } from "../../hooks/useAuth";
 import PageHeader from "../common/PageHeader";
+import { arrayBufferToWebP } from "webp-converter-browser";
 
 function ProductViewContent() {
   const { productData, revertChanges, productVariants, updateProductVariants } =
@@ -50,9 +55,19 @@ function ProductViewContent() {
   const createProduct = useMutation(api.inventory.products.create);
   const createSku = useMutation(api.inventory.products.createSku);
   const updateProduct = useMutation(api.inventory.products.update);
-  const deleteProduct = useMutation(api.inventory.products.remove);
+  const deleteProduct = useAction(api.inventory.products.clear);
   const deleteSku = useMutation(api.inventory.products.removeSku);
   const updateSku = useMutation(api.inventory.products.updateSku);
+
+  const uploadProductSkuImages = useAction(
+    api.inventory.productSku.uploadImages
+  );
+
+  const deleteProductSkuImages = useAction(
+    api.inventory.productSku.deleteImages
+  );
+
+  const updateProductSku = useMutation(api.inventory.productSku.update);
 
   const deleteActiveProduct = async () => {
     if (!activeProduct?._id || !activeStore)
@@ -60,10 +75,7 @@ function ProductViewContent() {
 
     try {
       setIsDeleteMutationPending(true);
-      await deleteProduct({ id: activeProduct._id });
-      await deleteDirectoryInS3(
-        `stores/${activeStore._id}/products/${activeProduct._id}`
-      );
+      await deleteProduct({ id: activeProduct._id, storeId: activeStore._id });
 
       toast(`Product '${activeProduct.name}' deleted`, {
         icon: <CheckCircledIcon className="w-4 h-4" />,
@@ -219,12 +231,21 @@ function ProductViewContent() {
     let images: string[] = [];
 
     if (variant.images && variant.images.length > 0) {
-      const { imageUrls } = await uploadProductImages(
-        variant.images,
-        `stores/${activeStore?._id}/products/${productId}`
-      );
+      try {
+        const { newImages } = getUploadImagesData(variant.images);
 
-      images = imageUrls;
+        const imageBuffers = await convertImagesToWebp(newImages);
+
+        const { images: imageUrls } = await uploadProductSkuImages({
+          images: imageBuffers,
+          storeId: activeStore!._id,
+          productId,
+        });
+
+        images = imageUrls;
+      } catch (e) {
+        toast.error("Error processing images");
+      }
     }
 
     return await createSku({
@@ -245,19 +266,32 @@ function ProductViewContent() {
   };
 
   const updateVariantSku = async (skuId: string, variant: any) => {
-    let images: string[] = [];
-
     if (variant.images && variant.images.length > 0) {
-      const res = await uploadProductImages(
-        variant.images,
-        `stores/${activeStore?._id}/products/${activeProduct?._id}`
-      );
+      try {
+        const { updatedImageUrls, imageUrlsToDelete, newImages } =
+          getUploadImagesData(variant.images);
 
-      if (res.failedUploadUrls.length > 0) {
-        toast.error("Failed to upload images");
+        if (imageUrlsToDelete.length > 0) {
+          await deleteProductSkuImages({ imageUrls: imageUrlsToDelete });
+        }
+
+        const imageBuffers = await convertImagesToWebp(newImages);
+
+        const { images } = await uploadProductSkuImages({
+          images: imageBuffers,
+          storeId: activeStore!._id,
+          productId: activeProduct!._id,
+        });
+
+        const imageUrls = [...updatedImageUrls, ...images];
+
+        await updateProductSku({
+          id: skuId as Id<"productSku">,
+          update: { images: imageUrls },
+        });
+      } catch (e) {
+        toast.error("Error processing images");
       }
-
-      images = res.imageUrls;
     }
 
     await updateSku({
@@ -272,7 +306,6 @@ function ProductViewContent() {
       color: variant.color,
       weight: variant.weight,
       attributes: variant.attributes || {},
-      images,
     });
   };
 

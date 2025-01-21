@@ -1,8 +1,10 @@
-import { mutation, query } from "../_generated/server";
+import { action, mutation, query } from "../_generated/server";
 import { v } from "convex/values";
 import { productSchema, productSkuSchema } from "../schemas/inventory";
 import { ProductSku } from "../../types";
 import { Id } from "../_generated/dataModel";
+import { api } from "../_generated/api";
+import { deleteDirectoryInS3 } from "../aws/aws";
 
 const entity = "product";
 
@@ -542,6 +544,23 @@ export const remove = mutation({
     await ctx.db.delete(args.id);
 
     return { message: "OK" };
+  },
+});
+
+export const clear = action({
+  args: { id: v.id(entity), storeId: v.id("store") },
+  handler: async (ctx, args) => {
+    const store = await ctx.runQuery(api.inventory.stores.getById, {
+      id: args.storeId,
+    });
+
+    await ctx.runMutation(api.inventory.products.remove, {
+      id: args.id,
+    });
+
+    if (store) {
+      await deleteDirectoryInS3(`stores/${store._id}/products/${args.id}`);
+    }
   },
 });
 
