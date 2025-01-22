@@ -7,6 +7,7 @@ const entity = "bestSeller";
 export const create = mutation({
   args: {
     productId: v.id("product"),
+    productSkuId: v.id("productSku"),
     storeId: v.id("store"),
   },
   handler: async (ctx, args) => {
@@ -14,7 +15,7 @@ export const create = mutation({
       .query(entity)
       .filter((q) => {
         return q.and(
-          q.eq(q.field("productId"), args.productId),
+          q.eq(q.field("productSkuId"), args.productSkuId),
           q.eq(q.field("storeId"), args.storeId)
         );
       })
@@ -26,6 +27,7 @@ export const create = mutation({
 
     const id = await ctx.db.insert(entity, {
       productId: args.productId,
+      productSkuId: args.productSkuId,
       storeId: args.storeId,
     });
 
@@ -65,16 +67,15 @@ export const getAll = query({
 
     const enrichedItems: any[] = await Promise.all(
       items.map(async (item) => {
-        const product = await ctx.runQuery(
-          api.inventory.products.getByIdOrSlug,
+        const productSku = await ctx.runQuery(
+          api.inventory.productSku.getById,
           {
-            identifier: item.productId,
-            storeId: args.storeId,
+            id: item.productSkuId,
           }
         );
         return {
           ...item,
-          product,
+          productSku,
         };
       })
     );

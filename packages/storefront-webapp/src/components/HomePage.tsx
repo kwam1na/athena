@@ -9,9 +9,11 @@ import Footer from "./footer/Footer";
 import { Link } from "@tanstack/react-router";
 import { Button } from "./ui/button";
 import { useStoreContext } from "@/contexts/StoreContext";
-import { ProductCard } from "./ProductCard";
+import { ProductCard, ProductSkuCard } from "./ProductCard";
 import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
+import { Product, ProductSku } from "@athena/webapp";
+import hero from "@/assets/hero.png";
 
 function FeaturedProduct({ product }: { product: any }) {
   const { formatter } = useStoreContext();
@@ -66,12 +68,12 @@ function ProductGrid({
   products,
   formatter,
 }: {
-  products: any[];
+  products: Product[];
   formatter: any;
 }) {
   return (
     <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-8 md:gap-24 xl:gap-4">
-      {products?.slice(0, 4).map((product: any) => (
+      {products?.slice(0, 4).map((product: Product) => (
         <Link
           to="/shop/product/$productSlug"
           key={product?._id}
@@ -83,6 +85,33 @@ function ProductGrid({
           search={{ variant: product?.skus?.[0].sku }}
         >
           <ProductCard product={product} currencyFormatter={formatter} />
+        </Link>
+      ))}
+    </div>
+  );
+}
+
+function ProductSkuGrid({
+  products,
+  formatter,
+}: {
+  products: ProductSku[];
+  formatter: any;
+}) {
+  return (
+    <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-8 md:gap-24 xl:gap-4">
+      {products?.slice(0, 4).map((product: ProductSku) => (
+        <Link
+          to="/shop/product/$productSlug"
+          key={product?._id}
+          className="h-64 w-48 md:h-80 md:w-80 xl:h-96 xl:w-96 flex-shrink-0"
+          params={(params) => ({
+            ...params,
+            productSlug: product?.productId,
+          })}
+          search={{ variant: product?.sku }}
+        >
+          <ProductSkuCard sku={product} currencyFormatter={formatter} />
         </Link>
       ))}
     </div>
@@ -127,7 +156,7 @@ function FeaturedSection({ data }: { data: any }) {
     if (!products?.length) return null;
     return (
       <div className="space-y-8">
-        <p className="text-sm">{`Shop ${name}`}</p>
+        <p className="text-sm font-medium">{`Shop ${name}`}</p>
 
         <div className="space-y-8 lg:space-y-20">
           <ProductGrid products={products} formatter={formatter} />
@@ -223,7 +252,7 @@ export default function HomePage() {
   );
 
   const bestSellersProducts = bestSellersSorted?.map((bestSeller: any) => {
-    return bestSeller.product;
+    return bestSeller.productSku;
   });
 
   const featuredSectionSorted = featured?.sort(
@@ -267,7 +296,7 @@ export default function HomePage() {
       <div className="container mx-auto px-4 lg:px-0 overflow-hidden">
         <div className="space-y-32 pb-56">
           <div className="px-8 pt-16 xl:p-32">
-            <div className="flex flex-col">
+            <div className="flex flex-col mt-32">
               <motion.p
                 initial={initialAnimation}
                 animate={{
@@ -294,6 +323,13 @@ export default function HomePage() {
               >
                 to match your mood
               </motion.p>
+
+              {/* <img
+                src={hero}
+                className="absolute right-0 top-32 aspect object-cover w-[480px] h-[560px] md:w-[640px] md:h-[800px]"
+              /> */}
+
+              <span className="h-[20vw]" />
             </div>
           </div>
 
@@ -309,10 +345,10 @@ export default function HomePage() {
               }}
               className="space-y-8"
             >
-              <p className="text-sm">Shop best sellers</p>
+              <p className="text-sm font-medium">Shop best sellers</p>
 
               <div className="space-y-8 lg:space-y-20">
-                <ProductGrid
+                <ProductSkuGrid
                   products={bestSellersProducts || []}
                   formatter={formatter}
                 />

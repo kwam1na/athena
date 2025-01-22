@@ -9,10 +9,10 @@ import { useGetProductFilters } from "@/hooks/useGetProductFilters";
 function ProductCardLoadingSkeleton() {
   return (
     <div className="space-y-4">
-      <Skeleton className="w-64 h-64 bg-zinc-100 rounded-md"></Skeleton>
+      <Skeleton className="w-64 h-64 bg-accent2/10 rounded-md"></Skeleton>
       <div className="space-y-2">
-        <Skeleton className="w-[180px] h-[16px] bg-zinc-100 rounded"></Skeleton>
-        <Skeleton className="w-[96px] h-[16px] bg-zinc-100 rounded"></Skeleton>
+        <Skeleton className="w-[180px] h-[16px] bg-accent2/10 rounded"></Skeleton>
+        <Skeleton className="w-[96px] h-[16px] bg-accent2/10 rounded"></Skeleton>
       </div>
     </div>
   );
@@ -34,7 +34,7 @@ export default function ProductsPage({
       <div className="space-y-8 container mx-auto max-w-[1024px] h-screen">
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
           <div className="space-y-4">
-            <div className="w-[80px] h-[24px] bg-zinc-100 rounded" />
+            <div className="w-[80px] h-[24px] bg-accent2/10 rounded" />
           </div>
         </div>
 
@@ -52,7 +52,7 @@ export default function ProductsPage({
       <div className="space-y-8 container mx-auto max-w-[1024px] h-screen">
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
           <div className="space-y-4">
-            <div className="w-[80px] h-[24px] bg-zinc-100 rounded" />
+            <div className="w-[80px] h-[24px] bg-accent2/10 rounded" />
           </div>
         </div>
 

@@ -1,13 +1,6 @@
 import ImageUploader from "../ui/image-uploader";
 import View from "../View";
-import { Skeleton } from "../ui/skeleton";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "../ui/select";
+
 import { useProduct } from "@/contexts/ProductContext";
 import { useEffect } from "react";
 import { GenericComboBox } from "../GenericComboBox";
@@ -69,7 +62,7 @@ const Header = () => {
 };
 
 export default function ProductImagesView() {
-  const { activeProductVariant, isLoading, updateVariantImages } = useProduct();
+  const { activeProductVariant, updateVariantImages } = useProduct();
 
   return (
     <View
@@ -78,21 +71,13 @@ export default function ProductImagesView() {
       className="h-auto"
       header={<Header />}
     >
-      {!isLoading && (
-        <ImageUploader
-          images={activeProductVariant?.images}
-          variantMarkedForDeletion={activeProductVariant?.markedForDeletion}
-          updateImages={(newImages) =>
-            updateVariantImages(activeProductVariant.id, newImages)
-          }
-        />
-      )}
-      {isLoading && (
-        <div className="flex gap-2 p-4">
-          <Skeleton className="w-[50%] h-[280px]" />
-          <Skeleton className="w-[50%] h-[280px]" />
-        </div>
-      )}
+      <ImageUploader
+        images={activeProductVariant?.images}
+        variantMarkedForDeletion={activeProductVariant?.markedForDeletion}
+        updateImages={(newImages) =>
+          updateVariantImages(activeProductVariant.id, newImages)
+        }
+      />
     </View>
   );
 }

@@ -7,6 +7,8 @@ import {
   CommandItem,
   CommandList,
 } from "../ui/command";
+import { Product, ProductSku } from "~/types";
+import { getProductName } from "~/src/lib/productUtils";
 
 export function BestSellersDialog({
   dialogOpen,
@@ -24,16 +26,22 @@ export function BestSellersDialog({
 
   const addBestSeller = useMutation(api.inventory.bestSeller.create);
 
-  const handleAddBestSeller = async (product: any) => {
+  const handleAddBestSeller = async (productSku: any) => {
     if (!activeStore) return;
 
+    console.log("adding ->", productSku);
+
     addBestSeller({
-      productId: product._id,
+      productId: productSku.productId,
+      productSkuId: productSku._id,
       storeId: activeStore._id,
     });
 
     setDialogOpen(false);
   };
+
+  const productSkus =
+    products?.flatMap((product: Product) => product.skus) || [];
 
   if (!activeStore || !products) return null;
 
@@ -42,21 +50,23 @@ export function BestSellersDialog({
       <CommandDialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <CommandList>
           <CommandGroup heading="Products">
-            {products?.map((product: any) => (
-              <CommandItem key={product._id}>
-                <div
-                  className="flex items-center gap-2 w-full"
-                  onClick={() => handleAddBestSeller(product)}
-                >
-                  <img
-                    src={product?.skus[0].images[0]}
-                    alt={product?.name}
-                    className="w-8 h-8 rounded-md"
-                  />
-                  <p>{product.name}</p>
-                </div>
-              </CommandItem>
-            ))}
+            <div className="space-y-4">
+              {productSkus?.map((product: ProductSku) => (
+                <CommandItem key={product._id}>
+                  <div
+                    className="flex h-[80px] items-center w-full"
+                    onClick={() => handleAddBestSeller(product)}
+                  >
+                    <img
+                      src={product.images[0]}
+                      alt={product?.productId}
+                      className="w-16 h-16 rounded-md"
+                    />
+                    <p>{getProductName(product)}</p>
+                  </div>
+                </CommandItem>
+              ))}
+            </div>
           </CommandGroup>
         </CommandList>
       </CommandDialog>

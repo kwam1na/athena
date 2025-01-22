@@ -114,7 +114,7 @@ export default function SavedBag() {
                             })
                           }
                           disabled={isUpdatingSavedBag || !item.price}
-                          className="w-12 py-2 bg-white text-black"
+                          className="w-12 py-2 bg-background text-black"
                         >
                           {[...Array(10)].map((_, i) => (
                             <option key={i + 1} value={i + 1}>

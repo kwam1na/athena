@@ -530,6 +530,18 @@ export const update = mutation({
   },
   handler: async (ctx, args) => {
     const { id, ...rest } = args;
+
+    if (args.name) {
+      const allSkus = await ctx.db
+        .query("productSku")
+        .filter((q) => q.eq(q.field("productId"), id))
+        .collect();
+
+      await Promise.all(
+        allSkus.map((sku) => ctx.db.patch(sku._id, { productName: args.name }))
+      );
+    }
+
     await ctx.db.patch(args.id, { ...rest });
 
     return await ctx.db.get(args.id);

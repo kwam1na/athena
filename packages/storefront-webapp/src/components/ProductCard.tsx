@@ -28,26 +28,23 @@ export function ProductCard({
 }
 
 export function ProductSkuCard({
-  product,
   sku,
   currencyFormatter,
 }: {
-  product: Product;
   sku: ProductSku;
   currencyFormatter: Intl.NumberFormat;
 }) {
-  if (!product) return null;
   return (
     <div className="flex flex-col">
       <div className="mb-2 overflow-hidden">
         <img
-          alt={`${product?.name} image`}
+          alt={`${sku?.productName} image`}
           className="aspect-square object-cover rounded"
           src={sku.images[0]}
         />
       </div>
       <div className="text-sm flex flex-col items-start gap-4">
-        <p className="font-medium">{product?.name}</p>
+        <p className="font-medium">{sku?.productName}</p>
         <p className="text-xs">{currencyFormatter.format(sku.price)}</p>
       </div>
     </div>

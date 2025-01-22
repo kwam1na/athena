@@ -1,9 +1,16 @@
 import { v } from "convex/values";
-import { action, mutation } from "../_generated/server";
+import { action, mutation, query } from "../_generated/server";
 import { deleteFileInS3, uploadFileToS3 } from "../aws/aws";
 
 export const generateUploadUrl = mutation(async (ctx) => {
   return await ctx.storage.generateUploadUrl();
+});
+
+export const getById = query({
+  args: { id: v.id("productSku") },
+  handler: async (ctx, args) => {
+    return await ctx.db.get(args.id);
+  },
 });
 
 export const update = mutation({

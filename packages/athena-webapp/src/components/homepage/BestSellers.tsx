@@ -16,6 +16,7 @@ import { Button } from "../ui/button";
 import { TrashIcon } from "@radix-ui/react-icons";
 import { PlusIcon } from "lucide-react";
 import { toast } from "sonner";
+import { ProductSku } from "~/types";
 
 export const BestSellers = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -76,6 +77,8 @@ export const BestSellers = () => {
     updateRanks({ ranks: newRanks });
   };
 
+  console.log(bestSellers);
+
   return (
     <View
       className="py-4"
@@ -115,23 +118,21 @@ export const BestSellers = () => {
                             ...params,
                             orgUrlSlug: params.orgUrlSlug!,
                             storeUrlSlug: params.storeUrlSlug!,
-                            productSlug: bestSeller?.product?._id,
+                            productSlug: bestSeller?.productId,
                           })}
                           className="flex items-center gap-4"
                         >
                           <img
-                            src={bestSeller?.product?.skus[0]?.images[0]}
-                            alt={bestSeller?.product?.name}
+                            src={bestSeller?.productSku?.images[0]}
+                            alt={bestSeller?.productSku?.productName}
                             className="w-16 h-16 rounded-md object-cover"
                           />
                           <div className="flex flex-col gap-2">
                             <p className="text-sm">
-                              {bestSeller?.product?.name}
+                              {bestSeller?.productSku?.productName}
                             </p>
                             <p className="text-xs text-muted-foreground">
-                              {formatter.format(
-                                bestSeller?.product?.skus[0]?.price
-                              )}
+                              {formatter.format(bestSeller?.productSku?.price)}
                             </p>
                           </div>
                         </Link>
