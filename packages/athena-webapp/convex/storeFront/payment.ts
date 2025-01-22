@@ -6,7 +6,8 @@ import { orderDetailsSchema } from "../schemas/storeFront";
 import { sendOrderEmail } from "../sendgrid";
 import { currencyFormatter, formatDate, getAddressString } from "../utils";
 
-const appUrl = process.env.APP_URL;
+// const appUrl = process.env.APP_URL;
+const appUrl = "http://localhost:5174";
 
 export const createTransaction = action({
   args: {
@@ -33,8 +34,7 @@ export const createTransaction = action({
           },
         }),
         headers: {
-          Authorization:
-            "Bearer sk_test_4460590841638115d8dae604191fdf38844042d0",
+          Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
           "Content-Type": "application/json",
         },
       }
@@ -75,8 +75,7 @@ export const verifyPayment = action({
       `https://api.paystack.co/transaction/verify/${args.externalReference}`,
       {
         headers: {
-          Authorization:
-            "Bearer sk_test_4460590841638115d8dae604191fdf38844042d0",
+          Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
         },
       }
     );

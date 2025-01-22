@@ -54,7 +54,7 @@ const OrderItem = ({
           </div>
         ))}
         {order?.items.length > 3 && (
-          <div className="h-32 w-32 bg-gray-100 rounded-sm flex items-center justify-center">
+          <div className="h-32 w-32 bg-accent2/40 rounded-sm flex items-center justify-center">
             <span className="text-gray-600">+{order.items.length - 3}</span>
           </div>
         )}
@@ -71,7 +71,7 @@ const OrderItem = ({
           </div>
         ))}
         {order?.items.length > 2 && (
-          <div className="h-32 w-32 bg-gray-100 rounded-sm flex items-center justify-center">
+          <div className="h-32 w-32 bg-accent2/40 rounded-sm flex items-center justify-center">
             <span className="text-gray-600">+{order.items.length - 2}</span>
           </div>
         )}

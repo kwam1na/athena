@@ -99,7 +99,7 @@ export function CheckoutMissingPayment() {
             incorrect, contact us for support.
           </p>
 
-          <p className="text-xs text-muted-foreground">{`SessionId: ${activeSession._id}`}</p>
+          <p className="text-xs font-medium">{`Reference: ${activeSession.externalReference}`}</p>
         </div>
 
         <div className="space-x-12">

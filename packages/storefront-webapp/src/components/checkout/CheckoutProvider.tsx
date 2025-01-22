@@ -13,6 +13,7 @@ import { SESSION_STORAGE_KEY } from "@/lib/constants";
 import { customerDetailsSchema } from "./schemas/customerDetailsSchema";
 import { baseDeliveryDetailsSchema } from "./schemas/deliveryDetailsSchema";
 import { baseBillingDetailsSchema } from "./schemas/billingDetailsSchema";
+import { CheckoutSession } from "@athena/webapp";
 
 export type Address = {
   address?: string;
@@ -51,7 +52,7 @@ export const webOrderSchema = z
       .nullable(),
     deliveryFee: z.number().nullable(),
     pickupLocation: z.string().min(1).nullable(),
-    deliveryDetails: baseDeliveryDetailsSchema.optional(),
+    deliveryDetails: baseDeliveryDetailsSchema.optional().nullable(),
     deliveryInstructions: z.string().optional(),
   })
   .superRefine((data, ctx) => {
@@ -387,7 +388,7 @@ const initialState: CheckoutState = {
 };
 
 type CheckoutContextType = {
-  activeSession: any;
+  activeSession: CheckoutSession;
   actionsState: CheckoutActions;
   checkoutState: CheckoutState;
   canPlaceOrder: () => Promise<boolean>;

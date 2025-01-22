@@ -11,6 +11,7 @@ import { OnlineOrder } from "~/types";
 import { CheckCircle2, Circle, CircleDashed, RotateCcw } from "lucide-react";
 import { getOrderState } from "../../../orders/utils";
 import { OrderStatus } from "../../OrderStatus";
+import { ProductStatus } from "~/src/components/product/ProductStatus";
 
 export const orderColumns: ColumnDef<OnlineOrder>[] = [
   {
@@ -38,6 +39,50 @@ export const orderColumns: ColumnDef<OnlineOrder>[] = [
     },
     enableSorting: false,
     enableHiding: false,
+  },
+  {
+    accessorKey: "status",
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Status" />
+    ),
+    cell: ({ row }) => {
+      const order = row.original;
+
+      const amountRefunded =
+        order?.refunds?.reduce((acc, refund) => acc + refund.amount, 0) || 0;
+
+      const isPartiallyRefunded =
+        amountRefunded > 0 && amountRefunded < (order as any).amountValue;
+
+      let status: string = row.getValue("status");
+
+      if (status == "refunded") {
+        if (isPartiallyRefunded) {
+          status = "partially refunded";
+        }
+      }
+
+      const { isOrderReady, hasOrderTransitioned } = getOrderState(order);
+
+      return (
+        <Link
+          to="/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug"
+          params={(prev) => ({
+            ...prev,
+            orgUrlSlug: prev.orgUrlSlug!,
+            storeUrlSlug: prev.storeUrlSlug!,
+            orderSlug: row.original._id,
+          })}
+        >
+          <OrderStatus order={order} />
+        </Link>
+      );
+    },
+    enableSorting: false,
+    enableHiding: false,
+    filterFn: (row, id, value) => {
+      return value.includes(row.getValue(id));
+    },
   },
   {
     accessorKey: "customerDetails",
@@ -114,50 +159,6 @@ export const orderColumns: ColumnDef<OnlineOrder>[] = [
           })}
         >
           {content}
-        </Link>
-      );
-    },
-    enableSorting: false,
-    enableHiding: false,
-    filterFn: (row, id, value) => {
-      return value.includes(row.getValue(id));
-    },
-  },
-  {
-    accessorKey: "status",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Status" />
-    ),
-    cell: ({ row }) => {
-      const order = row.original;
-
-      const amountRefunded =
-        order?.refunds?.reduce((acc, refund) => acc + refund.amount, 0) || 0;
-
-      const isPartiallyRefunded =
-        amountRefunded > 0 && amountRefunded < (order as any).amountValue;
-
-      let status: string = row.getValue("status");
-
-      if (status == "refunded") {
-        if (isPartiallyRefunded) {
-          status = "partially refunded";
-        }
-      }
-
-      const { isOrderReady, hasOrderTransitioned } = getOrderState(order);
-
-      return (
-        <Link
-          to="/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug"
-          params={(prev) => ({
-            ...prev,
-            orgUrlSlug: prev.orgUrlSlug!,
-            storeUrlSlug: prev.storeUrlSlug!,
-            orderSlug: row.original._id,
-          })}
-        >
-          <OrderStatus order={order} />
         </Link>
       );
     },

@@ -31,7 +31,7 @@ export const ProductStatus = ({ product }: { product: Product }) => {
   }
 
   return (
-    <div className="flex items-center">
+    <div className="flex items-center text-xs">
       {product.availability === "live" && (
         <div className="h-2 w-2 mr-2 rounded bg-green-700" />
       )}

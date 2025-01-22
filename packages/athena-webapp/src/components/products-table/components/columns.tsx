@@ -1,13 +1,7 @@
 import { ColumnDef } from "@tanstack/react-table";
-
-import { Badge } from "../../ui/badge";
-
 import { DataTableColumnHeader } from "./data-table-column-header";
-import { DataTableRowActions } from "./data-table-row-actions";
-import { capitalizeFirstLetter } from "@/lib/utils";
 import { Link } from "@tanstack/react-router";
 import { Product } from "~/types";
-import { Circle, CircleDashed, CircleDotDashed } from "lucide-react";
 import { ProductStatus } from "../../product/ProductStatus";
 
 export const columns: ColumnDef<Product>[] = [
@@ -40,9 +34,12 @@ export const columns: ColumnDef<Product>[] = [
             ) : (
               <div className="aspect-square w-12 h-12 bg-gray-100 rounded-md" />
             )}
-            <span className="max-w-[500px] truncate font-medium">
-              {row.getValue("name")}
-            </span>
+            <div className="flex items-center gap-4">
+              <span className="max-w-[500px] truncate font-medium">
+                {row.getValue("name")}
+              </span>
+              <ProductStatus product={row.original} />
+            </div>
           </Link>
         </div>
       );
@@ -51,73 +48,44 @@ export const columns: ColumnDef<Product>[] = [
     enableHiding: false,
   },
   {
-    accessorKey: "availability",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Status" />
-    ),
-    cell: ({ row }) => (
-      <Link
-        to="/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/edit"
-        params={(prev) => ({
-          ...prev,
-          orgUrlSlug: prev.orgUrlSlug!,
-          storeUrlSlug: prev.storeUrlSlug!,
-          productSlug: row.original._id,
-        })}
-        className="flex items-center gap-8"
-      >
-        <ProductStatus product={row.original} />
-      </Link>
-    ),
-    enableSorting: false,
-    enableHiding: false,
-  },
-  {
     accessorKey: "inventoryCount",
     header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Stock" />
+      <DataTableColumnHeader column={column} title="Inventory" />
     ),
-    cell: ({ row }) => (
-      <Link
-        to="/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug"
-        params={(prev) => ({
-          ...prev,
-          orgUrlSlug: prev.orgUrlSlug!,
-          storeUrlSlug: prev.storeUrlSlug!,
-          productSlug: row.original._id,
-        })}
-        className="flex items-center gap-8"
-      >
-        <div className="w-[80px]">{row.getValue("inventoryCount")}</div>
-      </Link>
-    ),
+    cell: ({ row }) => {
+      return (
+        <Link
+          to="/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug"
+          params={(prev) => ({
+            ...prev,
+            orgUrlSlug: prev.orgUrlSlug!,
+            storeUrlSlug: prev.storeUrlSlug!,
+            productSlug: row.original._id,
+          })}
+          className="flex items-center gap-8"
+        >
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1">
+              <strong>{row.original.skus.length}</strong>
+              <p className="text-muted-foreground">
+                {row.original.skus.length == 1 ? "variant" : "variants"}
+              </p>
+            </div>
+            <p>/</p>
+            <div className="flex items-center gap-1">
+              <strong>{row.getValue("inventoryCount")}</strong>
+              <p className="text-muted-foreground">stock</p>
+            </div>
+            <p>/</p>
+            <div className="flex items-center gap-1">
+              <strong>{row.original.quantityAvailable}</strong>
+              <p className="text-muted-foreground">available</p>
+            </div>
+          </div>
+        </Link>
+      );
+    },
     enableSorting: false,
     enableHiding: false,
   },
-  {
-    accessorKey: "quantityAvailable",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="# Available" />
-    ),
-    cell: ({ row }) => (
-      <Link
-        to="/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug"
-        params={(prev) => ({
-          ...prev,
-          orgUrlSlug: prev.orgUrlSlug!,
-          storeUrlSlug: prev.storeUrlSlug!,
-          productSlug: row.original._id,
-        })}
-        className="flex items-center gap-8"
-      >
-        <div className="w-[80px]">{row.getValue("quantityAvailable")}</div>
-      </Link>
-    ),
-    enableSorting: false,
-    enableHiding: false,
-  },
-  // {
-  //   id: "actions",
-  //   cell: ({ row }) => <DataTableRowActions row={row} />,
-  // },
 ];

@@ -15,7 +15,7 @@ export default function View({
   hideBorder?: boolean;
 }) {
   return (
-    <section className={cn("", className)}>
+    <section className={cn("container mx-auto", className)}>
       <div
         className={`h-full ${hideBorder ? "" : "border border-1"} rounded-lg`}
       >

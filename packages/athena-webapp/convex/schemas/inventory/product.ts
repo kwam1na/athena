@@ -17,6 +17,7 @@ export const productSchema = v.object({
   slug: v.string(),
   subcategoryId: v.id("subcategory"),
   inventoryCount: v.number(),
+  quantityAvailable: v.optional(v.number()),
 });
 
 export const productSkuSchema = v.object({
