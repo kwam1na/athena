@@ -48,7 +48,7 @@ const Header = () => {
 
   return (
     <div className="flex items-center w-full justify-between">
-      <p className="text-sm text-sm text-muted-foreground">Images</p>
+      <p className="text-sm text-sm">Images</p>
       {productVariants.length > 1 && (
         <GenericComboBox<ProductVariant>
           activeItem={activeProductVariant}

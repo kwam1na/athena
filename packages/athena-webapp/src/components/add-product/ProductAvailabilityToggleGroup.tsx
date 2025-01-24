@@ -38,7 +38,7 @@ function ProductAvailabilityToggleGroup() {
         aria-label="Toggle length"
       >
         <Archive className="w-4 h-4 mr-2" />
-        Archive
+        Archived
       </ToggleGroupItem>
     </ToggleGroup>
   );

@@ -24,7 +24,7 @@ export function ProductAttributesView() {
       className="h-auto"
       header={
         <div className="flex items-center justify-between">
-          <p className="text-sm text-sm text-muted-foreground">Attributes</p>
+          <p className="text-sm text-sm">Attributes</p>
           <div className="space-x-2">
             <Button
               className="text-muted-foreground"

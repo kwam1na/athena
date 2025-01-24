@@ -22,7 +22,7 @@ export function ProductDetailsView() {
       hideBorder
       hideHeaderBottomBorder
       className="h-auto"
-      header={<p className="text-sm text-sm text-muted-foreground">Details</p>}
+      header={<p className="text-sm text-sm font-medium">Details</p>}
     >
       <div className="px-4 py-8 space-y-4">
         <div className="space-y-2">

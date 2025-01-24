@@ -6,6 +6,9 @@ import useGetActiveStore from "~/src/hooks/useGetActiveStore";
 import View from "../View";
 import { Input } from "../ui/input";
 import { LoadingButton } from "../ui/loading-button";
+import { Switch } from "../ui/switch";
+import { Label } from "../ui/label";
+import { set } from "zod";
 
 const Header = () => {
   return (
@@ -207,12 +210,104 @@ const ContactView = () => {
   );
 };
 
+const MaintenanceView = () => {
+  const { activeStore } = useGetActiveStore();
+
+  const [isUpdatingConfig, setIsUpdatingConfig] = useState(false);
+
+  const [isInMaintenanceMode, setIsInMaintenanceMode] = useState(false);
+
+  const updateConfig = useMutation(api.inventory.stores.updateConfig);
+
+  const saveChanges = async (toggled: boolean) => {
+    setIsUpdatingConfig(true);
+    setIsInMaintenanceMode(toggled);
+
+    console.log("toggled ", toggled);
+
+    const updates = {
+      inMaintenanceMode: toggled,
+    };
+
+    try {
+      await updateConfig({
+        id: activeStore?._id!,
+        config: {
+          ...activeStore?.config,
+          availability: updates,
+        },
+      });
+      const message = toggled
+        ? "Store set to maintenance mode"
+        : "Store set to live";
+      toast.success(message);
+    } catch (error) {
+      console.log(error);
+      toast.error("An error occurred while updating store availability", {
+        description: (error as Error).message,
+        position: "top-right",
+      });
+    }
+
+    setIsUpdatingConfig(false);
+  };
+
+  useEffect(() => {
+    console.log("updating maintenance mode in effect");
+    console.log(activeStore?.config);
+    setIsInMaintenanceMode(
+      activeStore?.config?.availability?.inMaintenanceMode || false
+    );
+  }, [activeStore?.config?.availability]);
+
+  console.log("in maintenance mode: ", isInMaintenanceMode);
+
+  return (
+    <View
+      hideBorder
+      hideHeaderBottomBorder
+      className="h-auto w-full"
+      header={
+        <p className="text-sm text-muted-foreground">{`Store availability`}</p>
+      }
+    >
+      <div className="container mx-auto h-full py-8 grid grid-cols-2 gap-4">
+        <div className="flex items-center gap-2">
+          <Switch
+            id="custom"
+            disabled={isUpdatingConfig}
+            checked={isInMaintenanceMode}
+            onCheckedChange={(e) => {
+              saveChanges(e);
+            }}
+          />
+          <Label className="text-muted-foreground" htmlFor="custom">
+            Maintenance mode
+          </Label>
+        </div>
+      </div>
+
+      {/* <div className="w-full flex pr-8">
+        <LoadingButton
+          className="ml-auto"
+          isLoading={isUpdatingConfig}
+          onClick={saveChanges}
+        >
+          Save
+        </LoadingButton>
+      </div> */}
+    </View>
+  );
+};
+
 export const StoreConfiguration = () => {
   return (
     <View hideBorder hideHeaderBottomBorder header={<Header />}>
       <div className="container mx-auto h-full w-full py-8 grid grid-cols-2 gap-40">
         <FeesView />
         <ContactView />
+
+        <MaintenanceView />
       </div>
     </View>
   );

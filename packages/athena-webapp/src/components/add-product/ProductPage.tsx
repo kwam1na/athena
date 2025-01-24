@@ -24,21 +24,19 @@ export default function ProductPage() {
 
   return (
     <div className="h-full container mx-auto w-full p-8 space-x-32 flex">
-      <div className="w-full space-y-8">
-        <ProductStockView />
-        <ProductAttributesView />
-      </div>
-
-      <div className="w-full sticky space-y-8">
+      <div className="space-y-8">
         <div className="grid grid-cols-2 gap-8">
           <ProductDetailsView />
           <ProductAvailabilityView />
         </div>
         <ProductImagesView />
+        <ProductStockView />
+      </div>
+
+      <div className="w-full space-y-8">
         <ProductCategorizationView />
-        <div className="grid grid-cols-2 gap-8">
-          {category?.name == "Hair" && <WigTypeView />}
-        </div>
+        {category?.name == "Hair" && <WigTypeView />}
+        <ProductAttributesView />
       </div>
     </div>
   );

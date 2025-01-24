@@ -5,7 +5,7 @@ import {
 } from "@tanstack/react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import NavigationBar from "@/components/navigation-bar/NavigationBar";
-import { StoreProvider } from "@/contexts/StoreContext";
+import { StoreProvider, useStoreContext } from "@/contexts/StoreContext";
 import { Scripts } from "@tanstack/start";
 import { Toaster } from "@/components/ui/sonner";
 import { z } from "zod";
@@ -47,14 +47,16 @@ export const Route = createRootRoute({
 
 function RootComponent() {
   return (
-    <RootDocument>
-      <div className="flex flex-col h-screen bg-background">
-        <NavigationBar />
-        <main className="flex-grow bg-background">
-          <Outlet />
-        </main>
-      </div>
-    </RootDocument>
+    <StoreProvider>
+      <RootDocument>
+        <div className="flex flex-col h-screen bg-background">
+          <NavigationBar />
+          <main className="flex-grow bg-background">
+            <Outlet />
+          </main>
+        </div>
+      </RootDocument>
+    </StoreProvider>
   );
 }
 
@@ -67,21 +69,11 @@ const queryClient = new QueryClient({
 });
 
 function RootDocument({ children }: { children: React.ReactNode }) {
-  const { user, guestId } = useAuth();
+  const { store } = useStoreContext();
 
-  const allowed = [
-    "nn74pawp5hap116qtv8f5hp1th78m3k0",
-    "md7craj8j61apsnhrwgg4apqm178tthf",
-    "md755963ag0sdd03q9zr2r8ahd78vnrn",
-    "kh7013cspvmvgjb7tthev4vs0h78jrzj",
-    "kh79wgd0degj02g3dn5gm5gcgd78vs3g",
-  ];
+  const { inMaintenanceMode } = store?.config?.availability || {};
 
-  const id = user?._id || guestId;
-
-  const isAllowed = id && allowed.includes(id);
-
-  if (!isAllowed) {
+  if (inMaintenanceMode) {
     return <MaintenanceMode />;
   }
 
@@ -89,7 +81,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
     <div>
       <QueryClientProvider client={queryClient}>
         <Toaster />
-        <StoreProvider>{children}</StoreProvider>
+        {children}
       </QueryClientProvider>
       <ScrollRestoration />
       <Scripts />

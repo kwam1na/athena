@@ -220,9 +220,7 @@ export function ProductCategorizationView() {
       hideHeaderBottomBorder
       header={
         <div className="flex items-center justify-between">
-          <p className="text-sm text-sm text-muted-foreground">
-            Categorization
-          </p>
+          <p className="text-sm text-sm">Categorization</p>
           <div className="space-x-2">
             <Button
               className="text-muted-foreground"

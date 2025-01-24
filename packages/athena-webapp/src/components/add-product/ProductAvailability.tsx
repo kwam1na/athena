@@ -8,9 +8,7 @@ export function ProductAvailabilityView() {
       hideBorder
       hideHeaderBottomBorder
       className="h-auto"
-      header={
-        <p className="text-sm text-sm text-muted-foreground">Availability</p>
-      }
+      header={<p className="text-sm text-sm">Availability</p>}
     >
       <ProductAvailability />
     </View>
