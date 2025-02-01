@@ -138,7 +138,7 @@ function LayoutComponent() {
 
   return (
     <div className="pb-40">
-      <div className="bg-background border-b col-span-12 sticky top-0 z-20">
+      <div className="bg-accent5 border-b col-span-12 sticky top-0">
         <ProductFilterBar
           showFilters={showFilters}
           setShowFilters={setShowFilters}
@@ -147,7 +147,7 @@ function LayoutComponent() {
         />
       </div>
 
-      <div className="hidden xl:block sticky top-0 z-20">
+      <div className="hidden xl:block sticky top-0">
         <div className="absolute w-[20%] h-[480px]">
           <AnimatePresence initial={false}>
             {showFilters && (

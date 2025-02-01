@@ -8,6 +8,7 @@ import { Button } from "../ui/button";
 import { Separator } from "../ui/separator";
 import placeholder from "@/assets/placeholder.png";
 import { motion } from "framer-motion";
+import { Input } from "../ui/input";
 
 function SummaryItem({
   item,
@@ -60,7 +61,7 @@ function BagSummary() {
   const total = (checkoutState.deliveryFee ?? 0) + bagSubtotal;
 
   return (
-    <motion.div className="py-6 bg-white shadow-sm rounded-lg w-[80vw] lg:w-[30vw] space-y-12">
+    <motion.div className="py-6 bg-accent5 shadow-sm rounded-lg w-[80vw] lg:w-[30vw] space-y-12">
       <div className="flex items-center px-6 w-full">
         <p>Order summary</p>
         <div className="ml-auto">
@@ -77,14 +78,14 @@ function BagSummary() {
       </div>
 
       {/* Promo Code */}
-      {/* <div className="px-8 space-y-2">
-        <p className="text-sm font-medium">Promo code</p>
+      <div className="px-8 space-y-2">
+        {/* <p className="text-sm">Promo code</p> */}
         <div>
           <Input type="text" placeholder="Enter promo code" />
         </div>
-      </div> */}
+      </div>
 
-      <Separator className="bg-accent3" />
+      <Separator className="bg-background" />
 
       {/* Summary */}
       <div className="px-8 space-y-8 pt-4 mt-4">

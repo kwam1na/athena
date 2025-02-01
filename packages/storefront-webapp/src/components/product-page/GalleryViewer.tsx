@@ -72,7 +72,7 @@ const GalleryViewer: React.FC<GalleryViewerProps> = ({ images }) => {
             <img
               ref={(el) => (imageRefs.current[index] = el)}
               alt={`image`}
-              className={`aspect-square w-full h-[600px] lg:w-[800px] lg:h-[800px] object-cover cursor-pointer`}
+              className={`aspect-square w-full h-[600px] lg:w-[800px] lg:h-[800px] rounded-md object-cover cursor-pointer`}
               src={img}
             />
           </div>
@@ -90,7 +90,7 @@ const GalleryViewer: React.FC<GalleryViewerProps> = ({ images }) => {
             <img
               src={img}
               alt={`Preview ${index}`}
-              className={`aspect-square w-16 h-16 object-cover ${activeImage == index ? "opacity-100" : "opacity-20"}`}
+              className={`aspect-square w-16 h-16 object-cover rounded-md ${activeImage == index ? "opacity-100" : "opacity-20"}`}
             />
           </div>
         ))}

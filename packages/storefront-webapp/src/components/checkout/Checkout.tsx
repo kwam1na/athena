@@ -56,7 +56,7 @@ const MainComponent = () => {
 
         {/* <div className="order-1 lg:order-2 lg:col-span-6 bg-[#F6F6F6]" /> */}
 
-        <div className="block md:hidden px-6 bg-accent3 border">
+        <div className="block md:hidden px-6 bg-accent5 border">
           <MobileBagSummary />
         </div>
 
