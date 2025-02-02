@@ -6,6 +6,10 @@ export const getProductName = (item: any) => {
     return `${item.length}" ${capitalizeWords(item.colorName)} ${item.productName}`;
   }
 
+  if (item.length) {
+    return `${item.length}" ${item.productName}`;
+  }
+
   return item.productName;
 };
 

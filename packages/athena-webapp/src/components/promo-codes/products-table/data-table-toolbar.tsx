@@ -42,22 +42,7 @@ export function DataTableToolbar<TData>({
             </Button>
           )}
         </div>
-
-        <Link
-          to="/$orgUrlSlug/store/$storeUrlSlug/products/new"
-          params={(prev) => ({
-            ...prev,
-            orgUrlSlug: prev.orgUrlSlug!,
-            storeUrlSlug: prev.storeUrlSlug!,
-          })}
-          className="pr-2"
-        >
-          <Button variant="ghost" className="h-8 px-2 lg:px-3 ">
-            <PlusIcon className="h-4 w-4" />
-          </Button>
-        </Link>
       </div>
-      {/* <DataTableViewOptions table={table} /> */}
     </div>
   );
 }

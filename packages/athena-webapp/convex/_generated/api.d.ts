@@ -63,6 +63,7 @@ import type * as schemas_inventory_inviteCode from "../schemas/inventory/inviteC
 import type * as schemas_inventory_organization from "../schemas/inventory/organization.js";
 import type * as schemas_inventory_organizationMember from "../schemas/inventory/organizationMember.js";
 import type * as schemas_inventory_product from "../schemas/inventory/product.js";
+import type * as schemas_inventory_promoCode from "../schemas/inventory/promoCode.js";
 import type * as schemas_inventory_store from "../schemas/inventory/store.js";
 import type * as schemas_inventory_subcategory from "../schemas/inventory/subcategory.js";
 import type * as schemas_storeFront_bag from "../schemas/storeFront/bag.js";
@@ -153,6 +154,7 @@ declare const fullApi: ApiFromModules<{
   "schemas/inventory/organization": typeof schemas_inventory_organization;
   "schemas/inventory/organizationMember": typeof schemas_inventory_organizationMember;
   "schemas/inventory/product": typeof schemas_inventory_product;
+  "schemas/inventory/promoCode": typeof schemas_inventory_promoCode;
   "schemas/inventory/store": typeof schemas_inventory_store;
   "schemas/inventory/subcategory": typeof schemas_inventory_subcategory;
   "schemas/storeFront/bag": typeof schemas_storeFront_bag;

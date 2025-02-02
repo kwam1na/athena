@@ -12,6 +12,8 @@ import {
   organizationSchema,
   productSchema,
   productSkuSchema,
+  promoCodeItemSchema,
+  promoCodeSchema,
   storeSchema,
   subcategorySchema,
 } from "./schemas/inventory";
@@ -52,6 +54,8 @@ const schema = defineSchema({
   organizationMember: defineTable(organizationMemberSchema),
   product: defineTable(productSchema),
   productSku: defineTable(productSkuSchema),
+  promoCode: defineTable(promoCodeSchema),
+  promoCodeItem: defineTable(promoCodeItemSchema),
   savedBag: defineTable(savedBagSchema),
   savedBagItem: defineTable(savedBagItemSchema),
   store: defineTable(storeSchema),

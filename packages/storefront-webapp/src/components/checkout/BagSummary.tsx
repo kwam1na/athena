@@ -28,13 +28,13 @@ function SummaryItem({
           />
         </div>
         <div className="space-y-2">
-          <p className="text-sm">{getProductName(item)}</p>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm font-medium">{getProductName(item)}</p>
+          <p className="text-xs text-muted-foreground">
             {formatter.format(item.price * item.quantity)}
           </p>
         </div>
       </div>
-      <p className="text-sm text-muted-foreground">{`x${item.quantity}`}</p>
+      <p className="text-xs text-muted-foreground">{`x ${item.quantity}`}</p>
     </div>
   );
 }

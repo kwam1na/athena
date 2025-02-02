@@ -1,5 +1,4 @@
 import { v } from "convex/values";
-import { redeem } from "../../inventory/inviteCode";
 
 export const inviteCodeSchema = v.object({
   code: v.string(),

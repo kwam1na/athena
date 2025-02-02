@@ -16,8 +16,6 @@ export function ProductAvailabilityView() {
 }
 
 function ProductAvailability() {
-  const id = "availability";
-
   return (
     <div className="grid gap-6 px-4 py-8">
       <div className="grid gap-3">

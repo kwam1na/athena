@@ -10,3 +10,4 @@ export * from "./organizationMember";
 export * from "./color";
 export * from "./bestSeller";
 export * from "./featuredItem";
+export * from "./promoCode";

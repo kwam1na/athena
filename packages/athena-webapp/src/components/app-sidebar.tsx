@@ -13,6 +13,7 @@ import {
   SidebarMenuSubItem,
 } from "@/components/ui/sidebar";
 import {
+  BadgePercent,
   PersonStanding,
   ShoppingBasket,
   ShoppingCart,
@@ -102,6 +103,23 @@ export function AppSidebar() {
                   >
                     <ShoppingBasket className="w-4 h-4" />
                     <p className="font-medium">Products</p>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild>
+                  <Link
+                    to="/$orgUrlSlug/store/$storeUrlSlug/promo-codes"
+                    params={(p) => ({
+                      ...p,
+                      orgUrlSlug: activeOrganization?.slug,
+                      storeUrlSlug: activeStore?.slug,
+                    })}
+                    className="flex items-center"
+                  >
+                    <BadgePercent className="w-4 h-4" />
+                    <p className="font-medium">Promo codes</p>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>

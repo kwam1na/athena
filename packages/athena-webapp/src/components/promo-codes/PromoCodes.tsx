@@ -1,35 +1,35 @@
-import { columns } from "./products-table/components/columns";
-import { DataTable } from "./products-table/components/data-table";
-import { EmptyState } from "./states/empty/empty-state";
-import { PackageXIcon } from "lucide-react";
+import { EmptyState } from "../states/empty/empty-state";
+import { BadgePercent, PackageXIcon } from "lucide-react";
 import { Link } from "@tanstack/react-router";
-import { Button } from "./ui/button";
+import { Button } from "../ui/button";
 import { PlusIcon } from "@radix-ui/react-icons";
 import { Product, Store } from "~/types";
-import useGetActiveStore from "../hooks/useGetActiveStore";
+import { PromoCodesDataTable } from "./table/data-table";
+import { columns } from "./table/columns";
+import useGetActiveStore from "~/src/hooks/useGetActiveStore";
 
-export default function StoreProducts({ products }: { products: Product[] }) {
+export default function PromoCodes({ promoCodes }: { promoCodes: any[] }) {
   const { activeStore } = useGetActiveStore();
 
   return (
     <div className="container mx-auto">
-      {products && products.length > 0 && (
+      {promoCodes && promoCodes.length > 0 && (
         <div className="py-8">
-          <DataTable data={products} columns={columns} />
+          <PromoCodesDataTable data={promoCodes} columns={columns} />
         </div>
       )}
-      {products && products.length == 0 && (
+      {promoCodes && promoCodes.length == 0 && (
         <EmptyState
-          icon={<PackageXIcon className="w-16 h-16 text-muted-foreground" />}
+          icon={<BadgePercent className="w-16 h-16 text-muted-foreground" />}
           text={
             <div className="flex gap-1 text-sm">
-              <p className="text-muted-foreground">No products in</p>
+              <p className="text-muted-foreground">No promo codes for</p>
               <p className="font-medium">{activeStore?.name}</p>
             </div>
           }
           cta={
             <Link
-              to="/$orgUrlSlug/store/$storeUrlSlug/products/new"
+              to="/$orgUrlSlug/store/$storeUrlSlug/promo-codes/new"
               params={(prev) => ({
                 ...prev,
                 storeUrlSlug: prev.storeUrlSlug!,
@@ -38,7 +38,7 @@ export default function StoreProducts({ products }: { products: Product[] }) {
             >
               <Button variant={"outline"}>
                 <PlusIcon className="w-3 h-3 mr-2" />
-                Add product
+                Add code
               </Button>
             </Link>
           }

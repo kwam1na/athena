@@ -1,18 +1,11 @@
-import { useQuery } from "convex/react";
 import StoreProducts from "./StoreProducts";
 import View from "./View";
-import useGetActiveStore from "@/hooks/useGetActiveStore";
-import { api } from "~/convex/_generated/api";
+import { useGetProducts } from "../hooks/useGetProducts";
 
 export default function StoreProductsView() {
-  const { activeStore } = useGetActiveStore();
+  const products = useGetProducts();
 
-  const products = useQuery(
-    api.inventory.products.getAll,
-    activeStore?._id ? { storeId: activeStore._id } : "skip"
-  );
-
-  if (!activeStore || !products) return null;
+  if (!products) return null;
 
   const Navigation = () => {
     return (
@@ -33,7 +26,7 @@ export default function StoreProductsView() {
       className="bg-background"
       header={hasProducts && <Navigation />}
     >
-      <StoreProducts store={activeStore} products={products} />
+      <StoreProducts products={products} />
     </View>
   );
 }

@@ -1,5 +1,5 @@
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { Archive, Circle, CircleDashed, Palette, Ruler } from "lucide-react";
+import { Archive, Circle, CircleDashed } from "lucide-react";
 import { useProduct } from "~/src/contexts/ProductContext";
 
 function ProductAvailabilityToggleGroup() {

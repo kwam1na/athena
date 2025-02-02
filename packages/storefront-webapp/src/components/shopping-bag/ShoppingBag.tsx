@@ -188,7 +188,7 @@ export default function ShoppingBag() {
                     <motion.div
                       exit="exit"
                       variants={cellVariants}
-                      className="relative z-10 flex gap-4 items-center"
+                      className="relative z-10 flex gap-8 items-center"
                     >
                       <Link
                         key={index}
@@ -201,14 +201,16 @@ export default function ShoppingBag() {
                         <img
                           src={(item as any).productImage || placeholder}
                           alt={(item as any).productName || "product image"}
-                          className="w-32 h-32 lg:w-48 lg:h-48 object-cover rounded-lg"
+                          className="w-32 h-32 lg:w-40 lg:h-40 object-cover rounded-lg"
                         />
                       </Link>
 
                       <div className="flex-1 space-y-2 lg:space-y-6 text-sm">
                         <div className="flex flex-col gap-2 lg:gap-4">
-                          <h2>{item && getProductName(item)}</h2>
-                          <p className="text-sm text-muted-foreground">
+                          <h2 className="font-medium">
+                            {item && getProductName(item)}
+                          </h2>
+                          <p className="text-xs text-muted-foreground">
                             {item.price
                               ? formatter.format(item.price * item.quantity)
                               : "Product unavailable"}
@@ -222,7 +224,7 @@ export default function ShoppingBag() {
                               })
                             }
                             disabled={isUpdatingBag || !item.price}
-                            className="w-12 py-2 bg-background text-black"
+                            className="w-12 py-2 bg-background text-xs"
                           >
                             {[...Array(10)].map((_, i) => (
                               <option key={i + 1} value={i + 1}>
