@@ -1,6 +1,6 @@
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { DollarSign, Percent } from "lucide-react";
-import { DiscountType } from "../AddPromoCodeView";
+import { DiscountType } from "../PromoCodeView";
 
 function DiscountTypeToggleGroup({
   discountType,

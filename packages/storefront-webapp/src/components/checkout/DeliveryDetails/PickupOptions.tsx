@@ -44,6 +44,7 @@ export const PickupOptions = () => {
           updateState({
             deliveryMethod: "pickup",
             pickupLocation: "wigclub-hair-studio",
+            billingDetails: null,
           });
         }}
         selected={isPickup}

@@ -28,6 +28,12 @@ type UnavailableProducts = {
   productSkuId: string;
 }[];
 
+export type Discount = {
+  code: string;
+  type: "percentage" | "amount";
+  value: number;
+};
+
 export const useShoppingBag = () => {
   const queryClient = useQueryClient();
 
@@ -36,6 +42,8 @@ export const useShoppingBag = () => {
   const [action, setAction] = useState<ShoppingBagAction>("idle");
   const [unavailableProducts, setUnavailableProducts] =
     useState<UnavailableProducts>([]);
+
+  const [discount, setDiscount] = useState<Discount | null>(null);
 
   const { userId, organizationId, storeId } = useStoreContext();
 
@@ -447,6 +455,8 @@ export const useShoppingBag = () => {
   };
 
   return {
+    discount,
+    setDiscount,
     bagAction: action,
     addProductToBag,
     bag,

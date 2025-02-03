@@ -304,7 +304,7 @@ export default function HomePage() {
                   y: 0,
                   transition: firstLoad
                     ? { ease: "easeOut", duration: 0.4, delay: 0.3 }
-                    : { duration: 0 },
+                    : { ease: "easeOut", duration: 0, delay: 0.3 },
                 }}
                 className="text-2xl text-center"
               >
@@ -317,7 +317,7 @@ export default function HomePage() {
                   y: 0,
                   transition: firstLoad
                     ? { ease: "easeOut", duration: 0.4, delay: 0.6 }
-                    : { duration: 0 },
+                    : { ease: "easeOut", duration: 0, delay: 0.3 },
                 }}
                 className="font-lavish text-9xl text-center text-accent2"
               >

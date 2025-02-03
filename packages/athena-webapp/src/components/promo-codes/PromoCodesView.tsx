@@ -3,18 +3,18 @@ import View from "../View";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { api } from "~/convex/_generated/api";
 import PromoCodes from "./PromoCodes";
+import { currencyFormatter } from "~/src/lib/utils";
+import { PromoCode } from "~/types";
 
 export default function PromoCodesView() {
   const { activeStore } = useGetActiveStore();
 
-  const products = useQuery(
-    api.inventory.products.getAll,
+  const promoCodes = useQuery(
+    api.inventory.promoCode.getAll,
     activeStore?._id ? { storeId: activeStore._id } : "skip"
   );
 
-  const promoCodes: any[] = [];
-
-  if (!activeStore || !products) return null;
+  if (!activeStore || !promoCodes) return null;
 
   const Navigation = () => {
     return (
@@ -26,7 +26,21 @@ export default function PromoCodesView() {
     );
   };
 
+  console.log(promoCodes);
+
+  const formatter = currencyFormatter(activeStore.currency);
+
   const hasCodes = promoCodes.length > 0;
+
+  const promoCodesFormatted = promoCodes.map((promoCode: PromoCode) => {
+    return {
+      ...promoCode,
+      discountValue:
+        promoCode.discountType === "amount"
+          ? formatter.format(promoCode.discountValue)
+          : `${promoCode.discountValue}%`,
+    };
+  });
 
   return (
     <View
@@ -35,7 +49,7 @@ export default function PromoCodesView() {
       className="bg-background"
       header={hasCodes && <Navigation />}
     >
-      <PromoCodes promoCodes={promoCodes} />
+      <PromoCodes promoCodes={promoCodesFormatted} />
     </View>
   );
 }

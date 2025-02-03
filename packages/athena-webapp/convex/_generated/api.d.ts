@@ -48,6 +48,7 @@ import type * as inventory_organizationMembers from "../inventory/organizationMe
 import type * as inventory_organizations from "../inventory/organizations.js";
 import type * as inventory_productSku from "../inventory/productSku.js";
 import type * as inventory_products from "../inventory/products.js";
+import type * as inventory_promoCode from "../inventory/promoCode.js";
 import type * as inventory_stores from "../inventory/stores.js";
 import type * as inventory_subcategories from "../inventory/subcategories.js";
 import type * as otp_ResendOTP from "../otp/ResendOTP.js";
@@ -139,6 +140,7 @@ declare const fullApi: ApiFromModules<{
   "inventory/organizations": typeof inventory_organizations;
   "inventory/productSku": typeof inventory_productSku;
   "inventory/products": typeof inventory_products;
+  "inventory/promoCode": typeof inventory_promoCode;
   "inventory/stores": typeof inventory_stores;
   "inventory/subcategories": typeof inventory_subcategories;
   "otp/ResendOTP": typeof otp_ResendOTP;

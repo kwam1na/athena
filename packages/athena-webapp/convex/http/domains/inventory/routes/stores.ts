@@ -551,4 +551,24 @@ storeRoutes.post("/:storeId/users/:userId/orders/owner", async (c) => {
   }
 });
 
+storeRoutes.post("/:storeId/users/:userId/promoCodes", async (c) => {
+  const userId = c.req.param("userId");
+
+  if (!userId) {
+    return c.json({ error: "Customer id missing" }, 404);
+  }
+
+  const { code } = await c.req.json();
+
+  try {
+    const res = await c.env.runMutation(api.inventory.promoCode.redeem, {
+      code,
+    });
+
+    return c.json(res);
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, 400);
+  }
+});
+
 export { storeRoutes };

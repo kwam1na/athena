@@ -1,5 +1,14 @@
 import { useState } from "react";
-import { Heart, Info, InfoIcon, Trash2 } from "lucide-react";
+import {
+  AlertCircle,
+  ArrowRight,
+  Heart,
+  Info,
+  InfoIcon,
+  OctagonAlert,
+  Trash2,
+  TriangleAlert,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useStoreContext } from "@/contexts/StoreContext";
 import { Link, useNavigate } from "@tanstack/react-router";
@@ -142,11 +151,20 @@ export default function ShoppingBag() {
   return (
     <FadeIn className="container mx-auto max-w-[1024px] px-6 xl:px-0 space-y-8 lg:space-y-24 py-8">
       {!isBagEmpty && (
-        <div className="space-y-2">
+        <div className="space-y-4">
           {Boolean(data && data.length > 0) && (
             <PendingItem session={data?.[0]} count={data?.length || 0} />
           )}
           <h1 className="text-lg font-light">Bag</h1>
+
+          {areProductsUnavailable && (
+            <div className="flex items-center">
+              <AlertCircle className="w-4 h-4 mr-2" />
+              <p className="text-xs">
+                Some items in your bag are no longer available
+              </p>
+            </div>
+          )}
         </div>
       )}
 
@@ -223,8 +241,8 @@ export default function ShoppingBag() {
                                 itemId: item._id,
                               })
                             }
-                            disabled={isUpdatingBag || !item.price}
-                            className="w-12 py-2 bg-background text-xs"
+                            disabled={!item.price}
+                            className={`w-12 py-2 bg-background text-xs ${isUpdatingBag ? "pointer-events-none" : ""}`}
                           >
                             {[...Array(10)].map((_, i) => (
                               <option key={i + 1} value={i + 1}>
@@ -249,7 +267,8 @@ export default function ShoppingBag() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            disabled={isUpdatingBag || !item.price}
+                            className={`${isUpdatingBag ? "pointer-events-none" : ""}`}
+                            disabled={!item.price}
                             onClick={() => {
                               setBagAction("moving-to-saved-bag");
                               moveItemFromBagToSaved(item);
@@ -261,7 +280,7 @@ export default function ShoppingBag() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            disabled={isUpdatingBag}
+                            className={`${isUpdatingBag ? "pointer-events-none" : ""}`}
                             onClick={() => {
                               setBagAction("deleting-from-bag");
                               deleteItemFromBag(item._id);
@@ -279,7 +298,7 @@ export default function ShoppingBag() {
           </div>
 
           {/* Cart Summary */}
-          <div className="hidden md:block relative">
+          {/* <div className="hidden md:block relative">
             <div className="space-y-16 rounded-lg sticky top-8">
               <div className="space-y-4 text-sm">
                 <div className="flex justify-between mb-2">
@@ -321,10 +340,54 @@ export default function ShoppingBag() {
                 </LoadingButton>
               </div>
             </div>
-          </div>
+          </div> */}
+
+          {isNavbarShowing && (
+            <div className="fixed bottom-0 left-0 w-full z-50">
+              <motion.div
+                initial={{ opacity: 0, y: 32 }}
+                animate={{
+                  opacity: 1,
+                  y: 0,
+                  transition: { ease: "easeOut", duration: 0.3, delay: 0.5 },
+                }}
+                className="space-y-8 flex p-4 bg-accent5"
+              >
+                <div className="ml-auto flex gap-12">
+                  <div className="space-y-2">
+                    <div className="flex gap-8 text-sm text-accent2">
+                      <strong>TOTAL</strong>
+                      <strong>{formatter.format(total)}</strong>
+                    </div>
+
+                    <p className="text-xs">* excluding taxes and shipping</p>
+                  </div>
+
+                  <div className="space-y-4">
+                    <LoadingButton
+                      isLoading={isProcessingCheckoutRequest}
+                      onClick={handleOnCheckoutClick}
+                      className="group w-[240px]"
+                      variant={"clear"}
+                    >
+                      Checkout
+                      <ArrowRight className="w-4 h-4 ml-2 -me-1 ms-2 transition-transform group-hover:translate-x-0.5" />
+                    </LoadingButton>
+
+                    {error && (
+                      <div className="flex text-xs items-center">
+                        <OctagonAlert className="w-4 h-4 mr-2" />
+                        <p>{error}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </motion.div>
+            </div>
+          )}
 
           {/* Mobile Cart Summary */}
-          {isNavbarShowing && (
+          {/* {isNavbarShowing && (
             <div className="flex flex-col md:hidden fixed bottom-0 left-0 w-full bg-background p-8 shadow-md z-50 min-h-auto">
               <div className="flex justify-between text-lg font-medium mb-4">
                 <span>Total</span>
@@ -356,7 +419,7 @@ export default function ShoppingBag() {
                 </LoadingButton>
               </div>
             </div>
-          )}
+          )} */}
         </div>
       )}
     </FadeIn>

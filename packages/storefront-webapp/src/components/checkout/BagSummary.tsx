@@ -9,6 +9,13 @@ import { Separator } from "../ui/separator";
 import placeholder from "@/assets/placeholder.png";
 import { motion } from "framer-motion";
 import { Input } from "../ui/input";
+import { Tag } from "lucide-react";
+import InputWithEndButton from "../ui/input-with-end-button";
+import { useMutation } from "@tanstack/react-query";
+import { redeemPromoCode } from "@/api/promoCodes";
+import { useAuth } from "@/hooks/useAuth";
+import { useState } from "react";
+import { set } from "zod";
 
 function SummaryItem({
   item,
@@ -55,13 +62,63 @@ export function BagSummaryItems({ items }: { items: ProductSku[] }) {
 
 function BagSummary() {
   const { formatter } = useStoreContext();
-  const { bagSubtotal } = useShoppingBag();
+  const { bagSubtotal, discount, setDiscount } = useShoppingBag();
   const { checkoutState } = useCheckout();
+  const { store } = useStoreContext();
+  const { userId, guestId } = useAuth();
+  const [code, setCode] = useState("");
+  const [isInvalidCode, setIsInvalidCode] = useState(false);
 
-  const total = (checkoutState.deliveryFee ?? 0) + bagSubtotal;
+  const discountValue =
+    (discount?.type === "percentage"
+      ? (bagSubtotal * discount?.value) / 100
+      : discount?.value) || 0;
+
+  const total = (checkoutState.deliveryFee ?? 0) + bagSubtotal - discountValue;
+
+  const discountText =
+    discount?.type === "percentage"
+      ? `${discount.value}%`
+      : `${formatter.format(discountValue)}`;
+
+  const redeemPromoCodeMutation = useMutation({
+    mutationFn: redeemPromoCode,
+    onSuccess: (data: any) => {
+      if (data.promoCode) {
+        setDiscount({
+          code: data.promoCode.code,
+          value: data.promoCode.discountValue,
+          type: data.promoCode.discountType,
+        });
+      } else {
+        setIsInvalidCode(true);
+      }
+    },
+  });
+
+  const handleRedeemPromoCode = () => {
+    const storeFrontUserId = userId || guestId;
+
+    setIsInvalidCode(false);
+
+    if (!storeFrontUserId || !store) return;
+
+    redeemPromoCodeMutation.mutate({
+      code,
+      storeId: store._id,
+      organizationId: store.organizationId,
+      storeFrontUserId,
+    });
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && code.trim()) {
+      handleRedeemPromoCode();
+    }
+  };
 
   return (
-    <motion.div className="py-6 bg-accent5 shadow-sm rounded-lg w-[80vw] lg:w-[30vw] space-y-12">
+    <motion.div className="py-6 bg-background shadow-sm rounded-lg w-[80vw] lg:w-[30vw] space-y-12">
       <div className="flex items-center px-6 w-full">
         <p>Order summary</p>
         <div className="ml-auto">
@@ -79,9 +136,30 @@ function BagSummary() {
 
       {/* Promo Code */}
       <div className="px-8 space-y-2">
-        {/* <p className="text-sm">Promo code</p> */}
-        <div>
-          <Input type="text" placeholder="Enter promo code" />
+        <div className="space-y-6">
+          <div className="space-y-4">
+            <InputWithEndButton
+              isLoading={redeemPromoCodeMutation.isPending}
+              value={code}
+              onInputChange={(value) => setCode(value.toUpperCase())}
+              placeholder="Enter promo code"
+              buttonText="Apply"
+              onButtonClick={handleRedeemPromoCode}
+              onKeyDown={handleKeyDown}
+            />
+            {isInvalidCode && (
+              <p className="px-2 text-xs text-destructive">Invalid code</p>
+            )}
+          </div>
+          {discount && (
+            <div className="flex items-center px-4">
+              <Tag className="w-3.5 h-3.5 mr-2" />
+              <p className="text-sm font-medium">
+                {discount?.code} -{" "}
+                <strong>{discountText} off entire order</strong>
+              </p>
+            </div>
+          )}
         </div>
       </div>
 
@@ -99,6 +177,12 @@ function BagSummary() {
             <p className="text-sm">
               {formatter.format(checkoutState.deliveryFee)}
             </p>
+          </div>
+        )}
+        {Boolean(discountValue) && (
+          <div className="flex justify-between">
+            <p className="text-sm">Discounts</p>
+            <p className="text-sm">- {formatter.format(discountValue)}</p>
           </div>
         )}
         <div className="flex justify-between font-medium">

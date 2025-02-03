@@ -243,11 +243,11 @@ export const PaymentSection = ({ form }: CheckoutFormSectionProps) => {
           <LoadingButton
             isLoading={isProceedingToPayment}
             onClick={onSubmit}
-            className="w-full"
+            className="w-full group"
             disabled={!didAcceptTerms}
           >
             Proceed to payment
-            <ArrowRight className="w-4 h-4 ml-2" />
+            <ArrowRight className="w-4 h-4 ml-2 -me-1 ms-2 transition-transform group-hover:translate-x-0.5" />
           </LoadingButton>
         </motion.div>
       )}

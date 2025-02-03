@@ -190,8 +190,7 @@ export default function MobileProductPage() {
             <div className="flex gap-4">
               <LoadingButton
                 className="w-[288px]"
-                isLoading={false}
-                disabled={isUpdatingBag}
+                isLoading={isUpdatingBag}
                 onClick={handleUpdateBag}
               >
                 {isUpdatingBag ? "Adding to Bag.." : "Add to Bag"}
@@ -199,8 +198,7 @@ export default function MobileProductPage() {
 
               <LoadingButton
                 variant={"outline"}
-                isLoading={false}
-                disabled={isUpdatingSavedBag}
+                isLoading={isUpdatingBag}
                 onClick={handleUpdateSavedBag}
               >
                 {!savedBagItem && (

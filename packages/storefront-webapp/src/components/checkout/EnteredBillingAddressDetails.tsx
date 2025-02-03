@@ -29,12 +29,12 @@ export const EnteredBillingAddressDetails = () => {
     >
       <p>{`Billing address:`}</p>
       <div className="space-y-2">
-        <p>{checkoutState.billingDetails.address}</p>
+        <p>{checkoutState.billingDetails.address ?? ""}</p>
         {checkoutState.isUSOrder && (
           <p>{`${checkoutState.billingDetails.city}, ${checkoutState.billingDetails.state}, ${checkoutState.billingDetails.zip}`}</p>
         )}
         {checkoutState.isROWOrder && (
-          <p>{`${checkoutState.billingDetails.city}`}</p>
+          <p>{`${checkoutState.billingDetails.city ?? ""}`}</p>
         )}
 
         {checkoutState.isGhanaOrder && (

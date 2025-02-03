@@ -45,4 +45,8 @@ export type OnlineOrderItem = Doc<"onlineOrderItem">;
 
 export type OnlineOrder = Doc<"onlineOrder">;
 
+export type PromoCode = Doc<"promoCode">;
+
+export type PromoCodeItem = Doc<"promoCodeItem">;
+
 export type StoreFrontUser = Doc<"storeFrontUser">;

@@ -38,6 +38,7 @@ export const BillingDetailsSection = ({ form }: CheckoutFormSectionProps) => {
     form.setValue("billingDetails.city", "");
     form.setValue("billingDetails.state", "");
     form.setValue("billingDetails.zip", "");
+    form.setValue("billingDetails.country", "");
   };
 
   const previousCountryRef = useRef(
@@ -60,6 +61,12 @@ export const BillingDetailsSection = ({ form }: CheckoutFormSectionProps) => {
 
     previousCountryRef.current = country;
   }, [country]);
+
+  useEffect(() => {
+    if (!checkoutState.billingDetails) {
+      clearForm();
+    }
+  }, [checkoutState.billingDetails]);
 
   const handleUseBillingAddressOnFile = (checked: CheckedState) => {
     if (checked as Boolean) {

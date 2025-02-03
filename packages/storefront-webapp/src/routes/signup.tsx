@@ -22,6 +22,7 @@ import {
   redirect,
   useNavigate,
 } from "@tanstack/react-router";
+import { ArrowRight } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
@@ -179,11 +180,13 @@ const Signup = () => {
               </div>
 
               <LoadingButton
-                className="w-[96px]"
+                className="group"
+                variant={"clear"}
                 isLoading={verifyMutation.isPending}
                 type="submit"
               >
                 Continue
+                <ArrowRight className="w-4 h-4 ml-2 -me-1 ms-2 transition-transform group-hover:translate-x-0.5" />
               </LoadingButton>
 
               <div>
@@ -203,12 +206,9 @@ const Signup = () => {
                 <p className="text-sm text-muted-foreground">
                   Already have an account?
                 </p>
-                <Link
-                  to="/login"
-                  className="flex items-center gap-1 hover:underline"
-                >
+                <Link to="/login" className="flex items-center group">
                   <p className="text-sm">Login</p>
-                  <ArrowRightIcon className="w-3 h-3" />
+                  <ArrowRight className="w-3.5 h-3.5 ml-2 -me-1 ms-2 transition-transform group-hover:translate-x-0.5" />
                 </Link>
               </div>
             </div>

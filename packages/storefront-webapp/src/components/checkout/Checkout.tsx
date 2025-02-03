@@ -69,7 +69,7 @@ const MainComponent = () => {
             x: 0,
             transition: { ease: "easeOut" },
           }}
-          className="hidden md:block relative order-1 lg:order-2 lg:col-span-6 bg-accent3"
+          className="hidden md:block relative order-1 lg:order-2 lg:col-span-6 bg-accent5"
         >
           <div className="sticky top-0 pt-32 pb-24 flex items-start justify-center min-h-screen flex-grow">
             <BagSummary />

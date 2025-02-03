@@ -1,35 +1,31 @@
 import { ColumnDef } from "@tanstack/react-table";
 
 import { DataTableColumnHeader } from "./data-table-column-header";
-import {
-  capitalizeFirstLetter,
-  getRelativeTime,
-  slugToWords,
-} from "@/lib/utils";
 import { Link } from "@tanstack/react-router";
-import { OnlineOrder } from "~/types";
-import { CheckCircle2, Circle, CircleDashed, RotateCcw } from "lucide-react";
+import { PromoCode } from "~/types";
+import { capitalizeFirstLetter, slugToWords } from "~/src/lib/utils";
+import { capitalizeWords } from "~/convex/utils";
 
-export const columns: ColumnDef<any>[] = [
+export const columns: ColumnDef<PromoCode>[] = [
   {
-    accessorKey: "orderNumber",
+    accessorKey: "code",
     header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Product" />
+      <DataTableColumnHeader column={column} title="Promo code" />
     ),
     cell: ({ row }) => {
       return (
         <div className="flex space-x-2">
           <Link
-            to="/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug"
+            to="/$orgUrlSlug/store/$storeUrlSlug/promo-codes/$promoCodeSlug"
             params={(prev) => ({
               ...prev,
               orgUrlSlug: prev.orgUrlSlug!,
               storeUrlSlug: prev.storeUrlSlug!,
-              orderSlug: row.original._id,
+              promoCodeSlug: row.original._id,
             })}
             className="flex items-center gap-8"
           >
-            <span className="font-medium">{`#${row.getValue("orderNumber")}`}</span>
+            <span className="font-medium">{row.getValue("code")}</span>
           </Link>
         </div>
       );
@@ -38,46 +34,27 @@ export const columns: ColumnDef<any>[] = [
     enableHiding: false,
   },
   {
-    accessorKey: "customerDetails",
+    accessorKey: "discountValue",
     header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Code" />
+      <DataTableColumnHeader column={column} title="Discount" />
     ),
     cell: ({ row }) => {
-      const customer = row.getValue("customerDetails") as Record<string, any>;
+      const span = slugToWords(row.original.span);
       return (
         <Link
-          to="/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug"
+          to="/$orgUrlSlug/store/$storeUrlSlug/promo-codes/$promoCodeSlug"
           params={(prev) => ({
             ...prev,
             orgUrlSlug: prev.orgUrlSlug!,
             storeUrlSlug: prev.storeUrlSlug!,
-            orderSlug: row.original._id,
+            promoCodeSlug: row.original._id,
           })}
         >
-          {customer?.email}
+          <strong>{row.original.discountValue}</strong> off {span}
         </Link>
       );
     },
     enableSorting: false,
     enableHiding: false,
   },
-  // {
-  //   accessorKey: "_creationTime",
-  //   header: ({ column }) => (
-  //     <DataTableColumnHeader column={column} title="Placed" />
-  //   ),
-  //   cell: ({ row }) => (
-  //     <Link
-  //       to="/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug"
-  //       params={(prev) => ({
-  //         ...prev,
-  //         orgUrlSlug: prev.orgUrlSlug!,
-  //         storeUrlSlug: prev.storeUrlSlug!,
-  //         orderSlug: row.original._id,
-  //       })}
-  //     >
-  //       <div>{getRelativeTime(row.getValue("_creationTime"))}</div>
-  //     </Link>
-  //   ),
-  // },
 ];

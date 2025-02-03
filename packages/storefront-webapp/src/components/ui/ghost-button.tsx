@@ -17,7 +17,7 @@ export const GhostButton: React.FC<GhostButtonProps> = ({
       variant={"ghost"}
       {...props}
       className={cn(
-        `${selected ? "border border-[#EC4683] text-[#EC4683]" : "border border-background-muted"}`,
+        `${selected ? "border border-[#EC4683] text-[#EC4683] shadow-md" : "border border-background-muted"} hover:shadow-md hover:border-[#EC4683]`,
         className
       )}
     >

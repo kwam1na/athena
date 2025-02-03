@@ -131,7 +131,7 @@ export function PromoCodesDataTable<TData, TValue>({
             </TableBody>
           </Table>
         </div>
-        <DataTablePagination table={table} />
+        {/* <DataTablePagination table={table} /> */}
       </>
     </div>
   );

@@ -1,8 +1,12 @@
 import { createContext, useContext, useState } from "react";
+import { Id } from "~/convex/_generated/dataModel";
+import { ProductSku } from "~/types";
 
 interface SelectedProductsContextType {
-  selectedProductSkus: Set<string>;
-  setSelectedProductSkus: React.Dispatch<React.SetStateAction<Set<string>>>;
+  selectedProductSkus: Set<Id<"productSku">>;
+  setSelectedProductSkus: React.Dispatch<
+    React.SetStateAction<Set<Id<"productSku">>>
+  >;
 }
 
 const SelectedProductsContext = createContext<
@@ -15,7 +19,7 @@ export function SelectedProductsProvider({
   children: React.ReactNode;
 }) {
   const [selectedProductSkus, setSelectedProductSkus] = useState(
-    new Set<string>(new Set())
+    new Set<Id<"productSku">>(new Set())
   );
 
   return (

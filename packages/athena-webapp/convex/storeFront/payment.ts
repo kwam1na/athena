@@ -6,8 +6,7 @@ import { orderDetailsSchema } from "../schemas/storeFront";
 import { sendOrderEmail } from "../sendgrid";
 import { currencyFormatter, formatDate, getAddressString } from "../utils";
 
-// const appUrl = process.env.APP_URL;
-const appUrl = "http://localhost:5174";
+const appUrl = process.env.APP_URL;
 
 export const createTransaction = action({
   args: {

@@ -204,12 +204,12 @@ export default function ProductPage() {
               opacity: 1,
               transition: { duration: 0.4, delay: 0.1, ease: "easeInOut" },
             }}
-            className="col-span-1 md:col-span-2 pt-8 px-6 lg:px-16 space-y-12"
+            className="col-span-1 md:col-span-2 pt-8 px-6 lg:px-16 space-y-16"
           >
-            <div className="space-y-8">
+            <div className="space-y-16">
               <div className="space-y-6">
-                <p className="text-xl">{getProductName(selectedSku)}</p>
-                <p className="text-muted-foreground">
+                <p className="text-3xl">{getProductName(selectedSku)}</p>
+                <p className="text-lg text-muted-foreground">
                   {formatter.format(selectedSku.price)}
                 </p>
               </div>
@@ -229,26 +229,43 @@ export default function ProductPage() {
 
             <div className="space-y-4">
               <div className="flex gap-4">
-                <LoadingButton
-                  className="w-[288px]"
-                  isLoading={false}
-                  disabled={isUpdatingBag}
-                  onClick={handleUpdateBag}
+                <motion.div
+                  initial={{ opacity: 0, y: 4 }}
+                  animate={{
+                    opacity: 1,
+                    y: 0,
+                    transition: { ease: "easeInOut" },
+                  }}
                 >
-                  {isUpdatingBag ? "Adding to Bag.." : "Add to Bag"}
-                </LoadingButton>
+                  <LoadingButton
+                    className="w-[288px]"
+                    isLoading={false}
+                    onClick={handleUpdateBag}
+                  >
+                    {isUpdatingBag ? "Adding to Bag.." : "Add to Bag"}
+                  </LoadingButton>
+                </motion.div>
 
-                <LoadingButton
-                  variant={"outline"}
-                  isLoading={false}
-                  disabled={isUpdatingSavedBag}
-                  onClick={handleUpdateSavedBag}
+                <motion.div
+                  initial={{ opacity: 0, y: 4 }}
+                  animate={{
+                    opacity: 1,
+                    y: 0,
+                    transition: { ease: "easeInOut" },
+                  }}
                 >
-                  {!savedBagItem && (
-                    <HeartIcon className="w-4 h-4 text-muted-foreground" />
-                  )}
-                  {savedBagItem && <HeartIconFilled width={16} height={16} />}
-                </LoadingButton>
+                  <LoadingButton
+                    variant={"outline"}
+                    isLoading={false}
+                    onClick={handleUpdateSavedBag}
+                    className={`${savedBagItem ? "border-[#EC4683] shadow-md" : ""} hover:shadow-md`}
+                  >
+                    {!savedBagItem && (
+                      <HeartIcon className="w-4 h-4 text-muted-foreground" />
+                    )}
+                    {savedBagItem && <HeartIconFilled width={16} height={16} />}
+                  </LoadingButton>
+                </motion.div>
               </div>
 
               {addedItemSuccessfully == false && (

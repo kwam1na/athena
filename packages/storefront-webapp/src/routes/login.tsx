@@ -21,6 +21,7 @@ import {
   redirect,
   useNavigate,
 } from "@tanstack/react-router";
+import { ArrowRight } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
@@ -130,11 +131,13 @@ const Login = () => {
               </div>
 
               <LoadingButton
-                className="w-[96px]"
+                className="group"
                 isLoading={verifyMutation.isPending}
                 type="submit"
+                variant={"clear"}
               >
                 Continue
+                <ArrowRight className="w-4 h-4 ml-2 -me-1 ms-2 transition-transform group-hover:translate-x-0.5" />
               </LoadingButton>
 
               <div className="flex gap-2 pt-4">
