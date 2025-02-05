@@ -120,6 +120,7 @@ export const create = mutation({
       deliveryOption: null,
       deliveryFee: null,
       pickupLocation: null,
+      discount: null,
     });
 
     // Create session items
@@ -350,6 +351,10 @@ function createPatchObject(args: any) {
       deliveryFee: args.orderDetails.deliveryFee,
       pickupLocation: args.orderDetails.pickupLocation,
     });
+
+    if (args.orderDetails.discount) {
+      patchObject.discount = args.orderDetails.discount;
+    }
   }
 
   return patchObject;

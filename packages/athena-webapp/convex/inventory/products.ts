@@ -495,6 +495,7 @@ export const updateSku = mutation({
     sku: v.optional(v.string()),
     quantityAvailable: v.optional(v.number()),
     price: v.optional(v.number()),
+    retailPrice: v.optional(v.number()),
     inventoryCount: v.optional(v.number()),
     unitCost: v.optional(v.number()),
     attributes: v.optional(v.record(v.string(), v.any())),
@@ -519,6 +520,7 @@ export const update = mutation({
     availability: v.optional(
       v.union(v.literal("draft"), v.literal("live"), v.literal("archived"))
     ),
+    areFeesAbsorbed: v.optional(v.boolean()),
     attributes: v.optional(v.record(v.string(), v.any())),
     name: v.optional(v.string()),
     slug: v.optional(v.string()),

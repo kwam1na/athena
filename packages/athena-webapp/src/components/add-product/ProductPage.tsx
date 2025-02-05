@@ -10,6 +10,7 @@ import { api } from "~/convex/_generated/api";
 import { WigTypeView } from "./WigType";
 import useGetActiveStore from "../../hooks/useGetActiveStore";
 import { ScrollArea } from "../ui/scroll-area";
+import { ProcessingFeesView } from "./ProcessingFees";
 
 export default function ProductPage() {
   const { productData } = useProduct();
@@ -31,6 +32,7 @@ export default function ProductPage() {
         </div>
         <ProductImagesView />
         <ProductStockView />
+        <ProcessingFeesView />
       </div>
 
       <div className="w-full space-y-8">

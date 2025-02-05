@@ -16,11 +16,15 @@ export const redeem = mutation({
       return { success: false, message: "Invalid promo code" };
     }
 
-    // if (inviteCode.redeemedAt) {
-    //   return { success: false, message: "Invite code already redeemed" };
-    // }
+    // check if this code is already redeemed
+    const redeemed = await ctx.db
+      .query("redeemedPromoCode")
+      .filter((q) => q.eq(q.field("promoCodeId"), promoCode._id))
+      .first();
 
-    // await ctx.db.patch(inviteCode._id, { redeemedAt: Date.now() });
+    if (redeemed) {
+      return { success: false, message: "Promo code already redeemed" };
+    }
 
     return { success: true, promoCode };
   },

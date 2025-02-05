@@ -180,9 +180,7 @@ function LayoutComponent() {
       </div>
 
       <div className="container mx-auto max-w-[1024px] flex py-8 gap-4">
-        <div
-          className={"col-span-12 container mx-auto px-6 lg:px-0 lg:h-screen"}
-        >
+        <div className={"col-span-12 container mx-auto px-6 lg:px-0"}>
           <Outlet />
         </div>
       </div>

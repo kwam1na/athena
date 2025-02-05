@@ -34,6 +34,7 @@ export const orderDetailsSchema = v.object({
   deliveryOption: v.union(v.string(), v.null()),
   deliveryInstructions: v.optional(v.string()),
   pickupLocation: v.union(v.string(), v.null()),
+  discount: v.union(v.record(v.string(), v.any()), v.null()),
 });
 
 export const onlineOrderSchema = v.object({
@@ -55,6 +56,7 @@ export const onlineOrderSchema = v.object({
   didRefundDeliveryFee: v.optional(v.boolean()),
   didSendCompletedEmail: v.optional(v.boolean()),
   didSendReadyEmail: v.optional(v.boolean()),
+  discount: v.union(v.record(v.string(), v.any()), v.null()),
   externalReference: v.optional(v.string()),
   externalTransactionId: v.optional(v.string()),
   hasVerifiedPayment: v.boolean(),

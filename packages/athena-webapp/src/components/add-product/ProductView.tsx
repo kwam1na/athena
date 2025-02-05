@@ -26,11 +26,9 @@ import { useAction, useMutation } from "convex/react";
 import { api } from "~/convex/_generated/api";
 import { toSlug } from "../../lib/utils";
 import { Id } from "~/convex/_generated/dataModel";
-// import { deleteDirectoryInS3 } from "../../lib/aws";
 import { productSchema } from "../../lib/schemas/product";
 import { useAuth } from "../../hooks/useAuth";
 import PageHeader from "../common/PageHeader";
-import { arrayBufferToWebP } from "webp-converter-browser";
 
 function ProductViewContent() {
   const { productData, revertChanges, productVariants, updateProductVariants } =
@@ -115,8 +113,6 @@ function ProductViewContent() {
       };
 
       const validatedProductData = productSchema.parse(mainProductData);
-
-      console.log("validatedProductData", validatedProductData);
 
       const product = await createProduct({
         ...validatedProductData,

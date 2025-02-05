@@ -25,8 +25,7 @@ import { EnteredBillingAddressDetails } from "./EnteredBillingAddressDetails";
 import { US_STATES } from "@/lib/states";
 
 export const BillingDetailsSection = ({ form }: CheckoutFormSectionProps) => {
-  const { checkoutState, actionsState, updateActionsState, updateState } =
-    useCheckout();
+  const { checkoutState, updateActionsState, updateState } = useCheckout();
 
   const { user } = useStoreContext();
 
@@ -138,6 +137,7 @@ export const BillingDetailsSection = ({ form }: CheckoutFormSectionProps) => {
             checked={Boolean(
               checkoutState.billingDetails?.billingAddressSameAsDelivery
             )}
+            disabled={checkoutState.didEnterDeliveryDetails == false}
             onCheckedChange={(e) => toggleSameAsDelivery(e)}
             className="h-4 w-4 text-primary border-gray-300 focus:ring-primary"
           />

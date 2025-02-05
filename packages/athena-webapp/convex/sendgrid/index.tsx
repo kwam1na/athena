@@ -48,6 +48,8 @@ export const sendOrderEmail = async (params: {
   order_date: string;
   order_status_messaging: string;
   total: string;
+  delivery_fee?: string;
+  discount?: string;
   items: Array<{
     text: string;
     image: string;
@@ -72,6 +74,8 @@ export const sendOrderEmail = async (params: {
           },
         ],
         dynamic_template_data: {
+          delivery_fee: params.delivery_fee,
+          discount: params.discount,
           store_name: params.store_name,
           order_number: params.order_number,
           order_date: params.order_date,

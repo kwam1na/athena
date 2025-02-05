@@ -5,6 +5,7 @@ import { Address, CheckoutSession, OnlineOrder } from "../../types";
 import { orderDetailsSchema } from "../schemas/storeFront";
 import { sendOrderEmail } from "../sendgrid";
 import { currencyFormatter, formatDate, getAddressString } from "../utils";
+import { getDiscountValue, getOrderAmount } from "../inventory/utils";
 
 const appUrl = process.env.APP_URL;
 
@@ -17,13 +18,20 @@ export const createTransaction = action({
   },
   handler: async (ctx, args) => {
     // throw new Error("Not implemented");
+
+    const amount = getOrderAmount({
+      discount: args.orderDetails.discount,
+      deliveryFee: (args.orderDetails.deliveryFee || 0) * 100,
+      subtotal: args.amount,
+    });
+
     const response = await fetch(
       "https://api.paystack.co/transaction/initialize",
       {
         method: "POST",
         body: JSON.stringify({
           email: args.customerEmail,
-          amount: args.amount.toString(),
+          amount: amount.toString(),
           callback_url: `${appUrl}/shop/checkout/verify`,
           metadata: {
             cancel_action: `${appUrl}/shop/checkout`,
@@ -43,6 +51,7 @@ export const createTransaction = action({
       const res = await response.json();
 
       try {
+        // update the checkout session with the transaction reference
         await ctx.runMutation(
           internal.storeFront.checkoutSession.updateCheckoutSession,
           {
@@ -98,12 +107,26 @@ export const verifyPayment = action({
         }
       );
 
-      const amount = session?.amount || order?.amount;
+      console.log("order ->", order);
+      console.log("session ->", session);
+
+      const subtotal = session?.amount || order?.amount || 0;
+
+      const discount = session?.discount || order?.discount;
+
+      const orderAmountLessDiscounts = getOrderAmount({
+        discount,
+        deliveryFee: (order?.deliveryFee || 0) * 100, // mutiply by 100 to get the amount in cents
+        subtotal,
+      });
+
+      const discountValue = getDiscountValue(subtotal, discount);
 
       // console.log("session", session);
 
       const isVerified = Boolean(
-        res.data.status == "success" && res.data.amount == amount
+        res.data.status == "success" &&
+          res.data.amount == orderAmountLessDiscounts
       );
 
       if (isVerified) {
@@ -153,15 +176,23 @@ export const verifyPayment = action({
                 length: item.length && `${item.length} inches`,
               })) || [];
 
+            console.log("fee and discount", order.deliveryFee, discountValue);
+
             // send confirmation email
             const emailResponse = await sendOrderEmail({
               type: "confirmation",
               customerEmail: order.customerDetails.email,
+              delivery_fee: order.deliveryFee
+                ? formatter.format(order.deliveryFee)
+                : undefined,
+              discount: discountValue
+                ? formatter.format(discountValue / 100)
+                : undefined,
               store_name: "Wigclub",
               order_number: order.orderNumber,
               order_date: formatDate(order._creationTime),
               order_status_messaging: orderStatusMessaging,
-              total: formatter.format(order.amount / 100),
+              total: formatter.format(orderAmountLessDiscounts / 100),
               items,
               pickup_type: order.deliveryMethod,
               pickup_details: pickupDetails,

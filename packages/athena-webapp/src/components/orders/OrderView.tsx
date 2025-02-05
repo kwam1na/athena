@@ -7,7 +7,15 @@ import { PickupDetailsView } from "./PickupDetailsView";
 import { Button } from "../ui/button";
 import { ArrowLeftIcon, CheckCircledIcon } from "@radix-ui/react-icons";
 import { Badge } from "../ui/badge";
-import { AlertCircleIcon, Ban, RotateCcw, Store, Truck } from "lucide-react";
+import {
+  AlertCircleIcon,
+  Ban,
+  RotateCcw,
+  Store,
+  Truck,
+  X,
+  XCircle,
+} from "lucide-react";
 import {
   OnlineOrderProvider,
   useOnlineOrder,
@@ -120,14 +128,6 @@ export function RefundOptions() {
         </PopoverTrigger>
         <PopoverContent className="w-[240px]">
           <div className="flex flex-col gap-4 text-sm">
-            {/* {order.deliveryFee && (
-            <Button variant={"ghost"}>
-              <p className="text-sm text-left w-full text-muted-foreground">
-                {`Delivery fee - ${formatter.format(order.deliveryFee)}`}
-              </p>
-            </Button>
-          )} */}
-
             <Button
               variant={"ghost"}
               onClick={() =>
@@ -270,6 +270,16 @@ const Header = () => {
       </div>
 
       <div className="flex gap-4">
+        {/* <LoadingButton
+          isLoading={isUpdatingOrder}
+          onClick={() => handleUpdateOrder({ status: "ready-for-delivery" })}
+          variant={"outline"}
+          className="text-destructive"
+        >
+          <XCircle className="h-4 w-4 mr-1" />
+          <p className="text-sm">Cancel order</p>
+        </LoadingButton> */}
+
         {isDelivery && canPerformInitialTransition && (
           <LoadingButton
             isLoading={isUpdatingOrder}

@@ -7,6 +7,7 @@ import placeholder from "@/assets/placeholder.png";
 import { EmptyState } from "@/components/states/empty/empty-state";
 import { motion } from "framer-motion";
 import { capitalizeFirstLetter, slugToWords } from "@/lib/utils";
+import { getDiscountValue, getOrderAmount } from "@/components/checkout/utils";
 
 export const Route = createFileRoute("/_layout/_ordersLayout/shop/orders/")({
   component: () => <Purchases />,
@@ -19,7 +20,13 @@ const OrderItem = ({
   order: any;
   formatter: Intl.NumberFormat;
 }) => {
-  const amount = order.amount / 100;
+  const subtotal = order.amount / 100 - (order?.deliveryFee || 0);
+
+  const amount = getOrderAmount({
+    discount: order?.discount,
+    deliveryFee: order?.deliveryFee,
+    subtotal: order.amount / 100,
+  });
 
   const isOrderOpen = order.status == "open";
 
@@ -27,11 +34,9 @@ const OrderItem = ({
     <div className="space-y-8 text-sm">
       <div className="space-y-4">
         {isOrderOpen ? (
-          <p className="font-medium">Processing</p>
+          <strong>Processing</strong>
         ) : (
-          <p className="font-medium">
-            {capitalizeFirstLetter(slugToWords(order.status))}
-          </p>
+          <strong>{capitalizeFirstLetter(slugToWords(order.status))}</strong>
         )}
         <p>{new Date(order._creationTime).toDateString()}</p>
       </div>

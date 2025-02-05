@@ -16,7 +16,10 @@ export const ProductStockStatus = ({
     );
   }
 
-  if (productVariant.stock <= 2) {
+  if (
+    productVariant.stock <= 2 ||
+    (productVariant.quantityAvailable || 0) <= 2
+  ) {
     return (
       <div className="flex items-center">
         <AlertOctagonIcon className="w-3.5 h-3.5 text-yellow-600 mr-2" />

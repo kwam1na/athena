@@ -11,17 +11,19 @@ paystackRoutes.post("/", async (c) => {
 
   console.log("received payload", payload);
 
-  const { checkout_session_id, order_details } = payload?.data?.metadata || {};
+  const { checkout_session_id, checkout_session_amount, order_details } =
+    payload?.data?.metadata || {};
 
   if (payload?.event == "charge.success" && checkout_session_id) {
     console.log(`charge successful for session: ${checkout_session_id}`);
 
+    // update important fields first
     await c.env.runMutation(
       internal.storeFront.checkoutSession.updateCheckoutSession,
       {
         id: checkout_session_id as Id<"checkoutSession">,
         hasCompletedPayment: true,
-        amount: payload.data.amount,
+        amount: parseInt(checkout_session_amount),
         externalTransactionId: payload.data.id.toString(),
         paymentMethod: {
           last4: payload?.data?.authorization?.last4,
@@ -29,6 +31,15 @@ paystackRoutes.post("/", async (c) => {
           bank: payload?.data?.authorization?.bank,
           channel: payload?.data?.authorization?.channel,
         },
+      }
+    );
+
+    // update order details
+    await c.env.runMutation(
+      internal.storeFront.checkoutSession.updateCheckoutSession,
+      {
+        id: checkout_session_id as Id<"checkoutSession">,
+        hasCompletedPayment: true,
         orderDetails: {
           ...order_details,
           deliveryInstructions: order_details.deliveryInstructions || "",
@@ -41,6 +52,7 @@ paystackRoutes.post("/", async (c) => {
           deliveryFee: order_details.deliveryFee
             ? parseFloat(order_details.deliveryFee)
             : null,
+          discount: order_details.discount || null,
         },
       }
     );
@@ -90,7 +102,7 @@ paystackRoutes.post("/", async (c) => {
     });
   }
 
-  return c.json({});
+  return c.json({ message: "OK" });
 });
 
 export { paystackRoutes };

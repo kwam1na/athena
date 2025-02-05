@@ -128,7 +128,7 @@ function FeaturedSection({ data }: { data: any }) {
 
     return (
       <div className="space-y-8">
-        <p className="text-sm">{`Shop ${name}`}</p>
+        <p className="text-md font-medium">{`Shop ${name}`}</p>
 
         <div className="space-y-8 lg:space-y-20">
           <ProductGrid products={products} formatter={formatter} />
@@ -156,7 +156,7 @@ function FeaturedSection({ data }: { data: any }) {
     if (!products?.length) return null;
     return (
       <div className="space-y-8">
-        <p className="text-sm font-medium">{`Shop ${name}`}</p>
+        <p className="text-md font-medium">{`Shop ${name}`}</p>
 
         <div className="space-y-8 lg:space-y-20">
           <ProductGrid products={products} formatter={formatter} />
@@ -202,25 +202,27 @@ export default function HomePage() {
     })
   );
 
-  const [firstLoad] = useState(() => {
-    if (typeof window === "undefined") return true;
+  // const [firstLoad] = useState(() => {
+  //   if (typeof window === "undefined") return true;
 
-    try {
-      const savedState = sessionStorage.getItem(INITIAL_LOAD_KEY);
-      const lastLoadTime = sessionStorage.getItem(INITIAL_LOAD_TIME_KEY);
+  //   try {
+  //     const savedState = sessionStorage.getItem(INITIAL_LOAD_KEY);
+  //     const lastLoadTime = sessionStorage.getItem(INITIAL_LOAD_TIME_KEY);
 
-      if (!savedState || !lastLoadTime) return true;
+  //     if (!savedState || !lastLoadTime) return true;
 
-      // Check if last load was more than 24 hours ago
-      const now = new Date().getTime();
-      const timeDiff = now - parseInt(lastLoadTime);
-      const hoursDiff = timeDiff / (1000 * 60 * 60);
+  //     // Check if last load was more than 24 hours ago
+  //     const now = new Date().getTime();
+  //     const timeDiff = now - parseInt(lastLoadTime);
+  //     const hoursDiff = timeDiff / (1000 * 60 * 60);
 
-      return hoursDiff >= 24 ? true : savedState === "true";
-    } catch {
-      return true;
-    }
-  });
+  //     return hoursDiff >= 24 ? true : savedState === "true";
+  //   } catch {
+  //     return true;
+  //   }
+  // });
+
+  const firstLoad = true;
 
   useEffect(() => {
     const savedState = sessionStorage.getItem(INITIAL_LOAD_KEY);
@@ -293,9 +295,9 @@ export default function HomePage() {
 
   return (
     <>
-      <div className="container mx-auto px-4 lg:px-0 overflow-hidden">
+      <div className="px-4 lg:px-0 overflow-hidden">
         <div className="space-y-32 pb-56">
-          <div className="px-8 pt-16 xl:p-32">
+          <div className="pt-16 xl:p-32 bg-accent5">
             <div className="flex flex-col mt-32">
               <motion.p
                 initial={initialAnimation}
@@ -333,59 +335,61 @@ export default function HomePage() {
             </div>
           </div>
 
-          {Boolean(bestSellersSorted?.length) && (
-            <motion.div
-              initial={sectionAnimation}
-              animate={{
-                opacity: 1,
-                x: 0,
-                transition: firstLoad
-                  ? { duration: 0.3, delay: 1 }
-                  : { duration: 0 },
-              }}
-              className="space-y-8"
-            >
-              <p className="text-sm font-medium">Shop best sellers</p>
+          <div className="container mx-auto space-y-32 pb-56">
+            {Boolean(bestSellersSorted?.length) && (
+              <motion.div
+                initial={sectionAnimation}
+                animate={{
+                  opacity: 1,
+                  x: 0,
+                  transition: firstLoad
+                    ? { duration: 0.3, delay: 0.3 }
+                    : { duration: 0 },
+                }}
+                className="space-y-8"
+              >
+                <p className="text-md font-medium">Shop best sellers</p>
 
-              <div className="space-y-8 lg:space-y-20">
-                <ProductSkuGrid
-                  products={bestSellersProducts || []}
-                  formatter={formatter}
-                />
+                <div className="space-y-8 lg:space-y-20">
+                  <ProductSkuGrid
+                    products={bestSellersProducts || []}
+                    formatter={formatter}
+                  />
 
-                <div className="text-sm">
-                  <Link
-                    to="/shop/$categorySlug"
-                    params={{
-                      categorySlug: "best-sellers",
-                    }}
-                  >
-                    <Button className="p-0" variant={"link"}>
-                      Shop all
-                    </Button>
-                  </Link>
+                  <div className="text-sm">
+                    <Link
+                      to="/shop/$categorySlug"
+                      params={{
+                        categorySlug: "best-sellers",
+                      }}
+                    >
+                      <Button className="p-0" variant={"link"}>
+                        Shop all
+                      </Button>
+                    </Link>
+                  </div>
                 </div>
-              </div>
-            </motion.div>
-          )}
+              </motion.div>
+            )}
 
-          {Boolean(featuredSectionSorted?.length) && (
-            <motion.div
-              initial={sectionAnimation}
-              animate={{
-                opacity: 1,
-                x: 0,
-                transition: firstLoad
-                  ? { duration: 0.3, delay: 1 }
-                  : { duration: 0 },
-              }}
-              className="space-y-32"
-            >
-              {featuredSectionSorted?.map((data: any) => (
-                <FeaturedSection key={data._id} data={data} />
-              ))}
-            </motion.div>
-          )}
+            {Boolean(featuredSectionSorted?.length) && (
+              <motion.div
+                initial={sectionAnimation}
+                animate={{
+                  opacity: 1,
+                  x: 0,
+                  transition: firstLoad
+                    ? { duration: 0.3, delay: 0.3 }
+                    : { duration: 0 },
+                }}
+                className="space-y-32"
+              >
+                {featuredSectionSorted?.map((data: any) => (
+                  <FeaturedSection key={data._id} data={data} />
+                ))}
+              </motion.div>
+            )}
+          </div>
         </div>
       </div>
 

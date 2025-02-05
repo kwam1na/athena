@@ -54,6 +54,7 @@ export const webOrderSchema = z
     pickupLocation: z.string().min(1).nullable(),
     deliveryDetails: baseDeliveryDetailsSchema.optional().nullable(),
     deliveryInstructions: z.string().optional(),
+    discount: z.record(z.string(), z.any()).nullable(),
   })
   .superRefine((data, ctx) => {
     const { deliveryFee, deliveryMethod, deliveryDetails, billingDetails } =
@@ -320,6 +321,13 @@ type DeliveryOption = "within-accra" | "outside-accra" | "intl";
 
 export type DeliveryMethod = "delivery" | "pickup";
 
+export type Discount = {
+  id: string;
+  code: string;
+  type: "percentage" | "amount";
+  value: number;
+};
+
 type CheckoutState = {
   billingDetails: BillingAddress | null;
   customerDetails: CustomerDetails | null;
@@ -343,6 +351,8 @@ type CheckoutState = {
   failedFinalValidation: boolean;
 
   bag: any;
+
+  discount: Discount | null;
 };
 
 type CheckoutActions = {
@@ -385,6 +395,7 @@ const initialState: CheckoutState = {
 
   failedFinalValidation: false,
   bag: null,
+  discount: null,
 };
 
 type CheckoutContextType = {
@@ -427,6 +438,8 @@ export const CheckoutProvider = ({
 
   const [actionsState, setActionsState] = useState(initialActionsState);
 
+  // const [discount, setDiscount] = useState<Discount | null>(null);
+
   const { bag } = useShoppingBag();
 
   const { user } = useStoreContext();
@@ -436,7 +449,7 @@ export const CheckoutProvider = ({
     if (bag?.items?.length && bag?.items?.length > 0) {
       sessionStorage.setItem(
         SESSION_STORAGE_KEY,
-        JSON.stringify({ ...checkoutState, bag })
+        JSON.stringify({ ...checkoutState, discount: null, bag })
       );
     }
   }, [checkoutState, bag]);
@@ -445,6 +458,7 @@ export const CheckoutProvider = ({
     if (bag?.items?.length && bag?.items?.length > 0) {
       setCheckoutState((prev) => ({
         ...prev,
+        discount: null,
         bag,
       }));
     }

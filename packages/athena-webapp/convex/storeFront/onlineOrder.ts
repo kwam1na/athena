@@ -15,6 +15,7 @@ import {
 import { OrderEmailType, sendOrderEmail } from "../sendgrid";
 import { sendOrderUpdateEmail } from "./onlineOrderUtilFns";
 import { api } from "../_generated/api";
+import { Id } from "../_generated/dataModel";
 
 const entity = "onlineOrder";
 
@@ -38,6 +39,7 @@ export const create = mutation({
     deliveryOption: v.union(v.string(), v.null()),
     deliveryInstructions: v.union(v.string(), v.null()),
     deliveryFee: v.union(v.number(), v.null()),
+    discount: v.union(v.record(v.string(), v.any()), v.null()),
     pickupLocation: v.union(v.string(), v.null()),
     paymentMethod: v.optional(paymentMethodSchema),
   },
@@ -67,6 +69,7 @@ export const create = mutation({
       deliveryMethod: args.deliveryMethod,
       deliveryOption: args.deliveryOption,
       deliveryFee: args.deliveryFee,
+      discount: args.discount,
       pickupLocation: args.pickupLocation,
       hasVerifiedPayment: session.hasVerifiedPayment,
       paymentMethod: args.paymentMethod,
@@ -93,6 +96,14 @@ export const create = mutation({
         });
       })
     );
+
+    // update used promo code for this order
+    if (args.discount?.id) {
+      await ctx.db.insert("redeemedPromoCode", {
+        promoCodeId: args.discount.id as Id<"promoCode">,
+        storeFrontUserId: session.storeFrontUserId,
+      });
+    }
 
     return {
       success: true,

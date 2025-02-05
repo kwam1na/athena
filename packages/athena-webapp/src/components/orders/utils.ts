@@ -44,3 +44,14 @@ export const getOrderState = (order: any) => {
     hasOrderTransitioned,
   };
 };
+
+export const getDiscountValue = (
+  subtotal: number,
+  discount?: Record<string, any> | null
+) => {
+  return (
+    (discount?.type === "percentage"
+      ? (subtotal * discount?.value) / 100
+      : discount?.value) || 0
+  );
+};

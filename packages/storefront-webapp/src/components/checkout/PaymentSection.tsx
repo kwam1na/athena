@@ -14,6 +14,7 @@ import { updateUser } from "@/api/storeFrontUser";
 import { useStoreContext } from "@/contexts/StoreContext";
 import { BillingDetailsSection } from "./BillingDetailsSection";
 import { CheckoutFormSectionProps } from "./CustomerInfoSection";
+import { getDiscountValue } from "./utils";
 
 export const PaymentSection = ({ form }: CheckoutFormSectionProps) => {
   const { activeSession, canPlaceOrder, checkoutState } = useCheckout();
@@ -30,10 +31,13 @@ export const PaymentSection = ({ form }: CheckoutFormSectionProps) => {
   const onSubmit = async () => {
     setErrorFinalizingPayment(false);
 
+    console.log("discount", checkoutState.discount);
+
     try {
       const canProceedToPayment = await canPlaceOrder();
       const { data } = webOrderSchema.safeParse(checkoutState);
-      const total = (bagSubtotal + (checkoutState?.deliveryFee ?? 0)) * 100;
+
+      const total = bagSubtotal * 100;
 
       if (!canProceedToPayment || !data || !activeSession._id) {
         throw new Error("Invalid order state");
@@ -43,7 +47,10 @@ export const PaymentSection = ({ form }: CheckoutFormSectionProps) => {
 
       // Process checkout session
       const paymentResponse = await processCheckoutSession(
-        { ...data, deliveryDetails: data.deliveryDetails ?? null },
+        {
+          ...data,
+          deliveryDetails: data.deliveryDetails ?? null,
+        },
         total
       );
 

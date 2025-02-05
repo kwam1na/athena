@@ -13,3 +13,5 @@ export const currencies = [
     value: "ghs",
   },
 ];
+
+export const PAYSTACK_PROCESSING_FEE = 1.97;

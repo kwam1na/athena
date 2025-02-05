@@ -51,6 +51,7 @@ import type * as inventory_products from "../inventory/products.js";
 import type * as inventory_promoCode from "../inventory/promoCode.js";
 import type * as inventory_stores from "../inventory/stores.js";
 import type * as inventory_subcategories from "../inventory/subcategories.js";
+import type * as inventory_utils from "../inventory/utils.js";
 import type * as otp_ResendOTP from "../otp/ResendOTP.js";
 import type * as otp_VerificationCodeEmail from "../otp/VerificationCodeEmail.js";
 import type * as schemas_inventory_appVerificationCode from "../schemas/inventory/appVerificationCode.js";
@@ -65,6 +66,7 @@ import type * as schemas_inventory_organization from "../schemas/inventory/organ
 import type * as schemas_inventory_organizationMember from "../schemas/inventory/organizationMember.js";
 import type * as schemas_inventory_product from "../schemas/inventory/product.js";
 import type * as schemas_inventory_promoCode from "../schemas/inventory/promoCode.js";
+import type * as schemas_inventory_redeemedPromoCode from "../schemas/inventory/redeemedPromoCode.js";
 import type * as schemas_inventory_store from "../schemas/inventory/store.js";
 import type * as schemas_inventory_subcategory from "../schemas/inventory/subcategory.js";
 import type * as schemas_storeFront_bag from "../schemas/storeFront/bag.js";
@@ -143,6 +145,7 @@ declare const fullApi: ApiFromModules<{
   "inventory/promoCode": typeof inventory_promoCode;
   "inventory/stores": typeof inventory_stores;
   "inventory/subcategories": typeof inventory_subcategories;
+  "inventory/utils": typeof inventory_utils;
   "otp/ResendOTP": typeof otp_ResendOTP;
   "otp/VerificationCodeEmail": typeof otp_VerificationCodeEmail;
   "schemas/inventory/appVerificationCode": typeof schemas_inventory_appVerificationCode;
@@ -157,6 +160,7 @@ declare const fullApi: ApiFromModules<{
   "schemas/inventory/organizationMember": typeof schemas_inventory_organizationMember;
   "schemas/inventory/product": typeof schemas_inventory_product;
   "schemas/inventory/promoCode": typeof schemas_inventory_promoCode;
+  "schemas/inventory/redeemedPromoCode": typeof schemas_inventory_redeemedPromoCode;
   "schemas/inventory/store": typeof schemas_inventory_store;
   "schemas/inventory/subcategory": typeof schemas_inventory_subcategory;
   "schemas/storeFront/bag": typeof schemas_storeFront_bag;

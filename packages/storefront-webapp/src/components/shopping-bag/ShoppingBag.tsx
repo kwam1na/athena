@@ -297,51 +297,6 @@ export default function ShoppingBag() {
             </AnimatePresence>
           </div>
 
-          {/* Cart Summary */}
-          {/* <div className="hidden md:block relative">
-            <div className="space-y-16 rounded-lg sticky top-8">
-              <div className="space-y-4 text-sm">
-                <div className="flex justify-between mb-2">
-                  <span>Subtotal</span>
-                  <span>{formatter.format(bagSubtotal)}</span>
-                </div>
-                <div className="flex justify-between mb-2">
-                  <span>Shipping</span>
-                  <span>Calculated at checkout</span>
-                </div>
-              </div>
-              <div className="flex justify-between font-medium">
-                <span>Total</span>
-                <span>{formatter.format(total)}</span>
-              </div>
-              <div className="space-y-8">
-                {areProductsUnavailable && (
-                  <div className="flex">
-                    <InfoIcon className="w-4 h-4 mr-2" />
-                    <p className="text-xs">
-                      Some items are no longer available. Update your bag to
-                      continue.
-                    </p>
-                  </div>
-                )}
-
-                {error && (
-                  <div className="flex text-destructive">
-                    <InfoIcon className="w-4 h-4 mr-2" />
-                    <p className="text-xs">{error}</p>
-                  </div>
-                )}
-                <LoadingButton
-                  isLoading={isProcessingCheckoutRequest}
-                  onClick={handleOnCheckoutClick}
-                  className="w-full"
-                >
-                  Checkout
-                </LoadingButton>
-              </div>
-            </div>
-          </div> */}
-
           {isNavbarShowing && (
             <div className="fixed bottom-0 left-0 w-full z-50">
               <motion.div
@@ -351,7 +306,7 @@ export default function ShoppingBag() {
                   y: 0,
                   transition: { ease: "easeOut", duration: 0.3, delay: 0.5 },
                 }}
-                className="space-y-8 flex p-4 bg-accent5"
+                className="space-y-8 flex p-4 bg-accent5 border border-accent5"
               >
                 <div className="ml-auto flex gap-12">
                   <div className="space-y-2">
@@ -367,7 +322,7 @@ export default function ShoppingBag() {
                     <LoadingButton
                       isLoading={isProcessingCheckoutRequest}
                       onClick={handleOnCheckoutClick}
-                      className="group w-[240px]"
+                      className="group w-[240px] text-accent2"
                       variant={"clear"}
                     >
                       Checkout

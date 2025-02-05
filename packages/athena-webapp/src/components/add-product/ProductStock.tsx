@@ -149,7 +149,6 @@ function Stock() {
               <TableHead># Available</TableHead>
               <TableHead>{`Price (${activeStore?.currency.toUpperCase()})`}</TableHead>
               <TableHead>{`Cost (${activeStore?.currency.toUpperCase()})`}</TableHead>
-              <TableHead></TableHead>
             </TableRow>
           </TableHeader>
 
@@ -261,24 +260,39 @@ function Stock() {
                   <Label htmlFor={`cost-${index}`} className="sr-only">
                     Cost
                   </Label>
-                  {isLoading ? (
-                    <Skeleton className="h-[40px] w-full" />
-                  ) : (
-                    <Input
-                      id={`cost-${index}`}
-                      type="number"
-                      placeholder="999"
-                      onChange={(e) => handleChange(e, variant.id, "cost")}
-                      value={variant.cost || ""}
-                      disabled={variant.markedForDeletion}
-                    />
-                  )}
+                  <Input
+                    id={`cost-${index}`}
+                    type="number"
+                    placeholder="999"
+                    onChange={(e) => handleChange(e, variant.id, "cost")}
+                    value={variant.cost || ""}
+                    disabled={variant.markedForDeletion}
+                  />
                   {error && getErrorForField(error, "unitCost") && (
                     <p className="text-red-500 text-sm font-medium">
                       {getErrorForField(error, "unitCost")?.message}
                     </p>
                   )}
                 </TableCell>
+
+                {/* <TableCell>
+                  <Label htmlFor={`retail-price-${index}`} className="sr-only">
+                    Retail Price
+                  </Label>
+                  <Input
+                    id={`cost-${index}`}
+                    type="number"
+                    placeholder="999"
+                    onChange={(e) => handleChange(e, variant.id, "cost")}
+                    value={variant.cost || ""}
+                    disabled={variant.markedForDeletion}
+                  />
+                  {error && getErrorForField(error, "unitCost") && (
+                    <p className="text-red-500 text-sm font-medium">
+                      {getErrorForField(error, "unitCost")?.message}
+                    </p>
+                  )}
+                </TableCell> */}
                 {productVariants.length > 1 && (
                   <TableCell>
                     <Button

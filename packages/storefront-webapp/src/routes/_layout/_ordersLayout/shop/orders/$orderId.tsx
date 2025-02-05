@@ -9,7 +9,7 @@ import { DeliveryDetails } from "@/components/checkout/DeliveryDetails/DeliveryS
 import NotFound from "@/components/states/not-found/NotFound";
 import { FadeIn } from "@/components/common/FadeIn";
 import { capitalizeFirstLetter, slugToWords } from "@/lib/utils";
-import { CircleCheck, Hourglass, RotateCcw, Truck } from "lucide-react";
+import { CircleCheck, Hourglass, RotateCcw, Tag, Truck } from "lucide-react";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -17,6 +17,7 @@ import {
   BreadcrumbList,
 } from "@/components/ui/breadcrumb";
 import { WIGLUB_HAIR_STUDIO_LOCATION_URL } from "@/lib/constants";
+import { getDiscountValue } from "@/components/checkout/utils";
 
 export const Route = createFileRoute(
   "/_layout/_ordersLayout/shop/orders/$orderId"
@@ -41,7 +42,13 @@ export function OrderNavigation() {
 const OrderSummary = ({ order }: { order: any }) => {
   const { formatter } = useStoreContext();
 
-  const subtotal = order.amount / 100 - (order?.deliveryFee || 0);
+  const subtotal = order.amount / 100;
+
+  const discountValue = getDiscountValue(subtotal, order.discount);
+
+  const total = subtotal - discountValue + (order?.deliveryFee || 0);
+
+  // const subtotal = s - discountValue;
   const itemsCount = order.items.reduce(
     (total: number, item: any) => total + item.quantity,
     0
@@ -52,6 +59,11 @@ const OrderSummary = ({ order }: { order: any }) => {
     order.paymentMethod?.channel == "mobile_money"
       ? `Paid with ${order.paymentMethod?.bank} Mobile Money account ending in ${order.paymentMethod?.last4}`
       : `Paid with card ending in ${order.paymentMethod?.last4}`;
+
+  const discountText =
+    order.discount?.type === "percentage"
+      ? `${order.discount.value}%`
+      : `${formatter.format(discountValue)}`;
 
   return (
     <div className="space-y-8">
@@ -74,12 +86,26 @@ const OrderSummary = ({ order }: { order: any }) => {
           <p className="text-sm">{formatter.format(subtotal)}</p>
         </div>
 
+        {Boolean(discountValue) && (
+          <div className="grid grid-cols-2">
+            <p className="text-sm">Discount</p>
+            <p className="text-sm">{formatter.format(discountValue)}</p>
+          </div>
+        )}
+
         <div className="grid grid-cols-2">
           <p className="text-sm">Total</p>
-          <p className="text-sm font-medium">
-            {formatter.format(order.amount / 100)}
-          </p>
+          <p className="text-sm font-medium">{formatter.format(total)}</p>
         </div>
+
+        {Boolean(discountValue) && (
+          <div className="flex items-center gap-2">
+            <Tag className="w-3 h-3" />
+            <strong>
+              {`${order.discount.code} - ${discountText}`} off entire order
+            </strong>
+          </div>
+        )}
       </div>
 
       <p>{paymentText}</p>

@@ -29,5 +29,6 @@ export const checkoutSessionSchema = v.object({
   deliveryMethod: v.optional(v.string()),
   deliveryOption: v.union(v.string(), v.null()),
   deliveryFee: v.union(v.number(), v.null()),
+  discount: v.union(v.record(v.string(), v.any()), v.null()),
   pickupLocation: v.union(v.string(), v.null()),
 });

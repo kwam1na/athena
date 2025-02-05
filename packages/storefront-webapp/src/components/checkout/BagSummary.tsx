@@ -16,6 +16,7 @@ import { redeemPromoCode } from "@/api/promoCodes";
 import { useAuth } from "@/hooks/useAuth";
 import { useState } from "react";
 import { set } from "zod";
+import { getDiscountValue } from "./utils";
 
 function SummaryItem({
   item,
@@ -62,36 +63,36 @@ export function BagSummaryItems({ items }: { items: ProductSku[] }) {
 
 function BagSummary() {
   const { formatter } = useStoreContext();
-  const { bagSubtotal, discount, setDiscount } = useShoppingBag();
-  const { checkoutState } = useCheckout();
+  const { bagSubtotal } = useShoppingBag();
+  const { checkoutState, updateState } = useCheckout();
   const { store } = useStoreContext();
   const { userId, guestId } = useAuth();
   const [code, setCode] = useState("");
-  const [isInvalidCode, setIsInvalidCode] = useState(false);
+  const [invalidMessage, setInvalidMessage] = useState("");
 
-  const discountValue =
-    (discount?.type === "percentage"
-      ? (bagSubtotal * discount?.value) / 100
-      : discount?.value) || 0;
+  const discountValue = getDiscountValue(bagSubtotal, checkoutState.discount);
 
   const total = (checkoutState.deliveryFee ?? 0) + bagSubtotal - discountValue;
 
   const discountText =
-    discount?.type === "percentage"
-      ? `${discount.value}%`
+    checkoutState.discount?.type === "percentage"
+      ? `${checkoutState.discount.value}%`
       : `${formatter.format(discountValue)}`;
 
   const redeemPromoCodeMutation = useMutation({
     mutationFn: redeemPromoCode,
     onSuccess: (data: any) => {
       if (data.promoCode) {
-        setDiscount({
-          code: data.promoCode.code,
-          value: data.promoCode.discountValue,
-          type: data.promoCode.discountType,
+        updateState({
+          discount: {
+            id: data.promoCode._id,
+            code: data.promoCode.code,
+            value: data.promoCode.discountValue,
+            type: data.promoCode.discountType,
+          },
         });
       } else {
-        setIsInvalidCode(true);
+        setInvalidMessage(data.message);
       }
     },
   });
@@ -99,7 +100,7 @@ function BagSummary() {
   const handleRedeemPromoCode = () => {
     const storeFrontUserId = userId || guestId;
 
-    setIsInvalidCode(false);
+    setInvalidMessage("");
 
     if (!storeFrontUserId || !store) return;
 
@@ -147,15 +148,15 @@ function BagSummary() {
               onButtonClick={handleRedeemPromoCode}
               onKeyDown={handleKeyDown}
             />
-            {isInvalidCode && (
-              <p className="px-2 text-xs text-destructive">Invalid code</p>
+            {invalidMessage && (
+              <p className="px-2 text-xs text-destructive">{invalidMessage}</p>
             )}
           </div>
-          {discount && (
+          {checkoutState.discount && (
             <div className="flex items-center px-4">
               <Tag className="w-3.5 h-3.5 mr-2" />
               <p className="text-sm font-medium">
-                {discount?.code} -{" "}
+                {checkoutState.discount?.code} -{" "}
                 <strong>{discountText} off entire order</strong>
               </p>
             </div>
@@ -163,7 +164,7 @@ function BagSummary() {
         </div>
       </div>
 
-      <Separator className="bg-background" />
+      <Separator className="bg-accent5" />
 
       {/* Summary */}
       <div className="px-8 space-y-8 pt-4 mt-4">

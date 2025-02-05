@@ -29,6 +29,7 @@ type UnavailableProducts = {
 }[];
 
 export type Discount = {
+  id: string;
   code: string;
   type: "percentage" | "amount";
   value: number;

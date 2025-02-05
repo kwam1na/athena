@@ -1,8 +1,9 @@
-import { Check, CheckCircle2 } from "lucide-react";
+import { Check, Tag } from "lucide-react";
 import View from "../View";
 import { useOnlineOrder } from "~/src/contexts/OnlineOrderContext";
-import { currencyFormatter, getRelativeTime } from "~/src/lib/utils";
+import { currencyFormatter } from "~/src/lib/utils";
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
+import { getDiscountValue } from "./utils";
 
 export function OrderDetailsView() {
   const { order } = useOnlineOrder();
@@ -35,6 +36,15 @@ export function OrderDetailsView() {
 
   const netAmount = order.amount - amountRefunded;
 
+  const discountValue = getDiscountValue(order.amount, order.discount);
+
+  const amountPaid = order.amount - discountValue;
+
+  const discountText =
+    order.discount?.type === "percentage"
+      ? `${order.discount.value}%`
+      : `${formatter.format(discountValue)}`;
+
   return (
     <View
       hideBorder
@@ -47,6 +57,20 @@ export function OrderDetailsView() {
           <p className="text-sm text-muted-foreground">Total</p>
           <p className="text-sm">{formatter.format(order.amount / 100)}</p>
         </div>
+
+        {order.discount && (
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">Amount paid</p>
+            <p className="text-sm">{formatter.format(amountPaid / 100)}</p>
+
+            <div className="flex gap-2 items-center">
+              <Tag className="w-3 h-3" />
+              <p className="text-sm">
+                {`${order.discount?.code} - ${discountText}`} off entire order
+              </p>
+            </div>
+          </div>
+        )}
 
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">Payment status</p>
