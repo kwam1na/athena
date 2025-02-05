@@ -1,4 +1,4 @@
-import { mutation, query } from "../_generated/server";
+import { mutation } from "../_generated/server";
 import { v } from "convex/values";
 
 const entity = "savedBagItem";
@@ -20,6 +20,7 @@ export const addItemToBag = mutation({
       .filter((q) =>
         q.and(
           q.eq(q.field("productSkuId"), args.productSkuId),
+          q.eq(q.field("savedBagId"), args.savedBagId),
           q.eq(q.field("storeFrontUserId"), args.storeFrontUserId)
         )
       )

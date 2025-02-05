@@ -23,6 +23,8 @@ import { useMutation } from "convex/react";
 import { api } from "~/convex/_generated/api";
 import { LoadingButton } from "../ui/loading-button";
 import { getOrderState } from "./utils";
+import { Separator } from "../ui/separator";
+import { OrderSummary } from "./OrderSummary";
 
 function OrderItem({ item, order }: { item: any; order: any }) {
   const [isUpdatingOrderItem, setIsUpdatingOrderItem] = useState(false);
@@ -284,6 +286,10 @@ export function OrderItemsView() {
         {itemsFormatted?.map((item: any) => (
           <OrderItem key={item._id} item={item} order={order} />
         ))}
+
+        <Separator />
+
+        <OrderSummary />
       </div>
     </View>
   );

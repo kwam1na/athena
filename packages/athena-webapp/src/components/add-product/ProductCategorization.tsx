@@ -27,6 +27,7 @@ import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { useQuery } from "convex/react";
 import { api } from "~/convex/_generated/api";
 import { Id } from "~/convex/_generated/dataModel";
+import { Input } from "../ui/input";
 
 function ProductCategorization({
   setInitialSelectedOption,
@@ -87,7 +88,7 @@ function ProductCategorization({
             <Button
               onClick={() => setInitialSelectedOption("category")}
               variant={"ghost"}
-              className="text-muted-foreground"
+              className="text-muted-foreground text-xs"
             >
               <Plus className="w-3 h-3 mr-2" />
               New
@@ -132,7 +133,7 @@ function ProductCategorization({
             <Button
               onClick={() => setInitialSelectedOption("subcategory")}
               variant={"ghost"}
-              className="text-muted-foreground"
+              className="text-muted-foreground text-xs"
             >
               <Plus className="w-3 h-3 mr-2" />
               New
@@ -213,6 +214,8 @@ export function ProductCategorizationView() {
     setDialogOptions({ isOpen: true, initialSelected: option });
   };
 
+  const { productData, updateProductData } = useProduct();
+
   return (
     <View
       className="h-auto"
@@ -220,19 +223,7 @@ export function ProductCategorizationView() {
       hideHeaderBottomBorder
       header={
         <div className="flex items-center justify-between">
-          <p className="text-sm text-sm">Categorization</p>
-          <div className="space-x-2">
-            <Button
-              className="text-muted-foreground"
-              variant={"ghost"}
-              size={"icon"}
-              onClick={() =>
-                setDialogOptions((prev) => ({ ...prev, isOpen: true }))
-              }
-            >
-              <CogIcon className="w-4 h-4" />
-            </Button>
-          </div>
+          <p className="text-sm text-sm">Details</p>
         </div>
       }
     >
@@ -241,9 +232,31 @@ export function ProductCategorizationView() {
         initialSelectedOption={dialogOptions.initialSelected}
         onClose={() => setDialogOptions((prev) => ({ ...prev, isOpen: false }))}
       />
+      <div className="space-y-2 px-4 pt-4">
+        <Label className="text-muted-foreground" htmlFor="name">
+          Name
+        </Label>
+        <Input
+          value={productData.name || ""}
+          onChange={(e) => updateProductData({ name: e.target.value })}
+        />
+      </div>
+
       <ProductCategorization
         setInitialSelectedOption={setInitialSelectedOption}
       />
+      {/* <div className="px-4">
+        <Button
+          className="text-xs text-muted-foreground"
+          variant={"link"}
+          onClick={() =>
+            setDialogOptions((prev) => ({ ...prev, isOpen: true }))
+          }
+        >
+          <CogIcon className="w-3.5 h-3.5 mr-2" />
+          Manage categorization options
+        </Button>
+      </div> */}
     </View>
   );
 }

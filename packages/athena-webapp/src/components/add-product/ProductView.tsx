@@ -29,6 +29,7 @@ import { Id } from "~/convex/_generated/dataModel";
 import { productSchema } from "../../lib/schemas/product";
 import { useAuth } from "../../hooks/useAuth";
 import PageHeader from "../common/PageHeader";
+import { PAYSTACK_PROCESSING_FEE } from "~/src/lib/constants";
 
 function ProductViewContent() {
   const { productData, revertChanges, productVariants, updateProductVariants } =
@@ -244,10 +245,18 @@ function ProductViewContent() {
       }
     }
 
+    const processingFee =
+      ((variant.netPrice || 0) * PAYSTACK_PROCESSING_FEE) / 100;
+
+    const price = productData.areProcessingFeesAbsorbed
+      ? variant.netPrice
+      : Math.round(variant.netPrice + processingFee);
+
     return await createSku({
       productId,
       sku: variant.sku,
-      price: variant.price || 0,
+      price: price || 0,
+      netPrice: variant.netPrice || 0,
       inventoryCount: variant.stock || 0,
       quantityAvailable: variant.quantityAvailable || 0,
       unitCost: variant.cost || 0,
@@ -290,10 +299,18 @@ function ProductViewContent() {
       }
     }
 
+    const processingFee =
+      ((variant.netPrice || 0) * PAYSTACK_PROCESSING_FEE) / 100;
+
+    const price = productData.areProcessingFeesAbsorbed
+      ? variant.netPrice
+      : Math.round(variant.netPrice + processingFee);
+
     await updateSku({
       id: skuId as Id<"productSku">,
       sku: variant.sku,
-      price: variant.price || 0,
+      price: price || 0,
+      netPrice: variant.netPrice || 0,
       inventoryCount: variant.stock || 0,
       quantityAvailable: variant.quantityAvailable || 0,
       unitCost: variant.cost || 0,

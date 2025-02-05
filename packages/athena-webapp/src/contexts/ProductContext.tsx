@@ -172,6 +172,7 @@ export function ProductProvider({ children }: { children: ReactNode }) {
     quantityAvailable: sku.quantityAvailable,
     cost: sku.unitCost,
     price: sku.price,
+    netPrice: sku.netPrice,
     size: sku.size || undefined,
     color: sku.color || undefined,
     length: sku.length || undefined,

@@ -3,7 +3,6 @@ import View from "../View";
 import { useOnlineOrder } from "~/src/contexts/OnlineOrderContext";
 import { currencyFormatter } from "~/src/lib/utils";
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
-import { getDiscountValue } from "./utils";
 
 export function OrderDetailsView() {
   const { order } = useOnlineOrder();
@@ -36,82 +35,56 @@ export function OrderDetailsView() {
 
   const netAmount = order.amount - amountRefunded;
 
-  const discountValue = getDiscountValue(order.amount, order.discount);
-
-  const amountPaid = order.amount - discountValue;
-
-  const discountText =
-    order.discount?.type === "percentage"
-      ? `${order.discount.value}%`
-      : `${formatter.format(discountValue)}`;
-
   return (
     <View
       hideBorder
       hideHeaderBottomBorder
       className="h-auto w-full"
-      header={<p className="text-sm text-sm text-muted-foreground">Details</p>}
+      header={<p className="text-sm text-sm text-muted-foreground"></p>}
     >
-      <div className="py-4 grid grid-cols-2 gap-16">
-        <div className="space-y-4">
-          <p className="text-sm text-muted-foreground">Total</p>
-          <p className="text-sm">{formatter.format(order.amount / 100)}</p>
-        </div>
-
-        {order.discount && (
+      <div className="py-4 space-y-8">
+        <div className="grid grid-cols-2 gap-16">
           <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">Amount paid</p>
-            <p className="text-sm">{formatter.format(amountPaid / 100)}</p>
+            <p className="text-sm text-muted-foreground">Payment status</p>
+            {order.hasVerifiedPayment && !isOrderRefunded && (
+              <div className="flex gap-2 items-center">
+                <p className="text-sm">Complete</p>
+                <Check className="h-4 w-4 text-green-700" />
+              </div>
+            )}
 
-            <div className="flex gap-2 items-center">
-              <Tag className="w-3 h-3" />
-              <p className="text-sm">
-                {`${order.discount?.code} - ${discountText}`} off entire order
-              </p>
-            </div>
+            {Boolean(amountRefunded) && <p className="text-sm">{refundText}</p>}
+
+            {!order.hasVerifiedPayment && (
+              <div className="flex gap-2 items-center">
+                <p className="text-sm">Not verified</p>
+              </div>
+            )}
           </div>
-        )}
 
-        <div className="space-y-4">
-          <p className="text-sm text-muted-foreground">Payment status</p>
-          {order.hasVerifiedPayment && !isOrderRefunded && (
-            <div className="flex gap-2 items-center">
-              <p className="text-sm">Complete</p>
-              <Check className="h-4 w-4 text-green-700" />
+          {Boolean(amountRefunded) && (
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">Refunded</p>
+              <p className="text-sm">{`- ${formatter.format(amountRefunded / 100)}`}</p>
             </div>
           )}
 
-          {Boolean(amountRefunded) && <p className="text-sm">{refundText}</p>}
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">Payment channel</p>
+            <p className="text-sm">{`${paymentMethod?.bank} ${paymentChannel}`}</p>
+          </div>
 
-          {!order.hasVerifiedPayment && (
-            <div className="flex gap-2 items-center">
-              <p className="text-sm">Not verified</p>
+          {Boolean(amountRefunded) && Boolean(netAmount) && (
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">Net</p>
+              <p className="text-sm">{formatter.format(netAmount / 100)}</p>
             </div>
           )}
-        </div>
 
-        {Boolean(amountRefunded) && (
           <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">Refunded</p>
-            <p className="text-sm">{`- ${formatter.format(amountRefunded / 100)}`}</p>
+            <p className="text-sm text-muted-foreground">Payment method</p>
+            <p className="text-sm">{`Account ending in ${paymentMethod?.last4}`}</p>
           </div>
-        )}
-
-        <div className="space-y-4">
-          <p className="text-sm text-muted-foreground">Payment channel</p>
-          <p className="text-sm">{`${paymentMethod?.bank} ${paymentChannel}`}</p>
-        </div>
-
-        {Boolean(amountRefunded) && Boolean(netAmount) && (
-          <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">Net</p>
-            <p className="text-sm">{formatter.format(netAmount / 100)}</p>
-          </div>
-        )}
-
-        <div className="space-y-4">
-          <p className="text-sm text-muted-foreground">Payment method</p>
-          <p className="text-sm">{`Account ending in ${paymentMethod?.last4}`}</p>
         </div>
       </div>
     </View>

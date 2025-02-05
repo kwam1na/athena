@@ -18,7 +18,7 @@ export const productSchema = v.object({
   subcategoryId: v.id("subcategory"),
   inventoryCount: v.number(),
   quantityAvailable: v.optional(v.number()),
-  areFeesAbsorbed: v.optional(v.boolean()),
+  areProcessingFeesAbsorbed: v.optional(v.boolean()),
 });
 
 export const productSkuSchema = v.object({
@@ -35,6 +35,6 @@ export const productSkuSchema = v.object({
   inventoryCount: v.number(),
   quantityAvailable: v.number(),
   price: v.number(),
-  retailPrice: v.optional(v.number()),
+  netPrice: v.optional(v.number()),
   unitCost: v.optional(v.number()),
 });

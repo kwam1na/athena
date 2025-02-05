@@ -53,13 +53,6 @@ export function PickupDetailsView() {
             <p className="text-sm text-muted-foreground">Address</p>
             <DeliveryDetails address={deliveryDetails} />
           </div>
-
-          <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">Fee</p>
-            <p className="text-sm">
-              {formatter.format(order.deliveryFee || 0)}
-            </p>
-          </div>
         </div>
 
         <div className="space-y-4">

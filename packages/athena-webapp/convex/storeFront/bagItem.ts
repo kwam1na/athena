@@ -20,6 +20,7 @@ export const addItemToBag = mutation({
       .filter((q) =>
         q.and(
           q.eq(q.field("productSkuId"), args.productSkuId),
+          q.eq(q.field("bagId"), args.bagId),
           q.eq(q.field("storeFrontUserId"), args.storeFrontUserId)
         )
       )

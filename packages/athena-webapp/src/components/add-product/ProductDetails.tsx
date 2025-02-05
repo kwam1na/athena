@@ -1,21 +1,15 @@
-import { getErrorForField } from "@/lib/utils";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
-import { Textarea } from "../ui/textarea";
 import View from "../View";
 import { Skeleton } from "../ui/skeleton";
 import { useProduct } from "@/contexts/ProductContext";
 
 export function ProductDetailsView() {
-  const id = "productName";
-
   const { productData, isLoading, updateProductData, error } = useProduct();
 
   const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     updateProductData({ name: e.target.value });
   };
-
-  const validationError = getErrorForField(error, id);
 
   return (
     <View
@@ -32,11 +26,6 @@ export function ProductDetailsView() {
           {isLoading && <Skeleton className="h-[40px]" />}
           {!isLoading && (
             <Input value={productData.name || ""} onChange={handleNameChange} />
-          )}
-          {validationError && (
-            <p className="text-red-500 text-sm font-medium">
-              {validationError.message}
-            </p>
           )}
         </div>
         {/* <div className="space-y-2">

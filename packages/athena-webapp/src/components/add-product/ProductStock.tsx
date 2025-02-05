@@ -17,9 +17,15 @@ import { Skeleton } from "../ui/skeleton";
 import { CardFooter } from "../ui/card";
 import { useProduct } from "@/contexts/ProductContext";
 import { ImageFile } from "../ui/image-uploader";
-import { RotateCcw } from "lucide-react";
+import { Info, RotateCcw } from "lucide-react";
 import useGetActiveProduct from "@/hooks/useGetActiveProduct";
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "../ui/tooltip";
 
 export type ProductVariant = {
   id: string;
@@ -28,6 +34,7 @@ export type ProductVariant = {
   quantityAvailable?: number;
   cost?: number;
   price?: number;
+  netPrice?: number;
   length?: number;
   color?: string;
   size?: string;
@@ -90,7 +97,7 @@ function Stock() {
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement>,
     variantId: string,
-    field: "sku" | "stock" | "cost" | "price" | "quantityAvailable"
+    field: "sku" | "stock" | "cost" | "netPrice" | "quantityAvailable"
   ) => {
     const value = field === "sku" ? e.target.value : parseFloat(e.target.value);
     updateProductVariants((prevVariants) =>
@@ -144,7 +151,23 @@ function Stock() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>SKU</TableHead>
+              <TableHead>
+                <div className="flex items-center gap-1">
+                  <p>SKU</p>
+                  {!activeProduct && (
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger>
+                          <Info className="w-3.5 h-3.5 text-muted-foreground" />
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>auto-generated if left blank</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  )}
+                </div>
+              </TableHead>
               <TableHead>Stock</TableHead>
               <TableHead># Available</TableHead>
               <TableHead>{`Price (${activeStore?.currency.toUpperCase()})`}</TableHead>
@@ -244,8 +267,8 @@ function Stock() {
                       id={`price-${index}`}
                       type="number"
                       placeholder="999"
-                      onChange={(e) => handleChange(e, variant.id, "price")}
-                      value={variant.price || ""}
+                      onChange={(e) => handleChange(e, variant.id, "netPrice")}
+                      value={variant.netPrice || ""}
                       disabled={variant.markedForDeletion}
                     />
                   )}

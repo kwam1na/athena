@@ -260,7 +260,7 @@ const Header = () => {
 
         <p className="text-sm">{`Order #${order?.orderNumber}`}</p>
 
-        <div className="text-xs text-muted-foreground">
+        <div className="text-xs">
           <OrderStatus order={order} />
         </div>
 

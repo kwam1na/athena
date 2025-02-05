@@ -8,6 +8,6 @@ export const productSchema = z.object({
   organizationId: z.string(),
   subcategoryId: z.string(),
   name: z.string().min(2),
-  areFeesAbsorbed: z.boolean().optional(),
+  areProcessingFeesAbsorbed: z.boolean().optional(),
   attributes: z.record(z.string(), z.any()).optional(),
 });

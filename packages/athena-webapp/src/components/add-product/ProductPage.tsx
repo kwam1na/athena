@@ -26,17 +26,18 @@ export default function ProductPage() {
   return (
     <div className="h-full container mx-auto w-full p-8 space-x-32 flex">
       <div className="space-y-8">
-        <div className="grid grid-cols-2 gap-8">
+        {/* <div className="grid grid-cols-2 gap-8">
           <ProductDetailsView />
           <ProductAvailabilityView />
-        </div>
+        </div> */}
+        <ProductCategorizationView />
         <ProductImagesView />
         <ProductStockView />
         <ProcessingFeesView />
       </div>
 
       <div className="w-full space-y-8">
-        <ProductCategorizationView />
+        <ProductAvailabilityView />
         {category?.name == "Hair" && <WigTypeView />}
         <ProductAttributesView />
       </div>

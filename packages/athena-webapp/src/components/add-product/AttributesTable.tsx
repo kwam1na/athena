@@ -230,7 +230,7 @@ export function ColorPopover() {
   return (
     <Popover open={open} onOpenChange={(o) => setOpen(o)}>
       <PopoverTrigger asChild>
-        <Button variant={"ghost"} className="text-muted-foreground">
+        <Button variant={"ghost"} className="text-muted-foreground text-xs">
           <Plus className="mr-2 h-3 w-3" />
           New
         </Button>
