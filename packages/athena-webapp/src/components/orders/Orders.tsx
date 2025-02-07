@@ -1,6 +1,6 @@
 import { ShoppingBag } from "lucide-react";
 import { OnlineOrder, Store } from "~/types";
-import { DataTable } from "../products-table/components/data-table";
+import { DataTable } from "../products/products-table/components/data-table";
 import { EmptyState } from "../states/empty/empty-state";
 import { OrderDataTable } from "./orders-table/components/data-table";
 import { orderColumns } from "./orders-table/components/orderColumns";

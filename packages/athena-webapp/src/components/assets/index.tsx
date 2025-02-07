@@ -1,4 +1,4 @@
-import { useMutation } from "convex/react";
+import { useAction, useMutation, useQuery } from "convex/react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { api } from "~/convex/_generated/api";
@@ -9,11 +9,19 @@ import { LoadingButton } from "../ui/loading-button";
 import { Switch } from "../ui/switch";
 import { Label } from "../ui/label";
 import { set } from "zod";
+import { EmptyState } from "../states/empty/empty-state";
+import { ArrowUp, Image, PlusIcon } from "lucide-react";
+import { Button } from "../ui/button";
+import { AssetsDataTable } from "./assets-table/data-table";
+import { assetColumns } from "./assets-table/assetsColumns";
+import { useImageUpload } from "~/src/hooks/use-image-upload";
+import ImageUploader, { ImageFile } from "../ui/image-uploader";
+import { convertImagesToWebp } from "~/src/lib/imageUtils";
 
 const Header = () => {
   return (
     <div className="container mx-auto flex gap-2 h-[40px] items-center justify-between">
-      <p className="text-3xl font-medium">Store configuration</p>
+      <p className="text-3xl font-medium">Store assets</p>
     </div>
   );
 };
@@ -286,18 +294,97 @@ const MaintenanceView = () => {
           </Label>
         </div>
       </div>
+
+      {/* <div className="w-full flex pr-8">
+        <LoadingButton
+          className="ml-auto"
+          isLoading={isUpdatingConfig}
+          onClick={saveChanges}
+        >
+          Save
+        </LoadingButton>
+      </div> */}
     </View>
   );
 };
 
-export const StoreConfiguration = () => {
+const EmptyStateContent = () => {
+  const { activeStore } = useGetActiveStore();
+  return (
+    <EmptyState
+      icon={<Image className="w-16 h-16 text-muted-foreground" />}
+      text={
+        <div className="flex gap-1 text-sm">
+          <p className="text-muted-foreground">No assets for</p>
+          <p className="font-medium">{activeStore?.name}</p>
+        </div>
+      }
+      cta={
+        <Button variant={"outline"}>
+          <PlusIcon className="w-3 h-3 mr-2" />
+          Add asset
+        </Button>
+      }
+    />
+  );
+};
+
+export const StoreAssets = () => {
+  const [images, setImages] = useState<ImageFile[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
+
+  const uploadStoreAssets = useAction(api.inventory.stores.uploadImageAssets);
+
+  const { activeStore } = useGetActiveStore();
+
+  const imageAssets = useQuery(
+    api.inventory.stores.getImageAssets,
+    activeStore ? { storeId: activeStore._id } : "skip"
+  );
+
+  if (!activeStore) return null;
+
+  const tableData = imageAssets?.map((asset) => ({ url: asset.url }));
+
+  const handleUpload = async () => {
+    setIsUploading(true);
+    const buffer = await convertImagesToWebp(images);
+    try {
+      await uploadStoreAssets({ images: buffer, storeId: activeStore._id });
+      toast.success("Images uploaded successfully");
+      setImages([]);
+    } catch (error) {
+      console.log(error);
+      toast.error("An error occurred while uploading images", {
+        description: (error as Error).message,
+      });
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const hasAssets = tableData && tableData.length > 0;
+
   return (
     <View hideBorder hideHeaderBottomBorder header={<Header />}>
-      <div className="container mx-auto h-full w-full py-8 grid grid-cols-2 gap-40">
-        <FeesView />
-        <ContactView />
-
-        <MaintenanceView />
+      <div className="container mx-auto space-y-8">
+        {/* <EmptyStateContent /> */}
+        <div className="w-[50%]">
+          <ImageUploader images={images} updateImages={setImages} />
+          {images.length > 0 && (
+            <LoadingButton
+              isLoading={isUploading}
+              variant={"outline"}
+              onClick={handleUpload}
+            >
+              <ArrowUp className="w-3 h-3 mr-2" />
+              Upload
+            </LoadingButton>
+          )}
+        </div>
+        {hasAssets && (
+          <AssetsDataTable data={tableData || []} columns={assetColumns} />
+        )}
       </div>
     </View>
   );

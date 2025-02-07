@@ -12,6 +12,7 @@ import { CheckCircle2, Circle, CircleDashed, RotateCcw } from "lucide-react";
 import { getOrderState } from "../../../orders/utils";
 import { OrderStatus } from "../../OrderStatus";
 import { ProductStatus } from "~/src/components/product/ProductStatus";
+import { Badge } from "~/src/components/ui/badge";
 
 export const orderColumns: ColumnDef<OnlineOrder>[] = [
   {

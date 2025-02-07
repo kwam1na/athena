@@ -1,21 +1,21 @@
 import { CheckCircledIcon, DotsHorizontalIcon } from "@radix-ui/react-icons";
 import { Row } from "@tanstack/react-table";
 
-import { Button } from "../../ui/button";
+import { Button } from "../../../ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "../../ui/dropdown-menu";
+} from "../../../ui/dropdown-menu";
 
 import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { Ban } from "lucide-react";
 import { useState } from "react";
 import { AlertModal } from "@/components/ui/modals/alert-modal";
-import { useDeleteProduct } from "../../product-actions";
+import { useDeleteProduct } from "../../../product-actions";
 import { Product } from "~/types";
 
 interface DataTableRowActionsProps<TData> {

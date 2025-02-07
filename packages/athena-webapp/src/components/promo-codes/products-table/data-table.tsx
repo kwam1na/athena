@@ -23,11 +23,6 @@ import {
   TableRow,
 } from "../../ui/table";
 
-import { DataTablePagination } from "./data-table-pagination";
-import { DataTableToolbar } from "./data-table-toolbar";
-import { AddProductCommand } from "./add-product-command";
-import { SelectedProductsProvider } from "./selectable-data-provider";
-
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];

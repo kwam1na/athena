@@ -64,6 +64,7 @@ export const getAll = query({
     }
 
     if (args.category && !categoryId) {
+      console.log("returning empty array");
       return [];
     }
 
@@ -80,13 +81,14 @@ export const getAll = query({
               q.eq(q.field("categoryId"), categoryId)
             );
           }
-          return q.eq(q.field("name"), args.subcategory?.[0]);
+          return q.eq(q.field("slug"), args.subcategory?.[0]);
         })
         .first();
       subcategoryId = s?._id;
     }
 
     if (args.subcategory && !subcategoryId) {
+      console.log("returning empty array for subcategory");
       return [];
     }
 

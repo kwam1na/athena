@@ -8,3 +8,8 @@ export const storeSchema = v.object({
   createdByUserId: v.id("athenaUser"),
   organizationId: v.id("organization"),
 });
+
+export const storeAssetSchema = v.object({
+  storeId: v.id("store"),
+  url: v.string(),
+});

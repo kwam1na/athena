@@ -1,6 +1,8 @@
-import { mutation, query } from "../_generated/server";
+import { action, mutation, query } from "../_generated/server";
 import { v } from "convex/values";
 import { storeSchema } from "../schemas/inventory";
+import { uploadFileToS3 } from "../aws/aws";
+import { api } from "../_generated/api";
 
 const entity = "store";
 
@@ -123,5 +125,63 @@ export const updateConfig = mutation({
     await ctx.db.patch(args.id, { config: args.config });
 
     return await ctx.db.get(args.id);
+  },
+});
+
+export const createImageAsset = mutation({
+  args: {
+    storeId: v.id(entity),
+    url: v.string(),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.insert("storeAsset", {
+      url: args.url,
+      storeId: args.storeId,
+    });
+
+    return { success: true };
+  },
+});
+
+export const getImageAssets = query({
+  args: {
+    storeId: v.id(entity),
+  },
+  handler: async (ctx, args) => {
+    const assets = await ctx.db
+      .query("storeAsset")
+      .filter((q) => q.eq(q.field("storeId"), args.storeId))
+      .collect();
+
+    return assets;
+  },
+});
+
+export const uploadImageAssets = action({
+  args: {
+    images: v.array(v.bytes()),
+    storeId: v.id("store"),
+  },
+  handler: async (ctx, args) => {
+    const uploadPromises = args.images.map(async (imgBuffer) => {
+      return uploadFileToS3(
+        imgBuffer,
+        `stores/${args.storeId}/assets/${crypto.randomUUID()}.webp`
+      );
+    });
+    const images = (await Promise.all(uploadPromises)).filter(
+      (url) => url !== undefined
+    );
+
+    await Promise.all(
+      images.map((url) =>
+        ctx.runMutation(api.inventory.stores.createImageAsset, {
+          storeId: args.storeId,
+          url,
+        })
+      )
+    );
+
+    return { success: true, images };
   },
 });

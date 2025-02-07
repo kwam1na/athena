@@ -2,7 +2,7 @@ import { ColumnDef } from "@tanstack/react-table";
 import { DataTableColumnHeader } from "./data-table-column-header";
 import { Link } from "@tanstack/react-router";
 import { Product } from "~/types";
-import { ProductStatus } from "../../product/ProductStatus";
+import { ProductStatus } from "../../../product/ProductStatus";
 
 export const columns: ColumnDef<Product>[] = [
   {

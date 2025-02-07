@@ -3,6 +3,7 @@ import View from "../View";
 import { useOnlineOrder } from "~/src/contexts/OnlineOrderContext";
 import { currencyFormatter } from "~/src/lib/utils";
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
+import { Badge } from "../ui/badge";
 
 export function OrderDetailsView() {
   const { order } = useOnlineOrder();
@@ -33,56 +34,39 @@ export function OrderDetailsView() {
   const paymentChannel =
     paymentMethod?.channel == "mobile_money" ? "Mobile Money" : "Card";
 
-  const netAmount = order.amount - amountRefunded;
-
   return (
     <View
       hideBorder
       hideHeaderBottomBorder
       className="h-auto w-full"
-      header={<p className="text-sm text-sm text-muted-foreground"></p>}
+      header={<p className="text-sm text-sm text-muted-foreground">Payment</p>}
     >
-      <div className="py-4 space-y-8">
-        <div className="grid grid-cols-2 gap-16">
-          <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">Payment status</p>
-            {order.hasVerifiedPayment && !isOrderRefunded && (
-              <div className="flex gap-2 items-center">
-                <p className="text-sm">Complete</p>
-                <Check className="h-4 w-4 text-green-700" />
-              </div>
-            )}
+      <div className="py-4">
+        <div className="space-y-4">
+          <div className="flex items-center gap-8">
+            <div className="space-y-2">
+              <p className="text-sm">{`${paymentMethod?.bank} ${paymentChannel}`}</p>
+              {/* <p className="text-sm text-muted-foreground">Payment channel</p> */}
+            </div>
 
-            {Boolean(amountRefunded) && <p className="text-sm">{refundText}</p>}
+            {order.hasVerifiedPayment && (
+              <Badge variant={"outline"} className="bg-green-50 text-green-600">
+                <p className="text-xs mr-2">Verified</p>
+                <Check className="h-4 w-4" />
+              </Badge>
+            )}
 
             {!order.hasVerifiedPayment && (
-              <div className="flex gap-2 items-center">
-                <p className="text-sm">Not verified</p>
-              </div>
+              <Badge
+                variant={"outline"}
+                className="text-yellow-600 bg-yellow-50"
+              >
+                <p className="text-xs">Not verified</p>
+              </Badge>
             )}
           </div>
 
-          {Boolean(amountRefunded) && (
-            <div className="space-y-4">
-              <p className="text-sm text-muted-foreground">Refunded</p>
-              <p className="text-sm">{`- ${formatter.format(amountRefunded / 100)}`}</p>
-            </div>
-          )}
-
           <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">Payment channel</p>
-            <p className="text-sm">{`${paymentMethod?.bank} ${paymentChannel}`}</p>
-          </div>
-
-          {Boolean(amountRefunded) && Boolean(netAmount) && (
-            <div className="space-y-4">
-              <p className="text-sm text-muted-foreground">Net</p>
-              <p className="text-sm">{formatter.format(netAmount / 100)}</p>
-            </div>
-          )}
-
-          <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">Payment method</p>
             <p className="text-sm">{`Account ending in ${paymentMethod?.last4}`}</p>
           </div>
         </div>

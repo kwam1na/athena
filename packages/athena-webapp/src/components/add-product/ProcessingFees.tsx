@@ -42,7 +42,7 @@ function ProcessingFees() {
           <div>
             <Label htmlFor="fees-toggle">Absorb processing fees</Label>
             <p className="text-sm text-muted-foreground">
-              Paystack charges a 1.97% fee on all transactions
+              Paystack charges a {PAYSTACK_PROCESSING_FEE}% fee
             </p>
           </div>
           <Switch

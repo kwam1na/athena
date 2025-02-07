@@ -1,5 +1,5 @@
 import { useMutation, useQuery } from "convex/react";
-import StoreProducts from "../StoreProducts";
+import StoreProducts from "../products/StoreProducts";
 import View from "../View";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { api } from "~/convex/_generated/api";

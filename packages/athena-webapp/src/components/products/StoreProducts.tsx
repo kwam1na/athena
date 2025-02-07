@@ -1,12 +1,12 @@
 import { columns } from "./products-table/components/columns";
 import { DataTable } from "./products-table/components/data-table";
-import { EmptyState } from "./states/empty/empty-state";
+import { EmptyState } from "../states/empty/empty-state";
 import { PackageXIcon } from "lucide-react";
 import { Link } from "@tanstack/react-router";
-import { Button } from "./ui/button";
+import { Button } from "../ui/button";
 import { PlusIcon } from "@radix-ui/react-icons";
 import { Product, Store } from "~/types";
-import useGetActiveStore from "../hooks/useGetActiveStore";
+import useGetActiveStore from "../../hooks/useGetActiveStore";
 
 export default function StoreProducts({ products }: { products: Product[] }) {
   const { activeStore } = useGetActiveStore();

@@ -2,22 +2,17 @@ import { useQuery } from "convex/react";
 import useGetActiveStore from "./useGetActiveStore";
 import { api } from "~/convex/_generated/api";
 
-export const useGetProducts = ({
-  subcategorySlug,
-}: {
-  subcategorySlug?: string;
-} = {}) => {
+export const useGetSubcategories = () => {
   const { activeStore } = useGetActiveStore();
 
-  const products = useQuery(
-    api.inventory.products.getAll,
+  const subcategories = useQuery(
+    api.inventory.subcategories.getAll,
     activeStore?._id
       ? {
           storeId: activeStore._id,
-          subcategory: subcategorySlug ? [subcategorySlug] : undefined,
         }
       : "skip"
   );
 
-  return products;
+  return subcategories;
 };

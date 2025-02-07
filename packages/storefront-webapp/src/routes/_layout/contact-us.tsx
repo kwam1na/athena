@@ -1,5 +1,4 @@
 import { createFileRoute } from "@tanstack/react-router";
-import showroom from "@/assets/showroom.png";
 import { useStoreContext } from "@/contexts/StoreContext";
 import { capitalizeWords } from "@/lib/utils";
 import { FadeIn } from "@/components/common/FadeIn";
@@ -29,7 +28,7 @@ const ContactUs = () => {
 
         <img
           className="w-150 h-150 object-cover"
-          src={showroom}
+          src={store.config?.showroomImage}
           alt="showroom"
         />
 

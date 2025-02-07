@@ -14,6 +14,11 @@ import {
 } from "@/components/ui/sidebar";
 import {
   BadgePercent,
+  Cog,
+  CogIcon,
+  Image,
+  PanelBottom,
+  PanelTop,
   PersonStanding,
   ShoppingBasket,
   ShoppingCart,
@@ -28,6 +33,7 @@ import useGetActiveStore from "../hooks/useGetActiveStore";
 import { useGetActiveOrganization } from "../hooks/useGetOrganizations";
 import { useNewOrderNotification } from "../hooks/useNewOrderNotification";
 import { useAuth } from "../hooks/useAuth";
+import { GearIcon } from "@radix-ui/react-icons";
 
 export function AppSidebar() {
   const { activeStore } = useGetActiveStore();
@@ -125,7 +131,12 @@ export function AppSidebar() {
               </SidebarMenuItem>
 
               <SidebarMenuItem>
-                <SidebarGroupLabel>Configuration</SidebarGroupLabel>
+                <SidebarMenuButton asChild>
+                  <div className="flex items-center">
+                    <PanelTop className="w-4 h-4" />
+                    <p className="font-medium">Storefront</p>
+                  </div>
+                </SidebarMenuButton>
                 <SidebarMenuSub>
                   <SidebarMenuSubItem>
                     <SidebarMenuButton asChild>
@@ -138,7 +149,27 @@ export function AppSidebar() {
                         })}
                         className="flex items-center"
                       >
-                        <p className="font-medium">Store</p>
+                        <CogIcon className="w-4 h-4" />
+                        <p className="font-medium">Configuration</p>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuSubItem>
+                </SidebarMenuSub>
+
+                <SidebarMenuSub>
+                  <SidebarMenuSubItem>
+                    <SidebarMenuButton asChild>
+                      <Link
+                        to="/$orgUrlSlug/store/$storeUrlSlug/assets"
+                        params={(p) => ({
+                          ...p,
+                          orgUrlSlug: activeOrganization?.slug,
+                          storeUrlSlug: activeStore?.slug,
+                        })}
+                        className="flex items-center"
+                      >
+                        <Image className="w-4 h-4" />
+                        <p className="font-medium">Assets</p>
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuSubItem>

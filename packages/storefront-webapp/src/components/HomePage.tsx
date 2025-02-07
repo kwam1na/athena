@@ -13,7 +13,6 @@ import { ProductCard, ProductSkuCard } from "./ProductCard";
 import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
 import { Product, ProductSku } from "@athena/webapp";
-import hero from "@/assets/hero.png";
 
 function FeaturedProduct({ product }: { product: any }) {
   const { formatter } = useStoreContext();
@@ -25,15 +24,23 @@ function FeaturedProduct({ product }: { product: any }) {
     product.skus[0]
   );
 
+  const hasMultipleSkus = product.skus.length > 1;
+
+  const priceLabel = hasMultipleSkus
+    ? `Starting at ${formatter.format(lowestPriceSku.price)}`
+    : formatter.format(lowestPriceSku.price);
+
   return (
     <div className="w-full flex flex-col xl:flex-row items-center justify-center gap-8 xl:gap-16">
       <div className="space-y-4 order-2 xl:order-1">
         <div className="text-sm flex flex-col items-start gap-4">
           <p className="font-medium">{product.name}</p>
-          <p className="text-sm text-muted-foreground">{`Starting at ${formatter.format(lowestPriceSku.price)}`}</p>
-          <p className="text-sm text-muted-foreground">
-            Available in multiple lengths
-          </p>
+          <p className="text-sm text-muted-foreground">{priceLabel}</p>
+          {product.skus && product.skus.length > 1 && (
+            <p className="text-sm text-muted-foreground">
+              Available in multiple lengths
+            </p>
+          )}
         </div>
 
         <div>
@@ -179,7 +186,7 @@ function FeaturedSection({ data }: { data: any }) {
 }
 
 export default function HomePage() {
-  const { organizationId, storeId } = useStoreContext();
+  const { organizationId, storeId, store } = useStoreContext();
 
   const { data: bestSellers, isLoading: isLoadingBestSellers } = useQuery(
     productQueries.bestSellers({
@@ -297,18 +304,42 @@ export default function HomePage() {
     <>
       <div className="px-4 lg:px-0 overflow-hidden">
         <div className="space-y-32 pb-56">
-          <div className="pt-16 xl:p-32 bg-accent5">
-            <div className="flex flex-col mt-32">
+          <div className="relative">
+            <motion.img
+              initial={{ opacity: 0, scale: 1.05 }}
+              animate={{
+                opacity: 1,
+                scale: 1,
+                transition: {
+                  duration: 1,
+                  ease: [0.6, 0.05, 0.01, 0.9],
+                },
+              }}
+              src={store?.config?.showroomImage}
+              className="w-full object-cover"
+            />
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{
+                opacity: 0.4,
+                transition: {
+                  duration: 0.5,
+                  delay: 1, // Start after image animation completes
+                },
+              }}
+              className="absolute inset-0 bg-black"
+            />
+            <div className="absolute inset-0 flex flex-col items-center justify-center -translate-y-[15%]">
               <motion.p
                 initial={initialAnimation}
                 animate={{
                   opacity: 1,
                   y: 0,
                   transition: firstLoad
-                    ? { ease: "easeOut", duration: 0.4, delay: 0.3 }
+                    ? { ease: "easeOut", duration: 0.4, delay: 1.3 }
                     : { ease: "easeOut", duration: 0, delay: 0.3 },
                 }}
-                className="text-2xl text-center"
+                className="text-2xl text-center text-accent5 drop-shadow-lg"
               >
                 Switch your look
               </motion.p>
@@ -318,20 +349,13 @@ export default function HomePage() {
                   opacity: 1,
                   y: 0,
                   transition: firstLoad
-                    ? { ease: "easeOut", duration: 0.4, delay: 0.6 }
+                    ? { ease: "easeOut", duration: 0.4, delay: 1.6 }
                     : { ease: "easeOut", duration: 0, delay: 0.3 },
                 }}
-                className="font-lavish text-9xl text-center text-accent2"
+                className="font-lavish text-9xl text-center text-accent5 drop-shadow-lg"
               >
-                to match your mood
+                to match your mood!
               </motion.p>
-
-              {/* <img
-                src={hero}
-                className="absolute right-0 top-32 aspect object-cover w-[480px] h-[560px] md:w-[640px] md:h-[800px]"
-              /> */}
-
-              <span className="h-[20vw]" />
             </div>
           </div>
 

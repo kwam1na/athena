@@ -14,8 +14,14 @@ export const OrderSummary = () => {
 
   const discountValue = getDiscountValue(order.amount, order.discount);
 
-  const amountPaid =
-    order.amount - discountValue + (order.deliveryFee || 0) * 100;
+  const orderAmount = order.amount + (order.deliveryFee || 0) * 100;
+
+  const amountPaid = orderAmount - discountValue;
+
+  const amountRefunded =
+    order?.refunds?.reduce((acc, refund) => acc + refund.amount, 0) || 0;
+
+  const netAmount = amountPaid - amountRefunded;
 
   const discountText =
     order.discount?.type === "percentage"
@@ -52,7 +58,7 @@ export const OrderSummary = () => {
             <p className="text-sm">{formatter.format(discountValue / 100)}</p>
           </div>
 
-          <div className="flex justify-between font-medium">
+          <div className="flex text-sm justify-between font-medium">
             <strong>Amount paid</strong>
             <strong>{formatter.format(amountPaid / 100)}</strong>
           </div>
@@ -60,9 +66,23 @@ export const OrderSummary = () => {
       )}
 
       {!order.discount && (
-        <div className="flex justify-between">
+        <div className="flex text-sm justify-between">
           <strong>Amount paid</strong>
           <strong>{formatter.format(amountPaid / 100)}</strong>
+        </div>
+      )}
+
+      {Boolean(amountRefunded) && (
+        <div className="flex text-sm justify-between">
+          <strong>Refunded</strong>
+          <strong>{`- ${formatter.format(amountRefunded / 100)}`}</strong>
+        </div>
+      )}
+
+      {Boolean(amountRefunded) && Boolean(netAmount) && (
+        <div className="flex text-sm justify-between">
+          <strong>Net</strong>
+          <strong>{formatter.format(netAmount / 100)}</strong>
         </div>
       )}
     </div>

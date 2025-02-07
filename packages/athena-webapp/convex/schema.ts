@@ -15,6 +15,7 @@ import {
   promoCodeItemSchema,
   promoCodeSchema,
   redeemedPromoCodeSchema,
+  storeAssetSchema,
   storeSchema,
   subcategorySchema,
 } from "./schemas/inventory";
@@ -61,6 +62,7 @@ const schema = defineSchema({
   savedBag: defineTable(savedBagSchema),
   savedBagItem: defineTable(savedBagItemSchema),
   store: defineTable(storeSchema),
+  storeAsset: defineTable(storeAssetSchema),
   storeFrontSession: defineTable(storeFrontSessionSchema),
   storeFrontUser: defineTable(storeFrontUserSchema),
   storeFrontVerificationCode: defineTable(storeFrontVerificationCode),

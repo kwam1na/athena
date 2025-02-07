@@ -1,4 +1,4 @@
-import StoreProductsView from "~/src/components/StoreProductsView";
+import StoreProductsView from "~/src/components/products/StoreProductsView";
 import { NotFoundView } from "@/components/states/not-found/NotFoundView";
 import { createFileRoute } from "@tanstack/react-router";
 

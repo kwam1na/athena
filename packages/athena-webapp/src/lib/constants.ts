@@ -14,4 +14,4 @@ export const currencies = [
   },
 ];
 
-export const PAYSTACK_PROCESSING_FEE = 1.97;
+export const PAYSTACK_PROCESSING_FEE = 1.95;

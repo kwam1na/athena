@@ -21,11 +21,12 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "../../ui/table";
+} from "../../../ui/table";
 
 import { DataTablePagination } from "./data-table-pagination";
 import { DataTableToolbar } from "./data-table-toolbar";
 import { AddProductCommand } from "./add-product-command";
+import ProductSubcategoryToggleGroup from "../../ProductSubcategoryToggleGroup";
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
@@ -77,6 +78,9 @@ export function DataTable<TData, TValue>({
     <div className="space-y-4">
       <AddProductCommand />
       {showToolbar && <DataTableToolbar table={table} />}
+      {/* <div className="flex">
+        <ProductSubcategoryToggleGroup />
+      </div> */}
       <div className="rounded-md border">
         <Table>
           <TableHeader>
