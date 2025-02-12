@@ -44,8 +44,6 @@ export const useShoppingBag = () => {
   const [unavailableProducts, setUnavailableProducts] =
     useState<UnavailableProducts>([]);
 
-  const [discount, setDiscount] = useState<Discount | null>(null);
-
   const { userId, organizationId, storeId } = useStoreContext();
 
   const { data: savedBag } = useQuery(
@@ -456,8 +454,6 @@ export const useShoppingBag = () => {
   };
 
   return {
-    discount,
-    setDiscount,
     bagAction: action,
     addProductToBag,
     bag,

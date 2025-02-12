@@ -18,6 +18,7 @@ import { HeartIconFilled } from "@/assets/icons/HeartIconFilled";
 import { BagProduct, PickupDetails, ShippingPolicy } from "./ProductDetails";
 import { Reviews } from "./ProductReviews";
 import { About } from "./About";
+import ImageWithFallback from "../ui/image-with-fallback";
 
 export default function MobileProductPage() {
   const [isSheetOpen, setIsSheetOpen] = useState(false);
@@ -190,7 +191,7 @@ export default function MobileProductPage() {
             <div className="flex gap-4">
               <LoadingButton
                 className="w-[288px]"
-                isLoading={isUpdatingBag}
+                isLoading={false}
                 onClick={handleUpdateBag}
               >
                 {isUpdatingBag ? "Adding to Bag.." : "Add to Bag"}
@@ -198,7 +199,7 @@ export default function MobileProductPage() {
 
               <LoadingButton
                 variant={"outline"}
-                isLoading={isUpdatingBag}
+                isLoading={false}
                 onClick={handleUpdateSavedBag}
               >
                 {!savedBagItem && (

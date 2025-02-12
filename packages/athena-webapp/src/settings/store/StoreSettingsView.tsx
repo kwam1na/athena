@@ -23,7 +23,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { Store } from "~/types";
 import { useMutation } from "convex/react";
 import { api } from "~/convex/_generated/api";
-import { deleteDirectoryInS3 } from "~/src/lib/aws";
+// import { deleteDirectoryInS3 } from "~/src/lib/aws";
 
 const StoreSettings = () => {
   const { activeStore } = useGetActiveStore();
@@ -172,7 +172,7 @@ const DeleteStore = ({ store }: { store: Store }) => {
         id: store._id,
       });
 
-      await deleteDirectoryInS3(`stores/${store._id}`);
+      // await deleteDirectoryInS3(`stores/${store._id}`);
 
       toast("Store deleted", {
         icon: <CheckCircle2 className="h-4 w-4" />,
@@ -235,7 +235,7 @@ const DeleteAllProductsInStore = ({ store }: { store: Store }) => {
 
       await removeAllProductsForStore({ storeId: store._id });
 
-      await deleteDirectoryInS3(`stores/${store._id}/products`);
+      // await deleteDirectoryInS3(`stores/${store._id}/products`);
 
       toast("Products deleted", {
         icon: <CheckCircle2 className="h-4 w-4" />,

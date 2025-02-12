@@ -14,9 +14,14 @@ export const OrderSummary = () => {
 
   const discountValue = getDiscountValue(order.amount, order.discount);
 
+  const discount =
+    order.discount && order.discount?.type === "percentage"
+      ? discountValue
+      : discountValue * 100;
+
   const orderAmount = order.amount + (order.deliveryFee || 0) * 100;
 
-  const amountPaid = orderAmount - discountValue;
+  const amountPaid = orderAmount - discount;
 
   const amountRefunded =
     order?.refunds?.reduce((acc, refund) => acc + refund.amount, 0) || 0;
@@ -55,7 +60,7 @@ export const OrderSummary = () => {
               </div>
             </div>
 
-            <p className="text-sm">{formatter.format(discountValue / 100)}</p>
+            <p className="text-sm">{formatter.format(discount / 100)}</p>
           </div>
 
           <div className="flex text-sm justify-between font-medium">

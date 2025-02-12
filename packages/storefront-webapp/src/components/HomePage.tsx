@@ -11,8 +11,9 @@ import { Button } from "./ui/button";
 import { useStoreContext } from "@/contexts/StoreContext";
 import { ProductCard, ProductSkuCard } from "./ProductCard";
 import { motion } from "framer-motion";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { Product, ProductSku } from "@athena/webapp";
+import ImageWithFallback from "./ui/image-with-fallback";
 
 function FeaturedProduct({ product }: { product: any }) {
   const { formatter } = useStoreContext();
@@ -61,7 +62,7 @@ function FeaturedProduct({ product }: { product: any }) {
         params={(params) => ({ ...params, productSlug: product._id })}
         search={{ variant: product.skus?.[0].sku }}
       >
-        <img
+        <ImageWithFallback
           alt={`${product.name} image`}
           className="aspect-square object-cover w-96 h-96 rounded"
           src={product.skus[0].images[0]}
@@ -302,7 +303,7 @@ export default function HomePage() {
 
   return (
     <>
-      <div className="px-4 lg:px-0 overflow-hidden">
+      <div className="overflow-hidden">
         <div className="space-y-32 pb-56">
           <div className="relative">
             <motion.img
@@ -316,7 +317,7 @@ export default function HomePage() {
                 },
               }}
               src={store?.config?.showroomImage}
-              className="w-full object-cover"
+              className="w-full h-screen object-cover"
             />
             <motion.div
               initial={{ opacity: 0 }}
@@ -329,7 +330,7 @@ export default function HomePage() {
               }}
               className="absolute inset-0 bg-black"
             />
-            <div className="absolute inset-0 flex flex-col items-center justify-center -translate-y-[15%]">
+            <div className="absolute inset-0 flex flex-col items-center justify-center -translate-y-[10%]">
               <motion.p
                 initial={initialAnimation}
                 animate={{
@@ -352,14 +353,14 @@ export default function HomePage() {
                     ? { ease: "easeOut", duration: 0.4, delay: 1.6 }
                     : { ease: "easeOut", duration: 0, delay: 0.3 },
                 }}
-                className="font-lavish text-9xl text-center text-accent5 drop-shadow-lg"
+                className="font-lavish text-8xl md:text-9xl text-center text-accent5 drop-shadow-lg"
               >
-                to match your mood!
+                to match your mood
               </motion.p>
             </div>
           </div>
 
-          <div className="container mx-auto space-y-32 pb-56">
+          <div className="container mx-auto space-y-32 pb-56 px-4 lg:px-0">
             {Boolean(bestSellersSorted?.length) && (
               <motion.div
                 initial={sectionAnimation}

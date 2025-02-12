@@ -566,17 +566,12 @@ export const remove = mutation({
 export const clear = action({
   args: { id: v.id(entity), storeId: v.id("store") },
   handler: async (ctx, args) => {
-    const store = await ctx.runQuery(api.inventory.stores.getById, {
-      id: args.storeId,
-    });
-
-    await ctx.runMutation(api.inventory.products.remove, {
-      id: args.id,
-    });
-
-    if (store) {
-      await deleteDirectoryInS3(`stores/${store._id}/products/${args.id}`);
-    }
+    await Promise.all([
+      await ctx.runMutation(api.inventory.products.remove, {
+        id: args.id,
+      }),
+      await deleteDirectoryInS3(`stores/${args.storeId}/products/${args.id}`),
+    ]);
   },
 });
 

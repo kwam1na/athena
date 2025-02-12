@@ -28,7 +28,7 @@ const item = {
 
 export default function NavigationBar() {
   const { store } = useStoreContext();
-  const { bagCount, savedBagCount, bag } = useShoppingBag();
+  const { bagCount } = useShoppingBag();
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [isMobileMenuShowing, setIsMobileMenuShowing] = useState(false);
 

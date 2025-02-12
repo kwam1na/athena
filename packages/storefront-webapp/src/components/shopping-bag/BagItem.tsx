@@ -1,5 +1,6 @@
 import { ProductSku } from "@athena/webapp";
 import { motion } from "framer-motion";
+import ImageWithFallback from "../ui/image-with-fallback";
 
 type BagItemProps = {
   item: any; // The product item object
@@ -54,7 +55,7 @@ export function BagItem({
         exit="exit"
         className="relative z-10 flex gap-4 items-center"
       >
-        <img
+        <ImageWithFallback
           src={item.productImage || ""}
           alt={item.productName || "product image"}
           className="w-48 h-48 object-cover rounded-lg"

@@ -17,11 +17,9 @@ export const createTransaction = action({
     orderDetails: orderDetailsSchema,
   },
   handler: async (ctx, args) => {
-    // throw new Error("Not implemented");
-
     const amount = getOrderAmount({
       discount: args.orderDetails.discount,
-      deliveryFee: (args.orderDetails.deliveryFee || 0) * 100,
+      deliveryFee: args.orderDetails.deliveryFee || 0,
       subtotal: args.amount,
     });
 
@@ -107,16 +105,13 @@ export const verifyPayment = action({
         }
       );
 
-      console.log("order ->", order);
-      console.log("session ->", session);
-
       const subtotal = session?.amount || order?.amount || 0;
 
       const discount = session?.discount || order?.discount;
 
       const orderAmountLessDiscounts = getOrderAmount({
         discount,
-        deliveryFee: (order?.deliveryFee || 0) * 100, // mutiply by 100 to get the amount in cents
+        deliveryFee: order?.deliveryFee || 0,
         subtotal,
       });
 

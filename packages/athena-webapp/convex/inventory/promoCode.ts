@@ -4,7 +4,10 @@ import { mutation, query } from "../_generated/server";
 const entity = "promoCode";
 
 export const redeem = mutation({
-  args: { code: v.string() },
+  args: {
+    code: v.string(),
+    storeFrontUserId: v.union(v.id("storeFrontUser"), v.id("guest")),
+  },
   handler: async (ctx, args) => {
     // Find the invite code
     const promoCode = await ctx.db
@@ -19,7 +22,12 @@ export const redeem = mutation({
     // check if this code is already redeemed
     const redeemed = await ctx.db
       .query("redeemedPromoCode")
-      .filter((q) => q.eq(q.field("promoCodeId"), promoCode._id))
+      .filter((q) =>
+        q.and(
+          q.eq(q.field("promoCodeId"), promoCode._id),
+          q.eq(q.field("storeFrontUserId"), args.storeFrontUserId)
+        )
+      )
       .first();
 
     if (redeemed) {

@@ -9,6 +9,7 @@ import { LoadingButton } from "../ui/loading-button";
 import { Switch } from "../ui/switch";
 import { Label } from "../ui/label";
 import { set } from "zod";
+import { Construction, Disc2 } from "lucide-react";
 
 const Header = () => {
   return (
@@ -223,8 +224,6 @@ const MaintenanceView = () => {
     setIsUpdatingConfig(true);
     setIsInMaintenanceMode(toggled);
 
-    console.log("toggled ", toggled);
-
     const updates = {
       inMaintenanceMode: toggled,
     };
@@ -240,7 +239,13 @@ const MaintenanceView = () => {
       const message = toggled
         ? "Store set to maintenance mode"
         : "Store set to live";
-      toast.success(message);
+
+      const icon = toggled ? (
+        <Construction className="w-4 h-4" />
+      ) : (
+        <Disc2 className="w-4 h-4" />
+      );
+      toast.message(message, { icon });
     } catch (error) {
       console.log(error);
       toast.error("An error occurred while updating store availability", {
@@ -272,7 +277,13 @@ const MaintenanceView = () => {
       }
     >
       <div className="container mx-auto h-full py-8 grid grid-cols-2 gap-4">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-8">
+          <div className="flex items-center gap-2">
+            <Construction className="w-4 h-4 text-muted-foreground" />
+            <Label className="text-muted-foreground" htmlFor="custom">
+              Maintenance mode
+            </Label>
+          </div>
           <Switch
             id="custom"
             disabled={isUpdatingConfig}
@@ -281,9 +292,6 @@ const MaintenanceView = () => {
               saveChanges(e);
             }}
           />
-          <Label className="text-muted-foreground" htmlFor="custom">
-            Maintenance mode
-          </Label>
         </div>
       </div>
     </View>

@@ -4,13 +4,8 @@ import { Table } from "@tanstack/react-table";
 import { Button } from "../../../ui/button";
 import { Input } from "../../../ui/input";
 import { Link } from "@tanstack/react-router";
-import { DataTableViewOptions } from "./data-table-view-options";
 import { DataTableFacetedFilter } from "./data-table-faceted-filter";
-import { categories, subcategories } from "./data";
-// import { DataTableViewOptions } from "./data-table-view-options";
-
-// import { priorities, statuses } from "./data/data";
-// import { DataTableFacetedFilter } from "./data-table-faceted-filter";
+import { useGetSubcategories } from "~/src/hooks/useGetSubcategories";
 
 interface DataTableToolbarProps<TData> {
   table: Table<TData>;
@@ -20,6 +15,15 @@ export function DataTableToolbar<TData>({
   table,
 }: DataTableToolbarProps<TData>) {
   const isFiltered = table.getState().columnFilters.length > 0;
+
+  const subcategories = useGetSubcategories();
+
+  const subcategoryOptions = subcategories
+    ?.map((s) => ({
+      label: s.name,
+      value: s._id,
+    }))
+    ?.sort((a, b) => a.label.localeCompare(b.label));
 
   return (
     <div className="flex items-center justify-between">
@@ -33,6 +37,14 @@ export function DataTableToolbar<TData>({
             }
             className="h-8 w-[150px] lg:w-[250px]"
           />
+          {table.getColumn("subcategoryId") && (
+            <DataTableFacetedFilter
+              column={table.getColumn("subcategoryId")}
+              title="Subcategory"
+              options={subcategoryOptions || []}
+            />
+          )}
+
           {isFiltered && (
             <Button
               variant="ghost"

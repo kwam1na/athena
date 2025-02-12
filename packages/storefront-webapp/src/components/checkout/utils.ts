@@ -15,11 +15,14 @@ export const getOrderAmount = ({
   discount,
   deliveryFee,
   subtotal,
+  inCents,
 }: {
   discount?: Discount | null;
   deliveryFee: number;
   subtotal: number;
+  inCents?: boolean;
 }) => {
   const discountValue = getDiscountValue(subtotal, discount);
-  return subtotal - discountValue + deliveryFee;
+  const base = inCents ? 100 : 1;
+  return subtotal - discountValue * base + deliveryFee;
 };

@@ -35,17 +35,7 @@ export const getById = query({
     storeId: v.id("store"),
   },
   handler: async (ctx, args) => {
-    const subcategory = await ctx.db
-      .query(entity)
-      .filter((q) =>
-        q.and(
-          q.eq(q.field("_id"), args.id),
-          q.eq(q.field("storeId"), args.storeId)
-        )
-      )
-      .collect();
-
-    return subcategory;
+    return await ctx.db.get(args.id);
   },
 });
 

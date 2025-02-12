@@ -11,13 +11,8 @@ import { toast } from "sonner";
 import { Ban, Plus, PlusIcon, RotateCcw, Save } from "lucide-react";
 import { LoadingButton } from "../ui/loading-button";
 import { useState } from "react";
-import {
-  convertImagesToWebp,
-  deleteFiles,
-  getUploadImagesData,
-} from "@/lib/imageUtils";
+import { convertImagesToWebp, getUploadImagesData } from "@/lib/imageUtils";
 import { AlertModal } from "../ui/modals/alert-modal";
-import { ActionModal } from "../ui/modals/action-modal";
 import ProductPage from "./ProductPage";
 import { ProductProvider, useProduct } from "@/contexts/ProductContext";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
@@ -327,17 +322,17 @@ function ProductViewContent() {
     else await saveProduct();
   };
 
-  const retryDeletingImages = async () => {
-    setIsDeletingImages(true);
-    const res = await deleteFiles(failedToUploadUrls);
-    setIsDeletingImages(false);
+  // const retryDeletingImages = async () => {
+  //   setIsDeletingImages(true);
+  //   const res = await deleteFiles(failedToUploadUrls);
+  //   setIsDeletingImages(false);
 
-    if (res.failedDeleteKeys.length > 0) {
-      setFailedToUploadUrls(res.failedDeleteUrls);
-      setIsActionModalOpen(true);
-      return;
-    }
-  };
+  //   if (res.failedDeleteKeys.length > 0) {
+  //     setFailedToUploadUrls(res.failedDeleteUrls);
+  //     setIsActionModalOpen(true);
+  //     return;
+  //   }
+  // };
 
   // const isValid = didProvideRequiredData();
   const isValid = true;
@@ -432,27 +427,6 @@ function ProductViewContent() {
           deleteActiveProduct();
         }}
       />
-      <ActionModal
-        isOpen={isActionModalOpen}
-        loading={isDeletingImages}
-        title="Error deleting product images"
-        description=""
-        declineText="Cancel"
-        confirmText="Try again"
-        onConfirm={retryDeletingImages}
-        onClose={() => setIsActionModalOpen(false)}
-      >
-        <div className="grid grid-cols-4 space-y-2">
-          {failedToUploadUrls.map((key, index) => (
-            <img
-              key={index}
-              alt="Uploaded image"
-              className={`aspect-square w-full w-[64px] h-[64px] rounded-md object-cover`}
-              src={key}
-            />
-          ))}
-        </div>
-      </ActionModal>
       <ProductPage />
     </View>
   );

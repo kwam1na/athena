@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/breadcrumb";
 import { WIGLUB_HAIR_STUDIO_LOCATION_URL } from "@/lib/constants";
 import { getDiscountValue } from "@/components/checkout/utils";
+import ImageWithFallback from "@/components/ui/image-with-fallback";
 
 export const Route = createFileRoute(
   "/_layout/_ordersLayout/shop/orders/$orderId"
@@ -122,7 +123,7 @@ const OrderItem = ({
 }) => {
   return (
     <div className="flex gap-8 text-sm">
-      <img
+      <ImageWithFallback
         src={item.productImage || placeholder}
         alt={"product image"}
         className="w-40 h-40 aspect-square object-cover rounded-sm"

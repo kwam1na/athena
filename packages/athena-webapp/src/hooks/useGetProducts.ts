@@ -19,5 +19,5 @@ export const useGetProducts = ({
       : "skip"
   );
 
-  return products;
+  return products?.sort((a: any, b: any) => a.name.localeCompare(b.name));
 };

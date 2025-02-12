@@ -8,6 +8,7 @@ import { EmptyState } from "@/components/states/empty/empty-state";
 import { motion } from "framer-motion";
 import { capitalizeFirstLetter, slugToWords } from "@/lib/utils";
 import { getDiscountValue, getOrderAmount } from "@/components/checkout/utils";
+import ImageWithFallback from "@/components/ui/image-with-fallback";
 
 export const Route = createFileRoute("/_layout/_ordersLayout/shop/orders/")({
   component: () => <Purchases />,
@@ -51,7 +52,7 @@ const OrderItem = ({
       <div className="hidden md:flex gap-4">
         {order?.items.slice(0, 3).map((item: any, idx: number) => (
           <div key={idx} className="h-32 w-32">
-            <img
+            <ImageWithFallback
               src={item.productImage || placeholder}
               alt={"product image"}
               className="aspect-square object-cover rounded-sm"
@@ -68,7 +69,7 @@ const OrderItem = ({
       <div className="block md:hidden grid grid-cols-3 gap-4">
         {order?.items.slice(0, 2).map((item: any, idx: number) => (
           <div key={idx} className="h-32 w-32">
-            <img
+            <ImageWithFallback
               src={item.productImage || placeholder}
               alt={"product image"}
               className="aspect-square object-cover rounded-sm"

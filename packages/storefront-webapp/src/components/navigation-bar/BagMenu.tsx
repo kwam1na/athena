@@ -9,6 +9,7 @@ import { Cog, Package } from "lucide-react";
 import { PersonIcon } from "@radix-ui/react-icons";
 import { useStoreContext } from "@/contexts/StoreContext";
 import { useLogout } from "@/hooks/useLogout";
+import ImageWithFallback from "../ui/image-with-fallback";
 
 export const BagMenu = ({
   setActiveMenu,
@@ -59,7 +60,7 @@ export const BagMenu = ({
                   key={idx}
                   className="flex items-center gap-4"
                 >
-                  <img
+                  <ImageWithFallback
                     src={item.productImage || placeholder}
                     alt={item.productName || "product image"}
                     className="w-16 h-16 aspect-square object-cover rounded-lg"

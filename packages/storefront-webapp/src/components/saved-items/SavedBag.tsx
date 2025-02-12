@@ -10,6 +10,7 @@ import { capitalizeWords, getProductName } from "@/lib/utils";
 import { AnimatePresence, easeInOut, motion } from "framer-motion";
 import { EmptyState } from "../states/empty/empty-state";
 import { FadeIn } from "../common/FadeIn";
+import ImageWithFallback from "../ui/image-with-fallback";
 
 export default function SavedBag() {
   const [bagAction, setBagAction] = useState<ShoppingBagAction>("idle");
@@ -90,7 +91,7 @@ export default function SavedBag() {
                         variant: item.productSku,
                       }}
                     >
-                      <img
+                      <ImageWithFallback
                         src={(item as any).productImage || placeholder}
                         alt={(item as any).productName || "product image"}
                         className="w-32 h-32 lg:w-40 lg:h-40 object-cover rounded-lg"

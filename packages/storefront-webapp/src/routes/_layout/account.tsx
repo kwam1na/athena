@@ -191,7 +191,7 @@ const Account = () => {
   return (
     <FadeIn className="min-h-screen space-y-8 lg:space-y-24 pb-56">
       <div className="space-y-8">
-        <div className="w-full bg-accent3">
+        <div className="w-full bg-accent5">
           <div className="container mx-auto max-w-[1024px] space-y-4">
             <div className="flex items-center border-b py-2 px-6 lg:px-0">
               <p className="text-lg font-medium">Account</p>

@@ -3,6 +3,7 @@ import { useStoreContext } from "@/contexts/StoreContext";
 import { capitalizeWords } from "@/lib/utils";
 import { FadeIn } from "@/components/common/FadeIn";
 import { WIGLUB_HAIR_STUDIO_LOCATION_URL } from "@/lib/constants";
+import ImageWithFallback from "@/components/ui/image-with-fallback";
 
 export const Route = createFileRoute("/_layout/contact-us")({
   component: () => <ContactUs />,
@@ -26,7 +27,7 @@ const ContactUs = () => {
           </p>
         </div>
 
-        <img
+        <ImageWithFallback
           className="w-150 h-150 object-cover"
           src={store.config?.showroomImage}
           alt="showroom"

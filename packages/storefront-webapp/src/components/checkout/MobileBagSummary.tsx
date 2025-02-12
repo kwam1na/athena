@@ -10,26 +10,70 @@ import { useShoppingBag } from "@/hooks/useShoppingBag";
 import { useCheckout } from "./CheckoutProvider";
 import { BagSummaryItems } from "./BagSummary";
 import { Button } from "../ui/button";
-import { Input } from "../ui/input";
 import { Tag } from "lucide-react";
 import InputWithEndButton from "../ui/input-with-end-button";
+import { useMutation } from "@tanstack/react-query";
+import { useState } from "react";
+import { getDiscountValue } from "./utils";
+import { redeemPromoCode } from "@/api/promoCodes";
+import { useAuth } from "@/hooks/useAuth";
 
 export default function MobileBagSummary() {
   const { formatter } = useStoreContext();
-  const { bagSubtotal, discount } = useShoppingBag();
-  const { checkoutState } = useCheckout();
+  const { bagSubtotal } = useShoppingBag();
+  const { checkoutState, updateState } = useCheckout();
+  const [invalidMessage, setInvalidMessage] = useState("");
+  const [code, setCode] = useState("");
+  const { userId, guestId } = useAuth();
+  const { store } = useStoreContext();
 
-  const discountValue =
-    (discount?.type === "percentage"
-      ? (bagSubtotal * discount?.value) / 100
-      : discount?.value) || 0;
+  const discountValue = getDiscountValue(bagSubtotal, checkoutState.discount);
 
   const total = (checkoutState.deliveryFee ?? 0) + bagSubtotal - discountValue;
 
   const discountText =
-    discount?.type === "percentage"
-      ? `${discount.value}%`
+    checkoutState.discount?.type === "percentage"
+      ? `${checkoutState.discount.value}%`
       : `${formatter.format(discountValue)}`;
+
+  const redeemPromoCodeMutation = useMutation({
+    mutationFn: redeemPromoCode,
+    onSuccess: (data: any) => {
+      if (data.promoCode) {
+        updateState({
+          discount: {
+            id: data.promoCode._id,
+            code: data.promoCode.code,
+            value: data.promoCode.discountValue,
+            type: data.promoCode.discountType,
+          },
+        });
+      } else {
+        setInvalidMessage(data.message);
+      }
+    },
+  });
+
+  const handleRedeemPromoCode = () => {
+    const storeFrontUserId = userId || guestId;
+
+    setInvalidMessage("");
+
+    if (!storeFrontUserId || !store) return;
+
+    redeemPromoCodeMutation.mutate({
+      code,
+      storeId: store._id,
+      organizationId: store.organizationId,
+      storeFrontUserId,
+    });
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && code.trim()) {
+      handleRedeemPromoCode();
+    }
+  };
 
   return (
     <div>
@@ -56,17 +100,27 @@ export default function MobileBagSummary() {
             {/* Promo Code */}
             <div className="pt-8">
               <div className="space-y-6">
-                <InputWithEndButton
-                  isLoading={false}
-                  placeholder="Enter promo code"
-                  buttonText="Apply"
-                  onButtonClick={() => console.log()}
-                />
-                {discount && (
+                <div className="space-y-4">
+                  <InputWithEndButton
+                    isLoading={redeemPromoCodeMutation.isPending}
+                    value={code}
+                    onInputChange={(value) => setCode(value.toUpperCase())}
+                    placeholder="Enter promo code"
+                    buttonText="Apply"
+                    onButtonClick={handleRedeemPromoCode}
+                    onKeyDown={handleKeyDown}
+                  />
+                  {invalidMessage && (
+                    <p className="px-2 text-xs text-destructive">
+                      {invalidMessage}
+                    </p>
+                  )}
+                </div>
+                {checkoutState.discount && (
                   <div className="flex items-center">
                     <Tag className="w-3.5 h-3.5 mr-2" />
                     <p className="text-sm font-medium">
-                      {discount?.code} -{" "}
+                      {checkoutState.discount?.code} -{" "}
                       <strong>{discountText} off entire order</strong>
                     </p>
                   </div>

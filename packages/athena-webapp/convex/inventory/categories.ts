@@ -67,17 +67,7 @@ export const getById = query({
     storeId: v.string(),
   },
   handler: async (ctx, args) => {
-    const categories = await ctx.db
-      .query(entity)
-      .filter((q) =>
-        q.and(
-          q.eq(q.field("_id"), args.id),
-          q.eq(q.field("storeId"), args.storeId)
-        )
-      )
-      .collect();
-
-    return categories;
+    return await ctx.db.get(args.id);
   },
 });
 

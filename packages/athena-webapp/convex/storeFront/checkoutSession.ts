@@ -48,6 +48,27 @@ export const create = mutation({
     const sessionLimit = sessionLimitMinutes * 60 * 1000; // 15 minutes in ms
     const expiresAt = now + sessionLimit;
 
+    // Check for valid products
+    const productExistenceChecks = await Promise.all(
+      args.products.map((p) => ctx.db.get(p.productId))
+    );
+
+    const invalidProducts = args.products.filter(
+      (_, index) => !productExistenceChecks[index]
+    );
+
+    if (invalidProducts.length > 0) {
+      return {
+        success: false,
+        message: "Some products are no longer available.",
+        unavailableProducts: invalidProducts.map((p) => ({
+          productSkuId: p.productSkuId,
+          requested: p.quantity,
+          available: 0,
+        })),
+      };
+    }
+
     // Fetch product SKUs
     const productSkus = await fetchProductSkus(ctx, args.products);
 
@@ -573,7 +594,7 @@ function checkAdjustedAvailability(
   sessionItemsMap: Map<string, number>
 ) {
   const unavailable = [];
-  for (const { productSkuId, quantity } of products) {
+  for (const { productSkuId, productId, quantity } of products) {
     const sku = productSkus.find((p) => p._id === productSkuId);
     const existingQuantity = sessionItemsMap.get(productSkuId) || 0; // User's current session quantity
     const adjustedRequested = quantity - existingQuantity; // Net new quantity to request

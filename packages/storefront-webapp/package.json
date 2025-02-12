@@ -78,18 +78,19 @@
     "@types/bun": "latest",
     "@types/react": "^18.2.65",
     "@types/react-dom": "^18.2.21",
+    "@vitejs/plugin-react": "^4.3.2",
     "autoprefixer": "^10.4.20",
     "eslint": "^9.9.0",
     "eslint-plugin-react-hooks": "^5.1.0-rc.0",
     "eslint-plugin-react-refresh": "^0.4.9",
     "globals": "^15.9.0",
     "postcss": "^8.4.44",
+    "rollup-plugin-visualizer": "^5.14.0",
     "tailwindcss": "^3.4.16",
     "typescript": "^5.7.2",
     "typescript-eslint": "^8.0.1",
+    "vite": "^5.4.8",
     "vite-plugin-commonjs": "^0.10.3",
-    "vite-tsconfig-paths": "^5.1.4",
-    "@vitejs/plugin-react": "^4.3.2",
-    "vite": "^5.4.8"
+    "vite-tsconfig-paths": "^5.1.4"
   }
 }

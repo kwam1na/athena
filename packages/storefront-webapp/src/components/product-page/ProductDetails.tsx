@@ -5,6 +5,7 @@ import { Link } from "@tanstack/react-router";
 import { Button } from "../ui/button";
 import placeholder from "@/assets/placeholder.png";
 import { WIGLUB_HAIR_STUDIO_LOCATION_URL } from "@/lib/constants";
+import ImageWithFallback from "../ui/image-with-fallback";
 
 // Product Details Section
 export function PickupDetails({
@@ -43,7 +44,7 @@ export function BagProduct({ product }: { product: ProductSku }) {
       <div className="space-y-8">
         <p className="text-md">Added to your bag</p>
         <div className="flex gap-4">
-          <img
+          <ImageWithFallback
             alt={`Bag image`}
             className="w-[140px] h-[180px] aspect-square object-cover rounded"
             src={product.images[0] || placeholder}

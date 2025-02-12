@@ -1,7 +1,8 @@
 const config = {
   apiGateway: {
-    // URL: "https://colorless-cardinal-870.convex.site",
-    URL: "https://jovial-wildebeest-179.convex.site",
+    URL:
+      import.meta.env.VITE_API_URL ||
+      "https://jovial-wildebeest-179.convex.site",
   },
   storefront: {
     storeName: "Wigclub",

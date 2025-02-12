@@ -7,7 +7,7 @@ export const getProductName = (item: any) => {
     return `${item.length}" ${capitalizeWords(item.colorName)} ${item.productName}`;
   }
 
-  return item.productName;
+  return item.productName || "Unavailable";
 };
 
 export const sortProduct = (a: any, b: any) => {

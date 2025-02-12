@@ -1,8 +1,6 @@
 import { useState } from "react";
 import { useCheckout, webOrderSchema } from "./CheckoutProvider";
 import { CheckedState } from "@radix-ui/react-checkbox";
-import { Button } from "../ui/button";
-import { BillingDetailsForm } from "./BillingDetails";
 import { Separator } from "../ui/separator";
 import { Checkbox } from "../ui/checkbox";
 import { ArrowRight } from "lucide-react";
@@ -14,7 +12,6 @@ import { updateUser } from "@/api/storeFrontUser";
 import { useStoreContext } from "@/contexts/StoreContext";
 import { BillingDetailsSection } from "./BillingDetailsSection";
 import { CheckoutFormSectionProps } from "./CustomerInfoSection";
-import { getDiscountValue } from "./utils";
 
 export const PaymentSection = ({ form }: CheckoutFormSectionProps) => {
   const { activeSession, canPlaceOrder, checkoutState } = useCheckout();
@@ -30,8 +27,6 @@ export const PaymentSection = ({ form }: CheckoutFormSectionProps) => {
 
   const onSubmit = async () => {
     setErrorFinalizingPayment(false);
-
-    console.log("discount", checkoutState.discount);
 
     try {
       const canProceedToPayment = await canPlaceOrder();

@@ -21,7 +21,7 @@ export default function ProductPage() {
     activeStore && productData.categoryId
       ? { id: productData.categoryId, storeId: activeStore._id }
       : "skip"
-  )?.[0];
+  );
 
   return (
     <div className="h-full container mx-auto w-full p-8 space-x-32 flex">

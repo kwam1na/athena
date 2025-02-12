@@ -8,14 +8,12 @@ import { Button } from "../ui/button";
 import { Separator } from "../ui/separator";
 import placeholder from "@/assets/placeholder.png";
 import { motion } from "framer-motion";
-import { Input } from "../ui/input";
 import { Tag } from "lucide-react";
 import InputWithEndButton from "../ui/input-with-end-button";
 import { useMutation } from "@tanstack/react-query";
 import { redeemPromoCode } from "@/api/promoCodes";
 import { useAuth } from "@/hooks/useAuth";
 import { useState } from "react";
-import { set } from "zod";
 import { getDiscountValue } from "./utils";
 
 function SummaryItem({

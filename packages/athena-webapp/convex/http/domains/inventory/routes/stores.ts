@@ -563,6 +563,7 @@ storeRoutes.post("/:storeId/users/:userId/promoCodes", async (c) => {
   try {
     const res = await c.env.runMutation(api.inventory.promoCode.redeem, {
       code,
+      storeFrontUserId: userId as Id<"storeFrontUser"> | Id<"guest">,
     });
 
     return c.json(res);
