@@ -1,5 +1,6 @@
 import { getActiveUser } from "@/api/storeFrontUser";
 import { verifyUserAccount } from "@/api/stores";
+import { AuthComponent } from "@/components/auth/Auth";
 import { FadeIn } from "@/components/common/FadeIn";
 import {
   Form,
@@ -125,96 +126,98 @@ const Signup = () => {
   };
 
   return (
-    <FadeIn className="container mx-auto max-w-[1024px] pb-56 py-8 px-6 xl:px-0">
-      <div className="space-y-8 py-16">
-        <Form {...form}>
-          <form
-            onSubmit={form.handleSubmit(onSubmit)}
-            className="space-y-8 flex flex-col items-center p-12"
-          >
-            <div className="space-y-8 w-[320px] md:w-[400px]">
-              <p className="text-lg">{`Create your ${store?.name && capitalizeWords(store?.name as string)} account`}</p>
-              <div className="w-full">
-                <FormField
-                  control={form.control}
-                  name="firstName"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormControl>
-                        <Input {...field} placeholder="First name" />
-                      </FormControl>
-                      <FormMessage className="text-xs" />
-                    </FormItem>
-                  )}
-                />
-              </div>
+    <AuthComponent>
+      <FadeIn className="container mx-auto max-w-[1024px] pb-56 py-8 px-6 xl:px-0">
+        <div className="space-y-8 py-16">
+          <Form {...form}>
+            <form
+              onSubmit={form.handleSubmit(onSubmit)}
+              className="space-y-8 flex flex-col items-center p-12"
+            >
+              <div className="space-y-8 w-[320px] md:w-[400px]">
+                <p className="text-lg">{`Create your ${store?.name && capitalizeWords(store?.name as string)} account`}</p>
+                <div className="w-full">
+                  <FormField
+                    control={form.control}
+                    name="firstName"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormControl>
+                          <Input {...field} placeholder="First name" />
+                        </FormControl>
+                        <FormMessage className="text-xs" />
+                      </FormItem>
+                    )}
+                  />
+                </div>
 
-              <div className="w-full">
-                <FormField
-                  control={form.control}
-                  name="lastName"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormControl>
-                        <Input {...field} placeholder="Last name" />
-                      </FormControl>
-                      <FormMessage className="text-xs" />
-                    </FormItem>
-                  )}
-                />
-              </div>
+                <div className="w-full">
+                  <FormField
+                    control={form.control}
+                    name="lastName"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormControl>
+                          <Input {...field} placeholder="Last name" />
+                        </FormControl>
+                        <FormMessage className="text-xs" />
+                      </FormItem>
+                    )}
+                  />
+                </div>
 
-              <div className="w-full">
-                <FormField
-                  control={form.control}
-                  name="email"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormControl>
-                        <Input {...field} placeholder="Email" type="email" />
-                      </FormControl>
-                      <FormMessage className="text-xs" />
-                    </FormItem>
-                  )}
-                />
-              </div>
+                <div className="w-full">
+                  <FormField
+                    control={form.control}
+                    name="email"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormControl>
+                          <Input {...field} placeholder="Email" type="email" />
+                        </FormControl>
+                        <FormMessage className="text-xs" />
+                      </FormItem>
+                    )}
+                  />
+                </div>
 
-              <LoadingButton
-                className="group"
-                variant={"clear"}
-                isLoading={verifyMutation.isPending}
-                type="submit"
-              >
-                Continue
-                <ArrowRight className="w-4 h-4 ml-2 -me-1 ms-2 transition-transform group-hover:translate-x-0.5" />
-              </LoadingButton>
+                <LoadingButton
+                  className="group"
+                  variant={"clear"}
+                  isLoading={verifyMutation.isPending}
+                  type="submit"
+                >
+                  Continue
+                  <ArrowRight className="w-4 h-4 ml-2 -me-1 ms-2 transition-transform group-hover:translate-x-0.5" />
+                </LoadingButton>
 
-              <div>
-                <p className="text-sm text-muted-foreground">
-                  By creating an account, you agree to our{" "}
-                  <Link to="/policies/tos" className="text-primary">
-                    Terms of Service
-                  </Link>{" "}
-                  and{" "}
-                  <Link to="/policies/privacy" className="text-primary">
-                    Privacy Policy.
+                <div>
+                  <p className="text-sm text-muted-foreground">
+                    By creating an account, you agree to our{" "}
+                    <Link to="/policies/tos" className="text-primary">
+                      Terms of Service
+                    </Link>{" "}
+                    and{" "}
+                    <Link to="/policies/privacy" className="text-primary">
+                      Privacy Policy.
+                    </Link>
+                  </p>
+                </div>
+
+                <div className="flex gap-2 pt-4">
+                  <p className="text-sm text-muted-foreground">
+                    Already have an account?
+                  </p>
+                  <Link to="/login" className="flex items-center group">
+                    <p className="text-sm">Login</p>
+                    <ArrowRight className="w-3.5 h-3.5 ml-2 -me-1 ms-2 transition-transform group-hover:translate-x-0.5" />
                   </Link>
-                </p>
+                </div>
               </div>
-
-              <div className="flex gap-2 pt-4">
-                <p className="text-sm text-muted-foreground">
-                  Already have an account?
-                </p>
-                <Link to="/login" className="flex items-center group">
-                  <p className="text-sm">Login</p>
-                  <ArrowRight className="w-3.5 h-3.5 ml-2 -me-1 ms-2 transition-transform group-hover:translate-x-0.5" />
-                </Link>
-              </div>
-            </div>
-          </form>
-        </Form>
-      </div>
-    </FadeIn>
+            </form>
+          </Form>
+        </div>
+      </FadeIn>
+    </AuthComponent>
   );
 };

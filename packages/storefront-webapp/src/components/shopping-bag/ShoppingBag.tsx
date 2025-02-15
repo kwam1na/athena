@@ -62,10 +62,11 @@ export default function ShoppingBag() {
   const { formatter, userId, organizationId, storeId, isNavbarShowing } =
     useStoreContext();
 
-  const { setNavBarLayout } = useNavigationBarContext();
+  const { setNavBarLayout, setAppLocation } = useNavigationBarContext();
 
   useEffect(() => {
     setNavBarLayout("fixed");
+    setAppLocation("shop");
   }, []);
 
   const {

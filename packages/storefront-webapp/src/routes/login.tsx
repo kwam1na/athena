@@ -1,5 +1,6 @@
 import { getActiveUser } from "@/api/storeFrontUser";
 import { verifyUserAccount } from "@/api/stores";
+import { AuthComponent } from "@/components/auth/Auth";
 import { FadeIn } from "@/components/common/FadeIn";
 import {
   Form,
@@ -104,57 +105,59 @@ const Login = () => {
   if (!store) return <div className="h-screen" />;
 
   return (
-    <FadeIn className="container mx-auto max-w-[1024px] pb-56 py-8 px-6 xl:px-0">
-      <div className="space-y-8 py-16">
-        {/* <h1 className="text-xl font-medium">Login for faster checkout.</h1> */}
+    <AuthComponent>
+      <FadeIn className="container mx-auto max-w-[1024px] pb-56 py-8 px-6 xl:px-0">
+        <div className="space-y-8 py-16">
+          {/* <h1 className="text-xl font-medium">Login for faster checkout.</h1> */}
 
-        <Form {...form}>
-          <form
-            onSubmit={form.handleSubmit(onSubmit)}
-            className="space-y-8 flex flex-col items-center p-12"
-          >
-            <div className="space-y-8 w-[320px] md:w-[400px]">
-              <p className="text-lg">{`Login to your ${store?.name && capitalizeWords(store?.name as string)} account`}</p>
-              <div className="w-full">
-                <FormField
-                  control={form.control}
-                  name="email"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormControl>
-                        <Input {...field} placeholder="Email" type="email" />
-                      </FormControl>
-                      <FormMessage className="text-xs" />
-                    </FormItem>
-                  )}
-                />
-              </div>
+          <Form {...form}>
+            <form
+              onSubmit={form.handleSubmit(onSubmit)}
+              className="space-y-8 flex flex-col items-center p-12"
+            >
+              <div className="space-y-8 w-[320px] md:w-[400px]">
+                <p className="text-lg">{`Login to your ${store?.name && capitalizeWords(store?.name as string)} account`}</p>
+                <div className="w-full">
+                  <FormField
+                    control={form.control}
+                    name="email"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormControl>
+                          <Input {...field} placeholder="Email" type="email" />
+                        </FormControl>
+                        <FormMessage className="text-xs" />
+                      </FormItem>
+                    )}
+                  />
+                </div>
 
-              <LoadingButton
-                className="group"
-                isLoading={verifyMutation.isPending}
-                type="submit"
-                variant={"clear"}
-              >
-                Continue
-                <ArrowRight className="w-4 h-4 ml-2 -me-1 ms-2 transition-transform group-hover:translate-x-0.5" />
-              </LoadingButton>
-
-              <div className="flex gap-2 pt-4">
-                <p className="text-sm text-muted-foreground">
-                  Don't have an account?
-                </p>
-                <Link
-                  to="/signup"
-                  className="flex items-center gap-1 hover:underline"
+                <LoadingButton
+                  className="group"
+                  isLoading={verifyMutation.isPending}
+                  type="submit"
+                  variant={"clear"}
                 >
-                  <p className="text-sm">Create yours now.</p>
-                </Link>
+                  Continue
+                  <ArrowRight className="w-4 h-4 ml-2 -me-1 ms-2 transition-transform group-hover:translate-x-0.5" />
+                </LoadingButton>
+
+                <div className="flex gap-2 pt-4">
+                  <p className="text-sm text-muted-foreground">
+                    Don't have an account?
+                  </p>
+                  <Link
+                    to="/signup"
+                    className="flex items-center gap-1 hover:underline"
+                  >
+                    <p className="text-sm">Create yours now.</p>
+                  </Link>
+                </div>
               </div>
-            </div>
-          </form>
-        </Form>
-      </div>
-    </FadeIn>
+            </form>
+          </Form>
+        </div>
+      </FadeIn>
+    </AuthComponent>
   );
 };

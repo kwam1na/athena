@@ -444,10 +444,11 @@ export const CheckoutProvider = ({
 
   const { user, store } = useStoreContext();
 
-  const { setNavBarLayout } = useNavigationBarContext();
+  const { setNavBarLayout, setAppLocation } = useNavigationBarContext();
 
   useEffect(() => {
     setNavBarLayout("sticky");
+    setAppLocation("shop");
   }, []);
 
   useEffect(() => {

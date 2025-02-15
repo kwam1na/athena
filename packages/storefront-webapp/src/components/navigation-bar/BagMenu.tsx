@@ -35,7 +35,7 @@ export const BagMenu = ({
 
   const hoverClass =
     navBarLayout == "sticky" && appLocation == "home"
-      ? "hover:text-white"
+      ? "hover:text-gray-300 text-white"
       : "hover:text-gray-500";
 
   const handleOnLinkClick = async ({

@@ -8,7 +8,7 @@ function LayoutComponent() {
 
   useEffect(() => {
     setNavBarLayout("fixed");
-    setAppLocation(null);
+    setAppLocation("shop");
   }, []);
 
   return (

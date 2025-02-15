@@ -43,7 +43,7 @@ export default function NavigationBar() {
 
   const hoverClass =
     navBarLayout == "sticky" && appLocation == "home"
-      ? "hover:text-white"
+      ? "hover:text-gray-300 text-white"
       : "hover:text-gray-500";
 
   const container = {
@@ -151,7 +151,7 @@ export default function NavigationBar() {
     showNavbar();
   };
 
-  if (!store) return null;
+  if (!store || !appLocation) return null;
 
   const mainWrapperlass = navBarLayout == "sticky" ? "absolute" : "bg-accent5";
 
@@ -161,12 +161,20 @@ export default function NavigationBar() {
 
   return (
     <div className={`top-0 w-full z-50 ${mainWrapperlass}`}>
-      <AnimatePresence initial={false}>
+      <AnimatePresence>
         <div key="nav-bar">
           <div
             className={`w-full ${navBGClass} transition-all ease-out delay-250`}
           >
-            <nav
+            <motion.nav
+              initial={{ opacity: 0 }}
+              animate={{
+                opacity: 1,
+                transition: {
+                  duration: 0.3,
+                  delay: appLocation == "home" ? 2.4 : 0,
+                },
+              }}
               className={`${navBarClassname} container mx-auto max-w-[1024px]`}
             >
               <div className="flex items-center justify-between w-full">
@@ -224,16 +232,19 @@ export default function NavigationBar() {
                       className="flex lg:hidden"
                       onClick={handleShowMobileBagMenu}
                     >
-                      <CartIcon notificationCount={bagCount} />
+                      <CartIcon
+                        notificationCount={bagCount}
+                        hoverClass={hoverClass}
+                      />
                     </span>
                     <AlignLeft
-                      className="lg:hidden w-5 h-5"
+                      className={`lg:hidden w-5 h-5 ${hoverClass}`}
                       onClick={onHideNavbarClick}
                     />
                   </div>
                 </div>
               </div>
-            </nav>
+            </motion.nav>
           </div>
 
           {/* Submenus */}

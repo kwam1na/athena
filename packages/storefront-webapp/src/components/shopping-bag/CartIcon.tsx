@@ -15,7 +15,7 @@ const CartIcon: React.FC<CartIconProps> = ({
       <ShoppingBasket className={`w-5 h-5 ${hoverClass}`} />
 
       {/* Notification Dot */}
-      <AnimatePresence initial={false}>
+      <AnimatePresence>
         {Boolean(notificationCount) && (
           <motion.span
             initial={{ opacity: 0 }}
