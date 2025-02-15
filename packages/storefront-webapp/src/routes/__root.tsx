@@ -12,6 +12,11 @@ import { z } from "zod";
 import NotFound from "@/components/states/not-found/NotFound";
 import { MaintenanceMode } from "@/components/states/maintenance/Maintenance";
 import { useAuth } from "@/hooks/useAuth";
+import {
+  NavigationBarProvider,
+  useNavigationBarContext,
+} from "@/contexts/NavigationBarProvider";
+import { Root } from "postcss";
 
 const productsPageSchema = z.object({
   color: z.string().optional(),
@@ -38,7 +43,7 @@ export const Route = createRootRoute({
 
   validateSearch: productsPageSchema,
 
-  component: RootComponent,
+  component: Body,
 
   notFoundComponent: () => {
     return <NotFound />;
@@ -46,17 +51,32 @@ export const Route = createRootRoute({
 });
 
 function RootComponent() {
+  const { navBarLayout } = useNavigationBarContext();
+
+  const navBarClassname =
+    navBarLayout == "sticky" ? "absolute w-full sticky z-50 top-0" : "";
+
   return (
     <StoreProvider>
       <RootDocument>
         <div className="flex flex-col h-screen bg-background">
-          <NavigationBar />
+          <div className={navBarClassname}>
+            <NavigationBar />
+          </div>
           <main className="flex-grow bg-background">
             <Outlet />
           </main>
         </div>
       </RootDocument>
     </StoreProvider>
+  );
+}
+
+function Body() {
+  return (
+    <NavigationBarProvider>
+      <RootComponent />
+    </NavigationBarProvider>
   );
 }
 

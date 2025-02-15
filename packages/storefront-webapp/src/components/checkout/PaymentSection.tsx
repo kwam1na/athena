@@ -3,7 +3,7 @@ import { useCheckout, webOrderSchema } from "./CheckoutProvider";
 import { CheckedState } from "@radix-ui/react-checkbox";
 import { Separator } from "../ui/separator";
 import { Checkbox } from "../ui/checkbox";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, InfoIcon } from "lucide-react";
 import { motion } from "framer-motion";
 import { LoadingButton } from "../ui/loading-button";
 import { useShoppingBag } from "@/hooks/useShoppingBag";
@@ -24,6 +24,8 @@ export const PaymentSection = ({ form }: CheckoutFormSectionProps) => {
   const [didAcceptStoreTerms, setDidAcceptStoreTerms] = useState(false);
   const [didAcceptCommsTerms, setDidAcceptCommsTerms] = useState(false);
   const [errorFinalizingPayment, setErrorFinalizingPayment] = useState(false);
+
+  const [errorMessage, setErrorMessage] = useState("");
 
   const onSubmit = async () => {
     setErrorFinalizingPayment(false);
@@ -56,6 +58,10 @@ export const PaymentSection = ({ form }: CheckoutFormSectionProps) => {
       // Handle payment redirect
       if (paymentResponse?.authorization_url) {
         window.open(paymentResponse.authorization_url, "_self");
+      } else if (!paymentResponse?.success) {
+        setErrorMessage(
+          paymentResponse?.message || "Failed to finalize payment"
+        );
       } else {
         throw new Error("No authorization URL received");
       }
@@ -237,6 +243,21 @@ export const PaymentSection = ({ form }: CheckoutFormSectionProps) => {
           className="text-sm text-red-600 font-medium"
         >
           There was an error finalizing your payment. Please try again.
+        </motion.p>
+      )}
+
+      {errorMessage && (
+        <motion.p
+          initial={{ opacity: 0, y: -2 }}
+          animate={{
+            opacity: 1,
+            y: 0,
+            transition: { duration: 0.3, ease: "easeInOut" },
+          }}
+          className="flex items-center text-sm font-medium"
+        >
+          <InfoIcon className="w-4 h-4 mr-2" />
+          {errorMessage}
         </motion.p>
       )}
 

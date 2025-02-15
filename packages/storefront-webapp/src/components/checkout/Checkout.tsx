@@ -1,9 +1,6 @@
 import { CheckoutProvider, useCheckout } from "./CheckoutProvider";
 import { AnimatePresence, motion } from "framer-motion";
-import { CustomerDetailsForm } from "./CustomerDetails";
-import { DeliverySection } from "./DeliveryDetails/DeliverySection";
 import BagSummary from "./BagSummary";
-import { PaymentSection } from "./PaymentSection";
 import { useEffect } from "react";
 import MobileBagSummary from "./MobileBagSummary";
 import { CheckoutForm } from "./CheckoutForm";
@@ -37,16 +34,6 @@ const MainComponent = () => {
           <div className="py-8 space-y-12 container mx-auto">
             <p>Checkout</p>
             <div className="space-y-32">
-              {/* <div className="lg:pr-24">
-                <CustomerDetailsForm />
-              </div>
-
-              <div className="lg:pr-24 space-y-32">
-                <DeliverySection />
-
-                <PaymentSection />
-              </div> */}
-
               <div className="lg:pr-24">
                 <CheckoutForm />
               </div>

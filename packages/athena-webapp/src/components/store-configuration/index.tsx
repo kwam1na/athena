@@ -9,7 +9,8 @@ import { LoadingButton } from "../ui/loading-button";
 import { Switch } from "../ui/switch";
 import { Label } from "../ui/label";
 import { set } from "zod";
-import { Construction, Disc2 } from "lucide-react";
+import { Construction, Disc2, EyeClosed, EyeIcon } from "lucide-react";
+import { EyeOpenIcon } from "@radix-ui/react-icons";
 
 const Header = () => {
   return (
@@ -218,9 +219,11 @@ const MaintenanceView = () => {
 
   const [isInMaintenanceMode, setIsInMaintenanceMode] = useState(false);
 
+  const [isInReadOnlyMode, setIsInReadOnlyMode] = useState(false);
+
   const updateConfig = useMutation(api.inventory.stores.updateConfig);
 
-  const saveChanges = async (toggled: boolean) => {
+  const saveMaintenanceModeChanges = async (toggled: boolean) => {
     setIsUpdatingConfig(true);
     setIsInMaintenanceMode(toggled);
 
@@ -257,15 +260,52 @@ const MaintenanceView = () => {
     setIsUpdatingConfig(false);
   };
 
+  const saveReadOnlyeModeChanges = async (toggled: boolean) => {
+    setIsUpdatingConfig(true);
+    setIsInReadOnlyMode(toggled);
+
+    const updates = {
+      inReadOnlyMode: toggled,
+    };
+
+    try {
+      await updateConfig({
+        id: activeStore?._id!,
+        config: {
+          ...activeStore?.config,
+          visibility: updates,
+        },
+      });
+      const message = toggled
+        ? "Store set to read-only mode"
+        : "Store set to full access";
+
+      const icon = toggled ? (
+        <EyeIcon className="w-4 h-4" />
+      ) : (
+        <Disc2 className="w-4 h-4" />
+      );
+      toast.message(message, { icon });
+    } catch (error) {
+      console.log(error);
+      toast.error("An error occurred while updating store visibility", {
+        description: (error as Error).message,
+        position: "top-right",
+      });
+    }
+
+    setIsUpdatingConfig(false);
+  };
+
   useEffect(() => {
-    console.log("updating maintenance mode in effect");
-    console.log(activeStore?.config);
     setIsInMaintenanceMode(
       activeStore?.config?.availability?.inMaintenanceMode || false
     );
-  }, [activeStore?.config?.availability]);
 
-  console.log("in maintenance mode: ", isInMaintenanceMode);
+    setIsInReadOnlyMode(
+      activeStore?.config?.visibility?.inReadOnlyMode || false
+    );
+  }, [activeStore?.config?.availability, activeStore?.config?.visibility]);
 
   return (
     <View
@@ -276,7 +316,7 @@ const MaintenanceView = () => {
         <p className="text-sm text-muted-foreground">{`Store availability`}</p>
       }
     >
-      <div className="container mx-auto h-full py-8 grid grid-cols-2 gap-4">
+      <div className="container mx-auto h-full py-8 grid grid-cols-1 gap-8">
         <div className="flex items-center gap-8">
           <div className="flex items-center gap-2">
             <Construction className="w-4 h-4 text-muted-foreground" />
@@ -289,7 +329,24 @@ const MaintenanceView = () => {
             disabled={isUpdatingConfig}
             checked={isInMaintenanceMode}
             onCheckedChange={(e) => {
-              saveChanges(e);
+              saveMaintenanceModeChanges(e);
+            }}
+          />
+        </div>
+
+        <div className="flex items-center gap-8">
+          <div className="flex items-center gap-2">
+            <EyeIcon className="w-4 h-4 text-muted-foreground" />
+            <Label className="text-muted-foreground" htmlFor="custom">
+              Read-only mode
+            </Label>
+          </div>
+          <Switch
+            id="custom"
+            disabled={isUpdatingConfig}
+            checked={isInReadOnlyMode}
+            onCheckedChange={(e) => {
+              saveReadOnlyeModeChanges(e);
             }}
           />
         </div>

@@ -14,6 +14,7 @@ import { motion } from "framer-motion";
 import { useEffect } from "react";
 import { Product, ProductSku } from "@athena/webapp";
 import ImageWithFallback from "./ui/image-with-fallback";
+import { useNavigationBarContext } from "@/contexts/NavigationBarProvider";
 
 function FeaturedProduct({ product }: { product: any }) {
   const { formatter } = useStoreContext();
@@ -189,6 +190,8 @@ function FeaturedSection({ data }: { data: any }) {
 export default function HomePage() {
   const { organizationId, storeId, store } = useStoreContext();
 
+  const { setNavBarLayout } = useNavigationBarContext();
+
   const { data: bestSellers, isLoading: isLoadingBestSellers } = useQuery(
     productQueries.bestSellers({
       organizationId,
@@ -210,25 +213,9 @@ export default function HomePage() {
     })
   );
 
-  // const [firstLoad] = useState(() => {
-  //   if (typeof window === "undefined") return true;
-
-  //   try {
-  //     const savedState = sessionStorage.getItem(INITIAL_LOAD_KEY);
-  //     const lastLoadTime = sessionStorage.getItem(INITIAL_LOAD_TIME_KEY);
-
-  //     if (!savedState || !lastLoadTime) return true;
-
-  //     // Check if last load was more than 24 hours ago
-  //     const now = new Date().getTime();
-  //     const timeDiff = now - parseInt(lastLoadTime);
-  //     const hoursDiff = timeDiff / (1000 * 60 * 60);
-
-  //     return hoursDiff >= 24 ? true : savedState === "true";
-  //   } catch {
-  //     return true;
-  //   }
-  // });
+  useEffect(() => {
+    setNavBarLayout("sticky");
+  }, []);
 
   const firstLoad = true;
 
@@ -300,6 +287,10 @@ export default function HomePage() {
       </div>
     );
   }
+
+  // console.log("bestSellersProducts", bestSellersProducts);
+
+  // console.log("featured", featured);
 
   return (
     <>

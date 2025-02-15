@@ -180,6 +180,8 @@ export default function ProductPage() {
     return <NotFound />;
   }
 
+  const o = true;
+
   return (
     <>
       <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
@@ -270,8 +272,8 @@ export default function ProductPage() {
 
               {addedItemSuccessfully == false && (
                 <div className="flex gap-1 items-center text-destructive">
-                  <AlertCircleIcon className="w-4 h-4" />
-                  <p className="text-xs">
+                  <AlertCircleIcon className="w-3.5 h-3.5" />
+                  <p className="text-sm">
                     An error occured processing your last request
                   </p>
                 </div>

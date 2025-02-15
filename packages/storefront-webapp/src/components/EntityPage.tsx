@@ -30,13 +30,19 @@ export default function EntityPage() {
     })
   );
 
-  let data = products;
+  let skus;
 
   if (bestSellers?.length && categorySlug === "best-sellers") {
-    data = bestSellers.map((bestSeller: any) => bestSeller.product);
+    skus = bestSellers.map((bestSeller: any) => bestSeller.productSku);
   }
 
   const isLoading = isLoadingProducts || isLoadingBestSellers;
 
-  return <ProductsPage products={data} isLoading={isLoading} />;
+  return (
+    <ProductsPage
+      products={products}
+      productSkus={skus}
+      isLoading={isLoading}
+    />
+  );
 }

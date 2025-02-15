@@ -381,9 +381,9 @@ storeRoutes.post("/:storeId/users/:userId/checkout", async (c) => {
 storeRoutes.post(
   "/:storeId/users/:userId/checkout/:checkoutSessionId",
   async (c) => {
-    const { checkoutSessionId } = c.req.param();
+    const { checkoutSessionId, userId, storeId } = c.req.param();
 
-    const userId = c.req.param("userId");
+    const organizationId = c.req.param("organizationId");
 
     if (!userId) {
       return c.json({ error: "Customer id missing" }, 404);
@@ -399,6 +399,24 @@ storeRoutes.post(
 
     try {
       if (action == "finalize-payment") {
+        // check that the store is still active
+        const store = await c.env.runQuery(api.inventory.stores.getByIdOrSlug, {
+          identifier: storeId,
+          organizationId: organizationId as Id<"organization">,
+        });
+
+        const { config } = store || {};
+
+        if (
+          config?.availability?.inMaintenanceMode ||
+          config?.visibility?.inReadOnlyMode
+        ) {
+          return c.json({
+            success: false,
+            message: "Store checkout is currently unavailable",
+          });
+        }
+
         const payment = await c.env.runAction(
           api.storeFront.payment.createTransaction,
           {

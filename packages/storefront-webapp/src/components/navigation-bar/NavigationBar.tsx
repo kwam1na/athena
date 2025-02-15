@@ -9,7 +9,7 @@ import {
   XIcon,
 } from "lucide-react";
 import { useShoppingBag } from "@/hooks/useShoppingBag";
-import React, { useState } from "react";
+import React, { act, useState } from "react";
 import { useGetStoreCategories } from "../navigation/hooks";
 import { Button } from "../ui/button";
 import { capitalizeWords, getProductName, slugToWords } from "@/lib/utils";
@@ -19,6 +19,7 @@ import { AnimatePresence, easeInOut, motion } from "framer-motion";
 import { BagMenu } from "./BagMenu";
 import { MobileBagMenu } from "./MobileBagMenu";
 import { MobileMenu } from "./MobileMenu";
+import { useNavigationBarContext } from "@/contexts/NavigationBarProvider";
 
 const item = {
   hidden: { y: -2, opacity: 0 },
@@ -37,6 +38,8 @@ export default function NavigationBar() {
   const { categories, categoryToSubcategoriesMap } = useGetStoreCategories();
 
   const { navBarClassname, showNavbar, hideNavbar } = useStoreContext();
+
+  const { navBarLayout } = useNavigationBarContext();
 
   const container = {
     hidden: { opacity: 1 },
@@ -112,7 +115,7 @@ export default function NavigationBar() {
         initial="hidden"
         animate="show"
         exit={"exit"}
-        className="absolute w-full left-0 bg-accent5 bg-opacity-95 animate-fadeIn z-50"
+        className={`absolute w-full ${navBarLayout == "fixed" ? "bg-accent5" : ""} left-0 bg-opacity-95 animate-fadeIn z-50`}
         onMouseEnter={() => setActiveMenu(slug)}
         onMouseLeave={() => setActiveMenu(null)}
       >
@@ -145,73 +148,83 @@ export default function NavigationBar() {
 
   if (!store) return null;
 
+  const mainWrapperlass = navBarLayout == "sticky" ? "absolute" : "bg-accent5";
+
+  const navBGClass = activeMenu
+    ? `${navBarLayout == "sticky" ? "bg-white bg-opacity-20 backdrop-blur-md" : "bg-accent5"}`
+    : "bg-transparent";
+
   return (
-    <div className="relative bg-accent5">
+    <div className={`top-0 w-full z-50 ${mainWrapperlass}`}>
       <AnimatePresence initial={false}>
-        <div key="nav-bar" className="relative z-50">
-          <nav
-            className={`${navBarClassname} container mx-auto max-w-[1024px]`}
+        <div key="nav-bar">
+          <div
+            className={`w-full ${navBGClass} transition-all ease-out delay-250`}
           >
-            <div className="flex items-center justify-between w-full">
-              <div className="flex gap-16">
-                <div onMouseEnter={() => setActiveMenu(null)}>
-                  <Link to="/">
-                    <h1 className="text-md font-medium tracking-widest">
-                      {store?.name && (store?.name as string).toUpperCase()}
-                    </h1>
-                  </Link>
-                </div>
-                <div className="hidden lg:flex gap-12">
-                  {categories?.map((s) => (
-                    <div
-                      key={s.value}
-                      className="group relative h-full flex items-center"
-                      onMouseEnter={() => setActiveMenu(s.value)}
-                    >
-                      <Link
-                        to="/shop/$categorySlug"
-                        params={(p) => ({
-                          ...p,
-                          categorySlug: s.value,
-                        })}
-                        className="text-xs hover:text-gray-600 transition-colors"
-                        onClick={() => setActiveMenu(null)}
+            <nav
+              className={`${navBarClassname} container mx-auto max-w-[1024px]`}
+            >
+              <div className="flex items-center justify-between w-full">
+                <div className="flex gap-16">
+                  <div onMouseEnter={() => setActiveMenu(null)}>
+                    <Link to="/">
+                      <h1 className="text-md font-medium tracking-widest">
+                        {store?.name && (store?.name as string).toUpperCase()}
+                      </h1>
+                    </Link>
+                  </div>
+                  <div className="hidden lg:flex gap-12">
+                    {categories?.map((s) => (
+                      <div
+                        key={s.value}
+                        className="group relative h-full flex items-center"
+                        onMouseEnter={() => setActiveMenu(s.value)}
                       >
-                        {s.label}
-                      </Link>
-                      {/* Invisible extender to prevent hover gap */}
-                      <div className="absolute -bottom-6 left-0 w-full h-6" />
-                    </div>
-                  ))}
+                        <Link
+                          to="/shop/$categorySlug"
+                          params={(p) => ({
+                            ...p,
+                            categorySlug: s.value,
+                          })}
+                          className="text-xs hover:text-gray-600 transition-colors"
+                          onClick={() => setActiveMenu(null)}
+                        >
+                          {s.label}
+                        </Link>
+                        {/* Invisible extender to prevent hover gap */}
+                        <div className="absolute -bottom-6 left-0 w-full h-6" />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex gap-8">
+                  <div
+                    onMouseEnter={() => setActiveMenu(null)}
+                    className="flex items-center gap-4"
+                  >
+                    <span
+                      className="hidden lg:flex cursor-pointer hover:-rotate-6 transition-all duration-300 ease-out"
+                      onClick={() => setActiveMenu("bag")}
+                    >
+                      <CartIcon notificationCount={bagCount} />
+                    </span>
+
+                    <span
+                      className="flex lg:hidden"
+                      onClick={handleShowMobileBagMenu}
+                    >
+                      <CartIcon notificationCount={bagCount} />
+                    </span>
+                    <AlignLeft
+                      className="lg:hidden w-5 h-5"
+                      onClick={onHideNavbarClick}
+                    />
+                  </div>
                 </div>
               </div>
-
-              <div className="flex gap-8">
-                <div
-                  onMouseEnter={() => setActiveMenu(null)}
-                  className="flex items-center gap-4"
-                >
-                  <span
-                    className="hidden lg:flex cursor-pointer hover:-rotate-6 transition-all duration-300 ease-out"
-                    onClick={() => setActiveMenu("bag")}
-                  >
-                    <CartIcon notificationCount={bagCount} />
-                  </span>
-
-                  <span
-                    className="flex lg:hidden"
-                    onClick={handleShowMobileBagMenu}
-                  >
-                    <CartIcon notificationCount={bagCount} />
-                  </span>
-                  <AlignLeft
-                    className="lg:hidden w-5 h-5"
-                    onClick={onHideNavbarClick}
-                  />
-                </div>
-              </div>
-            </div>
-          </nav>
+            </nav>
+          </div>
 
           {/* Submenus */}
           {activeMenu && (
@@ -245,7 +258,7 @@ export default function NavigationBar() {
                 ease: "easeInOut",
               },
             }}
-            className="fixed inset-0 mt-20 bg-white bg-opacity-20 backdrop-blur-md z-40"
+            className="fixed inset-0 mt-12 bg-white bg-opacity-20 backdrop-blur-md z-10"
             onMouseEnter={() => setActiveMenu(null)}
           />
         )}

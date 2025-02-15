@@ -113,7 +113,9 @@ const CheckoutSession = () => {
   if (!sessionData && isLoading) return null;
 
   if (!sessionData && !isLoading) {
-    return null;
+    return (
+      <CheckoutSessionGeneric message="This checkout session does not exist" />
+    );
   }
 
   if (sessionData.isPaymentRefunded) {

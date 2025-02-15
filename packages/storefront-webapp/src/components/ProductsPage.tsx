@@ -1,7 +1,6 @@
 import { useStoreContext } from "@/contexts/StoreContext";
-import { Product } from "@athena/webapp";
+import { Product, ProductSku } from "@athena/webapp";
 import { Link } from "@tanstack/react-router";
-import { Button } from "./ui/button";
 import { Skeleton } from "./ui/skeleton";
 import { ProductCard, ProductSkuCard } from "./ProductCard";
 import { useGetProductFilters } from "@/hooks/useGetProductFilters";
@@ -20,10 +19,12 @@ function ProductCardLoadingSkeleton() {
 
 export default function ProductsPage({
   products,
+  productSkus,
   isLoading,
 }: {
   isLoading: boolean;
   products?: Product[];
+  productSkus?: ProductSku[];
 }) {
   const { formatter } = useStoreContext();
 
@@ -47,7 +48,7 @@ export default function ProductsPage({
     );
   }
 
-  if (products?.length == 0) {
+  if (products?.length == 0 && !productSkus) {
     return (
       <div className="space-y-8 container mx-auto max-w-[1024px] h-screen">
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
@@ -85,38 +86,32 @@ export default function ProductsPage({
           <ProductCardLoadingSkeleton />
         </>
       )}
-      {/* {!isLoading &&
-        products?.flatMap((product) =>
-          product.skus.map((sku: any) => (
-            <Link
-              to="/shop/product/$productSlug"
-              key={`${product._id}-${sku.sku}`}
-              params={(params) => ({
-                ...params,
-                productSlug: product._id,
-              })}
-              search={{ variant: sku.sku }}
-              className="block mb-4"
-            >
-              <ProductSkuCard
-                product={product}
-                sku={sku}
-                currencyFormatter={formatter}
-              />
-            </Link>
-          ))
-        )} */}
-
       {!isLoading &&
-        products?.flatMap((product) => (
+        productSkus?.flatMap((sku) => (
           <Link
             to="/shop/product/$productSlug"
-            key={`${product._id}}`}
+            key={`${sku._id}-${sku.sku}`}
             params={(params) => ({
               ...params,
-              productSlug: product._id,
+              productSlug: sku.productId,
             })}
-            search={{ variant: product.skus[0].sku }}
+            search={{ variant: sku.sku }}
+            className="block mb-4"
+          >
+            <ProductSkuCard sku={sku} currencyFormatter={formatter} />
+          </Link>
+        ))}
+
+      {!isLoading &&
+        products?.flatMap((product: Product) => (
+          <Link
+            to="/shop/product/$productSlug"
+            key={`${product?._id}}`}
+            params={(params) => ({
+              ...params,
+              productSlug: product?._id,
+            })}
+            search={{ variant: product?.skus?.[0].sku }}
             className="block mb-4"
           >
             <ProductCard product={product} currencyFormatter={formatter} />

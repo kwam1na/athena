@@ -14,6 +14,8 @@ import { customerDetailsSchema } from "./schemas/customerDetailsSchema";
 import { baseDeliveryDetailsSchema } from "./schemas/deliveryDetailsSchema";
 import { baseBillingDetailsSchema } from "./schemas/billingDetailsSchema";
 import { CheckoutSession } from "@athena/webapp";
+import { CheckoutUnavailable } from "../states/checkout unavailable/CheckoutUnavailable";
+import { useNavigationBarContext } from "@/contexts/NavigationBarProvider";
 
 export type Address = {
   address?: string;
@@ -438,11 +440,15 @@ export const CheckoutProvider = ({
 
   const [actionsState, setActionsState] = useState(initialActionsState);
 
-  // const [discount, setDiscount] = useState<Discount | null>(null);
-
   const { bag } = useShoppingBag();
 
-  const { user } = useStoreContext();
+  const { user, store } = useStoreContext();
+
+  const { setNavBarLayout } = useNavigationBarContext();
+
+  useEffect(() => {
+    setNavBarLayout("sticky");
+  }, []);
 
   useEffect(() => {
     // Save the current state to sessionStorage whenever it changes and bag is not empty
@@ -658,6 +664,12 @@ export const CheckoutProvider = ({
   };
 
   const { data, isLoading, refetch } = useGetActiveCheckoutSession();
+
+  const { config } = store || {};
+
+  if (config?.visibility?.inReadOnlyMode) {
+    return <CheckoutUnavailable />;
+  }
 
   if (isLoading || data === undefined) return null;
 

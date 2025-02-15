@@ -2,22 +2,26 @@ import { useCheckout } from "@/components/checkout/CheckoutProvider";
 import { Button } from "@/components/ui/button";
 import { ArrowLeftIcon } from "@radix-ui/react-icons";
 import { Link } from "@tanstack/react-router";
+import { ArrowLeft } from "lucide-react";
 
 export function CheckoutExpired() {
   return (
     <div className="container mx-auto max-w-[1024px] h-full flex justify-center">
       <div className="flex flex-col gap-16 mt-24 w-[80%]">
         <div className="space-y-4">
-          <p className="text-xl">Your checkout session has expired</p>
+          <p className="text-2xl">Your checkout session has expired</p>
 
-          <p className="text-sm">
+          <p>
             You've been inactive for a while, so we ended your session to secure
             your information.
           </p>
         </div>
 
         <Link to="/shop/bag">
-          <Button className="lg:w-[320px]">Return to bag</Button>
+          <Button variant={"clear"} className="group px-0">
+            <ArrowLeft className="w-4 h-4 mr-2 -me-1 ms-2 transition-transform group-hover:-translate-x-0.5" />
+            Return to bag
+          </Button>
         </Link>
       </div>
     </div>
@@ -30,15 +34,13 @@ export function CheckoutSessionNotFound() {
       <div className="flex flex-col gap-16 mt-24 w-[80%]">
         <div className="space-y-4">
           <p className="text-xl">This checkout session does not exists</p>
-
-          {/* <p className="text-sm">
-            You've been inactive for a while, so we ended your session to secure
-            your information.
-          </p> */}
         </div>
 
         <Link to="/shop/bag">
-          <Button className="lg:w-[320px]">Return to bag</Button>
+          <Button variant={"clear"} className="group px-0">
+            <ArrowLeft className="w-4 h-4 mr-2 -me-1 ms-2 transition-transform group-hover:-translate-x-0.5" />
+            Return to bag
+          </Button>
         </Link>
       </div>
     </div>
@@ -51,15 +53,13 @@ export function CheckoutSessionGeneric({ message }: { message: string }) {
       <div className="flex flex-col gap-16 mt-24 w-[80%]">
         <div className="space-y-4">
           <p className="text-xl">{message}</p>
-
-          {/* <p className="text-sm">
-            You've been inactive for a while, so we ended your session to secure
-            your information.
-          </p> */}
         </div>
 
         <Link to="/shop/bag">
-          <Button className="lg:w-[320px]">Return to bag</Button>
+          <Button variant={"clear"} className="group px-0">
+            <ArrowLeft className="w-4 h-4 mr-2 -me-1 ms-2 transition-transform group-hover:-translate-x-0.5" />
+            Return to bag
+          </Button>
         </Link>
       </div>
     </div>
@@ -94,17 +94,20 @@ export function CheckoutMissingPayment() {
     <div className="container mx-auto max-w-[1024px] h-full flex justify-center">
       <div className="flex flex-col gap-16 mt-24 w-[80%]">
         <div className="space-y-4">
-          <p className="text-sm">
+          <p>
             This checkout session is missing payment. If you think this is
             incorrect, contact us for support.
           </p>
 
-          <p className="text-xs font-medium">{`Reference: ${activeSession.externalReference}`}</p>
+          <p className="font-medium">{`Reference: ${activeSession.externalReference || activeSession._id}`}</p>
         </div>
 
         <div className="space-x-12">
           <Link to="/shop/checkout">
-            <Button className="lg:w-[320px]">Return to checkout</Button>
+            <Button variant={"clear"} className="group px-0">
+              <ArrowLeft className="w-4 h-4 mr-2 -me-1 ms-2 transition-transform group-hover:-translate-x-0.5" />
+              Return to checkout
+            </Button>
           </Link>
         </div>
       </div>
@@ -117,15 +120,16 @@ export function CheckoutNotComplete() {
     <div className="container mx-auto max-w-[1024px] h-full flex justify-center">
       <div className="flex flex-col gap-16 mt-24 w-[80%]">
         <div className="space-y-4">
-          <p className="text-sm">This checkout session is not complete</p>
+          <p>This checkout session is not complete</p>
         </div>
 
         <div className="space-x-12">
           <Button
-            className="lg:w-[320px] flex items-center"
+            variant={"clear"}
+            className="group px-0"
             onClick={() => window.history.back()}
           >
-            <ArrowLeftIcon className="w-4 h-4 mr-2" />
+            <ArrowLeft className="w-4 h-4 mr-2 -me-1 ms-2 transition-transform group-hover:-translate-x-0.5" />
             Go back
           </Button>
         </div>

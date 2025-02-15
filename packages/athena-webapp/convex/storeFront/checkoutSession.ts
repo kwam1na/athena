@@ -11,7 +11,6 @@ import {
 } from "../_generated/server";
 import { v } from "convex/values";
 import { orderDetailsSchema } from "../schemas/storeFront";
-import { returnItemsToStock } from "./onlineOrder";
 
 const entity = "checkoutSession";
 
@@ -47,6 +46,21 @@ export const create = mutation({
     const now = Date.now();
     const sessionLimit = sessionLimitMinutes * 60 * 1000; // 15 minutes in ms
     const expiresAt = now + sessionLimit;
+
+    // check that the store is in active mode
+    const store = await ctx.db.get(args.storeId);
+
+    const { config } = store || {};
+
+    if (
+      config?.availability?.inMaintenanceMode ||
+      config?.visibility?.inReadOnlyMode
+    ) {
+      return {
+        success: false,
+        message: "Store checkout is currently unavailable.",
+      };
+    }
 
     // Check for valid products
     const productExistenceChecks = await Promise.all(

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   AlertCircle,
   ArrowRight,
@@ -25,6 +25,7 @@ import { FadeIn } from "../common/FadeIn";
 import { checkoutSessionQueries } from "@/queries";
 import { ArrowRightIcon } from "@radix-ui/react-icons";
 import ImageWithFallback from "../ui/image-with-fallback";
+import { useNavigationBarContext } from "@/contexts/NavigationBarProvider";
 
 const PendingItem = ({ session, count }: { session: any; count: number }) => {
   return (
@@ -60,6 +61,12 @@ export default function ShoppingBag() {
   const [bagAction, setBagAction] = useState<ShoppingBagAction>("idle");
   const { formatter, userId, organizationId, storeId, isNavbarShowing } =
     useStoreContext();
+
+  const { setNavBarLayout } = useNavigationBarContext();
+
+  useEffect(() => {
+    setNavBarLayout("fixed");
+  }, []);
 
   const {
     bag,
@@ -137,6 +144,7 @@ export default function ShoppingBag() {
           to: "/shop/checkout",
         });
       } else {
+        setError(res.message);
         setIsProcessingCheckoutRequest(false);
       }
     } catch (e) {

@@ -1,12 +1,13 @@
 import { BagSummaryItems } from "@/components/checkout/BagSummary";
-import { Checkout } from "@/components/checkout/Checkout";
 import {
   PaymentDetails,
   PickupDetails,
 } from "@/components/checkout/OrderDetails";
 import { FadeIn } from "@/components/common/FadeIn";
-import { CheckoutNotComplete } from "@/components/states/checkout-expired/CheckoutExpired";
-import NotFound from "@/components/states/not-found/NotFound";
+import {
+  CheckoutNotComplete,
+  CheckoutSessionGeneric,
+} from "@/components/states/checkout-expired/CheckoutExpired";
 import { Button } from "@/components/ui/button";
 import { useStoreContext } from "@/contexts/StoreContext";
 import { capitalizeFirstLetter } from "@/lib/utils";
@@ -36,7 +37,9 @@ const CheckoutCompleteView = () => {
   if (!sessionData && isLoading) return null;
 
   if (!sessionData && !isLoading) {
-    return null;
+    return (
+      <CheckoutSessionGeneric message="This checkout session does not exist" />
+    );
   }
 
   if (!sessionData.placedOrderId) {
