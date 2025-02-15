@@ -2,13 +2,17 @@ import { AnimatePresence, motion } from "framer-motion";
 import { ShoppingBasket } from "lucide-react";
 
 interface CartIconProps {
-  notificationCount?: number; // Optional prop to display the count
+  notificationCount?: number;
+  hoverClass?: string;
 }
 
-const CartIcon: React.FC<CartIconProps> = ({ notificationCount }) => {
+const CartIcon: React.FC<CartIconProps> = ({
+  notificationCount,
+  hoverClass,
+}) => {
   return (
     <div className="relative inline-block">
-      <ShoppingBasket className="w-5 h-5" />
+      <ShoppingBasket className={`w-5 h-5 ${hoverClass}`} />
 
       {/* Notification Dot */}
       <AnimatePresence initial={false}>

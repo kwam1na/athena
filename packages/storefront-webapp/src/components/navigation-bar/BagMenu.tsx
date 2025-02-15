@@ -10,6 +10,7 @@ import { PersonIcon } from "@radix-ui/react-icons";
 import { useStoreContext } from "@/contexts/StoreContext";
 import { useLogout } from "@/hooks/useLogout";
 import ImageWithFallback from "../ui/image-with-fallback";
+import { useNavigationBarContext } from "@/contexts/NavigationBarProvider";
 
 export const BagMenu = ({
   setActiveMenu,
@@ -29,6 +30,13 @@ export const BagMenu = ({
   const { user } = useStoreContext();
 
   const handleLogout = useLogout();
+
+  const { navBarLayout, appLocation } = useNavigationBarContext();
+
+  const hoverClass =
+    navBarLayout == "sticky" && appLocation == "home"
+      ? "hover:text-white"
+      : "hover:text-gray-500";
 
   const handleOnLinkClick = async ({
     isLogout = false,
@@ -58,7 +66,7 @@ export const BagMenu = ({
                   }}
                   onClick={() => handleOnLinkClick()}
                   key={idx}
-                  className="flex items-center gap-4"
+                  className={`flex items-center gap-4 ${hoverClass}`}
                 >
                   <ImageWithFallback
                     src={item.productImage || placeholder}
@@ -96,7 +104,7 @@ export const BagMenu = ({
       <div className="space-y-4 max-w-[180px]">
         <Link
           to="/shop/orders"
-          className="flex items-center gap-4"
+          className={`flex items-center gap-4 ${hoverClass}`}
           onClick={() => handleOnLinkClick()}
         >
           <Package className="w-4 h-4" />
@@ -105,7 +113,7 @@ export const BagMenu = ({
 
         <Link
           to="/shop/saved"
-          className="flex items-center gap-4"
+          className={`flex items-center gap-4 ${hoverClass}`}
           onClick={() => handleOnLinkClick()}
         >
           <SavedIcon notificationCount={savedBagCount} />
@@ -114,7 +122,7 @@ export const BagMenu = ({
 
         <Link
           to="/account"
-          className="flex items-center gap-4"
+          className={`flex items-center gap-4 ${hoverClass}`}
           onClick={() => handleOnLinkClick()}
         >
           <Cog className="w-4 h-4" />
@@ -124,7 +132,7 @@ export const BagMenu = ({
         {!user && (
           <Link
             to="/login"
-            className="flex items-center gap-4"
+            className={`flex items-center gap-4 ${hoverClass}`}
             onClick={() => handleOnLinkClick()}
           >
             <PersonIcon className="w-4 h-4" />
@@ -134,7 +142,7 @@ export const BagMenu = ({
 
         {user && (
           <a
-            className="flex items-center gap-4"
+            className={`flex items-center gap-4 ${hoverClass}`}
             onClick={() => handleOnLinkClick({ isLogout: true })}
           >
             <PersonIcon className="w-4 h-4" />

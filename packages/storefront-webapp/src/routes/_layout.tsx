@@ -4,10 +4,11 @@ import { createFileRoute, Outlet } from "@tanstack/react-router";
 import { useEffect } from "react";
 
 function LayoutComponent() {
-  const { setNavBarLayout } = useNavigationBarContext();
+  const { setNavBarLayout, setAppLocation } = useNavigationBarContext();
 
   useEffect(() => {
     setNavBarLayout("fixed");
+    setAppLocation(null);
   }, []);
 
   return (

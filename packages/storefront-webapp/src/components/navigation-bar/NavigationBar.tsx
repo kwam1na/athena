@@ -39,7 +39,12 @@ export default function NavigationBar() {
 
   const { navBarClassname, showNavbar, hideNavbar } = useStoreContext();
 
-  const { navBarLayout } = useNavigationBarContext();
+  const { navBarLayout, appLocation } = useNavigationBarContext();
+
+  const hoverClass =
+    navBarLayout == "sticky" && appLocation == "home"
+      ? "hover:text-white"
+      : "hover:text-gray-500";
 
   const container = {
     hidden: { opacity: 1 },
@@ -69,7 +74,7 @@ export default function NavigationBar() {
               ...p,
               categorySlug: activeMenu,
             })}
-            className="text-xs hover:text-gray-600 transition-colors"
+            className={`text-xs ${hoverClass} transition-colors`}
             onClick={() => setActiveMenu(null)}
           >
             Shop all
@@ -88,7 +93,7 @@ export default function NavigationBar() {
                   categorySlug: activeMenu,
                   subcategorySlug: s.value,
                 })}
-                className="text-xs hover:text-gray-600 transition-colors"
+                className={`text-xs ${hoverClass} transition-colors`}
                 onClick={() => setActiveMenu(null)}
               >
                 {s.label}
@@ -168,7 +173,9 @@ export default function NavigationBar() {
                 <div className="flex gap-16">
                   <div onMouseEnter={() => setActiveMenu(null)}>
                     <Link to="/">
-                      <h1 className="text-md font-medium tracking-widest">
+                      <h1
+                        className={`text-md font-medium ${hoverClass} tracking-widest`}
+                      >
                         {store?.name && (store?.name as string).toUpperCase()}
                       </h1>
                     </Link>
@@ -186,7 +193,7 @@ export default function NavigationBar() {
                             ...p,
                             categorySlug: s.value,
                           })}
-                          className="text-xs hover:text-gray-600 transition-colors"
+                          className={`text-xs ${hoverClass} transition-colors`}
                           onClick={() => setActiveMenu(null)}
                         >
                           {s.label}
@@ -207,7 +214,10 @@ export default function NavigationBar() {
                       className="hidden lg:flex cursor-pointer hover:-rotate-6 transition-all duration-300 ease-out"
                       onClick={() => setActiveMenu("bag")}
                     >
-                      <CartIcon notificationCount={bagCount} />
+                      <CartIcon
+                        notificationCount={bagCount}
+                        hoverClass={hoverClass}
+                      />
                     </span>
 
                     <span

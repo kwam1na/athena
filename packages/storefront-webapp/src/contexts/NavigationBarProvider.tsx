@@ -3,11 +3,15 @@ import React, { createContext, useContext, useState } from "react";
 type NavigationBarConteztType = {
   navBarLayout: "sticky" | "fixed";
   setNavBarLayout: (layout: "sticky" | "fixed") => void;
+  appLocation: AppLocation;
+  setAppLocation: (location: AppLocation) => void;
 };
 
 const NavigationBarContext = createContext<
   NavigationBarConteztType | undefined
 >(undefined);
+
+type AppLocation = "home" | "store" | "product" | null;
 
 export const NavigationBarProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
@@ -16,9 +20,13 @@ export const NavigationBarProvider: React.FC<{ children: React.ReactNode }> = ({
     "sticky"
   );
 
+  const [location, setLocation] = useState<AppLocation>(null);
+
   return (
     <NavigationBarContext.Provider
       value={{
+        appLocation: location,
+        setAppLocation: setLocation,
         setNavBarLayout,
         navBarLayout,
       }}

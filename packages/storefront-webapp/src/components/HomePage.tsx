@@ -15,6 +15,7 @@ import { useEffect } from "react";
 import { Product, ProductSku } from "@athena/webapp";
 import ImageWithFallback from "./ui/image-with-fallback";
 import { useNavigationBarContext } from "@/contexts/NavigationBarProvider";
+import { HeroVideo } from "./home/HeroVideo";
 
 function FeaturedProduct({ product }: { product: any }) {
   const { formatter } = useStoreContext();
@@ -190,7 +191,7 @@ function FeaturedSection({ data }: { data: any }) {
 export default function HomePage() {
   const { organizationId, storeId, store } = useStoreContext();
 
-  const { setNavBarLayout } = useNavigationBarContext();
+  const { setNavBarLayout, setAppLocation } = useNavigationBarContext();
 
   const { data: bestSellers, isLoading: isLoadingBestSellers } = useQuery(
     productQueries.bestSellers({
@@ -215,9 +216,8 @@ export default function HomePage() {
 
   useEffect(() => {
     setNavBarLayout("sticky");
+    setAppLocation("home");
   }, []);
-
-  const firstLoad = true;
 
   useEffect(() => {
     const savedState = sessionStorage.getItem(INITIAL_LOAD_KEY);
@@ -231,16 +231,6 @@ export default function HomePage() {
       );
     }
   }, []);
-
-  useEffect(() => {
-    if (firstLoad) {
-      sessionStorage.setItem(INITIAL_LOAD_KEY, "false");
-      sessionStorage.setItem(
-        INITIAL_LOAD_TIME_KEY,
-        new Date().getTime().toString()
-      );
-    }
-  }, [firstLoad]);
 
   const { formatter } = useStoreContext();
 
@@ -261,16 +251,6 @@ export default function HomePage() {
 
   if (isLoading) return <div className="h-screen" />;
 
-  const initialAnimation = firstLoad
-    ? { opacity: 0, y: -8 }
-    : { opacity: 0, y: 0 };
-  const secondAnimation = firstLoad
-    ? { opacity: 0, y: 8 }
-    : { opacity: 0, y: 0 };
-  const sectionAnimation = firstLoad
-    ? { opacity: 0, x: -16 }
-    : { opacity: 0, x: 0 };
-
   if (products && products.length == 0) {
     return (
       <div className="container mx-auto px-4 lg:px-0 overflow-hidden">
@@ -288,28 +268,12 @@ export default function HomePage() {
     );
   }
 
-  // console.log("bestSellersProducts", bestSellersProducts);
-
-  // console.log("featured", featured);
-
   return (
     <>
       <div className="overflow-hidden">
         <div className="space-y-32 pb-56">
           <div className="relative">
-            <motion.img
-              initial={{ opacity: 0, scale: 1.05 }}
-              animate={{
-                opacity: 1,
-                scale: 1,
-                transition: {
-                  duration: 1,
-                  ease: [0.6, 0.05, 0.01, 0.9],
-                },
-              }}
-              src={store?.config?.showroomImage}
-              className="w-full h-screen object-cover"
-            />
+            <HeroVideo />
             <motion.div
               initial={{ opacity: 0 }}
               animate={{
@@ -323,26 +287,22 @@ export default function HomePage() {
             />
             <div className="absolute inset-0 flex flex-col items-center justify-center -translate-y-[10%]">
               <motion.p
-                initial={initialAnimation}
+                initial={{ opacity: 0, y: -8 }}
                 animate={{
                   opacity: 1,
                   y: 0,
-                  transition: firstLoad
-                    ? { ease: "easeOut", duration: 0.4, delay: 1.3 }
-                    : { ease: "easeOut", duration: 0, delay: 0.3 },
+                  transition: { ease: "easeOut", duration: 0.4, delay: 1.3 },
                 }}
                 className="text-2xl text-center text-accent5 drop-shadow-lg"
               >
                 Switch your look
               </motion.p>
               <motion.p
-                initial={secondAnimation}
+                initial={{ opacity: 0, y: 8 }}
                 animate={{
                   opacity: 1,
                   y: 0,
-                  transition: firstLoad
-                    ? { ease: "easeOut", duration: 0.4, delay: 1.6 }
-                    : { ease: "easeOut", duration: 0, delay: 0.3 },
+                  transition: { ease: "easeOut", duration: 0.4, delay: 1.6 },
                 }}
                 className="font-lavish text-8xl md:text-9xl text-center text-accent5 drop-shadow-lg"
               >
@@ -354,13 +314,11 @@ export default function HomePage() {
           <div className="container mx-auto space-y-32 pb-56 px-4 lg:px-0">
             {Boolean(bestSellersSorted?.length) && (
               <motion.div
-                initial={sectionAnimation}
+                initial={{ opacity: 0, x: -16 }}
                 animate={{
                   opacity: 1,
                   x: 0,
-                  transition: firstLoad
-                    ? { duration: 0.3, delay: 0.3 }
-                    : { duration: 0 },
+                  transition: { duration: 0.3, delay: 0.3 },
                 }}
                 className="space-y-8"
               >
@@ -390,13 +348,11 @@ export default function HomePage() {
 
             {Boolean(featuredSectionSorted?.length) && (
               <motion.div
-                initial={sectionAnimation}
+                initial={{ opacity: 0, x: -16 }}
                 animate={{
                   opacity: 1,
                   x: 0,
-                  transition: firstLoad
-                    ? { duration: 0.3, delay: 0.3 }
-                    : { duration: 0 },
+                  transition: { duration: 0.3, delay: 0.3 },
                 }}
                 className="space-y-32"
               >
