@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   AlertCircle,
+  AlertCircleIcon,
   ArrowRight,
   Heart,
   Info,
@@ -340,8 +341,8 @@ export default function ShoppingBag() {
                     </LoadingButton>
 
                     {error && (
-                      <div className="flex text-xs items-center">
-                        <OctagonAlert className="w-4 h-4 mr-2" />
+                      <div className="flex text-xs items-center font-medium">
+                        <AlertCircleIcon className="w-3.5 h-3.5 mr-2" />
                         <p>{error}</p>
                       </div>
                     )}

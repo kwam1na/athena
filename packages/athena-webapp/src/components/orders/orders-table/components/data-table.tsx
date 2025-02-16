@@ -49,7 +49,7 @@ export function OrderDataTable<TData, TValue>({
 
   const pageIndex = Number(localStorage.getItem(PAGE_INDEX_KEY) ?? 0);
 
-  const pageSize = Number(localStorage.getItem(PAGE_SIZE_KEY) ?? 10);
+  const pageSize = Number(localStorage.getItem(PAGE_SIZE_KEY) ?? 20);
 
   const table = useReactTable({
     data,

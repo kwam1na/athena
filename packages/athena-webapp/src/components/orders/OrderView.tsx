@@ -179,7 +179,7 @@ const Header = () => {
   const isDelivery = order?.deliveryMethod === "delivery";
   const isPickup = order?.deliveryMethod === "pickup";
 
-  const { o } = useSearch({ strict: false });
+  const { o, orderStatus } = useSearch({ strict: false });
 
   const navigate = useNavigate();
 
@@ -187,8 +187,10 @@ const Header = () => {
     if (o) {
       navigate({ to: o });
     } else {
+      const s = orderStatus?.includes("ready") ? "ready" : orderStatus || "all";
+
       navigate({
-        to: "/$orgUrlSlug/store/$storeUrlSlug/orders",
+        to: `/$orgUrlSlug/store/$storeUrlSlug/orders/${s}`,
         params: (prev) => ({
           ...prev,
           storeUrlSlug: prev.storeUrlSlug!,

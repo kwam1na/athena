@@ -20,6 +20,7 @@ import {
   PanelBottom,
   PanelTop,
   PersonStanding,
+  ShoppingBag,
   ShoppingBasket,
   ShoppingCart,
   Store,
@@ -34,6 +35,8 @@ import { useGetActiveOrganization } from "../hooks/useGetOrganizations";
 import { useNewOrderNotification } from "../hooks/useNewOrderNotification";
 import { useAuth } from "../hooks/useAuth";
 import { GearIcon } from "@radix-ui/react-icons";
+import { useQuery } from "convex/react";
+import { api } from "~/convex/_generated/api";
 
 export function AppSidebar() {
   const { activeStore } = useGetActiveStore();
@@ -42,6 +45,13 @@ export function AppSidebar() {
   const { user } = useAuth();
 
   useNewOrderNotification();
+
+  const orders = useQuery(
+    api.storeFront.onlineOrder.getAllOnlineOrders,
+    activeStore?._id ? { storeId: activeStore._id } : "skip"
+  );
+
+  const openOrders = orders?.filter((o: any) => o.status === "open")?.length;
 
   if (!activeStore || !activeOrganization) {
     return null;
@@ -82,7 +92,7 @@ export function AppSidebar() {
               <SidebarMenuItem>
                 <SidebarMenuButton asChild>
                   <Link
-                    to="/$orgUrlSlug/store/$storeUrlSlug/orders"
+                    to="/$orgUrlSlug/store/$storeUrlSlug/orders/all"
                     params={(p) => ({
                       ...p,
                       orgUrlSlug: activeOrganization?.slug,
@@ -90,10 +100,102 @@ export function AppSidebar() {
                     })}
                     className="flex items-center"
                   >
-                    <ShoppingCart className="w-4 h-4" />
+                    <ShoppingBag className="w-4 h-4" />
                     <p className="font-medium">Orders</p>
                   </Link>
                 </SidebarMenuButton>
+                <SidebarMenuSub>
+                  <SidebarMenuSubItem>
+                    <SidebarMenuButton asChild>
+                      <Link
+                        to="/$orgUrlSlug/store/$storeUrlSlug/orders/open"
+                        params={(p) => ({
+                          ...p,
+                          orgUrlSlug: activeOrganization?.slug,
+                          storeUrlSlug: activeStore?.slug,
+                        })}
+                        className="flex items-center justify-between"
+                      >
+                        <p className="font-medium">Open</p>
+                        {Boolean(openOrders) && (
+                          <p className="text-xs font-medium">{openOrders}</p>
+                        )}
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuSubItem>
+                </SidebarMenuSub>
+
+                <SidebarMenuSub>
+                  <SidebarMenuSubItem>
+                    <SidebarMenuButton asChild>
+                      <Link
+                        to="/$orgUrlSlug/store/$storeUrlSlug/orders/ready"
+                        params={(p) => ({
+                          ...p,
+                          orgUrlSlug: activeOrganization?.slug,
+                          storeUrlSlug: activeStore?.slug,
+                        })}
+                        className="flex items-center"
+                      >
+                        <p className="font-medium">Ready</p>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuSubItem>
+                </SidebarMenuSub>
+
+                <SidebarMenuSub>
+                  <SidebarMenuSubItem>
+                    <SidebarMenuButton asChild>
+                      <Link
+                        to="/$orgUrlSlug/store/$storeUrlSlug/orders/out-for-delivery"
+                        params={(p) => ({
+                          ...p,
+                          orgUrlSlug: activeOrganization?.slug,
+                          storeUrlSlug: activeStore?.slug,
+                        })}
+                        className="flex items-center"
+                      >
+                        <p className="font-medium">Out for delivery</p>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuSubItem>
+                </SidebarMenuSub>
+
+                <SidebarMenuSub>
+                  <SidebarMenuSubItem>
+                    <SidebarMenuButton asChild>
+                      <Link
+                        to="/$orgUrlSlug/store/$storeUrlSlug/orders/completed"
+                        params={(p) => ({
+                          ...p,
+                          orgUrlSlug: activeOrganization?.slug,
+                          storeUrlSlug: activeStore?.slug,
+                        })}
+                        className="flex items-center"
+                      >
+                        <p className="font-medium">Completed</p>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuSubItem>
+                </SidebarMenuSub>
+
+                <SidebarMenuSub>
+                  <SidebarMenuSubItem>
+                    <SidebarMenuButton asChild>
+                      <Link
+                        to="/$orgUrlSlug/store/$storeUrlSlug/orders/refunded"
+                        params={(p) => ({
+                          ...p,
+                          orgUrlSlug: activeOrganization?.slug,
+                          storeUrlSlug: activeStore?.slug,
+                        })}
+                        className="flex items-center"
+                      >
+                        <p className="font-medium">Refunded</p>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuSubItem>
+                </SidebarMenuSub>
               </SidebarMenuItem>
 
               <SidebarMenuItem>

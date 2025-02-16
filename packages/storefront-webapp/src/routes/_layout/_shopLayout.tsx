@@ -14,6 +14,7 @@ import { XIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { z } from "zod";
 import { AnimatePresence, motion } from "framer-motion";
+import { useNavigationBarContext } from "@/contexts/NavigationBarProvider";
 
 const productsPageSchema = z.object({
   color: z.string().optional(),
@@ -90,7 +91,10 @@ function LayoutComponent() {
   const [showFilters, setShowFilters] = useState(false);
   const [showMobileFilters, setShowMobileFilters] = useState(false);
 
+  // TODO: combine this into useNavigationBarContext
   const { hideNavbar, showNavbar } = useStoreContext();
+
+  const { setNavBarLayout } = useNavigationBarContext();
 
   const searchParams = useGetShopSearchParams();
 

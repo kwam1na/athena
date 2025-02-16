@@ -29,6 +29,7 @@ export const PaymentSection = ({ form }: CheckoutFormSectionProps) => {
 
   const onSubmit = async () => {
     setErrorFinalizingPayment(false);
+    setErrorMessage("");
 
     try {
       const canProceedToPayment = await canPlaceOrder();

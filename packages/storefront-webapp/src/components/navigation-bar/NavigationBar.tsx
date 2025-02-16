@@ -171,8 +171,9 @@ export default function NavigationBar() {
               animate={{
                 opacity: 1,
                 transition: {
-                  duration: 0.3,
-                  delay: appLocation == "home" ? 2.4 : 0,
+                  duration: 1,
+                  delay: appLocation == "home" ? 2.2 : 0,
+                  ease: [0.6, 0.05, 0.04, 0.9],
                 },
               }}
               className={`${navBarClassname} container mx-auto max-w-[1024px]`}

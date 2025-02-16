@@ -15,6 +15,7 @@ import { z } from "zod";
 const rootPageSchema = z.object({
   o: z.string().optional(),
   variant: z.string().optional(),
+  orderStatus: z.string().optional(),
 });
 
 export const Route = createRootRouteWithContext<{

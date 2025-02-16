@@ -447,7 +447,7 @@ export const CheckoutProvider = ({
   const { setNavBarLayout, setAppLocation } = useNavigationBarContext();
 
   useEffect(() => {
-    setNavBarLayout("sticky");
+    setNavBarLayout("fixed");
     setAppLocation("shop");
   }, []);
 
@@ -652,7 +652,6 @@ export const CheckoutProvider = ({
 
     try {
       // Parse the state using the schema
-      console.log("in can place order", checkoutState);
       webOrderSchema.parse(checkoutState);
       updateState({ failedFinalValidation: false });
 

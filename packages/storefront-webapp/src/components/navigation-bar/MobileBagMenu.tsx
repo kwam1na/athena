@@ -34,7 +34,11 @@ export function MobileBagMenu({
       </div>
 
       <div className="px-8 py-2">
-        <BagMenu setActiveMenu={setActiveMenu} onCloseClick={onCloseClick} />
+        <BagMenu
+          isMobile
+          setActiveMenu={setActiveMenu}
+          onCloseClick={onCloseClick}
+        />
       </div>
     </motion.div>
   );

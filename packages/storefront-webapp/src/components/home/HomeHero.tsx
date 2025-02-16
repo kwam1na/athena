@@ -1,7 +1,7 @@
 import { useStoreContext } from "@/contexts/StoreContext";
 import { motion } from "framer-motion";
 
-export const HeroVideo = () => {
+export const HomeHero = () => {
   const { store } = useStoreContext();
   return (
     <section className="relative w-full h-screen flex items-center justify-center text-white text-center">
@@ -43,10 +43,10 @@ export const HeroVideo = () => {
       <motion.div
         initial={{ opacity: 0 }}
         animate={{
-          opacity: 0.4,
+          opacity: 0.7,
           transition: {
             duration: 0.5,
-            delay: 1, // Start after image animation completes
+            delay: 1.1, // Start after image animation completes
           },
         }}
         className="absolute inset-0 bg-black"
@@ -57,7 +57,7 @@ export const HeroVideo = () => {
           animate={{
             opacity: 1,
             y: 0,
-            transition: { ease: "easeOut", duration: 0.4, delay: 1.3 },
+            transition: { ease: "easeOut", duration: 0.4, delay: 1.1 },
           }}
           className="text-2xl text-center text-accent5 drop-shadow-lg"
         >
@@ -68,7 +68,7 @@ export const HeroVideo = () => {
           animate={{
             opacity: 1,
             y: 0,
-            transition: { ease: "easeOut", duration: 0.4, delay: 1.6 },
+            transition: { ease: "easeOut", duration: 0.4, delay: 1.1 },
           }}
           className="font-lavish text-8xl md:text-9xl text-center text-accent5 drop-shadow-lg"
         >

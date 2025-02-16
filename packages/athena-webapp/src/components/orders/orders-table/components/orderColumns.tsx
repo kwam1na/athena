@@ -21,6 +21,8 @@ export const orderColumns: ColumnDef<OnlineOrder>[] = [
       <DataTableColumnHeader column={column} title="Order" />
     ),
     cell: ({ row }) => {
+      const s = window.location.pathname.split("/").pop();
+
       return (
         <div className="flex space-x-2">
           <Link
@@ -31,6 +33,7 @@ export const orderColumns: ColumnDef<OnlineOrder>[] = [
               storeUrlSlug: prev.storeUrlSlug!,
               orderSlug: row.original._id,
             })}
+            search={{ orderStatus: s }}
             className="flex items-center gap-8"
           >
             <span className="font-medium">{`#${row.getValue("orderNumber")}`}</span>
@@ -63,7 +66,7 @@ export const orderColumns: ColumnDef<OnlineOrder>[] = [
         }
       }
 
-      const { isOrderReady, hasOrderTransitioned } = getOrderState(order);
+      const s = window.location.pathname.split("/").pop();
 
       return (
         <Link
@@ -74,6 +77,7 @@ export const orderColumns: ColumnDef<OnlineOrder>[] = [
             storeUrlSlug: prev.storeUrlSlug!,
             orderSlug: row.original._id,
           })}
+          search={{ orderStatus: s }}
         >
           <OrderStatus order={order} />
         </Link>
@@ -92,6 +96,8 @@ export const orderColumns: ColumnDef<OnlineOrder>[] = [
     ),
     cell: ({ row }) => {
       const customer = row.getValue("customerDetails") as Record<string, any>;
+      const s = window.location.pathname.split("/").pop();
+
       return (
         <Link
           to="/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug"
@@ -101,6 +107,7 @@ export const orderColumns: ColumnDef<OnlineOrder>[] = [
             storeUrlSlug: prev.storeUrlSlug!,
             orderSlug: row.original._id,
           })}
+          search={{ orderStatus: s }}
         >
           {customer?.email}
         </Link>
@@ -114,19 +121,24 @@ export const orderColumns: ColumnDef<OnlineOrder>[] = [
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Amount" />
     ),
-    cell: ({ row }) => (
-      <Link
-        to="/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug"
-        params={(prev) => ({
-          ...prev,
-          orgUrlSlug: prev.orgUrlSlug!,
-          storeUrlSlug: prev.storeUrlSlug!,
-          orderSlug: row.original._id,
-        })}
-      >
-        <div>{row.getValue("amount")}</div>
-      </Link>
-    ),
+    cell: ({ row }) => {
+      const s = window.location.pathname.split("/").pop();
+
+      return (
+        <Link
+          to="/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug"
+          params={(prev) => ({
+            ...prev,
+            orgUrlSlug: prev.orgUrlSlug!,
+            storeUrlSlug: prev.storeUrlSlug!,
+            orderSlug: row.original._id,
+          })}
+          search={{ orderStatus: s }}
+        >
+          <div>{row.getValue("amount")}</div>
+        </Link>
+      );
+    },
     sortingFn: (a, b) => {
       return (a.original as any).amountValue - (b.original as any).amountValue;
     },
@@ -149,6 +161,8 @@ export const orderColumns: ColumnDef<OnlineOrder>[] = [
         content = <div>Pickup</div>;
       }
 
+      const s = window.location.pathname.split("/").pop();
+
       return (
         <Link
           to="/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug"
@@ -158,6 +172,7 @@ export const orderColumns: ColumnDef<OnlineOrder>[] = [
             storeUrlSlug: prev.storeUrlSlug!,
             orderSlug: row.original._id,
           })}
+          search={{ orderStatus: row.original.status }}
         >
           {content}
         </Link>
@@ -174,18 +189,23 @@ export const orderColumns: ColumnDef<OnlineOrder>[] = [
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Placed" />
     ),
-    cell: ({ row }) => (
-      <Link
-        to="/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug"
-        params={(prev) => ({
-          ...prev,
-          orgUrlSlug: prev.orgUrlSlug!,
-          storeUrlSlug: prev.storeUrlSlug!,
-          orderSlug: row.original._id,
-        })}
-      >
-        <div>{getRelativeTime(row.getValue("_creationTime"))}</div>
-      </Link>
-    ),
+    cell: ({ row }) => {
+      const s = window.location.pathname.split("/").pop();
+
+      return (
+        <Link
+          to="/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug"
+          params={(prev) => ({
+            ...prev,
+            orgUrlSlug: prev.orgUrlSlug!,
+            storeUrlSlug: prev.storeUrlSlug!,
+            orderSlug: row.original._id,
+          })}
+          search={{ orderStatus: s }}
+        >
+          <div>{getRelativeTime(row.getValue("_creationTime"))}</div>
+        </Link>
+      );
+    },
   },
 ];

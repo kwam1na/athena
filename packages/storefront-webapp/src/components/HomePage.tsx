@@ -15,7 +15,7 @@ import { useEffect } from "react";
 import { Product, ProductSku } from "@athena/webapp";
 import ImageWithFallback from "./ui/image-with-fallback";
 import { useNavigationBarContext } from "@/contexts/NavigationBarProvider";
-import { HeroVideo } from "./home/HeroVideo";
+import { HomeHero } from "./home/HomeHero";
 
 function FeaturedProduct({ product }: { product: any }) {
   const { formatter } = useStoreContext();
@@ -273,42 +273,7 @@ export default function HomePage() {
       <div className="overflow-hidden">
         <div className="space-y-32 pb-56">
           <div className="relative">
-            <HeroVideo />
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{
-                opacity: 0.4,
-                transition: {
-                  duration: 0.5,
-                  delay: 1, // Start after image animation completes
-                },
-              }}
-              className="absolute inset-0 bg-black"
-            />
-            <div className="absolute inset-0 flex flex-col items-center justify-center -translate-y-[10%]">
-              <motion.p
-                initial={{ opacity: 0, y: -8 }}
-                animate={{
-                  opacity: 1,
-                  y: 0,
-                  transition: { ease: "easeOut", duration: 0.4, delay: 1.3 },
-                }}
-                className="text-2xl text-center text-accent5 drop-shadow-lg"
-              >
-                Switch your look
-              </motion.p>
-              <motion.p
-                initial={{ opacity: 0, y: 8 }}
-                animate={{
-                  opacity: 1,
-                  y: 0,
-                  transition: { ease: "easeOut", duration: 0.4, delay: 1.6 },
-                }}
-                className="font-lavish text-8xl md:text-9xl text-center text-accent5 drop-shadow-lg"
-              >
-                to match your mood
-              </motion.p>
-            </div>
+            <HomeHero />
           </div>
 
           <div className="container mx-auto space-y-32 pb-56 px-4 lg:px-0">

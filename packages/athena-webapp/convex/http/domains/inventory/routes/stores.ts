@@ -413,7 +413,7 @@ storeRoutes.post(
         ) {
           return c.json({
             success: false,
-            message: "Store checkout is currently unavailable",
+            message: "Store checkout not available",
           });
         }
 

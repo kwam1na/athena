@@ -58,7 +58,7 @@ export const create = mutation({
     ) {
       return {
         success: false,
-        message: "Store checkout is currently unavailable.",
+        message: "Store checkout not available",
       };
     }
 

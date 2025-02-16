@@ -13,9 +13,11 @@ import ImageWithFallback from "../ui/image-with-fallback";
 import { useNavigationBarContext } from "@/contexts/NavigationBarProvider";
 
 export const BagMenu = ({
+  isMobile,
   setActiveMenu,
   onCloseClick,
 }: {
+  isMobile?: boolean;
   setActiveMenu: (menu: string | null) => void;
   onCloseClick?: () => void;
 }) => {
@@ -35,7 +37,7 @@ export const BagMenu = ({
 
   const hoverClass =
     navBarLayout == "sticky" && appLocation == "home"
-      ? "hover:text-gray-300 text-white"
+      ? `hover:text-gray-300 ${isMobile ? "" : "text-white"}`
       : "hover:text-gray-500";
 
   const handleOnLinkClick = async ({
@@ -53,7 +55,7 @@ export const BagMenu = ({
     <motion.div variants={item} className="space-y-12 pb-16">
       {Boolean(bag?.items?.length && bag?.items?.length > 0) && (
         <div className="space-y-8">
-          <p className="text-lg">Bag</p>
+          <p className={`text-lg ${hoverClass}`}>Bag</p>
 
           <div className="flex flex-col gap-8 lg:flex-row">
             <div className="grid grid-cols-1 gap-8 px-4">
@@ -78,7 +80,7 @@ export const BagMenu = ({
               ))}
 
               {bag?.items?.length && bag?.items?.length > 3 && (
-                <p className="text-xs text-muted-foreground">
+                <p className={`text-xs text-muted-foreground ${hoverClass}`}>
                   {`${bag.items.length - 3} more ${bag.items.length - 3 === 1 ? "item" : "items"} in your bag`}
                 </p>
               )}

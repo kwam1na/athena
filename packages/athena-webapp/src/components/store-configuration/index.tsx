@@ -277,7 +277,7 @@ const MaintenanceView = () => {
         },
       });
       const message = toggled
-        ? "Store set to read-only mode"
+        ? "Store set to view-only mode"
         : "Store set to full access";
 
       const icon = toggled ? (
@@ -338,7 +338,7 @@ const MaintenanceView = () => {
           <div className="flex items-center gap-2">
             <EyeIcon className="w-4 h-4 text-muted-foreground" />
             <Label className="text-muted-foreground" htmlFor="custom">
-              Read-only mode
+              View-only mode
             </Label>
           </div>
           <Switch
