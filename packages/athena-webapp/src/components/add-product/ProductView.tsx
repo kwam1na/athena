@@ -234,6 +234,11 @@ function ProductViewContent() {
           productId,
         });
 
+        if (imageUrls.length == 0) {
+          // error uploading images
+          toast.error("Error uploading images");
+        }
+
         images = imageUrls;
       } catch (e) {
         toast.error("Error processing images");
@@ -284,6 +289,11 @@ function ProductViewContent() {
         });
 
         const imageUrls = [...updatedImageUrls, ...images];
+
+        if (images.length == 0) {
+          // error uploading images
+          toast.error("Error uploading images");
+        }
 
         await updateProductSku({
           id: skuId as Id<"productSku">,

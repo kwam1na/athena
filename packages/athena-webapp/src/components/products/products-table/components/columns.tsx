@@ -97,7 +97,7 @@ export const columns: ColumnDef<Product>[] = [
     cell: ({ row }) => {
       return (
         <Link
-          to="/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug"
+          to="/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/edit"
           params={(prev) => ({
             ...prev,
             orgUrlSlug: prev.orgUrlSlug!,

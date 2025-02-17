@@ -1,26 +1,47 @@
+import config from "@/config";
 import { useStoreContext } from "@/contexts/StoreContext";
 import { motion } from "framer-motion";
+import Hls from "hls.js";
+import { useEffect, useRef } from "react";
 
 export const HomeHero = () => {
   const { store } = useStoreContext();
+
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const hlsUrl = `${config.hlsURL}/stores/${store?._id}/assets/hero/hero.m3u8`;
+
+  useEffect(() => {
+    if (!videoRef.current) return;
+    const video = videoRef.current;
+
+    if (video.canPlayType("application/vnd.apple.mpegurl")) {
+      video.src = hlsUrl;
+    } else if (Hls.isSupported()) {
+      const hls = new Hls();
+      hls.loadSource(hlsUrl);
+      hls.attachMedia(video);
+    }
+  }, []);
+
   return (
     <section className="relative w-full h-screen flex items-center justify-center text-white text-center">
       {/* <motion.img
-        initial={{ opacity: 0, scale: 1.05 }}
-        animate={{
-          opacity: 1,
-          scale: 1,
-          transition: {
-            duration: 1,
-            ease: [0.6, 0.05, 0.01, 0.9],
-          },
-        }}
-        src={store?.config?.showroomImage}
-        className="w-full h-screen object-cover"
-      /> */}
+          initial={{ opacity: 0, scale: 1.05 }}
+          animate={{
+            opacity: 1,
+            scale: 1,
+            transition: {
+              duration: 1,
+              ease: [0.6, 0.05, 0.01, 0.9],
+            },
+          }}
+          src={store?.config?.showroomImage}
+          className="w-full h-screen object-cover"
+        /> */}
 
       {/* Background Video */}
       <motion.video
+        ref={videoRef}
         initial={{ opacity: 0, scale: 1.05 }}
         animate={{
           opacity: 1,
@@ -36,7 +57,7 @@ export const HomeHero = () => {
         muted
         playsInline
       >
-        <source src="/videos/hero.mp4" type="video/mp4" />
+        <source src={hlsUrl} type="video/mp4" />
         Your browser does not support the video tag.
       </motion.video>
 

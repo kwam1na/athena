@@ -191,10 +191,7 @@ export const releaseCheckoutItems = internalMutation({
       .filter((q) =>
         q.and(
           q.lt(q.field("expiresAt"), now),
-          q.or(
-            q.eq(q.field("isFinalizingPayment"), false), // Explicitly false
-            q.not(q.field("isFinalizingPayment")) // Undefined
-          )
+          q.eq(q.field("isFinalizingPayment"), false)
         )
       )
       .collect();

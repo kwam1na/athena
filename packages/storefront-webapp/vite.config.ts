@@ -26,6 +26,8 @@ export default defineConfig({
 
             if (id.includes("@radix-ui")) return "radix-ui-vendor";
 
+            if (id.includes("hls.js")) return "hls-js-vendor";
+
             // Fallback for other node_modules
             return "vendor";
           }
