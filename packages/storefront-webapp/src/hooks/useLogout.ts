@@ -1,12 +1,14 @@
-import { LOGGED_IN_USER_ID_KEY, SESSION_STORAGE_KEY } from "@/lib/constants";
+import { logout } from "@/api/auth";
+import { SESSION_STORAGE_KEY } from "@/lib/constants";
+import { useMutation } from "@tanstack/react-query";
 
 export const useLogout = () => {
-  const handleLogout = () => {
-    localStorage.removeItem(LOGGED_IN_USER_ID_KEY);
+  const logoutMutaion = useMutation({
+    mutationFn: logout,
+  });
 
-    if (typeof window === "object") {
-      window.serverData = {};
-    }
+  const handleLogout = async () => {
+    await logoutMutaion.mutateAsync();
 
     sessionStorage.removeItem(SESSION_STORAGE_KEY);
 

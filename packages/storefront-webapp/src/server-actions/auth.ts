@@ -1,5 +1,3 @@
-import { createGuest } from "@/api/storeFrontUser";
-import { verifyUserAccount } from "@/api/stores";
 import { createServerFn } from "@tanstack/start";
 import { getCookie, setCookie } from "vinxi/http";
 
@@ -30,16 +28,11 @@ import { getCookie, setCookie } from "vinxi/http";
 //   }
 // );
 
-
-
-export const fetchUser = createServerFn({method: 'POST'}).handler(async ({ data }) => {
-  console.log(data)
-});
-
-
-
-
-
+export const fetchUser = createServerFn({ method: "POST" }).handler(
+  async ({ data }) => {
+    console.log(data);
+  }
+);
 
 // export const loginFn = createServerFn(
 //   "POST",
@@ -109,12 +102,14 @@ export const fetchUser = createServerFn({method: 'POST'}).handler(async ({ data 
 //   });
 // });
 
+export const logoutFn = createServerFn({ method: "POST" }).handler(
+  async ({ data }) => {
+    console.log(data);
+  }
+);
 
-export const logoutFn = createServerFn({method: 'POST'}).handler(async ({ data }) => {
-  console.log(data)
-});
-
-
-export const loginFn = createServerFn({method: 'POST'}).handler(async ({ data }) => {
-  console.log(data)
-});
+export const loginFn = createServerFn({ method: "POST" }).handler(
+  async ({ data }) => {
+    console.log(data);
+  }
+);

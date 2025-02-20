@@ -1,6 +1,5 @@
 import { Button } from "@/components/ui/button";
 import { useStoreContext } from "@/contexts/StoreContext";
-import { onlineOrderQueries } from "@/queries";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import placeholder from "@/assets/placeholder.png";
@@ -9,6 +8,7 @@ import { motion } from "framer-motion";
 import { capitalizeFirstLetter, slugToWords } from "@/lib/utils";
 import { getDiscountValue, getOrderAmount } from "@/components/checkout/utils";
 import ImageWithFallback from "@/components/ui/image-with-fallback";
+import { onlineOrderQueries } from "@/lib/queries/onlineOrder";
 
 export const Route = createFileRoute("/_layout/_ordersLayout/shop/orders/")({
   component: () => <Purchases />,
@@ -87,15 +87,9 @@ const OrderItem = ({
 };
 
 const Orders = () => {
-  const { userId, storeId, organizationId, formatter } = useStoreContext();
+  const { formatter } = useStoreContext();
 
-  const { data, isLoading } = useQuery(
-    onlineOrderQueries.list({
-      organizationId: organizationId,
-      storeId: storeId,
-      storeFrontUserId: userId || "",
-    })
-  );
+  const { data, isLoading } = useQuery(onlineOrderQueries.list());
 
   if (isLoading) return <div className="h-screen"></div>;
 
@@ -120,15 +114,7 @@ const Orders = () => {
 };
 
 const Purchases = () => {
-  const { userId, storeId, organizationId } = useStoreContext();
-
-  const { data, isLoading } = useQuery(
-    onlineOrderQueries.list({
-      organizationId: organizationId,
-      storeId: storeId,
-      storeFrontUserId: userId || "",
-    })
-  );
+  const { data, isLoading } = useQuery(onlineOrderQueries.list());
 
   if (isLoading) return <div className="h-screen"></div>;
 

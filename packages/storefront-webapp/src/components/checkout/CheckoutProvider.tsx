@@ -7,7 +7,6 @@ import { CheckoutExpired } from "../states/checkout-expired/CheckoutExpired";
 import { useShoppingBag } from "@/hooks/useShoppingBag";
 import { useParams } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { checkoutSessionQueries } from "@/queries";
 import { useStoreContext } from "@/contexts/StoreContext";
 import { SESSION_STORAGE_KEY } from "@/lib/constants";
 import { customerDetailsSchema } from "./schemas/customerDetailsSchema";
@@ -300,13 +299,13 @@ export const webOrderSchema = z
           });
         }
 
-        if (!houseNumber) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: ["deliveryDetails", "houseNumber"],
-            message: "Apt/House number is required",
-          });
-        }
+        // if (!houseNumber) {
+        //   ctx.addIssue({
+        //     code: z.ZodIssueCode.custom,
+        //     path: ["deliveryDetails", "houseNumber"],
+        //     message: "Apt/House number is required",
+        //   });
+        // }
 
         if (!neighborhood) {
           ctx.addIssue({
@@ -536,25 +535,6 @@ export const CheckoutProvider = ({
     }
   }, [user]);
 
-  useEffect(() => {
-    const determineRegion = () => {
-      try {
-        const region = new Intl.Locale(navigator.language).region || "GH";
-        setCheckoutState((prev) => ({
-          ...prev,
-          // deliveryDetails: { country: region } as Address,
-          // billingDetails: { country: region } as Address,
-        }));
-      } catch {
-        setCheckoutState((prev) => ({
-          ...prev,
-        }));
-      }
-    };
-
-    determineRegion();
-  }, []);
-
   const updateState = (updates: Partial<CheckoutState>) => {
     setCheckoutState((prev) => {
       const newUpdates = { ...prev, ...updates };
@@ -588,9 +568,7 @@ export const CheckoutProvider = ({
       );
 
       const didProvideAllGhanaAddressFields = Boolean(
-        newUpdates.deliveryDetails?.houseNumber &&
-          newUpdates.deliveryDetails?.street &&
-          newUpdates.deliveryDetails?.region
+        newUpdates.deliveryDetails?.street && newUpdates.deliveryDetails?.region
       );
 
       const didEnterDeliveryDetails =

@@ -61,12 +61,7 @@ export default function MobileBagSummary() {
 
     if (!storeFrontUserId || !store) return;
 
-    redeemPromoCodeMutation.mutate({
-      code,
-      storeId: store._id,
-      organizationId: store.organizationId,
-      storeFrontUserId,
-    });
+    redeemPromoCodeMutation.mutate(code);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {

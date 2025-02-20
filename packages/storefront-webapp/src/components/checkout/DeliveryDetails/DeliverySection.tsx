@@ -35,7 +35,7 @@ export const DeliveryDetails = ({ address }: { address: Address }) => {
       {isROWOrder && <p>{`${address.address}, ${address.city}`}</p>}
 
       {isGHOrder && (
-        <p>{`${address?.houseNumber} ${address?.street}, ${neighborhood}, ${region}`}</p>
+        <p>{`${address?.houseNumber || ""} ${address?.street}, ${neighborhood}, ${region}`}</p>
       )}
 
       <p>{country}</p>

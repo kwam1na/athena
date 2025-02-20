@@ -1,5 +1,4 @@
 import { useStoreContext } from "@/contexts/StoreContext";
-import { onlineOrderQueries } from "@/queries";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, useParams } from "@tanstack/react-router";
 import placeholder from "@/assets/placeholder.png";
@@ -19,6 +18,7 @@ import {
 import { WIGLUB_HAIR_STUDIO_LOCATION_URL } from "@/lib/constants";
 import { getDiscountValue } from "@/components/checkout/utils";
 import ImageWithFallback from "@/components/ui/image-with-fallback";
+import { onlineOrderQueries } from "@/lib/queries/onlineOrder";
 
 export const Route = createFileRoute(
   "/_layout/_ordersLayout/shop/orders/$orderId"
@@ -188,15 +188,8 @@ const PickupDetails = ({ order }: { order: any }) => {
 const OrderDetail = () => {
   const { orderId } = useParams({ strict: false });
 
-  const { userId, storeId, organizationId } = useStoreContext();
-
   const { data, isLoading } = useQuery(
-    onlineOrderQueries.detail({
-      orderId: orderId || "",
-      organizationId: organizationId,
-      storeId: storeId,
-      storeFrontUserId: userId || "",
-    })
+    onlineOrderQueries.detail(orderId || "")
   );
 
   if (isLoading) return <div className="h-screen"></div>;
@@ -258,7 +251,7 @@ const OrderDetail = () => {
   return (
     <FadeIn className="space-y-24 lg:space-y-40 py-8 pb-32 w-full">
       <div className="space-y-16">
-        <OrderNavigation />
+        {/* <OrderNavigation /> */}
 
         <div className="space-y-8 text-sm">
           {isOrderOpen ? (

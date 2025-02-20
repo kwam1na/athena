@@ -196,7 +196,10 @@ export const updateOwner = mutation({
       .filter((q) => q.eq(q.field("storeFrontUserId"), args.newOwner))
       .first();
 
+    console.log("updating bag owner.", args.currentOwner, args.newOwner);
+
     if (!bag) {
+      console.log("bag not found.");
       return null; // No guest bag exists
     }
 
@@ -242,6 +245,10 @@ export const updateOwner = mutation({
         })
       );
 
+      console.log(
+        `successfully updated bag owner from ${args.currentOwner} to ${args.newOwner}.`
+      );
+
       await ctx.db.delete(bag._id);
       return await ctx.db.get(newOwnerBag._id);
     } else {
@@ -250,6 +257,10 @@ export const updateOwner = mutation({
         storeFrontUserId: args.newOwner,
         updatedAt: Date.now(),
       });
+
+      console.log(
+        `successfully updated bag owner from ${args.currentOwner} to ${args.newOwner}.`
+      );
       return await ctx.db.get(bag._id);
     }
   },

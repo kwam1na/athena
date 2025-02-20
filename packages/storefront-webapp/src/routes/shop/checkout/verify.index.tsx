@@ -23,9 +23,6 @@ const Verify = () => {
     queryKey: ["verified-payment"],
     queryFn: () =>
       verifyCheckoutSessionPayment({
-        storeFrontUserId: userId!,
-        storeId,
-        organizationId,
         externalReference: externalReference!,
       }),
     enabled: Boolean(userId && externalReference),

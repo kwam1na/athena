@@ -5,11 +5,12 @@ import { useAuth } from "@/hooks/useAuth";
 import { MaintenanceMode } from "@/components/states/maintenance/Maintenance";
 import { useGetStore } from "@/hooks/useGetStore";
 import { ORGANIZATION_ID_KEY, STORE_ID_KEY } from "@/lib/constants";
+import { Id } from "../../../athena-webapp/convex/_generated/dataModel";
 
 type StoreContextType = {
   organizationId: string;
   storeId: string;
-  userId: string | null;
+  userId?: Id<"storeFrontUser"> | Id<"guest">;
   user?: StoreFrontUser;
   formatter: Intl.NumberFormat;
   store?: Store;

@@ -10,8 +10,8 @@ import {
 } from "@/components/states/checkout-expired/CheckoutExpired";
 import { Button } from "@/components/ui/button";
 import { useStoreContext } from "@/contexts/StoreContext";
+import { checkoutSessionQueries } from "@/lib/queries/checkout";
 import { capitalizeFirstLetter } from "@/lib/utils";
-import { checkoutSessionQueries } from "@/queries";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useParams } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
@@ -23,15 +23,8 @@ export const Route = createFileRoute("/shop/checkout/$sessionIdSlug/complete")({
 const CheckoutCompleteView = () => {
   const { sessionIdSlug } = useParams({ strict: false });
 
-  const { userId, organizationId, storeId } = useStoreContext();
-
   const { data: sessionData, isLoading } = useQuery(
-    checkoutSessionQueries.session({
-      sessionId: sessionIdSlug,
-      userId: userId!,
-      organizationId,
-      storeId,
-    })
+    checkoutSessionQueries.session(sessionIdSlug)
   );
 
   if (!sessionData && isLoading) return null;

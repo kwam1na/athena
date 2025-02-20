@@ -3,7 +3,10 @@ import { Store } from "@athena/webapp";
 
 export async function getStore(storeName: string): Promise<Store> {
   const response = await fetch(
-    `${config.apiGateway.URL}/storefront?storeName=${storeName}`
+    `${config.apiGateway.URL}/storefront?storeName=${storeName}`,
+    {
+      credentials: "include",
+    }
   );
 
   const res = await response.json();

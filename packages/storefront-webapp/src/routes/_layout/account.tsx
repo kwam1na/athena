@@ -24,11 +24,7 @@ export const Route = createFileRoute("/_layout/account")({
 
     try {
       if (storeId && organizationId) {
-        await getActiveUser({
-          storeId,
-          organizationId,
-          userId: id || "",
-        });
+        await getActiveUser();
       }
     } catch (e) {
       return redirect({ to: "/login" });
@@ -60,8 +56,6 @@ const AddressSection = ({
 
   const [updatedAddress, setUpdatedAddress] = useState<Address | null>(null);
 
-  const { store, userId } = useStoreContext();
-
   const handleOnSubmitForm = async (data: any) => {
     const addressType =
       type === "shipping" ? "shippingAddress" : "billingAddress";
@@ -70,9 +64,6 @@ const AddressSection = ({
 
     const res = await updateUser({
       data: update,
-      storeId: store?._id as string,
-      userId: userId || "",
-      organizationId: store?.organizationId as string,
     });
 
     if (res?.[addressType]) {
@@ -128,8 +119,6 @@ const AddressSection = ({
 };
 
 const ContactSection = ({ user }: { user?: StoreFrontUser }) => {
-  const { store, userId } = useStoreContext();
-
   const [userDetails, setUserDetails] = useState<StoreFrontUser>();
 
   const [isEditing, setIsEditing] = useState(false);
@@ -139,9 +128,6 @@ const ContactSection = ({ user }: { user?: StoreFrontUser }) => {
   const handleOnSubmitForm = async (data: any) => {
     const res = await updateUser({
       data: { ...data },
-      storeId: store?._id as string,
-      userId: userId || "",
-      organizationId: store?.organizationId as string,
     });
 
     if (res) {

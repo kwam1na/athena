@@ -11,7 +11,7 @@ export const HomeHero = () => {
   const hlsUrl = `${config.hlsURL}/stores/${store?._id}/assets/hero/hero.m3u8`;
 
   useEffect(() => {
-    if (!videoRef.current) return;
+    if (!videoRef.current || !store?._id) return;
     const video = videoRef.current;
 
     if (video.canPlayType("application/vnd.apple.mpegurl")) {
@@ -21,7 +21,7 @@ export const HomeHero = () => {
       hls.loadSource(hlsUrl);
       hls.attachMedia(video);
     }
-  }, []);
+  }, [store?._id]);
 
   return (
     <section className="relative w-full h-screen flex items-center justify-center text-white text-center">

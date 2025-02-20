@@ -14,7 +14,7 @@ import { orderDetailsSchema } from "../schemas/storeFront";
 
 const entity = "checkoutSession";
 
-const sessionLimitMinutes = 10;
+const sessionLimitMinutes = 20;
 
 type Product = {
   productId: Id<"product">;
@@ -117,7 +117,7 @@ export const create = mutation({
     if (unavailableProducts.length > 0) {
       return {
         success: false,
-        message: "Some products are unavailable or insufficient in stock.",
+        message: "Some products are unavailable",
         unavailableProducts,
       };
     }

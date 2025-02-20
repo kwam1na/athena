@@ -1,7 +1,7 @@
 import { updateBagOwner } from "@/api/bag";
 import { updateOrdersOwner } from "@/api/onlineOrder";
 import { updateSavedBagOwner } from "@/api/savedBag";
-import { verifyUserAccount } from "@/api/stores";
+import { verifyUserAccount } from "@/api/auth";
 import { AuthComponent } from "@/components/auth/Auth";
 import { FadeIn } from "@/components/common/FadeIn";
 import {
@@ -135,8 +135,6 @@ function InputOTPForm() {
     try {
       const res = await verifyUserAccountMutation.mutateAsync({
         email,
-        organizationId: store?.organizationId as string,
-        storeId: store?._id as string,
         code: data.code,
       });
 
@@ -150,8 +148,6 @@ function InputOTPForm() {
         await updateBagOwnerMutation.mutateAsync({
           currentOwnerId: userId || "",
           newOwnerId: res.user._id,
-          organizationId: store?.organizationId as string,
-          storeId: store?._id as string,
           bagId: bag?._id as string,
         });
 
@@ -166,8 +162,6 @@ function InputOTPForm() {
         await updateOrdersOwnerMutation.mutateAsync({
           currentOwnerId: userId || "",
           newOwnerId: res.user._id,
-          organizationId: store?.organizationId as string,
-          storeId: store?._id as string,
         });
 
         localStorage.setItem(LOGGED_IN_USER_ID_KEY, res.user._id);
@@ -192,8 +186,6 @@ function InputOTPForm() {
     }
 
     resendVerificationCodeMutation.mutate({
-      organizationId: store?.organizationId as string,
-      storeId: store?._id as string,
       email,
     });
   };

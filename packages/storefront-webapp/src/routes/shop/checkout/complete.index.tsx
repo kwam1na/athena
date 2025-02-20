@@ -14,8 +14,8 @@ import { Button } from "@/components/ui/button";
 import { LoadingButton } from "@/components/ui/loading-button";
 import { useStoreContext } from "@/contexts/StoreContext";
 import { useGetActiveCheckoutSession } from "@/hooks/useGetActiveCheckoutSession";
+import { bagQueries } from "@/lib/queries/bag";
 import { capitalizeFirstLetter } from "@/lib/utils";
-import { bagQueries } from "@/queries";
 import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
@@ -93,9 +93,6 @@ const CheckoutComplete = () => {
       if (data && activeSession.hasCompletedPayment) {
         const res = await updateCheckoutSession({
           action: "complete-checkout",
-          organizationId,
-          storeId,
-          storeFrontUserId: userId!,
           sessionId: activeSession._id,
           hasCompletedCheckoutSession: true,
           orderDetails: data,
@@ -124,9 +121,6 @@ const CheckoutComplete = () => {
 
       const res = await updateCheckoutSession({
         action: "complete-checkout",
-        organizationId,
-        storeId,
-        storeFrontUserId: userId!,
         sessionId: activeSession._id,
         hasCompletedCheckoutSession: true,
         orderDetails: data,

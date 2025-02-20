@@ -1,5 +1,5 @@
 import { getActiveUser } from "@/api/storeFrontUser";
-import { verifyUserAccount } from "@/api/stores";
+import { verifyUserAccount } from "@/api/auth";
 import { AuthComponent } from "@/components/auth/Auth";
 import { FadeIn } from "@/components/common/FadeIn";
 import {
@@ -63,11 +63,7 @@ export const Route = createFileRoute("/signup")({
 
     try {
       if (id && storeId && organizationId) {
-        const user = await getActiveUser({
-          storeId,
-          organizationId,
-          userId: id || "",
-        });
+        const user = await getActiveUser();
 
         if (user._id) {
           return redirect({ to: "/account" });
@@ -120,8 +116,6 @@ const Signup = () => {
       email: data.email,
       firstName: data.firstName,
       lastName: data.lastName,
-      organizationId: store.organizationId,
-      storeId: store._id,
     });
   };
 

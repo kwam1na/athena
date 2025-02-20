@@ -11,6 +11,10 @@
   src: url("./assets/fonts/LavishlyYours/LavishlyYours-Regular.ttf");
 }
 
+input, textarea, select {
+  font-size: initial;
+}
+
 
 :root {
   font-family: Avenir, sans-serif;

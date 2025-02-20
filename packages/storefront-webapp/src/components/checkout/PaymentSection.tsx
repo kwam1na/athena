@@ -111,9 +111,6 @@ export const PaymentSection = ({ form }: CheckoutFormSectionProps) => {
     if (Object.keys(updateData).length > 0) {
       await updateUser({
         data: updateData,
-        storeId: store?._id as string,
-        userId: userId || "",
-        organizationId: store?.organizationId as string,
       });
     }
   };

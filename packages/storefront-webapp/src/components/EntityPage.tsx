@@ -1,20 +1,16 @@
 import { useQuery } from "@tanstack/react-query";
 import { useParams, useSearch } from "@tanstack/react-router";
-import { productQueries } from "@/queries";
 import ProductsPage from "./ProductsPage";
 import { useStoreContext } from "@/contexts/StoreContext";
+import { productQueries } from "@/lib/queries/product";
 
 export default function EntityPage() {
   const search = useSearch({ from: "/_layout/_shopLayout" });
 
   const { categorySlug, subcategorySlug } = useParams({ strict: false });
 
-  const { organizationId, storeId } = useStoreContext();
-
   const { data: products, isLoading: isLoadingProducts } = useQuery(
     productQueries.list({
-      organizationId,
-      storeId,
       filters: {
         category: categorySlug,
         subcategory: subcategorySlug,
@@ -24,10 +20,7 @@ export default function EntityPage() {
   );
 
   const { data: bestSellers, isLoading: isLoadingBestSellers } = useQuery(
-    productQueries.bestSellers({
-      organizationId,
-      storeId,
-    })
+    productQueries.bestSellers()
   );
 
   let skus;

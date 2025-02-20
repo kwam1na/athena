@@ -1,30 +1,15 @@
 import config from "@/config";
 
-const getBaseUrl = (
-  organizationId: string,
-  storeId: string,
-  storeFrontUserId: string
-) =>
-  `${config.apiGateway.URL}/organizations/${organizationId}/stores/${storeId}/users/${storeFrontUserId}/orders`;
+const getBaseUrl = () => `${config.apiGateway.URL}/orders`;
 
-export async function getOrders({
-  storeFrontUserId,
-  organizationId,
-  storeId,
-}: {
-  storeFrontUserId: string;
-  organizationId: string;
-  storeId: string;
-}) {
-  const response = await fetch(
-    getBaseUrl(organizationId, storeId, storeFrontUserId),
-    {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-      },
-    }
-  );
+export async function getOrders() {
+  const response = await fetch(getBaseUrl(), {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    credentials: "include",
+  });
 
   const res = await response.json();
 
@@ -35,26 +20,14 @@ export async function getOrders({
   return res;
 }
 
-export async function getOrder({
-  storeFrontUserId,
-  organizationId,
-  storeId,
-  orderId,
-}: {
-  storeFrontUserId: string;
-  organizationId: string;
-  storeId: string;
-  orderId: string;
-}) {
-  const response = await fetch(
-    `${getBaseUrl(organizationId, storeId, storeFrontUserId)}/${orderId}`,
-    {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-      },
-    }
-  );
+export async function getOrder(orderId: string) {
+  const response = await fetch(`${getBaseUrl()}/${orderId}`, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    credentials: "include",
+  });
 
   const res = await response.json();
 
@@ -68,24 +41,18 @@ export async function getOrder({
 export async function updateOrdersOwner({
   currentOwnerId,
   newOwnerId,
-  organizationId,
-  storeId,
 }: {
   currentOwnerId: string;
   newOwnerId: string;
-  organizationId: string;
-  storeId: string;
 }) {
-  const response = await fetch(
-    `${getBaseUrl(organizationId, storeId, currentOwnerId)}/owner`,
-    {
-      method: "POST",
-      body: JSON.stringify({ currentOwnerId, newOwnerId }),
-      headers: {
-        "Content-Type": "application/json",
-      },
-    }
-  );
+  const response = await fetch(`${getBaseUrl()}/owner`, {
+    method: "POST",
+    body: JSON.stringify({ currentOwnerId, newOwnerId }),
+    headers: {
+      "Content-Type": "application/json",
+    },
+    credentials: "include",
+  });
 
   const res = await response.json();
 

@@ -4,7 +4,6 @@ import {
   INITIAL_LOAD_TIME_KEY,
   SESSION_STORAGE_KEY,
 } from "@/lib/constants";
-import { productQueries } from "@/queries";
 import Footer from "./footer/Footer";
 import { Link } from "@tanstack/react-router";
 import { Button } from "./ui/button";
@@ -16,6 +15,7 @@ import { Product, ProductSku } from "@athena/webapp";
 import ImageWithFallback from "./ui/image-with-fallback";
 import { useNavigationBarContext } from "@/contexts/NavigationBarProvider";
 import { HomeHero } from "./home/HomeHero";
+import { productQueries } from "@/lib/queries/product";
 
 function FeaturedProduct({ product }: { product: any }) {
   const { formatter } = useStoreContext();
@@ -189,29 +189,18 @@ function FeaturedSection({ data }: { data: any }) {
 }
 
 export default function HomePage() {
-  const { organizationId, storeId, store } = useStoreContext();
-
   const { setNavBarLayout, setAppLocation } = useNavigationBarContext();
 
   const { data: bestSellers, isLoading: isLoadingBestSellers } = useQuery(
-    productQueries.bestSellers({
-      organizationId,
-      storeId,
-    })
+    productQueries.bestSellers()
   );
 
   const { data: featured, isLoading: isLoadingFeatured } = useQuery(
-    productQueries.featured({
-      organizationId,
-      storeId,
-    })
+    productQueries.featured()
   );
 
   const { data: products, isLoading: isLoadingProducts } = useQuery(
-    productQueries.list({
-      organizationId,
-      storeId,
-    })
+    productQueries.list()
   );
 
   useEffect(() => {
@@ -271,20 +260,18 @@ export default function HomePage() {
   return (
     <>
       <div className="overflow-hidden">
-        <div className="space-y-32 pb-56">
+        <div className="space-y-32 pb-32">
           <div className="relative">
             <HomeHero />
           </div>
 
-          <div className="container mx-auto space-y-32 pb-56 px-4 lg:px-0">
+          <div className="container mx-auto space-y-32 pb-8 px-4 lg:px-0">
             {Boolean(bestSellersSorted?.length) && (
               <motion.div
-                initial={{ opacity: 0, x: -16 }}
-                animate={{
-                  opacity: 1,
-                  x: 0,
-                  transition: { duration: 0.3, delay: 0.3 },
-                }}
+                initial={{ opacity: 0, y: 16 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.6, delay: 0.2 }}
                 className="space-y-8"
               >
                 <p className="text-md font-medium">Shop best sellers</p>
@@ -312,19 +299,19 @@ export default function HomePage() {
             )}
 
             {Boolean(featuredSectionSorted?.length) && (
-              <motion.div
-                initial={{ opacity: 0, x: -16 }}
-                animate={{
-                  opacity: 1,
-                  x: 0,
-                  transition: { duration: 0.3, delay: 0.3 },
-                }}
-                className="space-y-32"
-              >
+              <div className="space-y-32">
                 {featuredSectionSorted?.map((data: any) => (
-                  <FeaturedSection key={data._id} data={data} />
+                  <motion.div
+                    key={data._id}
+                    initial={{ opacity: 0, y: 16 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ duration: 0.6, delay: 0.2 }}
+                  >
+                    <FeaturedSection data={data} />
+                  </motion.div>
                 ))}
-              </motion.div>
+              </div>
             )}
           </div>
         </div>

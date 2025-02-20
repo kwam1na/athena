@@ -1,7 +1,4 @@
-import {
-  getCheckoutSession,
-  updateCheckoutSession,
-} from "@/api/checkoutSession";
+import { updateCheckoutSession } from "@/api/checkoutSession";
 import { BagSummaryItems } from "@/components/checkout/BagSummary";
 import {
   PaymentDetails,
@@ -9,11 +6,9 @@ import {
 } from "@/components/checkout/OrderDetails";
 import { FadeIn } from "@/components/common/FadeIn";
 import { CheckoutSessionGeneric } from "@/components/states/checkout-expired/CheckoutExpired";
-import NotFound from "@/components/states/not-found/NotFound";
 import { LoadingButton } from "@/components/ui/loading-button";
-import { useStoreContext } from "@/contexts/StoreContext";
+import { checkoutSessionQueries } from "@/lib/queries/checkout";
 import { capitalizeFirstLetter } from "@/lib/utils";
-import { checkoutSessionQueries } from "@/queries";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   createFileRoute,
@@ -31,18 +26,12 @@ export const Route = createFileRoute("/shop/checkout/$sessionIdSlug/")({
 const CheckoutSession = () => {
   const { sessionIdSlug } = useParams({ strict: false });
 
-  const { userId, organizationId, storeId } = useStoreContext();
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [isCancelingOrder, setIsCancelingOrder] = useState(false);
   const [isError, setIsError] = useState(false);
 
   const { data: sessionData, isLoading } = useQuery(
-    checkoutSessionQueries.session({
-      sessionId: sessionIdSlug,
-      userId: userId!,
-      organizationId,
-      storeId,
-    })
+    checkoutSessionQueries.session(sessionIdSlug)
   );
 
   const queryClient = useQueryClient();
@@ -55,9 +44,6 @@ const CheckoutSession = () => {
 
       const res = await updateCheckoutSession({
         action: "place-order",
-        organizationId,
-        storeId,
-        storeFrontUserId: userId!,
         sessionId: sessionIdSlug,
         hasCompletedCheckoutSession: true,
       });
@@ -84,9 +70,6 @@ const CheckoutSession = () => {
 
       const res = await updateCheckoutSession({
         action: "cancel-order",
-        organizationId,
-        storeId,
-        storeFrontUserId: userId!,
         sessionId: sessionIdSlug,
         hasCompletedCheckoutSession: true,
       });

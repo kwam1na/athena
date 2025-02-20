@@ -3,18 +3,14 @@ import { HonoWithConvex } from "convex-helpers/server/hono";
 import { ActionCtx } from "../../../../_generated/server";
 import { api } from "../../../../_generated/api";
 import { Id } from "../../../../_generated/dataModel";
+import { getStoreDataFromRequest } from "../../../utils";
 
 const productRoutes: HonoWithConvex<ActionCtx> = new Hono();
 
-productRoutes.post("/", async (c) => {
-  const data = await c.req.json();
-
-  return c.json({});
-});
-
 productRoutes.get("/", async (c) => {
-  const storeId = c.req.param("storeId");
   const params = c.req.queries();
+
+  const { storeId } = getStoreDataFromRequest(c);
 
   if (!storeId) {
     return c.json({ error: "Store id missing" }, 404);
@@ -37,7 +33,7 @@ productRoutes.get("/", async (c) => {
 });
 
 productRoutes.get("/colors", async (c) => {
-  const storeId = c.req.param("storeId");
+  const { storeId } = getStoreDataFromRequest(c);
 
   if (!storeId) {
     return c.json({ error: "Store id missing" }, 404);
@@ -49,7 +45,7 @@ productRoutes.get("/colors", async (c) => {
 });
 
 productRoutes.get("/bestSellers", async (c) => {
-  const storeId = c.req.param("storeId");
+  const { storeId } = getStoreDataFromRequest(c);
 
   if (!storeId) {
     return c.json({ error: "Store id missing" }, 404);
@@ -63,7 +59,7 @@ productRoutes.get("/bestSellers", async (c) => {
 });
 
 productRoutes.get("/featured", async (c) => {
-  const storeId = c.req.param("storeId");
+  const { storeId } = getStoreDataFromRequest(c);
 
   if (!storeId) {
     return c.json({ error: "Store id missing" }, 404);
@@ -77,7 +73,7 @@ productRoutes.get("/featured", async (c) => {
 });
 
 productRoutes.get("/:productId", async (c) => {
-  const storeId = c.req.param("storeId");
+  const { storeId } = getStoreDataFromRequest(c);
   const { productId } = c.req.param();
 
   if (!storeId) {
@@ -94,45 +90,6 @@ productRoutes.get("/:productId", async (c) => {
   }
 
   return c.json(product);
-});
-
-productRoutes.put("/:productId", async (c) => {
-  const storeId = c.req.param("storeId");
-  const { productId } = c.req.param();
-
-  return c.json({});
-});
-
-productRoutes.post("/:productId/skus", async (c) => {
-  const { productId } = c.req.param();
-  const data = await c.req.json();
-
-  return c.json({});
-});
-
-productRoutes.put("/:productId/skus/:skuId", async (c) => {
-  const { skuId } = c.req.param();
-
-  const data = await c.req.json();
-
-  return c.json({});
-});
-
-productRoutes.delete("/:productId", async (c) => {
-  const { productId } = c.req.param();
-  return c.json({});
-});
-
-productRoutes.delete("/", async (c) => {
-  const storeId = c.req.param("storeId");
-
-  return c.json({});
-});
-
-productRoutes.delete("/:productId/skus/:skuId", async (c) => {
-  const { skuId } = c.req.param();
-
-  return c.json({});
 });
 
 export { productRoutes };

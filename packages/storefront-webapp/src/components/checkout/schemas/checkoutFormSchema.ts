@@ -242,13 +242,13 @@ export const checkoutFormSchema = z
           });
         }
 
-        if (!houseNumber) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: ["deliveryDetails", "houseNumber"],
-            message: "Apt/House number is required",
-          });
-        }
+        // if (!houseNumber) {
+        //   ctx.addIssue({
+        //     code: z.ZodIssueCode.custom,
+        //     path: ["deliveryDetails", "houseNumber"],
+        //     message: "Apt/House number is required",
+        //   });
+        // }
 
         if (!neighborhood) {
           ctx.addIssue({

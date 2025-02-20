@@ -1,25 +1,14 @@
 import config from "@/config";
-import { Bag, CheckoutSession } from "@athena/webapp";
+import { CheckoutSession } from "@athena/webapp";
 
-const getBaseUrl = (
-  organizationId: string,
-  storeId: string,
-  storeFrontUserId: string
-) =>
-  `${config.apiGateway.URL}/organizations/${organizationId}/stores/${storeId}/users/${storeFrontUserId}/checkout`;
+const getBaseUrl = () => `${config.apiGateway.URL}/checkout`;
 
 export async function createCheckoutSession({
-  storeFrontUserId,
-  organizationId,
-  storeId,
   bagId,
   bagItems,
   bagSubtotal,
 }: {
-  storeFrontUserId: string;
   bagId: string;
-  organizationId: string;
-  storeId: string;
   bagItems: {
     quantity: number;
     productSkuId: string;
@@ -28,22 +17,18 @@ export async function createCheckoutSession({
   }[];
   bagSubtotal: number;
 }) {
-  const response = await fetch(
-    getBaseUrl(organizationId, storeId, storeFrontUserId),
-    {
-      method: "POST",
-      body: JSON.stringify({
-        storeId,
-        bagId,
-        storeFrontUserId,
-        products: bagItems,
-        amount: bagSubtotal,
-      }),
-      headers: {
-        "Content-Type": "application/json",
-      },
-    }
-  );
+  const response = await fetch(getBaseUrl(), {
+    method: "POST",
+    body: JSON.stringify({
+      bagId,
+      products: bagItems,
+      amount: bagSubtotal,
+    }),
+    headers: {
+      "Content-Type": "application/json",
+    },
+    credentials: "include",
+  });
 
   const res = await response.json();
 
@@ -54,18 +39,10 @@ export async function createCheckoutSession({
   return res;
 }
 
-export async function getActiveCheckoutSession({
-  storeFrontUserId,
-  organizationId,
-  storeId,
-}: {
-  storeFrontUserId: string;
-  organizationId: string;
-  storeId: string;
-}): Promise<CheckoutSession | null> {
-  const response = await fetch(
-    `${getBaseUrl(organizationId, storeId, storeFrontUserId)}/active`
-  );
+export async function getActiveCheckoutSession(): Promise<CheckoutSession | null> {
+  const response = await fetch(`${getBaseUrl()}/active`, {
+    credentials: "include",
+  });
 
   const res = await response.json();
 
@@ -76,18 +53,10 @@ export async function getActiveCheckoutSession({
   return res;
 }
 
-export async function getPendingCheckoutSessions({
-  storeFrontUserId,
-  organizationId,
-  storeId,
-}: {
-  storeFrontUserId: string;
-  organizationId: string;
-  storeId: string;
-}): Promise<CheckoutSession[]> {
-  const response = await fetch(
-    `${getBaseUrl(organizationId, storeId, storeFrontUserId)}/pending`
-  );
+export async function getPendingCheckoutSessions(): Promise<CheckoutSession[]> {
+  const response = await fetch(`${getBaseUrl()}/pending`, {
+    credentials: "include",
+  });
 
   const res = await response.json();
 
@@ -98,20 +67,10 @@ export async function getPendingCheckoutSessions({
   return res;
 }
 
-export async function getCheckoutSession({
-  storeFrontUserId,
-  organizationId,
-  sessionId,
-  storeId,
-}: {
-  sessionId: string;
-  storeFrontUserId: string;
-  organizationId: string;
-  storeId: string;
-}) {
-  const response = await fetch(
-    `${getBaseUrl(organizationId, storeId, storeFrontUserId)}/${sessionId}`
-  );
+export async function getCheckoutSession(sessionId: string) {
+  const response = await fetch(`${getBaseUrl()}/${sessionId}`, {
+    credentials: "include",
+  });
 
   const res = await response.json();
 
@@ -124,9 +83,6 @@ export async function getCheckoutSession({
 
 export async function updateCheckoutSession({
   action,
-  organizationId,
-  storeId,
-  storeFrontUserId,
   sessionId,
   isFinalizingPayment,
   hasCompletedCheckoutSession,
@@ -140,9 +96,6 @@ export async function updateCheckoutSession({
     | "complete-checkout"
     | "place-order"
     | "cancel-order";
-  organizationId: string;
-  storeId: string;
-  storeFrontUserId: string;
   sessionId: string;
   isFinalizingPayment?: boolean;
   hasCompletedCheckoutSession?: boolean;
@@ -151,24 +104,22 @@ export async function updateCheckoutSession({
   amount?: number;
   orderDetails?: any;
 }) {
-  const response = await fetch(
-    `${getBaseUrl(organizationId, storeId, storeFrontUserId)}/${sessionId}`,
-    {
-      method: "POST",
-      body: JSON.stringify({
-        action,
-        isFinalizingPayment,
-        customerEmail,
-        amount,
-        externalReference,
-        hasCompletedCheckoutSession,
-        orderDetails,
-      }),
-      headers: {
-        "Content-Type": "application/json",
-      },
-    }
-  );
+  const response = await fetch(`${getBaseUrl()}/${sessionId}`, {
+    method: "POST",
+    body: JSON.stringify({
+      action,
+      isFinalizingPayment,
+      customerEmail,
+      amount,
+      externalReference,
+      hasCompletedCheckoutSession,
+      orderDetails,
+    }),
+    headers: {
+      "Content-Type": "application/json",
+    },
+    credentials: "include",
+  });
 
   const res = await response.json();
 
@@ -180,19 +131,13 @@ export async function updateCheckoutSession({
 }
 
 export async function verifyCheckoutSessionPayment({
-  storeFrontUserId,
-  organizationId,
-  storeId,
   externalReference,
 }: {
-  storeFrontUserId: string;
-  organizationId: string;
-  storeId: string;
   externalReference: string;
 }) {
-  const response = await fetch(
-    `${getBaseUrl(organizationId, storeId, storeFrontUserId)}/verify/${externalReference}`
-  );
+  const response = await fetch(`${getBaseUrl()}/verify/${externalReference}`, {
+    credentials: "include",
+  });
 
   const res = await response.json();
 

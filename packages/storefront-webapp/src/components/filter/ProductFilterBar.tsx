@@ -21,15 +21,14 @@ export default function ProductFilterBar({
       ? "Show filters"
       : `Show filters (${selectedFiltersCount})`;
 
-  // hide the filter button for the best-sellers category
-  const isBestSellersCategory = categorySlug === "best-sellers";
+  const showFilterButton = ["hair"].includes(categorySlug || "");
 
   return (
     <div className="flex justify-between items-center container mx-auto max-w-[1024px] px-6 lg:px-0 sticky">
       <div className="flex items-center py-4">
         <p className="text-md font-medium">{`${capitalizeFirstLetter(slugToWords(subcategorySlug || categorySlug || ""))}`}</p>
       </div>
-      {!isBestSellersCategory && (
+      {showFilterButton && (
         <>
           <Button
             variant="clear"

@@ -23,10 +23,10 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { LoadingButton } from "../ui/loading-button";
 import { EmptyState } from "../states/empty/empty-state";
 import { FadeIn } from "../common/FadeIn";
-import { checkoutSessionQueries } from "@/queries";
 import { ArrowRightIcon } from "@radix-ui/react-icons";
 import ImageWithFallback from "../ui/image-with-fallback";
 import { useNavigationBarContext } from "@/contexts/NavigationBarProvider";
+import { checkoutSessionQueries } from "@/lib/queries/checkout";
 
 const PendingItem = ({ session, count }: { session: any; count: number }) => {
   return (
@@ -109,13 +109,7 @@ export default function ShoppingBag() {
     }),
   };
 
-  const { data } = useQuery(
-    checkoutSessionQueries.pendingSessions({
-      userId: userId!,
-      organizationId,
-      storeId,
-    })
-  );
+  const { data } = useQuery(checkoutSessionQueries.pendingSessions());
 
   const handleOnCheckoutClick = async () => {
     // send post

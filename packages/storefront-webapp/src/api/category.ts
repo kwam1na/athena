@@ -1,27 +1,17 @@
 import config from "@/config";
-import { FilterParams, OrganizationStoreEntityApiParams } from "./types";
+import { OrganizationStoreEntityApiParams } from "./types";
 import { Category } from "@athena/webapp";
 
 type GetParams = OrganizationStoreEntityApiParams & {
   categoryId: string;
 };
 
-const getBaseUrl = (organizationId: string, storeId: string) =>
-  `${config.apiGateway.URL}/organizations/${organizationId}/stores/${storeId}/categories`;
+const getBaseUrl = () => `${config.apiGateway.URL}/categories`;
 
-const buildQueryString = (params?: FilterParams) => {
-  if (!params) return null;
-  const query = new URLSearchParams();
-  if (params.color) query.append("color", params.color); // Expecting comma-separated string for color
-  if (params.length) query.append("length", params.length); // Expecting comma-separated string for length
-  return query.toString();
-};
-
-export async function getAllCategories({
-  organizationId,
-  storeId,
-}: OrganizationStoreEntityApiParams): Promise<Category[]> {
-  const response = await fetch(getBaseUrl(organizationId, storeId));
+export async function getAllCategories(): Promise<Category[]> {
+  const response = await fetch(getBaseUrl(), {
+    credentials: "include",
+  });
 
   const res = await response.json();
 
@@ -32,13 +22,10 @@ export async function getAllCategories({
   return res.categories;
 }
 
-export async function getAllCategoriesWithSubcategories({
-  organizationId,
-  storeId,
-}: OrganizationStoreEntityApiParams): Promise<Category[]> {
-  const response = await fetch(
-    `${getBaseUrl(organizationId, storeId)}?withSubcategories='true'`
-  );
+export async function getAllCategoriesWithSubcategories(): Promise<Category[]> {
+  const response = await fetch(`${getBaseUrl()}?withSubcategories='true'`, {
+    credentials: "include",
+  });
 
   const res = await response.json();
 
@@ -50,13 +37,11 @@ export async function getAllCategoriesWithSubcategories({
 }
 
 export async function getCategory({
-  organizationId,
-  storeId,
   categoryId,
 }: GetParams): Promise<Category> {
-  const response = await fetch(
-    `${getBaseUrl(organizationId, storeId)}/${categoryId}`
-  );
+  const response = await fetch(`${getBaseUrl()}/${categoryId}`, {
+    credentials: "include",
+  });
 
   const res = await response.json();
 

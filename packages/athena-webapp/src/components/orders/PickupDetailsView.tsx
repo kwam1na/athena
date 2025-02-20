@@ -88,7 +88,7 @@ const DeliveryDetails = ({ address }: { address: any }) => {
       {isROWOrder && <p>{`${address.city}`}</p>}
 
       {isGhanaOrder && (
-        <p>{`${address.houseNumber} ${address.street}, ${neighborhood}, ${region}`}</p>
+        <p>{`${address.houseNumber || ""} ${address.street}, ${neighborhood}, ${region}`}</p>
       )}
       <p>{address?.landmark}</p>
       <p>{country}</p>

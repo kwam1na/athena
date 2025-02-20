@@ -105,7 +105,6 @@ function LayoutComponent() {
   const hasActiveFilters = Boolean(searchParams.color || searchParams.length);
 
   const onClickOnMobileFilters = () => {
-    console.log("onClickOnMobileFilters");
     setShowMobileFilters(true);
     hideNavbar();
   };

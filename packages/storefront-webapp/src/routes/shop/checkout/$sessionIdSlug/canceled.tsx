@@ -6,7 +6,7 @@ import {
 } from "@/components/states/checkout-expired/CheckoutExpired";
 import { Button } from "@/components/ui/button";
 import { useStoreContext } from "@/contexts/StoreContext";
-import { checkoutSessionQueries } from "@/queries";
+import { checkoutSessionQueries } from "@/lib/queries/checkout";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useParams } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
@@ -18,20 +18,11 @@ export const Route = createFileRoute("/shop/checkout/$sessionIdSlug/canceled")({
 const CheckoutCanceledView = () => {
   const { sessionIdSlug } = useParams({ strict: false });
 
-  const { userId, organizationId, storeId } = useStoreContext();
-
   const {
     data: sessionData,
     isLoading,
     isRefetching,
-  } = useQuery(
-    checkoutSessionQueries.session({
-      sessionId: sessionIdSlug,
-      userId: userId!,
-      organizationId,
-      storeId,
-    })
-  );
+  } = useQuery(checkoutSessionQueries.session(sessionIdSlug));
 
   if ((!sessionData && isLoading) || isRefetching) return null;
 

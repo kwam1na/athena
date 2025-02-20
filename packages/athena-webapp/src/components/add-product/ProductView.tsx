@@ -234,7 +234,7 @@ function ProductViewContent() {
           productId,
         });
 
-        if (imageUrls.length == 0) {
+        if (imageUrls.length == 0 && newImages.length > 0) {
           // error uploading images
           toast.error("Error uploading images");
         }
@@ -290,7 +290,7 @@ function ProductViewContent() {
 
         const imageUrls = [...updatedImageUrls, ...images];
 
-        if (images.length == 0) {
+        if (images.length == 0 && newImages.length > 0) {
           // error uploading images
           toast.error("Error uploading images");
         }

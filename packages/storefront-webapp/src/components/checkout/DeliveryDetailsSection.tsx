@@ -353,7 +353,7 @@ const GhanaAddressFields = ({ form }: CheckoutFormSectionProps) => {
           render={({ field }) => (
             <FormItem>
               <FormLabel className="text-muted-foreground text-xs">
-                Apt/House number
+                Apt/House number (Optional)
               </FormLabel>
               <FormControl>
                 <Input
@@ -513,7 +513,9 @@ const GhanaAddressLocaleFields = ({
                   }}
                   className="text-muted-foreground text-xs p-0"
                 >
-                  {isEnteringNewNeighborhood ? "Choose from list" : "Add"}
+                  {isEnteringNewNeighborhood
+                    ? "Choose from list"
+                    : "Add suburb"}
                 </Button>
               )}
 

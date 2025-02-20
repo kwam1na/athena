@@ -12,7 +12,9 @@ import {
   subcategoryRoutes,
 } from "./http/domains/inventory/routes";
 import {
+  bagRoutes,
   checkoutRoutes,
+  onlineOrderRoutes,
   paystackRoutes,
   storefrontRoutes,
   userRoutes,
@@ -20,6 +22,7 @@ import {
 import { httpRouter } from "convex/server";
 import { guestRoutes } from "./http/domains/storeFront/routes/guest";
 import { colorRoutes } from "./http/domains/inventory/routes/colors";
+import { savedBagRoutes } from "./http/domains/storeFront/routes/savedBag";
 
 const app: HonoWithConvex<ActionCtx> = new Hono();
 
@@ -34,8 +37,10 @@ app.use(
       return origin;
     },
     allowMethods: ["OPTIONS", "GET", "POST", "PUT", "DELETE"],
+    credentials: true,
   })
 );
+app.route("/stores", storeRoutes);
 
 app.route("/storefront", storefrontRoutes);
 
@@ -45,33 +50,25 @@ app.route("/auth", authRoutes);
 
 app.route("/organizations", orgRoutes);
 
-app.route("/organizations/:organizationId/stores", storeRoutes);
+app.route("/bags", bagRoutes);
 
-app.route(
-  "/organizations/:organizationId/stores/:storeId/products",
-  productRoutes
-);
+app.route("/savedBags", savedBagRoutes);
 
-app.route(
-  "/organizations/:organizationId/stores/:storeId/categories",
-  categoryRoutes
-);
+app.route("/products", productRoutes);
 
-app.route(
-  "/organizations/:organizationId/stores/:storeId/subcategories",
-  subcategoryRoutes
-);
+app.route("/categories", categoryRoutes);
 
-app.route("/organizations/:organizationId/stores/:storeId/colors", colorRoutes);
+app.route("/subcategories", subcategoryRoutes);
 
-app.route("/organizations/:organizationId/stores/:storeId/guests", guestRoutes);
+app.route("/colors", colorRoutes);
 
-app.route("/organizations/:organizationId/stores/:storeId/users", userRoutes);
+app.route("/guests", guestRoutes);
 
-app.route(
-  "/organizations/:organizationId/stores/:storeId/checkout",
-  checkoutRoutes
-);
+app.route("/users", userRoutes);
+
+app.route("/checkout", checkoutRoutes);
+
+app.route("/orders", onlineOrderRoutes);
 
 app.get("/.well-known/openid-configuration", async (c) => {
   const [httpAction] = http.lookup(

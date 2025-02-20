@@ -6,16 +6,9 @@ import { getRouteApi } from "@tanstack/react-router";
 
 // value=id and label=name
 export function useGetStoreSubcategories() {
-  const { organizationId, storeId } = useStoreContext();
-
   const { data } = useQuery({
     queryKey: ["subcategories"],
-    queryFn: () =>
-      getAllSubcategories({
-        organizationId,
-        storeId,
-      }),
-    enabled: Boolean(organizationId && storeId),
+    queryFn: () => getAllSubcategories(),
   });
 
   const subcategories: Array<{ value: string; label: string }> | undefined =
@@ -27,16 +20,9 @@ export function useGetStoreSubcategories() {
 }
 
 export function useGetStoreCategories() {
-  const { organizationId, storeId } = useStoreContext();
-
   const { data } = useQuery({
     queryKey: ["categories"],
-    queryFn: () =>
-      getAllCategoriesWithSubcategories({
-        organizationId,
-        storeId,
-      }),
-    enabled: Boolean(organizationId && storeId),
+    queryFn: () => getAllCategoriesWithSubcategories(),
   });
 
   const categories: Array<{ value: string; label: string }> | undefined = data

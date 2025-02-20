@@ -32,10 +32,13 @@ import type * as http_domains_storeFront_routes_bag from "../http/domains/storeF
 import type * as http_domains_storeFront_routes_checkout from "../http/domains/storeFront/routes/checkout.js";
 import type * as http_domains_storeFront_routes_guest from "../http/domains/storeFront/routes/guest.js";
 import type * as http_domains_storeFront_routes_index from "../http/domains/storeFront/routes/index.js";
+import type * as http_domains_storeFront_routes_me from "../http/domains/storeFront/routes/me.js";
+import type * as http_domains_storeFront_routes_onlineOrder from "../http/domains/storeFront/routes/onlineOrder.js";
 import type * as http_domains_storeFront_routes_paystack from "../http/domains/storeFront/routes/paystack.js";
 import type * as http_domains_storeFront_routes_savedBag from "../http/domains/storeFront/routes/savedBag.js";
 import type * as http_domains_storeFront_routes_storefront from "../http/domains/storeFront/routes/storefront.js";
 import type * as http_domains_storeFront_routes_user from "../http/domains/storeFront/routes/user.js";
+import type * as http_utils from "../http/utils.js";
 import type * as http from "../http.js";
 import type * as inventory_athenaUser from "../inventory/athenaUser.js";
 import type * as inventory_auth from "../inventory/auth.js";
@@ -83,6 +86,7 @@ import type * as schemas_storeFront_savedBagItem from "../schemas/storeFront/sav
 import type * as schemas_storeFront_storeFrontSession from "../schemas/storeFront/storeFrontSession.js";
 import type * as schemas_storeFront_storeFrontUser from "../schemas/storeFront/storeFrontUser.js";
 import type * as schemas_storeFront_storeFrontVerificationCode from "../schemas/storeFront/storeFrontVerificationCode.js";
+import type * as schemas_storeFront_supportTicket from "../schemas/storeFront/supportTicket.js";
 import type * as sendgrid_index from "../sendgrid/index.js";
 import type * as storeFront_auth from "../storeFront/auth.js";
 import type * as storeFront_bag from "../storeFront/bag.js";
@@ -95,6 +99,7 @@ import type * as storeFront_onlineOrderUtilFns from "../storeFront/onlineOrderUt
 import type * as storeFront_payment from "../storeFront/payment.js";
 import type * as storeFront_savedBag from "../storeFront/savedBag.js";
 import type * as storeFront_savedBagItem from "../storeFront/savedBagItem.js";
+import type * as storeFront_supportTicket from "../storeFront/supportTicket.js";
 import type * as storeFront_user from "../storeFront/user.js";
 import type * as utils from "../utils.js";
 
@@ -126,10 +131,13 @@ declare const fullApi: ApiFromModules<{
   "http/domains/storeFront/routes/checkout": typeof http_domains_storeFront_routes_checkout;
   "http/domains/storeFront/routes/guest": typeof http_domains_storeFront_routes_guest;
   "http/domains/storeFront/routes/index": typeof http_domains_storeFront_routes_index;
+  "http/domains/storeFront/routes/me": typeof http_domains_storeFront_routes_me;
+  "http/domains/storeFront/routes/onlineOrder": typeof http_domains_storeFront_routes_onlineOrder;
   "http/domains/storeFront/routes/paystack": typeof http_domains_storeFront_routes_paystack;
   "http/domains/storeFront/routes/savedBag": typeof http_domains_storeFront_routes_savedBag;
   "http/domains/storeFront/routes/storefront": typeof http_domains_storeFront_routes_storefront;
   "http/domains/storeFront/routes/user": typeof http_domains_storeFront_routes_user;
+  "http/utils": typeof http_utils;
   http: typeof http;
   "inventory/athenaUser": typeof inventory_athenaUser;
   "inventory/auth": typeof inventory_auth;
@@ -177,6 +185,7 @@ declare const fullApi: ApiFromModules<{
   "schemas/storeFront/storeFrontSession": typeof schemas_storeFront_storeFrontSession;
   "schemas/storeFront/storeFrontUser": typeof schemas_storeFront_storeFrontUser;
   "schemas/storeFront/storeFrontVerificationCode": typeof schemas_storeFront_storeFrontVerificationCode;
+  "schemas/storeFront/supportTicket": typeof schemas_storeFront_supportTicket;
   "sendgrid/index": typeof sendgrid_index;
   "storeFront/auth": typeof storeFront_auth;
   "storeFront/bag": typeof storeFront_bag;
@@ -189,6 +198,7 @@ declare const fullApi: ApiFromModules<{
   "storeFront/payment": typeof storeFront_payment;
   "storeFront/savedBag": typeof storeFront_savedBag;
   "storeFront/savedBagItem": typeof storeFront_savedBagItem;
+  "storeFront/supportTicket": typeof storeFront_supportTicket;
   "storeFront/user": typeof storeFront_user;
   utils: typeof utils;
 }>;

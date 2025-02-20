@@ -38,7 +38,7 @@ export const EnteredBillingAddressDetails = () => {
         )}
 
         {checkoutState.isGhanaOrder && (
-          <p>{`${checkoutState.billingDetails.houseNumber} ${checkoutState.billingDetails.street}, ${neighborhood}, ${region}`}</p>
+          <p>{`${checkoutState.billingDetails.houseNumber || ""} ${checkoutState.billingDetails.street}, ${neighborhood}, ${region}`}</p>
         )}
         <p>{country}</p>
       </div>

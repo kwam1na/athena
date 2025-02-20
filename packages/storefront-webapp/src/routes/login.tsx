@@ -1,5 +1,5 @@
 import { getActiveUser } from "@/api/storeFrontUser";
-import { verifyUserAccount } from "@/api/stores";
+import { verifyUserAccount } from "@/api/auth";
 import { AuthComponent } from "@/components/auth/Auth";
 import { FadeIn } from "@/components/common/FadeIn";
 import {
@@ -44,11 +44,7 @@ export const Route = createFileRoute("/login")({
 
     try {
       if (id && storeId && organizationId) {
-        const user = await getActiveUser({
-          storeId,
-          organizationId,
-          userId: id || "",
-        });
+        const user = await getActiveUser();
 
         if (user._id) {
           return redirect({ to: "/account" });
@@ -97,8 +93,6 @@ const Login = () => {
   const onSubmit = async (data: z.infer<typeof customerDetailsSchema>) => {
     verifyMutation.mutate({
       email: data.email,
-      organizationId: store.organizationId,
-      storeId: store._id,
     });
   };
 

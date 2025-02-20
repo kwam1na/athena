@@ -1,6 +1,6 @@
 import { FadeIn } from "@/components/common/FadeIn";
 import { useStoreContext } from "@/contexts/StoreContext";
-import { checkoutSessionQueries } from "@/queries";
+import { checkoutSessionQueries } from "@/lib/queries/checkout";
 import { ArrowRightIcon } from "@radix-ui/react-icons";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
@@ -10,14 +10,10 @@ export const Route = createFileRoute("/shop/checkout/pending")({
 });
 
 const PendingOrders = () => {
-  const { userId, organizationId, storeId, formatter } = useStoreContext();
+  const { formatter } = useStoreContext();
 
   const { data: pendingOrders, isLoading } = useQuery(
-    checkoutSessionQueries.pendingSessions({
-      userId: userId!,
-      organizationId,
-      storeId,
-    })
+    checkoutSessionQueries.pendingSessions()
   );
 
   if (isLoading) return <div className="h-screen" />;

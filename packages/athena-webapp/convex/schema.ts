@@ -33,6 +33,7 @@ import {
   storeFrontVerificationCode,
   storeFrontUserSchema,
   storeFrontSessionSchema,
+  supportTicketSchema,
 } from "./schemas/storeFront";
 
 const schema = defineSchema({
@@ -67,6 +68,7 @@ const schema = defineSchema({
   storeFrontUser: defineTable(storeFrontUserSchema),
   storeFrontVerificationCode: defineTable(storeFrontVerificationCode),
   subcategory: defineTable(subcategorySchema),
+  supportTicket: defineTable(supportTicketSchema),
 });
 
 export default schema;

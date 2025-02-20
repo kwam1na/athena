@@ -117,8 +117,6 @@ export const verifyPayment = action({
 
       const discountValue = getDiscountValue(subtotal, discount);
 
-      // console.log("session", session);
-
       const isVerified = Boolean(
         res.data.status == "success" &&
           res.data.amount == orderAmountLessDiscounts
@@ -147,8 +145,8 @@ export const verifyPayment = action({
 
             const orderStatusMessaging =
               order.deliveryMethod == "pickup"
-                ? "Thank you for shopping with us! We're processing your order. We'll notify you when your items are ready for pickup. Please note it takes 24 - 48 hours to process your order."
-                : "Thank you for shopping with us! We're processing your order. We'll notify you when your items are are on their way. Please note it takes 24 - 48 hours to process your order.";
+                ? "Thank you for shopping with us! We're processing your order and will notify you once it's ready for pickup. Processing takes 24-48 hours."
+                : "Thank you for shopping with us! We're processing your order and will notify you once it's on the way. Processing takes 24-48 hours.";
 
             const orderPickupLocation = store?.config?.contactInfo?.location;
 
@@ -170,8 +168,6 @@ export const verifyPayment = action({
                 color: item.colorName,
                 length: item.length && `${item.length} inches`,
               })) || [];
-
-            console.log("fee and discount", order.deliveryFee, discountValue);
 
             // send confirmation email
             const emailResponse = await sendOrderEmail({

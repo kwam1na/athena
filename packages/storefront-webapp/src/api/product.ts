@@ -16,19 +16,18 @@ const buildQueryString = (params?: FilterParams) => {
   return query.toString();
 };
 
-const getBaseUrl = (organizationId: string, storeId: string) =>
-  `${config.apiGateway.URL}/organizations/${organizationId}/stores/${storeId}/products`;
+const getBaseUrl = () => `${config.apiGateway.URL}/products`;
 
 export async function getAllProducts({
-  organizationId,
-  storeId,
   filters,
-}: OrganizationStoreEntityApiParams & { filters?: FilterParams }): Promise<
-  Product[]
-> {
+}: {
+  filters?: FilterParams;
+}): Promise<Product[]> {
   const queryString = buildQueryString(filters);
-  const url = `${getBaseUrl(organizationId, storeId)}${queryString ? `?${queryString}` : ""}`;
-  const response = await fetch(url);
+  const url = `${getBaseUrl()}${queryString ? `?${queryString}` : ""}`;
+  const response = await fetch(url, {
+    credentials: "include",
+  });
 
   const res = await response.json();
 
@@ -39,14 +38,10 @@ export async function getAllProducts({
   return res.products;
 }
 
-export async function getProduct({
-  organizationId,
-  storeId,
-  productId,
-}: GetParams): Promise<Product> {
-  const response = await fetch(
-    `${getBaseUrl(organizationId, storeId)}/${productId}`
-  );
+export async function getProduct(productId: string): Promise<Product> {
+  const response = await fetch(`${getBaseUrl()}/${productId}`, {
+    credentials: "include",
+  });
 
   const res = await response.json();
 
@@ -57,18 +52,10 @@ export async function getProduct({
   return res;
 }
 
-export async function getBestSellers({
-  organizationId,
-  storeId,
-  filters,
-}: {
-  organizationId: string;
-  storeId: string;
-  filters?: FilterParams;
-}): Promise<Product[]> {
-  const response = await fetch(
-    `${getBaseUrl(organizationId, storeId)}/bestSellers`
-  );
+export async function getBestSellers(): Promise<Product[]> {
+  const response = await fetch(`${getBaseUrl()}/bestSellers`, {
+    credentials: "include",
+  });
 
   const res = await response.json();
 
@@ -79,16 +66,10 @@ export async function getBestSellers({
   return res;
 }
 
-export async function getFeatured({
-  organizationId,
-  storeId,
-}: {
-  organizationId: string;
-  storeId: string;
-}): Promise<Product[]> {
-  const response = await fetch(
-    `${getBaseUrl(organizationId, storeId)}/featured`
-  );
+export async function getFeatured(): Promise<Product[]> {
+  const response = await fetch(`${getBaseUrl()}/featured`, {
+    credentials: "include",
+  });
 
   const res = await response.json();
 

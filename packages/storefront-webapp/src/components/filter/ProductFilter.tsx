@@ -10,18 +10,11 @@ import FilterComponent from "../footer/Filter";
 import { Separator } from "../ui/separator";
 import { useState } from "react";
 import { useGetShopSearchParams } from "../navigation/hooks";
-import { useStoreContext } from "@/contexts/StoreContext";
 
 export default function ProductFilter() {
-  const { organizationId, storeId } = useStoreContext();
   const { data } = useQuery({
     queryKey: ["products", "colors"],
-    queryFn: () =>
-      getAllColors({
-        organizationId,
-        storeId,
-      }),
-    enabled: Boolean(organizationId && storeId),
+    queryFn: () => getAllColors(),
   });
 
   const searchParams = useGetShopSearchParams();

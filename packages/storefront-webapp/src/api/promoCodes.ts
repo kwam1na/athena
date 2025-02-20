@@ -1,36 +1,19 @@
 import config from "@/config";
 import { PromoCode } from "@athena/webapp";
 
-const getBaseUrl = (
-  organizationId: string,
-  storeId: string,
-  storeFrontUserId: string
-) =>
-  `${config.apiGateway.URL}/organizations/${organizationId}/stores/${storeId}/users/${storeFrontUserId}/promoCodes`;
+const getBaseUrl = () => `${config.apiGateway.URL}/stores/promoCodes`;
 
-export async function redeemPromoCode({
-  storeFrontUserId,
-  organizationId,
-  storeId,
-  code,
-}: {
-  storeFrontUserId: string;
-  organizationId: string;
-  storeId: string;
-  code: string;
-}): Promise<PromoCode> {
-  const response = await fetch(
-    getBaseUrl(organizationId, storeId, storeFrontUserId),
-    {
-      method: "POST",
-      body: JSON.stringify({
-        code,
-      }),
-      headers: {
-        "Content-Type": "application/json",
-      },
-    }
-  );
+export async function redeemPromoCode(code: string): Promise<PromoCode> {
+  const response = await fetch(getBaseUrl(), {
+    method: "POST",
+    body: JSON.stringify({
+      code,
+    }),
+    headers: {
+      "Content-Type": "application/json",
+    },
+    credentials: "include",
+  });
 
   const res = await response.json();
 

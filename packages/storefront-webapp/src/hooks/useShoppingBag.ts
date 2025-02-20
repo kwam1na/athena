@@ -9,7 +9,7 @@ import {
   updateSavedBagItem,
 } from "@/api/savedBag";
 import { useStoreContext } from "@/contexts/StoreContext";
-import { bagQueries } from "@/queries";
+import { bagQueries } from "@/lib/queries/bag";
 import { BagItem, ProductSku, SavedBagItem } from "@athena/webapp";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -46,13 +46,7 @@ export const useShoppingBag = () => {
 
   const { userId, organizationId, storeId } = useStoreContext();
 
-  const { data: savedBag } = useQuery(
-    bagQueries.activeSavedBag({
-      userId,
-      organizationId,
-      storeId,
-    })
-  );
+  const { data: savedBag } = useQuery(bagQueries.activeSavedBag());
 
   const addNewSavedBagItemMutation = useMutation({
     mutationFn: ({
@@ -67,9 +61,6 @@ export const useShoppingBag = () => {
       quantity: number;
     }) =>
       addItemToSavedBag({
-        storeFrontUserId: userId!,
-        organizationId,
-        storeId,
         productId,
         productSkuId,
         productSku,
@@ -90,12 +81,9 @@ export const useShoppingBag = () => {
   const updateSavedBagItemMutation = useMutation({
     mutationFn: ({ itemId, quantity }: { itemId: string; quantity: number }) =>
       updateSavedBagItem({
-        storeFrontUserId: userId!,
         savedBagId: savedBag!._id,
         quantity,
         itemId,
-        organizationId,
-        storeId,
       }),
     onSuccess: () => {
       setOperationSuccessful(true);
@@ -111,11 +99,8 @@ export const useShoppingBag = () => {
   const removeSavedBagItemMutation = useMutation({
     mutationFn: ({ itemId }: { itemId: string }) =>
       removeItemFromSavedBag({
-        storeFrontUserId: userId!,
         savedBagId: savedBag!._id,
         itemId: itemId,
-        organizationId,
-        storeId,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({
@@ -179,13 +164,7 @@ export const useShoppingBag = () => {
     updateSavedBagItemMutation.isPending ||
     removeSavedBagItemMutation.isPending;
 
-  const { data: bag } = useQuery(
-    bagQueries.activeBag({
-      userId,
-      organizationId,
-      storeId,
-    })
-  );
+  const { data: bag } = useQuery(bagQueries.activeBag());
 
   const addNewBagItem = useMutation({
     mutationFn: ({
@@ -200,9 +179,6 @@ export const useShoppingBag = () => {
       quantity: number;
     }) =>
       addItemToBag({
-        storeFrontUserId: userId!,
-        organizationId,
-        storeId,
         productId,
         productSkuId,
         productSku,
@@ -221,12 +197,9 @@ export const useShoppingBag = () => {
   const updateBagItemMutation = useMutation({
     mutationFn: ({ itemId, quantity }: { itemId: string; quantity: number }) =>
       updateBagItem({
-        storeFrontUserId: userId!,
         bagId: bag!._id,
         quantity,
         itemId,
-        organizationId,
-        storeId,
       }),
     onSuccess: () => {
       setOperationSuccessful(true);
@@ -240,11 +213,8 @@ export const useShoppingBag = () => {
   const removeBagItem = useMutation({
     mutationFn: ({ itemId }: { itemId: string }) =>
       removeItemFromBag({
-        storeFrontUserId: userId!,
         bagId: bag!._id,
         itemId: itemId,
-        organizationId,
-        storeId,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: bagQueries.activeBagKey() });
@@ -351,9 +321,6 @@ export const useShoppingBag = () => {
     }) =>
       createCheckoutSession({
         bagId,
-        storeFrontUserId: userId!,
-        storeId,
-        organizationId,
         bagItems,
         bagSubtotal,
       }),
@@ -385,9 +352,6 @@ export const useShoppingBag = () => {
       orderDetails: any;
     }) =>
       updateCheckoutSessionAPI({
-        storeFrontUserId: userId!,
-        storeId,
-        organizationId,
         isFinalizingPayment,
         sessionId,
         customerEmail,
