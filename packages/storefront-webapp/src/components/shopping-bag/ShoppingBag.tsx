@@ -79,7 +79,6 @@ export default function ShoppingBag() {
     moveItemFromBagToSaved,
     obtainCheckoutSession,
     unavailableProducts,
-    areProductsUnavailable,
   } = useShoppingBag();
 
   const [isProcessingCheckoutRequest, setIsProcessingCheckoutRequest] =
@@ -109,7 +108,9 @@ export default function ShoppingBag() {
     }),
   };
 
-  const { data } = useQuery(checkoutSessionQueries.pendingSessions());
+  const { data: pendingSessions } = useQuery(
+    checkoutSessionQueries.pendingSessions()
+  );
 
   const handleOnCheckoutClick = async () => {
     // send post
@@ -157,17 +158,18 @@ export default function ShoppingBag() {
     <FadeIn className="container mx-auto max-w-[1024px] px-6 xl:px-0 space-y-8 lg:space-y-24 py-8">
       {!isBagEmpty && (
         <div className="space-y-4">
-          {Boolean(data && data.length > 0) && (
-            <PendingItem session={data?.[0]} count={data?.length || 0} />
+          {Boolean(pendingSessions && pendingSessions.length > 0) && (
+            <PendingItem
+              session={pendingSessions?.[0]}
+              count={pendingSessions?.length || 0}
+            />
           )}
           <h1 className="text-lg font-light">Bag</h1>
 
-          {areProductsUnavailable && (
-            <div className="flex items-center">
-              <AlertCircle className="w-4 h-4 mr-2" />
-              <p className="text-xs">
-                Some items in your bag are no longer available
-              </p>
+          {error && (
+            <div className="flex items-center font-medium">
+              <AlertCircleIcon className="w-4 h-4 mr-2" />
+              <p className="text-xs">{error}</p>
             </div>
           )}
         </div>
@@ -175,8 +177,11 @@ export default function ShoppingBag() {
 
       {isBagEmpty && (
         <div className="space-y-8">
-          {Boolean(data && data.length > 0) && (
-            <PendingItem session={data?.[0]} count={data?.length || 0} />
+          {Boolean(pendingSessions && pendingSessions.length > 0) && (
+            <PendingItem
+              session={pendingSessions?.[0]}
+              count={pendingSessions?.length || 0}
+            />
           )}
           <EmptyState message="Your bag is empty." />
         </div>
@@ -327,59 +332,17 @@ export default function ShoppingBag() {
                     <LoadingButton
                       isLoading={isProcessingCheckoutRequest}
                       onClick={handleOnCheckoutClick}
-                      className="group w-[240px] text-accent2"
+                      className={`group w-[240px] text-accent2 ${isUpdatingBag ? "pointer-events-none" : ""}`}
                       variant={"clear"}
                     >
                       Checkout
                       <ArrowRight className="w-4 h-4 ml-2 -me-1 ms-2 transition-transform group-hover:translate-x-0.5" />
                     </LoadingButton>
-
-                    {error && (
-                      <div className="flex text-xs items-center font-medium">
-                        <AlertCircleIcon className="w-3.5 h-3.5 mr-2" />
-                        <p>{error}</p>
-                      </div>
-                    )}
                   </div>
                 </div>
               </motion.div>
             </div>
           )}
-
-          {/* Mobile Cart Summary */}
-          {/* {isNavbarShowing && (
-            <div className="flex flex-col md:hidden fixed bottom-0 left-0 w-full bg-background p-8 shadow-md z-50 min-h-auto">
-              <div className="flex justify-between text-lg font-medium mb-4">
-                <span>Total</span>
-                <span>{formatter.format(total)}</span>
-              </div>
-              <div className="space-y-8">
-                {areProductsUnavailable && (
-                  <div className="flex">
-                    <InfoIcon className="w-4 h-4 mr-2" />
-                    <p className="text-xs">
-                      Some items are no longer available. Update your bag to
-                      continue.
-                    </p>
-                  </div>
-                )}
-
-                {error && (
-                  <div className="flex text-destructive">
-                    <InfoIcon className="w-4 h-4 mr-2" />
-                    <p className="text-xs">{error}</p>
-                  </div>
-                )}
-                <LoadingButton
-                  isLoading={isProcessingCheckoutRequest}
-                  onClick={handleOnCheckoutClick}
-                  className="w-full"
-                >
-                  Checkout
-                </LoadingButton>
-              </div>
-            </div>
-          )} */}
         </div>
       )}
     </FadeIn>

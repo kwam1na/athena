@@ -74,7 +74,7 @@ export const create = mutation({
     if (invalidProducts.length > 0) {
       return {
         success: false,
-        message: "Some products are no longer available.",
+        message: "Some items in your bag are no longer available",
         unavailableProducts: invalidProducts.map((p) => ({
           productSkuId: p.productSkuId,
           requested: p.quantity,
@@ -117,7 +117,7 @@ export const create = mutation({
     if (unavailableProducts.length > 0) {
       return {
         success: false,
-        message: "Some products are unavailable",
+        message: "Some items in your bag are no longer available",
         unavailableProducts,
       };
     }
