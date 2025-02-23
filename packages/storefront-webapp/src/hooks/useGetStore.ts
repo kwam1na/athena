@@ -1,11 +1,8 @@
-import { getStore } from "@/api/storefront";
-import config from "@/config";
+import { storeQueries } from "@/lib/queries/store";
 import { useQuery } from "@tanstack/react-query";
 
-export const useGetStore = () => {
-  return useQuery({
-    queryKey: ["store"],
-    staleTime: 1 * 60 * 1000,
-    queryFn: () => getStore(config.storefront.storeName),
-  });
+export const useGetStore = (
+  { enabled }: { enabled?: boolean } = { enabled: true }
+) => {
+  return useQuery({ ...storeQueries.store(), enabled });
 };

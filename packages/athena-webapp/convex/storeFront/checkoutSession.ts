@@ -1,4 +1,4 @@
-import { CheckoutSessionItem, ProductSku } from "../../types";
+import { CheckoutSession, CheckoutSessionItem, ProductSku } from "../../types";
 import { api, internal } from "../_generated/api";
 import { Id } from "../_generated/dataModel";
 import {
@@ -278,14 +278,21 @@ export const cancelOrder = action({
     });
 
     if (response.status == 200) {
-      await ctx.runMutation(
-        internal.storeFront.checkoutSession.updateCheckoutSession,
-        {
-          id: session._id,
-          isFinalizingPayment: false,
-          isPaymentRefunded: true,
-        }
-      );
+      await Promise.all([
+        await ctx.runMutation(
+          internal.storeFront.checkoutSession.updateCheckoutSession,
+          {
+            id: session._id,
+            isFinalizingPayment: false,
+            isPaymentRefunded: true,
+          }
+        ),
+
+        await ctx.runMutation(api.storeFront.onlineOrder.update, {
+          externalReference: session.externalReference,
+          update: { status: "cancelled" },
+        }),
+      ]);
 
       return { success: true, message: "Order has been cancelled." };
     } else {
@@ -308,6 +315,7 @@ export const updateCheckoutSession = internalMutation({
     hasVerifiedPayment: v.optional(v.boolean()),
     amount: v.optional(v.number()),
     orderDetails: v.optional(orderDetailsSchema),
+    placedOrderId: v.optional(v.string()),
     paymentMethod: v.optional(
       v.object({
         last4: v.optional(v.string()),
@@ -389,15 +397,23 @@ function createPatchObject(args: any) {
     }
   }
 
+  if (args.placedOrderId) patchObject.placedOrderId = args.placedOrderId;
+
   return patchObject;
 }
 
 async function handlePlaceOrder(
   ctx: MutationCtx,
   sessionId: Id<"checkoutSession">,
-  session: any
+  session: CheckoutSession
 ) {
-  if (session.placedOrderId) {
+  const placedOrder = session.externalReference
+    ? await ctx.runQuery(api.storeFront.onlineOrder.get, {
+        identifier: session.externalReference,
+      })
+    : null;
+
+  if (session.placedOrderId || placedOrder) {
     console.log(`Order has already been placed for session: ${sessionId}`);
     return {
       success: false,
@@ -414,6 +430,7 @@ async function handlePlaceOrder(
     deliveryOption: session.deliveryOption,
     deliveryInstructions: session.deliveryInstructions,
     deliveryFee: session.deliveryFee,
+    discount: session.discount,
     pickupLocation: session.pickupLocation,
     paymentMethod: session.paymentMethod,
   });
@@ -424,10 +441,16 @@ async function handlePlaceOrder(
 async function handleOrderCreation(
   ctx: MutationCtx,
   sessionId: Id<"checkoutSession">,
-  session: any,
+  session: CheckoutSession,
   orderDetails: any
 ) {
-  if (session.placedOrderId) {
+  const placedOrder = session.externalReference
+    ? await ctx.runQuery(api.storeFront.onlineOrder.get, {
+        identifier: session.externalReference,
+      })
+    : null;
+
+  if (session.placedOrderId || placedOrder) {
     return {
       success: false,
       orderId: session.placedOrderId,
@@ -499,7 +522,6 @@ export const getPendingCheckoutSessions = query({
         q.and(
           q.eq(q.field("storeFrontUserId"), args.storeFrontUserId),
           q.eq(q.field("hasCompletedPayment"), true),
-          q.eq(q.field("hasCompletedCheckoutSession"), true),
           q.eq(q.field("placedOrderId"), undefined),
           q.neq(q.field("isPaymentRefunded"), true)
         )
@@ -583,6 +605,7 @@ async function retrieveActiveCheckoutSession(
           )
         ),
         q.eq(q.field("hasCompletedCheckoutSession"), false)
+        // q.eq(q.field("hasCompletedPayment"), false)
       )
     )
     .first();

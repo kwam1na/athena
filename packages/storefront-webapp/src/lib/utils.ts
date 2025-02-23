@@ -45,3 +45,10 @@ export function getStoreDetails() {
 
   return { storeId, organizationId };
 }
+
+export const enableQuery = () => {
+  return Boolean(
+    localStorage.getItem(ORGANIZATION_ID_KEY) &&
+      localStorage.getItem(STORE_ID_KEY)
+  );
+};

@@ -384,7 +384,7 @@ const VerifyPaymentAlert = () => {
   };
 
   return (
-    <div className="flex gap-2 items-center p-4 rounded-lg text-yellow-700 bg-yellow-50">
+    <div className="flex gap-2 items-center px-4 rounded-lg text-yellow-700 bg-yellow-50">
       <AlertCircleIcon className="h-4 w-4" />
       <div className="flex items-center">
         <p className="text-sm">Payment for this order has not been verified.</p>

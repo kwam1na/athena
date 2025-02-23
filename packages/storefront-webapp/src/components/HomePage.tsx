@@ -1,9 +1,4 @@
 import { useQuery } from "@tanstack/react-query";
-import {
-  INITIAL_LOAD_KEY,
-  INITIAL_LOAD_TIME_KEY,
-  SESSION_STORAGE_KEY,
-} from "@/lib/constants";
 import Footer from "./footer/Footer";
 import { Link } from "@tanstack/react-router";
 import { Button } from "./ui/button";
@@ -15,7 +10,7 @@ import { Product, ProductSku } from "@athena/webapp";
 import ImageWithFallback from "./ui/image-with-fallback";
 import { useNavigationBarContext } from "@/contexts/NavigationBarProvider";
 import { HomeHero } from "./home/HomeHero";
-import { productQueries } from "@/lib/queries/product";
+import { useProductQueries } from "@/lib/queries/product";
 
 function FeaturedProduct({ product }: { product: any }) {
   const { formatter } = useStoreContext();
@@ -66,7 +61,7 @@ function FeaturedProduct({ product }: { product: any }) {
       >
         <ImageWithFallback
           alt={`${product.name} image`}
-          className="aspect-square object-cover w-96 h-96 rounded"
+          className="aspect-square object-cover w-[400px] h-[400px] md:w-[600px] md:h-[640px] rounded"
           src={product.skus[0].images[0]}
         />
       </Link>
@@ -140,7 +135,7 @@ function FeaturedSection({ data }: { data: any }) {
       <div className="space-y-8">
         <p className="text-md font-medium">{`Shop ${name}`}</p>
 
-        <div className="space-y-8 lg:space-y-20">
+        <div className="space-y-8 lg:space-y-24">
           <ProductGrid products={products} formatter={formatter} />
           <div className="text-sm">
             <Link
@@ -168,7 +163,7 @@ function FeaturedSection({ data }: { data: any }) {
       <div className="space-y-8">
         <p className="text-md font-medium">{`Shop ${name}`}</p>
 
-        <div className="space-y-8 lg:space-y-20">
+        <div className="space-y-8 lg:space-y-24">
           <ProductGrid products={products} formatter={formatter} />
           <div className="text-sm"></div>
           <Link to="/shop/$categorySlug" params={{ categorySlug: slug }}>
@@ -191,6 +186,8 @@ function FeaturedSection({ data }: { data: any }) {
 export default function HomePage() {
   const { setNavBarLayout, setAppLocation } = useNavigationBarContext();
 
+  const productQueries = useProductQueries();
+
   const { data: bestSellers, isLoading: isLoadingBestSellers } = useQuery(
     productQueries.bestSellers()
   );
@@ -206,19 +203,6 @@ export default function HomePage() {
   useEffect(() => {
     setNavBarLayout("sticky");
     setAppLocation("home");
-  }, []);
-
-  useEffect(() => {
-    const savedState = sessionStorage.getItem(INITIAL_LOAD_KEY);
-    const lastLoadTime = sessionStorage.getItem(INITIAL_LOAD_TIME_KEY);
-
-    if (!savedState || !lastLoadTime) {
-      sessionStorage.setItem(INITIAL_LOAD_KEY, "true");
-      sessionStorage.setItem(
-        SESSION_STORAGE_KEY,
-        new Date().getTime().toString()
-      );
-    }
   }, []);
 
   const { formatter } = useStoreContext();
@@ -265,7 +249,7 @@ export default function HomePage() {
             <HomeHero />
           </div>
 
-          <div className="container mx-auto space-y-32 pb-8 px-4 lg:px-0">
+          <div className="container mx-auto space-y-40 md:space-y-48 pb-8 px-4 lg:px-0">
             {Boolean(bestSellersSorted?.length) && (
               <motion.div
                 initial={{ opacity: 0, y: 16 }}
@@ -276,7 +260,7 @@ export default function HomePage() {
               >
                 <p className="text-md font-medium">Shop best sellers</p>
 
-                <div className="space-y-8 lg:space-y-20">
+                <div className="space-y-8 lg:space-y-24">
                   <ProductSkuGrid
                     products={bestSellersProducts || []}
                     formatter={formatter}
@@ -299,7 +283,7 @@ export default function HomePage() {
             )}
 
             {Boolean(featuredSectionSorted?.length) && (
-              <div className="space-y-32">
+              <div className="space-y-40 md:space-y-48">
                 {featuredSectionSorted?.map((data: any) => (
                   <motion.div
                     key={data._id}

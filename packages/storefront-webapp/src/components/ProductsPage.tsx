@@ -67,7 +67,7 @@ export default function ProductsPage({
   }
 
   return (
-    <div className="container mx-auto grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2 lg:gap-8">
+    <div className="container mx-auto grid grid-cols-2 lg:grid-cols-3 gap-2 lg:gap-12">
       {isLoading && (
         <>
           <ProductCardLoadingSkeleton />

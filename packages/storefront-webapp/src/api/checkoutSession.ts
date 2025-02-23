@@ -1,5 +1,5 @@
 import config from "@/config";
-import { CheckoutSession } from "@athena/webapp";
+import { CheckoutSession, ProductSku } from "@athena/webapp";
 
 const getBaseUrl = () => `${config.apiGateway.URL}/checkout`;
 
@@ -67,7 +67,9 @@ export async function getPendingCheckoutSessions(): Promise<CheckoutSession[]> {
   return res;
 }
 
-export async function getCheckoutSession(sessionId: string) {
+export async function getCheckoutSession(
+  sessionId: string
+): Promise<CheckoutSession & { items: ProductSku[] }> {
   const response = await fetch(`${getBaseUrl()}/${sessionId}`, {
     credentials: "include",
   });
@@ -90,11 +92,13 @@ export async function updateCheckoutSession({
   customerEmail,
   amount,
   orderDetails,
+  placedOrderId,
 }: {
   action:
     | "finalize-payment"
     | "complete-checkout"
     | "place-order"
+    | "update-order"
     | "cancel-order";
   sessionId: string;
   isFinalizingPayment?: boolean;
@@ -103,6 +107,7 @@ export async function updateCheckoutSession({
   customerEmail?: string;
   amount?: number;
   orderDetails?: any;
+  placedOrderId?: string;
 }) {
   const response = await fetch(`${getBaseUrl()}/${sessionId}`, {
     method: "POST",
@@ -114,6 +119,7 @@ export async function updateCheckoutSession({
       externalReference,
       hasCompletedCheckoutSession,
       orderDetails,
+      placedOrderId,
     }),
     headers: {
       "Content-Type": "application/json",

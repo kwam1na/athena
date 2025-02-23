@@ -10,7 +10,7 @@ import {
 } from "@/components/states/checkout-expired/CheckoutExpired";
 import { Button } from "@/components/ui/button";
 import { useStoreContext } from "@/contexts/StoreContext";
-import { checkoutSessionQueries } from "@/lib/queries/checkout";
+import { useCheckoutSessionQueries } from "@/lib/queries/checkout";
 import { capitalizeFirstLetter } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useParams } from "@tanstack/react-router";
@@ -22,6 +22,8 @@ export const Route = createFileRoute("/shop/checkout/$sessionIdSlug/complete")({
 
 const CheckoutCompleteView = () => {
   const { sessionIdSlug } = useParams({ strict: false });
+
+  const checkoutSessionQueries = useCheckoutSessionQueries();
 
   const { data: sessionData, isLoading } = useQuery(
     checkoutSessionQueries.session(sessionIdSlug)
@@ -35,12 +37,12 @@ const CheckoutCompleteView = () => {
     );
   }
 
-  if (!sessionData.placedOrderId) {
+  if (!sessionData?.placedOrderId) {
     return <CheckoutNotComplete />;
   }
 
-  const isDeliveryOrder = sessionData.deliveryMethod == "delivery";
-  const isPickupOrder = sessionData.deliveryMethod == "pickup";
+  const isDeliveryOrder = sessionData?.deliveryMethod == "delivery";
+  const isPickupOrder = sessionData?.deliveryMethod == "pickup";
 
   return (
     <AnimatePresence>
@@ -107,14 +109,16 @@ const CheckoutCompleteView = () => {
           className="space-x-12 pt-8"
         >
           <Link to="/">
-            <Button className="w-[240px]">Continue shopping</Button>
+            <Button variant={"clear"} className="px-0">
+              Continue shopping
+            </Button>
           </Link>
 
           <Link
             to="/shop/orders/$orderId"
             params={{ orderId: sessionData.placedOrderId }}
           >
-            <Button variant={"clear"}>View order</Button>
+            <Button variant={"link"}>View order</Button>
           </Link>
         </motion.div>
       </FadeIn>

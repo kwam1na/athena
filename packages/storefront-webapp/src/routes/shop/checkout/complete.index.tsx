@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { LoadingButton } from "@/components/ui/loading-button";
 import { useStoreContext } from "@/contexts/StoreContext";
 import { useGetActiveCheckoutSession } from "@/hooks/useGetActiveCheckoutSession";
-import { bagQueries } from "@/lib/queries/bag";
+import { useBagQueries } from "@/lib/queries/bag";
 import { capitalizeFirstLetter } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
@@ -79,12 +79,14 @@ const PaymentDetails = () => {
 
 const CheckoutComplete = () => {
   const { checkoutState, activeSession } = useCheckout();
-  const { userId, storeId, organizationId } = useStoreContext();
+  const { userId } = useStoreContext();
   const [orderId, setOrderId] = useState<string | null>(null);
   const [attemptedOrderCreation, setAttemptedOrderCreation] = useState(false);
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
 
   const queryClient = useQueryClient();
+
+  const bagQueries = useBagQueries();
 
   useEffect(() => {
     const completeCheckoutSession = async () => {
@@ -246,12 +248,14 @@ const CheckoutComplete = () => {
           className="flex flex-col gap-4 lg:flex-row pt-8"
         >
           <Link to="/">
-            <Button className="w-full lg:w-[240px]">Continue shopping</Button>
+            <Button variant={"clear"} className="px-0">
+              Continue shopping
+            </Button>
           </Link>
 
           {orderId && (
             <Link to="/shop/orders/$orderId" params={{ orderId }}>
-              <Button className="w-full lg:w-[240px]" variant={"clear"}>
+              <Button variant={"link"}>
                 <p className="w-full text-center">View order</p>
               </Button>
             </Link>

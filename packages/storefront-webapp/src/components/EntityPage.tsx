@@ -1,13 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
 import { useParams, useSearch } from "@tanstack/react-router";
 import ProductsPage from "./ProductsPage";
-import { useStoreContext } from "@/contexts/StoreContext";
-import { productQueries } from "@/lib/queries/product";
+import { useProductQueries } from "@/lib/queries/product";
 
 export default function EntityPage() {
   const search = useSearch({ from: "/_layout/_shopLayout" });
 
   const { categorySlug, subcategorySlug } = useParams({ strict: false });
+
+  const productQueries = useProductQueries();
 
   const { data: products, isLoading: isLoadingProducts } = useQuery(
     productQueries.list({

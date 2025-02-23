@@ -5,15 +5,7 @@ import {
   customerDetailsSchema,
   paymentMethodSchema,
 } from "../schemas/storeFront";
-import { Address, OnlineOrder, Store } from "../../types";
-import {
-  capitalizeWords,
-  currencyFormatter,
-  formatDate,
-  getAddressString,
-} from "../utils";
-import { OrderEmailType, sendOrderEmail } from "../sendgrid";
-import { sendOrderUpdateEmail } from "./onlineOrderUtilFns";
+import { OnlineOrder } from "../../types";
 import { api } from "../_generated/api";
 import { Id } from "../_generated/dataModel";
 
@@ -46,6 +38,8 @@ export const create = mutation({
   handler: async (ctx, args) => {
     // get the session
     const session = await ctx.db.get(args.checkoutSessionId);
+
+    console.log(`creating online order for session: ${session?._id}`);
 
     if (!session) {
       return {
@@ -105,6 +99,8 @@ export const create = mutation({
       });
     }
 
+    console.log("created online order for session.");
+
     return {
       success: true,
       orderId,
@@ -155,22 +151,19 @@ export const getAll = query({
 
 export const get = query({
   args: {
-    orderId: v.optional(v.id("onlineOrder")),
-    externalReference: v.optional(v.string()),
+    identifier: v.union(v.id("onlineOrder"), v.string()),
   },
   handler: async (ctx, args) => {
-    let order: OnlineOrder | null = null;
-
-    if (args.orderId) {
-      order = await ctx.db.get(args.orderId);
-    } else if (args.externalReference) {
-      order = await ctx.db
-        .query(entity)
-        .filter((q) =>
-          q.eq(q.field("externalReference"), args.externalReference)
+    const order = await ctx.db
+      .query(entity)
+      .filter((q) =>
+        q.or(
+          q.eq(q.field("_id"), args.identifier),
+          q.eq(q.field("externalReference"), args.identifier),
+          q.eq(q.field("checkoutSessionId"), args.identifier)
         )
-        .first();
-    }
+      )
+      .first();
 
     if (!order) return null;
 
@@ -270,8 +263,6 @@ export const update = mutation({
     update: v.record(v.string(), v.any()),
   },
   handler: async (ctx, args) => {
-    console.log("in update with args", args);
-
     if (args.orderId) {
       const order = await ctx.db.get(args.orderId);
       if (!order) return { success: false, message: "Order not found" };
@@ -288,6 +279,16 @@ export const update = mutation({
             date: Date.now(),
           },
         ];
+
+        // if we are cancelling the order, return all items to stock
+        if (args.update.status === "cancelled") {
+          await ctx.runMutation(
+            api.storeFront.onlineOrder.returnAllItemsToStock,
+            {
+              orderId: order._id,
+            }
+          );
+        }
       }
 
       // Add readyAt timestamp for specific status updates
@@ -352,6 +353,17 @@ export const update = mutation({
             { status: args.update.status, date: Date.now() },
           ],
         };
+
+        // if we are cancelling the order, return all items to stock
+        if (args.update.status === "cancelled") {
+          await ctx.runMutation(
+            api.storeFront.onlineOrder.returnAllItemsToStock,
+            {
+              orderId: order._id,
+            }
+          );
+        }
+
         await ctx.db.patch(order._id, updates);
       } else {
         await ctx.db.patch(order._id, { ...rest, refunds });
@@ -541,5 +553,26 @@ export const updateOwner = mutation({
     console.info("successfully updated owner for orders");
 
     return true;
+  },
+});
+
+export const isDuplicateOrder = query({
+  args: {
+    id: v.id("onlineOrder"),
+  },
+  handler: async (ctx, args) => {
+    const order = await ctx.db.get(args.id);
+    if (!order) {
+      return false;
+    }
+
+    const orders = await ctx.db
+      .query(entity)
+      .filter((q) =>
+        q.eq(q.field("externalReference"), order.externalReference)
+      )
+      .collect();
+
+    return orders.length > 1;
   },
 });

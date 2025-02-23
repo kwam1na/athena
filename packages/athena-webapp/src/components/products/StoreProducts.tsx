@@ -5,7 +5,7 @@ import { PackageXIcon } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { Button } from "../ui/button";
 import { PlusIcon } from "@radix-ui/react-icons";
-import { Product, Store } from "~/types";
+import { Product } from "~/types";
 import useGetActiveStore from "../../hooks/useGetActiveStore";
 
 export default function StoreProducts({ products }: { products: Product[] }) {

@@ -8,7 +8,7 @@ export default function useGetActiveOnlineOrder() {
 
   const onlineOrder = useQuery(
     api.storeFront.onlineOrder.get,
-    orderSlug ? { orderId: orderSlug as Id<"onlineOrder"> } : "skip"
+    orderSlug ? { identifier: orderSlug as Id<"onlineOrder"> } : "skip"
   );
 
   return onlineOrder;

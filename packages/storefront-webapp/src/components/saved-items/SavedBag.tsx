@@ -52,7 +52,13 @@ export default function SavedBag() {
     <FadeIn className="container mx-auto max-w-[1024px] min-h-screen px-6 xl:px-0 space-y-8 lg:space-y-24 py-8">
       {!isSavedEmpty && <h1 className="text-lg font-light mb-8">Saved</h1>}
 
-      {isSavedEmpty && <EmptyState message="You don't have any saved items." />}
+      {isSavedEmpty && (
+        <EmptyState
+          message="Nothing saved yet. Spot something you love?"
+          cta="Browse Bestsellers"
+          ctaDestination="/shop/best-sellers"
+        />
+      )}
 
       {!isSavedEmpty && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 pb-40">

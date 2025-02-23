@@ -1,16 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
-import { getActiveUser, getGuest } from "@/api/storeFrontUser";
+import { useUserQueries } from "@/lib/queries/user";
 
 export const useAuth = () => {
-  const { data: user, isLoading } = useQuery({
-    queryKey: ["user"],
-    queryFn: () => getActiveUser(),
-  });
+  const userQueries = useUserQueries();
+  const { data: user, isLoading } = useQuery(userQueries.me());
 
-  const { data: guestData } = useQuery({
-    queryKey: ["guest"],
-    queryFn: () => getGuest(),
-  });
+  const { data: guestData } = useQuery(userQueries.guest());
 
   return {
     user,

@@ -62,6 +62,7 @@ checkoutRoutes.post("/:checkoutSessionId", async (c) => {
     hasCompletedCheckoutSession,
     action,
     orderDetails,
+    placedOrderId,
   } = await c.req.json();
 
   try {
@@ -101,7 +102,6 @@ checkoutRoutes.post("/:checkoutSessionId", async (c) => {
     }
 
     if (action == "complete-checkout") {
-      console.log("sending complete checkout action"), orderDetails;
       const res = await c.env.runMutation(
         internal.storeFront.checkoutSession.updateCheckoutSession,
         {
@@ -135,6 +135,19 @@ checkoutRoutes.post("/:checkoutSessionId", async (c) => {
         api.storeFront.checkoutSession.cancelOrder,
         {
           id: checkoutSessionId as Id<"checkoutSession">,
+        }
+      );
+
+      return c.json(res);
+    }
+
+    if (action == "update-order") {
+      const res = await c.env.runMutation(
+        internal.storeFront.checkoutSession.updateCheckoutSession,
+        {
+          id: checkoutSessionId as Id<"checkoutSession">,
+          placedOrderId,
+          hasCompletedCheckoutSession,
         }
       );
 

@@ -6,18 +6,25 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { motion } from "framer-motion";
 import { useGetActiveCheckoutSession } from "@/hooks/useGetActiveCheckoutSession";
-import { CheckoutCompleted } from "@/components/states/checkout-expired/CheckoutExpired";
+import {
+  CheckoutCompleted,
+  UnableToVerifyCheckoutPayment,
+} from "@/components/states/checkout-expired/CheckoutExpired";
 
 export const Route = createFileRoute("/shop/checkout/verify/")({
   component: () => <Verify />,
 });
 
 const Verify = () => {
-  const { userId, storeId, organizationId } = useStoreContext();
+  const { userId } = useStoreContext();
 
-  const externalReference = new URLSearchParams(window.location.search).get(
-    "reference"
-  );
+  const navigate = useNavigate();
+
+  const { data: session, isLoading } = useGetActiveCheckoutSession();
+
+  const externalReference =
+    new URLSearchParams(window.location.search).get("reference") ||
+    session?.externalReference;
 
   const { data } = useQuery({
     queryKey: ["verified-payment"],
@@ -28,17 +35,18 @@ const Verify = () => {
     enabled: Boolean(userId && externalReference),
   });
 
-  const navigate = useNavigate();
-
   useEffect(() => {
-    if (data?.verified) {
-      navigate({ to: "/shop/checkout/complete" });
+    if (data) {
+      if (data.verified || session?.placedOrderId)
+        navigate({ to: "/shop/checkout/complete" });
     }
-  }, [data]);
-
-  const { data: session, isLoading } = useGetActiveCheckoutSession();
+  }, [data, session]);
 
   if (isLoading || session === undefined) return null;
+
+  if (!externalReference || data?.verified === false) {
+    return <UnableToVerifyCheckoutPayment />;
+  }
 
   if (session === null) {
     return <CheckoutCompleted />;

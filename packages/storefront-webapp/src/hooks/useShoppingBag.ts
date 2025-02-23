@@ -9,7 +9,7 @@ import {
   updateSavedBagItem,
 } from "@/api/savedBag";
 import { useStoreContext } from "@/contexts/StoreContext";
-import { bagQueries } from "@/lib/queries/bag";
+import { useBagQueries } from "@/lib/queries/bag";
 import { BagItem, ProductSku, SavedBagItem } from "@athena/webapp";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -44,7 +44,7 @@ export const useShoppingBag = () => {
   const [unavailableProducts, setUnavailableProducts] =
     useState<UnavailableProducts>([]);
 
-  const { userId, organizationId, storeId } = useStoreContext();
+  const bagQueries = useBagQueries();
 
   const { data: savedBag } = useQuery(bagQueries.activeSavedBag());
 

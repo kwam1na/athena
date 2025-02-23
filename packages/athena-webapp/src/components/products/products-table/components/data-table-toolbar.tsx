@@ -67,7 +67,8 @@ export function DataTableToolbar<TData>({
           className="pr-2"
         >
           <Button variant="ghost" className="h-8 px-2 lg:px-3 ">
-            <PlusIcon className="h-4 w-4" />
+            <PlusIcon className="h-4 w-4 mr-2" />
+            New product
           </Button>
         </Link>
       </div>

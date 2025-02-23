@@ -1,12 +1,8 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { z, ZodError } from "zod";
-import { billingDetailsSchema } from "./BillingDetails";
-import { deliveryDetailsSchema } from "./DeliveryDetails/schema";
 import { useGetActiveCheckoutSession } from "@/hooks/useGetActiveCheckoutSession";
 import { CheckoutExpired } from "../states/checkout-expired/CheckoutExpired";
 import { useShoppingBag } from "@/hooks/useShoppingBag";
-import { useParams } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
 import { useStoreContext } from "@/contexts/StoreContext";
 import { SESSION_STORAGE_KEY } from "@/lib/constants";
 import { customerDetailsSchema } from "./schemas/customerDetailsSchema";

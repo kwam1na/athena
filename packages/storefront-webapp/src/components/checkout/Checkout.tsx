@@ -4,13 +4,17 @@ import BagSummary from "./BagSummary";
 import { useEffect } from "react";
 import MobileBagSummary from "./MobileBagSummary";
 import { CheckoutForm } from "./CheckoutForm";
-import { CheckoutMissingPayment } from "../states/checkout-expired/CheckoutExpired";
 
 const MainComponent = () => {
   const { activeSession } = useCheckout();
 
   useEffect(() => {
-    if (activeSession.externalReference && activeSession.hasCompletedPayment) {
+    const needsVerification =
+      activeSession.externalReference &&
+      activeSession.hasCompletedPayment &&
+      !activeSession.placedOrderId;
+
+    if (needsVerification) {
       window.open(
         `/shop/checkout/verify?reference=${activeSession.externalReference}`,
         "_self"

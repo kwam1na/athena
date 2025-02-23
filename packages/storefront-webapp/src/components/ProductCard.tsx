@@ -13,14 +13,23 @@ export function ProductCard({
     new Set(product.skus.map((sku) => sku.color))
   ).length;
 
+  const isSoldOut =
+    product.skus?.[0].quantityAvailable === 0 &&
+    product.skus?.[0].inventoryCount === 0;
+
   return (
     <div className="flex flex-col space-y-4">
-      <div className="overflow-hidden">
+      <div className="overflow-hidden relative">
         <img
           alt={`${product?.name} image`}
-          className="aspect-square object-cover rounded"
+          className="aspect-square md:aspect-auto md:w-[300px] md:h-[400px] object-cover rounded"
           src={product?.skus?.[0].images[0]}
         />
+        {isSoldOut && (
+          <div className="font-medium text-xs absolute top-0 left-0 m-2 text-white bg-black bg-opacity-40 rounded-md px-2 py-1">
+            Sold Out
+          </div>
+        )}
       </div>
       <div className="flex flex-col items-start space-y-2">
         <p className="font-medium">{product?.name}</p>
@@ -44,14 +53,22 @@ export function ProductSkuCard({
   sku: ProductSku;
   currencyFormatter: Intl.NumberFormat;
 }) {
+  const isSoldOut = sku.quantityAvailable === 0 && sku.inventoryCount === 0;
+
   return (
     <div className="flex flex-col">
-      <div className="mb-2 overflow-hidden">
+      <div className="mb-2 overflow-hidden relative">
         <img
           alt={`${sku?.productName} image`}
-          className="aspect-square object-cover rounded"
+          className="aspect-square md:aspect-auto md:w-[300px] md:h-[400px] object-cover rounded"
           src={sku.images[0]}
         />
+
+        {isSoldOut && (
+          <div className="font-medium text-xs absolute top-0 left-0 m-2 text-white bg-black bg-opacity-40 rounded-md px-2 py-1">
+            Sold Out
+          </div>
+        )}
       </div>
       <div className="text-sm flex flex-col items-start gap-4">
         <p className="font-medium">{sku?.productName}</p>

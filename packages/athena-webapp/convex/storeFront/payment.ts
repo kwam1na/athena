@@ -101,7 +101,7 @@ export const verifyPayment = action({
       const order: OnlineOrder | null = await ctx.runQuery(
         api.storeFront.onlineOrder.get,
         {
-          externalReference: args.externalReference,
+          identifier: args.externalReference,
         }
       );
 
@@ -116,6 +116,10 @@ export const verifyPayment = action({
       });
 
       const discountValue = getDiscountValue(subtotal, discount);
+
+      const baseForDiscount = discount?.type === "percentage" ? 1 : 100;
+
+      const actualDiscount = discountValue * baseForDiscount;
 
       const isVerified = Boolean(
         res.data.status == "success" &&
@@ -177,7 +181,7 @@ export const verifyPayment = action({
                 ? formatter.format(order.deliveryFee)
                 : undefined,
               discount: discountValue
-                ? formatter.format(discountValue / 100)
+                ? formatter.format(actualDiscount / 100)
                 : undefined,
               store_name: "Wigclub",
               order_number: order.orderNumber,

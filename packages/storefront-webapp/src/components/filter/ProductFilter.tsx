@@ -5,17 +5,15 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "../ui/accordion";
-import { getAllColors } from "@/api/color";
 import FilterComponent from "../footer/Filter";
 import { Separator } from "../ui/separator";
 import { useState } from "react";
 import { useGetShopSearchParams } from "../navigation/hooks";
+import { useProductQueries } from "@/lib/queries/product";
 
 export default function ProductFilter() {
-  const { data } = useQuery({
-    queryKey: ["products", "colors"],
-    queryFn: () => getAllColors(),
-  });
+  const productQueries = useProductQueries();
+  const { data } = useQuery(productQueries.colors());
 
   const searchParams = useGetShopSearchParams();
 

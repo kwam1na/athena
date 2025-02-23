@@ -7,20 +7,13 @@ import {
 } from "@tanstack/react-router";
 import { LoadingButton } from "../ui/loading-button";
 import { useShoppingBag } from "@/hooks/useShoppingBag";
-import { BagItem, Product, ProductSku, SavedBagItem } from "@athena/webapp";
-import { Button } from "../ui/button";
-import { capitalizeWords, getProductName } from "@/lib/utils";
+import { BagItem, ProductSku, SavedBagItem } from "@athena/webapp";
+import { getProductName } from "@/lib/utils";
 import { AlertCircleIcon, HeartIcon } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
-import placeholder from "@/assets/placeholder.png";
 import { motion } from "framer-motion";
 
-import {
-  Sheet,
-  SheetContent,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import NotFound from "../states/not-found/NotFound";
 import GalleryViewer from "./GalleryViewer";
 import { useGetProductQuery } from "@/hooks/useGetProduct";
@@ -29,6 +22,7 @@ import { BagProduct, PickupDetails, ShippingPolicy } from "./ProductDetails";
 import { ProductAttribute } from "./ProductAttribute";
 import { Reviews } from "./ProductReviews";
 import { About } from "./About";
+import { Badge } from "../ui/badge";
 
 // Main Product Page Component
 export default function ProductPage() {
@@ -43,7 +37,6 @@ export default function ProductPage() {
     addedItemSuccessfully,
     savedBag,
     addProductToSavedBag,
-    isUpdatingSavedBag,
   } = useShoppingBag();
 
   const [isSheetOpen, setIsSheetOpen] = useState(false);
@@ -180,7 +173,8 @@ export default function ProductPage() {
     return <NotFound />;
   }
 
-  const o = true;
+  const isSoldOut =
+    selectedSku?.quantityAvailable === 0 && selectedSku.inventoryCount === 0;
 
   return (
     <>
@@ -211,9 +205,21 @@ export default function ProductPage() {
             <div className="space-y-16">
               <div className="space-y-6">
                 <p className="text-3xl">{getProductName(selectedSku)}</p>
-                <p className="text-lg text-muted-foreground">
-                  {formatter.format(selectedSku.price)}
-                </p>
+
+                <div className="flex items-center gap-4">
+                  <p className="text-lg text-muted-foreground">
+                    {formatter.format(selectedSku.price)}
+                  </p>
+
+                  {isSoldOut && (
+                    <Badge
+                      variant={"outline"}
+                      className="bg-gray-600 text-gray-50 border-gray-600"
+                    >
+                      Sold Out
+                    </Badge>
+                  )}
+                </div>
               </div>
               <ProductAttribute
                 product={product}
@@ -243,6 +249,7 @@ export default function ProductPage() {
                     className="w-[288px]"
                     isLoading={false}
                     onClick={handleUpdateBag}
+                    disabled={isSoldOut}
                   >
                     {isUpdatingBag ? "Adding to Bag.." : "Add to Bag"}
                   </LoadingButton>
@@ -260,6 +267,7 @@ export default function ProductPage() {
                     variant={"outline"}
                     isLoading={false}
                     onClick={handleUpdateSavedBag}
+                    disabled={isSoldOut}
                     className={`${savedBagItem ? "border-[#EC4683] shadow-md" : ""} hover:shadow-md`}
                   >
                     {!savedBagItem && (

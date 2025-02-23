@@ -18,7 +18,7 @@ import {
 import { WIGLUB_HAIR_STUDIO_LOCATION_URL } from "@/lib/constants";
 import { getDiscountValue } from "@/components/checkout/utils";
 import ImageWithFallback from "@/components/ui/image-with-fallback";
-import { onlineOrderQueries } from "@/lib/queries/onlineOrder";
+import { useOnlineOrderQueries } from "@/lib/queries/onlineOrder";
 
 export const Route = createFileRoute(
   "/_layout/_ordersLayout/shop/orders/$orderId"
@@ -187,6 +187,8 @@ const PickupDetails = ({ order }: { order: any }) => {
 
 const OrderDetail = () => {
   const { orderId } = useParams({ strict: false });
+
+  const onlineOrderQueries = useOnlineOrderQueries();
 
   const { data, isLoading } = useQuery(
     onlineOrderQueries.detail(orderId || "")

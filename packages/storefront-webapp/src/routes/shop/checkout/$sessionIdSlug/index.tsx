@@ -7,7 +7,8 @@ import {
 import { FadeIn } from "@/components/common/FadeIn";
 import { CheckoutSessionGeneric } from "@/components/states/checkout-expired/CheckoutExpired";
 import { LoadingButton } from "@/components/ui/loading-button";
-import { checkoutSessionQueries } from "@/lib/queries/checkout";
+import { useCheckoutSessionQueries } from "@/lib/queries/checkout";
+import { useOnlineOrderQueries } from "@/lib/queries/onlineOrder";
 import { capitalizeFirstLetter } from "@/lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -28,31 +29,65 @@ const CheckoutSession = () => {
 
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [isCancelingOrder, setIsCancelingOrder] = useState(false);
-  const [isError, setIsError] = useState(false);
+  const [error, setError] = useState("");
+
+  const checkoutSessionQueries = useCheckoutSessionQueries();
+
+  const onlineOrderQueries = useOnlineOrderQueries();
 
   const { data: sessionData, isLoading } = useQuery(
     checkoutSessionQueries.session(sessionIdSlug)
   );
+
+  const { data: onlineOrder, isLoading: isLoadingOnlineOrder } = useQuery(
+    onlineOrderQueries.detail(sessionIdSlug!)
+  );
+
+  console.log("onlineOrder", onlineOrder);
 
   const queryClient = useQueryClient();
 
   const placeOrder = async () => {
     if (!sessionData || !sessionIdSlug) return;
 
+    setError("");
+
     try {
       setIsPlacingOrder(true);
 
-      const res = await updateCheckoutSession({
-        action: "place-order",
-        sessionId: sessionIdSlug,
-        hasCompletedCheckoutSession: true,
-      });
+      let res;
 
-      if (res.orderId) {
+      if (onlineOrder) {
+        // the order has already been placed. update the session to reflect this
+        res = await updateCheckoutSession({
+          action: "update-order",
+          sessionId: sessionIdSlug,
+          placedOrderId: onlineOrder._id,
+          hasCompletedCheckoutSession: true,
+        });
+      } else {
+        res = await updateCheckoutSession({
+          action: "place-order",
+          sessionId: sessionIdSlug,
+          hasCompletedCheckoutSession: true,
+        });
+      }
+
+      if (res.orderId || res.success) {
+        queryClient.invalidateQueries({
+          queryKey: [...checkoutSessionQueries.sessionKey(), sessionIdSlug],
+        });
+
+        queryClient.invalidateQueries({
+          queryKey: [...checkoutSessionQueries.pendingSessionsKey()],
+        });
+
         window.location.href = `/shop/checkout/${sessionIdSlug}/complete`;
       }
 
-      setIsError(!res.success);
+      if (!res.success) {
+        setError(res.message);
+      }
 
       setIsPlacingOrder(false);
     } catch (e) {
@@ -64,6 +99,8 @@ const CheckoutSession = () => {
 
   const cancelOrder = async () => {
     if (!sessionData || !sessionIdSlug) return;
+
+    setError("");
 
     try {
       setIsCancelingOrder(true);
@@ -79,13 +116,17 @@ const CheckoutSession = () => {
           queryKey: [...checkoutSessionQueries.sessionKey(), sessionIdSlug],
         });
 
+        queryClient.invalidateQueries({
+          queryKey: [...checkoutSessionQueries.pendingSessionsKey()],
+        });
+
         navigate({
           to: "/shop/checkout/$sessionIdSlug/canceled",
           params: { sessionIdSlug },
         });
+      } else {
+        setError(res.message);
       }
-
-      setIsError(res.success == false);
 
       setIsCancelingOrder(false);
     } catch (e) {
@@ -93,7 +134,7 @@ const CheckoutSession = () => {
     }
   };
 
-  if (!sessionData && isLoading) return null;
+  if ((!sessionData && isLoading) || isLoadingOnlineOrder) return null;
 
   if (!sessionData && !isLoading) {
     return (
@@ -101,7 +142,7 @@ const CheckoutSession = () => {
     );
   }
 
-  if (sessionData.isPaymentRefunded) {
+  if (sessionData?.isPaymentRefunded) {
     return <CheckoutSessionGeneric message="This order has been refunded" />;
   }
 
@@ -134,7 +175,7 @@ const CheckoutSession = () => {
         >
           <p className="text-xs">Your order</p>
 
-          <BagSummaryItems items={sessionData?.items} />
+          {sessionData?.items && <BagSummaryItems items={sessionData?.items} />}
         </motion.div>
 
         <motion.div
@@ -159,7 +200,7 @@ const CheckoutSession = () => {
           }}
           className="space-y-8 pt-8"
         >
-          {isError && (
+          {error && (
             <div className="flex items-center gap-2 text-red-700 ">
               <AlertCircle className="w-4 h-4" />
               <motion.p
@@ -170,8 +211,7 @@ const CheckoutSession = () => {
                 }}
                 className="text-sm"
               >
-                There was an error processing your last request. Please try
-                again.
+                {error}
               </motion.p>
             </div>
           )}

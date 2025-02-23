@@ -31,6 +31,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const { user, userId, guestId } = useAuth();
 
+  // const user = undefined;
+  // const userId = undefined;
+  // const guestId = undefined;
+
   const hiddenNavClassname =
     "hidden w-full flex flex-col items-center justify-center py-2";
   const navClassname =

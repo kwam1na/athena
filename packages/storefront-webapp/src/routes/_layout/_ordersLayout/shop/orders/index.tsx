@@ -6,9 +6,9 @@ import placeholder from "@/assets/placeholder.png";
 import { EmptyState } from "@/components/states/empty/empty-state";
 import { motion } from "framer-motion";
 import { capitalizeFirstLetter, slugToWords } from "@/lib/utils";
-import { getDiscountValue, getOrderAmount } from "@/components/checkout/utils";
+import { getOrderAmount } from "@/components/checkout/utils";
 import ImageWithFallback from "@/components/ui/image-with-fallback";
-import { onlineOrderQueries } from "@/lib/queries/onlineOrder";
+import { useOnlineOrderQueries } from "@/lib/queries/onlineOrder";
 
 export const Route = createFileRoute("/_layout/_ordersLayout/shop/orders/")({
   component: () => <Purchases />,
@@ -89,12 +89,16 @@ const OrderItem = ({
 const Orders = () => {
   const { formatter } = useStoreContext();
 
+  const onlineOrderQueries = useOnlineOrderQueries();
+
   const { data, isLoading } = useQuery(onlineOrderQueries.list());
 
   if (isLoading) return <div className="h-screen"></div>;
 
   if (data?.length === 0) {
-    return <EmptyState message="You haven't placed any orders." />;
+    return (
+      <EmptyState message="No orders yet. Let's change that!" cta="Shop Now" />
+    );
   }
 
   return (
@@ -114,6 +118,8 @@ const Orders = () => {
 };
 
 const Purchases = () => {
+  const onlineOrderQueries = useOnlineOrderQueries();
+
   const { data, isLoading } = useQuery(onlineOrderQueries.list());
 
   if (isLoading) return <div className="h-screen"></div>;

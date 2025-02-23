@@ -26,7 +26,8 @@ import { FadeIn } from "../common/FadeIn";
 import { ArrowRightIcon } from "@radix-ui/react-icons";
 import ImageWithFallback from "../ui/image-with-fallback";
 import { useNavigationBarContext } from "@/contexts/NavigationBarProvider";
-import { checkoutSessionQueries } from "@/lib/queries/checkout";
+import { useCheckoutSessionQueries } from "@/lib/queries/checkout";
+import { useGetActiveCheckoutSession } from "@/hooks/useGetActiveCheckoutSession";
 
 const PendingItem = ({ session, count }: { session: any; count: number }) => {
   return (
@@ -35,7 +36,18 @@ const PendingItem = ({ session, count }: { session: any; count: number }) => {
       animate={{ opacity: 1, y: 0, transition: { ease: easeInOut } }}
       className="flex items-center"
     >
-      <InfoIcon className="w-4 h-4" />
+      <motion.div
+        animate={{
+          scale: [1, 1.2, 1],
+        }}
+        transition={{
+          duration: 1.6,
+          ease: "easeInOut",
+          repeat: Infinity,
+        }}
+      >
+        <InfoIcon className="w-4 h-4" />
+      </motion.div>
       <Link
         to={
           count == 1
@@ -89,6 +101,12 @@ export default function ShoppingBag() {
   const navigate = useNavigate();
 
   const queryClient = useQueryClient();
+
+  const { data: activeSession } = useGetActiveCheckoutSession();
+
+  // console.log("activeSession", activeSession);
+
+  const checkoutSessionQueries = useCheckoutSessionQueries();
 
   const total = bagSubtotal;
 
@@ -154,11 +172,15 @@ export default function ShoppingBag() {
     return unavailableProducts.find((p) => p.productSkuId == skuId);
   };
 
+  const hasPendingOrders = Boolean(
+    pendingSessions && pendingSessions.length > 0
+  );
+
   return (
     <FadeIn className="container mx-auto max-w-[1024px] px-6 xl:px-0 space-y-8 lg:space-y-24 py-8">
       {!isBagEmpty && (
         <div className="space-y-4">
-          {Boolean(pendingSessions && pendingSessions.length > 0) && (
+          {hasPendingOrders && (
             <PendingItem
               session={pendingSessions?.[0]}
               count={pendingSessions?.length || 0}
@@ -177,13 +199,16 @@ export default function ShoppingBag() {
 
       {isBagEmpty && (
         <div className="space-y-8">
-          {Boolean(pendingSessions && pendingSessions.length > 0) && (
+          {hasPendingOrders && (
             <PendingItem
               session={pendingSessions?.[0]}
               count={pendingSessions?.length || 0}
             />
           )}
-          <EmptyState message="Your bag is empty." />
+          <EmptyState
+            message="Your bag is empty. Let's fix that!"
+            cta={"Shop Now"}
+          />
         </div>
       )}
 
@@ -334,6 +359,7 @@ export default function ShoppingBag() {
                       onClick={handleOnCheckoutClick}
                       className={`group w-[240px] text-accent2 ${isUpdatingBag ? "pointer-events-none" : ""}`}
                       variant={"clear"}
+                      disabled={hasPendingOrders}
                     >
                       Checkout
                       <ArrowRight className="w-4 h-4 ml-2 -me-1 ms-2 transition-transform group-hover:translate-x-0.5" />

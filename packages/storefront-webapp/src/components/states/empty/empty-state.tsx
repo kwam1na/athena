@@ -1,12 +1,17 @@
 import { Button } from "@/components/ui/button";
 import { Link } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
+import { ArrowRight } from "lucide-react";
 
 export const EmptyState = ({
   message,
+  cta,
+  ctaDestination,
   showButton = true,
 }: {
   message: string;
+  cta?: string;
+  ctaDestination?: string;
   showButton?: boolean;
 }) => {
   return (
@@ -19,8 +24,11 @@ export const EmptyState = ({
       >
         <p className="text-lg font-medium">{message}</p>
         {showButton && (
-          <Link to="/">
-            <Button className="w-[320px]">Continue Shopping</Button>
+          <Link to="/shop/$categorySlug" params={{ categorySlug: "hair" }}>
+            <Button variant={"clear"} className="px-0 group">
+              {cta || "Continue Shopping"}
+              <ArrowRight className="w-4 h-4 ml-2 -me-1 ms-2 transition-transform group-hover:translate-x-0.5" />
+            </Button>
           </Link>
         )}
       </motion.div>

@@ -1,33 +1,22 @@
-import { Check, Tag } from "lucide-react";
+import { Check, Tag, TriangleAlert } from "lucide-react";
 import View from "../View";
 import { useOnlineOrder } from "~/src/contexts/OnlineOrderContext";
 import { currencyFormatter } from "~/src/lib/utils";
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
 import { Badge } from "../ui/badge";
+import { useQuery } from "convex/react";
+import { api } from "~/convex/_generated/api";
 
 export function OrderDetailsView() {
   const { order } = useOnlineOrder();
   const { activeStore } = useGetActiveStore();
 
+  const isDuplicateQuery = useQuery(
+    api.storeFront.onlineOrder.isDuplicateOrder,
+    order?._id ? { id: order._id } : "skip"
+  );
+
   if (!order || !activeStore) return null;
-
-  const formatter = currencyFormatter(activeStore.currency);
-
-  const amountRefunded =
-    order?.refunds?.reduce((acc, refund) => acc + refund.amount, 0) || 0;
-
-  const isFullyRefunded = amountRefunded === order.amount;
-
-  const isPartiallyRefunded =
-    amountRefunded > 0 && amountRefunded < order.amount;
-
-  const isOrderRefunded = isFullyRefunded || isPartiallyRefunded;
-
-  const refundText = isFullyRefunded
-    ? "Refunded"
-    : isPartiallyRefunded
-      ? "Partially refunded"
-      : "Refund pending";
 
   const { paymentMethod } = order;
 
@@ -46,7 +35,6 @@ export function OrderDetailsView() {
           <div className="flex items-center gap-8">
             <div className="space-y-2">
               <p className="text-sm">{`${paymentMethod?.bank} ${paymentChannel}`}</p>
-              {/* <p className="text-sm text-muted-foreground">Payment channel</p> */}
             </div>
 
             {order.hasVerifiedPayment && (
@@ -68,6 +56,19 @@ export function OrderDetailsView() {
 
           <div className="space-y-4">
             <p className="text-sm">{`Account ending in ${paymentMethod?.last4}`}</p>
+          </div>
+
+          <div className="flex items-center gap-8">
+            <p className="text-sm">
+              Paystack reference <b>{order?.externalReference}</b>
+            </p>
+
+            {isDuplicateQuery && (
+              <Badge variant={"outline"} className="bg-gray-50 text-gray-600">
+                <TriangleAlert className="h-4 w-4 mr-2" />
+                <p className="text-xs">Duplicate order</p>
+              </Badge>
+            )}
           </div>
         </div>
       </div>

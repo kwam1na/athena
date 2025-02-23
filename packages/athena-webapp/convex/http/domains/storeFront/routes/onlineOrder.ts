@@ -25,7 +25,7 @@ onlineOrderRoutes.get("/:orderId", async (c) => {
   const { orderId } = c.req.param();
 
   const order = await c.env.runQuery(api.storeFront.onlineOrder.get, {
-    orderId: orderId as Id<"onlineOrder">,
+    identifier: orderId as Id<"onlineOrder">,
   });
 
   return c.json(order);

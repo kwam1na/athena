@@ -184,7 +184,7 @@ export const sendOrderUpdateEmail = action({
   args: { orderId: v.id("onlineOrder"), newStatus: v.string() },
   handler: async (ctx, args) => {
     const order = await ctx.runQuery(api.storeFront.onlineOrder.get, {
-      orderId: args.orderId,
+      identifier: args.orderId,
     });
 
     if (!order) {
