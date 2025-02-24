@@ -1,6 +1,6 @@
 import config from "@/config";
 import { FilterParams, OrganizationStoreEntityApiParams } from "./types";
-import { Product } from "@athena/webapp";
+import { FeaturedItem, Product } from "@athena/webapp";
 
 type GetParams = OrganizationStoreEntityApiParams & {
   productId: string;
@@ -66,7 +66,7 @@ export async function getBestSellers(): Promise<Product[]> {
   return res;
 }
 
-export async function getFeatured(): Promise<Product[]> {
+export async function getFeatured(): Promise<FeaturedItem[]> {
   const response = await fetch(`${getBaseUrl()}/featured`, {
     credentials: "include",
   });

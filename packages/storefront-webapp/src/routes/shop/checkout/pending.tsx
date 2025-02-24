@@ -1,3 +1,4 @@
+import { CheckoutProvider } from "@/components/checkout/CheckoutProvider";
 import { FadeIn } from "@/components/common/FadeIn";
 import { useStoreContext } from "@/contexts/StoreContext";
 import { useCheckoutSessionQueries } from "@/lib/queries/checkout";
@@ -9,7 +10,7 @@ export const Route = createFileRoute("/shop/checkout/pending")({
   component: () => <PendingOrders />,
 });
 
-const PendingOrders = () => {
+const Pending = () => {
   const { formatter } = useStoreContext();
 
   const checkoutSessionQueries = useCheckoutSessionQueries();
@@ -40,5 +41,13 @@ const PendingOrders = () => {
         })}
       </div>
     </FadeIn>
+  );
+};
+
+const PendingOrders = () => {
+  return (
+    <CheckoutProvider>
+      <Pending />
+    </CheckoutProvider>
   );
 };

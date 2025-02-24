@@ -1,8 +1,6 @@
-import { Discount } from "./CheckoutProvider";
-
 export const getDiscountValue = (
   subtotal: number,
-  discount?: Discount | null
+  discount?: Record<string, any> | null
 ) => {
   return (
     (discount?.type === "percentage"
@@ -17,7 +15,7 @@ export const getOrderAmount = ({
   subtotal,
   inCents,
 }: {
-  discount?: Discount | null;
+  discount?: Record<string, any> | null;
   deliveryFee: number;
   subtotal: number;
   inCents?: boolean;

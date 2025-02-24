@@ -49,7 +49,7 @@ const ProductContext = createContext<ProductContextType | undefined>(undefined);
 
 export function ProductProvider({ children }: { children: ReactNode }) {
   const [productData, setProductData] = useState<Partial<Product>>({
-    availability: "draft" as const,
+    availability: "live" as const,
   });
 
   const [productVariants, updateProductVariants] = useState<ProductVariant[]>([

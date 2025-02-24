@@ -11,6 +11,7 @@ import ImageWithFallback from "./ui/image-with-fallback";
 import { useNavigationBarContext } from "@/contexts/NavigationBarProvider";
 import { HomeHero } from "./home/HomeHero";
 import { useProductQueries } from "@/lib/queries/product";
+import { ArrowRight } from "lucide-react";
 
 function FeaturedProduct({ product }: { product: any }) {
   const { formatter } = useStoreContext();
@@ -205,7 +206,7 @@ export default function HomePage() {
     setAppLocation("home");
   }, []);
 
-  const { formatter } = useStoreContext();
+  const { formatter, store } = useStoreContext();
 
   const bestSellersSorted = bestSellers?.sort(
     (a: any, b: any) => a.rank - b.rank
@@ -215,9 +216,15 @@ export default function HomePage() {
     return bestSeller.productSku;
   });
 
-  const featuredSectionSorted = featured?.sort(
-    (a: any, b: any) => a.rank - b.rank
-  );
+  const featuredSectionSorted = featured
+    ?.sort((a: any, b: any) => a.rank - b.rank)
+    .filter((item: any) => item.type === "regular");
+
+  const shopLookSorted = featured
+    ?.sort((a, b) => (a.rank || 0) - (b.rank || 0))
+    .filter((item) => item.type === "shop_look");
+
+  const shopLookProduct = shopLookSorted?.[0];
 
   const isLoading =
     isLoadingBestSellers || isLoadingFeatured || isLoadingProducts;
@@ -244,9 +251,73 @@ export default function HomePage() {
   return (
     <>
       <div className="overflow-hidden">
-        <div className="space-y-32 pb-32">
-          <div className="relative">
+        <div className="space-y-56 pb-32">
+          <div>
             <HomeHero />
+            <motion.div className="flex flex-col lg:relative">
+              <motion.img
+                initial={{ opacity: 0, y: 16 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.6, delay: 0.8 }}
+                src={store?.config?.showroomImage}
+                className="w-full lg:w-[50%] h-screen object-cover"
+              />
+
+              <motion.div
+                initial={{ opacity: 0 }}
+                whileInView={{ opacity: 1 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.6, delay: 1 }}
+                className="lg:absolute lg:right-[240px] lg:top-1/2 lg:-translate-y-1/2 p-8 rounded-lg"
+              >
+                <div className="flex flex-col items-center gap-16">
+                  <h2 className="text-2xl font-bold text-[hsl(338,81%,45%)] text-center tracking-widest leading-loose">
+                    because{" "}
+                    <span className="font-lavish text-6xl md:text-7xl">
+                      looking good
+                    </span>{" "}
+                    starts with{" "}
+                    <span className="font-lavish text-6xl md:text-7xl">
+                      you
+                    </span>
+                  </h2>
+
+                  <div className="space-y-8">
+                    {/* <p className="text-md font-medium">Shop the look</p> */}
+                    {shopLookProduct?.productId && (
+                      <Link
+                        to="/shop/product/$productSlug"
+                        params={{ productSlug: shopLookProduct.productId }}
+                      >
+                        <Button
+                          variant={"link"}
+                          className="group px-0 items-center"
+                        >
+                          Shop the look
+                          <ArrowRight className="w-4 h-4 mr-2 -me-1 ms-2 transition-transform group-hover:translate-x-0.5" />
+                        </Button>
+                      </Link>
+                    )}
+
+                    {/* <div className="grid grid-cols-2 gap-8 md:gap-16">
+                      {shopLookSorted?.map((data: any) => (
+                        <Link
+                          to="/shop/product/$productSlug"
+                          params={{ productSlug: data.product._id }}
+                          key={data._id}
+                        >
+                          <ProductCard
+                            product={data.product}
+                            currencyFormatter={formatter}
+                          />
+                        </Link>
+                      ))}
+                    </div> */}
+                  </div>
+                </div>
+              </motion.div>
+            </motion.div>
           </div>
 
           <div className="container mx-auto space-y-40 md:space-y-48 pb-8 px-4 lg:px-0">

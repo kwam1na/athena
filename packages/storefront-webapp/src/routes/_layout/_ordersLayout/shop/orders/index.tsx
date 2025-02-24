@@ -5,10 +5,11 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import placeholder from "@/assets/placeholder.png";
 import { EmptyState } from "@/components/states/empty/empty-state";
 import { motion } from "framer-motion";
-import { capitalizeFirstLetter, slugToWords } from "@/lib/utils";
+import { capitalizeFirstLetter, formatDate, slugToWords } from "@/lib/utils";
 import { getOrderAmount } from "@/components/checkout/utils";
 import ImageWithFallback from "@/components/ui/image-with-fallback";
 import { useOnlineOrderQueries } from "@/lib/queries/onlineOrder";
+import { OnlineOrder } from "@athena/webapp";
 
 export const Route = createFileRoute("/_layout/_ordersLayout/shop/orders/")({
   component: () => <Purchases />,
@@ -18,14 +19,14 @@ const OrderItem = ({
   order,
   formatter,
 }: {
-  order: any;
+  order: OnlineOrder;
   formatter: Intl.NumberFormat;
 }) => {
   const subtotal = order.amount / 100 - (order?.deliveryFee || 0);
 
   const amount = getOrderAmount({
     discount: order?.discount,
-    deliveryFee: order?.deliveryFee,
+    deliveryFee: order?.deliveryFee || 0,
     subtotal: order.amount / 100,
   });
 
@@ -39,7 +40,7 @@ const OrderItem = ({
         ) : (
           <strong>{capitalizeFirstLetter(slugToWords(order.status))}</strong>
         )}
-        <p>{new Date(order._creationTime).toDateString()}</p>
+        <p>{formatDate(order._creationTime)}</p>
       </div>
 
       <div className="flex items-center gap-4">
@@ -50,7 +51,7 @@ const OrderItem = ({
       </div>
 
       <div className="hidden md:flex gap-4">
-        {order?.items.slice(0, 3).map((item: any, idx: number) => (
+        {order?.items?.slice(0, 3).map((item: any, idx: number) => (
           <div key={idx} className="h-32 w-32">
             <ImageWithFallback
               src={item.productImage || placeholder}
@@ -59,7 +60,7 @@ const OrderItem = ({
             />
           </div>
         ))}
-        {order?.items.length > 3 && (
+        {order?.items && order?.items?.length > 3 && (
           <div className="h-32 w-32 bg-accent2/40 rounded-sm flex items-center justify-center">
             <span className="text-gray-600">+{order.items.length - 3}</span>
           </div>
@@ -67,16 +68,17 @@ const OrderItem = ({
       </div>
 
       <div className="block md:hidden grid grid-cols-3 gap-4">
-        {order?.items.slice(0, 2).map((item: any, idx: number) => (
-          <div key={idx} className="h-32 w-32">
-            <ImageWithFallback
-              src={item.productImage || placeholder}
-              alt={"product image"}
-              className="aspect-square object-cover rounded-sm"
-            />
-          </div>
-        ))}
-        {order?.items.length > 2 && (
+        {order?.items &&
+          order?.items.slice(0, 2).map((item: any, idx: number) => (
+            <div key={idx} className="h-32 w-32">
+              <ImageWithFallback
+                src={item.productImage || placeholder}
+                alt={"product image"}
+                className="aspect-square object-cover rounded-sm"
+              />
+            </div>
+          ))}
+        {order?.items && order?.items.length > 2 && (
           <div className="h-32 w-32 bg-accent2/40 rounded-sm flex items-center justify-center">
             <span className="text-gray-600">+{order.items.length - 2}</span>
           </div>

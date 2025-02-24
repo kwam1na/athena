@@ -6,4 +6,5 @@ export const featuredItemSchema = v.object({
   subcategoryId: v.optional(v.id("subcategory")),
   storeId: v.id("store"),
   rank: v.optional(v.number()),
+  type: v.optional(v.string()),
 });

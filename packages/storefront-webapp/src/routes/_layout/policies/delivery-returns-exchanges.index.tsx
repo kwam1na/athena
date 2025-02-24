@@ -15,7 +15,7 @@ const OnlineOrderPolicy = () => {
   if (!store) return <div className="h-screen" />;
 
   return (
-    <FadeIn className="container mx-auto max-w-[1024px] h-screen pb-56 py-8 px-6 xl:px-0">
+    <FadeIn className="container mx-auto max-w-[1024px] pb-56 py-8 px-6 xl:px-0">
       <div className="space-y-8">
         <h1 className="text-lg">Deliveries, Returns and Exchanges</h1>
 
@@ -28,7 +28,7 @@ const OnlineOrderPolicy = () => {
         </p>
         <div className="space-y-8 text-sm">
           <div className="space-y-4">
-            <p className="text-md">Deliveries</p>
+            <p className="text-lg">Deliveries</p>
             <ul className="space-y-2">
               <li>
                 <p>
@@ -54,7 +54,7 @@ const OnlineOrderPolicy = () => {
           </div>
 
           <div className="space-y-4">
-            <p className="text-md">Returns</p>
+            <p className="text-lg">Returns</p>
             <ul className="space-y-2">
               <li>
                 <p>
@@ -84,7 +84,7 @@ const OnlineOrderPolicy = () => {
           </div>
 
           <div className="space-y-4">
-            <p className="text-md">Exchanges</p>
+            <p className="text-lg">Exchanges</p>
             <ul className="space-y-2">
               <li>
                 <p>

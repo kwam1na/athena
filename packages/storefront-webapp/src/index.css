@@ -48,8 +48,8 @@ input, textarea, select {
     --muted-foreground: 0 3.8% 0.1%;
     --accent: 240 4.8% 95.9%;
     --accent-foreground: 240 5.9% 10%;
-    --accent-2: 338 81% 65%; /* Updated to match the HSL value in the screenshot */
-    --accent-2-foreground: 240 5.9% 10%;
+    --accent-2: 338 81% 65%;
+    --accent-2-foreground: 338 81% 45%;
     --accent-3: 338 80% 96.5%;
     --accent-4: 338 81% 45%;
     --accent-5: 338 90.9% 95.5%;

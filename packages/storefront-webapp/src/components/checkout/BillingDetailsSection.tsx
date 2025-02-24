@@ -32,12 +32,12 @@ export const BillingDetailsSection = ({ form }: CheckoutFormSectionProps) => {
   const { billingDetails } = form.getValues();
   const { country } = billingDetails || {};
 
-  const clearForm = () => {
+  const clearForm = ({ leaveCountry }: { leaveCountry?: boolean } = {}) => {
     form.setValue("billingDetails.address", "");
     form.setValue("billingDetails.city", "");
     form.setValue("billingDetails.state", "");
     form.setValue("billingDetails.zip", "");
-    form.setValue("billingDetails.country", "");
+    if (!leaveCountry) form.setValue("billingDetails.country", "");
   };
 
   const previousCountryRef = useRef(
@@ -50,8 +50,8 @@ export const BillingDetailsSection = ({ form }: CheckoutFormSectionProps) => {
     const previousCountry = previousCountryRef.current;
 
     if (previousCountry && country !== previousCountry) {
-      clearForm();
-
+      clearForm({ leaveCountry: true });
+      console.log("clearing form");
       // clear the state for delivery and billing details
       updateState({
         billingDetails: { country } as Address,
@@ -216,7 +216,7 @@ export const BillingDetailsSection = ({ form }: CheckoutFormSectionProps) => {
                           const selectedValue = e.target.value;
                           updateState({
                             billingDetails: {
-                              ...checkoutState.deliveryDetails,
+                              ...checkoutState.billingDetails,
                               country: selectedValue,
                             } as Address,
                           });
@@ -362,7 +362,7 @@ export const BillingDetailsSection = ({ form }: CheckoutFormSectionProps) => {
                                 const selectedValue = e.target.value;
                                 updateState({
                                   billingDetails: {
-                                    ...checkoutState.deliveryDetails,
+                                    ...checkoutState.billingDetails,
                                     state: selectedValue,
                                   } as Address,
                                 });

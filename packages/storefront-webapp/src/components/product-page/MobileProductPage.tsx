@@ -19,6 +19,7 @@ import { BagProduct, PickupDetails, ShippingPolicy } from "./ProductDetails";
 import { Reviews } from "./ProductReviews";
 import { About } from "./About";
 import ImageWithFallback from "../ui/image-with-fallback";
+import { Badge } from "../ui/badge";
 
 export default function MobileProductPage() {
   const [isSheetOpen, setIsSheetOpen] = useState(false);
@@ -137,6 +138,9 @@ export default function MobileProductPage() {
     return <NotFound />;
   }
 
+  const isSoldOut =
+    selectedSku?.quantityAvailable === 0 && selectedSku.inventoryCount === 0;
+
   return (
     <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
       <SheetTitle />
@@ -169,9 +173,20 @@ export default function MobileProductPage() {
           <div className="space-y-8">
             <div className="space-y-6">
               <p className="text-xl">{getProductName(selectedSku)}</p>
-              <p className="text-muted-foreground">
-                {formatter.format(selectedSku.price)}
-              </p>
+              <div className="flex items-center gap-4">
+                {isSoldOut && (
+                  <Badge
+                    variant={"outline"}
+                    className="bg-gray-600 text-gray-50 border-gray-600"
+                  >
+                    Sold Out
+                  </Badge>
+                )}
+
+                <p className="text-lg text-muted-foreground">
+                  {formatter.format(selectedSku.price)}
+                </p>
+              </div>
             </div>
             <ProductAttribute
               product={product}
@@ -193,6 +208,7 @@ export default function MobileProductPage() {
                 className="w-[288px]"
                 isLoading={false}
                 onClick={handleUpdateBag}
+                disabled={isSoldOut}
               >
                 {isUpdatingBag ? "Adding to Bag.." : "Add to Bag"}
               </LoadingButton>
@@ -201,6 +217,7 @@ export default function MobileProductPage() {
                 variant={"outline"}
                 isLoading={false}
                 onClick={handleUpdateSavedBag}
+                disabled={isSoldOut}
               >
                 {!savedBagItem && (
                   <HeartIcon className="w-4 h-4 text-muted-foreground" />

@@ -39,6 +39,15 @@ export function currencyFormatter(currency: string) {
   });
 }
 
+export const formatDate = (date: number) => {
+  return new Intl.DateTimeFormat("en-US", {
+    weekday: "short",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  }).format(new Date(date));
+};
+
 export function getStoreDetails() {
   const storeId = localStorage.getItem(STORE_ID_KEY);
   const organizationId = localStorage.getItem(ORGANIZATION_ID_KEY);

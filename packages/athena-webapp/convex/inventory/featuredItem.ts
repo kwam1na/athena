@@ -9,6 +9,7 @@ export const create = mutation({
     productId: v.optional(v.id("product")),
     categoryId: v.optional(v.id("category")),
     subcategoryId: v.optional(v.id("subcategory")),
+    type: v.optional(v.string()),
     storeId: v.id("store"),
   },
   handler: async (ctx, args) => {
@@ -25,7 +26,8 @@ export const create = mutation({
           args.subcategoryId
             ? q.eq(q.field("subcategoryId"), args.subcategoryId)
             : q.eq(1, 1),
-          q.eq(q.field("storeId"), args.storeId)
+          q.eq(q.field("storeId"), args.storeId),
+          q.eq(q.field("type"), args.type)
         );
       })
       .first();
@@ -39,6 +41,7 @@ export const create = mutation({
       categoryId: args.categoryId,
       subcategoryId: args.subcategoryId,
       storeId: args.storeId,
+      type: args.type,
     });
 
     return await ctx.db.get(id);
@@ -68,11 +71,17 @@ export const getById = query({
 export const getAll = query({
   args: {
     storeId: v.id("store"),
+    type: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const items = await ctx.db
       .query(entity)
-      .filter((q) => q.eq(q.field("storeId"), args.storeId))
+      .filter((q) => {
+        return q.and(
+          q.eq(q.field("storeId"), args.storeId),
+          args.type ? q.eq(q.field("type"), args.type) : q.eq(1, 1)
+        );
+      })
       .collect();
 
     const enrichedItems: any[] = await Promise.all(

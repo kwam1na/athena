@@ -18,10 +18,10 @@ const TosSection = ({
 }: TosSectionProps) => {
   return (
     <div className="space-y-4">
-      <p className="text-md font-medium">{`${sectionNumber}. ${sectionTitle}`}</p>
+      <div className="text-md font-medium">{`${sectionNumber}. ${sectionTitle}`}</div>
       <div className="space-y-2">
         {sectionItems.map((item, idx) => (
-          <p key={idx}>{item}</p>
+          <div key={idx}>{item}</div>
         ))}
       </div>
     </div>

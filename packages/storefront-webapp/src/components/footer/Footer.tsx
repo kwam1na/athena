@@ -80,15 +80,16 @@ export function FooterInner() {
   ];
 
   return (
-    <footer className="container mx-auto max-w-[1024px] flex flex-col gap-12 justify-center pb-8 text-xs font-light">
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-8">
+    <footer className="container mx-auto max-w-[1024px] flex flex-col gap-12 justify-center pb-8 text-sm font-light">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-12">
         {linkGroups.map((group, idx) => (
           <LinkGroup key={idx} group={group} />
         ))}
       </div>
-      <div className="flex items-center justify-center w-full">
+      <div className="flex items-center w-full">
         <p>
-          © {new Date().getFullYear()} {store?.name}. All rights reserved.
+          Copyright © {new Date().getFullYear()} {store?.name}. All rights
+          reserved.
         </p>
       </div>
     </footer>

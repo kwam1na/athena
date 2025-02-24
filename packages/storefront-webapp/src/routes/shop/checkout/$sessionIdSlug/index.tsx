@@ -86,7 +86,7 @@ const CheckoutSession = () => {
       }
 
       if (!res.success) {
-        setError(res.message);
+        setError(res.message || "Failed to place order");
       }
 
       setIsPlacingOrder(false);

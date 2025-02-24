@@ -50,3 +50,5 @@ export type PromoCode = Doc<"promoCode">;
 export type PromoCodeItem = Doc<"promoCodeItem">;
 
 export type StoreFrontUser = Doc<"storeFrontUser">;
+
+export type FeaturedItem = Doc<"featuredItem">;

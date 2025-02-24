@@ -9,6 +9,7 @@ import { DeliveryDetails } from "@/components/checkout/DeliveryDetails/DeliveryS
 import {
   CheckoutCompleted,
   CheckoutMissingPayment,
+  UnableToVerifyCheckoutPayment,
 } from "@/components/states/checkout-expired/CheckoutExpired";
 import { Button } from "@/components/ui/button";
 import { LoadingButton } from "@/components/ui/loading-button";
@@ -147,7 +148,7 @@ const CheckoutComplete = () => {
           transition: { ease: "easeOut", duration: 0.4 },
         }}
       >
-        <CheckoutMissingPayment />
+        <UnableToVerifyCheckoutPayment />
       </motion.div>
     );
   }
@@ -245,7 +246,7 @@ const CheckoutComplete = () => {
             opacity: 1,
             transition: { ease: "easeOut", duration: 0.4, delay: 1.5 },
           }}
-          className="flex flex-col gap-4 lg:flex-row pt-8"
+          className="flex flex-col gap-4 md:gap-8 lg:flex-row pt-8"
         >
           <Link to="/">
             <Button variant={"clear"} className="px-0">
@@ -255,7 +256,7 @@ const CheckoutComplete = () => {
 
           {orderId && (
             <Link to="/shop/orders/$orderId" params={{ orderId }}>
-              <Button variant={"link"}>
+              <Button variant={"link"} className="px-0">
                 <p className="w-full text-center">View order</p>
               </Button>
             </Link>

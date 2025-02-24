@@ -207,10 +207,6 @@ export default function ProductPage() {
                 <p className="text-3xl">{getProductName(selectedSku)}</p>
 
                 <div className="flex items-center gap-4">
-                  <p className="text-lg text-muted-foreground">
-                    {formatter.format(selectedSku.price)}
-                  </p>
-
                   {isSoldOut && (
                     <Badge
                       variant={"outline"}
@@ -219,6 +215,10 @@ export default function ProductPage() {
                       Sold Out
                     </Badge>
                   )}
+
+                  <p className="text-lg text-muted-foreground">
+                    {formatter.format(selectedSku.price)}
+                  </p>
                 </div>
               </div>
               <ProductAttribute

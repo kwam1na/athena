@@ -37,7 +37,7 @@ export default function ProductPage() {
       </div>
 
       <div className="w-full space-y-8">
-        <ProductAvailabilityView />
+        {/* <ProductAvailabilityView /> */}
         {category?.name == "Hair" && <WigTypeView />}
         <ProductAttributesView />
       </div>

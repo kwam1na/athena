@@ -10,9 +10,10 @@ import {
   CheckoutCompleted,
   UnableToVerifyCheckoutPayment,
 } from "@/components/states/checkout-expired/CheckoutExpired";
+import { CheckoutProvider } from "@/components/checkout/CheckoutProvider";
 
 export const Route = createFileRoute("/shop/checkout/verify/")({
-  component: () => <Verify />,
+  component: () => <VerifyCheckoutSessionPayment />,
 });
 
 const Verify = () => {
@@ -77,5 +78,13 @@ const Verify = () => {
         </div>
       </motion.div>
     </div>
+  );
+};
+
+const VerifyCheckoutSessionPayment = () => {
+  return (
+    <CheckoutProvider>
+      <Verify />
+    </CheckoutProvider>
   );
 };

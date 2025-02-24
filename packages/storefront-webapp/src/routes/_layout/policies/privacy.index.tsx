@@ -7,7 +7,7 @@ export const Route = createFileRoute("/_layout/policies/privacy/")({
 
 const PrivacyPolicy = () => {
   return (
-    <FadeIn className="container mx-auto max-w-[1024px] pb-56 lg:h-screen py-8 px-6 xl:px-0">
+    <FadeIn className="container mx-auto max-w-[1024px] pb-56 py-8 px-6 xl:px-0">
       <div className="space-y-8">
         <h1 className="text-lg">Privacy Policy</h1>
         <div className="space-y-4 text-sm">

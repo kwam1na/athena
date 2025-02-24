@@ -26,18 +26,18 @@ export const HomeHero = () => {
   return (
     <section className="relative w-full h-screen flex items-center justify-center text-white text-center">
       {/* <motion.img
-          initial={{ opacity: 0, scale: 1.05 }}
-          animate={{
-            opacity: 1,
-            scale: 1,
-            transition: {
-              duration: 1,
-              ease: [0.6, 0.05, 0.01, 0.9],
-            },
-          }}
-          src={store?.config?.showroomImage}
-          className="w-full h-screen object-cover"
-        /> */}
+        initial={{ opacity: 0, scale: 1.05 }}
+        animate={{
+          opacity: 1,
+          scale: 1,
+          transition: {
+            duration: 1,
+            ease: [0.6, 0.05, 0.01, 0.9],
+          },
+        }}
+        src={store?.config?.showroomImage}
+        className="w-full h-screen object-cover"
+      /> */}
 
       {/* Background Video */}
       <motion.video

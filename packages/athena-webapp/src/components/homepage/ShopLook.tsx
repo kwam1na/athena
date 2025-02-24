@@ -14,16 +14,16 @@ import { Link } from "@tanstack/react-router";
 import { Button } from "../ui/button";
 import { TrashIcon } from "@radix-ui/react-icons";
 import { PlusIcon } from "lucide-react";
-import { FeaturedSectionDialog } from "./FeaturedSectionDialog";
+import { ShopLookDialog } from "./ShopLookDialog";
 
-export const FeaturedSection = () => {
+export const ShopLookSection = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
 
   const { activeStore } = useGetActiveStore();
 
   const featuredItemsQuery = useQuery(
     api.inventory.featuredItem.getAll,
-    activeStore?._id ? { storeId: activeStore._id, type: "regular" } : "skip"
+    activeStore?._id ? { storeId: activeStore._id, type: "shop_look" } : "skip"
   );
 
   const [featuredItems, setFeaturedItems] = useState<any[] | null>(null);
@@ -36,6 +36,7 @@ export const FeaturedSection = () => {
       const sortedItems = featuredItemsQuery?.sort(
         (a: any, b: any) => a.rank - b.rank
       );
+
       sortedItems && setFeaturedItems(sortedItems);
     }
   }, [featuredItemsQuery, featuredItems]);
@@ -73,12 +74,9 @@ export const FeaturedSection = () => {
       hideBorder
       hideHeaderBottomBorder
       className="py-4"
-      header={<p className="text-sm text-muted-foreground">Highlighted</p>}
+      header={<p className="text-sm text-muted-foreground">Shop Look</p>}
     >
-      <FeaturedSectionDialog
-        dialogOpen={dialogOpen}
-        setDialogOpen={setDialogOpen}
-      />
+      <ShopLookDialog dialogOpen={dialogOpen} setDialogOpen={setDialogOpen} />
       <div className="py-4 space-y-8">
         <DragDropContext onDragEnd={onDragEnd}>
           <Droppable droppableId="featuredItemsList">
@@ -132,28 +130,6 @@ export const FeaturedSection = () => {
                                 </p>
                               </div>
                             </Link>
-                          )}
-
-                          {featuredItem?.category && (
-                            <div className="flex gap-2 items-center">
-                              <p className="text-sm">
-                                {featuredItem?.category?.name}
-                              </p>
-                              <p className="text-xs text-muted-foreground">
-                                Category
-                              </p>
-                            </div>
-                          )}
-
-                          {featuredItem?.subcategory && (
-                            <div className="flex gap-2 items-center">
-                              <p className="text-sm">
-                                {featuredItem?.subcategory?.name}
-                              </p>
-                              <p className="text-xs text-muted-foreground">
-                                Subcategory
-                              </p>
-                            </div>
                           )}
                         </div>
 

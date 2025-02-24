@@ -1,7 +1,6 @@
 import { useCheckout } from "@/components/checkout/CheckoutProvider";
 import { Button } from "@/components/ui/button";
 import { useGetActiveCheckoutSession } from "@/hooks/useGetActiveCheckoutSession";
-import { ArrowLeftIcon } from "@radix-ui/react-icons";
 import { Link } from "@tanstack/react-router";
 import { ArrowLeft, ArrowRight } from "lucide-react";
 
@@ -83,7 +82,7 @@ export function UnableToVerifyCheckoutPayment() {
     <div className="container mx-auto max-w-[1024px] h-full flex justify-center">
       <div className="flex flex-col gap-16 mt-24 w-[80%]">
         <div className="space-y-4">
-          <p className="text-xl">
+          <p>
             We couldn't find your payment information. Please try again. If this
             continues,{" "}
             <button
@@ -101,7 +100,7 @@ export function UnableToVerifyCheckoutPayment() {
         <div className="flex items-center gap-8">
           <Link to="/shop/bag">
             <Button variant={"clear"} className="group px-0">
-              <ArrowLeft className="w-4 h-4 mr-2 transition-transform group-hover:translate-x-0.5" />
+              <ArrowLeft className="w-4 h-4 mr-2 transition-transform group-hover:-translate-x-0.5" />
               Return to bag
             </Button>
           </Link>
@@ -115,34 +114,6 @@ export function UnableToVerifyCheckoutPayment() {
               Try again
             </Button>
           </Link>
-        </div>
-      </div>
-    </div>
-  );
-}
-export function SendSupportEmail({ supportEmail }: { supportEmail: string }) {
-  const { data: activeSession } = useGetActiveCheckoutSession();
-
-  const handleSendEmail = () => {
-    const subject = "Support Request: Checkout Issue";
-    const body = `Reference: ${activeSession?.externalReference || activeSession?._id}`;
-    const mailtoLink = `mailto:${supportEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-    window.location.href = mailtoLink;
-  };
-
-  return (
-    <div className="container mx-auto max-w-[1024px] h-full flex justify-center">
-      <div className="flex flex-col gap-16 mt-24 w-[80%]">
-        <div className="space-y-4">
-          <p className="text-xl">Need help with your order?</p>
-          <Button
-            onClick={handleSendEmail}
-            variant="clear"
-            className="group px-0"
-          >
-            Contact Support
-            <ArrowRight className="w-4 h-4 ml-2 transition-transform group-hover:translate-x-0.5" />
-          </Button>
         </div>
       </div>
     </div>

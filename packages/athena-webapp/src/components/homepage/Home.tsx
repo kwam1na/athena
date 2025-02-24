@@ -7,6 +7,7 @@ import { FeaturedSection } from "./FeaturedSection";
 import { api } from "~/convex/_generated/api";
 import { EmptyState } from "../states/empty/empty-state";
 import { Store } from "lucide-react";
+import { ShopLookSection } from "./ShopLook";
 
 export default function Home() {
   const { activeStore } = useGetActiveStore();
@@ -39,6 +40,7 @@ export default function Home() {
         <div className="container mx-auto grid grid-cols-2 gap-40">
           <BestSellers />
           <FeaturedSection />
+          <ShopLookSection />
         </div>
       )}
 

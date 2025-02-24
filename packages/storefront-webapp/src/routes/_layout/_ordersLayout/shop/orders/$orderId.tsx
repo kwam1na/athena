@@ -7,7 +7,7 @@ import { Separator } from "@/components/ui/separator";
 import { DeliveryDetails } from "@/components/checkout/DeliveryDetails/DeliverySection";
 import NotFound from "@/components/states/not-found/NotFound";
 import { FadeIn } from "@/components/common/FadeIn";
-import { capitalizeFirstLetter, slugToWords } from "@/lib/utils";
+import { capitalizeFirstLetter, formatDate, slugToWords } from "@/lib/utils";
 import { CircleCheck, Hourglass, RotateCcw, Tag, Truck } from "lucide-react";
 import {
   Breadcrumb,
@@ -284,7 +284,7 @@ const OrderDetail = () => {
 
           <div className="flex items-center justify-between w-full lg:w-[30%]">
             <p>Purchase date</p>
-            <p>{new Date(data._creationTime).toDateString()}</p>
+            <p>{formatDate(data._creationTime)}</p>
           </div>
 
           <div className="flex items-center justify-between w-full lg:w-[30%]">
