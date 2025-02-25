@@ -1,3 +1,4 @@
+export * from "./analytics";
 export * from "./bag";
 export * from "./bagItem";
 export * from "./savedBag";

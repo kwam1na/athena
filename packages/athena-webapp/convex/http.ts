@@ -4,6 +4,7 @@ import { auth } from "./auth";
 import { HonoWithConvex, HttpRouterWithHono } from "convex-helpers/server/hono";
 import { ActionCtx } from "./_generated/server";
 import {
+  analyticsRoutes,
   authRoutes,
   categoryRoutes,
   orgRoutes,
@@ -45,6 +46,8 @@ app.route("/stores", storeRoutes);
 app.route("/storefront", storefrontRoutes);
 
 app.route("/webhooks/paystack", paystackRoutes);
+
+app.route("/analytics", analyticsRoutes);
 
 app.route("/auth", authRoutes);
 

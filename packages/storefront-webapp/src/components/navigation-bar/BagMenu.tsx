@@ -36,7 +36,7 @@ export const BagMenu = ({
   const { navBarLayout, appLocation } = useNavigationBarContext();
 
   const hoverClass =
-    navBarLayout == "sticky" && appLocation == "home"
+    navBarLayout == "sticky" && appLocation == "homepage"
       ? `hover:text-gray-300 ${isMobile ? "" : "text-white"}`
       : "hover:text-gray-500";
 

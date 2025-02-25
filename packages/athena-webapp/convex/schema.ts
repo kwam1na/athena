@@ -34,10 +34,12 @@ import {
   storeFrontUserSchema,
   storeFrontSessionSchema,
   supportTicketSchema,
+  analyticsSchema,
 } from "./schemas/storeFront";
 
 const schema = defineSchema({
   ...authTables,
+  analytics: defineTable(analyticsSchema),
   appVerificationCode: defineTable(appVerificationCodeSchema),
   athenaUser: defineTable(athenaUserSchema),
   bag: defineTable(bagSchema),

@@ -5,7 +5,7 @@ const crons = cronJobs();
 
 crons.interval(
   "release-checkout-items",
-  { minutes: 1 },
+  { minutes: process.env.STAGE == "prod" ? 10 : 60 },
   internal.storeFront.checkoutSession.releaseCheckoutItems,
   {}
 );

@@ -3,7 +3,7 @@ import { getAllSubcategories } from "@/api/subcategory";
 import { queryOptions } from "@tanstack/react-query";
 import { useQueryEnabled } from "@/hooks/useQueryEnabled";
 
-export const inventoryQueries = () => {
+export const useInventoryQueries = () => {
   const queryEnabled = useQueryEnabled();
 
   return {

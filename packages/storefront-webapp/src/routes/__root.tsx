@@ -16,13 +16,13 @@ import {
   NavigationBarProvider,
   useNavigationBarContext,
 } from "@/contexts/NavigationBarProvider";
-import { Root } from "postcss";
 
 const productsPageSchema = z.object({
   color: z.string().optional(),
   length: z.string().optional(),
   checkoutSessionId: z.string().optional(),
   email: z.string().optional(),
+  origin: z.string().optional(),
 });
 
 export const Route = createRootRoute({

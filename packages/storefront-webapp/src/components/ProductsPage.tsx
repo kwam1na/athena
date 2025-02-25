@@ -30,6 +30,8 @@ export default function ProductsPage({
 
   const { filtersCount } = useGetProductFilters();
 
+  const origin = "shop";
+
   if (products?.length == 0 && filtersCount > 0) {
     return (
       <div className="space-y-8 container mx-auto max-w-[1024px] h-screen">
@@ -95,7 +97,7 @@ export default function ProductsPage({
               ...params,
               productSlug: sku.productId,
             })}
-            search={{ variant: sku.sku }}
+            search={{ variant: sku.sku, origin }}
             className="block mb-4"
           >
             <ProductSkuCard sku={sku} currencyFormatter={formatter} />
@@ -111,7 +113,7 @@ export default function ProductsPage({
               ...params,
               productSlug: product?._id,
             })}
-            search={{ variant: product?.skus?.[0].sku }}
+            search={{ variant: product?.skus?.[0].sku, origin }}
             className="block mb-4"
           >
             <ProductCard product={product} currencyFormatter={formatter} />

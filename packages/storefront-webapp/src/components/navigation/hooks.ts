@@ -1,13 +1,13 @@
 import { getAllCategoriesWithSubcategories } from "@/api/category";
 import { getAllSubcategories } from "@/api/subcategory";
 import { useStoreContext } from "@/contexts/StoreContext";
-import { inventoryQueries } from "@/lib/queries/inventory";
+import { useInventoryQueries } from "@/lib/queries/inventory";
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
 
 // value=id and label=name
 export function useGetStoreSubcategories() {
-  const { data } = useQuery(inventoryQueries().subcategories());
+  const { data } = useQuery(useInventoryQueries().subcategories());
 
   const subcategories: Array<{ value: string; label: string }> | undefined =
     data
@@ -18,7 +18,7 @@ export function useGetStoreSubcategories() {
 }
 
 export function useGetStoreCategories() {
-  const { data } = useQuery(inventoryQueries().categories());
+  const { data } = useQuery(useInventoryQueries().categories());
 
   const categories: Array<{ value: string; label: string }> | undefined = data
     ?.map((category) => ({ value: category.slug, label: category.name }))

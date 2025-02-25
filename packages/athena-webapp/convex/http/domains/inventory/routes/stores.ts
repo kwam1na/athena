@@ -3,9 +3,30 @@ import { HonoWithConvex } from "convex-helpers/server/hono";
 import { ActionCtx } from "../../../../_generated/server";
 import { api } from "../../../../_generated/api";
 import { Id } from "../../../../_generated/dataModel";
-import { getStorefrontUserFromRequest } from "../../../utils";
+import {
+  getStoreDataFromRequest,
+  getStorefrontUserFromRequest,
+} from "../../../utils";
 
 const storeRoutes: HonoWithConvex<ActionCtx> = new Hono();
+
+storeRoutes.get("/promoCodes", async (c) => {
+  const { storeId } = getStoreDataFromRequest(c);
+
+  if (!storeId) {
+    return c.json({ error: "Store id missing" }, 404);
+  }
+
+  try {
+    const res = await c.env.runQuery(api.inventory.promoCode.getAll, {
+      storeId: storeId,
+    });
+
+    return c.json(res);
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, 400);
+  }
+});
 
 storeRoutes.get("/:storeId", async (c) => {
   const { storeId } = c.req.param();

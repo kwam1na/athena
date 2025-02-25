@@ -12,6 +12,9 @@ import { useNavigationBarContext } from "@/contexts/NavigationBarProvider";
 import { HomeHero } from "./home/HomeHero";
 import { useProductQueries } from "@/lib/queries/product";
 import { ArrowRight } from "lucide-react";
+import { useTrackEvent } from "@/hooks/useTrackEvent";
+
+const origin = "homepage";
 
 function FeaturedProduct({ product }: { product: any }) {
   const { formatter } = useStoreContext();
@@ -46,7 +49,7 @@ function FeaturedProduct({ product }: { product: any }) {
           <Link
             to="/shop/product/$productSlug"
             params={(params) => ({ ...params, productSlug: product._id })}
-            search={{ variant: product.skus?.[0].sku }}
+            search={{ variant: product.skus?.[0].sku, origin }}
           >
             <Button className="p-0" variant={"link"}>
               <p className="text-xs underline">Shop</p>
@@ -58,7 +61,7 @@ function FeaturedProduct({ product }: { product: any }) {
       <Link
         to="/shop/product/$productSlug"
         params={(params) => ({ ...params, productSlug: product._id })}
-        search={{ variant: product.skus?.[0].sku }}
+        search={{ variant: product.skus?.[0].sku, origin }}
       >
         <ImageWithFallback
           alt={`${product.name} image`}
@@ -88,7 +91,7 @@ function ProductGrid({
             ...params,
             productSlug: product?._id,
           })}
-          search={{ variant: product?.skus?.[0].sku }}
+          search={{ variant: product?.skus?.[0].sku, origin }}
         >
           <ProductCard product={product} currencyFormatter={formatter} />
         </Link>
@@ -115,7 +118,7 @@ function ProductSkuGrid({
             ...params,
             productSlug: product?.productId,
           })}
-          search={{ variant: product?.sku }}
+          search={{ variant: product?.sku, origin }}
         >
           <ProductSkuCard sku={product} currencyFormatter={formatter} />
         </Link>
@@ -145,6 +148,9 @@ function FeaturedSection({ data }: { data: any }) {
                 categorySlug: "hair",
                 subcategorySlug: slug,
               }}
+              search={{
+                origin: "shop_hair",
+              }}
             >
               <Button className="p-0" variant={"link"}>
                 Shop all
@@ -167,7 +173,13 @@ function FeaturedSection({ data }: { data: any }) {
         <div className="space-y-8 lg:space-y-24">
           <ProductGrid products={products} formatter={formatter} />
           <div className="text-sm"></div>
-          <Link to="/shop/$categorySlug" params={{ categorySlug: slug }}>
+          <Link
+            to="/shop/$categorySlug"
+            params={{ categorySlug: slug }}
+            search={{
+              origin: `shop ${slug}`,
+            }}
+          >
             <Button className="p-0" variant={"link"}>
               Shop all
             </Button>
@@ -203,8 +215,12 @@ export default function HomePage() {
 
   useEffect(() => {
     setNavBarLayout("sticky");
-    setAppLocation("home");
+    setAppLocation(origin);
   }, []);
+
+  useTrackEvent({
+    action: "view_homepage",
+  });
 
   const { formatter, store } = useStoreContext();
 
@@ -289,6 +305,9 @@ export default function HomePage() {
                       <Link
                         to="/shop/product/$productSlug"
                         params={{ productSlug: shopLookProduct.productId }}
+                        search={{
+                          origin: "shop_this_look",
+                        }}
                       >
                         <Button
                           variant={"link"}
@@ -342,6 +361,9 @@ export default function HomePage() {
                       to="/shop/$categorySlug"
                       params={{
                         categorySlug: "best-sellers",
+                      }}
+                      search={{
+                        origin: "shop_bestsellers",
                       }}
                     >
                       <Button className="p-0" variant={"link"}>

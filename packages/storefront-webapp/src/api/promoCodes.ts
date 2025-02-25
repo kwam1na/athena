@@ -23,3 +23,18 @@ export async function redeemPromoCode(code: string): Promise<PromoCode> {
 
   return res;
 }
+
+export async function getPromoCodes(): Promise<PromoCode[]> {
+  const response = await fetch(getBaseUrl(), {
+    method: "GET",
+    credentials: "include",
+  });
+
+  const res = await response.json();
+
+  if (!response.ok) {
+    throw new Error("Error getting promo codes");
+  }
+
+  return res;
+}

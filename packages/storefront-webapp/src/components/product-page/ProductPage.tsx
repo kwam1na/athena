@@ -1,10 +1,5 @@
 import { useStoreContext } from "@/contexts/StoreContext";
-import {
-  Link,
-  useNavigate,
-  useParams,
-  useSearch,
-} from "@tanstack/react-router";
+import { useParams, useSearch } from "@tanstack/react-router";
 import { LoadingButton } from "../ui/loading-button";
 import { useShoppingBag } from "@/hooks/useShoppingBag";
 import { BagItem, ProductSku, SavedBagItem } from "@athena/webapp";
@@ -23,6 +18,8 @@ import { ProductAttribute } from "./ProductAttribute";
 import { Reviews } from "./ProductReviews";
 import { About } from "./About";
 import { Badge } from "../ui/badge";
+import { usePostAnalytics } from "@/lib/mutations.ts";
+import { useTrackAction } from "@/hooks/useTrackAction";
 
 // Main Product Page Component
 export default function ProductPage() {
@@ -49,9 +46,11 @@ export default function ProductPage() {
 
   const { data: product, error } = useGetProductQuery(productSlug);
 
-  const { variant } = useSearch({ strict: false });
+  const { variant, origin } = useSearch({ strict: false });
 
   const [selectedSku, setSelectedSku] = useState<ProductSku | null>(null);
+
+  const postAnalytics = usePostAnalytics();
 
   useEffect(() => {
     if (product && variant) {
@@ -122,6 +121,13 @@ export default function ProductPage() {
 
     return () => clearTimeout(t);
   }, [addedItemSuccessfully]);
+
+  useTrackAction({
+    action: "view_product",
+    data: {
+      product: productSlug,
+    },
+  });
 
   const bagItem = bag?.items?.find(
     (item: BagItem) => item.productSku === selectedSku?.sku

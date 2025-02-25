@@ -20,6 +20,7 @@ import type * as constants_countries from "../constants/countries.js";
 import type * as constants_ghana from "../constants/ghana.js";
 import type * as crons from "../crons.js";
 import type * as env from "../env.js";
+import type * as http_domains_inventory_routes_analytics from "../http/domains/inventory/routes/analytics.js";
 import type * as http_domains_inventory_routes_auth from "../http/domains/inventory/routes/auth.js";
 import type * as http_domains_inventory_routes_categories from "../http/domains/inventory/routes/categories.js";
 import type * as http_domains_inventory_routes_colors from "../http/domains/inventory/routes/colors.js";
@@ -72,6 +73,7 @@ import type * as schemas_inventory_promoCode from "../schemas/inventory/promoCod
 import type * as schemas_inventory_redeemedPromoCode from "../schemas/inventory/redeemedPromoCode.js";
 import type * as schemas_inventory_store from "../schemas/inventory/store.js";
 import type * as schemas_inventory_subcategory from "../schemas/inventory/subcategory.js";
+import type * as schemas_storeFront_analytics from "../schemas/storeFront/analytics.js";
 import type * as schemas_storeFront_bag from "../schemas/storeFront/bag.js";
 import type * as schemas_storeFront_bagItem from "../schemas/storeFront/bagItem.js";
 import type * as schemas_storeFront_checkoutSession from "../schemas/storeFront/checkoutSession.js";
@@ -88,6 +90,7 @@ import type * as schemas_storeFront_storeFrontUser from "../schemas/storeFront/s
 import type * as schemas_storeFront_storeFrontVerificationCode from "../schemas/storeFront/storeFrontVerificationCode.js";
 import type * as schemas_storeFront_supportTicket from "../schemas/storeFront/supportTicket.js";
 import type * as sendgrid_index from "../sendgrid/index.js";
+import type * as storeFront_analytics from "../storeFront/analytics.js";
 import type * as storeFront_auth from "../storeFront/auth.js";
 import type * as storeFront_bag from "../storeFront/bag.js";
 import type * as storeFront_bagItem from "../storeFront/bagItem.js";
@@ -119,6 +122,7 @@ declare const fullApi: ApiFromModules<{
   "constants/ghana": typeof constants_ghana;
   crons: typeof crons;
   env: typeof env;
+  "http/domains/inventory/routes/analytics": typeof http_domains_inventory_routes_analytics;
   "http/domains/inventory/routes/auth": typeof http_domains_inventory_routes_auth;
   "http/domains/inventory/routes/categories": typeof http_domains_inventory_routes_categories;
   "http/domains/inventory/routes/colors": typeof http_domains_inventory_routes_colors;
@@ -171,6 +175,7 @@ declare const fullApi: ApiFromModules<{
   "schemas/inventory/redeemedPromoCode": typeof schemas_inventory_redeemedPromoCode;
   "schemas/inventory/store": typeof schemas_inventory_store;
   "schemas/inventory/subcategory": typeof schemas_inventory_subcategory;
+  "schemas/storeFront/analytics": typeof schemas_storeFront_analytics;
   "schemas/storeFront/bag": typeof schemas_storeFront_bag;
   "schemas/storeFront/bagItem": typeof schemas_storeFront_bagItem;
   "schemas/storeFront/checkoutSession": typeof schemas_storeFront_checkoutSession;
@@ -187,6 +192,7 @@ declare const fullApi: ApiFromModules<{
   "schemas/storeFront/storeFrontVerificationCode": typeof schemas_storeFront_storeFrontVerificationCode;
   "schemas/storeFront/supportTicket": typeof schemas_storeFront_supportTicket;
   "sendgrid/index": typeof sendgrid_index;
+  "storeFront/analytics": typeof storeFront_analytics;
   "storeFront/auth": typeof storeFront_auth;
   "storeFront/bag": typeof storeFront_bag;
   "storeFront/bagItem": typeof storeFront_bagItem;

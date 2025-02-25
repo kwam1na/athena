@@ -72,8 +72,7 @@ const PendingItem = ({ session, count }: { session: any; count: number }) => {
 
 export default function ShoppingBag() {
   const [bagAction, setBagAction] = useState<ShoppingBagAction>("idle");
-  const { formatter, userId, organizationId, storeId, isNavbarShowing } =
-    useStoreContext();
+  const { formatter, userId, isNavbarShowing } = useStoreContext();
 
   const { setNavBarLayout, setAppLocation } = useNavigationBarContext();
 
