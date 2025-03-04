@@ -15,10 +15,10 @@ export const getOrderAmount = ({
   subtotal,
 }: {
   discount?: Record<string, any> | null;
-  deliveryFee: number;
+  deliveryFee: number | null;
   subtotal: number;
 }) => {
   const discountValue = getDiscountValue(subtotal, discount);
   const baseForDiscount = discount?.type === "percentage" ? 1 : 100;
-  return subtotal - discountValue * baseForDiscount + deliveryFee * 100;
+  return subtotal - discountValue * baseForDiscount + (deliveryFee || 0) * 100;
 };

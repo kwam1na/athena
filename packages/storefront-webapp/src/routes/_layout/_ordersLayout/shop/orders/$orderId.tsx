@@ -1,6 +1,11 @@
 import { useStoreContext } from "@/contexts/StoreContext";
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, useParams } from "@tanstack/react-router";
+import {
+  createFileRoute,
+  useNavigate,
+  useParams,
+  useSearch,
+} from "@tanstack/react-router";
 import placeholder from "@/assets/placeholder.png";
 import { getProductName } from "@/lib/productUtils";
 import { Separator } from "@/components/ui/separator";
@@ -8,7 +13,14 @@ import { DeliveryDetails } from "@/components/checkout/DeliveryDetails/DeliveryS
 import NotFound from "@/components/states/not-found/NotFound";
 import { FadeIn } from "@/components/common/FadeIn";
 import { capitalizeFirstLetter, formatDate, slugToWords } from "@/lib/utils";
-import { CircleCheck, Hourglass, RotateCcw, Tag, Truck } from "lucide-react";
+import {
+  ArrowLeft,
+  CircleCheck,
+  Hourglass,
+  RotateCcw,
+  Tag,
+  Truck,
+} from "lucide-react";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -19,6 +31,7 @@ import { WIGLUB_HAIR_STUDIO_LOCATION_URL } from "@/lib/constants";
 import { getDiscountValue } from "@/components/checkout/utils";
 import ImageWithFallback from "@/components/ui/image-with-fallback";
 import { useOnlineOrderQueries } from "@/lib/queries/onlineOrder";
+import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute(
   "/_layout/_ordersLayout/shop/orders/$orderId"
@@ -27,16 +40,26 @@ export const Route = createFileRoute(
 });
 
 export function OrderNavigation() {
+  const { origin } = useSearch({ strict: false });
+  const navigate = useNavigate();
+
   return (
-    <Breadcrumb className="container mx-auto xl:px-0 py-2 lg:py-8">
-      <BreadcrumbList>
-        <BreadcrumbItem>
-          <BreadcrumbLink onClick={() => window.history.back()}>
-            <p className="text-xs cursor-pointer">Back</p>
-          </BreadcrumbLink>
-        </BreadcrumbItem>
-      </BreadcrumbList>
-    </Breadcrumb>
+    <div className="container mx-auto xl:px-0 py-2 lg:py-8">
+      <Button
+        className="group px-0"
+        variant={"clear"}
+        onClick={() => {
+          if (origin) {
+            navigate({ to: "/shop/orders" });
+          } else {
+            window.history.back();
+          }
+        }}
+      >
+        <ArrowLeft className="w-4 h-4 mr-2 -me-1 ms-2 transition-transform group-hover:-translate-x-0.5" />
+        <p>All orders</p>
+      </Button>
+    </div>
   );
 }
 
@@ -253,7 +276,7 @@ const OrderDetail = () => {
   return (
     <FadeIn className="space-y-24 lg:space-y-40 py-8 pb-32 w-full">
       <div className="space-y-16">
-        {/* <OrderNavigation /> */}
+        <OrderNavigation />
 
         <div className="space-y-8 text-sm">
           {isOrderOpen ? (

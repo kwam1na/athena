@@ -4,6 +4,7 @@ import BagSummary from "./BagSummary";
 import { useEffect } from "react";
 import MobileBagSummary from "./MobileBagSummary";
 import { CheckoutForm } from "./CheckoutForm";
+import { CheckoutComplete } from "@/routes/shop/checkout/complete.index";
 
 const MainComponent = () => {
   const { activeSession } = useCheckout();

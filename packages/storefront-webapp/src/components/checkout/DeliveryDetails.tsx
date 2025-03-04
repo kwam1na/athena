@@ -26,8 +26,7 @@ import { Plus } from "lucide-react";
 import { CheckoutFormSectionProps } from "./CustomerInfoSection";
 
 export const DeliveryDetailsForm = ({ form }: CheckoutFormSectionProps) => {
-  const { checkoutState, actionsState, updateActionsState, updateState } =
-    useCheckout();
+  const { checkoutState, updateState } = useCheckout();
 
   // const onSubmit = (data: z.infer<typeof deliveryDetailsSchema>) => {
   //   console.log("on submit in delivery details ->", data);

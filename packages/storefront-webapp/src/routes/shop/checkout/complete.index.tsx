@@ -7,6 +7,11 @@ import {
 } from "@/components/checkout/CheckoutProvider";
 import { DeliveryDetails } from "@/components/checkout/DeliveryDetails/DeliverySection";
 import {
+  OrderDetails,
+  PaymentDetails,
+  PickupDetails,
+} from "@/components/checkout/OrderDetails";
+import {
   CheckoutCompleted,
   CheckoutMissingPayment,
   UnableToVerifyCheckoutPayment,
@@ -26,61 +31,8 @@ export const Route = createFileRoute("/shop/checkout/complete/")({
   component: () => <CheckoutCompleteView />,
 });
 
-const PickupDetails = () => {
-  const { checkoutState } = useCheckout();
-
-  if (checkoutState.isPickupOrder) {
-    return (
-      <div className="space-y-8 text-sm">
-        <p className="text-xs">Picking up at</p>
-
-        <div className="space-y-2">
-          <p className="">Wigclub Hair Studio</p>
-          <p className="text-sm text-muted-foreground">
-            2 Jungle Ave., East Legon
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!checkoutState.deliveryDetails) return null;
-
-  return (
-    <div className="space-y-8">
-      <p className="text-xs">Delivering to</p>
-
-      <DeliveryDetails address={checkoutState.deliveryDetails} />
-    </div>
-  );
-};
-
-const PaymentDetails = () => {
-  const { activeSession } = useCheckout();
-
-  if (!activeSession?.paymentMethod) {
-    return null;
-  }
-
-  const { paymentMethod } = activeSession;
-
-  const text =
-    paymentMethod?.channel == "mobile_money"
-      ? `${paymentMethod?.bank} Mobile Money ending in ${paymentMethod?.last4}`
-      : `Card ending in ${paymentMethod?.last4}`;
-
-  return (
-    <div className="space-y-8">
-      <p className="text-xs">Payment</p>
-
-      <p className="text-sm">{text}</p>
-    </div>
-  );
-};
-
-const CheckoutComplete = () => {
+export const CheckoutComplete = () => {
   const { checkoutState, activeSession } = useCheckout();
-  const { userId } = useStoreContext();
   const [orderId, setOrderId] = useState<string | null>(null);
   const [attemptedOrderCreation, setAttemptedOrderCreation] = useState(false);
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
@@ -110,7 +62,7 @@ const CheckoutComplete = () => {
       }
     };
 
-    if (activeSession && userId) {
+    if (activeSession) {
       completeCheckoutSession();
     }
   }, [activeSession]);
@@ -198,14 +150,14 @@ const CheckoutComplete = () => {
           <p className="text-3xl font-light">{`Get excited, ${capitalizeFirstLetter(checkoutState.customerDetails?.firstName || "")}!`}</p>
 
           {checkoutState.isDeliveryOrder && (
-            <p className="text-sm">
+            <p>
               Your order will be processed in 24 - 48 hours. We'll email you
               when it's out for delivery.
             </p>
           )}
 
           {checkoutState.isPickupOrder && (
-            <p className="text-sm">
+            <p>
               Your order will be processed in 24 - 48 hours. We'll email you
               when it's ready for pickup.
             </p>
@@ -221,24 +173,10 @@ const CheckoutComplete = () => {
           }}
           className="space-y-8 w-full lg:w-[40%]"
         >
-          {/* <p className="text-xs">Your order</p> */}
-
           <BagSummaryItems items={checkoutState.bag.items} />
         </motion.div>
 
-        <motion.div
-          initial={{ opacity: 0, y: -4 }}
-          animate={{
-            opacity: 1,
-            y: 0,
-            transition: { ease: "easeOut", duration: 0.8, delay: 1.1 },
-          }}
-          className="grid grid-cols-1 lg:grid-cols-2 w-full lg:w-[80%] gap-8"
-        >
-          <PickupDetails />
-
-          <PaymentDetails />
-        </motion.div>
+        <OrderDetails session={activeSession} delayAnimation />
 
         <motion.div
           initial={{ opacity: 0 }}
@@ -255,7 +193,11 @@ const CheckoutComplete = () => {
           </Link>
 
           {orderId && (
-            <Link to="/shop/orders/$orderId" params={{ orderId }}>
+            <Link
+              to="/shop/orders/$orderId"
+              params={{ orderId }}
+              search={{ origin: "checkout" }}
+            >
               <Button variant={"link"} className="px-0">
                 <p className="w-full text-center">View order</p>
               </Button>

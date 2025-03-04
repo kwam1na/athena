@@ -81,7 +81,7 @@ checkoutRoutes.post("/:checkoutSessionId", async (c) => {
       ) {
         return c.json({
           success: false,
-          message: "Store checkout not available",
+          message: "Store checkout is currently not available",
         });
       }
 

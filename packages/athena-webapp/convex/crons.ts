@@ -10,4 +10,11 @@ crons.interval(
   {}
 );
 
+crons.interval(
+  "clear-abandoned-sessions",
+  { minutes: process.env.STAGE == "prod" ? 30 : 60 },
+  internal.storeFront.checkoutSession.clearAbandonedSessions,
+  {}
+);
+
 export default crons;

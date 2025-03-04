@@ -3,6 +3,7 @@ import { api, internal } from "../_generated/api";
 import { Id } from "../_generated/dataModel";
 import {
   action,
+  internalAction,
   internalMutation,
   mutation,
   MutationCtx,
@@ -58,7 +59,7 @@ export const create = mutation({
     ) {
       return {
         success: false,
-        message: "Store checkout not available",
+        message: "Store checkout is currrently not available",
       };
     }
 
@@ -180,21 +181,56 @@ export const create = mutation({
   },
 });
 
-// Mutation to release held quantities from expired checkout sessions
-export const releaseCheckoutItems = internalMutation({
+export const getAbandonedCheckoutSessions = query({
+  args: {},
   handler: async (ctx) => {
     const now = Date.now();
+    const oneHourAgo = now - 60 * 60 * 1000; // 1 hour in milliseconds
 
-    // 1. Fetch all expired checkout sessions
-    const expiredSessions = await ctx.db
+    return await ctx.db
       .query("checkoutSession")
       .filter((q) =>
         q.and(
-          q.lt(q.field("expiresAt"), now),
-          q.eq(q.field("isFinalizingPayment"), false)
+          q.lt(q.field("expiresAt"), oneHourAgo),
+          q.eq(q.field("isFinalizingPayment"), true),
+          q.eq(q.field("placedOrderId"), undefined)
         )
       )
       .collect();
+  },
+});
+
+// Mutation to release held quantities from expired checkout sessions
+export const releaseCheckoutItems = internalMutation({
+  args: { externalReferences: v.optional(v.array(v.string())) },
+  handler: async (ctx, args) => {
+    let expiredSessions: CheckoutSession[] = [];
+
+    if (args.externalReferences && args.externalReferences.length > 0) {
+      expiredSessions = await ctx.db
+        .query("checkoutSession")
+        .filter((q) =>
+          q.or(
+            ...args.externalReferences!.map((ref) =>
+              q.eq(q.field("externalReference"), ref)
+            )
+          )
+        )
+        .collect();
+    } else {
+      const now = Date.now();
+
+      // 1. Fetch all expired checkout sessions
+      expiredSessions = await ctx.db
+        .query("checkoutSession")
+        .filter((q) =>
+          q.and(
+            q.lt(q.field("expiresAt"), now),
+            q.eq(q.field("isFinalizingPayment"), false)
+          )
+        )
+        .collect();
+    }
 
     if (expiredSessions.length === 0) {
       console.log("No expired sessions found.");
@@ -269,8 +305,7 @@ export const cancelOrder = action({
     const response = await fetch(`https://api.paystack.co/refund`, {
       method: "POST",
       headers: {
-        Authorization:
-          "Bearer sk_test_4460590841638115d8dae604191fdf38844042d0",
+        Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
       },
       body: JSON.stringify({
         transaction: session.externalTransactionId,
@@ -299,6 +334,45 @@ export const cancelOrder = action({
       console.error("Failed to refund payment", response);
       return { success: false, message: "Failed to cancel order." };
     }
+  },
+});
+
+export const clearAbandonedSessions = internalAction({
+  args: {},
+  handler: async (ctx) => {
+    const sessions = await ctx.runQuery(
+      api.storeFront.checkoutSession.getAbandonedCheckoutSessions,
+      {}
+    );
+
+    if (sessions.length === 0) {
+      console.log("No abandoned sessions found.");
+      return { success: false, message: "No abandoned sessions" };
+    }
+
+    const checks = await Promise.all(
+      sessions.map((session) => {
+        return fetch(
+          `https://api.paystack.co/transaction/verify/${session.externalReference}`,
+          {
+            headers: {
+              Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
+            },
+          }
+        );
+      })
+    );
+
+    const responses = await Promise.all(checks.map((check) => check.json()));
+
+    const abandonededBags = responses
+      .filter((r) => r.data.status === "abandoned")
+      .map((r) => r.data.reference);
+
+    await ctx.runMutation(
+      internal.storeFront.checkoutSession.releaseCheckoutItems,
+      { externalReferences: abandonededBags }
+    );
   },
 });
 
@@ -464,6 +538,7 @@ async function handleOrderCreation(
   });
 
   if (orderResponse.success) {
+    console.log("Order created successfully. Clearing user bag.");
     await ctx.runMutation(api.storeFront.bag.clearBag, { id: session.bagId });
   }
 
@@ -605,6 +680,7 @@ async function retrieveActiveCheckoutSession(
           )
         ),
         q.eq(q.field("hasCompletedCheckoutSession"), false)
+        // q.eq(q.field("placedOrderId"), undefined)
         // q.eq(q.field("hasCompletedPayment"), false)
       )
     )

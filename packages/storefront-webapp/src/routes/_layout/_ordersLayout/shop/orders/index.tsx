@@ -22,12 +22,10 @@ const OrderItem = ({
   order: OnlineOrder;
   formatter: Intl.NumberFormat;
 }) => {
-  const subtotal = order.amount / 100 - (order?.deliveryFee || 0);
-
   const amount = getOrderAmount({
     discount: order?.discount,
     deliveryFee: order?.deliveryFee || 0,
-    subtotal: order.amount / 100,
+    subtotal: order.amount,
   });
 
   const isOrderOpen = order.status == "open";
@@ -44,7 +42,7 @@ const OrderItem = ({
       </div>
 
       <div className="flex items-center gap-4">
-        <p>{formatter.format(amount)}</p>
+        <p>{formatter.format(amount / 100)}</p>
         <Link to="/shop/orders/$orderId" params={{ orderId: order._id }}>
           <Button variant={"link"}>View</Button>
         </Link>

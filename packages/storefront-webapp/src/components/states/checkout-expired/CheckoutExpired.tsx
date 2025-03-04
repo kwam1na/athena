@@ -2,7 +2,7 @@ import { useCheckout } from "@/components/checkout/CheckoutProvider";
 import { Button } from "@/components/ui/button";
 import { useGetActiveCheckoutSession } from "@/hooks/useGetActiveCheckoutSession";
 import { Link } from "@tanstack/react-router";
-import { ArrowLeft, ArrowRight } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 
 export function CheckoutExpired() {
   return (
@@ -125,7 +125,7 @@ export function CheckoutCompleted() {
     <div className="container mx-auto max-w-[1024px] h-full flex justify-center">
       <div className="flex flex-col gap-16 mt-24 w-[80%]">
         <div className="space-y-4">
-          <p className="text-xl">Your checkout session is complete</p>
+          <p className="text-2xl">Your checkout session is complete</p>
         </div>
 
         <div className="space-x-12">

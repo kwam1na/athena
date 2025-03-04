@@ -17,7 +17,7 @@ export const createTransaction = action({
     orderDetails: orderDetailsSchema,
   },
   handler: async (ctx, args) => {
-    const amount = getOrderAmount({
+    const amountToCharge = getOrderAmount({
       discount: args.orderDetails.discount,
       deliveryFee: args.orderDetails.deliveryFee || 0,
       subtotal: args.amount,
@@ -29,13 +29,14 @@ export const createTransaction = action({
         method: "POST",
         body: JSON.stringify({
           email: args.customerEmail,
-          amount: amount.toString(),
+          amount: amountToCharge.toString(),
           callback_url: `${appUrl}/shop/checkout/verify`,
           metadata: {
             cancel_action: `${appUrl}/shop/checkout`,
             checkout_session_id: args.checkoutSessionId,
             checkout_session_amount: args.amount.toString(),
             order_details: args.orderDetails,
+            amount_to_charge: amountToCharge.toString(),
           },
         }),
         headers: {
@@ -77,6 +78,10 @@ export const verifyPayment = action({
     externalReference: v.string(),
   },
   handler: async (ctx, args): Promise<any> => {
+    console.log(
+      `verifying payment for session with reference: ${args.externalReference}`
+    );
+
     const response = await fetch(
       `https://api.paystack.co/transaction/verify/${args.externalReference}`,
       {
@@ -210,7 +215,12 @@ export const verifyPayment = action({
         });
 
         console.log(
-          `verified payment for session. [session: ${session?._id}, order: ${order?._id}, customer: ${args.storeFrontUserId}, externalReference: ${args.externalReference}]`
+          `Payment Verification Success | ` +
+            `Session: ${session?._id || "N/A"} | ` +
+            `Order: ${order?._id || "N/A"} | ` +
+            `Amount: ${orderAmountLessDiscounts / 100} | ` +
+            `Customer: ${args.storeFrontUserId} | ` +
+            `Reference: ${args.externalReference}`
         );
       }
 
@@ -222,7 +232,7 @@ export const verifyPayment = action({
 
       return { verified: isVerified };
     } else {
-      console.error("Failed to create transaction", response);
+      console.error("Failed to verify transaction", response);
     }
 
     return {
@@ -243,8 +253,7 @@ export const refundPayment = action({
     const response = await fetch(`https://api.paystack.co/refund`, {
       method: "POST",
       headers: {
-        Authorization:
-          "Bearer sk_test_4460590841638115d8dae604191fdf38844042d0",
+        Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
       },
       body: JSON.stringify({
         transaction: args.externalTransactionId,

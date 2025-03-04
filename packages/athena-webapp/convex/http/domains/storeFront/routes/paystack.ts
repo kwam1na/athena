@@ -11,8 +11,7 @@ paystackRoutes.post("/", async (c) => {
 
   console.log("received payload", payload);
 
-  const { checkout_session_id, checkout_session_amount, order_details } =
-    payload?.data?.metadata || {};
+  const { checkout_session_id, order_details } = payload?.data?.metadata || {};
 
   if (payload?.event == "charge.success" && checkout_session_id) {
     console.log(`charge successful for session: ${checkout_session_id}`);
@@ -23,7 +22,6 @@ paystackRoutes.post("/", async (c) => {
       {
         id: checkout_session_id as Id<"checkoutSession">,
         hasCompletedPayment: true,
-        amount: parseInt(checkout_session_amount),
         externalTransactionId: payload.data.id.toString(),
         paymentMethod: {
           last4: payload?.data?.authorization?.last4,

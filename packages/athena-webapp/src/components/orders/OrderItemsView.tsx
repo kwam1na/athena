@@ -219,8 +219,6 @@ export function OrderItemsView() {
     api.storeFront.onlineOrder.returnAllItemsToStock
   );
 
-  // console.log(order);
-
   const handleRestockAll = async () => {
     if (!order) return;
 

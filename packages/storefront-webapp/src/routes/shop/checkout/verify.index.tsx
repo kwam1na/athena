@@ -17,8 +17,6 @@ export const Route = createFileRoute("/shop/checkout/verify/")({
 });
 
 const Verify = () => {
-  const { userId } = useStoreContext();
-
   const navigate = useNavigate();
 
   const { data: session, isLoading } = useGetActiveCheckoutSession();
@@ -33,12 +31,16 @@ const Verify = () => {
       verifyCheckoutSessionPayment({
         externalReference: externalReference!,
       }),
-    enabled: Boolean(userId && externalReference),
+    enabled: Boolean(externalReference),
   });
 
   useEffect(() => {
     if (data) {
-      if (data.verified || session?.placedOrderId)
+      if (
+        data.verified ||
+        session?.placedOrderId ||
+        session?.hasVerifiedPayment
+      )
         navigate({ to: "/shop/checkout/complete" });
     }
   }, [data, session]);

@@ -1,6 +1,7 @@
 import { updateCheckoutSession } from "@/api/checkoutSession";
 import { BagSummaryItems } from "@/components/checkout/BagSummary";
 import {
+  OrderDetails,
   PaymentDetails,
   PickupDetails,
 } from "@/components/checkout/OrderDetails";
@@ -42,8 +43,6 @@ const CheckoutSession = () => {
   const { data: onlineOrder, isLoading: isLoadingOnlineOrder } = useQuery(
     onlineOrderQueries.detail(sessionIdSlug!)
   );
-
-  console.log("onlineOrder", onlineOrder);
 
   const queryClient = useQueryClient();
 
@@ -159,9 +158,7 @@ const CheckoutSession = () => {
         >
           <p className="text-4xl font-light">{`Almost there, ${capitalizeFirstLetter(sessionData?.customerDetails?.firstName || "")}`}</p>
 
-          <p className="text-sm">
-            Confirm everything looks good to proceed with your order
-          </p>
+          <p>Confirm everything looks good to proceed with your order</p>
         </motion.div>
 
         <motion.div
@@ -178,19 +175,7 @@ const CheckoutSession = () => {
           {sessionData?.items && <BagSummaryItems items={sessionData?.items} />}
         </motion.div>
 
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{
-            opacity: 1,
-            y: 0,
-            transition: { ease: "easeOut" },
-          }}
-          className="grid grid-cols-1 md:grid-cols-2 md:w-[80%]"
-        >
-          <PickupDetails session={sessionData} />
-
-          <PaymentDetails session={sessionData} />
-        </motion.div>
+        <OrderDetails session={sessionData} />
 
         <motion.div
           initial={{ opacity: 0 }}

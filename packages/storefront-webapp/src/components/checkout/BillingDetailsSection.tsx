@@ -51,7 +51,6 @@ export const BillingDetailsSection = ({ form }: CheckoutFormSectionProps) => {
 
     if (previousCountry && country !== previousCountry) {
       clearForm({ leaveCountry: true });
-      console.log("clearing form");
       // clear the state for delivery and billing details
       updateState({
         billingDetails: { country } as Address,

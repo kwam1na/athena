@@ -1,5 +1,6 @@
 import { BagSummaryItems } from "@/components/checkout/BagSummary";
 import {
+  OrderDetails,
   PaymentDetails,
   PickupDetails,
 } from "@/components/checkout/OrderDetails";
@@ -58,14 +59,14 @@ const CheckoutCompleteView = () => {
           <p className="text-4xl font-light">{`Get excited, ${capitalizeFirstLetter(sessionData.customerDetails?.firstName || "")}!`}</p>
 
           {isDeliveryOrder && (
-            <p className="text-sm">
+            <p>
               We're processing your order. You will receive an email once it is
               out for delivery.
             </p>
           )}
 
           {isPickupOrder && (
-            <p className="text-sm">
+            <p>
               We're processing your order. You will receive an email once it is
               ready for pickup.
             </p>
@@ -86,19 +87,7 @@ const CheckoutCompleteView = () => {
           <BagSummaryItems items={sessionData.items} />
         </motion.div>
 
-        <motion.div
-          initial={{ opacity: 0, y: -4 }}
-          animate={{
-            opacity: 1,
-            y: 0,
-            transition: { ease: "easeOut", duration: 0.8, delay: 1.1 },
-          }}
-          className="grid grid-cols-2 w-[80%]"
-        >
-          <PickupDetails session={sessionData} />
-
-          <PaymentDetails session={sessionData} />
-        </motion.div>
+        <OrderDetails session={sessionData} delayAnimation />
 
         <motion.div
           initial={{ opacity: 0 }}
@@ -117,6 +106,7 @@ const CheckoutCompleteView = () => {
           <Link
             to="/shop/orders/$orderId"
             params={{ orderId: sessionData.placedOrderId }}
+            search={{ origin: "checkout" }}
           >
             <Button variant={"link"}>View order</Button>
           </Link>
