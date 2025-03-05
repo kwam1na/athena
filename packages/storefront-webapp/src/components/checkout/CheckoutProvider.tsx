@@ -38,7 +38,7 @@ export type CustomerDetails = {
 
 export const webOrderSchema = z
   .object({
-    billingDetails: baseBillingDetailsSchema,
+    // billingDetails: baseBillingDetailsSchema,
     customerDetails: customerDetailsSchema,
     deliveryMethod: z
       .enum(["pickup", "delivery"])
@@ -54,120 +54,119 @@ export const webOrderSchema = z
     discount: z.record(z.string(), z.any()).nullable(),
   })
   .superRefine((data, ctx) => {
-    const { deliveryFee, deliveryMethod, deliveryDetails, billingDetails } =
-      data;
+    const { deliveryFee, deliveryMethod, deliveryDetails } = data;
 
     if (deliveryMethod == "delivery") {
-      if (!billingDetails) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["billingDetails"],
-          message: "Billing details are required",
-        });
-      }
+      // if (!billingDetails) {
+      //   ctx.addIssue({
+      //     code: z.ZodIssueCode.custom,
+      //     path: ["billingDetails"],
+      //     message: "Billing details are required",
+      //   });
+      // }
 
-      const {
-        address: billingAddress,
-        billingAddressSameAsDelivery,
-        city: billingCity,
-        state: billingState,
-        zip: billingZip,
-        country: billingCountry,
-      } = billingDetails || {};
+      // const {
+      //   address: billingAddress,
+      //   billingAddressSameAsDelivery,
+      //   city: billingCity,
+      //   state: billingState,
+      //   zip: billingZip,
+      //   country: billingCountry,
+      // } = billingDetails || {};
 
-      const isUSBillingAddress = billingCountry == "US";
+      // const isUSBillingAddress = billingCountry == "US";
 
-      if (!billingAddressSameAsDelivery) {
-        if (!billingAddress) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: ["billingDetails", "address"],
-            message: "Address is required",
-          });
-        }
+      // if (!billingAddressSameAsDelivery) {
+      //   if (!billingAddress) {
+      //     ctx.addIssue({
+      //       code: z.ZodIssueCode.custom,
+      //       path: ["billingDetails", "address"],
+      //       message: "Address is required",
+      //     });
+      //   }
 
-        if (billingAddress?.trim().length == 0) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: ["billingDetails", "address"],
-            message: "Address cannot be empty or whitespace",
-          });
-        }
+      //   if (billingAddress?.trim().length == 0) {
+      //     ctx.addIssue({
+      //       code: z.ZodIssueCode.custom,
+      //       path: ["billingDetails", "address"],
+      //       message: "Address cannot be empty or whitespace",
+      //     });
+      //   }
 
-        if (!billingCity) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: ["billingDetails", "city"],
-            message: "City is required",
-          });
-        }
+      //   if (!billingCity) {
+      //     ctx.addIssue({
+      //       code: z.ZodIssueCode.custom,
+      //       path: ["billingDetails", "city"],
+      //       message: "City is required",
+      //     });
+      //   }
 
-        if (billingCity?.trim().length == 0) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: ["billingDetails", "city"],
-            message: "City cannot be empty or whitespace",
-          });
-        }
+      //   if (billingCity?.trim().length == 0) {
+      //     ctx.addIssue({
+      //       code: z.ZodIssueCode.custom,
+      //       path: ["billingDetails", "city"],
+      //       message: "City cannot be empty or whitespace",
+      //     });
+      //   }
 
-        if (!billingCountry) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: ["billingDetails", "country"],
-            message: "Country is required",
-          });
-        }
-      }
+      //   if (!billingCountry) {
+      //     ctx.addIssue({
+      //       code: z.ZodIssueCode.custom,
+      //       path: ["billingDetails", "country"],
+      //       message: "Country is required",
+      //     });
+      //   }
+      // }
 
-      if (billingCountry?.trim().length == 0) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["billingDetails", "country"],
-          message: "Country cannot be empty or whitespace",
-        });
-      }
+      // if (billingCountry?.trim().length == 0) {
+      //   ctx.addIssue({
+      //     code: z.ZodIssueCode.custom,
+      //     path: ["billingDetails", "country"],
+      //     message: "Country cannot be empty or whitespace",
+      //   });
+      // }
 
-      if (isUSBillingAddress) {
-        if (!billingState) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: ["billingDetails", "state"],
-            message: "State is required",
-          });
+      // if (isUSBillingAddress) {
+      //   if (!billingState) {
+      //     ctx.addIssue({
+      //       code: z.ZodIssueCode.custom,
+      //       path: ["billingDetails", "state"],
+      //       message: "State is required",
+      //     });
 
-          if (billingState?.trim().length == 0) {
-            ctx.addIssue({
-              code: z.ZodIssueCode.custom,
-              path: ["billingDetails", "state"],
-              message: "State cannot be empty or whitespace",
-            });
-          }
-        }
+      //     if (billingState?.trim().length == 0) {
+      //       ctx.addIssue({
+      //         code: z.ZodIssueCode.custom,
+      //         path: ["billingDetails", "state"],
+      //         message: "State cannot be empty or whitespace",
+      //       });
+      //     }
+      //   }
 
-        if (!billingZip) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: ["billingDetails", "zip"],
-            message: "Zip is required",
-          });
-        }
+      //   if (!billingZip) {
+      //     ctx.addIssue({
+      //       code: z.ZodIssueCode.custom,
+      //       path: ["billingDetails", "zip"],
+      //       message: "Zip is required",
+      //     });
+      //   }
 
-        if (billingZip?.trim().length == 0) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: ["billingDetails", "zip"],
-            message: "Zip code cannot be empty or whitespace",
-          });
-        }
+      //   if (billingZip?.trim().length == 0) {
+      //     ctx.addIssue({
+      //       code: z.ZodIssueCode.custom,
+      //       path: ["billingDetails", "zip"],
+      //       message: "Zip code cannot be empty or whitespace",
+      //     });
+      //   }
 
-        if (billingZip && !/^\d{5}$/.test(billingZip)) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: ["billingDetails", "zip"],
-            message: "Zip code must be a 5-digit number",
-          });
-        }
-      }
+      //   if (billingZip && !/^\d{5}$/.test(billingZip)) {
+      //     ctx.addIssue({
+      //       code: z.ZodIssueCode.custom,
+      //       path: ["billingDetails", "zip"],
+      //       message: "Zip code must be a 5-digit number",
+      //     });
+      //   }
+      // }
 
       if (!deliveryFee) {
         ctx.addIssue({
@@ -189,7 +188,6 @@ export const webOrderSchema = z
         address,
         city,
         street,
-        houseNumber,
         neighborhood,
         state,
         zip,

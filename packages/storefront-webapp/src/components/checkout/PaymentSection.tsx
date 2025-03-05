@@ -16,7 +16,7 @@ import { CheckoutFormSectionProps } from "./CustomerInfoSection";
 export const PaymentSection = ({ form }: CheckoutFormSectionProps) => {
   const { activeSession, canPlaceOrder, checkoutState } = useCheckout();
 
-  const { store, userId, user } = useStoreContext();
+  const { user } = useStoreContext();
 
   const { updateCheckoutSession, bagSubtotal } = useShoppingBag();
 
@@ -148,7 +148,7 @@ export const PaymentSection = ({ form }: CheckoutFormSectionProps) => {
       className="w-full flex flex-col space-y-12"
     >
       <div className="space-y-12">
-        <motion.div
+        {/* <motion.div
           initial={{ opacity: 0 }}
           animate={{
             opacity: 1,
@@ -162,10 +162,10 @@ export const PaymentSection = ({ form }: CheckoutFormSectionProps) => {
           className="flex items-center"
         >
           <p>Payment</p>
-        </motion.div>
+        </motion.div> */}
 
         {/* {showPayment && <BillingDetailsForm />} */}
-        {showPayment && <BillingDetailsSection form={form} />}
+        {/* {showPayment && <BillingDetailsSection form={form} />} */}
 
         {showProceedSection && (
           <motion.div

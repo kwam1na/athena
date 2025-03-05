@@ -57,6 +57,7 @@ export const createTransaction = action({
             id: args.checkoutSessionId,
             isFinalizingPayment: true,
             externalReference: res.data.reference,
+            orderDetails: args.orderDetails,
           }
         );
       } catch (error) {
@@ -116,7 +117,7 @@ export const verifyPayment = action({
 
       const orderAmountLessDiscounts = getOrderAmount({
         discount,
-        deliveryFee: order?.deliveryFee || 0,
+        deliveryFee: order?.deliveryFee || session?.deliveryFee || 0,
         subtotal,
       });
 

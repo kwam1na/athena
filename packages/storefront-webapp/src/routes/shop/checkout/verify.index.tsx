@@ -47,7 +47,10 @@ const Verify = () => {
 
   if (isLoading || session === undefined) return null;
 
-  if (!externalReference || data?.verified === false) {
+  if (
+    !externalReference ||
+    (data?.verified === false && !session?.hasCompletedPayment)
+  ) {
     return <UnableToVerifyCheckoutPayment />;
   }
 

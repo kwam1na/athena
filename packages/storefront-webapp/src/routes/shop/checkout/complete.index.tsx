@@ -45,7 +45,10 @@ export const CheckoutComplete = () => {
     const completeCheckoutSession = async () => {
       const { data } = webOrderSchema.safeParse(checkoutState);
 
-      if (data && activeSession.hasCompletedPayment) {
+      if (
+        data &&
+        (activeSession.hasCompletedPayment || activeSession.hasVerifiedPayment)
+      ) {
         const res = await updateCheckoutSession({
           action: "complete-checkout",
           sessionId: activeSession._id,
@@ -91,7 +94,7 @@ export const CheckoutComplete = () => {
     }
   };
 
-  if (!activeSession.hasCompletedPayment) {
+  if (!activeSession.hasCompletedPayment && !activeSession.hasVerifiedPayment) {
     return (
       <motion.div
         initial={{ opacity: 0 }}
@@ -106,6 +109,7 @@ export const CheckoutComplete = () => {
   }
 
   if ((!orderId && attemptedOrderCreation) || isPlacingOrder) {
+    console.log("returning issue order");
     return (
       <div className="px-48 pt-24 pb-40 space-y-24">
         <motion.div

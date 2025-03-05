@@ -405,6 +405,7 @@ export const updateCheckoutSession = internalMutation({
       await ctx.db.patch(args.id, patchObject);
 
       const session = await ctx.db.get(args.id);
+
       if (!session) {
         return { success: false, message: "Invalid session." };
       }
@@ -413,7 +414,11 @@ export const updateCheckoutSession = internalMutation({
         return await handlePlaceOrder(ctx, args.id, session);
       }
 
-      if (args.orderDetails && session.hasCompletedPayment) {
+      const shouldPlaceOrder =
+        (session.hasCompletedPayment || session.hasVerifiedPayment) &&
+        !session.placedOrderId;
+
+      if (args.orderDetails && shouldPlaceOrder) {
         return await handleOrderCreation(
           ctx,
           args.id,

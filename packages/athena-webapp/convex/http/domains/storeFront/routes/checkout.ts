@@ -93,6 +93,7 @@ checkoutRoutes.post("/:checkoutSessionId", async (c) => {
           checkoutSessionId: checkoutSessionId as Id<"checkoutSession">,
           orderDetails: {
             ...orderDetails,
+            billingDetails: null,
             deliveryDetails: orderDetails.deliveryDetails ?? null,
           },
         }
@@ -109,6 +110,7 @@ checkoutRoutes.post("/:checkoutSessionId", async (c) => {
           hasCompletedCheckoutSession,
           orderDetails: {
             ...orderDetails,
+            billingDetails: null,
             deliveryDetails: orderDetails.deliveryDetails ?? null,
           },
         }

@@ -68,7 +68,7 @@ function RootComponent() {
 function RootDocument({ children }: { children: React.ReactNode }) {
   return (
     <main>
-      <Toaster position="top-right" expand />
+      <Toaster expand />
       {children}
       <ScrollRestoration />
       <Scripts />

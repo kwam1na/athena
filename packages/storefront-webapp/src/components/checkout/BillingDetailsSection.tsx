@@ -29,36 +29,36 @@ export const BillingDetailsSection = ({ form }: CheckoutFormSectionProps) => {
 
   const { user } = useStoreContext();
 
-  const { billingDetails } = form.getValues();
-  const { country } = billingDetails || {};
+  // const { billingDetails } = form.getValues();
+  // const { country } = billingDetails || {};
 
   const clearForm = ({ leaveCountry }: { leaveCountry?: boolean } = {}) => {
-    form.setValue("billingDetails.address", "");
-    form.setValue("billingDetails.city", "");
-    form.setValue("billingDetails.state", "");
-    form.setValue("billingDetails.zip", "");
-    if (!leaveCountry) form.setValue("billingDetails.country", "");
+    // form.setValue("billingDetails.address", "");
+    // form.setValue("billingDetails.city", "");
+    // form.setValue("billingDetails.state", "");
+    // form.setValue("billingDetails.zip", "");
+    // if (!leaveCountry) form.setValue("billingDetails.country", "");
   };
 
   const previousCountryRef = useRef(
     checkoutState.billingDetails?.country || undefined
   );
 
-  useEffect(() => {
-    // effect to clear state and the form when the country changes
+  // useEffect(() => {
+  //   // effect to clear state and the form when the country changes
 
-    const previousCountry = previousCountryRef.current;
+  //   const previousCountry = previousCountryRef.current;
 
-    if (previousCountry && country !== previousCountry) {
-      clearForm({ leaveCountry: true });
-      // clear the state for delivery and billing details
-      updateState({
-        billingDetails: { country } as Address,
-      });
-    }
+  //   if (previousCountry && country !== previousCountry) {
+  //     clearForm({ leaveCountry: true });
+  //     // clear the state for delivery and billing details
+  //     updateState({
+  //       billingDetails: { country } as Address,
+  //     });
+  //   }
 
-    previousCountryRef.current = country;
-  }, [country]);
+  //   previousCountryRef.current = country;
+  // }, [country]);
 
   useEffect(() => {
     if (!checkoutState.billingDetails) {
@@ -74,30 +74,30 @@ export const BillingDetailsSection = ({ form }: CheckoutFormSectionProps) => {
 
       const { address, city, state, zip, country } = user?.billingAddress || {};
 
-      form.setValue("billingDetails.address", address);
-      form.setValue("billingDetails.city", city);
-      form.setValue("billingDetails.state", state);
-      form.setValue("billingDetails.zip", zip);
-      form.setValue("billingDetails.country", country || "");
+      // form.setValue("billingDetails.address", address);
+      // form.setValue("billingDetails.city", city);
+      // form.setValue("billingDetails.state", state);
+      // form.setValue("billingDetails.zip", zip);
+      // form.setValue("billingDetails.country", country || "");
     }
   };
 
   const toggleSameAsDelivery = (checked: CheckedState) => {
-    updateState({
-      billingDetails: (checked as boolean)
-        ? {
-            ...checkoutState.deliveryDetails!,
-            billingAddressSameAsDelivery: true,
-          }
-        : {
-            address: billingDetails?.address || "",
-            city: billingDetails?.city || "",
-            state: billingDetails?.state || "",
-            zip: billingDetails?.zip || "",
-            country: billingDetails?.country || "",
-            billingAddressSameAsDelivery: false,
-          },
-    });
+    // updateState({
+    //   billingDetails: (checked as boolean)
+    //     ? {
+    //         ...checkoutState.deliveryDetails!,
+    //         billingAddressSameAsDelivery: true,
+    //       }
+    //     : {
+    //         address: billingDetails?.address || "",
+    //         city: billingDetails?.city || "",
+    //         state: billingDetails?.state || "",
+    //         zip: billingDetails?.zip || "",
+    //         country: billingDetails?.country || "",
+    //         billingAddressSameAsDelivery: false,
+    //       },
+    // });
 
     // if the form is in the edit state and the check box is checked, cancel the edit mode
     if (checked) {
@@ -157,7 +157,7 @@ export const BillingDetailsSection = ({ form }: CheckoutFormSectionProps) => {
           }}
           className="space-y-8"
         >
-          <div className="flex flex-col xl:flex-row gap-8">
+          {/* <div className="flex flex-col xl:flex-row gap-8">
             <div className="hidden md:block w-full md:w-[40%]">
               <FormField
                 control={form.control}
@@ -415,7 +415,7 @@ export const BillingDetailsSection = ({ form }: CheckoutFormSectionProps) => {
                 </div>
               </>
             )}
-          </div>
+          </div> */}
         </motion.div>
       )}
     </div>

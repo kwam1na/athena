@@ -24,7 +24,7 @@ export interface CheckoutFormSectionProps {
       deliveryMethod: DeliveryMethod | null;
       customerDetails: CustomerDetails;
       deliveryDetails: Address;
-      billingDetails: BillingAddress;
+      // billingDetails: BillingAddress;
     },
     any,
     undefined

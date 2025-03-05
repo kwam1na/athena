@@ -23,10 +23,13 @@ export const customerDetailsSchema = v.object({
 });
 
 export const orderDetailsSchema = v.object({
-  billingDetails: v.object({
-    ...addressSchema.fields,
-    billingAddressSameAsDelivery: v.optional(v.boolean()),
-  }),
+  billingDetails: v.union(
+    v.object({
+      ...addressSchema.fields,
+      billingAddressSameAsDelivery: v.optional(v.boolean()),
+    }),
+    v.null()
+  ),
   customerDetails: customerDetailsSchema,
   deliveryDetails: v.union(addressSchema, v.null(), v.string()),
   deliveryFee: v.union(v.number(), v.null()),
@@ -40,10 +43,13 @@ export const orderDetailsSchema = v.object({
 export const onlineOrderSchema = v.object({
   amount: v.number(),
   bagId: v.id("bag"),
-  billingDetails: v.object({
-    ...addressSchema.fields,
-    billingAddressSameAsDelivery: v.optional(v.boolean()),
-  }),
+  billingDetails: v.union(
+    v.object({
+      ...addressSchema.fields,
+      billingAddressSameAsDelivery: v.optional(v.boolean()),
+    }),
+    v.null()
+  ),
   checkoutSessionId: v.id("checkoutSession"),
   completedAt: v.optional(v.number()),
   customerDetails: customerDetailsSchema,

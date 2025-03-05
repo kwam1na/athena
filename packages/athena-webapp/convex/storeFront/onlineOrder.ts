@@ -21,10 +21,13 @@ function generateOrderNumber() {
 export const create = mutation({
   args: {
     checkoutSessionId: v.id("checkoutSession"),
-    billingDetails: v.object({
-      ...addressSchema.fields,
-      billingAddressSameAsDelivery: v.optional(v.boolean()),
-    }),
+    billingDetails: v.union(
+      v.object({
+        ...addressSchema.fields,
+        billingAddressSameAsDelivery: v.optional(v.boolean()),
+      }),
+      v.null()
+    ),
     customerDetails: customerDetailsSchema,
     deliveryDetails: v.union(addressSchema, v.null(), v.string()),
     deliveryMethod: v.string(),

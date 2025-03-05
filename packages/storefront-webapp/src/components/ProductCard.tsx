@@ -1,3 +1,4 @@
+import { capitalizeWords } from "@/lib/utils";
 import { Product, ProductSku } from "@athena/webapp";
 
 export function ProductCard({
@@ -32,7 +33,7 @@ export function ProductCard({
         )}
       </div>
       <div className="flex flex-col items-start space-y-2">
-        <p className="font-medium">{product?.name}</p>
+        <p className="font-medium">{capitalizeWords(product?.name)}</p>
         <div className="flex gap-2">
           <p className="text-sm">
             {currencyFormatter.format(product?.skus?.[0].price)}
@@ -71,7 +72,9 @@ export function ProductSkuCard({
         )}
       </div>
       <div className="text-sm flex flex-col items-start gap-4">
-        <p className="font-medium">{sku?.productName}</p>
+        <p className="font-medium">
+          {sku?.productName && capitalizeWords(sku?.productName)}
+        </p>
         <p className="text-xs">{currencyFormatter.format(sku.price)}</p>
       </div>
     </div>
