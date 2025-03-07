@@ -2,6 +2,7 @@ import { getAllCategoriesWithSubcategories } from "@/api/category";
 import { getAllSubcategories } from "@/api/subcategory";
 import { useStoreContext } from "@/contexts/StoreContext";
 import { useInventoryQueries } from "@/lib/queries/inventory";
+import { capitalizeWords } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
 
@@ -35,7 +36,7 @@ export function useGetStoreCategories() {
       const transformedSubcategories = (category as any)?.subcategories
         .map((subcategory: any) => ({
           value: subcategory.slug,
-          label: subcategory.name,
+          label: capitalizeWords(subcategory.name),
         }))
         .sort((a: any, b: any) => a.label.localeCompare(b.label));
 

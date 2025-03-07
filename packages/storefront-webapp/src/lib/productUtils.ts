@@ -1,4 +1,3 @@
-import { ProductSku } from "@athena/webapp";
 import { capitalizeWords } from "./utils";
 
 export const getProductName = (item: any) => {
@@ -7,7 +6,7 @@ export const getProductName = (item: any) => {
     return `${item.length}" ${capitalizeWords(item.colorName)} ${item.productName}`;
   }
 
-  return item.productName || "Unavailable";
+  return capitalizeWords(item.productName) || "Unavailable";
 };
 
 export const sortProduct = (a: any, b: any) => {
