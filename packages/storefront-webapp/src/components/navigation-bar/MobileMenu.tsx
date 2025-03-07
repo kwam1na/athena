@@ -44,7 +44,6 @@ export function MobileMenu({ onCloseClick }: { onCloseClick: () => void }) {
   useEffect(() => {
     // Disable scrolling when component mounts
     document.body.style.overflow = "hidden";
-
     // Re-enable scrolling when component unmounts
     return () => {
       document.body.style.overflow = "unset";
@@ -55,7 +54,7 @@ export function MobileMenu({ onCloseClick }: { onCloseClick: () => void }) {
     <motion.div
       initial="hidden"
       animate="show"
-      className="fixed inset-0 z-50 w-full h-screen bg-background"
+      className="fixed inset-0 z-50 w-full min-h-screen bg-background overflow-y-auto"
     >
       <div className="flex pt-4 px-2">
         {selectedCategory && (
@@ -74,7 +73,7 @@ export function MobileMenu({ onCloseClick }: { onCloseClick: () => void }) {
       </div>
 
       {!selectedCategory && (
-        <div className="flex flex-col gap-8 pt-16 px-12">
+        <div className="flex flex-col gap-8 pt-16 px-12 flex-grow">
           {categories?.map((s) => (
             <motion.div
               variants={categoryItem}
@@ -95,7 +94,7 @@ export function MobileMenu({ onCloseClick }: { onCloseClick: () => void }) {
       {selectedCategory && (
         <motion.div
           variants={subcategoryItem}
-          className="flex flex-col gap-8 pt-16 px-12"
+          className="flex flex-col gap-8 pt-16 pb-24 px-12 flex-grow"
         >
           <Link
             to="/shop/$categorySlug"
