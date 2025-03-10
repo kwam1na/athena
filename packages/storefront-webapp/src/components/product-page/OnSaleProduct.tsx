@@ -25,7 +25,9 @@ export function OnsaleProduct() {
         />
         <div className="space-y-2">
           <p>{getProductName(p)}</p>
-          <p className="text-sm">Included free of charge with your purchase</p>
+          <p className="text-sm">
+            Included <b>free</b> with your purchase
+          </p>
           {/* <LoadingButton
             className="pt-8 px-0"
             variant={"link"}

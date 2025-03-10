@@ -8,11 +8,8 @@ import { motion } from "framer-motion";
 
 export const SiteBanner = () => {
   const { navBarLayout, appLocation } = useNavigationBarContext();
-
   const { formatter } = useStoreContext();
-
   const promoCodeQueries = usePromoCodesQueries();
-
   const { data: promoCodes } = useQuery(promoCodeQueries.getAll());
 
   const textClass =
@@ -25,7 +22,7 @@ export const SiteBanner = () => {
     if (promoCode.discountType === "percentage") {
       return promoCode.span === "selected-products"
         ? `${value}% off select items`
-        : `${value}% off`;
+        : `up to 20% off`;
     } else {
       return promoCode.span === "selected-products"
         ? `${formatter.format(value)} off select items`
@@ -46,21 +43,42 @@ export const SiteBanner = () => {
         delay: appLocation == "homepage" ? 1.85 : 0,
         ease: "easeInOut",
       }}
-      className="w-full py-2 flex items-center justify-center"
+      className={`w-full py-2 overflow-hidden ${textClass}`}
     >
       <div
         className={cn(
-          "flex items-center gap-4 whitespace-nowrap text-xs",
-          textClass
+          "flex items-center whitespace-nowrap text-xs",
+          "md:justify-center",
+          "max-md:w-max max-md:gap-8 max-md:animate-scroll max-md:hover:animate-pause"
         )}
       >
-        <p>
-          <b>SITEWIDE SALE</b>
-        </p>
-        <p>
-          USE PROMO CODE <b>{activePromoCode.code}</b> FOR{" "}
-          <b>{getPromoMessage(activePromoCode).toUpperCase()}</b>
-        </p>
+        {[...Array(2)].map((_, idx) => (
+          <div
+            key={idx}
+            className={cn(
+              "flex gap-4",
+              "md:hidden" // Hide duplicates on medium screens and up
+            )}
+          >
+            <p>
+              <b>SITEWIDE SALE</b>
+            </p>
+            <p>
+              USE PROMO CODE <b>{activePromoCode.code}</b> FOR{" "}
+              <b>{getPromoMessage(activePromoCode).toUpperCase()}</b>
+            </p>
+          </div>
+        ))}
+        {/* Single centered content for medium screens and up */}
+        <div className="hidden md:flex md:gap-4">
+          <p>
+            <b>SITEWIDE SALE</b>
+          </p>
+          <p>
+            USE PROMO CODE <b>{activePromoCode.code}</b> FOR{" "}
+            <b>{getPromoMessage(activePromoCode).toUpperCase()}</b>
+          </p>
+        </div>
       </div>
     </motion.div>
   );

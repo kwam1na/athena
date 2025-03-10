@@ -156,7 +156,7 @@ export default function NavigationBar() {
     <div className="flex flex-col relative">
       <div className={`top-0 w-full z-50 ${mainWrapperlass}`}>
         <AnimatePresence>
-          {/* <SiteBanner /> */}
+          <SiteBanner />
 
           <div key="nav-bar">
             <div className={`w-full ${navBGClass} transition-all ease-out`}>
