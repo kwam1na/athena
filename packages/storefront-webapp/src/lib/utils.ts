@@ -2,6 +2,7 @@ import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { ZodError } from "zod";
 import { ORGANIZATION_ID_KEY, STORE_ID_KEY } from "./constants";
+import { PromoCode } from "@athena/webapp";
 
 export * from "./productUtils";
 

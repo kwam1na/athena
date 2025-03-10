@@ -15,10 +15,13 @@ interface DataTablePaginationProps<TData> {
 export function DataTablePagination<TData>({
   table,
 }: DataTablePaginationProps<TData>) {
+  const count = table.getRowCount();
+  const productsCountLabel = count === 1 ? `1 product` : `${count} products`;
+
   return (
     <div className="flex items-center w-full space-x-6 lg:space-x-8 px-4">
       <div className="flex w-[100px] text-sm font-medium">
-        {table.getRowCount()} products
+        {productsCountLabel}
       </div>
 
       <div className="flex items-center justify-end w-full space-x-6 lg:space-x-8">

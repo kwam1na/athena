@@ -321,6 +321,9 @@ export type Discount = {
   code: string;
   type: "percentage" | "amount";
   value: number;
+  span: "entire-order" | "selected-products";
+  productSkus?: string[];
+  totalDiscount?: number;
 };
 
 type CheckoutState = {

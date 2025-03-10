@@ -28,4 +28,6 @@ export const ORGANIZATION_ID_KEY = "organization_id";
 
 export const STORE_ID_KEY = "store_id";
 
+export const MARKER_KEY = "marker";
+
 export const DEFAULT_STALE_TIME = 2 * 60 * 1000;

@@ -1,13 +1,20 @@
 import config from "@/config";
-import { PromoCode } from "@athena/webapp";
+import { ProductSku, PromoCode } from "@athena/webapp";
 
 const getBaseUrl = () => `${config.apiGateway.URL}/stores/promoCodes`;
 
-export async function redeemPromoCode(code: string): Promise<PromoCode> {
+export async function redeemPromoCode({
+  code,
+  checkoutSessionId,
+}: {
+  code: string;
+  checkoutSessionId: string;
+}): Promise<PromoCode> {
   const response = await fetch(getBaseUrl(), {
     method: "POST",
     body: JSON.stringify({
       code,
+      checkoutSessionId,
     }),
     headers: {
       "Content-Type": "application/json",
@@ -34,6 +41,24 @@ export async function getPromoCodes(): Promise<PromoCode[]> {
 
   if (!response.ok) {
     throw new Error("Error getting promo codes");
+  }
+
+  return res;
+}
+
+export async function getPromoCodeItems(): Promise<ProductSku[]> {
+  const response = await fetch(
+    `${config.apiGateway.URL}/stores/promoCodeItems`,
+    {
+      method: "GET",
+      credentials: "include",
+    }
+  );
+
+  const res = await response.json();
+
+  if (!response.ok) {
+    throw new Error("Error getting promo items");
   }
 
   return res;

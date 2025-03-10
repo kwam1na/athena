@@ -15,6 +15,7 @@ export const promoCodeSchema = v.object({
 
 export const promoCodeItemSchema = v.object({
   promoCodeId: v.id("promoCode"),
+  storeId: v.id("store"),
   productId: v.optional(v.id("product")),
   productSkuId: v.optional(v.id("productSku")),
 });

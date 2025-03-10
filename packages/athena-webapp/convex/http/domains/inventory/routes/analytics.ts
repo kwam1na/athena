@@ -14,10 +14,17 @@ analyticsRoutes.post("/", async (c) => {
 
   const userId = getStorefrontUserFromRequest(c);
 
+  if (!userId) {
+    return c.json({ error: "Customer id missing" }, 400);
+  }
+
+  const userAgent = c.req.header("user-agent") || "";
+  const isMobile = /mobile|android|iphone|ipad|ipod/i.test(userAgent);
+
   const { action, origin, data } = await c.req.json();
 
   if (!storeId || !organizationId) {
-    return c.json({ error: "Store or organization id missing" }, 404);
+    return c.json({ error: "Store or organization id missing" }, 400);
   }
 
   const res = await c.env.runMutation(api.storeFront.analytics.create, {
@@ -26,6 +33,7 @@ analyticsRoutes.post("/", async (c) => {
     origin,
     action,
     data,
+    device: isMobile ? "mobile" : "desktop",
   });
 
   return c.json(res);

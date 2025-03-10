@@ -1,4 +1,3 @@
-import { useState } from "react";
 import View from "../View";
 import {
   Table,
@@ -17,7 +16,7 @@ import { Skeleton } from "../ui/skeleton";
 import { CardFooter } from "../ui/card";
 import { useProduct } from "@/contexts/ProductContext";
 import { ImageFile } from "../ui/image-uploader";
-import { Info, RotateCcw } from "lucide-react";
+import { Info, RotateCcw, TriangleAlert } from "lucide-react";
 import useGetActiveProduct from "@/hooks/useGetActiveProduct";
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
 import {
@@ -26,6 +25,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "../ui/tooltip";
+import { set } from "zod";
 
 export type ProductVariant = {
   id: string;
@@ -56,11 +56,12 @@ const StockHeader = () => {
       }))
     );
   };
+
   return (
     <div className="flex items-center justify-between">
       <p className="text-sm">Variants</p>
       <Button onClick={restock} variant={"ghost"} size={"sm"}>
-        Restock
+        Restock all
       </Button>
     </div>
   );
@@ -137,6 +138,16 @@ function Stock() {
     } else {
       removeProductVariant(variantId);
     }
+  };
+
+  const setOutOfStock = (id: string) => {
+    updateProductVariants((prevVariants) =>
+      prevVariants.map((variant) =>
+        variant.id === id
+          ? { ...variant, quantityAvailable: 0, stock: 0 }
+          : variant
+      )
+    );
   };
 
   const isLastActiveVariant = (index: number) => {
@@ -298,45 +309,62 @@ function Stock() {
                   )}
                 </TableCell>
 
-                {/* <TableCell>
-                  <Label htmlFor={`retail-price-${index}`} className="sr-only">
-                    Retail Price
-                  </Label>
-                  <Input
-                    id={`cost-${index}`}
-                    type="number"
-                    placeholder="999"
-                    onChange={(e) => handleChange(e, variant.id, "cost")}
-                    value={variant.cost || ""}
-                    disabled={variant.markedForDeletion}
-                  />
-                  {error && getErrorForField(error, "unitCost") && (
-                    <p className="text-red-500 text-sm font-medium">
-                      {getErrorForField(error, "unitCost")?.message}
-                    </p>
-                  )}
-                </TableCell> */}
-                {productVariants.length > 1 && (
-                  <TableCell>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() =>
-                        handleDeleteAction(
-                          variant.id,
-                          variant.markedForDeletion
-                        )
-                      }
-                      disabled={isLastActiveVariant(index)}
-                    >
-                      {variant.markedForDeletion ? (
-                        <RotateCcw className="w-4 h-4" />
-                      ) : (
-                        <TrashIcon className="h-4 w-4 text-red-500" />
-                      )}
-                    </Button>
-                  </TableCell>
-                )}
+                <TableCell>
+                  <div className="flex items-center gap-2">
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => setOutOfStock(variant.id)}
+                            disabled={
+                              (variant.quantityAvailable == 0 &&
+                                variant.stock == 0) ||
+                              variant.markedForDeletion
+                            }
+                          >
+                            <TriangleAlert className="w-4 h-4 text-yellow-500" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Set to out of stock</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+
+                    {productVariants.length > 1 && (
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() =>
+                                handleDeleteAction(
+                                  variant.id,
+                                  variant.markedForDeletion
+                                )
+                              }
+                              disabled={isLastActiveVariant(index)}
+                            >
+                              {variant.markedForDeletion ? (
+                                <RotateCcw className="w-4 h-4" />
+                              ) : (
+                                <TrashIcon className="h-4 w-4 text-red-500" />
+                              )}
+                            </Button>
+                          </TooltipTrigger>
+                          {!variant.markedForDeletion && (
+                            <TooltipContent>
+                              <p>Delete</p>
+                            </TooltipContent>
+                          )}
+                        </Tooltip>
+                      </TooltipProvider>
+                    )}
+                  </div>
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>

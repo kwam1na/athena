@@ -12,20 +12,20 @@ function PromoCodeSpanToggleGroup({
   return (
     <ToggleGroup
       type="single"
-      value={"entire-order"}
-      // onValueChange={(value) => {
-      //   setPromoCodeSpan(value as PromoCodeSpan);
-      // }}
+      value={promoCodeSpan}
+      onValueChange={(value) => {
+        setPromoCodeSpan(value as PromoCodeSpan);
+      }}
     >
       <ToggleGroupItem value="entire-order" aria-label="Toggle entire order">
         Entire order
       </ToggleGroupItem>
-      {/* <ToggleGroupItem
+      <ToggleGroupItem
         value="selected-products"
         aria-label="Toggle select products"
       >
         Product
-      </ToggleGroupItem> */}
+      </ToggleGroupItem>
     </ToggleGroup>
   );
 }

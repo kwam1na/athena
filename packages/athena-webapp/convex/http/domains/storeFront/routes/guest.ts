@@ -11,6 +11,8 @@ const guestRoutes: HonoWithConvex<ActionCtx> = new Hono();
 guestRoutes.get("/", async (c) => {
   const guestId = getCookie(c, "guest_id");
 
+  const marker = c.req.query("marker");
+
   if (!guestId) {
     return c.json({ error: "Guest id missing" }, 404);
   }
@@ -23,10 +25,10 @@ guestRoutes.get("/", async (c) => {
     return c.json(guest);
   } catch (e) {
     if ((e as Error).message.includes("ArgumentValidationError")) {
-      const newGuestId = await c.env.runMutation(
-        api.storeFront.guest.create,
-        {}
-      );
+      const newGuestId = await c.env.runMutation(api.storeFront.guest.create, {
+        marker,
+        creationOrigin: "getGuest",
+      });
 
       const g = await c.env.runQuery(api.storeFront.guest.getById, {
         id: newGuestId,
@@ -51,7 +53,7 @@ guestRoutes.get("/", async (c) => {
 
 // Create a new guest
 guestRoutes.post("/", async (c) => {
-  const guest = await c.env.runMutation(api.storeFront.guest.create);
+  const guest = await c.env.runMutation(api.storeFront.guest.create, {});
 
   return c.json({ id: guest });
 });

@@ -12,7 +12,13 @@ export type Category = Doc<"category">;
 
 export type Subcategory = Doc<"subcategory">;
 
-export type ProductSku = Doc<"productSku">;
+export type ProductSku = Doc<"productSku"> & {
+  productCategory?: string;
+  colorName?: string | null;
+  productName?: string;
+  size?: string;
+  length?: number;
+};
 
 export type Product = Doc<"product"> & { skus: ProductSku[] };
 
@@ -23,9 +29,21 @@ export type Bag = Doc<"bag">;
 
 export type SavedBag = Doc<"savedBag">;
 
-export type BagItem = Doc<"bagItem">;
+export type BagItem = Doc<"bagItem"> & {
+  productCategory?: string;
+  colorName?: string;
+  productName?: string;
+  size?: string;
+  length?: number;
+};
 
-export type SavedBagItem = Doc<"savedBagItem">;
+export type SavedBagItem = Doc<"savedBagItem"> & {
+  productCategory?: string;
+  colorName?: string;
+  productName?: string;
+  size?: string;
+  length?: number;
+};
 
 export type Customer = Doc<"customer">;
 

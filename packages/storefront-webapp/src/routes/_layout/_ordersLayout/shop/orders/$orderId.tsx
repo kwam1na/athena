@@ -68,7 +68,8 @@ const OrderSummary = ({ order }: { order: any }) => {
 
   const subtotal = order.amount / 100;
 
-  const discountValue = getDiscountValue(subtotal, order.discount);
+  const discountValue =
+    order.discount?.totalDiscount || getDiscountValue(subtotal, order.discount);
 
   const total = subtotal - discountValue + (order?.deliveryFee || 0);
 
@@ -88,6 +89,9 @@ const OrderSummary = ({ order }: { order: any }) => {
     order.discount?.type === "percentage"
       ? `${order.discount.value}%`
       : `${formatter.format(discountValue)}`;
+
+  const discountSpan =
+    order.discount?.span == "entire-order" ? "entire order" : "select items";
 
   return (
     <div className="space-y-8">
@@ -126,7 +130,7 @@ const OrderSummary = ({ order }: { order: any }) => {
           <div className="flex items-center gap-2">
             <Tag className="w-3 h-3" />
             <strong>
-              {`${order.discount.code} - ${discountText}`} off entire order
+              {`${order.discount.code} - ${discountText}`} off {discountSpan}
             </strong>
           </div>
         )}
@@ -144,6 +148,9 @@ const OrderItem = ({
   item: any;
   formatter: Intl.NumberFormat;
 }) => {
+  const priceLabel = item.price
+    ? formatter.format(item.price * item.quantity)
+    : "Free";
   return (
     <div className="flex gap-8 text-sm">
       <ImageWithFallback
@@ -154,9 +161,7 @@ const OrderItem = ({
 
       <div className="space-y-2 text-sm">
         <p className="text-sm">{getProductName(item)}</p>
-        <p className="text-sm text-muted-foreground">
-          {formatter.format(item.price * item.quantity)}
-        </p>
+        <p className="text-sm text-muted-foreground">{priceLabel}</p>
         <p className="text-xs text-muted-foreground">{`x${item.quantity}`}</p>
       </div>
     </div>

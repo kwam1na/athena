@@ -1,6 +1,7 @@
 import { useStoreContext } from "@/contexts/StoreContext";
 import { Link } from "@tanstack/react-router";
 import { useGetStoreCategories } from "../navigation/hooks";
+import { WIGLUB_HAIR_STUDIO_LOCATION_URL } from "@/lib/constants";
 
 interface FooterLinkGroup {
   header: string;
@@ -24,6 +25,8 @@ function LinkGroup({ group }: { group: FooterLinkGroup }) {
 
 export function FooterInner() {
   const { store } = useStoreContext();
+
+  const { contactInfo } = store?.config || {};
 
   const { categories } = useGetStoreCategories();
 
@@ -85,6 +88,20 @@ export function FooterInner() {
         {linkGroups.map((group, idx) => (
           <LinkGroup key={idx} group={group} />
         ))}
+      </div>
+
+      <div className="space-y-4 text-sm">
+        <div className="space-y-2">
+          <p>{contactInfo?.location}</p>
+          <div>
+            <a
+              href={`tel:${contactInfo?.phoneNumber}`}
+              className="hover:underline font-medium"
+            >
+              {contactInfo?.phoneNumber}
+            </a>
+          </div>
+        </div>
       </div>
       <div className="flex items-center w-full text-xs">
         <p>

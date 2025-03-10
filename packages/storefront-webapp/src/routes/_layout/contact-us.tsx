@@ -38,14 +38,13 @@ const ContactUs = () => {
             <p className="font-medium">Address</p>
 
             <div className="space-y-2">
-              <p>2 Jungle Avenue</p>
-              <p>East Legon, Accra, Ghana</p>
+              <p>{store.config?.contactInfo?.location}</p>
               <div>
                 <a
-                  href="tel:+233249771887"
+                  href={`tel:${store.config?.contactInfo?.phoneNumber}`}
                   className="hover:underline font-medium"
                 >
-                  +233249771887
+                  {store.config?.contactInfo?.phoneNumber}
                 </a>
               </div>
             </div>

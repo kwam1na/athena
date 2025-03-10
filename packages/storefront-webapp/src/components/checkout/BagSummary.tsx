@@ -10,11 +10,13 @@ import placeholder from "@/assets/placeholder.png";
 import { motion } from "framer-motion";
 import { Tag } from "lucide-react";
 import InputWithEndButton from "../ui/input-with-end-button";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { redeemPromoCode } from "@/api/promoCodes";
 import { useAuth } from "@/hooks/useAuth";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { getDiscountValue } from "./utils";
+import { ac } from "dist/assets/vendor-Cnz6qlnH";
+import { usePromoCodesQueries } from "@/lib/queries/promoCode";
 
 function SummaryItem({
   item,
@@ -23,6 +25,19 @@ function SummaryItem({
   item: any;
   formatter: Intl.NumberFormat;
 }) {
+  const promoCodeQueries = usePromoCodesQueries();
+
+  const { data } = useQuery(promoCodeQueries.getAllItems());
+
+  const isDiscounted = data?.some(
+    (productSku) => productSku._id === item.productSkuId
+  );
+
+  const label =
+    isDiscounted && item.price == 0
+      ? "Free"
+      : formatter.format(item.price * item.quantity);
+
   return (
     <div className="flex items-center justify-between">
       <div className="flex items-center space-x-4">
@@ -35,9 +50,7 @@ function SummaryItem({
         </div>
         <div className="space-y-2">
           <p className="text-sm font-medium">{getProductName(item)}</p>
-          <p className="text-xs text-muted-foreground">
-            {formatter.format(item.price * item.quantity)}
-          </p>
+          <p className="text-xs text-muted-foreground">{label}</p>
         </div>
       </div>
       <p className="text-xs text-muted-foreground">{`x ${item.quantity}`}</p>
@@ -62,13 +75,16 @@ export function BagSummaryItems({ items }: { items: ProductSku[] }) {
 function BagSummary() {
   const { formatter } = useStoreContext();
   const { bagSubtotal } = useShoppingBag();
-  const { checkoutState, updateState } = useCheckout();
+  const { checkoutState, updateState, activeSession } = useCheckout();
   const { store } = useStoreContext();
   const { userId, guestId } = useAuth();
   const [code, setCode] = useState("");
   const [invalidMessage, setInvalidMessage] = useState("");
 
-  const discountValue = getDiscountValue(bagSubtotal, checkoutState.discount);
+  const calculatedDiscount = checkoutState.discount?.totalDiscount;
+
+  const discountValue =
+    calculatedDiscount || getDiscountValue(bagSubtotal, checkoutState.discount);
 
   const total = (checkoutState.deliveryFee ?? 0) + bagSubtotal - discountValue;
 
@@ -87,11 +103,17 @@ function BagSummary() {
             code: data.promoCode.code,
             value: data.promoCode.discountValue,
             type: data.promoCode.discountType,
+            span: data.promoCode.span,
+            productSkus: data.promoCode.productSkus,
+            totalDiscount: data.promoCode.totalDiscount,
           },
         });
       } else {
         setInvalidMessage(data.message);
       }
+    },
+    onError: (error) => {
+      setInvalidMessage(error.message);
     },
   });
 
@@ -102,7 +124,10 @@ function BagSummary() {
 
     if (!storeFrontUserId || !store) return;
 
-    redeemPromoCodeMutation.mutate(code);
+    redeemPromoCodeMutation.mutate({
+      code,
+      checkoutSessionId: activeSession._id,
+    });
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -110,6 +135,11 @@ function BagSummary() {
       handleRedeemPromoCode();
     }
   };
+
+  const discountSpan =
+    checkoutState.discount?.span == "entire-order"
+      ? "entire order"
+      : "select items";
 
   return (
     <motion.div className="py-6 bg-background shadow-sm rounded-lg w-[80vw] lg:w-[30vw] space-y-12">
@@ -150,7 +180,9 @@ function BagSummary() {
               <Tag className="w-3.5 h-3.5 mr-2" />
               <p className="text-sm font-medium">
                 {checkoutState.discount?.code} -{" "}
-                <strong>{discountText} off entire order</strong>
+                <strong>
+                  {discountText} off {discountSpan}
+                </strong>
               </p>
             </div>
           )}

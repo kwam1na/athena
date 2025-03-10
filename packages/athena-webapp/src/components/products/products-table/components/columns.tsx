@@ -6,6 +6,7 @@ import { ProductStatus } from "../../../product/ProductStatus";
 import { useQuery } from "convex/react";
 import { api } from "~/convex/_generated/api";
 import { Badge } from "~/src/components/ui/badge";
+import { capitalizeWords } from "~/src/lib/utils";
 
 export const columns: ColumnDef<Product>[] = [
   {
@@ -39,7 +40,7 @@ export const columns: ColumnDef<Product>[] = [
             )}
             <div className="flex items-center gap-4">
               <span className="max-w-[500px] truncate font-medium">
-                {row.getValue("name")}
+                {capitalizeWords(row.getValue("name"))}
               </span>
               <ProductStatus product={row.original} />
             </div>

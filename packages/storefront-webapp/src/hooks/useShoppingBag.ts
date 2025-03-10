@@ -1,4 +1,9 @@
-import { addItemToBag, removeItemFromBag, updateBagItem } from "@/api/bag";
+import {
+  addItemToBag,
+  clearBag,
+  removeItemFromBag,
+  updateBagItem,
+} from "@/api/bag";
 import {
   createCheckoutSession,
   updateCheckoutSession as updateCheckoutSessionAPI,
@@ -10,6 +15,7 @@ import {
 } from "@/api/savedBag";
 import { useStoreContext } from "@/contexts/StoreContext";
 import { useBagQueries } from "@/lib/queries/bag";
+import { usePromoCodesQueries } from "@/lib/queries/promoCode";
 import { BagItem, ProductSku, SavedBagItem } from "@athena/webapp";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -19,6 +25,7 @@ export type ShoppingBagAction =
   | "adding-to-bag"
   | "adding-to-saved-bag"
   | "deleting-from-bag"
+  | "clearing-bag"
   | "deleting-from-saved-bag"
   | "moving-to-saved-bag"
   | "moving-to-bag";
@@ -47,6 +54,12 @@ export const useShoppingBag = () => {
   const bagQueries = useBagQueries();
 
   const { data: savedBag } = useQuery(bagQueries.activeSavedBag());
+
+  const { data: bag } = useQuery(bagQueries.activeBag());
+
+  const promoCodeQueries = usePromoCodesQueries();
+
+  const { data: promoCodeSkus } = useQuery(promoCodeQueries.getAllItems());
 
   const addNewSavedBagItemMutation = useMutation({
     mutationFn: ({
@@ -164,8 +177,6 @@ export const useShoppingBag = () => {
     updateSavedBagItemMutation.isPending ||
     removeSavedBagItemMutation.isPending;
 
-  const { data: bag } = useQuery(bagQueries.activeBag());
-
   const addNewBagItem = useMutation({
     mutationFn: ({
       productId,
@@ -224,6 +235,21 @@ export const useShoppingBag = () => {
     },
   });
 
+  const clearBagMutation = useMutation({
+    mutationFn: () =>
+      clearBag({
+        bagId: bag!._id,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: bagQueries.activeBagKey(),
+      });
+    },
+    onError: () => {
+      setOperationSuccessful(false);
+    },
+  });
+
   const updateBag = async ({
     itemId,
     quantity,
@@ -261,8 +287,33 @@ export const useShoppingBag = () => {
   };
 
   const deleteItemFromBag = async (itemId: string) => {
+    const remainingItems =
+      bag?.items.filter((item) => item._id !== itemId) || [];
+
+    const willHaveOneItemLeft = remainingItems.length === 1;
+
+    if (!willHaveOneItemLeft) {
+      setAction("deleting-from-bag");
+      await removeBagItem.mutateAsync({ itemId });
+      return;
+    }
+
+    const lastItem = remainingItems[0];
+    const isLastItemDiscounted = promoCodeSkus?.some(
+      (sku: ProductSku) => sku._id === lastItem.productSkuId
+    );
+
+    if (isLastItemDiscounted) {
+      await clearBagItems();
+    } else {
+      setAction("deleting-from-bag");
+      await removeBagItem.mutateAsync({ itemId });
+    }
+  };
+
+  const clearBagItems = async () => {
     setAction("deleting-from-bag");
-    await removeBagItem.mutateAsync({ itemId });
+    await clearBagMutation.mutateAsync();
   };
 
   const bagCount =
@@ -423,6 +474,7 @@ export const useShoppingBag = () => {
     bag,
     bagCount,
     bagSubtotal,
+    clearBagItems,
     deleteItemFromBag,
     isUpdatingBag,
     updateBag,

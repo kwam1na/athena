@@ -102,6 +102,19 @@ export async function removeItemFromBag({
   }
 }
 
+// Remove an item from a bag
+export async function clearBag({ bagId }: GetBagItemsParams): Promise<void> {
+  const response = await fetch(`${getBaseUrl()}/${bagId}/items/`, {
+    method: "DELETE",
+    credentials: "include",
+  });
+
+  if (!response.ok) {
+    const res = await response.json();
+    throw new Error(res.error || "Error removing item from bag.");
+  }
+}
+
 export async function updateBagOwner({
   currentOwnerId,
   newOwnerId,

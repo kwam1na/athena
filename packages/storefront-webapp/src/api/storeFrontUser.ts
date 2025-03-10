@@ -1,10 +1,18 @@
 import config from "@/config";
+import { MARKER_KEY } from "@/lib/constants";
 import { Guest, StoreFrontUser } from "@athena/webapp";
 
 const getBaseUrl = () => `${config.apiGateway.URL}`;
 
 export async function getGuest(): Promise<Guest> {
-  const response = await fetch(`${getBaseUrl()}/guests`, {
+  let marker = localStorage.getItem(MARKER_KEY);
+
+  if (!marker) {
+    marker = Math.random().toString(36).substring(7);
+    localStorage.setItem(MARKER_KEY, marker);
+  }
+
+  const response = await fetch(`${getBaseUrl()}/guests?marker=${marker}`, {
     credentials: "include",
   });
 

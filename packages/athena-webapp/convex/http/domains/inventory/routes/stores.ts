@@ -28,6 +28,24 @@ storeRoutes.get("/promoCodes", async (c) => {
   }
 });
 
+storeRoutes.get("/promoCodeItems", async (c) => {
+  const { storeId } = getStoreDataFromRequest(c);
+
+  if (!storeId) {
+    return c.json({ error: "Store id missing" }, 404);
+  }
+
+  try {
+    const res = await c.env.runQuery(api.inventory.promoCode.getAllItems, {
+      storeId: storeId,
+    });
+
+    return c.json(res);
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, 400);
+  }
+});
+
 storeRoutes.get("/:storeId", async (c) => {
   const { storeId } = c.req.param();
   const organizationId = c.req.param("organizationId");
@@ -55,12 +73,13 @@ storeRoutes.post("/promoCodes", async (c) => {
     return c.json({ error: "Customer id missing" }, 404);
   }
 
-  const { code } = await c.req.json();
+  const { code, checkoutSessionId } = await c.req.json();
 
   try {
     const res = await c.env.runMutation(api.inventory.promoCode.redeem, {
       code,
       storeFrontUserId: userId as Id<"storeFrontUser"> | Id<"guest">,
+      checkoutSessionId: checkoutSessionId as Id<"checkoutSession">,
     });
 
     return c.json(res);

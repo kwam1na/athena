@@ -1,12 +1,14 @@
+import { BagItem, ProductSku, SavedBagItem } from "@athena/webapp";
 import { capitalizeWords } from "./utils";
 
-export const getProductName = (item: any) => {
+export const getProductName = (item: ProductSku | BagItem | SavedBagItem) => {
   if (item.productCategory == "Hair") {
-    if (!item.colorName) return capitalizeWords(item.productName);
+    if (!item.colorName)
+      return capitalizeWords(item.productName || "Unavailable");
     return `${item.length}" ${capitalizeWords(item.colorName)} ${item.productName}`;
   }
 
-  return capitalizeWords(item.productName) || "Unavailable";
+  return capitalizeWords(item.productName || "Unavailable");
 };
 
 export const sortProduct = (a: any, b: any) => {

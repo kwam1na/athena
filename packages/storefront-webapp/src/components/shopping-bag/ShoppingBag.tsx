@@ -28,6 +28,7 @@ import ImageWithFallback from "../ui/image-with-fallback";
 import { useNavigationBarContext } from "@/contexts/NavigationBarProvider";
 import { useCheckoutSessionQueries } from "@/lib/queries/checkout";
 import { useGetActiveCheckoutSession } from "@/hooks/useGetActiveCheckoutSession";
+import { usePromoCodesQueries } from "@/lib/queries/promoCode";
 
 const PendingItem = ({ session, count }: { session: any; count: number }) => {
   return (
@@ -87,6 +88,7 @@ export default function ShoppingBag() {
     deleteItemFromBag,
     updateBag,
     isUpdatingBag,
+    operationSuccessful,
     moveItemFromBagToSaved,
     obtainCheckoutSession,
     unavailableProducts,
@@ -101,11 +103,11 @@ export default function ShoppingBag() {
 
   const queryClient = useQueryClient();
 
-  const { data: activeSession } = useGetActiveCheckoutSession();
-
-  // console.log("activeSession", activeSession);
-
   const checkoutSessionQueries = useCheckoutSessionQueries();
+
+  const promoCodeQueries = usePromoCodesQueries();
+
+  const { data: promoCodeSkus } = useQuery(promoCodeQueries.getAllItems());
 
   const total = bagSubtotal;
 
@@ -187,6 +189,13 @@ export default function ShoppingBag() {
           )}
           <h1 className="text-lg font-light">Bag</h1>
 
+          {operationSuccessful == false && (
+            <div className="flex items-center font-medium">
+              <AlertCircleIcon className="w-4 h-4 mr-2" />
+              <p className="text-xs">Something went wrong. Try again.</p>
+            </div>
+          )}
+
           {error && (
             <div className="flex items-center font-medium">
               <AlertCircleIcon className="w-4 h-4 mr-2" />
@@ -217,6 +226,18 @@ export default function ShoppingBag() {
             <AnimatePresence initial={false} custom={bagAction}>
               {bag?.items.map((item: BagItem, index: number) => {
                 const unavailableSku = isSkuUnavailable(item.productSkuId);
+
+                const isDiscounted = promoCodeSkus?.some(
+                  (productSku) => productSku._id === item.productSkuId
+                );
+
+                let priceLabel = "Product unavailable";
+
+                if (item.price) {
+                  priceLabel = formatter.format(item.price * item.quantity);
+                } else if (isDiscounted && item.price == 0) {
+                  priceLabel = "Free";
+                }
 
                 return (
                   <motion.div
@@ -263,9 +284,7 @@ export default function ShoppingBag() {
                             {item && getProductName(item)}
                           </h2>
                           <p className="text-xs text-muted-foreground">
-                            {item.price
-                              ? formatter.format(item.price * item.quantity)
-                              : "Product unavailable"}
+                            {priceLabel}
                           </p>
                           <select
                             value={item.quantity}

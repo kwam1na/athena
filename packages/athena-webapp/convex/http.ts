@@ -37,7 +37,7 @@ app.use(
     origin: (origin) => {
       return origin;
     },
-    allowMethods: ["OPTIONS", "GET", "POST", "PUT", "DELETE"],
+    allowMethods: ["OPTIONS", "GET", "POST", "PUT", "PATCH", "DELETE"],
     credentials: true,
   })
 );

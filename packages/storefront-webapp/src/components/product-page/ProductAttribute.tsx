@@ -9,7 +9,7 @@ export function ProductAttribute({
   setSelectedSku,
 }: {
   product: Product;
-  selectedSku: any;
+  selectedSku: ProductSku;
   setSelectedSku: (sku: ProductSku) => void;
 }) {
   const colors: string[] = Array.from(
@@ -31,7 +31,19 @@ export function ProductAttribute({
     )
   );
 
-  const handleClick = (attribute: "color" | "length", value: string) => {
+  const sizes: number[] = Array.from(
+    new Set(
+      product.skus
+        .map((sku: any) => parseInt(sku.size))
+        .filter((size: any) => !isNaN(size))
+        .sort((a: number, b: number) => a - b)
+    )
+  );
+
+  const handleClick = (
+    attribute: "color" | "length" | "size",
+    value: string
+  ) => {
     let variant;
 
     if (attribute == "color") {
@@ -39,12 +51,17 @@ export function ProductAttribute({
         product.skus.find(
           (sk: any) => sk.colorName == value && sk.length == selectedSku.length
         ) || product.skus.find((sk: any) => sk.colorName == value);
-    } else {
+    } else if (attribute == "length") {
       variant =
         product.skus.find(
           (sk: any) =>
             sk.length == value && sk.colorName == selectedSku.colorName
         ) || product.skus.find((sk: any) => sk.length == value);
+    } else {
+      variant =
+        product.skus.find(
+          (sk: any) => sk.size == value && sk.colorName == selectedSku.colorName
+        ) || product.skus.find((sk: any) => sk.size == value);
     }
 
     variant && setSelectedSku(variant);
@@ -87,6 +104,27 @@ export function ProductAttribute({
                   onClick={() => handleClick("length", length.toString())}
                 >
                   {`${length}"`}
+                </Button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {selectedSku.productCategory !== "Hair" && Boolean(sizes.length) && (
+        <div className="space-y-4">
+          <p className="text-sm">Size</p>
+
+          <div className="flex flex-wrap gap-4">
+            {sizes.map((size, index) => {
+              return (
+                <Button
+                  variant={"ghost"}
+                  key={index}
+                  className={`${selectedSku?.size == size.toString() ? "border text-[#EC4683] border-[#EC4683] shadow-md" : "border border-background-muted"} hover:shadow-md hover:border-[#EC4683]`}
+                  onClick={() => handleClick("size", size.toString())}
+                >
+                  {`${size}"`}
                 </Button>
               );
             })}

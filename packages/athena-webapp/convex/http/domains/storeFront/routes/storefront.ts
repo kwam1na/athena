@@ -2,13 +2,15 @@ import { Hono } from "hono";
 import { HonoWithConvex } from "convex-helpers/server/hono";
 import { ActionCtx } from "../../../../_generated/server";
 import { api } from "../../../../_generated/api";
-import { setCookie, getCookie } from "hono/cookie";
+import { setCookie } from "hono/cookie";
 import { getStorefrontUserFromRequest } from "../../../utils";
 
 const storefrontRoutes: HonoWithConvex<ActionCtx> = new Hono();
 
 storefrontRoutes.get("/", async (c) => {
   const storeName = c.req.query("storeName");
+  const marker = c.req.query("marker");
+  const asNewUser = c.req.query("asNewUser");
 
   if (!storeName) {
     return c.json({ error: "Store name missing" }, 404);
@@ -20,8 +22,12 @@ storefrontRoutes.get("/", async (c) => {
 
   const userId = getStorefrontUserFromRequest(c);
 
-  if (!userId) {
-    const guestId = await c.env.runMutation(api.storeFront.guest.create, {});
+  if (!userId && asNewUser === "true") {
+    const guestId = await c.env.runMutation(api.storeFront.guest.create, {
+      marker,
+      creationOrigin: "storefront",
+    });
+
     setCookie(c, "guest_id", guestId, {
       path: "/",
       secure: true,

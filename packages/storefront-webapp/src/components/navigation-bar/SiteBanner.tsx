@@ -21,9 +21,16 @@ export const SiteBanner = () => {
   const getPromoMessage = (promoCode: PromoCode) => {
     if (!promoCode) return "";
     const value = promoCode.discountValue;
-    return promoCode.discountType === "percentage"
-      ? `${value}% OFF`
-      : `${formatter.format(value)} OFF`;
+
+    if (promoCode.discountType === "percentage") {
+      return promoCode.span === "selected-products"
+        ? `${value}% off select items`
+        : `${value}% off`;
+    } else {
+      return promoCode.span === "selected-products"
+        ? `${formatter.format(value)} off select items`
+        : `${formatter.format(value)} off`;
+    }
   };
 
   const activePromoCode = promoCodes?.find((code) => code.active);
@@ -52,7 +59,7 @@ export const SiteBanner = () => {
         </p>
         <p>
           USE PROMO CODE <b>{activePromoCode.code}</b> FOR{" "}
-          <b>{getPromoMessage(activePromoCode)}</b>
+          <b>{getPromoMessage(activePromoCode).toUpperCase()}</b>
         </p>
       </div>
     </motion.div>

@@ -10,6 +10,7 @@ export const create = mutation({
     origin: v.optional(v.string()),
     action: v.string(),
     data: v.record(v.string(), v.any()),
+    device: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const id = await ctx.db.insert(entity, {

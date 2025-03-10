@@ -7,6 +7,7 @@ export const useQueryEnabled = () => {
 
   const { data: store } = useGetStore({
     enabled: Boolean(!storeId && !organizationId),
+    asNewUser: false,
   });
 
   return (

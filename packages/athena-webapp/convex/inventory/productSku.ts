@@ -13,6 +13,18 @@ export const getById = query({
   },
 });
 
+export const retrieve = query({
+  args: { id: v.id("productSku") },
+  handler: async (ctx, args) => {
+    const s = await ctx.db.get(args.id);
+    if (s) {
+      const product = await ctx.db.get(s.productId);
+
+      return { ...s, productName: product?.name };
+    }
+  },
+});
+
 export const update = mutation({
   args: { id: v.id("productSku"), update: v.record(v.string(), v.any()) },
   handler: async (ctx, args) => {

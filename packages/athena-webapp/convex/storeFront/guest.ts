@@ -19,9 +19,15 @@ export const getById = query({
 });
 
 export const create = mutation({
-  args: {},
-  handler: async (ctx) => {
-    return await ctx.db.insert(entity, {});
+  args: {
+    marker: v.optional(v.string()),
+    creationOrigin: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db.insert(entity, {
+      marker: args.marker,
+      creationOrigin: args.creationOrigin,
+    });
   },
 });
 

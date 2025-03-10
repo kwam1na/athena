@@ -21,7 +21,7 @@ import { useAuth } from "@/hooks/useAuth";
 export default function MobileBagSummary() {
   const { formatter } = useStoreContext();
   const { bagSubtotal } = useShoppingBag();
-  const { checkoutState, updateState } = useCheckout();
+  const { checkoutState, updateState, activeSession } = useCheckout();
   const [invalidMessage, setInvalidMessage] = useState("");
   const [code, setCode] = useState("");
   const { userId, guestId } = useAuth();
@@ -46,6 +46,8 @@ export default function MobileBagSummary() {
             code: data.promoCode.code,
             value: data.promoCode.discountValue,
             type: data.promoCode.discountType,
+            span: data.promoCode.span,
+            productSkus: data.promoCode.productSkus,
           },
         });
       } else {
@@ -61,7 +63,10 @@ export default function MobileBagSummary() {
 
     if (!storeFrontUserId || !store) return;
 
-    redeemPromoCodeMutation.mutate(code);
+    redeemPromoCodeMutation.mutate({
+      code,
+      checkoutSessionId: activeSession._id,
+    });
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {

@@ -20,6 +20,9 @@ import { About } from "./About";
 import { Badge } from "../ui/badge";
 import { usePostAnalytics } from "@/lib/mutations.ts";
 import { useTrackAction } from "@/hooks/useTrackAction";
+import { OnsaleProduct } from "./OnSaleProduct";
+import { usePromoCodesQueries } from "@/lib/queries/promoCode";
+import { useQuery } from "@tanstack/react-query";
 
 // Main Product Page Component
 export default function ProductPage() {
@@ -46,11 +49,19 @@ export default function ProductPage() {
 
   const { data: product, error } = useGetProductQuery(productSlug);
 
-  const { variant, origin } = useSearch({ strict: false });
+  const promoCodeQueries = usePromoCodesQueries();
+
+  const { data: promoCodeItems } = useQuery(promoCodeQueries.getAllItems());
+
+  const promoCodeItem = promoCodeItems?.[0];
+
+  const { variant } = useSearch({ strict: false });
 
   const [selectedSku, setSelectedSku] = useState<ProductSku | null>(null);
 
-  const postAnalytics = usePostAnalytics();
+  const isPromoCodeItemInBag = bag?.items?.find(
+    (item: BagItem) => item.productSkuId === promoCodeItem?._id
+  );
 
   useEffect(() => {
     if (product && variant) {
@@ -151,6 +162,15 @@ export default function ProductPage() {
       });
     }
 
+    if (!isPromoCodeItemInBag && promoCodeItem) {
+      await addProductToBag({
+        quantity: 1,
+        productId: promoCodeItem?.productId as string,
+        productSkuId: promoCodeItem?._id as string,
+        productSku: promoCodeItem?.sku as string,
+      });
+    }
+
     setIsSheetOpen(true);
   };
 
@@ -239,6 +259,10 @@ export default function ProductPage() {
                 productAttributes={product.attributes || {}}
                 productSku={selectedSku}
               />
+            )}
+
+            {(selectedSku as any).productCategory == "Hair" && (
+              <OnsaleProduct />
             )}
 
             <div className="space-y-4">

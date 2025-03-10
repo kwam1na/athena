@@ -22,6 +22,7 @@ export const assetColumns: ColumnDef<Asset>[] = [
     ),
     cell: ({ row }) => {
       const [isUpdating, setIsUpdating] = useState(false);
+      const [isUpdatingShopTheLook, setIsUpdatingShopTheLook] = useState(false);
       const updateConfig = useMutation(api.inventory.stores.updateConfig);
       const { activeStore } = useGetActiveStore();
 
@@ -46,6 +47,32 @@ export const assetColumns: ColumnDef<Asset>[] = [
 
         setIsUpdating(false);
       };
+
+      const handleUpdateShopTheLookImage = async () => {
+        setIsUpdatingShopTheLook(true);
+
+        try {
+          await updateConfig({
+            id: activeStore?._id!,
+            config: {
+              ...activeStore?.config,
+              shopTheLookImage: row.original.url,
+            },
+          });
+          toast.success("Shop the Look image updated");
+        } catch (error) {
+          console.log(error);
+          toast.error(
+            "An error occurred while updating the shop the look image",
+            {
+              description: (error as Error).message,
+            }
+          );
+        }
+
+        setIsUpdatingShopTheLook(false);
+      };
+
       return (
         <div className="flex items-center gap-8">
           <img
@@ -64,6 +91,14 @@ export const assetColumns: ColumnDef<Asset>[] = [
                 onClick={handleUpdateShowroomImage}
               >
                 Set as showroom image
+              </LoadingButton>
+              <LoadingButton
+                isLoading={isUpdatingShopTheLook}
+                variant={"outline"}
+                size={"sm"}
+                onClick={handleUpdateShopTheLookImage}
+              >
+                Set as shop this look image
               </LoadingButton>
               <Button variant={"outline"} size={"sm"}>
                 <TrashIcon className="w-4 h-4" />

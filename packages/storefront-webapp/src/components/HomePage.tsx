@@ -13,6 +13,7 @@ import { HomeHero } from "./home/HomeHero";
 import { useProductQueries } from "@/lib/queries/product";
 import { ArrowRight } from "lucide-react";
 import { useTrackEvent } from "@/hooks/useTrackEvent";
+import { MARKER_KEY } from "@/lib/constants";
 
 const origin = "homepage";
 
@@ -216,6 +217,12 @@ export default function HomePage() {
   useEffect(() => {
     setNavBarLayout("sticky");
     setAppLocation(origin);
+
+    // generate a random uuid and save it to local storage
+    const uuid = localStorage.getItem(MARKER_KEY);
+    if (!uuid) {
+      localStorage.setItem(MARKER_KEY, Math.random().toString(36).substring(7));
+    }
   }, []);
 
   useTrackEvent({
@@ -276,7 +283,7 @@ export default function HomePage() {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ duration: 0.6, delay: 0.8 }}
-                src={store?.config?.showroomImage}
+                src={store?.config?.shopTheLookImage}
                 className="w-full lg:w-[50%] h-screen object-cover"
               />
 

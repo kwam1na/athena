@@ -18,7 +18,11 @@ export const getOrderAmount = ({
   deliveryFee: number | null;
   subtotal: number;
 }) => {
-  const discountValue = getDiscountValue(subtotal, discount);
+  const discountValue =
+    parseInt(discount?.totalDiscount) * 100 ||
+    getDiscountValue(subtotal, discount);
+
+  console.log("discountValue", discountValue);
   const baseForDiscount = discount?.type === "percentage" ? 1 : 100;
   return subtotal - discountValue * baseForDiscount + (deliveryFee || 0) * 100;
 };

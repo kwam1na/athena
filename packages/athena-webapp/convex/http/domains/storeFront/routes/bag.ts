@@ -97,6 +97,17 @@ bagRoutes.delete("/:bagId/items/:itemId", async (c) => {
   return c.json({ success: true });
 });
 
+// Delete all item from a bag
+bagRoutes.delete("/:bagId/items/", async (c) => {
+  const { bagId } = c.req.param();
+
+  await c.env.runMutation(api.storeFront.bag.clearBag, {
+    id: bagId as Id<"bag">,
+  });
+
+  return c.json({ success: true });
+});
+
 // Update an item in a bag
 bagRoutes.put("/:bagId/items/:itemId", async (c) => {
   const { itemId } = c.req.param();

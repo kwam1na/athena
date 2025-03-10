@@ -23,6 +23,8 @@ export const createTransaction = action({
       subtotal: args.amount,
     });
 
+    console.log("amount to charge:", amountToCharge);
+
     const response = await fetch(
       "https://api.paystack.co/transaction/initialize",
       {
@@ -68,7 +70,8 @@ export const createTransaction = action({
 
       return res.data;
     } else {
-      console.error("Failed to create transaction", response);
+      const r = await response.json();
+      console.error("Failed to create transaction", r);
     }
   },
 });
@@ -121,7 +124,8 @@ export const verifyPayment = action({
         subtotal,
       });
 
-      const discountValue = getDiscountValue(subtotal, discount);
+      const discountValue =
+        discount?.totalDiscount || getDiscountValue(subtotal, discount);
 
       const baseForDiscount = discount?.type === "percentage" ? 1 : 100;
 

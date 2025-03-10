@@ -20,13 +20,22 @@ import { Reviews } from "./ProductReviews";
 import { About } from "./About";
 import ImageWithFallback from "../ui/image-with-fallback";
 import { Badge } from "../ui/badge";
+import { OnsaleProduct } from "./OnSaleProduct";
+import { usePromoCodesQueries } from "@/lib/queries/promoCode";
+import { useQuery } from "@tanstack/react-query";
 
 export default function MobileProductPage() {
   const [isSheetOpen, setIsSheetOpen] = useState(false);
 
   const { productSlug } = useParams({ strict: false });
 
-  const { data: product, isLoading, error } = useGetProductQuery(productSlug);
+  const { data: product, error } = useGetProductQuery(productSlug);
+
+  const promoCodeQueries = usePromoCodesQueries();
+
+  const { data: promoCodeItems } = useQuery(promoCodeQueries.getAllItems());
+
+  const promoCodeItem = promoCodeItems?.[0];
 
   const { variant } = useSearch({ strict: false });
 
@@ -41,17 +50,15 @@ export default function MobileProductPage() {
     addedItemSuccessfully,
     savedBag,
     addProductToSavedBag,
-    isUpdatingSavedBag,
   } = useShoppingBag();
 
   const sheetContent = useRef<React.ReactNode | null>(null);
 
   const [selectedSku, setSelectedSku] = useState<ProductSku | null>(null);
 
-  //   const selectedSku =
-  //     product?.skus?.find((sku: ProductSku) => sku.sku === variant) ||
-  //     product?.skus?.[0];
-  //   let selectedSku: any;
+  const isPromoCodeItemInBag = bag?.items?.find(
+    (item: BagItem) => item.productSkuId === promoCodeItem?._id
+  );
 
   useEffect(() => {
     if (product && variant) {
@@ -101,6 +108,15 @@ export default function MobileProductPage() {
         productId: product?._id as string,
         productSkuId: selectedSku?._id as string,
         productSku: selectedSku?.sku as string,
+      });
+    }
+
+    if (!isPromoCodeItemInBag && promoCodeItem) {
+      await addProductToBag({
+        quantity: 1,
+        productId: promoCodeItem?.productId as string,
+        productSkuId: promoCodeItem?._id as string,
+        productSku: promoCodeItem?.sku as string,
       });
     }
 
@@ -201,6 +217,8 @@ export default function MobileProductPage() {
               productSku={selectedSku}
             />
           )}
+
+          {(selectedSku as any).productCategory == "Hair" && <OnsaleProduct />}
 
           <div className="space-y-4">
             <div className="flex gap-4">
