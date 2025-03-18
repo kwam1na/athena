@@ -5,7 +5,8 @@ export const getProductName = (item: ProductSku | BagItem | SavedBagItem) => {
   if (item.productCategory == "Hair") {
     if (!item.colorName)
       return capitalizeWords(item.productName || "Unavailable");
-    return `${item.length}" ${capitalizeWords(item.colorName)} ${item.productName}`;
+
+    return `${item.length}" ${item.colorName} ${capitalizeWords(item.productName || "")}`;
   }
 
   return capitalizeWords(item.productName || "Unavailable");

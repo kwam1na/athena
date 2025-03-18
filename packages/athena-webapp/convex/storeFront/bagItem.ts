@@ -1,3 +1,4 @@
+import { api } from "../_generated/api";
 import { mutation, query } from "../_generated/server";
 import { v } from "convex/values";
 
@@ -53,5 +54,29 @@ export const deleteItemFromBag = mutation({
   handler: async (ctx, args) => {
     await ctx.db.delete(args.itemId);
     return { message: "Item deleted from bag" };
+  },
+});
+
+export const getBagItemsForStore = query({
+  args: {
+    storeId: v.id("store"),
+  },
+  handler: async (ctx, args) => {
+    // Get all the bags for the store
+    const bags = await ctx.db
+      .query("bag")
+      .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
+      .collect();
+
+    // Get all the items for the bags
+    const items: any[] = await Promise.all(
+      bags.map(async (bag) => {
+        return await ctx.runQuery(api.storeFront.bag.getById, {
+          id: bag._id,
+        });
+      })
+    );
+
+    return items;
   },
 });

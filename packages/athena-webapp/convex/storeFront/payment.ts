@@ -4,7 +4,12 @@ import { api, internal } from "../_generated/api";
 import { Address, CheckoutSession, OnlineOrder } from "../../types";
 import { orderDetailsSchema } from "../schemas/storeFront";
 import { sendOrderEmail } from "../sendgrid";
-import { currencyFormatter, formatDate, getAddressString } from "../utils";
+import {
+  capitalizeWords,
+  currencyFormatter,
+  formatDate,
+  getAddressString,
+} from "../utils";
 import { getDiscountValue, getOrderAmount } from "../inventory/utils";
 
 const appUrl = process.env.APP_URL;
@@ -22,8 +27,6 @@ export const createTransaction = action({
       deliveryFee: args.orderDetails.deliveryFee || 0,
       subtotal: args.amount,
     });
-
-    console.log("amount to charge:", amountToCharge);
 
     const response = await fetch(
       "https://api.paystack.co/transaction/initialize",
@@ -175,7 +178,7 @@ export const verifyPayment = action({
 
             const items =
               order.items?.map((item: any) => ({
-                text: item.productName,
+                text: capitalizeWords(item.productName),
                 image: item.productImage,
                 price: formatter.format(item.price),
                 quantity: item.quantity,

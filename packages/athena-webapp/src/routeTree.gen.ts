@@ -24,12 +24,14 @@ import { Route as AuthedOrgUrlSlugSettingsIndexImport } from './routes/_authed/$
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugIndexImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/index'
 import { Route as AuthedOrgUrlSlugSettingsOrganizationIndexImport } from './routes/_authed/$orgUrlSlug/settings/organization/index'
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugHomeImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/home'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugAnalyticsImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/analytics'
 import { Route as AuthedOrgUrlSlugSettingsStoresStoreUrlSlugImport } from './routes/_authed/$orgUrlSlug/settings/stores/$storeUrlSlug'
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesIndexImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/promo-codes/index'
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugProductsIndexImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/products/index'
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugOrdersIndexImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/index'
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugMembersIndexImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/members.index'
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugConfigurationIndexImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/configuration.index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugBagsIndexImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/bags.index'
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugAssetsIndexImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/assets.index'
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesNewImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/promo-codes/new'
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesPromoCodeSlugImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/promo-codes/$promoCodeSlug'
@@ -126,6 +128,13 @@ const AuthedOrgUrlSlugStoreStoreUrlSlugHomeRoute =
     getParentRoute: () => AuthedRoute,
   } as any)
 
+const AuthedOrgUrlSlugStoreStoreUrlSlugAnalyticsRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugAnalyticsImport.update({
+    id: '/$orgUrlSlug/store/$storeUrlSlug/analytics',
+    path: '/$orgUrlSlug/store/$storeUrlSlug/analytics',
+    getParentRoute: () => AuthedRoute,
+  } as any)
+
 const AuthedOrgUrlSlugSettingsStoresStoreUrlSlugRoute =
   AuthedOrgUrlSlugSettingsStoresStoreUrlSlugImport.update({
     id: '/$orgUrlSlug/settings/stores/$storeUrlSlug',
@@ -165,6 +174,13 @@ const AuthedOrgUrlSlugStoreStoreUrlSlugConfigurationIndexRoute =
   AuthedOrgUrlSlugStoreStoreUrlSlugConfigurationIndexImport.update({
     id: '/$orgUrlSlug/store/$storeUrlSlug/configuration/',
     path: '/$orgUrlSlug/store/$storeUrlSlug/configuration/',
+    getParentRoute: () => AuthedRoute,
+  } as any)
+
+const AuthedOrgUrlSlugStoreStoreUrlSlugBagsIndexRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugBagsIndexImport.update({
+    id: '/$orgUrlSlug/store/$storeUrlSlug/bags/',
+    path: '/$orgUrlSlug/store/$storeUrlSlug/bags/',
     getParentRoute: () => AuthedRoute,
   } as any)
 
@@ -333,6 +349,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedOrgUrlSlugSettingsStoresStoreUrlSlugImport
       parentRoute: typeof AuthedImport
     }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/analytics': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/analytics'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/analytics'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/analytics'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugAnalyticsImport
+      parentRoute: typeof AuthedImport
+    }
     '/_authed/$orgUrlSlug/store/$storeUrlSlug/home': {
       id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/home'
       path: '/$orgUrlSlug/store/$storeUrlSlug/home'
@@ -380,6 +403,13 @@ declare module '@tanstack/react-router' {
       path: '/$orgUrlSlug/store/$storeUrlSlug/assets'
       fullPath: '/$orgUrlSlug/store/$storeUrlSlug/assets'
       preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugAssetsIndexImport
+      parentRoute: typeof AuthedImport
+    }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/bags/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/bags/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/bags'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/bags'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugBagsIndexImport
       parentRoute: typeof AuthedImport
     }
     '/_authed/$orgUrlSlug/store/$storeUrlSlug/configuration/': {
@@ -490,6 +520,7 @@ interface AuthedRouteChildren {
   AuthedOrgUrlSlugSettingsIndexRoute: typeof AuthedOrgUrlSlugSettingsIndexRoute
   AuthedOrgUrlSlugStoreIndexRoute: typeof AuthedOrgUrlSlugStoreIndexRoute
   AuthedOrgUrlSlugSettingsStoresStoreUrlSlugRoute: typeof AuthedOrgUrlSlugSettingsStoresStoreUrlSlugRoute
+  AuthedOrgUrlSlugStoreStoreUrlSlugAnalyticsRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugAnalyticsRoute
   AuthedOrgUrlSlugStoreStoreUrlSlugHomeRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugHomeRoute
   AuthedOrgUrlSlugSettingsOrganizationIndexRoute: typeof AuthedOrgUrlSlugSettingsOrganizationIndexRoute
   AuthedOrgUrlSlugStoreStoreUrlSlugIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugIndexRoute
@@ -497,6 +528,7 @@ interface AuthedRouteChildren {
   AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesPromoCodeSlugRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesPromoCodeSlugRoute
   AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesNewRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesNewRoute
   AuthedOrgUrlSlugStoreStoreUrlSlugAssetsIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugAssetsIndexRoute
+  AuthedOrgUrlSlugStoreStoreUrlSlugBagsIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugBagsIndexRoute
   AuthedOrgUrlSlugStoreStoreUrlSlugConfigurationIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugConfigurationIndexRoute
   AuthedOrgUrlSlugStoreStoreUrlSlugMembersIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugMembersIndexRoute
   AuthedOrgUrlSlugStoreStoreUrlSlugOrdersIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersIndexRoute
@@ -519,6 +551,8 @@ const AuthedRouteChildren: AuthedRouteChildren = {
   AuthedOrgUrlSlugStoreIndexRoute: AuthedOrgUrlSlugStoreIndexRoute,
   AuthedOrgUrlSlugSettingsStoresStoreUrlSlugRoute:
     AuthedOrgUrlSlugSettingsStoresStoreUrlSlugRoute,
+  AuthedOrgUrlSlugStoreStoreUrlSlugAnalyticsRoute:
+    AuthedOrgUrlSlugStoreStoreUrlSlugAnalyticsRoute,
   AuthedOrgUrlSlugStoreStoreUrlSlugHomeRoute:
     AuthedOrgUrlSlugStoreStoreUrlSlugHomeRoute,
   AuthedOrgUrlSlugSettingsOrganizationIndexRoute:
@@ -533,6 +567,8 @@ const AuthedRouteChildren: AuthedRouteChildren = {
     AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesNewRoute,
   AuthedOrgUrlSlugStoreStoreUrlSlugAssetsIndexRoute:
     AuthedOrgUrlSlugStoreStoreUrlSlugAssetsIndexRoute,
+  AuthedOrgUrlSlugStoreStoreUrlSlugBagsIndexRoute:
+    AuthedOrgUrlSlugStoreStoreUrlSlugBagsIndexRoute,
   AuthedOrgUrlSlugStoreStoreUrlSlugConfigurationIndexRoute:
     AuthedOrgUrlSlugStoreStoreUrlSlugConfigurationIndexRoute,
   AuthedOrgUrlSlugStoreStoreUrlSlugMembersIndexRoute:
@@ -598,6 +634,7 @@ export interface FileRoutesByFullPath {
   '/$orgUrlSlug/settings': typeof AuthedOrgUrlSlugSettingsIndexRoute
   '/$orgUrlSlug/store': typeof AuthedOrgUrlSlugStoreIndexRoute
   '/$orgUrlSlug/settings/stores/$storeUrlSlug': typeof AuthedOrgUrlSlugSettingsStoresStoreUrlSlugRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/analytics': typeof AuthedOrgUrlSlugStoreStoreUrlSlugAnalyticsRoute
   '/$orgUrlSlug/store/$storeUrlSlug/home': typeof AuthedOrgUrlSlugStoreStoreUrlSlugHomeRoute
   '/$orgUrlSlug/settings/organization': typeof AuthedOrgUrlSlugSettingsOrganizationIndexRoute
   '/$orgUrlSlug/store/$storeUrlSlug': typeof AuthedOrgUrlSlugStoreStoreUrlSlugIndexRoute
@@ -605,6 +642,7 @@ export interface FileRoutesByFullPath {
   '/$orgUrlSlug/store/$storeUrlSlug/promo-codes/$promoCodeSlug': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesPromoCodeSlugRoute
   '/$orgUrlSlug/store/$storeUrlSlug/promo-codes/new': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesNewRoute
   '/$orgUrlSlug/store/$storeUrlSlug/assets': typeof AuthedOrgUrlSlugStoreStoreUrlSlugAssetsIndexRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/bags': typeof AuthedOrgUrlSlugStoreStoreUrlSlugBagsIndexRoute
   '/$orgUrlSlug/store/$storeUrlSlug/configuration': typeof AuthedOrgUrlSlugStoreStoreUrlSlugConfigurationIndexRoute
   '/$orgUrlSlug/store/$storeUrlSlug/members': typeof AuthedOrgUrlSlugStoreStoreUrlSlugMembersIndexRoute
   '/$orgUrlSlug/store/$storeUrlSlug/orders': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersIndexRoute
@@ -630,6 +668,7 @@ export interface FileRoutesByTo {
   '/$orgUrlSlug/settings': typeof AuthedOrgUrlSlugSettingsIndexRoute
   '/$orgUrlSlug/store': typeof AuthedOrgUrlSlugStoreIndexRoute
   '/$orgUrlSlug/settings/stores/$storeUrlSlug': typeof AuthedOrgUrlSlugSettingsStoresStoreUrlSlugRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/analytics': typeof AuthedOrgUrlSlugStoreStoreUrlSlugAnalyticsRoute
   '/$orgUrlSlug/store/$storeUrlSlug/home': typeof AuthedOrgUrlSlugStoreStoreUrlSlugHomeRoute
   '/$orgUrlSlug/settings/organization': typeof AuthedOrgUrlSlugSettingsOrganizationIndexRoute
   '/$orgUrlSlug/store/$storeUrlSlug': typeof AuthedOrgUrlSlugStoreStoreUrlSlugIndexRoute
@@ -637,6 +676,7 @@ export interface FileRoutesByTo {
   '/$orgUrlSlug/store/$storeUrlSlug/promo-codes/$promoCodeSlug': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesPromoCodeSlugRoute
   '/$orgUrlSlug/store/$storeUrlSlug/promo-codes/new': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesNewRoute
   '/$orgUrlSlug/store/$storeUrlSlug/assets': typeof AuthedOrgUrlSlugStoreStoreUrlSlugAssetsIndexRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/bags': typeof AuthedOrgUrlSlugStoreStoreUrlSlugBagsIndexRoute
   '/$orgUrlSlug/store/$storeUrlSlug/configuration': typeof AuthedOrgUrlSlugStoreStoreUrlSlugConfigurationIndexRoute
   '/$orgUrlSlug/store/$storeUrlSlug/members': typeof AuthedOrgUrlSlugStoreStoreUrlSlugMembersIndexRoute
   '/$orgUrlSlug/store/$storeUrlSlug/orders': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersIndexRoute
@@ -665,6 +705,7 @@ export interface FileRoutesById {
   '/_authed/$orgUrlSlug/settings/': typeof AuthedOrgUrlSlugSettingsIndexRoute
   '/_authed/$orgUrlSlug/store/': typeof AuthedOrgUrlSlugStoreIndexRoute
   '/_authed/$orgUrlSlug/settings/stores/$storeUrlSlug': typeof AuthedOrgUrlSlugSettingsStoresStoreUrlSlugRoute
+  '/_authed/$orgUrlSlug/store/$storeUrlSlug/analytics': typeof AuthedOrgUrlSlugStoreStoreUrlSlugAnalyticsRoute
   '/_authed/$orgUrlSlug/store/$storeUrlSlug/home': typeof AuthedOrgUrlSlugStoreStoreUrlSlugHomeRoute
   '/_authed/$orgUrlSlug/settings/organization/': typeof AuthedOrgUrlSlugSettingsOrganizationIndexRoute
   '/_authed/$orgUrlSlug/store/$storeUrlSlug/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugIndexRoute
@@ -672,6 +713,7 @@ export interface FileRoutesById {
   '/_authed/$orgUrlSlug/store/$storeUrlSlug/promo-codes/$promoCodeSlug': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesPromoCodeSlugRoute
   '/_authed/$orgUrlSlug/store/$storeUrlSlug/promo-codes/new': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesNewRoute
   '/_authed/$orgUrlSlug/store/$storeUrlSlug/assets/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugAssetsIndexRoute
+  '/_authed/$orgUrlSlug/store/$storeUrlSlug/bags/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugBagsIndexRoute
   '/_authed/$orgUrlSlug/store/$storeUrlSlug/configuration/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugConfigurationIndexRoute
   '/_authed/$orgUrlSlug/store/$storeUrlSlug/members/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugMembersIndexRoute
   '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersIndexRoute
@@ -700,6 +742,7 @@ export interface FileRouteTypes {
     | '/$orgUrlSlug/settings'
     | '/$orgUrlSlug/store'
     | '/$orgUrlSlug/settings/stores/$storeUrlSlug'
+    | '/$orgUrlSlug/store/$storeUrlSlug/analytics'
     | '/$orgUrlSlug/store/$storeUrlSlug/home'
     | '/$orgUrlSlug/settings/organization'
     | '/$orgUrlSlug/store/$storeUrlSlug'
@@ -707,6 +750,7 @@ export interface FileRouteTypes {
     | '/$orgUrlSlug/store/$storeUrlSlug/promo-codes/$promoCodeSlug'
     | '/$orgUrlSlug/store/$storeUrlSlug/promo-codes/new'
     | '/$orgUrlSlug/store/$storeUrlSlug/assets'
+    | '/$orgUrlSlug/store/$storeUrlSlug/bags'
     | '/$orgUrlSlug/store/$storeUrlSlug/configuration'
     | '/$orgUrlSlug/store/$storeUrlSlug/members'
     | '/$orgUrlSlug/store/$storeUrlSlug/orders'
@@ -731,6 +775,7 @@ export interface FileRouteTypes {
     | '/$orgUrlSlug/settings'
     | '/$orgUrlSlug/store'
     | '/$orgUrlSlug/settings/stores/$storeUrlSlug'
+    | '/$orgUrlSlug/store/$storeUrlSlug/analytics'
     | '/$orgUrlSlug/store/$storeUrlSlug/home'
     | '/$orgUrlSlug/settings/organization'
     | '/$orgUrlSlug/store/$storeUrlSlug'
@@ -738,6 +783,7 @@ export interface FileRouteTypes {
     | '/$orgUrlSlug/store/$storeUrlSlug/promo-codes/$promoCodeSlug'
     | '/$orgUrlSlug/store/$storeUrlSlug/promo-codes/new'
     | '/$orgUrlSlug/store/$storeUrlSlug/assets'
+    | '/$orgUrlSlug/store/$storeUrlSlug/bags'
     | '/$orgUrlSlug/store/$storeUrlSlug/configuration'
     | '/$orgUrlSlug/store/$storeUrlSlug/members'
     | '/$orgUrlSlug/store/$storeUrlSlug/orders'
@@ -764,6 +810,7 @@ export interface FileRouteTypes {
     | '/_authed/$orgUrlSlug/settings/'
     | '/_authed/$orgUrlSlug/store/'
     | '/_authed/$orgUrlSlug/settings/stores/$storeUrlSlug'
+    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/analytics'
     | '/_authed/$orgUrlSlug/store/$storeUrlSlug/home'
     | '/_authed/$orgUrlSlug/settings/organization/'
     | '/_authed/$orgUrlSlug/store/$storeUrlSlug/'
@@ -771,6 +818,7 @@ export interface FileRouteTypes {
     | '/_authed/$orgUrlSlug/store/$storeUrlSlug/promo-codes/$promoCodeSlug'
     | '/_authed/$orgUrlSlug/store/$storeUrlSlug/promo-codes/new'
     | '/_authed/$orgUrlSlug/store/$storeUrlSlug/assets/'
+    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/bags/'
     | '/_authed/$orgUrlSlug/store/$storeUrlSlug/configuration/'
     | '/_authed/$orgUrlSlug/store/$storeUrlSlug/members/'
     | '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/'
@@ -828,6 +876,7 @@ export const routeTree = rootRoute
         "/_authed/$orgUrlSlug/settings/",
         "/_authed/$orgUrlSlug/store/",
         "/_authed/$orgUrlSlug/settings/stores/$storeUrlSlug",
+        "/_authed/$orgUrlSlug/store/$storeUrlSlug/analytics",
         "/_authed/$orgUrlSlug/store/$storeUrlSlug/home",
         "/_authed/$orgUrlSlug/settings/organization/",
         "/_authed/$orgUrlSlug/store/$storeUrlSlug/",
@@ -835,6 +884,7 @@ export const routeTree = rootRoute
         "/_authed/$orgUrlSlug/store/$storeUrlSlug/promo-codes/$promoCodeSlug",
         "/_authed/$orgUrlSlug/store/$storeUrlSlug/promo-codes/new",
         "/_authed/$orgUrlSlug/store/$storeUrlSlug/assets/",
+        "/_authed/$orgUrlSlug/store/$storeUrlSlug/bags/",
         "/_authed/$orgUrlSlug/store/$storeUrlSlug/configuration/",
         "/_authed/$orgUrlSlug/store/$storeUrlSlug/members/",
         "/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/",
@@ -887,6 +937,10 @@ export const routeTree = rootRoute
       "filePath": "_authed/$orgUrlSlug/settings/stores/$storeUrlSlug.tsx",
       "parent": "/_authed"
     },
+    "/_authed/$orgUrlSlug/store/$storeUrlSlug/analytics": {
+      "filePath": "_authed/$orgUrlSlug/store/$storeUrlSlug/analytics.tsx",
+      "parent": "/_authed"
+    },
     "/_authed/$orgUrlSlug/store/$storeUrlSlug/home": {
       "filePath": "_authed/$orgUrlSlug/store/$storeUrlSlug/home.tsx",
       "parent": "/_authed"
@@ -913,6 +967,10 @@ export const routeTree = rootRoute
     },
     "/_authed/$orgUrlSlug/store/$storeUrlSlug/assets/": {
       "filePath": "_authed/$orgUrlSlug/store/$storeUrlSlug/assets.index.tsx",
+      "parent": "/_authed"
+    },
+    "/_authed/$orgUrlSlug/store/$storeUrlSlug/bags/": {
+      "filePath": "_authed/$orgUrlSlug/store/$storeUrlSlug/bags.index.tsx",
       "parent": "/_authed"
     },
     "/_authed/$orgUrlSlug/store/$storeUrlSlug/configuration/": {

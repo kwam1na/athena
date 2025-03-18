@@ -3,8 +3,7 @@ import { ColumnDef } from "@tanstack/react-table";
 import { DataTableColumnHeader } from "./data-table-column-header";
 import { Link } from "@tanstack/react-router";
 import { PromoCode } from "~/types";
-import { capitalizeFirstLetter, slugToWords } from "~/src/lib/utils";
-import { capitalizeWords } from "~/convex/utils";
+import { slugToWords } from "~/src/lib/utils";
 
 export const columns: ColumnDef<PromoCode>[] = [
   {

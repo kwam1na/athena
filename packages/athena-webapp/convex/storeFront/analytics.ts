@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { mutation } from "../_generated/server";
+import { mutation, query } from "../_generated/server";
 
 const entity = "analytics";
 
@@ -21,14 +21,14 @@ export const create = mutation({
   },
 });
 
-export const getAll = mutation({
+export const getAll = query({
   args: {
     storeId: v.id("store"),
   },
   handler: async (ctx, args) => {
     return await ctx.db
       .query(entity)
-      .filter((q) => q.eq(q.field("storeId"), args.storeId))
+      .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
       .collect();
   },
 });

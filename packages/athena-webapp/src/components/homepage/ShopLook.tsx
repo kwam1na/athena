@@ -74,7 +74,7 @@ export const ShopLookSection = () => {
       hideBorder
       hideHeaderBottomBorder
       className="py-4"
-      header={<p className="text-sm text-muted-foreground">Shop Look</p>}
+      header={<p className="text-sm text-muted-foreground">Shop The Look</p>}
     >
       <ShopLookDialog dialogOpen={dialogOpen} setDialogOpen={setDialogOpen} />
       <div className="py-4 space-y-8">

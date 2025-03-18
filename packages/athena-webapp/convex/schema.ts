@@ -39,11 +39,11 @@ import {
 
 const schema = defineSchema({
   ...authTables,
-  analytics: defineTable(analyticsSchema),
+  analytics: defineTable(analyticsSchema).index("by_storeId", ["storeId"]),
   appVerificationCode: defineTable(appVerificationCodeSchema),
   athenaUser: defineTable(athenaUserSchema),
-  bag: defineTable(bagSchema),
-  bagItem: defineTable(bagItemSchema),
+  bag: defineTable(bagSchema).index("by_storeId", ["storeId"]),
+  bagItem: defineTable(bagItemSchema).index("by_bagId", ["bagId"]),
   bestSeller: defineTable(bestSellerSchema),
   category: defineTable(categorySchema),
   checkoutSession: defineTable(checkoutSessionSchema),
@@ -57,8 +57,10 @@ const schema = defineSchema({
   onlineOrderItem: defineTable(onlineOrderItemSchema),
   organization: defineTable(organizationSchema),
   organizationMember: defineTable(organizationMemberSchema),
-  product: defineTable(productSchema),
-  productSku: defineTable(productSkuSchema),
+  product: defineTable(productSchema).index("by_storeId", ["storeId"]),
+  productSku: defineTable(productSkuSchema).index("by_productId", [
+    "productId",
+  ]),
   promoCode: defineTable(promoCodeSchema),
   promoCodeItem: defineTable(promoCodeItemSchema),
   redeemedPromoCode: defineTable(redeemedPromoCodeSchema),

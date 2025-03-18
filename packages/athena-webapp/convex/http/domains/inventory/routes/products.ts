@@ -21,13 +21,16 @@ productRoutes.get("/", async (c) => {
   const categories = params.category?.[0]?.split(",").map((s) => s);
   const subcategories = params.subcategory?.[0]?.split(",").map((s) => s);
 
-  const products = await c.env.runQuery(api.inventory.products.getAll, {
-    storeId: storeId as Id<"store">,
-    color: colors,
-    length: lengths,
-    category: categories,
-    subcategory: subcategories,
-  });
+  const products = await c.env.runAction(
+    api.inventory.productUtil.getAllProducts,
+    {
+      storeId: storeId as Id<"store">,
+      color: colors,
+      length: lengths,
+      category: categories,
+      subcategory: subcategories,
+    }
+  );
 
   return c.json({ products });
 });

@@ -162,7 +162,11 @@ export default function ProductPage() {
       });
     }
 
-    if (!isPromoCodeItemInBag && promoCodeItem) {
+    if (
+      !isPromoCodeItemInBag &&
+      promoCodeItem &&
+      selectedSku?.productCategory == "Hair"
+    ) {
       await addProductToBag({
         quantity: 1,
         productId: promoCodeItem?.productId as string,
@@ -254,16 +258,14 @@ export default function ProductPage() {
               />
             </div>
 
-            {(selectedSku as any).productCategory == "Hair" && (
+            {selectedSku.productCategory == "Hair" && (
               <About
                 productAttributes={product.attributes || {}}
                 productSku={selectedSku}
               />
             )}
 
-            {(selectedSku as any).productCategory == "Hair" && (
-              <OnsaleProduct />
-            )}
+            {selectedSku.productCategory == "Hair" && <OnsaleProduct />}
 
             <div className="space-y-4">
               <div className="flex gap-4">

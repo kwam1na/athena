@@ -155,8 +155,6 @@ export const getAllItems = query({
       .map((item) => item.productSkuId)
       .filter((i) => i !== undefined);
 
-    console.log(skus);
-
     return await Promise.all(
       skus.map(async (sku) => {
         return await ctx.runQuery(api.inventory.productSku.retrieve, {

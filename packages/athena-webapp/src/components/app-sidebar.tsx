@@ -14,12 +14,16 @@ import {
 } from "@/components/ui/sidebar";
 import {
   BadgePercent,
+  BarChart,
+  ChartNoAxesColumn,
+  ChartNoAxesCombined,
   Cog,
   CogIcon,
   Image,
   PanelBottom,
   PanelTop,
   PersonStanding,
+  ScanBarcode,
   ShoppingBag,
   ShoppingBasket,
   ShoppingCart,
@@ -72,6 +76,23 @@ export function AppSidebar() {
           <SidebarGroupLabel>Store</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild>
+                  <Link
+                    to="/$orgUrlSlug/store/$storeUrlSlug/analytics"
+                    params={(p) => ({
+                      ...p,
+                      orgUrlSlug: activeOrganization?.slug,
+                      storeUrlSlug: activeStore?.slug,
+                    })}
+                    className="flex items-center"
+                  >
+                    <ChartNoAxesCombined className="w-4 h-4" />
+                    <p className="font-medium">Analytics</p>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+
               <SidebarMenuItem>
                 <SidebarMenuButton asChild>
                   <Link
@@ -209,7 +230,7 @@ export function AppSidebar() {
                     })}
                     className="flex items-center"
                   >
-                    <ShoppingBasket className="w-4 h-4" />
+                    <ScanBarcode className="w-4 h-4" />
                     <p className="font-medium">Products</p>
                   </Link>
                 </SidebarMenuButton>
@@ -276,6 +297,23 @@ export function AppSidebar() {
                     </SidebarMenuButton>
                   </SidebarMenuSubItem>
                 </SidebarMenuSub>
+              </SidebarMenuItem>
+
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild>
+                  <Link
+                    to="/$orgUrlSlug/store/$storeUrlSlug/bags"
+                    params={(p) => ({
+                      ...p,
+                      orgUrlSlug: activeOrganization?.slug,
+                      storeUrlSlug: activeStore?.slug,
+                    })}
+                    className="flex items-center"
+                  >
+                    <ShoppingBasket className="w-4 h-4" />
+                    <p className="font-medium">User bags</p>
+                  </Link>
+                </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>

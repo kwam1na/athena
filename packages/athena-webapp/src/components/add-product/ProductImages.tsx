@@ -6,6 +6,9 @@ import { useEffect } from "react";
 import { GenericComboBox } from "../GenericComboBox";
 import { ProductVariant } from "./ProductStock";
 import { useSearch } from "@tanstack/react-router";
+import { Button } from "../ui/button";
+import useGetActiveProduct from "~/src/hooks/useGetActiveProduct";
+import config from "~/src/config";
 
 const Header = () => {
   const { activeProductVariant, productVariants, setActiveProductVariant } =
@@ -63,6 +66,7 @@ const Header = () => {
 
 export default function ProductImagesView() {
   const { activeProductVariant, updateVariantImages } = useProduct();
+  const { activeProduct } = useGetActiveProduct();
 
   return (
     <View
@@ -78,6 +82,23 @@ export default function ProductImagesView() {
           updateVariantImages(activeProductVariant.id, newImages)
         }
       />
+
+      {activeProduct && (
+        <div className="w-full flex">
+          <Button
+            variant={"outline"}
+            className="ml-auto"
+            onClick={() => {
+              window.open(
+                `${config.storeFrontUrl}/shop/product/${activeProduct?._id}?variant=${activeProductVariant?.sku}`,
+                "_blank"
+              );
+            }}
+          >
+            View on store
+          </Button>
+        </div>
+      )}
     </View>
   );
 }

@@ -33,6 +33,7 @@ export type BagItem = Doc<"bagItem"> & {
   productCategory?: string;
   colorName?: string;
   productName?: string;
+  productImage?: string;
   size?: string;
   length?: number;
 };
@@ -41,6 +42,7 @@ export type SavedBagItem = Doc<"savedBagItem"> & {
   productCategory?: string;
   colorName?: string;
   productName?: string;
+  productImage?: string;
   size?: string;
   length?: number;
 };

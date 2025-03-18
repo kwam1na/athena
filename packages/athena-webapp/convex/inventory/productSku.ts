@@ -9,7 +9,14 @@ export const generateUploadUrl = mutation(async (ctx) => {
 export const getById = query({
   args: { id: v.id("productSku") },
   handler: async (ctx, args) => {
-    return await ctx.db.get(args.id);
+    const s = await ctx.db.get(args.id);
+    if (s && !s.productName) {
+      const product = await ctx.db.get(s.productId);
+
+      return { ...s, productName: product?.name };
+    }
+
+    return s;
   },
 });
 
@@ -17,11 +24,13 @@ export const retrieve = query({
   args: { id: v.id("productSku") },
   handler: async (ctx, args) => {
     const s = await ctx.db.get(args.id);
-    if (s) {
+    if (s && !s.productName) {
       const product = await ctx.db.get(s.productId);
 
       return { ...s, productName: product?.name };
     }
+
+    return s;
   },
 });
 

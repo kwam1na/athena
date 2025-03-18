@@ -185,8 +185,6 @@ function PromoCodeView() {
     return p;
   });
 
-  console.log("formatted", productsFormatted);
-
   const Discount = () => {
     if (!discount) return null;
 

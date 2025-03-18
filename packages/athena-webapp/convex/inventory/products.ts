@@ -190,24 +190,11 @@ export const getById = query({
     storeId: v.id("store"),
   },
   handler: async (ctx, args) => {
-    const product = await ctx.db
-      .query(entity)
-      .filter((q) =>
-        q.and(
-          q.eq(q.field("_id"), args.id),
-          q.eq(q.field("storeId"), args.storeId)
-        )
-      )
-      .first();
+    const product = await ctx.db.get(args.id);
 
     const skus = await ctx.db
       .query("productSku")
-      .filter((q) =>
-        q.and(
-          q.eq(q.field("storeId"), args.storeId),
-          q.eq(q.field("productId"), product?._id)
-        )
-      )
+      .withIndex("by_productId", (q) => q.eq("productId", args.id))
       .collect();
 
     const colorIds = skus
@@ -272,12 +259,7 @@ export const getBySlug = query({
 
     const skus = await ctx.db
       .query("productSku")
-      .filter((q) =>
-        q.and(
-          q.eq(q.field("storeId"), args.storeId),
-          q.eq(q.field("productId"), product?._id)
-        )
-      )
+      .withIndex("by_productId", (q) => q.eq("productId", product?._id))
       .collect();
 
     const colorIds = skus
@@ -348,12 +330,7 @@ export const getByIdOrSlug = query({
 
     const skus = await ctx.db
       .query("productSku")
-      .filter((q) =>
-        q.and(
-          q.eq(q.field("storeId"), args.storeId),
-          q.eq(q.field("productId"), product?._id)
-        )
-      )
+      .withIndex("by_productId", (q) => q.eq("productId", product?._id))
       .collect();
 
     const colorIds = skus
@@ -424,7 +401,19 @@ export const create = mutation({
   handler: async (ctx, args) => {
     const id = await ctx.db.insert(entity, args);
 
-    return await ctx.db.get(id);
+    const product = await ctx.db.get(id);
+
+    if (product) {
+      await ctx.scheduler.runAfter(
+        0,
+        api.inventory.productUtil.invalidateProductCache,
+        {
+          storeId: product?.storeId,
+        }
+      );
+    }
+
+    return product;
   },
 });
 
@@ -548,7 +537,19 @@ export const update = mutation({
 
     await ctx.db.patch(args.id, { ...rest });
 
-    return await ctx.db.get(args.id);
+    const product = await ctx.db.get(args.id);
+
+    if (product) {
+      await ctx.scheduler.runAfter(
+        0,
+        api.inventory.productUtil.invalidateProductCache,
+        {
+          storeId: product?.storeId,
+        }
+      );
+    }
+
+    return product;
   },
 });
 
@@ -606,5 +607,24 @@ export const removeAllProductsForStore = mutation({
 
     // Delete all products using Promise.all
     await Promise.all(products.map((product) => ctx.db.delete(product._id)));
+  },
+});
+
+export const batchGet = query({
+  args: {
+    ids: v.array(v.id(entity)),
+    storeId: v.id("store"),
+  },
+  handler: async (ctx, args) => {
+    const res: any[] = await Promise.all(
+      args.ids.map((id) =>
+        ctx.runQuery(api.inventory.products.getById, {
+          id,
+          storeId: args.storeId,
+        })
+      )
+    );
+
+    return res;
   },
 });

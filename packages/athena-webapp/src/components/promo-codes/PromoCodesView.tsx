@@ -26,8 +26,6 @@ export default function PromoCodesView() {
     );
   };
 
-  console.log(promoCodes);
-
   const formatter = currencyFormatter(activeStore.currency);
 
   const hasCodes = promoCodes.length > 0;

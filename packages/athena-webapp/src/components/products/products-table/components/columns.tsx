@@ -32,7 +32,7 @@ export const columns: ColumnDef<Product>[] = [
             {sku?.images[0] ? (
               <img
                 alt="Uploaded image"
-                className={`aspect-square w-12 h-12 rounded-md object-cover`}
+                className={`aspect-square w-16 h-16 rounded-md object-cover`}
                 src={sku?.images[0]}
               />
             ) : (

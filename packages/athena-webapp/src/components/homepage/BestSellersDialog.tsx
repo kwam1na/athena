@@ -29,8 +29,6 @@ export function BestSellersDialog({
   const handleAddBestSeller = async (productSku: any) => {
     if (!activeStore) return;
 
-    console.log("adding ->", productSku);
-
     addBestSeller({
       productId: productSku.productId,
       productSkuId: productSku._id,

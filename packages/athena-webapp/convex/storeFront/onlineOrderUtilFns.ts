@@ -28,7 +28,7 @@ export async function handleOrderStatusUpdate({
   // Helper to format order items
   const formatOrderItems = (items: any) =>
     items?.map((item: any) => ({
-      text: item.productName,
+      text: capitalizeWords(item.productName),
       image: item.productImage,
       price: formatter.format(item.price),
       quantity: item.quantity,

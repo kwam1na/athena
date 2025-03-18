@@ -36,11 +36,12 @@ export const getById = query({
   },
   handler: async (ctx, args) => {
     const bag = await ctx.db.get(args.id);
+
     if (!bag) return null;
 
     const items = await ctx.db
       .query("bagItem")
-      .filter((q) => q.eq(q.field("bagId"), bag._id))
+      .withIndex("by_bagId", (q) => q.eq("bagId", bag._id))
       .collect();
 
     // For each item, retrieve the associated product and its SKUs
@@ -100,7 +101,7 @@ export const getByUserId = query({
 
     const items = await ctx.db
       .query("bagItem")
-      .filter((q) => q.eq(q.field("bagId"), bag._id))
+      .withIndex("by_bagId", (q) => q.eq("bagId", bag._id))
       .collect();
 
     // For each item, retrieve the associated product and its SKUs
