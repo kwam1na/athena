@@ -188,11 +188,17 @@ const Signup = () => {
                 <div>
                   <p className="text-sm text-muted-foreground">
                     By creating an account, you agree to our{" "}
-                    <Link to="/policies/tos" className="text-primary">
+                    <Link
+                      to="/policies/tos"
+                      className="text-primary hover:underline"
+                    >
                       Terms of Service
                     </Link>{" "}
                     and{" "}
-                    <Link to="/policies/privacy" className="text-primary">
+                    <Link
+                      to="/policies/privacy"
+                      className="text-primary hover:underline"
+                    >
                       Privacy Policy.
                     </Link>
                   </p>
@@ -202,7 +208,10 @@ const Signup = () => {
                   <p className="text-sm text-muted-foreground">
                     Already have an account?
                   </p>
-                  <Link to="/login" className="flex items-center group">
+                  <Link
+                    to="/login"
+                    className="flex items-center group hover:underline"
+                  >
                     <p className="text-sm">Login</p>
                     <ArrowRight className="w-3.5 h-3.5 ml-2 -me-1 ms-2 transition-transform group-hover:translate-x-0.5" />
                   </Link>
