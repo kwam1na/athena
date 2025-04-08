@@ -29,6 +29,7 @@ import { useNavigationBarContext } from "@/contexts/NavigationBarProvider";
 import { useCheckoutSessionQueries } from "@/lib/queries/checkout";
 import { useGetActiveCheckoutSession } from "@/hooks/useGetActiveCheckoutSession";
 import { usePromoCodesQueries } from "@/lib/queries/promoCode";
+import { postAnalytics } from "@/api/analytics";
 
 const PendingItem = ({ session, count }: { session: any; count: number }) => {
   return (
@@ -146,11 +147,17 @@ export default function ShoppingBag() {
     setError(null);
 
     try {
-      const res = await obtainCheckoutSession({
-        bagItems,
-        bagId: bag?._id as string,
-        bagSubtotal: bagSubtotal * 100,
-      });
+      const [res] = await Promise.all([
+        obtainCheckoutSession({
+          bagItems,
+          bagId: bag?._id as string,
+          bagSubtotal: bagSubtotal * 100,
+        }),
+        postAnalytics({
+          action: "initiate_checkout",
+          data: {},
+        }).catch((error) => console.error("Failed to post analytics:", error)),
+      ]);
 
       if (res.session) {
         queryClient.setQueryData(["active-checkout-session", userId], {

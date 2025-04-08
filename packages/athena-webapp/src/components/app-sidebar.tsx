@@ -20,6 +20,7 @@ import {
   Cog,
   CogIcon,
   Image,
+  Logs,
   PanelBottom,
   PanelTop,
   PersonStanding,
@@ -109,6 +110,23 @@ export function AppSidebar() {
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
+
+              {/* <SidebarMenuItem>
+                <SidebarMenuButton asChild>
+                  <Link
+                    to="/$orgUrlSlug/store/$storeUrlSlug/logs"
+                    params={(p) => ({
+                      ...p,
+                      orgUrlSlug: activeOrganization?.slug,
+                      storeUrlSlug: activeStore?.slug,
+                    })}
+                    className="flex items-center"
+                  >
+                    <Logs className="w-4 h-4" />
+                    <p className="font-medium">Logs</p>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem> */}
 
               <SidebarMenuItem>
                 <SidebarMenuButton asChild>

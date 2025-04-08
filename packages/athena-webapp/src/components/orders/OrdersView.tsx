@@ -10,6 +10,7 @@ import {
 } from "~/src/lib/utils";
 import { OrdersTableToolbarProvider } from "./orders-table/components/data-table-toolbar-provider";
 import { OnlineOrder } from "~/types";
+import { FadeIn } from "../common/FadeIn";
 
 export default function OrdersView({ status }: { status?: string }) {
   const { activeStore } = useGetActiveStore();
@@ -66,13 +67,15 @@ export default function OrdersView({ status }: { status?: string }) {
       className="bg-background"
       header={hasOrders && <Navigation />}
     >
-      <OrdersTableToolbarProvider>
-        <Orders
-          store={activeStore}
-          status={status || "open"}
-          orders={ordersFormatted}
-        />
-      </OrdersTableToolbarProvider>
+      <FadeIn>
+        <OrdersTableToolbarProvider>
+          <Orders
+            store={activeStore}
+            status={status || "open"}
+            orders={ordersFormatted}
+          />
+        </OrdersTableToolbarProvider>
+      </FadeIn>
     </View>
   );
 }

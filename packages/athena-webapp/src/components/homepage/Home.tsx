@@ -8,6 +8,7 @@ import { api } from "~/convex/_generated/api";
 import { EmptyState } from "../states/empty/empty-state";
 import { Store } from "lucide-react";
 import { ShopLookSection } from "./ShopLook";
+import { FadeIn } from "../common/FadeIn";
 
 export default function Home() {
   const { activeStore } = useGetActiveStore();
@@ -36,27 +37,29 @@ export default function Home() {
       className="bg-background"
       header={hasProducts && <Navigation />}
     >
-      {hasProducts && (
-        <div className="container mx-auto grid grid-cols-2 gap-40">
-          <BestSellers />
-          <FeaturedSection />
-          <ShopLookSection />
-        </div>
-      )}
+      <FadeIn>
+        {hasProducts && (
+          <div className="container mx-auto grid grid-cols-2 gap-40">
+            <BestSellers />
+            <FeaturedSection />
+            <ShopLookSection />
+          </div>
+        )}
 
-      {!hasProducts && (
-        <div className="container mx-auto">
-          <EmptyState
-            icon={<Store className="w-16 h-16 text-muted-foreground" />}
-            text={
-              <div className="flex gap-1 text-sm">
-                <p className="text-muted-foreground">No products found in</p>
-                <p className="font-medium">{activeStore.name}</p>
-              </div>
-            }
-          />
-        </div>
-      )}
+        {!hasProducts && (
+          <div className="container mx-auto">
+            <EmptyState
+              icon={<Store className="w-16 h-16 text-muted-foreground" />}
+              text={
+                <div className="flex gap-1 text-sm">
+                  <p className="text-muted-foreground">No products found in</p>
+                  <p className="font-medium">{activeStore.name}</p>
+                </div>
+              }
+            />
+          </div>
+        )}
+      </FadeIn>
     </View>
   );
 }

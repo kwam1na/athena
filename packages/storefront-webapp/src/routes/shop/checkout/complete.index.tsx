@@ -1,3 +1,4 @@
+import { postAnalytics } from "@/api/analytics";
 import { updateCheckoutSession } from "@/api/checkoutSession";
 import { BagSummaryItems } from "@/components/checkout/BagSummary";
 import {
@@ -5,27 +6,20 @@ import {
   useCheckout,
   webOrderSchema,
 } from "@/components/checkout/CheckoutProvider";
-import { DeliveryDetails } from "@/components/checkout/DeliveryDetails/DeliverySection";
-import {
-  OrderDetails,
-  PaymentDetails,
-  PickupDetails,
-} from "@/components/checkout/OrderDetails";
+import { OrderDetails } from "@/components/checkout/OrderDetails";
 import {
   CheckoutCompleted,
-  CheckoutMissingPayment,
   UnableToVerifyCheckoutPayment,
 } from "@/components/states/checkout-expired/CheckoutExpired";
 import { Button } from "@/components/ui/button";
 import { LoadingButton } from "@/components/ui/loading-button";
-import { useStoreContext } from "@/contexts/StoreContext";
 import { useGetActiveCheckoutSession } from "@/hooks/useGetActiveCheckoutSession";
 import { useBagQueries } from "@/lib/queries/bag";
 import { capitalizeFirstLetter } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
-import { useEffect, useState } from "react";
+import { act, useEffect, useState } from "react";
 
 export const Route = createFileRoute("/shop/checkout/complete/")({
   component: () => <CheckoutCompleteView />,
@@ -46,22 +40,26 @@ export const CheckoutComplete = () => {
       const { data } = webOrderSchema.safeParse(checkoutState);
 
       if (
-        data &&
-        (activeSession.hasCompletedPayment || activeSession.hasVerifiedPayment)
+        activeSession.hasCompletedPayment ||
+        activeSession.hasVerifiedPayment
       ) {
-        const res = await updateCheckoutSession({
-          action: "complete-checkout",
-          sessionId: activeSession._id,
-          hasCompletedCheckoutSession: true,
-          orderDetails: data,
-        });
+        await Promise.all([
+          updateCheckoutSession({
+            action: "complete-checkout",
+            sessionId: activeSession._id,
+            hasCompletedCheckoutSession: true,
+            orderDetails: data,
+          }),
 
-        setOrderId(res.orderId);
-        setAttemptedOrderCreation(true);
+          postAnalytics({
+            action: "completed_checkout",
+            data: {
+              checkoutSessionId: activeSession._id,
+            },
+          }),
+        ]);
 
         queryClient.invalidateQueries({ queryKey: bagQueries.activeBagKey() });
-
-        // sessionStorage.removeItem("checkoutState");
       }
     };
 
@@ -138,8 +136,6 @@ export const CheckoutComplete = () => {
     );
   }
 
-  if (!orderId && !attemptedOrderCreation) return null;
-
   return (
     <AnimatePresence>
       <div className="container mx-auto max-w-[1024px] pt-24 pb-40 px-6 lg:px-0 space-y-24">
@@ -151,16 +147,16 @@ export const CheckoutComplete = () => {
           }}
           className="space-y-12"
         >
-          <p className="text-3xl font-light">{`Get excited, ${capitalizeFirstLetter(checkoutState.customerDetails?.firstName || "")}!`}</p>
+          <p className="text-3xl font-light">{`Get excited, ${capitalizeFirstLetter(activeSession.customerDetails?.firstName || "")}!`}</p>
 
-          {checkoutState.isDeliveryOrder && (
+          {activeSession.deliveryMethod == "delivery" && (
             <p>
               Your order will be processed in 24 - 48 hours. We'll email you
               when it's out for delivery.
             </p>
           )}
 
-          {checkoutState.isPickupOrder && (
+          {activeSession.deliveryMethod == "pickup" && (
             <p>
               Your order will be processed in 24 - 48 hours. We'll email you
               when it's ready for pickup.
@@ -196,10 +192,10 @@ export const CheckoutComplete = () => {
             </Button>
           </Link>
 
-          {orderId && (
+          {activeSession.placedOrderId && (
             <Link
               to="/shop/orders/$orderId"
-              params={{ orderId }}
+              params={{ orderId: activeSession.placedOrderId }}
               search={{ origin: "checkout" }}
             >
               <Button variant={"link"} className="px-0">

@@ -7,6 +7,8 @@ import { AnalyticsChart } from "./chart";
 import { Analytic } from "~/types";
 import { AnalyticsProductsTable } from "./analytics-products-table/data-table";
 import AnalyticsProducts from "./AnalyticsProducts";
+import { AnimatePresence, motion } from "framer-motion";
+import { FadeIn } from "../common/FadeIn";
 
 export default function AnalyticsView() {
   const { activeStore } = useGetActiveStore();
@@ -37,10 +39,10 @@ export default function AnalyticsView() {
       className="bg-background"
       header={<Navigation />}
     >
-      <div className="grid grid-cols-2 gap-16">
+      <FadeIn className="grid grid-cols-2 gap-16">
         <AnalyticsProducts items={items} />
         <AnalyticsItems items={items} />
-      </div>
+      </FadeIn>
     </View>
   );
 }

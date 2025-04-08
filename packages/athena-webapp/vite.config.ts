@@ -16,24 +16,24 @@ export default defineConfig({
           template: "treemap",
         }),
       ],
-      // output: {
-      //   manualChunks(id) {
-      //     if (id.includes("node_modules")) {
-      //       if (id.includes("@tanstack")) return "tanstack-vendor";
+      output: {
+        manualChunks(id) {
+          if (id.includes("node_modules")) {
+            // if (id.includes("@tanstack")) return "tanstack-vendor";
 
-      //       if (id.includes("zod")) return "zod-vendor";
+            // // if (id.includes("zod")) return "zod-vendor";
 
-      //       if (id.includes("framer-motion")) return "framer-motion-vendor";
+            // if (id.includes("framer-motion")) return "framer-motion-vendor";
 
-      //       if (id.includes("@radix-ui")) return "radix-ui-vendor";
+            // if (id.includes("@radix-ui")) return "radix-ui-vendor";
 
-      //       // if (id.includes("@hello-pangea")) return "hello-pangea-vendor";
+            // if (id.includes("@hello-pangea")) return "hello-pangea-vendor";
 
-      //       // Fallback for other node_modules
-      //       return "vendor";
-      //     }
-      //   },
-      // },
+            // Fallback for other node_modules
+            return "vendor";
+          }
+        },
+      },
     },
   },
   plugins: [TanStackRouterVite(), react()],

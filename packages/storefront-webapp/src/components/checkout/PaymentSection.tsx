@@ -12,6 +12,7 @@ import { updateUser } from "@/api/storeFrontUser";
 import { useStoreContext } from "@/contexts/StoreContext";
 import { BillingDetailsSection } from "./BillingDetailsSection";
 import { CheckoutFormSectionProps } from "./CustomerInfoSection";
+import { postAnalytics } from "@/api/analytics";
 
 export const PaymentSection = ({ form }: CheckoutFormSectionProps) => {
   const { activeSession, canPlaceOrder, checkoutState } = useCheckout();
@@ -43,14 +44,22 @@ export const PaymentSection = ({ form }: CheckoutFormSectionProps) => {
 
       setIsProceedingToPayment(true);
 
-      // Process checkout session
-      const paymentResponse = await processCheckoutSession(
-        {
-          ...data,
-          deliveryDetails: data.deliveryDetails ?? null,
-        },
-        total
-      );
+      // Process checkout and track analytics in parallel
+      const [paymentResponse] = await Promise.all([
+        processCheckoutSession(
+          {
+            ...data,
+            deliveryDetails: data.deliveryDetails ?? null,
+          },
+          total
+        ),
+        postAnalytics({
+          action: "finalize_checkout",
+          data: {
+            checkoutSessionId: activeSession._id,
+          },
+        }),
+      ]);
 
       if (user)
         // Update user information if needed

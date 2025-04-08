@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { mutation, query } from "../_generated/server";
+import { internalMutation, mutation, query } from "../_generated/server";
 import {
   addressSchema,
   customerDetailsSchema,
@@ -103,6 +103,93 @@ export const create = mutation({
     }
 
     console.log("created online order for session.");
+
+    return {
+      success: true,
+      orderId,
+    };
+  },
+});
+
+export const createFromSession = internalMutation({
+  args: {
+    checkoutSessionId: v.id("checkoutSession"),
+    paymentMethod: v.optional(paymentMethodSchema),
+  },
+  handler: async (ctx, args) => {
+    const session = await ctx.db.get(args.checkoutSessionId);
+
+    if (!session) {
+      return {
+        success: false,
+        error: "Invalid session",
+      };
+    }
+
+    const orderId = await ctx.db.insert(entity, {
+      storeFrontUserId: session.storeFrontUserId,
+      storeId: session.storeId,
+      checkoutSessionId: args.checkoutSessionId,
+      externalReference: session.externalReference,
+      externalTransactionId: session.externalTransactionId?.toString(),
+      bagId: session.bagId,
+      amount: session.amount,
+      billingDetails: session.billingDetails as any,
+      customerDetails: session.customerDetails as any,
+      deliveryDetails: session.deliveryDetails as any,
+      deliveryInstructions: session.deliveryInstructions,
+      deliveryMethod: session.deliveryMethod || "n/a",
+      deliveryOption: session.deliveryOption,
+      deliveryFee: session.deliveryFee,
+      discount: session.discount,
+      pickupLocation: session.pickupLocation,
+      hasVerifiedPayment: session.hasVerifiedPayment,
+      paymentMethod: args.paymentMethod,
+      orderNumber: generateOrderNumber(),
+      status: "open",
+    });
+
+    // get the session items using the session id to create the online order items
+    const items = await ctx.db
+      .query("checkoutSessionItem")
+      .filter((q) => q.eq(q.field("sesionId"), args.checkoutSessionId))
+      .collect();
+
+    await Promise.all(
+      items.map((item) => {
+        return ctx.db.insert("onlineOrderItem", {
+          orderId,
+          productId: item.productId,
+          quantity: item.quantity,
+          productSku: item.productSku,
+          productSkuId: item.productSkuId,
+          storeFrontUserId: item.storeFrontUserId,
+          price: item.price,
+        });
+      })
+    );
+
+    // update used promo code for this order
+    if (session.discount?.id) {
+      await ctx.db.insert("redeemedPromoCode", {
+        promoCodeId: session.discount.id as Id<"promoCode">,
+        storeFrontUserId: session.storeFrontUserId,
+      });
+    }
+
+    // update the session to reflect that the order has been created
+    await ctx.db.patch(args.checkoutSessionId, {
+      placedOrderId: orderId,
+    });
+
+    console.log("created online order for session. clearing bag..");
+
+    // clear the bag for the sesion
+    await ctx.runMutation(api.storeFront.bag.clearBag, {
+      id: session.bagId,
+    });
+
+    console.log("cleared bag for session.");
 
     return {
       success: true,

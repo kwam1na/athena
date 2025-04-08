@@ -1,7 +1,12 @@
-import { AtSign, Phone, Send, UserRound } from "lucide-react";
+import { AtSign, IdCard, Phone, Send, UserRound } from "lucide-react";
 import View from "../View";
-import { Button } from "../ui/button";
 import { useOnlineOrder } from "~/src/contexts/OnlineOrderContext";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "../ui/tooltip";
 
 export function CustomerDetailsView() {
   const { order } = useOnlineOrder();
@@ -20,8 +25,19 @@ export function CustomerDetailsView() {
       <div className="py-4 space-y-12">
         <div className="space-y-4">
           <div className="flex items-center gap-4">
-            <UserRound className="h-4 w-4" />
-            <p className="text-sm">{`${customerDetails.firstName} ${customerDetails.lastName}`}</p>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="flex items-center gap-4">
+                    <UserRound className="h-4 w-4" />
+                    <p className="text-sm">{`${customerDetails.firstName} ${customerDetails.lastName}`}</p>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{order.storeFrontUserId}</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
 
           <div className="flex items-center gap-4">

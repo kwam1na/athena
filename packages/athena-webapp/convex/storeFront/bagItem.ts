@@ -27,9 +27,13 @@ export const addItemToBag = mutation({
       )
       .first();
 
+    // update the bag's updatedAt field
+    await ctx.db.patch(args.bagId, { updatedAt: Date.now() });
+
     if (existing) {
       return await ctx.db.patch(existing._id, {
         quantity: existing.quantity + args.quantity,
+        updatedAt: Date.now(),
       });
     }
 
@@ -77,6 +81,6 @@ export const getBagItemsForStore = query({
       })
     );
 
-    return items;
+    return items.filter((item) => item.items.length > 0);
   },
 });

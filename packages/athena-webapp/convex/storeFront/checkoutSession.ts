@@ -337,6 +337,45 @@ export const cancelOrder = action({
   },
 });
 
+export const completeCheckoutSessions = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const now = Date.now();
+
+    const oneHourAgo = now - 60 * 60 * 1000; // 1 hour in milliseconds
+
+    const sessions = await ctx.db
+      .query("checkoutSession")
+      .filter((q) =>
+        q.and(
+          q.lt(q.field("expiresAt"), oneHourAgo),
+          q.eq(q.field("isFinalizingPayment"), true),
+          q.eq(q.field("hasCompletedPayment"), true),
+          q.eq(q.field("hasVerifiedPayment"), true),
+          q.eq(q.field("hasCompletedCheckoutSession"), false)
+        )
+      )
+      .collect();
+
+    if (sessions.length === 0) {
+      console.log("No sessions to complete.");
+      return;
+    }
+
+    // set all sessions to completed
+    await Promise.all(
+      sessions.map((session) =>
+        ctx.db.patch(session._id, { hasCompletedCheckoutSession: true })
+      )
+    );
+
+    console.log(
+      "Completed checkout sessions",
+      sessions.map((s) => s._id)
+    );
+  },
+});
+
 export const clearAbandonedSessions = internalAction({
   args: {},
   handler: async (ctx) => {
@@ -366,7 +405,9 @@ export const clearAbandonedSessions = internalAction({
     const responses = await Promise.all(checks.map((check) => check.json()));
 
     const abandonededBags = responses
-      .filter((r) => r.data.status === "abandoned")
+      .filter(
+        (r) => r.data.status === "abandoned" || r.data.status === "failed"
+      )
       .map((r) => r.data.reference);
 
     await ctx.runMutation(
@@ -407,10 +448,15 @@ export const updateCheckoutSession = internalMutation({
       const session = await ctx.db.get(args.id);
 
       if (!session) {
+        console.log(
+          "Session missing for id in updateCheckoutSession. Returning false.",
+          args.id
+        );
         return { success: false, message: "Invalid session." };
       }
 
       if (args.action === "place-order") {
+        console.log("Placing order for session", args.id);
         return await handlePlaceOrder(ctx, args.id, session);
       }
 
@@ -419,6 +465,7 @@ export const updateCheckoutSession = internalMutation({
         !session.placedOrderId;
 
       if (args.orderDetails && shouldPlaceOrder) {
+        console.log(`Placing order from calculation for session ${args.id}`);
         return await handleOrderCreation(
           ctx,
           args.id,
@@ -513,6 +560,8 @@ async function handlePlaceOrder(
     pickupLocation: session.pickupLocation,
     paymentMethod: session.paymentMethod,
   });
+
+  console.log(`Created online order for session ${sessionId}`, orderResponse);
 
   return orderResponse;
 }

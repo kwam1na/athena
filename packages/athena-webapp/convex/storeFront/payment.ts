@@ -3,7 +3,7 @@ import { action } from "../_generated/server";
 import { api, internal } from "../_generated/api";
 import { Address, CheckoutSession, OnlineOrder } from "../../types";
 import { orderDetailsSchema } from "../schemas/storeFront";
-import { sendOrderEmail } from "../sendgrid";
+import { sendNewOrderEmail, sendOrderEmail } from "../sendgrid";
 import {
   capitalizeWords,
   currencyFormatter,
@@ -152,68 +152,90 @@ export const verifyPayment = action({
 
         const update: Record<string, any> = { hasVerifiedPayment: true };
 
-        if (order && !order.didSendConfirmationEmail) {
-          try {
-            const store = await ctx.runQuery(api.inventory.stores.getById, {
-              id: order.storeId,
-            });
+        if (order) {
+          const store = await ctx.runQuery(api.inventory.stores.getById, {
+            id: order.storeId,
+          });
 
-            const formatter = currencyFormatter(store?.currency || "USD");
+          const formatter = currencyFormatter(store?.currency || "USD");
 
-            const orderStatusMessaging =
-              order.deliveryMethod == "pickup"
-                ? "Thank you for shopping with us! We're processing your order and will notify you once it's ready for pickup. Processing takes 24-48 hours."
-                : "Thank you for shopping with us! We're processing your order and will notify you once it's on the way. Processing takes 24-48 hours.";
-
-            const orderPickupLocation = store?.config?.contactInfo?.location;
-
-            const deliveryAddress = order.deliveryDetails
-              ? getAddressString(order.deliveryDetails as Address)
-              : "Details not available";
-
-            const pickupDetails =
-              order.deliveryMethod == "pickup"
-                ? orderPickupLocation
-                : deliveryAddress;
-
-            const items =
-              order.items?.map((item: any) => ({
-                text: capitalizeWords(item.productName),
-                image: item.productImage,
-                price: formatter.format(item.price),
-                quantity: item.quantity,
-                color: item.colorName,
-                length: item.length && `${item.length} inches`,
-              })) || [];
-
-            // send confirmation email
-            const emailResponse = await sendOrderEmail({
-              type: "confirmation",
-              customerEmail: order.customerDetails.email,
-              delivery_fee: order.deliveryFee
-                ? formatter.format(order.deliveryFee)
-                : undefined,
-              discount: discountValue
-                ? formatter.format(actualDiscount / 100)
-                : undefined,
+          if (!order.didSendNewOrderReceivedEmail) {
+            const emailResponse = await sendNewOrderEmail({
               store_name: "Wigclub",
-              order_number: order.orderNumber,
+              order_amount: formatter.format(orderAmountLessDiscounts / 100),
+              order_status: "Paid",
               order_date: formatDate(order._creationTime),
-              order_status_messaging: orderStatusMessaging,
-              total: formatter.format(orderAmountLessDiscounts / 100),
-              items,
-              pickup_type: order.deliveryMethod,
-              pickup_details: pickupDetails,
+              customer_name: `${order.customerDetails.firstName} ${order.customerDetails.lastName}`,
             });
-
             if (emailResponse.ok) {
               console.log(
-                `sent order confirmation for order #${order?.orderNumber} to ${order.customerDetails?.email}`
+                `sent new order received email for order #${order?.orderNumber} to admins`
               );
-              update.didSendConfirmationEmail = true;
+              update.didSendNewOrderReceivedEmail = true;
+            } else {
+              console.error(
+                `Failed to send new order received email for order #${order?.orderNumber}`
+              );
             }
-          } catch (e) {
-            console.error("Failed to send order confirmation email", e);
+          }
+
+          if (!order.didSendConfirmationEmail) {
+            try {
+              const orderStatusMessaging =
+                order.deliveryMethod == "pickup"
+                  ? "Thank you for shopping with us! We're processing your order and will notify you once it's ready for pickup. Processing takes 24-48 hours."
+                  : "Thank you for shopping with us! We're processing your order and will notify you once it's on the way. Processing takes 24-48 hours.";
+
+              const orderPickupLocation = store?.config?.contactInfo?.location;
+
+              const deliveryAddress = order.deliveryDetails
+                ? getAddressString(order.deliveryDetails as Address)
+                : "Details not available";
+
+              const pickupDetails =
+                order.deliveryMethod == "pickup"
+                  ? orderPickupLocation
+                  : deliveryAddress;
+
+              const items =
+                order.items?.map((item: any) => ({
+                  text: capitalizeWords(item.productName),
+                  image: item.productImage,
+                  price: formatter.format(item.price),
+                  quantity: item.quantity,
+                  color: item.colorName,
+                  length: item.length && `${item.length} inches`,
+                })) || [];
+
+              // send confirmation email
+              const emailResponse = await sendOrderEmail({
+                type: "confirmation",
+                customerEmail: order.customerDetails.email,
+                delivery_fee: order.deliveryFee
+                  ? formatter.format(order.deliveryFee)
+                  : undefined,
+                discount: discountValue
+                  ? formatter.format(actualDiscount / 100)
+                  : undefined,
+                store_name: "Wigclub",
+                order_number: order.orderNumber,
+                order_date: formatDate(order._creationTime),
+                order_status_messaging: orderStatusMessaging,
+                total: formatter.format(orderAmountLessDiscounts / 100),
+                items,
+                pickup_type: order.deliveryMethod,
+                pickup_details: pickupDetails,
+              });
+
+              if (emailResponse.ok) {
+                console.log(
+                  `sent order confirmation for order #${order?.orderNumber} to ${order.customerDetails?.email}`
+                );
+                update.didSendConfirmationEmail = true;
+              }
+            } catch (e) {
+              console.error("Failed to send order confirmation email", e);
+            }
           }
         }
 

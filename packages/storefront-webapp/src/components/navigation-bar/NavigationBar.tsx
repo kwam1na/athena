@@ -2,7 +2,7 @@ import { useStoreContext } from "@/contexts/StoreContext";
 import { Link } from "@tanstack/react-router";
 import { AlignLeft } from "lucide-react";
 import { useShoppingBag } from "@/hooks/useShoppingBag";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useGetStoreCategories } from "../navigation/hooks";
 import CartIcon from "../shopping-bag/CartIcon";
 
@@ -144,32 +144,60 @@ export default function NavigationBar() {
     showNavbar();
   };
 
+  const [isScrollingDown, setIsScrollingDown] = useState(false);
+  const [prevScrollY, setPrevScrollY] = useState(0);
+
+  // Handle scroll direction detection
+  useEffect(() => {
+    const handleScroll = () => {
+      const currentScrollY = window.scrollY;
+      if (currentScrollY > prevScrollY && currentScrollY > 50) {
+        setIsScrollingDown(true);
+      } else {
+        setIsScrollingDown(false);
+      }
+      setPrevScrollY(currentScrollY);
+    };
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, [prevScrollY]);
+
   if (!store || !appLocation) return null;
 
-  const mainWrapperlass = navBarLayout == "sticky" ? "absolute" : "bg-accent5";
+  const mainWrapperlass =
+    navBarLayout == "sticky" ? "absolute bg-primary/20" : "bg-accent5";
 
   const navBGClass = activeMenu
     ? `${navBarLayout == "sticky" ? "bg-white bg-opacity-20 backdrop-blur-md" : "bg-accent5"}`
     : "bg-transparent";
 
   return (
-    <div className="flex flex-col relative">
-      <div className={`top-0 w-full z-50 ${mainWrapperlass}`}>
+    <div className="flex flex-col">
+      <motion.div
+        className={`w-full z-50 ${mainWrapperlass}`}
+        initial={{ opacity: 0 }}
+        animate={{
+          opacity: 1,
+          y: isScrollingDown && !activeMenu ? -100 : 0,
+          transition: {
+            y: { duration: 0.3, ease: "easeInOut" },
+            opacity: {
+              duration: 1,
+              delay: appLocation == "homepage" ? 2.2 : 0,
+              ease: [0.6, 0.05, 0.04, 0.9],
+            },
+          },
+        }}
+      >
         <AnimatePresence>
-          <SiteBanner />
+          <div>
+            <SiteBanner />
+          </div>
 
           <div key="nav-bar">
             <div className={`w-full ${navBGClass} transition-all ease-out`}>
-              <motion.nav
-                initial={{ opacity: 0 }}
-                animate={{
-                  opacity: 1,
-                  transition: {
-                    duration: 1,
-                    delay: appLocation == "homepage" ? 2.2 : 0,
-                    ease: [0.6, 0.05, 0.04, 0.9],
-                  },
-                }}
+              <nav
                 className={`${navBarClassname} container mx-auto max-w-[1024px]`}
               >
                 <div className="flex items-center justify-between w-full">
@@ -239,7 +267,7 @@ export default function NavigationBar() {
                     </div>
                   </div>
                 </div>
-              </motion.nav>
+              </nav>
             </div>
 
             {/* Submenus */}
@@ -294,7 +322,7 @@ export default function NavigationBar() {
             />
           )}
         </AnimatePresence>
-      </div>
+      </motion.div>
     </div>
   );
 }

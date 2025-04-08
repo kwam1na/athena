@@ -1,5 +1,6 @@
 import config from "@/config";
 import { CheckoutSession, ProductSku } from "@athena/webapp";
+import { postAnalytics } from "./analytics";
 
 const getBaseUrl = () => `${config.apiGateway.URL}/checkout`;
 
@@ -130,7 +131,7 @@ export async function updateCheckoutSession({
   const res = await response.json();
 
   if (!response.ok) {
-    throw new Error(res.error || "Error updating.");
+    throw new Error(res.error || "Error updating checkout session.");
   }
 
   return res;

@@ -5,15 +5,22 @@ const crons = cronJobs();
 
 crons.interval(
   "release-checkout-items",
-  { minutes: process.env.STAGE == "prod" ? 10 : 60 },
+  { minutes: process.env.STAGE == "prod" ? 10 : 1440 },
   internal.storeFront.checkoutSession.releaseCheckoutItems,
   {}
 );
 
 crons.interval(
   "clear-abandoned-sessions",
-  { minutes: process.env.STAGE == "prod" ? 30 : 60 },
+  { minutes: process.env.STAGE == "prod" ? 30 : 1440 },
   internal.storeFront.checkoutSession.clearAbandonedSessions,
+  {}
+);
+
+crons.interval(
+  "complete-checkout-sessions",
+  { minutes: process.env.STAGE == "prod" ? 30 : 1440 },
+  internal.storeFront.checkoutSession.completeCheckoutSessions,
   {}
 );
 

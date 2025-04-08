@@ -32,3 +32,37 @@ export const getAll = query({
       .collect();
   },
 });
+
+export const getAllPaginated = query({
+  args: {
+    storeId: v.id("store"),
+    cursor: v.union(v.string(), v.null()),
+    action: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const { page, continueCursor, isDone } = await ctx.db
+      .query(entity)
+      .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
+      .filter((q) => q.eq(q.field("action"), args.action))
+      .order("desc")
+      .paginate({
+        numItems: 10,
+        cursor: args.cursor,
+      });
+
+    return {
+      items: page,
+      cursor: continueCursor,
+      isDone,
+    };
+  },
+});
+
+export const get = query({
+  args: {
+    id: v.id("analytics"),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db.get(args.id);
+  },
+});

@@ -5,6 +5,7 @@ import {
   ProductsTableProvider,
   useProductsTableState,
 } from "./ProductsTableContext";
+import { FadeIn } from "../common/FadeIn";
 
 const Navigation = () => {
   return (
@@ -34,7 +35,9 @@ function Body() {
       className="bg-background"
       header={hasProducts && <Navigation />}
     >
-      <StoreProducts products={products} />
+      <FadeIn>
+        <StoreProducts products={products} />
+      </FadeIn>
     </View>
   );
 }

@@ -54,12 +54,12 @@ function RootComponent() {
   const { navBarLayout } = useNavigationBarContext();
 
   const navBarClassname =
-    navBarLayout == "sticky" ? "absolute w-full sticky z-50 top-0" : "";
+    navBarLayout == "sticky" ? "w-full sticky z-50 top-0" : "";
 
   return (
     <StoreProvider>
       <RootDocument>
-        <div className="flex flex-col h-screen bg-background">
+        <div className="flex flex-col bg-background">
           <div className={navBarClassname}>
             <NavigationBar />
           </div>
