@@ -29,14 +29,7 @@ export type Bag = Doc<"bag">;
 
 export type SavedBag = Doc<"savedBag">;
 
-export type BagItem = Doc<"bagItem"> & {
-  productCategory?: string;
-  colorName?: string;
-  productName?: string;
-  productImage?: string;
-  size?: string;
-  length?: number;
-};
+export type BagItem = Doc<"bagItem">;
 
 export type SavedBagItem = Doc<"savedBagItem"> & {
   productCategory?: string;

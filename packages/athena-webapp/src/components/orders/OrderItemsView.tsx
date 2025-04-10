@@ -94,11 +94,16 @@ function OrderItem({ item, order }: { item: any; order: any }) {
         }}
       >
         {item.productImage ? (
-          <img
-            src={item.productImage}
-            alt={item.productName || "product image"}
-            className="w-40 h-40 aspect-square object-cover rounded-lg"
-          />
+          <div className="relative">
+            <img
+              src={item.productImage}
+              alt={item.productName || "product image"}
+              className="w-24 h-24 aspect-square object-cover rounded-lg"
+            />
+            <div className="absolute -top-2 -right-2 bg-primary/70 text-primary-foreground text-xs w-4 h-4 rounded-full flex items-center justify-center">
+              {item.quantity}
+            </div>
+          </div>
         ) : (
           <div className="w-40 h-40 bg-gray-100 rounded-lg" />
         )}
@@ -123,7 +128,6 @@ function OrderItem({ item, order }: { item: any; order: any }) {
           <p className="text-sm">{getProductName(item)}</p>
           <p className="text-xs text-muted-foreground">{item.productSku}</p>
           <p className="text-xs text-muted-foreground">{item.price}</p>
-          <p className="text-xs text-muted-foreground">{`x${item.quantity}`}</p>
         </Link>
 
         <div className="space-y-2">

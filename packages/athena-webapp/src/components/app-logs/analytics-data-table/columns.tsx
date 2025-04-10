@@ -97,7 +97,12 @@ export const columns: ColumnDef<Analytic>[] = [
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <User className="w-4 h-4" />
+                <div className="flex items-center gap-2">
+                  <User className="w-4 h-4" />
+                  <p className="text-sm font-medium">
+                    {`User-${item.storeFrontUserId.slice(-5)}`}
+                  </p>
+                </div>
               </TooltipTrigger>
               <TooltipContent>
                 <p>{item.storeFrontUserId}</p>

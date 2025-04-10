@@ -20,30 +20,28 @@ export const bagColumns: ColumnDef<Bag>[] = [
     ),
     cell: ({ row }) => {
       const bag = row.original;
-      const bagItem = bag.items[0];
 
       return (
         <Link
-          to="/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug"
+          to="/$orgUrlSlug/store/$storeUrlSlug/bags/$bagId"
           params={(prev) => ({
             ...prev,
             orgUrlSlug: prev.orgUrlSlug!,
             storeUrlSlug: prev.storeUrlSlug!,
-            productSlug: bagItem.productId,
+            bagId: bag._id,
           })}
-          search={{ variant: bagItem.productSku }}
           className="flex items-center gap-8"
         >
           <div className="flex flex-col gap-4">
             <div className="flex gap-2">
-              {bag.items.slice(0, 3).map((item) => (
+              {bag.items.slice(0, 3).map((item: any) => (
                 <div key={item._id} className="relative">
                   <img
                     alt="Uploaded image"
                     className={`aspect-square w-12 h-12 rounded-md object-cover`}
                     src={item.productImage}
                   />
-                  <div className="absolute -top-2 -right-2 bg-primary/60 text-primary-foreground text-xs w-4 h-4 rounded-full flex items-center justify-center">
+                  <div className="absolute -top-2 -right-2 bg-primary/70 text-primary-foreground text-xs w-4 h-4 rounded-full flex items-center justify-center">
                     {item.quantity}
                   </div>
                 </div>
@@ -86,7 +84,12 @@ export const bagColumns: ColumnDef<Bag>[] = [
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <User className="w-4 h-4" />
+                <div className="flex items-center gap-2">
+                  <User className="w-4 h-4" />
+                  <p className="text-sm font-medium">
+                    {`User-${item.storeFrontUserId.slice(-5)}`}
+                  </p>
+                </div>
               </TooltipTrigger>
               <TooltipContent>
                 <p>{item.storeFrontUserId}</p>

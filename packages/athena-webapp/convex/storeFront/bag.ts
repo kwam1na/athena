@@ -1,4 +1,5 @@
 import { api } from "../_generated/api";
+import { Doc } from "../_generated/dataModel";
 import { mutation, query } from "../_generated/server";
 import { v } from "convex/values";
 
@@ -75,7 +76,7 @@ export const getById = query({
           productCategory: category,
           productImage: sku?.images?.[0],
           productSlug: product?.slug,
-        };
+        } as Doc<"bagItem">;
       })
     );
 
@@ -83,7 +84,7 @@ export const getById = query({
     return {
       ...bag,
       items: itemsWithProductDetails,
-    };
+    } as Doc<"bag">;
   },
 });
 
