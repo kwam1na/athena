@@ -6,13 +6,14 @@ import { currencyFormatter } from "~/src/lib/utils";
 import { BagItem } from "~/types";
 import BagItems from "./BagItems";
 import Bags from "./Bags";
+import { FadeIn } from "../common/FadeIn";
 
 export default function BagItemsView() {
   const { activeStore } = useGetActiveStore();
 
   const bags = useQuery(
     api.storeFront.bagItem.getBagItemsForStore,
-    activeStore?._id ? { storeId: activeStore._id } : "skip"
+    activeStore?._id ? { storeId: activeStore._id, cursor: null } : "skip"
   );
 
   if (!activeStore || !bags) return null;
@@ -58,8 +59,9 @@ export default function BagItemsView() {
       className="bg-background"
       header={hasBagItems && <Navigation />}
     >
-      {/* <BagItems items={items} /> */}
-      <Bags items={data} />
+      <FadeIn>
+        <Bags items={data} />
+      </FadeIn>
     </View>
   );
 }

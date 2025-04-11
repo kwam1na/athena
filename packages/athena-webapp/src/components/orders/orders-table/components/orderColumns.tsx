@@ -203,7 +203,9 @@ export const orderColumns: ColumnDef<OnlineOrder>[] = [
           })}
           search={{ orderStatus: s }}
         >
-          <div>{getRelativeTime(row.getValue("_creationTime"))}</div>
+          <p className="text-muted-foreground">
+            {getRelativeTime(row.getValue("_creationTime"))}
+          </p>
         </Link>
       );
     },

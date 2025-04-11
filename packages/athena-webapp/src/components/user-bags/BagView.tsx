@@ -1,62 +1,28 @@
-import {
-  Link,
-  useNavigate,
-  useParams,
-  useSearch,
-} from "@tanstack/react-router";
-import PageHeader from "../common/PageHeader";
+import { Link, useParams } from "@tanstack/react-router";
 import View from "../View";
-import { Button } from "../ui/button";
-import { ArrowLeftIcon, Clock, User } from "lucide-react";
 import { useQuery } from "convex/react";
 import { api } from "~/convex/_generated/api";
 import { Id } from "~/convex/_generated/dataModel";
-import { BagItem } from "~/types";
+import { Bag, BagItem } from "~/types";
 import { getProductName } from "~/src/lib/productUtils";
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
 import {
   capitalizeFirstLetter,
+  cn,
   currencyFormatter,
   getRelativeTime,
 } from "~/src/lib/utils";
+import { getOrigin } from "~/src/lib/navigationUtils";
+import { SimplePageHeader } from "../common/SimplePageHeader";
+import { FadeIn } from "../common/FadeIn";
 
-const Header = () => {
-  const { o } = useSearch({ strict: false });
-
-  const navigate = useNavigate();
-
-  const handleBackClick = () => {
-    if (o) {
-      navigate({ to: o });
-    } else {
-      navigate({
-        to: `/$orgUrlSlug/store/$storeUrlSlug/bags`,
-        params: (prev) => ({
-          ...prev,
-          storeUrlSlug: prev.storeUrlSlug!,
-          orgUrlSlug: prev.orgUrlSlug!,
-        }),
-      });
-    }
-  };
-
-  return (
-    <PageHeader>
-      <div className="flex items-center gap-4">
-        <Button
-          onClick={handleBackClick}
-          variant="ghost"
-          className="h-8 px-2 lg:px-3 "
-        >
-          <ArrowLeftIcon className="h-4 w-4" />
-        </Button>
-        <p className="text-sm">Bag details</p>
-      </div>
-    </PageHeader>
-  );
-};
-
-const BagItemView = ({ item }: { item: BagItem }) => {
+const BagItemView = ({
+  item,
+  formatter,
+}: {
+  item: BagItem;
+  formatter: Intl.NumberFormat;
+}) => {
   return (
     <Link
       to="/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug"
@@ -66,7 +32,7 @@ const BagItemView = ({ item }: { item: BagItem }) => {
         storeUrlSlug: prev.storeUrlSlug!,
         productSlug: item.productId,
       })}
-      search={{ variant: item.productSku }}
+      search={{ variant: item.productSku, o: getOrigin() }}
       className="flex items-center gap-4"
     >
       <div className="flex items-center gap-4">
@@ -85,23 +51,29 @@ const BagItemView = ({ item }: { item: BagItem }) => {
           <div className="w-24 h-24 bg-gray-100 rounded-lg" />
         )}
 
-        <p className="text-sm">{getProductName(item)}</p>
+        <div className="space-y-2">
+          <p className="text-sm">{getProductName(item)}</p>
+          <p className="text-sm text-muted-foreground">
+            {item.price === 0
+              ? "Free"
+              : formatter.format((item.price || 0) * item.quantity)}
+          </p>
+        </div>
       </div>
     </Link>
   );
 };
 
-export const BagView = () => {
-  const { bagId } = useParams({ strict: false });
-
+export const BagDetails = ({
+  className,
+  bag,
+}: {
+  className?: string;
+  bag: Bag;
+}) => {
   const { activeStore } = useGetActiveStore();
 
-  const bag = useQuery(
-    api.storeFront.bag.getById,
-    bagId ? { id: bagId as Id<"bag"> } : "skip"
-  );
-
-  if (!bag || !activeStore) return null;
+  if (!activeStore) return null;
 
   const bagTotal = bag.items.reduce(
     (acc: any, item: any) => acc + item.price * item.quantity,
@@ -110,53 +82,96 @@ export const BagView = () => {
 
   const formatter = currencyFormatter(activeStore.currency);
 
+  const createdAt = getRelativeTime(bag._creationTime);
+  const updatedAt = getRelativeTime(bag.updatedAt);
+
   return (
-    <View header={<Header />}>
-      <div className="container mx-auto h-full w-full p-8 space-y-12">
-        <div className="grid grid-cols-2 gap-8">
+    <div
+      className={cn("container mx-auto h-full w-full space-y-12", className)}
+    >
+      <div className="space-y-16">
+        <div className="space-y-4">
+          {bag.items.length > 0 && <p className="text-sm font-medium">Items</p>}
+
           <div className="space-y-8">
             {bag.items.map((item: any) => (
-              <BagItemView key={item._id} item={item} />
+              <BagItemView key={item._id} item={item} formatter={formatter} />
             ))}
           </div>
 
-          <div className="space-y-8">
-            <div className="space-y-2">
-              <div className="flex items-center gap-1">
-                <p className="text-sm text-muted-foreground">Total</p>
-              </div>
-              <p className="text-sm">{formatter.format(bagTotal)}</p>
+          {bag.items.length === 0 && (
+            <p className="text-sm text-muted-foreground">No items in bag</p>
+          )}
+        </div>
+
+        <div className="space-y-8">
+          <p className="text-sm font-medium">Summary</p>
+
+          <div className="flex items-center gap-8">
+            {bagTotal > 0 && (
+              <>
+                <div className="flex items-center gap-2">
+                  <p className="text-sm text-muted-foreground">Total</p>
+                  <p className="text-sm">{formatter.format(bagTotal)}</p>
+                </div>
+
+                <p className="text-xs text-muted-foreground">·</p>
+              </>
+            )}
+
+            <div className="flex items-center gap-1">
+              <p className="text-sm text-muted-foreground">Created</p>
+              <p className="text-sm">{capitalizeFirstLetter(createdAt)}</p>
+              <p className="text-sm">by</p>
+              <Link
+                to="/$orgUrlSlug/store/$storeUrlSlug/users/$userId"
+                params={(p) => ({
+                  ...p,
+                  storeUrlSlug: p.storeUrlSlug!,
+                  orgUrlSlug: p.orgUrlSlug!,
+                  userId: bag.storeFrontUserId,
+                })}
+                search={{ o: getOrigin() }}
+                className="flex items-center gap-2"
+              >
+                <p className="text-sm">
+                  {`User-${bag.storeFrontUserId.slice(-5)}`}
+                </p>
+              </Link>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <div className="flex items-center gap-1">
-                  <p className="text-sm text-muted-foreground">Created</p>
-                </div>
-                <p className="text-sm">
-                  {capitalizeFirstLetter(getRelativeTime(bag._creationTime))}
-                </p>
-              </div>
+            {createdAt != updatedAt && (
+              <>
+                <p className="text-xs text-muted-foreground">·</p>
 
-              <div className="space-y-2">
                 <div className="flex items-center gap-1">
                   <p className="text-sm text-muted-foreground">Updated</p>
+                  <p className="text-sm">{capitalizeFirstLetter(updatedAt)}</p>
                 </div>
-                <p className="text-sm">
-                  {capitalizeFirstLetter(getRelativeTime(bag.updatedAt))}
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <User className="w-4 h-4" />
-              <p className="text-sm">
-                {`User-${bag.storeFrontUserId.slice(-5)}`}
-              </p>
-            </div>
+              </>
+            )}
           </div>
         </div>
       </div>
+    </div>
+  );
+};
+
+export const BagView = () => {
+  const { bagId } = useParams({ strict: false });
+
+  const bag = useQuery(
+    api.storeFront.bag.getById,
+    bagId ? { id: bagId as Id<"bag"> } : "skip"
+  );
+
+  if (!bag) return null;
+
+  return (
+    <View header={<SimplePageHeader title="Bag details" />}>
+      <FadeIn>
+        <BagDetails className="p-8" bag={bag} />
+      </FadeIn>
     </View>
   );
 };

@@ -134,10 +134,12 @@ export default function ProductPage() {
   }, [addedItemSuccessfully]);
 
   useTrackAction({
-    action: "view_product",
+    action: "viewed_product",
     data: {
       product: productSlug,
+      productImageUrl: selectedSku?.images?.[0],
     },
+    isReady: !!selectedSku,
   });
 
   const bagItem = bag?.items?.find(

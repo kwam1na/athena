@@ -20,11 +20,11 @@ import { Analytic } from "~/types";
 import { countGroupedAnalytics, groupProductViewsByDay } from "./utils";
 
 const chartConfig = {
-  view_homepage: {
+  viewed_homepage: {
     label: "View homepage",
     color: "hsl(var(--chart-1))",
   },
-  view_product: {
+  viewed_product: {
     label: "View product",
     color: "hsl(var(--chart-2))",
   },
@@ -66,15 +66,15 @@ export function AnalyticsChart({ analytics }: { analytics: Analytic[] }) {
             <ChartTooltip content={<ChartTooltipContent hideLabel />} />
             <ChartLegend content={<ChartLegendContent />} />
             <Bar
-              dataKey="view_homepage"
+              dataKey="viewed_homepage"
               stackId="a"
-              fill="var(--color-view_homepage)"
+              fill="var(--color-viewed_homepage)"
               radius={[0, 0, 4, 4]}
             />
             <Bar
-              dataKey="view_product"
+              dataKey="viewed_product"
               stackId="a"
-              fill="var(--color-view_product)"
+              fill="var(--color-viewed_product)"
               radius={[4, 4, 0, 0]}
             />
           </BarChart>

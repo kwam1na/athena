@@ -1,6 +1,6 @@
 import { useStoreContext } from "@/contexts/StoreContext";
 import { Product, ProductSku } from "@athena/webapp";
-import { Link } from "@tanstack/react-router";
+import { Link, useParams } from "@tanstack/react-router";
 import { Skeleton } from "./ui/skeleton";
 import { ProductCard, ProductSkuCard } from "./ProductCard";
 import { useGetProductFilters } from "@/hooks/useGetProductFilters";
@@ -30,7 +30,9 @@ export default function ProductsPage({
 
   const { filtersCount } = useGetProductFilters();
 
-  const origin = "shop";
+  const { categorySlug } = useParams({ strict: false });
+
+  const origin = categorySlug ? `shop_${categorySlug}` : "shop";
 
   if (products?.length == 0 && filtersCount > 0) {
     return (

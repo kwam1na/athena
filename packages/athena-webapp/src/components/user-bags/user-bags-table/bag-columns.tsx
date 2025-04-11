@@ -11,6 +11,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "../../ui/tooltip";
+import { getOrigin } from "~/src/lib/navigationUtils";
 
 export const bagColumns: ColumnDef<Bag>[] = [
   {
@@ -30,6 +31,7 @@ export const bagColumns: ColumnDef<Bag>[] = [
             storeUrlSlug: prev.storeUrlSlug!,
             bagId: bag._id,
           })}
+          search={{ o: getOrigin() }}
           className="flex items-center gap-8"
         >
           <div className="flex flex-col gap-4">
@@ -73,14 +75,22 @@ export const bagColumns: ColumnDef<Bag>[] = [
   // },
   {
     accessorKey: "user",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="User" />
-    ),
+    header: ({ column }) => <DataTableColumnHeader column={column} title="" />,
     cell: ({ row }) => {
       const item = row.original;
 
       return (
-        <div className="flex items-center gap-2">
+        <Link
+          to="/$orgUrlSlug/store/$storeUrlSlug/users/$userId"
+          params={(p) => ({
+            ...p,
+            orgUrlSlug: p.orgUrlSlug!,
+            storeUrlSlug: p.storeUrlSlug!,
+            userId: item.storeFrontUserId,
+          })}
+          search={{ o: getOrigin() }}
+          className="flex items-center gap-2"
+        >
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -96,7 +106,7 @@ export const bagColumns: ColumnDef<Bag>[] = [
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
-        </div>
+        </Link>
       );
     },
     enableSorting: false,
@@ -110,7 +120,11 @@ export const bagColumns: ColumnDef<Bag>[] = [
     cell: ({ row }) => {
       const item = row.original;
 
-      return <p>{getRelativeTime(item.updatedAt)}</p>;
+      return (
+        <p className="text-muted-foreground">
+          {getRelativeTime(item.updatedAt)}
+        </p>
+      );
     },
     enableSorting: false,
     enableHiding: false,

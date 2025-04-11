@@ -29,7 +29,8 @@ export const getAll = query({
     return await ctx.db
       .query(entity)
       .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
-      .collect();
+      .order("desc")
+      .take(100);
   },
 });
 

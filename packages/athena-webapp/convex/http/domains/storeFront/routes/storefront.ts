@@ -23,19 +23,29 @@ storefrontRoutes.get("/", async (c) => {
   const userId = getStorefrontUserFromRequest(c);
 
   if (!userId && asNewUser === "true") {
-    const guestId = await c.env.runMutation(api.storeFront.guest.create, {
+    let guest = await c.env.runQuery(api.storeFront.guest.getByMarker, {
       marker,
-      creationOrigin: "storefront",
     });
 
-    setCookie(c, "guest_id", guestId, {
-      path: "/",
-      secure: true,
-      domain: "wigclub.store",
-      httpOnly: true,
-      sameSite: "None",
-      maxAge: 90 * 24 * 60 * 60, // 90 days in seconds
-    });
+    if (!guest) {
+      guest = await c.env.runMutation(api.storeFront.guest.create, {
+        marker,
+        creationOrigin: "storefront",
+        storeId: store?._id,
+        organizationId: store?.organizationId,
+      });
+    }
+
+    if (guest) {
+      setCookie(c, "guest_id", guest._id, {
+        path: "/",
+        secure: true,
+        domain: "wigclub.store",
+        httpOnly: true,
+        sameSite: "None",
+        maxAge: 90 * 24 * 60 * 60, // 90 days in seconds
+      });
+    }
   }
 
   if (store) {

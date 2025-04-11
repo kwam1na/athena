@@ -154,7 +154,7 @@ export default function ShoppingBag() {
           bagSubtotal: bagSubtotal * 100,
         }),
         postAnalytics({
-          action: "initiate_checkout",
+          action: "initiated_checkout",
           data: {},
         }).catch((error) => console.error("Failed to post analytics:", error)),
       ]);

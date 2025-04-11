@@ -245,7 +245,7 @@ export function OrderItemsView() {
   const itemsFormatted = order?.items?.map((item: any) => {
     return {
       ...item,
-      price: formatter.format(item.price),
+      price: item.price == 0 ? "Free" : formatter.format(item.price),
     };
   });
 

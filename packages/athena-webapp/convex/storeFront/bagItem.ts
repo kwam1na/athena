@@ -64,12 +64,14 @@ export const deleteItemFromBag = mutation({
 export const getBagItemsForStore = query({
   args: {
     storeId: v.id("store"),
+    cursor: v.union(v.string(), v.null()),
   },
   handler: async (ctx, args) => {
     // Get all the bags for the store
     const bags = await ctx.db
       .query("bag")
       .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
+      .order("desc")
       .collect();
 
     // Get all the items for the bags

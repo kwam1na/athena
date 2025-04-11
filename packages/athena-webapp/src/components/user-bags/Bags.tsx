@@ -1,4 +1,3 @@
-import { Bag } from "~/types";
 import { BagsTable } from "./user-bags-table/bags-table";
 import { bagColumns } from "./user-bags-table/bag-columns";
 

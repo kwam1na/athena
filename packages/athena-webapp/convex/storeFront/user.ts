@@ -64,3 +64,16 @@ export const update = mutation({
     return await ctx.db.get(args.id);
   },
 });
+
+export const getByIdentifier = query({
+  args: {
+    id: v.union(v.id(entity), v.id("guest")),
+  },
+  handler: async (ctx, args) => {
+    try {
+      return await ctx.db.get(args.id);
+    } catch (e) {
+      return null;
+    }
+  },
+});

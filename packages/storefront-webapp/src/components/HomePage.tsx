@@ -226,7 +226,7 @@ export default function HomePage() {
   }, []);
 
   useTrackEvent({
-    action: "view_homepage",
+    action: "viewed_homepage",
   });
 
   const { formatter, store } = useStoreContext();

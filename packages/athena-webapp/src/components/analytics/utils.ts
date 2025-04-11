@@ -19,7 +19,11 @@ export const groupAnalytics = (
       acc[day] = {};
     }
 
-    if (options.groupByProduct && action === "view_product" && data?.product) {
+    if (
+      options.groupByProduct &&
+      ["viewed_product", "view_product"].includes(action) &&
+      data?.product
+    ) {
       if (!acc[day][action]) {
         acc[day][action] = {};
       }
@@ -60,7 +64,10 @@ export const countGroupedAnalytics = (
     counts[day] = {};
 
     for (const action in grouped[day]) {
-      if (options.groupByProduct && action === "view_product") {
+      if (
+        options.groupByProduct &&
+        ["viewed_product", "view_product"].includes(action)
+      ) {
         counts[day][action] = {};
         const productGroups = grouped[day][action] as Record<
           string,
@@ -85,7 +92,9 @@ export const groupProductViewsByDay = (
   options = { groupByDay: true }
 ) => {
   const viewProductAnalytics = analytics.filter(
-    (analytic) => analytic.action === "view_product" && analytic.data?.product
+    (analytic) =>
+      ["viewed_product", "view_product"].includes(analytic.action) &&
+      analytic.data?.product
   );
 
   if (options.groupByDay) {

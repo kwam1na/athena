@@ -54,7 +54,7 @@ export const PaymentSection = ({ form }: CheckoutFormSectionProps) => {
           total
         ),
         postAnalytics({
-          action: "finalize_checkout",
+          action: "finalized_checkout",
           data: {
             checkoutSessionId: activeSession._id,
           },

@@ -7,6 +7,8 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "../ui/tooltip";
+import { Link } from "@tanstack/react-router";
+import { getOrigin } from "~/src/lib/navigationUtils";
 
 export function CustomerDetailsView() {
   const { order } = useOnlineOrder();
@@ -24,21 +26,20 @@ export function CustomerDetailsView() {
     >
       <div className="py-4 space-y-12">
         <div className="space-y-4">
-          <div className="flex items-center gap-4">
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <div className="flex items-center gap-4">
-                    <UserRound className="h-4 w-4" />
-                    <p className="text-sm">{`${customerDetails.firstName} ${customerDetails.lastName}`}</p>
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>{order.storeFrontUserId}</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          </div>
+          <Link
+            to="/$orgUrlSlug/store/$storeUrlSlug/users/$userId"
+            params={(p) => ({
+              ...p,
+              orgUrlSlug: p.orgUrlSlug!,
+              storeUrlSlug: p.storeUrlSlug!,
+              userId: order.storeFrontUserId,
+            })}
+            search={{ o: getOrigin() }}
+            className="flex items-center gap-4"
+          >
+            <UserRound className="h-4 w-4" />
+            <p className="text-sm">{`${customerDetails.firstName} ${customerDetails.lastName}`}</p>
+          </Link>
 
           <div className="flex items-center gap-4">
             <AtSign className="h-4 w-4" />
