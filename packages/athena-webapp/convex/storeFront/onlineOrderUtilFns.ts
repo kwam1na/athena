@@ -10,6 +10,21 @@ import {
 } from "../utils";
 import { api } from "../_generated/api";
 
+export const formatOrderItems = (items: any, storeCurrency: string) => {
+  const formatter = currencyFormatter(storeCurrency);
+
+  return (
+    items?.map((item: any) => ({
+      text: capitalizeWords(item.productName),
+      image: item.productImage,
+      price: item.price == 0 ? "Free" : formatter.format(item.price),
+      quantity: item.quantity,
+      color: item.colorName,
+      length: item.length && `${item.length} inches`,
+    })) || []
+  );
+};
+
 export async function handleOrderStatusUpdate({
   order,
   newStatus,
@@ -25,17 +40,6 @@ export async function handleOrderStatusUpdate({
 
   const formatter = currencyFormatter(store?.currency || "USD");
 
-  // Helper to format order items
-  const formatOrderItems = (items: any) =>
-    items?.map((item: any) => ({
-      text: capitalizeWords(item.productName),
-      image: item.productImage,
-      price: formatter.format(item.price),
-      quantity: item.quantity,
-      color: item.colorName,
-      length: item.length && `${item.length} inches`,
-    })) || [];
-
   // Helper to send email
   async function sendEmail({
     type,
@@ -46,7 +50,7 @@ export async function handleOrderStatusUpdate({
     statusMessaging: string;
     pickupDetails: string;
   }) {
-    const items = formatOrderItems(order.items);
+    const items = formatOrderItems(order.items, store.currency);
     const emailResponse = await sendOrderEmail({
       type,
       customerEmail: order.customerDetails.email,

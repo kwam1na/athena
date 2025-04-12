@@ -13,8 +13,8 @@ import {
   getRelativeTime,
 } from "~/src/lib/utils";
 import { getOrigin } from "~/src/lib/navigationUtils";
-import { SimplePageHeader } from "../common/SimplePageHeader";
 import { FadeIn } from "../common/FadeIn";
+import { SimplePageHeader } from "../common/PageHeader";
 
 const BagItemView = ({
   item,
@@ -100,7 +100,9 @@ export const BagDetails = ({
           </div>
 
           {bag.items.length === 0 && (
-            <p className="text-sm text-muted-foreground">No items in bag</p>
+            <p className="text-sm text-muted-foreground">
+              This user's bag is empty.
+            </p>
           )}
         </div>
 

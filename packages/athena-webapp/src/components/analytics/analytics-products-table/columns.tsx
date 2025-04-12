@@ -5,6 +5,7 @@ import { AnalyticProduct } from "../AnalyticsProducts";
 import { Clock, Eye } from "lucide-react";
 import { getRelativeTime } from "~/src/lib/utils";
 import { Link } from "@tanstack/react-router";
+import { getOrigin } from "~/src/lib/navigationUtils";
 
 export const columns: ColumnDef<AnalyticProduct>[] = [
   {
@@ -26,6 +27,10 @@ export const columns: ColumnDef<AnalyticProduct>[] = [
             storeUrlSlug: p.storeUrlSlug!,
             productSlug: product.slug,
           })}
+          search={{
+            o: getOrigin(),
+            variant: sku?.sku,
+          }}
           className="flex items-center gap-8"
         >
           {sku?.images[0] ? (

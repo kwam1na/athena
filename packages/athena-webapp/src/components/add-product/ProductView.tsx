@@ -1,11 +1,6 @@
 import { useNavigate, useParams, useSearch } from "@tanstack/react-router";
 import View from "../View";
-import { Button } from "../ui/button";
-import {
-  ArrowLeftIcon,
-  CheckCircledIcon,
-  TrashIcon,
-} from "@radix-ui/react-icons";
+import { CheckCircledIcon, TrashIcon } from "@radix-ui/react-icons";
 import { ZodError } from "zod";
 import { toast } from "sonner";
 import { Ban, Plus, PlusIcon, RotateCcw, Save } from "lucide-react";
@@ -23,7 +18,7 @@ import { toSlug } from "../../lib/utils";
 import { Id } from "~/convex/_generated/dataModel";
 import { productSchema } from "../../lib/schemas/product";
 import { useAuth } from "../../hooks/useAuth";
-import PageHeader from "../common/PageHeader";
+import { ComposedPageHeader } from "../common/PageHeader";
 import { PAYSTACK_PROCESSING_FEE } from "~/src/lib/constants";
 
 function ProductViewContent() {
@@ -63,6 +58,8 @@ function ProductViewContent() {
 
   const updateProductSku = useMutation(api.inventory.productSku.update);
 
+  const { o } = useSearch({ strict: false });
+
   const deleteActiveProduct = async () => {
     if (!activeProduct?._id || !activeStore)
       throw new Error("Missing data required to delete product");
@@ -75,14 +72,18 @@ function ProductViewContent() {
         icon: <CheckCircledIcon className="w-4 h-4" />,
       });
 
-      navigate({
-        to: "/$orgUrlSlug/store/$storeUrlSlug/products",
-        params: (prev) => ({
-          ...prev,
-          storeUrlSlug: prev.storeUrlSlug!,
-          orgUrlSlug: prev.orgUrlSlug!,
-        }),
-      });
+      if (o) {
+        navigate({ to: decodeURIComponent(o) });
+      }
+
+      // navigate({
+      //   to: "/$orgUrlSlug/store/$storeUrlSlug/products",
+      //   params: (prev) => ({
+      //     ...prev,
+      //     storeUrlSlug: prev.storeUrlSlug!,
+      //     orgUrlSlug: prev.orgUrlSlug!,
+      //   }),
+      // });
     } catch (e) {
       toast("Something went wrong", {
         icon: <Ban className="w-4 h-4" />,
@@ -133,14 +134,9 @@ function ProductViewContent() {
 
       toast.success(`Product created`);
 
-      navigate({
-        to: "/$orgUrlSlug/store/$storeUrlSlug/products",
-        params: (prev) => ({
-          ...prev,
-          storeUrlSlug: prev.storeUrlSlug!,
-          orgUrlSlug: prev.orgUrlSlug!,
-        }),
-      });
+      if (o) {
+        navigate({ to: decodeURIComponent(o) });
+      }
     } catch (error) {
       console.error("Error saving product:", (error as Error).message);
 
@@ -200,14 +196,18 @@ function ProductViewContent() {
 
       toast.success("Changes saved");
 
-      navigate({
-        to: "/$orgUrlSlug/store/$storeUrlSlug/products",
-        params: (prev) => ({
-          ...prev,
-          storeUrlSlug: prev.storeUrlSlug!,
-          orgUrlSlug: prev.orgUrlSlug!,
-        }),
-      });
+      if (o) {
+        navigate({ to: decodeURIComponent(o) });
+      }
+
+      // navigate({
+      //   to: "/$orgUrlSlug/store/$storeUrlSlug/products",
+      //   params: (prev) => ({
+      //     ...prev,
+      //     storeUrlSlug: prev.storeUrlSlug!,
+      //     orgUrlSlug: prev.orgUrlSlug!,
+      //   }),
+      // });
     } catch (error) {
       console.error("Error modifying product:", (error as ZodError).message);
 
@@ -348,8 +348,6 @@ function ProductViewContent() {
   const isValid = true;
 
   const Navigation = () => {
-    const { o } = useSearch({ strict: false });
-
     const { productSlug } = useParams({ strict: false });
 
     const header = productSlug ? "Edit Product" : "Add New Product";
@@ -360,67 +358,42 @@ function ProductViewContent() {
       <Save className="w-4 h-4" />
     );
 
-    const navigate = useNavigate();
-
-    const handleBackClick = () => {
-      if (o) {
-        navigate({ to: decodeURIComponent(o) });
-      } else {
-        navigate({
-          to: "/$orgUrlSlug/store/$storeUrlSlug/products",
-          params: (prev) => ({
-            ...prev,
-            storeUrlSlug: prev.storeUrlSlug!,
-            orgUrlSlug: prev.orgUrlSlug!,
-          }),
-        });
-      }
-    };
-
     return (
-      <PageHeader>
-        <div className="flex items-center gap-4">
-          <Button
-            onClick={handleBackClick}
-            variant="ghost"
-            className="h-8 px-2 lg:px-3 "
-          >
-            <ArrowLeftIcon className="h-4 w-4" />
-          </Button>
-          <p className="text-sm">{header}</p>
-        </div>
+      <ComposedPageHeader
+        leadingContent={<p className="text-sm">{header}</p>}
+        trailingContent={
+          <div className="flex space-x-2">
+            {activeProduct && (
+              <>
+                <LoadingButton
+                  isLoading={isDeleteMutationPending}
+                  className="text-red-400 hover:bg-red-300 hover:text-red-800"
+                  variant={"outline"}
+                  onClick={() => setIsDeleteModalOpen(true)}
+                >
+                  <TrashIcon className="w-4 h-4" />
+                </LoadingButton>
 
-        <div className="flex space-x-2">
-          {activeProduct && (
-            <>
-              <LoadingButton
-                isLoading={isDeleteMutationPending}
-                className="text-red-400 hover:bg-red-300 hover:text-red-800"
-                variant={"outline"}
-                onClick={() => setIsDeleteModalOpen(true)}
-              >
-                <TrashIcon className="w-4 h-4" />
-              </LoadingButton>
-
-              <LoadingButton
-                isLoading={isDeleteMutationPending}
-                variant={"outline"}
-                onClick={() => revertChanges()}
-              >
-                <RotateCcw className="w-4 h-4" />
-              </LoadingButton>
-            </>
-          )}
-          <LoadingButton
-            disabled={!isValid}
-            isLoading={isCreateMutationPending || isUpdateMutationPending}
-            onClick={onSubmit}
-            variant={"outline"}
-          >
-            {ctaIcon}
-          </LoadingButton>
-        </div>
-      </PageHeader>
+                <LoadingButton
+                  isLoading={isDeleteMutationPending}
+                  variant={"outline"}
+                  onClick={() => revertChanges()}
+                >
+                  <RotateCcw className="w-4 h-4" />
+                </LoadingButton>
+              </>
+            )}
+            <LoadingButton
+              disabled={!isValid}
+              isLoading={isCreateMutationPending || isUpdateMutationPending}
+              onClick={onSubmit}
+              variant={"outline"}
+            >
+              {ctaIcon}
+            </LoadingButton>
+          </div>
+        }
+      />
     );
   };
 

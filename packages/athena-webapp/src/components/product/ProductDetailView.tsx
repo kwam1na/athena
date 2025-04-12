@@ -13,75 +13,49 @@ import { ImagesView } from "./ImagesView";
 import { PenIcon } from "lucide-react";
 import { ProductStatus } from "./ProductStatus";
 import { ProductStockStatus } from "./ProductStock";
-import PageHeader from "../common/PageHeader";
+import { ComposedPageHeader } from "../common/PageHeader";
+import { capitalizeWords } from "~/src/lib/utils";
+import { getOrigin } from "~/src/lib/navigationUtils";
 
 const ProductDetailViewHeader = () => {
-  const { o } = useSearch({ strict: false });
-
-  const navigate = useNavigate();
-
   const { activeProduct } = useGetActiveProduct();
 
   const { activeProductVariant } = useProduct();
 
-  const handleBackClick = () => {
-    if (o) {
-      navigate({ to: decodeURIComponent(o) });
-    } else {
-      window.history.back();
-    }
-  };
-
   if (!activeProduct) return null;
 
   return (
-    <PageHeader>
-      <div className="flex gap-4 items-center">
-        <div className="flex items-center gap-2">
-          <Button
-            onClick={handleBackClick}
-            variant="ghost"
-            className="h-8 px-2 lg:px-3 "
-          >
-            <ArrowLeftIcon className="h-4 w-4" />
-          </Button>
-        </div>
+    <ComposedPageHeader
+      leadingContent={
+        <>
+          <p className="text-sm">{capitalizeWords(activeProduct.name)}</p>
 
-        <p className="text-sm">{activeProduct?.name}</p>
-
-        {/* <Badge
-          className="rounded-lg text-xs text-muted-foreground"
-          variant={"outline"}
+          <div className="text-xs flex items-center gap-4">
+            <ProductStatus product={activeProduct} />
+            <ProductStockStatus productVariant={activeProductVariant} />
+          </div>
+        </>
+      }
+      trailingContent={
+        <Link
+          to="/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/edit"
+          params={(prev) => ({
+            ...prev,
+            orgUrlSlug: prev.orgUrlSlug!,
+            storeUrlSlug: prev.storeUrlSlug!,
+            productSlug: activeProduct._id,
+          })}
+          search={{
+            o: getOrigin(),
+            variant: activeProductVariant?.sku,
+          }}
         >
-          <p>{activeProduct?.availability.toUpperCase()}</p>
-        </Badge> */}
-
-        <div className="text-xs flex items-center gap-4">
-          <ProductStatus product={activeProduct} />
-          <ProductStockStatus productVariant={activeProductVariant} />
-        </div>
-      </div>
-
-      <Link
-        to="/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/edit"
-        params={(prev) => ({
-          ...prev,
-          orgUrlSlug: prev.orgUrlSlug!,
-          storeUrlSlug: prev.storeUrlSlug!,
-          productSlug: activeProduct._id,
-        })}
-        search={{
-          o: encodeURIComponent(
-            `${window.location.pathname}${window.location.search}`
-          ),
-          variant: activeProductVariant?.sku,
-        }}
-      >
-        <Button variant="outline">
-          <PenIcon className="h-3.5 w-3.5" />
-        </Button>
-      </Link>
-    </PageHeader>
+          <Button variant="outline">
+            <PenIcon className="h-3.5 w-3.5" />
+          </Button>
+        </Link>
+      }
+    />
   );
 };
 

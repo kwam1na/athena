@@ -8,13 +8,14 @@ import { useMutation, useQuery } from "convex/react";
 import { useEffect, useState } from "react";
 import { api } from "~/convex/_generated/api";
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
-import { currencyFormatter } from "~/src/lib/utils";
+import { capitalizeWords, currencyFormatter } from "~/src/lib/utils";
 import View from "../View";
 import { Link } from "@tanstack/react-router";
 import { Button } from "../ui/button";
 import { TrashIcon } from "@radix-ui/react-icons";
 import { PlusIcon } from "lucide-react";
 import { ShopLookDialog } from "./ShopLookDialog";
+import { getOrigin } from "~/src/lib/navigationUtils";
 
 export const ShopLookSection = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -109,6 +110,7 @@ export const ShopLookSection = () => {
                                 storeUrlSlug: params.storeUrlSlug!,
                                 productSlug: featuredItem.product._id,
                               })}
+                              search={{ o: getOrigin() }}
                               className="flex items-center gap-4"
                             >
                               <img
@@ -121,7 +123,7 @@ export const ShopLookSection = () => {
                               />
                               <div className="flex flex-col gap-2">
                                 <p className="text-sm">
-                                  {featuredItem?.product?.name}
+                                  {capitalizeWords(featuredItem?.product?.name)}
                                 </p>
                                 <p className="text-xs text-muted-foreground">
                                   {formatter.format(

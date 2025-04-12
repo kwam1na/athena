@@ -7,6 +7,7 @@ import { Product, Store } from "~/types";
 import { PromoCodesDataTable } from "./table/data-table";
 import { columns } from "./table/columns";
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
+import { getOrigin } from "~/src/lib/navigationUtils";
 
 export default function PromoCodes({ promoCodes }: { promoCodes: any[] }) {
   const { activeStore } = useGetActiveStore();
@@ -35,6 +36,9 @@ export default function PromoCodes({ promoCodes }: { promoCodes: any[] }) {
                 storeUrlSlug: prev.storeUrlSlug!,
                 orgUrlSlug: prev.orgUrlSlug!,
               })}
+              search={{
+                o: getOrigin(),
+              }}
             >
               <Button variant={"outline"}>
                 <PlusIcon className="w-3 h-3 mr-2" />

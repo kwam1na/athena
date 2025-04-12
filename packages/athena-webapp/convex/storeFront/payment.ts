@@ -11,6 +11,7 @@ import {
   getAddressString,
 } from "../utils";
 import { getDiscountValue, getOrderAmount } from "../inventory/utils";
+import { formatOrderItems } from "./onlineOrderUtilFns";
 
 const appUrl = process.env.APP_URL;
 
@@ -157,7 +158,7 @@ export const verifyPayment = action({
             id: order.storeId,
           });
 
-          const formatter = currencyFormatter(store?.currency || "USD");
+          const formatter = currencyFormatter(store?.currency || "GHS");
 
           if (!order.didSendNewOrderReceivedEmail) {
             const emailResponse = await sendNewOrderEmail({
@@ -197,15 +198,10 @@ export const verifyPayment = action({
                   ? orderPickupLocation
                   : deliveryAddress;
 
-              const items =
-                order.items?.map((item: any) => ({
-                  text: capitalizeWords(item.productName),
-                  image: item.productImage,
-                  price: formatter.format(item.price),
-                  quantity: item.quantity,
-                  color: item.colorName,
-                  length: item.length && `${item.length} inches`,
-                })) || [];
+              const items = formatOrderItems(
+                order.items,
+                store?.currency || "GHS"
+              );
 
               // send confirmation email
               const emailResponse = await sendOrderEmail({

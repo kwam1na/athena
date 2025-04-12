@@ -15,6 +15,7 @@ import { Button } from "../ui/button";
 import { TrashIcon } from "@radix-ui/react-icons";
 import { PlusIcon } from "lucide-react";
 import { FeaturedSectionDialog } from "./FeaturedSectionDialog";
+import { getOrigin } from "~/src/lib/navigationUtils";
 
 export const FeaturedSection = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -111,6 +112,7 @@ export const FeaturedSection = () => {
                                 storeUrlSlug: params.storeUrlSlug!,
                                 productSlug: featuredItem.product._id,
                               })}
+                              search={{ o: getOrigin() }}
                               className="flex items-center gap-4"
                             >
                               <img

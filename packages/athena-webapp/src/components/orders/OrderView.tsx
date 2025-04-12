@@ -43,7 +43,7 @@ import { ActivityView } from "./ActivityView";
 import { getOrderState } from "./utils";
 import { OrderStatus } from "./OrderStatus";
 import { EmailStatusView } from "./EmailStatusView";
-import PageHeader from "../common/PageHeader";
+import PageHeader, { ComposedPageHeader } from "../common/PageHeader";
 
 export function RefundOptions() {
   const { order } = useOnlineOrder();
@@ -179,27 +179,6 @@ const Header = () => {
   const isDelivery = order?.deliveryMethod === "delivery";
   const isPickup = order?.deliveryMethod === "pickup";
 
-  const { o, orderStatus } = useSearch({ strict: false });
-
-  const navigate = useNavigate();
-
-  const handleBackClick = () => {
-    if (o) {
-      navigate({ to: o });
-    } else {
-      const s = orderStatus?.includes("ready") ? "ready" : orderStatus || "all";
-
-      navigate({
-        to: `/$orgUrlSlug/store/$storeUrlSlug/orders/${s}`,
-        params: (prev) => ({
-          ...prev,
-          storeUrlSlug: prev.storeUrlSlug!,
-          orgUrlSlug: prev.orgUrlSlug!,
-        }),
-      });
-    }
-  };
-
   const handleUpdateOrder = async (update: Record<string, any>) => {
     try {
       setIsUpdatingOrder(true);
@@ -219,21 +198,7 @@ const Header = () => {
 
   if (!order) return null;
 
-  // console.log(order);
-
-  const amountRefunded =
-    order?.refunds?.reduce((acc, refund) => acc + refund.amount, 0) || 0;
-
-  const isFullyRefunded = amountRefunded === order.amount;
-
-  const isPartiallyRefunded =
-    amountRefunded > 0 && amountRefunded < order.amount;
-
   const hasIssuedRefund = order.status.includes("refund");
-
-  const isRefundPending = ["refund-pending", "refund-processing"].includes(
-    order.status
-  );
 
   const isReady = order?.items
     ?.filter((i) => !Boolean(i.isRefunded))
@@ -248,101 +213,86 @@ const Header = () => {
     isOrderOpen;
 
   return (
-    <PageHeader>
-      <div className="flex gap-4 items-center">
-        <div className="flex items-center gap-2">
-          <Button
-            onClick={handleBackClick}
-            variant="ghost"
-            className="h-8 px-2 lg:px-3 "
-          >
-            <ArrowLeftIcon className="h-4 w-4" />
-          </Button>
+    <ComposedPageHeader
+      leadingContent={
+        <>
+          <p className="text-sm">{`Order #${order?.orderNumber}`}</p>
+
+          <div className="text-xs">
+            <OrderStatus order={order} />
+          </div>
+
+          <p className="text-xs text-muted-foreground">
+            {`placed ${getRelativeTime(order._creationTime)}`}
+          </p>
+        </>
+      }
+      trailingContent={
+        <div className="flex gap-4">
+          {isDelivery && canPerformInitialTransition && (
+            <LoadingButton
+              isLoading={isUpdatingOrder}
+              disabled={!isReady}
+              onClick={() =>
+                handleUpdateOrder({ status: "ready-for-delivery" })
+              }
+              variant={"outline"}
+            >
+              <Truck className="h-4 w-4 mr-1" />
+              <p className="text-sm">&rarr; Ready for delivery</p>
+            </LoadingButton>
+          )}
+
+          {isDelivery && isOrderReady && (
+            <LoadingButton
+              isLoading={isUpdatingOrder}
+              disabled={!isReady}
+              onClick={() => handleUpdateOrder({ status: "out-for-delivery" })}
+              variant={"outline"}
+            >
+              <Truck className="h-4 w-4 mr-1" />
+              <p className="text-sm">&rarr; Out for delivery</p>
+            </LoadingButton>
+          )}
+
+          {isOrderOutForDelivery && (
+            <LoadingButton
+              isLoading={isUpdatingOrder}
+              disabled={!isReady}
+              onClick={() => handleUpdateOrder({ status: "delivered" })}
+              variant={"outline"}
+            >
+              <Truck className="h-4 w-4 mr-1" />
+              <p className="text-sm">&rarr; Delivered</p>
+            </LoadingButton>
+          )}
+
+          {isPickup && canPerformInitialTransition && (
+            <LoadingButton
+              isLoading={isUpdatingOrder}
+              disabled={!isReady}
+              onClick={() => handleUpdateOrder({ status: "ready-for-pickup" })}
+              variant={"outline"}
+            >
+              <Store className="h-4 w-4 mr-1" />
+              <p className="text-sm">&rarr; Ready for pickup</p>
+            </LoadingButton>
+          )}
+
+          {isPickup && isOrderReady && (
+            <LoadingButton
+              isLoading={isUpdatingOrder}
+              disabled={!isReady}
+              onClick={() => handleUpdateOrder({ status: "picked-up" })}
+              variant={"outline"}
+            >
+              <Store className="h-4 w-4 mr-1" />
+              <p className="text-sm">&rarr; Picked up</p>
+            </LoadingButton>
+          )}
         </div>
-
-        <p className="text-sm">{`Order #${order?.orderNumber}`}</p>
-
-        <div className="text-xs">
-          <OrderStatus order={order} />
-        </div>
-
-        <p className="text-xs text-muted-foreground">
-          {`placed ${getRelativeTime(order._creationTime)}`}
-        </p>
-      </div>
-
-      <div className="flex gap-4">
-        {/* <LoadingButton
-          isLoading={isUpdatingOrder}
-          onClick={() => handleUpdateOrder({ status: "ready-for-delivery" })}
-          variant={"outline"}
-          className="text-destructive"
-        >
-          <XCircle className="h-4 w-4 mr-1" />
-          <p className="text-sm">Cancel order</p>
-        </LoadingButton> */}
-
-        {isDelivery && canPerformInitialTransition && (
-          <LoadingButton
-            isLoading={isUpdatingOrder}
-            disabled={!isReady}
-            onClick={() => handleUpdateOrder({ status: "ready-for-delivery" })}
-            variant={"outline"}
-          >
-            <Truck className="h-4 w-4 mr-1" />
-            <p className="text-sm">&rarr; Ready for delivery</p>
-          </LoadingButton>
-        )}
-
-        {isDelivery && isOrderReady && (
-          <LoadingButton
-            isLoading={isUpdatingOrder}
-            disabled={!isReady}
-            onClick={() => handleUpdateOrder({ status: "out-for-delivery" })}
-            variant={"outline"}
-          >
-            <Truck className="h-4 w-4 mr-1" />
-            <p className="text-sm">&rarr; Out for delivery</p>
-          </LoadingButton>
-        )}
-
-        {isOrderOutForDelivery && (
-          <LoadingButton
-            isLoading={isUpdatingOrder}
-            disabled={!isReady}
-            onClick={() => handleUpdateOrder({ status: "delivered" })}
-            variant={"outline"}
-          >
-            <Truck className="h-4 w-4 mr-1" />
-            <p className="text-sm">&rarr; Delivered</p>
-          </LoadingButton>
-        )}
-
-        {isPickup && canPerformInitialTransition && (
-          <LoadingButton
-            isLoading={isUpdatingOrder}
-            disabled={!isReady}
-            onClick={() => handleUpdateOrder({ status: "ready-for-pickup" })}
-            variant={"outline"}
-          >
-            <Store className="h-4 w-4 mr-1" />
-            <p className="text-sm">&rarr; Ready for pickup</p>
-          </LoadingButton>
-        )}
-
-        {isPickup && isOrderReady && (
-          <LoadingButton
-            isLoading={isUpdatingOrder}
-            disabled={!isReady}
-            onClick={() => handleUpdateOrder({ status: "picked-up" })}
-            variant={"outline"}
-          >
-            <Store className="h-4 w-4 mr-1" />
-            <p className="text-sm">&rarr; Picked up</p>
-          </LoadingButton>
-        )}
-      </div>
-    </PageHeader>
+      }
+    />
   );
 };
 

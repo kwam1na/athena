@@ -6,6 +6,7 @@ import { Input } from "../../../ui/input";
 import { Link } from "@tanstack/react-router";
 import { DataTableFacetedFilter } from "./data-table-faceted-filter";
 import { useGetSubcategories } from "~/src/hooks/useGetSubcategories";
+import { getOrigin } from "~/src/lib/navigationUtils";
 
 interface DataTableToolbarProps<TData> {
   table: Table<TData>;
@@ -64,6 +65,9 @@ export function DataTableToolbar<TData>({
             orgUrlSlug: prev.orgUrlSlug!,
             storeUrlSlug: prev.storeUrlSlug!,
           })}
+          search={{
+            o: getOrigin(),
+          }}
           className="pr-2"
         >
           <Button variant="ghost" className="h-8 px-2 lg:px-3 ">

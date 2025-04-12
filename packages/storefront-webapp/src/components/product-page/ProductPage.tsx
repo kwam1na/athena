@@ -23,6 +23,7 @@ import { useTrackAction } from "@/hooks/useTrackAction";
 import { OnsaleProduct } from "./OnSaleProduct";
 import { usePromoCodesQueries } from "@/lib/queries/promoCode";
 import { useQuery } from "@tanstack/react-query";
+import { SoldOutBadge } from "./SoldOutBadge";
 
 // Main Product Page Component
 export default function ProductPage() {
@@ -137,6 +138,7 @@ export default function ProductPage() {
     action: "viewed_product",
     data: {
       product: productSlug,
+      productSku: selectedSku?.sku,
       productImageUrl: selectedSku?.images?.[0],
     },
     isReady: !!selectedSku,
@@ -239,14 +241,7 @@ export default function ProductPage() {
                 <p className="text-3xl">{getProductName(selectedSku)}</p>
 
                 <div className="flex items-center gap-4">
-                  {isSoldOut && (
-                    <Badge
-                      variant={"outline"}
-                      className="bg-gray-600 text-gray-50 border-gray-600"
-                    >
-                      Sold Out
-                    </Badge>
-                  )}
+                  {isSoldOut && <SoldOutBadge />}
 
                   <p className="text-lg text-muted-foreground">
                     {formatter.format(selectedSku.price)}

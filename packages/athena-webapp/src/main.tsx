@@ -5,6 +5,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ConvexReactClient } from "convex/react";
 import { ConvexAuthProvider } from "@convex-dev/auth/react";
 import "./index.css";
+import { useEffect } from "react";
+import { createVersionChecker } from "./utils/versionChecker";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -33,15 +35,32 @@ declare module "@tanstack/react-router" {
 
 const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL as string);
 
-const rootElement = document.getElementById("app")!;
+// App wrapper component to handle version checking
+function App() {
+  useEffect(() => {
+    // Start version checking
+    const versionChecker = createVersionChecker({
+      onNewVersionAvailable: () => {
+        window.location.reload();
+      },
+    });
 
-if (!rootElement.innerHTML) {
-  const root = ReactDOM.createRoot(rootElement);
-  root.render(
+    // Clean up on unmount
+    return () => versionChecker.stop();
+  }, []);
+
+  return (
     <ConvexAuthProvider client={convex}>
       <QueryClientProvider client={queryClient}>
         <RouterProvider router={router} />
       </QueryClientProvider>
     </ConvexAuthProvider>
   );
+}
+
+const rootElement = document.getElementById("app")!;
+
+if (!rootElement.innerHTML) {
+  const root = ReactDOM.createRoot(rootElement);
+  root.render(<App />);
 }

@@ -7,6 +7,7 @@ import { useQuery } from "convex/react";
 import { api } from "~/convex/_generated/api";
 import { Badge } from "~/src/components/ui/badge";
 import { capitalizeWords } from "~/src/lib/utils";
+import { getOrigin } from "~/src/lib/navigationUtils";
 
 export const columns: ColumnDef<Product>[] = [
   {
@@ -27,6 +28,7 @@ export const columns: ColumnDef<Product>[] = [
               storeUrlSlug: prev.storeUrlSlug!,
               productSlug: row.original._id,
             })}
+            search={{ o: getOrigin() }}
             className="flex items-center gap-8"
           >
             {sku?.images[0] ? (
@@ -75,6 +77,7 @@ export const columns: ColumnDef<Product>[] = [
               storeUrlSlug: prev.storeUrlSlug!,
               productSlug: row.original._id,
             })}
+            search={{ o: getOrigin() }}
             className="flex items-center gap-8"
           >
             <div className="flex items-center gap-4">
@@ -105,6 +108,7 @@ export const columns: ColumnDef<Product>[] = [
             storeUrlSlug: prev.storeUrlSlug!,
             productSlug: row.original._id,
           })}
+          search={{ o: getOrigin() }}
           className="flex items-center gap-8"
         >
           <div className="flex items-center gap-2">

@@ -1,5 +1,5 @@
 import { Analytic, BagItem } from "~/types";
-import { columns } from "./analytics-data-table/columns";
+import { columns } from "./analytics-data-table/analytics-columns";
 import { AnalyticsItemsTable } from "./analytics-data-table/data-table";
 
 export default function AnalyticsItems({ items }: { items: Analytic[] }) {

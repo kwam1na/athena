@@ -2,8 +2,8 @@ import { ColumnDef } from "@tanstack/react-table";
 import { DataTableColumnHeader } from "./data-table-column-header";
 import { Link } from "@tanstack/react-router";
 import { getRelativeTime, snakeCaseToWords } from "~/src/lib/utils";
-import { Analytic, BagItem } from "~/types";
-import { ArrowRight, Monitor, Smartphone, User } from "lucide-react";
+import { Analytic } from "~/types";
+import { Monitor, Smartphone } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
@@ -22,7 +22,7 @@ export const columns: ColumnDef<Analytic>[] = [
       const item = row.original;
 
       return (
-        <p className="flex items-center gap-2">
+        <div className="flex items-center gap-2">
           <div className="space-y-2">
             <div className="flex items-center gap-2">
               <Link
@@ -44,11 +44,32 @@ export const columns: ColumnDef<Analytic>[] = [
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <div className="flex items-center gap-2 hover:cursor-pointer">
-                      <span className="font-medium">
-                        {snakeCaseToWords(item.action)}
-                      </span>
-                    </div>
+                    {item.data.product && item.data.productSku ? (
+                      <Link
+                        to="/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug"
+                        params={(p) => ({
+                          ...p,
+                          orgUrlSlug: p.orgUrlSlug!,
+                          storeUrlSlug: p.storeUrlSlug!,
+                          productSlug: item.data.product,
+                        })}
+                        search={{
+                          o: getOrigin(),
+                          variant: item.data.productSku,
+                        }}
+                        className="flex items-center gap-2"
+                      >
+                        <span className="font-medium">
+                          {snakeCaseToWords(item.action)}
+                        </span>
+                      </Link>
+                    ) : (
+                      <div className="flex items-center gap-2 hover:cursor-pointer">
+                        <span className="font-medium">
+                          {snakeCaseToWords(item.action)}
+                        </span>
+                      </div>
+                    )}
                   </TooltipTrigger>
                   {item.data.productImageUrl && (
                     <TooltipContent>
@@ -90,7 +111,7 @@ export const columns: ColumnDef<Analytic>[] = [
               )}
             </div>
           </div>
-        </p>
+        </div>
       );
     },
     enableSorting: false,

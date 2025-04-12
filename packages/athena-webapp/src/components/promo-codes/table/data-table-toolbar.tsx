@@ -15,6 +15,7 @@ import { X } from "lucide-react";
 import { DataTableFacetedFilter } from "./data-table-faceted-filter";
 import { deliveryMethods, statuses } from "./data";
 import { useOrdersTableToolbar } from "./data-table-toolbar-provider";
+import { getOrigin } from "~/src/lib/navigationUtils";
 
 interface DataTableToolbarProps<TData> {
   table: Table<TData>;
@@ -48,6 +49,7 @@ export function DataTableToolbar<TData>({
             orgUrlSlug: prev.orgUrlSlug!,
             storeUrlSlug: prev.storeUrlSlug!,
           })}
+          search={{ o: getOrigin() }}
           className="pr-2"
         >
           <Button variant="ghost" className="h-8 px-2 lg:px-3 ">

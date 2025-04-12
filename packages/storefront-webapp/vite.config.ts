@@ -8,7 +8,7 @@ export default defineConfig({
   base: "/",
   build: {
     rollupOptions: {
-      // treeshake: true,
+      treeshake: true,
       plugins: [
         visualizer({
           filename: "stats.html",

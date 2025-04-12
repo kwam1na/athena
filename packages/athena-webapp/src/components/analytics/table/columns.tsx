@@ -5,6 +5,7 @@ import { Link } from "@tanstack/react-router";
 import { PromoCode } from "~/types";
 import { capitalizeFirstLetter, slugToWords } from "~/src/lib/utils";
 import { capitalizeWords } from "~/convex/utils";
+import { getOrigin } from "~/src/lib/navigationUtils";
 
 export const columns: ColumnDef<PromoCode>[] = [
   {
@@ -23,6 +24,7 @@ export const columns: ColumnDef<PromoCode>[] = [
               storeUrlSlug: prev.storeUrlSlug!,
               promoCodeSlug: row.original._id,
             })}
+            search={{ o: getOrigin() }}
             className="flex items-center gap-8"
           >
             <span className="font-medium">{row.getValue("code")}</span>
@@ -49,6 +51,7 @@ export const columns: ColumnDef<PromoCode>[] = [
             storeUrlSlug: prev.storeUrlSlug!,
             promoCodeSlug: row.original._id,
           })}
+          search={{ o: getOrigin() }}
         >
           <strong>{row.original.discountValue}</strong> off {span}
         </Link>

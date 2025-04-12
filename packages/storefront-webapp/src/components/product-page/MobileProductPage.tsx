@@ -23,6 +23,7 @@ import { Badge } from "../ui/badge";
 import { OnsaleProduct } from "./OnSaleProduct";
 import { usePromoCodesQueries } from "@/lib/queries/promoCode";
 import { useQuery } from "@tanstack/react-query";
+import { SoldOutBadge } from "./SoldOutBadge";
 
 export default function MobileProductPage() {
   const [isSheetOpen, setIsSheetOpen] = useState(false);
@@ -194,14 +195,7 @@ export default function MobileProductPage() {
             <div className="space-y-6">
               <p className="text-xl">{getProductName(selectedSku)}</p>
               <div className="flex items-center gap-4">
-                {isSoldOut && (
-                  <Badge
-                    variant={"outline"}
-                    className="bg-gray-600 text-gray-50 border-gray-600"
-                  >
-                    Sold Out
-                  </Badge>
-                )}
+                {isSoldOut && <SoldOutBadge />}
 
                 <p className="text-lg text-muted-foreground">
                   {formatter.format(selectedSku.price)}

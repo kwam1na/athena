@@ -17,6 +17,7 @@ import { TrashIcon } from "@radix-ui/react-icons";
 import { PlusIcon } from "lucide-react";
 import { toast } from "sonner";
 import { ProductSku } from "~/types";
+import { getOrigin } from "~/src/lib/navigationUtils";
 
 export const BestSellers = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -77,8 +78,6 @@ export const BestSellers = () => {
     updateRanks({ ranks: newRanks });
   };
 
-  console.log(bestSellers);
-
   return (
     <View
       className="py-4"
@@ -120,6 +119,10 @@ export const BestSellers = () => {
                             storeUrlSlug: params.storeUrlSlug!,
                             productSlug: bestSeller?.productId,
                           })}
+                          search={{
+                            o: getOrigin(),
+                            variant: bestSeller?.productSku?.sku,
+                          }}
                           className="flex items-center gap-4"
                         >
                           <img

@@ -7,6 +7,7 @@ import { Button } from "../ui/button";
 import { PlusIcon } from "@radix-ui/react-icons";
 import { Product } from "~/types";
 import useGetActiveStore from "../../hooks/useGetActiveStore";
+import { getOrigin } from "~/src/lib/navigationUtils";
 
 export default function StoreProducts({ products }: { products: Product[] }) {
   const { activeStore } = useGetActiveStore();
@@ -35,6 +36,9 @@ export default function StoreProducts({ products }: { products: Product[] }) {
                 storeUrlSlug: prev.storeUrlSlug!,
                 orgUrlSlug: prev.orgUrlSlug!,
               })}
+              search={{
+                o: getOrigin(),
+              }}
             >
               <Button variant={"outline"}>
                 <PlusIcon className="w-3 h-3 mr-2" />

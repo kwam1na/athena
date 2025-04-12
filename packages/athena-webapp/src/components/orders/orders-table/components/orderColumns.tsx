@@ -13,6 +13,7 @@ import { getOrderState } from "../../../orders/utils";
 import { OrderStatus } from "../../OrderStatus";
 import { ProductStatus } from "~/src/components/product/ProductStatus";
 import { Badge } from "~/src/components/ui/badge";
+import { getOrigin } from "~/src/lib/navigationUtils";
 
 export const orderColumns: ColumnDef<OnlineOrder>[] = [
   {
@@ -33,7 +34,7 @@ export const orderColumns: ColumnDef<OnlineOrder>[] = [
               storeUrlSlug: prev.storeUrlSlug!,
               orderSlug: row.original._id,
             })}
-            search={{ orderStatus: s }}
+            search={{ orderStatus: s, o: getOrigin() }}
             className="flex items-center gap-8"
           >
             <span className="font-medium">{`#${row.getValue("orderNumber")}`}</span>
@@ -77,7 +78,7 @@ export const orderColumns: ColumnDef<OnlineOrder>[] = [
             storeUrlSlug: prev.storeUrlSlug!,
             orderSlug: row.original._id,
           })}
-          search={{ orderStatus: s }}
+          search={{ orderStatus: s, o: getOrigin() }}
         >
           <OrderStatus order={order} />
         </Link>
@@ -107,7 +108,7 @@ export const orderColumns: ColumnDef<OnlineOrder>[] = [
             storeUrlSlug: prev.storeUrlSlug!,
             orderSlug: row.original._id,
           })}
-          search={{ orderStatus: s }}
+          search={{ orderStatus: s, o: getOrigin() }}
         >
           {customer?.email}
         </Link>
@@ -133,7 +134,7 @@ export const orderColumns: ColumnDef<OnlineOrder>[] = [
             storeUrlSlug: prev.storeUrlSlug!,
             orderSlug: row.original._id,
           })}
-          search={{ orderStatus: s }}
+          search={{ orderStatus: s, o: getOrigin() }}
         >
           <div>{row.getValue("amount")}</div>
         </Link>
@@ -172,7 +173,7 @@ export const orderColumns: ColumnDef<OnlineOrder>[] = [
             storeUrlSlug: prev.storeUrlSlug!,
             orderSlug: row.original._id,
           })}
-          search={{ orderStatus: row.original.status }}
+          search={{ orderStatus: row.original.status, o: getOrigin() }}
         >
           {content}
         </Link>
@@ -201,7 +202,7 @@ export const orderColumns: ColumnDef<OnlineOrder>[] = [
             storeUrlSlug: prev.storeUrlSlug!,
             orderSlug: row.original._id,
           })}
-          search={{ orderStatus: s }}
+          search={{ orderStatus: s, o: getOrigin() }}
         >
           <p className="text-muted-foreground">
             {getRelativeTime(row.getValue("_creationTime"))}
