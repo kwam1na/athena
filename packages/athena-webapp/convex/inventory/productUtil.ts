@@ -2,8 +2,9 @@
 
 import { v } from "convex/values";
 import { action } from "../_generated/server";
-import redisClient from "../redis";
 import { api } from "../_generated/api";
+// import redisClient from "../r";
+import { ValkeyClient } from "../cache";
 
 export const getAllProducts = action({
   args: {
@@ -24,11 +25,12 @@ export const getAllProducts = action({
       ? `:subcategory:${args.subcategory.join(",")}`
       : "";
 
-    const cacheKey = `all:products:${args.storeId}${colorParam}${lengthParam}${categoryParam}${subcategoryParam}`;
+    // Use hash tag for slot alignment
+    const cacheKey = `all:products:{${args.storeId}}${colorParam}${lengthParam}${categoryParam}${subcategoryParam}`;
 
-    // Check cache first
     try {
-      const cachedData = await redisClient.get(cacheKey);
+      const cache = new ValkeyClient();
+      const cachedData = await cache.get(cacheKey);
 
       if (cachedData) {
         console.log("hit cache");
@@ -41,8 +43,11 @@ export const getAllProducts = action({
         args
       );
 
-      // Cache the data
-      await redisClient.set(cacheKey, JSON.stringify(products));
+      try {
+        await cache.set(cacheKey, JSON.stringify(products));
+      } catch (e) {
+        console.log("Cache set error", (e as Error).message);
+      }
 
       return products;
     } catch (e) {
@@ -57,21 +62,15 @@ export const invalidateProductCache = action({
   },
   handler: async (_, args) => {
     try {
-      // Create pattern to match all cache entries for this store
-      // This will clear cache for all filter combinations
-      const pattern = `all:products:${args.storeId}*`;
+      // Match the hash tag style from getAllProducts
+      const pattern = `all:products:{${args.storeId}}*`;
 
-      // Get all matching keys
-      const keys = await redisClient.keys(pattern);
-
-      if (keys.length > 0) {
-        // Delete all matching keys
-        await redisClient.del(keys);
-      }
+      const cache = new ValkeyClient();
+      const keys = await cache.invalidate(pattern);
 
       return {
         success: true,
-        keysCleared: keys.length,
+        keysCleared: keys,
       };
     } catch (e) {
       console.log("Cache invalidation error", (e as Error).message);

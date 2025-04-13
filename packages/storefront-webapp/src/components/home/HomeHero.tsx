@@ -8,7 +8,7 @@ export const HomeHero = () => {
   const { store } = useStoreContext();
 
   const videoRef = useRef<HTMLVideoElement>(null);
-  const hlsUrl = `${config.hlsURL}/stores/${store?._id}/assets/hero/hero.m3u8`;
+  const hlsUrl = `${config.hlsURL}/stores/${store?._id}/assets/hero/v${store?.config?.landingPageReelVersion}/reel.m3u8`;
 
   useEffect(() => {
     if (!videoRef.current || !store?._id) return;

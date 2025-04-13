@@ -210,10 +210,6 @@ export default function HomePage() {
     productQueries.featured()
   );
 
-  const { data: products, isLoading: isLoadingProducts } = useQuery(
-    productQueries.list()
-  );
-
   useEffect(() => {
     setNavBarLayout("sticky");
     setAppLocation(origin);
@@ -249,27 +245,9 @@ export default function HomePage() {
 
   const shopLookProduct = shopLookSorted?.[0];
 
-  const isLoading =
-    isLoadingBestSellers || isLoadingFeatured || isLoadingProducts;
+  const isLoading = isLoadingBestSellers || isLoadingFeatured;
 
   if (isLoading) return <div className="h-screen" />;
-
-  if (products && products.length == 0) {
-    return (
-      <div className="container mx-auto px-4 lg:px-0 overflow-hidden">
-        <div className="flex items-center justify-center h-screen">
-          <div className="space-y-2">
-            <p className="text-xl text-center font-medium">
-              We're updating our store...
-            </p>
-            <p className="text-muted-foreground tex-sm text-center">
-              We're working on bringing you amazing products. Check back soon!
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <>

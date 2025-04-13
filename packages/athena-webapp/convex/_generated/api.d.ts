@@ -16,6 +16,7 @@ import type {
 import type * as app from "../app.js";
 import type * as auth from "../auth.js";
 import type * as aws_aws from "../aws/aws.js";
+import type * as cache_index from "../cache/index.js";
 import type * as constants_countries from "../constants/countries.js";
 import type * as constants_ghana from "../constants/ghana.js";
 import type * as crons from "../crons.js";
@@ -59,7 +60,6 @@ import type * as inventory_subcategories from "../inventory/subcategories.js";
 import type * as inventory_utils from "../inventory/utils.js";
 import type * as otp_ResendOTP from "../otp/ResendOTP.js";
 import type * as otp_VerificationCodeEmail from "../otp/VerificationCodeEmail.js";
-import type * as redis from "../redis.js";
 import type * as schemas_inventory_appVerificationCode from "../schemas/inventory/appVerificationCode.js";
 import type * as schemas_inventory_athenaUser from "../schemas/inventory/athenaUser.js";
 import type * as schemas_inventory_bestSeller from "../schemas/inventory/bestSeller.js";
@@ -120,6 +120,7 @@ declare const fullApi: ApiFromModules<{
   app: typeof app;
   auth: typeof auth;
   "aws/aws": typeof aws_aws;
+  "cache/index": typeof cache_index;
   "constants/countries": typeof constants_countries;
   "constants/ghana": typeof constants_ghana;
   crons: typeof crons;
@@ -163,7 +164,6 @@ declare const fullApi: ApiFromModules<{
   "inventory/utils": typeof inventory_utils;
   "otp/ResendOTP": typeof otp_ResendOTP;
   "otp/VerificationCodeEmail": typeof otp_VerificationCodeEmail;
-  redis: typeof redis;
   "schemas/inventory/appVerificationCode": typeof schemas_inventory_appVerificationCode;
   "schemas/inventory/athenaUser": typeof schemas_inventory_athenaUser;
   "schemas/inventory/bestSeller": typeof schemas_inventory_bestSeller;
