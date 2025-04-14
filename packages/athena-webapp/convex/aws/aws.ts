@@ -89,3 +89,67 @@ export const deleteDirectoryInS3 = async (directory: string) => {
     return { success: false, error, directory };
   }
 };
+
+export interface ListItemsOptions {
+  directory: string;
+  firstLevelOnly?: boolean;
+}
+
+export const listItemsInS3Directory = async ({
+  directory,
+  firstLevelOnly = false,
+}: ListItemsOptions) => {
+  try {
+    const items = [];
+    let continuationToken: string | undefined;
+
+    do {
+      // List objects in the "directory"
+      const listParams = {
+        Bucket: `${process.env.AWS_BUCKET}`,
+        Prefix: `${directory}/`,
+        Delimiter: firstLevelOnly ? "/" : undefined,
+        ContinuationToken: continuationToken,
+      };
+
+      const listResponse = await s3.send(new ListObjectsV2Command(listParams));
+
+      // Process regular contents
+      if (listResponse.Contents && listResponse.Contents.length > 0) {
+        for (const item of listResponse.Contents) {
+          if (item.Key) {
+            // When in firstLevelOnly mode, skip the directory itself
+            if (firstLevelOnly && item.Key === `${directory}/`) continue;
+
+            items.push({
+              key: item.Key,
+              url: `https://${process.env.AWS_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/${item.Key}`,
+              size: item.Size,
+              type: "file",
+            });
+          }
+        }
+      }
+
+      // Process CommonPrefixes (folders) when in firstLevelOnly mode
+      if (firstLevelOnly && listResponse.CommonPrefixes) {
+        for (const prefix of listResponse.CommonPrefixes) {
+          if (prefix.Prefix) {
+            items.push({
+              key: prefix.Prefix,
+              url: `https://${process.env.AWS_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/${prefix.Prefix}`,
+              type: "directory",
+            });
+          }
+        }
+      }
+
+      continuationToken = listResponse.NextContinuationToken;
+    } while (continuationToken);
+
+    return { success: true, items, directory };
+  } catch (error) {
+    console.error("Error listing directory items", error);
+    return { success: false, error, directory };
+  }
+};

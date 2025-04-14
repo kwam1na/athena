@@ -77,7 +77,11 @@ export const columns: ColumnDef<AnalyticProduct>[] = [
     cell: ({ row }) => {
       const item = row.original;
 
-      return <p>{getRelativeTime(item.lastViewed)}</p>;
+      return (
+        <p className="text-muted-foreground">
+          {getRelativeTime(item.lastViewed)}
+        </p>
+      );
     },
   },
 ];

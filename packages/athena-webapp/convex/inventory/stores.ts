@@ -1,8 +1,9 @@
 import { action, mutation, query } from "../_generated/server";
 import { v } from "convex/values";
 import { storeSchema } from "../schemas/inventory";
-import { uploadFileToS3 } from "../aws/aws";
+import { listItemsInS3Directory, uploadFileToS3 } from "../aws/aws";
 import { api } from "../_generated/api";
+import { Doc } from "../_generated/dataModel";
 
 const entity = "store";
 
@@ -16,7 +17,60 @@ export const getAll = query({
       .filter((q) => q.eq(q.field("organizationId"), args.organizationId))
       .collect();
 
+    // // const reelVersions = await ctx.
+    // const reelVersions = await listItemsInS3Directory({
+    //   directory: `stores/${args.organizationId}/assets/hero`,
+    //   firstLevelOnly: true,
+    // });
+
     return stores;
+  },
+});
+
+export const getAllByOrganization = action({
+  args: {
+    organizationId: v.id("organization"),
+  },
+  handler: async (ctx, args) => {
+    const stores: Doc<"store">[] = await ctx.runQuery(
+      api.inventory.stores.getAll,
+      {
+        organizationId: args.organizationId,
+      }
+    );
+
+    const reelVersions = await Promise.all(
+      stores.map((store) => {
+        return listItemsInS3Directory({
+          directory: `stores/${store._id}/assets/hero`,
+          firstLevelOnly: true,
+        });
+      })
+    );
+
+    const storesWithReelVersions = stores.map((store) => {
+      const storeReelVersions = reelVersions.find((reelVersion) =>
+        reelVersion.directory.includes(store._id)
+      );
+
+      const extractedVersions =
+        storeReelVersions?.items
+          ?.map((item) => {
+            const match = item.key.match(/hero\/v(\d+)/);
+            return match ? match[1] : null;
+          })
+          .filter(Boolean) || [];
+
+      return {
+        ...store,
+        config: {
+          ...store.config,
+          reelVersions: extractedVersions,
+        },
+      };
+    });
+
+    return { storesWithReelVersions };
   },
 });
 
@@ -183,5 +237,53 @@ export const uploadImageAssets = action({
     );
 
     return { success: true, images };
+  },
+});
+
+export const updateLandingPageReel = action({
+  args: {
+    storeId: v.id(entity),
+    data: v.object({
+      reelVersion: v.string(),
+    }),
+    config: v.record(v.string(), v.any()),
+  },
+  handler: async (ctx, args) => {
+    const versions = await listItemsInS3Directory({
+      directory: `stores/${args.storeId}/assets/hero`,
+      firstLevelOnly: true,
+    });
+
+    const doesVersionExist = versions?.items?.some((version) =>
+      version.key.includes(`hero/v${args.data.reelVersion}`)
+    );
+
+    if (!doesVersionExist) {
+      return {
+        success: false,
+        errorMessage: "Version does not exist",
+      };
+    }
+
+    await ctx.runMutation(api.inventory.stores.updateConfig, {
+      id: args.storeId,
+      config: args.config,
+    });
+
+    return { success: true };
+  },
+});
+
+export const getReelVersions = action({
+  args: {
+    storeId: v.id(entity),
+  },
+  handler: async (ctx, args) => {
+    const versions = await listItemsInS3Directory({
+      directory: `stores/${args.storeId}/assets/hero`,
+      firstLevelOnly: true,
+    });
+
+    return versions;
   },
 });
