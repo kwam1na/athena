@@ -222,12 +222,14 @@ export const getById = query({
       category = productCategory?.name;
     }
 
-    const skusWithCategory = skus.map((sku) => ({
-      ...sku,
-      productCategory: category,
-      productName: product?.name,
-      colorName: sku.color ? colorMap[sku.color] : null,
-    }));
+    const skusWithCategory = skus
+      .map((sku) => ({
+        ...sku,
+        productCategory: category,
+        productName: product?.name,
+        colorName: sku.color ? colorMap[sku.color] : null,
+      }))
+      .filter((sku) => sku.isVisible || sku.isVisible === undefined);
 
     return {
       ...product,
@@ -287,12 +289,14 @@ export const getBySlug = query({
       category = productCategory?.name;
     }
 
-    const skusWithCategory = skus.map((sku) => ({
-      ...sku,
-      productCategory: category,
-      productName: product?.name,
-      colorName: sku.color ? colorMap[sku.color] : null,
-    }));
+    const skusWithCategory = skus
+      .map((sku) => ({
+        ...sku,
+        productCategory: category,
+        productName: product?.name,
+        colorName: sku.color ? colorMap[sku.color] : null,
+      }))
+      .filter((sku) => sku.isVisible || sku.isVisible === undefined);
 
     return {
       ...product,
@@ -305,6 +309,11 @@ export const getBySlug = query({
 export const getByIdOrSlug = query({
   args: {
     identifier: v.union(v.id(entity), v.string()),
+    filters: v.optional(
+      v.object({
+        isVisible: v.boolean(),
+      })
+    ),
     storeId: v.id("store"),
   },
   handler: async (ctx, args) => {
@@ -381,7 +390,12 @@ export const getByIdOrSlug = query({
       }))
       ?.sort((a, b) => {
         return a.price - b.price;
-      });
+      })
+      .filter((sku) =>
+        args.filters?.isVisible
+          ? sku.isVisible || sku.isVisible === undefined
+          : true
+      );
     // .filter((p) => p.price > 0);
 
     return {
@@ -479,6 +493,7 @@ export const updateSku = mutation({
   args: {
     id: v.id("productSku"),
     images: v.optional(v.array(v.string())),
+    isVisible: v.optional(v.boolean()),
     length: v.optional(v.number()),
     size: v.optional(v.string()),
     color: v.optional(v.id("color")),

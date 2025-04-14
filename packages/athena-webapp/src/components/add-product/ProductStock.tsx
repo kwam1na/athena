@@ -16,7 +16,7 @@ import { Skeleton } from "../ui/skeleton";
 import { CardFooter } from "../ui/card";
 import { useProduct } from "@/contexts/ProductContext";
 import { ImageFile } from "../ui/image-uploader";
-import { Info, RotateCcw, TriangleAlert } from "lucide-react";
+import { Eye, EyeClosed, Info, RotateCcw, TriangleAlert } from "lucide-react";
 import useGetActiveProduct from "@/hooks/useGetActiveProduct";
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
 import {
@@ -25,13 +25,13 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "../ui/tooltip";
-import { set } from "zod";
 
 export type ProductVariant = {
   id: string;
   sku?: string;
   stock?: number;
   quantityAvailable?: number;
+  isVisible?: boolean;
   cost?: number;
   price?: number;
   netPrice?: number;
@@ -150,10 +150,34 @@ function Stock() {
     );
   };
 
+  const setVisibility = (id: string) => {
+    updateProductVariants((prevVariants) =>
+      prevVariants.map((variant) =>
+        variant.id === id
+          ? {
+              ...variant,
+              isVisible:
+                variant.isVisible == undefined ? false : !variant.isVisible,
+            }
+          : variant
+      )
+    );
+  };
+
   const isLastActiveVariant = (index: number) => {
     return productVariants.every(
       (v, idx) => index == idx || v.markedForDeletion
     );
+  };
+
+  const isLastVisibleVariant = (index: number) => {
+    return productVariants.every(
+      (v, idx) => index == idx || v.isVisible == false
+    );
+  };
+
+  const shouldDisable = (variant: ProductVariant) => {
+    return variant.markedForDeletion || variant.isVisible == false;
   };
 
   return (
@@ -203,7 +227,7 @@ function Stock() {
                       placeholder="SKU"
                       onChange={(e) => handleChange(e, variant.id, "sku")}
                       value={variant.sku || ""}
-                      disabled={variant.markedForDeletion}
+                      disabled={shouldDisable(variant)}
                     />
                   ) : (
                     <p
@@ -232,7 +256,7 @@ function Stock() {
                       placeholder="1"
                       onChange={(e) => handleChange(e, variant.id, "stock")}
                       value={variant.stock || ""}
-                      disabled={variant.markedForDeletion}
+                      disabled={shouldDisable(variant)}
                     />
                   )}
                   {error && getErrorForField(error, "inventoryCount") && (
@@ -257,7 +281,7 @@ function Stock() {
                         handleChange(e, variant.id, "quantityAvailable")
                       }
                       value={variant.quantityAvailable || ""}
-                      disabled={variant.markedForDeletion}
+                      disabled={shouldDisable(variant)}
                     />
                   )}
                   {error && getErrorForField(error, "quantityAvailable") && (
@@ -280,7 +304,7 @@ function Stock() {
                       placeholder="999"
                       onChange={(e) => handleChange(e, variant.id, "netPrice")}
                       value={variant.netPrice || ""}
-                      disabled={variant.markedForDeletion}
+                      disabled={shouldDisable(variant)}
                     />
                   )}
                   {error && getErrorForField(error, "price") && (
@@ -300,7 +324,7 @@ function Stock() {
                     placeholder="999"
                     onChange={(e) => handleChange(e, variant.id, "cost")}
                     value={variant.cost || ""}
-                    disabled={variant.markedForDeletion}
+                    disabled={shouldDisable(variant)}
                   />
                   {error && getErrorForField(error, "unitCost") && (
                     <p className="text-red-500 text-sm font-medium">
@@ -311,6 +335,39 @@ function Stock() {
 
                 <TableCell>
                   <div className="flex items-center gap-2">
+                    {productVariants.length > 1 && (
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => setVisibility(variant.id)}
+                              disabled={
+                                isLastActiveVariant(index) ||
+                                isLastVisibleVariant(index)
+                              }
+                            >
+                              {(variant.isVisible == undefined ||
+                                variant.isVisible) && (
+                                <EyeClosed className="w-4 h-4" />
+                              )}
+
+                              {variant.isVisible == false && (
+                                <Eye className="w-4 h-4 text-muted-foreground" />
+                              )}
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            {(variant.isVisible == undefined ||
+                              variant.isVisible) && <p>Hide</p>}
+
+                            {variant.isVisible == false && <p>Make visible</p>}
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    )}
+
                     <TooltipProvider>
                       <Tooltip>
                         <TooltipTrigger asChild>
@@ -321,7 +378,7 @@ function Stock() {
                             disabled={
                               (variant.quantityAvailable == 0 &&
                                 variant.stock == 0) ||
-                              variant.markedForDeletion
+                              shouldDisable(variant)
                             }
                           >
                             <TriangleAlert className="w-4 h-4 text-yellow-500" />

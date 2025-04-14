@@ -319,6 +319,7 @@ function ProductViewContent() {
       inventoryCount: variant.stock || 0,
       quantityAvailable: variant.quantityAvailable || 0,
       unitCost: variant.cost || 0,
+      isVisible: variant.isVisible,
       length: variant.length ? parseInt(variant.length) : undefined,
       size: variant.size,
       color: variant.color,

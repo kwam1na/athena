@@ -79,6 +79,8 @@ productRoutes.get("/:productId", async (c) => {
   const { storeId } = getStoreDataFromRequest(c);
   const { productId } = c.req.param();
 
+  const params = c.req.queries();
+
   if (!storeId) {
     return c.json({ error: "Store id missing" }, 404);
   }
@@ -86,6 +88,9 @@ productRoutes.get("/:productId", async (c) => {
   const product = await c.env.runQuery(api.inventory.products.getByIdOrSlug, {
     identifier: productId,
     storeId: storeId as Id<"store">,
+    filters: {
+      isVisible: !!params.isVisible,
+    },
   });
 
   if (!product) {

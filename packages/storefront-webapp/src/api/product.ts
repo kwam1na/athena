@@ -39,7 +39,12 @@ export async function getAllProducts({
 }
 
 export async function getProduct(productId: string): Promise<Product> {
-  const response = await fetch(`${getBaseUrl()}/${productId}`, {
+  const params = {
+    isVisible: "true",
+  };
+  const queryString = new URLSearchParams(params).toString();
+  const url = `${getBaseUrl()}/${productId}${queryString ? `?${queryString}` : ""}`;
+  const response = await fetch(url, {
     credentials: "include",
   });
 

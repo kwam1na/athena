@@ -58,6 +58,7 @@ export function ProductProvider({ children }: { children: ReactNode }) {
       sku: "",
       stock: 0,
       quantityAvailable: 0,
+      isVisible: true,
       cost: 0,
       price: 0,
       images: [],
@@ -167,6 +168,7 @@ export function ProductProvider({ children }: { children: ReactNode }) {
   const convertSkuToVariant = (sku: ProductSku): ProductVariant => ({
     existsInDB: true,
     id: sku._id,
+    isVisible: sku.isVisible,
     sku: sku.sku,
     stock: sku.inventoryCount,
     quantityAvailable: sku.quantityAvailable,
@@ -238,8 +240,6 @@ export function ProductProvider({ children }: { children: ReactNode }) {
       }
     }
   }, [productVariants, activeProductVariant]);
-
-  // console.log(productVariants);
 
   const value = {
     appState,
