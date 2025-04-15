@@ -4,6 +4,7 @@ import { ActionCtx } from "../../../../_generated/server";
 import { api } from "../../../../_generated/api";
 import { Id } from "../../../../_generated/dataModel";
 import { getCookie } from "hono/cookie";
+import { getStorefrontUserFromRequest } from "../../../utils";
 
 const userRoutes: HonoWithConvex<ActionCtx> = new Hono();
 
@@ -52,7 +53,9 @@ userRoutes.put("/:userId", async (c) => {
   } = await c.req.json();
 
   if (userId == "me") {
-    const userId = getCookie(c, "user_id");
+    // const userId = getCookie(c, "user_id");
+
+    const userId = getStorefrontUserFromRequest(c);
 
     if (!userId) {
       return c.json(null, 200);

@@ -13,6 +13,7 @@ import { useStoreContext } from "@/contexts/StoreContext";
 import { BillingDetailsSection } from "./BillingDetailsSection";
 import { CheckoutFormSectionProps } from "./CustomerInfoSection";
 import { postAnalytics } from "@/api/analytics";
+import { updateGuest } from "@/api/guest";
 
 export const PaymentSection = ({ form }: CheckoutFormSectionProps) => {
   const { activeSession, canPlaceOrder, checkoutState } = useCheckout();
@@ -44,7 +45,7 @@ export const PaymentSection = ({ form }: CheckoutFormSectionProps) => {
 
       setIsProceedingToPayment(true);
 
-      // Process checkout and track analytics in parallel
+      // Process checkout, track analytics, and update user information in parallel
       const [paymentResponse] = await Promise.all([
         processCheckoutSession(
           {
@@ -59,11 +60,8 @@ export const PaymentSection = ({ form }: CheckoutFormSectionProps) => {
             checkoutSessionId: activeSession._id,
           },
         }),
+        user ? updateUserInformation() : updateUserInformation("guest"),
       ]);
-
-      if (user)
-        // Update user information if needed
-        await updateUserInformation();
 
       // Handle payment redirect
       if (paymentResponse?.authorization_url) {
@@ -93,7 +91,7 @@ export const PaymentSection = ({ form }: CheckoutFormSectionProps) => {
     });
   };
 
-  const updateUserInformation = async () => {
+  const updateUserInformation = async (type: "user" | "guest" = "user") => {
     const { customerDetails, deliveryDetails, billingDetails } = checkoutState;
 
     const updateData = {
@@ -118,9 +116,15 @@ export const PaymentSection = ({ form }: CheckoutFormSectionProps) => {
     };
 
     if (Object.keys(updateData).length > 0) {
-      await updateUser({
-        data: updateData,
-      });
+      if (type === "user") {
+        await updateUser({
+          data: updateData,
+        });
+      } else {
+        await updateGuest({
+          data: updateData,
+        });
+      }
     }
   };
 

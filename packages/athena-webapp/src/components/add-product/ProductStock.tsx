@@ -10,13 +10,26 @@ import {
 import { Label } from "../ui/label";
 import { Input } from "../ui/input";
 import { Button } from "../ui/button";
-import { PlusCircledIcon, TrashIcon } from "@radix-ui/react-icons";
+import {
+  DotsHorizontalIcon,
+  PlusCircledIcon,
+  TrashIcon,
+} from "@radix-ui/react-icons";
 import { getErrorForField } from "@/lib/utils";
 import { Skeleton } from "../ui/skeleton";
 import { CardFooter } from "../ui/card";
 import { useProduct } from "@/contexts/ProductContext";
 import { ImageFile } from "../ui/image-uploader";
-import { Eye, EyeClosed, Info, RotateCcw, TriangleAlert } from "lucide-react";
+import {
+  Eye,
+  EyeClosed,
+  Image,
+  Info,
+  MoreHorizontal,
+  RefreshCw,
+  RotateCcw,
+  TriangleAlert,
+} from "lucide-react";
 import useGetActiveProduct from "@/hooks/useGetActiveProduct";
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
 import {
@@ -25,6 +38,13 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "../ui/tooltip";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "../ui/dropdown-menu";
 
 export type ProductVariant = {
   id: string;
@@ -45,7 +65,7 @@ export type ProductVariant = {
 };
 
 const StockHeader = () => {
-  const { updateProductVariants } = useProduct();
+  const { updateProductVariants, productVariants } = useProduct();
 
   const restock = () => {
     updateProductVariants((prevVariants) =>
@@ -60,9 +80,40 @@ const StockHeader = () => {
   return (
     <div className="flex items-center justify-between">
       <p className="text-sm">Variants</p>
-      <Button onClick={restock} variant={"ghost"} size={"sm"}>
-        Restock all
-      </Button>
+
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            className="flex h-8 w-8 p-0 data-[state=open]:bg-muted"
+          >
+            <DotsHorizontalIcon className="w-4 h-4" />
+            <span className="sr-only">Open menu</span>
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-[160px]">
+          <DropdownMenuItem onClick={restock}>
+            <div className="flex items-center gap-2">
+              <RefreshCw className="w-4 h-4 text-muted-foreground" />
+              {productVariants.length > 1 && <p>Restock all</p>}
+              {productVariants.length == 1 && <p>Restock</p>}
+            </div>
+          </DropdownMenuItem>
+
+          {productVariants.length > 1 && (
+            <>
+              <DropdownMenuSeparator />
+
+              <DropdownMenuItem>
+                <div className="flex items-center gap-2">
+                  <Image className="w-4 h-4 text-muted-foreground" />
+                  <p>Copy images</p>
+                </div>
+              </DropdownMenuItem>
+            </>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   );
 };
