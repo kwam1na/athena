@@ -45,6 +45,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
+import { useSheet } from "./SheetProvider";
+import { useEffect } from "react";
+import { Checkbox } from "../ui/checkbox";
+import { Separator } from "../ui/separator";
+import { CopyImagesView } from "./copy-images/CopyImagesView";
 
 export type ProductVariant = {
   id: string;
@@ -66,6 +71,16 @@ export type ProductVariant = {
 
 const StockHeader = () => {
   const { updateProductVariants, productVariants } = useProduct();
+
+  const { toggleSheet, setSheetContent } = useSheet();
+
+  useEffect(() => {
+    setSheetContent(
+      <div className="h-[90vh] overflow-y-auto">
+        <CopyImagesView />
+      </div>
+    );
+  }, []);
 
   const restock = () => {
     updateProductVariants((prevVariants) =>
@@ -104,7 +119,7 @@ const StockHeader = () => {
             <>
               <DropdownMenuSeparator />
 
-              <DropdownMenuItem>
+              <DropdownMenuItem onClick={() => toggleSheet(true)}>
                 <div className="flex items-center gap-2">
                   <Image className="w-4 h-4 text-muted-foreground" />
                   <p>Copy images</p>
