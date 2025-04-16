@@ -351,6 +351,12 @@ export const update = mutation({
     orderId: v.optional(v.id("onlineOrder")),
     externalReference: v.optional(v.string()),
     update: v.record(v.string(), v.any()),
+    signedInAthenaUser: v.optional(
+      v.object({
+        id: v.id("athenaUser"),
+        email: v.string(),
+      })
+    ),
   },
   handler: async (ctx, args) => {
     if (args.orderId) {
@@ -367,6 +373,7 @@ export const update = mutation({
           {
             status: args.update.status,
             date: Date.now(),
+            signedInAthenaUser: args.signedInAthenaUser,
           },
         ];
 

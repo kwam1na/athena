@@ -30,7 +30,6 @@ import {
   ShoppingCart,
   Store,
   UserCircle,
-  UserCircle2,
   Users,
 } from "lucide-react";
 import { AppHeader } from "./Navbar";

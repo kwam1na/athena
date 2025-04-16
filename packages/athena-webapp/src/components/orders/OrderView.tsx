@@ -43,7 +43,8 @@ import { ActivityView } from "./ActivityView";
 import { getOrderState } from "./utils";
 import { OrderStatus } from "./OrderStatus";
 import { EmailStatusView } from "./EmailStatusView";
-import PageHeader, { ComposedPageHeader } from "../common/PageHeader";
+import { ComposedPageHeader } from "../common/PageHeader";
+import { useAuth } from "~/src/hooks/useAuth";
 
 export function RefundOptions() {
   const { order } = useOnlineOrder();
@@ -172,6 +173,8 @@ export function RefundOptions() {
 const Header = () => {
   const { order } = useOnlineOrder();
 
+  const { user } = useAuth();
+
   const updateOrder = useMutation(api.storeFront.onlineOrder.update);
 
   const [isUpdatingOrder, setIsUpdatingOrder] = useState(false);
@@ -185,6 +188,12 @@ const Header = () => {
       await updateOrder({
         orderId: order?._id,
         update,
+        signedInAthenaUser: user
+          ? {
+              id: user._id,
+              email: user.email,
+            }
+          : undefined,
       });
       toast(`Order marked as ${slugToWords(update.status)}`, {
         icon: <CheckCircledIcon className="w-4 h-4" />,

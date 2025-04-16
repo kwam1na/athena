@@ -8,6 +8,27 @@ import {
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
 import { Circle } from "lucide-react";
 
+type ActivityType = "refund" | "transition";
+
+type CreatedAction = {
+  status: "created";
+  date: number;
+  type: ActivityType;
+};
+type RefundAction = {
+  amount: number;
+  date: number;
+  type: ActivityType;
+};
+
+type TransitionAction = {
+  status: string;
+  date: number;
+  type: ActivityType;
+  user?: string;
+};
+type Activity = RefundAction | TransitionAction;
+
 export function ActivityView() {
   const { order } = useOnlineOrder();
   const { activeStore } = useGetActiveStore();
@@ -19,18 +40,28 @@ export function ActivityView() {
   // combine the refunds {amount, date} and transitions {status, date} into one array
   // of activities, sorted by date with a type field to differentiate between the two
 
-  const refundActions = order.refunds?.map((refund) => ({
-    ...refund,
-    type: "refund",
-  }));
+  const refundActions: RefundAction[] | undefined = order.refunds?.map(
+    (refund) => ({
+      ...refund,
+      type: "refund",
+    })
+  );
 
-  const transitionActions = order.transitions?.map((transition) => ({
-    ...transition,
+  const transitionActions: TransitionAction[] | undefined =
+    order.transitions?.map((transition) => ({
+      ...transition,
+      type: "transition",
+      user: transition.signedInAthenaUser?.email,
+    }));
+
+  const createdAction: CreatedAction = {
+    status: "created",
+    date: order._creationTime,
     type: "transition",
-  }));
+  };
 
-  const activities = [
-    { status: "created", date: order._creationTime, type: "transition" },
+  const activities: Activity[] = [
+    createdAction,
     ...(refundActions ?? []),
     ...(transitionActions ?? []),
   ].sort((a, b) => b.date - a.date);
@@ -62,7 +93,8 @@ export function ActivityView() {
                       <p className="text-sm text-muted-foreground">order was</p>
                     ) : (
                       <p className="text-sm text-muted-foreground">
-                        order transitioned &rarr;
+                        {`${(activity as TransitionAction).user || "user"}`}{" "}
+                        transitioned order &rarr;
                       </p>
                     )}
 

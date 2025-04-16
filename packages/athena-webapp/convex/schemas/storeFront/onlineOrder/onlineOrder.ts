@@ -79,6 +79,17 @@ export const onlineOrderSchema = v.object({
   storeId: v.id("store"),
   storeFrontUserId: v.union(v.id("storeFrontUser"), v.id("guest")),
   transitions: v.optional(
-    v.array(v.object({ status: v.string(), date: v.number() }))
+    v.array(
+      v.object({
+        status: v.string(),
+        date: v.number(),
+        signedInAthenaUser: v.optional(
+          v.object({
+            id: v.id("athenaUser"),
+            email: v.string(),
+          })
+        ),
+      })
+    )
   ),
 });
