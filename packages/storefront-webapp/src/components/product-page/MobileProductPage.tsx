@@ -11,19 +11,21 @@ import { useShoppingBag } from "@/hooks/useShoppingBag";
 import { useEffect, useRef, useState } from "react";
 
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "../ui/sheet";
-import { Button } from "../ui/button";
 import NotFound from "../states/not-found/NotFound";
 import { AlertCircleIcon, HeartIcon } from "lucide-react";
 import { HeartIconFilled } from "@/assets/icons/HeartIconFilled";
 import { BagProduct, PickupDetails, ShippingPolicy } from "./ProductDetails";
 import { Reviews } from "./ProductReviews";
 import { About } from "./About";
-import ImageWithFallback from "../ui/image-with-fallback";
-import { Badge } from "../ui/badge";
 import { OnsaleProduct } from "./OnSaleProduct";
 import { usePromoCodesQueries } from "@/lib/queries/promoCode";
 import { useQuery } from "@tanstack/react-query";
-import { SoldOutBadge } from "./SoldOutBadge";
+import {
+  LowStockBadge,
+  SellingFastBadge,
+  SellingFastSignal,
+  SoldOutBadge,
+} from "./InventoryLevelBadge";
 
 export default function MobileProductPage() {
   const [isSheetOpen, setIsSheetOpen] = useState(false);
@@ -162,6 +164,9 @@ export default function MobileProductPage() {
   const isSoldOut =
     selectedSku?.quantityAvailable === 0 && selectedSku.inventoryCount === 0;
 
+  const isLowStock =
+    selectedSku?.quantityAvailable <= 2 || selectedSku.inventoryCount <= 2;
+
   return (
     <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
       <SheetTitle />
@@ -193,13 +198,19 @@ export default function MobileProductPage() {
         >
           <div className="space-y-8">
             <div className="space-y-6">
-              <p className="text-xl">{getProductName(selectedSku)}</p>
-              <div className="flex items-center gap-4">
-                {isSoldOut && <SoldOutBadge />}
+              <p className="text-2xl">{getProductName(selectedSku)}</p>
+              <div className="space-y-4">
+                <div className="flex items-center gap-2">
+                  {isSoldOut && <SoldOutBadge />}
 
-                <p className="text-lg text-muted-foreground">
-                  {formatter.format(selectedSku.price)}
-                </p>
+                  {isLowStock && !isSoldOut && (
+                    <SellingFastSignal
+                      message={`Only ${selectedSku.quantityAvailable} left`}
+                    />
+                  )}
+                </div>
+
+                <p>{formatter.format(selectedSku.price)}</p>
               </div>
             </div>
             <ProductAttribute

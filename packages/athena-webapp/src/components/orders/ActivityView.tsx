@@ -93,8 +93,7 @@ export function ActivityView() {
                       <p className="text-sm text-muted-foreground">order was</p>
                     ) : (
                       <p className="text-sm text-muted-foreground">
-                        {`${(activity as TransitionAction).user || "user"}`}{" "}
-                        transitioned order &rarr;
+                        {`${(activity as TransitionAction).user || "user"} transitioned order →`}
                       </p>
                     )}
 

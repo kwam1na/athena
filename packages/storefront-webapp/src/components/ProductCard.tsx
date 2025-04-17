@@ -14,9 +14,13 @@ export function ProductCard({
     new Set(product.skus.map((sku) => sku.color))
   ).length;
 
-  const isSoldOut =
-    product.skus?.[0].quantityAvailable === 0 &&
-    product.skus?.[0].inventoryCount === 0;
+  const isSoldOut = product.skus.every(
+    (sku) => sku.quantityAvailable === 0 && sku.inventoryCount === 0
+  );
+
+  const isSellingFast = product.skus.some(
+    (sku) => sku.quantityAvailable > 0 && sku.quantityAvailable <= 2
+  );
 
   return (
     <div className="flex flex-col space-y-4">
@@ -29,6 +33,12 @@ export function ProductCard({
         {isSoldOut && (
           <div className="font-medium text-xs absolute top-0 left-0 m-2 text-white bg-black bg-opacity-40 rounded-md px-2 py-1">
             Sold Out
+          </div>
+        )}
+
+        {!isSoldOut && isSellingFast && (
+          <div className="font-medium text-xs absolute top-0 left-0 m-2 text-white bg-black bg-opacity-40 rounded-md px-2 py-1">
+            🔥 Selling fast
           </div>
         )}
       </div>

@@ -23,7 +23,12 @@ import { useTrackAction } from "@/hooks/useTrackAction";
 import { OnsaleProduct } from "./OnSaleProduct";
 import { usePromoCodesQueries } from "@/lib/queries/promoCode";
 import { useQuery } from "@tanstack/react-query";
-import { SoldOutBadge } from "./SoldOutBadge";
+import {
+  LowStockBadge,
+  SellingFastBadge,
+  SellingFastSignal,
+  SoldOutBadge,
+} from "./InventoryLevelBadge";
 
 // Main Product Page Component
 export default function ProductPage() {
@@ -210,6 +215,9 @@ export default function ProductPage() {
   const isSoldOut =
     selectedSku?.quantityAvailable === 0 && selectedSku.inventoryCount === 0;
 
+  const isLowStock =
+    selectedSku?.quantityAvailable <= 2 || selectedSku.inventoryCount <= 2;
+
   return (
     <>
       <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
@@ -240,12 +248,16 @@ export default function ProductPage() {
               <div className="space-y-6">
                 <p className="text-3xl">{getProductName(selectedSku)}</p>
 
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-8">
                   {isSoldOut && <SoldOutBadge />}
 
-                  <p className="text-lg text-muted-foreground">
-                    {formatter.format(selectedSku.price)}
-                  </p>
+                  {isLowStock && !isSoldOut && (
+                    <SellingFastSignal
+                      message={`Only ${selectedSku.quantityAvailable} left`}
+                    />
+                  )}
+
+                  <p>{formatter.format(selectedSku.price)}</p>
                 </div>
               </div>
               <ProductAttribute
