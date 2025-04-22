@@ -1,4 +1,4 @@
-import { columns } from "./products-table/components/columns";
+import { productColumns } from "./products-table/components/productColumns";
 import { DataTable } from "./products-table/components/data-table";
 import { EmptyState } from "../states/empty/empty-state";
 import { PackageXIcon } from "lucide-react";
@@ -16,7 +16,7 @@ export default function StoreProducts({ products }: { products: Product[] }) {
     <div className="container mx-auto">
       {products && products.length > 0 && (
         <div className="py-8">
-          <DataTable data={products} columns={columns} />
+          <DataTable data={products} columns={productColumns} />
         </div>
       )}
       {products && products.length == 0 && (

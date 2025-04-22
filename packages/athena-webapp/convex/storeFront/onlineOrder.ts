@@ -289,7 +289,7 @@ export const get = query({
           length: productSku?.length,
           colorName,
           productName: product?.name,
-          productImage: productSku?.images?.[0] ?? null,
+          productImage: productSku?.images?.[0],
         };
       })
     );
@@ -343,6 +343,19 @@ export const getAllOnlineOrders = query({
     // );
 
     // return ordersWithItems;
+  },
+});
+
+export const getAllOnlineOrdersByStoreFrontUserId = query({
+  args: { storeFrontUserId: v.union(v.id("storeFrontUser"), v.id("guest")) },
+  handler: async (ctx, args) => {
+    const orders = await ctx.db
+      .query(entity)
+      .filter((q) => q.eq(q.field("storeFrontUserId"), args.storeFrontUserId))
+      .order("desc")
+      .collect();
+
+    return orders;
   },
 });
 

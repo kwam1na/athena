@@ -8,6 +8,7 @@ import { PromoCodesDataTable } from "./table/data-table";
 import { columns } from "./table/columns";
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
 import { getOrigin } from "~/src/lib/navigationUtils";
+import { GenericDataTable } from "../base/table/data-table";
 
 export default function PromoCodes({ promoCodes }: { promoCodes: any[] }) {
   const { activeStore } = useGetActiveStore();

@@ -91,6 +91,8 @@ export default function ImageUploader({
     }
   }, [variantMarkedForDeletion, images, updateImages]);
 
+  console.log(images);
+
   return (
     <div className="grid gap-2 p-4">
       <div className="grid grid-cols-2 gap-2">

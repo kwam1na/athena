@@ -10,6 +10,8 @@ export const onlineOrderItemSchema = v.object({
   productId: v.id("product"),
   productSku: v.string(),
   productSkuId: v.id("productSku"),
+  productName: v.optional(v.string()),
+  productImage: v.optional(v.string()),
   quantity: v.number(),
   storeFrontUserId: v.union(v.id("storeFrontUser"), v.id("guest")),
 });

@@ -21,3 +21,21 @@ export const useGetProducts = ({
 
   return products?.sort((a: any, b: any) => a.name.localeCompare(b.name));
 };
+
+export const useGetProductsWithNoImages = () => {
+  const { activeStore } = useGetActiveStore();
+
+  const products = useQuery(
+    api.inventory.products.getAll,
+    activeStore?._id
+      ? {
+          storeId: activeStore._id,
+          filters: {
+            isMissingImages: true,
+          },
+        }
+      : "skip"
+  );
+
+  return products?.sort((a: any, b: any) => a.name.localeCompare(b.name));
+};

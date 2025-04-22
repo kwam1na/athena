@@ -92,4 +92,5 @@ export const onlineOrderSchema = v.object({
       })
     )
   ),
+  updatedAt: v.optional(v.number()),
 });

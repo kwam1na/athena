@@ -12,7 +12,7 @@ import {
 } from "../../ui/tooltip";
 import { getOrigin } from "~/src/lib/navigationUtils";
 
-export const columns: ColumnDef<Analytic>[] = [
+export const analyticsColumns: ColumnDef<Analytic>[] = [
   {
     accessorKey: "action",
     header: ({ column }) => (

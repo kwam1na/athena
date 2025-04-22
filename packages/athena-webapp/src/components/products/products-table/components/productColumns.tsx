@@ -9,7 +9,7 @@ import { Badge } from "~/src/components/ui/badge";
 import { capitalizeWords } from "~/src/lib/utils";
 import { getOrigin } from "~/src/lib/navigationUtils";
 
-export const columns: ColumnDef<Product>[] = [
+export const productColumns: ColumnDef<Product>[] = [
   {
     accessorKey: "name",
     header: ({ column }) => (

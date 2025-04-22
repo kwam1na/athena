@@ -23,18 +23,23 @@ export default function ProductPage() {
 
   return (
     <SheetProvider>
-      <div className="h-full container mx-auto w-full p-8 space-x-32 flex">
-        <div className="space-y-8">
-          <ProductCategorizationView />
-          <ProductImagesView />
-          <ProductStockView />
-          <ProcessingFeesView />
+      <div className="h-full container mx-auto w-full p-8 space-y-12">
+        <div className="grid grid-cols-2 gap-8">
+          <div className="space-y-8">
+            <ProductCategorizationView />
+            <ProductImagesView />
+          </div>
+
+          <div className="w-full space-y-8">
+            {/* <ProductAvailabilityView /> */}
+            {category?.name == "Hair" && <WigTypeView />}
+            <ProductAttributesView />
+          </div>
         </div>
 
-        <div className="w-full space-y-8">
-          {/* <ProductAvailabilityView /> */}
-          {category?.name == "Hair" && <WigTypeView />}
-          <ProductAttributesView />
+        <div>
+          <ProductStockView />
+          <ProcessingFeesView />
         </div>
       </div>
     </SheetProvider>

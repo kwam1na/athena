@@ -101,12 +101,12 @@ export const orderColumns: ColumnDef<OnlineOrder>[] = [
 
       return (
         <Link
-          to="/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug"
+          to="/$orgUrlSlug/store/$storeUrlSlug/users/$userId"
           params={(prev) => ({
             ...prev,
             orgUrlSlug: prev.orgUrlSlug!,
             storeUrlSlug: prev.storeUrlSlug!,
-            orderSlug: row.original._id,
+            userId: row.original.storeFrontUserId,
           })}
           search={{ orderStatus: s, o: getOrigin() }}
         >

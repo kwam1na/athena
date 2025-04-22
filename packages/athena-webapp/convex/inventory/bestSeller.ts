@@ -58,6 +58,7 @@ export const getById = query({
 export const getAll = query({
   args: {
     storeId: v.id("store"),
+    isVisible: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const items = await ctx.db
@@ -66,16 +67,24 @@ export const getAll = query({
       .collect();
 
     const enrichedItems: any[] = await Promise.all(
-      items.map(async (item) => {
+      items.map(async (item: any) => {
         const productSku = await ctx.runQuery(
           api.inventory.productSku.getById,
           {
             id: item.productSkuId,
           }
         );
+
+        const sku =
+          args.isVisible !== undefined
+            ? args.isVisible === productSku?.isVisible
+              ? productSku
+              : undefined
+            : productSku;
+
         return {
           ...item,
-          productSku,
+          productSku: sku,
         };
       })
     );

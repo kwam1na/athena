@@ -14,20 +14,13 @@ import {
 } from "@/components/ui/sidebar";
 import {
   BadgePercent,
-  BarChart,
-  ChartNoAxesColumn,
   ChartNoAxesCombined,
-  Cog,
   CogIcon,
   Image,
-  Logs,
-  PanelBottom,
   PanelTop,
-  PersonStanding,
   ScanBarcode,
   ShoppingBag,
   ShoppingBasket,
-  ShoppingCart,
   Store,
   UserCircle,
   Users,
@@ -41,10 +34,13 @@ import { useAuth } from "../hooks/useAuth";
 import { GearIcon } from "@radix-ui/react-icons";
 import { useQuery } from "convex/react";
 import { api } from "~/convex/_generated/api";
+import { useGetProductsWithNoImages } from "../hooks/useGetProducts";
 
 export function AppSidebar() {
   const { activeStore } = useGetActiveStore();
   const { activeOrganization } = useGetActiveOrganization();
+
+  const products = useGetProductsWithNoImages();
 
   const { user } = useAuth();
 
@@ -251,6 +247,29 @@ export function AppSidebar() {
                     <p className="font-medium">Products</p>
                   </Link>
                 </SidebarMenuButton>
+
+                {products && products.length > 0 && (
+                  <SidebarMenuSub>
+                    <SidebarMenuSubItem>
+                      <SidebarMenuButton asChild>
+                        <Link
+                          to="/$orgUrlSlug/store/$storeUrlSlug/products/unresolved"
+                          params={(p) => ({
+                            ...p,
+                            orgUrlSlug: activeOrganization?.slug,
+                            storeUrlSlug: activeStore?.slug,
+                          })}
+                          className="flex items-center justify-between"
+                        >
+                          <p className="font-medium">Unresolved</p>
+                          <p className="text-xs font-medium">
+                            {products.length}
+                          </p>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuSubItem>
+                  </SidebarMenuSub>
+                )}
               </SidebarMenuItem>
 
               <SidebarMenuItem>

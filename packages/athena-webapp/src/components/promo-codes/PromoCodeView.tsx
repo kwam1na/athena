@@ -4,7 +4,7 @@ import View from "../View";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { api } from "~/convex/_generated/api";
 import PromoCodes from "./PromoCodes";
-import PageHeader from "../common/PageHeader";
+import PageHeader, { ComposedPageHeader } from "../common/PageHeader";
 import { Button } from "../ui/button";
 import { ArrowLeftIcon, TrashIcon } from "@radix-ui/react-icons";
 import { useNavigate, useParams, useSearch } from "@tanstack/react-router";
@@ -25,6 +25,8 @@ import { useAuth } from "~/src/hooks/useAuth";
 import { toast } from "sonner";
 import { LoadingButton } from "../ui/loading-button";
 import { Id } from "~/convex/_generated/dataModel";
+import { Label } from "../ui/label";
+import { Switch } from "../ui/switch";
 
 export type DiscountType = "percentage" | "amount";
 
@@ -37,8 +39,6 @@ const Header = ({
   isUpdating: boolean;
   handleSave: () => void;
 }) => {
-  const { o } = useSearch({ strict: false });
-
   const navigate = useNavigate();
 
   const { promoCodeSlug } = useParams({ strict: false });
@@ -46,21 +46,6 @@ const Header = ({
   const [isDeletingPromoCode, setIsDeletingPromoCode] = useState(false);
 
   const deletePromoCode = useMutation(api.inventory.promoCode.remove);
-
-  const handleBackClick = () => {
-    if (o) {
-      navigate({ to: o });
-    } else {
-      navigate({
-        to: "/$orgUrlSlug/store/$storeUrlSlug/promo-codes",
-        params: (prev) => ({
-          ...prev,
-          storeUrlSlug: prev.storeUrlSlug!,
-          orgUrlSlug: prev.orgUrlSlug!,
-        }),
-      });
-    }
-  };
 
   const handleDeletePromoCode = async () => {
     try {
@@ -87,42 +72,33 @@ const Header = ({
   const header = promoCodeSlug ? "Edit promo code" : "Add promo code";
 
   return (
-    <PageHeader>
-      <div className="flex gap-4 items-center w-full">
-        <div className="flex items-center gap-2">
-          <Button
-            onClick={handleBackClick}
-            variant="ghost"
-            className="h-8 px-2 lg:px-3 "
-          >
-            <ArrowLeftIcon className="h-4 w-4" />
-          </Button>
-        </div>
+    <ComposedPageHeader
+      leadingContent={<p className="text-sm">{header}</p>}
+      trailingContent={
+        <>
+          {promoCodeSlug && (
+            <div className="ml-auto space-x-2">
+              <LoadingButton
+                isLoading={isUpdating}
+                variant={"outline"}
+                onClick={handleSave}
+              >
+                <Save className="w-4 h-4" />
+              </LoadingButton>
 
-        <p className="text-sm">{header}</p>
-
-        {promoCodeSlug && (
-          <div className="ml-auto space-x-2">
-            <LoadingButton
-              isLoading={isUpdating}
-              variant={"outline"}
-              onClick={handleSave}
-            >
-              <Save className="w-4 h-4" />
-            </LoadingButton>
-
-            <LoadingButton
-              isLoading={isDeletingPromoCode}
-              className="text-red-400 hover:bg-red-300 hover:text-red-800"
-              variant={"outline"}
-              onClick={handleDeletePromoCode}
-            >
-              <TrashIcon className="w-4 h-4" />
-            </LoadingButton>
-          </div>
-        )}
-      </div>
-    </PageHeader>
+              <LoadingButton
+                isLoading={isDeletingPromoCode}
+                className="text-red-400 hover:bg-red-300 hover:text-red-800"
+                variant={"outline"}
+                onClick={handleDeletePromoCode}
+              >
+                <TrashIcon className="w-4 h-4" />
+              </LoadingButton>
+            </div>
+          )}
+        </>
+      }
+    />
   );
 };
 
@@ -136,6 +112,7 @@ function PromoCodeView() {
     useState<PromoCodeSpan>("entire-order");
   const [promoCode, setPromoCode] = useState<string | null>(null);
   const [discount, setDiscount] = useState<string | null>(null);
+  const [isActive, setIsActive] = useState(false);
 
   const [isAddingPromoCode, setIsAddingPromoCode] = useState(false);
 
@@ -164,6 +141,7 @@ function PromoCodeView() {
       setDiscount(activePromoCode.discountValue.toString());
       setDiscountType(activePromoCode.discountType);
       setPromoCodeSpan(activePromoCode.span);
+      setIsActive(activePromoCode.active);
     }
   }, [activePromoCode]);
 
@@ -257,6 +235,7 @@ function PromoCodeView() {
       await updatePromoCode({
         id: promoCodeSlug as Id<"promoCode">,
         code: promoCode!,
+        active: isActive,
         discountType: discountType,
         discountValue: parseFloat(discount!),
         span: promoCodeSpan,
@@ -305,7 +284,7 @@ function PromoCodeView() {
       <div className="container mx-auto h-full w-full p-8 space-y-12">
         <div className="grid grid-cols-2 gap-8">
           <div className="space-y-6">
-            <div>
+            <div className="flex items-center gap-8">
               <Input
                 className="w-[320px]"
                 placeholder="Promo code"
@@ -314,6 +293,22 @@ function PromoCodeView() {
                   setPromoCode(e.target.value.toUpperCase());
                 }}
               />
+
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <Label className="text-muted-foreground" htmlFor="custom">
+                    Active
+                  </Label>
+                </div>
+                <Switch
+                  id="custom"
+                  disabled={isUpdatingPromoCode}
+                  checked={isActive}
+                  onCheckedChange={(e) => {
+                    setIsActive(e);
+                  }}
+                />
+              </div>
             </div>
 
             <div className="flex">

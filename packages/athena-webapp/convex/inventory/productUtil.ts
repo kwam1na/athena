@@ -13,6 +13,7 @@ export const getAllProducts = action({
     length: v.optional(v.array(v.number())),
     category: v.optional(v.array(v.string())),
     subcategory: v.optional(v.array(v.string())),
+    isVisible: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     // Create a cache key that includes all filter parameters

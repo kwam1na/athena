@@ -193,6 +193,7 @@ export const remove = mutation({
 export const update = mutation({
   args: {
     id: v.id(entity),
+    active: v.optional(v.boolean()),
     code: v.optional(v.string()),
     discountType: v.optional(
       v.union(v.literal("percentage"), v.literal("amount"))
@@ -209,6 +210,7 @@ export const update = mutation({
   handler: async (ctx, args) => {
     await ctx.db.patch(args.id, {
       code: args.code,
+      active: args.active,
       discountType: args.discountType,
       discountValue: args.discountValue,
       limit: args.limit,

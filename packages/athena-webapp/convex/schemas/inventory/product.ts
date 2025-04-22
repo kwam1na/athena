@@ -8,6 +8,7 @@ export const productSchema = v.object({
     v.literal("draft"),
     v.literal("live")
   ),
+  isVisible: v.optional(v.boolean()),
   categoryId: v.id("category"),
   createdByUserId: v.id("athenaUser"),
   currency: v.string(),

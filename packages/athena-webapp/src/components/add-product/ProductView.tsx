@@ -3,7 +3,15 @@ import View from "../View";
 import { CheckCircledIcon, TrashIcon } from "@radix-ui/react-icons";
 import { ZodError } from "zod";
 import { toast } from "sonner";
-import { Ban, Plus, PlusIcon, RotateCcw, Save } from "lucide-react";
+import {
+  Ban,
+  Eye,
+  EyeOff,
+  Plus,
+  PlusIcon,
+  RotateCcw,
+  Save,
+} from "lucide-react";
 import { LoadingButton } from "../ui/loading-button";
 import { useState } from "react";
 import { convertImagesToWebp, getUploadImagesData } from "@/lib/imageUtils";
@@ -20,13 +28,20 @@ import { productSchema } from "../../lib/schemas/product";
 import { useAuth } from "../../hooks/useAuth";
 import { ComposedPageHeader } from "../common/PageHeader";
 import { PAYSTACK_PROCESSING_FEE } from "~/src/lib/constants";
+import { Tooltip, TooltipProvider, TooltipTrigger } from "../ui/tooltip";
+import { Badge } from "../ui/badge";
+import { ProductStatus } from "../product/ProductStatus";
 
 function ProductViewContent() {
   const { productData, revertChanges, productVariants, updateProductVariants } =
     useProduct();
 
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-  const [isActionModalOpen, setIsActionModalOpen] = useState(false);
+  const [isMakeProductVisibleModalOpen, setIsMakeProductVisibleModalOpen] =
+    useState(false);
+  const [isUpdatingProductVisibility, setIsUpdatingProductVisibility] =
+    useState(false);
+
   const [failedToUploadUrls, setFailedToUploadUrls] = useState<string[]>([]);
   const [isDeletingImages, setIsDeletingImages] = useState(false);
   const [productId, setProductid] = useState<Id<"product"> | null>(null);
@@ -351,36 +366,122 @@ function ProductViewContent() {
   const Navigation = () => {
     const { productSlug } = useParams({ strict: false });
 
+    const { activeProduct } = useGetActiveProduct();
+
     const header = productSlug ? "Edit Product" : "Add New Product";
 
     const ctaIcon = !productSlug ? (
-      <PlusIcon className="w-4 h-4" />
+      <PlusIcon className="w-3.5 h-3.5" />
     ) : (
-      <Save className="w-4 h-4" />
+      <Save className="w-3.5 h-3.5" />
     );
+
+    const updateProductVisibility = async ({
+      isVisible,
+    }: {
+      isVisible: boolean;
+    }) => {
+      if (!activeProduct || !activeStore) return;
+
+      setIsUpdatingProductVisibility(true);
+      try {
+        const data = {
+          ...productData,
+          organizationId: activeStore.organizationId,
+          storeId: activeStore._id,
+          description: productData.description || undefined,
+          currency: activeStore.currency,
+        };
+
+        const { organizationId, storeId, ...updatedProductData } =
+          productSchema.parse(data);
+
+        await updateProduct({
+          ...updatedProductData,
+          isVisible,
+          slug: toSlug(updatedProductData.name),
+          id: activeProduct?._id,
+          categoryId: updatedProductData.categoryId as Id<"category">,
+          subcategoryId: updatedProductData.subcategoryId as Id<"subcategory">,
+        });
+        toast.success(
+          `Product visibility set to ${isVisible ? "visible" : "hidden"}`
+        );
+      } catch (e) {
+        toast.error("Something went wrong", {
+          icon: <Ban className="w-3.5 h-3.5" />,
+          description: (e as Error).message,
+        });
+      } finally {
+        setIsUpdatingProductVisibility(false);
+      }
+    };
 
     return (
       <ComposedPageHeader
-        leadingContent={<p className="text-sm">{header}</p>}
+        leadingContent={
+          <div className="flex items-center gap-4">
+            <p className="text-sm">{header}</p>
+            {activeProduct?.isVisible == false && (
+              <Badge
+                variant={"outline"}
+                className="rounded-md px-2 py-1 text-muted-foreground flex items-center gap-2"
+              >
+                <EyeOff className="h-3.5 w-3.5" />
+                <p className="text-xs ">This product is hidden</p>
+              </Badge>
+            )}
+          </div>
+        }
         trailingContent={
           <div className="flex space-x-2">
             {activeProduct && (
               <>
                 <LoadingButton
                   isLoading={isDeleteMutationPending}
-                  className="text-red-400 hover:bg-red-300 hover:text-red-800"
+                  className="text-red-400 flex gap-2 items-center bg-red-50 hover:bg-red-100 hover:text-red-800"
                   variant={"outline"}
                   onClick={() => setIsDeleteModalOpen(true)}
                 >
-                  <TrashIcon className="w-4 h-4" />
+                  <p>Delete</p>
+                  <TrashIcon className="w-3.5 h-3.5" />
                 </LoadingButton>
+
+                <div className="flex items-center gap-2">
+                  <LoadingButton
+                    isLoading={isUpdatingProductVisibility}
+                    variant={"outline"}
+                    onClick={() => {
+                      updateProductVisibility({
+                        isVisible: !activeProduct?.isVisible,
+                      });
+                    }}
+                  >
+                    {(activeProduct?.isVisible == undefined ||
+                      activeProduct?.isVisible) && (
+                      <div className="flex gap-2 items-center">
+                        <p>Hide</p>
+                        <EyeOff className="w-3.5 h-3.5" />
+                      </div>
+                    )}
+
+                    {activeProduct?.isVisible == false && (
+                      <div className="flex gap-2 items-center">
+                        <p>Make visible</p>
+                        <Eye className="w-3.5 h-3.5 text-muted-foreground" />
+                      </div>
+                    )}
+                  </LoadingButton>
+                </div>
 
                 <LoadingButton
                   isLoading={isDeleteMutationPending}
                   variant={"outline"}
                   onClick={() => revertChanges()}
+                  className="flex gap-2 items-center"
                 >
-                  <RotateCcw className="w-4 h-4" />
+                  <p>Revert changes</p>
+                  <RotateCcw className="w-3.5 h-3.5" />
                 </LoadingButton>
               </>
             )}
@@ -389,7 +490,9 @@ function ProductViewContent() {
               isLoading={isCreateMutationPending || isUpdateMutationPending}
               onClick={onSubmit}
               variant={"outline"}
+              className="flex gap-2 items-center text-blue-700 bg-blue-50 hover:bg-blue-100"
             >
+              <p>{productSlug ? "Save" : "Add"}</p>
               {ctaIcon}
             </LoadingButton>
           </div>
@@ -406,6 +509,20 @@ function ProductViewContent() {
         loading={isDeleteMutationPending}
         onClose={() => {
           setIsDeleteModalOpen(false);
+        }}
+        onConfirm={() => {
+          deleteActiveProduct();
+        }}
+      />
+      <AlertModal
+        title="Do you want to make this product visible?"
+        ctaText="Yes"
+        secondaryCtaText="No"
+        showCancel={false}
+        isOpen={isMakeProductVisibleModalOpen}
+        loading={isDeleteMutationPending}
+        onClose={() => {
+          setIsMakeProductVisibleModalOpen(false);
         }}
         onConfirm={() => {
           deleteActiveProduct();

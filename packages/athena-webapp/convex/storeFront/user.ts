@@ -77,3 +77,26 @@ export const getByIdentifier = query({
     }
   },
 });
+
+export const getAllUserActivity = query({
+  args: {
+    id: v.union(v.id(entity), v.id("guest")),
+  },
+  handler: async (ctx, args) => {
+    const analytics = await ctx.db
+      .query("analytics")
+      .filter((q) => q.eq(q.field("storeFrontUserId"), args.id))
+      .collect();
+
+    return analytics;
+  },
+});
+
+export const getOnlineOrderById = query({
+  args: {
+    id: v.id("onlineOrder"),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db.get(args.id);
+  },
+});

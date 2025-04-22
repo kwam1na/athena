@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import { Id } from "~/convex/_generated/dataModel";
 import { useSheet } from "../SheetProvider";
 import PageHeader, { SimplePageHeader } from "../../common/PageHeader";
+import { GenericDataTable } from "../../base/table/data-table";
 
 export const CopyImagesView = () => {
   return (
@@ -160,14 +161,14 @@ const ProductVariantsTable = () => {
     <div className="grid grid-rows-2">
       <div className="flex items-center gap-56">
         <div className="w-[50%]">
-          <ProductVariantsDataTable
+          <GenericDataTable
             data={sourceVariants}
             columns={productVariantColumns}
           />
         </div>
 
         <div className="w-[50%]">
-          <ProductVariantsDataTable
+          <GenericDataTable
             data={destinationVariants}
             columns={productVariantColumns}
           />

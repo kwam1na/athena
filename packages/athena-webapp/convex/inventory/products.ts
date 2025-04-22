@@ -50,6 +50,12 @@ export const getAll = query({
     length: v.optional(v.array(v.number())),
     category: v.optional(v.array(v.string())),
     subcategory: v.optional(v.array(v.string())),
+    isVisible: v.optional(v.boolean()),
+    filters: v.optional(
+      v.object({
+        isMissingImages: v.optional(v.boolean()),
+      })
+    ),
   },
   handler: async (ctx, args) => {
     let categoryId: Id<"category"> | undefined;
@@ -161,24 +167,35 @@ export const getAll = query({
       {}
     );
 
-    // Add SKUs to their corresponding products
-    const productsWithSkus = products
-      .map((product) => ({
-        ...product,
-        inventoryCount: calculateTotalInventoryCount(
-          skusByProductId[product._id]
-        ),
-        quantityAvailable: calculateTotalAvailableCount(
-          skusByProductId[product._id]
-        ),
-        skus:
-          skusByProductId[product._id]
-            ?.sort((a, b) => {
-              return a.price - b.price;
-            })
-            ?.filter((p) => p.price > 0) || [],
-      }))
-      .filter((p) => p.skus.length > 0);
+    // Filter by visibility if specified
+    const visibleProducts =
+      args.isVisible !== undefined
+        ? products.filter((p) => p.isVisible === args.isVisible)
+        : products;
+
+    // Attach SKUs and inventory data to products
+    const productsWithSkus = visibleProducts
+      .map((product) => {
+        const skus = skusByProductId[product._id] || [];
+        const validSkus = skus
+          .filter((sku) => sku.price > 0)
+          .filter((sku) => {
+            if (args.filters?.isMissingImages && sku.images.length == 0) {
+              return true;
+            } else if (!args.filters?.isMissingImages) {
+              return true;
+            }
+          })
+          .sort((a, b) => a.price - b.price);
+
+        return {
+          ...product,
+          inventoryCount: calculateTotalInventoryCount(skus),
+          quantityAvailable: calculateTotalAvailableCount(skus),
+          skus: validSkus,
+        };
+      })
+      .filter((product) => product.skus.length > 0);
 
     return productsWithSkus;
   },
@@ -535,6 +552,7 @@ export const update = mutation({
     subcategoryId: v.optional(v.id("subcategory")),
     description: v.optional(v.string()),
     inventoryCount: v.optional(v.number()),
+    isVisible: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const { id, ...rest } = args;

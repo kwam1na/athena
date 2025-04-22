@@ -7,6 +7,9 @@ import { AtSign, IdCard, Phone } from "lucide-react";
 import { BagDetails } from "../user-bags/BagView";
 import { FadeIn } from "../common/FadeIn";
 import { SimplePageHeader } from "../common/PageHeader";
+import { UserActivity } from "./UserActivity";
+import { UserBag } from "./UserBag";
+import { UserOnlineOrders } from "./UserOnlineOrders";
 
 export const UserView = () => {
   const { userId } = useParams({ strict: false });
@@ -33,42 +36,53 @@ export const UserView = () => {
   return (
     <View header={<SimplePageHeader title="User details" />}>
       <FadeIn className="container mx-auto h-full w-full p-8 space-y-12">
-        <div className="space-y-16">
-          <div className="space-y-8">
-            <p className="text-sm font-medium">Contact details</p>
-            {!hasContactDetails ? (
-              <p className="text-sm text-muted-foreground">
-                This user hasn't provided any contact details.
-              </p>
-            ) : (
-              <div className="space-y-4">
-                {name && (
-                  <div className="flex items-center gap-2">
-                    <IdCard className="w-4 h-4 text-muted-foreground" />
-                    <p className="text-sm">{name}</p>
-                  </div>
-                )}
+        <div className="flex justify-between">
+          <div className="space-y-16">
+            <div className="space-y-8">
+              <p className="text-sm font-medium">Contact details</p>
+              {!hasContactDetails ? (
+                <p className="text-sm text-muted-foreground">
+                  This user hasn't provided any contact details.
+                </p>
+              ) : (
+                <div className="space-y-4">
+                  {name && (
+                    <div className="flex items-center gap-2">
+                      <IdCard className="w-4 h-4 text-muted-foreground" />
+                      <p className="text-sm">{name}</p>
+                    </div>
+                  )}
 
-                {user.email && (
-                  <div className="flex items-center gap-2">
-                    <AtSign className="w-4 h-4 text-muted-foreground" />
-                    <p className="text-sm">{user.email}</p>
-                  </div>
-                )}
+                  {user.email && (
+                    <div className="flex items-center gap-2">
+                      <AtSign className="w-4 h-4 text-muted-foreground" />
+                      <p className="text-sm">{user.email}</p>
+                    </div>
+                  )}
 
-                {user.phoneNumber && (
-                  <div className="flex items-center gap-2">
-                    <Phone className="w-4 h-4 text-muted-foreground" />
-                    <p className="text-sm">{user.phoneNumber}</p>
-                  </div>
-                )}
-              </div>
-            )}
+                  {user.phoneNumber && (
+                    <div className="flex items-center gap-2">
+                      <Phone className="w-4 h-4 text-muted-foreground" />
+                      <p className="text-sm">{user.phoneNumber}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-8">
+              <p className="text-sm font-medium">Bag details</p>
+              <UserBag />
+            </div>
+
+            <div className="space-y-8">
+              <p className="text-sm font-medium">Online orders</p>
+              <UserOnlineOrders />
+            </div>
           </div>
 
-          <div className="space-y-8">
-            <p className="text-sm font-medium">Bag details</p>
-            {userBag && <BagDetails bag={userBag} />}
+          <div className="w-[40%]">
+            <UserActivity />
           </div>
         </div>
       </FadeIn>
