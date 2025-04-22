@@ -10,6 +10,8 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { PickupOptions } from "./PickupOptions";
 import { accraNeighborhoods } from "@/lib/ghana";
+import { CheckoutFormSectionProps } from "../CustomerInfoSection";
+import { CountryFields } from "../DeliveryDetailsSection";
 
 export const DeliveryDetails = ({ address }: { address: Address }) => {
   const country = ALL_COUNTRIES.find((c) => c.code == address.country)?.name;
@@ -70,11 +72,13 @@ const EnteredDeliveryDetails = () => {
   );
 };
 
-export const DeliveryOptions = () => {
+export const DeliveryOptions = ({ form }: CheckoutFormSectionProps) => {
+  const { checkoutState } = useCheckout();
   return (
     <div className="space-y-8">
       <p className="text-xs text-muted-foreground">Delivery options</p>
-      <DeliveryOptionsSelector />
+      <CountryFields form={form} />
+      {checkoutState.deliveryDetails?.country && <DeliveryOptionsSelector />}
     </div>
   );
 };

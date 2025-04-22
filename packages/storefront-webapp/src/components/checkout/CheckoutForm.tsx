@@ -9,6 +9,7 @@ import { PickupOptions } from "./DeliveryDetails/PickupOptions";
 import { StoreSelector } from "./DeliveryDetails/DeliveryOptionsSelector";
 import { PaymentSection } from "./PaymentSection";
 import { DeliveryDetailsSection } from "./DeliveryDetailsSection";
+import { DeliveryOptions } from "./DeliveryDetails/DeliverySection";
 
 export const CheckoutForm = () => {
   const { checkoutState } = useCheckout();
@@ -91,13 +92,15 @@ export const CheckoutForm = () => {
         >
           <PickupOptions />
 
-          {checkoutState.isPickupOrder && <StoreSelector />}
+          {checkoutState.isDeliveryOrder && <DeliveryOptions form={form} />}
 
-          <CustomerInfoSection form={form} />
+          {checkoutState.isPickupOrder && <StoreSelector />}
 
           {checkoutState.isDeliveryOrder && (
             <DeliveryDetailsSection form={form} />
           )}
+
+          <CustomerInfoSection form={form} />
 
           <PaymentSection form={form} />
         </motion.div>

@@ -17,6 +17,28 @@ export const PickupOptions = () => {
         type="button"
         onClick={() => {
           updateState({
+            deliveryMethod: "pickup",
+            pickupLocation: "wigclub-hair-studio",
+            billingDetails: null,
+          });
+        }}
+        selected={isPickup}
+        className="h-[64px] w-[50%] justify-start"
+      >
+        <div className="w-full space-y-2">
+          <div className="flex items-center">
+            <Store className="w-4 h-4 mr-2" />
+            Store pickup
+          </div>
+
+          <p className="text-xs text-start w-full">Free</p>
+        </div>
+      </GhostButton>
+
+      <GhostButton
+        type="button"
+        onClick={() => {
+          updateState({
             deliveryMethod: "delivery",
             deliveryFee: null,
             pickupLocation: null,
@@ -35,29 +57,6 @@ export const PickupOptions = () => {
             <p className="text-xs text-[#EC4683] text-start w-full">
               {formatter.format(checkoutState.deliveryFee || 0)}
             </p>
-          )}
-        </div>
-      </GhostButton>
-      <GhostButton
-        type="button"
-        onClick={() => {
-          updateState({
-            deliveryMethod: "pickup",
-            pickupLocation: "wigclub-hair-studio",
-            billingDetails: null,
-          });
-        }}
-        selected={isPickup}
-        className="h-[64px] w-[50%] justify-start"
-      >
-        <div className="w-full space-y-2">
-          <div className="flex items-center">
-            <Store className="w-4 h-4 mr-2" />
-            Store pickup
-          </div>
-
-          {Boolean(checkoutState.isPickupOrder) && (
-            <p className="text-xs text-[#EC4683] text-start w-full">Free</p>
           )}
         </div>
       </GhostButton>

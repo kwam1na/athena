@@ -46,7 +46,7 @@ export const UserActivity = () => {
 
   if (!analytics) return null;
 
-  console.log(analytics);
+  // console.log(analytics);
 
   const items = analytics.sort((a, b) => b._creationTime - a._creationTime);
 

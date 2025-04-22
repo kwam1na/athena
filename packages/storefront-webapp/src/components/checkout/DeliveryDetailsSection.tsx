@@ -24,7 +24,7 @@ import { Textarea } from "../ui/textarea";
 import { Button } from "../ui/button";
 import { US_STATES } from "@/lib/states";
 
-const CountryFields = ({ form }: CheckoutFormSectionProps) => {
+export const CountryFields = ({ form }: CheckoutFormSectionProps) => {
   const { checkoutState, updateState } = useCheckout();
   return (
     <>
@@ -815,8 +815,8 @@ export const DeliveryDetailsSection = ({ form }: CheckoutFormSectionProps) => {
     <div className="w-full space-y-16">
       <div className="flex flex-col space-y-8">
         <p className="text-xs text-muted-foreground">Delivery details</p>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <CountryFields form={form} />
+        <div className="grid grid-cols-1 md:grid-cols-1 gap-4">
+          {/* <CountryFields form={form} /> */}
 
           {checkoutState.isGhanaOrder && <RegionFields form={form} />}
 
@@ -842,7 +842,7 @@ export const DeliveryDetailsSection = ({ form }: CheckoutFormSectionProps) => {
 
       {checkoutState.isGhanaOrder && <DeliveryInstructions form={form} />}
 
-      {checkoutState.deliveryDetails?.country && <DeliveryOptions />}
+      {/* {checkoutState.deliveryDetails?.country && <DeliveryOptions />} */}
     </div>
   );
 };
