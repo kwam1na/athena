@@ -9,7 +9,7 @@ import {
 import { Check, Copy } from "lucide-react";
 import { useState } from "react";
 
-export default function CopyButton({ stringToCopy }: { stringToCopy: string }) {
+export default function CopyButton({ stringToCopy }: { stringToCopy: any }) {
   const [copied, setCopied] = useState<boolean>(false);
 
   const handleCopy = async () => {

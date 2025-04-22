@@ -11,6 +11,7 @@ import { AnimatePresence, easeInOut, motion } from "framer-motion";
 import { EmptyState } from "../states/empty/empty-state";
 import { FadeIn } from "../common/FadeIn";
 import ImageWithFallback from "../ui/image-with-fallback";
+import { postAnalytics } from "@/api/analytics";
 
 export default function SavedBag() {
   const [bagAction, setBagAction] = useState<ShoppingBagAction>("idle");
@@ -138,9 +139,20 @@ export default function SavedBag() {
                           variant="ghost"
                           size="icon"
                           disabled={isUpdatingSavedBag || !item.price}
-                          onClick={() => {
+                          onClick={async () => {
                             setBagAction("moving-to-bag");
-                            moveItemFromSavedToBag(item);
+                            await Promise.all([
+                              moveItemFromSavedToBag(item),
+                              postAnalytics({
+                                action: "added_product_to_bag",
+                                origin: "saved_bag",
+                                data: {
+                                  product: item.productId,
+                                  productSku: item.productSku,
+                                  productImageUrl: item.productImage,
+                                },
+                              }),
+                            ]);
                           }}
                         >
                           <ShoppingBasket className="h-4 w-4" />
@@ -150,9 +162,19 @@ export default function SavedBag() {
                           variant="ghost"
                           size="icon"
                           disabled={isUpdatingSavedBag}
-                          onClick={() => {
+                          onClick={async () => {
                             setBagAction("deleting-from-saved-bag");
-                            deleteItemFromSavedBag(item._id);
+                            await Promise.all([
+                              deleteItemFromSavedBag(item._id),
+                              postAnalytics({
+                                action: "removed_product_from_saved",
+                                data: {
+                                  product: item.productId,
+                                  productSku: item.productSku,
+                                  productImageUrl: item.productImage,
+                                },
+                              }),
+                            ]);
                           }}
                         >
                           <Trash2 className="h-4 w-4" />

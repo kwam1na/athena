@@ -27,7 +27,6 @@ import { ArrowRightIcon } from "@radix-ui/react-icons";
 import ImageWithFallback from "../ui/image-with-fallback";
 import { useNavigationBarContext } from "@/contexts/NavigationBarProvider";
 import { useCheckoutSessionQueries } from "@/lib/queries/checkout";
-import { useGetActiveCheckoutSession } from "@/hooks/useGetActiveCheckoutSession";
 import { usePromoCodesQueries } from "@/lib/queries/promoCode";
 import { postAnalytics } from "@/api/analytics";
 
@@ -329,9 +328,20 @@ export default function ShoppingBag() {
                             size="icon"
                             className={`${isUpdatingBag ? "pointer-events-none" : ""}`}
                             disabled={!item.price}
-                            onClick={() => {
+                            onClick={async () => {
                               setBagAction("moving-to-saved-bag");
-                              moveItemFromBagToSaved(item);
+                              await Promise.all([
+                                moveItemFromBagToSaved(item),
+                                postAnalytics({
+                                  action: "added_product_to_saved",
+                                  origin: "shopping_bag",
+                                  data: {
+                                    product: item.productId,
+                                    productSku: item.productSku,
+                                    productImageUrl: item.productImage,
+                                  },
+                                }),
+                              ]);
                             }}
                           >
                             <Heart className="h-4 w-4" />
@@ -341,9 +351,19 @@ export default function ShoppingBag() {
                             variant="ghost"
                             size="icon"
                             className={`${isUpdatingBag ? "pointer-events-none" : ""}`}
-                            onClick={() => {
+                            onClick={async () => {
                               setBagAction("deleting-from-bag");
-                              deleteItemFromBag(item._id);
+                              await Promise.all([
+                                deleteItemFromBag(item._id),
+                                postAnalytics({
+                                  action: "removed_product_from_bag",
+                                  data: {
+                                    product: item.productId,
+                                    productSku: item.productSku,
+                                    productImageUrl: item.productImage,
+                                  },
+                                }),
+                              ]);
                             }}
                           >
                             <Trash2 className="h-4 w-4" />

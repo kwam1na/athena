@@ -6,7 +6,14 @@ import {
   slugToWords,
 } from "~/src/lib/utils";
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
-import { Circle } from "lucide-react";
+import { Circle, Copy } from "lucide-react";
+
+import { Button } from "../ui/button";
+import { DotsHorizontalIcon } from "@radix-ui/react-icons";
+import CopyButton from "../ui/copy-button";
+import { useAuth } from "~/src/hooks/useAuth";
+import { useQuery } from "convex/react";
+import { api } from "~/convex/_generated/api";
 
 type ActivityType = "refund" | "transition";
 
