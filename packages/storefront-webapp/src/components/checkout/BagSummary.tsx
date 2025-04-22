@@ -15,7 +15,6 @@ import { redeemPromoCode } from "@/api/promoCodes";
 import { useAuth } from "@/hooks/useAuth";
 import { useEffect, useState } from "react";
 import { getDiscountValue } from "./utils";
-import { ac } from "dist/assets/vendor-Cnz6qlnH";
 import { usePromoCodesQueries } from "@/lib/queries/promoCode";
 
 function SummaryItem({

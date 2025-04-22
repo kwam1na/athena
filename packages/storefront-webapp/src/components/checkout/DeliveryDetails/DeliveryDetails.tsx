@@ -297,7 +297,7 @@ export const DeliveryDetailsForm = () => {
           </div>
         </div>
 
-        {checkoutState.deliveryDetails?.country && <DeliveryOptions />}
+        {/* {checkoutState.deliveryDetails?.country && <DeliveryOptions form={form} />} */}
 
         {/* Show continue button only when editing */}
         {/* {(actionsState.isEditingDeliveryDetails ||

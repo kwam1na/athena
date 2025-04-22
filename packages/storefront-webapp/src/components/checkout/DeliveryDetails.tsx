@@ -523,7 +523,9 @@ export const DeliveryDetailsForm = ({ form }: CheckoutFormSectionProps) => {
         </div>
       </div>
 
-      {checkoutState.deliveryDetails?.country && <DeliveryOptions />}
+      {checkoutState.deliveryDetails?.country && (
+        <DeliveryOptions form={form} />
+      )}
 
       {checkoutState.isGhanaOrder && <DeliveryInstructions />}
     </div>
