@@ -60,7 +60,7 @@ export default function BagItemsView() {
       header={hasBagItems && <Navigation />}
     >
       <FadeIn>
-        <Bags items={data} />
+        <Bags />
       </FadeIn>
     </View>
   );

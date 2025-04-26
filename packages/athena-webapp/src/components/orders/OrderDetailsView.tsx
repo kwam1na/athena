@@ -60,7 +60,7 @@ export function OrderDetailsView() {
 
           <div className="flex items-center gap-8">
             <p className="text-sm">
-              Paystack reference <b>{order?.externalReference}</b>
+              External payment reference <b>{order?.externalReference}</b>
             </p>
 
             {isDuplicateQuery && (

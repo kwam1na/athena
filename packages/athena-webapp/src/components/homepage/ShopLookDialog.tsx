@@ -7,6 +7,7 @@ import {
   CommandItem,
   CommandList,
 } from "../ui/command";
+import { capitalizeWords } from "~/src/lib/utils";
 
 export function ShopLookDialog({
   dialogOpen,
@@ -49,12 +50,16 @@ export function ShopLookDialog({
                   className="flex items-center gap-2 w-full"
                   onClick={() => handleAddFeaturedItem(product)}
                 >
-                  <img
-                    src={product?.skus[0].images[0]}
-                    alt={product?.name}
-                    className="w-8 h-8 rounded-md"
-                  />
-                  <p>{product.name}</p>
+                  {product?.skus[0].images[0] ? (
+                    <img
+                      src={product?.skus[0].images[0]}
+                      alt={product?.name}
+                      className="w-16 h-16 rounded-md"
+                    />
+                  ) : (
+                    <div className="aspect-square w-16 h-16 bg-gray-100 rounded-md" />
+                  )}
+                  <p>{capitalizeWords(product.name)}</p>
                 </div>
               </CommandItem>
             ))}

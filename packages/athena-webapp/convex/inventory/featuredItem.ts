@@ -109,7 +109,8 @@ export const getAll = query({
             .filter((q) =>
               q.and(
                 q.eq(q.field("categoryId"), item.categoryId),
-                q.eq(q.field("storeId"), args.storeId)
+                q.eq(q.field("storeId"), args.storeId),
+                q.eq(q.field("isVisible"), true)
               )
             )
             .take(5);
@@ -141,7 +142,8 @@ export const getAll = query({
             .filter((q) =>
               q.and(
                 q.eq(q.field("subcategoryId"), item.subcategoryId),
-                q.eq(q.field("storeId"), args.storeId)
+                q.eq(q.field("storeId"), args.storeId),
+                q.eq(q.field("isVisible"), true)
               )
             )
             .take(5);

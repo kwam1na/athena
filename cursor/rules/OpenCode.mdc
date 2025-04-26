@@ -1,0 +1,50 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+
+# OpenCode Guidelines
+
+## 1. Build, Lint, and Test Commands
+
+- **Install dependencies:**
+  - In each package: `bun install`
+- **Build:**
+  - `bun run build` (runs `vite build && tsc --noEmit`)
+- **Dev server:**
+  - `bun run dev` or `bun run start`
+- **Lint:**
+  - `bunx eslint .` (if you want to lint the package)
+- **Test:**
+  - _No unit test scripts or tests detected currently. Add tests in `*.test.ts` or `tests/` as needed. Use your preferred runner (e.g. Vitest, Jest) and install it if required._
+
+## 2. Code Style Guidelines
+
+- **Language:** TypeScript (React, Node)
+- **Imports & Paths:**
+  - Use ESNext (`import/export`). Prefer absolute imports per `tsconfig.json`, e.g. `@/foo` maps to `src/foo`.
+- **Formatting:**
+  - Follow project and TypeScript defaults; Prettier config not detected, so use standard 2-space indentation, trailing commas, and double quotes for JSON.
+- **Types:**
+  - Use TypeScript strict mode (`strict: true`).
+  - Prefer explicit types, interfaces, and strong typing.
+- **Lint Rules:**
+  - Based on `eslint:recommended`, `typescript-eslint`, and React Hooks plugin.
+  - Use React function components; respect react-hooks rules.
+- **Naming Conventions:**
+  - Use `PascalCase` for components/classes, `camelCase` for variables/functions, UPPER_CASE for constants.
+- **Error Handling:**
+  - Use idiomatic try/catch in async code. Prefer returning explicit errors over silent failures.
+- **React:**
+  - Use function components with hooks.
+  - Place React components in `src/components/`.
+- **File Organization:**
+  - Group related files; keep test files alongside or in dedicated folders.
+- **Misc:**
+  - No .editorconfig or Prettier config detected—default to common open source formatting.
+  - No Cursor or Copilot rules detected.
+
+---
+
+You can edit/extend this file as you add test runners or configuration files.

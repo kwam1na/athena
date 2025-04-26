@@ -8,7 +8,7 @@ import { useMutation, useQuery } from "convex/react";
 import { useEffect, useState } from "react";
 import { api } from "~/convex/_generated/api";
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
-import { currencyFormatter } from "~/src/lib/utils";
+import { capitalizeWords, currencyFormatter } from "~/src/lib/utils";
 import View from "../View";
 import { Link } from "@tanstack/react-router";
 import { Button } from "../ui/button";
@@ -125,7 +125,7 @@ export const FeaturedSection = () => {
                               />
                               <div className="flex flex-col gap-2">
                                 <p className="text-sm">
-                                  {featuredItem?.product?.name}
+                                  {capitalizeWords(featuredItem?.product?.name)}
                                 </p>
                                 <p className="text-xs text-muted-foreground">
                                   {formatter.format(

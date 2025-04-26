@@ -23,17 +23,20 @@ import {
   TableRow,
 } from "../../ui/table";
 import { DataTablePagination } from "./data-table-pagination";
+import { useQuery } from "convex/react";
+import { api } from "~/convex/_generated/api";
+import useGetActiveStore from "~/src/hooks/useGetActiveStore";
+import { currencyFormatter } from "~/src/lib/utils";
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
-  data: TData[];
   showToolbar?: boolean;
 }
 
 export function BagsTable<TData, TValue>({
   columns,
-  data,
 }: DataTableProps<TData, TValue>) {
+  const { activeStore } = useGetActiveStore();
   const [rowSelection, setRowSelection] = React.useState({});
   const [columnVisibility, setColumnVisibility] =
     React.useState<VisibilityState>({});
@@ -41,16 +44,43 @@ export function BagsTable<TData, TValue>({
     []
   );
   const [sorting, setSorting] = React.useState<SortingState>([]);
+  const [pagination, setPagination] = React.useState({
+    pageIndex: 0,
+    pageSize: 10,
+  });
+
+  const formatter = currencyFormatter(activeStore?.currency || "USD");
+
+  const { items, pageCount } = useQuery(
+    api.storeFront.bag.getPaginatedBags,
+    activeStore
+      ? {
+          storeId: activeStore._id,
+          pagination,
+          sorting,
+          filters: columnFilters,
+        }
+      : "skip"
+  ) || { items: [], totalCount: 0, pageCount: 0 };
+
+  const data = items.map((item) => ({
+    ...item,
+    total: formatter.format(item.total),
+  }));
 
   const table = useReactTable({
-    data,
+    data: data as TData[],
     columns,
     state: {
       sorting,
       columnVisibility,
       rowSelection,
       columnFilters,
+      pagination,
     },
+    pageCount,
+    manualPagination: true,
+    onPaginationChange: setPagination,
     enableRowSelection: true,
     onRowSelectionChange: setRowSelection,
     onSortingChange: setSorting,

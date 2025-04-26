@@ -52,14 +52,18 @@ export function BestSellersDialog({
               {productSkus?.map((product: ProductSku) => (
                 <CommandItem key={product._id}>
                   <div
-                    className="flex h-[80px] items-center w-full"
+                    className="flex h-[80px] items-center gap-2 w-full"
                     onClick={() => handleAddBestSeller(product)}
                   >
-                    <img
-                      src={product.images[0]}
-                      alt={product?.productId}
-                      className="w-16 h-16 rounded-md"
-                    />
+                    {product.images[0] ? (
+                      <img
+                        src={product.images[0]}
+                        alt={product?.productName}
+                        className="w-16 h-16 rounded-md"
+                      />
+                    ) : (
+                      <div className="aspect-square w-16 h-16 bg-gray-100 rounded-md" />
+                    )}
                     <p>{getProductName(product)}</p>
                   </div>
                 </CommandItem>

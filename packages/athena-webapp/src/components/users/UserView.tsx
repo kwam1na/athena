@@ -4,12 +4,12 @@ import { useQuery } from "convex/react";
 import { api } from "~/convex/_generated/api";
 import { Id } from "~/convex/_generated/dataModel";
 import { AtSign, IdCard, Phone } from "lucide-react";
-import { BagDetails } from "../user-bags/BagView";
 import { FadeIn } from "../common/FadeIn";
 import { SimplePageHeader } from "../common/PageHeader";
 import { UserActivity } from "./UserActivity";
 import { UserBag } from "./UserBag";
 import { UserOnlineOrders } from "./UserOnlineOrders";
+import { UserInsightsSection } from "./UserInsightsSection";
 
 export const UserView = () => {
   const { userId } = useParams({ strict: false });
@@ -17,11 +17,6 @@ export const UserView = () => {
   const user = useQuery(
     api.storeFront.user.getByIdentifier,
     userId ? { id: userId as Id<"storeFrontUser"> } : "skip"
-  );
-
-  const userBag = useQuery(
-    api.storeFront.bag.getByUserId,
-    user ? { storeFrontUserId: user._id } : "skip"
   );
 
   if (!user) return null;
@@ -79,6 +74,8 @@ export const UserView = () => {
               <p className="text-sm font-medium">Online orders</p>
               <UserOnlineOrders />
             </div>
+
+            <UserInsightsSection />
           </div>
 
           <div className="w-[40%]">
