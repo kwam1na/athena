@@ -14,7 +14,7 @@ const initialScripts = Array.from(document.querySelectorAll("script"))
  * if the HTML entry point references different script files than when the app was loaded.
  */
 export function createVersionChecker({
-  pollingIntervalMs = 5 * 60 * 1000, // 5 minutes
+  pollingIntervalMs = 1 * 60 * 1000, // 1 minute
   onNewVersionAvailable,
 }: {
   pollingIntervalMs?: number;

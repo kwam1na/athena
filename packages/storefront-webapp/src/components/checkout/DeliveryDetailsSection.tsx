@@ -17,7 +17,6 @@ import {
 } from "../ui/select";
 import { ALL_COUNTRIES } from "@/lib/countries";
 import { useEffect, useRef, useState } from "react";
-import { DeliveryOptions } from "./DeliveryDetails/DeliverySection";
 import { accraNeighborhoods } from "@/lib/ghana";
 import { CheckoutFormSectionProps } from "./CustomerInfoSection";
 import { Textarea } from "../ui/textarea";

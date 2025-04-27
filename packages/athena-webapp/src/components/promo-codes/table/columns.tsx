@@ -5,6 +5,7 @@ import { Link } from "@tanstack/react-router";
 import { PromoCode } from "~/types";
 import { slugToWords } from "~/src/lib/utils";
 import { getOrigin } from "~/src/lib/navigationUtils";
+import { Badge } from "../../ui/badge";
 
 export const columns: ColumnDef<PromoCode>[] = [
   {
@@ -13,6 +14,7 @@ export const columns: ColumnDef<PromoCode>[] = [
       <DataTableColumnHeader column={column} title="Promo code" />
     ),
     cell: ({ row }) => {
+      const code = row.original;
       return (
         <div className="flex space-x-2">
           <Link
@@ -27,6 +29,16 @@ export const columns: ColumnDef<PromoCode>[] = [
             className="flex items-center gap-8"
           >
             <span className="font-medium">{row.getValue("code")}</span>
+            <Badge
+              variant="outline"
+              className={`rounded-md px-2 py-1 ${
+                code.active
+                  ? "bg-green-50 text-green-600"
+                  : "bg-red-50 text-red-600"
+              }`}
+            >
+              <p>{code.active ? "Active" : "Inactive"}</p>
+            </Badge>
           </Link>
         </div>
       );

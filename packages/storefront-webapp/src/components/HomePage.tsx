@@ -275,15 +275,12 @@ export default function HomePage() {
                 className="lg:absolute lg:right-[240px] lg:top-1/2 lg:-translate-y-1/2 p-8 rounded-lg"
               >
                 <div className="flex flex-col items-center gap-16">
-                  <h2 className="text-2xl font-bold text-[hsl(338,81%,45%)] text-center tracking-widest leading-loose">
-                    because{" "}
+                  <h2 className="text-2xl font-bold text-accent2 text-center tracking-widest leading-loose">
+                    the{" "}
                     <span className="font-lavish text-6xl md:text-7xl">
-                      looking good
+                      signature sleek
                     </span>{" "}
-                    starts with{" "}
-                    <span className="font-lavish text-6xl md:text-7xl">
-                      you
-                    </span>
+                    collection
                   </h2>
 
                   <div className="space-y-8">

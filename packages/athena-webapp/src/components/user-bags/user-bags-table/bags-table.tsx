@@ -63,7 +63,6 @@ export function BagsTable<TData, TValue>({
       : "skip"
   );
 
-  const isLoading = !queryResult;
   const { items, pageCount } = queryResult || {
     items: [],
     totalCount: 0,
@@ -74,6 +73,8 @@ export function BagsTable<TData, TValue>({
     ...item,
     total: formatter.format(item.total),
   }));
+
+  const isLoading = !queryResult || data.length === 0;
 
   const table = useReactTable({
     data: data as TData[],
