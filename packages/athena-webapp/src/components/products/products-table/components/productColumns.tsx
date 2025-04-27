@@ -54,14 +54,9 @@ export const productColumns: ColumnDef<Product>[] = [
     enableHiding: false,
   },
   {
-    accessorKey: "subcategoryId",
+    accessorKey: "categoryId",
     header: ({ column }) => <DataTableColumnHeader column={column} title="" />,
     cell: ({ row }) => {
-      const subcategory = useQuery(api.inventory.subcategories.getById, {
-        id: row.original.subcategoryId,
-        storeId: row.original.storeId,
-      });
-
       const category = useQuery(api.inventory.categories.getById, {
         id: row.original.categoryId,
         storeId: row.original.storeId,
@@ -84,6 +79,37 @@ export const productColumns: ColumnDef<Product>[] = [
               <Badge variant="outline" className="bg-zinc-50">
                 <p className="text-zinc-600 text-xs">{category?.name}</p>
               </Badge>
+            </div>
+          </Link>
+        </div>
+      );
+    },
+    enableSorting: false,
+    enableHiding: true,
+  },
+  {
+    accessorKey: "subcategoryId",
+    header: ({ column }) => <DataTableColumnHeader column={column} title="" />,
+    cell: ({ row }) => {
+      const subcategory = useQuery(api.inventory.subcategories.getById, {
+        id: row.original.subcategoryId,
+        storeId: row.original.storeId,
+      });
+
+      return (
+        <div className="flex space-x-2">
+          <Link
+            to="/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/edit"
+            params={(prev) => ({
+              ...prev,
+              orgUrlSlug: prev.orgUrlSlug!,
+              storeUrlSlug: prev.storeUrlSlug!,
+              productSlug: row.original._id,
+            })}
+            search={{ o: getOrigin() }}
+            className="flex items-center gap-8"
+          >
+            <div className="flex items-center gap-4">
               <Badge variant="outline" className="bg-zinc-50">
                 <p className="text-zinc-600 text-xs">{subcategory?.name}</p>
               </Badge>

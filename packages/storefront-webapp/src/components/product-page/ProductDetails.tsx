@@ -1,11 +1,11 @@
 import { ProductSku } from "@athena/webapp";
-import { SheetTrigger } from "../ui/sheet";
+import { SheetTrigger } from "@/components/ui/sheet";
 import { getProductName } from "@/lib/productUtils";
 import { Link } from "@tanstack/react-router";
-import { Button } from "../ui/button";
+import { Button } from "@/components/ui/button";
 import placeholder from "@/assets/placeholder.png";
 import { WIGLUB_HAIR_STUDIO_LOCATION_URL } from "@/lib/constants";
-import ImageWithFallback from "../ui/image-with-fallback";
+import { ShoppingBagAction } from "@/hooks/useShoppingBag";
 
 // Product Details Section
 export function PickupDetails({
@@ -38,13 +38,28 @@ export function PickupDetails({
 }
 
 // Bag Product Summary
-export function BagProduct({ product }: { product: ProductSku }) {
+export function BagProduct({
+  product,
+  action,
+}: {
+  product: ProductSku;
+  action: ShoppingBagAction;
+}) {
+  const actionText =
+    action == "adding-to-bag"
+      ? "Added to your bag"
+      : "Added to your saved items";
+
+  const buttonText = action == "adding-to-bag" ? "See Bag" : "See Saved Items";
+
+  const buttonLink = action == "adding-to-bag" ? "/shop/bag" : "/shop/saved";
+
   return (
     <div className="flex flex-col gap-12 pt-12">
       <div className="space-y-8">
-        <p className="text-md">Added to your bag</p>
+        <p className="text-md">{actionText}</p>
         <div className="flex gap-4">
-          <ImageWithFallback
+          <img
             alt={`Bag image`}
             className="w-[140px] h-[180px] aspect-square object-cover rounded"
             src={product.images[0] || placeholder}
@@ -52,9 +67,9 @@ export function BagProduct({ product }: { product: ProductSku }) {
           <p className="text-sm">{getProductName(product)}</p>
         </div>
       </div>
-      <Link to="/shop/bag">
+      <Link to={buttonLink}>
         <Button variant="outline" className="w-full">
-          See Bag
+          {buttonText}
         </Button>
       </Link>
     </div>

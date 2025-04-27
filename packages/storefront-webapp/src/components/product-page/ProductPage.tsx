@@ -36,6 +36,7 @@ export default function ProductPage() {
     isUpdatingBag,
     addedItemSuccessfully,
     savedBag,
+    bagAction,
     addProductToSavedBag,
   } = useShoppingBag();
 
@@ -121,7 +122,9 @@ export default function ProductPage() {
 
   useEffect(() => {
     if (addedItemSuccessfully && selectedSku) {
-      sheetContent.current = <BagProduct product={selectedSku} />;
+      sheetContent.current = (
+        <BagProduct product={selectedSku} action={bagAction} />
+      );
     }
 
     const t = setTimeout(() => {
@@ -131,7 +134,7 @@ export default function ProductPage() {
     }, 3500);
 
     return () => clearTimeout(t);
-  }, [addedItemSuccessfully]);
+  }, [addedItemSuccessfully, bagAction]);
 
   useTrackAction({
     action: "viewed_product",
@@ -242,6 +245,7 @@ export default function ProductPage() {
           },
         }),
       ]);
+      setIsSheetOpen(true);
     }
   };
 

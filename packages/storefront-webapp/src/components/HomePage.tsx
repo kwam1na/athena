@@ -39,7 +39,7 @@ function FeaturedProduct({ product }: { product: any }) {
     <div className="w-full flex flex-col xl:flex-row items-center justify-center gap-8 xl:gap-16">
       <div className="space-y-4 order-2 xl:order-1">
         <div className="text-sm flex flex-col items-start gap-4">
-          <p className="font-medium">{capitalizeWords(product.name)}</p>
+          <p className="font-medium">{getProductName(product.skus[0])}</p>
           <p className="text-sm text-muted-foreground">{priceLabel}</p>
           {product.skus && product.skus.length > 1 && (
             <p className="text-sm text-muted-foreground">

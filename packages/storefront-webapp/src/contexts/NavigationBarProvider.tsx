@@ -11,7 +11,7 @@ const NavigationBarContext = createContext<
   NavigationBarConteztType | undefined
 >(undefined);
 
-type AppLocation = "homepage" | "shop" | null;
+type AppLocation = "homepage" | "shop" | "checkout" | null;
 
 export const NavigationBarProvider: React.FC<{ children: React.ReactNode }> = ({
   children,

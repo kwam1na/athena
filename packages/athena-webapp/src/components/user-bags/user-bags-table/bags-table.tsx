@@ -51,7 +51,7 @@ export function BagsTable<TData, TValue>({
 
   const formatter = currencyFormatter(activeStore?.currency || "USD");
 
-  const { items, pageCount } = useQuery(
+  const queryResult = useQuery(
     api.storeFront.bag.getPaginatedBags,
     activeStore
       ? {
@@ -61,7 +61,14 @@ export function BagsTable<TData, TValue>({
           filters: columnFilters,
         }
       : "skip"
-  ) || { items: [], totalCount: 0, pageCount: 0 };
+  );
+
+  const isLoading = !queryResult;
+  const { items, pageCount } = queryResult || {
+    items: [],
+    totalCount: 0,
+    pageCount: 0,
+  };
 
   const data = items.map((item) => ({
     ...item,
@@ -118,7 +125,18 @@ export function BagsTable<TData, TValue>({
             ))}
           </TableHeader>
           <TableBody>
-            {table.getRowModel().rows?.length ? (
+            {isLoading ? (
+              // Skeleton rows
+              Array.from({ length: 10 }).map((_, rowIdx) => (
+                <TableRow key={rowIdx}>
+                  {columns.map((_, colIdx) => (
+                    <TableCell key={colIdx}>
+                      <div className="h-4 w-full rounded bg-muted animate-pulse" />
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))
+            ) : table.getRowModel().rows?.length ? (
               table.getRowModel().rows.map((row) => (
                 <TableRow
                   key={row.id}
@@ -147,7 +165,7 @@ export function BagsTable<TData, TValue>({
           </TableBody>
         </Table>
       </div>
-      <DataTablePagination table={table} />
+      {!isLoading && <DataTablePagination table={table} />}
     </div>
   );
 }

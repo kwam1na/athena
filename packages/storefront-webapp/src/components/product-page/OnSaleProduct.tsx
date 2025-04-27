@@ -24,7 +24,7 @@ export function OnsaleProduct() {
           className={`aspect-square w-[116px] h-[116px] object-cover rounded-md`}
         />
         <div className="space-y-2">
-          <p>{getProductName(p)}</p>
+          <p className="text-sm">{getProductName(p)}</p>
           <p className="text-sm">
             Included <b>free</b> with your purchase
           </p>

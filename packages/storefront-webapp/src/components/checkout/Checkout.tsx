@@ -5,9 +5,11 @@ import { useEffect } from "react";
 import MobileBagSummary from "./MobileBagSummary";
 import { CheckoutForm } from "./CheckoutForm";
 import { CheckoutComplete } from "@/routes/shop/checkout/complete.index";
+import { useNavigationBarContext } from "@/contexts/NavigationBarProvider";
 
 const MainComponent = () => {
   const { activeSession } = useCheckout();
+  const { setAppLocation } = useNavigationBarContext();
 
   useEffect(() => {
     const needsVerification =

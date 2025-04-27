@@ -211,29 +211,31 @@ export default function NavigationBar() {
                         </h1>
                       </Link>
                     </div>
-                    <div className="hidden lg:flex gap-12">
-                      {categories?.map((s) => (
-                        <div
-                          key={s.value}
-                          className="group relative h-full flex items-center"
-                          onMouseEnter={() => setActiveMenu(s.value)}
-                        >
-                          <Link
-                            to="/shop/$categorySlug"
-                            params={(p) => ({
-                              ...p,
-                              categorySlug: s.value,
-                            })}
-                            className={`text-xs ${hoverClass} transition-colors`}
-                            onClick={() => setActiveMenu(null)}
+                    {appLocation !== "checkout" && (
+                      <div className="hidden lg:flex gap-12">
+                        {categories?.map((s) => (
+                          <div
+                            key={s.value}
+                            className="group relative h-full flex items-center"
+                            onMouseEnter={() => setActiveMenu(s.value)}
                           >
-                            {s.label}
-                          </Link>
-                          {/* Invisible extender to prevent hover gap */}
-                          <div className="absolute -bottom-6 left-0 w-full h-6" />
-                        </div>
-                      ))}
-                    </div>
+                            <Link
+                              to="/shop/$categorySlug"
+                              params={(p) => ({
+                                ...p,
+                                categorySlug: s.value,
+                              })}
+                              className={`text-xs ${hoverClass} transition-colors`}
+                              onClick={() => setActiveMenu(null)}
+                            >
+                              {s.label}
+                            </Link>
+                            {/* Invisible extender to prevent hover gap */}
+                            <div className="absolute -bottom-6 left-0 w-full h-6" />
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex gap-8">

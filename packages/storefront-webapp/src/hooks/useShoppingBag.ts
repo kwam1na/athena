@@ -13,7 +13,6 @@ import {
   removeItemFromSavedBag,
   updateSavedBagItem,
 } from "@/api/savedBag";
-import { useStoreContext } from "@/contexts/StoreContext";
 import { useBagQueries } from "@/lib/queries/bag";
 import { usePromoCodesQueries } from "@/lib/queries/promoCode";
 import { BagItem, ProductSku, SavedBagItem } from "@athena/webapp";
@@ -159,6 +158,7 @@ export const useShoppingBag = () => {
       productSkuId,
       productSku,
     });
+    setOperationSuccessful(true);
   };
 
   const deleteItemFromSavedBag = async (itemId: string) => {

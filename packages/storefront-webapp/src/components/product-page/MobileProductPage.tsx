@@ -20,12 +20,8 @@ import { About } from "./About";
 import { OnsaleProduct } from "./OnSaleProduct";
 import { usePromoCodesQueries } from "@/lib/queries/promoCode";
 import { useQuery } from "@tanstack/react-query";
-import {
-  LowStockBadge,
-  SellingFastBadge,
-  SellingFastSignal,
-  SoldOutBadge,
-} from "./InventoryLevelBadge";
+import { SellingFastSignal, SoldOutBadge } from "./InventoryLevelBadge";
+import { postAnalytics } from "@/api/analytics";
 
 export default function MobileProductPage() {
   const [isSheetOpen, setIsSheetOpen] = useState(false);
@@ -52,6 +48,7 @@ export default function MobileProductPage() {
     isUpdatingBag,
     addedItemSuccessfully,
     savedBag,
+    bagAction,
     addProductToSavedBag,
   } = useShoppingBag();
 
@@ -88,7 +85,9 @@ export default function MobileProductPage() {
 
   useEffect(() => {
     if (addedItemSuccessfully && selectedSku) {
-      sheetContent.current = <BagProduct product={selectedSku} />;
+      sheetContent.current = (
+        <BagProduct product={selectedSku} action={bagAction} />
+      );
     }
 
     const t = setTimeout(() => {
@@ -98,20 +97,42 @@ export default function MobileProductPage() {
     }, 3500);
 
     return () => clearTimeout(t);
-  }, [addedItemSuccessfully]);
+  }, [addedItemSuccessfully, bagAction]);
 
   const handleUpdateBag = async () => {
     sheetContent.current = null;
 
     if (bagItem) {
-      await updateBag({ itemId: bagItem._id, quantity: bagItem.quantity + 1 });
+      await Promise.all([
+        updateBag({ itemId: bagItem._id, quantity: bagItem.quantity + 1 }),
+        postAnalytics({
+          action: "updated_product_in_bag",
+          data: {
+            product: productSlug,
+            productSku: selectedSku?.sku,
+            productImageUrl: selectedSku?.images?.[0],
+            quantity: bagItem.quantity + 1,
+          },
+        }),
+      ]);
     } else {
-      await addProductToBag({
-        quantity: 1,
-        productId: product?._id as string,
-        productSkuId: selectedSku?._id as string,
-        productSku: selectedSku?.sku as string,
-      });
+      await Promise.all([
+        addProductToBag({
+          quantity: 1,
+          productId: product?._id as string,
+          productSkuId: selectedSku?._id as string,
+          productSku: selectedSku?.sku as string,
+        }),
+
+        postAnalytics({
+          action: "added_product_to_bag",
+          data: {
+            product: productSlug,
+            productSku: selectedSku?.sku,
+            productImageUrl: selectedSku?.images?.[0],
+          },
+        }),
+      ]);
     }
 
     if (
@@ -119,12 +140,23 @@ export default function MobileProductPage() {
       promoCodeItem &&
       selectedSku?.productCategory == "Hair"
     ) {
-      await addProductToBag({
-        quantity: 1,
-        productId: promoCodeItem?.productId as string,
-        productSkuId: promoCodeItem?._id as string,
-        productSku: promoCodeItem?.sku as string,
-      });
+      await Promise.all([
+        addProductToBag({
+          quantity: 1,
+          productId: promoCodeItem?.productId as string,
+          productSkuId: promoCodeItem?._id as string,
+          productSku: promoCodeItem?.sku as string,
+        }),
+
+        postAnalytics({
+          action: "added_product_to_bag",
+          data: {
+            product: promoCodeItem?.productId,
+            productSku: promoCodeItem?.sku,
+            productImageUrl: promoCodeItem.images[0],
+          },
+        }),
+      ]);
     }
 
     setIsSheetOpen(true);
@@ -132,14 +164,35 @@ export default function MobileProductPage() {
 
   const handleUpdateSavedBag = async () => {
     if (savedBagItem) {
-      await deleteItemFromSavedBag(savedBagItem._id);
+      await Promise.all([
+        deleteItemFromSavedBag(savedBagItem._id),
+        postAnalytics({
+          action: "deleted_product_from_saved",
+          data: {
+            product: productSlug,
+            productSku: selectedSku?.sku,
+            productImageUrl: selectedSku?.images?.[0],
+          },
+        }),
+      ]);
     } else {
-      await addProductToSavedBag({
-        quantity: 1,
-        productId: product?._id as string,
-        productSkuId: selectedSku?._id as string,
-        productSku: selectedSku?.sku as string,
-      });
+      await Promise.all([
+        addProductToSavedBag({
+          quantity: 1,
+          productId: product?._id as string,
+          productSkuId: selectedSku?._id as string,
+          productSku: selectedSku?.sku as string,
+        }),
+        postAnalytics({
+          action: "added_product_to_saved",
+          data: {
+            product: productSlug,
+            productSku: selectedSku?.sku,
+            productImageUrl: selectedSku?.images?.[0],
+          },
+        }),
+      ]);
+      setIsSheetOpen(true);
     }
   };
 

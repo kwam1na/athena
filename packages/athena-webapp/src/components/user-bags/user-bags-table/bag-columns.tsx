@@ -38,11 +38,15 @@ export const bagColumns: ColumnDef<Bag>[] = [
             <div className="flex gap-2">
               {bag.items.slice(0, 3).map((item: any) => (
                 <div key={item._id} className="relative">
-                  <img
-                    alt="Uploaded image"
-                    className={`aspect-square w-12 h-12 rounded-md object-cover`}
-                    src={item.productImage}
-                  />
+                  {item.productImage ? (
+                    <img
+                      alt="Uploaded image"
+                      className={`aspect-square w-12 h-12 rounded-md object-cover`}
+                      src={item.productImage}
+                    />
+                  ) : (
+                    <div className="w-12 h-12 bg-gray-100 rounded-md" />
+                  )}
                   <div className="absolute -top-2 -right-2 bg-primary/70 text-primary-foreground text-xs w-4 h-4 rounded-full flex items-center justify-center">
                     {item.quantity}
                   </div>

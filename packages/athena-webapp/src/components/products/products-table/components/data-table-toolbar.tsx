@@ -7,6 +7,7 @@ import { Link } from "@tanstack/react-router";
 import { DataTableFacetedFilter } from "./data-table-faceted-filter";
 import { useGetSubcategories } from "~/src/hooks/useGetSubcategories";
 import { getOrigin } from "~/src/lib/navigationUtils";
+import { useGetCategories } from "~/src/hooks/useGetCategories";
 
 interface DataTableToolbarProps<TData> {
   table: Table<TData>;
@@ -16,6 +17,15 @@ export function DataTableToolbar<TData>({
   table,
 }: DataTableToolbarProps<TData>) {
   const isFiltered = table.getState().columnFilters.length > 0;
+
+  const categories = useGetCategories();
+
+  const categoryOptions = categories
+    ?.map((c) => ({
+      label: c.name,
+      value: c._id,
+    }))
+    ?.sort((a, b) => a.label.localeCompare(b.label));
 
   const subcategories = useGetSubcategories();
 
@@ -38,6 +48,15 @@ export function DataTableToolbar<TData>({
             }
             className="h-8 w-[150px] lg:w-[250px]"
           />
+
+          {table.getColumn("categoryId") && (
+            <DataTableFacetedFilter
+              column={table.getColumn("categoryId")}
+              title="Category"
+              options={categoryOptions || []}
+            />
+          )}
+
           {table.getColumn("subcategoryId") && (
             <DataTableFacetedFilter
               column={table.getColumn("subcategoryId")}

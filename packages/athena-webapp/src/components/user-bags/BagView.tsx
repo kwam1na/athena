@@ -48,7 +48,12 @@ const BagItemView = ({
             </div>
           </div>
         ) : (
-          <div className="w-24 h-24 bg-gray-100 rounded-lg" />
+          <div className="relative">
+            <div className="w-24 h-24 bg-gray-100 rounded-lg" />
+            <div className="absolute -top-2 -right-2 bg-primary/70 text-primary-foreground text-xs w-4 h-4 rounded-full flex items-center justify-center">
+              {item.quantity}
+            </div>
+          </div>
         )}
 
         <div className="space-y-2">
