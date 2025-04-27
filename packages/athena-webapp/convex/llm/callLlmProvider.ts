@@ -1,20 +1,18 @@
 import { callOpenAi } from "./providers/openai";
-// import { callAnthropic } from "./providers/anthropic"; // for future use
+import { callAnthropic } from "./providers/anthropic";
 
 export async function callLlmProvider({
   prompt,
   provider,
-  apiKey,
 }: {
   prompt: string;
   provider: string;
-  apiKey: string;
 }) {
   switch (provider) {
     case "openai":
-      return callOpenAi({ prompt, apiKey });
-    // case "anthropic":
-    //   return callAnthropic({ prompt, apiKey });
+      return callOpenAi({ prompt });
+    case "anthropic":
+      return callAnthropic({ prompt });
     default:
       throw new Error("Unsupported LLM provider");
   }

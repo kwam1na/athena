@@ -31,8 +31,8 @@ export const UserView = () => {
   return (
     <View header={<SimplePageHeader title="User details" />}>
       <FadeIn className="container mx-auto h-full w-full p-8 space-y-12">
-        <div className="flex justify-between">
-          <div className="space-y-16">
+        <div className="flex justify-between gap-24">
+          <div className="space-y-16 w-[60%]">
             <div className="space-y-8">
               <p className="text-sm font-medium">Contact details</p>
               {!hasContactDetails ? (

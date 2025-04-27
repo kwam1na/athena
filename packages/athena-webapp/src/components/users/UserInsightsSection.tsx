@@ -1,6 +1,14 @@
 import { useParams } from "@tanstack/react-router";
 import { useAction } from "convex/react";
-import { HelpCircle, Smartphone, Monitor, WandSparkles } from "lucide-react";
+import {
+  HelpCircle,
+  Smartphone,
+  Monitor,
+  WandSparkles,
+  CircleDot,
+  Circle,
+  Star,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { api } from "~/convex/_generated/api";
 import { Id } from "~/convex/_generated/dataModel";
@@ -47,8 +55,10 @@ export const UserInsightsSection = () => {
     }
   }, [userId]);
 
+  // console.log(insights);
+
   return (
-    <div className={`space-y-8 ${insightsLoading ? "w-full" : "w-[60%]"}`}>
+    <div className={`space-y-8 w-[80%]`}>
       <div className="flex items-center gap-2">
         <p className="text-sm font-medium">User Insights</p>
         <WandSparkles className="w-4 h-4 text-muted-foreground" />
@@ -65,14 +75,14 @@ export const UserInsightsSection = () => {
           {/* Summary */}
           {insights.summary && (
             <div>
-              <p className="font-semibold text-sm mb-2">Summary</p>
+              <p className="font-medium text-sm mb-2">Summary</p>
               <p className="text-sm">{insights.summary}</p>
             </div>
           )}
           <hr />
           {/* Profile */}
           <div className="space-y-8">
-            <p className="font-semibold text-sm mb-2">Profile</p>
+            <p className="font-medium text-sm mb-2">Profile</p>
             <ul className="list-disc ml-6 text-sm space-y-8">
               {insights.likely_intent && (
                 <li>
@@ -106,6 +116,22 @@ export const UserInsightsSection = () => {
                   </span>
                 </div>
               )}
+              {/* {insights.activity_status && (
+                <div className="flex flex-col items-center">
+                  {insights.activity_status === "active" ? (
+                    <CircleDot className="w-5 h-5 text-green-500" />
+                  ) : insights.activity_status === "inactive" ? (
+                    <Circle className="w-5 h-5 text-gray-400" />
+                  ) : insights.activity_status === "new" ? (
+                    <Star className="w-5 h-5 text-yellow-400" />
+                  ) : (
+                    <HelpCircle className="w-5 h-5 text-muted-foreground" />
+                  )}
+                  <span className="text-sm mt-2">
+                    {capitalizeFirstLetter(insights.activity_status)}
+                  </span>
+                </div>
+              )} */}
             </div>
           </div>
           <hr />
@@ -113,7 +139,7 @@ export const UserInsightsSection = () => {
           {insights.recommendations &&
             Array.isArray(insights.recommendations) && (
               <div className="text-sm">
-                <p className="font-semibold mb-2">Recommendations</p>
+                <p className="font-medium mb-2">Recommendations</p>
                 <ul className="list-disc ml-6 space-y-1">
                   {insights.recommendations.map((rec: string, i: number) => (
                     <li key={i}>{rec}</li>

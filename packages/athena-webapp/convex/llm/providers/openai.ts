@@ -1,13 +1,7 @@
 import OpenAI from "openai";
 
-export async function callOpenAi({
-  prompt,
-  apiKey,
-}: {
-  prompt: string;
-  apiKey: string;
-}) {
-  const openai = new OpenAI({ apiKey });
+export async function callOpenAi({ prompt }: { prompt: string }) {
+  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
   const completion = await openai.chat.completions.create({
     model: "gpt-4.1-nano-2025-04-14",
     messages: [{ role: "user", content: prompt }],

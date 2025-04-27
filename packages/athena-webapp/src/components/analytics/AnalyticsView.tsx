@@ -9,6 +9,7 @@ import { AnalyticsProductsTable } from "./analytics-products-table/data-table";
 import AnalyticsProducts from "./AnalyticsProducts";
 import { AnimatePresence, motion } from "framer-motion";
 import { FadeIn } from "../common/FadeIn";
+import StoreInsights from "./StoreInsights";
 
 export default function AnalyticsView() {
   const { activeStore } = useGetActiveStore();
@@ -39,9 +40,12 @@ export default function AnalyticsView() {
       className="bg-background"
       header={<Navigation />}
     >
-      <FadeIn className="grid grid-cols-2 gap-16">
-        <AnalyticsProducts items={items} />
-        <AnalyticsItems items={items} />
+      <FadeIn className="space-y-8 py-8">
+        <StoreInsights storeId={activeStore._id} />
+        <div className="grid grid-cols-2 gap-16">
+          <AnalyticsProducts items={items} />
+          <AnalyticsItems items={items} />
+        </div>
       </FadeIn>
     </View>
   );
