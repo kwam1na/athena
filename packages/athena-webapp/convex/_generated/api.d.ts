@@ -39,6 +39,7 @@ import type * as http_domains_storeFront_routes_onlineOrder from "../http/domain
 import type * as http_domains_storeFront_routes_paystack from "../http/domains/storeFront/routes/paystack.js";
 import type * as http_domains_storeFront_routes_savedBag from "../http/domains/storeFront/routes/savedBag.js";
 import type * as http_domains_storeFront_routes_storefront from "../http/domains/storeFront/routes/storefront.js";
+import type * as http_domains_storeFront_routes_upsells from "../http/domains/storeFront/routes/upsells.js";
 import type * as http_domains_storeFront_routes_user from "../http/domains/storeFront/routes/user.js";
 import type * as http_utils from "../http/utils.js";
 import type * as http from "../http.js";
@@ -149,6 +150,7 @@ declare const fullApi: ApiFromModules<{
   "http/domains/storeFront/routes/paystack": typeof http_domains_storeFront_routes_paystack;
   "http/domains/storeFront/routes/savedBag": typeof http_domains_storeFront_routes_savedBag;
   "http/domains/storeFront/routes/storefront": typeof http_domains_storeFront_routes_storefront;
+  "http/domains/storeFront/routes/upsells": typeof http_domains_storeFront_routes_upsells;
   "http/domains/storeFront/routes/user": typeof http_domains_storeFront_routes_user;
   "http/utils": typeof http_utils;
   http: typeof http;

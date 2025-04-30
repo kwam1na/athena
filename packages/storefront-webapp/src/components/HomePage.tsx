@@ -5,7 +5,7 @@ import { Button } from "./ui/button";
 import { useStoreContext } from "@/contexts/StoreContext";
 import { ProductCard, ProductSkuCard } from "./ProductCard";
 import { motion } from "framer-motion";
-import { useEffect } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Product, ProductSku } from "@athena/webapp";
 import ImageWithFallback from "./ui/image-with-fallback";
 import { useNavigationBarContext } from "@/contexts/NavigationBarProvider";
@@ -16,6 +16,11 @@ import { useTrackEvent } from "@/hooks/useTrackEvent";
 import { MARKER_KEY } from "@/lib/constants";
 import { getProductName } from "@/lib/productUtils";
 import { capitalizeWords } from "@/lib/utils";
+import { useUpsellsQueries } from "@/lib/queries/upsells";
+import { Upsell } from "./Upsell";
+import { ProductReminderBar } from "./ProductReminderBar";
+import { useShoppingBag } from "@/hooks/useShoppingBag";
+import { postAnalytics } from "@/api/analytics";
 
 const origin = "homepage";
 
@@ -201,6 +206,10 @@ function FeaturedSection({ data }: { data: any }) {
 
 export default function HomePage() {
   const { setNavBarLayout, setAppLocation } = useNavigationBarContext();
+  const [showReminderBar, setShowReminderBar] = useState(false);
+  const shopTheLookRef = useRef<HTMLImageElement>(null);
+  const homeHeroRef = useRef<HTMLDivElement>(null);
+  const footerRef = useRef<HTMLDivElement>(null);
 
   const productQueries = useProductQueries();
 
@@ -212,6 +221,9 @@ export default function HomePage() {
     productQueries.featured()
   );
 
+  const upsellsQueries = useUpsellsQueries();
+  const { data: upsell } = useQuery(upsellsQueries.upsells());
+
   useEffect(() => {
     setNavBarLayout("sticky");
     setAppLocation(origin);
@@ -221,6 +233,23 @@ export default function HomePage() {
     if (!uuid) {
       localStorage.setItem(MARKER_KEY, Math.random().toString(36).substring(7));
     }
+  }, []);
+
+  useEffect(() => {
+    const checkScroll = () => {
+      if (homeHeroRef.current) {
+        const heroBottom = homeHeroRef.current.getBoundingClientRect().top;
+        const windowHeight = window.innerHeight;
+
+        if (heroBottom < windowHeight / 2) {
+          setShowReminderBar(true);
+          window.removeEventListener("scroll", checkScroll);
+        }
+      }
+    };
+
+    window.addEventListener("scroll", checkScroll);
+    return () => window.removeEventListener("scroll", checkScroll);
   }, []);
 
   useTrackEvent({
@@ -255,10 +284,11 @@ export default function HomePage() {
     <>
       <div className="overflow-hidden">
         <div className="space-y-56 pb-32">
-          <div>
+          <div ref={homeHeroRef}>
             <HomeHero />
             <motion.div className="flex flex-col lg:relative">
               <motion.img
+                ref={shopTheLookRef}
                 initial={{ opacity: 0, y: 16 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
@@ -378,7 +408,18 @@ export default function HomePage() {
         </div>
       </div>
 
-      <Footer />
+      <Footer ref={footerRef} />
+
+      {upsell && (
+        <ProductReminderBar
+          product={upsell}
+          isVisible={showReminderBar && upsell.quantityAvailable > 0}
+          onDismiss={() => {
+            setShowReminderBar(false);
+          }}
+          footerRef={footerRef}
+        />
+      )}
     </>
   );
 }

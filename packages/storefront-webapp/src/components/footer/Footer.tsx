@@ -2,6 +2,7 @@ import { useStoreContext } from "@/contexts/StoreContext";
 import { Link } from "@tanstack/react-router";
 import { useGetStoreCategories } from "../navigation/hooks";
 import { WIGLUB_HAIR_STUDIO_LOCATION_URL } from "@/lib/constants";
+import { forwardRef } from "react";
 
 interface FooterLinkGroup {
   header: string;
@@ -113,12 +114,16 @@ export function FooterInner() {
   );
 }
 
-export default function Footer() {
+const Footer = forwardRef<HTMLDivElement>((_, ref) => {
   return (
-    <div className="border-t pt-8 bg-background">
+    <div ref={ref} className="border-t pt-8 bg-background">
       <div className="container mx-auto max-w-[1024px] px-6 lg:px-0">
         <FooterInner />
       </div>
     </div>
   );
-}
+});
+
+Footer.displayName = "Footer";
+
+export default Footer;

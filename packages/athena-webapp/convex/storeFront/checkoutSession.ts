@@ -45,7 +45,7 @@ export const create = mutation({
   },
   handler: async (ctx, args) => {
     const now = Date.now();
-    const sessionLimit = sessionLimitMinutes * 60 * 1000; // 15 minutes in ms
+    const sessionLimit = sessionLimitMinutes * 60 * 1000;
     const expiresAt = now + sessionLimit;
 
     // check that the store is in active mode

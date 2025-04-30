@@ -4,14 +4,18 @@ import { useEffect } from "react";
 export const useTrackEvent = ({
   action,
   data = {},
+  isReady = true,
 }: {
   action: string;
   data?: Record<string, any>;
+  isReady?: boolean;
 }) => {
   useEffect(() => {
-    postAnalytics({
-      action,
-      data,
-    });
-  }, []);
+    if (isReady) {
+      postAnalytics({
+        action,
+        data,
+      });
+    }
+  }, [isReady]);
 };

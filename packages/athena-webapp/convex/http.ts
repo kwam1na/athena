@@ -18,6 +18,7 @@ import {
   onlineOrderRoutes,
   paystackRoutes,
   storefrontRoutes,
+  upsellRoutes,
   userRoutes,
 } from "./http/domains/storeFront/routes";
 import { httpRouter } from "convex/server";
@@ -41,6 +42,9 @@ app.use(
     credentials: true,
   })
 );
+
+app.route("/upsells", upsellRoutes);
+
 app.route("/stores", storeRoutes);
 
 app.route("/storefront", storefrontRoutes);
