@@ -51,7 +51,7 @@ const schema = defineSchema({
   color: defineTable(colorSchema),
   customer: defineTable(customerSchema),
   featuredItem: defineTable(featuredItemSchema),
-  guest: defineTable(guestSchema),
+  guest: defineTable(guestSchema).index("by_storeId", ["storeId"]),
   inviteCode: defineTable(inviteCodeSchema),
   onlineOrder: defineTable(onlineOrderSchema),
   onlineOrderItem: defineTable(onlineOrderItemSchema),

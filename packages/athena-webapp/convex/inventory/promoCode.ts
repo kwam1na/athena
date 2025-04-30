@@ -194,6 +194,7 @@ export const update = mutation({
   args: {
     id: v.id(entity),
     active: v.optional(v.boolean()),
+    autoApply: v.optional(v.boolean()),
     code: v.optional(v.string()),
     discountType: v.optional(
       v.union(v.literal("percentage"), v.literal("amount"))
@@ -211,6 +212,7 @@ export const update = mutation({
     await ctx.db.patch(args.id, {
       code: args.code,
       active: args.active,
+      autoApply: args.autoApply,
       discountType: args.discountType,
       discountValue: args.discountValue,
       limit: args.limit,

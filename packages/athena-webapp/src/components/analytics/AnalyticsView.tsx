@@ -3,13 +3,44 @@ import View from "../View";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { api } from "~/convex/_generated/api";
 import AnalyticsItems from "./AnalyticsItems";
-import { AnalyticsChart } from "./chart";
-import { Analytic } from "~/types";
-import { AnalyticsProductsTable } from "./analytics-products-table/data-table";
 import AnalyticsProducts from "./AnalyticsProducts";
-import { AnimatePresence, motion } from "framer-motion";
 import { FadeIn } from "../common/FadeIn";
 import StoreInsights from "./StoreInsights";
+import { formatNumber } from "../../utils/formatNumber";
+
+const StoreVisitors = () => {
+  const { activeStore } = useGetActiveStore();
+
+  const lifetimeVisitors = useQuery(
+    api.storeFront.guest.getUniqueVisitors,
+    activeStore?._id ? { storeId: activeStore._id } : "skip"
+  );
+
+  const uniqueVisitorsToday = useQuery(
+    api.storeFront.guest.getUniqueVisitorsForDay,
+    activeStore?._id ? { storeId: activeStore._id } : "skip"
+  );
+
+  return (
+    <div className="flex items-center gap-16 border rounded-lg p-4">
+      <div className="space-y-4">
+        <p className="font-medium text-2xl">
+          {formatNumber(uniqueVisitorsToday)}
+        </p>
+        <p className="text-sm text-muted-foreground">
+          {uniqueVisitorsToday === 1
+            ? "Unique visitor today"
+            : "Unique visitors today"}
+        </p>
+      </div>
+
+      <div className="space-y-4">
+        <p className="font-medium text-2xl">{formatNumber(lifetimeVisitors)}</p>
+        <p className="text-sm text-muted-foreground">Lifetime visitors</p>
+      </div>
+    </div>
+  );
+};
 
 export default function AnalyticsView() {
   const { activeStore } = useGetActiveStore();
@@ -41,7 +72,10 @@ export default function AnalyticsView() {
       header={<Navigation />}
     >
       <FadeIn className="space-y-8 py-8">
-        <StoreInsights storeId={activeStore._id} />
+        <div className="flex items-start gap-16">
+          <StoreInsights storeId={activeStore._id} />
+          <StoreVisitors />
+        </div>
         <div className="grid grid-cols-2 gap-16">
           <AnalyticsProducts items={items} />
           <AnalyticsItems items={items} />

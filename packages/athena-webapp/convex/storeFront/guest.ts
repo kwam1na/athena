@@ -87,3 +87,51 @@ export const update = mutation({
     return await ctx.db.get(args.id);
   },
 });
+
+export const getUniqueVisitorsForDay = query({
+  args: {
+    storeId: v.id("store"),
+  },
+  handler: async (ctx, args) => {
+    const today = new Date();
+
+    const startOfDay = new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate()
+    ).getTime();
+
+    const endOfDay = new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate() + 1
+    ).getTime();
+
+    const uniqueVisitors = await ctx.db
+      .query(entity)
+      .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
+      .filter((q) =>
+        q.and(
+          q.gte(q.field("_creationTime"), startOfDay),
+          q.lt(q.field("_creationTime"), endOfDay)
+        )
+      )
+      .collect();
+
+    return uniqueVisitors.length;
+  },
+});
+
+export const getUniqueVisitors = query({
+  args: {
+    storeId: v.id("store"),
+  },
+  handler: async (ctx, args) => {
+    const uniqueVisitors = await ctx.db
+      .query(entity)
+      .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
+      .collect();
+
+    return uniqueVisitors.length;
+  },
+});

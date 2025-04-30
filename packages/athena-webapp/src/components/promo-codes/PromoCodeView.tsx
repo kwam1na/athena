@@ -113,6 +113,7 @@ function PromoCodeView() {
   const [promoCode, setPromoCode] = useState<string | null>(null);
   const [discount, setDiscount] = useState<string | null>(null);
   const [isActive, setIsActive] = useState(false);
+  const [autoApply, setAutoApply] = useState(false);
 
   const [isAddingPromoCode, setIsAddingPromoCode] = useState(false);
 
@@ -142,6 +143,7 @@ function PromoCodeView() {
       setDiscountType(activePromoCode.discountType);
       setPromoCodeSpan(activePromoCode.span);
       setIsActive(activePromoCode.active);
+      setAutoApply(activePromoCode.autoApply ?? false);
     }
   }, [activePromoCode]);
 
@@ -236,6 +238,7 @@ function PromoCodeView() {
         id: promoCodeSlug as Id<"promoCode">,
         code: promoCode!,
         active: isActive,
+        autoApply: autoApply,
         discountType: discountType,
         discountValue: parseFloat(discount!),
         span: promoCodeSpan,
@@ -293,22 +296,6 @@ function PromoCodeView() {
                   setPromoCode(e.target.value.toUpperCase());
                 }}
               />
-
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2">
-                  <Label className="text-muted-foreground" htmlFor="custom">
-                    Active
-                  </Label>
-                </div>
-                <Switch
-                  id="custom"
-                  disabled={isUpdatingPromoCode}
-                  checked={isActive}
-                  onCheckedChange={(e) => {
-                    setIsActive(e);
-                  }}
-                />
-              </div>
             </div>
 
             <div className="flex">
@@ -334,6 +321,40 @@ function PromoCodeView() {
                 promoCodeSpan={promoCodeSpan}
                 setPromoCodeSpan={setPromoCodeSpan}
               />
+            </div>
+
+            <div className="flex items-center gap-8 border rounded-lg p-4 w-[320px]">
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <Label className="text-muted-foreground" htmlFor="custom">
+                    Active
+                  </Label>
+                </div>
+                <Switch
+                  id="custom"
+                  disabled={isUpdatingPromoCode}
+                  checked={isActive}
+                  onCheckedChange={(e) => {
+                    setIsActive(e);
+                  }}
+                />
+              </div>
+
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <Label className="text-muted-foreground" htmlFor="custom">
+                    Auto-apply
+                  </Label>
+                </div>
+                <Switch
+                  id="custom"
+                  disabled={isUpdatingPromoCode}
+                  checked={autoApply}
+                  onCheckedChange={(e) => {
+                    setAutoApply(e);
+                  }}
+                />
+              </div>
             </div>
 
             {promoCodeSpan == "selected-products" && (

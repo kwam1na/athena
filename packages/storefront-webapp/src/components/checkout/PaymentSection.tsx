@@ -14,6 +14,7 @@ import { BillingDetailsSection } from "./BillingDetailsSection";
 import { CheckoutFormSectionProps } from "./CustomerInfoSection";
 import { postAnalytics } from "@/api/analytics";
 import { updateGuest } from "@/api/guest";
+import OrderSummary from "./OrderDetails/OrderSummary";
 
 export const PaymentSection = ({ form }: CheckoutFormSectionProps) => {
   const { activeSession, canPlaceOrder, checkoutState } = useCheckout();
@@ -190,6 +191,10 @@ export const PaymentSection = ({ form }: CheckoutFormSectionProps) => {
             exit={{ opacity: 0, transition: { duration: 0.4 } }}
             className="space-y-12"
           >
+            <div className="block lg:hidden">
+              <OrderSummary />
+            </div>
+
             <Separator />
 
             <div className="space-y-8">

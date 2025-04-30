@@ -39,6 +39,12 @@ export const columns: ColumnDef<PromoCode>[] = [
             >
               <p>{code.active ? "Active" : "Inactive"}</p>
             </Badge>
+
+            {code.autoApply && (
+              <Badge variant="outline" className={`rounded-md px-2 py-1`}>
+                <p className="text-muted-foreground">Auto-applied</p>
+              </Badge>
+            )}
           </Link>
         </div>
       );

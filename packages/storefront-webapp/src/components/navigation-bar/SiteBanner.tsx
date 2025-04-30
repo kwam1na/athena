@@ -63,8 +63,8 @@ export const SiteBanner = () => {
             <p>
               <b>SITEWIDE SALE</b>
             </p>
-            <p>
-              USE PROMO CODE <b>{activePromoCode.code}</b> FOR{" "}
+            <p className="uppercase">
+              promo code <b>{activePromoCode.code}</b> automatically applied for{" "}
               <b>{getPromoMessage(activePromoCode).toUpperCase()}</b>
             </p>
           </div>
@@ -74,8 +74,8 @@ export const SiteBanner = () => {
           <p>
             <b>SITEWIDE SALE</b>
           </p>
-          <p>
-            USE PROMO CODE <b>{activePromoCode.code}</b> FOR{" "}
+          <p className="uppercase">
+            promo code <b>{activePromoCode.code}</b> automatically applied for{" "}
             <b>{getPromoMessage(activePromoCode).toUpperCase()}</b>
           </p>
         </div>

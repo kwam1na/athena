@@ -12,11 +12,12 @@ import { BagSummaryItems } from "./BagSummary";
 import { Button } from "../ui/button";
 import { Tag } from "lucide-react";
 import InputWithEndButton from "../ui/input-with-end-button";
-import { useMutation } from "@tanstack/react-query";
-import { useState } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { useState, useEffect } from "react";
 import { getDiscountValue } from "./utils";
 import { redeemPromoCode } from "@/api/promoCodes";
 import { useAuth } from "@/hooks/useAuth";
+import { usePromoCodesQueries } from "@/lib/queries/promoCode";
 
 export default function MobileBagSummary() {
   const { formatter } = useStoreContext();
@@ -26,6 +27,22 @@ export default function MobileBagSummary() {
   const [code, setCode] = useState("");
   const { userId, guestId } = useAuth();
   const { store } = useStoreContext();
+  const [isAutoApplyingPromoCode, setIsAutoApplyingPromoCode] = useState(false);
+
+  const promoCodeQueries = usePromoCodesQueries();
+  const { data: promoCodes } = useQuery(promoCodeQueries.getAll());
+
+  useEffect(() => {
+    if (promoCodes?.length && !checkoutState.discount && activeSession._id) {
+      const autoApplyPromoCode = promoCodes.find(
+        (code) => code.autoApply && code.active
+      );
+      if (autoApplyPromoCode) {
+        setIsAutoApplyingPromoCode(true);
+        handleRedeemPromoCode(autoApplyPromoCode.code);
+      }
+    }
+  }, [promoCodes, checkoutState.discount, activeSession._id]);
 
   const discountValue = getDiscountValue(bagSubtotal, checkoutState.discount);
 
@@ -51,20 +68,29 @@ export default function MobileBagSummary() {
           },
         });
       } else {
+        if (isAutoApplyingPromoCode) {
+          setIsAutoApplyingPromoCode(false);
+          return;
+        }
         setInvalidMessage(data.message);
+      }
+
+      if (isAutoApplyingPromoCode) {
+        setIsAutoApplyingPromoCode(false);
       }
     },
   });
 
-  const handleRedeemPromoCode = () => {
+  const handleRedeemPromoCode = (promoCode?: string) => {
     const storeFrontUserId = userId || guestId;
+    const codeToUse = promoCode || code;
 
     setInvalidMessage("");
 
-    if (!storeFrontUserId || !store) return;
+    if (!storeFrontUserId || !store || !codeToUse || !activeSession._id) return;
 
     redeemPromoCodeMutation.mutate({
-      code,
+      code: codeToUse,
       checkoutSessionId: activeSession._id,
     });
   };
@@ -148,8 +174,8 @@ export default function MobileBagSummary() {
                 </div>
               )}
               <div className="flex justify-between font-medium">
-                <p className="text-sm">Total</p>
-                <p className="text-sm">{formatter.format(total)}</p>
+                <p className="text-lg">Total</p>
+                <p className="text-lg">{formatter.format(total)}</p>
               </div>
             </div>
           </AccordionContent>

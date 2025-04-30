@@ -79,12 +79,26 @@ function BagSummary() {
   const { userId, guestId } = useAuth();
   const [code, setCode] = useState("");
   const [invalidMessage, setInvalidMessage] = useState("");
+  const [isAutoApplyingPromoCode, setIsAutoApplyingPromoCode] = useState(false);
+
+  const promoCodeQueries = usePromoCodesQueries();
+  const { data: promoCodes } = useQuery(promoCodeQueries.getAll());
+
+  useEffect(() => {
+    if (promoCodes?.length && !checkoutState.discount && activeSession._id) {
+      const autoApplyPromoCode = promoCodes.find(
+        (code) => code.autoApply && code.active
+      );
+      if (autoApplyPromoCode) {
+        setIsAutoApplyingPromoCode(true);
+        handleRedeemPromoCode(autoApplyPromoCode.code);
+      }
+    }
+  }, [promoCodes, checkoutState.discount, activeSession._id]);
 
   const calculatedDiscount = checkoutState.discount?.totalDiscount;
-
   const discountValue =
     calculatedDiscount || getDiscountValue(bagSubtotal, checkoutState.discount);
-
   const total = (checkoutState.deliveryFee ?? 0) + bagSubtotal - discountValue;
 
   const discountText =
@@ -108,7 +122,15 @@ function BagSummary() {
           },
         });
       } else {
+        if (isAutoApplyingPromoCode) {
+          setIsAutoApplyingPromoCode(false);
+          return;
+        }
         setInvalidMessage(data.message);
+      }
+
+      if (isAutoApplyingPromoCode) {
+        setIsAutoApplyingPromoCode(false);
       }
     },
     onError: (error) => {
@@ -116,15 +138,16 @@ function BagSummary() {
     },
   });
 
-  const handleRedeemPromoCode = () => {
+  const handleRedeemPromoCode = (promoCode?: string) => {
     const storeFrontUserId = userId || guestId;
+    const codeToUse = promoCode || code;
 
     setInvalidMessage("");
 
-    if (!storeFrontUserId || !store) return;
+    if (!storeFrontUserId || !store || !codeToUse || !activeSession._id) return;
 
     redeemPromoCodeMutation.mutate({
-      code,
+      code: codeToUse,
       checkoutSessionId: activeSession._id,
     });
   };
