@@ -114,6 +114,11 @@ export function ProductReminderBar({
         }),
       ]);
 
+      localStorage.setItem(
+        COOLDOWN_KEY,
+        (Date.now() + COOLDOWN_DURATION).toString()
+      );
+
       queryClient.invalidateQueries({
         queryKey: ["upsells"],
       });

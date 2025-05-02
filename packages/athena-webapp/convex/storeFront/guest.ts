@@ -93,27 +93,20 @@ export const getUniqueVisitorsForDay = query({
     storeId: v.id("store"),
   },
   handler: async (ctx, args) => {
+    // Get UTC midnight today and tomorrow
     const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
 
-    const startOfDay = new Date(
-      today.getFullYear(),
-      today.getMonth(),
-      today.getDate()
-    ).getTime();
-
-    const endOfDay = new Date(
-      today.getFullYear(),
-      today.getMonth(),
-      today.getDate() + 1
-    ).getTime();
+    const tomorrow = new Date(today);
+    tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
 
     const uniqueVisitors = await ctx.db
       .query(entity)
       .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
       .filter((q) =>
         q.and(
-          q.gte(q.field("_creationTime"), startOfDay),
-          q.lt(q.field("_creationTime"), endOfDay)
+          q.gte(q.field("_creationTime"), today.getTime()),
+          q.lt(q.field("_creationTime"), tomorrow.getTime())
         )
       )
       .collect();

@@ -113,10 +113,37 @@ export const getLastViewedProduct = query({
       .take(10);
 
     if (!analytics.length) {
+      const lastViewedProductAnalytic = await ctx.db
+        .query("analytics")
+        .filter((q) =>
+          q.and(
+            q.eq(q.field("storeFrontUserId"), args.id),
+            q.eq(q.field("action"), "viewed_product")
+          )
+        )
+        .order("desc")
+        .first();
+
+      if (!lastViewedProductAnalytic) {
+        console.log(`no last viewed product found for user ${args.id}`);
+        return null;
+      }
+
+      const product: any = await ctx.runQuery(api.inventory.products.getById, {
+        id: lastViewedProductAnalytic.data.product,
+        storeId: lastViewedProductAnalytic.storeId,
+      });
+
       console.log(
-        `no analytics match found for last viewed product for user ${args.id}`
+        `sending upsell product ${lastViewedProductAnalytic.data.productSku} for user ${args.id}`
       );
-      return null;
+
+      return product?.skus?.find(
+        (sku: any) =>
+          sku.sku === lastViewedProductAnalytic.data.productSku &&
+          sku.productCategory == "Hair" &&
+          sku.quantityAvailable > 0
+      );
     }
 
     // Get all the product SKUs from analytics
