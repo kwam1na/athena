@@ -52,8 +52,9 @@ export function DataTableToolbar<TData>({
           search={{ o: getOrigin() }}
           className="pr-2"
         >
-          <Button variant="ghost" className="h-8 px-2 lg:px-3 ">
-            <PlusIcon className="h-4 w-4" />
+          <Button variant="ghost" className="h-8 px-2 lg:px-3">
+            <PlusIcon className="h-4 w-4 mr-2" />
+            Add code
           </Button>
         </Link>
       </div>

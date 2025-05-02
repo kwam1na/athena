@@ -15,7 +15,12 @@ import {
 } from "@/api/savedBag";
 import { useBagQueries } from "@/lib/queries/bag";
 import { usePromoCodesQueries } from "@/lib/queries/promoCode";
-import { BagItem, ProductSku, SavedBagItem } from "@athena/webapp";
+import {
+  BagItem,
+  ProductSku,
+  PromoCodeItem,
+  SavedBagItem,
+} from "@athena/webapp";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
@@ -44,8 +49,9 @@ export type Discount = {
 export const useShoppingBag = () => {
   const queryClient = useQueryClient();
 
-  const [operationSuccessful, setOperationSuccessful] =
-    useState<Boolean | null>(null);
+  const [operationSuccessful, setOperationSuccessful] = useState<
+    boolean | null
+  >(null);
   const [action, setAction] = useState<ShoppingBagAction>("idle");
   const [unavailableProducts, setUnavailableProducts] =
     useState<UnavailableProducts>([]);
@@ -300,7 +306,7 @@ export const useShoppingBag = () => {
 
     const lastItem = remainingItems[0];
     const isLastItemDiscounted = promoCodeSkus?.some(
-      (sku: ProductSku) => sku._id === lastItem.productSkuId
+      (sku: PromoCodeItem) => sku.productSku._id === lastItem.productSkuId
     );
 
     if (isLastItemDiscounted) {

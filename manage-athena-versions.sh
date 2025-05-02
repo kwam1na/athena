@@ -19,6 +19,7 @@ KEY_PATH="/Users/kwamina/Desktop/athena-webserver/athena-eu-west-key.pem"
 # Local paths
 ATHENA_WEBAPP_DIR="$HOME/athena/packages/athena-webapp"
 STOREFRONT_DIR="$HOME/athena/packages/storefront-webapp"
+VALKEY_PROXY_DIR="$HOME/athena/packages/valkey-proxy-server"
 
 # =============================================
 # Helper Functions
@@ -123,6 +124,25 @@ deploy_app() {
   echo "✅ Deployed $app_name version: $fun_name ($timestamp)"
 }
 
+# Copy valkey proxy server to EC2 instance
+copy_valkey_proxy() {
+  echo "Deploying valkey-proxy-server to EC2 instance..."
+  
+  if [ ! -d "$VALKEY_PROXY_DIR" ]; then
+    echo "Error: valkey-proxy-server directory not found at $VALKEY_PROXY_DIR"
+    return 1
+  fi
+  
+  scp -i "$KEY_PATH" -r "$VALKEY_PROXY_DIR" "$REMOTE:/home/ec2-user/"
+  
+  if [ $? -eq 0 ]; then
+    echo "✅ Successfully deployed valkey-proxy-server to EC2 instance"
+  else
+    echo "❌ Failed to deploy valkey-proxy-server to EC2 instance"
+    return 1
+  fi
+}
+
 # =============================================
 # Deployment Functions
 # =============================================
@@ -155,8 +175,8 @@ full_deploy_athena() {
 # Main Script
 # =============================================
 
-# Select operation (rollback, delete versions, deploy, or show versions)
-OPERATION=$(printf "rollback\ndelete versions\ndeploy\nshow versions" | fzf --prompt="Select operation: ")
+# Select operation (rollback, delete versions, deploy, show versions, or copy valkey proxy)
+OPERATION=$(printf "rollback\ndelete versions\ndeploy\nshow versions\ndeploy valkey proxy" | fzf --prompt="Select operation: ")
 if [ -z "$OPERATION" ]; then
   echo "No operation selected. Aborting."
   exit 1
@@ -165,6 +185,12 @@ fi
 # Handle show versions operation
 if [ "$OPERATION" = "show versions" ]; then
   show_current_versions
+  exit 0
+fi
+
+# Handle copy valkey proxy operation
+if [ "$OPERATION" = "deploy valkey proxy" ]; then
+  copy_valkey_proxy
   exit 0
 fi
 

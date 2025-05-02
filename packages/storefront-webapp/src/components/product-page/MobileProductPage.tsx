@@ -34,7 +34,7 @@ export default function MobileProductPage() {
 
   const { data: promoCodeItems } = useQuery(promoCodeQueries.getAllItems());
 
-  const promoCodeItem = promoCodeItems?.[0];
+  const promoCodeItem = promoCodeItems?.[0].productSku;
 
   const { variant } = useSearch({ strict: false });
 
@@ -208,14 +208,21 @@ export default function MobileProductPage() {
     (item: SavedBagItem) => item.productSku === selectedSku?.sku
   );
 
+  if (error) return <NotFound />;
+
   if (!selectedSku || !product) return <div className="h-screen" />;
 
-  if (error || (product && !selectedSku)) {
+  const isPromoCodeItem = promoCodeItem?.productId === productSlug;
+
+  if (
+    (product && !selectedSku) ||
+    product?.isVisible === false ||
+    isPromoCodeItem
+  ) {
     return <NotFound />;
   }
 
-  const isSoldOut =
-    selectedSku?.quantityAvailable === 0 && selectedSku.inventoryCount === 0;
+  const isSoldOut = selectedSku?.quantityAvailable === 0;
 
   const isLowStock =
     selectedSku?.quantityAvailable <= 2 || selectedSku.inventoryCount <= 2;

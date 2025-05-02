@@ -48,6 +48,7 @@ import type * as inventory_auth from "../inventory/auth.js";
 import type * as inventory_bestSeller from "../inventory/bestSeller.js";
 import type * as inventory_categories from "../inventory/categories.js";
 import type * as inventory_colors from "../inventory/colors.js";
+import type * as inventory_complimentaryProduct from "../inventory/complimentaryProduct.js";
 import type * as inventory_featuredItem from "../inventory/featuredItem.js";
 import type * as inventory_inviteCode from "../inventory/inviteCode.js";
 import type * as inventory_organizationMembers from "../inventory/organizationMembers.js";
@@ -72,6 +73,7 @@ import type * as schemas_inventory_athenaUser from "../schemas/inventory/athenaU
 import type * as schemas_inventory_bestSeller from "../schemas/inventory/bestSeller.js";
 import type * as schemas_inventory_category from "../schemas/inventory/category.js";
 import type * as schemas_inventory_color from "../schemas/inventory/color.js";
+import type * as schemas_inventory_complimentaryProduct from "../schemas/inventory/complimentaryProduct.js";
 import type * as schemas_inventory_featuredItem from "../schemas/inventory/featuredItem.js";
 import type * as schemas_inventory_index from "../schemas/inventory/index.js";
 import type * as schemas_inventory_inviteCode from "../schemas/inventory/inviteCode.js";
@@ -159,6 +161,7 @@ declare const fullApi: ApiFromModules<{
   "inventory/bestSeller": typeof inventory_bestSeller;
   "inventory/categories": typeof inventory_categories;
   "inventory/colors": typeof inventory_colors;
+  "inventory/complimentaryProduct": typeof inventory_complimentaryProduct;
   "inventory/featuredItem": typeof inventory_featuredItem;
   "inventory/inviteCode": typeof inventory_inviteCode;
   "inventory/organizationMembers": typeof inventory_organizationMembers;
@@ -183,6 +186,7 @@ declare const fullApi: ApiFromModules<{
   "schemas/inventory/bestSeller": typeof schemas_inventory_bestSeller;
   "schemas/inventory/category": typeof schemas_inventory_category;
   "schemas/inventory/color": typeof schemas_inventory_color;
+  "schemas/inventory/complimentaryProduct": typeof schemas_inventory_complimentaryProduct;
   "schemas/inventory/featuredItem": typeof schemas_inventory_featuredItem;
   "schemas/inventory/index": typeof schemas_inventory_index;
   "schemas/inventory/inviteCode": typeof schemas_inventory_inviteCode;

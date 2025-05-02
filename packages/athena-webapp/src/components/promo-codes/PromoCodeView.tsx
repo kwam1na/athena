@@ -19,7 +19,7 @@ import { PlusIcon, Save } from "lucide-react";
 import {
   SelectedProductsProvider,
   useSelectedProducts,
-} from "./products-table/selectable-data-provider";
+} from "./selectable-products-table/selectable-data-provider";
 import PromoCodeSpanToggleGroup from "./add-promo-code/PromoCodeSpanToggleGroup";
 import { useAuth } from "~/src/hooks/useAuth";
 import { toast } from "sonner";
@@ -27,6 +27,7 @@ import { LoadingButton } from "../ui/loading-button";
 import { Id } from "~/convex/_generated/dataModel";
 import { Label } from "../ui/label";
 import { Switch } from "../ui/switch";
+import { FadeIn } from "../common/FadeIn";
 
 export type DiscountType = "percentage" | "amount";
 
@@ -284,7 +285,7 @@ function PromoCodeView() {
         />
       }
     >
-      <div className="container mx-auto h-full w-full p-8 space-y-12">
+      <FadeIn className="container mx-auto h-full w-full p-8 space-y-12">
         <div className="grid grid-cols-2 gap-8">
           <div className="space-y-6">
             <div className="flex items-center gap-8">
@@ -392,7 +393,7 @@ function PromoCodeView() {
             </div>
           </View>
         </div>
-      </div>
+      </FadeIn>
     </View>
   );
 }

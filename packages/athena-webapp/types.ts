@@ -60,7 +60,9 @@ export type OnlineOrder = Doc<"onlineOrder">;
 
 export type PromoCode = Doc<"promoCode">;
 
-export type PromoCodeItem = Doc<"promoCodeItem">;
+export type PromoCodeItem = Doc<"promoCodeItem"> & {
+  productSku: ProductSku;
+};
 
 export type StoreFrontUser = Doc<"storeFrontUser">;
 
@@ -69,3 +71,7 @@ export type FeaturedItem = Doc<"featuredItem">;
 export type BestSeller = Doc<"bestSeller">;
 
 export type Analytic = Doc<"analytics">;
+
+export type ComplimentaryProduct = Doc<"complimentaryProduct"> & {
+  productSku: ProductSku;
+};

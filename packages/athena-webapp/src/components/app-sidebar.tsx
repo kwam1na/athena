@@ -15,15 +15,21 @@ import {
 import {
   BadgePercent,
   ChartNoAxesCombined,
+  CheckCircle,
   CogIcon,
+  Gift,
   Image,
   PanelTop,
+  RotateCcw,
   ScanBarcode,
   ShoppingBag,
   ShoppingBasket,
   Store,
+  Truck,
   UserCircle,
   Users,
+  Clock,
+  Package,
 } from "lucide-react";
 import { AppHeader } from "./Navbar";
 import { Link } from "@tanstack/react-router";
@@ -150,7 +156,10 @@ export function AppSidebar() {
                         })}
                         className="flex items-center justify-between"
                       >
-                        <p className="font-medium">Open</p>
+                        <div className="flex items-center">
+                          <Clock className="w-4 h-4 mr-2" />
+                          <p className="font-medium">Open</p>
+                        </div>
                         {Boolean(openOrders) && (
                           <p className="text-xs font-medium">{openOrders}</p>
                         )}
@@ -171,6 +180,7 @@ export function AppSidebar() {
                         })}
                         className="flex items-center"
                       >
+                        <Package className="w-4 h-4" />
                         <p className="font-medium">Ready</p>
                       </Link>
                     </SidebarMenuButton>
@@ -189,6 +199,7 @@ export function AppSidebar() {
                         })}
                         className="flex items-center"
                       >
+                        <Truck className="w-4 h-4" />
                         <p className="font-medium">Out for delivery</p>
                       </Link>
                     </SidebarMenuButton>
@@ -207,6 +218,7 @@ export function AppSidebar() {
                         })}
                         className="flex items-center"
                       >
+                        <CheckCircle className="w-4 h-4" />
                         <p className="font-medium">Completed</p>
                       </Link>
                     </SidebarMenuButton>
@@ -225,6 +237,7 @@ export function AppSidebar() {
                         })}
                         className="flex items-center"
                       >
+                        <RotateCcw className="w-4 h-4" />
                         <p className="font-medium">Refunded</p>
                       </Link>
                     </SidebarMenuButton>
@@ -270,6 +283,25 @@ export function AppSidebar() {
                     </SidebarMenuSubItem>
                   </SidebarMenuSub>
                 )}
+
+                <SidebarMenuSub>
+                  <SidebarMenuSubItem>
+                    <SidebarMenuButton asChild>
+                      <Link
+                        to="/$orgUrlSlug/store/$storeUrlSlug/products/complimentary"
+                        params={(p) => ({
+                          ...p,
+                          orgUrlSlug: activeOrganization?.slug,
+                          storeUrlSlug: activeStore?.slug,
+                        })}
+                        className="flex items-center"
+                      >
+                        <Gift className="w-4 h-4" />
+                        <p className="font-medium">Complimentary</p>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuSubItem>
+                </SidebarMenuSub>
               </SidebarMenuItem>
 
               <SidebarMenuItem>

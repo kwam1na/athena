@@ -83,7 +83,7 @@ export const create = mutation({
     await Promise.all(
       items.map((item) => {
         return ctx.db.insert("onlineOrderItem", {
-          orderId: orderId,
+          orderId,
           productId: item.productId,
           quantity: item.quantity,
           productSku: item.productSku,
@@ -91,6 +91,23 @@ export const create = mutation({
           storeFrontUserId: item.storeFrontUserId,
           price: item.price,
         });
+      })
+    );
+
+    // Check for items in both checkoutSessionItem and promoCodeItem tables
+    await Promise.all(
+      items.map(async (item) => {
+        const promoCodeItem = await ctx.db
+          .query("promoCodeItem")
+          .filter((q) => q.eq(q.field("productSkuId"), item.productSkuId))
+          .first();
+
+        if (promoCodeItem) {
+          await ctx.db.patch(promoCodeItem._id, {
+            quantityClaimed:
+              (promoCodeItem.quantityClaimed ?? 0) + item.quantity,
+          });
+        }
       })
     );
 
@@ -166,6 +183,23 @@ export const createFromSession = internalMutation({
           storeFrontUserId: item.storeFrontUserId,
           price: item.price,
         });
+      })
+    );
+
+    // Check for items in both checkoutSessionItem and promoCodeItem tables
+    await Promise.all(
+      items.map(async (item) => {
+        const promoCodeItem = await ctx.db
+          .query("promoCodeItem")
+          .filter((q) => q.eq(q.field("productSkuId"), item.productSkuId))
+          .first();
+
+        if (promoCodeItem) {
+          await ctx.db.patch(promoCodeItem._id, {
+            quantityClaimed:
+              (promoCodeItem.quantityClaimed ?? 0) + item.quantity,
+          });
+        }
       })
     );
 

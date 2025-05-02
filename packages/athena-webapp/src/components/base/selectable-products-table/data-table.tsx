@@ -22,6 +22,7 @@ import {
   TableHeader,
   TableRow,
 } from "../../ui/table";
+import { DataTablePagination } from "./data-table-pagination";
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
@@ -117,6 +118,7 @@ export function SelectableProductsTable<TData, TValue>({
           </TableBody>
         </Table>
       </div>
+      <DataTablePagination table={table} />
     </div>
   );
 }

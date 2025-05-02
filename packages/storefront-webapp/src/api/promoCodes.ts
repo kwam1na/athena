@@ -1,5 +1,5 @@
 import config from "@/config";
-import { ProductSku, PromoCode } from "@athena/webapp";
+import { PromoCode, PromoCodeItem } from "@athena/webapp";
 
 const getBaseUrl = () => `${config.apiGateway.URL}/stores/promoCodes`;
 
@@ -46,7 +46,7 @@ export async function getPromoCodes(): Promise<PromoCode[]> {
   return res;
 }
 
-export async function getPromoCodeItems(): Promise<ProductSku[]> {
+export async function getPromoCodeItems(): Promise<PromoCodeItem[]> {
   const response = await fetch(
     `${config.apiGateway.URL}/stores/promoCodeItems`,
     {

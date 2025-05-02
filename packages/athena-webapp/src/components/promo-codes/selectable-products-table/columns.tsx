@@ -14,7 +14,7 @@ import { Checkbox } from "../../ui/checkbox";
 import { useSelectedProducts } from "./selectable-data-provider";
 import { CheckedState } from "@radix-ui/react-checkbox";
 
-export const columns: ColumnDef<Product>[] = [
+export const selectableProductColumns: ColumnDef<Product>[] = [
   {
     accessorKey: "name",
     header: ({ column }) => (
@@ -46,10 +46,10 @@ export const columns: ColumnDef<Product>[] = [
           <AccordionItem className="border-none" value="item-1">
             <AccordionTrigger hideChevron>
               <div className="flex items-center gap-8">
-                <Checkbox
+                {/* <Checkbox
                   checked={selectedAll}
                   onCheckedChange={handleSelectAll}
-                />
+                /> */}
                 <div className="flex items-center gap-8">
                   {sku?.images[0] ? (
                     <img

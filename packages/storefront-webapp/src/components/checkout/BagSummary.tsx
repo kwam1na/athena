@@ -29,7 +29,7 @@ function SummaryItem({
   const { data } = useQuery(promoCodeQueries.getAllItems());
 
   const isDiscounted = data?.some(
-    (productSku) => productSku._id === item.productSkuId
+    (promoCodeItem) => promoCodeItem.productSku._id === item.productSkuId
   );
 
   const label =

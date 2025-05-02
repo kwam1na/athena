@@ -234,7 +234,8 @@ export default function ShoppingBag() {
                 const unavailableSku = isSkuUnavailable(item.productSkuId);
 
                 const isDiscounted = promoCodeSkus?.some(
-                  (productSku) => productSku._id === item.productSkuId
+                  (productSku) =>
+                    productSku.productSku._id === item.productSkuId
                 );
 
                 let priceLabel = "Product unavailable";

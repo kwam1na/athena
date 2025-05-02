@@ -18,6 +18,8 @@ import {
   storeAssetSchema,
   storeSchema,
   subcategorySchema,
+  complimentaryProductsCollectionSchema,
+  complimentaryProductSchema,
 } from "./schemas/inventory";
 import {
   bagItemSchema,
@@ -49,6 +51,12 @@ const schema = defineSchema({
   checkoutSession: defineTable(checkoutSessionSchema),
   checkoutSessionItem: defineTable(checkoutSessionItemSchema),
   color: defineTable(colorSchema),
+  complimentaryProductsCollection: defineTable(
+    complimentaryProductsCollectionSchema
+  ).index("by_storeId", ["storeId"]),
+  complimentaryProduct: defineTable(complimentaryProductSchema)
+    .index("by_storeId", ["storeId"])
+    .index("by_collectionId", ["collectionId"]),
   customer: defineTable(customerSchema),
   featuredItem: defineTable(featuredItemSchema),
   guest: defineTable(guestSchema).index("by_storeId", ["storeId"]),

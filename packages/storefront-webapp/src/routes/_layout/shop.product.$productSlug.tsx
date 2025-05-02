@@ -1,4 +1,3 @@
-import MobileProductPage from "@/components/product-page/MobileProductPage";
 import ProductPage from "@/components/product-page/ProductPage";
 import { ProductNavigationBar } from "@/components/product-page/ProductsNavigationBar";
 import { createFileRoute } from "@tanstack/react-router";
@@ -17,12 +16,7 @@ const Component = () => {
   return (
     <div>
       <ProductNavigationBar />
-      <div className="hidden lg:flex">
-        <ProductPage />
-      </div>
-      <div className="lg:hidden">
-        <MobileProductPage />
-      </div>
+      <ProductPage />
     </div>
   );
 };

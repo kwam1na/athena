@@ -1,6 +1,7 @@
 import { v } from "convex/values";
-import { mutation, query } from "../_generated/server";
+import { internalMutation, mutation, query } from "../_generated/server";
 import { api } from "../_generated/api";
+import { Id } from "../_generated/dataModel";
 
 const entity = "promoCode";
 
@@ -155,13 +156,18 @@ export const getAllItems = query({
       .map((item) => item.productSkuId)
       .filter((i) => i !== undefined);
 
-    return await Promise.all(
+    const skuData = await Promise.all(
       skus.map(async (sku) => {
         return await ctx.runQuery(api.inventory.productSku.retrieve, {
           id: sku,
         });
       })
     );
+
+    return items.map((item, index) => ({
+      ...item,
+      productSku: skuData[index],
+    }));
   },
 });
 
@@ -230,6 +236,32 @@ export const update = mutation({
 
       await Promise.all(items.map((item) => ctx.db.delete(item._id)));
     }
+
+    return { success: true };
+  },
+});
+
+export const updateQuantityClaimedForMiniStraightener = internalMutation({
+  args: {},
+  handler: async (ctx, args) => {
+    const promoCodeItem = await ctx.db.query("promoCodeItem").first();
+
+    if (
+      !promoCodeItem ||
+      !promoCodeItem.quantity ||
+      !promoCodeItem.quantityClaimed
+    ) {
+      return { success: false, message: "Promo code item not found" };
+    }
+
+    if (promoCodeItem.quantityClaimed >= promoCodeItem.quantity) {
+      return { success: false, message: "Promo code item quantity claimed" };
+    }
+
+    await ctx.db.patch(promoCodeItem._id, {
+      quantityClaimed:
+        (promoCodeItem?.quantityClaimed ?? 0) + Math.floor(Math.random() * 3),
+    });
 
     return { success: true };
   },

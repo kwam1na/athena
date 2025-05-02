@@ -24,4 +24,10 @@ crons.interval(
   {}
 );
 
+crons.interval(
+  "update-quantity-claimed-for-mini-straightener",
+  { minutes: process.env.STAGE == "prod" ? 120 : 1440 },
+  internal.inventory.promoCode.updateQuantityClaimedForMiniStraightener,
+  {}
+);
 export default crons;

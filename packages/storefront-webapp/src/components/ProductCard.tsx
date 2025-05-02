@@ -14,9 +14,7 @@ export function ProductCard({
     new Set(product.skus.map((sku) => sku.color))
   ).length;
 
-  const isSoldOut = product.skus.every(
-    (sku) => sku.quantityAvailable === 0 && sku.inventoryCount === 0
-  );
+  const isSoldOut = product.skus.every((sku) => sku.quantityAvailable === 0);
 
   const isSellingFast = product.skus.some(
     (sku) => sku.quantityAvailable > 0 && sku.quantityAvailable <= 2
@@ -64,7 +62,7 @@ export function ProductSkuCard({
   sku: ProductSku;
   currencyFormatter: Intl.NumberFormat;
 }) {
-  const isSoldOut = sku.quantityAvailable === 0 && sku.inventoryCount === 0;
+  const isSoldOut = sku.quantityAvailable === 0;
 
   return (
     <div className="flex flex-col">

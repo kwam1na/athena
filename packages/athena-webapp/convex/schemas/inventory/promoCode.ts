@@ -19,4 +19,6 @@ export const promoCodeItemSchema = v.object({
   storeId: v.id("store"),
   productId: v.optional(v.id("product")),
   productSkuId: v.optional(v.id("productSku")),
+  quantity: v.optional(v.number()),
+  quantityClaimed: v.optional(v.number()),
 });
