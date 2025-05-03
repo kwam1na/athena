@@ -9,7 +9,7 @@ export function OnsaleProduct() {
 
   const p = data?.[0];
 
-  if (!p || p.quantityClaimed === p.quantity) return null;
+  if (!p || !p.productSku) return null;
 
   return (
     <div className="w-full border rounded-md p-4 border-accent2/10 bg-accent2/10">

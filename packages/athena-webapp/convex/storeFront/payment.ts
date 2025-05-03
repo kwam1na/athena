@@ -274,6 +274,12 @@ export const refundPayment = action({
     returnItemsToStock: v.boolean(),
     onlineOrderItemIds: v.optional(v.array(v.id("onlineOrderItem"))),
     refundItems: v.optional(v.array(v.string())),
+    signedInAthenaUser: v.optional(
+      v.object({
+        id: v.id("athenaUser"),
+        email: v.string(),
+      })
+    ),
   },
   handler: async (ctx, args) => {
     const response = await fetch(`https://api.paystack.co/refund`, {
@@ -296,6 +302,7 @@ export const refundPayment = action({
           status: "refund-submitted",
           didRefundDeliveryFee: args.refundItems?.includes("delivery-fee"),
         },
+        signedInAthenaUser: args.signedInAthenaUser,
       });
 
       console.log('updated order status to "refund-submitted"');

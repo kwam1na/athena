@@ -84,7 +84,7 @@ export const selectableProductColumns: ColumnDef<Product>[] = [
                       </div>
                       <p>/</p>
                       <div className="flex items-center gap-1">
-                        <strong>{row.getValue("inventoryCount")}</strong>
+                        <strong>{row.original.inventoryCount}</strong>
                         <p className="text-muted-foreground">stock</p>
                       </div>
                       <p>/</p>

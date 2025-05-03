@@ -20,7 +20,7 @@ export default function PromoCodesView() {
     return (
       <div className="container mx-auto flex gap-2 h-[40px]">
         <div className="flex items-center">
-          <p className="text-3xl font-medium">Promo codes</p>
+          <p className="text-xl font-medium">Promo codes</p>
         </div>
       </div>
     );

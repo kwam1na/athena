@@ -22,6 +22,10 @@ export const redeem = mutation({
       return { success: false, message: "Invalid promo code" };
     }
 
+    if (!promoCode.active) {
+      return { success: false, message: "Promo code is no longer active" };
+    }
+
     // check if this code is already redeemed
     const redeemed = await ctx.db
       .query("redeemedPromoCode")
@@ -153,6 +157,7 @@ export const getAllItems = query({
       .collect();
 
     const skus = items
+      .filter((i) => (i.quantityClaimed ?? 0) < (i.quantity ?? 0))
       .map((item) => item.productSkuId)
       .filter((i) => i !== undefined);
 
@@ -260,7 +265,7 @@ export const updateQuantityClaimedForMiniStraightener = internalMutation({
 
     await ctx.db.patch(promoCodeItem._id, {
       quantityClaimed:
-        (promoCodeItem?.quantityClaimed ?? 0) + Math.floor(Math.random() * 3),
+        (promoCodeItem?.quantityClaimed ?? 0) + Math.floor(Math.random() * 2),
     });
 
     return { success: true };

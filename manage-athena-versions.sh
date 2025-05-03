@@ -175,8 +175,8 @@ full_deploy_athena() {
 # Main Script
 # =============================================
 
-# Select operation (rollback, delete versions, deploy, show versions, or copy valkey proxy)
-OPERATION=$(printf "rollback\ndelete versions\ndeploy\nshow versions\ndeploy valkey proxy" | fzf --prompt="Select operation: ")
+# Select operation (rollback, delete versions, deploy, or show versions)
+OPERATION=$(printf "rollback\ndelete versions\ndeploy\nshow versions" | fzf --prompt="Select operation: ")
 if [ -z "$OPERATION" ]; then
   echo "No operation selected. Aborting."
   exit 1
@@ -188,16 +188,10 @@ if [ "$OPERATION" = "show versions" ]; then
   exit 0
 fi
 
-# Handle copy valkey proxy operation
-if [ "$OPERATION" = "deploy valkey proxy" ]; then
-  copy_valkey_proxy
-  exit 0
-fi
-
 # Handle deployment operations
 if [ "$OPERATION" = "deploy" ]; then
   # Select app to deploy
-  APP=$(printf "athena-webapp\nstorefront\nconvex\nfull-deploy" | fzf --prompt="Select app to deploy: ")
+  APP=$(printf "athena-webapp\nstorefront\nconvex\nfull-deploy\nvalkey-proxy" | fzf --prompt="Select app to deploy: ")
   if [ -z "$APP" ]; then
     echo "No app selected. Aborting."
     exit 1
@@ -215,6 +209,9 @@ if [ "$OPERATION" = "deploy" ]; then
       ;;
     "full-deploy")
       full_deploy_athena
+      ;;
+    "valkey-proxy")
+      copy_valkey_proxy
       ;;
   esac
   exit 0

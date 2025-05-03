@@ -25,9 +25,7 @@ export function ProductInfo({
         {isSoldOut && <SoldOutBadge />}
 
         {isLowStock && !isSoldOut && (
-          <SellingFastSignal
-            message={`Only ${selectedSku.quantityAvailable} left`}
-          />
+          <SellingFastSignal message={`Low stock`} />
         )}
 
         <p>{formatter.format(selectedSku.price)}</p>

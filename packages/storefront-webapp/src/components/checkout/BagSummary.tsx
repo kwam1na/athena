@@ -29,7 +29,7 @@ function SummaryItem({
   const { data } = useQuery(promoCodeQueries.getAllItems());
 
   const isDiscounted = data?.some(
-    (promoCodeItem) => promoCodeItem.productSku._id === item.productSkuId
+    (promoCodeItem) => promoCodeItem?.productSku?._id === item.productSkuId
   );
 
   const label =
@@ -140,7 +140,11 @@ function BagSummary() {
 
   const handleRedeemPromoCode = (promoCode?: string) => {
     const storeFrontUserId = userId || guestId;
-    const codeToUse = promoCode || code;
+    let codeToUse = code;
+
+    if (typeof promoCode === "string") {
+      codeToUse = promoCode;
+    }
 
     setInvalidMessage("");
 

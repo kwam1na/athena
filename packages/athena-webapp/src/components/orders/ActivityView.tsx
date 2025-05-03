@@ -100,7 +100,9 @@ export function ActivityView() {
                       <p className="text-sm text-muted-foreground">order was</p>
                     ) : (
                       <p className="text-sm text-muted-foreground">
-                        {`${(activity as TransitionAction).user || "user"} transitioned order →`}
+                        {(activity as TransitionAction).user
+                          ? `${(activity as TransitionAction)?.user} transitioned order →`
+                          : "order transitioned →"}
                       </p>
                     )}
 

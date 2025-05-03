@@ -24,7 +24,7 @@ export default function Home() {
   const Navigation = () => {
     return (
       <div className="container mx-auto flex gap-2 h-[40px]">
-        <p className="text-3xl font-medium">Homepage</p>
+        <p className="text-xl font-medium">Homepage</p>
       </div>
     );
   };

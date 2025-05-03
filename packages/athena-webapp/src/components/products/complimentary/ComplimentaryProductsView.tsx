@@ -7,7 +7,7 @@ const Navigation = () => {
   return (
     <div className="container mx-auto flex gap-2 h-[40px]">
       <div className="flex items-center">
-        <p className="text-3xl font-medium">Complimentary Products</p>
+        <p className="text-xl font-medium">Complimentary Products</p>
       </div>
     </div>
   );

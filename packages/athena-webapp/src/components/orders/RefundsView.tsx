@@ -28,6 +28,7 @@ import { ActionModal } from "../ui/modals/action-modal";
 import { Switch } from "../ui/switch";
 import { Label } from "../ui/label";
 import { Separator } from "../ui/separator";
+import { useAuth } from "~/src/hooks/useAuth";
 
 export function RefundsView() {
   const { order } = useOnlineOrder();
@@ -55,6 +56,8 @@ export function RefundsView() {
   });
 
   const [isRefundingOrder, setIsRefundingOrder] = useState(false);
+
+  const { user } = useAuth();
 
   const refundOrder = useAction(api.storeFront.payment.refundPayment);
 
@@ -86,6 +89,12 @@ export function RefundsView() {
         returnItemsToStock: state.returnToStock,
         onlineOrderItemIds: ids,
         refundItems,
+        signedInAthenaUser: user
+          ? {
+              id: user._id,
+              email: user.email,
+            }
+          : undefined,
       });
 
       if (res.success) {

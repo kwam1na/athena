@@ -83,11 +83,18 @@ export default function MobileBagSummary() {
 
   const handleRedeemPromoCode = (promoCode?: string) => {
     const storeFrontUserId = userId || guestId;
-    const codeToUse = promoCode || code;
+
+    let codeToUse = code;
+
+    if (typeof promoCode === "string") {
+      codeToUse = promoCode;
+    }
 
     setInvalidMessage("");
 
-    if (!storeFrontUserId || !store || !codeToUse || !activeSession._id) return;
+    if (!storeFrontUserId || !store || !codeToUse || !activeSession._id) {
+      return;
+    }
 
     redeemPromoCodeMutation.mutate({
       code: codeToUse,

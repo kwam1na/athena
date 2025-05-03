@@ -131,6 +131,7 @@ export const create = mutation({
 export const createFromSession = internalMutation({
   args: {
     checkoutSessionId: v.id("checkoutSession"),
+    externalTransactionId: v.string(),
     paymentMethod: v.optional(paymentMethodSchema),
   },
   handler: async (ctx, args) => {
@@ -148,7 +149,7 @@ export const createFromSession = internalMutation({
       storeId: session.storeId,
       checkoutSessionId: args.checkoutSessionId,
       externalReference: session.externalReference,
-      externalTransactionId: session.externalTransactionId?.toString(),
+      externalTransactionId: args.externalTransactionId,
       bagId: session.bagId,
       amount: session.amount,
       billingDetails: session.billingDetails as any,
@@ -484,7 +485,14 @@ export const update = mutation({
       const refunds = [
         ...(order?.refunds ?? []),
         ...(refund_id && refund_amount
-          ? [{ id: refund_id, amount: refund_amount, date: Date.now() }]
+          ? [
+              {
+                id: refund_id,
+                amount: refund_amount,
+                date: Date.now(),
+                signedInAthenaUser: args.signedInAthenaUser,
+              },
+            ]
           : []),
       ];
 
@@ -494,7 +502,11 @@ export const update = mutation({
           refunds,
           transitions: [
             ...(order?.transitions ?? []),
-            { status: args.update.status, date: Date.now() },
+            {
+              status: args.update.status,
+              date: Date.now(),
+              signedInAthenaUser: args.signedInAthenaUser,
+            },
           ],
         };
 

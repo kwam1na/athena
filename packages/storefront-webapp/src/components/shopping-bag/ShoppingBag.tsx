@@ -107,7 +107,7 @@ export default function ShoppingBag() {
 
   const promoCodeQueries = usePromoCodesQueries();
 
-  const { data: promoCodeSkus } = useQuery(promoCodeQueries.getAllItems());
+  const { data: promoCodeItems } = useQuery(promoCodeQueries.getAllItems());
 
   const total = bagSubtotal;
 
@@ -233,9 +233,9 @@ export default function ShoppingBag() {
               {bag?.items.map((item: BagItem, index: number) => {
                 const unavailableSku = isSkuUnavailable(item.productSkuId);
 
-                const isDiscounted = promoCodeSkus?.some(
-                  (productSku) =>
-                    productSku.productSku._id === item.productSkuId
+                const isDiscounted = promoCodeItems?.some(
+                  (promoCodeItem) =>
+                    promoCodeItem?.productSku?._id === item.productSkuId
                 );
 
                 let priceLabel = "Product unavailable";

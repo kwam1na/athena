@@ -56,7 +56,7 @@ export default function AnalyticsView() {
     return (
       <div className="container mx-auto flex gap-2 h-[40px]">
         <div className="flex items-center">
-          <p className="text-3xl font-medium">Analytics</p>
+          <p className="text-xl font-medium">Analytics</p>
         </div>
       </div>
     );

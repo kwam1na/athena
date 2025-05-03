@@ -64,7 +64,7 @@ export const useShoppingBag = () => {
 
   const promoCodeQueries = usePromoCodesQueries();
 
-  const { data: promoCodeSkus } = useQuery(promoCodeQueries.getAllItems());
+  const { data: promoCodeItems } = useQuery(promoCodeQueries.getAllItems());
 
   const addNewSavedBagItemMutation = useMutation({
     mutationFn: ({
@@ -305,7 +305,7 @@ export const useShoppingBag = () => {
     }
 
     const lastItem = remainingItems[0];
-    const isLastItemDiscounted = promoCodeSkus?.some(
+    const isLastItemDiscounted = promoCodeItems?.some(
       (sku: PromoCodeItem) => sku.productSku._id === lastItem.productSkuId
     );
 

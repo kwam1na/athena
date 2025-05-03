@@ -30,6 +30,11 @@ import {
   Users,
   Clock,
   Package,
+  AlertTriangle,
+  AlertCircle,
+  AlertOctagon,
+  PackageCheckIcon,
+  PackageOpenIcon,
 } from "lucide-react";
 import { AppHeader } from "./Navbar";
 import { Link } from "@tanstack/react-router";
@@ -46,7 +51,7 @@ export function AppSidebar() {
   const { activeStore } = useGetActiveStore();
   const { activeOrganization } = useGetActiveOrganization();
 
-  const products = useGetProductsWithNoImages();
+  const productsWithNoImages = useGetProductsWithNoImages();
 
   const { user } = useAuth();
 
@@ -157,7 +162,7 @@ export function AppSidebar() {
                         className="flex items-center justify-between"
                       >
                         <div className="flex items-center">
-                          <Clock className="w-4 h-4 mr-2" />
+                          <PackageOpenIcon className="w-4 h-4 mr-2" />
                           <p className="font-medium">Open</p>
                         </div>
                         {Boolean(openOrders) && (
@@ -180,7 +185,7 @@ export function AppSidebar() {
                         })}
                         className="flex items-center"
                       >
-                        <Package className="w-4 h-4" />
+                        <PackageCheckIcon className="w-4 h-4" />
                         <p className="font-medium">Ready</p>
                       </Link>
                     </SidebarMenuButton>
@@ -261,7 +266,7 @@ export function AppSidebar() {
                   </Link>
                 </SidebarMenuButton>
 
-                {products && products.length > 0 && (
+                {productsWithNoImages && productsWithNoImages.length > 0 && (
                   <SidebarMenuSub>
                     <SidebarMenuSubItem>
                       <SidebarMenuButton asChild>
@@ -274,9 +279,12 @@ export function AppSidebar() {
                           })}
                           className="flex items-center justify-between"
                         >
-                          <p className="font-medium">Unresolved</p>
+                          <div className="flex items-center">
+                            <AlertOctagon className="w-4 h-4 mr-2" />
+                            <p className="font-medium">Unresolved</p>
+                          </div>
                           <p className="text-xs font-medium">
-                            {products.length}
+                            {productsWithNoImages?.length}
                           </p>
                         </Link>
                       </SidebarMenuButton>

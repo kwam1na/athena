@@ -20,6 +20,7 @@ paystackRoutes.post("/", async (c) => {
     console.log("creating order..");
     await c.env.runMutation(internal.storeFront.onlineOrder.createFromSession, {
       checkoutSessionId: checkout_session_id as Id<"checkoutSession">,
+      externalTransactionId: payload.data.id.toString(),
       paymentMethod: {
         last4: payload?.data?.authorization?.last4,
         brand: payload?.data?.authorization?.brand,
