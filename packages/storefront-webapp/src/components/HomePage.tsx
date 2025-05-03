@@ -1,215 +1,29 @@
 import { useQuery } from "@tanstack/react-query";
 import Footer from "./footer/Footer";
-import { Link } from "@tanstack/react-router";
-import { Button } from "./ui/button";
-import { useStoreContext } from "@/contexts/StoreContext";
-import { ProductCard, ProductSkuCard } from "./ProductCard";
-import { motion } from "framer-motion";
-import { useEffect, useState, useRef } from "react";
-import { Product, ProductSku } from "@athena/webapp";
-import ImageWithFallback from "./ui/image-with-fallback";
+import { useEffect, useRef } from "react";
 import { useNavigationBarContext } from "@/contexts/NavigationBarProvider";
-import { HomeHero } from "./home/HomeHero";
 import { useProductQueries } from "@/lib/queries/product";
-import { ArrowRight } from "lucide-react";
 import { useTrackEvent } from "@/hooks/useTrackEvent";
 import { MARKER_KEY } from "@/lib/constants";
-import { getProductName } from "@/lib/productUtils";
-import { capitalizeWords } from "@/lib/utils";
-import { useUpsellsQueries } from "@/lib/queries/upsells";
-import { Upsell } from "./Upsell";
 import { ProductReminderBar } from "./ProductReminderBar";
-import { useShoppingBag } from "@/hooks/useShoppingBag";
-import { postAnalytics } from "@/api/analytics";
+import { PromoAlert } from "./home/PromoAlert";
+import { usePromoAlert } from "@/hooks/usePromoAlert";
+import { useProductReminder } from "@/hooks/useProductReminder";
+import { HomeHeroSectionWithRef } from "./home/HomeHeroSection";
+import { BestSellersSection } from "./home/BestSellersSection";
+import { FeaturedProductsSection } from "./home/FeaturedProductsSection";
 
 const origin = "homepage";
 
-function FeaturedProduct({ product }: { product: any }) {
-  const { formatter } = useStoreContext();
-
-  // find the lowest price sku for the product (product.skus)
-  const lowestPriceSku = product.skus.reduce(
-    (lowest: any, current: any) =>
-      current.price < lowest.price ? current : lowest,
-    product.skus[0]
-  );
-
-  const hasMultipleSkus = product.skus.length > 1;
-
-  const priceLabel = hasMultipleSkus
-    ? `Starting at ${formatter.format(lowestPriceSku.price)}`
-    : formatter.format(lowestPriceSku.price);
-
-  return (
-    <div className="w-full flex flex-col xl:flex-row items-center justify-center gap-8 xl:gap-16">
-      <div className="space-y-4 order-2 xl:order-1">
-        <div className="text-sm flex flex-col items-start gap-4">
-          <p className="font-medium">{getProductName(product.skus[0])}</p>
-          <p className="text-sm text-muted-foreground">{priceLabel}</p>
-          {product.skus && product.skus.length > 1 && (
-            <p className="text-sm text-muted-foreground">
-              Available in multiple lengths
-            </p>
-          )}
-        </div>
-
-        <div>
-          <Link
-            to="/shop/product/$productSlug"
-            params={(params) => ({ ...params, productSlug: product._id })}
-            search={{ variant: product.skus?.[0].sku, origin }}
-          >
-            <Button className="p-0" variant={"link"}>
-              <p className="text-xs underline">Shop</p>
-            </Button>
-          </Link>
-        </div>
-      </div>
-
-      <Link
-        to="/shop/product/$productSlug"
-        params={(params) => ({ ...params, productSlug: product._id })}
-        search={{ variant: product.skus?.[0].sku, origin }}
-      >
-        <ImageWithFallback
-          alt={`${product.name} image`}
-          className="aspect-square object-cover w-[400px] h-[400px] md:w-[600px] md:h-[640px] rounded"
-          src={product.skus[0].images[0]}
-        />
-      </Link>
-    </div>
-  );
-}
-
-function ProductGrid({
-  products,
-  formatter,
-}: {
-  products: Product[];
-  formatter: any;
-}) {
-  return (
-    <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-8 md:gap-24 xl:gap-4">
-      {products?.slice(0, 4).map((product: Product) => (
-        <Link
-          to="/shop/product/$productSlug"
-          key={product?._id}
-          className="h-64 w-48 md:h-80 md:w-80 xl:h-96 xl:w-96 flex-shrink-0"
-          params={(params) => ({
-            ...params,
-            productSlug: product?._id,
-          })}
-          search={{ variant: product?.skus?.[0].sku, origin }}
-        >
-          <ProductCard product={product} currencyFormatter={formatter} />
-        </Link>
-      ))}
-    </div>
-  );
-}
-
-function ProductSkuGrid({
-  products,
-  formatter,
-}: {
-  products: ProductSku[];
-  formatter: any;
-}) {
-  return (
-    <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-8 md:gap-24 xl:gap-4">
-      {products?.slice(0, 4).map((product: ProductSku) => (
-        <Link
-          to="/shop/product/$productSlug"
-          key={product?._id}
-          className="h-64 w-48 md:h-80 md:w-80 xl:h-96 xl:w-96 flex-shrink-0"
-          params={(params) => ({
-            ...params,
-            productSlug: product?.productId,
-          })}
-          search={{ variant: product?.sku, origin }}
-        >
-          <ProductSkuCard sku={product} currencyFormatter={formatter} />
-        </Link>
-      ))}
-    </div>
-  );
-}
-
-function FeaturedSection({ data }: { data: any }) {
-  const { formatter } = useStoreContext();
-
-  if (data.subcategory) {
-    const { name, products, slug } = data.subcategory;
-
-    if (!products.length) return null;
-
-    return (
-      <div className="space-y-8">
-        <p className="text-md font-medium">{`Shop ${name}`}</p>
-
-        <div className="space-y-8 lg:space-y-24">
-          <ProductGrid products={products} formatter={formatter} />
-          <div className="text-sm">
-            <Link
-              to="/shop/$categorySlug/$subcategorySlug"
-              params={{
-                categorySlug: "hair",
-                subcategorySlug: slug,
-              }}
-              search={{
-                origin: "shop_hair",
-              }}
-            >
-              <Button className="p-0" variant={"link"}>
-                Shop all
-              </Button>
-            </Link>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (data.category) {
-    const { name, products, slug } = data.category;
-
-    if (!products?.length) return null;
-    return (
-      <div className="space-y-8">
-        <p className="text-md font-medium">{`Shop ${name}`}</p>
-
-        <div className="space-y-8 lg:space-y-24">
-          <ProductGrid products={products} formatter={formatter} />
-          <div className="text-sm"></div>
-          <Link
-            to="/shop/$categorySlug"
-            params={{ categorySlug: slug }}
-            search={{
-              origin: `shop ${slug}`,
-            }}
-          >
-            <Button className="p-0" variant={"link"}>
-              Shop all
-            </Button>
-          </Link>
-        </div>
-      </div>
-    );
-  }
-
-  if (data.product) {
-    return <FeaturedProduct product={data.product} />;
-  }
-
-  return null;
-}
-
 export default function HomePage() {
   const { setNavBarLayout, setAppLocation } = useNavigationBarContext();
-  const [showReminderBar, setShowReminderBar] = useState(false);
-  const shopTheLookRef = useRef<HTMLImageElement>(null);
   const homeHeroRef = useRef<HTMLDivElement>(null);
   const footerRef = useRef<HTMLDivElement>(null);
+
+  // Use extracted custom hooks
+  const { isPromoAlertOpen, setIsPromoAlertOpen } = usePromoAlert();
+  const { showReminderBar, setShowReminderBar, upsell } =
+    useProductReminder(homeHeroRef);
 
   const productQueries = useProductQueries();
 
@@ -220,9 +34,6 @@ export default function HomePage() {
   const { data: featured, isLoading: isLoadingFeatured } = useQuery(
     productQueries.featured()
   );
-
-  const upsellsQueries = useUpsellsQueries();
-  const { data: upsell } = useQuery(upsellsQueries.upsells());
 
   useEffect(() => {
     setNavBarLayout("sticky");
@@ -235,28 +46,9 @@ export default function HomePage() {
     }
   }, []);
 
-  useEffect(() => {
-    const checkScroll = () => {
-      if (homeHeroRef.current) {
-        const heroBottom = homeHeroRef.current.getBoundingClientRect().top;
-        const windowHeight = window.innerHeight;
-
-        if (heroBottom < windowHeight / 2) {
-          setShowReminderBar(true);
-          window.removeEventListener("scroll", checkScroll);
-        }
-      }
-    };
-
-    window.addEventListener("scroll", checkScroll);
-    return () => window.removeEventListener("scroll", checkScroll);
-  }, []);
-
   useTrackEvent({
     action: "viewed_homepage",
   });
-
-  const { formatter, store } = useStoreContext();
 
   const bestSellersSorted = bestSellers?.sort(
     (a: any, b: any) => a.rank - b.rank
@@ -282,144 +74,50 @@ export default function HomePage() {
 
   return (
     <>
-      <div className="overflow-hidden">
-        <div className="space-y-56 pb-32">
-          <div ref={homeHeroRef}>
-            <HomeHero />
-            <motion.div className="flex flex-col lg:relative">
-              <motion.img
-                ref={shopTheLookRef}
-                initial={{ opacity: 0, y: 16 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.6, delay: 0.8 }}
-                src={store?.config?.shopTheLookImage}
-                className="w-full lg:w-[50%] h-screen object-cover"
-              />
+      <PromoAlert isOpen={isPromoAlertOpen} setIsOpen={setIsPromoAlertOpen} />
+      <div className="min-h-screen">
+        <div className="overflow-hidden">
+          <div className="space-y-56 pb-32">
+            {/* Hero Section */}
+            <HomeHeroSectionWithRef
+              heroRef={homeHeroRef}
+              shopLookProduct={shopLookProduct}
+              origin={origin}
+            />
 
-              <motion.div
-                initial={{ opacity: 0 }}
-                whileInView={{ opacity: 1 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.6, delay: 1 }}
-                className="lg:absolute lg:right-[240px] lg:top-1/2 lg:-translate-y-1/2 p-8 rounded-lg"
-              >
-                <div className="flex flex-col items-center gap-16">
-                  <h2 className="text-2xl font-bold text-accent2 text-center tracking-widest leading-loose">
-                    the{" "}
-                    <span className="font-lavish text-6xl md:text-7xl">
-                      signature sleek
-                    </span>{" "}
-                    collection
-                  </h2>
+            <div className="container mx-auto space-y-40 md:space-y-48 pb-8 px-4 lg:px-0">
+              {/* Best Sellers Section */}
+              {Boolean(bestSellersSorted?.length) && (
+                <BestSellersSection
+                  bestSellersProducts={bestSellersProducts || []}
+                  origin={origin}
+                />
+              )}
 
-                  <div className="space-y-8">
-                    {/* <p className="text-md font-medium">Shop the look</p> */}
-                    {shopLookProduct?.productId && (
-                      <Link
-                        to="/shop/product/$productSlug"
-                        params={{ productSlug: shopLookProduct.productId }}
-                        search={{
-                          origin: "shop_this_look",
-                        }}
-                      >
-                        <Button
-                          variant={"link"}
-                          className="group px-0 items-center"
-                        >
-                          Shop the look
-                          <ArrowRight className="w-4 h-4 mr-2 -me-1 ms-2 transition-transform group-hover:translate-x-0.5" />
-                        </Button>
-                      </Link>
-                    )}
-
-                    {/* <div className="grid grid-cols-2 gap-8 md:gap-16">
-                      {shopLookSorted?.map((data: any) => (
-                        <Link
-                          to="/shop/product/$productSlug"
-                          params={{ productSlug: data.product._id }}
-                          key={data._id}
-                        >
-                          <ProductCard
-                            product={data.product}
-                            currencyFormatter={formatter}
-                          />
-                        </Link>
-                      ))}
-                    </div> */}
-                  </div>
-                </div>
-              </motion.div>
-            </motion.div>
-          </div>
-
-          <div className="container mx-auto space-y-40 md:space-y-48 pb-8 px-4 lg:px-0">
-            {Boolean(bestSellersSorted?.length) && (
-              <motion.div
-                initial={{ opacity: 0, y: 16 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.6, delay: 0.2 }}
-                className="space-y-8"
-              >
-                <p className="text-md font-medium">Shop best sellers</p>
-
-                <div className="space-y-8 lg:space-y-24">
-                  <ProductSkuGrid
-                    products={bestSellersProducts || []}
-                    formatter={formatter}
-                  />
-
-                  <div className="text-sm">
-                    <Link
-                      to="/shop/$categorySlug"
-                      params={{
-                        categorySlug: "best-sellers",
-                      }}
-                      search={{
-                        origin: "shop_bestsellers",
-                      }}
-                    >
-                      <Button className="p-0" variant={"link"}>
-                        Shop all
-                      </Button>
-                    </Link>
-                  </div>
-                </div>
-              </motion.div>
-            )}
-
-            {Boolean(featuredSectionSorted?.length) && (
-              <div className="space-y-40 md:space-y-48">
-                {featuredSectionSorted?.map((data: any) => (
-                  <motion.div
-                    key={data._id}
-                    initial={{ opacity: 0, y: 16 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    viewport={{ once: true }}
-                    transition={{ duration: 0.6, delay: 0.2 }}
-                  >
-                    <FeaturedSection data={data} />
-                  </motion.div>
-                ))}
-              </div>
-            )}
+              {/* Featured Products Section */}
+              {Boolean(featuredSectionSorted?.length) && (
+                <FeaturedProductsSection
+                  featuredSectionSorted={featuredSectionSorted}
+                  origin={origin}
+                />
+              )}
+            </div>
           </div>
         </div>
+
+        <Footer ref={footerRef} />
+
+        {upsell && !isPromoAlertOpen && (
+          <ProductReminderBar
+            product={upsell}
+            isVisible={showReminderBar && upsell.quantityAvailable > 0}
+            onDismiss={() => {
+              setShowReminderBar(false);
+            }}
+            footerRef={footerRef}
+          />
+        )}
       </div>
-
-      <Footer ref={footerRef} />
-
-      {upsell && (
-        <ProductReminderBar
-          product={upsell}
-          isVisible={showReminderBar && upsell.quantityAvailable > 0}
-          onDismiss={() => {
-            setShowReminderBar(false);
-          }}
-          footerRef={footerRef}
-        />
-      )}
     </>
   );
 }

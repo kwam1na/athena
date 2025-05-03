@@ -19,7 +19,7 @@ interface ProductReminderBarProps {
   footerRef: React.RefObject<HTMLDivElement>;
 }
 
-const COOLDOWN_KEY = "productReminderCooldown";
+const COOLDOWN_KEY = "product_reminder_bar_cooldown";
 const COOLDOWN_DURATION = 6 * 60 * 60 * 1000; // 6 hours in milliseconds
 
 export function ProductReminderBar({
@@ -68,7 +68,7 @@ export function ProductReminderBar({
       productSku: product.sku,
       productImageUrl: product.images[0],
     },
-    isReady: isVisible && !isInCooldown,
+    isReady: isVisible && !isInCooldown && shouldShow,
   });
 
   useEffect(() => {
@@ -159,7 +159,7 @@ export function ProductReminderBar({
         {isVisible && !isInCooldown && shouldShow && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
+            animate={{ opacity: 1, y: 0, transition: { delay: 1.8 } }}
             exit={{ opacity: 0, y: 20 }}
             transition={{
               type: "spring",
