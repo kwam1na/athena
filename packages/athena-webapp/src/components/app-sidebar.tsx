@@ -28,10 +28,6 @@ import {
   Truck,
   UserCircle,
   Users,
-  Clock,
-  Package,
-  AlertTriangle,
-  AlertCircle,
   AlertOctagon,
   PackageCheckIcon,
   PackageOpenIcon,
@@ -42,10 +38,10 @@ import useGetActiveStore from "../hooks/useGetActiveStore";
 import { useGetActiveOrganization } from "../hooks/useGetOrganizations";
 import { useNewOrderNotification } from "../hooks/useNewOrderNotification";
 import { useAuth } from "../hooks/useAuth";
-import { GearIcon } from "@radix-ui/react-icons";
 import { useQuery } from "convex/react";
 import { api } from "~/convex/_generated/api";
 import { useGetProductsWithNoImages } from "../hooks/useGetProducts";
+import { useProductWithNoImagesNotification } from "../hooks/useProductWithNoImagesNotification";
 
 export function AppSidebar() {
   const { activeStore } = useGetActiveStore();
@@ -56,6 +52,8 @@ export function AppSidebar() {
   const { user } = useAuth();
 
   useNewOrderNotification();
+
+  useProductWithNoImagesNotification();
 
   const orders = useQuery(
     api.storeFront.onlineOrder.getAllOnlineOrders,

@@ -111,7 +111,13 @@ export const sendNewOrderEmail = async (params: {
   order_status: string;
   order_date: string;
   customer_name: string;
+  order_id: string;
 }) => {
+  const appUrl =
+    process.env.STAGE == "prod"
+      ? "https://athena.wigclub.store"
+      : "http://localhost:5173";
+
   const message = {
     from: {
       email: "orders@wigclub.store",
@@ -132,6 +138,7 @@ export const sendNewOrderEmail = async (params: {
           order_status: params.order_status,
           order_date: params.order_date,
           customer_name: params.customer_name,
+          order_url: `${appUrl}/wigclub/store/wigclub/orders/${params.order_id}`,
         },
       },
     ],

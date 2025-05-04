@@ -1,6 +1,7 @@
 import { useNavigateBack } from "~/src/hooks/use-navigate-back";
 import { Button } from "../ui/button";
 import { ArrowLeftIcon } from "lucide-react";
+import { useSearch } from "@tanstack/react-router";
 
 const PageHeader = ({ children }: { children: React.ReactNode }) => {
   return (
@@ -11,18 +12,21 @@ const PageHeader = ({ children }: { children: React.ReactNode }) => {
 };
 
 export const SimplePageHeader = ({ title }: { title: string }) => {
+  const { o } = useSearch({ strict: false });
   const navigateBack = useNavigateBack();
 
   return (
     <PageHeader>
       <div className="flex items-center gap-4">
-        <Button
-          onClick={navigateBack}
-          variant="ghost"
-          className="h-8 px-2 lg:px-3 "
-        >
-          <ArrowLeftIcon className="h-4 w-4" />
-        </Button>
+        {o && (
+          <Button
+            onClick={navigateBack}
+            variant="ghost"
+            className="h-8 px-2 lg:px-3 "
+          >
+            <ArrowLeftIcon className="h-4 w-4" />
+          </Button>
+        )}
         <p className="text-sm">{title}</p>
       </div>
     </PageHeader>
@@ -36,18 +40,21 @@ export const ComposedPageHeader = ({
   leadingContent: React.ReactNode;
   trailingContent?: React.ReactNode;
 }) => {
+  const { o } = useSearch({ strict: false });
   const navigateBack = useNavigateBack();
 
   return (
     <PageHeader>
       <div className="flex items-center gap-4">
-        <Button
-          onClick={navigateBack}
-          variant="ghost"
-          className="h-8 px-2 lg:px-3 "
-        >
-          <ArrowLeftIcon className="h-4 w-4" />
-        </Button>
+        {o && (
+          <Button
+            onClick={navigateBack}
+            variant="ghost"
+            className="h-8 px-2 lg:px-3 "
+          >
+            <ArrowLeftIcon className="h-4 w-4" />
+          </Button>
+        )}
         {leadingContent}
       </div>
 

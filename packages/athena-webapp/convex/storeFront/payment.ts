@@ -167,6 +167,7 @@ export const verifyPayment = action({
               order_status: "Paid",
               order_date: formatDate(order._creationTime),
               customer_name: `${order.customerDetails.firstName} ${order.customerDetails.lastName}`,
+              order_id: order._id,
             });
             if (emailResponse.ok) {
               console.log(
