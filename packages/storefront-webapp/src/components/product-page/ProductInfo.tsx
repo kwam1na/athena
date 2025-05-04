@@ -1,6 +1,9 @@
 import { ProductSku } from "@athena/webapp";
 import { getProductName } from "@/lib/productUtils";
 import { SellingFastSignal, SoldOutBadge } from "./InventoryLevelBadge";
+import { useProductQueries } from "@/lib/queries/product";
+import { EyeIcon } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 
 interface ProductInfoProps {
   selectedSku: ProductSku;
@@ -8,6 +11,46 @@ interface ProductInfoProps {
   isSoldOut: boolean;
   isLowStock: boolean;
   className?: string;
+}
+
+function ViewCount({ productId }: { productId: string }) {
+  const productQueries = useProductQueries();
+  const { data: viewCount, isLoading } = useQuery(
+    productQueries.viewCount({ productId: productId || "" })
+  );
+
+  if (!productId) return null;
+  if (
+    !isLoading &&
+    (!viewCount || (viewCount.daily === 0 && viewCount.total === 0))
+  )
+    return null;
+
+  const daily = viewCount?.daily ?? 0;
+  const total = viewCount?.total ?? 0;
+
+  let dailyText = "";
+  if (daily === 1) dailyText = "Viewed once today";
+  else if (daily > 1) dailyText = `${daily} views today`;
+
+  let totalText = "";
+  if (total === 1) totalText = "1 total view";
+  else if (total > 1) totalText = `${total} total views`;
+
+  return (
+    <div className="text-sm text-gray-500 flex items-center gap-2 min-h-[20px]">
+      <p>👀</p>
+      {isLoading ? (
+        <span className="inline-block w-24 h-3 bg-gray-200 rounded animate-pulse" />
+      ) : (
+        <>
+          {daily > 0 && <span className="font-medium">{dailyText}</span>}
+          {dailyText && totalText ? " · " : ""}
+          {totalText}
+        </>
+      )}
+    </div>
+  );
 }
 
 export function ProductInfo({
@@ -20,16 +63,16 @@ export function ProductInfo({
   return (
     <div className={`space-y-6 ${className}`}>
       <p className="text-2xl md:text-3xl">{getProductName(selectedSku)}</p>
-
-      <div className="flex items-center gap-2 md:gap-8 flex-wrap">
+      <div className="flex items-center gap-4 flex-wrap">
         {isSoldOut && <SoldOutBadge />}
 
         {isLowStock && !isSoldOut && (
-          <SellingFastSignal message={`Low stock`} />
+          <SellingFastSignal message={`Almost gone`} />
         )}
 
-        <p>{formatter.format(selectedSku.price)}</p>
+        <p className="text-md">{formatter.format(selectedSku.price)}</p>
       </div>
+      <ViewCount productId={selectedSku.productId} />
     </div>
   );
 }

@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { HonoWithConvex } from "convex-helpers/server/hono";
 import { ActionCtx } from "../../../../_generated/server";
 import { api } from "../../../../_generated/api";
+import { Id } from "../../../../_generated/dataModel";
 import {
   getStoreDataFromRequest,
   getStorefrontUserFromRequest,
@@ -37,6 +38,22 @@ analyticsRoutes.post("/", async (c) => {
   });
 
   return c.json(res);
+});
+
+// New: GET /product-view-count?productId=...
+analyticsRoutes.get("/product-view-count", async (c) => {
+  const productId = c.req.query("productId");
+  if (!productId) {
+    return c.json({ error: "Missing productId" }, 400);
+  }
+  const count = await c.env.runQuery(
+    api.storeFront.analytics.getProductViewCount,
+    {
+      productId: productId as Id<"product">,
+    }
+  );
+
+  return c.json(count);
 });
 
 export { analyticsRoutes };

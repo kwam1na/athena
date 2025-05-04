@@ -44,3 +44,19 @@ export async function logout() {
 
   return res;
 }
+
+export async function getProductViewCount(
+  productId: string
+): Promise<{ daily: number; total: number }> {
+  const response = await fetch(
+    `${config.apiGateway.URL}/analytics/product-view-count?productId=${productId}`,
+    {
+      credentials: "include",
+    }
+  );
+  const res = await response.json();
+  if (!response.ok) {
+    throw new Error(res.error || "Error fetching product view count.");
+  }
+  return { daily: res.daily, total: res.total };
+}

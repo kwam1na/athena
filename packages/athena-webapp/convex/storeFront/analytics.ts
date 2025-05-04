@@ -67,3 +67,39 @@ export const get = query({
     return await ctx.db.get(args.id);
   },
 });
+
+export const getProductViewCount = query({
+  args: {
+    productId: v.id("product"),
+  },
+  handler: async (ctx, args) => {
+    // Calculate the start of today (midnight)
+    const now = new Date();
+    const startOfDay = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate()
+    ).getTime();
+
+    // All-time views
+    const totalRecords = await ctx.db
+      .query(entity)
+      .filter((q) =>
+        q.and(
+          q.eq(q.field("action"), "viewed_product"),
+          q.eq(q.field("data.product"), args.productId)
+        )
+      )
+      .collect();
+
+    // Today's views
+    const dailyRecords = totalRecords.filter(
+      (rec) => rec._creationTime >= startOfDay
+    );
+
+    return {
+      daily: dailyRecords.length,
+      total: totalRecords.length,
+    };
+  },
+});

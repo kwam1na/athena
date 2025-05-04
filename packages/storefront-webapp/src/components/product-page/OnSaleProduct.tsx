@@ -26,11 +26,11 @@ export function OnsaleProduct() {
             </p>
           </div>
           <p className="text-sm">
-            Included <b>free</b> with your purchase while stocks last!
+            Included with your purchase — while supplies last!
           </p>
           <p className="text-sm italic text-muted-foreground">
-            <b>{p.quantityClaimed}</b> of <b>{p.quantity}</b> gifts already
-            claimed -- reserve yours now!
+            <b>{p.quantityClaimed}</b> of <b>{p.quantity}</b> claimed — Few
+            remaining!
           </p>
         </div>
       </div>

@@ -2,7 +2,7 @@ import { mutation, query } from "../_generated/server";
 import { v } from "convex/values";
 import { addressSchema } from "../schemas/storeFront";
 import { api } from "../_generated/api";
-import { Doc } from "../_generated/dataModel";
+import { Doc, Id } from "../_generated/dataModel";
 
 const entity = "storeFrontUser";
 
@@ -101,6 +101,25 @@ export const getLastViewedProduct = query({
   handler: async (ctx, args) => {
     const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000; // 1 day ago in ms
 
+    // Helper function to check if a specific SKU is available
+    const isSkuAvailable = async (
+      productId: Id<"product">,
+      storeId: Id<"store">,
+      skuToCheck: string
+    ) => {
+      const product: any = await ctx.runQuery(api.inventory.products.getById, {
+        id: productId,
+        storeId,
+      });
+      return product?.skus?.find(
+        (sku: any) =>
+          sku.sku === skuToCheck &&
+          sku.productCategory === "Hair" &&
+          sku.quantityAvailable > 0
+      );
+    };
+
+    // Get recent product views
     const analytics = await ctx.db
       .query("analytics")
       .filter((q) =>
@@ -112,80 +131,97 @@ export const getLastViewedProduct = query({
       )
       .take(10);
 
-    if (!analytics.length) {
-      const lastViewedProductAnalytic = await ctx.db
-        .query("analytics")
-        .filter((q) =>
-          q.and(
-            q.eq(q.field("storeFrontUserId"), args.id),
-            q.eq(q.field("action"), "viewed_product")
-          )
-        )
-        .order("desc")
-        .first();
+    if (analytics.length) {
+      // Get all the product SKUs from analytics
+      const productSkus = analytics.map((analytic) => analytic.data.productSku);
 
-      if (!lastViewedProductAnalytic) {
-        console.log(`no last viewed product found for user ${args.id}`);
-        return null;
+      // Find all bag items for these SKUs
+      const bagItems = await ctx.db
+        .query("bagItem")
+        .filter((q) => q.eq(q.field("storeFrontUserId"), args.id))
+        .collect()
+        .then((items) =>
+          items.filter((item) => productSkus.includes(item.productSku))
+        );
+
+      // Create a Set of SKUs that are in the bag for faster lookup
+      const bagSkus = new Set(bagItems.map((item) => item.productSku));
+
+      // Try each analytic in order until we find an available product
+      for (const analytic of analytics) {
+        if (bagSkus.has(analytic.data.productSku)) continue;
+
+        const availableSku = await isSkuAvailable(
+          analytic.data.product,
+          analytic.storeId,
+          analytic.data.productSku
+        );
+
+        if (availableSku) {
+          console.log(
+            `Found available upsell product for user ${args.id}: ${availableSku.sku}`
+          );
+          return availableSku;
+        }
       }
 
-      const product: any = await ctx.runQuery(api.inventory.products.getById, {
-        id: lastViewedProductAnalytic.data.product,
-        storeId: lastViewedProductAnalytic.storeId,
-      });
-
       console.log(
-        `sending upsell product ${lastViewedProductAnalytic.data.productSku} for user ${args.id}`
+        `No available products found in recent views for user ${args.id}`
       );
-
-      return product?.skus?.find(
-        (sku: any) =>
-          sku.sku === lastViewedProductAnalytic.data.productSku &&
-          sku.productCategory == "Hair" &&
-          sku.quantityAvailable > 0
-      );
-    }
-
-    // Get all the product SKUs from analytics
-    const productSkus = analytics.map((analytic) => analytic.data.productSku);
-
-    // Find all bag items for these SKUs
-    const bagItems = await ctx.db
-      .query("bagItem")
-      .filter((q) => q.eq(q.field("storeFrontUserId"), args.id))
-      .collect()
-      .then((items) =>
-        items.filter((item) => productSkus.includes(item.productSku))
-      );
-
-    // Create a Set of SKUs that are in the bag for faster lookup
-    const bagSkus = new Set(bagItems.map((item) => item.productSku));
-
-    // Find the first analytic whose product is not in the bag
-    const validAnalytic = analytics.find(
-      (analytic) => !bagSkus.has(analytic.data.productSku)
-    );
-
-    if (!validAnalytic) {
-      console.log(`all viewed products are in bag for user ${args.id}`);
       return null;
     }
 
-    const product: any = await ctx.runQuery(api.inventory.products.getById, {
-      id: validAnalytic.data.product,
-      storeId: validAnalytic.storeId,
-    });
+    // If no recent views, try to find the last viewed product (all time)
+    const allTimeAnalytics = await ctx.db
+      .query("analytics")
+      .filter((q) =>
+        q.and(
+          q.eq(q.field("storeFrontUserId"), args.id),
+          q.eq(q.field("action"), "viewed_product")
+        )
+      )
+      .order("desc")
+      .take(20); // check up to 20 most recent all-time views
 
-    console.log(
-      `sending upsell product ${validAnalytic.data.productSku} for user ${args.id}`
-    );
+    if (allTimeAnalytics.length) {
+      // Get all the product SKUs from analytics
+      const productSkus = allTimeAnalytics.map(
+        (analytic) => analytic.data.productSku
+      );
 
-    return product?.skus?.find(
-      (sku: any) =>
-        sku.sku === validAnalytic.data.productSku &&
-        sku.productCategory == "Hair" &&
-        sku.quantityAvailable > 0
-    );
+      // Find all bag items for these SKUs
+      const bagItems = await ctx.db
+        .query("bagItem")
+        .filter((q) => q.eq(q.field("storeFrontUserId"), args.id))
+        .collect()
+        .then((items) =>
+          items.filter((item) => productSkus.includes(item.productSku))
+        );
+
+      // Create a Set of SKUs that are in the bag for faster lookup
+      const bagSkus = new Set(bagItems.map((item) => item.productSku));
+
+      // Try each analytic in order until we find an available product
+      for (const analytic of allTimeAnalytics) {
+        if (bagSkus.has(analytic.data.productSku)) continue;
+
+        const availableSku = await isSkuAvailable(
+          analytic.data.product,
+          analytic.storeId,
+          analytic.data.productSku
+        );
+
+        if (availableSku) {
+          console.log(
+            `Found available upsell product for user ${args.id}: ${availableSku.sku}`
+          );
+          return availableSku;
+        }
+      }
+    }
+
+    console.log(`No available products found for user ${args.id}`);
+    return null;
   },
 });
 

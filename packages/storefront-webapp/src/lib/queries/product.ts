@@ -9,6 +9,7 @@ import { FilterParams } from "@/api/types";
 import { DEFAULT_STALE_TIME } from "@/lib/constants";
 import { queryOptions } from "@tanstack/react-query";
 import { useQueryEnabled } from "@/hooks/useQueryEnabled";
+import { getProductViewCount } from "@/api/analytics";
 
 export const useProductQueries = () => {
   const queryEnabled = useQueryEnabled();
@@ -50,6 +51,13 @@ export const useProductQueries = () => {
         queryFn: () => getProduct(productId),
         staleTime: DEFAULT_STALE_TIME,
         enabled: queryEnabled,
+      }),
+    viewCount: ({ productId }: { productId: string }) =>
+      queryOptions({
+        queryKey: ["productViewCount", productId],
+        queryFn: () => getProductViewCount(productId),
+        staleTime: DEFAULT_STALE_TIME,
+        enabled: queryEnabled && !!productId,
       }),
   };
 };

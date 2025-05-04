@@ -13,6 +13,45 @@ interface PromoAlertProps {
   setIsOpen: Dispatch<SetStateAction<boolean>>;
 }
 
+function getPromoAlertCopy(itemsLeft: number) {
+  if (itemsLeft <= 0) {
+    return {
+      tagline: "All gifts claimed!",
+      body: "Thanks for the love! Our complimentary mini straightener (GHS 180 value) is all gone — stay tuned for the next drop!",
+    };
+  } else if (itemsLeft <= 2) {
+    return {
+      tagline: `Last chance — only ${itemsLeft} left!`,
+      body: "Final chance to score a complimentary mini straightener (GHS 180 value) with your purchase!",
+    };
+  } else if (itemsLeft <= 5) {
+    return {
+      tagline: `Almost gone — only ${itemsLeft} left!`,
+      body: "Hurry! Grab your complimentary mini straightener (GHS 180 value) before they're all claimed!",
+    };
+  } else if (itemsLeft <= 10) {
+    return {
+      tagline: `Going fast — only ${itemsLeft} left!`,
+      body: "Act now to get a complimentary mini straightener (GHS 180 value) with your purchase!",
+    };
+  } else if (itemsLeft <= 20) {
+    return {
+      tagline: `Hurry — only ${itemsLeft} left!`,
+      body: "Limited stock! Secure your complimentary mini straightener (GHS 180 value) today.",
+    };
+  } else if (itemsLeft <= 39) {
+    return {
+      tagline: `Moving fast — only ${itemsLeft} left!`,
+      body: "Claim your complimentary mini straightener (GHS 180 value) while supplies last!",
+    };
+  } else {
+    return {
+      tagline: "Limited-time free gift!",
+      body: "Score a complimentary mini straightener (GHS 180 value) with your purchase while supplies last!",
+    };
+  }
+}
+
 export function PromoAlert({ isOpen, setIsOpen }: PromoAlertProps) {
   const alertRef = useRef<HTMLDivElement>(null);
   const promoCodeQueries = usePromoCodesQueries();
@@ -74,6 +113,8 @@ export function PromoAlert({ isOpen, setIsOpen }: PromoAlertProps) {
       ? promoItem.quantity - promoItem.quantityClaimed
       : 0;
 
+  const { tagline, body } = getPromoAlertCopy(itemsLeft);
+
   return (
     <AnimatePresence>
       {isOpen && (
@@ -97,7 +138,7 @@ export function PromoAlert({ isOpen, setIsOpen }: PromoAlertProps) {
               ease: [0.4, 0, 1, 1],
             },
           }}
-          className="fixed top-[80px] left-0 right-0 z-10 mx-auto max-w-md border rounded-md p-4 px-6 md:px-4 mx-4 md:mx-auto shadow-lg transition-colors duration-300 bg-black/30 backdrop-blur-sm border-white/20"
+          className="fixed top-[80px] left-0 right-0 z-10 max-w-md border rounded-md p-4 px-6 mx-4 md:mx-auto shadow-lg transition-colors duration-300 bg-black/30 backdrop-blur-sm border-white/20"
         >
           <div className="relative">
             <button
@@ -116,14 +157,9 @@ export function PromoAlert({ isOpen, setIsOpen }: PromoAlertProps) {
               />
 
               <div className="space-y-2">
-                <p className="font-medium text-sm text-white">
-                  Almost Gone! Only {itemsLeft} left
-                </p>
+                <p className="font-medium text-sm text-white">{tagline}</p>
                 <div className="space-y-4">
-                  <p className="text-sm text-white/80">
-                    Our free gift promotion is almost over. Shop now to claim
-                    yours!
-                  </p>
+                  <p className="text-sm text-white/80">{body}</p>
                   <div className="mt-2">
                     <Link
                       to="/shop/$categorySlug"
