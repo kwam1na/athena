@@ -8,7 +8,7 @@ import { useMutation, useQuery } from "convex/react";
 import { useEffect, useState } from "react";
 import { api } from "~/convex/_generated/api";
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
-import { currencyFormatter } from "~/src/lib/utils";
+import { capitalizeWords, currencyFormatter } from "~/src/lib/utils";
 import View from "../View";
 import { BestSellersDialog } from "./BestSellersDialog";
 import { Link } from "@tanstack/react-router";
@@ -18,6 +18,7 @@ import { PlusIcon } from "lucide-react";
 import { toast } from "sonner";
 import { ProductSku } from "~/types";
 import { getOrigin } from "~/src/lib/navigationUtils";
+import { getProductName } from "~/src/lib/productUtils";
 
 export const BestSellers = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -132,7 +133,7 @@ export const BestSellers = () => {
                           />
                           <div className="flex flex-col gap-2">
                             <p className="text-sm">
-                              {bestSeller?.productSku?.productName}
+                              {getProductName(bestSeller?.productSku)}
                             </p>
                             <p className="text-xs text-muted-foreground">
                               {formatter.format(bestSeller?.productSku?.price)}

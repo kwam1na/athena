@@ -36,6 +36,7 @@ export function getAddressString(address: Address) {
 }
 
 export function capitalizeWords(str: string): string {
+  if (!str) return str;
   return str
     .split(" ")
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
@@ -62,12 +63,12 @@ export function formatDate(timestamp: number) {
 export const getProductName = (item: any) => {
   if (item.productCategory == "Hair") {
     if (!item.colorName) return capitalizeWords(item.productName);
-    return `${item.length}" ${capitalizeWords(item.colorName)} ${item.productName}`;
+    return `${item.length}" ${capitalizeWords(item.colorName)} ${capitalizeWords(item.productName)}`;
   }
 
   if (item.length) {
-    return `${item.length}" ${item.productName}`;
+    return `${item.length}" ${capitalizeWords(item.productName)}`;
   }
 
-  return item.productName;
+  return capitalizeWords(item.productName);
 };

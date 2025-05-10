@@ -43,7 +43,7 @@ export const productColumns: ColumnDef<Product>[] = [
                 src={sku?.images[0]}
               />
             ) : (
-              <div className="aspect-square w-12 h-12 bg-gray-100 rounded-md" />
+              <div className="aspect-square w-16 h-16 bg-gray-100 rounded-md" />
             )}
             <div className="flex items-center gap-4">
               <span className="max-w-[500px] truncate font-medium">

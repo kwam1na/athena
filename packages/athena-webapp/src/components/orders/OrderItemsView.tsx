@@ -9,7 +9,6 @@ import {
   MessageSquare,
 } from "lucide-react";
 import View from "../View";
-import { Button } from "../ui/button";
 import { useOnlineOrder } from "~/src/contexts/OnlineOrderContext";
 import { getProductName } from "~/src/lib/productUtils";
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
@@ -145,7 +144,7 @@ function OrderItem({ item, order }: { item: any; order: any }) {
             </div>
           </div>
         ) : (
-          <div className="w-40 h-40 bg-gray-100 rounded-lg" />
+          <div className="w-24 h-24 bg-gray-100 rounded-lg" />
         )}
       </Link>
       <div className="space-y-8">

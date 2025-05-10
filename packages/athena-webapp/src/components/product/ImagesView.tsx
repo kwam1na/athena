@@ -1,4 +1,10 @@
-import { Check, CheckCircle2 } from "lucide-react";
+import {
+  AlertOctagon,
+  AlertTriangle,
+  Check,
+  CheckCircle2,
+  EyeOff,
+} from "lucide-react";
 import View from "../View";
 import { useOnlineOrder } from "~/src/contexts/OnlineOrderContext";
 import { currencyFormatter, getRelativeTime } from "~/src/lib/utils";
@@ -35,6 +41,13 @@ export function ImagesView() {
               />
             );
           })}
+
+          {activeProductVariant.images.length === 0 && (
+            <div className="w-80 h-80 border border-dashed rounded-lg flex items-center justify-center text-muted-foreground">
+              <AlertOctagon className="w-4 h-4 mr-2" />
+              <p className="text-sm">Missing images</p>
+            </div>
+          )}
         </div>
         <Button
           variant={"outline"}
