@@ -36,7 +36,9 @@ import { Route as LayoutShopProductProductSlugImport } from './routes/_layout/sh
 import { Route as LayoutShopLayoutShopCategorySlugIndexImport } from './routes/_layout/_shopLayout/shop/$categorySlug/index'
 import { Route as LayoutOrdersLayoutShopOrdersIndexImport } from './routes/_layout/_ordersLayout/shop/orders/index'
 import { Route as LayoutShopLayoutShopCategorySlugSubcategorySlugImport } from './routes/_layout/_shopLayout/shop/$categorySlug/$subcategorySlug'
-import { Route as LayoutOrdersLayoutShopOrdersOrderIdImport } from './routes/_layout/_ordersLayout/shop/orders/$orderId'
+import { Route as LayoutOrdersLayoutShopOrdersOrderIdIndexImport } from './routes/_layout/_ordersLayout/shop/orders/$orderId/index'
+import { Route as LayoutOrdersLayoutShopOrdersOrderIdReviewImport } from './routes/_layout/_ordersLayout/shop/orders/$orderId/review'
+import { Route as LayoutOrdersLayoutShopOrdersOrderIdOrderItemIdReviewImport } from './routes/_layout/_ordersLayout/shop/orders/$orderId/$orderItemId.review'
 
 // Create/Update Routes
 
@@ -197,10 +199,24 @@ const LayoutShopLayoutShopCategorySlugSubcategorySlugRoute =
     getParentRoute: () => LayoutShopLayoutRoute,
   } as any)
 
-const LayoutOrdersLayoutShopOrdersOrderIdRoute =
-  LayoutOrdersLayoutShopOrdersOrderIdImport.update({
-    id: '/shop/orders/$orderId',
-    path: '/shop/orders/$orderId',
+const LayoutOrdersLayoutShopOrdersOrderIdIndexRoute =
+  LayoutOrdersLayoutShopOrdersOrderIdIndexImport.update({
+    id: '/shop/orders/$orderId/',
+    path: '/shop/orders/$orderId/',
+    getParentRoute: () => LayoutOrdersLayoutRoute,
+  } as any)
+
+const LayoutOrdersLayoutShopOrdersOrderIdReviewRoute =
+  LayoutOrdersLayoutShopOrdersOrderIdReviewImport.update({
+    id: '/shop/orders/$orderId/review',
+    path: '/shop/orders/$orderId/review',
+    getParentRoute: () => LayoutOrdersLayoutRoute,
+  } as any)
+
+const LayoutOrdersLayoutShopOrdersOrderIdOrderItemIdReviewRoute =
+  LayoutOrdersLayoutShopOrdersOrderIdOrderItemIdReviewImport.update({
+    id: '/shop/orders/$orderId/$orderItemId/review',
+    path: '/shop/orders/$orderId/$orderItemId/review',
     getParentRoute: () => LayoutOrdersLayoutRoute,
   } as any)
 
@@ -362,13 +378,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ShopCheckoutVerifyIndexImport
       parentRoute: typeof rootRoute
     }
-    '/_layout/_ordersLayout/shop/orders/$orderId': {
-      id: '/_layout/_ordersLayout/shop/orders/$orderId'
-      path: '/shop/orders/$orderId'
-      fullPath: '/shop/orders/$orderId'
-      preLoaderRoute: typeof LayoutOrdersLayoutShopOrdersOrderIdImport
-      parentRoute: typeof LayoutOrdersLayoutImport
-    }
     '/_layout/_shopLayout/shop/$categorySlug/$subcategorySlug': {
       id: '/_layout/_shopLayout/shop/$categorySlug/$subcategorySlug'
       path: '/shop/$categorySlug/$subcategorySlug'
@@ -390,21 +399,48 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutShopLayoutShopCategorySlugIndexImport
       parentRoute: typeof LayoutShopLayoutImport
     }
+    '/_layout/_ordersLayout/shop/orders/$orderId/review': {
+      id: '/_layout/_ordersLayout/shop/orders/$orderId/review'
+      path: '/shop/orders/$orderId/review'
+      fullPath: '/shop/orders/$orderId/review'
+      preLoaderRoute: typeof LayoutOrdersLayoutShopOrdersOrderIdReviewImport
+      parentRoute: typeof LayoutOrdersLayoutImport
+    }
+    '/_layout/_ordersLayout/shop/orders/$orderId/': {
+      id: '/_layout/_ordersLayout/shop/orders/$orderId/'
+      path: '/shop/orders/$orderId'
+      fullPath: '/shop/orders/$orderId'
+      preLoaderRoute: typeof LayoutOrdersLayoutShopOrdersOrderIdIndexImport
+      parentRoute: typeof LayoutOrdersLayoutImport
+    }
+    '/_layout/_ordersLayout/shop/orders/$orderId/$orderItemId/review': {
+      id: '/_layout/_ordersLayout/shop/orders/$orderId/$orderItemId/review'
+      path: '/shop/orders/$orderId/$orderItemId/review'
+      fullPath: '/shop/orders/$orderId/$orderItemId/review'
+      preLoaderRoute: typeof LayoutOrdersLayoutShopOrdersOrderIdOrderItemIdReviewImport
+      parentRoute: typeof LayoutOrdersLayoutImport
+    }
   }
 }
 
 // Create and export the route tree
 
 interface LayoutOrdersLayoutRouteChildren {
-  LayoutOrdersLayoutShopOrdersOrderIdRoute: typeof LayoutOrdersLayoutShopOrdersOrderIdRoute
   LayoutOrdersLayoutShopOrdersIndexRoute: typeof LayoutOrdersLayoutShopOrdersIndexRoute
+  LayoutOrdersLayoutShopOrdersOrderIdReviewRoute: typeof LayoutOrdersLayoutShopOrdersOrderIdReviewRoute
+  LayoutOrdersLayoutShopOrdersOrderIdIndexRoute: typeof LayoutOrdersLayoutShopOrdersOrderIdIndexRoute
+  LayoutOrdersLayoutShopOrdersOrderIdOrderItemIdReviewRoute: typeof LayoutOrdersLayoutShopOrdersOrderIdOrderItemIdReviewRoute
 }
 
 const LayoutOrdersLayoutRouteChildren: LayoutOrdersLayoutRouteChildren = {
-  LayoutOrdersLayoutShopOrdersOrderIdRoute:
-    LayoutOrdersLayoutShopOrdersOrderIdRoute,
   LayoutOrdersLayoutShopOrdersIndexRoute:
     LayoutOrdersLayoutShopOrdersIndexRoute,
+  LayoutOrdersLayoutShopOrdersOrderIdReviewRoute:
+    LayoutOrdersLayoutShopOrdersOrderIdReviewRoute,
+  LayoutOrdersLayoutShopOrdersOrderIdIndexRoute:
+    LayoutOrdersLayoutShopOrdersOrderIdIndexRoute,
+  LayoutOrdersLayoutShopOrdersOrderIdOrderItemIdReviewRoute:
+    LayoutOrdersLayoutShopOrdersOrderIdOrderItemIdReviewRoute,
 }
 
 const LayoutOrdersLayoutRouteWithChildren =
@@ -474,10 +510,12 @@ export interface FileRoutesByFullPath {
   '/shop/checkout/$sessionIdSlug': typeof ShopCheckoutSessionIdSlugIndexRoute
   '/shop/checkout/complete': typeof ShopCheckoutCompleteIndexRoute
   '/shop/checkout/verify': typeof ShopCheckoutVerifyIndexRoute
-  '/shop/orders/$orderId': typeof LayoutOrdersLayoutShopOrdersOrderIdRoute
   '/shop/$categorySlug/$subcategorySlug': typeof LayoutShopLayoutShopCategorySlugSubcategorySlugRoute
   '/shop/orders': typeof LayoutOrdersLayoutShopOrdersIndexRoute
   '/shop/$categorySlug': typeof LayoutShopLayoutShopCategorySlugIndexRoute
+  '/shop/orders/$orderId/review': typeof LayoutOrdersLayoutShopOrdersOrderIdReviewRoute
+  '/shop/orders/$orderId': typeof LayoutOrdersLayoutShopOrdersOrderIdIndexRoute
+  '/shop/orders/$orderId/$orderItemId/review': typeof LayoutOrdersLayoutShopOrdersOrderIdOrderItemIdReviewRoute
 }
 
 export interface FileRoutesByTo {
@@ -501,10 +539,12 @@ export interface FileRoutesByTo {
   '/shop/checkout/$sessionIdSlug': typeof ShopCheckoutSessionIdSlugIndexRoute
   '/shop/checkout/complete': typeof ShopCheckoutCompleteIndexRoute
   '/shop/checkout/verify': typeof ShopCheckoutVerifyIndexRoute
-  '/shop/orders/$orderId': typeof LayoutOrdersLayoutShopOrdersOrderIdRoute
   '/shop/$categorySlug/$subcategorySlug': typeof LayoutShopLayoutShopCategorySlugSubcategorySlugRoute
   '/shop/orders': typeof LayoutOrdersLayoutShopOrdersIndexRoute
   '/shop/$categorySlug': typeof LayoutShopLayoutShopCategorySlugIndexRoute
+  '/shop/orders/$orderId/review': typeof LayoutOrdersLayoutShopOrdersOrderIdReviewRoute
+  '/shop/orders/$orderId': typeof LayoutOrdersLayoutShopOrdersOrderIdIndexRoute
+  '/shop/orders/$orderId/$orderItemId/review': typeof LayoutOrdersLayoutShopOrdersOrderIdOrderItemIdReviewRoute
 }
 
 export interface FileRoutesById {
@@ -531,10 +571,12 @@ export interface FileRoutesById {
   '/shop/checkout/$sessionIdSlug/': typeof ShopCheckoutSessionIdSlugIndexRoute
   '/shop/checkout/complete/': typeof ShopCheckoutCompleteIndexRoute
   '/shop/checkout/verify/': typeof ShopCheckoutVerifyIndexRoute
-  '/_layout/_ordersLayout/shop/orders/$orderId': typeof LayoutOrdersLayoutShopOrdersOrderIdRoute
   '/_layout/_shopLayout/shop/$categorySlug/$subcategorySlug': typeof LayoutShopLayoutShopCategorySlugSubcategorySlugRoute
   '/_layout/_ordersLayout/shop/orders/': typeof LayoutOrdersLayoutShopOrdersIndexRoute
   '/_layout/_shopLayout/shop/$categorySlug/': typeof LayoutShopLayoutShopCategorySlugIndexRoute
+  '/_layout/_ordersLayout/shop/orders/$orderId/review': typeof LayoutOrdersLayoutShopOrdersOrderIdReviewRoute
+  '/_layout/_ordersLayout/shop/orders/$orderId/': typeof LayoutOrdersLayoutShopOrdersOrderIdIndexRoute
+  '/_layout/_ordersLayout/shop/orders/$orderId/$orderItemId/review': typeof LayoutOrdersLayoutShopOrdersOrderIdOrderItemIdReviewRoute
 }
 
 export interface FileRouteTypes {
@@ -560,10 +602,12 @@ export interface FileRouteTypes {
     | '/shop/checkout/$sessionIdSlug'
     | '/shop/checkout/complete'
     | '/shop/checkout/verify'
-    | '/shop/orders/$orderId'
     | '/shop/$categorySlug/$subcategorySlug'
     | '/shop/orders'
     | '/shop/$categorySlug'
+    | '/shop/orders/$orderId/review'
+    | '/shop/orders/$orderId'
+    | '/shop/orders/$orderId/$orderItemId/review'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -586,10 +630,12 @@ export interface FileRouteTypes {
     | '/shop/checkout/$sessionIdSlug'
     | '/shop/checkout/complete'
     | '/shop/checkout/verify'
-    | '/shop/orders/$orderId'
     | '/shop/$categorySlug/$subcategorySlug'
     | '/shop/orders'
     | '/shop/$categorySlug'
+    | '/shop/orders/$orderId/review'
+    | '/shop/orders/$orderId'
+    | '/shop/orders/$orderId/$orderItemId/review'
   id:
     | '__root__'
     | '/'
@@ -614,10 +660,12 @@ export interface FileRouteTypes {
     | '/shop/checkout/$sessionIdSlug/'
     | '/shop/checkout/complete/'
     | '/shop/checkout/verify/'
-    | '/_layout/_ordersLayout/shop/orders/$orderId'
     | '/_layout/_shopLayout/shop/$categorySlug/$subcategorySlug'
     | '/_layout/_ordersLayout/shop/orders/'
     | '/_layout/_shopLayout/shop/$categorySlug/'
+    | '/_layout/_ordersLayout/shop/orders/$orderId/review'
+    | '/_layout/_ordersLayout/shop/orders/$orderId/'
+    | '/_layout/_ordersLayout/shop/orders/$orderId/$orderItemId/review'
   fileRoutesById: FileRoutesById
 }
 
@@ -707,8 +755,10 @@ export const routeTree = rootRoute
       "filePath": "_layout/_ordersLayout.tsx",
       "parent": "/_layout",
       "children": [
-        "/_layout/_ordersLayout/shop/orders/$orderId",
-        "/_layout/_ordersLayout/shop/orders/"
+        "/_layout/_ordersLayout/shop/orders/",
+        "/_layout/_ordersLayout/shop/orders/$orderId/review",
+        "/_layout/_ordersLayout/shop/orders/$orderId/",
+        "/_layout/_ordersLayout/shop/orders/$orderId/$orderItemId/review"
       ]
     },
     "/_layout/_shopLayout": {
@@ -774,10 +824,6 @@ export const routeTree = rootRoute
     "/shop/checkout/verify/": {
       "filePath": "shop/checkout/verify.index.tsx"
     },
-    "/_layout/_ordersLayout/shop/orders/$orderId": {
-      "filePath": "_layout/_ordersLayout/shop/orders/$orderId.tsx",
-      "parent": "/_layout/_ordersLayout"
-    },
     "/_layout/_shopLayout/shop/$categorySlug/$subcategorySlug": {
       "filePath": "_layout/_shopLayout/shop/$categorySlug/$subcategorySlug.tsx",
       "parent": "/_layout/_shopLayout"
@@ -789,6 +835,18 @@ export const routeTree = rootRoute
     "/_layout/_shopLayout/shop/$categorySlug/": {
       "filePath": "_layout/_shopLayout/shop/$categorySlug/index.tsx",
       "parent": "/_layout/_shopLayout"
+    },
+    "/_layout/_ordersLayout/shop/orders/$orderId/review": {
+      "filePath": "_layout/_ordersLayout/shop/orders/$orderId/review.tsx",
+      "parent": "/_layout/_ordersLayout"
+    },
+    "/_layout/_ordersLayout/shop/orders/$orderId/": {
+      "filePath": "_layout/_ordersLayout/shop/orders/$orderId/index.tsx",
+      "parent": "/_layout/_ordersLayout"
+    },
+    "/_layout/_ordersLayout/shop/orders/$orderId/$orderItemId/review": {
+      "filePath": "_layout/_ordersLayout/shop/orders/$orderId/$orderItemId.review.tsx",
+      "parent": "/_layout/_ordersLayout"
     }
   }
 }

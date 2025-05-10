@@ -46,21 +46,23 @@ export default function StoreView() {
   return (
     <View header={<Navigation />}>
       {noStoresPresent && (
-        <EmptyState
-          icon={<StoreIcon className="w-16 h-16 text-muted-foreground" />}
-          text={
-            <div className="flex gap-1 text-sm">
-              <p className="text-muted-foreground">No stores for</p>
-              <p className="font-medium">{activeOrganization?.name}</p>
-            </div>
-          }
-          cta={
-            <Button variant={"outline"} onClick={() => storeModal.onOpen()}>
-              <PlusIcon className="w-3 h-3 mr-2" />
-              Add store
-            </Button>
-          }
-        />
+        <div className="flex items-center justify-center min-h-[60vh] w-full">
+          <EmptyState
+            icon={<StoreIcon className="w-16 h-16 text-muted-foreground" />}
+            title={
+              <div className="flex gap-1 text-sm">
+                <p className="text-muted-foreground">No stores for</p>
+                <p className="font-medium">{activeOrganization?.name}</p>
+              </div>
+            }
+            cta={
+              <Button variant={"outline"} onClick={() => storeModal.onOpen()}>
+                <PlusIcon className="w-3 h-3 mr-2" />
+                Add store
+              </Button>
+            }
+          />
+        </div>
       )}
     </View>
   );

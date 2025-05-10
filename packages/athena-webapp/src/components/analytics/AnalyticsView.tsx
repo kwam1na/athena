@@ -23,7 +23,7 @@ const StoreVisitors = () => {
 
   return (
     <div className="flex items-center gap-16 border rounded-lg p-4">
-      <div className="space-y-4">
+      <div className="space-y-2">
         <p className="font-medium text-2xl">
           {formatNumber(uniqueVisitorsToday)}
         </p>
@@ -34,7 +34,7 @@ const StoreVisitors = () => {
         </p>
       </div>
 
-      <div className="space-y-4">
+      <div className="space-y-2">
         <p className="font-medium text-2xl">{formatNumber(lifetimeVisitors)}</p>
         <p className="text-sm text-muted-foreground">Lifetime visitors</p>
       </div>
@@ -72,9 +72,11 @@ export default function AnalyticsView() {
       header={<Navigation />}
     >
       <FadeIn className="space-y-8 py-8">
-        <div className="flex items-start gap-16">
-          <StoreInsights storeId={activeStore._id} />
-          <StoreVisitors />
+        <div className="flex">
+          {/* <StoreInsights storeId={activeStore._id} /> */}
+          <div className="ml-auto">
+            <StoreVisitors />
+          </div>
         </div>
         <div className="grid grid-cols-2 gap-16">
           <AnalyticsProducts items={items} />

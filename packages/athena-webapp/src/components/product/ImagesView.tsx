@@ -19,7 +19,7 @@ export function ImagesView() {
       hideBorder
       hideHeaderBottomBorder
       className="h-auto w-full"
-      header={<p className="text-sm text-sm text-muted-foreground">Images</p>}
+      header={null}
     >
       <div className="space-y-8">
         <div className="py-4 grid grid-cols-2 gap-2">

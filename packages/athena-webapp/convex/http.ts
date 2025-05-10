@@ -20,6 +20,7 @@ import {
   storefrontRoutes,
   upsellRoutes,
   userRoutes,
+  reviewRoutes,
 } from "./http/domains/storeFront/routes";
 import { httpRouter } from "convex/server";
 import { guestRoutes } from "./http/domains/storeFront/routes/guest";
@@ -76,6 +77,8 @@ app.route("/users", userRoutes);
 app.route("/checkout", checkoutRoutes);
 
 app.route("/orders", onlineOrderRoutes);
+
+app.route("/reviews", reviewRoutes);
 
 app.get("/.well-known/openid-configuration", async (c) => {
   const [httpAction] = http.lookup(

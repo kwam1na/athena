@@ -6,3 +6,4 @@ export * from "./user";
 export * from "./me";
 export * from "./onlineOrder";
 export * from "./upsells";
+export * from "./reviews";

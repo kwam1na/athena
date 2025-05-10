@@ -2,10 +2,26 @@ import { NotFoundView } from "@/components/states/not-found/NotFoundView";
 import StoreView from "@/components/StoreView";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { useGetActiveOrganization } from "@/hooks/useGetOrganizations";
+import { useEffect } from "react";
+import { useNavigate, useParams } from "@tanstack/react-router";
 // import { getOrganization } from '@/server-actions/organizations'
 // import { getProducts } from '@/server-actions/products'
 // import { getStore } from '@/server-actions/stores'
 import { createFileRoute, notFound } from "@tanstack/react-router";
+
+function StoreRootRedirect() {
+  const navigate = useNavigate();
+  const { orgUrlSlug, storeUrlSlug } = useParams({ strict: false });
+  useEffect(() => {
+    if (orgUrlSlug && storeUrlSlug) {
+      navigate({
+        to: "/$orgUrlSlug/store/$storeUrlSlug/analytics",
+        params: { orgUrlSlug, storeUrlSlug },
+      });
+    }
+  }, [orgUrlSlug, storeUrlSlug]);
+  return null;
+}
 
 export const Route = createFileRoute(
   "/_authed/$orgUrlSlug/store/$storeUrlSlug/"
@@ -49,7 +65,7 @@ export const Route = createFileRoute(
     };
   },
 
-  component: StoreView,
+  component: StoreRootRedirect,
 
   notFoundComponent: ({ data }) => {
     const { orgUrlSlug, storeUrlSlug } = Route.useParams();

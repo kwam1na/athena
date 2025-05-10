@@ -75,3 +75,9 @@ export type Analytic = Doc<"analytics">;
 export type ComplimentaryProduct = Doc<"complimentaryProduct"> & {
   productSku: ProductSku;
 };
+
+export type Review = Doc<"review"> & {
+  productImage?: string | null;
+  productSku: ProductSku;
+  user: Guest | StoreFrontUser;
+};

@@ -14,11 +14,8 @@ export const useProductWithNoImagesNotification = () => {
         toastIdRef.current = toast("Some products have no images", {
           icon: <AlertOctagon className="w-4 h-4 text-[#1e3a8a]" />,
           duration: Infinity,
-          className: "border border-blue-200",
-          style: {
-            backgroundColor: "#e0edff", // light blue
-            color: "#1e3a8a", // dark blue text
-          },
+          className: "border border-blue-200 bg-[#e0edff] text-[#1e3a8a]",
+          style: {},
           description: (
             <Link
               className="text-blue-600 hover:text-blue-800 hover:underline"

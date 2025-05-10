@@ -12,4 +12,5 @@ export * from "./onlineOrder/onlineOrderItem";
 export * from "./storeFrontVerificationCode";
 export * from "./storeFrontUser";
 export * from "./storeFrontSession";
+export * from "./review";
 export * from "./supportTicket";

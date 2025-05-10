@@ -290,9 +290,19 @@ export default function ShoppingBag() {
                           <h2 className="font-medium">
                             {item && getProductName(item)}
                           </h2>
-                          <p className="text-xs text-muted-foreground">
-                            {priceLabel}
-                          </p>
+                          {priceLabel != "Free" && (
+                            <p className="text-xs text-muted-foreground">
+                              {priceLabel}
+                            </p>
+                          )}
+                          {priceLabel == "Free" && (
+                            <div className="flex items-center gap-2 text-xs">
+                              <p className="text-muted-foreground line-through">
+                                GHS 180
+                              </p>
+                              <p className="text-xs">Free</p>
+                            </div>
+                          )}
                           <select
                             value={item.quantity}
                             onChange={(e) =>

@@ -14,14 +14,14 @@ export const OrderStatus = ({ order }: { order: any }) => {
       variant="outline"
       className={`rounded-md px-2 py-1 ${
         order.status.includes("refunded")
-          ? "bg-red-50 text-red-600"
+          ? "bg-red-100 text-red-600"
           : order.status === "delivered" || order.status === "picked-up"
-            ? "bg-green-50 text-green-600"
+            ? "bg-green-100 text-green-600"
             : order.status === "out-for-delivery"
-              ? "bg-blue-50 text-blue-600"
+              ? "bg-blue-100 text-blue-600"
               : order.status.includes("ready")
-                ? "bg-emerald-50 text-emerald-600"
-                : "bg-gray-50 text-gray-600"
+                ? "bg-emerald-100 text-emerald-600"
+                : "bg-zinc-100 text-zinc-600"
       }`}
     >
       <div className="flex items-center">

@@ -47,6 +47,7 @@ export default function ProductPage() {
       productImageUrl: selectedSku?.images?.[0],
     },
     isReady: !!selectedSku,
+    deps: [selectedSku?.sku],
   });
 
   useEffect(() => {
@@ -127,14 +128,17 @@ export default function ProductPage() {
 
             <PickupDetails showShippingPolicy={showShippingPolicy} />
 
-            <Reviews />
+            <Reviews
+              productId={product._id}
+              productCategory={(product as any).categoryName}
+            />
           </motion.div>
         </div>
 
         {/* Desktop UI: Grid layout */}
         <motion.main
           ref={pageRef}
-          className="hidden md:grid container mx-auto grid-cols-1 xl:grid-cols-4 gap-12 pb-16"
+          className="hidden md:grid container mx-auto grid-cols-1 xl:grid-cols-4 gap-12 pb-32"
         >
           <motion.div
             initial={{ opacity: 0 }}
@@ -187,7 +191,10 @@ export default function ProductPage() {
 
             <PickupDetails showShippingPolicy={showShippingPolicy} />
 
-            <Reviews />
+            <Reviews
+              productId={product._id}
+              productCategory={(product as any).categoryName}
+            />
           </motion.div>
         </motion.main>
       </Sheet>

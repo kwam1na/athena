@@ -1,9 +1,11 @@
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
+import { LucideIcon } from "lucide-react";
 
 interface EmptyStateProps {
   icon: React.ReactNode;
-  text: React.ReactNode | string;
+  title: string | React.ReactNode;
+  description?: string;
   hideButtonIcon?: boolean;
   cta?: React.ReactNode;
   action?: {
@@ -14,13 +16,14 @@ interface EmptyStateProps {
   };
 }
 
-export const EmptyState: React.FC<EmptyStateProps> = ({
-  cta,
+export function EmptyState({
   icon,
-  text,
+  title,
+  description,
+  cta,
   action,
   hideButtonIcon,
-}) => {
+}: EmptyStateProps) {
   const { type, params, handler } = action || {};
 
   const onClick = () => {
@@ -40,13 +43,14 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
   };
 
   return (
-    <div className="flex flex-col items-center justify-center h-[50vh] gap-4">
-      <div>{icon}</div>
-      {typeof text == "string" ? (
-        <p className="text-sm text-center text-muted-foreground">{text}</p>
+    <div className="flex flex-col items-center justify-center py-12 text-center">
+      <div className="mb-4 text-muted-foreground">{icon}</div>
+      {typeof title === "string" ? (
+        <h3 className="text-lg font-medium">{title}</h3>
       ) : (
-        text
+        title
       )}
+      <p className="mt-2 text-sm text-muted-foreground">{description}</p>
       {action && (
         <Button onClick={onClick}>
           {!hideButtonIcon && <Plus className="mr-2 h-4 w-4" />}{" "}
@@ -56,4 +60,4 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
       {cta}
     </div>
   );
-};
+}

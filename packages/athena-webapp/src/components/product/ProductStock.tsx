@@ -1,4 +1,3 @@
-import { ProductSku } from "~/types";
 import { ProductVariant } from "../add-product/ProductStock";
 import { AlertOctagonIcon, AlertTriangle, Check } from "lucide-react";
 

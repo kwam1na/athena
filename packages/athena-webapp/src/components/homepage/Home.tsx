@@ -64,7 +64,7 @@ export default function Home() {
           <div className="container mx-auto">
             <EmptyState
               icon={<Store className="w-16 h-16 text-muted-foreground" />}
-              text={
+              title={
                 <div className="flex gap-1 text-sm">
                   <p className="text-muted-foreground">No products found in</p>
                   <p className="font-medium">{activeStore.name}</p>

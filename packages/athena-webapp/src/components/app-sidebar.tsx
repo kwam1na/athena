@@ -31,6 +31,10 @@ import {
   AlertOctagon,
   PackageCheckIcon,
   PackageOpenIcon,
+  ChartNoAxesColumn,
+  MessageCircle,
+  MessageCircleDashed,
+  MessageCircleMore,
 } from "lucide-react";
 import { AppHeader } from "./Navbar";
 import { Link } from "@tanstack/react-router";
@@ -62,6 +66,11 @@ export function AppSidebar() {
 
   const openOrders = orders?.filter((o: any) => o.status === "open")?.length;
 
+  const unapprovedReviewsCount = useQuery(
+    api.storeFront.reviews.getUnapprovedReviewsCount,
+    activeStore?._id ? { storeId: activeStore._id } : "skip"
+  );
+
   if (!activeStore || !activeOrganization) {
     return null;
   }
@@ -92,7 +101,7 @@ export function AppSidebar() {
                     })}
                     className="flex items-center"
                   >
-                    <ChartNoAxesCombined className="w-4 h-4" />
+                    <ChartNoAxesColumn className="w-4 h-4" />
                     <p className="font-medium">Analytics</p>
                   </Link>
                 </SidebarMenuButton>
@@ -290,7 +299,7 @@ export function AppSidebar() {
                   </SidebarMenuSub>
                 )}
 
-                <SidebarMenuSub>
+                {/* <SidebarMenuSub>
                   <SidebarMenuSubItem>
                     <SidebarMenuButton asChild>
                       <Link
@@ -307,7 +316,7 @@ export function AppSidebar() {
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuSubItem>
-                </SidebarMenuSub>
+                </SidebarMenuSub> */}
               </SidebarMenuItem>
 
               <SidebarMenuItem>
@@ -323,6 +332,30 @@ export function AppSidebar() {
                   >
                     <BadgePercent className="w-4 h-4" />
                     <p className="font-medium">Promo codes</p>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild>
+                  <Link
+                    to="/$orgUrlSlug/store/$storeUrlSlug/reviews/new"
+                    params={(p) => ({
+                      ...p,
+                      orgUrlSlug: activeOrganization?.slug,
+                      storeUrlSlug: activeStore?.slug,
+                    })}
+                    className="flex items-center justify-between"
+                  >
+                    <div className="flex items-center">
+                      <MessageCircleMore className="w-4 h-4 mr-2" />
+                      <p className="font-medium">Reviews</p>
+                    </div>
+                    {Boolean(unapprovedReviewsCount) && (
+                      <p className="text-xs font-medium">
+                        {unapprovedReviewsCount}
+                      </p>
+                    )}
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -419,9 +452,11 @@ export function AppSidebar() {
       </SidebarContent>
 
       <SidebarFooter>
-        <div className="flex items-center">
-          <UserCircle className="w-4 h-4 mr-1" />
-          <p className="text-sm font-medium">{user?.email}</p>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center">
+            <UserCircle className="w-4 h-4 mr-1" />
+            <p className="text-sm font-medium">{user?.email}</p>
+          </div>
         </div>
       </SidebarFooter>
     </Sidebar>

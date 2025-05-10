@@ -4,6 +4,8 @@ import { SellingFastSignal, SoldOutBadge } from "./InventoryLevelBadge";
 import { useProductQueries } from "@/lib/queries/product";
 import { EyeIcon } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
+import { useGetProductReviewsQuery } from "@/hooks/useGetProductReviews";
+import { ReviewSummary } from "./ReviewSummary";
 
 interface ProductInfoProps {
   selectedSku: ProductSku;
@@ -60,9 +62,20 @@ export function ProductInfo({
   isLowStock,
   className = "",
 }: ProductInfoProps) {
+  const { data: reviews } = useGetProductReviewsQuery(selectedSku.productId);
+
   return (
     <div className={`space-y-6 ${className}`}>
-      <p className="text-2xl md:text-3xl">{getProductName(selectedSku)}</p>
+      <div className="flex items-baseline gap-3">
+        <p className="text-2xl md:text-3xl leading-tight">
+          {getProductName(selectedSku)}
+        </p>
+        {reviews && reviews.length > 0 && (
+          <span className="align-middle">
+            <ReviewSummary reviews={reviews} />
+          </span>
+        )}
+      </div>
       <div className="flex items-center gap-4 flex-wrap">
         {isSoldOut && <SoldOutBadge />}
 
@@ -72,7 +85,7 @@ export function ProductInfo({
 
         <p className="text-md">{formatter.format(selectedSku.price)}</p>
       </div>
-      <ViewCount productId={selectedSku.productId} />
+      {/* <ViewCount productId={selectedSku.productId} /> */}
     </div>
   );
 }

@@ -2,6 +2,7 @@ import { api } from "../_generated/api";
 import { Doc } from "../_generated/dataModel";
 import { mutation, query } from "../_generated/server";
 import { v } from "convex/values";
+import { getProductName } from "../utils";
 
 const entity = "bag";
 

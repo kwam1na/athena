@@ -37,7 +37,9 @@ import {
   storeFrontSessionSchema,
   supportTicketSchema,
   analyticsSchema,
+  reviewSchema,
 } from "./schemas/storeFront";
+import { v } from "convex/values";
 
 const schema = defineSchema({
   ...authTables,
@@ -81,6 +83,7 @@ const schema = defineSchema({
   storeFrontVerificationCode: defineTable(storeFrontVerificationCode),
   subcategory: defineTable(subcategorySchema),
   supportTicket: defineTable(supportTicketSchema),
+  review: defineTable(reviewSchema).index("by_orderItemId", ["orderItemId"]),
 });
 
 export default schema;

@@ -5,6 +5,14 @@ export const onlineOrderItemSchema = v.object({
   isRefunded: v.optional(v.boolean()),
   isRestocked: v.optional(v.boolean()),
   isUnavailable: v.optional(v.boolean()),
+  feedbackRequested: v.optional(v.boolean()),
+  feedbackRequestedAt: v.optional(v.number()),
+  feedbackRequestedBy: v.optional(
+    v.object({
+      id: v.id("athenaUser"),
+      email: v.string(),
+    })
+  ),
   orderId: v.id("onlineOrder"),
   price: v.number(),
   productId: v.id("product"),

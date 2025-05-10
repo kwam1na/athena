@@ -154,3 +154,43 @@ export const sendNewOrderEmail = async (params: {
     body: JSON.stringify(message),
   });
 };
+
+export const sendFeedbackRequestEmail = async (params: {
+  customerEmail: string;
+  customer_name: string;
+  product_name: string;
+  product_image_url: string;
+  review_url: string;
+}) => {
+  const message = {
+    from: {
+      email: "noreply@wigclub.store",
+      name: "Wigclub",
+    },
+    personalizations: [
+      {
+        to: [
+          {
+            email: params.customerEmail,
+          },
+        ],
+        dynamic_template_data: {
+          customer_name: params.customer_name,
+          product_name: params.product_name,
+          product_image_url: params.product_image_url,
+          review_url: params.review_url,
+        },
+      },
+    ],
+    template_id: "d-95899bf9e0cd4fe09593cd4df8e6e087",
+  };
+
+  return await fetch("https://api.sendgrid.com/v3/mail/send", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${process.env.SENDGRID_API_KEY}`,
+    },
+    body: JSON.stringify(message),
+  });
+};

@@ -30,7 +30,8 @@ export const getAll = query({
       .query(entity)
       .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
       .order("desc")
-      .take(100);
+      .collect();
+    // .take(100);
   },
 });
 

@@ -82,7 +82,7 @@ export function LoginForm({
 
         <div className="flex flex-col">
           {form.state.fieldMeta.email?.errors.length > 0 && (
-            <span className="mb-2 text-sm text-destructive dark:text-destructive-foreground">
+            <span className="mb-2 text-sm text-destructive">
               {form.state.fieldMeta.email?.errors.join(" ")}
             </span>
           )}

@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { action, mutation, query } from "../_generated/server";
 import { deleteFileInS3, uploadFileToS3 } from "../aws/aws";
+import { getProductName } from "../utils";
 
 export const generateUploadUrl = mutation(async (ctx) => {
   return await ctx.storage.generateUploadUrl();
@@ -10,13 +11,32 @@ export const getById = query({
   args: { id: v.id("productSku") },
   handler: async (ctx, args) => {
     const s = await ctx.db.get(args.id);
-    if (s && !s.productName) {
-      const product = await ctx.db.get(s.productId);
+    if (!s) return null;
 
-      return { ...s, productName: product?.name };
-    }
+    // Fetch related product
+    const product = await ctx.db.get(s.productId);
+    // Fetch color (if present)
+    const color = s.color ? await ctx.db.get(s.color) : null;
+    // Fetch subcategory (from product)
+    const subcategory = product?.subcategoryId
+      ? await ctx.db.get(product.subcategoryId)
+      : null;
+    // Fetch category (from product)
+    const category = product?.categoryId
+      ? await ctx.db.get(product.categoryId)
+      : null;
 
-    return s;
+    return {
+      ...s,
+      productName: product?.name,
+      product,
+      colorName: color?.name,
+      color,
+      productSubcategory: subcategory?.name,
+      subcategory,
+      productCategory: category?.name,
+      category,
+    };
   },
 });
 
@@ -24,13 +44,28 @@ export const retrieve = query({
   args: { id: v.id("productSku") },
   handler: async (ctx, args) => {
     const s = await ctx.db.get(args.id);
-    if (s && !s.productName) {
-      const product = await ctx.db.get(s.productId);
+    if (!s) return null;
 
-      return { ...s, productName: product?.name };
-    }
+    const product = await ctx.db.get(s.productId);
+    const color = s.color ? await ctx.db.get(s.color) : null;
+    const subcategory = product?.subcategoryId
+      ? await ctx.db.get(product.subcategoryId)
+      : null;
+    const category = product?.categoryId
+      ? await ctx.db.get(product.categoryId)
+      : null;
 
-    return s;
+    return {
+      ...s,
+      productName: product?.name,
+      product,
+      colorName: color?.name,
+      color,
+      productSubcategory: subcategory?.name,
+      subcategory,
+      productCategory: category?.name,
+      category,
+    };
   },
 });
 

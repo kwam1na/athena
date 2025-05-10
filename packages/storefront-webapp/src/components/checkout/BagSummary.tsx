@@ -49,7 +49,15 @@ function SummaryItem({
         </div>
         <div className="space-y-2">
           <p className="text-sm font-medium">{getProductName(item)}</p>
-          <p className="text-xs text-muted-foreground">{label}</p>
+          {label != "Free" && (
+            <p className="text-xs text-muted-foreground">{label}</p>
+          )}
+          {label == "Free" && (
+            <div className="flex items-center gap-2 text-xs">
+              <p className="text-muted-foreground line-through">GHS 180</p>
+              <p className="text-xs">Free</p>
+            </div>
+          )}
         </div>
       </div>
       <p className="text-xs text-muted-foreground">{`x ${item.quantity}`}</p>

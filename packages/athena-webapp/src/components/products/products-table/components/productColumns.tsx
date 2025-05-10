@@ -8,6 +8,7 @@ import { api } from "~/convex/_generated/api";
 import { Badge } from "~/src/components/ui/badge";
 import { capitalizeWords } from "~/src/lib/utils";
 import { getOrigin } from "~/src/lib/navigationUtils";
+import { AlertOctagon } from "lucide-react";
 
 export const productColumns: ColumnDef<Product>[] = [
   {
@@ -18,10 +19,14 @@ export const productColumns: ColumnDef<Product>[] = [
     cell: ({ row }) => {
       const sku = row.original.skus[0];
 
+      const hasNoImages = row.original.skus.some(
+        (sku) => sku.images.length === 0
+      );
+
       return (
         <div className="flex space-x-2">
           <Link
-            to="/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/edit"
+            to="/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug"
             params={(prev) => ({
               ...prev,
               orgUrlSlug: prev.orgUrlSlug!,
@@ -45,6 +50,15 @@ export const productColumns: ColumnDef<Product>[] = [
                 {capitalizeWords(row.getValue("name"))}
               </span>
               <ProductStatus product={row.original} />
+              {hasNoImages && (
+                <Badge
+                  variant="outline"
+                  className="flex items-center gap-2 bg-blue-100 text-blue-700"
+                >
+                  <AlertOctagon className="w-3.5 h-3.5" />
+                  <p className="text-xs">Missing product images</p>
+                </Badge>
+              )}
             </div>
           </Link>
         </div>
@@ -65,7 +79,7 @@ export const productColumns: ColumnDef<Product>[] = [
       return (
         <div className="flex space-x-2">
           <Link
-            to="/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/edit"
+            to="/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug"
             params={(prev) => ({
               ...prev,
               orgUrlSlug: prev.orgUrlSlug!,
@@ -76,8 +90,8 @@ export const productColumns: ColumnDef<Product>[] = [
             className="flex items-center gap-8"
           >
             <div className="flex items-center gap-4">
-              <Badge variant="outline" className="bg-zinc-50">
-                <p className="text-zinc-600 text-xs">{category?.name}</p>
+              <Badge variant="outline" className="bg-gray-100 text-gray-700">
+                <p className="text-xs">{category?.name}</p>
               </Badge>
             </div>
           </Link>
@@ -99,7 +113,7 @@ export const productColumns: ColumnDef<Product>[] = [
       return (
         <div className="flex space-x-2">
           <Link
-            to="/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/edit"
+            to="/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug"
             params={(prev) => ({
               ...prev,
               orgUrlSlug: prev.orgUrlSlug!,
@@ -110,8 +124,8 @@ export const productColumns: ColumnDef<Product>[] = [
             className="flex items-center gap-8"
           >
             <div className="flex items-center gap-4">
-              <Badge variant="outline" className="bg-zinc-50">
-                <p className="text-zinc-600 text-xs">{subcategory?.name}</p>
+              <Badge variant="outline" className="bg-gray-100 text-gray-700">
+                <p className="text-xs">{subcategory?.name}</p>
               </Badge>
             </div>
           </Link>
@@ -127,7 +141,7 @@ export const productColumns: ColumnDef<Product>[] = [
     cell: ({ row }) => {
       return (
         <Link
-          to="/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/edit"
+          to="/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug"
           params={(prev) => ({
             ...prev,
             orgUrlSlug: prev.orgUrlSlug!,

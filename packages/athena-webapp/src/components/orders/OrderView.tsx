@@ -313,8 +313,6 @@ const VerifyPaymentAlert = () => {
 
   if (!order) return null;
 
-  console.log(order);
-
   if (order.hasVerifiedPayment) return null;
 
   const handleVerifyPayment = async () => {

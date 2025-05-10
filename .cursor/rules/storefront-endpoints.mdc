@@ -1,0 +1,264 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Adding a New Storefront Endpoint
+
+This guide outlines the steps to add a new endpoint for the storefront web app.
+
+## 1. Backend Setup
+
+### Schema Definition
+1. Create a new file in `packages/athena-webapp/convex/schemas/storeFront/` for your schema (e.g., `yourSchema.ts`)
+2. Define your schema using Convex's validation system:
+```typescript
+import { v } from "convex/values";
+
+export const yourSchema = v.object({
+  // Required fields
+  field1: v.string(),
+  field2: v.optional(v.string()),
+  // Reference other tables using v.id()
+  relatedId: v.id("relatedTable"),
+  // Complex types
+  nestedObject: v.optional(v.object({
+    nestedField: v.string()
+  })),
+  // Arrays
+  items: v.array(v.string()),
+  // Records
+  metadata: v.optional(v.record(v.string(), v.any()))
+});
+```
+
+3. Export your schema in `packages/athena-webapp/convex/schemas/storeFront/index.ts`:
+```typescript
+export * from "./yourSchema";
+```
+
+4. Add your table to the main schema in `packages/athena-webapp/convex/schema.ts`:
+```typescript
+import { defineSchema, defineTable } from "convex/server";
+import { yourSchema } from "./schemas/storeFront";
+
+const schema = defineSchema({
+  // ... other tables
+  yourTable: defineTable(yourSchema)
+    .index("by_field1", ["field1"])
+    .index("by_relatedId", ["relatedId"]),
+});
+
+export default schema;
+```
+
+### Convex Functions
+1. Create a new file in `packages/athena-webapp/convex/storeFront/` for your domain
+2. Define types for your data and function arguments
+3. Implement CRUD functions using Convex mutations and queries:
+```typescript
+export const create = mutation({
+  args: {
+    field1: v.string(),
+    field2: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    // Implementation
+  },
+});
+```
+
+### HTTP Routes
+1. Create a new file in `packages/athena-webapp/convex/http/domains/storeFront/routes/` for your routes (e.g., `yourRoutes.ts`)
+2. Define request/response interfaces for your endpoints:
+```typescript
+interface CreateRequest {
+  field1: string;
+  field2?: string;
+  // Add other fields
+}
+
+interface UpdateRequest {
+  field1?: string;
+  field2?: string;
+  // Add other optional fields
+}
+```
+
+3. Create and implement your routes using Hono:
+```typescript
+import { Hono } from "hono";
+import { HonoWithConvex } from "convex-helpers/server/hono";
+import { ActionCtx } from "../../../../_generated/server";
+import { api } from "../../../../_generated/api";
+import { Id } from "../../../../_generated/dataModel";
+
+const yourRoutes: HonoWithConvex<ActionCtx> = new Hono();
+
+/**
+ * Create a new resource
+ * POST /your-endpoint
+ */
+yourRoutes.post("/", async (c) => {
+  try {
+    const body = (await c.req.json()) as CreateRequest;
+    const { field1, field2 } = body;
+
+    // Validate required fields
+    if (!field1) {
+      return c.json({ error: "Missing required fields" }, 400);
+    }
+
+    // Call your Convex mutation
+    const result = await c.env.runMutation(api.storeFront.yourDomain.create, {
+      field1,
+      field2,
+    });
+
+    return c.json(result);
+  } catch (error) {
+    console.error("Failed to create:", error);
+    return c.json({ error: "Failed to create" }, 500);
+  }
+});
+
+/**
+ * Get resource by ID
+ * GET /your-endpoint/:id
+ */
+yourRoutes.get("/:id", async (c) => {
+  try {
+    const id = c.req.param("id");
+
+    const result = await c.env.runQuery(api.storeFront.yourDomain.get, {
+      id: id as Id<"yourTable">,
+    });
+
+    if (!result) {
+      return c.json({ error: "Not found" }, 404);
+    }
+
+    return c.json(result);
+  } catch (error) {
+    console.error("Failed to fetch:", error);
+    return c.json({ error: "Failed to fetch" }, 500);
+  }
+});
+
+/**
+ * Update a resource
+ * PATCH /your-endpoint/:id
+ */
+yourRoutes.patch("/:id", async (c) => {
+  try {
+    const id = c.req.param("id");
+    const body = (await c.req.json()) as UpdateRequest;
+
+    const result = await c.env.runMutation(api.storeFront.yourDomain.update, {
+      id: id as Id<"yourTable">,
+      ...body,
+    });
+
+    return c.json(result);
+  } catch (error) {
+    console.error("Failed to update:", error);
+    return c.json({ error: "Failed to update" }, 500);
+  }
+});
+
+/**
+ * Delete a resource
+ * DELETE /your-endpoint/:id
+ */
+yourRoutes.delete("/:id", async (c) => {
+  try {
+    const id = c.req.param("id");
+
+    await c.env.runMutation(api.storeFront.yourDomain.delete, {
+      id: id as Id<"yourTable">,
+    });
+
+    return c.json({ success: true });
+  } catch (error) {
+    console.error("Failed to delete:", error);
+    return c.json({ error: "Failed to delete" }, 500);
+  }
+});
+
+export { yourRoutes };
+```
+
+4. Export your routes in `packages/athena-webapp/convex/http/domains/storeFront/routes/index.ts`:
+```typescript
+export * from "./yourRoutes";
+```
+
+5. Register your routes in `packages/athena-webapp/convex/http.ts`:
+```typescript
+import { yourRoutes } from "./domains/storeFront/routes";
+
+// ... other imports and setup ...
+
+app.route("/your-endpoint", yourRoutes);
+```
+
+## 2. Frontend Setup
+
+### API Client
+1. Create a new file in `packages/storefront-webapp/src/api/` for your endpoint
+2. Define types for your data
+3. Implement API functions:
+```typescript
+export type YourType = {
+  id: string;
+  field1: string;
+  field2?: string;
+};
+
+export async function createYourThing(
+  data: Omit<YourType, "id">
+): Promise<YourType> {
+  const response = await fetch(getBaseUrl(), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(data),
+  });
+
+  const res = await response.json();
+  if (!response.ok) {
+    throw new Error(res.error || "Failed to create");
+  }
+  return res;
+}
+```
+
+### Component Integration
+1. Import the API functions in your component
+2. Use React Query for data fetching
+3. Implement error handling and loading states
+4. Add proper TypeScript types for all data
+
+## Best Practices
+1. Always include proper error handling in both backend and frontend
+2. Use TypeScript types consistently across backend and frontend
+3. Follow the existing patterns for API responses and error messages
+4. Add appropriate indexes to your schema for common queries
+5. Include proper validation in both backend and frontend
+6. Use proper HTTP status codes for different scenarios
+7. Include proper documentation in your code
+8. Use `v.id()` for references to other tables
+9. Use `v.optional()` for nullable fields
+10. Use `v.union()` for fields that can have multiple types
+11. Use `v.array()` and `v.object()` for complex data structures
+12. Use `v.record()` for dynamic key-value pairs
+
+## Example Files
+- Schema: [schema.ts](mdc:packages/athena-webapp/convex/schema.ts)
+- Domain Schema: [storeFront/index.ts](mdc:packages/athena-webapp/convex/schemas/storeFront/index.ts)
+- Schema Definition: [storeFrontUser.ts](mdc:packages/athena-webapp/convex/schemas/storeFront/storeFrontUser.ts)
+- Convex Functions: [reviews.ts](mdc:packages/athena-webapp/convex/storeFront/reviews.ts)
+- HTTP Routes: [reviews.ts](mdc:packages/athena-webapp/convex/http/domains/storeFront/routes/reviews.ts)
+- Frontend API: [reviews.ts](mdc:packages/storefront-webapp/src/api/reviews.ts)
+- Component: [ReviewEditor.tsx](mdc:packages/storefront-webapp/src/components/product-reviews/ReviewEditor.tsx)

@@ -6,6 +6,7 @@ import {
   RotateCcw,
   StopCircle,
   XCircle,
+  MessageSquare,
 } from "lucide-react";
 import View from "../View";
 import { Button } from "../ui/button";
@@ -19,21 +20,26 @@ import {
 } from "~/src/lib/utils";
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
-import { useMutation } from "convex/react";
+import { useAction, useMutation } from "convex/react";
 import { api } from "~/convex/_generated/api";
 import { LoadingButton } from "../ui/loading-button";
 import { getOrderState } from "./utils";
 import { Separator } from "../ui/separator";
 import { OrderSummary } from "./OrderSummary";
+import { toast } from "sonner";
+import { CheckCircledIcon } from "@radix-ui/react-icons";
+import { useAuth } from "~/src/hooks/useAuth";
 
 function OrderItem({ item, order }: { item: any; order: any }) {
   const [isUpdatingOrderItem, setIsUpdatingOrderItem] = useState(false);
+  const [isRequestingFeedback, setIsRequestingFeedback] = useState(false);
+  const { user } = useAuth();
 
   const updateOrderItem = useMutation(api.storeFront.onlineOrderItem.update);
-
   const returnItemToStock = useMutation(
     api.storeFront.onlineOrder.returnItemsToStock
   );
+  const requestFeedback = useAction(api.storeFront.reviews.sendFeedbackRequest);
 
   const handleUpdateOrderItem = async (isReady: boolean) => {
     try {
@@ -65,6 +71,39 @@ function OrderItem({ item, order }: { item: any; order: any }) {
     }
   };
 
+  const handleRequestFeedback = async () => {
+    try {
+      setIsRequestingFeedback(true);
+      const result = await requestFeedback({
+        productSkuId: item.productSkuId,
+        customerEmail: order.customerDetails.email,
+        customerName: order.customerDetails.firstName,
+        orderId: order._id,
+        orderItemId: item._id,
+        signedInAthenaUser: user
+          ? {
+              id: user._id,
+              email: user.email,
+            }
+          : undefined,
+      });
+
+      if (!result.success) {
+        toast.error(result.error);
+        return;
+      }
+
+      toast.success("Feedback request sent");
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to send feedback request", {
+        description: (error as Error).message,
+      });
+    } finally {
+      setIsRequestingFeedback(false);
+    }
+  };
+
   const isPickup = order.deliveryMethod == "pickup";
 
   const readyText = isPickup ? "Ready for pickup" : "Ready for delivery";
@@ -74,6 +113,7 @@ function OrderItem({ item, order }: { item: any; order: any }) {
     isOrderReady,
     isPartiallyRefunded,
     hasOrderTransitioned,
+    isOrderCompleted,
   } = getOrderState(order);
 
   return (
@@ -160,6 +200,13 @@ function OrderItem({ item, order }: { item: any; order: any }) {
               <p className="text-xs">Restocked</p>
             </div>
           )}
+
+          {item.feedbackRequested && (
+            <div className="flex ml-auto items-center gap-2 text-muted-foreground">
+              <MessageSquare className="h-3 w-3" />
+              <p className="text-xs">Review requested</p>
+            </div>
+          )}
         </div>
 
         {!item.isRefunded &&
@@ -188,13 +235,19 @@ function OrderItem({ item, order }: { item: any; order: any }) {
                   Not ready
                 </LoadingButton>
               )}
-
-              {/* <Button className="text-red-700" variant="outline">
-                <Ban className="h-4 w-4 mr-2" />
-                Unavailable
-              </Button> */}
             </div>
           )}
+
+        {isOrderCompleted && !item.feedbackRequested && (
+          <LoadingButton
+            isLoading={isRequestingFeedback}
+            onClick={handleRequestFeedback}
+            variant="outline"
+          >
+            <MessageSquare className="h-4 w-4 mr-2" />
+            Request review
+          </LoadingButton>
+        )}
       </div>
 
       {item?.isRefunded && !item?.isRestocked && (
@@ -222,8 +275,6 @@ export function OrderItemsView() {
   const restockAllItems = useMutation(
     api.storeFront.onlineOrder.returnAllItemsToStock
   );
-
-  console.log(order);
 
   const handleRestockAll = async () => {
     if (!order) return;

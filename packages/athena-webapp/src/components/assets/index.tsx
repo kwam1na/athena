@@ -313,7 +313,7 @@ const EmptyStateContent = () => {
   return (
     <EmptyState
       icon={<Image className="w-16 h-16 text-muted-foreground" />}
-      text={
+      title={
         <div className="flex gap-1 text-sm">
           <p className="text-muted-foreground">No assets for</p>
           <p className="font-medium">{activeStore?.name}</p>

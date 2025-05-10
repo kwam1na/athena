@@ -12,6 +12,7 @@ import { useProductReminder } from "@/hooks/useProductReminder";
 import { HomeHeroSectionWithRef } from "./home/HomeHeroSection";
 import { BestSellersSection } from "./home/BestSellersSection";
 import { FeaturedProductsSection } from "./home/FeaturedProductsSection";
+import { useParams, useSearch } from "@tanstack/react-router";
 
 const origin = "homepage";
 
@@ -35,6 +36,8 @@ export default function HomePage() {
     productQueries.featured()
   );
 
+  const s = useSearch({ strict: false });
+
   useEffect(() => {
     setNavBarLayout("sticky");
     setAppLocation(origin);
@@ -48,6 +51,7 @@ export default function HomePage() {
 
   useTrackEvent({
     action: "viewed_homepage",
+    origin: s.utm_source,
   });
 
   const bestSellersSorted = bestSellers?.sort(

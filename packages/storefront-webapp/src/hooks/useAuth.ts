@@ -11,6 +11,7 @@ export const useAuth = () => {
     user,
     userId: user?._id,
     guestId: guestData?._id,
+    storeFrontUserId: user?._id ?? guestData?._id,
     isLoading,
   };
 };

@@ -21,33 +21,35 @@ export default function PromoCodes({ promoCodes }: { promoCodes: any[] }) {
         </div>
       )}
       {promoCodes && promoCodes.length == 0 && (
-        <EmptyState
-          icon={<BadgePercent className="w-16 h-16 text-muted-foreground" />}
-          text={
-            <div className="flex gap-1 text-sm">
-              <p className="text-muted-foreground">No promo codes for</p>
-              <p className="font-medium">{activeStore?.name}</p>
-            </div>
-          }
-          cta={
-            <Link
-              to="/$orgUrlSlug/store/$storeUrlSlug/promo-codes/new"
-              params={(prev) => ({
-                ...prev,
-                storeUrlSlug: prev.storeUrlSlug!,
-                orgUrlSlug: prev.orgUrlSlug!,
-              })}
-              search={{
-                o: getOrigin(),
-              }}
-            >
-              <Button variant={"outline"}>
-                <PlusIcon className="w-3 h-3 mr-2" />
-                Add code
-              </Button>
-            </Link>
-          }
-        />
+        <div className="flex items-center justify-center min-h-[60vh] w-full">
+          <EmptyState
+            icon={<BadgePercent className="w-16 h-16 text-muted-foreground" />}
+            title={
+              <div className="flex gap-1 text-sm">
+                <p className="text-muted-foreground">No promo codes for</p>
+                <p className="font-medium">{activeStore?.name}</p>
+              </div>
+            }
+            cta={
+              <Link
+                to="/$orgUrlSlug/store/$storeUrlSlug/promo-codes/new"
+                params={(prev) => ({
+                  ...prev,
+                  storeUrlSlug: prev.storeUrlSlug!,
+                  orgUrlSlug: prev.orgUrlSlug!,
+                })}
+                search={{
+                  o: getOrigin(),
+                }}
+              >
+                <Button variant={"outline"}>
+                  <PlusIcon className="w-3 h-3 mr-2" />
+                  Add code
+                </Button>
+              </Link>
+            }
+          />
+        </div>
       )}
     </div>
   );

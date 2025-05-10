@@ -23,9 +23,9 @@ import { ImageFile } from "../ui/image-uploader";
 import {
   Eye,
   EyeClosed,
+  EyeOff,
   Image,
   Info,
-  MoreHorizontal,
   RefreshCw,
   RotateCcw,
   TriangleAlert,
@@ -416,7 +416,7 @@ function Stock() {
                             >
                               {(variant.isVisible == undefined ||
                                 variant.isVisible) && (
-                                <EyeClosed className="w-4 h-4" />
+                                <EyeOff className="w-4 h-4" />
                               )}
 
                               {variant.isVisible == false && (

@@ -22,32 +22,32 @@ function getPromoAlertCopy(itemsLeft: number) {
   } else if (itemsLeft <= 2) {
     return {
       tagline: `Last chance — only ${itemsLeft} left!`,
-      body: "Final chance to score a complimentary mini straightener (GHS 180 value) with your purchase!",
+      body: "Final chance to score a complimentary mini straightener (GHS 180 value) with your purchase.",
     };
   } else if (itemsLeft <= 5) {
     return {
       tagline: `Almost gone — only ${itemsLeft} left!`,
-      body: "Hurry! Grab your complimentary mini straightener (GHS 180 value) before they're all claimed!",
+      body: "Hurry! Grab your complimentary mini straightener (GHS 180 value) before they're all claimed.",
     };
   } else if (itemsLeft <= 10) {
     return {
       tagline: `Going fast — only ${itemsLeft} left!`,
-      body: "Act now to get a complimentary mini straightener (GHS 180 value) with your purchase!",
+      body: "Act now to get a complimentary mini straightener (GHS 180 value) with your purchase.",
     };
   } else if (itemsLeft <= 20) {
     return {
       tagline: `Hurry — only ${itemsLeft} left!`,
-      body: "Limited stock! Secure your complimentary mini straightener (GHS 180 value) today.",
+      body: "Limited stock. Secure your complimentary mini straightener (GHS 180 value) today.",
     };
   } else if (itemsLeft <= 39) {
     return {
       tagline: `Moving fast — only ${itemsLeft} left!`,
-      body: "Claim your complimentary mini straightener (GHS 180 value) while supplies last!",
+      body: "Claim your complimentary mini straightener (GHS 180 value) while supplies last.",
     };
   } else {
     return {
       tagline: "Limited-time free gift!",
-      body: "Score a complimentary mini straightener (GHS 180 value) with your purchase while supplies last!",
+      body: "Score a complimentary mini straightener (GHS 180 value) with your purchase while supplies last.",
     };
   }
 }

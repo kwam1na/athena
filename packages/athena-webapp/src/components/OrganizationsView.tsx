@@ -41,23 +41,25 @@ export default function OrganizationsView() {
   return (
     <View header={<Navigation />}>
       {organizations && organizations?.length == 0 && (
-        <EmptyState
-          icon={<BuildingIcon className="w-16 h-16 text-muted-foreground" />}
-          text={
-            <div className="flex gap-1 text-sm">
-              <p className="text-muted-foreground">No organizations</p>
-            </div>
-          }
-          cta={
-            <Button
-              variant={"outline"}
-              onClick={() => organizationModal.onOpen()}
-            >
-              <PlusIcon className="w-3 h-3 mr-2" />
-              Create organization
-            </Button>
-          }
-        />
+        <div className="flex items-center justify-center min-h-[60vh] w-full">
+          <EmptyState
+            icon={<BuildingIcon className="w-16 h-16 text-muted-foreground" />}
+            title={
+              <div className="flex gap-1 text-sm">
+                <p className="text-muted-foreground">No organizations</p>
+              </div>
+            }
+            cta={
+              <Button
+                variant={"outline"}
+                onClick={() => organizationModal.onOpen()}
+              >
+                <PlusIcon className="w-3 h-3 mr-2" />
+                Create organization
+              </Button>
+            }
+          />
+        </div>
       )}
     </View>
   );

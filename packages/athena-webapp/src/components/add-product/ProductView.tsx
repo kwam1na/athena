@@ -137,6 +137,7 @@ function ProductViewContent() {
         subcategoryId: validatedProductData.subcategoryId as Id<"subcategory">,
         inventoryCount: 0,
         attributes: validatedProductData.attributes || {},
+        isVisible: true,
       });
 
       if (product) setProductid(product?._id);

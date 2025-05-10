@@ -16,6 +16,7 @@ import { ProductStockStatus } from "./ProductStock";
 import { ComposedPageHeader } from "../common/PageHeader";
 import { capitalizeWords } from "~/src/lib/utils";
 import { getOrigin } from "~/src/lib/navigationUtils";
+import { AnalyticsInsights } from "./AnalyticsInsights";
 
 const ProductDetailViewHeader = () => {
   const { activeProduct } = useGetActiveProduct();
@@ -75,7 +76,10 @@ export const ProductDetailView = () => {
               <CategorizationView />
             </div>
 
-            <ImagesView />
+            <div className="space-y-8">
+              <ImagesView />
+              <AnalyticsInsights />
+            </div>
           </div>
         </div>
       </View>

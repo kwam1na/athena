@@ -23,16 +23,18 @@ export default function Orders({
         </div>
       )}
       {orders && orders.length == 0 && (
-        <EmptyState
-          icon={<ShoppingBag className="w-16 h-16 text-muted-foreground" />}
-          text={
-            <div className="flex gap-1 text-sm">
-              <p className="text-muted-foreground">
-                No <b>{status == "all" ? "" : slugToWords(status)}</b> orders
-              </p>
-            </div>
-          }
-        />
+        <div className="flex items-center justify-center min-h-[60vh] w-full">
+          <EmptyState
+            icon={<ShoppingBag className="w-16 h-16 text-muted-foreground" />}
+            title={
+              <div className="flex gap-1 text-sm">
+                <p className="text-muted-foreground">
+                  No <b>{status == "all" ? "" : slugToWords(status)}</b> orders
+                </p>
+              </div>
+            }
+          />
+        </div>
       )}
     </div>
   );

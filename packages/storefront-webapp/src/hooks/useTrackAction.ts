@@ -6,10 +6,12 @@ export const useTrackAction = ({
   action,
   data,
   isReady = true,
+  deps = [],
 }: {
   action: string;
   data: Record<string, any>;
   isReady?: boolean;
+  deps?: any[];
 }) => {
   const { origin } = useSearch({ strict: false });
 
@@ -21,5 +23,5 @@ export const useTrackAction = ({
         data,
       });
     }
-  }, [origin, isReady]);
+  }, [origin, isReady, ...deps]);
 };

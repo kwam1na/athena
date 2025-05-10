@@ -37,6 +37,7 @@ import type * as http_domains_storeFront_routes_index from "../http/domains/stor
 import type * as http_domains_storeFront_routes_me from "../http/domains/storeFront/routes/me.js";
 import type * as http_domains_storeFront_routes_onlineOrder from "../http/domains/storeFront/routes/onlineOrder.js";
 import type * as http_domains_storeFront_routes_paystack from "../http/domains/storeFront/routes/paystack.js";
+import type * as http_domains_storeFront_routes_reviews from "../http/domains/storeFront/routes/reviews.js";
 import type * as http_domains_storeFront_routes_savedBag from "../http/domains/storeFront/routes/savedBag.js";
 import type * as http_domains_storeFront_routes_storefront from "../http/domains/storeFront/routes/storefront.js";
 import type * as http_domains_storeFront_routes_upsells from "../http/domains/storeFront/routes/upsells.js";
@@ -94,6 +95,7 @@ import type * as schemas_storeFront_guest from "../schemas/storeFront/guest.js";
 import type * as schemas_storeFront_index from "../schemas/storeFront/index.js";
 import type * as schemas_storeFront_onlineOrder_onlineOrder from "../schemas/storeFront/onlineOrder/onlineOrder.js";
 import type * as schemas_storeFront_onlineOrder_onlineOrderItem from "../schemas/storeFront/onlineOrder/onlineOrderItem.js";
+import type * as schemas_storeFront_review from "../schemas/storeFront/review.js";
 import type * as schemas_storeFront_savedBag from "../schemas/storeFront/savedBag.js";
 import type * as schemas_storeFront_savedBagItem from "../schemas/storeFront/savedBagItem.js";
 import type * as schemas_storeFront_storeFrontSession from "../schemas/storeFront/storeFrontSession.js";
@@ -111,6 +113,7 @@ import type * as storeFront_onlineOrder from "../storeFront/onlineOrder.js";
 import type * as storeFront_onlineOrderItem from "../storeFront/onlineOrderItem.js";
 import type * as storeFront_onlineOrderUtilFns from "../storeFront/onlineOrderUtilFns.js";
 import type * as storeFront_payment from "../storeFront/payment.js";
+import type * as storeFront_reviews from "../storeFront/reviews.js";
 import type * as storeFront_savedBag from "../storeFront/savedBag.js";
 import type * as storeFront_savedBagItem from "../storeFront/savedBagItem.js";
 import type * as storeFront_supportTicket from "../storeFront/supportTicket.js";
@@ -150,6 +153,7 @@ declare const fullApi: ApiFromModules<{
   "http/domains/storeFront/routes/me": typeof http_domains_storeFront_routes_me;
   "http/domains/storeFront/routes/onlineOrder": typeof http_domains_storeFront_routes_onlineOrder;
   "http/domains/storeFront/routes/paystack": typeof http_domains_storeFront_routes_paystack;
+  "http/domains/storeFront/routes/reviews": typeof http_domains_storeFront_routes_reviews;
   "http/domains/storeFront/routes/savedBag": typeof http_domains_storeFront_routes_savedBag;
   "http/domains/storeFront/routes/storefront": typeof http_domains_storeFront_routes_storefront;
   "http/domains/storeFront/routes/upsells": typeof http_domains_storeFront_routes_upsells;
@@ -207,6 +211,7 @@ declare const fullApi: ApiFromModules<{
   "schemas/storeFront/index": typeof schemas_storeFront_index;
   "schemas/storeFront/onlineOrder/onlineOrder": typeof schemas_storeFront_onlineOrder_onlineOrder;
   "schemas/storeFront/onlineOrder/onlineOrderItem": typeof schemas_storeFront_onlineOrder_onlineOrderItem;
+  "schemas/storeFront/review": typeof schemas_storeFront_review;
   "schemas/storeFront/savedBag": typeof schemas_storeFront_savedBag;
   "schemas/storeFront/savedBagItem": typeof schemas_storeFront_savedBagItem;
   "schemas/storeFront/storeFrontSession": typeof schemas_storeFront_storeFrontSession;
@@ -224,6 +229,7 @@ declare const fullApi: ApiFromModules<{
   "storeFront/onlineOrderItem": typeof storeFront_onlineOrderItem;
   "storeFront/onlineOrderUtilFns": typeof storeFront_onlineOrderUtilFns;
   "storeFront/payment": typeof storeFront_payment;
+  "storeFront/reviews": typeof storeFront_reviews;
   "storeFront/savedBag": typeof storeFront_savedBag;
   "storeFront/savedBagItem": typeof storeFront_savedBagItem;
   "storeFront/supportTicket": typeof storeFront_supportTicket;

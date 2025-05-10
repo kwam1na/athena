@@ -23,6 +23,7 @@ const productsPageSchema = z.object({
   checkoutSessionId: z.string().optional(),
   email: z.string().optional(),
   origin: z.string().optional(),
+  utm_source: z.string().optional(),
 });
 
 export const Route = createRootRoute({

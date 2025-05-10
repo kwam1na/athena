@@ -30,6 +30,9 @@ export const getOrderState = (order: any) => {
     order.status
   );
 
+  const isOrderCompleted =
+    isOrderDelivered || isOrderPickedUp || isFullyRefunded;
+
   return {
     isFullyRefunded,
     isPartiallyRefunded,
@@ -42,6 +45,7 @@ export const getOrderState = (order: any) => {
     isOrderDelivered,
     isOrderPickedUp,
     hasOrderTransitioned,
+    isOrderCompleted,
   };
 };
 
