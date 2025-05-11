@@ -267,7 +267,7 @@ const OrderDetail = () => {
   };
 
   return (
-    <FadeIn className="space-y-24 lg:space-y-40 py-8 pb-32 w-full">
+    <FadeIn className="space-y-24 lg:space-y-40 py-8 pb-32 w-full container mx-auto max-w-[1024px] px-6 xl:px-0">
       <div className="space-y-16">
         <OrderNavigation />
 

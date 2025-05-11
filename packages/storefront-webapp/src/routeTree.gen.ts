@@ -22,6 +22,7 @@ import { Route as LayoutShopLayoutImport } from './routes/_layout/_shopLayout'
 import { Route as LayoutOrdersLayoutImport } from './routes/_layout/_ordersLayout'
 import { Route as ShopCheckoutIndexImport } from './routes/shop/checkout/index'
 import { Route as ShopBagIndexImport } from './routes/shop/bag.index'
+import { Route as LayoutRewardsIndexImport } from './routes/_layout/rewards.index'
 import { Route as ShopCheckoutPendingImport } from './routes/shop/checkout/pending'
 import { Route as ShopCheckoutVerifyIndexImport } from './routes/shop/checkout/verify.index'
 import { Route as ShopCheckoutCompleteIndexImport } from './routes/shop/checkout/complete.index'
@@ -103,6 +104,12 @@ const ShopBagIndexRoute = ShopBagIndexImport.update({
   id: '/shop/bag/',
   path: '/shop/bag/',
   getParentRoute: () => rootRoute,
+} as any)
+
+const LayoutRewardsIndexRoute = LayoutRewardsIndexImport.update({
+  id: '/rewards/',
+  path: '/rewards/',
+  getParentRoute: () => LayoutRoute,
 } as any)
 
 const ShopCheckoutPendingRoute = ShopCheckoutPendingImport.update({
@@ -294,6 +301,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ShopCheckoutPendingImport
       parentRoute: typeof rootRoute
     }
+    '/_layout/rewards/': {
+      id: '/_layout/rewards/'
+      path: '/rewards'
+      fullPath: '/rewards'
+      preLoaderRoute: typeof LayoutRewardsIndexImport
+      parentRoute: typeof LayoutImport
+    }
     '/shop/bag/': {
       id: '/shop/bag/'
       path: '/shop/bag'
@@ -466,6 +480,7 @@ interface LayoutRouteChildren {
   LayoutShopLayoutRoute: typeof LayoutShopLayoutRouteWithChildren
   LayoutAccountRoute: typeof LayoutAccountRoute
   LayoutContactUsRoute: typeof LayoutContactUsRoute
+  LayoutRewardsIndexRoute: typeof LayoutRewardsIndexRoute
   LayoutShopProductProductSlugRoute: typeof LayoutShopProductProductSlugRoute
   LayoutPoliciesDeliveryReturnsExchangesIndexRoute: typeof LayoutPoliciesDeliveryReturnsExchangesIndexRoute
   LayoutPoliciesPrivacyIndexRoute: typeof LayoutPoliciesPrivacyIndexRoute
@@ -478,6 +493,7 @@ const LayoutRouteChildren: LayoutRouteChildren = {
   LayoutShopLayoutRoute: LayoutShopLayoutRouteWithChildren,
   LayoutAccountRoute: LayoutAccountRoute,
   LayoutContactUsRoute: LayoutContactUsRoute,
+  LayoutRewardsIndexRoute: LayoutRewardsIndexRoute,
   LayoutShopProductProductSlugRoute: LayoutShopProductProductSlugRoute,
   LayoutPoliciesDeliveryReturnsExchangesIndexRoute:
     LayoutPoliciesDeliveryReturnsExchangesIndexRoute,
@@ -498,6 +514,7 @@ export interface FileRoutesByFullPath {
   '/contact-us': typeof LayoutContactUsRoute
   '/auth/verify': typeof AuthVerifyRoute
   '/shop/checkout/pending': typeof ShopCheckoutPendingRoute
+  '/rewards': typeof LayoutRewardsIndexRoute
   '/shop/bag': typeof ShopBagIndexRoute
   '/shop/checkout': typeof ShopCheckoutIndexRoute
   '/shop/product/$productSlug': typeof LayoutShopProductProductSlugRoute
@@ -527,6 +544,7 @@ export interface FileRoutesByTo {
   '/contact-us': typeof LayoutContactUsRoute
   '/auth/verify': typeof AuthVerifyRoute
   '/shop/checkout/pending': typeof ShopCheckoutPendingRoute
+  '/rewards': typeof LayoutRewardsIndexRoute
   '/shop/bag': typeof ShopBagIndexRoute
   '/shop/checkout': typeof ShopCheckoutIndexRoute
   '/shop/product/$productSlug': typeof LayoutShopProductProductSlugRoute
@@ -559,6 +577,7 @@ export interface FileRoutesById {
   '/_layout/contact-us': typeof LayoutContactUsRoute
   '/auth/verify': typeof AuthVerifyRoute
   '/shop/checkout/pending': typeof ShopCheckoutPendingRoute
+  '/_layout/rewards/': typeof LayoutRewardsIndexRoute
   '/shop/bag/': typeof ShopBagIndexRoute
   '/shop/checkout/': typeof ShopCheckoutIndexRoute
   '/_layout/shop/product/$productSlug': typeof LayoutShopProductProductSlugRoute
@@ -590,6 +609,7 @@ export interface FileRouteTypes {
     | '/contact-us'
     | '/auth/verify'
     | '/shop/checkout/pending'
+    | '/rewards'
     | '/shop/bag'
     | '/shop/checkout'
     | '/shop/product/$productSlug'
@@ -618,6 +638,7 @@ export interface FileRouteTypes {
     | '/contact-us'
     | '/auth/verify'
     | '/shop/checkout/pending'
+    | '/rewards'
     | '/shop/bag'
     | '/shop/checkout'
     | '/shop/product/$productSlug'
@@ -648,6 +669,7 @@ export interface FileRouteTypes {
     | '/_layout/contact-us'
     | '/auth/verify'
     | '/shop/checkout/pending'
+    | '/_layout/rewards/'
     | '/shop/bag/'
     | '/shop/checkout/'
     | '/_layout/shop/product/$productSlug'
@@ -738,6 +760,7 @@ export const routeTree = rootRoute
         "/_layout/_shopLayout",
         "/_layout/account",
         "/_layout/contact-us",
+        "/_layout/rewards/",
         "/_layout/shop/product/$productSlug",
         "/_layout/policies/delivery-returns-exchanges/",
         "/_layout/policies/privacy/",
@@ -782,6 +805,10 @@ export const routeTree = rootRoute
     },
     "/shop/checkout/pending": {
       "filePath": "shop/checkout/pending.tsx"
+    },
+    "/_layout/rewards/": {
+      "filePath": "_layout/rewards.index.tsx",
+      "parent": "/_layout"
     },
     "/shop/bag/": {
       "filePath": "shop/bag.index.tsx"

@@ -3,6 +3,7 @@ import {
   AlertCircle,
   AlertCircleIcon,
   ArrowRight,
+  Award,
   Heart,
   Info,
   InfoIcon,
@@ -183,10 +184,12 @@ export default function ShoppingBag() {
     pendingSessions && pendingSessions.length > 0
   );
 
+  const potentialRewards = Math.floor(bagSubtotal / 10);
+
   return (
     <FadeIn className="container mx-auto max-w-[1024px] px-6 xl:px-0 space-y-8 lg:space-y-24 py-8">
       {!isBagEmpty && (
-        <div className="space-y-4">
+        <div className="space-y-4 pb-8">
           {hasPendingOrders && (
             <PendingItem
               session={pendingSessions?.[0]}
@@ -194,6 +197,19 @@ export default function ShoppingBag() {
             />
           )}
           <h1 className="text-lg font-light">Bag</h1>
+
+          <div className="space-y-2 border border-accent5 rounded-md p-4 w-fit bg-accent5/40">
+            <p className="text-sm font-medium">
+              🎉 Woohoo! You're earning{" "}
+              <b className="text-accent2">
+                {potentialRewards.toLocaleString()}
+              </b>{" "}
+              reward points from this order
+            </p>
+            <p className="text-xs italic text-gray-500">
+              Redeemable for discounts on future purchases
+            </p>
+          </div>
 
           {operationSuccessful == false && (
             <div className="flex items-center font-medium">

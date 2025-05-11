@@ -38,8 +38,10 @@ import {
   supportTicketSchema,
   analyticsSchema,
   reviewSchema,
+  rewardPointsSchema,
+  rewardTransactionSchema,
+  rewardTierSchema,
 } from "./schemas/storeFront";
-import { v } from "convex/values";
 
 const schema = defineSchema({
   ...authTables,
@@ -63,7 +65,9 @@ const schema = defineSchema({
   featuredItem: defineTable(featuredItemSchema),
   guest: defineTable(guestSchema).index("by_storeId", ["storeId"]),
   inviteCode: defineTable(inviteCodeSchema),
-  onlineOrder: defineTable(onlineOrderSchema),
+  onlineOrder: defineTable(onlineOrderSchema).index("by_storeFrontUserId", [
+    "storeFrontUserId",
+  ]),
   onlineOrderItem: defineTable(onlineOrderItemSchema),
   organization: defineTable(organizationSchema),
   organizationMember: defineTable(organizationMemberSchema),
@@ -84,6 +88,14 @@ const schema = defineSchema({
   subcategory: defineTable(subcategorySchema),
   supportTicket: defineTable(supportTicketSchema),
   review: defineTable(reviewSchema).index("by_orderItemId", ["orderItemId"]),
+  rewardPoints: defineTable(rewardPointsSchema).index("by_user_store", [
+    "storeFrontUserId",
+    "storeId",
+  ]),
+  rewardTransactions: defineTable(rewardTransactionSchema)
+    .index("by_user", ["storeFrontUserId"])
+    .index("by_order", ["orderId"]),
+  rewardTiers: defineTable(rewardTierSchema).index("by_store", ["storeId"]),
 });
 
 export default schema;

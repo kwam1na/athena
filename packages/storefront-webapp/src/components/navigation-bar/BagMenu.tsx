@@ -5,7 +5,7 @@ import SavedIcon from "../saved-items/SavedIcon";
 import placeholder from "@/assets/placeholder.png";
 import { getProductName } from "@/lib/productUtils";
 import { Button } from "../ui/button";
-import { Cog, Package } from "lucide-react";
+import { Cog, Package, Award } from "lucide-react";
 import { PersonIcon } from "@radix-ui/react-icons";
 import { useStoreContext } from "@/contexts/StoreContext";
 import { useLogout } from "@/hooks/useLogout";
@@ -116,6 +116,15 @@ export const BagMenu = ({
         </Link>
 
         <Link
+          to="/rewards"
+          className={`flex items-center gap-4 ${hoverClass}`}
+          onClick={() => handleOnLinkClick()}
+        >
+          <Award className="w-4 h-4" />
+          <p className="text-sm">Rewards</p>
+        </Link>
+
+        <Link
           to="/shop/saved"
           className={`flex items-center gap-4 ${hoverClass}`}
           onClick={() => handleOnLinkClick()}
@@ -150,7 +159,7 @@ export const BagMenu = ({
             onClick={() => handleOnLinkClick({ isLogout: true })}
           >
             <PersonIcon className="w-4 h-4" />
-            <p className="text-sm">{`Sign out ${user?.firstName ?? ""}`}</p>
+            <p className="text-sm cursor-pointer">{`Sign out ${user?.firstName ?? ""}`}</p>
           </a>
         )}
       </div>

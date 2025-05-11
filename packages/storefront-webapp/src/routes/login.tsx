@@ -21,10 +21,12 @@ import {
   Link,
   redirect,
   useNavigate,
+  useSearch,
 } from "@tanstack/react-router";
 import { ArrowRight } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
+import { useEffect } from "react";
 
 export const customerDetailsSchema = z.object({
   email: z
@@ -67,6 +69,16 @@ const Login = () => {
     },
   });
 
+  const { origin, email } = useSearch({ strict: false });
+
+  const isFromGuestRewards = origin === "guest-rewards";
+
+  useEffect(() => {
+    if (isFromGuestRewards && email) {
+      form.setValue("email", email);
+    }
+  }, [isFromGuestRewards, email]);
+
   const { store } = useStoreContext();
 
   const navigate = useNavigate();
@@ -98,6 +110,10 @@ const Login = () => {
 
   if (!store) return <div className="h-screen" />;
 
+  const header = isFromGuestRewards
+    ? `Create your ${store?.name && capitalizeWords(store?.name as string)} account`
+    : `Login to your ${store?.name && capitalizeWords(store?.name as string)} account`;
+
   return (
     <AuthComponent>
       <FadeIn className="container mx-auto max-w-[1024px] pb-56 py-8 px-6 xl:px-0">
@@ -110,7 +126,7 @@ const Login = () => {
               className="space-y-8 flex flex-col items-center p-12"
             >
               <div className="space-y-8 w-[320px] md:w-[400px]">
-                <p className="text-lg">{`Login to your ${store?.name && capitalizeWords(store?.name as string)} account`}</p>
+                <p className="text-lg">{header}</p>
                 <div className="w-full">
                   <FormField
                     control={form.control}
@@ -136,17 +152,19 @@ const Login = () => {
                   <ArrowRight className="w-4 h-4 ml-2 -me-1 ms-2 transition-transform group-hover:translate-x-0.5" />
                 </LoadingButton>
 
-                <div className="flex gap-2 pt-4">
-                  <p className="text-sm text-muted-foreground">
-                    Don't have an account?
-                  </p>
-                  <Link
-                    to="/signup"
-                    className="flex items-center gap-1 hover:underline"
-                  >
-                    <p className="text-sm">Create yours now.</p>
-                  </Link>
-                </div>
+                {!isFromGuestRewards && (
+                  <div className="flex gap-2 pt-4">
+                    <p className="text-sm text-muted-foreground">
+                      Don't have an account?
+                    </p>
+                    <Link
+                      to="/signup"
+                      className="flex items-center gap-1 hover:underline"
+                    >
+                      <p className="text-sm">Create yours now.</p>
+                    </Link>
+                  </div>
+                )}
               </div>
             </form>
           </Form>

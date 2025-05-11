@@ -13,14 +13,16 @@ import {
   subcategoryRoutes,
 } from "./http/domains/inventory/routes";
 import {
+  onlineOrderRoutes,
+  userRoutes,
   bagRoutes,
   checkoutRoutes,
-  onlineOrderRoutes,
+  meRoutes,
+  upsellRoutes,
+  reviewRoutes,
+  rewardsRoutes,
   paystackRoutes,
   storefrontRoutes,
-  upsellRoutes,
-  userRoutes,
-  reviewRoutes,
 } from "./http/domains/storeFront/routes";
 import { httpRouter } from "convex/server";
 import { guestRoutes } from "./http/domains/storeFront/routes/guest";
@@ -79,6 +81,12 @@ app.route("/checkout", checkoutRoutes);
 app.route("/orders", onlineOrderRoutes);
 
 app.route("/reviews", reviewRoutes);
+
+app.route("/me", meRoutes);
+
+app.route("/upsells", upsellRoutes);
+
+app.route("/rewards", rewardsRoutes);
 
 app.get("/.well-known/openid-configuration", async (c) => {
   const [httpAction] = http.lookup(

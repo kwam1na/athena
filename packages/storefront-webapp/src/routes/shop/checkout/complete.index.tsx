@@ -7,12 +7,14 @@ import {
   webOrderSchema,
 } from "@/components/checkout/CheckoutProvider";
 import { OrderDetails } from "@/components/checkout/OrderDetails";
+import { GuestRewardsPrompt } from "@/components/rewards/GuestRewardsPrompt";
 import {
   CheckoutCompleted,
   UnableToVerifyCheckoutPayment,
 } from "@/components/states/checkout-expired/CheckoutExpired";
 import { Button } from "@/components/ui/button";
 import { LoadingButton } from "@/components/ui/loading-button";
+import { useAuth } from "@/hooks/useAuth";
 import { useGetActiveCheckoutSession } from "@/hooks/useGetActiveCheckoutSession";
 import { useBagQueries } from "@/lib/queries/bag";
 import { capitalizeFirstLetter } from "@/lib/utils";
@@ -34,6 +36,10 @@ export const CheckoutComplete = () => {
   const queryClient = useQueryClient();
 
   const bagQueries = useBagQueries();
+
+  const { userId } = useAuth();
+
+  const isGuest = userId === undefined;
 
   useEffect(() => {
     const completeCheckoutSession = async () => {
@@ -177,6 +183,22 @@ export const CheckoutComplete = () => {
         </motion.div>
 
         <OrderDetails session={activeSession} delayAnimation />
+
+        {isGuest && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{
+              opacity: 1,
+              y: 0,
+              transition: { ease: "easeOut", duration: 0.8, delay: 1.4 },
+            }}
+          >
+            <GuestRewardsPrompt
+              orderAmount={activeSession.amount}
+              orderEmail={activeSession.customerDetails?.email || ""}
+            />
+          </motion.div>
+        )}
 
         <motion.div
           initial={{ opacity: 0 }}

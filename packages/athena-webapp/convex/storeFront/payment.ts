@@ -160,7 +160,16 @@ export const verifyPayment = action({
 
           const formatter = currencyFormatter(store?.currency || "GHS");
 
-          if (!order.didSendNewOrderReceivedEmail) {
+          const testAccounts = [
+            "kwamina.0x00@gmail.com",
+            "kwami.nuh@gmail.com",
+          ];
+
+          const isTestAccount = testAccounts.includes(
+            order.customerDetails.email
+          );
+
+          if (!order.didSendNewOrderReceivedEmail && !isTestAccount) {
             const emailResponse = await sendNewOrderEmail({
               store_name: "Wigclub",
               order_amount: formatter.format(orderAmountLessDiscounts / 100),
@@ -233,6 +242,26 @@ export const verifyPayment = action({
             } catch (e) {
               console.error("Failed to send order confirmation email", e);
             }
+          }
+
+          // Calculate points (10 points per dollar spent, rounded down)
+          const pointsToAward = (session?.amount || 0) / 1000;
+
+          // Award points if this is a registered user (not a guest)
+          const res = await ctx.runMutation(
+            internal.storeFront.rewards.awardOrderPoints,
+            {
+              orderId: order._id,
+              points: Math.floor(pointsToAward),
+            }
+          );
+
+          if (res.success) {
+            console.log(
+              `Awarded ${Math.floor(pointsToAward)} points for order ${order?._id}`
+            );
+          } else {
+            console.error("Failed to award points", res.error);
           }
         }
 

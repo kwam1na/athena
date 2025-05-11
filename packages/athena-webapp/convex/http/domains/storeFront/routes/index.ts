@@ -7,3 +7,4 @@ export * from "./me";
 export * from "./onlineOrder";
 export * from "./upsells";
 export * from "./reviews";
+export { rewardsRoutes } from "./rewards";

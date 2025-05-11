@@ -63,9 +63,9 @@ export function PromoAlert({ isOpen, setIsOpen }: PromoAlertProps) {
     action: "viewed_promo_alert",
     data: {
       promoCodeItemId: promoItem?._id,
-      productSku: promoItem?.productSku.sku,
-      productImageUrl: promoItem?.productSku.images[0],
-      product: promoItem?.productSku.productId,
+      productSku: promoItem?.productSku?.sku,
+      productImageUrl: promoItem?.productSku?.images[0],
+      product: promoItem?.productSku?.productId,
     },
     isReady: isOpen && !!promoItem && !!promoItem.productSku,
   });

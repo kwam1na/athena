@@ -13,7 +13,7 @@ export const useOnlineOrderQueries = () => {
       queryOptions({
         queryKey: ["online-orders", "list"],
         queryFn: () => getOrders(),
-        staleTime: DEFAULT_STALE_TIME,
+        staleTime: 0,
         enabled: queryEnabled,
       }),
     details: () => ["online-orders", "detail"],
@@ -21,7 +21,7 @@ export const useOnlineOrderQueries = () => {
       queryOptions({
         queryKey: ["online-orders", "detail", orderId],
         queryFn: () => getOrder(orderId),
-        staleTime: DEFAULT_STALE_TIME,
+        staleTime: 0,
         enabled: queryEnabled,
       }),
   };

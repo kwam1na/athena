@@ -14,6 +14,7 @@ import { DeliveryDetails } from "@/components/checkout/DeliveryDetails/DeliveryS
 import NotFound from "@/components/states/not-found/NotFound";
 import { FadeIn } from "@/components/common/FadeIn";
 import { capitalizeFirstLetter, formatDate, slugToWords } from "@/lib/utils";
+import { useAuth } from "@/hooks/useAuth";
 import {
   ArrowLeft,
   CircleCheck,
@@ -21,6 +22,7 @@ import {
   RotateCcw,
   Tag,
   Truck,
+  Award,
 } from "lucide-react";
 import {
   Breadcrumb,
@@ -33,6 +35,9 @@ import { getDiscountValue } from "@/components/checkout/utils";
 import ImageWithFallback from "@/components/ui/image-with-fallback";
 import { useOnlineOrderQueries } from "@/lib/queries/onlineOrder";
 import { Button } from "@/components/ui/button";
+import { GuestRewardsPrompt } from "@/components/rewards/GuestRewardsPrompt";
+import { useUserQueries } from "@/lib/queries/user";
+import { OrderPointsDisplay } from "@/components/rewards/OrderPointsDisplay";
 
 export const Route = createFileRoute(
   "/_layout/_ordersLayout/shop/orders/$orderId/"
@@ -134,6 +139,13 @@ const OrderSummary = ({ order }: { order: any }) => {
               {`${order.discount.code} - ${discountText}`} off {discountSpan}
             </strong>
           </div>
+        )}
+
+        {!order.storeFrontUserId.toString().startsWith("guest") && (
+          <OrderPointsDisplay
+            orderId={order._id}
+            hasVerifiedPayment={order.hasVerifiedPayment}
+          />
         )}
       </div>
 
@@ -242,8 +254,76 @@ const PickupDetails = ({ order }: { order: any }) => {
     );
 };
 
+const OrderStatusSection = ({ data }: { data: any }) => {
+  const isOrderOpen = data.status === "open";
+
+  // Don't show points for guest users
+  const showPoints =
+    !data.storeFrontUserId.toString().startsWith("guest") &&
+    data.hasVerifiedPayment;
+
+  return (
+    <div className="space-y-8 text-sm">
+      {isOrderOpen ? (
+        <div className="flex items-center gap-2">
+          <Hourglass className="w-3.5 h-3.5" />
+          <p className="font-medium">Processing</p>
+        </div>
+      ) : (
+        <div className="flex items-center gap-2">
+          {data.status == "out-for-delivery" && (
+            <Truck className="w-3.5 h-3.5" />
+          )}
+
+          {data.status == "refunded" && <RotateCcw className="w-3 h-3" />}
+
+          {data.status == "picked-up" && (
+            <CircleCheck className="w-3.5 h-3.5" />
+          )}
+
+          {data.status == "delivered" && (
+            <CircleCheck className="w-3.5 h-3.5" />
+          )}
+          <p className="font-medium">
+            {capitalizeFirstLetter(slugToWords(data.status))}
+          </p>
+        </div>
+      )}
+
+      <div className="flex items-center justify-between w-full lg:w-[30%]">
+        <p>Purchase date</p>
+        <p>{formatDate(data._creationTime)}</p>
+      </div>
+
+      <div className="flex items-center justify-between w-full lg:w-[30%]">
+        <p>Order #</p>
+        <p>{data?.orderNumber}</p>
+      </div>
+
+      {/* Add reward points display for registered users */}
+      {/* {showPoints && (
+        <div className="flex items-center justify-between w-full lg:w-[30%]">
+          <p>Reward points</p>
+          <div className="flex items-center gap-1">
+            <Award className="w-3.5 h-3.5 text-primary" />
+            <OrderPointsDisplay
+              orderId={data._id}
+              hasVerifiedPayment={data.hasVerifiedPayment}
+              compact={true}
+            />
+          </div>
+        </div>
+      )} */}
+    </div>
+  );
+};
+
 const OrderDetail = () => {
   const { orderId } = useParams({ strict: false });
+
+  const { userId } = useAuth();
+
+  const isGuest = userId === undefined;
 
   const onlineOrderQueries = useOnlineOrderQueries();
 
@@ -258,8 +338,6 @@ const OrderDetail = () => {
   }
 
   const isPickupOrder = data.deliveryMethod == "pickup";
-
-  const isOrderOpen = data.status == "open";
 
   const getOrderMessage = () => {
     const getNextPhase = () => {
@@ -316,47 +394,18 @@ const OrderDetail = () => {
   ].includes(data.status);
 
   return (
-    <FadeIn className="space-y-24 lg:space-y-40 py-8 pb-32 w-full">
+    <FadeIn className="space-y-24 lg:space-y-40 py-8 pb-32 w-full container mx-auto max-w-[1024px] px-6 xl:px-0">
       <div className="space-y-16">
         <OrderNavigation />
 
-        <div className="space-y-8 text-sm">
-          {isOrderOpen ? (
-            <div className="flex items-center gap-2">
-              {data.status == "open" && <Hourglass className="w-3.5 h-3.5" />}
-              <p className="font-medium">Processing</p>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2">
-              {data.status == "out-for-delivery" && (
-                <Truck className="w-3.5 h-3.5" />
-              )}
+        <OrderStatusSection data={data} />
 
-              {data.status == "refunded" && <RotateCcw className="w-3 h-3" />}
-
-              {data.status == "picked-up" && (
-                <CircleCheck className="w-3.5 h-3.5" />
-              )}
-
-              {data.status == "delivered" && (
-                <CircleCheck className="w-3.5 h-3.5" />
-              )}
-              <p className="font-medium">
-                {capitalizeFirstLetter(slugToWords(data.status))}
-              </p>
-            </div>
-          )}
-
-          <div className="flex items-center justify-between w-full lg:w-[30%]">
-            <p>Purchase date</p>
-            <p>{formatDate(data._creationTime)}</p>
-          </div>
-
-          <div className="flex items-center justify-between w-full lg:w-[30%]">
-            <p>Order #</p>
-            <p>{data?.orderNumber}</p>
-          </div>
-        </div>
+        {isGuest && data && data.hasVerifiedPayment && (
+          <GuestRewardsPrompt
+            orderAmount={data.amount}
+            orderEmail={data.customerDetails.email}
+          />
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-24 text-sm">

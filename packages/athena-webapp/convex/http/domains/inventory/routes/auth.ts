@@ -2,7 +2,10 @@ import { Hono } from "hono";
 import { HonoWithConvex } from "convex-helpers/server/hono";
 import { ActionCtx } from "../../../../_generated/server";
 import { api } from "../../../../_generated/api";
-import { getStoreDataFromRequest } from "../../../utils";
+import {
+  getStoreDataFromRequest,
+  getStorefrontUserFromRequest,
+} from "../../../utils";
 import { Id } from "../../../../_generated/dataModel";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 
@@ -10,6 +13,8 @@ const authRoutes: HonoWithConvex<ActionCtx> = new Hono();
 
 authRoutes.post("/verify", async (c) => {
   const { storeId, organizationId } = getStoreDataFromRequest(c);
+
+  const userId = getStorefrontUserFromRequest(c);
 
   const { email, firstName, lastName, code } = await c.req.json();
 
@@ -24,6 +29,7 @@ authRoutes.post("/verify", async (c) => {
         email,
         storeId: storeId as Id<"store">,
         organizationId: organizationId as Id<"organization">,
+        userId,
       });
 
       if (res.user) {

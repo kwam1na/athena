@@ -10,6 +10,7 @@ import { getOrderAmount } from "@/components/checkout/utils";
 import ImageWithFallback from "@/components/ui/image-with-fallback";
 import { useOnlineOrderQueries } from "@/lib/queries/onlineOrder";
 import { OnlineOrder } from "@athena/webapp";
+import { FadeIn } from "@/components/common/FadeIn";
 
 export const Route = createFileRoute("/_layout/_ordersLayout/shop/orders/")({
   component: () => <Purchases />,
@@ -125,10 +126,18 @@ const Purchases = () => {
   if (isLoading) return <div className="h-screen"></div>;
 
   return (
-    <div className="pb-56 space-y-8 lg:space-y-24 py-8">
-      {data?.length != 0 && <h1 className="text-lg">Orders</h1>}
+    <FadeIn className="pb-56 space-y-8 lg:space-y-24">
+      <div className="w-full bg-accent5">
+        <div className="container mx-auto max-w-[1024px] space-y-4">
+          <div className="flex items-center border-b py-2 px-6 lg:px-0">
+            <p className="text-lg font-medium">Orders</p>
+          </div>
+        </div>
+      </div>
 
-      <Orders />
-    </div>
+      <div className="container mx-auto max-w-[1024px] px-6 xl:px-0">
+        <Orders />
+      </div>
+    </FadeIn>
   );
 };

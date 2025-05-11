@@ -128,3 +128,59 @@ export const getUniqueVisitors = query({
     return uniqueVisitors.length;
   },
 });
+
+export const getReturningVisitorsForDay = query({
+  args: {
+    storeId: v.id("store"),
+  },
+  returns: v.number(),
+  handler: async (ctx, args) => {
+    // Get UTC midnight today and tomorrow
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+
+    const tomorrow = new Date(today);
+    tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+
+    // Get all visitors with analytics activity today
+    const analyticsToday = await ctx.db
+      .query("analytics")
+      .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
+      .filter((q) =>
+        q.and(
+          q.gte(q.field("_creationTime"), today.getTime()),
+          q.lt(q.field("_creationTime"), tomorrow.getTime())
+        )
+      )
+      .collect();
+
+    // Get unique visitor IDs from today's analytics
+    const visitorIdsToday = new Set<string>();
+    for (const analytic of analyticsToday) {
+      if (analytic.storeFrontUserId) {
+        visitorIdsToday.add(analytic.storeFrontUserId);
+      }
+    }
+
+    // Count how many of these users also have analytics records from before today
+    let returningVisitors = 0;
+    for (const visitorId of visitorIdsToday) {
+      const previousActivity = await ctx.db
+        .query("analytics")
+        .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
+        .filter((q) =>
+          q.and(
+            q.eq(q.field("storeFrontUserId"), visitorId),
+            q.lt(q.field("_creationTime"), today.getTime())
+          )
+        )
+        .first();
+
+      if (previousActivity) {
+        returningVisitors++;
+      }
+    }
+
+    return returningVisitors;
+  },
+});

@@ -3,6 +3,8 @@ import { DeliveryDetails } from "../DeliveryDetails/DeliverySection";
 import { getDiscountValue, getOrderAmount } from "../utils";
 import { useStoreContext } from "@/contexts/StoreContext";
 import { motion } from "framer-motion";
+import { useAuth } from "@/hooks/useAuth";
+import { Award } from "lucide-react";
 
 export const PickupDetails = ({ session }: { session: any }) => {
   if (session.deliveryMethod == "pickup") {
@@ -32,6 +34,10 @@ export const PickupDetails = ({ session }: { session: any }) => {
 };
 
 export const PaymentDetails = ({ session }: { session?: CheckoutSession }) => {
+  const { userId } = useAuth();
+
+  const isGuest = userId === undefined;
+
   if (!session?.paymentMethod) {
     return null;
   }
@@ -58,6 +64,8 @@ export const PaymentDetails = ({ session }: { session?: CheckoutSession }) => {
       ? `${discount.value}%`
       : `${formatter.format(discountValue)}`;
 
+  const potentialRewards = Math.floor(session.amount / 1000);
+
   return (
     <div className="space-y-8">
       <p className="text-xs">Payment</p>
@@ -72,6 +80,15 @@ export const PaymentDetails = ({ session }: { session?: CheckoutSession }) => {
           )}
         </div>
         <p className="text-sm">{text}</p>
+
+        {!isGuest && (
+          <div className="flex items-center gap-2 text-accent2">
+            <Award className="w-4 h-4" />
+            <p className="text-sm font-medium">
+              +{potentialRewards.toLocaleString()} points earned
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );

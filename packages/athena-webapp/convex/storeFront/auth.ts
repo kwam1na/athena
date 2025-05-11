@@ -42,6 +42,7 @@ export const verifyCode = mutation({
     email: v.string(),
     storeId: v.id("store"),
     organizationId: v.id("organization"),
+    userId: v.union(v.id("storeFrontUser"), v.id("guest")),
   },
   handler: async (ctx, args) => {
     const verificationCode = await ctx.db
@@ -86,12 +87,15 @@ export const verifyCode = mutation({
       .first();
 
     if (!user) {
+      // get the guest user
+      const guestUser = await ctx.db.get(args.userId);
+
       const id = await ctx.db.insert("storeFrontUser", {
         email: verificationCode.email,
         storeId: args.storeId,
         organizationId: args.organizationId,
-        firstName: verificationCode.firstName,
-        lastName: verificationCode.lastName,
+        firstName: verificationCode.firstName || guestUser?.firstName,
+        lastName: verificationCode.lastName || guestUser?.lastName,
       });
 
       user = await ctx.db.get(id);

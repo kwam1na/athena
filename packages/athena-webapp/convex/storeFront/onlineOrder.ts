@@ -5,8 +5,7 @@ import {
   customerDetailsSchema,
   paymentMethodSchema,
 } from "../schemas/storeFront";
-import { OnlineOrder } from "../../types";
-import { api } from "../_generated/api";
+import { api, internal } from "../_generated/api";
 import { Id } from "../_generated/dataModel";
 
 const entity = "onlineOrder";

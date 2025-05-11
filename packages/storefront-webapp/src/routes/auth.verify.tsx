@@ -32,6 +32,7 @@ import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { set, z } from "zod";
+import { awardPointsForGuestOrders } from "@/api/rewards";
 
 export const FormSchema = z.object({
   code: z.string().min(6, {
@@ -72,6 +73,10 @@ function InputOTPForm() {
 
   const updateOrdersOwnerMutation = useMutation({
     mutationFn: updateOrdersOwner,
+  });
+
+  const awardPointsForGuestOrdersMutation = useMutation({
+    mutationFn: awardPointsForGuestOrders,
   });
 
   // Initialize and handle countdown
@@ -145,24 +150,31 @@ function InputOTPForm() {
       }
 
       if (res.success) {
-        await updateBagOwnerMutation.mutateAsync({
-          currentOwnerId: userId || "",
-          newOwnerId: res.user._id,
-          bagId: bag?._id as string,
-        });
+        await Promise.all([
+          await updateBagOwnerMutation.mutateAsync({
+            currentOwnerId: userId || "",
+            newOwnerId: res.user._id,
+            bagId: bag?._id as string,
+          }),
 
-        await updateSavedBagOwnerMutation.mutateAsync({
-          currentOwnerId: userId || "",
-          newOwnerId: res.user._id,
-          organizationId: store?.organizationId as string,
-          storeId: store?._id as string,
-          savedBagId: savedBag?._id as string,
-        });
+          await updateSavedBagOwnerMutation.mutateAsync({
+            currentOwnerId: userId || "",
+            newOwnerId: res.user._id,
+            organizationId: store?.organizationId as string,
+            storeId: store?._id as string,
+            savedBagId: savedBag?._id as string,
+          }),
 
-        await updateOrdersOwnerMutation.mutateAsync({
-          currentOwnerId: userId || "",
-          newOwnerId: res.user._id,
-        });
+          await updateOrdersOwnerMutation.mutateAsync({
+            currentOwnerId: userId || "",
+            newOwnerId: res.user._id,
+          }),
+
+          await awardPointsForGuestOrdersMutation.mutateAsync({
+            guestId: userId || "",
+            userId: res.user._id,
+          }),
+        ]);
 
         localStorage.setItem(LOGGED_IN_USER_ID_KEY, res.user._id);
 
