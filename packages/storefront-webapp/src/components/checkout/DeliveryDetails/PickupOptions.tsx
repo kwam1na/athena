@@ -1,35 +1,41 @@
 import { useStoreContext } from "@/contexts/StoreContext";
 import { useCheckout } from "../CheckoutProvider";
 import { GhostButton } from "@/components/ui/ghost-button";
-import { Store, Truck } from "lucide-react";
+import { Truck } from "lucide-react";
+import { StoreIcon } from "lucide-react";
+import { isFeeWaived } from "@/lib/feeUtils";
 
 export const PickupOptions = () => {
   const { checkoutState, updateState } = useCheckout();
-
   const { formatter, store } = useStoreContext();
-  const { waiveDeliveryFees } = store?.config || {};
+  const { waiveDeliveryFees, deliveryFees } = store?.config || {};
 
-  const isDelivery = checkoutState.deliveryMethod === "delivery";
   const isPickup = checkoutState.deliveryMethod === "pickup";
+  const isDelivery = checkoutState.deliveryMethod === "delivery";
+
+  // Use the shared utility function to determine if the fee should be waived
+  const isFeeWaivedForCurrentOption = isFeeWaived(
+    waiveDeliveryFees,
+    checkoutState.deliveryOption
+  );
 
   return (
-    <div className="flex gap-4 w-full">
+    <div className="flex items-center gap-4">
       <GhostButton
         type="button"
         onClick={() => {
           updateState({
             deliveryMethod: "pickup",
-            pickupLocation: "wigclub-hair-studio",
-            billingDetails: null,
+            deliveryOption: null,
+            deliveryFee: 0,
           });
         }}
         selected={isPickup}
-        className="h-[64px] w-[50%] justify-start"
+        className="h-[64px] w-[50%]"
       >
         <div className="w-full space-y-2">
           <div className="flex items-center">
-            <Store className="w-4 h-4 mr-2" />
-            Store pickup
+            <StoreIcon className="w-4 h-4 mr-2" /> Store pickup
           </div>
 
           <p className="text-xs text-start w-full">Free</p>
@@ -41,7 +47,7 @@ export const PickupOptions = () => {
         onClick={() => {
           updateState({
             deliveryMethod: "delivery",
-            deliveryFee: waiveDeliveryFees ? 0 : null,
+            deliveryFee: isFeeWaivedForCurrentOption ? 0 : null,
             pickupLocation: null,
           });
         }}
@@ -54,7 +60,7 @@ export const PickupOptions = () => {
             Delivery
           </div>
 
-          {waiveDeliveryFees ? (
+          {isFeeWaivedForCurrentOption ? (
             <p className="text-xs text-start w-full">Free</p>
           ) : (
             Boolean(checkoutState.deliveryFee) && (

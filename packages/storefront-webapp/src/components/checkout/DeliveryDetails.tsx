@@ -29,7 +29,7 @@ import { useStoreContext } from "@/contexts/StoreContext";
 export const DeliveryDetailsForm = ({ form }: CheckoutFormSectionProps) => {
   const { checkoutState, updateState } = useCheckout();
   const { store } = useStoreContext();
-  const { waiveDeliveryFees } = store?.config || {};
+  const { waiveDeliveryFees, deliveryFees } = store?.config || {};
 
   // const onSubmit = (data: z.infer<typeof deliveryDetailsSchema>) => {
   //   console.log("on submit in delivery details ->", data);
@@ -191,11 +191,24 @@ export const DeliveryDetailsForm = ({ form }: CheckoutFormSectionProps) => {
                             const region = e.target.value;
                             const deliveryOption =
                               region == "GA" ? "within-accra" : "outside-accra";
-                            const deliveryFee = waiveDeliveryFees
+
+                            // Handle both old boolean format and new object format for backward compatibility
+                            const shouldWaiveRegionFee =
+                              typeof waiveDeliveryFees === "boolean"
+                                ? waiveDeliveryFees
+                                : region == "GA"
+                                  ? waiveDeliveryFees?.withinAccra ||
+                                    waiveDeliveryFees?.all ||
+                                    false
+                                  : waiveDeliveryFees?.otherRegions ||
+                                    waiveDeliveryFees?.all ||
+                                    false;
+
+                            const deliveryFee = shouldWaiveRegionFee
                               ? 0
                               : region == "GA"
-                                ? 30
-                                : 70;
+                                ? deliveryFees?.withinAccra || 30
+                                : deliveryFees?.otherRegions || 70;
 
                             updateState({
                               deliveryDetails: {
@@ -238,11 +251,23 @@ export const DeliveryDetailsForm = ({ form }: CheckoutFormSectionProps) => {
                           const deliveryOption =
                             region == "GA" ? "within-accra" : "outside-accra";
 
-                          const deliveryFee = waiveDeliveryFees
+                          // Handle both old boolean format and new object format for backward compatibility
+                          const shouldWaiveRegionFee =
+                            typeof waiveDeliveryFees === "boolean"
+                              ? waiveDeliveryFees
+                              : region == "GA"
+                                ? waiveDeliveryFees?.withinAccra ||
+                                  waiveDeliveryFees?.all ||
+                                  false
+                                : waiveDeliveryFees?.otherRegions ||
+                                  waiveDeliveryFees?.all ||
+                                  false;
+
+                          const deliveryFee = shouldWaiveRegionFee
                             ? 0
                             : region == "GA"
-                              ? 30
-                              : 70;
+                              ? deliveryFees?.withinAccra || 30
+                              : deliveryFees?.otherRegions || 70;
 
                           updateState({
                             deliveryDetails: {

@@ -40,6 +40,31 @@ analyticsRoutes.post("/", async (c) => {
   return c.json(res);
 });
 
+// Endpoint for updating analytics owner from guest to registered user
+analyticsRoutes.post("/update-owner", async (c) => {
+  try {
+    const { guestId, userId } = await c.req.json();
+
+    if (!guestId || !userId) {
+      return c.json({ error: "Guest ID and User ID are required" }, 400);
+    }
+
+    // Add a mutation to update all analytics records associated with guestId to userId
+    await c.env.runMutation(api.storeFront.analytics.updateOwner, {
+      guestId: guestId as Id<"guest">,
+      userId: userId as Id<"storeFrontUser">,
+    });
+
+    return c.json({ success: true });
+  } catch (error) {
+    console.error("Error updating analytics owner:", error);
+    return c.json(
+      { error: "Failed to update analytics owner", details: String(error) },
+      500
+    );
+  }
+});
+
 // New: GET /product-view-count?productId=...
 analyticsRoutes.get("/product-view-count", async (c) => {
   const productId = c.req.query("productId");

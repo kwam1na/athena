@@ -84,8 +84,49 @@ export const create = mutation({
       };
     }
 
+    // Check if products are visible
+    const invisibleProducts = productExistenceChecks.filter(
+      (product) => product && product.isVisible === false
+    );
+
+    if (invisibleProducts.length > 0) {
+      return {
+        success: false,
+        message: "Some items in your bag are no longer available",
+        unavailableProducts: invisibleProducts.map((product) => {
+          const correspondingProductData = args.products.find(
+            (p) => p.productId === product?._id
+          );
+          return {
+            productSkuId: correspondingProductData?.productSkuId,
+            requested: correspondingProductData?.quantity || 0,
+            available: 0,
+          };
+        }),
+      };
+    }
+
     // Fetch product SKUs
     const productSkus = await fetchProductSkus(ctx, args.products);
+
+    // Check if product SKUs are visible
+    const invisibleProductSkus = productSkus.filter(
+      (sku) => sku.isVisible === false
+    );
+
+    if (invisibleProductSkus.length > 0) {
+      return {
+        success: false,
+        message: "Some items in your bag are no longer available",
+        unavailableProducts: invisibleProductSkus.map((sku) => ({
+          productSkuId: sku._id,
+          requested:
+            args.products.find((p) => p.productSkuId === sku._id)?.quantity ||
+            0,
+          available: 0,
+        })),
+      };
+    }
 
     // Check for existing session
     const existingSession = await retrieveActiveCheckoutSession(

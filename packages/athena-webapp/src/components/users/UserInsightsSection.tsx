@@ -58,7 +58,7 @@ export const UserInsightsSection = () => {
   // console.log(insights);
 
   return (
-    <div className={`space-y-8 w-[80%]`}>
+    <div className={`space-y-8 p-8 border rounded-lg`}>
       <div className="flex items-center gap-2">
         <p className="text-sm font-medium">User Insights</p>
         <WandSparkles className="w-4 h-4 text-muted-foreground" />

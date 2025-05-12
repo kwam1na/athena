@@ -2,7 +2,7 @@ import { useState } from "react";
 import { ShoppingBasket, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useStoreContext } from "@/contexts/StoreContext";
-import { Link } from "@tanstack/react-router";
+import { Link, useSearch } from "@tanstack/react-router";
 import placeholder from "@/assets/placeholder.png";
 import { ShoppingBagAction, useShoppingBag } from "@/hooks/useShoppingBag";
 import { ProductSku, SavedBagItem } from "@athena/webapp";
@@ -12,6 +12,7 @@ import { EmptyState } from "../states/empty/empty-state";
 import { FadeIn } from "../common/FadeIn";
 import ImageWithFallback from "../ui/image-with-fallback";
 import { postAnalytics } from "@/api/analytics";
+import { useTrackEvent } from "@/hooks/useTrackEvent";
 
 export default function SavedBag() {
   const [bagAction, setBagAction] = useState<ShoppingBagAction>("idle");
@@ -24,14 +25,12 @@ export default function SavedBag() {
     moveItemFromSavedToBag,
   } = useShoppingBag();
 
-  // const getProductName = (item: ProductSku) => {
-  //   if ((item as any).productCategory == "Hair") {
-  //     if (!(item as any).colorName) return capitalizeWords((item as any).productName);
-  //     return `${item.length}" ${capitalizeWords((item as any).colorName)} ${(item as any).productName}`;
-  //   }
+  const { origin } = useSearch({ strict: false });
 
-  //   return (item as any).productName;
-  // };
+  useTrackEvent({
+    action: "viewed_saved_bag",
+    origin,
+  });
 
   const isSavedEmpty = savedBag?.items?.length === 0;
 
@@ -96,6 +95,7 @@ export default function SavedBag() {
                       params={() => ({ productSlug: item.productId })}
                       search={{
                         variant: item.productSku,
+                        origin: "saved_bag",
                       }}
                     >
                       <ImageWithFallback

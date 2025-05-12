@@ -23,6 +23,74 @@ export const createTransaction = action({
     orderDetails: orderDetailsSchema,
   },
   handler: async (ctx, args) => {
+    // Get the checkout session
+    const session = await ctx.runQuery(api.storeFront.checkoutSession.getById, {
+      sessionId: args.checkoutSessionId,
+    });
+
+    if (!session) {
+      return {
+        success: false,
+        message: "Invalid checkout session",
+      };
+    }
+
+    // Get session items with their product and SKU info
+    const sessionItems = session.items || [];
+
+    if (sessionItems.length === 0) {
+      return {
+        success: false,
+        message: "No items in checkout session",
+      };
+    }
+
+    // Get the store ID from the session
+    const storeId = session.storeId;
+
+    // Extract product and SKU IDs from session items
+    const productIds = sessionItems.map((item) => item.productId);
+    const productSkuIds = sessionItems.map((item) => item.productSkuId);
+
+    // Check product visibility
+    const products = await Promise.all(
+      productIds.map((id) =>
+        ctx.runQuery(api.inventory.products.getById, {
+          id,
+          storeId,
+        })
+      )
+    );
+
+    const invisibleProducts = products.filter(
+      (product) => product && product.isVisible === false
+    );
+
+    if (invisibleProducts.length > 0) {
+      return {
+        success: false,
+        message: "Some items in your bag are no longer available",
+      };
+    }
+
+    // Check product SKU visibility
+    const productSkus = await Promise.all(
+      productSkuIds.map((id) =>
+        ctx.runQuery(api.inventory.productSku.getById, { id })
+      )
+    );
+
+    const invisibleSkus = productSkus.filter(
+      (sku) => sku && sku.isVisible === false
+    );
+
+    if (invisibleSkus.length > 0) {
+      return {
+        success: false,
+        message: "Some items in your bag are no longer available",
+      };
+    }
+
     const amountToCharge = getOrderAmount({
       discount: args.orderDetails.discount,
       deliveryFee: args.orderDetails.deliveryFee || 0,
@@ -76,6 +144,10 @@ export const createTransaction = action({
     } else {
       const r = await response.json();
       console.error("Failed to create transaction", r);
+      return {
+        success: false,
+        message: "Failed to create payment transaction",
+      };
     }
   },
 });
@@ -283,6 +355,9 @@ export const verifyPayment = action({
       if (!isVerified) {
         console.error(
           `unable to verify payment. [session: ${session?._id}, order: ${order?._id}, customer: ${args.storeFrontUserId}, externalReference: ${args.externalReference}]`
+        );
+        console.info(
+          `status: ${res.data.status}, amount_from_paystack: ${res.data.amount}, amount_from_order: ${orderAmountLessDiscounts}`
         );
       }
 

@@ -33,7 +33,7 @@ export const DeliveryDetailsForm = () => {
   const { checkoutState, actionsState, updateActionsState, updateState } =
     useCheckout();
   const { store } = useStoreContext();
-  const { waiveDeliveryFees } = store?.config || {};
+  const { waiveDeliveryFees, deliveryFees } = store?.config || {};
 
   const form = useForm({
     resolver: zodResolver(deliveryDetailsSchema),
@@ -224,11 +224,22 @@ export const DeliveryDetailsForm = () => {
                           const deliveryOption =
                             region == "GA" ? "within-accra" : "outside-accra";
 
-                          const deliveryFee = waiveDeliveryFees
+                          const shouldWaiveRegionFee =
+                            typeof waiveDeliveryFees === "boolean"
+                              ? waiveDeliveryFees
+                              : region == "GA"
+                                ? waiveDeliveryFees?.withinAccra ||
+                                  waiveDeliveryFees?.all ||
+                                  false
+                                : waiveDeliveryFees?.otherRegions ||
+                                  waiveDeliveryFees?.all ||
+                                  false;
+
+                          const deliveryFee = shouldWaiveRegionFee
                             ? 0
                             : region == "GA"
-                              ? 30
-                              : 70;
+                              ? deliveryFees?.withinAccra || 30
+                              : deliveryFees?.otherRegions || 70;
 
                           updateState({
                             deliveryDetails: {

@@ -66,3 +66,9 @@ export function getRelativeTime(timestamp: number) {
   if (hours < 24) return rtf.format(-hours, "hours");
   return rtf.format(-days, "days");
 }
+
+// Add the formatUserId function to format user IDs
+export const formatUserId = (id: string) => {
+  const lastFive = id.slice(-5);
+  return `user-${lastFive}`;
+};

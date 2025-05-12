@@ -5,7 +5,7 @@ export const storeQueries = {
   store: ({ asNewUser }: { asNewUser: boolean }) =>
     queryOptions({
       queryKey: ["store"],
-      staleTime: 0.15 * 60 * 1000,
+      staleTime: 0,
       queryFn: () => getStore(asNewUser),
     }),
 };

@@ -45,7 +45,9 @@ import {
 
 const schema = defineSchema({
   ...authTables,
-  analytics: defineTable(analyticsSchema).index("by_storeId", ["storeId"]),
+  analytics: defineTable(analyticsSchema)
+    .index("by_storeId", ["storeId"])
+    .index("by_storeFrontUserId", ["storeFrontUserId"]),
   appVerificationCode: defineTable(appVerificationCodeSchema),
   athenaUser: defineTable(athenaUserSchema),
   bag: defineTable(bagSchema).index("by_storeId", ["storeId"]),

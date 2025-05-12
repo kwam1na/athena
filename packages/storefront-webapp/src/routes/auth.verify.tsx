@@ -2,6 +2,7 @@ import { updateBagOwner } from "@/api/bag";
 import { updateOrdersOwner } from "@/api/onlineOrder";
 import { updateSavedBagOwner } from "@/api/savedBag";
 import { verifyUserAccount } from "@/api/auth";
+import { updateAnalyticsOwner } from "@/api/analytics";
 import { AuthComponent } from "@/components/auth/Auth";
 import { FadeIn } from "@/components/common/FadeIn";
 import {
@@ -73,6 +74,10 @@ function InputOTPForm() {
 
   const updateOrdersOwnerMutation = useMutation({
     mutationFn: updateOrdersOwner,
+  });
+
+  const updateAnalyticsOwnerMutation = useMutation({
+    mutationFn: updateAnalyticsOwner,
   });
 
   const awardPointsForGuestOrdersMutation = useMutation({
@@ -168,6 +173,11 @@ function InputOTPForm() {
           await updateOrdersOwnerMutation.mutateAsync({
             currentOwnerId: userId || "",
             newOwnerId: res.user._id,
+          }),
+
+          await updateAnalyticsOwnerMutation.mutateAsync({
+            guestId: userId || "",
+            userId: res.user._id,
           }),
 
           await awardPointsForGuestOrdersMutation.mutateAsync({

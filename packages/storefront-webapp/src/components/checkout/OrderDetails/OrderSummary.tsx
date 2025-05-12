@@ -4,12 +4,20 @@ import { useShoppingBag } from "@/hooks/useShoppingBag";
 import { getDiscountValue } from "../utils";
 import { BagSummaryItems } from "../BagSummary";
 import { Tag } from "lucide-react";
+import { isFeeWaived, isAnyFeeWaived } from "@/lib/feeUtils";
 
 export default function OrderSummary() {
   const { formatter, store } = useStoreContext();
   const { bagSubtotal } = useShoppingBag();
   const { checkoutState } = useCheckout();
   const { waiveDeliveryFees } = store?.config || {};
+
+  // Use the shared utility functions for fee waiving logic
+  const isFeeWaivedForCurrentOption = isFeeWaived(
+    waiveDeliveryFees,
+    checkoutState.deliveryOption
+  );
+  const anyFeeWaived = isAnyFeeWaived(waiveDeliveryFees);
 
   const discountValue = getDiscountValue(bagSubtotal, checkoutState.discount);
 
@@ -31,16 +39,17 @@ export default function OrderSummary() {
           <p className="text-sm">Subtotal</p>
           <p className="text-sm">{formatter.format(bagSubtotal)}</p>
         </div>
-        {checkoutState.deliveryMethod === "delivery" && (
-          <div className="flex justify-between">
-            <p className="text-sm">Shipping</p>
-            <p className="text-sm">
-              {waiveDeliveryFees
-                ? "Free"
-                : formatter.format(checkoutState.deliveryFee || 0)}
-            </p>
-          </div>
-        )}
+        {checkoutState.deliveryMethod === "delivery" &&
+          Boolean(checkoutState.deliveryFee) && (
+            <div className="flex justify-between">
+              <p className="text-sm">Shipping</p>
+              <p className="text-sm">
+                {isFeeWaivedForCurrentOption
+                  ? "Free"
+                  : formatter.format(checkoutState.deliveryFee || 0)}
+              </p>
+            </div>
+          )}
         {Boolean(discountValue) && (
           <div className="flex justify-between">
             <p className="text-sm">Discount</p>
@@ -57,14 +66,15 @@ export default function OrderSummary() {
             </p>
           </div>
         )}
-        {waiveDeliveryFees && checkoutState.deliveryMethod === "delivery" && (
-          <div className="flex items-center">
-            <Tag className="w-3.5 h-3.5 mr-2" />
-            <p className="text-sm font-medium">
-              <strong>Free shipping applied</strong>
-            </p>
-          </div>
-        )}
+        {isFeeWaivedForCurrentOption &&
+          checkoutState.deliveryMethod === "delivery" && (
+            <div className="flex items-center">
+              <Tag className="w-3.5 h-3.5 mr-2" />
+              <p className="text-sm font-medium">
+                <strong>Free shipping applied</strong>
+              </p>
+            </div>
+          )}
         <div className="flex justify-between font-medium">
           <p className="text-lg">Total</p>
           <p className="text-lg">{formatter.format(total)}</p>

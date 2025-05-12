@@ -114,7 +114,7 @@ export const CountryFields = ({ form }: CheckoutFormSectionProps) => {
 const RegionFields = ({ form }: CheckoutFormSectionProps) => {
   const { checkoutState, updateState } = useCheckout();
   const { store } = useStoreContext();
-  const { waiveDeliveryFees } = store?.config || {};
+  const { waiveDeliveryFees, deliveryFees } = store?.config || {};
 
   return (
     <>
@@ -136,11 +136,24 @@ const RegionFields = ({ form }: CheckoutFormSectionProps) => {
                       const region = e.target.value;
                       const deliveryOption =
                         region == "GA" ? "within-accra" : "outside-accra";
-                      const deliveryFee = waiveDeliveryFees
+
+                      // Handle both old boolean format and new object format for backward compatibility
+                      const shouldWaiveRegionFee =
+                        typeof waiveDeliveryFees === "boolean"
+                          ? waiveDeliveryFees
+                          : region == "GA"
+                            ? waiveDeliveryFees?.withinAccra ||
+                              waiveDeliveryFees?.all ||
+                              false
+                            : waiveDeliveryFees?.otherRegions ||
+                              waiveDeliveryFees?.all ||
+                              false;
+
+                      const deliveryFee = shouldWaiveRegionFee
                         ? 0
                         : region == "GA"
-                          ? 30
-                          : 70;
+                          ? deliveryFees?.withinAccra || 30
+                          : deliveryFees?.otherRegions || 70;
 
                       updateState({
                         deliveryDetails: {
@@ -187,11 +200,23 @@ const RegionFields = ({ form }: CheckoutFormSectionProps) => {
                     const deliveryOption =
                       region == "GA" ? "within-accra" : "outside-accra";
 
-                    const deliveryFee = waiveDeliveryFees
+                    // Handle both old boolean format and new object format for backward compatibility
+                    const shouldWaiveRegionFee =
+                      typeof waiveDeliveryFees === "boolean"
+                        ? waiveDeliveryFees
+                        : region == "GA"
+                          ? waiveDeliveryFees?.withinAccra ||
+                            waiveDeliveryFees?.all ||
+                            false
+                          : waiveDeliveryFees?.otherRegions ||
+                            waiveDeliveryFees?.all ||
+                            false;
+
+                    const deliveryFee = shouldWaiveRegionFee
                       ? 0
                       : region == "GA"
-                        ? 30
-                        : 70;
+                        ? deliveryFees?.withinAccra || 30
+                        : deliveryFees?.otherRegions || 70;
 
                     updateState({
                       deliveryDetails: {

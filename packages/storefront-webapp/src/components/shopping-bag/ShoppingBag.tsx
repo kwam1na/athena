@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useStoreContext } from "@/contexts/StoreContext";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import placeholder from "@/assets/placeholder.png";
 import { ShoppingBagAction, useShoppingBag } from "@/hooks/useShoppingBag";
 import { BagItem, ProductSku } from "@athena/webapp";
@@ -30,6 +30,7 @@ import { useNavigationBarContext } from "@/contexts/NavigationBarProvider";
 import { useCheckoutSessionQueries } from "@/lib/queries/checkout";
 import { usePromoCodesQueries } from "@/lib/queries/promoCode";
 import { postAnalytics } from "@/api/analytics";
+import { useTrackEvent } from "@/hooks/useTrackEvent";
 
 const PendingItem = ({ session, count }: { session: any; count: number }) => {
   return (
@@ -132,6 +133,13 @@ export default function ShoppingBag() {
     checkoutSessionQueries.pendingSessions()
   );
 
+  const { origin } = useSearch({ strict: false });
+
+  useTrackEvent({
+    action: "viewed_shopping_bag",
+    origin,
+  });
+
   const handleOnCheckoutClick = async () => {
     // send post
     const bagItems =
@@ -198,18 +206,28 @@ export default function ShoppingBag() {
           )}
           <h1 className="text-lg font-light">Bag</h1>
 
-          <div className="space-y-2 border border-accent5 rounded-md p-4 w-fit bg-accent5/40">
-            <p className="text-sm font-medium">
-              🎉 Woohoo! You're earning{" "}
-              <b className="text-accent2">
-                {potentialRewards.toLocaleString()}
-              </b>{" "}
-              reward points from this order
-            </p>
-            <p className="text-xs italic text-gray-500">
-              Redeemable for discounts on future purchases
-            </p>
-          </div>
+          {potentialRewards > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: -4 }}
+              animate={{
+                opacity: 1,
+                y: 0,
+                transition: { ease: "easeIn", delay: 0.4 },
+              }}
+              className="space-y-2 border border-accent5 rounded-md p-4 w-fit bg-accent5/40"
+            >
+              <p className="text-sm font-medium">
+                🎉 Woohoo! You're earning{" "}
+                <b className="text-accent2">
+                  {potentialRewards.toLocaleString()}
+                </b>{" "}
+                reward points from this order
+              </p>
+              <p className="text-xs italic text-gray-500">
+                Redeemable for discounts on future purchases
+              </p>
+            </motion.div>
+          )}
 
           {operationSuccessful == false && (
             <div className="flex items-center font-medium">
@@ -292,6 +310,7 @@ export default function ShoppingBag() {
                         params={() => ({ productSlug: item.productId })}
                         search={{
                           variant: item.productSku,
+                          origin: "shopping_bag",
                         }}
                       >
                         <ImageWithFallback
@@ -418,22 +437,24 @@ export default function ShoppingBag() {
                 <div className="ml-auto flex gap-12">
                   <div className="space-y-2">
                     <div className="flex gap-8 text-sm text-accent2">
-                      <strong>TOTAL</strong>
-                      <strong>{formatter.format(total)}</strong>
+                      <p>TOTAL</p>
+                      <p>{formatter.format(total)}</p>
                     </div>
 
-                    <p className="text-xs">* excluding taxes and shipping</p>
+                    <p className="text-xs text-gray-500">
+                      * excluding taxes and shipping
+                    </p>
                   </div>
 
                   <div className="space-y-4">
                     <LoadingButton
                       isLoading={isProcessingCheckoutRequest}
                       onClick={handleOnCheckoutClick}
-                      className={`group w-[240px] text-accent2 ${isUpdatingBag ? "pointer-events-none" : ""}`}
+                      className={`group font-light w-[240px] text-accent2 ${isUpdatingBag ? "pointer-events-none" : ""}`}
                       variant={"clear"}
                       disabled={hasPendingOrders}
                     >
-                      Checkout
+                      <p>Checkout</p>
                       <ArrowRight className="w-4 h-4 ml-2 -me-1 ms-2 transition-transform group-hover:translate-x-0.5" />
                     </LoadingButton>
                   </div>

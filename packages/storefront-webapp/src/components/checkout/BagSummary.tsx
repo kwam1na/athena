@@ -16,6 +16,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useEffect, useState } from "react";
 import { getDiscountValue } from "./utils";
 import { usePromoCodesQueries } from "@/lib/queries/promoCode";
+import { isFeeWaived } from "@/lib/feeUtils";
 
 function SummaryItem({
   item,
@@ -175,6 +176,11 @@ function BagSummary() {
       ? "entire order"
       : "select items";
 
+  const isFeeWaivedForCurrentOption = isFeeWaived(
+    waiveDeliveryFees,
+    checkoutState.deliveryOption
+  );
+
   return (
     <motion.div className="py-6 bg-background shadow-sm rounded-lg w-[80vw] lg:w-[30vw] space-y-12">
       <div className="flex items-center px-6 w-full">
@@ -231,16 +237,17 @@ function BagSummary() {
           <p className="text-sm">Subtotal</p>
           <p className="text-sm">{formatter.format(bagSubtotal)}</p>
         </div>
-        {checkoutState.deliveryMethod === "delivery" && (
-          <div className="flex justify-between">
-            <p className="text-sm">Shipping</p>
-            <p className="text-sm">
-              {waiveDeliveryFees
-                ? "Free"
-                : formatter.format(checkoutState.deliveryFee || 0)}
-            </p>
-          </div>
-        )}
+        {checkoutState.deliveryMethod === "delivery" &&
+          checkoutState.deliveryFee !== null && (
+            <div className="flex justify-between">
+              <p className="text-sm">Shipping</p>
+              <p className="text-sm">
+                {isFeeWaivedForCurrentOption
+                  ? "Free"
+                  : formatter.format(checkoutState.deliveryFee || 0)}
+              </p>
+            </div>
+          )}
         {Boolean(discountValue) && (
           <div className="flex justify-between">
             <p className="text-sm">Discounts</p>

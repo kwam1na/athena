@@ -45,7 +45,7 @@ export function GuestRewardsPrompt({
       </div>
       <div>
         <Link
-          to="/signup"
+          to="/login"
           search={{ origin: "guest-rewards", email: orderEmail }}
         >
           <Button className="w-full py-4 font-semibold bg-accent2/90 hover:bg-accent2 text-white transition">

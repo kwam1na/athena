@@ -11,6 +11,7 @@ import {
   TooltipTrigger,
 } from "../../ui/tooltip";
 import { getOrigin } from "~/src/lib/navigationUtils";
+import { UserAnalyticsName } from "~/src/components/users/UserAnalyticsName";
 
 export const analyticsColumns: ColumnDef<Analytic>[] = [
   {
@@ -21,25 +22,16 @@ export const analyticsColumns: ColumnDef<Analytic>[] = [
     cell: ({ row }) => {
       const item = row.original;
 
+      console.log(item);
+
       return (
         <div className="flex items-center gap-2">
           <div className="space-y-2">
             <div className="flex items-center gap-2">
-              <Link
-                to="/$orgUrlSlug/store/$storeUrlSlug/users/$userId"
-                params={(p) => ({
-                  ...p,
-                  storeUrlSlug: p.storeUrlSlug!,
-                  orgUrlSlug: p.orgUrlSlug!,
-                  userId: item.storeFrontUserId,
-                })}
-                search={{ o: getOrigin() }}
-                className="flex items-center gap-2"
-              >
-                <p className="text-sm font-bold">
-                  {`User-${item.storeFrontUserId.slice(-5)}`}
-                </p>
-              </Link>
+              <UserAnalyticsName
+                userId={item.storeFrontUserId}
+                userData={item.userData}
+              />
 
               <TooltipProvider>
                 <Tooltip>

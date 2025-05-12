@@ -21,17 +21,53 @@ export const create = mutation({
   },
 });
 
+export const updateOwner = mutation({
+  args: {
+    guestId: v.id("guest"),
+    userId: v.id("storeFrontUser"),
+  },
+  handler: async (ctx, args) => {
+    // Get all analytics records for the guest user
+    const records = await ctx.db
+      .query(entity)
+      .withIndex("by_storeFrontUserId", (q) =>
+        q.eq("storeFrontUserId", args.guestId)
+      )
+      .collect();
+
+    // Update each record in parallel to associate with the authenticated user
+    await Promise.all(
+      records.map((record) =>
+        ctx.db.patch(record._id, {
+          storeFrontUserId: args.userId,
+        })
+      )
+    );
+
+    return { updated: records.length };
+  },
+});
+
 export const getAll = query({
   args: {
     storeId: v.id("store"),
   },
   handler: async (ctx, args) => {
+    // TODO: Add pagination
+    if (process.env.STAGE === "prod") {
+      return await ctx.db
+        .query(entity)
+        .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
+        .order("desc")
+        .collect();
+    }
+
     return await ctx.db
       .query(entity)
       .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
       .order("desc")
-      .collect();
-    // .take(100);
+      .take(100);
+    // .collect();
   },
 });
 

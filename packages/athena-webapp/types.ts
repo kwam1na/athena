@@ -70,7 +70,11 @@ export type FeaturedItem = Doc<"featuredItem">;
 
 export type BestSeller = Doc<"bestSeller">;
 
-export type Analytic = Doc<"analytics">;
+export type Analytic = Doc<"analytics"> & {
+  userData?: {
+    email?: string;
+  };
+};
 
 export type ComplimentaryProduct = Doc<"complimentaryProduct"> & {
   productSku: ProductSku;

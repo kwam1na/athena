@@ -27,6 +27,34 @@ export async function postAnalytics({
   return res;
 }
 
+export async function updateAnalyticsOwner({
+  guestId,
+  userId,
+}: {
+  guestId: string;
+  userId: string;
+}) {
+  const response = await fetch(
+    `${config.apiGateway.URL}/analytics/update-owner`,
+    {
+      method: "POST",
+      body: JSON.stringify({ guestId, userId }),
+      headers: {
+        "Content-Type": "application/json",
+      },
+      credentials: "include",
+    }
+  );
+
+  const res = await response.json();
+
+  if (!response.ok) {
+    throw new Error(res.error || "Error updating analytics owner.");
+  }
+
+  return res;
+}
+
 export async function logout() {
   const response = await fetch(`${config.apiGateway.URL}/auth/logout`, {
     method: "POST",

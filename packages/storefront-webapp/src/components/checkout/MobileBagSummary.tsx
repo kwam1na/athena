@@ -18,6 +18,7 @@ import { getDiscountValue } from "./utils";
 import { redeemPromoCode } from "@/api/promoCodes";
 import { useAuth } from "@/hooks/useAuth";
 import { usePromoCodesQueries } from "@/lib/queries/promoCode";
+import { isFeeWaived } from "@/lib/feeUtils";
 
 export default function MobileBagSummary() {
   const { formatter, store } = useStoreContext();
@@ -108,6 +109,12 @@ export default function MobileBagSummary() {
     }
   };
 
+  // Use the shared utility function to determine if fee should be waived
+  const isFeeWaivedForCurrentOption = isFeeWaived(
+    waiveDeliveryFees,
+    checkoutState.deliveryOption
+  );
+
   return (
     <div>
       <Accordion type="single" collapsible className="w-full space-y-4">
@@ -166,16 +173,17 @@ export default function MobileBagSummary() {
                 <p className="text-sm">Subtotal</p>
                 <p className="text-sm">{formatter.format(bagSubtotal)}</p>
               </div>
-              {checkoutState.deliveryMethod === "delivery" && (
-                <div className="flex justify-between">
-                  <p className="text-sm">Shipping</p>
-                  <p className="text-sm">
-                    {waiveDeliveryFees
-                      ? "Free"
-                      : formatter.format(checkoutState.deliveryFee || 0)}
-                  </p>
-                </div>
-              )}
+              {checkoutState.deliveryMethod === "delivery" &&
+                checkoutState.deliveryFee !== null && (
+                  <div className="flex justify-between">
+                    <p className="text-sm">Shipping</p>
+                    <p className="text-sm">
+                      {isFeeWaivedForCurrentOption
+                        ? "Free"
+                        : formatter.format(checkoutState.deliveryFee || 0)}
+                    </p>
+                  </div>
+                )}
               {Boolean(discountValue) && (
                 <div className="flex justify-between">
                   <p className="text-sm">Discount</p>

@@ -33,6 +33,7 @@ export const SiteBanner = () => {
   const activePromoCode = promoCodes?.find((code) => code.active);
 
   if (!activePromoCode) return null;
+  // if (appLocation === "homepage") return null;
 
   return (
     <motion.div
@@ -40,7 +41,7 @@ export const SiteBanner = () => {
       animate={{ y: 0, opacity: 1 }}
       transition={{
         duration: 1.4,
-        delay: appLocation == "homepage" ? 1.85 : 0,
+        // delay: appLocation == "homepage" ? 1.85 : 0,
         ease: "easeInOut",
       }}
       className={`w-full py-2 overflow-hidden ${textClass}`}
@@ -61,22 +62,34 @@ export const SiteBanner = () => {
             )}
           >
             <p>
-              <b>SITEWIDE SALE</b>
+              <b>INTRODUCING WIGCLUB REWARDS</b>
             </p>
-            <p className="uppercase">
+            {/* <p className="uppercase">
               promo code <b>{activePromoCode.code}</b> automatically applied for{" "}
               <b>{getPromoMessage(activePromoCode).toUpperCase()}</b>
+            </p> */}
+            <p className="uppercase">
+              <b>earn 10 points for every GHS 1 spent</b>
+            </p>
+            <p className="uppercase">
+              <b>redeem for discounts on future purchases</b>
             </p>
           </div>
         ))}
         {/* Single centered content for medium screens and up */}
         <div className="hidden md:flex md:gap-4">
-          <p>
-            <b>SITEWIDE SALE</b>
-          </p>
           <p className="uppercase">
+            <b>INTRODUCING WIGCLUB REWARDS</b>
+          </p>
+          {/* <p className="uppercase">
             promo code <b>{activePromoCode.code}</b> automatically applied for{" "}
             <b>{getPromoMessage(activePromoCode).toUpperCase()}</b>
+          </p> */}
+          <p className="uppercase">
+            <b>earn 10 points for every GHS 1 spent</b>
+          </p>
+          <p className="uppercase">
+            <b>redeem for discounts on future purchases</b>
           </p>
         </div>
       </div>

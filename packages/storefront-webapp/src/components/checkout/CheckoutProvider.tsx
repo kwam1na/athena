@@ -11,6 +11,7 @@ import { baseBillingDetailsSchema } from "./schemas/billingDetailsSchema";
 import { CheckoutSession } from "@athena/webapp";
 import { CheckoutUnavailable } from "../states/checkout unavailable/CheckoutUnavailable";
 import { useNavigationBarContext } from "@/contexts/NavigationBarProvider";
+import { isFeeWaived, isAnyFeeWaived } from "@/lib/feeUtils";
 
 export type Address = {
   address?: string;
@@ -54,7 +55,8 @@ export const webOrderSchema = z
     discount: z.record(z.string(), z.any()).nullable(),
   })
   .superRefine((data, ctx) => {
-    const { deliveryFee, deliveryMethod, deliveryDetails } = data;
+    const { deliveryFee, deliveryMethod, deliveryDetails, pickupLocation } =
+      data;
 
     if (deliveryMethod == "delivery") {
       // if (!billingDetails) {
@@ -310,6 +312,24 @@ export const webOrderSchema = z
         }
       }
     }
+
+    if (deliveryMethod == "pickup") {
+      if (!pickupLocation) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["pickupLocation"],
+          message: "Pickup location is required",
+        });
+      }
+
+      if (pickupLocation?.trim().length == 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["pickupLocation"],
+          message: "Pickup location cannot be empty or whitespace",
+        });
+      }
+    }
   });
 
 type DeliveryOption = "within-accra" | "outside-accra" | "intl";
@@ -498,14 +518,32 @@ export const CheckoutProvider = ({
       const isGreaterAccraAddress = region == "GA";
 
       let deliveryOption: DeliveryOption = "intl";
-      let deliveryFee = waiveDeliveryFees ? 0 : 800;
+      const shouldWaiveIntlFee = isFeeWaived(waiveDeliveryFees, "intl");
+      let deliveryFee = shouldWaiveIntlFee
+        ? 0
+        : store?.config?.deliveryFees?.international || 800;
 
       if (isGhanaAddress) {
         deliveryOption = isGreaterAccraAddress
           ? "within-accra"
           : "outside-accra";
 
-        deliveryFee = waiveDeliveryFees ? 0 : isGreaterAccraAddress ? 30 : 70;
+        const shouldWaiveRegionFee =
+          typeof waiveDeliveryFees === "boolean"
+            ? waiveDeliveryFees
+            : isGreaterAccraAddress
+              ? waiveDeliveryFees?.withinAccra ||
+                waiveDeliveryFees?.all ||
+                false
+              : waiveDeliveryFees?.otherRegions ||
+                waiveDeliveryFees?.all ||
+                false;
+
+        deliveryFee = shouldWaiveRegionFee
+          ? 0
+          : isGreaterAccraAddress
+            ? 30
+            : 70;
       }
 
       updateState({
@@ -539,7 +577,13 @@ export const CheckoutProvider = ({
   }, [user]);
 
   const updateState = (updates: Partial<CheckoutState>) => {
-    if (waiveDeliveryFees && updates.deliveryMethod === "delivery") {
+    const anyFeeWaived = isAnyFeeWaived(waiveDeliveryFees);
+
+    if (
+      anyFeeWaived &&
+      updates.deliveryMethod === "delivery" &&
+      (updates.deliveryFee === null || updates.deliveryFee === undefined)
+    ) {
       updates.deliveryFee = 0;
     }
 
@@ -547,15 +591,29 @@ export const CheckoutProvider = ({
       const newUpdates = { ...prev, ...updates };
 
       const isDeliveryOrder = newUpdates.deliveryMethod == "delivery";
-
       const isPickupOrder = newUpdates.deliveryMethod == "pickup";
-
-      const isUSOrder =
-        isDeliveryOrder && newUpdates.deliveryDetails?.country == "US";
 
       const isGhanaOrder =
         isPickupOrder ||
         (isDeliveryOrder && newUpdates.deliveryDetails?.country == "GH");
+
+      // Always set international delivery for non-Ghana countries
+      if (
+        isDeliveryOrder &&
+        newUpdates.deliveryDetails?.country &&
+        newUpdates.deliveryDetails.country !== "GH" &&
+        newUpdates.deliveryOption !== "intl"
+      ) {
+        const shouldWaiveIntlFee = isFeeWaived(waiveDeliveryFees, "intl");
+
+        newUpdates.deliveryOption = "intl";
+        newUpdates.deliveryFee = shouldWaiveIntlFee
+          ? 0
+          : store?.config?.deliveryFees?.international || 800;
+      }
+
+      const isUSOrder =
+        isDeliveryOrder && newUpdates.deliveryDetails?.country == "US";
 
       const isROWOrder = isDeliveryOrder && !isUSOrder && !isGhanaOrder;
 
@@ -610,14 +668,6 @@ export const CheckoutProvider = ({
           ? didProvideAllUSBillingAddressFields
           : didProvideAllRestOfWorldBillingFields;
 
-      if (
-        waiveDeliveryFees &&
-        newUpdates.isDeliveryOrder &&
-        newUpdates.deliveryFee === null
-      ) {
-        newUpdates.deliveryFee = 0;
-      }
-
       return {
         ...newUpdates,
         didEnterDeliveryDetails,
@@ -653,7 +703,6 @@ export const CheckoutProvider = ({
     }
 
     try {
-      console.log(checkoutState);
       // Parse the state using the schema
       webOrderSchema.parse(checkoutState);
       updateState({ failedFinalValidation: false });

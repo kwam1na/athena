@@ -80,17 +80,95 @@ export const getByIdentifier = query({
   },
 });
 
+export const findLinkedAccounts = query({
+  args: {
+    userId: v.union(v.id(entity), v.id("guest")),
+  },
+  handler: async (ctx, args) => {
+    // Get the user to find their email
+    const user = await ctx.db.get(args.userId);
+    if (!user || !user.email) {
+      return { storeFrontUsers: [], guestUsers: [] };
+    }
+
+    const email = user.email;
+
+    // Find all storeFrontUsers with the same email (excluding the current user)
+    const storeFrontUsers = await ctx.db
+      .query("storeFrontUser")
+      .filter((q) =>
+        q.and(q.eq(q.field("email"), email), q.neq(q.field("_id"), args.userId))
+      )
+      .collect();
+
+    // Find all guest users with the same email
+    const guestUsers = await ctx.db
+      .query("guest")
+      .filter((q) => q.eq(q.field("email"), email))
+      .collect();
+
+    return {
+      storeFrontUsers,
+      guestUsers,
+    };
+  },
+});
+
 export const getAllUserActivity = query({
   args: {
     id: v.union(v.id(entity), v.id("guest")),
   },
   handler: async (ctx, args) => {
+    // Get the user's analytics data
     const analytics = await ctx.db
       .query("analytics")
       .filter((q) => q.eq(q.field("storeFrontUserId"), args.id))
       .collect();
 
-    return analytics;
+    // Get unique user IDs from analytics
+    const userIds = new Set<string>();
+    analytics.forEach((analytic) => {
+      userIds.add(analytic.storeFrontUserId);
+    });
+
+    // Fetch user data for these IDs by trying both tables
+    const userMap: Record<string, { email?: string }> = {};
+
+    // Try to fetch all IDs as both types of users
+    const idArray = Array.from(userIds);
+
+    // First try as storeFrontUsers
+    for (const id of idArray) {
+      try {
+        // Try to get from storeFrontUser table
+        const user = await ctx.db.get(id as Id<"storeFrontUser">);
+        if (user) {
+          userMap[id] = { email: user.email };
+          continue; // Found in storeFrontUser table, skip to next ID
+        }
+      } catch (e) {
+        // ID not found in storeFrontUser table, continue to try guest table
+      }
+
+      try {
+        // Try to get from guest table
+        const guest = await ctx.db.get(id as Id<"guest">);
+        if (guest) {
+          userMap[id] = { email: guest.email };
+        }
+      } catch (e) {
+        // Not found in either table, continue
+        console.error("User ID not found in any table:", id);
+      }
+    }
+
+    // Attach user data to analytics
+    const enrichedAnalytics = analytics.map((analytic) => ({
+      ...analytic,
+      userData: userMap[analytic.storeFrontUserId] || {},
+    }));
+
+    return enrichedAnalytics;
   },
 });
 
@@ -231,5 +309,22 @@ export const getOnlineOrderById = query({
   },
   handler: async (ctx, args) => {
     return await ctx.db.get(args.id);
+  },
+});
+
+// Get just the most recent user activity for efficient status checking
+export const getMostRecentActivity = query({
+  args: {
+    id: v.union(v.id(entity), v.id("guest")),
+  },
+  handler: async (ctx, args) => {
+    // Get only the most recent analytics record
+    const analytics = await ctx.db
+      .query("analytics")
+      .filter((q) => q.eq(q.field("storeFrontUserId"), args.id))
+      .order("desc") // Most recent first
+      .first();
+
+    return analytics;
   },
 });

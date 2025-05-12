@@ -81,7 +81,7 @@ export function RewardsAlert({ isOpen, setIsOpen }: RewardsAlertProps) {
             <div className="space-y-4">
               <p className="text-sm text-white/80">
                 Earn 10 points for every GHS 1 you spend. Redeem points for
-                discounts on your next purchase.
+                discounts on future purchases.
               </p>
 
               <div className="mt-2">

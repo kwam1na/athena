@@ -21,10 +21,10 @@ const StoreVisitors = () => {
     activeStore?._id ? { storeId: activeStore._id } : "skip"
   );
 
-  const returningVisitorsToday = useQuery(
-    api.storeFront.guest.getReturningVisitorsForDay,
-    activeStore?._id ? { storeId: activeStore._id } : "skip"
-  );
+  // const returningVisitorsToday = useQuery(
+  //   api.storeFront.guest.getReturningVisitorsForDay,
+  //   activeStore?._id ? { storeId: activeStore._id } : "skip"
+  // );
 
   return (
     <div className="flex items-center gap-16 border rounded-lg p-4">
@@ -39,7 +39,7 @@ const StoreVisitors = () => {
         </p>
       </div>
 
-      <div className="space-y-2">
+      {/* <div className="space-y-2">
         <p className="font-medium text-2xl">
           {formatNumber(returningVisitorsToday)}
         </p>
@@ -48,7 +48,7 @@ const StoreVisitors = () => {
             ? "Returning visitor today"
             : "Returning visitors today"}
         </p>
-      </div>
+      </div> */}
 
       <div className="space-y-2">
         <p className="font-medium text-2xl">{formatNumber(lifetimeVisitors)}</p>
