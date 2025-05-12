@@ -40,7 +40,7 @@ export function DeliveryOptionsSelector() {
 
   const { store, formatter } = useStoreContext();
 
-  const { deliveryFees } = store?.config || {};
+  const { deliveryFees, waiveDeliveryFees } = store?.config || {};
 
   const { international, withinAccra, otherRegions } = deliveryFees || {};
 
@@ -54,13 +54,13 @@ export function DeliveryOptionsSelector() {
     if (value == "intl") {
       updateState({
         ...base,
-        deliveryFee: deliveryFees?.international || 800,
+        deliveryFee: waiveDeliveryFees ? 0 : deliveryFees?.international || 800,
         deliveryOption: "intl",
       });
     } else if (value == "within-accra") {
       updateState({
         ...base,
-        deliveryFee: deliveryFees?.withinAccra || 30,
+        deliveryFee: waiveDeliveryFees ? 0 : deliveryFees?.withinAccra || 30,
         deliveryOption: "within-accra",
         deliveryDetails: {
           ...checkoutState.deliveryDetails,
@@ -70,7 +70,7 @@ export function DeliveryOptionsSelector() {
     } else {
       updateState({
         ...base,
-        deliveryFee: deliveryFees?.otherRegions || 70,
+        deliveryFee: waiveDeliveryFees ? 0 : deliveryFees?.otherRegions || 70,
         deliveryOption: "outside-accra",
         deliveryDetails: {
           ...checkoutState.deliveryDetails,
@@ -100,10 +100,13 @@ export function DeliveryOptionsSelector() {
       } else if (currentCountry !== "GH" && previousCountry === "GH") {
         if (
           checkoutState.deliveryOption !== "intl" ||
-          checkoutState.deliveryFee !== deliveryFees?.international
+          checkoutState.deliveryFee !==
+            (waiveDeliveryFees ? 0 : deliveryFees?.international)
         ) {
           updateState({
-            deliveryFee: deliveryFees?.international || 800,
+            deliveryFee: waiveDeliveryFees
+              ? 0
+              : deliveryFees?.international || 800,
             deliveryOption: "intl",
           });
         }
@@ -119,7 +122,7 @@ export function DeliveryOptionsSelector() {
     ) {
       updateState({
         deliveryOption: "within-accra",
-        deliveryFee: deliveryFees?.withinAccra || 30,
+        deliveryFee: waiveDeliveryFees ? 0 : deliveryFees?.withinAccra || 30,
       });
     }
   }, [checkoutState.deliveryDetails?.region]);
@@ -136,7 +139,11 @@ export function DeliveryOptionsSelector() {
             <RadioGroupItem value="within-accra" id="r1" />
             <div className="flex w-full lg:w-[50%] justify-between">
               <p>Delivery within Greater Accra</p>
-              <p className="text-muted-foreground">{`${formatter.format(withinAccra || 30)}`}</p>
+              <p className="text-muted-foreground">
+                {waiveDeliveryFees
+                  ? "Free"
+                  : formatter.format(withinAccra || 30)}
+              </p>
             </div>
           </div>
 
@@ -144,7 +151,11 @@ export function DeliveryOptionsSelector() {
             <RadioGroupItem value="outside-accra" id="r2" />
             <div className="flex w-full lg:w-[50%] justify-between">
               <p>Delivery to other regions</p>
-              <p className="text-muted-foreground">{`${formatter.format(otherRegions || 70)}`}</p>
+              <p className="text-muted-foreground">
+                {waiveDeliveryFees
+                  ? "Free"
+                  : formatter.format(otherRegions || 70)}
+              </p>
             </div>
           </div>
         </div>
@@ -155,7 +166,11 @@ export function DeliveryOptionsSelector() {
           <RadioGroupItem value="intl" id="r2" />
           <div className="flex w-full lg:w-[50%] justify-between">
             <p>Express shipping</p>
-            <p className="text-muted-foreground">{`${formatter.format(international || 800)}`}</p>
+            <p className="text-muted-foreground">
+              {waiveDeliveryFees
+                ? "Free"
+                : formatter.format(international || 800)}
+            </p>
           </div>
         </div>
       )}

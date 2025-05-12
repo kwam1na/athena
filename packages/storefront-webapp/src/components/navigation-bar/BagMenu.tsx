@@ -100,9 +100,7 @@ export const BagMenu = ({
       )}
 
       {Boolean(bag?.items?.length == 0) && (
-        <p className={`text-lg font-medium ${hoverClass}`}>
-          Your bag is empty.
-        </p>
+        <p className={`text-lg font-light ${hoverClass}`}>Your bag is empty.</p>
       )}
 
       <div className="space-y-4 max-w-[180px]">

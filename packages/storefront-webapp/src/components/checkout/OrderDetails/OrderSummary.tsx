@@ -6,9 +6,10 @@ import { BagSummaryItems } from "../BagSummary";
 import { Tag } from "lucide-react";
 
 export default function OrderSummary() {
-  const { formatter } = useStoreContext();
+  const { formatter, store } = useStoreContext();
   const { bagSubtotal } = useShoppingBag();
   const { checkoutState } = useCheckout();
+  const { waiveDeliveryFees } = store?.config || {};
 
   const discountValue = getDiscountValue(bagSubtotal, checkoutState.discount);
 
@@ -30,11 +31,13 @@ export default function OrderSummary() {
           <p className="text-sm">Subtotal</p>
           <p className="text-sm">{formatter.format(bagSubtotal)}</p>
         </div>
-        {checkoutState.deliveryFee && (
+        {checkoutState.deliveryMethod === "delivery" && (
           <div className="flex justify-between">
             <p className="text-sm">Shipping</p>
             <p className="text-sm">
-              {formatter.format(checkoutState.deliveryFee)}
+              {waiveDeliveryFees
+                ? "Free"
+                : formatter.format(checkoutState.deliveryFee || 0)}
             </p>
           </div>
         )}
@@ -51,6 +54,14 @@ export default function OrderSummary() {
             <p className="text-sm font-medium">
               {checkoutState.discount?.code} -{" "}
               <strong>{discountText} off entire order</strong>
+            </p>
+          </div>
+        )}
+        {waiveDeliveryFees && checkoutState.deliveryMethod === "delivery" && (
+          <div className="flex items-center">
+            <Tag className="w-3.5 h-3.5 mr-2" />
+            <p className="text-sm font-medium">
+              <strong>Free shipping applied</strong>
             </p>
           </div>
         )}

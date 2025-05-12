@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import Footer from "./footer/Footer";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigationBarContext } from "@/contexts/NavigationBarProvider";
 import { useProductQueries } from "@/lib/queries/product";
 import { useTrackEvent } from "@/hooks/useTrackEvent";
@@ -13,6 +13,7 @@ import { HomeHeroSectionWithRef } from "./home/HomeHeroSection";
 import { BestSellersSection } from "./home/BestSellersSection";
 import { FeaturedProductsSection } from "./home/FeaturedProductsSection";
 import { useParams, useSearch } from "@tanstack/react-router";
+import { RewardsAlert } from "./home/RewardsAlert";
 
 const origin = "homepage";
 
@@ -23,6 +24,8 @@ export default function HomePage() {
 
   // Use extracted custom hooks
   const { isPromoAlertOpen, setIsPromoAlertOpen } = usePromoAlert();
+  const [isRewardsAlertOpen, setIsRewardsAlertOpen] = useState(true);
+
   const { showReminderBar, setShowReminderBar, upsell } =
     useProductReminder(homeHeroRef);
 
@@ -78,7 +81,14 @@ export default function HomePage() {
 
   return (
     <>
-      <PromoAlert isOpen={isPromoAlertOpen} setIsOpen={setIsPromoAlertOpen} />
+      <PromoAlert
+        isOpen={isPromoAlertOpen && !isRewardsAlertOpen}
+        setIsOpen={setIsPromoAlertOpen}
+      />
+      <RewardsAlert
+        isOpen={isRewardsAlertOpen}
+        setIsOpen={setIsRewardsAlertOpen}
+      />
       <div className="min-h-screen">
         <div className="overflow-hidden">
           <div className="space-y-56 pb-32">

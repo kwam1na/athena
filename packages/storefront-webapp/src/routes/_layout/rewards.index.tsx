@@ -27,7 +27,7 @@ export default function RewardsPage() {
         <div className="w-full bg-accent5">
           <div className="container mx-auto max-w-[1024px] space-y-4">
             <div className="flex items-center border-b py-2 px-6 lg:px-0">
-              <p className="text-lg font-medium">Rewards</p>
+              <p className="text-lg font-light">Rewards</p>
             </div>
 
             <div className="px-6 lg:px-0">

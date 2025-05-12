@@ -12,14 +12,13 @@ export function GuestRewardsPrompt({
   orderEmail,
 }: GuestRewardsPromptProps) {
   // Calculate the potential points (1 point per dollar spent, rounded down)
-  const potentialPoints = Math.floor(orderAmount / 1000);
+  const potentialPoints = Math.floor(orderAmount / 10);
 
   return (
     <div className="mt-8 rounded-xl border border-accent5 bg-accent5/40 p-8 space-y-8 max-w-md mx-auto">
       <div className="flex flex-col items-center text-center space-y-8">
         <div className="flex items-center gap-2">
-          <Award className="w-7 h-7 text-primary" />
-          <span className="text-2xl font-bold text-gray-900">
+          <span className="text-2xl font-light text-gray-900">
             Earn {potentialPoints.toLocaleString()} reward points!
           </span>
         </div>
@@ -46,7 +45,7 @@ export function GuestRewardsPrompt({
       </div>
       <div>
         <Link
-          to="/login"
+          to="/signup"
           search={{ origin: "guest-rewards", email: orderEmail }}
         >
           <Button className="w-full py-4 font-semibold bg-accent2/90 hover:bg-accent2 text-white transition">

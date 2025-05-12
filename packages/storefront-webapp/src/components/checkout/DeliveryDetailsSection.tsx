@@ -22,6 +22,7 @@ import { CheckoutFormSectionProps } from "./CustomerInfoSection";
 import { Textarea } from "../ui/textarea";
 import { Button } from "../ui/button";
 import { US_STATES } from "@/lib/states";
+import { useStoreContext } from "@/contexts/StoreContext";
 
 export const CountryFields = ({ form }: CheckoutFormSectionProps) => {
   const { checkoutState, updateState } = useCheckout();
@@ -112,6 +113,9 @@ export const CountryFields = ({ form }: CheckoutFormSectionProps) => {
 
 const RegionFields = ({ form }: CheckoutFormSectionProps) => {
   const { checkoutState, updateState } = useCheckout();
+  const { store } = useStoreContext();
+  const { waiveDeliveryFees } = store?.config || {};
+
   return (
     <>
       <div className="flex items-center">
@@ -132,7 +136,11 @@ const RegionFields = ({ form }: CheckoutFormSectionProps) => {
                       const region = e.target.value;
                       const deliveryOption =
                         region == "GA" ? "within-accra" : "outside-accra";
-                      const deliveryFee = region == "GA" ? 30 : 70;
+                      const deliveryFee = waiveDeliveryFees
+                        ? 0
+                        : region == "GA"
+                          ? 30
+                          : 70;
 
                       updateState({
                         deliveryDetails: {
@@ -179,7 +187,11 @@ const RegionFields = ({ form }: CheckoutFormSectionProps) => {
                     const deliveryOption =
                       region == "GA" ? "within-accra" : "outside-accra";
 
-                    const deliveryFee = region == "GA" ? 30 : 70;
+                    const deliveryFee = waiveDeliveryFees
+                      ? 0
+                      : region == "GA"
+                        ? 30
+                        : 70;
 
                     updateState({
                       deliveryDetails: {

@@ -20,13 +20,13 @@ import { useAuth } from "@/hooks/useAuth";
 import { usePromoCodesQueries } from "@/lib/queries/promoCode";
 
 export default function MobileBagSummary() {
-  const { formatter } = useStoreContext();
+  const { formatter, store } = useStoreContext();
   const { bagSubtotal } = useShoppingBag();
   const { checkoutState, updateState, activeSession } = useCheckout();
   const [invalidMessage, setInvalidMessage] = useState("");
   const [code, setCode] = useState("");
   const { userId, guestId } = useAuth();
-  const { store } = useStoreContext();
+  const { waiveDeliveryFees } = store?.config || {};
   const [isAutoApplyingPromoCode, setIsAutoApplyingPromoCode] = useState(false);
 
   const promoCodeQueries = usePromoCodesQueries();
@@ -166,11 +166,13 @@ export default function MobileBagSummary() {
                 <p className="text-sm">Subtotal</p>
                 <p className="text-sm">{formatter.format(bagSubtotal)}</p>
               </div>
-              {checkoutState.deliveryFee && (
+              {checkoutState.deliveryMethod === "delivery" && (
                 <div className="flex justify-between">
                   <p className="text-sm">Shipping</p>
                   <p className="text-sm">
-                    {formatter.format(checkoutState.deliveryFee)}
+                    {waiveDeliveryFees
+                      ? "Free"
+                      : formatter.format(checkoutState.deliveryFee || 0)}
                   </p>
                 </div>
               )}

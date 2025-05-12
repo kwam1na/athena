@@ -80,14 +80,14 @@ export function BagSummaryItems({ items }: { items: ProductSku[] }) {
 }
 
 function BagSummary() {
-  const { formatter } = useStoreContext();
+  const { formatter, store } = useStoreContext();
   const { bagSubtotal } = useShoppingBag();
   const { checkoutState, updateState, activeSession } = useCheckout();
-  const { store } = useStoreContext();
   const { userId, guestId } = useAuth();
   const [code, setCode] = useState("");
   const [invalidMessage, setInvalidMessage] = useState("");
   const [isAutoApplyingPromoCode, setIsAutoApplyingPromoCode] = useState(false);
+  const { waiveDeliveryFees } = store?.config || {};
 
   const promoCodeQueries = usePromoCodesQueries();
   const { data: promoCodes } = useQuery(promoCodeQueries.getAll());
@@ -231,11 +231,13 @@ function BagSummary() {
           <p className="text-sm">Subtotal</p>
           <p className="text-sm">{formatter.format(bagSubtotal)}</p>
         </div>
-        {checkoutState.deliveryFee && (
+        {checkoutState.deliveryMethod === "delivery" && (
           <div className="flex justify-between">
             <p className="text-sm">Shipping</p>
             <p className="text-sm">
-              {formatter.format(checkoutState.deliveryFee)}
+              {waiveDeliveryFees
+                ? "Free"
+                : formatter.format(checkoutState.deliveryFee || 0)}
             </p>
           </div>
         )}

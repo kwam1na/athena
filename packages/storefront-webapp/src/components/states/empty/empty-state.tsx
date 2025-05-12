@@ -22,7 +22,7 @@ export const EmptyState = ({
         transition={{ ease: "easeInOut" }}
         className="flex flex-col items-center mt-40 lg:items-start gap-16 lg:mt-12 h-screen"
       >
-        <p className="text-lg font-medium">{message}</p>
+        <p className="text-lg font-light">{message}</p>
         {showButton && (
           <Link to="/shop/$categorySlug" params={{ categorySlug: "hair" }}>
             <Button variant={"clear"} className="px-0 group">

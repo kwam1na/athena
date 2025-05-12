@@ -58,6 +58,9 @@ export function RewardsPanel() {
     }
   };
 
+  const hasPoints =
+    historyData?.transactions && historyData.transactions.length > 0;
+
   return (
     <div className="space-y-16">
       <div className="bg-white rounded-lg border p-6">
@@ -66,14 +69,16 @@ export function RewardsPanel() {
           {pointsLoading && <Skeleton className="h-10 w-32 mx-auto mb-2" />}
 
           {!pointsLoading && points !== undefined && points >= 0 && (
-            <div className="text-4xl font-bold">{points}</div>
+            <div className="text-4xl font-light">{points.toLocaleString()}</div>
           )}
         </div>
       </div>
 
-      <h2 className="text-lg font-medium mb-4">Point History</h2>
+      {hasPoints && (
+        <h2 className="text-lg font-medium mb-4">Points History</h2>
+      )}
 
-      {historyLoading ? (
+      {historyLoading && (
         <div className="space-y-4">
           {[...Array(3)].map((_, i) => (
             <div key={i} className="py-3 space-y-2">
@@ -85,40 +90,44 @@ export function RewardsPanel() {
             </div>
           ))}
         </div>
-      ) : historyData?.transactions && historyData.transactions.length > 0 ? (
-        <div className="">
-          <div className="overflow-x-auto">
-            <div className="w-full text-left">
-              <div className="space-y-4">
-                {historyData.transactions.map((transaction, index) => (
-                  <div key={transaction._id}>
-                    <div className="py-3 space-y-2">
-                      <p
-                        className={`font-semibold ${transaction.points > 0 ? "text-accent2" : "text-red-600"}`}
-                      >
-                        {transaction.points > 0 ? "+" : ""}
-                        {transaction.points} pts
-                      </p>
-                      <div className="flex items-center gap-2 text-sm text-gray-400">
-                        {transaction.orderId && (
-                          <Link
-                            to={`/shop/orders/$orderId`}
-                            params={{ orderId: transaction.orderId }}
-                          >
-                            <p>Order #{transaction.orderNumber}</p>
-                          </Link>
-                        )}
-                        <p>·</p>
-                        <p>{formatDate(transaction._creationTime)}</p>
+      )}
+
+      {!historyLoading &&
+        historyData?.transactions &&
+        historyData.transactions.length > 0 && (
+          <div className="">
+            <div className="overflow-x-auto">
+              <div className="w-full text-left">
+                <div className="space-y-4">
+                  {historyData.transactions.map((transaction, index) => (
+                    <div key={transaction._id}>
+                      <div className="py-3 space-y-2">
+                        <p
+                          className={`font-light ${transaction.points > 0 ? "text-accent2" : "text-red-600"}`}
+                        >
+                          {transaction.points > 0 ? "+" : ""}
+                          {transaction.points.toLocaleString()} pts
+                        </p>
+                        <div className="flex items-center gap-2 text-sm text-gray-400">
+                          {transaction.orderId && (
+                            <Link
+                              to={`/shop/orders/$orderId`}
+                              params={{ orderId: transaction.orderId }}
+                            >
+                              <p>Order #{transaction.orderNumber}</p>
+                            </Link>
+                          )}
+                          <p>·</p>
+                          <p>{formatDate(transaction._creationTime)}</p>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      ) : null}
+        )}
     </div>
   );
 }

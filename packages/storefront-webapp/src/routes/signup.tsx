@@ -22,10 +22,12 @@ import {
   Link,
   redirect,
   useNavigate,
+  useSearch,
 } from "@tanstack/react-router";
 import { ArrowRight } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
+import { useEffect } from "react";
 
 const nameRegex = /^[a-zA-Zà-öø-ÿÀ-ÖØ-ß\-'\.\s]+$/;
 
@@ -88,9 +90,17 @@ const Signup = () => {
     },
   });
 
+  const { origin, email } = useSearch({ strict: false });
+
   const { store } = useStoreContext();
 
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (origin === "guest-rewards" && email) {
+      form.setValue("email", email);
+    }
+  }, [origin, email]);
 
   const verifyMutation = useMutation({
     mutationFn: verifyUserAccount,
@@ -118,6 +128,8 @@ const Signup = () => {
       lastName: data.lastName,
     });
   };
+
+  const isFromGuestRewards = origin === "guest-rewards";
 
   return (
     <AuthComponent>
@@ -204,18 +216,20 @@ const Signup = () => {
                   </p>
                 </div>
 
-                <div className="flex gap-2 pt-4">
-                  <p className="text-sm text-muted-foreground">
-                    Already have an account?
-                  </p>
-                  <Link
-                    to="/login"
-                    className="flex items-center group hover:underline"
-                  >
-                    <p className="text-sm">Login</p>
-                    <ArrowRight className="w-3.5 h-3.5 ml-2 -me-1 ms-2 transition-transform group-hover:translate-x-0.5" />
-                  </Link>
-                </div>
+                {!isFromGuestRewards && (
+                  <div className="flex gap-2 pt-4">
+                    <p className="text-sm text-muted-foreground">
+                      Already have an account?
+                    </p>
+                    <Link
+                      to="/login"
+                      className="flex items-center group hover:underline"
+                    >
+                      <p className="text-sm">Login</p>
+                      <ArrowRight className="w-3.5 h-3.5 ml-2 -me-1 ms-2 transition-transform group-hover:translate-x-0.5" />
+                    </Link>
+                  </div>
+                )}
               </div>
             </form>
           </Form>

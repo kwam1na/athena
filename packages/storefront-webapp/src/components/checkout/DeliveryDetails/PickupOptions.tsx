@@ -6,7 +6,8 @@ import { Store, Truck } from "lucide-react";
 export const PickupOptions = () => {
   const { checkoutState, updateState } = useCheckout();
 
-  const { formatter } = useStoreContext();
+  const { formatter, store } = useStoreContext();
+  const { waiveDeliveryFees } = store?.config || {};
 
   const isDelivery = checkoutState.deliveryMethod === "delivery";
   const isPickup = checkoutState.deliveryMethod === "pickup";
@@ -40,7 +41,7 @@ export const PickupOptions = () => {
         onClick={() => {
           updateState({
             deliveryMethod: "delivery",
-            deliveryFee: null,
+            deliveryFee: waiveDeliveryFees ? 0 : null,
             pickupLocation: null,
           });
         }}
@@ -53,10 +54,14 @@ export const PickupOptions = () => {
             Delivery
           </div>
 
-          {Boolean(checkoutState.deliveryFee) && (
-            <p className="text-xs text-[#EC4683] text-start w-full">
-              {formatter.format(checkoutState.deliveryFee || 0)}
-            </p>
+          {waiveDeliveryFees ? (
+            <p className="text-xs text-start w-full">Free</p>
+          ) : (
+            Boolean(checkoutState.deliveryFee) && (
+              <p className="text-xs text-[#EC4683] text-start w-full">
+                {formatter.format(checkoutState.deliveryFee || 0)}
+              </p>
+            )
           )}
         </div>
       </GhostButton>

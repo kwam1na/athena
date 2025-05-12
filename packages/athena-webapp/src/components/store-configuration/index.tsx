@@ -28,6 +28,7 @@ const FeesView = () => {
   const [enteredOtherRegionsFee, setEnteredOtherRegionsFee] = useState(0);
   const [enteredWithinAccraFee, setEnteredWithinAccraFee] = useState(0);
   const [enteredIntlFee, setEnteredIntlFee] = useState(0);
+  const [waiveDeliveryFees, setWaiveDeliveryFees] = useState(false);
 
   const updateFees = useMutation(api.inventory.stores.updateConfig);
 
@@ -46,6 +47,7 @@ const FeesView = () => {
         config: {
           ...activeStore?.config,
           deliveryFees: updates,
+          waiveDeliveryFees: waiveDeliveryFees,
         },
       });
       toast.success("Delivery fees updated", { position: "top-right" });
@@ -69,6 +71,7 @@ const FeesView = () => {
       activeStore?.config?.deliveryFees?.otherRegions || undefined
     );
     setEnteredIntlFee(activeStore?.config?.deliveryFees?.international || 0);
+    setWaiveDeliveryFees(activeStore?.config?.waiveDeliveryFees || false);
   }, [activeStore]);
 
   return (
@@ -87,6 +90,7 @@ const FeesView = () => {
             type="number"
             value={enteredWithinAccraFee || undefined}
             onChange={(e) => setEnteredWithinAccraFee(parseInt(e.target.value))}
+            disabled={waiveDeliveryFees}
           />
         </div>
 
@@ -98,6 +102,7 @@ const FeesView = () => {
             onChange={(e) =>
               setEnteredOtherRegionsFee(parseInt(e.target.value))
             }
+            disabled={waiveDeliveryFees}
           />
         </div>
 
@@ -107,8 +112,31 @@ const FeesView = () => {
             type="number"
             value={enteredIntlFee || undefined}
             onChange={(e) => setEnteredIntlFee(parseInt(e.target.value))}
+            disabled={waiveDeliveryFees}
           />
         </div>
+      </div>
+
+      <div className="container mx-auto py-4">
+        <div className="flex items-center gap-2">
+          <Switch
+            id="waive-delivery-fees"
+            checked={waiveDeliveryFees}
+            onCheckedChange={setWaiveDeliveryFees}
+          />
+          <Label
+            className="text-muted-foreground"
+            htmlFor="waive-delivery-fees"
+          >
+            Waive all delivery fees
+          </Label>
+        </div>
+        {waiveDeliveryFees && (
+          <p className="text-xs text-muted-foreground mt-2">
+            When enabled, customers will not be charged for delivery regardless
+            of location.
+          </p>
+        )}
       </div>
 
       <div className="w-full flex pr-8">

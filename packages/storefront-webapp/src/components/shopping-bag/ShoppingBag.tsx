@@ -184,7 +184,7 @@ export default function ShoppingBag() {
     pendingSessions && pendingSessions.length > 0
   );
 
-  const potentialRewards = Math.floor(bagSubtotal / 10);
+  const potentialRewards = Math.floor(bagSubtotal * 10);
 
   return (
     <FadeIn className="container mx-auto max-w-[1024px] px-6 xl:px-0 space-y-8 lg:space-y-24 py-8">

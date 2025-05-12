@@ -27,10 +27,13 @@ import { ALL_COUNTRIES } from "@/lib/countries";
 import { useEffect, useRef } from "react";
 import { DeliveryOptions } from "./DeliverySection";
 import { deliveryDetailsSchema } from "./schema";
+import { useStoreContext } from "@/contexts/StoreContext";
 
 export const DeliveryDetailsForm = () => {
   const { checkoutState, actionsState, updateActionsState, updateState } =
     useCheckout();
+  const { store } = useStoreContext();
+  const { waiveDeliveryFees } = store?.config || {};
 
   const form = useForm({
     resolver: zodResolver(deliveryDetailsSchema),
@@ -221,7 +224,11 @@ export const DeliveryDetailsForm = () => {
                           const deliveryOption =
                             region == "GA" ? "within-accra" : "outside-accra";
 
-                          const deliveryFee = region == "GA" ? 30 : 70;
+                          const deliveryFee = waiveDeliveryFees
+                            ? 0
+                            : region == "GA"
+                              ? 30
+                              : 70;
 
                           updateState({
                             deliveryDetails: {

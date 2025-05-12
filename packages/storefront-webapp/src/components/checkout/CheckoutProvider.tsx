@@ -168,10 +168,10 @@ export const webOrderSchema = z
       //   }
       // }
 
-      if (!deliveryFee) {
+      if (deliveryFee == null) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          path: ["billingDetails", "deliveryFee"],
+          path: ["deliveryFee"],
           message: "Delivery fee is required",
         });
       }
@@ -422,7 +422,6 @@ export const CheckoutProvider = ({
 }: {
   children: React.ReactNode;
 }) => {
-  // Load initial state from sessionStorage or fallback to the default state
   const [checkoutState, setCheckoutState] = useState<CheckoutState>(() => {
     if (typeof window === "undefined") return initialState;
 
@@ -434,7 +433,13 @@ export const CheckoutProvider = ({
     }
   });
 
-  const [actionsState, setActionsState] = useState(initialActionsState);
+  const [actionsState, setActionsState] = useState<CheckoutActions>({
+    isEditingCustomerDetails: false,
+    isEditingDeliveryDetails: false,
+    isEditingBillingDetails: false,
+    didEnterDeliveryDetails: false,
+    didEnterBillingDetails: false,
+  });
 
   const { bag } = useShoppingBag();
 
@@ -442,13 +447,14 @@ export const CheckoutProvider = ({
 
   const { setNavBarLayout, setAppLocation } = useNavigationBarContext();
 
+  const { waiveDeliveryFees } = store?.config || {};
+
   useEffect(() => {
     setNavBarLayout("fixed");
     setAppLocation("shop");
   }, []);
 
   useEffect(() => {
-    // Save the current state to sessionStorage whenever it changes and bag is not empty
     if (bag?.items?.length && bag?.items?.length > 0) {
       sessionStorage.setItem(
         SESSION_STORAGE_KEY,
@@ -492,14 +498,14 @@ export const CheckoutProvider = ({
       const isGreaterAccraAddress = region == "GA";
 
       let deliveryOption: DeliveryOption = "intl";
-      let deliveryFee = 800;
+      let deliveryFee = waiveDeliveryFees ? 0 : 800;
 
       if (isGhanaAddress) {
         deliveryOption = isGreaterAccraAddress
           ? "within-accra"
           : "outside-accra";
 
-        deliveryFee = isGreaterAccraAddress ? 30 : 70;
+        deliveryFee = waiveDeliveryFees ? 0 : isGreaterAccraAddress ? 30 : 70;
       }
 
       updateState({
@@ -533,6 +539,10 @@ export const CheckoutProvider = ({
   }, [user]);
 
   const updateState = (updates: Partial<CheckoutState>) => {
+    if (waiveDeliveryFees && updates.deliveryMethod === "delivery") {
+      updates.deliveryFee = 0;
+    }
+
     setCheckoutState((prev) => {
       const newUpdates = { ...prev, ...updates };
 
@@ -600,6 +610,14 @@ export const CheckoutProvider = ({
           ? didProvideAllUSBillingAddressFields
           : didProvideAllRestOfWorldBillingFields;
 
+      if (
+        waiveDeliveryFees &&
+        newUpdates.isDeliveryOrder &&
+        newUpdates.deliveryFee === null
+      ) {
+        newUpdates.deliveryFee = 0;
+      }
+
       return {
         ...newUpdates,
         didEnterDeliveryDetails,
@@ -625,7 +643,17 @@ export const CheckoutProvider = ({
       return false;
     }
 
+    // Ensure deliveryFee is set to 0 when waiveDeliveryFees is true and delivery method is 'delivery'
+    if (
+      waiveDeliveryFees &&
+      checkoutState.deliveryMethod === "delivery" &&
+      checkoutState.deliveryFee === null
+    ) {
+      updateState({ deliveryFee: 0 });
+    }
+
     try {
+      console.log(checkoutState);
       // Parse the state using the schema
       webOrderSchema.parse(checkoutState);
       updateState({ failedFinalValidation: false });

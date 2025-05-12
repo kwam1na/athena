@@ -24,9 +24,12 @@ import {
 import { accraNeighborhoods } from "@/lib/ghana";
 import { Plus } from "lucide-react";
 import { CheckoutFormSectionProps } from "./CustomerInfoSection";
+import { useStoreContext } from "@/contexts/StoreContext";
 
 export const DeliveryDetailsForm = ({ form }: CheckoutFormSectionProps) => {
   const { checkoutState, updateState } = useCheckout();
+  const { store } = useStoreContext();
+  const { waiveDeliveryFees } = store?.config || {};
 
   // const onSubmit = (data: z.infer<typeof deliveryDetailsSchema>) => {
   //   console.log("on submit in delivery details ->", data);
@@ -188,7 +191,11 @@ export const DeliveryDetailsForm = ({ form }: CheckoutFormSectionProps) => {
                             const region = e.target.value;
                             const deliveryOption =
                               region == "GA" ? "within-accra" : "outside-accra";
-                            const deliveryFee = region == "GA" ? 30 : 70;
+                            const deliveryFee = waiveDeliveryFees
+                              ? 0
+                              : region == "GA"
+                                ? 30
+                                : 70;
 
                             updateState({
                               deliveryDetails: {
@@ -231,7 +238,11 @@ export const DeliveryDetailsForm = ({ form }: CheckoutFormSectionProps) => {
                           const deliveryOption =
                             region == "GA" ? "within-accra" : "outside-accra";
 
-                          const deliveryFee = region == "GA" ? 30 : 70;
+                          const deliveryFee = waiveDeliveryFees
+                            ? 0
+                            : region == "GA"
+                              ? 30
+                              : 70;
 
                           updateState({
                             deliveryDetails: {

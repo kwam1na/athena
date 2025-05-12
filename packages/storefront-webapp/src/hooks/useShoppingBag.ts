@@ -306,7 +306,7 @@ export const useShoppingBag = () => {
 
     const lastItem = remainingItems[0];
     const isLastItemDiscounted = promoCodeItems?.some(
-      (sku: PromoCodeItem) => sku.productSku._id === lastItem.productSkuId
+      (sku: PromoCodeItem) => sku.productSku?._id === lastItem.productSkuId
     );
 
     if (isLastItemDiscounted) {
