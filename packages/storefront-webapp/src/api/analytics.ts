@@ -3,11 +3,11 @@ import config from "@/config";
 export async function postAnalytics({
   action,
   origin,
-  data,
+  data = {},
 }: {
   action: string;
   origin?: string;
-  data: Record<string, any>;
+  data?: Record<string, any>;
 }) {
   const response = await fetch(`${config.apiGateway.URL}/analytics`, {
     method: "POST",

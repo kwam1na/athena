@@ -3,10 +3,12 @@ import {
   Dialog,
   DialogContent,
   DialogContentNaked,
+  DialogContentFullscreen,
   DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
 
 interface ModalProps {
   title: string;
@@ -16,6 +18,8 @@ interface ModalProps {
   children?: React.ReactNode;
   withoutHeader?: boolean;
   withoutCloseButton?: boolean;
+  withoutBackground?: boolean;
+  fullscreen?: boolean;
 }
 
 export const Modal: React.FC<ModalProps> = ({
@@ -26,6 +30,8 @@ export const Modal: React.FC<ModalProps> = ({
   children,
   withoutHeader,
   withoutCloseButton,
+  withoutBackground,
+  fullscreen,
 }) => {
   const onChange = (open: boolean) => {
     if (!open) {
@@ -33,10 +39,32 @@ export const Modal: React.FC<ModalProps> = ({
     }
   };
 
+  // Use fullscreen dialog component if fullscreen prop is true
+  if (fullscreen) {
+    return (
+      <Dialog open={isOpen} onOpenChange={onChange}>
+        <DialogContentFullscreen
+          className={cn(
+            "bg-transparent border-none p-0",
+            withoutBackground && "bg-transparent"
+          )}
+        >
+          <DialogTitle className="mt-6">{title}</DialogTitle>
+          {children}
+        </DialogContentFullscreen>
+      </Dialog>
+    );
+  }
+
   return (
     <Dialog open={isOpen} onOpenChange={onChange}>
       {withoutCloseButton && (
-        <DialogContentNaked>
+        <DialogContentNaked
+          className={cn(
+            "bg-transparent border-none",
+            withoutBackground && "bg-transparent"
+          )}
+        >
           {!!withoutHeader == false && (
             <DialogHeader className="flex gap-6">
               <DialogTitle className="mt-6">{title}</DialogTitle>
@@ -47,7 +75,12 @@ export const Modal: React.FC<ModalProps> = ({
         </DialogContentNaked>
       )}
       {!withoutCloseButton && (
-        <DialogContent>
+        <DialogContent
+          className={cn(
+            "bg-transparent border-none",
+            withoutBackground && "bg-transparent"
+          )}
+        >
           {!!withoutHeader == false && (
             <DialogHeader className="flex gap-6">
               <p className="text-sm">{title}</p>

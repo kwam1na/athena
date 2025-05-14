@@ -8,49 +8,28 @@ import { useTrackEvent } from "@/hooks/useTrackEvent";
 
 interface RewardsAlertProps {
   isOpen: boolean;
-  setIsOpen: (isOpen: boolean) => void;
+  onClose: () => void;
 }
 
-export function RewardsAlert({ isOpen, setIsOpen }: RewardsAlertProps) {
-  useTrackEvent({
-    action: "viewed_rewards_alert",
-    data: {},
-    isReady: isOpen,
-  });
+export function RewardsAlert({ isOpen, onClose }: RewardsAlertProps) {
+  // useTrackEvent({
+  //   action: "viewed_rewards_alert",
+  //   data: {},
+  //   isReady: isOpen,
+  // });
 
-  const onClose = () => {
-    setIsOpen(false);
-    //   localStorage.setItem("promo_alert_last_shown", Date.now().toString());
-    //   if (promoItem && promoItem.productSku) {
-    //     postAnalytics({
-    //       action: "dismissed_promo_alert",
-    //       origin: "promo_alert",
-    //       data: {
-    //         promoCodeItemId: promoItem._id,
-    //         productSku: promoItem.productSku.sku,
-    //         productImageUrl: promoItem.productSku.images[0],
-    //         product: promoItem.productSku.productId,
-    //       },
-    //     });
-    //   }
+  const onRewardsAlertClose = () => {
+    onClose();
+
+    postAnalytics({
+      action: "dismissed_rewards_alert",
+      data: {},
+    });
   };
 
   // Track when the alert is actioned on
   const handleShopNow = () => {
-    setIsOpen(false);
-    //   localStorage.setItem("promo_alert_last_shown", Date.now().toString());
-    //   if (promoItem && promoItem.productSku) {
-    //     postAnalytics({
-    //       action: "clicked_shop_all_hair",
-    //       origin: "promo_alert",
-    //       data: {
-    //         promoCodeItemId: promoItem._id,
-    //         productSkuId: promoItem.productSku._id,
-    //         quantity: promoItem.quantity,
-    //         quantityClaimed: promoItem.quantityClaimed,
-    //       },
-    //     });
-    //   }
+    onClose();
 
     postAnalytics({
       action: "clicked_shop_now",
@@ -65,13 +44,13 @@ export function RewardsAlert({ isOpen, setIsOpen }: RewardsAlertProps) {
       className="fixed top-[80px] left-0 right-0 z-10 max-w-md border rounded-md p-4 px-6 mx-4 md:mx-auto shadow-lg transition-colors duration-300 bg-accent4/30 backdrop-blur-sm border-white/20"
     >
       <div className="relative">
-        {/* <button
-          onClick={onClose}
+        <button
+          onClick={onRewardsAlertClose}
           className="absolute right-0 top-0 text-white"
           aria-label="Close alert"
         >
           <X className="h-4 w-4" />
-        </button> */}
+        </button>
 
         <div className="flex items-center gap-4">
           <div className="space-y-2">

@@ -1,5 +1,5 @@
 import { postAnalytics } from "@/api/analytics";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 export const useTrackEvent = ({
   action,
@@ -12,13 +12,21 @@ export const useTrackEvent = ({
   data?: Record<string, any>;
   isReady?: boolean;
 }) => {
+  const hasRun = useRef(false);
+
   useEffect(() => {
-    if (isReady) {
-      postAnalytics({
-        action,
-        origin,
-        data,
-      });
-    }
-  }, [isReady]);
+    // Wait for the next tick to ensure state is stable
+    const timeoutId = setTimeout(() => {
+      if (isReady && !hasRun.current) {
+        postAnalytics({
+          action,
+          origin,
+          data,
+        });
+        hasRun.current = true;
+      }
+    }, 0);
+
+    return () => clearTimeout(timeoutId);
+  }, [isReady, action, origin, data]);
 };

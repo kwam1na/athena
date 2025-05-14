@@ -35,6 +35,7 @@ import type * as http_domains_storeFront_routes_checkout from "../http/domains/s
 import type * as http_domains_storeFront_routes_guest from "../http/domains/storeFront/routes/guest.js";
 import type * as http_domains_storeFront_routes_index from "../http/domains/storeFront/routes/index.js";
 import type * as http_domains_storeFront_routes_me from "../http/domains/storeFront/routes/me.js";
+import type * as http_domains_storeFront_routes_offers from "../http/domains/storeFront/routes/offers.js";
 import type * as http_domains_storeFront_routes_onlineOrder from "../http/domains/storeFront/routes/onlineOrder.js";
 import type * as http_domains_storeFront_routes_paystack from "../http/domains/storeFront/routes/paystack.js";
 import type * as http_domains_storeFront_routes_reviews from "../http/domains/storeFront/routes/reviews.js";
@@ -43,6 +44,7 @@ import type * as http_domains_storeFront_routes_savedBag from "../http/domains/s
 import type * as http_domains_storeFront_routes_storefront from "../http/domains/storeFront/routes/storefront.js";
 import type * as http_domains_storeFront_routes_upsells from "../http/domains/storeFront/routes/upsells.js";
 import type * as http_domains_storeFront_routes_user from "../http/domains/storeFront/routes/user.js";
+import type * as http_domains_storeFront_routes_userOffers from "../http/domains/storeFront/routes/userOffers.js";
 import type * as http_utils from "../http/utils.js";
 import type * as http from "../http.js";
 import type * as inventory_athenaUser from "../inventory/athenaUser.js";
@@ -94,6 +96,7 @@ import type * as schemas_storeFront_checkoutSessionItem from "../schemas/storeFr
 import type * as schemas_storeFront_customer from "../schemas/storeFront/customer.js";
 import type * as schemas_storeFront_guest from "../schemas/storeFront/guest.js";
 import type * as schemas_storeFront_index from "../schemas/storeFront/index.js";
+import type * as schemas_storeFront_offer from "../schemas/storeFront/offer.js";
 import type * as schemas_storeFront_onlineOrder_onlineOrder from "../schemas/storeFront/onlineOrder/onlineOrder.js";
 import type * as schemas_storeFront_onlineOrder_onlineOrderItem from "../schemas/storeFront/onlineOrder/onlineOrderItem.js";
 import type * as schemas_storeFront_review from "../schemas/storeFront/review.js";
@@ -111,6 +114,7 @@ import type * as storeFront_bag from "../storeFront/bag.js";
 import type * as storeFront_bagItem from "../storeFront/bagItem.js";
 import type * as storeFront_checkoutSession from "../storeFront/checkoutSession.js";
 import type * as storeFront_guest from "../storeFront/guest.js";
+import type * as storeFront_offers from "../storeFront/offers.js";
 import type * as storeFront_onlineOrder from "../storeFront/onlineOrder.js";
 import type * as storeFront_onlineOrderItem from "../storeFront/onlineOrderItem.js";
 import type * as storeFront_onlineOrderUtilFns from "../storeFront/onlineOrderUtilFns.js";
@@ -121,6 +125,7 @@ import type * as storeFront_savedBag from "../storeFront/savedBag.js";
 import type * as storeFront_savedBagItem from "../storeFront/savedBagItem.js";
 import type * as storeFront_supportTicket from "../storeFront/supportTicket.js";
 import type * as storeFront_user from "../storeFront/user.js";
+import type * as storeFront_userOffers from "../storeFront/userOffers.js";
 import type * as utils from "../utils.js";
 
 /**
@@ -154,6 +159,7 @@ declare const fullApi: ApiFromModules<{
   "http/domains/storeFront/routes/guest": typeof http_domains_storeFront_routes_guest;
   "http/domains/storeFront/routes/index": typeof http_domains_storeFront_routes_index;
   "http/domains/storeFront/routes/me": typeof http_domains_storeFront_routes_me;
+  "http/domains/storeFront/routes/offers": typeof http_domains_storeFront_routes_offers;
   "http/domains/storeFront/routes/onlineOrder": typeof http_domains_storeFront_routes_onlineOrder;
   "http/domains/storeFront/routes/paystack": typeof http_domains_storeFront_routes_paystack;
   "http/domains/storeFront/routes/reviews": typeof http_domains_storeFront_routes_reviews;
@@ -162,6 +168,7 @@ declare const fullApi: ApiFromModules<{
   "http/domains/storeFront/routes/storefront": typeof http_domains_storeFront_routes_storefront;
   "http/domains/storeFront/routes/upsells": typeof http_domains_storeFront_routes_upsells;
   "http/domains/storeFront/routes/user": typeof http_domains_storeFront_routes_user;
+  "http/domains/storeFront/routes/userOffers": typeof http_domains_storeFront_routes_userOffers;
   "http/utils": typeof http_utils;
   http: typeof http;
   "inventory/athenaUser": typeof inventory_athenaUser;
@@ -213,6 +220,7 @@ declare const fullApi: ApiFromModules<{
   "schemas/storeFront/customer": typeof schemas_storeFront_customer;
   "schemas/storeFront/guest": typeof schemas_storeFront_guest;
   "schemas/storeFront/index": typeof schemas_storeFront_index;
+  "schemas/storeFront/offer": typeof schemas_storeFront_offer;
   "schemas/storeFront/onlineOrder/onlineOrder": typeof schemas_storeFront_onlineOrder_onlineOrder;
   "schemas/storeFront/onlineOrder/onlineOrderItem": typeof schemas_storeFront_onlineOrder_onlineOrderItem;
   "schemas/storeFront/review": typeof schemas_storeFront_review;
@@ -230,6 +238,7 @@ declare const fullApi: ApiFromModules<{
   "storeFront/bagItem": typeof storeFront_bagItem;
   "storeFront/checkoutSession": typeof storeFront_checkoutSession;
   "storeFront/guest": typeof storeFront_guest;
+  "storeFront/offers": typeof storeFront_offers;
   "storeFront/onlineOrder": typeof storeFront_onlineOrder;
   "storeFront/onlineOrderItem": typeof storeFront_onlineOrderItem;
   "storeFront/onlineOrderUtilFns": typeof storeFront_onlineOrderUtilFns;
@@ -240,6 +249,7 @@ declare const fullApi: ApiFromModules<{
   "storeFront/savedBagItem": typeof storeFront_savedBagItem;
   "storeFront/supportTicket": typeof storeFront_supportTicket;
   "storeFront/user": typeof storeFront_user;
+  "storeFront/userOffers": typeof storeFront_userOffers;
   utils: typeof utils;
 }>;
 export declare const api: FilterApi<

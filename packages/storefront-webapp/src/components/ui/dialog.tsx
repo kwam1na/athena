@@ -126,6 +126,26 @@ const DialogContentNaked = React.forwardRef<
 ));
 DialogContentNaked.displayName = "DialogContentNaked";
 
+const DialogContentFullscreen = React.forwardRef<
+  React.ElementRef<typeof DialogPrimitive.Content>,
+  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
+>(({ className, children, ...props }, ref) => (
+  <DialogPortal>
+    <DialogOverlay />
+    <DialogPrimitive.Content
+      ref={ref}
+      className={cn(
+        "fixed inset-0 z-50 flex items-center justify-center w-full h-full p-0 bg-background shadow-lg sm:left-[50%] sm:top-[50%] sm:max-h-[85vh] sm:max-w-lg sm:translate-x-[-50%] sm:translate-y-[-50%] sm:rounded-lg",
+        className
+      )}
+      {...props}
+    >
+      {children}
+    </DialogPrimitive.Content>
+  </DialogPortal>
+));
+DialogContentFullscreen.displayName = "DialogContentFullscreen";
+
 export {
   Dialog,
   DialogPortal,
@@ -134,6 +154,7 @@ export {
   DialogTrigger,
   DialogContent,
   DialogContentNaked,
+  DialogContentFullscreen,
   DialogHeader,
   DialogFooter,
   DialogTitle,

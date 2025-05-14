@@ -10,7 +10,7 @@ import { postAnalytics } from "@/api/analytics";
 
 interface PromoAlertProps {
   isOpen: boolean;
-  setIsOpen: Dispatch<SetStateAction<boolean>>;
+  onClose: () => void;
 }
 
 function getPromoAlertCopy(itemsLeft: number) {
@@ -52,7 +52,7 @@ function getPromoAlertCopy(itemsLeft: number) {
   }
 }
 
-export function PromoAlert({ isOpen, setIsOpen }: PromoAlertProps) {
+export function PromoAlert({ isOpen, onClose }: PromoAlertProps) {
   const promoCodeQueries = usePromoCodesQueries();
   const { data: promoItems } = useQuery(promoCodeQueries.getAllItems());
   const promoItem = promoItems?.[0];
@@ -69,9 +69,8 @@ export function PromoAlert({ isOpen, setIsOpen }: PromoAlertProps) {
     isReady: isOpen && !!promoItem && !!promoItem.productSku,
   });
 
-  const onClose = () => {
-    setIsOpen(false);
-    localStorage.setItem("promo_alert_last_shown", Date.now().toString());
+  const onPromoAlertClose = () => {
+    onClose();
     if (promoItem && promoItem.productSku) {
       postAnalytics({
         action: "dismissed_promo_alert",
@@ -88,8 +87,7 @@ export function PromoAlert({ isOpen, setIsOpen }: PromoAlertProps) {
 
   // Track when the alert is actioned on
   const handleShopNow = () => {
-    setIsOpen(false);
-    localStorage.setItem("promo_alert_last_shown", Date.now().toString());
+    onClose();
     if (promoItem && promoItem.productSku) {
       postAnalytics({
         action: "clicked_shop_all_hair",
@@ -121,7 +119,7 @@ export function PromoAlert({ isOpen, setIsOpen }: PromoAlertProps) {
     >
       <div className="relative">
         <button
-          onClick={onClose}
+          onClick={onPromoAlertClose}
           className="absolute right-0 top-0 text-white"
           aria-label="Close alert"
         >

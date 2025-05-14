@@ -10,7 +10,9 @@ export const promoCodeSchema = v.object({
   validTo: v.number(),
   span: v.union(v.literal("entire-order"), v.literal("selected-products")),
   active: v.boolean(),
+  displayText: v.string(),
   autoApply: v.optional(v.boolean()),
+  sitewide: v.optional(v.boolean()),
   createdByUserId: v.id("athenaUser"),
 });
 

@@ -194,3 +194,51 @@ export const sendFeedbackRequestEmail = async (params: {
     body: JSON.stringify(message),
   });
 };
+
+export const sendDiscountCodeEmail = async (params: {
+  customerEmail: string;
+  promoCode: string;
+  discount: string;
+  validTo: Date;
+}) => {
+  // Format expiration date
+  const expirationDate = new Date(
+    Date.now() + 30 * 24 * 60 * 60 * 1000
+  ).toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+
+  const message = {
+    from: {
+      email: "offers@wigclub.store",
+      name: "Wigclub",
+    },
+    personalizations: [
+      {
+        to: [
+          {
+            email: params.customerEmail,
+          },
+        ],
+        dynamic_template_data: {
+          promo_code: params.promoCode,
+          discount: params.discount,
+          expiration_date: expirationDate,
+          shop_url: `${process.env.STORE_URL}/shop/hair`,
+        },
+      },
+    ],
+    template_id: "d-c5615c89ab4043b680c184d11eaa12a4",
+  };
+
+  return await fetch("https://api.sendgrid.com/v3/mail/send", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${process.env.SENDGRID_API_KEY}`,
+    },
+    body: JSON.stringify(message),
+  });
+};

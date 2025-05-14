@@ -41,6 +41,7 @@ import {
   rewardPointsSchema,
   rewardTransactionSchema,
   rewardTierSchema,
+  offerSchema,
 } from "./schemas/storeFront";
 
 const schema = defineSchema({
@@ -98,6 +99,12 @@ const schema = defineSchema({
     .index("by_user", ["storeFrontUserId"])
     .index("by_order", ["orderId"]),
   rewardTiers: defineTable(rewardTierSchema).index("by_store", ["storeId"]),
+  offer: defineTable(offerSchema)
+    .index("by_email", ["email"])
+    .index("by_storeFrontUserId", ["storeFrontUserId"])
+    .index("by_promoCodeId", ["promoCodeId"])
+    .index("by_storeId", ["storeId"])
+    .index("by_ipAddress", ["ipAddress"]),
 });
 
 export default schema;

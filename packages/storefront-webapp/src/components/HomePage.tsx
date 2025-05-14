@@ -12,19 +12,52 @@ import { useProductReminder } from "@/hooks/useProductReminder";
 import { HomeHeroSectionWithRef } from "./home/HomeHeroSection";
 import { BestSellersSection } from "./home/BestSellersSection";
 import { FeaturedProductsSection } from "./home/FeaturedProductsSection";
-import { useParams, useSearch } from "@tanstack/react-router";
+import { useSearch } from "@tanstack/react-router";
 import { RewardsAlert } from "./home/RewardsAlert";
+import { useDiscountCodeAlert } from "@/hooks/useDiscountCodeAlert";
+import { useRewardsAlert } from "@/hooks/useRewardsAlert";
+import { WelcomeBackModal } from "./ui/modals/WelcomeBackModal";
+import { GiftIcon } from "lucide-react";
+import { motion } from "framer-motion";
+import { useStoreContext } from "@/contexts/StoreContext";
 
 const origin = "homepage";
 
+// Threshold for how far down the user needs to scroll before showing the modal (in pixels)
+const SCROLL_THRESHOLD = 40;
+
 export default function HomePage() {
-  const { setNavBarLayout, setAppLocation } = useNavigationBarContext();
   const homeHeroRef = useRef<HTMLDivElement>(null);
   const footerRef = useRef<HTMLDivElement>(null);
 
+  const { store } = useStoreContext();
+
+  const { setNavBarLayout, setAppLocation } = useNavigationBarContext();
+
   // Use extracted custom hooks
-  const { isPromoAlertOpen, setIsPromoAlertOpen } = usePromoAlert();
-  const [isRewardsAlertOpen, setIsRewardsAlertOpen] = useState(true);
+  const { isPromoAlertOpen, handleClosePromoAlert } = usePromoAlert();
+
+  const {
+    isRewardsAlertOpen,
+    isRewardsAlertDismissed,
+    handleCloseRewardsAlert,
+    lastRewardsAlertShownTime,
+  } = useRewardsAlert();
+
+  const {
+    isDiscountModalOpen,
+    setIsDiscountModalOpen,
+    handleCloseDiscountModal,
+    completeDiscountModalFlow,
+    hasDiscountModalBeenShown,
+    hasCompletedDiscountModalFlow,
+    setHasDiscountModalBeenShown,
+    isDiscountModalDismissed,
+    openDiscountModal,
+  } = useDiscountCodeAlert();
+
+  const [hasScrolledPastThreshold, setHasScrolledPastThreshold] =
+    useState(false);
 
   const { showReminderBar, setShowReminderBar, upsell } =
     useProductReminder(homeHeroRef);
@@ -40,6 +73,30 @@ export default function HomePage() {
   );
 
   const s = useSearch({ strict: false });
+
+  // Handle scroll events
+  useEffect(() => {
+    const handleScroll = () => {
+      const scrollPosition = window.scrollY;
+
+      // Check if user has scrolled past the threshold and the modal hasn't been shown yet
+      if (
+        scrollPosition > SCROLL_THRESHOLD &&
+        !hasScrolledPastThreshold &&
+        !hasDiscountModalBeenShown
+      ) {
+        setHasScrolledPastThreshold(true);
+        setIsDiscountModalOpen(true);
+        setHasDiscountModalBeenShown(true);
+      }
+    };
+
+    window.addEventListener("scroll", handleScroll);
+
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+    };
+  }, [hasScrolledPastThreshold, hasDiscountModalBeenShown]);
 
   useEffect(() => {
     setNavBarLayout("sticky");
@@ -83,12 +140,37 @@ export default function HomePage() {
     <>
       <PromoAlert
         isOpen={isPromoAlertOpen && !isRewardsAlertOpen}
-        setIsOpen={setIsPromoAlertOpen}
+        onClose={handleClosePromoAlert}
       />
-      <RewardsAlert
-        isOpen={isRewardsAlertOpen}
-        setIsOpen={setIsRewardsAlertOpen}
+
+      {/* <RewardsAlert
+        isOpen={isRewardsAlertOpen && !isRewardsAlertDismissed}
+        onClose={handleCloseRewardsAlert}
+      /> */}
+
+      <WelcomeBackModal
+        isOpen={isDiscountModalOpen}
+        onClose={handleCloseDiscountModal}
+        onSuccess={completeDiscountModalFlow}
+        promoCodeId={store?.config?.homepageDiscountCodeModalPromoCode}
       />
+
+      {/* Floating welcome back button */}
+      {/* {isDiscountModalDismissed &&
+        !hasCompletedDiscountModalFlow &&
+        store?.config?.homepageDiscountCodeModalPromoCode && (
+          <motion.button
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.4, delay: 2.6, ease: "easeIn" }}
+            onClick={openDiscountModal}
+            className="fixed right-4 top-1/2 transform -translate-y-1/2 z-10 bg-accent5/60 text-primary rounded-full p-3 shadow-md flex items-center transition-all duration-100 hover:scale-105"
+            aria-label="Special offer"
+          >
+            <GiftIcon className="h-5 w-5" />
+          </motion.button>
+        )} */}
+
       <div className="min-h-screen">
         <div className="overflow-hidden">
           <div className="space-y-56 pb-32">
@@ -121,7 +203,7 @@ export default function HomePage() {
 
         <Footer ref={footerRef} />
 
-        {upsell && !isPromoAlertOpen && (
+        {/* {upsell && !isPromoAlertOpen && (
           <ProductReminderBar
             product={upsell}
             isVisible={showReminderBar && upsell.quantityAvailable > 0}
@@ -130,7 +212,7 @@ export default function HomePage() {
             }}
             footerRef={footerRef}
           />
-        )}
+        )} */}
       </div>
     </>
   );

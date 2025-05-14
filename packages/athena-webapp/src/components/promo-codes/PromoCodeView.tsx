@@ -115,10 +115,12 @@ function PromoCodeView() {
   const [discount, setDiscount] = useState<string | null>(null);
   const [isActive, setIsActive] = useState(false);
   const [autoApply, setAutoApply] = useState(false);
+  const [isSitewide, setIsSitewide] = useState(false);
+  const [isHomepageDiscountCode, setIsHomepageDiscountCode] = useState(false);
 
   const [isAddingPromoCode, setIsAddingPromoCode] = useState(false);
-
   const [isUpdatingPromoCode, setIsUpdatingPromoCode] = useState(false);
+  const [isUpdatingStoreConfig, setIsUpdatingStoreConfig] = useState(false);
 
   const { selectedProductSkus } = useSelectedProducts();
 
@@ -127,8 +129,8 @@ function PromoCodeView() {
   const navigate = useNavigate();
 
   const addPromoCode = useMutation(api.inventory.promoCode.create);
-
   const updatePromoCode = useMutation(api.inventory.promoCode.update);
+  const updateStoreConfig = useMutation(api.inventory.stores.updateConfig);
 
   const { promoCodeSlug } = useParams({ strict: false });
 
@@ -145,8 +147,17 @@ function PromoCodeView() {
       setPromoCodeSpan(activePromoCode.span);
       setIsActive(activePromoCode.active);
       setAutoApply(activePromoCode.autoApply ?? false);
+      setIsSitewide(activePromoCode.sitewide ?? false);
+
+      // Check if this promo code is set as homepage discount code
+      if (
+        activeStore?.config?.homepageDiscountCodeModalPromoCode ===
+        activePromoCode._id
+      ) {
+        setIsHomepageDiscountCode(true);
+      }
     }
-  }, [activePromoCode]);
+  }, [activePromoCode, activeStore]);
 
   if (!products || !activeStore || !user) return null;
 
@@ -194,13 +205,21 @@ function PromoCodeView() {
         ? Array.from(selectedProductSkus)
         : undefined;
 
+    const displayText =
+      discountType == "amount"
+        ? formatter.format(parseFloat(discount!))
+        : `${discount}%`;
+
     try {
       setIsAddingPromoCode(true);
-      await addPromoCode({
+      const newPromoCode = await addPromoCode({
         storeId: activeStore._id,
         code: promoCode!,
         discountType: discountType,
         discountValue: parseFloat(discount!),
+        displayText: displayText,
+        sitewide: isSitewide,
+        autoApply: autoApply,
         span: promoCodeSpan,
         productSkus,
         validFrom: Date.now(),
@@ -209,6 +228,18 @@ function PromoCodeView() {
       });
 
       toast.success(`Promo code ${promoCode} added`);
+
+      // If set as homepage discount code, update store config
+      if (isHomepageDiscountCode && newPromoCode.promoCode) {
+        await updateStoreConfig({
+          id: activeStore._id,
+          config: {
+            ...activeStore.config,
+            homepageDiscountCodeModalPromoCode: newPromoCode.promoCode._id,
+          },
+        });
+        toast.success("Set as homepage discount code");
+      }
 
       navigate({
         to: "/$orgUrlSlug/store/$storeUrlSlug/promo-codes",
@@ -233,6 +264,11 @@ function PromoCodeView() {
         ? Array.from(selectedProductSkus)
         : undefined;
 
+    const displayText =
+      discountType == "amount"
+        ? formatter.format(parseFloat(discount!))
+        : `${discount}%`;
+
     try {
       setIsUpdatingPromoCode(true);
       await updatePromoCode({
@@ -240,8 +276,10 @@ function PromoCodeView() {
         code: promoCode!,
         active: isActive,
         autoApply: autoApply,
+        sitewide: isSitewide,
         discountType: discountType,
         discountValue: parseFloat(discount!),
+        displayText: displayText,
         span: promoCodeSpan,
         productSkus,
         validFrom: Date.now(),
@@ -249,6 +287,35 @@ function PromoCodeView() {
       });
 
       toast.success(`Promo code ${promoCode} updated`);
+
+      // Update store config for homepage discount code if needed
+      if (activeStore && promoCodeSlug) {
+        const currentHomepagePromoCodeId =
+          activeStore.config?.homepageDiscountCodeModalPromoCode;
+        const isCurrentlyHomepageCode =
+          currentHomepagePromoCodeId === promoCodeSlug;
+
+        if (isHomepageDiscountCode && !isCurrentlyHomepageCode) {
+          // Add this promo code as homepage discount code
+          await updateStoreConfig({
+            id: activeStore._id,
+            config: {
+              ...activeStore.config,
+              homepageDiscountCodeModalPromoCode: promoCodeSlug,
+            },
+          });
+          toast.success("Set as homepage discount code");
+        } else if (!isHomepageDiscountCode && isCurrentlyHomepageCode) {
+          // Remove this promo code as homepage discount code
+          const { homepageDiscountCodeModalPromoCode, ...restConfig } =
+            activeStore.config || {};
+          await updateStoreConfig({
+            id: activeStore._id,
+            config: restConfig,
+          });
+          toast.success("Removed as homepage discount code");
+        }
+      }
 
       navigate({
         to: "/$orgUrlSlug/store/$storeUrlSlug/promo-codes",
@@ -264,6 +331,43 @@ function PromoCodeView() {
       });
     } finally {
       setIsUpdatingPromoCode(false);
+    }
+  };
+
+  const updateHomepageDiscountCode = async (checked: boolean) => {
+    if (!activeStore || !promoCodeSlug) return;
+
+    try {
+      setIsUpdatingStoreConfig(true);
+
+      if (checked) {
+        // Set this promo code as homepage discount code
+        await updateStoreConfig({
+          id: activeStore._id,
+          config: {
+            ...activeStore.config,
+            homepageDiscountCodeModalPromoCode: promoCodeSlug,
+          },
+        });
+        toast.success("Set as homepage discount code");
+      } else {
+        // Remove this promo code as homepage discount code
+        const { homepageDiscountCodeModalPromoCode, ...restConfig } =
+          activeStore.config || {};
+        await updateStoreConfig({
+          id: activeStore._id,
+          config: restConfig,
+        });
+        toast.success("Removed as homepage discount code");
+      }
+
+      setIsHomepageDiscountCode(checked);
+    } catch (e) {
+      toast.error("Failed to update homepage discount code", {
+        description: (e as Error).message,
+      });
+    } finally {
+      setIsUpdatingStoreConfig(false);
     }
   };
 
@@ -324,7 +428,23 @@ function PromoCodeView() {
               />
             </div>
 
-            <div className="flex items-center gap-8 border rounded-lg p-4 w-[320px]">
+            <div className="flex items-center gap-8 border rounded-lg p-4 w-fit">
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <Label className="text-muted-foreground" htmlFor="custom">
+                    Sitewide
+                  </Label>
+                </div>
+                <Switch
+                  id="custom"
+                  disabled={isUpdatingPromoCode}
+                  checked={isSitewide}
+                  onCheckedChange={(e) => {
+                    setIsSitewide(e);
+                  }}
+                />
+              </div>
+
               <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2">
                   <Label className="text-muted-foreground" htmlFor="custom">
@@ -357,6 +477,27 @@ function PromoCodeView() {
                 />
               </div>
             </div>
+
+            {promoCodeSlug && (
+              <div className="flex items-center gap-8 border rounded-lg p-4 w-fit">
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <Label
+                      className="text-muted-foreground"
+                      htmlFor="homepage-discount"
+                    >
+                      Use as homepage discount code
+                    </Label>
+                  </div>
+                  <Switch
+                    id="homepage-discount"
+                    disabled={isUpdatingStoreConfig}
+                    checked={isHomepageDiscountCode}
+                    onCheckedChange={updateHomepageDiscountCode}
+                  />
+                </div>
+              </div>
+            )}
 
             {promoCodeSpan == "selected-products" && (
               <Products products={productsFormatted} />
