@@ -39,10 +39,7 @@ export const WelcomeBackModalSuccess: React.FC<
           <polyline points="22 4 12 14.01 9 11.01"></polyline>
         </svg>
       </motion.div>
-      <div className="space-y-3">
-        <h2 className="text-4xl font-light">Thank You!</h2>
-        <p>Your discount code has been sent to your email</p>
-      </div>
+      <p>Your discount code has been sent to your email</p>
       <Button
         onClick={onClose}
         className="mt-4 font-semibold py-2 sm:py-3 rounded"

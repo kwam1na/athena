@@ -17,7 +17,7 @@ import { RewardsAlert } from "./home/RewardsAlert";
 import { useDiscountCodeAlert } from "@/hooks/useDiscountCodeAlert";
 import { useRewardsAlert } from "@/hooks/useRewardsAlert";
 import { WelcomeBackModal } from "./ui/modals/WelcomeBackModal";
-import { GiftIcon } from "lucide-react";
+import { ChevronDown, GiftIcon } from "lucide-react";
 import { motion } from "framer-motion";
 import { useStoreContext } from "@/contexts/StoreContext";
 
@@ -26,8 +26,12 @@ const origin = "homepage";
 // Threshold for how far down the user needs to scroll before showing the modal (in pixels)
 const SCROLL_THRESHOLD = 40;
 
+// Key for storing scroll hint dismissed state in localStorage
+const SCROLL_HINT_DISMISSED_KEY = "wigclub_scroll_hint_dismissed";
+
 export default function HomePage() {
   const homeHeroRef = useRef<HTMLDivElement>(null);
+  const bestSellersRef = useRef<HTMLDivElement>(null);
   const footerRef = useRef<HTMLDivElement>(null);
 
   const { store } = useStoreContext();
@@ -59,6 +63,9 @@ export default function HomePage() {
   const [hasScrolledPastThreshold, setHasScrolledPastThreshold] =
     useState(false);
 
+  // Track if the user has scrolled to hide the scroll indicator
+  // const [hasScrolled, setHasScrolled] = useState(false);
+
   const { showReminderBar, setShowReminderBar, upsell } =
     useProductReminder(homeHeroRef);
 
@@ -89,6 +96,11 @@ export default function HomePage() {
         setIsDiscountModalOpen(true);
         setHasDiscountModalBeenShown(true);
       }
+
+      // Hide the scroll indicator after user starts scrolling
+      // if (scrollPosition > 10 && !hasScrolled) {
+      //   setHasScrolled(true);
+      // }
     };
 
     window.addEventListener("scroll", handleScroll);
@@ -172,22 +184,26 @@ export default function HomePage() {
         )} */}
 
       <div className="min-h-screen">
-        <div className="overflow-hidden">
-          <div className="space-y-56 pb-32">
+        <div className="overflow-visible">
+          <div className="space-y-16 md:space-y-56 pb-32">
             {/* Hero Section */}
             <HomeHeroSectionWithRef
               heroRef={homeHeroRef}
               shopLookProduct={shopLookProduct}
               origin={origin}
+              nextSectionRef={bestSellersRef}
             />
 
-            <div className="container mx-auto space-y-40 md:space-y-48 pb-8 px-4 lg:px-0">
-              {/* Best Sellers Section */}
+            <div className="container mx-auto space-y-24 md:space-y-48 pb-8 px-4 lg:px-0">
+              {/* Best Sellers Section with peek-a-boo effect on mobile */}
               {Boolean(bestSellersSorted?.length) && (
-                <BestSellersSection
-                  bestSellersProducts={bestSellersProducts || []}
-                  origin={origin}
-                />
+                <div ref={bestSellersRef} className="relative md:mt-0">
+                  <div className="absolute -top-12 left-0 right-0 h-12 bg-gradient-to-b from-transparent to-white/10 md:hidden" />
+                  <BestSellersSection
+                    bestSellersProducts={bestSellersProducts || []}
+                    origin={origin}
+                  />
+                </div>
               )}
 
               {/* Featured Products Section */}

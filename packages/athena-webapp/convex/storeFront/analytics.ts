@@ -140,3 +140,21 @@ export const getProductViewCount = query({
     };
   },
 });
+
+export const getByPromoCodeId = query({
+  args: {
+    promoCodeId: v.id("promoCode"),
+  },
+  handler: async (ctx, args) => {
+    // Query the analytics table for records with promoCodeId in the data field
+    const analytics = await ctx.db
+      .query(entity)
+      .filter(
+        (q) => q.eq(q.field("data.promoCodeId"), args.promoCodeId) // Filter by the action relevant to promo codes
+      )
+      .order("desc")
+      .collect();
+
+    return analytics;
+  },
+});

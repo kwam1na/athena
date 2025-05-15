@@ -9,6 +9,7 @@ import { useStoreContext } from "@/contexts/StoreContext";
 interface HomeHeroSectionProps {
   shopLookProduct: any;
   origin: string;
+  nextSectionRef?: React.RefObject<HTMLDivElement>;
 }
 
 /**
@@ -18,6 +19,7 @@ interface HomeHeroSectionProps {
 export function HomeHeroSection({
   shopLookProduct,
   origin,
+  nextSectionRef,
 }: HomeHeroSectionProps) {
   const homeHeroRef = useRef<HTMLDivElement>(null);
   const shopTheLookRef = useRef<HTMLImageElement>(null);
@@ -25,7 +27,7 @@ export function HomeHeroSection({
 
   return (
     <div ref={homeHeroRef}>
-      <HomeHero />
+      <HomeHero nextSectionRef={nextSectionRef} />
       <motion.div className="flex flex-col lg:relative">
         <motion.img
           ref={shopTheLookRef}

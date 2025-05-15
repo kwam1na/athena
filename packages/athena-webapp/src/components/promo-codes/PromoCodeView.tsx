@@ -1,113 +1,31 @@
 import { useMutation, useQuery } from "convex/react";
-import StoreProducts from "../products/StoreProducts";
 import View from "../View";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { api } from "~/convex/_generated/api";
-import PromoCodes from "./PromoCodes";
-import PageHeader, { ComposedPageHeader } from "../common/PageHeader";
-import { Button } from "../ui/button";
-import { ArrowLeftIcon, TrashIcon } from "@radix-ui/react-icons";
-import { useNavigate, useParams, useSearch } from "@tanstack/react-router";
-import { Input } from "../ui/input";
-import DiscountTypeToggleGroup from "./add-promo-code/DiscountTypeToggleGroup";
-import Products from "./Products";
+import { useNavigate, useParams } from "@tanstack/react-router";
 import { useGetProducts } from "~/src/hooks/useGetProducts";
 import { currencyFormatter } from "~/src/lib/utils";
 import { Product } from "~/types";
 import { useEffect, useState } from "react";
-import { PlusIcon, Save } from "lucide-react";
+import { BarChart3 } from "lucide-react";
 import {
   SelectedProductsProvider,
   useSelectedProducts,
 } from "./selectable-products-table/selectable-data-provider";
-import PromoCodeSpanToggleGroup from "./add-promo-code/PromoCodeSpanToggleGroup";
 import { useAuth } from "~/src/hooks/useAuth";
 import { toast } from "sonner";
-import { LoadingButton } from "../ui/loading-button";
 import { Id } from "~/convex/_generated/dataModel";
-import { Label } from "../ui/label";
-import { Switch } from "../ui/switch";
 import { FadeIn } from "../common/FadeIn";
-
-export type DiscountType = "percentage" | "amount";
-
-export type PromoCodeSpan = "entire-order" | "selected-products";
-
-const Header = ({
-  isUpdating,
-  handleSave,
-}: {
-  isUpdating: boolean;
-  handleSave: () => void;
-}) => {
-  const navigate = useNavigate();
-
-  const { promoCodeSlug } = useParams({ strict: false });
-
-  const [isDeletingPromoCode, setIsDeletingPromoCode] = useState(false);
-
-  const deletePromoCode = useMutation(api.inventory.promoCode.remove);
-
-  const handleDeletePromoCode = async () => {
-    try {
-      setIsDeletingPromoCode(true);
-      await deletePromoCode({ id: promoCodeSlug as Id<"promoCode"> });
-      toast.success("Promo code deleted");
-      navigate({
-        to: "/$orgUrlSlug/store/$storeUrlSlug/promo-codes",
-        params: (prev) => ({
-          ...prev,
-          storeUrlSlug: prev.storeUrlSlug!,
-          orgUrlSlug: prev.orgUrlSlug!,
-        }),
-      });
-    } catch (e) {
-      toast.error("Failed to delete promo code", {
-        description: (e as Error).message,
-      });
-    } finally {
-      setIsDeletingPromoCode(false);
-    }
-  };
-
-  const header = promoCodeSlug ? "Edit promo code" : "Add promo code";
-
-  return (
-    <ComposedPageHeader
-      leadingContent={<p className="text-sm">{header}</p>}
-      trailingContent={
-        <>
-          {promoCodeSlug && (
-            <div className="ml-auto space-x-2">
-              <LoadingButton
-                isLoading={isUpdating}
-                variant={"outline"}
-                onClick={handleSave}
-              >
-                <Save className="w-4 h-4" />
-              </LoadingButton>
-
-              <LoadingButton
-                isLoading={isDeletingPromoCode}
-                className="text-red-400 hover:bg-red-300 hover:text-red-800"
-                variant={"outline"}
-                onClick={handleDeletePromoCode}
-              >
-                <TrashIcon className="w-4 h-4" />
-              </LoadingButton>
-            </div>
-          )}
-        </>
-      }
-    />
-  );
-};
+import { Separator } from "../ui/separator";
+import { DiscountType, PromoCodeSpan } from "./types";
+import PromoCodeHeader from "./PromoCodeHeader";
+import PromoCodeForm from "./PromoCodeForm";
+import PromoCodePreview from "./PromoCodePreview";
+import PromoCodeAnalytics from "./analytics/PromoCodeAnalytics";
 
 function PromoCodeView() {
   const products = useGetProducts();
-
   const { activeStore } = useGetActiveStore();
-
   const [discountType, setDiscountType] = useState<DiscountType>("amount");
   const [promoCodeSpan, setPromoCodeSpan] =
     useState<PromoCodeSpan>("entire-order");
@@ -123,9 +41,7 @@ function PromoCodeView() {
   const [isUpdatingStoreConfig, setIsUpdatingStoreConfig] = useState(false);
 
   const { selectedProductSkus } = useSelectedProducts();
-
   const { user } = useAuth();
-
   const navigate = useNavigate();
 
   const addPromoCode = useMutation(api.inventory.promoCode.create);
@@ -176,28 +92,6 @@ function PromoCodeView() {
 
     return p;
   });
-
-  const Discount = () => {
-    if (!discount) return null;
-
-    return (
-      <p className="text-sm">
-        for{" "}
-        <strong>
-          {discountType == "amount"
-            ? formatter.format(parseFloat(discount))
-            : `${discount}%`}
-        </strong>{" "}
-        off{" "}
-        {promoCodeSpan == "entire-order" ? "your entire order" : "select items"}
-      </p>
-    );
-  };
-
-  const toggleDiscountType = (value: DiscountType) => {
-    // setDiscount(null);
-    setDiscountType(value);
-  };
 
   const handleAddPromoCode = async () => {
     const productSkus =
@@ -383,7 +277,7 @@ function PromoCodeView() {
   return (
     <View
       header={
-        <Header
+        <PromoCodeHeader
           isUpdating={isUpdatingPromoCode}
           handleSave={handleUpdatePromoCode}
         />
@@ -391,149 +285,62 @@ function PromoCodeView() {
     >
       <FadeIn className="container mx-auto h-full w-full p-8 space-y-12">
         <div className="grid grid-cols-2 gap-8">
-          <div className="space-y-6">
-            <div className="flex items-center gap-8">
-              <Input
-                className="w-[320px]"
-                placeholder="Promo code"
-                value={promoCode ?? undefined}
-                onChange={(e) => {
-                  setPromoCode(e.target.value.toUpperCase());
-                }}
-              />
-            </div>
+          <PromoCodeForm
+            promoCode={promoCode}
+            setPromoCode={setPromoCode}
+            discount={discount}
+            setDiscount={setDiscount}
+            discountType={discountType}
+            setDiscountType={setDiscountType}
+            promoCodeSpan={promoCodeSpan}
+            setPromoCodeSpan={setPromoCodeSpan}
+            isActive={isActive}
+            setIsActive={setIsActive}
+            autoApply={autoApply}
+            setAutoApply={setAutoApply}
+            isSitewide={isSitewide}
+            setIsSitewide={setIsSitewide}
+            isHomepageDiscountCode={isHomepageDiscountCode}
+            updateHomepageDiscountCode={updateHomepageDiscountCode}
+            isUpdatingPromoCode={isUpdatingPromoCode}
+            isUpdatingStoreConfig={isUpdatingStoreConfig}
+            promoCodeSlug={promoCodeSlug as Id<"promoCode">}
+            products={productsFormatted}
+          />
 
-            <div className="flex">
-              <DiscountTypeToggleGroup
-                discountType={discountType}
-                setDiscountType={toggleDiscountType}
-              />
-            </div>
-            <div>
-              <Input
-                className="w-[160px]"
-                type="number"
-                placeholder="Discount"
-                value={discount ?? undefined}
-                onChange={(e) => {
-                  setDiscount(e.target.value);
-                }}
-              />
-            </div>
-
-            <div className="flex">
-              <PromoCodeSpanToggleGroup
-                promoCodeSpan={promoCodeSpan}
-                setPromoCodeSpan={setPromoCodeSpan}
-              />
-            </div>
-
-            <div className="flex items-center gap-8 border rounded-lg p-4 w-fit">
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2">
-                  <Label className="text-muted-foreground" htmlFor="custom">
-                    Sitewide
-                  </Label>
-                </div>
-                <Switch
-                  id="custom"
-                  disabled={isUpdatingPromoCode}
-                  checked={isSitewide}
-                  onCheckedChange={(e) => {
-                    setIsSitewide(e);
-                  }}
-                />
-              </div>
-
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2">
-                  <Label className="text-muted-foreground" htmlFor="custom">
-                    Active
-                  </Label>
-                </div>
-                <Switch
-                  id="custom"
-                  disabled={isUpdatingPromoCode}
-                  checked={isActive}
-                  onCheckedChange={(e) => {
-                    setIsActive(e);
-                  }}
-                />
-              </div>
-
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2">
-                  <Label className="text-muted-foreground" htmlFor="custom">
-                    Auto-apply
-                  </Label>
-                </div>
-                <Switch
-                  id="custom"
-                  disabled={isUpdatingPromoCode}
-                  checked={autoApply}
-                  onCheckedChange={(e) => {
-                    setAutoApply(e);
-                  }}
-                />
-              </div>
-            </div>
-
-            {promoCodeSlug && (
-              <div className="flex items-center gap-8 border rounded-lg p-4 w-fit">
-                <div className="flex items-center gap-4">
-                  <div className="flex items-center gap-2">
-                    <Label
-                      className="text-muted-foreground"
-                      htmlFor="homepage-discount"
-                    >
-                      Use as homepage discount code
-                    </Label>
-                  </div>
-                  <Switch
-                    id="homepage-discount"
-                    disabled={isUpdatingStoreConfig}
-                    checked={isHomepageDiscountCode}
-                    onCheckedChange={updateHomepageDiscountCode}
-                  />
-                </div>
-              </div>
-            )}
-
-            {promoCodeSpan == "selected-products" && (
-              <Products products={productsFormatted} />
-            )}
-          </div>
-
-          <View
-            hideHeaderBottomBorder
-            header={
-              <PageHeader>
-                <p className="text-sm">Preview</p>
-              </PageHeader>
-            }
-          >
-            <div className="px-8 space-y-12">
-              <div className="space-y-4">
-                {promoCode && (
-                  <span className="text-sm">
-                    Use promo code <strong>{promoCode}</strong>
-                  </span>
-                )}
-                <Discount />
-              </div>
-
-              {hasEnteredCode && !promoCodeSlug && (
-                <LoadingButton
-                  isLoading={isAddingPromoCode}
-                  onClick={handleAddPromoCode}
-                >
-                  <PlusIcon className="w-3 h-3 mr-2" />
-                  Add code
-                </LoadingButton>
-              )}
-            </div>
-          </View>
+          <PromoCodePreview
+            promoCode={promoCode}
+            discount={discount}
+            discountType={discountType}
+            currencyFormatter={formatter}
+            hasEnteredCode={hasEnteredCode}
+            promoCodeSlug={promoCodeSlug}
+            isAddingPromoCode={isAddingPromoCode}
+            handleAddPromoCode={handleAddPromoCode}
+          />
         </div>
+
+        {/* Analytics section - only show when editing an existing promo code */}
+        {promoCodeSlug && (
+          <div className="mt-12">
+            <Separator className="mb-8" />
+            <View
+              hideHeaderBottomBorder
+              header={
+                <div className="flex items-center gap-2">
+                  <BarChart3 className="w-4 h-4" />
+                  <p className="text-sm">Analytics</p>
+                </div>
+              }
+            >
+              <div className="p-8">
+                <PromoCodeAnalytics
+                  promoCodeId={promoCodeSlug as Id<"promoCode">}
+                />
+              </div>
+            </View>
+          </div>
+        )}
       </FadeIn>
     </View>
   );

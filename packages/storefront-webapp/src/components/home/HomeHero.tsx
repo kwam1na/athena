@@ -3,8 +3,13 @@ import { useStoreContext } from "@/contexts/StoreContext";
 import { motion } from "framer-motion";
 import Hls from "hls.js";
 import { useEffect, useRef } from "react";
+import { ScrollDownButton } from "../ui/ScrollDownButton";
 
-export const HomeHero = () => {
+interface HomeHeroProps {
+  nextSectionRef?: React.RefObject<HTMLDivElement>;
+}
+
+export const HomeHero = ({ nextSectionRef }: HomeHeroProps) => {
   const { store } = useStoreContext();
 
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -96,6 +101,16 @@ export const HomeHero = () => {
           to match your mood
         </motion.p>
       </div>
+
+      {/* Scroll down button - positioned at bottom of hero section */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 2, duration: 0.6 }}
+        className="absolute bottom-24 md:bottom-4 left-0 right-0 flex justify-center"
+      >
+        <ScrollDownButton targetRef={nextSectionRef} />
+      </motion.div>
     </section>
   );
 };

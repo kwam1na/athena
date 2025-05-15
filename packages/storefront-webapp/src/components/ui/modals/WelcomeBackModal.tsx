@@ -75,6 +75,7 @@ export const WelcomeBackModal: React.FC<WelcomeBackModalProps> = ({
     data: {
       isNextOrder,
       selectedVariant: safeVariant,
+      promoCodeId,
     },
   });
 
@@ -89,6 +90,7 @@ export const WelcomeBackModal: React.FC<WelcomeBackModalProps> = ({
         data: {
           isNextOrder,
           selectedVariant: safeVariant,
+          promoCodeId,
         },
       });
     }
@@ -106,6 +108,7 @@ export const WelcomeBackModal: React.FC<WelcomeBackModalProps> = ({
       data: {
         isNextOrder,
         selectedVariant: safeVariant,
+        promoCodeId,
       },
     });
   };
