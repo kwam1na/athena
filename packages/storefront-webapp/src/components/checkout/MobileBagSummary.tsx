@@ -19,6 +19,8 @@ import { redeemPromoCode } from "@/api/promoCodes";
 import { useAuth } from "@/hooks/useAuth";
 import { usePromoCodesQueries } from "@/lib/queries/promoCode";
 import { isFeeWaived } from "@/lib/feeUtils";
+import { Badge } from "../ui/badge";
+import { motion } from "framer-motion";
 
 export default function MobileBagSummary() {
   const { formatter, store } = useStoreContext();
@@ -156,15 +158,51 @@ export default function MobileBagSummary() {
                     </p>
                   )}
                 </div>
-                {checkoutState.discount && (
-                  <div className="flex items-center">
-                    <Tag className="w-3.5 h-3.5 mr-2" />
-                    <p className="text-sm font-medium">
-                      {checkoutState.discount?.code} -{" "}
-                      <strong>{discountText} off entire order</strong>
-                    </p>
-                  </div>
-                )}
+
+                <div className="space-y-4">
+                  {checkoutState.discount && (
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ duration: 0.4, ease: "easeInOut" }}
+                      className="flex items-center gap-2"
+                    >
+                      <Badge
+                        variant={"outline"}
+                        className="bg-accent2/10 text-accent2 border-none"
+                      >
+                        <Tag className="w-3.5 h-3.5 mr-2" />
+                        <p className="text-sm font-medium">
+                          {checkoutState.discount?.code}
+                        </p>
+                      </Badge>
+
+                      <p className="text-sm">
+                        <strong>- {discountText} off entire order</strong>
+                      </p>
+                    </motion.div>
+                  )}
+
+                  {isFeeWaivedForCurrentOption &&
+                    checkoutState.deliveryMethod === "delivery" && (
+                      <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ duration: 0.4, ease: "easeInOut" }}
+                        className="flex items-center"
+                      >
+                        <Badge
+                          variant={"outline"}
+                          className="bg-accent2/10 text-accent2 border-none"
+                        >
+                          <Tag className="w-3.5 h-3.5 mr-2" />
+                          <p className="text-sm font-medium">
+                            Free delivery applied
+                          </p>
+                        </Badge>
+                      </motion.div>
+                    )}
+                </div>
               </div>
             </div>
 
@@ -174,9 +212,10 @@ export default function MobileBagSummary() {
                 <p className="text-sm">{formatter.format(bagSubtotal)}</p>
               </div>
               {checkoutState.deliveryMethod === "delivery" &&
-                checkoutState.deliveryFee !== null && (
+                checkoutState.deliveryFee !== null &&
+                checkoutState.deliveryOption && (
                   <div className="flex justify-between">
-                    <p className="text-sm">Shipping</p>
+                    <p className="text-sm">Delivery</p>
                     <p className="text-sm">
                       {isFeeWaivedForCurrentOption
                         ? "Free"

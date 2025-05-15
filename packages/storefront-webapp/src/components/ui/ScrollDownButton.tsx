@@ -1,6 +1,7 @@
 import { ChevronDown } from "lucide-react";
 import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
+import { postAnalytics } from "@/api/analytics";
 
 interface ScrollDownButtonProps {
   targetRef?: React.RefObject<HTMLElement>;
@@ -24,6 +25,14 @@ export function ScrollDownButton({
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
+
+  useEffect(() => {
+    if (!isVisible) {
+      postAnalytics({
+        action: "scrolled_down_on_homepage",
+      });
+    }
+  }, [isVisible]);
 
   const handleScroll = () => {
     if (targetRef?.current) {

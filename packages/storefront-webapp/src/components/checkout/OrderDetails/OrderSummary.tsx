@@ -5,6 +5,7 @@ import { getDiscountValue } from "../utils";
 import { BagSummaryItems } from "../BagSummary";
 import { Tag } from "lucide-react";
 import { isFeeWaived, isAnyFeeWaived } from "@/lib/feeUtils";
+import { Badge } from "@/components/ui/badge";
 
 export default function OrderSummary() {
   const { formatter, store } = useStoreContext();
@@ -17,7 +18,6 @@ export default function OrderSummary() {
     waiveDeliveryFees,
     checkoutState.deliveryOption
   );
-  const anyFeeWaived = isAnyFeeWaived(waiveDeliveryFees);
 
   const discountValue = getDiscountValue(bagSubtotal, checkoutState.discount);
 
@@ -40,9 +40,10 @@ export default function OrderSummary() {
           <p className="text-sm">{formatter.format(bagSubtotal)}</p>
         </div>
         {checkoutState.deliveryMethod === "delivery" &&
-          Boolean(checkoutState.deliveryFee) && (
+          checkoutState.deliveryFee !== null &&
+          checkoutState.deliveryOption && (
             <div className="flex justify-between">
-              <p className="text-sm">Shipping</p>
+              <p className="text-sm">Delivery</p>
               <p className="text-sm">
                 {isFeeWaivedForCurrentOption
                   ? "Free"
@@ -57,24 +58,37 @@ export default function OrderSummary() {
           </div>
         )}
 
-        {checkoutState.discount && (
-          <div className="flex items-center">
-            <Tag className="w-3.5 h-3.5 mr-2" />
-            <p className="text-sm font-medium">
-              {checkoutState.discount?.code} -{" "}
-              <strong>{discountText} off entire order</strong>
-            </p>
-          </div>
-        )}
-        {isFeeWaivedForCurrentOption &&
-          checkoutState.deliveryMethod === "delivery" && (
-            <div className="flex items-center">
-              <Tag className="w-3.5 h-3.5 mr-2" />
-              <p className="text-sm font-medium">
-                <strong>Free shipping applied</strong>
+        <div className="space-y-4">
+          {checkoutState.discount && (
+            <div className="flex items-center gap-2">
+              <Badge
+                variant={"outline"}
+                className="bg-accent5/60 text-accent2 border-none"
+              >
+                <Tag className="w-3.5 h-3.5 mr-2" />
+                <p className="text-sm font-medium">
+                  {checkoutState.discount?.code}
+                </p>
+              </Badge>
+
+              <p className="text-sm">
+                <strong>- {discountText} off entire order</strong>
               </p>
             </div>
           )}
+          {isFeeWaivedForCurrentOption &&
+            checkoutState.deliveryMethod === "delivery" && (
+              <div className="flex items-center">
+                <Badge
+                  variant={"outline"}
+                  className="bg-accent5/60 text-accent2 border-none"
+                >
+                  <Tag className="w-3.5 h-3.5 mr-2" />
+                  <p className="text-sm font-medium">Free delivery applied</p>
+                </Badge>
+              </div>
+            )}
+        </div>
         <div className="flex justify-between font-medium">
           <p className="text-lg">Total</p>
           <p className="text-lg">{formatter.format(total)}</p>
