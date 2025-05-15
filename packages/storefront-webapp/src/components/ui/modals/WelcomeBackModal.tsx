@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { motion } from "framer-motion";
+import React, { useState, useRef } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { Modal } from "@/components/ui/modal";
 import { WelcomeBackModalForm } from "./WelcomeBackModalForm";
 import { WelcomeBackModalSuccess } from "./WelcomeBackModalSuccess";
@@ -80,10 +80,9 @@ export const WelcomeBackModal: React.FC<WelcomeBackModalProps> = ({
   });
 
   const handleClose = async (logAnalytics = true) => {
-    // Reset state when closing
-    setIsSuccess(false);
     onClose();
 
+    // Log analytics if needed
     if (logAnalytics) {
       await postAnalytics({
         action: "dismissed_WELCOMEBACK25_modal",
@@ -127,60 +126,64 @@ export const WelcomeBackModal: React.FC<WelcomeBackModalProps> = ({
       withoutBackground
       fullscreen
     >
-      <motion.div
-        variants={containerVariants}
-        initial="hidden"
-        animate="visible"
-        className="relative flex flex-col items-center justify-center text-center overflow-hidden w-full h-full sm:rounded-lg"
-        style={{
-          height: "100%",
-          width: "100%",
-        }}
-      >
-        {/* Background Image */}
-        <motion.div
-          variants={backgroundVariants}
-          initial="hidden"
-          animate="visible"
-          className="absolute inset-0 z-0 bg-cover bg-center"
-          style={{
-            backgroundImage: `url(${currentConfig.backgroundImageUrl || defaultBackgroundImageUrl})`,
-          }}
-        />
-
-        {/* Frosted Glass Overlay */}
-        <motion.div
-          variants={overlayVariants}
-          initial="hidden"
-          animate="visible"
-          className="absolute inset-0 z-0"
-        />
-
-        {/* Content */}
-        <div className="relative z-10 p-4 sm:p-6 flex flex-col items-center justify-between w-full max-w-[90%] sm:max-w-full mx-auto text-white h-full">
-          <div className="flex-1" />
-
+      <AnimatePresence mode="wait">
+        {isOpen && (
           <motion.div
-            variants={contentVariants}
+            variants={containerVariants}
             initial="hidden"
-            animate="visible"
-            className="flex flex-col items-center"
+            animate={"visible"}
+            className="relative flex flex-col items-center justify-center text-center overflow-hidden w-full h-full sm:rounded-lg"
+            style={{
+              height: "100%",
+              width: "100%",
+            }}
           >
-            {isSuccess ? (
-              <WelcomeBackModalSuccess onClose={() => handleClose(false)} />
-            ) : (
-              <WelcomeBackModalForm
-                onClose={handleClose}
-                onSuccess={handleSuccess}
-                promoCodeId={promoCodeId}
-                config={currentConfig}
-              />
-            )}
-          </motion.div>
+            {/* Background Image */}
+            <motion.div
+              variants={backgroundVariants}
+              initial="hidden"
+              animate={"visible"}
+              className="absolute inset-0 z-0 bg-cover bg-center"
+              style={{
+                backgroundImage: `url(${currentConfig.backgroundImageUrl || defaultBackgroundImageUrl})`,
+              }}
+            />
 
-          <div className="flex-1" />
-        </div>
-      </motion.div>
+            {/* Frosted Glass Overlay */}
+            <motion.div
+              variants={overlayVariants}
+              initial="hidden"
+              animate={"visible"}
+              className="absolute inset-0 z-0"
+            />
+
+            {/* Content */}
+            <div className="relative z-10 p-4 sm:p-6 flex flex-col items-center justify-between w-full max-w-[90%] sm:max-w-full mx-auto text-white h-full">
+              <div className="flex-1" />
+
+              <motion.div
+                variants={contentVariants}
+                initial="hidden"
+                animate={"visible"}
+                className="flex flex-col items-center"
+              >
+                {isSuccess ? (
+                  <WelcomeBackModalSuccess onClose={() => handleClose(false)} />
+                ) : (
+                  <WelcomeBackModalForm
+                    onClose={handleClose}
+                    onSuccess={handleSuccess}
+                    promoCodeId={promoCodeId}
+                    config={currentConfig}
+                  />
+                )}
+              </motion.div>
+
+              <div className="flex-1" />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </Modal>
   );
 };

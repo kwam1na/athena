@@ -30,7 +30,7 @@ export function Reviews({ productId, productCategory }: ReviewsProps) {
       <div className="space-y-4">
         <h2 className="text-lg font-medium">Reviews</h2>
         <p className="text-sm text-muted-foreground">
-          This product has no reviews yet
+          This product has no reviews yet. Be the first to leave one!
         </p>
       </div>
     );

@@ -14,13 +14,13 @@ export const defaultBackgroundImageUrl =
 export const welcomeBackConfigs: WelcomeBackModalConfig[] = [
   {
     title: "Get 25% off your first order",
-    body: "Enjoy 25% off your first order. Just enter your email and we'll send you a discount code to use at checkout.",
+    body: "Enjoy 25% off your first order. Enter your email and we'll send you a discount code to use at checkout.",
     backgroundImageUrl: defaultBackgroundImageUrl,
     ctaText: "Send My Code",
   },
   {
     title: "Get 25% off your first order",
-    body: "Enjoy 25% off your first order. Just enter your email and we'll send you a discount code to use at checkout.",
+    body: "Enjoy 25% off your first order. Enter your email and we'll send you a discount code to use at checkout.",
     backgroundImageUrl: defaultBackgroundImageUrl,
     ctaText: "Claim my discount",
   },
@@ -29,13 +29,13 @@ export const welcomeBackConfigs: WelcomeBackModalConfig[] = [
 export const nextOrderConfigs: WelcomeBackModalConfig[] = [
   {
     title: "Get 25% off your next order",
-    body: "Enjoy 25% off your next order. Just enter your email and we'll send you a discount code to use at checkout.",
+    body: "Enjoy 25% off your next order. Enter your email and we'll send you a discount code to use at checkout.",
     backgroundImageUrl: defaultBackgroundImageUrl,
     ctaText: "Send My Code",
   },
   {
     title: "Get 25% off your next order",
-    body: "Enjoy 25% off your next order. Just enter your email and we'll send you a discount code to use at checkout.",
+    body: "Enjoy 25% off your next order. Enter your email and we'll send you a discount code to use at checkout.",
     backgroundImageUrl: defaultBackgroundImageUrl,
     ctaText: "Claim my discount",
   },

@@ -24,7 +24,7 @@ import { useStoreContext } from "@/contexts/StoreContext";
 const origin = "homepage";
 
 // Threshold for how far down the user needs to scroll before showing the modal (in pixels)
-const SCROLL_THRESHOLD = 40;
+const SCROLL_THRESHOLD = 800;
 
 // Key for storing scroll hint dismissed state in localStorage
 const SCROLL_HINT_DISMISSED_KEY = "wigclub_scroll_hint_dismissed";
@@ -88,7 +88,7 @@ export default function HomePage() {
 
       // Check if user has scrolled past the threshold and the modal hasn't been shown yet
       if (
-        scrollPosition > SCROLL_THRESHOLD &&
+        scrollPosition > window.innerHeight * 0.9 &&
         !hasScrolledPastThreshold &&
         !hasDiscountModalBeenShown
       ) {

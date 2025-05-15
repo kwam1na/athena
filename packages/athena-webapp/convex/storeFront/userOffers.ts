@@ -22,12 +22,6 @@ export const getEligibility = query({
   },
 });
 
-// Define a minimal interface for analytics records
-interface AnalyticsRecord {
-  _creationTime: number;
-  action: string;
-}
-
 /**
  * Check whether a user is eligible for the WELCOME25 offer
  */
@@ -40,21 +34,28 @@ async function determineOfferEligibility(
   const recentActivity = await ctx.db
     .query("analytics")
     .withIndex("by_storeFrontUserId", (q) => q.eq("storeFrontUserId", userId))
-    .take(20);
+    .take(100);
 
   // Check if the user is returning - look for activity more than a day old
   const ONE_DAY = 24 * 60 * 60 * 1000;
+
   const hasOlderActivity = recentActivity.some(
-    (activity: AnalyticsRecord) => Date.now() - activity._creationTime > ONE_DAY
+    (activity) => Date.now() - activity._creationTime > ONE_DAY
+  );
+
+  const hasViewedProduct = recentActivity.some(
+    (activity) => activity.action === "viewed_product"
   );
 
   // Check engagement level by counting unique actions
   const uniqueActions = new Set(
-    recentActivity.map((activity: AnalyticsRecord) => activity.action)
+    recentActivity.map((activity) => activity.action)
   );
+
   const isEngaged = uniqueActions.size >= 2;
 
   const store = await ctx.db.get(storeId);
+
   const currentWelcomeOffer: Id<"promoCode"> | null =
     store?.config?.homepageDiscountCodeModalPromoCode;
 
@@ -78,7 +79,11 @@ async function determineOfferEligibility(
 
   // Only returning users get the WELCOME25 offer
   const isEligibleForWelcome25 =
-    hasOlderActivity && welcomePromo && welcomePromo.active && !hasRedeemed;
+    hasOlderActivity &&
+    welcomePromo &&
+    welcomePromo.active &&
+    !hasRedeemed &&
+    hasViewedProduct;
 
   return {
     isReturningUser: hasOlderActivity,
