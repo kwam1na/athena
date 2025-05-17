@@ -20,6 +20,7 @@ import { WelcomeBackModal } from "./ui/modals/WelcomeBackModal";
 import { ChevronDown, GiftIcon } from "lucide-react";
 import { motion } from "framer-motion";
 import { useStoreContext } from "@/contexts/StoreContext";
+import { postAnalytics } from "@/api/analytics";
 
 const origin = "homepage";
 
@@ -126,6 +127,15 @@ export default function HomePage() {
     origin: s.utm_source,
   });
 
+  const handleClickOnDiscountCode = async () => {
+    openDiscountModal();
+
+    await postAnalytics({
+      action: "clicked_on_discount_code_trigger",
+      origin: "homepage",
+    });
+  };
+
   const bestSellersSorted = bestSellers?.sort(
     (a: any, b: any) => a.rank - b.rank
   );
@@ -168,20 +178,19 @@ export default function HomePage() {
       />
 
       {/* Floating welcome back button */}
-      {/* {isDiscountModalDismissed &&
-        !hasCompletedDiscountModalFlow &&
+      {!hasCompletedDiscountModalFlow &&
         store?.config?.homepageDiscountCodeModalPromoCode && (
           <motion.button
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.4, delay: 2.6, ease: "easeIn" }}
-            onClick={openDiscountModal}
+            onClick={handleClickOnDiscountCode}
             className="fixed right-4 top-1/2 transform -translate-y-1/2 z-10 bg-accent5/60 text-primary rounded-full p-3 shadow-md flex items-center transition-all duration-100 hover:scale-105"
             aria-label="Special offer"
           >
             <GiftIcon className="h-5 w-5" />
           </motion.button>
-        )} */}
+        )}
 
       <div className="min-h-screen">
         <div className="overflow-visible">

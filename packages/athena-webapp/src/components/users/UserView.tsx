@@ -1,6 +1,6 @@
 import { useParams } from "@tanstack/react-router";
 import View from "../View";
-import { useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "~/convex/_generated/api";
 import { Id } from "~/convex/_generated/dataModel";
 import {
@@ -9,10 +9,12 @@ import {
   CalendarPlus,
   Hash,
   IdCard,
+  OctagonX,
   Phone,
+  Trash2,
 } from "lucide-react";
 import { FadeIn } from "../common/FadeIn";
-import { SimplePageHeader } from "../common/PageHeader";
+import { ComposedPageHeader, SimplePageHeader } from "../common/PageHeader";
 import { UserActivity } from "./UserActivity";
 import { UserBag } from "./UserBag";
 import { UserOnlineOrders } from "./UserOnlineOrders";
@@ -21,6 +23,13 @@ import { LinkedAccounts } from "./LinkedAccounts";
 import { formatDate } from "~/convex/utils";
 import { formatUserId } from "~/src/lib/utils";
 import { Badge } from "../ui/badge";
+import CopyButton from "../ui/copy-button";
+import CopyWrapper from "../ui/copy-wrapper";
+import { useCopyText } from "~/src/hooks/useCopyText";
+import { LoadingButton } from "../ui/loading-button";
+import { useState } from "react";
+import useGetActiveStore from "~/src/hooks/useGetActiveStore";
+import { toast } from "sonner";
 
 // Component to determine if user is new or returning
 const UserStatus = ({
@@ -64,6 +73,49 @@ const UserStatus = ({
   );
 };
 
+const UserActions = () => {
+  const { userId } = useParams({ strict: false });
+
+  const [isLoading, setIsLoading] = useState(false);
+
+  const { activeStore } = useGetActiveStore();
+
+  const clearAnalytics = useMutation(api.storeFront.analytics.clear);
+
+  const handleClearAnalytics = async () => {
+    if (!activeStore?._id) {
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      await clearAnalytics({
+        storeFrontUserId: userId as Id<"storeFrontUser">,
+        storeId: activeStore?._id,
+      });
+
+      toast.success("Analytics cleared for user");
+    } catch (e) {
+      console.error(e);
+      toast.error("Failed to clear analytics");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <LoadingButton
+      isLoading={isLoading}
+      onClick={handleClearAnalytics}
+      variant="outline"
+    >
+      <OctagonX className="w-4 h-4 mr-2" />
+      Clear Analytics
+    </LoadingButton>
+  );
+};
+
 export const UserView = () => {
   const { userId } = useParams({ strict: false });
 
@@ -71,6 +123,8 @@ export const UserView = () => {
     api.storeFront.user.getByIdentifier,
     userId ? { id: userId as Id<"storeFrontUser"> } : "skip"
   );
+
+  const copyUserId = useCopyText(user?._id as string);
 
   if (!user) return null;
 
@@ -82,7 +136,14 @@ export const UserView = () => {
   const hasContactDetails = name || user.email || user.phoneNumber;
 
   return (
-    <View header={<SimplePageHeader title="User details" />}>
+    <View
+      header={
+        <ComposedPageHeader
+          leadingContent={<p className="text-sm font-medium">User details</p>}
+          trailingContent={<UserActions />}
+        />
+      }
+    >
       <FadeIn className="container mx-auto h-full w-full p-8 space-y-12">
         <div className="flex justify-between gap-24">
           <div className="space-y-16 w-[60%]">
@@ -122,8 +183,14 @@ export const UserView = () => {
               <p className="text-sm font-medium">User details</p>
               <div className="space-y-4">
                 <div className="flex items-center gap-2">
-                  <Hash className="w-4 h-4 text-muted-foreground" />
+                  <Hash
+                    onClick={copyUserId}
+                    className="w-4 h-4 text-muted-foreground"
+                  />
+
                   <p className="text-sm">{formatUserId(user._id)}</p>
+
+                  <CopyButton stringToCopy={user._id} />
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -154,7 +221,7 @@ export const UserView = () => {
           </div>
 
           <div className="w-[40%] space-y-24">
-            <UserInsightsSection />
+            {/* <UserInsightsSection /> */}
             <UserActivity />
           </div>
         </div>

@@ -1,11 +1,10 @@
 import { useModalState } from "./useModalState";
-import { useUserOffersQueries } from "@/lib/queries/userOffers";
-import { useQuery } from "@tanstack/react-query";
+import { useEffect } from "react";
 
-const WELCOME_BACK_MODAL_COOLDOWN_DAYS = 30;
-const WELCOME_BACK_MODAL_LAST_SHOWN_KEY = "welcome_back_modal_last_shown";
-const WELCOME_BACK_MODAL_COMPLETED_KEY = "welcome_back_modal_completed";
-const WELCOME_BACK_MODAL_DISMISSED_KEY = "welcome_back_modal_dismissed";
+const DISCOUNT_CODE_ALERT_COOLDOWN_DAYS = 30;
+const DISCOUNT_CODE_ALERT_LAST_SHOWN_KEY = "discount_code_alert_last_shown";
+const DISCOUNT_CODE_ALERT_COMPLETED_KEY = "discount_code_alert_completed";
+const DISCOUNT_CODE_ALERT_DISMISSED_KEY = "discount_code_alert_dismissed";
 
 /**
  * Custom hook to handle discount code alert logic for the welcome back modal
@@ -26,19 +25,22 @@ export function useDiscountCodeAlert() {
     completeFlow,
     hasCompleted,
   } = useModalState({
-    cooldownDays: WELCOME_BACK_MODAL_COOLDOWN_DAYS,
-    lastShownKey: WELCOME_BACK_MODAL_LAST_SHOWN_KEY,
-    completedKey: WELCOME_BACK_MODAL_COMPLETED_KEY,
-    dismissedKey: WELCOME_BACK_MODAL_DISMISSED_KEY,
+    cooldownDays: DISCOUNT_CODE_ALERT_COOLDOWN_DAYS,
+    lastShownKey: DISCOUNT_CODE_ALERT_LAST_SHOWN_KEY,
+    completedKey: DISCOUNT_CODE_ALERT_COMPLETED_KEY,
+    dismissedKey: DISCOUNT_CODE_ALERT_DISMISSED_KEY,
   });
 
-  // Get eligibility data using the query
-  const userOffersQueries = useUserOffersQueries();
-  const { data: eligibility } = useQuery(userOffersQueries.eligibility());
-  const isEligibleForWelcome25 = eligibility?.isEligibleForWelcome25 || false;
+  useEffect(() => {
+    Object.keys(localStorage).forEach((key) => {
+      if (key.startsWith("welcome_")) {
+        localStorage.removeItem(key);
+      }
+    });
+  }, []);
 
   return {
-    isDiscountModalOpen: isOpen && isEligibleForWelcome25,
+    isDiscountModalOpen: isOpen,
     setIsDiscountModalOpen: setIsOpen,
     hasDiscountModalBeenShown: hasBeenShown,
     setHasDiscountModalBeenShown: setHasBeenShown,

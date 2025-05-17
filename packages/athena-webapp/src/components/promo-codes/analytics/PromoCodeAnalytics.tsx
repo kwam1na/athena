@@ -2,7 +2,7 @@ import { useQuery } from "convex/react";
 import { api } from "~/convex/_generated/api";
 import { Id } from "~/convex/_generated/dataModel";
 import { Card, CardContent, CardHeader } from "../../ui/card";
-import { BarChart3 } from "lucide-react";
+import { BarChart3, Mail } from "lucide-react";
 import {
   BarChart,
   Bar,
@@ -15,6 +15,13 @@ import {
 } from "recharts";
 import { GenericDataTable } from "../../base/table/data-table";
 import { analyticsColumns } from "../../analytics/analytics-data-table/analytics-columns";
+import CapturedEmails from "../captured/CapturedEmails";
+import { useState } from "react";
+import { Button } from "../../ui/button";
+import { Tabs, TabsList, TabsTrigger } from "../../ui/tabs";
+
+// Define types for view state
+type AnalyticsView = "table" | "emails";
 
 // Analytics component for promo codes
 const PromoCodeAnalytics = ({
@@ -22,6 +29,9 @@ const PromoCodeAnalytics = ({
 }: {
   promoCodeId: Id<"promoCode">;
 }) => {
+  // Add state for controlling which view to show
+  const [currentView, setCurrentView] = useState<AnalyticsView>("table");
+
   const analytics = useQuery(api.storeFront.analytics.getByPromoCodeId, {
     promoCodeId,
   });
@@ -64,9 +74,9 @@ const PromoCodeAnalytics = ({
 
   // Prepare data for recharts - create separate entries for each action
   const chartData = [
-    { name: "Viewed", value: actionCounts.viewed, fill: "#64748b" },
-    { name: "Dismissed", value: actionCounts.dismissed, fill: "#94a3b8" },
-    { name: "Submitted", value: actionCounts.submitted, fill: "#475569" },
+    { name: "Viewed", value: actionCounts.viewed, fill: "#333333" },
+    { name: "Dismissed", value: actionCounts.dismissed, fill: "#333333" },
+    { name: "Submitted", value: actionCounts.submitted, fill: "#333333" },
   ];
 
   // Total interactions
@@ -81,6 +91,26 @@ const PromoCodeAnalytics = ({
 
   return (
     <div className="space-y-6">
+      {/* View Toggle */}
+      <div className="flex justify-end">
+        <Tabs
+          value={currentView}
+          onValueChange={(value) => setCurrentView(value as AnalyticsView)}
+          className="w-auto"
+        >
+          <TabsList>
+            <TabsTrigger value="table" className="flex items-center gap-1">
+              <BarChart3 className="h-4 w-4" />
+              <span>Analytics</span>
+            </TabsTrigger>
+            <TabsTrigger value="emails" className="flex items-center gap-1">
+              <Mail className="h-4 w-4" />
+              <span>Captured Emails</span>
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+      </div>
+
       <div className="grid grid-cols-2 gap-4">
         <Card className="shadow-none">
           <CardHeader className="pb-4">
@@ -134,7 +164,14 @@ const PromoCodeAnalytics = ({
         </CardContent>
       </Card>
 
-      <GenericDataTable data={analytics} columns={analyticsColumns} />
+      {/* Use consistent height container for both views to prevent layout shift */}
+      <div className="min-h-[500px]">
+        {currentView === "table" ? (
+          <GenericDataTable data={analytics} columns={analyticsColumns} />
+        ) : (
+          <CapturedEmails promoCodeId={promoCodeId} />
+        )}
+      </div>
     </div>
   );
 };

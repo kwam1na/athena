@@ -56,19 +56,24 @@ const isRateLimited = async (
 };
 
 // Check if this email + guest combination already exists for this promo
-const isDuplicate = async (ctx: QueryCtx, email: string, ipAddress: string) => {
-  const [existing, existingByIpAddress] = await Promise.all([
+const isDuplicate = async (
+  ctx: QueryCtx,
+  email: string,
+  storeFrontUserId: Id<"storeFrontUser"> | Id<"guest">
+) => {
+  const [existing] = await Promise.all([
     ctx.db
       .query(entity)
-      .withIndex("by_email", (q) => q.eq("email", email))
-      .first(),
-    ctx.db
-      .query(entity)
-      .withIndex("by_ipAddress", (q) => q.eq("ipAddress", ipAddress))
+      .filter((q) =>
+        q.or(
+          q.eq(q.field("email"), email),
+          q.eq(q.field("storeFrontUserId"), storeFrontUserId)
+        )
+      )
       .first(),
   ]);
 
-  return !!existing || !!existingByIpAddress;
+  return !!existing;
 };
 
 // Create a new offer
@@ -104,7 +109,7 @@ export const create = mutation({
     const isDuplicateSubmission = await isDuplicate(
       ctx,
       args.email,
-      args.ipAddress || ""
+      args.storeFrontUserId
     );
 
     if (isDuplicateSubmission) {
@@ -273,6 +278,20 @@ export const getByStoreId = query({
   },
 });
 
+// Get offers by promo code ID
+export const getByPromoCodeId = query({
+  args: {
+    promoCodeId: v.id("promoCode"),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query(entity)
+      .withIndex("by_promoCodeId", (q) => q.eq("promoCodeId", args.promoCodeId))
+      .order("desc")
+      .collect();
+  },
+});
+
 // Get offers by email
 export const getByEmail = query({
   args: {
@@ -283,6 +302,18 @@ export const getByEmail = query({
       .query(entity)
       .withIndex("by_email", (q) => q.eq("email", args.email))
       .order("desc")
+      .collect();
+  },
+});
+
+export const getAll = query({
+  args: {
+    storeId: v.id("store"),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query(entity)
+      .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
       .collect();
   },
 });

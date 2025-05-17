@@ -22,8 +22,6 @@ export const analyticsColumns: ColumnDef<Analytic>[] = [
     cell: ({ row }) => {
       const item = row.original;
 
-      console.log(item);
-
       return (
         <div className="flex items-center gap-2">
           <div className="space-y-2">

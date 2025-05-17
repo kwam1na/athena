@@ -171,13 +171,13 @@ export default function MobileBagSummary() {
                         variant={"outline"}
                         className="bg-accent2/10 text-accent2 border-none"
                       >
-                        <Tag className="w-3.5 h-3.5 mr-2" />
-                        <p className="text-sm font-medium">
+                        <Tag className="w-3 h-3 mr-2" />
+                        <p className="text-xs font-medium">
                           {checkoutState.discount?.code}
                         </p>
                       </Badge>
 
-                      <p className="text-sm">
+                      <p className="text-xs">
                         <strong>- {discountText} off entire order</strong>
                       </p>
                     </motion.div>
@@ -195,8 +195,8 @@ export default function MobileBagSummary() {
                           variant={"outline"}
                           className="bg-accent2/10 text-accent2 border-none"
                         >
-                          <Tag className="w-3.5 h-3.5 mr-2" />
-                          <p className="text-sm font-medium">
+                          <Tag className="w-3 h-3 mr-2" />
+                          <p className="text-xs font-medium">
                             Free delivery applied
                           </p>
                         </Badge>

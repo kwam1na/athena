@@ -327,7 +327,7 @@ function PromoCodeView() {
             <View
               hideHeaderBottomBorder
               header={
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 px-6 pt-4">
                   <BarChart3 className="w-4 h-4" />
                   <p className="text-sm">Analytics</p>
                 </div>

@@ -85,3 +85,5 @@ export type Review = Doc<"review"> & {
   productSku: ProductSku;
   user: Guest | StoreFrontUser;
 };
+
+export type Offer = Doc<"offer">;

@@ -64,7 +64,7 @@ export const PaymentDetails = ({ session }: { session?: CheckoutSession }) => {
       ? `${discount.value}%`
       : `${formatter.format(discountValue)}`;
 
-  const potentialRewards = Math.floor(session.amount * 10);
+  const potentialRewards = Math.floor(session.amount / 10);
 
   return (
     <div className="space-y-8">

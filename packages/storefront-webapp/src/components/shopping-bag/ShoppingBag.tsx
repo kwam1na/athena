@@ -4,6 +4,7 @@ import {
   AlertCircleIcon,
   ArrowRight,
   Award,
+  Gift,
   Heart,
   Info,
   InfoIcon,
@@ -31,6 +32,8 @@ import { useCheckoutSessionQueries } from "@/lib/queries/checkout";
 import { usePromoCodesQueries } from "@/lib/queries/promoCode";
 import { postAnalytics } from "@/api/analytics";
 import { useTrackEvent } from "@/hooks/useTrackEvent";
+import { useDiscountCodeAlert } from "@/hooks/useDiscountCodeAlert";
+import { WelcomeBackModal } from "../ui/modals/WelcomeBackModal";
 
 const PendingItem = ({ session, count }: { session: any; count: number }) => {
   return (
@@ -75,7 +78,7 @@ const PendingItem = ({ session, count }: { session: any; count: number }) => {
 
 export default function ShoppingBag() {
   const [bagAction, setBagAction] = useState<ShoppingBagAction>("idle");
-  const { formatter, userId, isNavbarShowing } = useStoreContext();
+  const { formatter, userId, isNavbarShowing, store } = useStoreContext();
 
   const { setNavBarLayout, setAppLocation } = useNavigationBarContext();
 
@@ -110,6 +113,15 @@ export default function ShoppingBag() {
   const promoCodeQueries = usePromoCodesQueries();
 
   const { data: promoCodeItems } = useQuery(promoCodeQueries.getAllItems());
+
+  const {
+    isDiscountModalOpen,
+    handleCloseDiscountModal,
+    hasDiscountModalBeenShown,
+    completeDiscountModalFlow,
+    hasCompletedDiscountModalFlow,
+    openDiscountModal,
+  } = useDiscountCodeAlert();
 
   const total = bagSubtotal;
 
@@ -184,6 +196,15 @@ export default function ShoppingBag() {
     }
   };
 
+  const handleClickOnDiscountCode = async () => {
+    openDiscountModal();
+
+    await postAnalytics({
+      action: "clicked_on_discount_code_trigger",
+      origin: "shopping_bag",
+    });
+  };
+
   const isSkuUnavailable = (skuId: string) => {
     return unavailableProducts.find((p) => p.productSkuId == skuId);
   };
@@ -206,7 +227,7 @@ export default function ShoppingBag() {
           )}
           <h1 className="text-lg font-light">Bag</h1>
 
-          {potentialRewards > 0 && (
+          {potentialRewards > 0 && hasDiscountModalBeenShown && (
             <motion.div
               initial={{ opacity: 0, y: -4 }}
               animate={{
@@ -217,7 +238,7 @@ export default function ShoppingBag() {
               className="space-y-2 border border-accent5 rounded-md p-4 w-fit bg-accent5/40"
             >
               <p className="text-sm font-medium">
-                🎉 Woohoo! You're earning{" "}
+                🎉 Yay! You're earning{" "}
                 <b className="text-accent2">
                   {potentialRewards.toLocaleString()}
                 </b>{" "}
@@ -228,6 +249,27 @@ export default function ShoppingBag() {
               </p>
             </motion.div>
           )}
+
+          {!hasCompletedDiscountModalFlow &&
+            store?.config?.homepageDiscountCodeModalPromoCode && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{
+                  opacity: 1,
+                  y: 0,
+                  transition: { ease: "easeIn", delay: 0.4 },
+                }}
+                className="group space-y-2 border border-accent5 rounded-md p-4 w-fit bg-accent5/30 cursor-pointer hover:bg-accent5/50 transition-all duration-200"
+                onClick={handleClickOnDiscountCode}
+              >
+                <div className="flex items-center gap-2 text-accent2">
+                  <Gift className="w-4 h-4 group-hover:-rotate-6 transition-transform duration-200" />
+                  <p className="text-sm font-medium">
+                    Special offer! Get 25% off your order
+                  </p>
+                </div>
+              </motion.div>
+            )}
 
           {operationSuccessful == false && (
             <div className="flex items-center font-medium">
@@ -464,6 +506,13 @@ export default function ShoppingBag() {
           )}
         </div>
       )}
+
+      <WelcomeBackModal
+        isOpen={isDiscountModalOpen}
+        onClose={handleCloseDiscountModal}
+        onSuccess={completeDiscountModalFlow}
+        promoCodeId={store?.config?.homepageDiscountCodeModalPromoCode}
+      />
     </FadeIn>
   );
 }

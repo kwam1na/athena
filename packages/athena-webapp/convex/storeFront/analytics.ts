@@ -54,19 +54,19 @@ export const getAll = query({
   },
   handler: async (ctx, args) => {
     // TODO: Add pagination
-    if (process.env.STAGE === "prod") {
-      return await ctx.db
-        .query(entity)
-        .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
-        .order("desc")
-        .collect();
-    }
+    // if (process.env.STAGE === "prod") {
+    //   return await ctx.db
+    //     .query(entity)
+    //     .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
+    //     .order("desc")
+    //     .collect();
+    // }
 
     return await ctx.db
       .query(entity)
       .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
       .order("desc")
-      .take(100);
+      .take(250);
     // .collect();
   },
 });
@@ -156,5 +156,46 @@ export const getByPromoCodeId = query({
       .collect();
 
     return analytics;
+  },
+});
+
+export const clear = mutation({
+  args: {
+    storeId: v.id("store"),
+    storeFrontUserId: v.union(v.id("storeFrontUser"), v.id("guest")),
+    action: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    if (args.action) {
+      const records = await ctx.db
+        .query(entity)
+        .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
+        .filter((q) =>
+          q.and(
+            q.eq(q.field("storeFrontUserId"), args.storeFrontUserId),
+            q.eq(q.field("action"), args.action)
+          )
+        )
+        .collect();
+
+      await Promise.all(records.map((record) => ctx.db.delete(record._id)));
+
+      return {
+        deleted: records.length,
+      };
+    } else {
+      const records = await ctx.db
+        .query(entity)
+        .withIndex("by_storeFrontUserId", (q) =>
+          q.eq("storeFrontUserId", args.storeFrontUserId)
+        )
+        .collect();
+
+      await Promise.all(records.map((record) => ctx.db.delete(record._id)));
+
+      return {
+        deleted: records.length,
+      };
+    }
   },
 });

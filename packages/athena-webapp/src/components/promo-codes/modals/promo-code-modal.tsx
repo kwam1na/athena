@@ -4,12 +4,10 @@ import { Button } from "../../ui/button";
 import ImageUploader, { ImageFile } from "../../ui/image-uploader";
 import { Input } from "../../ui/input";
 import { Label } from "../../ui/label";
-import PromoCodeSpanToggleGroup from "../add-promo-code/PromoCodeSpanToggleGroup";
-import DiscountTypeToggleGroup from "../add-promo-code/DiscountTypeToggleGroup";
-import { DiscountType, PromoCodeSpan } from "../PromoCodeView";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { DollarSign, Percent } from "lucide-react";
 import { getUploadImagesData } from "@/lib/imageUtils";
+import { DiscountType, PromoCodeSpan } from "../types";
 
 interface PromoCodeModalProps {
   isOpen: boolean;

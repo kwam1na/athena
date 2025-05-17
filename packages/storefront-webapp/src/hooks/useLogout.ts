@@ -12,6 +12,12 @@ export const useLogout = () => {
 
     sessionStorage.removeItem(SESSION_STORAGE_KEY);
 
+    Object.keys(localStorage).forEach((key) => {
+      if (key.startsWith("welcome_")) {
+        localStorage.removeItem(key);
+      }
+    });
+
     window.location.reload();
   };
 
