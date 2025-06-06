@@ -33,8 +33,6 @@ export const AnalyticsInsights = () => {
       analytic.data.productSku === activeProductVariant.sku
   );
 
-  console.log(productAnalytics);
-
   // Calculate metrics
   const totalViews = productAnalytics.filter(
     (analytic) => analytic.action === "viewed_product"

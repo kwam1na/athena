@@ -156,6 +156,7 @@ deploy_convex() {
 deploy_athena() {
   local env_vars="VITE_CONVEX_URL=https://colorless-cardinal-870.convex.cloud \
     VITE_API_GATEWAY_URL='https://colorless-cardinal-870.convex.site' \
+    VITE_HLS_URL='https://d37wmi4mfpeer9.cloudfront.net' \
     VITE_STOREFRONT_URL='https://wigclub.store'"
   deploy_app "athena-webapp" "$ATHENA_WEBAPP_DIR" "$env_vars"
 }

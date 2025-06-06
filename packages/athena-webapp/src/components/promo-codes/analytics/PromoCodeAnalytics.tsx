@@ -55,28 +55,93 @@ const PromoCodeAnalytics = ({
     );
   }
 
-  // Process analytics data
+  // Process analytics data by variant
+  const variantActionCounts: Record<string, Record<string, number>> = {};
+  const variants = new Set<string>();
+
+  analytics.forEach((record) => {
+    // Extract variant from data, defaulting to "Default" if not present
+    const variant = record.data?.selectedVariant || "Default";
+    variants.add(variant);
+
+    if (!variantActionCounts[variant]) {
+      variantActionCounts[variant] = {
+        viewed: 0,
+        dismissed: 0,
+        submitted: 0,
+      };
+    }
+
+    if (record.action.includes("viewed")) {
+      variantActionCounts[variant].viewed++;
+    } else if (record.action.includes("dismissed")) {
+      variantActionCounts[variant].dismissed++;
+    } else if (record.action.includes("submitted")) {
+      variantActionCounts[variant].submitted++;
+    }
+  });
+
+  // Convert variants to array and sort for consistent ordering
+  const sortedVariants = Array.from(variants).sort();
+
+  // Create a mapping of variant names to display names
+  const variantDisplayNames: Record<string, string> = {};
+  sortedVariants.forEach((variant, index) => {
+    variantDisplayNames[variant] = `Variant ${index + 1}`;
+  });
+
+  // Calculate totals across all variants
   const actionCounts = {
     viewed: 0,
     dismissed: 0,
     submitted: 0,
   };
 
-  analytics.forEach((record) => {
-    if (record.action.includes("viewed")) {
-      actionCounts.viewed++;
-    } else if (record.action.includes("dismissed")) {
-      actionCounts.dismissed++;
-    } else if (record.action.includes("submitted")) {
-      actionCounts.submitted++;
-    }
+  Object.values(variantActionCounts).forEach((counts) => {
+    actionCounts.viewed += counts.viewed;
+    actionCounts.dismissed += counts.dismissed;
+    actionCounts.submitted += counts.submitted;
   });
 
-  // Prepare data for recharts - create separate entries for each action
+  // Prepare data for recharts - grouped by action with bars for each variant
   const chartData = [
-    { name: "Viewed", value: actionCounts.viewed, fill: "#333333" },
-    { name: "Dismissed", value: actionCounts.dismissed, fill: "#333333" },
-    { name: "Submitted", value: actionCounts.submitted, fill: "#333333" },
+    {
+      name: "Viewed",
+      ...Object.fromEntries(
+        sortedVariants.map((v) => [
+          variantDisplayNames[v],
+          variantActionCounts[v]?.viewed || 0,
+        ])
+      ),
+    },
+    {
+      name: "Dismissed",
+      ...Object.fromEntries(
+        sortedVariants.map((v) => [
+          variantDisplayNames[v],
+          variantActionCounts[v]?.dismissed || 0,
+        ])
+      ),
+    },
+    {
+      name: "Submitted",
+      ...Object.fromEntries(
+        sortedVariants.map((v) => [
+          variantDisplayNames[v],
+          variantActionCounts[v]?.submitted || 0,
+        ])
+      ),
+    },
+  ];
+
+  // Generate colors for different variants
+  const variantColors = [
+    "#000000", // Black
+    "#333333", // Dark gray
+    "#555555", // Medium gray
+    "#777777", // Gray
+    "#999999", // Light gray
+    "#BBBBBB", // Very light gray
   ];
 
   // Total interactions
@@ -135,7 +200,7 @@ const PromoCodeAnalytics = ({
 
       <Card className="shadow-none border-none">
         <CardHeader>
-          <p className="text-sm">Interaction Breakdown</p>
+          <p className="text-sm">Interaction Breakdown by Variant</p>
         </CardHeader>
         <CardContent>
           <div className="h-64">
@@ -153,11 +218,15 @@ const PromoCodeAnalytics = ({
                 <YAxis />
                 <Tooltip />
                 <Legend />
-                <Bar dataKey="value" radius={[4, 4, 0, 0]} name="Interactions">
-                  {chartData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.fill} />
-                  ))}
-                </Bar>
+                {sortedVariants.map((variant, index) => (
+                  <Bar
+                    key={variant}
+                    dataKey={variantDisplayNames[variant]}
+                    name={variantDisplayNames[variant]}
+                    fill={variantColors[index % variantColors.length]}
+                    radius={[4, 4, 0, 0]}
+                  />
+                ))}
               </BarChart>
             </ResponsiveContainer>
           </div>

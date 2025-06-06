@@ -17,7 +17,7 @@ import {
 import { useTrackEvent } from "@/hooks/useTrackEvent";
 import { postAnalytics } from "@/api/analytics";
 import { useOnlineOrderQueries } from "@/lib/queries/onlineOrder";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 interface WelcomeBackModalProps {
   isOpen: boolean;
@@ -39,6 +39,8 @@ export const WelcomeBackModal: React.FC<WelcomeBackModalProps> = ({
 
   const onlineOrderQueries = useOnlineOrderQueries();
   const { data: onlineOrders } = useQuery(onlineOrderQueries.list());
+
+  // const queryClient = useQueryClient();
 
   const isNextOrder = onlineOrders?.length > 1;
 
@@ -101,6 +103,10 @@ export const WelcomeBackModal: React.FC<WelcomeBackModalProps> = ({
     if (onSuccess) {
       onSuccess();
     }
+
+    // await queryClient.invalidateQueries({
+    //   queryKey: ["userOffers", "redeemed"],
+    // });
 
     await postAnalytics({
       action: "submitted_WELCOMEBACK25_modal",

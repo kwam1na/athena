@@ -24,6 +24,7 @@ export function useModalState({
   const [isDismissed, setIsDismissed] = useState(false);
   const [hasCompleted, setHasCompleted] = useState(false);
   const [lastShownTime, setLastShownTime] = useState<number | null>(null);
+  const [isLoaded, setIsLoaded] = useState(false);
 
   useEffect(() => {
     const lastShown = localStorage.getItem(lastShownKey);
@@ -46,6 +47,7 @@ export function useModalState({
     if (completed) {
       setIsOpen(false);
       setHasBeenShown(true);
+      setIsLoaded(true);
       return;
     }
 
@@ -53,6 +55,7 @@ export function useModalState({
     if (dismissed) {
       setIsOpen(false);
       setHasBeenShown(true);
+      setIsLoaded(true);
       return;
     }
 
@@ -64,6 +67,7 @@ export function useModalState({
     ) {
       setIsOpen(false);
       setHasBeenShown(true);
+      setIsLoaded(true);
       return;
     }
 
@@ -76,7 +80,10 @@ export function useModalState({
       setLastShownTime(currentTime);
       localStorage.setItem(lastShownKey, currentTime.toString());
     }
-  }, [cooldownDays, lastShownKey, completedKey, dismissedKey, defaultOpen]);
+
+    // Mark as loaded after all localStorage operations are complete
+    setIsLoaded(true);
+  }, [lastShownKey, completedKey, dismissedKey, cooldownDays, defaultOpen]);
 
   const handleOpen = () => {
     setIsOpen(true);
@@ -122,6 +129,7 @@ export function useModalState({
     hasCompleted,
     setHasCompleted,
     lastShownTime,
+    isLoaded,
     handleOpen,
     handleClose,
     handleSuccess,

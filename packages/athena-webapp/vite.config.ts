@@ -29,6 +29,8 @@ export default defineConfig({
 
             // if (id.includes("@hello-pangea")) return "hello-pangea-vendor";
 
+            if (id.includes("hls.js")) return "hls-js-vendor";
+
             // Fallback for other node_modules
             return "vendor";
           }

@@ -72,6 +72,13 @@ export const analyticsColumns: ColumnDef<Analytic>[] = [
                       </div>
                     </TooltipContent>
                   )}
+                  {item.data.selectedVariant !== undefined && (
+                    <TooltipContent>
+                      <div className="flex flex-col gap-2 items-center p-2">
+                        <p>Variant {item.data.selectedVariant + 1}</p>
+                      </div>
+                    </TooltipContent>
+                  )}
                 </Tooltip>
               </TooltipProvider>
             </div>

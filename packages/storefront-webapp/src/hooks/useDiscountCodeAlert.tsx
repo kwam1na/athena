@@ -1,5 +1,6 @@
+import { useUserOffersQueries } from "@/lib/queries/userOffers";
 import { useModalState } from "./useModalState";
-import { useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 
 const DISCOUNT_CODE_ALERT_COOLDOWN_DAYS = 30;
 const DISCOUNT_CODE_ALERT_LAST_SHOWN_KEY = "discount_code_alert_last_shown";
@@ -19,6 +20,7 @@ export function useDiscountCodeAlert() {
     isDismissed,
     setIsDismissed,
     lastShownTime,
+    isLoaded,
     handleOpen,
     handleClose,
     handleSuccess,
@@ -31,22 +33,20 @@ export function useDiscountCodeAlert() {
     dismissedKey: DISCOUNT_CODE_ALERT_DISMISSED_KEY,
   });
 
-  useEffect(() => {
-    Object.keys(localStorage).forEach((key) => {
-      if (key.startsWith("welcome_")) {
-        localStorage.removeItem(key);
-      }
-    });
-  }, []);
+  const offersQueries = useUserOffersQueries();
+
+  const { data: redeemedOffers } = useQuery(offersQueries.redeemed());
 
   return {
     isDiscountModalOpen: isOpen,
     setIsDiscountModalOpen: setIsOpen,
-    hasDiscountModalBeenShown: hasBeenShown,
+    hasDiscountModalBeenShown:
+      hasBeenShown || (redeemedOffers?.length ?? 0) > 0,
     setHasDiscountModalBeenShown: setHasBeenShown,
     isDiscountModalDismissed: isDismissed,
     setIsDiscountModalDismissed: setIsDismissed,
     lastDiscountModalShownTime: lastShownTime,
+    isDiscountModalStateLoaded: isLoaded,
     openDiscountModal: handleOpen,
     handleCloseDiscountModal: handleClose,
     handleSuccessDiscountModal: handleSuccess,

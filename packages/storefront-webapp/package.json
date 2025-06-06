@@ -6,7 +6,8 @@
     "dev": "vite",
     "build": "vite build && tsc --noEmit",
     "serve": "vite preview",
-    "start": "vite"
+    "start": "vite",
+    "test": "vitest"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.645.0",
@@ -92,6 +93,10 @@
     "typescript-eslint": "^8.0.1",
     "vite": "^5.4.8",
     "vite-plugin-commonjs": "^0.10.3",
-    "vite-tsconfig-paths": "^5.1.4"
+    "vite-tsconfig-paths": "^5.1.4",
+    "vitest": "^1.0.0",
+    "@testing-library/react": "^14.0.0",
+    "@testing-library/jest-dom": "^6.0.0",
+    "@testing-library/user-event": "^14.4.3"
   }
 }

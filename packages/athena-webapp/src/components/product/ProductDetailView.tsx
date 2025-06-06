@@ -51,7 +51,8 @@ const ProductDetailViewHeader = () => {
             variant: activeProductVariant?.sku,
           }}
         >
-          <Button variant="outline">
+          <Button variant="outline" className="flex items-center gap-2">
+            Edit
             <PenIcon className="h-3.5 w-3.5" />
           </Button>
         </Link>

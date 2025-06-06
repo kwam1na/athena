@@ -5,6 +5,8 @@ import { api } from "~/convex/_generated/api";
 import { toast } from "sonner";
 import { LoadingButton } from "../ui/loading-button";
 import { SelectNative } from "../ui/select-native";
+import config from "~/src/config";
+import { VideoPlayer } from "./VideoPlayer";
 
 export const LandingPageReelVersion = () => {
   const { activeStore } = useGetActiveStore();
@@ -20,6 +22,8 @@ export const LandingPageReelVersion = () => {
   const updateLandingPageReel = useAction(
     api.inventory.stores.updateLandingPageReel
   );
+
+  const hlsUrl = `${config.hlsURL}/stores/${activeStore?._id}/assets/hero/v${reelVersion}/reel.m3u8`;
 
   const handleUpdateConfig = async () => {
     if (!activeStore || !reelVersion) return;
@@ -102,6 +106,7 @@ export const LandingPageReelVersion = () => {
           Save
         </LoadingButton>
       </div>
+      <VideoPlayer hlsUrl={hlsUrl} />
     </div>
   );
 };

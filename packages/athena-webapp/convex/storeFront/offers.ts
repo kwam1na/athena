@@ -306,6 +306,22 @@ export const getByEmail = query({
   },
 });
 
+// Get offers by storefront user ID
+export const getByStorefrontUserId = query({
+  args: {
+    storeFrontUserId: v.union(v.id("guest"), v.id("storeFrontUser")),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query(entity)
+      .withIndex("by_storeFrontUserId", (q) =>
+        q.eq("storeFrontUserId", args.storeFrontUserId)
+      )
+      .order("desc")
+      .collect();
+  },
+});
+
 export const getAll = query({
   args: {
     storeId: v.id("store"),

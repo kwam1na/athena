@@ -62,6 +62,7 @@ export async function handleOrderStatusUpdate({
       items,
       pickup_type: order.deliveryMethod,
       pickup_details: pickupDetails,
+      customer_name: order.customerDetails.firstName,
     });
 
     return emailResponse.ok;
@@ -71,8 +72,8 @@ export async function handleOrderStatusUpdate({
     try {
       const statusMessaging =
         order.deliveryMethod == "pickup"
-          ? "Thank you for shopping with us! We're processing your order. We'll notify you when your items are ready for pickup. Please note it takes 24 - 48 hours to process your order."
-          : "Thank you for shopping with us! We're processing your order. We'll notify you when your items are are on their way. Please note it takes 24 - 48 hours to process your order.";
+          ? "We're processing your order. We'll notify you when your items are ready for pickup. Please note it takes 24 - 48 hours to process your order."
+          : "We're processing your order. We'll notify you when your items are are on their way. Please note it takes 24 - 48 hours to process your order.";
 
       const orderPickupLocation = store?.config?.contactInfo?.location;
 

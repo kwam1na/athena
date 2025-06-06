@@ -24,12 +24,6 @@ import { postAnalytics } from "@/api/analytics";
 
 const origin = "homepage";
 
-// Threshold for how far down the user needs to scroll before showing the modal (in pixels)
-const SCROLL_THRESHOLD = 800;
-
-// Key for storing scroll hint dismissed state in localStorage
-const SCROLL_HINT_DISMISSED_KEY = "wigclub_scroll_hint_dismissed";
-
 export default function HomePage() {
   const homeHeroRef = useRef<HTMLDivElement>(null);
   const bestSellersRef = useRef<HTMLDivElement>(null);
@@ -58,17 +52,15 @@ export default function HomePage() {
     hasCompletedDiscountModalFlow,
     setHasDiscountModalBeenShown,
     isDiscountModalDismissed,
+    isDiscountModalStateLoaded,
     openDiscountModal,
   } = useDiscountCodeAlert();
 
   const [hasScrolledPastThreshold, setHasScrolledPastThreshold] =
     useState(false);
 
-  // Track if the user has scrolled to hide the scroll indicator
-  // const [hasScrolled, setHasScrolled] = useState(false);
-
-  const { showReminderBar, setShowReminderBar, upsell } =
-    useProductReminder(homeHeroRef);
+  // const { showReminderBar, setShowReminderBar, upsell } =
+  //   useProductReminder(homeHeroRef);
 
   const productQueries = useProductQueries();
 
@@ -82,8 +74,11 @@ export default function HomePage() {
 
   const s = useSearch({ strict: false });
 
-  // Handle scroll events
+  // Handle scroll events - now only runs after localStorage is loaded
   useEffect(() => {
+    // Don't add scroll listener until localStorage state is fully loaded
+    if (!isDiscountModalStateLoaded) return;
+
     const handleScroll = () => {
       const scrollPosition = window.scrollY;
 
@@ -91,17 +86,13 @@ export default function HomePage() {
       if (
         scrollPosition > window.innerHeight * 0.9 &&
         !hasScrolledPastThreshold &&
-        !hasDiscountModalBeenShown
+        !hasDiscountModalBeenShown &&
+        !isDiscountModalDismissed // Also check if it was dismissed
       ) {
         setHasScrolledPastThreshold(true);
         setIsDiscountModalOpen(true);
         setHasDiscountModalBeenShown(true);
       }
-
-      // Hide the scroll indicator after user starts scrolling
-      // if (scrollPosition > 10 && !hasScrolled) {
-      //   setHasScrolled(true);
-      // }
     };
 
     window.addEventListener("scroll", handleScroll);
@@ -109,7 +100,12 @@ export default function HomePage() {
     return () => {
       window.removeEventListener("scroll", handleScroll);
     };
-  }, [hasScrolledPastThreshold, hasDiscountModalBeenShown]);
+  }, [
+    hasScrolledPastThreshold,
+    hasDiscountModalBeenShown,
+    isDiscountModalDismissed,
+    isDiscountModalStateLoaded,
+  ]);
 
   useEffect(() => {
     setNavBarLayout("sticky");
@@ -133,6 +129,9 @@ export default function HomePage() {
     await postAnalytics({
       action: "clicked_on_discount_code_trigger",
       origin: "homepage",
+      data: {
+        promoCodeId: store?.config?.homepageDiscountCodeModalPromoCode,
+      },
     });
   };
 
@@ -160,10 +159,10 @@ export default function HomePage() {
 
   return (
     <>
-      <PromoAlert
+      {/* <PromoAlert
         isOpen={isPromoAlertOpen && !isRewardsAlertOpen}
         onClose={handleClosePromoAlert}
-      />
+      /> */}
 
       {/* <RewardsAlert
         isOpen={isRewardsAlertOpen && !isRewardsAlertDismissed}

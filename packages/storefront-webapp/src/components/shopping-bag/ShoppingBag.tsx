@@ -202,6 +202,9 @@ export default function ShoppingBag() {
     await postAnalytics({
       action: "clicked_on_discount_code_trigger",
       origin: "shopping_bag",
+      data: {
+        promoCodeId: store?.config?.homepageDiscountCodeModalPromoCode,
+      },
     });
   };
 

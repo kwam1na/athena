@@ -60,7 +60,15 @@ export const sendOrderEmail = async (params: {
   }>;
   pickup_type: string;
   pickup_details: string;
+  customer_name: string;
 }) => {
+  const templateId = {
+    confirmation: "d-be37af6e090c4273ad0b20d5a3dd1162",
+    ready: "d-b210f1543144426d89525df6b3983fe7",
+    complete: "d-b210f1543144426d89525df6b3983fe7",
+    canceled: "d-b210f1543144426d89525df6b3983fe7",
+  };
+
   const message = {
     from: {
       email: "orders@wigclub.store",
@@ -75,6 +83,7 @@ export const sendOrderEmail = async (params: {
         ],
         dynamic_template_data: {
           delivery_fee: params.delivery_fee,
+          customer_name: params.customer_name.toUpperCase(),
           discount: params.discount,
           store_name: params.store_name,
           order_number: params.order_number,
@@ -92,7 +101,7 @@ export const sendOrderEmail = async (params: {
         },
       },
     ],
-    template_id: "d-b210f1543144426d89525df6b3983fe7",
+    template_id: templateId[params.type],
   };
 
   return await fetch("https://api.sendgrid.com/v3/mail/send", {

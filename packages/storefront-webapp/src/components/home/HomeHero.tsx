@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import Hls from "hls.js";
 import { useEffect, useRef } from "react";
 import { ScrollDownButton } from "../ui/ScrollDownButton";
+import { VideoPlayer } from "./VideoPlayer";
 
 interface HomeHeroProps {
   nextSectionRef?: React.RefObject<HTMLDivElement>;
@@ -45,26 +46,7 @@ export const HomeHero = ({ nextSectionRef }: HomeHeroProps) => {
       /> */}
 
       {/* Background Video */}
-      <motion.video
-        ref={videoRef}
-        initial={{ opacity: 0, scale: 1.05 }}
-        animate={{
-          opacity: 1,
-          scale: 1,
-          transition: {
-            duration: 1,
-            ease: [0.6, 0.05, 0.01, 0.9],
-          },
-        }}
-        className="absolute top-0 left-0 w-full h-full object-cover"
-        autoPlay
-        loop
-        muted
-        playsInline
-      >
-        <source src={hlsUrl} type="video/mp4" />
-        Your browser does not support the video tag.
-      </motion.video>
+      <VideoPlayer hlsUrl={hlsUrl} />
 
       <motion.div
         initial={{ opacity: 0 }}

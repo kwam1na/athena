@@ -74,6 +74,7 @@
     "convex": "^1.16.4",
     "convex-helpers": "^0.1.59",
     "framer-motion": "^10.16.4",
+    "hls.js": "^1.6.2",
     "hono": "^4.6.3",
     "imagemin": "^9.0.0",
     "imagemin-webp": "^8.0.0",

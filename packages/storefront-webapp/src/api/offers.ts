@@ -36,3 +36,24 @@ export async function submitOffer(data: OfferRequest): Promise<OfferResponse> {
 
   return result;
 }
+
+/**
+ * Get offers by storefront user ID
+ *
+ * @param storeFrontUserId The storefront user ID
+ * @returns The response with success status and message
+ */
+export async function getUserRedeemedOffers() {
+  const response = await fetch(getBaseUrl(), {
+    method: "GET",
+    credentials: "include", // This is important to include the guest ID cookie
+  });
+
+  const result = await response.json();
+
+  if (!response.ok) {
+    throw new Error(result.error || "Failed to get offers");
+  }
+
+  return result;
+}

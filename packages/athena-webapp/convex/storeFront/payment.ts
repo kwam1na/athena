@@ -266,8 +266,8 @@ export const verifyPayment = action({
             try {
               const orderStatusMessaging =
                 order.deliveryMethod == "pickup"
-                  ? "Thank you for shopping with us! We're processing your order and will notify you once it's ready for pickup. Processing takes 24-48 hours."
-                  : "Thank you for shopping with us! We're processing your order and will notify you once it's on the way. Processing takes 24-48 hours.";
+                  ? "We're processing your order and will notify you once it's ready for pickup. Processing takes 24-48 hours."
+                  : "We're processing your order and will notify you once it's on the way. Processing takes 24-48 hours.";
 
               const orderPickupLocation = store?.config?.contactInfo?.location;
 
@@ -303,6 +303,7 @@ export const verifyPayment = action({
                 items,
                 pickup_type: order.deliveryMethod,
                 pickup_details: pickupDetails,
+                customer_name: order.customerDetails.firstName,
               });
 
               if (emailResponse.ok) {

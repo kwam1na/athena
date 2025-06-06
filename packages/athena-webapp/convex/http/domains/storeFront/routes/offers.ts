@@ -78,4 +78,26 @@ offersRoutes.post("/", async (c) => {
   }
 });
 
+offersRoutes.get("/", async (c) => {
+  try {
+    const guestId = getStorefrontUserFromRequest(c);
+
+    if (!guestId) {
+      return c.json({ error: "Guest ID is required" }, 400);
+    }
+
+    const result = await c.env.runQuery(
+      api.storeFront.offers.getByStorefrontUserId,
+      {
+        storeFrontUserId: guestId as Id<"guest"> | Id<"storeFrontUser">,
+      }
+    );
+
+    return c.json(result);
+  } catch (error) {
+    console.error("Failed to get offers:", error);
+    return c.json({ error: "Failed to get offers" }, 500);
+  }
+});
+
 export { offersRoutes };

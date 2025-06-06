@@ -36,7 +36,7 @@ export function ProductCard({
 
         {!isSoldOut && isSellingFast && (
           <div className="font-medium text-xs absolute top-0 left-0 m-2 text-white bg-black bg-opacity-40 rounded-md px-2 py-1">
-            🔥 Selling fast
+            🔥 Selling fast — Few left
           </div>
         )}
       </div>
