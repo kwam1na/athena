@@ -43,6 +43,12 @@ import {
   rewardTierSchema,
   offerSchema,
 } from "./schemas/storeFront";
+import {
+  posTransactionSchema,
+  posTransactionItemSchema,
+  posCustomerSchema,
+} from "./schemas/pos";
+import { posSessionSchema } from "./schemas/pos/posSession";
 
 const schema = defineSchema({
   ...authTables,
@@ -74,6 +80,31 @@ const schema = defineSchema({
   onlineOrderItem: defineTable(onlineOrderItemSchema),
   organization: defineTable(organizationSchema),
   organizationMember: defineTable(organizationMemberSchema),
+  posCustomer: defineTable(posCustomerSchema)
+    .index("by_storeId", ["storeId"])
+    .index("by_storeId_and_name", ["storeId", "name"])
+    .index("by_storeId_and_email", ["storeId", "email"])
+    .index("by_storeId_and_phone", ["storeId", "phone"])
+    .index("by_linkedStoreFrontUserId", ["linkedStoreFrontUserId"])
+    .index("by_linkedGuestId", ["linkedGuestId"])
+    .index("by_loyaltyTier", ["loyaltyTier"])
+    .index("by_createdBy", ["createdBy"]),
+  posTransaction: defineTable(posTransactionSchema)
+    .index("by_storeId", ["storeId"])
+    .index("by_transactionNumber", ["transactionNumber"])
+    .index("by_status", ["status"])
+    .index("by_cashierId", ["cashierId"])
+    .index("by_customerId", ["customerId"]),
+  posTransactionItem: defineTable(posTransactionItemSchema)
+    .index("by_transactionId", ["transactionId"])
+    .index("by_productId", ["productId"])
+    .index("by_productSkuId", ["productSkuId"]),
+  posSession: defineTable(posSessionSchema)
+    .index("by_storeId", ["storeId"])
+    .index("by_status", ["status"])
+    .index("by_cashierId", ["cashierId"])
+    .index("by_storeId_and_status", ["storeId", "status"])
+    .index("by_sessionNumber", ["sessionNumber"]),
   product: defineTable(productSchema).index("by_storeId", ["storeId"]),
   productSku: defineTable(productSkuSchema).index("by_productId", [
     "productId",

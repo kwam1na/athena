@@ -87,3 +87,78 @@ export type Review = Doc<"review"> & {
 };
 
 export type Offer = Doc<"offer">;
+
+// POS System Types
+/**
+ * POS (Point of Sale) system types for in-store transactions and customer management.
+ *
+ * The POS system is designed to work independently from the storefront but can
+ * optionally link to existing storefront customers for unified customer experience.
+ *
+ * Key Features:
+ * - Independent customer database for quick in-store lookup
+ * - Optional linking to storefront users/guests
+ * - Transaction tracking with inventory updates
+ * - Customer loyalty and spending analytics
+ * - Receipt generation and payment processing
+ */
+
+export type POSCustomer = Doc<"posCustomer">;
+
+export type POSSession = Doc<"posSession"> & {
+  customer?: POSCustomer; // Populated customer data when linked
+};
+
+export type POSTransaction = Doc<"posTransaction"> & {
+  customer?: POSCustomer; // Populated customer data when linked
+  items?: POSTransactionItem[]; // Transaction items
+};
+
+export type POSTransactionItem = Doc<"posTransactionItem"> & {
+  product?: Product; // Populated product data
+  productSku?: ProductSku; // Populated SKU data
+};
+
+// Enhanced POS types with relationships for analytics and detailed views
+export type POSCustomerWithStats = POSCustomer & {
+  recentTransactions?: POSTransaction[];
+  monthlySpending?: number;
+  averageOrderValue?: number;
+  lastPurchaseCategory?: string;
+  visitFrequency?: number;
+  loyaltyStatus?: "new" | "regular" | "vip";
+};
+
+export type POSTransactionWithDetails = POSTransaction & {
+  customer?: POSCustomer;
+  items: (POSTransactionItem & {
+    product: Product;
+    productSku: ProductSku;
+  })[];
+  cashier?: AthenaUser;
+  store?: Store;
+};
+
+// Summary types for quick lookups and search results
+export type POSCustomerSummary = Pick<
+  POSCustomer,
+  | "_id"
+  | "_creationTime"
+  | "name"
+  | "email"
+  | "phone"
+  | "totalSpent"
+  | "transactionCount"
+  | "lastTransactionAt"
+>;
+
+export type POSTransactionSummary = Pick<
+  POSTransaction,
+  | "_id"
+  | "_creationTime"
+  | "transactionNumber"
+  | "total"
+  | "paymentMethod"
+  | "status"
+  | "completedAt"
+>;

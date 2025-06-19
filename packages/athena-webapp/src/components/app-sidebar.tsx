@@ -11,6 +11,7 @@ import {
   SidebarMenuItem,
   SidebarMenuSub,
   SidebarMenuSubItem,
+  SidebarRail,
 } from "@/components/ui/sidebar";
 import {
   BadgePercent,
@@ -35,6 +36,7 @@ import {
   MessageCircle,
   MessageCircleDashed,
   MessageCircleMore,
+  Tag,
 } from "lucide-react";
 import { AppHeader } from "./Navbar";
 import { Link } from "@tanstack/react-router";
@@ -76,11 +78,28 @@ export function AppSidebar() {
   }
 
   return (
-    <Sidebar>
+    <Sidebar collapsible="icon">
       <SidebarHeader>
         <SidebarGroup>
-          <SidebarGroupContent className="px-6">
-            <AppHeader />
+          <SidebarGroupContent>
+            {/* Shows AppHeader when expanded, icon when collapsed */}
+            <div className="group-data-[collapsible=icon]:hidden px-6">
+              <AppHeader />
+            </div>
+            {/* <div className="hidden group-data-[collapsible=icon]:block">
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    tooltip={`${activeOrganization.name} - ${activeStore.name}`}
+                  >
+                    <Link to="/">
+                      <Store className="w-4 h-4" />
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </div> */}
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarHeader>
@@ -90,6 +109,23 @@ export function AppSidebar() {
           <SidebarGroupLabel>Store</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild>
+                  <Link
+                    to="/$orgUrlSlug/store/$storeUrlSlug/pos"
+                    params={(p) => ({
+                      ...p,
+                      orgUrlSlug: activeOrganization?.slug,
+                      storeUrlSlug: activeStore?.slug,
+                    })}
+                    className="flex items-center"
+                  >
+                    <ScanBarcode className="w-4 h-4" />
+                    <p className="font-medium">Point of Sale</p>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+
               <SidebarMenuItem>
                 <SidebarMenuButton asChild>
                   <Link
@@ -268,7 +304,7 @@ export function AppSidebar() {
                     })}
                     className="flex items-center"
                   >
-                    <ScanBarcode className="w-4 h-4" />
+                    <Tag className="w-4 h-4" />
                     <p className="font-medium">Products</p>
                   </Link>
                 </SidebarMenuButton>
@@ -452,13 +488,22 @@ export function AppSidebar() {
       </SidebarContent>
 
       <SidebarFooter>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center">
-            <UserCircle className="w-4 h-4 mr-1" />
-            <p className="text-sm font-medium">{user?.email}</p>
-          </div>
-        </div>
+        {/* User Footer - Shows email when expanded, icon when collapsed */}
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              tooltip={user?.email}
+              className="group-data-[collapsible=icon]:justify-center"
+            >
+              <UserCircle className="w-4 h-4 shrink-0" />
+              <div className="group-data-[collapsible=icon]:hidden">
+                <p className="text-sm font-medium truncate">{user?.email}</p>
+              </div>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
       </SidebarFooter>
+      <SidebarRail />
     </Sidebar>
   );
 }

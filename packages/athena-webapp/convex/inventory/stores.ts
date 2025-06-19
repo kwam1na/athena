@@ -197,6 +197,55 @@ export const createImageAsset = mutation({
   },
 });
 
+export const calculateTax = query({
+  args: {
+    storeId: v.id(entity),
+    amount: v.number(),
+  },
+  returns: v.object({
+    taxAmount: v.number(),
+    totalWithTax: v.number(),
+    taxRate: v.number(),
+    taxName: v.string(),
+  }),
+  handler: async (ctx, args) => {
+    const store = await ctx.db.get(args.storeId);
+
+    if (!store || !store.config?.tax?.enabled) {
+      return {
+        taxAmount: 0,
+        totalWithTax: args.amount,
+        taxRate: 0,
+        taxName: "Tax",
+      };
+    }
+
+    const taxConfig = store.config.tax;
+    const taxRate = taxConfig.rate || 0;
+    const taxName = taxConfig.name || "Tax";
+
+    let taxAmount: number;
+    let totalWithTax: number;
+
+    if (taxConfig.includedInPrice) {
+      // Tax is included in the price, so we need to extract it
+      taxAmount = (args.amount * taxRate) / (100 + taxRate);
+      totalWithTax = args.amount;
+    } else {
+      // Tax is added on top of the price
+      taxAmount = (args.amount * taxRate) / 100;
+      totalWithTax = args.amount + taxAmount;
+    }
+
+    return {
+      taxAmount: Math.round(taxAmount * 100) / 100, // Round to 2 decimal places
+      totalWithTax: Math.round(totalWithTax * 100) / 100,
+      taxRate,
+      taxName,
+    };
+  },
+});
+
 export const getImageAssets = query({
   args: {
     storeId: v.id(entity),
