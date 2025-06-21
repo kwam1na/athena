@@ -93,42 +93,76 @@ export const getCustomerBehaviorTimeline = query({
       }
     }
 
-    // Enrich analytics with product information
-    const enrichedAnalytics = await Promise.all(
-      analytics.map(async (analytic) => {
-        let productInfo = undefined;
+    // OPTIMIZATION: Batch product data fetching to avoid N+1 queries
+    const productIds = [
+      ...new Set(
+        analytics
+          .filter((a) => a.data.product)
+          .map((a) => a.data.product as Id<"product">)
+      ),
+    ];
 
-        // If this is a product-related event, try to get product info
-        if (analytic.data.product && analytic.data.productSku) {
-          try {
-            const productId = analytic.data.product as Id<"product">;
-            const product = await ctx.db.get(productId);
-
-            if (product) {
-              // Find the specific SKU
-              const sku = product.skus?.find(
-                (s: any) => s.sku === analytic.data.productSku
-              );
-
-              productInfo = {
-                name: product.name,
-                images: sku?.images || product.images,
-                price: sku?.price,
-                currency: product.currency,
-              };
-            }
-          } catch (e) {
-            // Product not found or error fetching
-          }
+    // Batch fetch all products
+    const products = await Promise.all(
+      productIds.map(async (productId) => {
+        try {
+          return await ctx.db.get(productId);
+        } catch {
+          return null;
         }
-
-        return {
-          ...analytic,
-          userData,
-          productInfo,
-        };
       })
     );
+
+    const productMap = new Map();
+    products.filter(Boolean).forEach((product) => {
+      productMap.set(product!._id, product);
+    });
+
+    // Batch fetch SKUs for products (avoiding complex filter that causes linter issues)
+    const skuMap = new Map();
+    if (productIds.length > 0) {
+      // Get all SKUs and filter in memory for now (can be optimized with proper indexes later)
+      const allSkus = await ctx.db.query("productSku").collect();
+
+      // Filter to only SKUs for our products
+      const relevantSkus = allSkus.filter((sku) =>
+        productIds.includes(sku.productId)
+      );
+
+      relevantSkus.forEach((sku) => {
+        const key = `${sku.productId}-${sku.sku}`;
+        skuMap.set(key, sku);
+      });
+    }
+
+    // Enrich analytics with product information (optimized)
+    const enrichedAnalytics = analytics.map((analytic) => {
+      let productInfo = undefined;
+
+      // If this is a product-related event, get product info from cached maps
+      if (analytic.data.product && analytic.data.productSku) {
+        const productId = analytic.data.product as Id<"product">;
+        const product = productMap.get(productId);
+
+        if (product) {
+          const skuKey = `${productId}-${analytic.data.productSku}`;
+          const sku = skuMap.get(skuKey);
+
+          productInfo = {
+            name: product.name,
+            images: sku?.images || [],
+            price: sku?.price,
+            currency: product.currency,
+          };
+        }
+      }
+
+      return {
+        ...analytic,
+        userData,
+        productInfo,
+      };
+    });
 
     return enrichedAnalytics;
   },
@@ -188,7 +222,8 @@ export const getCustomerBehaviorSummary = query({
       );
     }
 
-    const analytics = await analyticsQuery.collect();
+    // OPTIMIZATION: Limit records to prevent excessive database reads
+    const analytics = await analyticsQuery.take(1000);
 
     // Calculate summary statistics
     const totalActions = analytics.length;
@@ -204,10 +239,13 @@ export const getCustomerBehaviorSummary = query({
       actionCounts[a.action] = (actionCounts[a.action] || 0) + 1;
     });
 
-    const mostCommonAction = Object.keys(actionCounts).reduce(
-      (a, b) => (actionCounts[a] > actionCounts[b] ? a : b),
-      undefined as string | undefined
-    );
+    let mostCommonAction: string | undefined = undefined;
+    const actionKeys = Object.keys(actionCounts);
+    if (actionKeys.length > 0) {
+      mostCommonAction = actionKeys.reduce((a, b) =>
+        actionCounts[a] > actionCounts[b] ? a : b
+      );
+    }
 
     // Device breakdown
     const deviceBreakdown = analytics.reduce(

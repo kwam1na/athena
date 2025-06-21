@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useQuery } from "convex/react";
 import View from "../View";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
@@ -7,6 +8,9 @@ import AnalyticsProducts from "./AnalyticsProducts";
 import { FadeIn } from "../common/FadeIn";
 import StoreInsights from "./StoreInsights";
 import { formatNumber } from "../../utils/formatNumber";
+import EnhancedAnalyticsView from "./EnhancedAnalyticsView";
+import { Button } from "../ui/button";
+import { BarChart3, List } from "lucide-react";
 
 const StoreVisitors = () => {
   const { activeStore } = useGetActiveStore();
@@ -60,6 +64,7 @@ const StoreVisitors = () => {
 
 export default function AnalyticsView() {
   const { activeStore } = useGetActiveStore();
+  const [viewMode, setViewMode] = useState<"enhanced" | "classic">("enhanced");
 
   const analytics = useQuery(
     api.storeFront.analytics.getAll,
@@ -70,14 +75,49 @@ export default function AnalyticsView() {
 
   const Navigation = () => {
     return (
-      <div className="container mx-auto flex gap-2 h-[40px]">
+      <div className="container mx-auto flex justify-between items-center h-[40px]">
         <div className="flex items-center">
           <p className="text-xl font-medium">Analytics</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            variant={viewMode === "enhanced" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setViewMode("enhanced")}
+            className="flex items-center gap-1"
+          >
+            <BarChart3 className="h-4 w-4" />
+            Enhanced
+          </Button>
+          <Button
+            variant={viewMode === "classic" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setViewMode("classic")}
+            className="flex items-center gap-1"
+          >
+            <List className="h-4 w-4" />
+            Classic
+          </Button>
         </div>
       </div>
     );
   };
 
+  // Enhanced view
+  if (viewMode === "enhanced") {
+    return (
+      <View
+        hideBorder
+        hideHeaderBottomBorder
+        className="bg-background"
+        header={<Navigation />}
+      >
+        <EnhancedAnalyticsView />
+      </View>
+    );
+  }
+
+  // Classic view
   const items = analytics.sort((a, b) => b._creationTime - a._creationTime);
 
   return (

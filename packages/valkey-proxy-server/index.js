@@ -81,7 +81,7 @@ app.post("/set", async (req, res) => {
   }
 });
 
-// Improved cache invalidation
+// Cluster-aware cache invalidation
 app.post("/invalidate", async (req, res) => {
   const { pattern } = req.body;
   if (!pattern) {
@@ -89,61 +89,176 @@ app.post("/invalidate", async (req, res) => {
   }
 
   try {
+    let totalKeys = 0;
+    let errors = [];
+
+    // Get all nodes in the cluster
+    const nodes = redis.nodes("all");
+
+    // Scan each node separately to avoid cross-slot issues
+    for (const node of nodes) {
+      let cursor = "0";
+      let nodeKeys = [];
+
+      do {
+        try {
+          const [nextCursor, matchedKeys] = await node.scan(
+            cursor,
+            "MATCH",
+            pattern,
+            "COUNT",
+            100
+          );
+          cursor = nextCursor;
+          nodeKeys.push(...matchedKeys);
+
+          // Delete keys from this node in smaller batches
+          if (nodeKeys.length >= 50) {
+            try {
+              // Delete keys one by one to avoid slot conflicts
+              for (const key of nodeKeys) {
+                try {
+                  await redis.del(key);
+                  totalKeys++;
+                } catch (delErr) {
+                  console.error(`Failed to delete key ${key}:`, delErr);
+                  errors.push(`Failed to delete ${key}: ${delErr.message}`);
+                }
+              }
+              nodeKeys = [];
+            } catch (batchDelErr) {
+              console.error("Batch delete failed:", batchDelErr);
+              errors.push(`Batch delete failed: ${batchDelErr.message}`);
+            }
+          }
+        } catch (scanErr) {
+          console.error(
+            `Scan operation failed on node ${node.options.host}:`,
+            scanErr
+          );
+          errors.push(
+            `Scan failed on node ${node.options.host}: ${scanErr.message}`
+          );
+          break; // Skip to next node
+        }
+      } while (cursor !== "0");
+
+      // Delete any remaining keys from this node
+      if (nodeKeys.length > 0) {
+        try {
+          for (const key of nodeKeys) {
+            try {
+              await redis.del(key);
+              totalKeys++;
+            } catch (delErr) {
+              console.error(`Failed to delete key ${key}:`, delErr);
+              errors.push(`Failed to delete ${key}: ${delErr.message}`);
+            }
+          }
+        } catch (finalDelErr) {
+          console.error("Final delete batch failed:", finalDelErr);
+          errors.push(`Final delete failed: ${finalDelErr.message}`);
+        }
+      }
+    }
+
+    const success = errors.length === 0;
+    const message = success
+      ? `✅ Cache invalidation successful: ${totalKeys} keys cleared with pattern "${pattern}"`
+      : `⚠️ Cache invalidation completed with some errors: ${totalKeys} keys cleared, ${errors.length} errors`;
+
+    console.log(message);
+
+    if (errors.length > 0) {
+      console.error("Errors encountered:", errors);
+    }
+
+    res.json({
+      success,
+      keysCleared: totalKeys,
+      errors: errors.length > 0 ? errors : undefined,
+    });
+  } catch (err) {
+    console.error("Cache invalidation error:", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Alternative cache invalidation using pipeline (more efficient for clusters)
+app.post("/invalidate-pipeline", async (req, res) => {
+  const { pattern } = req.body;
+  if (!pattern) {
+    return res.status(400).json({ error: "Pattern is required" });
+  }
+
+  try {
     let cursor = "0";
-    let keys = [];
+    let allKeys = [];
     let totalKeys = 0;
 
-    do {
-      try {
-        const [nextCursor, matchedKeys] = await redis.scan(
-          cursor,
-          "MATCH",
-          pattern,
-          "COUNT",
-          100
-        );
-        cursor = nextCursor;
-        keys.push(...matchedKeys);
+    // First, collect all keys across all nodes
+    const nodes = redis.nodes("all");
+    for (const node of nodes) {
+      let nodeCursor = "0";
+      do {
+        try {
+          const [nextCursor, matchedKeys] = await node.scan(
+            nodeCursor,
+            "MATCH",
+            pattern,
+            "COUNT",
+            100
+          );
+          nodeCursor = nextCursor;
+          allKeys.push(...matchedKeys);
+        } catch (scanErr) {
+          console.error(`Scan failed on node ${node.options.host}:`, scanErr);
+        }
+      } while (nodeCursor !== "0");
+    }
 
-        // Delete in batches to avoid command timeout
-        if (keys.length >= 100) {
-          if (keys.length > 0) {
-            await redis.del(...keys);
-            totalKeys += keys.length;
-            keys = [];
+    // Remove duplicates (in case keys appear on multiple nodes during scanning)
+    const uniqueKeys = [...new Set(allKeys)];
+
+    // Delete keys in small batches using pipeline
+    const batchSize = 10; // Small batch size to avoid cross-slot issues
+    let deletedCount = 0;
+
+    for (let i = 0; i < uniqueKeys.length; i += batchSize) {
+      const batch = uniqueKeys.slice(i, i + batchSize);
+      const pipeline = redis.pipeline();
+
+      // Add delete commands to pipeline
+      batch.forEach((key) => pipeline.del(key));
+
+      try {
+        const results = await pipeline.exec();
+        // Count successful deletions
+        results.forEach(([err, result]) => {
+          if (!err && result > 0) {
+            deletedCount += result;
+          }
+        });
+      } catch (pipelineErr) {
+        console.error("Pipeline delete failed:", pipelineErr);
+        // Fall back to individual deletions for this batch
+        for (const key of batch) {
+          try {
+            const result = await redis.del(key);
+            deletedCount += result;
+          } catch (delErr) {
+            console.error(`Failed to delete key ${key}:`, delErr);
           }
         }
-      } catch (scanErr) {
-        console.error("Scan operation failed:", scanErr);
-        return res.status(500).json({
-          success: false,
-          error: `Scan failed: ${scanErr.message}`,
-          keysCleared: totalKeys,
-        });
-      }
-    } while (cursor !== "0");
-
-    // Delete any remaining keys
-    if (keys.length > 0) {
-      try {
-        await redis.del(...keys);
-        totalKeys += keys.length;
-      } catch (delErr) {
-        console.error("Delete operation failed:", delErr);
-        return res.status(500).json({
-          success: false,
-          error: `Delete failed: ${delErr.message}`,
-          keysCleared: totalKeys,
-        });
       }
     }
 
     console.log(
-      `✅ Cache invalidation successful: ${totalKeys} keys cleared with pattern "${pattern}"`
+      `✅ Pipeline cache invalidation successful: ${deletedCount} keys cleared with pattern "${pattern}"`
     );
-    res.json({ success: true, keysCleared: totalKeys });
+    res.json({ success: true, keysCleared: deletedCount });
   } catch (err) {
-    console.error("Cache invalidation error:", err);
+    console.error("Pipeline cache invalidation error:", err);
     res.status(500).json({ success: false, error: err.message });
   }
 });

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useQuery } from "convex/react";
 import {
   DropdownMenu,
@@ -13,6 +14,9 @@ import { Id } from "~/convex/_generated/dataModel";
 import { Button } from "../ui/button";
 import { DotsHorizontalIcon } from "@radix-ui/react-icons";
 import CopyButton from "../ui/copy-button";
+import { CustomerBehaviorTimeline } from "./CustomerBehaviorTimeline";
+import { LayoutList } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
 
 const ActivityHeader = () => {
   return (
@@ -39,16 +43,49 @@ const ActivityHeader = () => {
 
 export const UserActivity = () => {
   const { userId } = useParams({ strict: false });
+  const [viewMode, setViewMode] = useState<"timeline" | "table">("timeline");
+
   const analytics = useQuery(
     api.storeFront.user.getAllUserActivity,
     userId ? { id: userId as Id<"storeFrontUser"> } : "skip"
   );
 
-  if (!analytics) return null;
-
-  // console.log(analytics);
+  if (!analytics || !userId) return null;
 
   const items = analytics.sort((a, b) => b._creationTime - a._creationTime);
 
-  return <GenericDataTable data={items} columns={analyticsColumns} />;
+  return (
+    <div className="space-y-4">
+      <Tabs
+        value={viewMode}
+        onValueChange={(value) => setViewMode(value as "timeline" | "table")}
+      >
+        <div className="flex items-center justify-between">
+          <TabsList className="grid w-[200px] grid-cols-2">
+            <TabsTrigger
+              value="timeline"
+              className="flex items-center space-x-2"
+            >
+              {/* <Timeline className="w-4 h-4" /> */}
+              <span>Timeline</span>
+            </TabsTrigger>
+            <TabsTrigger value="table" className="flex items-center space-x-2">
+              <LayoutList className="w-4 h-4" />
+              <span>Table</span>
+            </TabsTrigger>
+          </TabsList>
+        </div>
+
+        <TabsContent value="timeline" className="mt-6">
+          <CustomerBehaviorTimeline
+            userId={userId as Id<"storeFrontUser"> | Id<"guest">}
+          />
+        </TabsContent>
+
+        <TabsContent value="table" className="mt-6">
+          <GenericDataTable data={items} columns={analyticsColumns} />
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
 };

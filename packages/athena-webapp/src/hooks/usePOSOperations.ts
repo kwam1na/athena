@@ -186,7 +186,7 @@ export const usePOSOperations = () => {
     if (!product.areProcessingFeesAbsorbed) {
       // If merchant doesn't absorb fees, use base price (minus processing fees)
       const processingFee = (product.price * PAYSTACK_PROCESSING_FEE) / 100;
-      return product.price - processingFee;
+      return Math.ceil(product.price - processingFee);
     }
     // If merchant absorbs fees, use full price
     return product.price;

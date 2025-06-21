@@ -2,6 +2,8 @@ import { Review } from "../../../types";
 import { RatingStars } from "./RatingStars";
 import { ReviewMetadata } from "./ReviewMetadata";
 import { ReviewActions } from "./ReviewActions";
+import { Link } from "@tanstack/react-router";
+import { getOrigin } from "../../lib/navigationUtils";
 
 interface RatingDimension {
   key: string;
@@ -45,11 +47,23 @@ export function ReviewCard({
         <div className="space-y-8">
           <div className="flex items-start gap-8">
             {review.productImage && (
-              <img
-                src={review.productImage}
-                alt="Product"
-                className="w-24 h-24 rounded-lg object-cover"
-              />
+              <Link
+                to="/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug"
+                params={(prev) => ({
+                  ...prev,
+                  orgUrlSlug: prev.orgUrlSlug!,
+                  storeUrlSlug: prev.storeUrlSlug!,
+                  productSlug: review.productId,
+                })}
+                search={{ o: getOrigin(), variant: review.productSku?.sku! }}
+                className="block"
+              >
+                <img
+                  src={review.productImage}
+                  alt="Product"
+                  className="w-24 h-24 rounded-lg object-cover"
+                />
+              </Link>
             )}
             <div className="flex-1 space-y-12">
               <div className="space-y-4">
