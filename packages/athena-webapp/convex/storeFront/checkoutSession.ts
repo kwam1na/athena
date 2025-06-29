@@ -478,6 +478,12 @@ export const updateCheckoutSession = internalMutation({
         brand: v.optional(v.string()),
         bank: v.optional(v.string()),
         channel: v.optional(v.string()),
+        type: v.optional(
+          v.union(v.literal("online_payment"), v.literal("payment_on_delivery"))
+        ),
+        podPaymentMethod: v.optional(
+          v.union(v.literal("cash"), v.literal("mobile_money"))
+        ),
       })
     ),
   },

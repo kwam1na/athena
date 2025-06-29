@@ -28,6 +28,27 @@ export function CheckoutExpired() {
   );
 }
 
+export function NoCheckoutSession() {
+  return (
+    <div className="container mx-auto max-w-[1024px] h-full flex justify-center">
+      <div className="flex flex-col gap-16 mt-24 w-[80%]">
+        <div className="space-y-4">
+          <p className="text-2xl">No active checkout session found</p>
+
+          <p>Add some items to your bag to begin one.</p>
+        </div>
+
+        <Link to="/shop/bag">
+          <Button variant={"clear"} className="group px-0">
+            <ArrowLeft className="w-4 h-4 mr-2 -me-1 ms-2 transition-transform group-hover:-translate-x-0.5" />
+            Return to bag
+          </Button>
+        </Link>
+      </div>
+    </div>
+  );
+}
+
 export function CheckoutSessionNotFound() {
   return (
     <div className="container mx-auto max-w-[1024px] h-full flex justify-center">

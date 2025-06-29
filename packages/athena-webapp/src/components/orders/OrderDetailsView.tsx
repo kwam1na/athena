@@ -1,4 +1,13 @@
-import { Check, Circle, Tag, TriangleAlert } from "lucide-react";
+import {
+  Check,
+  Circle,
+  Tag,
+  TriangleAlert,
+  Banknote,
+  Smartphone,
+  Clock,
+  CircleCheck,
+} from "lucide-react";
 import View from "../View";
 import { useOnlineOrder } from "~/src/contexts/OnlineOrderContext";
 import {
@@ -13,6 +22,7 @@ import { api } from "~/convex/_generated/api";
 import { useEffect, useState } from "react";
 import { Button } from "../ui/button";
 import { toast } from "sonner";
+import { useAuth } from "~/src/hooks/useAuth";
 
 interface ExternalTransaction {
   id: string;
@@ -87,6 +97,7 @@ const ExternalTransaction = ({
 export function OrderDetailsView() {
   const { order } = useOnlineOrder();
   const { activeStore } = useGetActiveStore();
+  const { user } = useAuth();
 
   const formatter = currencyFormatter(activeStore?.currency || "GHS");
 
@@ -153,9 +164,34 @@ export function OrderDetailsView() {
     }
   };
 
+  const handleMarkPaymentCollected = async () => {
+    try {
+      await updateOrder({
+        orderId: order?._id,
+        update: {
+          paymentCollected: true,
+          paymentCollectedAt: Date.now(),
+        },
+        signedInAthenaUser: user
+          ? {
+              id: user._id,
+              email: user.email,
+            }
+          : undefined,
+      });
+      toast.success("Payment marked as collected");
+    } catch (error) {
+      toast.error("Failed to mark payment as collected");
+    }
+  };
+
   if (!order || !activeStore) return null;
 
   const { paymentMethod } = order;
+  const isPODOrder =
+    order.isPODOrder || paymentMethod?.type === "payment_on_delivery";
+  const podMethod =
+    order.podPaymentMethod || paymentMethod?.podPaymentMethod || "cash";
 
   const paymentChannel =
     paymentMethod?.channel == "mobile_money" ? "Mobile Money" : "Card";
@@ -169,36 +205,85 @@ export function OrderDetailsView() {
     >
       <div className="py-4">
         <div className="space-y-4">
+          {/* Payment Method Display */}
           <div className="flex items-center gap-8">
             <div className="space-y-2">
-              <p className="text-sm">{`${paymentMethod?.bank} ${paymentChannel}`}</p>
+              {isPODOrder ? (
+                <div className="flex items-center gap-2">
+                  {podMethod === "mobile_money" ? (
+                    <Smartphone className="w-4 h-4" />
+                  ) : (
+                    <Banknote className="w-4 h-4" />
+                  )}
+                  <p className="text-sm">
+                    {podMethod === "mobile_money"
+                      ? "Mobile Money on Delivery"
+                      : "Cash on Delivery"}
+                  </p>
+                </div>
+              ) : (
+                <p className="text-sm">{`${paymentMethod?.bank} ${paymentChannel}`}</p>
+              )}
             </div>
 
-            {order.hasVerifiedPayment && <VerifiedBadge status="Verified" />}
-
-            {!order.hasVerifiedPayment && (
+            {/* Payment Status Badges */}
+            {isPODOrder ? (
+              // POD Payment Status
+              <div className="flex items-center gap-4">
+                {order.paymentCollected ? (
+                  <Badge
+                    variant="outline"
+                    className="bg-green-50 text-green-600 flex items-center gap-2"
+                  >
+                    <CircleCheck className="w-3 h-3" />
+                    <p className="text-xs">Payment Collected</p>
+                  </Badge>
+                ) : (
+                  <Button variant="link" onClick={handleMarkPaymentCollected}>
+                    Mark as collected
+                  </Button>
+                )}
+              </div>
+            ) : (
+              // Regular Payment Status
               <div>
-                <Badge
-                  variant={"outline"}
-                  className="text-yellow-600 bg-yellow-50"
-                >
-                  <p className="text-xs">Not verified</p>
-                </Badge>
-                <Button variant={"link"} onClick={handleMarkAsVerified}>
-                  Mark as verified
-                </Button>
+                {order.hasVerifiedPayment ? (
+                  <VerifiedBadge status="Verified" />
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <Badge
+                      variant="outline"
+                      className="text-yellow-600 bg-yellow-50"
+                    >
+                      <p className="text-xs">Not verified</p>
+                    </Badge>
+                    <Button variant="link" onClick={handleMarkAsVerified}>
+                      Mark as verified
+                    </Button>
+                  </div>
+                )}
               </div>
             )}
           </div>
 
-          <div className="space-y-4">
-            <p className="text-sm">{`Account ending in ${paymentMethod?.last4}`}</p>
-          </div>
+          {/* Payment Details */}
+          {!isPODOrder && (
+            <div className="space-y-4">
+              <p className="text-sm">{`Account ending in ${paymentMethod?.last4}`}</p>
+            </div>
+          )}
 
+          {/* Reference Information */}
           <div className="flex items-center gap-8">
-            <p className="text-sm">
-              External payment reference <b>{order?.externalReference}</b>
-            </p>
+            {!isPODOrder ? (
+              <p className="text-sm">
+                External payment reference <b>{order?.externalReference}</b>
+              </p>
+            ) : (
+              <p className="text-sm">
+                Order reference <b>{order?.orderNumber}</b>
+              </p>
+            )}
 
             {isDuplicateQuery && (
               <Badge variant={"outline"} className="bg-gray-50 text-gray-600">
@@ -208,7 +293,7 @@ export function OrderDetailsView() {
             )}
           </div>
 
-          {externalTransactions.length > 0 && (
+          {!isPODOrder && externalTransactions.length > 0 && (
             <div className="space-y-4 pt-8">
               <p className="text-sm text-sm text-muted-foreground">
                 Payment history
@@ -220,6 +305,34 @@ export function OrderDetailsView() {
                     transaction={transaction}
                   />
                 ))}
+              </div>
+            </div>
+          )}
+
+          {/* POD Payment Instructions */}
+          {isPODOrder && !order.paymentCollected && (
+            <div className="space-y-4 pt-8">
+              <p className="text-sm text-muted-foreground">
+                Payment Instructions
+              </p>
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                <div className="flex items-start gap-3">
+                  <Clock className="w-4 h-4 text-amber-600 mt-0.5" />
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium text-amber-800">
+                      Payment collection required
+                    </p>
+                    <p className="text-sm text-amber-700">
+                      Collect payment via{" "}
+                      {podMethod === "mobile_money" ? "mobile money" : "cash"}{" "}
+                      when the order is{" "}
+                      {order.deliveryMethod === "pickup"
+                        ? "picked up"
+                        : "delivered"}
+                      .
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
           )}

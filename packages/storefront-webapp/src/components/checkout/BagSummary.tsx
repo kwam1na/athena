@@ -19,6 +19,7 @@ import { usePromoCodesQueries } from "@/lib/queries/promoCode";
 import { isFeeWaived } from "@/lib/feeUtils";
 import { Badge } from "../ui/badge";
 import OrderSummary from "./OrderDetails/OrderSummary";
+import { useDiscountCodeAlert } from "@/hooks/useDiscountCodeAlert";
 
 function SummaryItem({
   item,
@@ -94,18 +95,32 @@ function BagSummary() {
 
   const promoCodeQueries = usePromoCodesQueries();
   const { data: promoCodes } = useQuery(promoCodeQueries.getAll());
+  const { redeemedOffers } = useDiscountCodeAlert();
 
   useEffect(() => {
     if (promoCodes?.length && !checkoutState.discount && activeSession._id) {
       const autoApplyPromoCode = promoCodes.find(
-        (code) => code.autoApply && code.active
+        (code) => code.autoApply && code.active && !code.isExclusive
       );
-      if (autoApplyPromoCode) {
+
+      const exclusivePromoCodes = promoCodes.filter(
+        (code) => code.isExclusive && code.active && code.autoApply
+      );
+
+      const exclusivePromoCode = exclusivePromoCodes.find((code) =>
+        redeemedOffers?.some(
+          (offer: any) => offer.promoCodeId === code._id && !offer.isRedeemed
+        )
+      );
+
+      const codeToApply = autoApplyPromoCode || exclusivePromoCode;
+
+      if (codeToApply) {
         setIsAutoApplyingPromoCode(true);
-        handleRedeemPromoCode(autoApplyPromoCode.code);
+        handleRedeemPromoCode(codeToApply.code);
       }
     }
-  }, [promoCodes, checkoutState.discount, activeSession._id]);
+  }, [promoCodes, checkoutState.discount, activeSession._id, redeemedOffers]);
 
   const calculatedDiscount = checkoutState.discount?.totalDiscount;
   const discountValue =

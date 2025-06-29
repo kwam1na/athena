@@ -11,6 +11,7 @@ export const promoCodeSchema = v.object({
   span: v.union(v.literal("entire-order"), v.literal("selected-products")),
   active: v.boolean(),
   displayText: v.string(),
+  isExclusive: v.optional(v.boolean()),
   autoApply: v.optional(v.boolean()),
   sitewide: v.optional(v.boolean()),
   createdByUserId: v.id("athenaUser"),

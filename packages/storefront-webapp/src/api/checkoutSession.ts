@@ -100,7 +100,8 @@ export async function updateCheckoutSession({
     | "complete-checkout"
     | "place-order"
     | "update-order"
-    | "cancel-order";
+    | "cancel-order"
+    | "create-pod-order";
   sessionId: string;
   isFinalizingPayment?: boolean;
   hasCompletedCheckoutSession?: boolean;

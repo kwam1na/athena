@@ -38,6 +38,13 @@ export const orderDetailsSchema = v.object({
   deliveryInstructions: v.optional(v.string()),
   pickupLocation: v.union(v.string(), v.null()),
   discount: v.union(v.record(v.string(), v.any()), v.null()),
+  // Payment method fields for POD support
+  paymentMethod: v.optional(
+    v.union(v.literal("online_payment"), v.literal("payment_on_delivery"))
+  ),
+  podPaymentMethod: v.optional(
+    v.union(v.literal("cash"), v.literal("mobile_money"))
+  ),
 });
 
 export const onlineOrderSchema = v.object({
@@ -93,4 +100,12 @@ export const onlineOrderSchema = v.object({
     )
   ),
   updatedAt: v.optional(v.number()),
+  isPODOrder: v.optional(v.boolean()),
+  paymentDue: v.optional(v.number()),
+  paymentCollected: v.optional(v.boolean()),
+  paymentCollectedAt: v.optional(v.number()),
+  paymentCollectedBy: v.optional(v.id("athenaUser")),
+  podPaymentMethod: v.optional(
+    v.union(v.literal("cash"), v.literal("mobile_money"))
+  ),
 });

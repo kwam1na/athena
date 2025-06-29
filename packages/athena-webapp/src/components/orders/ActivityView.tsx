@@ -96,13 +96,19 @@ function ActivityItem({
           {isTransitionAction(activity) && (
             <div className="flex items-center gap-1">
               <p className="text-sm text-muted-foreground">
-                {activity.user
-                  ? `${activity.user} transitioned order →`
-                  : "order transitioned →"}
+                {activity.status === "payment_collected"
+                  ? activity.user
+                    ? `${activity.user} marked payment as collected`
+                    : "payment marked as collected"
+                  : activity.user
+                    ? `${activity.user} transitioned order →`
+                    : "order transitioned →"}
               </p>
-              <p className="text-sm font-medium">
-                {slugToWords(activity.status)}
-              </p>
+              {activity.status !== "payment_collected" && (
+                <p className="text-sm font-medium">
+                  {slugToWords(activity.status)}
+                </p>
+              )}
             </div>
           )}
           {isFeedbackRequestAction(activity) && (

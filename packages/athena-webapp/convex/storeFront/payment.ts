@@ -23,7 +23,6 @@ export const createTransaction = action({
     orderDetails: orderDetailsSchema,
   },
   handler: async (ctx, args) => {
-    // Get the checkout session
     const session = await ctx.runQuery(api.storeFront.checkoutSession.getById, {
       sessionId: args.checkoutSessionId,
     });
@@ -31,71 +30,19 @@ export const createTransaction = action({
     if (!session) {
       return {
         success: false,
-        message: "Invalid checkout session",
+        message: "Session not found",
       };
     }
 
-    // Get session items with their product and SKU info
-    const sessionItems = session.items || [];
+    const discount = session.discount;
 
-    if (sessionItems.length === 0) {
-      return {
-        success: false,
-        message: "No items in checkout session",
-      };
-    }
-
-    // Get the store ID from the session
-    const storeId = session.storeId;
-
-    // Extract product and SKU IDs from session items
-    const productIds = sessionItems.map((item) => item.productId);
-    const productSkuIds = sessionItems.map((item) => item.productSkuId);
-
-    // Check product visibility
-    const products = await Promise.all(
-      productIds.map((id) =>
-        ctx.runQuery(api.inventory.products.getById, {
-          id,
-          storeId,
-        })
-      )
-    );
-
-    const invisibleProducts = products.filter(
-      (product) => product && product.isVisible === false
-    );
-
-    if (invisibleProducts.length > 0) {
-      return {
-        success: false,
-        message: "Some items in your bag are no longer available",
-      };
-    }
-
-    // Check product SKU visibility
-    const productSkus = await Promise.all(
-      productSkuIds.map((id) =>
-        ctx.runQuery(api.inventory.productSku.getById, { id })
-      )
-    );
-
-    const invisibleSkus = productSkus.filter(
-      (sku) => sku && sku.isVisible === false
-    );
-
-    if (invisibleSkus.length > 0) {
-      return {
-        success: false,
-        message: "Some items in your bag are no longer available",
-      };
-    }
-
-    const amountToCharge = getOrderAmount({
-      discount: args.orderDetails.discount,
+    const orderAmountLessDiscounts = getOrderAmount({
+      discount,
       deliveryFee: args.orderDetails.deliveryFee || 0,
       subtotal: args.amount,
     });
+
+    const amountToCharge = orderAmountLessDiscounts;
 
     const response = await fetch(
       "https://api.paystack.co/transaction/initialize",
@@ -147,6 +94,161 @@ export const createTransaction = action({
       return {
         success: false,
         message: "Failed to create payment transaction",
+      };
+    }
+  },
+});
+
+export const createPODOrder = action({
+  args: {
+    checkoutSessionId: v.id("checkoutSession"),
+    customerEmail: v.string(),
+    amount: v.number(),
+    orderDetails: orderDetailsSchema,
+  },
+  handler: async (ctx, args) => {
+    console.log(`Creating POD order for session: ${args.checkoutSessionId}`);
+
+    try {
+      // Generate a POD reference
+      const podReference = `POD-${Date.now()}-${args.checkoutSessionId}`;
+
+      // First update checkout session with order details (including customer details)
+      await ctx.runMutation(
+        internal.storeFront.checkoutSession.updateCheckoutSession,
+        {
+          id: args.checkoutSessionId,
+          hasCompletedPayment: false, // Payment not completed yet - will be paid on delivery
+          hasVerifiedPayment: false, // Will be verified on delivery
+          externalReference: podReference,
+          orderDetails: {
+            ...args.orderDetails,
+            paymentMethod: "payment_on_delivery",
+          },
+          paymentMethod: {
+            type: "payment_on_delivery",
+            podPaymentMethod: args.orderDetails.podPaymentMethod || "cash",
+            channel: args.orderDetails.podPaymentMethod || "cash",
+          },
+        }
+      );
+
+      // Then create the order from the updated session
+      await ctx.runMutation(internal.storeFront.onlineOrder.createFromSession, {
+        checkoutSessionId: args.checkoutSessionId,
+        externalTransactionId: podReference,
+        paymentMethod: {
+          type: "payment_on_delivery",
+          podPaymentMethod: args.orderDetails.podPaymentMethod || "cash",
+          channel: args.orderDetails.podPaymentMethod || "cash",
+        },
+      });
+
+      // Send POD order confirmation email
+      const order = await ctx.runQuery(api.storeFront.onlineOrder.get, {
+        identifier: podReference,
+      });
+
+      if (order) {
+        const store = await ctx.runQuery(api.inventory.stores.getById, {
+          id: order.storeId,
+        });
+
+        const formatter = currencyFormatter(store?.currency || "GHS");
+
+        const deliveryMethodText =
+          order.deliveryMethod === "pickup" ? "picked up" : "delivered";
+        const processingTimeMessage =
+          "We're currently processing your order and will notify you when it's ready. Please note that processing typically takes 24-48 hours.";
+        const paymentMessage = `You'll pay ${formatter.format(args.amount / 100)} via ${args.orderDetails.podPaymentMethod === "mobile_money" ? "mobile money" : "cash"} when your order is ${deliveryMethodText}.`;
+
+        const orderStatusMessaging = `Your order has been placed successfully! ${processingTimeMessage} ${paymentMessage}`;
+
+        const deliveryAddress = order.deliveryDetails
+          ? getAddressString(order.deliveryDetails as Address)
+          : "Details not available";
+
+        const items = formatOrderItems(order.items, store?.currency || "GHS");
+
+        // Send POD confirmation email
+        const emailResponse = await sendOrderEmail({
+          type: "confirmation",
+          customerEmail: order.customerDetails.email,
+          delivery_fee: order.deliveryFee
+            ? formatter.format(order.deliveryFee)
+            : undefined,
+          store_name: "Wigclub",
+          order_number: order.orderNumber,
+          order_date: formatDate(order._creationTime),
+          order_status_messaging: orderStatusMessaging,
+          total: formatter.format(args.amount / 100),
+          items,
+          pickup_type: order.deliveryMethod,
+          pickup_details: deliveryAddress,
+          customer_name: order.customerDetails.firstName,
+        });
+
+        if (emailResponse.ok) {
+          console.log(
+            `Sent POD order confirmation for order #${order.orderNumber} to ${order.customerDetails.email}`
+          );
+
+          // Update the order to mark confirmation email as sent
+          await ctx.runMutation(api.storeFront.onlineOrder.update, {
+            orderId: order._id,
+            update: {
+              didSendConfirmationEmail: true,
+            },
+          });
+        }
+
+        const testAccounts = ["kwamina.0x00@gmail.com", "kwami.nuh@gmail.com"];
+
+        const isTestAccount = testAccounts.includes(
+          order.customerDetails.email
+        );
+
+        if (!isTestAccount) {
+          // Send new order notification to admins
+          const adminEmailResponse = await sendNewOrderEmail({
+            store_name: "Wigclub",
+            order_amount: formatter.format(args.amount / 100),
+            order_status: `Payment on Delivery (${args.orderDetails.podPaymentMethod === "mobile_money" ? "Mobile Money" : "Cash"})`,
+            order_date: formatDate(order._creationTime),
+            customer_name: `${order.customerDetails.firstName} ${order.customerDetails.lastName}`,
+            order_id: order._id,
+          });
+
+          if (adminEmailResponse.ok) {
+            console.log(
+              `Sent POD new order notification for order #${order.orderNumber} to admins`
+            );
+
+            // Update the order to mark admin notification email as sent
+            await ctx.runMutation(api.storeFront.onlineOrder.update, {
+              orderId: order._id,
+              update: {
+                didSendNewOrderReceivedEmail: true,
+              },
+            });
+          }
+        }
+      }
+
+      console.log(
+        `Successfully created POD order with reference: ${podReference}`
+      );
+
+      return {
+        success: true,
+        message: "Payment on delivery order created successfully",
+        reference: podReference,
+      };
+    } catch (error) {
+      console.error("Failed to create POD order:", error);
+      return {
+        success: false,
+        message: "Failed to create payment on delivery order",
       };
     }
   },

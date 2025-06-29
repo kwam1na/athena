@@ -52,5 +52,6 @@ export function useDiscountCodeAlert() {
     handleSuccessDiscountModal: handleSuccess,
     completeDiscountModalFlow: completeFlow,
     hasCompletedDiscountModalFlow: hasCompleted,
+    redeemedOffers,
   };
 }

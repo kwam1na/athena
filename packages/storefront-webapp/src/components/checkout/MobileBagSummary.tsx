@@ -14,6 +14,7 @@ import { Tag } from "lucide-react";
 import InputWithEndButton from "../ui/input-with-end-button";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
+import { useMedia } from "react-use";
 import { getDiscountValue } from "./utils";
 import { redeemPromoCode } from "@/api/promoCodes";
 import { useAuth } from "@/hooks/useAuth";
@@ -21,6 +22,8 @@ import { usePromoCodesQueries } from "@/lib/queries/promoCode";
 import { isFeeWaived } from "@/lib/feeUtils";
 import { Badge } from "../ui/badge";
 import { motion } from "framer-motion";
+import { toast } from "sonner";
+import { useDiscountCodeAlert } from "@/hooks/useDiscountCodeAlert";
 
 export default function MobileBagSummary() {
   const { formatter, store } = useStoreContext();
@@ -31,21 +34,45 @@ export default function MobileBagSummary() {
   const { userId, guestId } = useAuth();
   const { waiveDeliveryFees } = store?.config || {};
   const [isAutoApplyingPromoCode, setIsAutoApplyingPromoCode] = useState(false);
+  const isMobile = useMedia("(max-width: 768px)");
 
   const promoCodeQueries = usePromoCodesQueries();
   const { data: promoCodes } = useQuery(promoCodeQueries.getAll());
+  const { redeemedOffers } = useDiscountCodeAlert();
 
   useEffect(() => {
     if (promoCodes?.length && !checkoutState.discount && activeSession._id) {
       const autoApplyPromoCode = promoCodes.find(
-        (code) => code.autoApply && code.active
+        (code) => code.autoApply && code.active && !code.isExclusive
       );
-      if (autoApplyPromoCode) {
+
+      const exclusivePromoCodes = promoCodes.filter(
+        (code) => code.isExclusive && code.active && code.autoApply
+      );
+
+      const exclusivePromoCode = exclusivePromoCodes.find((code) =>
+        redeemedOffers?.some(
+          (offer: any) => offer.promoCodeId === code._id && !offer.isRedeemed
+        )
+      );
+
+      const codeToApply = autoApplyPromoCode || exclusivePromoCode;
+
+      if (codeToApply) {
         setIsAutoApplyingPromoCode(true);
-        handleRedeemPromoCode(autoApplyPromoCode.code);
+        if (isMobile) {
+          toast.success("Auto-applying available promo codes..", {
+            position: "top-center",
+            duration: 950,
+            style: {
+              background: "#FFF5F9",
+            },
+          });
+        }
+        handleRedeemPromoCode(codeToApply.code);
       }
     }
-  }, [promoCodes, checkoutState.discount, activeSession._id]);
+  }, [promoCodes, checkoutState.discount, activeSession._id, redeemedOffers]);
 
   const discountValue = getDiscountValue(bagSubtotal, checkoutState.discount);
 
@@ -79,7 +106,9 @@ export default function MobileBagSummary() {
       }
 
       if (isAutoApplyingPromoCode) {
-        setIsAutoApplyingPromoCode(false);
+        setTimeout(() => {
+          setIsAutoApplyingPromoCode(false);
+        }, 1000);
       }
     },
   });

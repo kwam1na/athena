@@ -306,7 +306,7 @@ export default function ShoppingBag() {
       )}
 
       {!isBagEmpty && total !== 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 pb-56">
+        <div className="grid grid-cols-1 gap-8 pb-56">
           <div className="md:col-span-2 space-y-24">
             <AnimatePresence initial={false} custom={bagAction}>
               {bag?.items.map((item: BagItem, index: number) => {
@@ -468,6 +468,13 @@ export default function ShoppingBag() {
             </AnimatePresence>
           </div>
 
+          {error && bag?.items?.length && bag?.items?.length > 3 && (
+            <div className="flex items-center font-medium pt-16">
+              <AlertCircleIcon className="w-4 h-4 mr-2" />
+              <p className="text-xs">{error}</p>
+            </div>
+          )}
+
           {isNavbarShowing && (
             <div className="fixed bottom-0 left-0 w-full z-50">
               <motion.div
@@ -481,7 +488,7 @@ export default function ShoppingBag() {
               >
                 <div className="ml-auto flex gap-12">
                   <div className="space-y-2">
-                    <div className="flex gap-8 text-sm text-accent2">
+                    <div className="flex gap-4 md:gap-8 text-md font-medium text-accent2">
                       <p>TOTAL</p>
                       <p>{formatter.format(total)}</p>
                     </div>
@@ -499,7 +506,7 @@ export default function ShoppingBag() {
                       variant={"clear"}
                       disabled={hasPendingOrders}
                     >
-                      <p>Checkout</p>
+                      <p className="font-medium">Checkout</p>
                       <ArrowRight className="w-4 h-4 ml-2 -me-1 ms-2 transition-transform group-hover:translate-x-0.5" />
                     </LoadingButton>
                   </div>

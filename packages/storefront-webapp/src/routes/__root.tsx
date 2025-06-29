@@ -96,6 +96,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
   const { inMaintenanceMode } = store?.config?.availability || {};
 
   if (inMaintenanceMode) {
+    console.log("inMaintenanceMode", inMaintenanceMode);
     return <MaintenanceMode />;
   }
 

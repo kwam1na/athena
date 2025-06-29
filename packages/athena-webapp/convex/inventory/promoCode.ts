@@ -41,6 +41,25 @@ export const redeem = mutation({
       return { success: false, message: "Promo code already redeemed" };
     }
 
+    if (promoCode.isExclusive) {
+      const hasOffer = await ctx.db
+        .query("offer")
+        .filter((q) =>
+          q.and(
+            q.eq(q.field("promoCodeId"), promoCode._id),
+            q.eq(q.field("storeFrontUserId"), args.storeFrontUserId)
+          )
+        )
+        .first();
+
+      if (!hasOffer) {
+        return {
+          success: false,
+          message: "Promo code is not eligible for this order",
+        };
+      }
+    }
+
     const checkoutSession = await ctx.db.get(args.checkoutSessionId);
 
     if (!checkoutSession) {
@@ -101,6 +120,7 @@ export const create = mutation({
     discountValue: v.number(),
     limit: v.optional(v.number()),
     autoApply: v.optional(v.boolean()),
+    isExclusive: v.optional(v.boolean()),
     sitewide: v.optional(v.boolean()),
     displayText: v.string(),
     validFrom: v.number(),
@@ -117,6 +137,7 @@ export const create = mutation({
       discountValue: args.discountValue,
       limit: args.limit,
       autoApply: args.autoApply,
+      isExclusive: args.isExclusive,
       sitewide: args.sitewide,
       displayText: args.displayText,
       validFrom: args.validFrom,
@@ -212,6 +233,7 @@ export const update = mutation({
     id: v.id(entity),
     active: v.optional(v.boolean()),
     autoApply: v.optional(v.boolean()),
+    isExclusive: v.optional(v.boolean()),
     sitewide: v.optional(v.boolean()),
     displayText: v.optional(v.string()),
     code: v.optional(v.string()),
@@ -232,6 +254,7 @@ export const update = mutation({
       code: args.code,
       active: args.active,
       autoApply: args.autoApply,
+      isExclusive: args.isExclusive,
       sitewide: args.sitewide,
       displayText: args.displayText,
       discountType: args.discountType,

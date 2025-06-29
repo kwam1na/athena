@@ -22,7 +22,7 @@ export const SiteBanner = () => {
     if (promoCode.discountType === "percentage") {
       return promoCode.span === "selected-products"
         ? `${value}% off select items`
-        : `up to 20% off`;
+        : `up to ${value}% off`;
     } else {
       return promoCode.span === "selected-products"
         ? `${formatter.format(value)} off select items`
@@ -66,7 +66,8 @@ export const SiteBanner = () => {
               <b>SITEWIDE SALE</b>
             </p>
             <p className="uppercase">
-              promo code <b>{activePromoCode.code}</b> automatically applied for{" "}
+              promo code <b>{activePromoCode.code}</b>{" "}
+              {activePromoCode.autoApply ? "automatically applied" : ""} for{" "}
               <b>{getPromoMessage(activePromoCode).toUpperCase()}</b>
             </p>
           </div>

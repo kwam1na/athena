@@ -26,7 +26,7 @@ export function StoreSelector() {
       <div className="flex items-center space-x-4 text-sm">
         <RadioGroupItem value="wigclub-hair-studio" id="r1" />
         <div className="space-y-2">
-          <p>Wigclub Hair Studio</p>
+          <p className="font-medium">Wigclub Hair Studio</p>
           <p className="text-sm text-muted-foreground">
             2 Jungle Ave, East Legon, Accra
           </p>
@@ -94,6 +94,8 @@ export function DeliveryOptionsSelector() {
           ...checkoutState.deliveryDetails,
           region: undefined,
         } as Address,
+        paymentMethod: "online_payment",
+        podPaymentMethod: null,
       });
     }
   };

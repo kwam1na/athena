@@ -7,6 +7,7 @@ import {
   StopCircle,
   XCircle,
   MessageSquare,
+  AlertTriangle,
 } from "lucide-react";
 import View from "../View";
 import { useOnlineOrder } from "~/src/contexts/OnlineOrderContext";
@@ -19,7 +20,7 @@ import {
 } from "~/src/lib/utils";
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
-import { useAction, useMutation } from "convex/react";
+import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "~/convex/_generated/api";
 import { LoadingButton } from "../ui/loading-button";
 import { getOrderState } from "./utils";
@@ -28,6 +29,8 @@ import { OrderSummary } from "./OrderSummary";
 import { toast } from "sonner";
 import { CheckCircledIcon } from "@radix-ui/react-icons";
 import { useAuth } from "~/src/hooks/useAuth";
+import { Badge } from "../ui/badge";
+import { LowStockStatus, OutOfStockStatus } from "../product/ProductStock";
 
 function OrderItem({ item, order }: { item: any; order: any }) {
   const [isUpdatingOrderItem, setIsUpdatingOrderItem] = useState(false);
@@ -133,14 +136,16 @@ function OrderItem({ item, order }: { item: any; order: any }) {
         }}
       >
         {item.productImage ? (
-          <div className="relative">
-            <img
-              src={item.productImage}
-              alt={item.productName || "product image"}
-              className="w-24 h-24 aspect-square object-cover rounded-lg"
-            />
-            <div className="absolute -top-2 -right-2 bg-primary/70 text-primary-foreground text-xs w-4 h-4 rounded-full flex items-center justify-center">
-              {item.quantity}
+          <div className="flex flex-col items-center gap-2">
+            <div className="relative">
+              <img
+                src={item.productImage}
+                alt={item.productName || "product image"}
+                className="w-24 h-24 aspect-square object-cover rounded-lg"
+              />
+              <div className="absolute -top-2 -right-2 bg-primary/70 text-primary-foreground text-xs w-4 h-4 rounded-full flex items-center justify-center">
+                {item.quantity}
+              </div>
             </div>
           </div>
         ) : (
@@ -167,9 +172,17 @@ function OrderItem({ item, order }: { item: any; order: any }) {
           <p className="text-sm">{getProductName(item)}</p>
           <p className="text-xs text-muted-foreground">{item.productSku}</p>
           <p className="text-xs text-muted-foreground">{item.price}</p>
+          {!item.isRefunded && (
+            <>
+              {item.isOutOfStock && <OutOfStockStatus />}
+              {!item.isOutOfStock && item.isLowStock && <LowStockStatus />}
+            </>
+          )}
         </Link>
 
         <div className="space-y-2">
+          {/* Stock Status Warnings */}
+
           {hasOrderTransitioned && !item.isRefunded && (
             <div className="flex ml-auto items-center gap-2 text-muted-foreground">
               <Check className="h-3 w-3" />
@@ -218,6 +231,7 @@ function OrderItem({ item, order }: { item: any; order: any }) {
                   isLoading={isUpdatingOrderItem}
                   onClick={() => handleUpdateOrderItem(true)}
                   variant="outline"
+                  disabled={item.quantity > item.currentInventoryCount}
                 >
                   <Check className="h-4 w-4 mr-2 text-green-700" />
                   Ready

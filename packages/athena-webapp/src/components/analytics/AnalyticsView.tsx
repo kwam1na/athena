@@ -64,7 +64,7 @@ const StoreVisitors = () => {
 
 export default function AnalyticsView() {
   const { activeStore } = useGetActiveStore();
-  const [viewMode, setViewMode] = useState<"enhanced" | "classic">("enhanced");
+  const [viewMode, setViewMode] = useState<"enhanced" | "classic">("classic");
 
   const analytics = useQuery(
     api.storeFront.analytics.getAll,
@@ -85,6 +85,7 @@ export default function AnalyticsView() {
             size="sm"
             onClick={() => setViewMode("enhanced")}
             className="flex items-center gap-1"
+            disabled={true}
           >
             <BarChart3 className="h-4 w-4" />
             Enhanced
@@ -104,18 +105,18 @@ export default function AnalyticsView() {
   };
 
   // Enhanced view
-  if (viewMode === "enhanced") {
-    return (
-      <View
-        hideBorder
-        hideHeaderBottomBorder
-        className="bg-background"
-        header={<Navigation />}
-      >
-        <EnhancedAnalyticsView />
-      </View>
-    );
-  }
+  // if (viewMode === "enhanced") {
+  //   return (
+  //     <View
+  //       hideBorder
+  //       hideHeaderBottomBorder
+  //       className="bg-background"
+  //       header={<Navigation />}
+  //     >
+  //       <EnhancedAnalyticsView />
+  //     </View>
+  //   );
+  // }
 
   // Classic view
   const items = analytics.sort((a, b) => b._creationTime - a._creationTime);

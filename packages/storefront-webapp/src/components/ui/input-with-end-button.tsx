@@ -35,6 +35,7 @@ export default function InputWithEndButton({
         />
         <button
           onClick={onButtonClick}
+          type="button"
           disabled={isLoading}
           className="inline-flex items-center rounded-e-lg border border-input bg-background px-3 text-sm font-medium text-foreground outline-offset-2 transition-colors hover:bg-accent2 hover:text-white focus:z-10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70 disabled:cursor-not-allowed disabled:opacity-50"
         >

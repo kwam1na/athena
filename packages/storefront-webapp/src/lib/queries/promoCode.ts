@@ -12,6 +12,7 @@ export const usePromoCodesQueries = () => {
         queryFn: () => getPromoCodes(),
         enabled: queryEnabled,
         staleTime: 0.15 * 60 * 1000,
+        refetchOnWindowFocus: true,
       }),
     getAllItems: () =>
       queryOptions({

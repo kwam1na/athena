@@ -23,6 +23,9 @@ import {
   Tag,
   Truck,
   Award,
+  Banknote,
+  Smartphone,
+  Clock,
 } from "lucide-react";
 import {
   Breadcrumb,
@@ -86,10 +89,30 @@ const OrderSummary = ({ order }: { order: any }) => {
   );
   const isSingleItemOrder = itemsCount == 1;
 
-  const paymentText =
-    order.paymentMethod?.channel == "mobile_money"
+  // Handle payment on delivery vs regular payment text
+  const getPaymentText = () => {
+    if (
+      order.isPODOrder ||
+      order.paymentMethod?.type === "payment_on_delivery"
+    ) {
+      const podMethod =
+        order.podPaymentMethod ||
+        order.paymentMethod?.podPaymentMethod ||
+        "cash";
+      const methodText = podMethod === "mobile_money" ? "mobile money" : "cash";
+
+      if (order.paymentCollected) {
+        return `Payment collected via ${methodText} upon delivery`;
+      } else {
+        return `Pay with ${methodText} when your order is delivered`;
+      }
+    }
+
+    // Regular online payment
+    return order.paymentMethod?.channel == "mobile_money"
       ? `Paid with ${order.paymentMethod?.bank} Mobile Money account ending in ${order.paymentMethod?.last4}`
       : `Paid with card ending in ${order.paymentMethod?.last4}`;
+  };
 
   const discountText =
     order.discount?.type === "percentage"
@@ -149,7 +172,7 @@ const OrderSummary = ({ order }: { order: any }) => {
         )}
       </div>
 
-      <p>{paymentText}</p>
+      <p>{getPaymentText()}</p>
     </div>
   );
 };
@@ -256,6 +279,10 @@ const PickupDetails = ({ order }: { order: any }) => {
 
 const OrderStatusSection = ({ data }: { data: any }) => {
   const isOrderOpen = data.status === "open";
+  const isPODOrder =
+    data.isPODOrder || data.paymentMethod?.type === "payment_on_delivery";
+  const podMethod =
+    data.podPaymentMethod || data.paymentMethod?.podPaymentMethod || "cash";
 
   // Don't show points for guest users
   const showPoints =
@@ -300,6 +327,45 @@ const OrderStatusSection = ({ data }: { data: any }) => {
         <p>{data?.orderNumber}</p>
       </div>
 
+      {/* Show payment method for payment on delivery orders */}
+      {isPODOrder && (
+        <div className="flex items-center justify-between w-full lg:w-[30%]">
+          <p>Payment method</p>
+          <div className="flex items-center gap-1">
+            {podMethod === "mobile_money" ? (
+              <Smartphone className="w-3.5 h-3.5" />
+            ) : (
+              <Banknote className="w-3.5 h-3.5" />
+            )}
+            <p>
+              {podMethod === "mobile_money"
+                ? "Mobile Money on Delivery"
+                : "Cash on Delivery"}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Show payment status for payment on delivery orders */}
+      {isPODOrder && (
+        <div className="flex items-center justify-between w-full lg:w-[30%]">
+          <p>Payment status</p>
+          <div className="flex items-center gap-1">
+            {data.paymentCollected ? (
+              <>
+                <CircleCheck className="w-3.5 h-3.5 text-green-600" />
+                <p className="text-green-600">Payment Collected</p>
+              </>
+            ) : (
+              <>
+                <Clock className="w-3.5 h-3.5 text-amber-600" />
+                <p className="text-amber-600">Payment Due on Delivery</p>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Add reward points display for registered users */}
       {/* {showPoints && (
         <div className="flex items-center justify-between w-full lg:w-[30%]">
@@ -340,6 +406,12 @@ const OrderDetail = () => {
   const isPickupOrder = data.deliveryMethod == "pickup";
 
   const getOrderMessage = () => {
+    const isPODOrder =
+      data.isPODOrder || data.paymentMethod?.type === "payment_on_delivery";
+    const podMethod =
+      data.podPaymentMethod || data.paymentMethod?.podPaymentMethod || "cash";
+    const methodText = podMethod === "mobile_money" ? "mobile money" : "cash";
+
     const getNextPhase = () => {
       if (isPickupOrder) {
         return "ready for pickup";
@@ -350,28 +422,57 @@ const OrderDetail = () => {
 
     let message = `We're currently processing this order. You'll receive an email when it's ${getNextPhase()}.`;
 
+    // Add payment on delivery specific messaging for payment instructions
+    if (isPODOrder && !data.paymentCollected) {
+      const paymentInstruction = isPickupOrder
+        ? `Please have your ${methodText} ready when you pick up your order.`
+        : `Please have your ${methodText} ready when we deliver your order.`;
+
+      message += ` ${paymentInstruction}`;
+    }
+
     switch (data.status) {
       case "open":
         break;
 
       case "ready-for-pickup":
-        message = `Your order is ready for pickup. Visit our store to pick it up anytime during our working hours.`;
+        if (isPODOrder && !data.paymentCollected) {
+          message = `Your order is ready for pickup! Visit our store anytime during working hours and pay with ${methodText} when you collect your items.`;
+        } else {
+          message = `Your order is ready for pickup. Visit our store to pick it up anytime during our working hours.`;
+        }
         break;
 
       case "ready-for-delivery":
-        message = `We're preparing your order for delivery. You'll receive an email when we send it out.`;
+        if (isPODOrder && !data.paymentCollected) {
+          message = `We're preparing your order for delivery. You'll receive an email when we send it out. Please have your ${methodText} ready when we arrive.`;
+        } else {
+          message = `We're preparing your order for delivery. You'll receive an email when we send it out.`;
+        }
         break;
 
       case "out-for-delivery":
-        message = `Your order is out for delivery. Expect it soon!`;
+        if (isPODOrder && !data.paymentCollected) {
+          message = `Your order is on its way! Our delivery courier will collect payment via ${methodText} when they arrive.`;
+        } else {
+          message = `Your order is out for delivery. Expect it soon!`;
+        }
         break;
 
       case "picked-up":
-        message = `Your order has been picked up. Thank you for shopping with us!`;
+        if (isPODOrder && data.paymentCollected) {
+          message = `Order completed! You've picked up your items and payment has been processed. Thank you for shopping with us!`;
+        } else {
+          message = `Your order has been picked up. Thank you for shopping with us!`;
+        }
         break;
 
       case "delivered":
-        message = `Your order has been delivered. Thank you for shopping with us!`;
+        if (isPODOrder && data.paymentCollected) {
+          message = `Order completed! Your items have been delivered and payment has been processed. Thank you for shopping with us!`;
+        } else {
+          message = `Your order has been delivered. Thank you for shopping with us!`;
+        }
         break;
 
       case "refunded":

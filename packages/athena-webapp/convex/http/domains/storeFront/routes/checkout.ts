@@ -132,6 +132,42 @@ checkoutRoutes.post("/:checkoutSessionId", async (c) => {
       return c.json(res);
     }
 
+    if (action == "create-pod-order") {
+      // check that the store is still active
+      const store = await c.env.runQuery(api.inventory.stores.getByIdOrSlug, {
+        identifier: storeId,
+        organizationId: organizationId as Id<"organization">,
+      });
+
+      const { config } = store || {};
+
+      if (
+        config?.availability?.inMaintenanceMode ||
+        config?.visibility?.inReadOnlyMode
+      ) {
+        return c.json({
+          success: false,
+          message: "Store checkout is currently not available",
+        });
+      }
+
+      const podOrder = await c.env.runAction(
+        api.storeFront.payment.createPODOrder,
+        {
+          customerEmail,
+          amount,
+          checkoutSessionId: checkoutSessionId as Id<"checkoutSession">,
+          orderDetails: {
+            ...orderDetails,
+            billingDetails: null,
+            deliveryDetails: orderDetails.deliveryDetails ?? null,
+          },
+        }
+      );
+
+      return c.json(podOrder);
+    }
+
     if (action == "cancel-order") {
       const res = await c.env.runAction(
         api.storeFront.checkoutSession.cancelOrder,

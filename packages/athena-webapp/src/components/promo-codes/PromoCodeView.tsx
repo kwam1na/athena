@@ -35,6 +35,7 @@ function PromoCodeView() {
   const [autoApply, setAutoApply] = useState(false);
   const [isSitewide, setIsSitewide] = useState(false);
   const [isHomepageDiscountCode, setIsHomepageDiscountCode] = useState(false);
+  const [isExclusive, setIsExclusive] = useState(false);
 
   const [isAddingPromoCode, setIsAddingPromoCode] = useState(false);
   const [isUpdatingPromoCode, setIsUpdatingPromoCode] = useState(false);
@@ -64,7 +65,7 @@ function PromoCodeView() {
       setIsActive(activePromoCode.active);
       setAutoApply(activePromoCode.autoApply ?? false);
       setIsSitewide(activePromoCode.sitewide ?? false);
-
+      setIsExclusive(activePromoCode.isExclusive ?? false);
       // Check if this promo code is set as homepage discount code
       if (
         activeStore?.config?.homepageDiscountCodeModalPromoCode ===
@@ -114,6 +115,7 @@ function PromoCodeView() {
         displayText: displayText,
         sitewide: isSitewide,
         autoApply: autoApply,
+        isExclusive: isExclusive,
         span: promoCodeSpan,
         productSkus,
         validFrom: Date.now(),
@@ -170,6 +172,7 @@ function PromoCodeView() {
         code: promoCode!,
         active: isActive,
         autoApply: autoApply,
+        isExclusive: isExclusive,
         sitewide: isSitewide,
         discountType: discountType,
         discountValue: parseFloat(discount!),
@@ -298,6 +301,8 @@ function PromoCodeView() {
             setIsActive={setIsActive}
             autoApply={autoApply}
             setAutoApply={setAutoApply}
+            isExclusive={isExclusive}
+            setIsExclusive={setIsExclusive}
             isSitewide={isSitewide}
             setIsSitewide={setIsSitewide}
             isHomepageDiscountCode={isHomepageDiscountCode}

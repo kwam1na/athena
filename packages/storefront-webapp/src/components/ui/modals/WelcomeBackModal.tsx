@@ -40,35 +40,11 @@ export const WelcomeBackModal: React.FC<WelcomeBackModalProps> = ({
   const onlineOrderQueries = useOnlineOrderQueries();
   const { data: onlineOrders } = useQuery(onlineOrderQueries.list());
 
-  // const queryClient = useQueryClient();
-
   const isNextOrder = onlineOrders?.length > 1;
 
-  // Get or initialize the variant once, persisting it in localStorage
-  const [selectedVariant] = useState(() => {
-    // Try to get from localStorage first
-    const storedVariant = localStorage.getItem(WELCOME_VARIANT_KEY);
-
-    if (storedVariant !== null) {
-      const parsed = parseInt(storedVariant, 10);
-      // Validate the stored value
-      if (!isNaN(parsed) && parsed >= 0) {
-        return parsed;
-      }
-    }
-
-    // Only generate a random variant if none exists in storage
-    const maxIndex =
-      Math.min(welcomeBackConfigs.length, nextOrderConfigs.length) - 1;
-    const newVariant = Math.floor(Math.random() * (maxIndex + 1));
-    localStorage.setItem(WELCOME_VARIANT_KEY, newVariant.toString());
-    return newVariant;
-  });
-
-  // Choose the appropriate config based on order status
   const configsArray = isNextOrder ? nextOrderConfigs : welcomeBackConfigs;
-  // Ensure the variant is valid for the current config array
-  const safeVariant = Math.min(selectedVariant, configsArray.length - 1);
+
+  const safeVariant = 1;
   const currentConfig = configsArray[safeVariant];
 
   useTrackEvent({

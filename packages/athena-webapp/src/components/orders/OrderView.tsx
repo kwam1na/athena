@@ -313,7 +313,11 @@ const VerifyPaymentAlert = () => {
 
   if (!order) return null;
 
-  if (order.hasVerifiedPayment) return null;
+  if (
+    order.hasVerifiedPayment ||
+    order.paymentMethod?.type === "payment_on_delivery"
+  )
+    return null;
 
   const handleVerifyPayment = async () => {
     try {

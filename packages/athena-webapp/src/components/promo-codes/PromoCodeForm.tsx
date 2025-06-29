@@ -21,6 +21,8 @@ interface PromoCodeFormProps {
   setIsActive: Dispatch<SetStateAction<boolean>>;
   autoApply: boolean;
   setAutoApply: Dispatch<SetStateAction<boolean>>;
+  isExclusive: boolean;
+  setIsExclusive: Dispatch<SetStateAction<boolean>>;
   isSitewide: boolean;
   setIsSitewide: Dispatch<SetStateAction<boolean>>;
   isHomepageDiscountCode: boolean;
@@ -45,10 +47,11 @@ const PromoCodeForm = ({
   setIsActive,
   autoApply,
   setAutoApply,
+  isExclusive,
+  setIsExclusive,
   isSitewide,
   setIsSitewide,
   isHomepageDiscountCode,
-  setIsHomepageDiscountCode,
   updateHomepageDiscountCode,
   isUpdatingPromoCode,
   isUpdatingStoreConfig,
@@ -142,6 +145,22 @@ const PromoCodeForm = ({
             checked={autoApply}
             onCheckedChange={(e) => {
               setAutoApply(e);
+            }}
+          />
+        </div>
+
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <Label className="text-muted-foreground" htmlFor="exclusive">
+              Exclusive
+            </Label>
+          </div>
+          <Switch
+            id="exclusive"
+            disabled={isUpdatingPromoCode}
+            checked={isExclusive}
+            onCheckedChange={(e) => {
+              setIsExclusive(e);
             }}
           />
         </div>

@@ -10,18 +10,18 @@ import { useShoppingBag } from "@/hooks/useShoppingBag";
 import { Link } from "@tanstack/react-router";
 import { updateUser } from "@/api/storeFrontUser";
 import { useStoreContext } from "@/contexts/StoreContext";
-import { BillingDetailsSection } from "./BillingDetailsSection";
 import { CheckoutFormSectionProps } from "./CustomerInfoSection";
 import { postAnalytics } from "@/api/analytics";
 import { updateGuest } from "@/api/guest";
 import OrderSummary from "./OrderDetails/OrderSummary";
+import { PaymentMethodSection } from "./PaymentMethodSection";
 
 export const PaymentSection = ({ form }: CheckoutFormSectionProps) => {
   const { activeSession, canPlaceOrder, checkoutState } = useCheckout();
 
   const { user } = useStoreContext();
 
-  const { updateCheckoutSession, bagSubtotal } = useShoppingBag();
+  const { bagSubtotal, updateCheckoutSession } = useShoppingBag();
 
   const [isProceedingToPayment, setIsProceedingToPayment] = useState(false);
   const [didAcceptStoreTerms, setDidAcceptStoreTerms] = useState(false);
@@ -46,33 +46,102 @@ export const PaymentSection = ({ form }: CheckoutFormSectionProps) => {
 
       setIsProceedingToPayment(true);
 
-      // Process checkout, track analytics, and update user information in parallel
-      const [paymentResponse] = await Promise.all([
-        processCheckoutSession(
-          {
-            ...data,
-            deliveryDetails: data.deliveryDetails ?? null,
-          },
-          total
-        ),
-        postAnalytics({
-          action: "finalized_checkout",
-          data: {
-            checkoutSessionId: activeSession._id,
-          },
-        }),
-        user ? updateUserInformation() : updateUserInformation("guest"),
-      ]);
+      // Check if this is a payment on delivery order
+      if (checkoutState.paymentMethod === "payment_on_delivery") {
+        // Handle POD flow - run all operations with allSettled
+        const results = await Promise.allSettled([
+          processPODCheckoutSession(
+            {
+              ...data,
+              deliveryDetails: data.deliveryDetails ?? null,
+              paymentMethod: checkoutState.paymentMethod,
+              podPaymentMethod: checkoutState.podPaymentMethod,
+            },
+            total
+          ),
+          postAnalytics({
+            action: "finalized_checkout_pod",
+            data: {
+              checkoutSessionId: activeSession._id,
+              podPaymentMethod: checkoutState.podPaymentMethod,
+            },
+          }),
+          user ? updateUserInformation() : updateUserInformation("guest"),
+        ]);
 
-      // Handle payment redirect
-      if (paymentResponse?.authorization_url) {
-        window.open(paymentResponse.authorization_url, "_self");
-      } else if (!paymentResponse?.success) {
-        setErrorMessage(
-          paymentResponse?.message || "Failed to finalize payment"
-        );
+        // Check the critical operation (order processing) result
+        const podResult = results[0];
+        if (podResult.status === "fulfilled") {
+          const podResponse = podResult.value;
+          if (podResponse?.success) {
+            // Redirect to POD confirmation page
+            window.open("/shop/checkout/pod-confirmation", "_self");
+          } else {
+            setErrorMessage(
+              podResponse?.message ||
+                "Failed to create payment on delivery order"
+            );
+          }
+        } else {
+          console.error("POD checkout failed:", podResult.reason);
+          setErrorMessage("Failed to create payment on delivery order");
+        }
+
+        // Log any failures in non-critical operations
+        results.slice(1).forEach((result, index) => {
+          if (result.status === "rejected") {
+            console.error(
+              `Non-critical operation ${index + 1} failed:`,
+              result.reason
+            );
+          }
+        });
       } else {
-        throw new Error("No authorization URL received");
+        // Original online payment flow - run all operations with allSettled
+        const results = await Promise.allSettled([
+          processCheckoutSession(
+            {
+              ...data,
+              deliveryDetails: data.deliveryDetails ?? null,
+            },
+            total
+          ),
+          postAnalytics({
+            action: "finalized_checkout",
+            data: {
+              checkoutSessionId: activeSession._id,
+            },
+          }),
+          user ? updateUserInformation() : updateUserInformation("guest"),
+        ]);
+
+        // Check the critical operation (payment processing) result
+        const paymentResult = results[0];
+        if (paymentResult.status === "fulfilled") {
+          const paymentResponse = paymentResult.value;
+          if (paymentResponse?.authorization_url) {
+            window.open(paymentResponse.authorization_url, "_self");
+          } else if (!paymentResponse?.success) {
+            setErrorMessage(
+              paymentResponse?.message || "Failed to finalize payment"
+            );
+          } else {
+            throw new Error("No authorization URL received");
+          }
+        } else {
+          console.error("Payment processing failed:", paymentResult.reason);
+          setErrorMessage("Failed to finalize payment");
+        }
+
+        // Log any failures in non-critical operations
+        results.slice(1).forEach((result, index) => {
+          if (result.status === "rejected") {
+            console.error(
+              `Non-critical operation ${index + 1} failed:`,
+              result.reason
+            );
+          }
+        });
       }
     } catch (error) {
       console.error("Payment error:", error);
@@ -84,7 +153,17 @@ export const PaymentSection = ({ form }: CheckoutFormSectionProps) => {
 
   const processCheckoutSession = async (orderData: any, total: number) => {
     return await updateCheckoutSession({
-      isFinalizingPayment: true,
+      action: "finalize-payment",
+      sessionId: activeSession._id,
+      customerEmail: checkoutState.customerDetails?.email || "",
+      amount: total,
+      orderDetails: orderData,
+    });
+  };
+
+  const processPODCheckoutSession = async (orderData: any, total: number) => {
+    return await updateCheckoutSession({
+      action: "create-pod-order",
       sessionId: activeSession._id,
       customerEmail: checkoutState.customerDetails?.email || "",
       amount: total,
@@ -197,6 +276,9 @@ export const PaymentSection = ({ form }: CheckoutFormSectionProps) => {
 
             <Separator />
 
+            {/* Payment Method Selection */}
+            <PaymentMethodSection />
+
             <div className="space-y-8">
               <div className="w-full xl:w-auto flex items-center gap-4">
                 <Checkbox
@@ -285,7 +367,9 @@ export const PaymentSection = ({ form }: CheckoutFormSectionProps) => {
             className="w-full group"
             disabled={!didAcceptTerms}
           >
-            Proceed to payment
+            {checkoutState.paymentMethod === "payment_on_delivery"
+              ? "Place Order (Pay on delivery)"
+              : "Proceed to Payment"}
             <ArrowRight className="w-4 h-4 ml-2 -me-1 ms-2 transition-transform group-hover:translate-x-0.5" />
           </LoadingButton>
         </motion.div>

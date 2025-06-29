@@ -1,7 +1,10 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { z, ZodError } from "zod";
 import { useGetActiveCheckoutSession } from "@/hooks/useGetActiveCheckoutSession";
-import { CheckoutExpired } from "../states/checkout-expired/CheckoutExpired";
+import {
+  CheckoutExpired,
+  NoCheckoutSession,
+} from "../states/checkout-expired/CheckoutExpired";
 import { useShoppingBag } from "@/hooks/useShoppingBag";
 import { useStoreContext } from "@/contexts/StoreContext";
 import { SESSION_STORAGE_KEY } from "@/lib/constants";
@@ -346,6 +349,9 @@ export type Discount = {
   totalDiscount?: number;
 };
 
+export type PaymentMethodType = "online_payment" | "payment_on_delivery";
+export type PODPaymentMethod = "cash" | "mobile_money";
+
 type CheckoutState = {
   billingDetails: BillingAddress | null;
   customerDetails: CustomerDetails | null;
@@ -371,6 +377,10 @@ type CheckoutState = {
   bag: any;
 
   discount: Discount | null;
+
+  // Payment method fields
+  paymentMethod: PaymentMethodType | null;
+  podPaymentMethod: PODPaymentMethod | null;
 };
 
 type CheckoutActions = {
@@ -380,6 +390,8 @@ type CheckoutActions = {
 
   didEnterDeliveryDetails: boolean;
   didEnterBillingDetails: boolean;
+
+  didToggleOrderSummary: boolean;
 };
 
 const initialActionsState: CheckoutActions = {
@@ -389,6 +401,8 @@ const initialActionsState: CheckoutActions = {
 
   didEnterDeliveryDetails: false,
   didEnterBillingDetails: false,
+
+  didToggleOrderSummary: false,
 };
 
 const initialState: CheckoutState = {
@@ -414,6 +428,10 @@ const initialState: CheckoutState = {
   failedFinalValidation: false,
   bag: null,
   discount: null,
+
+  // Payment method defaults
+  paymentMethod: "online_payment",
+  podPaymentMethod: null,
 };
 
 type CheckoutContextType = {
@@ -447,19 +465,24 @@ export const CheckoutProvider = ({
 
     try {
       const savedState = sessionStorage.getItem(SESSION_STORAGE_KEY);
-      return savedState ? JSON.parse(savedState) : initialState;
+      if (savedState) {
+        const parsed = JSON.parse(savedState);
+        return {
+          ...initialState,
+          ...parsed,
+          // Ensure new fields have defaults
+          paymentMethod: parsed.paymentMethod || "online_payment",
+          podPaymentMethod: parsed.podPaymentMethod || null,
+        };
+      }
+      return initialState;
     } catch {
       return initialState;
     }
   });
 
-  const [actionsState, setActionsState] = useState<CheckoutActions>({
-    isEditingCustomerDetails: false,
-    isEditingDeliveryDetails: false,
-    isEditingBillingDetails: false,
-    didEnterDeliveryDetails: false,
-    didEnterBillingDetails: false,
-  });
+  const [actionsState, setActionsState] =
+    useState<CheckoutActions>(initialActionsState);
 
   const { bag } = useShoppingBag();
 
@@ -724,6 +747,10 @@ export const CheckoutProvider = ({
   }
 
   if (isLoading || data === undefined) return null;
+
+  if (checkoutState.bag === null) {
+    return <NoCheckoutSession />;
+  }
 
   if (data === null) {
     return <CheckoutExpired />;

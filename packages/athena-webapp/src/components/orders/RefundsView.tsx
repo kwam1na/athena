@@ -63,6 +63,9 @@ export function RefundsView() {
 
   if (!order || !activeStore) return null;
 
+  const isPODOrder =
+    order.isPODOrder || order.paymentMethod?.type === "payment_on_delivery";
+
   const formatter = currencyFormatter(activeStore.currency);
 
   const refundText =
@@ -142,6 +145,46 @@ export function RefundsView() {
   const shouldShowInventoryOption = isFullRefund || isEntireOrderRefund;
 
   if (!canRefund) return null;
+
+  // POD orders cannot be refunded through Paystack - show different UI
+  if (isPODOrder) {
+    return (
+      <View
+        hideBorder
+        hideHeaderBottomBorder
+        className="h-auto w-full"
+        header={<p className="text-sm text-sm text-muted-foreground">Refund</p>}
+      >
+        <div className="py-4">
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div className="flex items-start gap-3">
+              <InfoIcon className="w-4 h-4 text-blue-600 mt-0.5" />
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-blue-800">
+                  Payment on Delivery Order
+                </p>
+                <p className="text-sm text-blue-700">
+                  This order uses payment on delivery. Refunds must be processed
+                  manually since no online payment was made.
+                  {!order.paymentCollected &&
+                    " No payment has been collected yet."}
+                </p>
+                {order.paymentCollected && (
+                  <p className="text-sm text-blue-700">
+                    Payment was collected on{" "}
+                    {order.paymentCollectedAt
+                      ? new Date(order.paymentCollectedAt).toLocaleDateString()
+                      : "unknown date"}
+                    . Process refund manually and update order status as needed.
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </View>
+    );
+  }
 
   return (
     <View

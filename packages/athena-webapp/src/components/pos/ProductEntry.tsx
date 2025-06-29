@@ -185,14 +185,14 @@ export function ProductEntry({
                               >
                                 {formatter.format(calculatePOSPrice(product))}
                               </Badge>
-                              {!product.areProcessingFeesAbsorbed && (
+                              {/* {!product.areProcessingFeesAbsorbed && (
                                 <Badge
                                   variant="outline"
                                   className="text-xs text-green-700 bg-green-50 border-green-200"
                                 >
                                   net
                                 </Badge>
-                              )}
+                              )} */}
                               {!product.inStock && (
                                 <Badge
                                   variant="destructive"

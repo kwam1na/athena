@@ -51,6 +51,12 @@ export const columns: ColumnDef<PromoCode>[] = [
                 <p className="text-muted-foreground">Sitewide</p>
               </Badge>
             )}
+
+            {code.isExclusive && (
+              <Badge variant="outline" className={`rounded-md px-2 py-1`}>
+                <p className="text-muted-foreground">Exclusive</p>
+              </Badge>
+            )}
           </Link>
         </div>
       );

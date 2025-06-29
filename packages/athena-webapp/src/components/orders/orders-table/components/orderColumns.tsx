@@ -8,7 +8,18 @@ import {
 } from "@/lib/utils";
 import { Link } from "@tanstack/react-router";
 import { OnlineOrder } from "~/types";
-import { CheckCircle2, Circle, CircleDashed, RotateCcw } from "lucide-react";
+import {
+  CheckCircle2,
+  Circle,
+  CircleDashed,
+  RotateCcw,
+  Banknote,
+  Smartphone,
+  Clock,
+  CheckIcon,
+  AlertCircleIcon,
+  CheckCircle,
+} from "lucide-react";
 import { getOrderState } from "../../../orders/utils";
 import { OrderStatus } from "../../OrderStatus";
 import { ProductStatus } from "~/src/components/product/ProductStatus";
@@ -24,6 +35,8 @@ export const orderColumns: ColumnDef<OnlineOrder>[] = [
     cell: ({ row }) => {
       const s = window.location.pathname.split("/").pop();
 
+      const order = row.original;
+
       return (
         <div className="flex space-x-2">
           <Link
@@ -37,7 +50,18 @@ export const orderColumns: ColumnDef<OnlineOrder>[] = [
             search={{ orderStatus: s, o: getOrigin() }}
             className="flex items-center gap-8"
           >
-            <span className="font-medium">{`#${row.getValue("orderNumber")}`}</span>
+            <div className="flex items-center gap-2">
+              <span className="font-medium">{`#${row.getValue("orderNumber")}`}</span>
+              {order.hasVerifiedPayment &&
+                order.paymentMethod?.type !== "payment_on_delivery" && (
+                  <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />
+                )}
+
+              {!order.hasVerifiedPayment &&
+                order.paymentMethod?.type !== "payment_on_delivery" && (
+                  <AlertCircleIcon className="w-3.5 h-3.5 text-yellow-500" />
+                )}
+            </div>
           </Link>
         </div>
       );
@@ -147,7 +171,7 @@ export const orderColumns: ColumnDef<OnlineOrder>[] = [
   {
     accessorKey: "deliveryMethod",
     header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Method" />
+      <DataTableColumnHeader column={column} title="Delivery" />
     ),
     cell: ({ row }) => {
       const method = row.getValue("deliveryMethod");
@@ -183,6 +207,66 @@ export const orderColumns: ColumnDef<OnlineOrder>[] = [
     enableHiding: false,
     filterFn: (row, id, value) => {
       return value.includes(row.getValue(id));
+    },
+  },
+  {
+    accessorKey: "paymentMethod",
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Payment" />
+    ),
+    cell: ({ row }) => {
+      const order = row.original;
+      const isPODOrder =
+        order.isPODOrder || order.paymentMethod?.type === "payment_on_delivery";
+      const podMethod =
+        order.podPaymentMethod ||
+        order.paymentMethod?.podPaymentMethod ||
+        "cash";
+
+      const s = window.location.pathname.split("/").pop();
+
+      return (
+        <Link
+          to="/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug"
+          params={(prev) => ({
+            ...prev,
+            orgUrlSlug: prev.orgUrlSlug!,
+            storeUrlSlug: prev.storeUrlSlug!,
+            orderSlug: row.original._id,
+          })}
+          search={{ orderStatus: row.original.status, o: getOrigin() }}
+        >
+          <div className="flex flex-col">
+            {isPODOrder ? (
+              <>
+                <span className="text-xs">
+                  {podMethod === "mobile_money" ? "Mobile Money" : "Cash"}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  On Delivery
+                </span>
+              </>
+            ) : (
+              <>
+                <span className="text-xs">
+                  {order.paymentMethod?.channel === "mobile_money"
+                    ? "Mobile Money"
+                    : "Card"}
+                </span>
+                <span className="text-xs text-muted-foreground">Online</span>
+              </>
+            )}
+          </div>
+        </Link>
+      );
+    },
+    enableSorting: false,
+    enableHiding: false,
+    filterFn: (row, id, value) => {
+      const order = row.original;
+      const isPODOrder =
+        order.isPODOrder || order.paymentMethod?.type === "payment_on_delivery";
+      return value.includes(isPODOrder ? "pod" : "online");
     },
   },
   {

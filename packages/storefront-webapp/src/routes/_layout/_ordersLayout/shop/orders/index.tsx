@@ -11,6 +11,8 @@ import ImageWithFallback from "@/components/ui/image-with-fallback";
 import { useOnlineOrderQueries } from "@/lib/queries/onlineOrder";
 import { OnlineOrder } from "@athena/webapp";
 import { FadeIn } from "@/components/common/FadeIn";
+import { Badge } from "@/components/ui/badge";
+import { Banknote, Smartphone, Clock, CircleCheck } from "lucide-react";
 
 export const Route = createFileRoute("/_layout/_ordersLayout/shop/orders/")({
   component: () => <Purchases />,
@@ -30,15 +32,61 @@ const OrderItem = ({
   });
 
   const isOrderOpen = order.status == "open";
+  const isPODOrder =
+    order.isPODOrder || order.paymentMethod?.type === "payment_on_delivery";
+  const podMethod =
+    order.podPaymentMethod || order.paymentMethod?.podPaymentMethod || "cash";
 
   return (
     <div className="space-y-8 text-sm">
       <div className="space-y-4">
-        {isOrderOpen ? (
-          <strong>Processing</strong>
-        ) : (
-          <strong>{capitalizeFirstLetter(slugToWords(order.status))}</strong>
-        )}
+        <div className="flex items-center gap-2 flex-wrap">
+          {isOrderOpen ? (
+            <strong>Processing</strong>
+          ) : (
+            <strong>{capitalizeFirstLetter(slugToWords(order.status))}</strong>
+          )}
+
+          {/* Show payment on delivery badge */}
+          {isPODOrder && (
+            <Badge variant="outline" className="flex items-center gap-1">
+              {podMethod === "mobile_money" ? (
+                <Smartphone className="w-3 h-3" />
+              ) : (
+                <Banknote className="w-3 h-3" />
+              )}
+              <span className="text-xs">
+                {podMethod === "mobile_money"
+                  ? "Mobile Money on Delivery"
+                  : "Cash on Delivery"}
+              </span>
+            </Badge>
+          )}
+
+          {/* Show payment status for POD orders */}
+          {isPODOrder && (
+            <Badge
+              variant="outline"
+              className={`flex items-center gap-1 ${
+                order.paymentCollected
+                  ? "text-green-600 border-green-200"
+                  : "text-amber-600 border-amber-200"
+              }`}
+            >
+              {order.paymentCollected ? (
+                <>
+                  <CircleCheck className="w-3 h-3" />
+                  <span className="text-xs">Paid</span>
+                </>
+              ) : (
+                <>
+                  <Clock className="w-3 h-3" />
+                  <span className="text-xs">Payment Pending</span>
+                </>
+              )}
+            </Badge>
+          )}
+        </div>
         <p>{formatDate(order._creationTime)}</p>
       </div>
 

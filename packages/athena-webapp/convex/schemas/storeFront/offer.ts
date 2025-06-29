@@ -8,5 +8,6 @@ export const offerSchema = v.object({
   status: v.union(v.literal("pending"), v.literal("sent"), v.literal("error")),
   sentAt: v.optional(v.number()),
   errorMessage: v.optional(v.string()),
+  isRedeemed: v.optional(v.boolean()),
   ipAddress: v.optional(v.string()), // For rate limiting
 });

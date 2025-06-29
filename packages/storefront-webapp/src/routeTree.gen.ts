@@ -23,6 +23,7 @@ import { Route as LayoutOrdersLayoutImport } from './routes/_layout/_ordersLayou
 import { Route as ShopCheckoutIndexImport } from './routes/shop/checkout/index'
 import { Route as ShopBagIndexImport } from './routes/shop/bag.index'
 import { Route as LayoutRewardsIndexImport } from './routes/_layout/rewards.index'
+import { Route as ShopCheckoutPodConfirmationImport } from './routes/shop/checkout/pod-confirmation'
 import { Route as ShopCheckoutPendingImport } from './routes/shop/checkout/pending'
 import { Route as ShopCheckoutVerifyIndexImport } from './routes/shop/checkout/verify.index'
 import { Route as ShopCheckoutCompleteIndexImport } from './routes/shop/checkout/complete.index'
@@ -111,6 +112,13 @@ const LayoutRewardsIndexRoute = LayoutRewardsIndexImport.update({
   path: '/rewards/',
   getParentRoute: () => LayoutRoute,
 } as any)
+
+const ShopCheckoutPodConfirmationRoute =
+  ShopCheckoutPodConfirmationImport.update({
+    id: '/shop/checkout/pod-confirmation',
+    path: '/shop/checkout/pod-confirmation',
+    getParentRoute: () => rootRoute,
+  } as any)
 
 const ShopCheckoutPendingRoute = ShopCheckoutPendingImport.update({
   id: '/shop/checkout/pending',
@@ -299,6 +307,13 @@ declare module '@tanstack/react-router' {
       path: '/shop/checkout/pending'
       fullPath: '/shop/checkout/pending'
       preLoaderRoute: typeof ShopCheckoutPendingImport
+      parentRoute: typeof rootRoute
+    }
+    '/shop/checkout/pod-confirmation': {
+      id: '/shop/checkout/pod-confirmation'
+      path: '/shop/checkout/pod-confirmation'
+      fullPath: '/shop/checkout/pod-confirmation'
+      preLoaderRoute: typeof ShopCheckoutPodConfirmationImport
       parentRoute: typeof rootRoute
     }
     '/_layout/rewards/': {
@@ -514,6 +529,7 @@ export interface FileRoutesByFullPath {
   '/contact-us': typeof LayoutContactUsRoute
   '/auth/verify': typeof AuthVerifyRoute
   '/shop/checkout/pending': typeof ShopCheckoutPendingRoute
+  '/shop/checkout/pod-confirmation': typeof ShopCheckoutPodConfirmationRoute
   '/rewards': typeof LayoutRewardsIndexRoute
   '/shop/bag': typeof ShopBagIndexRoute
   '/shop/checkout': typeof ShopCheckoutIndexRoute
@@ -544,6 +560,7 @@ export interface FileRoutesByTo {
   '/contact-us': typeof LayoutContactUsRoute
   '/auth/verify': typeof AuthVerifyRoute
   '/shop/checkout/pending': typeof ShopCheckoutPendingRoute
+  '/shop/checkout/pod-confirmation': typeof ShopCheckoutPodConfirmationRoute
   '/rewards': typeof LayoutRewardsIndexRoute
   '/shop/bag': typeof ShopBagIndexRoute
   '/shop/checkout': typeof ShopCheckoutIndexRoute
@@ -577,6 +594,7 @@ export interface FileRoutesById {
   '/_layout/contact-us': typeof LayoutContactUsRoute
   '/auth/verify': typeof AuthVerifyRoute
   '/shop/checkout/pending': typeof ShopCheckoutPendingRoute
+  '/shop/checkout/pod-confirmation': typeof ShopCheckoutPodConfirmationRoute
   '/_layout/rewards/': typeof LayoutRewardsIndexRoute
   '/shop/bag/': typeof ShopBagIndexRoute
   '/shop/checkout/': typeof ShopCheckoutIndexRoute
@@ -609,6 +627,7 @@ export interface FileRouteTypes {
     | '/contact-us'
     | '/auth/verify'
     | '/shop/checkout/pending'
+    | '/shop/checkout/pod-confirmation'
     | '/rewards'
     | '/shop/bag'
     | '/shop/checkout'
@@ -638,6 +657,7 @@ export interface FileRouteTypes {
     | '/contact-us'
     | '/auth/verify'
     | '/shop/checkout/pending'
+    | '/shop/checkout/pod-confirmation'
     | '/rewards'
     | '/shop/bag'
     | '/shop/checkout'
@@ -669,6 +689,7 @@ export interface FileRouteTypes {
     | '/_layout/contact-us'
     | '/auth/verify'
     | '/shop/checkout/pending'
+    | '/shop/checkout/pod-confirmation'
     | '/_layout/rewards/'
     | '/shop/bag/'
     | '/shop/checkout/'
@@ -698,6 +719,7 @@ export interface RootRouteChildren {
   SignupRoute: typeof SignupRoute
   AuthVerifyRoute: typeof AuthVerifyRoute
   ShopCheckoutPendingRoute: typeof ShopCheckoutPendingRoute
+  ShopCheckoutPodConfirmationRoute: typeof ShopCheckoutPodConfirmationRoute
   ShopBagIndexRoute: typeof ShopBagIndexRoute
   ShopCheckoutIndexRoute: typeof ShopCheckoutIndexRoute
   ShopCheckoutSessionIdSlugCanceledRoute: typeof ShopCheckoutSessionIdSlugCanceledRoute
@@ -714,6 +736,7 @@ const rootRouteChildren: RootRouteChildren = {
   SignupRoute: SignupRoute,
   AuthVerifyRoute: AuthVerifyRoute,
   ShopCheckoutPendingRoute: ShopCheckoutPendingRoute,
+  ShopCheckoutPodConfirmationRoute: ShopCheckoutPodConfirmationRoute,
   ShopBagIndexRoute: ShopBagIndexRoute,
   ShopCheckoutIndexRoute: ShopCheckoutIndexRoute,
   ShopCheckoutSessionIdSlugCanceledRoute:
@@ -741,6 +764,7 @@ export const routeTree = rootRoute
         "/signup",
         "/auth/verify",
         "/shop/checkout/pending",
+        "/shop/checkout/pod-confirmation",
         "/shop/bag/",
         "/shop/checkout/",
         "/shop/checkout/$sessionIdSlug/canceled",
@@ -805,6 +829,9 @@ export const routeTree = rootRoute
     },
     "/shop/checkout/pending": {
       "filePath": "shop/checkout/pending.tsx"
+    },
+    "/shop/checkout/pod-confirmation": {
+      "filePath": "shop/checkout/pod-confirmation.tsx"
     },
     "/_layout/rewards/": {
       "filePath": "_layout/rewards.index.tsx",

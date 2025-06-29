@@ -23,6 +23,7 @@ import { Textarea } from "../ui/textarea";
 import { Button } from "../ui/button";
 import { US_STATES } from "@/lib/states";
 import { useStoreContext } from "@/contexts/StoreContext";
+import { isFeeWaived } from "@/lib/feeUtils";
 
 export const CountryFields = ({ form }: CheckoutFormSectionProps) => {
   const { checkoutState, updateState } = useCheckout();
@@ -766,6 +767,10 @@ export const DeliveryDetailsSection = ({ form }: CheckoutFormSectionProps) => {
 
   const { country, region } = deliveryDetails || {};
 
+  const { store } = useStoreContext();
+
+  const { deliveryFees, waiveDeliveryFees } = store?.config || {};
+
   const previousCountryRef = useRef(
     checkoutState.deliveryDetails?.country || undefined
   );
@@ -774,6 +779,8 @@ export const DeliveryDetailsSection = ({ form }: CheckoutFormSectionProps) => {
 
   const [isEnteringNewNeighborhood, setIsEnteringNewNeighborhood] =
     useState(false);
+
+  const shouldWaiveIntlFee = isFeeWaived(waiveDeliveryFees, "intl");
 
   useEffect(() => {
     // effect to clear state and the form when the country changes
@@ -817,11 +824,20 @@ export const DeliveryDetailsSection = ({ form }: CheckoutFormSectionProps) => {
       updateState({
         deliveryDetails: { country } as Address,
         billingDetails: null,
+        paymentMethod: "online_payment",
+        podPaymentMethod: null,
+        deliveryOption: country === "GH" ? "within-accra" : "intl",
+        deliveryFee:
+          country === "GH"
+            ? deliveryFees?.withinAccra || 30
+            : shouldWaiveIntlFee
+              ? 0
+              : deliveryFees?.international || 800,
       });
     }
 
     previousCountryRef.current = country;
-  }, [country]);
+  }, [country, shouldWaiveIntlFee]);
 
   useEffect(() => {
     if (

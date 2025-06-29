@@ -401,19 +401,21 @@ export const useShoppingBag = () => {
       customerEmail,
       amount,
       orderDetails,
+      action = "finalize-payment",
     }: {
       isFinalizingPayment?: boolean;
       sessionId: string;
       customerEmail: string;
       amount: number;
       orderDetails: any;
+      action?: "finalize-payment" | "create-pod-order";
     }) =>
       updateCheckoutSessionAPI({
         isFinalizingPayment,
         sessionId,
         customerEmail,
         amount,
-        action: "finalize-payment",
+        action,
         orderDetails,
       }),
     onError: () => {
@@ -456,12 +458,14 @@ export const useShoppingBag = () => {
     customerEmail,
     amount,
     orderDetails,
+    action = "finalize-payment",
   }: {
     isFinalizingPayment?: boolean;
     sessionId: string;
     customerEmail: string;
     amount: number;
     orderDetails: any;
+    action?: "finalize-payment" | "create-pod-order";
   }) => {
     setOperationSuccessful(null);
 
@@ -471,6 +475,7 @@ export const useShoppingBag = () => {
       customerEmail,
       amount,
       orderDetails,
+      action,
     });
   };
 

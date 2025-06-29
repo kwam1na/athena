@@ -8,7 +8,7 @@ import { isFeeWaived } from "@/lib/feeUtils";
 export const PickupOptions = () => {
   const { checkoutState, updateState } = useCheckout();
   const { formatter, store } = useStoreContext();
-  const { waiveDeliveryFees, deliveryFees } = store?.config || {};
+  const { waiveDeliveryFees } = store?.config || {};
 
   const isPickup = checkoutState.deliveryMethod === "pickup";
   const isDelivery = checkoutState.deliveryMethod === "delivery";
@@ -28,6 +28,8 @@ export const PickupOptions = () => {
             deliveryMethod: "pickup",
             deliveryOption: null,
             deliveryFee: 0,
+            paymentMethod: "online_payment",
+            podPaymentMethod: null,
           });
         }}
         selected={isPickup}

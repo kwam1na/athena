@@ -5,6 +5,12 @@ export const paymentMethodSchema = v.object({
   brand: v.optional(v.string()),
   bank: v.optional(v.string()),
   channel: v.optional(v.string()),
+  type: v.optional(
+    v.union(v.literal("online_payment"), v.literal("payment_on_delivery"))
+  ),
+  podPaymentMethod: v.optional(
+    v.union(v.literal("cash"), v.literal("mobile_money"))
+  ),
 });
 
 export const checkoutSessionSchema = v.object({
@@ -33,4 +39,5 @@ export const checkoutSessionSchema = v.object({
   deliveryFee: v.union(v.number(), v.null()),
   discount: v.union(v.record(v.string(), v.any()), v.null()),
   pickupLocation: v.union(v.string(), v.null()),
+  isPODOrder: v.optional(v.boolean()),
 });

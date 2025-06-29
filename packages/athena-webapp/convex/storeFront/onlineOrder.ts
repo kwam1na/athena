@@ -116,6 +116,20 @@ export const create = mutation({
         promoCodeId: args.discount.id as Id<"promoCode">,
         storeFrontUserId: session.storeFrontUserId,
       });
+
+      const offer = await ctx.db
+        .query("offer")
+        .filter((q) =>
+          q.and(
+            q.eq(q.field("promoCodeId"), args.discount?.id as Id<"promoCode">),
+            q.eq(q.field("storeFrontUserId"), session.storeFrontUserId)
+          )
+        )
+        .first();
+
+      if (offer) {
+        await ctx.db.patch(offer._id, { isRedeemed: true });
+      }
     }
 
     console.log("created online order for session.");
@@ -209,6 +223,23 @@ export const createFromSession = internalMutation({
         promoCodeId: session.discount.id as Id<"promoCode">,
         storeFrontUserId: session.storeFrontUserId,
       });
+
+      const offer = await ctx.db
+        .query("offer")
+        .filter((q) =>
+          q.and(
+            q.eq(
+              q.field("promoCodeId"),
+              session.discount?.id as Id<"promoCode">
+            ),
+            q.eq(q.field("storeFrontUserId"), session.storeFrontUserId)
+          )
+        )
+        .first();
+
+      if (offer) {
+        await ctx.db.patch(offer._id, { isRedeemed: true });
+      }
     }
 
     // update the session to reflect that the order has been created
@@ -317,6 +348,13 @@ export const get = query({
           category = productCategory?.name;
         }
 
+        // Calculate stock status
+        const currentQuantityAvailable = productSku?.quantityAvailable ?? 0;
+        const isOutOfStock = productSku?.inventoryCount === 0;
+        const isLowStock =
+          (currentQuantityAvailable <= 2 && currentQuantityAvailable > 0) ||
+          (productSku?.inventoryCount ?? 0) <= 2;
+
         return {
           ...item,
           productCategory: category,
@@ -324,6 +362,11 @@ export const get = query({
           colorName,
           productName: product?.name,
           productImage: productSku?.images?.[0],
+          // Stock information
+          currentQuantityAvailable,
+          currentInventoryCount: productSku?.inventoryCount ?? 0,
+          isOutOfStock,
+          isLowStock,
         };
       })
     );
@@ -433,6 +476,18 @@ export const update = mutation({
             }
           );
         }
+      }
+
+      // Add transition if payment is being marked as collected for POD orders
+      if (args.update.paymentCollected === true && !order.paymentCollected) {
+        updates.transitions = [
+          ...(updates.transitions ?? order.transitions ?? []),
+          {
+            status: "payment_collected",
+            date: Date.now(),
+            signedInAthenaUser: args.signedInAthenaUser,
+          },
+        ];
       }
 
       // Add readyAt timestamp for specific status updates

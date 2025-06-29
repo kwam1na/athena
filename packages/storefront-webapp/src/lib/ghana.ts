@@ -1,6 +1,7 @@
 export const accraNeighborhoods = [
   { label: "Adabraka", value: "adabraka" },
   { label: "Adenta", value: "adenta" },
+  { label: "Adjiringanor", value: "adjiringanor" },
   { label: "Airport Residential Area", value: "airport_residential" },
   { label: "Ashaley Botwe", value: "ashaley_botwe" },
   { label: "Cantonments", value: "cantonments" },
@@ -15,6 +16,7 @@ export const accraNeighborhoods = [
   { label: "Osu", value: "osu" },
   { label: "Roman Ridge", value: "roman_ridge" },
   { label: "Spintex", value: "spintex" },
+  { label: "Tema", value: "tema" },
   { label: "Tesano", value: "tesano" },
   { label: "Teshie", value: "teshie" },
   { label: "Weija", value: "weija" },

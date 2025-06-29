@@ -38,7 +38,7 @@ const MainComponent = () => {
           }}
           className="grid order-2 pb-16 lg:order-1 lg:col-span-6 px-6 lg:px-16"
         >
-          <div className="py-8 space-y-12 container mx-auto">
+          <div className="py-8 space-y-12">
             <p>Checkout</p>
             <div className="space-y-32">
               <div className="lg:pr-24">
@@ -50,9 +50,18 @@ const MainComponent = () => {
 
         {/* <div className="order-1 lg:order-2 lg:col-span-6 bg-[#F6F6F6]" /> */}
 
-        <div className="block md:hidden px-6 bg-accent5 border border-accent2/10">
+        <motion.div
+          key={"mobile-bag-summary"}
+          initial={{ opacity: 0, y: -4 }}
+          animate={{
+            opacity: 1,
+            y: 0,
+            transition: { duration: 0.2, ease: "easeOut" },
+          }}
+          className="block md:hidden px-6 bg-accent5 border border-accent2/10"
+        >
           <MobileBagSummary />
-        </div>
+        </motion.div>
 
         {/* Right Panel */}
         <motion.div
