@@ -6,10 +6,12 @@ export const useTrackAction = ({
   action,
   data,
   isReady = true,
+  productId,
   deps = [],
 }: {
   action: string;
   data: Record<string, any>;
+  productId?: string;
   isReady?: boolean;
   deps?: any[];
 }) => {
@@ -21,6 +23,7 @@ export const useTrackAction = ({
         action,
         origin,
         data,
+        productId,
       });
     }
   }, [origin, isReady, ...deps]);

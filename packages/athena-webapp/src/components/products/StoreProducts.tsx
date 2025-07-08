@@ -2,15 +2,16 @@ import { productColumns } from "./products-table/components/productColumns";
 import { DataTable } from "./products-table/components/data-table";
 import { EmptyState } from "../states/empty/empty-state";
 import { PackageXIcon } from "lucide-react";
-import { Link } from "@tanstack/react-router";
+import { Link, useSearch } from "@tanstack/react-router";
 import { Button } from "../ui/button";
 import { PlusIcon } from "@radix-ui/react-icons";
 import { Product } from "~/types";
 import useGetActiveStore from "../../hooks/useGetActiveStore";
 import { getOrigin } from "~/src/lib/navigationUtils";
+import { slugToWords } from "~/src/lib/utils";
 
 export default function StoreProducts({ products }: { products: Product[] }) {
-  const { activeStore } = useGetActiveStore();
+  const { categorySlug } = useSearch({ strict: false });
 
   return (
     <div className="container mx-auto">
@@ -25,8 +26,8 @@ export default function StoreProducts({ products }: { products: Product[] }) {
             icon={<PackageXIcon className="w-16 h-16 text-muted-foreground" />}
             title={
               <div className="flex gap-1 text-sm">
-                <p className="text-muted-foreground">No products in</p>
-                <p className="font-medium">{activeStore?.name}</p>
+                <p className="text-muted-foreground">{`No ${slugToWords(categorySlug ?? "products")}`}</p>
+                {/* <p className="font-medium">{activeStore?.name}</p> */}
               </div>
             }
             cta={

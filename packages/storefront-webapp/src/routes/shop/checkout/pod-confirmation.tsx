@@ -149,7 +149,7 @@ const PODConfirmationContent = () => {
           }),
 
           postAnalytics({
-            action: "completed_checkout_pod",
+            action: "completed_payment_on_delivery_checkout",
             data: {
               checkoutSessionId: session._id,
               podPaymentMethod: session.paymentMethod?.podPaymentMethod,

@@ -26,6 +26,7 @@ import {
   Banknote,
   Smartphone,
   Clock,
+  XCircle,
 } from "lucide-react";
 import {
   Breadcrumb,
@@ -311,6 +312,8 @@ const OrderStatusSection = ({ data }: { data: any }) => {
           {data.status == "delivered" && (
             <CircleCheck className="w-3.5 h-3.5" />
           )}
+
+          {data.status == "cancelled" && <XCircle className="w-3.5 h-3.5" />}
           <p className="font-medium">
             {capitalizeFirstLetter(slugToWords(data.status))}
           </p>
@@ -347,7 +350,7 @@ const OrderStatusSection = ({ data }: { data: any }) => {
       )}
 
       {/* Show payment status for payment on delivery orders */}
-      {isPODOrder && (
+      {isPODOrder && data.status !== "cancelled" && (
         <div className="flex items-center justify-between w-full lg:w-[30%]">
           <p>Payment status</p>
           <div className="flex items-center gap-1">
@@ -479,6 +482,10 @@ const OrderDetail = () => {
         message = `Your order has been refunded. Please allow 7-10 business days for the refund to reflect in your account.`;
         break;
 
+      case "cancelled":
+        message = `Your order has been cancelled. If you have any questions, please contact our support team.`;
+        break;
+
       default:
         break;
     }
@@ -486,13 +493,9 @@ const OrderDetail = () => {
     return message;
   };
 
-  const isReviewable = [
-    "delivered",
-    "picked-up",
-    "refunded",
-    "delivered",
-    "refunded",
-  ].includes(data.status);
+  const isReviewable = ["delivered", "picked-up", "refunded"].includes(
+    data.status
+  );
 
   return (
     <FadeIn className="space-y-24 lg:space-y-40 py-8 pb-32 w-full container mx-auto max-w-[1024px] px-6 xl:px-0">

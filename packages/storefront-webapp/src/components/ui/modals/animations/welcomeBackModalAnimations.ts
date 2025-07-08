@@ -44,7 +44,7 @@ export const overlayVariants: Variants = {
   hidden: { backdropFilter: "blur(0px)", backgroundColor: "rgba(0, 0, 0, 0)" },
   visible: {
     backdropFilter: "blur(4px)",
-    backgroundColor: "rgba(0, 0, 0, 0.3)",
+    backgroundColor: "rgba(0, 0, 0, 0.4)",
     transition: {
       duration: 1.2, // Increased from 0.8
       ease: "easeInOut",

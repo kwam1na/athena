@@ -122,7 +122,9 @@ export const getAllUserActivity = query({
     // Get the user's analytics data
     const analytics = await ctx.db
       .query("analytics")
-      .filter((q) => q.eq(q.field("storeFrontUserId"), args.id))
+      .withIndex("by_storeFrontUserId", (q) =>
+        q.eq("storeFrontUserId", args.id)
+      )
       .collect();
 
     // Get unique user IDs from analytics

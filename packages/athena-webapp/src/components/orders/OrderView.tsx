@@ -38,6 +38,9 @@ import {
 } from "@/components/ui/popover";
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
 import { AlertModal } from "../ui/modals/alert-modal";
+import { ActionModal } from "../ui/modals/action-modal";
+import { Switch } from "../ui/switch";
+import { Label } from "../ui/label";
 import { RefundsView } from "./RefundsView";
 import { ActivityView } from "./ActivityView";
 import { getOrderState } from "./utils";
@@ -178,6 +181,13 @@ const Header = () => {
   const updateOrder = useMutation(api.storeFront.onlineOrder.update);
 
   const [isUpdatingOrder, setIsUpdatingOrder] = useState(false);
+  const [cancelOrderState, setCancelOrderState] = useState<{
+    showModal: boolean;
+    returnToStock: boolean;
+  }>({
+    showModal: false,
+    returnToStock: true,
+  });
 
   const isDelivery = order?.deliveryMethod === "delivery";
   const isPickup = order?.deliveryMethod === "pickup";
@@ -205,6 +215,38 @@ const Header = () => {
     }
   };
 
+  const handleCancelOrder = async () => {
+    try {
+      setIsUpdatingOrder(true);
+      await updateOrder({
+        orderId: order?._id,
+        update: { status: "cancelled" },
+        returnItemsToStock: cancelOrderState.returnToStock,
+        signedInAthenaUser: user
+          ? {
+              id: user._id,
+              email: user.email,
+            }
+          : undefined,
+      });
+      toast("Order cancelled", {
+        icon: <CheckCircledIcon className="w-4 h-4" />,
+      });
+    } catch (error) {
+      console.error(error);
+      toast("Failed to cancel order", {
+        icon: <Ban className="w-4 h-4" />,
+        description: (error as Error).message,
+      });
+    } finally {
+      setIsUpdatingOrder(false);
+      setCancelOrderState({
+        showModal: false,
+        returnToStock: false,
+      });
+    }
+  };
+
   if (!order) return null;
 
   const hasIssuedRefund = order.status.includes("refund");
@@ -222,86 +264,144 @@ const Header = () => {
     isOrderOpen;
 
   return (
-    <ComposedPageHeader
-      leadingContent={
-        <>
-          <p className="text-sm">{`Order #${order?.orderNumber}`}</p>
-
-          <div className="text-xs">
-            <OrderStatus order={order} />
+    <>
+      <ActionModal
+        isOpen={cancelOrderState.showModal}
+        loading={isUpdatingOrder}
+        title="Cancel Order"
+        description="Are you sure you want to cancel this order?"
+        confirmText="Cancel Order"
+        declineText="Keep Order"
+        ctaButtonVariant="destructive"
+        onClose={() =>
+          setCancelOrderState({
+            showModal: false,
+            returnToStock: false,
+          })
+        }
+        onConfirm={handleCancelOrder}
+      >
+        <div className="flex">
+          <div className="ml-auto flex items-center gap-4">
+            <Switch
+              id="inventory"
+              checked={cancelOrderState.returnToStock}
+              onCheckedChange={(checked) => {
+                setCancelOrderState((prev) => ({
+                  ...prev,
+                  returnToStock: checked,
+                }));
+              }}
+            />
+            <Label className="text-muted-foreground" htmlFor="inventory">
+              Return items to inventory
+            </Label>
           </div>
-
-          <p className="text-xs text-muted-foreground">
-            {`placed ${getRelativeTime(order._creationTime)}`}
-          </p>
-        </>
-      }
-      trailingContent={
-        <div className="flex gap-4">
-          {isDelivery && canPerformInitialTransition && (
-            <LoadingButton
-              isLoading={isUpdatingOrder}
-              disabled={!isReady}
-              onClick={() =>
-                handleUpdateOrder({ status: "ready-for-delivery" })
-              }
-              variant={"outline"}
-            >
-              <Truck className="h-4 w-4 mr-1" />
-              <p className="text-sm">&rarr; Ready for delivery</p>
-            </LoadingButton>
-          )}
-
-          {isDelivery && isOrderReady && (
-            <LoadingButton
-              isLoading={isUpdatingOrder}
-              disabled={!isReady}
-              onClick={() => handleUpdateOrder({ status: "out-for-delivery" })}
-              variant={"outline"}
-            >
-              <Truck className="h-4 w-4 mr-1" />
-              <p className="text-sm">&rarr; Out for delivery</p>
-            </LoadingButton>
-          )}
-
-          {isOrderOutForDelivery && (
-            <LoadingButton
-              isLoading={isUpdatingOrder}
-              disabled={!isReady}
-              onClick={() => handleUpdateOrder({ status: "delivered" })}
-              variant={"outline"}
-            >
-              <Truck className="h-4 w-4 mr-1" />
-              <p className="text-sm">&rarr; Delivered</p>
-            </LoadingButton>
-          )}
-
-          {isPickup && canPerformInitialTransition && (
-            <LoadingButton
-              isLoading={isUpdatingOrder}
-              disabled={!isReady}
-              onClick={() => handleUpdateOrder({ status: "ready-for-pickup" })}
-              variant={"outline"}
-            >
-              <Store className="h-4 w-4 mr-1" />
-              <p className="text-sm">&rarr; Ready for pickup</p>
-            </LoadingButton>
-          )}
-
-          {isPickup && isOrderReady && (
-            <LoadingButton
-              isLoading={isUpdatingOrder}
-              disabled={!isReady}
-              onClick={() => handleUpdateOrder({ status: "picked-up" })}
-              variant={"outline"}
-            >
-              <Store className="h-4 w-4 mr-1" />
-              <p className="text-sm">&rarr; Picked up</p>
-            </LoadingButton>
-          )}
         </div>
-      }
-    />
+      </ActionModal>
+
+      <ComposedPageHeader
+        leadingContent={
+          <>
+            <p className="text-sm">{`Order #${order?.orderNumber}`}</p>
+
+            <div className="text-xs">
+              <OrderStatus order={order} />
+            </div>
+
+            <p className="text-xs text-muted-foreground">
+              {`placed ${getRelativeTime(order._creationTime)}`}
+            </p>
+          </>
+        }
+        trailingContent={
+          <div className="flex gap-4">
+            {/* Cancel button - only show for open orders */}
+            {isOrderOpen && (
+              <Button
+                variant="outline"
+                onClick={() =>
+                  setCancelOrderState({
+                    showModal: true,
+                    returnToStock: true,
+                  })
+                }
+                className="text-red-500 hover:text-red-500 hover:bg-red-100 bg-red-50"
+              >
+                <XCircle className="h-4 w-4 mr-1" />
+                <p className="text-sm">Cancel Order</p>
+              </Button>
+            )}
+
+            {isDelivery && canPerformInitialTransition && (
+              <LoadingButton
+                isLoading={isUpdatingOrder}
+                disabled={!isReady}
+                onClick={() =>
+                  handleUpdateOrder({ status: "ready-for-delivery" })
+                }
+                variant={"outline"}
+              >
+                <Truck className="h-4 w-4 mr-1" />
+                <p className="text-sm">&rarr; Ready for delivery</p>
+              </LoadingButton>
+            )}
+
+            {isDelivery && isOrderReady && (
+              <LoadingButton
+                isLoading={isUpdatingOrder}
+                disabled={!isReady}
+                onClick={() =>
+                  handleUpdateOrder({ status: "out-for-delivery" })
+                }
+                variant={"outline"}
+              >
+                <Truck className="h-4 w-4 mr-1" />
+                <p className="text-sm">&rarr; Out for delivery</p>
+              </LoadingButton>
+            )}
+
+            {isOrderOutForDelivery && (
+              <LoadingButton
+                isLoading={isUpdatingOrder}
+                disabled={!isReady}
+                onClick={() => handleUpdateOrder({ status: "delivered" })}
+                variant={"outline"}
+              >
+                <Truck className="h-4 w-4 mr-1" />
+                <p className="text-sm">&rarr; Delivered</p>
+              </LoadingButton>
+            )}
+
+            {isPickup && canPerformInitialTransition && (
+              <LoadingButton
+                isLoading={isUpdatingOrder}
+                disabled={!isReady}
+                onClick={() =>
+                  handleUpdateOrder({ status: "ready-for-pickup" })
+                }
+                variant={"outline"}
+              >
+                <Store className="h-4 w-4 mr-1" />
+                <p className="text-sm">&rarr; Ready for pickup</p>
+              </LoadingButton>
+            )}
+
+            {isPickup && isOrderReady && (
+              <LoadingButton
+                isLoading={isUpdatingOrder}
+                disabled={!isReady}
+                onClick={() => handleUpdateOrder({ status: "picked-up" })}
+                variant={"outline"}
+              >
+                <Store className="h-4 w-4 mr-1" />
+                <p className="text-sm">&rarr; Picked up</p>
+              </LoadingButton>
+            )}
+          </div>
+        }
+      />
+    </>
   );
 };
 

@@ -83,9 +83,11 @@ export const LandingPageReelVersion = () => {
     <div className="space-y-4">
       <div className="flex items-center gap-2">
         <div className="flex items-center px-1 gap-2 border border-input rounded-md">
-          <p className="text-sm pl-2 text-muted-foreground">Reel version</p>
+          <p className="text-sm pl-2 w-[116px] text-muted-foreground">
+            Reel version
+          </p>
           <SelectNative
-            className="bg-background/0 border-none text-muted-foreground hover:text-foreground w-fit "
+            className="bg-background/0 border-none text-muted-foreground hover:text-foreground w-fit"
             value={reelVersion || ""}
             onChange={(e) => setReelVersion(e.target.value)}
           >

@@ -441,6 +441,7 @@ export const update = mutation({
     orderId: v.optional(v.id("onlineOrder")),
     externalReference: v.optional(v.string()),
     update: v.record(v.string(), v.any()),
+    returnItemsToStock: v.optional(v.boolean()),
     signedInAthenaUser: v.optional(
       v.object({
         id: v.id("athenaUser"),
@@ -467,8 +468,11 @@ export const update = mutation({
           },
         ];
 
-        // if we are cancelling the order, return all items to stock
-        if (args.update.status === "cancelled") {
+        // if we are cancelling the order, conditionally return items to stock
+        if (
+          args.update.status === "cancelled" &&
+          args.returnItemsToStock !== false
+        ) {
           await ctx.runMutation(
             api.storeFront.onlineOrder.returnAllItemsToStock,
             {
@@ -505,6 +509,7 @@ export const update = mutation({
         ...completedStatuses,
         "ready-for-pickup",
         "out-for-delivery",
+        "cancelled",
       ].includes(args.update.status);
 
       if (shouldSendOrderUpdateEmail) {
@@ -564,8 +569,11 @@ export const update = mutation({
           ],
         };
 
-        // if we are cancelling the order, return all items to stock
-        if (args.update.status === "cancelled") {
+        // if we are cancelling the order, conditionally return items to stock
+        if (
+          args.update.status === "cancelled" &&
+          args.returnItemsToStock !== false
+        ) {
           await ctx.runMutation(
             api.storeFront.onlineOrder.returnAllItemsToStock,
             {

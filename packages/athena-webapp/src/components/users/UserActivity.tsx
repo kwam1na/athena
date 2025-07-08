@@ -15,6 +15,7 @@ import { Button } from "../ui/button";
 import { DotsHorizontalIcon } from "@radix-ui/react-icons";
 import CopyButton from "../ui/copy-button";
 import { CustomerBehaviorTimeline } from "./CustomerBehaviorTimeline";
+import { ActivitySummaryCards } from "./ActivitySummaryCards";
 import { LayoutList } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
 
@@ -55,7 +56,10 @@ export const UserActivity = () => {
   const items = analytics.sort((a, b) => b._creationTime - a._creationTime);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
+      {/* Activity Summary Cards */}
+      {/* <ActivitySummaryCards activities={analytics} /> */}
+
       <Tabs
         value={viewMode}
         onValueChange={(value) => setViewMode(value as "timeline" | "table")}

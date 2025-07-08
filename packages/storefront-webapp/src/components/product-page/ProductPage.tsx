@@ -46,6 +46,7 @@ export default function ProductPage() {
       productSku: selectedSku?.sku,
       productImageUrl: selectedSku?.images?.[0],
     },
+    productId: productSlug,
     isReady: !!selectedSku,
     deps: [selectedSku?.sku],
   });

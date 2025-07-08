@@ -16,6 +16,7 @@ import { toast } from "sonner";
 
 interface ProductContextType {
   activeProductVariant: ProductVariant;
+  activeProduct?: Product | null;
   error: ZodError | null;
   images: ImageFile[];
   productData: Partial<Product>;
@@ -243,6 +244,7 @@ export function ProductProvider({ children }: { children: ReactNode }) {
 
   const value = {
     appState,
+    activeProduct,
     productData,
     updateProductData,
     activeProductVariant,

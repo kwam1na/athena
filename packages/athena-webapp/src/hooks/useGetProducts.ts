@@ -4,8 +4,10 @@ import { api } from "~/convex/_generated/api";
 
 export const useGetProducts = ({
   subcategorySlug,
+  categorySlug,
 }: {
   subcategorySlug?: string;
+  categorySlug?: string;
 } = {}) => {
   const { activeStore } = useGetActiveStore();
 
@@ -15,6 +17,7 @@ export const useGetProducts = ({
       ? {
           storeId: activeStore._id,
           subcategory: subcategorySlug ? [subcategorySlug] : undefined,
+          category: categorySlug ? [categorySlug] : undefined,
         }
       : "skip"
   );

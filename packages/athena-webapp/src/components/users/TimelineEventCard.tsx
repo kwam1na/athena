@@ -36,8 +36,19 @@ export function TimelineEventCard({
 
   const currencyFormatter = useGetCurrencyFormatter();
 
+  // Priority styling
+  const priorityStyles = {
+    high: "border-l-red-500 hover:border-l-red-600 bg-red-50/30",
+    medium: "border-l-orange-400 hover:border-l-orange-500 bg-orange-50/30",
+    low: "border-l-gray-200 hover:border-l-blue-300",
+  };
+
+  const priorityBorder = priorityStyles.low;
+
   return (
-    <Card className="relative border-l-4 border-l-gray-200 hover:border-l-blue-300 transition-colors duration-200">
+    <Card
+      className={`relative border-l-4 transition-colors duration-200 ${priorityBorder}`}
+    >
       <CardContent className="p-4">
         <div className="flex items-start space-x-4">
           {/* Icon Circle */}
@@ -194,7 +205,7 @@ export function TimelineEventList({
         <Card className="border border-gray-200 rounded-lg">
           <div
             ref={containerRef}
-            className="space-y-6 max-h-[600px] overflow-y-auto p-4 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent"
+            className="space-y-6 max-h-[800px] overflow-y-auto p-4 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent"
           >
             {sortedDays.map(([day, dayEvents]) => (
               <div key={day} className="space-y-3">

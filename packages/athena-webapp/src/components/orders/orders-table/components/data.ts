@@ -24,6 +24,10 @@ export const statuses = [
     label: "Picked up",
   },
   {
+    value: "cancelled",
+    label: "Cancelled",
+  },
+  {
     value: "refunded",
     label: "Refunded",
   },

@@ -25,6 +25,7 @@ export const getCustomerBehaviorTimeline = query({
       origin: v.optional(v.string()),
       device: v.optional(v.string()),
       data: v.record(v.string(), v.any()),
+      productId: v.optional(v.id("product")),
       userData: v.optional(
         v.object({
           email: v.optional(v.string()),

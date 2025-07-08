@@ -16,7 +16,7 @@ export const columns: ColumnDef<AnalyticProduct>[] = [
     cell: ({ row }) => {
       const item = row.original;
       const product = item.product;
-      const sku = product?.skus[0];
+      const sku = product?.skus.find((s) => s.sku === item.productSku);
 
       return (
         <Link

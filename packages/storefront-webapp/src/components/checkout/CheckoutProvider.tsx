@@ -408,21 +408,21 @@ const initialActionsState: CheckoutActions = {
 const initialState: CheckoutState = {
   billingDetails: null,
   deliveryFee: null,
-  deliveryMethod: null,
+  deliveryMethod: "pickup",
   deliveryOption: null,
   deliveryDetails: null,
   deliveryInstructions: "",
   customerDetails: null,
-  pickupLocation: null,
+  pickupLocation: "wigclub-hair-studio",
 
   didEnterDeliveryDetails: false,
   didEnterBillingDetails: false,
   didSelectPickupLocation: false,
 
   isUSOrder: false,
-  isGhanaOrder: false,
   isROWOrder: false,
-  isPickupOrder: false,
+  isGhanaOrder: true,
+  isPickupOrder: true,
   isDeliveryOrder: false,
 
   failedFinalValidation: false,

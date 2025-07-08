@@ -13,14 +13,21 @@ import View from "../View";
 import { Link } from "@tanstack/react-router";
 import { Button } from "../ui/button";
 import { TrashIcon } from "@radix-ui/react-icons";
-import { PlusIcon } from "lucide-react";
+import { Image, Info, PencilIcon, PlusIcon } from "lucide-react";
 import { ShopLookDialog } from "./ShopLookDialog";
 import { getOrigin } from "~/src/lib/navigationUtils";
+
+import { ShopLookImageUploader } from "./ShopLookImageUploader";
+import { toast } from "sonner";
 
 export const ShopLookSection = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
 
   const { activeStore } = useGetActiveStore();
+
+  const [shopTheLookImage, setShopTheLookImage] = useState<
+    string | undefined
+  >();
 
   const featuredItemsQuery = useQuery(
     api.inventory.featuredItem.getAll,
@@ -42,8 +49,15 @@ export const ShopLookSection = () => {
     }
   }, [featuredItemsQuery, featuredItems]);
 
+  useEffect(() => {
+    if (activeStore?.config?.shopTheLookImage) {
+      setShopTheLookImage(activeStore?.config?.shopTheLookImage);
+    }
+  }, [activeStore?.config?.shopTheLookImage]);
+
   const removeHighlightedItem = useMutation(api.inventory.featuredItem.remove);
   const updateRanks = useMutation(api.inventory.featuredItem.updateRanks);
+  const updateConfig = useMutation(api.inventory.stores.updateConfig);
 
   const handleHighlightedItem = async (featuredItem: any) => {
     removeHighlightedItem({
@@ -68,7 +82,42 @@ export const ShopLookSection = () => {
     updateRanks({ ranks: newRanks });
   };
 
+  const handleImageUpdate = async (newImageUrl: string) => {
+    console.log("newImageUrl", newImageUrl);
+    try {
+      await updateConfig({
+        id: activeStore?._id!,
+        config: {
+          ...activeStore?.config,
+          shopTheLookImage: newImageUrl,
+        },
+      });
+      setShopTheLookImage(newImageUrl);
+      toast.success("Shop the Look image updated");
+    } catch (error) {
+      console.error("Failed to update store configuration:", error);
+      toast.error("Failed to update store configuration");
+      throw error; // Re-throw so component can handle it
+    }
+  };
+
   const formatter = currencyFormatter(activeStore?.currency || "USD");
+
+  const featuredItem = featuredItems?.[0];
+
+  const hasHighlightedItem = !!featuredItem;
+
+  const ctaText = hasHighlightedItem
+    ? "Edit highlighted product"
+    : "Add highlighted product";
+
+  const ctaIcon = hasHighlightedItem ? (
+    <PencilIcon className="w-2.5 h-2.5 mr-2" />
+  ) : (
+    <PlusIcon className="w-2.5 h-2.5 mr-2" />
+  );
+
+  console.log(activeStore?.config?.shopTheLookImage);
 
   return (
     <View
@@ -77,8 +126,18 @@ export const ShopLookSection = () => {
       className="py-4"
       header={<p className="text-sm text-muted-foreground">Shop The Look</p>}
     >
-      <ShopLookDialog dialogOpen={dialogOpen} setDialogOpen={setDialogOpen} />
+      <ShopLookDialog
+        action={hasHighlightedItem ? "edit" : "add"}
+        dialogOpen={dialogOpen}
+        setDialogOpen={setDialogOpen}
+        featuredItemId={featuredItem?._id}
+      />
       <div className="py-4 space-y-8">
+        <ShopLookImageUploader
+          currentImageUrl={activeStore?.config?.shopTheLookImage}
+          onImageUpdate={handleImageUpdate}
+          disabled={!activeStore}
+        />
         <DragDropContext onDragEnd={onDragEnd}>
           <Droppable droppableId="featuredItemsList">
             {(provided) => (
@@ -150,10 +209,29 @@ export const ShopLookSection = () => {
             )}
           </Droppable>
         </DragDropContext>
-        <Button variant="ghost" onClick={() => setDialogOpen(true)}>
-          <PlusIcon className="w-3 h-3 mr-2" />
-          <p className="text-xs">Add highlighted item</p>
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            onClick={() => setDialogOpen(true)}
+            // disabled={featuredItems?.length == 1}
+          >
+            {ctaIcon}
+            <p className="text-xs">{ctaText}</p>
+          </Button>
+
+          {/* {featuredItems?.length == 1 && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Info className="h-4 w-4 text-muted-foreground" />
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Only one product can be highlighted</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )} */}
+        </div>
       </div>
     </View>
   );

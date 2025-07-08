@@ -22,7 +22,7 @@ analyticsRoutes.post("/", async (c) => {
   const userAgent = c.req.header("user-agent") || "";
   const isMobile = /mobile|android|iphone|ipad|ipod/i.test(userAgent);
 
-  const { action, origin, data } = await c.req.json();
+  const { action, origin, data, productId } = await c.req.json();
 
   if (!storeId || !organizationId) {
     return c.json({ error: "Store or organization id missing" }, 400);
@@ -35,6 +35,7 @@ analyticsRoutes.post("/", async (c) => {
     action,
     data,
     device: isMobile ? "mobile" : "desktop",
+    productId,
   });
 
   return c.json(res);

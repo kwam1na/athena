@@ -15,23 +15,26 @@ export function AttributesView() {
       : "skip"
   );
 
+  if (
+    !color &&
+    !Boolean(activeProductVariant.length) &&
+    !Boolean(activeProductVariant.size)
+  ) {
+    return null;
+  }
+
   return (
-    <View
-      hideBorder
-      hideHeaderBottomBorder
-      className="h-auto w-full"
-      header={
-        <p className="text-sm text-sm text-muted-foreground">Attributes</p>
-      }
-    >
+    <View hideBorder hideHeaderBottomBorder className="h-auto w-full">
       <div className="py-4 grid grid-cols-3">
-        <div className="space-y-4">
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <Palette className="h-3.5 w-3.5" />
-            <p className="text-sm">Color</p>
+        {color && (
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <Palette className="h-3.5 w-3.5" />
+              <p className="text-sm">Color</p>
+            </div>
+            <p className="text-sm">{color?.name}</p>
           </div>
-          <p className="text-sm">{color?.name}</p>
-        </div>
+        )}
 
         {Boolean(activeProductVariant.length) && (
           <div className="space-y-4">

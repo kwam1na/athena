@@ -54,7 +54,9 @@ const schema = defineSchema({
   ...authTables,
   analytics: defineTable(analyticsSchema)
     .index("by_storeId", ["storeId"])
-    .index("by_storeFrontUserId", ["storeFrontUserId"]),
+    .index("by_storeFrontUserId", ["storeFrontUserId"])
+    .index("by_storeId_action", ["storeId", "action"])
+    .index("by_storeId_action_productId", ["storeId", "action", "productId"]),
   appVerificationCode: defineTable(appVerificationCodeSchema),
   athenaUser: defineTable(athenaUserSchema),
   bag: defineTable(bagSchema).index("by_storeId", ["storeId"]),

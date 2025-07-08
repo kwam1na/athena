@@ -29,6 +29,7 @@ export const PickupOptions = () => {
             deliveryOption: null,
             deliveryFee: 0,
             paymentMethod: "online_payment",
+            pickupLocation: "wigclub-hair-studio",
             podPaymentMethod: null,
           });
         }}

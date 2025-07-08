@@ -25,6 +25,19 @@ export function EmailStatusView() {
 
   if (!order || !activeStore) return null;
 
+  const shouldShowOutForDelivery =
+    order.status === "out-for-delivery" && !order.didSendReadyEmail;
+
+  const shouldShowReadyForPickup =
+    order.status === "ready-for-pickup" && !order.didSendReadyEmail;
+
+  const shouldShowCompleted =
+    ["delivered", "picked-up"].includes(order.status) &&
+    !order.didSendCompletedEmail;
+
+  const shouldShowCancelled =
+    order.status === "cancelled" && !order.didSendCancelledEmail;
+
   const handleSendOrderEmail = async () => {
     let orderStatus = "open";
 
@@ -38,6 +51,10 @@ export function EmailStatusView() {
 
     if (shouldShowCompleted) {
       orderStatus = "completed";
+    }
+
+    if (shouldShowCancelled) {
+      orderStatus = "cancelled";
     }
 
     try {
@@ -57,16 +74,6 @@ export function EmailStatusView() {
       setSendingUpdateEmail(false);
     }
   };
-
-  const shouldShowOutForDelivery =
-    order.status === "out-for-delivery" && !order.didSendReadyEmail;
-
-  const shouldShowReadyForPickup =
-    order.status === "ready-for-pickup" && !order.didSendReadyEmail;
-
-  const shouldShowCompleted =
-    ["delivered", "picked-up"].includes(order.status) &&
-    !order.didSendCompletedEmail;
 
   return (
     <View
@@ -150,6 +157,29 @@ export function EmailStatusView() {
             >
               <Send className="h-4 w-4 mr-2" />
               Send order complete email
+            </LoadingButton>
+          </div>
+        )}
+
+        {order.didSendCancelledEmail && (
+          <div className="grid grid-cols-1 gap-2">
+            <p className="text-sm">order cancelled</p>
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <p className="text-xs">Sent</p>
+              <CheckIcon className="h-3.5 w-3.5" />
+            </div>
+          </div>
+        )}
+
+        {shouldShowCancelled && (
+          <div>
+            <LoadingButton
+              variant={"outline"}
+              isLoading={sendingUpdateEmail}
+              onClick={() => handleSendOrderEmail()}
+            >
+              <Send className="h-4 w-4 mr-2" />
+              Send order cancelled email
             </LoadingButton>
           </div>
         )}

@@ -7,4 +7,5 @@ export const analyticsSchema = v.object({
   device: v.optional(v.string()),
   action: v.string(),
   data: v.record(v.string(), v.any()),
+  productId: v.optional(v.id("product")),
 });

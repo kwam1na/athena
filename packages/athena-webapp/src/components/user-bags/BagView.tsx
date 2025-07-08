@@ -114,54 +114,58 @@ export const BagDetails = ({
           )}
         </div>
 
-        <div className="space-y-8">
-          <p className="text-sm font-medium">Summary</p>
+        {bag.items && bag.items.length > 0 && (
+          <div className="space-y-8">
+            <p className="text-sm font-medium">Summary</p>
 
-          <div className="flex items-center gap-8">
-            {bagTotal > 0 && (
-              <>
-                <div className="flex items-center gap-2">
-                  <p className="text-sm text-muted-foreground">Total</p>
-                  <p className="text-sm">{formatter.format(bagTotal)}</p>
-                </div>
+            <div className="flex items-center gap-8">
+              {bagTotal > 0 && (
+                <>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm text-muted-foreground">Total</p>
+                    <p className="text-sm">{formatter.format(bagTotal)}</p>
+                  </div>
 
-                <p className="text-xs text-muted-foreground">·</p>
-              </>
-            )}
+                  <p className="text-xs text-muted-foreground">·</p>
+                </>
+              )}
 
-            <div className="flex items-center gap-1">
-              <p className="text-sm text-muted-foreground">Created</p>
-              <p className="text-sm">{capitalizeFirstLetter(createdAt)}</p>
-              <p className="text-sm">by</p>
-              <Link
-                to="/$orgUrlSlug/store/$storeUrlSlug/users/$userId"
-                params={(p) => ({
-                  ...p,
-                  storeUrlSlug: p.storeUrlSlug!,
-                  orgUrlSlug: p.orgUrlSlug!,
-                  userId: bag.storeFrontUserId,
-                })}
-                search={{ o: getOrigin() }}
-                className="flex items-center gap-2"
-              >
-                <p className="text-sm">
-                  {`User-${bag.storeFrontUserId.slice(-5)}`}
-                </p>
-              </Link>
+              <div className="flex items-center gap-1">
+                <p className="text-sm text-muted-foreground">Created</p>
+                <p className="text-sm">{capitalizeFirstLetter(createdAt)}</p>
+                <p className="text-sm">by</p>
+                <Link
+                  to="/$orgUrlSlug/store/$storeUrlSlug/users/$userId"
+                  params={(p) => ({
+                    ...p,
+                    storeUrlSlug: p.storeUrlSlug!,
+                    orgUrlSlug: p.orgUrlSlug!,
+                    userId: bag.storeFrontUserId,
+                  })}
+                  search={{ o: getOrigin() }}
+                  className="flex items-center gap-2"
+                >
+                  <p className="text-sm">
+                    {`User-${bag.storeFrontUserId.slice(-5)}`}
+                  </p>
+                </Link>
+              </div>
+
+              {createdAt != updatedAt && updatedAt && (
+                <>
+                  <p className="text-xs text-muted-foreground">·</p>
+
+                  <div className="flex items-center gap-1">
+                    <p className="text-sm text-muted-foreground">Updated</p>
+                    <p className="text-sm">
+                      {capitalizeFirstLetter(updatedAt)}
+                    </p>
+                  </div>
+                </>
+              )}
             </div>
-
-            {createdAt != updatedAt && updatedAt && (
-              <>
-                <p className="text-xs text-muted-foreground">·</p>
-
-                <div className="flex items-center gap-1">
-                  <p className="text-sm text-muted-foreground">Updated</p>
-                  <p className="text-sm">{capitalizeFirstLetter(updatedAt)}</p>
-                </div>
-              </>
-            )}
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

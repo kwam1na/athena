@@ -1,6 +1,8 @@
 export const getOrderState = (order: any) => {
   const isOrderOpen = order?.status === "open";
 
+  const isOrderCancelled = order?.status === "cancelled";
+
   // covers ready-for-pickup and ready-for-delivery
   const isOrderReady = order?.status.includes("ready");
 
@@ -40,6 +42,7 @@ export const getOrderState = (order: any) => {
     isRefundPending,
     amountRefunded,
     isOrderOpen,
+    isOrderCancelled,
     isOrderReady,
     isOrderOutForDelivery,
     isOrderDelivered,

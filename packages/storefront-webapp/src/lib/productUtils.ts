@@ -8,10 +8,21 @@ export function getProductName(
   item: ProductSku | BagItem | SavedBagItem
 ): string {
   if (item.productCategory == "Hair") {
-    if (!item.colorName)
-      return capitalizeWords(item.productName || "Unavailable");
+    if (!item.colorName) {
+      if (!item.productName) return "Unavailable";
 
-    return `${item.length}" ${item.colorName} ${capitalizeWords(item.productName || "")}`;
+      if (item.length) {
+        return `${item.length}" ${capitalizeWords(item.productName)}`;
+      }
+
+      return capitalizeWords(item.productName);
+    }
+
+    if (item.length) {
+      return `${item.length}" ${item.colorName} ${capitalizeWords(item.productName || "")}`;
+    }
+
+    return `${item.colorName} ${capitalizeWords(item.productName || "")}`;
   }
 
   return capitalizeWords(item.productName || "Unavailable");

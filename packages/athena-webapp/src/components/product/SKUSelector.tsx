@@ -3,11 +3,18 @@ import { GenericComboBox } from "../GenericComboBox";
 import { useProduct } from "~/src/contexts/ProductContext";
 import { useEffect } from "react";
 import { ProductVariant } from "../add-product/ProductStock";
-import { useSearch } from "@tanstack/react-router";
+import { Link, useSearch } from "@tanstack/react-router";
+import { getOrigin } from "~/src/lib/navigationUtils";
+import { Button } from "../ui/button";
+import { PenIcon } from "lucide-react";
 
 export const SKUSelector = () => {
-  const { activeProductVariant, productVariants, setActiveProductVariant } =
-    useProduct();
+  const {
+    activeProductVariant,
+    productVariants,
+    setActiveProductVariant,
+    activeProduct,
+  } = useProduct();
 
   const { variant } = useSearch({ strict: false });
 
@@ -45,7 +52,7 @@ export const SKUSelector = () => {
     a.id === b.id;
 
   return (
-    <div className="p-8 flex items-center gap-8">
+    <div className="py-8 flex items-center gap-8">
       <p className="text-xs">SKU</p>
 
       {productVariants.length > 0 && (
@@ -56,6 +63,25 @@ export const SKUSelector = () => {
           equalityFn={variantEqualityFn}
         />
       )}
+
+      {/* <Link
+        to="/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/edit"
+        params={(prev) => ({
+          ...prev,
+          orgUrlSlug: prev.orgUrlSlug!,
+          storeUrlSlug: prev.storeUrlSlug!,
+          productSlug: activeProduct?._id!,
+        })}
+        search={{
+          o: getOrigin(),
+          variant: activeProductVariant?.sku,
+        }}
+      >
+        <Button variant="outline" className="flex items-center gap-2">
+          Edit
+          <PenIcon className="h-3.5 w-3.5" />
+        </Button>
+      </Link> */}
     </div>
   );
 };

@@ -64,7 +64,7 @@ const OrderItem = ({
           )}
 
           {/* Show payment status for POD orders */}
-          {isPODOrder && (
+          {isPODOrder && order.status !== "cancelled" && (
             <Badge
               variant="outline"
               className={`flex items-center gap-1 ${

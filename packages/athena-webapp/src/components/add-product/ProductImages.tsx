@@ -9,6 +9,7 @@ import { useSearch } from "@tanstack/react-router";
 import { Button } from "../ui/button";
 import useGetActiveProduct from "~/src/hooks/useGetActiveProduct";
 import config from "~/src/config";
+import { EyeIcon } from "lucide-react";
 
 const Header = () => {
   const { activeProductVariant, productVariants, setActiveProductVariant } =
@@ -87,7 +88,7 @@ export default function ProductImagesView() {
         <div className="w-full flex">
           <Button
             variant={"outline"}
-            className="ml-auto"
+            className="ml-auto flex items-center gap-2"
             onClick={() => {
               window.open(
                 `${config.storeFrontUrl}/shop/product/${activeProduct?._id}?variant=${activeProductVariant?.sku}`,
@@ -96,6 +97,7 @@ export default function ProductImagesView() {
             }}
           >
             View on store
+            <EyeIcon className="h-3.5 w-3.5" />
           </Button>
         </div>
       )}

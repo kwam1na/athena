@@ -13,11 +13,13 @@ export interface AnalyticProduct {
   views: number;
   product: Product;
   lastViewed: number;
+  productSku: string;
 }
 
 export default function AnalyticsProducts({ items }: { items: Analytic[] }) {
   const productViews = groupProductViewsByDay(items, { groupByDay: false }) as {
     productId: string;
+    productSku: string;
     views: number;
     lastViewed: number;
   }[];

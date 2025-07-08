@@ -14,5 +14,5 @@ export const useGetCategories = () => {
       : "skip"
   );
 
-  return categories;
+  return categories?.sort((a, b) => a.name.localeCompare(b.name));
 };

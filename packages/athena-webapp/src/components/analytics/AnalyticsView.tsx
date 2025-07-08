@@ -5,6 +5,7 @@ import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { api } from "~/convex/_generated/api";
 import AnalyticsItems from "./AnalyticsItems";
 import AnalyticsProducts from "./AnalyticsProducts";
+import AnalyticsUsers from "./AnalyticsUsers";
 import { FadeIn } from "../common/FadeIn";
 import StoreInsights from "./StoreInsights";
 import { formatNumber } from "../../utils/formatNumber";
@@ -135,9 +136,12 @@ export default function AnalyticsView() {
             <StoreVisitors />
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-16">
-          <AnalyticsProducts items={items} />
-          <AnalyticsItems items={items} />
+        <div className="space-y-16">
+          <AnalyticsUsers items={items} />
+          <div className="grid grid-cols-2 gap-16">
+            <AnalyticsProducts items={items} />
+            <AnalyticsItems items={items} />
+          </div>
         </div>
       </FadeIn>
     </View>

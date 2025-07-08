@@ -126,9 +126,15 @@ export const groupProductViewsByDay = (
   } else {
     // When not grouping by day, collect views and last viewed time for each product
     return viewProductAnalytics.reduce<
-      { productId: string; views: number; lastViewed: number }[]
+      {
+        productId: string;
+        productSku: string;
+        views: number;
+        lastViewed: number;
+      }[]
     >((acc, analytic) => {
       const productId = analytic.data!.product as string;
+      const productSku = analytic.data!.productSku as string;
       const existingIndex = acc.findIndex(
         (item) => item.productId === productId
       );
@@ -137,6 +143,7 @@ export const groupProductViewsByDay = (
         // Add new product entry
         acc.push({
           productId,
+          productSku,
           views: 1,
           lastViewed: analytic._creationTime,
         });

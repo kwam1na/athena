@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { submitOffer, type OfferRequest } from "@/api/offers";
 import { validateEmail } from "@/lib/validations/email";
 import { WelcomeBackModalConfig } from "./config/welcomeBackModalConfig";
+import { Badge } from "../badge";
 
 interface WelcomeBackModalFormProps {
   onClose: () => void;
@@ -57,12 +58,13 @@ export const WelcomeBackModalForm: React.FC<WelcomeBackModalFormProps> = ({
   return (
     <div className="flex flex-col items-center gap-8">
       <div className="space-y-8">
-        <div className="flex flex-col items-center">
-          <h2 className="text-5xl font-light mb-1 sm:mb-2">{config.title}</h2>
+        <div className="flex flex-col items-center gap-8">
+          <Badge className="border-none text-accent2" variant="outline">
+            Exclusive offer!
+          </Badge>
+          <h2 className="text-6xl font-light">{config.title}</h2>
           {config.subtitle && (
-            <h3 className="text-5xl font-light mb-4 sm:mb-6">
-              {config.subtitle}
-            </h3>
+            <h3 className="text-5xl font-light">{config.subtitle}</h3>
           )}
         </div>
         <p className="mb-6 text-sm sm:text-base">{config.body}</p>

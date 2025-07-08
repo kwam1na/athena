@@ -4,14 +4,16 @@ export async function postAnalytics({
   action,
   origin,
   data = {},
+  productId,
 }: {
   action: string;
   origin?: string;
   data?: Record<string, any>;
+  productId?: string;
 }) {
   const response = await fetch(`${config.apiGateway.URL}/analytics`, {
     method: "POST",
-    body: JSON.stringify({ action, origin, data }),
+    body: JSON.stringify({ action, origin, data, productId }),
     headers: {
       "Content-Type": "application/json",
     },

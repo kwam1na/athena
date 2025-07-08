@@ -60,7 +60,7 @@ export const PaymentSection = ({ form }: CheckoutFormSectionProps) => {
             total
           ),
           postAnalytics({
-            action: "finalized_checkout_pod",
+            action: "finalized_payment_on_delivery_checkout",
             data: {
               checkoutSessionId: activeSession._id,
               podPaymentMethod: checkoutState.podPaymentMethod,

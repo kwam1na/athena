@@ -100,7 +100,7 @@ export const PaymentMethodSection = () => {
                     <p className="font-medium text-sm sm:text-base leading-tight text-left">
                       Pay on delivery
                     </p>
-                    <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed text-left text-wrap">
+                    <p className="text-sm sm:text-sm text-muted-foreground leading-relaxed text-left text-wrap">
                       Pay with cash or mobile money when your order arrives
                     </p>
                   </div>
@@ -119,7 +119,7 @@ export const PaymentMethodSection = () => {
               transition={{ duration: 0.3 }}
               className="space-y-4 sm:space-y-6 mt-8 sm:mt-6 pt-8"
             >
-              <p className="text-xs sm:text-sm font-medium text-muted-foreground">
+              <p className="font-medium text-muted-foreground">
                 How would you like to pay on delivery?
               </p>
 
@@ -135,10 +135,10 @@ export const PaymentMethodSection = () => {
                       <Banknote className="w-4 h-4" />
                     </div>
                     <div className="flex-1 min-w-0 space-y-1.5 text-left">
-                      <p className="text-xs sm:text-sm font-medium leading-tight text-left">
+                      <p className="text-sm sm:text-base font-medium leading-tight text-left">
                         Cash
                       </p>
-                      <p className="text-xs text-muted-foreground leading-relaxed text-left">
+                      <p className="text-sm text-muted-foreground leading-relaxed text-left">
                         Pay with cash to the delivery courier
                       </p>
                     </div>
@@ -156,10 +156,10 @@ export const PaymentMethodSection = () => {
                       <Smartphone className="w-4 h-4" />
                     </div>
                     <div className="flex-1 min-w-0 space-y-1.5 text-left">
-                      <p className="text-xs sm:text-sm font-medium leading-tight text-left">
+                      <p className="text-sm sm:text-base font-medium leading-tight text-left">
                         Mobile Money
                       </p>
-                      <p className="text-xs text-muted-foreground leading-relaxed text-left">
+                      <p className="text-sm text-muted-foreground leading-relaxed text-left">
                         Pay via MTN, Telecel, or AirtelTigo mobile money
                       </p>
                     </div>

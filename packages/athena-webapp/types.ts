@@ -20,7 +20,14 @@ export type ProductSku = Doc<"productSku"> & {
   length?: number;
 };
 
-export type Product = Doc<"product"> & { skus: ProductSku[] };
+export type Product = Doc<"product"> & {
+  skus: ProductSku[];
+  categoryName?: string;
+  subcategoryName?: string;
+  categorySlug?: string;
+  subcategorySlug?: string;
+  inventoryCount?: number;
+};
 
 export type Color = Doc<"color">;
 

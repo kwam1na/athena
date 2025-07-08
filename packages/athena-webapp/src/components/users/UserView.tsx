@@ -5,13 +5,17 @@ import { api } from "~/convex/_generated/api";
 import { Id } from "~/convex/_generated/dataModel";
 import {
   AtSign,
+  Brain,
   Calendar,
   CalendarPlus,
   Hash,
   IdCard,
   OctagonX,
   Phone,
+  Sparkle,
   Trash2,
+  UserIcon,
+  UserRoundCheck,
 } from "lucide-react";
 import { FadeIn } from "../common/FadeIn";
 import { ComposedPageHeader, SimplePageHeader } from "../common/PageHeader";
@@ -20,6 +24,7 @@ import { UserBag } from "./UserBag";
 import { UserOnlineOrders } from "./UserOnlineOrders";
 import { UserInsightsSection } from "./UserInsightsSection";
 import { LinkedAccounts } from "./LinkedAccounts";
+import { UserBehaviorInsights } from "./behavioral-insights";
 import { formatDate } from "~/convex/utils";
 import { formatUserId } from "~/src/lib/utils";
 import { Badge } from "../ui/badge";
@@ -30,6 +35,8 @@ import { LoadingButton } from "../ui/loading-button";
 import { useState } from "react";
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
 import { toast } from "sonner";
+import { EmptyState } from "../states/empty/empty-state";
+import { CounterClockwiseClockIcon } from "@radix-ui/react-icons";
 
 // Component to determine if user is new or returning
 const UserStatus = ({
@@ -49,6 +56,10 @@ const UserStatus = ({
   const thirtyDaysInMs = 30 * 24 * 60 * 60 * 1000;
   const isNewAccount = Date.now() - creationTime < thirtyDaysInMs;
 
+  if (mostRecentActivity === undefined) {
+    return null;
+  }
+
   // Check if most recent activity exists and is > 1 day after account creation
   let hasRecentActivity = false;
   if (mostRecentActivity) {
@@ -64,10 +75,12 @@ const UserStatus = ({
       variant="outline"
       className={
         isReturning
-          ? "bg-blue-50 border-blue-50 text-blue-400"
-          : "bg-green-50 border-green-50 text-green-500"
+          ? "bg-blue-50 border-blue-50 text-blue-500 flex items-center gap-1"
+          : "bg-green-50 border-green-50 text-green-600 flex items-center gap-1"
       }
     >
+      {isReturning && <UserRoundCheck className="w-3 h-3" />}
+      {!isReturning && <Sparkle className="w-3 h-3" />}
       {isReturning ? "Returning" : "New"}
     </Badge>
   );
@@ -126,7 +139,20 @@ export const UserView = () => {
 
   const copyUserId = useCopyText(user?._id as string);
 
-  if (!user) return null;
+  if (!user)
+    return (
+      <View>
+        <FadeIn className="flex items-center justify-center min-h-[60vh] w-full">
+          <EmptyState
+            title={
+              <div className="flex gap-1 text-sm">
+                <p className="text-muted-foreground">User not found</p>
+              </div>
+            }
+          />
+        </FadeIn>
+      </View>
+    );
 
   const name =
     !user.firstName || !user.lastName
@@ -139,7 +165,12 @@ export const UserView = () => {
     <View
       header={
         <ComposedPageHeader
-          leadingContent={<p className="text-sm font-medium">User details</p>}
+          leadingContent={
+            <div className="flex items-center gap-2">
+              <p className="text-sm font-medium">User details</p>{" "}
+              <UserStatus creationTime={user._creationTime} userId={user._id} />
+            </div>
+          }
           trailingContent={<UserActions />}
         />
       }
@@ -148,11 +179,18 @@ export const UserView = () => {
         <div className="flex justify-between gap-24">
           <div className="space-y-16 w-[60%]">
             <div className="space-y-8">
-              <p className="text-sm font-medium">Contact Details</p>
+              {/* <p className="text-sm font-medium">Contact Details</p> */}
               {!hasContactDetails ? (
-                <p className="text-sm text-muted-foreground">
-                  This user hasn't provided any contact details.
-                </p>
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2">
+                    <Hash className="w-4 h-4 text-muted-foreground" />
+                    <p className="text-sm">{formatUserId(user._id)}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <CalendarPlus className="w-4 h-4 text-muted-foreground" />
+                    <p className="text-sm">{formatDate(user._creationTime)}</p>
+                  </div>
+                </div>
               ) : (
                 <div className="space-y-4">
                   {name && (
@@ -175,33 +213,21 @@ export const UserView = () => {
                       <p className="text-sm">{user.phoneNumber}</p>
                     </div>
                   )}
+
+                  <div className="flex items-center gap-2">
+                    <CalendarPlus className="w-4 h-4 text-muted-foreground" />
+                    <p className="text-sm">{formatDate(user._creationTime)}</p>
+                  </div>
                 </div>
               )}
             </div>
 
             <div className="space-y-8">
-              <p className="text-sm font-medium">User details</p>
-              <div className="space-y-4">
-                <div className="flex items-center gap-2">
-                  <Hash
-                    onClick={copyUserId}
-                    className="w-4 h-4 text-muted-foreground"
-                  />
-
-                  <p className="text-sm">{formatUserId(user._id)}</p>
-
-                  <CopyButton stringToCopy={user._id} />
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <CalendarPlus className="w-4 h-4 text-muted-foreground" />
-                  <p className="text-sm">{formatDate(user._creationTime)}</p>
-                  <UserStatus
-                    creationTime={user._creationTime}
-                    userId={user._id}
-                  />
-                </div>
+              <div className="flex items-center gap-2">
+                <Brain className="w-4 h-4 text-muted-foreground" />
+                <p className="text-sm font-medium">Behavioral Insights</p>
               </div>
+              <UserBehaviorInsights userId={user._id} />
             </div>
 
             <div className="space-y-8">

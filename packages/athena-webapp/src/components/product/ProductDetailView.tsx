@@ -21,8 +21,6 @@ import { AnalyticsInsights } from "./AnalyticsInsights";
 const ProductDetailViewHeader = () => {
   const { activeProduct } = useGetActiveProduct();
 
-  const { activeProductVariant } = useProduct();
-
   if (!activeProduct) return null;
 
   return (
@@ -33,29 +31,8 @@ const ProductDetailViewHeader = () => {
 
           <div className="text-xs flex items-center gap-4">
             <ProductStatus product={activeProduct} />
-            <ProductStockStatus productVariant={activeProductVariant} />
           </div>
         </>
-      }
-      trailingContent={
-        <Link
-          to="/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/edit"
-          params={(prev) => ({
-            ...prev,
-            orgUrlSlug: prev.orgUrlSlug!,
-            storeUrlSlug: prev.storeUrlSlug!,
-            productSlug: activeProduct._id,
-          })}
-          search={{
-            o: getOrigin(),
-            variant: activeProductVariant?.sku,
-          }}
-        >
-          <Button variant="outline" className="flex items-center gap-2">
-            Edit
-            <PenIcon className="h-3.5 w-3.5" />
-          </Button>
-        </Link>
       }
     />
   );

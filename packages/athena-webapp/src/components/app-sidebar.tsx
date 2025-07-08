@@ -37,6 +37,8 @@ import {
   MessageCircleDashed,
   MessageCircleMore,
   Tag,
+  XCircle,
+  ChevronDown,
 } from "lucide-react";
 import { AppHeader } from "./Navbar";
 import { Link } from "@tanstack/react-router";
@@ -48,6 +50,12 @@ import { useQuery } from "convex/react";
 import { api } from "~/convex/_generated/api";
 import { useGetProductsWithNoImages } from "../hooks/useGetProducts";
 import { useProductWithNoImagesNotification } from "../hooks/useProductWithNoImagesNotification";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@radix-ui/react-collapsible";
+import { useGetCategories } from "../hooks/useGetCategories";
 
 export function AppSidebar() {
   const { activeStore } = useGetActiveStore();
@@ -60,6 +68,8 @@ export function AppSidebar() {
   useNewOrderNotification();
 
   useProductWithNoImagesNotification();
+
+  const categories = useGetCategories();
 
   const orders = useQuery(
     api.storeFront.onlineOrder.getAllOnlineOrders,
@@ -192,6 +202,7 @@ export function AppSidebar() {
                     <p className="font-medium">Orders</p>
                   </Link>
                 </SidebarMenuButton>
+
                 <SidebarMenuSub>
                   <SidebarMenuSubItem>
                     <SidebarMenuButton asChild>
@@ -291,6 +302,25 @@ export function AppSidebar() {
                     </SidebarMenuButton>
                   </SidebarMenuSubItem>
                 </SidebarMenuSub>
+
+                <SidebarMenuSub>
+                  <SidebarMenuSubItem>
+                    <SidebarMenuButton asChild>
+                      <Link
+                        to="/$orgUrlSlug/store/$storeUrlSlug/orders/cancelled"
+                        params={(p) => ({
+                          ...p,
+                          orgUrlSlug: activeOrganization?.slug,
+                          storeUrlSlug: activeStore?.slug,
+                        })}
+                        className="flex items-center"
+                      >
+                        <XCircle className="w-4 h-4" />
+                        <p className="font-medium">Cancelled</p>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuSubItem>
+                </SidebarMenuSub>
               </SidebarMenuItem>
 
               <SidebarMenuItem>
@@ -308,6 +338,42 @@ export function AppSidebar() {
                     <p className="font-medium">Products</p>
                   </Link>
                 </SidebarMenuButton>
+                {categories?.map((category) => (
+                  <SidebarMenuSub key={category._id}>
+                    <SidebarMenuSubItem>
+                      <SidebarMenuButton asChild>
+                        <Link
+                          to="/$orgUrlSlug/store/$storeUrlSlug/products"
+                          params={(p) => ({
+                            ...p,
+                            orgUrlSlug: activeOrganization?.slug,
+                            storeUrlSlug: activeStore?.slug,
+                          })}
+                          search={{
+                            categorySlug: category.slug,
+                          }}
+                          className="flex items-center"
+                        >
+                          <p className="font-medium">{category.name}</p>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuSubItem>
+                  </SidebarMenuSub>
+                ))}
+                {/* <SidebarMenuButton asChild>
+                  <Link
+                    to="/$orgUrlSlug/store/$storeUrlSlug/products"
+                    params={(p) => ({
+                      ...p,
+                      orgUrlSlug: activeOrganization?.slug,
+                      storeUrlSlug: activeStore?.slug,
+                    })}
+                    className="flex items-center"
+                  >
+                    <Tag className="w-4 h-4" />
+                    <p className="font-medium">Products</p>
+                  </Link>
+                </SidebarMenuButton> */}
 
                 {productsWithNoImages && productsWithNoImages.length > 0 && (
                   <SidebarMenuSub>

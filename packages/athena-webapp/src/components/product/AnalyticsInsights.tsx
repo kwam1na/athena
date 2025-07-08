@@ -20,7 +20,13 @@ export const AnalyticsInsights = () => {
 
   const analytics = useQuery(
     api.storeFront.analytics.getAll,
-    activeStore?._id ? { storeId: activeStore._id } : "skip"
+    activeStore?._id
+      ? {
+          storeId: activeStore._id,
+          action: "viewed_product",
+          productId: activeProduct?._id,
+        }
+      : "skip"
   );
 
   if (!activeStore || !analytics || !activeProduct || !activeProductVariant)
@@ -28,23 +34,19 @@ export const AnalyticsInsights = () => {
 
   // Filter analytics for this product and SKU
   const productAnalytics = analytics.filter(
-    (analytic) =>
-      analytic.data.product === activeProduct._id &&
-      analytic.data.productSku === activeProductVariant.sku
+    (analytic) => analytic.data.productSku === activeProductVariant.sku
   );
 
   // Calculate metrics
-  const totalViews = productAnalytics.filter(
-    (analytic) => analytic.action === "viewed_product"
-  ).length;
+  const totalViews = productAnalytics.length;
 
   const uniqueUsers = new Set(
     productAnalytics.map((analytic) => analytic.storeFrontUserId)
   ).size;
 
-  const lastViewed = productAnalytics
-    .filter((analytic) => analytic.action === "viewed_product")
-    .sort((a, b) => b._creationTime - a._creationTime)[0]?._creationTime;
+  const lastViewed = productAnalytics.sort(
+    (a, b) => b._creationTime - a._creationTime
+  )[0]?._creationTime;
 
   return (
     <div className="space-y-4">

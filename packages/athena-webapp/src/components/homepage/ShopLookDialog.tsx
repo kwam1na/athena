@@ -8,11 +8,16 @@ import {
   CommandList,
 } from "../ui/command";
 import { capitalizeWords } from "~/src/lib/utils";
+import { Id } from "~/convex/_generated/dataModel";
 
 export function ShopLookDialog({
+  action,
+  featuredItemId,
   dialogOpen,
   setDialogOpen,
 }: {
+  action: "add" | "edit";
+  featuredItemId?: string;
   dialogOpen: boolean;
   setDialogOpen: React.Dispatch<React.SetStateAction<boolean>>;
 }) {
@@ -25,8 +30,14 @@ export function ShopLookDialog({
 
   const addFeaturedItem = useMutation(api.inventory.featuredItem.create);
 
+  const removeHighlightedItem = useMutation(api.inventory.featuredItem.remove);
+
   const handleAddFeaturedItem = async (item: any) => {
     if (!activeStore) return;
+
+    if (action === "edit" && featuredItemId) {
+      removeHighlightedItem({ id: featuredItemId as Id<"featuredItem"> });
+    }
 
     addFeaturedItem({
       productId: item._id,

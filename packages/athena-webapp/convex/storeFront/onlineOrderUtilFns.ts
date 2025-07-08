@@ -183,6 +183,41 @@ export async function handleOrderStatusUpdate({
       console.error("Ffailed to send complete email", e);
     }
   }
+
+  // Handle cancelled email
+  if (newStatus === "cancelled" && !order.didSendCancelledEmail) {
+    try {
+      const { firstName } = order.customerDetails;
+      const baseMessage = `Hi ${capitalizeWords(firstName)}, your order has been cancelled.`;
+
+      const statusMessaging = `${baseMessage} If you have any questions, please contact our support team.`;
+
+      const orderPickupLocation = store?.config?.contactInfo?.location;
+      const deliveryAddress = order.deliveryDetails
+        ? getAddressString(order.deliveryDetails as Address)
+        : "Details not available";
+
+      const pickupDetails =
+        order.deliveryMethod == "pickup"
+          ? orderPickupLocation
+          : deliveryAddress;
+
+      if (
+        await sendEmail({
+          type: "canceled",
+          statusMessaging,
+          pickupDetails,
+        })
+      ) {
+        console.info(
+          `sent order cancelled email for order #${order.orderNumber} to ${order.customerDetails.email}`
+        );
+        return { didSendCancelledEmail: true };
+      }
+    } catch (e) {
+      console.error("failed to send order cancelled email", e);
+    }
+  }
 }
 
 export const sendOrderUpdateEmail = action({
@@ -210,6 +245,7 @@ export const sendOrderUpdateEmail = action({
       didSendCompletedEmail,
       didSendReadyEmail,
       didSendConfirmationEmail,
+      didSendCancelledEmail,
     } =
       (await handleOrderStatusUpdate({
         order: order!,
@@ -247,6 +283,17 @@ export const sendOrderUpdateEmail = action({
       await ctx.runMutation(api.storeFront.onlineOrder.update, {
         orderId: order!._id,
         update: { didSendCompletedEmail },
+      });
+    }
+
+    if (didSendCancelledEmail) {
+      console.info(
+        `successfully sent cancelled email for order #${order!.orderNumber}`
+      );
+
+      await ctx.runMutation(api.storeFront.onlineOrder.update, {
+        orderId: order!._id,
+        update: { didSendCancelledEmail },
       });
     }
   },

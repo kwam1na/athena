@@ -31,6 +31,8 @@ import {
   Package,
 } from "lucide-react";
 import { Skeleton } from "../ui/skeleton";
+import { EngagementMetricsGrid } from "./behavioral-insights/EngagementMetrics";
+import { calculateEngagementMetrics } from "~/src/lib/behaviorUtils";
 
 interface CustomerBehaviorTimelineProps {
   userId: Id<"storeFrontUser"> | Id<"guest">;
@@ -64,9 +66,15 @@ export function CustomerBehaviorTimeline({
     }
   );
 
-  if (!timeline || !summary) {
+  const activities = useQuery(api.storeFront.user.getAllUserActivity, {
+    id: userId,
+  });
+
+  if (!timeline || !summary || !activities) {
     return <TimelineSkeleton />;
   }
+
+  const metrics = calculateEngagementMetrics(activities);
 
   // Enrich timeline events with display information
   const enrichedEvents = enrichTimelineEvents(timeline as TimelineEvent[]);
@@ -82,6 +90,7 @@ export function CustomerBehaviorTimeline({
 
   return (
     <div className="space-y-6">
+      {/* <EngagementMetricsGrid metrics={metrics} /> */}
       {/* Header with filters */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
@@ -122,7 +131,7 @@ export function CustomerBehaviorTimeline({
       </div>
 
       {/* Summary Statistics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      {/* <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         <Card>
           <CardContent className="p-4">
             <div className="flex flex-col h-full">
@@ -166,10 +175,10 @@ export function CustomerBehaviorTimeline({
             </div>
           </CardContent>
         </Card>
-      </div>
+      </div> */}
 
       {/* Activity Categories */}
-      <Card>
+      {/* <Card>
         <CardHeader>
           <CardTitle className="text-base">Activity Breakdown</CardTitle>
         </CardHeader>
@@ -184,7 +193,7 @@ export function CustomerBehaviorTimeline({
         </CardContent>
       </Card>
 
-      <Separator />
+      <Separator /> */}
 
       <div className="flex justify-end">
         <Button
@@ -212,17 +221,9 @@ export function CustomerBehaviorTimeline({
           sortDirection={sortDirection}
         />
       ) : (
-        <Card>
-          <CardContent className="p-8 text-center">
-            <User className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">
-              No activity found
-            </h3>
-            <p className="text-gray-500">
-              No customer activity recorded for the selected time period.
-            </p>
-          </CardContent>
-        </Card>
+        <p className="text-muted-foreground text-center text-sm pt-8">
+          No customer activity recorded for the selected time period.
+        </p>
       )}
     </div>
   );

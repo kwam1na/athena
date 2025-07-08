@@ -17,6 +17,7 @@ import {
   MousePointerClick,
 } from "lucide-react";
 import { snakeCaseToWords } from "./utils";
+import { getActivityPriority } from "./behaviorUtils";
 
 export interface TimelineEvent {
   _id: string;
@@ -44,6 +45,7 @@ export interface EnrichedTimelineEvent extends TimelineEvent {
   icon: React.ComponentType<{ className?: string }>;
   color: string;
   category: "product" | "commerce" | "engagement" | "account";
+  priority: "high" | "medium" | "low";
 }
 
 // Activity type mappings with icons and colors
@@ -98,12 +100,12 @@ export const activityTypeMap: Record<
     getTitle: (event) => "Completed Checkout",
     getDescription: (event) => "Successfully completed checkout",
   },
-  completed_purchase: {
+  completed_payment_on_delivery_checkout: {
     icon: CheckCircle,
-    color: "text-green-600 bg-green-100",
+    color: "text-emerald-600 bg-emerald-100",
     category: "commerce",
-    getTitle: (event) => "Completed Purchase",
-    getDescription: (event) => "Successfully completed an order",
+    getTitle: (event) => "Completed Checkout",
+    getDescription: (event) => "Successfully completed checkout",
   },
   clicked_on_discount_code_trigger: {
     icon: Ticket,
@@ -131,16 +133,6 @@ export const activityTypeMap: Record<
     getDescription: (event) => {
       const productName = event.productInfo?.name || "Product";
       return `Removed ${productName} from shopping bag`;
-    },
-  },
-  searched_products: {
-    icon: Search,
-    color: "text-indigo-600 bg-indigo-100",
-    category: "product",
-    getTitle: (event) => "Searched Products",
-    getDescription: (event) => {
-      const query = event.data.query || "products";
-      return `Searched for "${query}"`;
     },
   },
   signed_up: {
@@ -177,23 +169,6 @@ export const activityTypeMap: Record<
       return `Removed ${productName} from saved items`;
     },
   },
-  clicked_product_link: {
-    icon: MousePointer,
-    color: "text-violet-600 bg-violet-100",
-    category: "engagement",
-    getTitle: (event) => "Clicked Product Link",
-    getDescription: (event) => "Clicked on a product recommendation",
-  },
-  left_review: {
-    icon: Star,
-    color: "text-yellow-600 bg-yellow-100",
-    category: "engagement",
-    getTitle: (event) => "Left Review",
-    getDescription: (event) => {
-      const rating = event.data.rating ? ` (${event.data.rating} stars)` : "";
-      return `Left a product review${rating}`;
-    },
-  },
 };
 
 // Fallback for unknown actions
@@ -218,6 +193,7 @@ export function enrichTimelineEvent(
     icon: activityConfig.icon,
     color: activityConfig.color,
     category: activityConfig.category,
+    priority: getActivityPriority(event.action),
   };
 }
 
