@@ -64,7 +64,10 @@ const schema = defineSchema({
   bestSeller: defineTable(bestSellerSchema),
   category: defineTable(categorySchema),
   checkoutSession: defineTable(checkoutSessionSchema),
-  checkoutSessionItem: defineTable(checkoutSessionItemSchema),
+  checkoutSessionItem: defineTable(checkoutSessionItemSchema).index(
+    "by_sessionId",
+    ["sesionId"]
+  ),
   color: defineTable(colorSchema),
   complimentaryProductsCollection: defineTable(
     complimentaryProductsCollectionSchema

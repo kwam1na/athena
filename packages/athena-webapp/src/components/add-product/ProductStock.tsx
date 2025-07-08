@@ -28,6 +28,7 @@ import {
   Info,
   RefreshCw,
   RotateCcw,
+  ShoppingCart,
   TriangleAlert,
 } from "lucide-react";
 import useGetActiveProduct from "@/hooks/useGetActiveProduct";
@@ -50,6 +51,7 @@ import { useEffect } from "react";
 import { Checkbox } from "../ui/checkbox";
 import { Separator } from "../ui/separator";
 import { CopyImagesView } from "./copy-images/CopyImagesView";
+import { useSkusReservedInCheckout } from "@/hooks/useSkusReservedInCheckout";
 
 export type ProductVariant = {
   id: string;
@@ -69,7 +71,11 @@ export type ProductVariant = {
   images: ImageFile[];
 };
 
-const StockHeader = () => {
+const StockHeader = ({
+  isSkuReserved,
+}: {
+  isSkuReserved: (sku?: string) => boolean;
+}) => {
   const { updateProductVariants, productVariants } = useProduct();
 
   const { toggleSheet, setSheetContent } = useSheet();
@@ -84,11 +90,16 @@ const StockHeader = () => {
 
   const restock = () => {
     updateProductVariants((prevVariants) =>
-      prevVariants.map((variant) => ({
-        ...variant,
-        stock: 5,
-        quantityAvailable: 5,
-      }))
+      prevVariants.map(
+        (variant) =>
+          !isSkuReserved(variant.sku)
+            ? {
+                ...variant,
+                stock: 5,
+                quantityAvailable: 5,
+              }
+            : variant // Keep reserved variants unchanged
+      )
     );
   };
 
@@ -134,19 +145,29 @@ const StockHeader = () => {
 };
 
 export function ProductStockView() {
+  const { productVariants } = useProduct();
+
+  // Check which SKUs are reserved in active checkout sessions
+  const skusToCheck = productVariants.map((variant) => variant.sku);
+  const { isSkuReserved } = useSkusReservedInCheckout(skusToCheck);
+
   return (
     <View
       hideBorder
       hideHeaderBottomBorder
       className="h-auto"
-      header={<StockHeader />}
+      header={<StockHeader isSkuReserved={isSkuReserved} />}
     >
-      <Stock />
+      <Stock isSkuReserved={isSkuReserved} />
     </View>
   );
 }
 
-function Stock() {
+function Stock({
+  isSkuReserved,
+}: {
+  isSkuReserved: (sku?: string) => boolean;
+}) {
   const {
     error,
     isLoading,
@@ -160,6 +181,10 @@ function Stock() {
   const { activeProduct } = useGetActiveProduct();
 
   const { activeStore } = useGetActiveStore();
+
+  // Check which SKUs are reserved in active checkout sessions
+  // const skusToCheck = productVariants.map((variant) => variant.sku);
+  // const { isSkuReserved } = useSkusReservedInCheckout(skusToCheck);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement>,
@@ -243,7 +268,11 @@ function Stock() {
   };
 
   const shouldDisable = (variant: ProductVariant) => {
-    return variant.markedForDeletion || variant.isVisible == false;
+    return (
+      variant.markedForDeletion ||
+      variant.isVisible == false ||
+      isSkuReserved(variant.sku)
+    );
   };
 
   return (
@@ -284,24 +313,40 @@ function Stock() {
                 className={variant.markedForDeletion ? "opacity-50" : ""}
               >
                 <TableCell>
-                  {isLoading ? (
-                    <Skeleton className="h-[40px] w-full" />
-                  ) : !activeProduct ? (
-                    <Input
-                      id={`sku-${index}`}
-                      type="text"
-                      placeholder="SKU"
-                      onChange={(e) => handleChange(e, variant.id, "sku")}
-                      value={variant.sku || ""}
-                      disabled={shouldDisable(variant)}
-                    />
-                  ) : (
-                    <p
-                      className={`${variant.id == activeProductVariant.id ? "font-bold" : "text-muted-foreground"}`}
-                    >
-                      {variant.sku}
-                    </p>
-                  )}
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1">
+                      {isLoading ? (
+                        <Skeleton className="h-[40px] w-full" />
+                      ) : !activeProduct ? (
+                        <Input
+                          id={`sku-${index}`}
+                          type="text"
+                          placeholder="SKU"
+                          onChange={(e) => handleChange(e, variant.id, "sku")}
+                          value={variant.sku || ""}
+                          disabled={shouldDisable(variant)}
+                        />
+                      ) : (
+                        <p
+                          className={`${variant.id == activeProductVariant.id ? "font-bold" : "text-muted-foreground"}`}
+                        >
+                          {variant.sku}
+                        </p>
+                      )}
+                    </div>
+                    {isSkuReserved(variant.sku) && (
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger>
+                            <ShoppingCart className="w-4 h-4 text-green-500" />
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>SKU is reserved in an active checkout session</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    )}
+                  </div>
                   {error && getErrorForField(error, "sku") && (
                     <p className="text-red-500 text-sm font-medium">
                       {getErrorForField(error, "sku")?.message}

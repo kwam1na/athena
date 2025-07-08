@@ -77,7 +77,7 @@ export const PaymentMethodSection = () => {
                 <p className="font-medium text-sm sm:text-base leading-tight text-left">
                   Pay online
                 </p>
-                <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed text-left text-wrap">
+                <p className="text-sm text-muted-foreground leading-relaxed text-left text-wrap">
                   {onlineTagline}
                 </p>
               </div>
@@ -100,7 +100,7 @@ export const PaymentMethodSection = () => {
                     <p className="font-medium text-sm sm:text-base leading-tight text-left">
                       Pay on delivery
                     </p>
-                    <p className="text-sm sm:text-sm text-muted-foreground leading-relaxed text-left text-wrap">
+                    <p className="text-sm text-muted-foreground leading-relaxed text-left text-wrap">
                       Pay with cash or mobile money when your order arrives
                     </p>
                   </div>

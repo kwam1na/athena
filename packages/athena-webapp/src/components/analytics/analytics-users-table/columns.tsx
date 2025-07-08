@@ -196,29 +196,8 @@ export const columns: ColumnDef<AnalyticUser>[] = [
               ?
             </span>
           )}
-          {/* <span className="capitalize">{user.devicePreference}</span> */}
         </div>
       );
     },
   },
-
-  //   {
-  //     accessorKey: "lastActive",
-
-  //     header: ({ column }) => (
-  //       <DataTableColumnHeader column={column} title="Last Active" />
-  //     ),
-  //     cell: ({ row }) => {
-  //       const user = row.original;
-
-  //       return (
-  //         <div className="flex items-center gap-2">
-  //           <Clock className="w-4 h-4 text-muted-foreground" />
-  //           <span className="text-muted-foreground">
-  //             {getRelativeTime(user.lastActive)}
-  //           </span>
-  //         </div>
-  //       );
-  //     },
-  //   },
 ];

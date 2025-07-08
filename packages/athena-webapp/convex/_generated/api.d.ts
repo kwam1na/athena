@@ -64,6 +64,7 @@ import type * as inventory_productSku from "../inventory/productSku.js";
 import type * as inventory_productUtil from "../inventory/productUtil.js";
 import type * as inventory_products from "../inventory/products.js";
 import type * as inventory_promoCode from "../inventory/promoCode.js";
+import type * as inventory_stockValidation from "../inventory/stockValidation.js";
 import type * as inventory_stores from "../inventory/stores.js";
 import type * as inventory_subcategories from "../inventory/subcategories.js";
 import type * as inventory_utils from "../inventory/utils.js";
@@ -199,6 +200,7 @@ declare const fullApi: ApiFromModules<{
   "inventory/productUtil": typeof inventory_productUtil;
   "inventory/products": typeof inventory_products;
   "inventory/promoCode": typeof inventory_promoCode;
+  "inventory/stockValidation": typeof inventory_stockValidation;
   "inventory/stores": typeof inventory_stores;
   "inventory/subcategories": typeof inventory_subcategories;
   "inventory/utils": typeof inventory_utils;
