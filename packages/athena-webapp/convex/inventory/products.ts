@@ -451,6 +451,17 @@ export const create = mutation({
 export const createSku = mutation({
   args: productSkuSchema,
   handler: async (ctx, args) => {
+    // Validate quantityAvailable doesn't exceed stock
+    if (
+      args.quantityAvailable !== undefined &&
+      args.inventoryCount !== undefined &&
+      args.quantityAvailable > args.inventoryCount
+    ) {
+      throw new Error(
+        `Quantity available (${args.quantityAvailable}) cannot exceed stock (${args.inventoryCount})`
+      );
+    }
+
     // Fetch the product to verify existence and fetch storeId
     const product = await ctx.db
       .query("product")
@@ -524,6 +535,28 @@ export const updateSku = mutation({
     attributes: v.optional(v.record(v.string(), v.any())),
   },
   handler: async (ctx, args) => {
+    // Get current SKU data for validation
+    const currentSku = await ctx.db.get(args.id);
+    if (!currentSku) throw new Error("SKU not found");
+
+    // Determine final values for validation
+    const finalQuantityAvailable =
+      args.quantityAvailable ?? currentSku.quantityAvailable;
+    const finalInventoryCount =
+      args.inventoryCount ?? currentSku.inventoryCount;
+
+    // Validate quantityAvailable doesn't exceed stock
+    if (
+      finalQuantityAvailable !== undefined &&
+      finalInventoryCount !== undefined &&
+      finalQuantityAvailable > finalInventoryCount
+    ) {
+      return {
+        success: false,
+        error: "Quantity available cannot exceed stock",
+      };
+    }
+
     const { id, ...rest } = args;
     await ctx.db.patch(args.id, {
       ...rest,

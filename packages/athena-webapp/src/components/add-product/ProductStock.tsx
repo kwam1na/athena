@@ -182,20 +182,40 @@ function Stock({
 
   const { activeStore } = useGetActiveStore();
 
-  // Check which SKUs are reserved in active checkout sessions
-  // const skusToCheck = productVariants.map((variant) => variant.sku);
-  // const { isSkuReserved } = useSkusReservedInCheckout(skusToCheck);
-
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement>,
     variantId: string,
     field: "sku" | "stock" | "cost" | "netPrice" | "quantityAvailable"
   ) => {
     const value = field === "sku" ? e.target.value : parseFloat(e.target.value);
+
     updateProductVariants((prevVariants) =>
-      prevVariants.map((variant) =>
-        variant.id === variantId ? { ...variant, [field]: value } : variant
-      )
+      prevVariants.map((variant) => {
+        if (variant.id !== variantId) return variant;
+
+        if (field === "stock") {
+          // When updating stock, also adjust quantityAvailable to not exceed stock
+          const newStock = value as number;
+          const currentQuantityAvailable = variant.quantityAvailable || 0;
+          let adjustedQuantityAvailable = Math.min(
+            currentQuantityAvailable,
+            newStock
+          );
+
+          if (currentQuantityAvailable === 0 && newStock > 0) {
+            adjustedQuantityAvailable = newStock;
+          }
+
+          return {
+            ...variant,
+            stock: newStock,
+            quantityAvailable: adjustedQuantityAvailable,
+          };
+        } else {
+          // For all other fields, use default behavior
+          return { ...variant, [field]: value };
+        }
+      })
     );
   };
 
@@ -272,6 +292,14 @@ function Stock({
       variant.markedForDeletion ||
       variant.isVisible == false ||
       isSkuReserved(variant.sku)
+    );
+  };
+
+  const hasQuantityError = (variant: ProductVariant) => {
+    return (
+      variant.quantityAvailable !== undefined &&
+      variant.stock !== undefined &&
+      variant.quantityAvailable > variant.stock
     );
   };
 
@@ -393,6 +421,9 @@ function Stock({
                       }
                       value={variant.quantityAvailable || ""}
                       disabled={shouldDisable(variant)}
+                      className={
+                        hasQuantityError(variant) ? "border-red-500" : ""
+                      }
                     />
                   )}
                   {error && getErrorForField(error, "quantityAvailable") && (
@@ -456,7 +487,8 @@ function Stock({
                               onClick={() => setVisibility(variant.id)}
                               disabled={
                                 isLastActiveVariant(index) ||
-                                isLastVisibleVariant(index)
+                                isLastVisibleVariant(index) ||
+                                isSkuReserved(variant.sku)
                               }
                             >
                               {(variant.isVisible == undefined ||
@@ -514,7 +546,10 @@ function Stock({
                                   variant.markedForDeletion
                                 )
                               }
-                              disabled={isLastActiveVariant(index)}
+                              disabled={
+                                isLastActiveVariant(index) ||
+                                isSkuReserved(variant.sku)
+                              }
                             >
                               {variant.markedForDeletion ? (
                                 <RotateCcw className="w-4 h-4" />

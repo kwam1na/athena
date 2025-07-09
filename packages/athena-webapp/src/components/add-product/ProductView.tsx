@@ -193,7 +193,7 @@ function ProductViewContent() {
 
       // console.log("variants in flow:", productVariants);
 
-      await Promise.all(
+      const res = await Promise.all(
         productVariants.map((variant) => {
           if (variant.existsInDB) {
             return variant.markedForDeletion
@@ -209,6 +209,10 @@ function ProductViewContent() {
       updateProductVariants((prevVariants) =>
         prevVariants.filter((variant) => !variant.markedForDeletion)
       );
+
+      if (res.some((r: any) => r === false)) {
+        return;
+      }
 
       toast.success("Changes saved");
 
@@ -327,7 +331,7 @@ function ProductViewContent() {
       ? variant.netPrice
       : Math.round(variant.netPrice + processingFee);
 
-    await updateSku({
+    const res: any = await updateSku({
       id: skuId as Id<"productSku">,
       sku: variant.sku,
       price: price || 0,
@@ -342,6 +346,13 @@ function ProductViewContent() {
       weight: variant.weight,
       attributes: variant.attributes || {},
     });
+
+    if (res?.success === false) {
+      toast.error(res?.error);
+      return false;
+    }
+
+    return true;
   };
 
   const onSubmit = async () => {
