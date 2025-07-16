@@ -49,7 +49,7 @@ export const CheckoutComplete = () => {
         activeSession.hasCompletedPayment ||
         activeSession.hasVerifiedPayment
       ) {
-        await Promise.all([
+        await Promise.allSettled([
           updateCheckoutSession({
             action: "complete-checkout",
             sessionId: activeSession._id,

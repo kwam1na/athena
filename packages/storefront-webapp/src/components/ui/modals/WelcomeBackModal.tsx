@@ -13,27 +13,26 @@ import {
   welcomeBackConfigs,
   defaultBackgroundImageUrl,
   nextOrderConfigs,
+  getModalConfig,
 } from "./config/welcomeBackModalConfig";
 import { useTrackEvent } from "@/hooks/useTrackEvent";
 import { postAnalytics } from "@/api/analytics";
 import { useOnlineOrderQueries } from "@/lib/queries/onlineOrder";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { PromoCode } from "./types";
 
 interface WelcomeBackModalProps {
   isOpen: boolean;
   onClose: () => void;
-  promoCodeId?: string;
+  promoCode?: PromoCode;
   onSuccess?: () => void;
 }
-
-// Single storage key for variant persistence
-const WELCOME_VARIANT_KEY = "welcome_modal_variant";
 
 export const WelcomeBackModal: React.FC<WelcomeBackModalProps> = ({
   isOpen,
   onClose,
   onSuccess,
-  promoCodeId,
+  promoCode,
 }) => {
   const [isSuccess, setIsSuccess] = useState(false);
 
@@ -42,18 +41,12 @@ export const WelcomeBackModal: React.FC<WelcomeBackModalProps> = ({
 
   const isNextOrder = onlineOrders?.length > 1;
 
-  const configsArray = isNextOrder ? nextOrderConfigs : welcomeBackConfigs;
-
-  const safeVariant = 1;
-  const currentConfig = configsArray[safeVariant];
-
   useTrackEvent({
     action: "viewed_WELCOMEBACK25_modal",
     isReady: isOpen,
     data: {
       isNextOrder,
-      selectedVariant: safeVariant,
-      promoCodeId,
+      promoCodeId: promoCode?.promoCodeId,
     },
   });
 
@@ -66,8 +59,7 @@ export const WelcomeBackModal: React.FC<WelcomeBackModalProps> = ({
         action: "dismissed_WELCOMEBACK25_modal",
         data: {
           isNextOrder,
-          selectedVariant: safeVariant,
-          promoCodeId,
+          promoCodeId: promoCode?.promoCodeId,
         },
       });
     }
@@ -88,15 +80,18 @@ export const WelcomeBackModal: React.FC<WelcomeBackModalProps> = ({
       action: "submitted_WELCOMEBACK25_modal",
       data: {
         isNextOrder,
-        selectedVariant: safeVariant,
-        promoCodeId,
+        promoCodeId: promoCode?.promoCodeId,
       },
     });
   };
 
-  if (!promoCodeId || !isOpen) {
+  if (!promoCode || !isOpen) {
     return null;
   }
+
+  const modalType = isNextOrder ? "nextOrder" : "welcomeBack";
+
+  const currentConfig = getModalConfig(promoCode, modalType);
 
   return (
     <Modal
@@ -155,7 +150,7 @@ export const WelcomeBackModal: React.FC<WelcomeBackModalProps> = ({
                   <WelcomeBackModalForm
                     onClose={handleClose}
                     onSuccess={handleSuccess}
-                    promoCodeId={promoCodeId}
+                    promoCode={promoCode}
                     config={currentConfig}
                   />
                 )}

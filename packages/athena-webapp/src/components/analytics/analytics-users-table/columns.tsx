@@ -34,7 +34,7 @@ export const columns: ColumnDef<AnalyticUser>[] = [
   {
     accessorKey: "email",
     header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="User" />
+      <DataTableColumnHeader column={column} title="Top Users" />
     ),
     cell: ({ row }) => {
       const user = row.original;

@@ -260,7 +260,10 @@ export const sendOrderUpdateEmail = action({
 
       await ctx.runMutation(api.storeFront.onlineOrder.update, {
         orderId: order!._id,
-        update: { didSendConfirmationEmail },
+        update: {
+          didSendConfirmationEmail,
+          orderReceivedEmailSentAt: Date.now(),
+        },
       });
     }
 
@@ -271,7 +274,10 @@ export const sendOrderUpdateEmail = action({
 
       await ctx.runMutation(api.storeFront.onlineOrder.update, {
         orderId: order!._id,
-        update: { didSendReadyEmail },
+        update: {
+          didSendReadyEmail,
+          orderReadyEmailSentAt: Date.now(),
+        },
       });
     }
 
@@ -282,7 +288,10 @@ export const sendOrderUpdateEmail = action({
 
       await ctx.runMutation(api.storeFront.onlineOrder.update, {
         orderId: order!._id,
-        update: { didSendCompletedEmail },
+        update: {
+          didSendCompletedEmail,
+          orderCompletedEmailSentAt: Date.now(),
+        },
       });
     }
 
@@ -293,7 +302,10 @@ export const sendOrderUpdateEmail = action({
 
       await ctx.runMutation(api.storeFront.onlineOrder.update, {
         orderId: order!._id,
-        update: { didSendCancelledEmail },
+        update: {
+          didSendCancelledEmail,
+          orderCancelledEmailSentAt: Date.now(),
+        },
       });
     }
   },

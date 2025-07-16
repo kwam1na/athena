@@ -4,29 +4,13 @@ import useGetActiveStore from "~/src/hooks/useGetActiveStore";
 import { GenericDataTable } from "../../base/table/data-table";
 import { capturedEmailsColumns } from "./captured-emails-columns";
 import { Id } from "~/convex/_generated/dataModel";
+import { Offer } from "~/types";
 
 interface CapturedEmailsProps {
-  promoCodeId?: Id<"promoCode">;
+  offers?: Offer[];
 }
 
-export default function CapturedEmails({
-  promoCodeId,
-}: CapturedEmailsProps = {}) {
-  const { activeStore } = useGetActiveStore();
-
-  // If promoCodeId is provided, get offers for that specific promo code
-  // Otherwise, get all offers for the store
-  const offers = useQuery(
-    promoCodeId
-      ? api.storeFront.offers.getByPromoCodeId
-      : api.storeFront.offers.getAll,
-    promoCodeId
-      ? { promoCodeId }
-      : activeStore?._id
-        ? { storeId: activeStore?._id }
-        : "skip"
-  );
-
+export default function CapturedEmails({ offers }: CapturedEmailsProps = {}) {
   if (!offers) return null;
 
   return <GenericDataTable data={offers} columns={capturedEmailsColumns} />;

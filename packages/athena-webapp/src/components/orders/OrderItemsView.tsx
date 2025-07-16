@@ -231,6 +231,7 @@ function OrderItem({ item, order }: { item: any; order: any }) {
                   isLoading={isUpdatingOrderItem}
                   onClick={() => handleUpdateOrderItem(true)}
                   variant="outline"
+                  className="text-green-700 bg-gray-50 hover:text-green-700"
                   disabled={item.quantity > item.currentInventoryCount}
                 >
                   <Check className="h-4 w-4 mr-2 text-green-700" />
@@ -243,6 +244,7 @@ function OrderItem({ item, order }: { item: any; order: any }) {
                   isLoading={isUpdatingOrderItem}
                   onClick={() => handleUpdateOrderItem(false)}
                   variant="outline"
+                  className="text-red-700 bg-gray-50 hover:text-red-700"
                 >
                   <XCircle className="h-4 w-4 mr-2 text-red-700" />
                   Not ready

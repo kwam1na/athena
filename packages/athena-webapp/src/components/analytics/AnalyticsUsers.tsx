@@ -151,7 +151,7 @@ export default function AnalyticsUsers({ items }: { items: Analytic[] }) {
   return (
     <div className="container mx-auto">
       <div className="py-8">
-        <AnalyticsUsersTable data={sortedData} columns={columns} />
+        <AnalyticsUsersTable pageSize={3} data={sortedData} columns={columns} />
       </div>
     </div>
   );

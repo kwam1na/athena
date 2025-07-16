@@ -177,6 +177,7 @@ export const getAllUserActivity = query({
 export const getLastViewedProduct = query({
   args: {
     id: v.union(v.id(entity), v.id("guest")),
+    category: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000; // 1 day ago in ms
@@ -191,10 +192,11 @@ export const getLastViewedProduct = query({
         id: productId,
         storeId,
       });
+
       return product?.skus?.find(
         (sku: any) =>
           sku.sku === skuToCheck &&
-          sku.productCategory === "Hair" &&
+          sku.productCategory === args.category &&
           sku.quantityAvailable > 0
       );
     };
@@ -202,14 +204,12 @@ export const getLastViewedProduct = query({
     // Get recent product views
     const analytics = await ctx.db
       .query("analytics")
-      .filter((q) =>
-        q.and(
-          q.eq(q.field("storeFrontUserId"), args.id),
-          q.eq(q.field("action"), "viewed_product"),
-          q.gte(q.field("_creationTime"), oneDayAgo)
-        )
+      .withIndex("by_storeFrontUserId", (q) =>
+        q.eq("storeFrontUserId", args.id)
       )
-      .take(10);
+      .filter((q) => q.eq(q.field("action"), "viewed_product"))
+      .order("desc")
+      .take(100);
 
     if (analytics.length) {
       // Get all the product SKUs from analytics
@@ -229,7 +229,9 @@ export const getLastViewedProduct = query({
 
       // Try each analytic in order until we find an available product
       for (const analytic of analytics) {
-        if (bagSkus.has(analytic.data.productSku)) continue;
+        // if (bagSkus.has(analytic.data.productSku)) {
+        //   continue;
+        // }
 
         const availableSku = await isSkuAvailable(
           analytic.data.product,
@@ -254,14 +256,12 @@ export const getLastViewedProduct = query({
     // If no recent views, try to find the last viewed product (all time)
     const allTimeAnalytics = await ctx.db
       .query("analytics")
-      .filter((q) =>
-        q.and(
-          q.eq(q.field("storeFrontUserId"), args.id),
-          q.eq(q.field("action"), "viewed_product")
-        )
+      .withIndex("by_storeFrontUserId", (q) =>
+        q.eq("storeFrontUserId", args.id)
       )
+      .filter((q) => q.eq(q.field("action"), "viewed_product"))
       .order("desc")
-      .take(20); // check up to 20 most recent all-time views
+      .take(200); // check up to 20 most recent all-time views
 
     if (allTimeAnalytics.length) {
       // Get all the product SKUs from analytics
@@ -283,7 +283,7 @@ export const getLastViewedProduct = query({
 
       // Try each analytic in order until we find an available product
       for (const analytic of allTimeAnalytics) {
-        if (bagSkus.has(analytic.data.productSku)) continue;
+        // if (bagSkus.has(analytic.data.productSku)) continue;
 
         const availableSku = await isSkuAvailable(
           analytic.data.product,

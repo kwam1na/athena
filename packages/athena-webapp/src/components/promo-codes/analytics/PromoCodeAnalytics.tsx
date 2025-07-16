@@ -36,6 +36,10 @@ const PromoCodeAnalytics = ({
     promoCodeId,
   });
 
+  const offers = useQuery(api.storeFront.offers.getByPromoCodeId, {
+    promoCodeId,
+  });
+
   if (!analytics) {
     return (
       <div className="flex items-center justify-center h-48">
@@ -154,6 +158,8 @@ const PromoCodeAnalytics = ({
       ? ((actionCounts.submitted / actionCounts.viewed) * 100).toFixed(1)
       : "0";
 
+  const capturedEmailsCount = offers?.length || 0;
+
   return (
     <div className="space-y-6">
       {/* View Toggle */}
@@ -176,7 +182,7 @@ const PromoCodeAnalytics = ({
         </Tabs>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-3 gap-4">
         <Card className="shadow-none">
           <CardHeader className="pb-4">
             <p className="text-sm text-muted-foreground">Total Interactions</p>
@@ -194,6 +200,14 @@ const PromoCodeAnalytics = ({
             <p className="text-xs text-muted-foreground">
               Of users who viewed the code, {conversionRate}% submitted it
             </p>
+          </CardContent>
+        </Card>
+        <Card className="shadow-none">
+          <CardHeader className="pb-4">
+            <p className="text-sm text-muted-foreground">Captured Emails</p>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-2xl font-semibold">{capturedEmailsCount}</p>
           </CardContent>
         </Card>
       </div>
@@ -238,7 +252,7 @@ const PromoCodeAnalytics = ({
         {currentView === "table" ? (
           <GenericDataTable data={analytics} columns={analyticsColumns} />
         ) : (
-          <CapturedEmails promoCodeId={promoCodeId} />
+          <CapturedEmails offers={offers} />
         )}
       </div>
     </div>

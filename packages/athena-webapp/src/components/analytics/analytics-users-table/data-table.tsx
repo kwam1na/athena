@@ -28,11 +28,13 @@ interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
   showToolbar?: boolean;
+  pageSize?: number;
 }
 
 export function AnalyticsUsersTable<TData, TValue>({
   columns,
   data,
+  pageSize = 10,
 }: DataTableProps<TData, TValue>) {
   const [rowSelection, setRowSelection] = React.useState({});
   const [columnVisibility, setColumnVisibility] =
@@ -47,7 +49,7 @@ export function AnalyticsUsersTable<TData, TValue>({
     columns,
     initialState: {
       pagination: {
-        pageSize: 10,
+        pageSize,
       },
     },
     state: {

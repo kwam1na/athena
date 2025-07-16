@@ -1,3 +1,5 @@
+import { PromoCode } from "../types";
+
 export interface WelcomeBackModalConfig {
   title: string;
   subtitle?: string;
@@ -40,3 +42,24 @@ export const nextOrderConfigs: WelcomeBackModalConfig[] = [
     ctaText: "Claim my discount",
   },
 ];
+
+export const getModalConfig = (
+  promoCode: PromoCode,
+  type: "welcomeBack" | "nextOrder"
+) => {
+  if (type == "welcomeBack") {
+    return {
+      title: `Get ${promoCode.displayText} off your first purchase`,
+      body: "Enter your email to get your exclusive discount code. Limited-time only!",
+      backgroundImageUrl: defaultBackgroundImageUrl,
+      ctaText: "Claim my discount",
+    };
+  }
+
+  return {
+    title: `Get ${promoCode.displayText} off your next purchase`,
+    body: "Enter your email to get your exclusive discount code. Limited-time only!",
+    backgroundImageUrl: defaultBackgroundImageUrl,
+    ctaText: "Claim my discount",
+  };
+};

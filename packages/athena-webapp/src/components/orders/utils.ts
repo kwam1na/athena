@@ -62,3 +62,16 @@ export const getDiscountValue = (
       : discount?.value) || 0
   );
 };
+
+export const getAmountPaidForOrder = (order: any) => {
+  const discountValue = getDiscountValue(order.amount, order.discount);
+
+  const discount =
+    order.discount && order.discount?.type === "percentage"
+      ? discountValue
+      : discountValue * 100;
+
+  const orderAmount = order.amount + (order.deliveryFee || 0) * 100;
+
+  return orderAmount - discount;
+};

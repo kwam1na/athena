@@ -57,7 +57,7 @@ export const Route = createRootRouteWithContext<{
 function RootComponent() {
   return (
     <RootDocument>
-      <div className="p-8 bg-background">
+      <div className="p-8 bg-transparent">
         <Outlet />
       </div>
       {/* <ReactQueryDevtools buttonPosition="top-right" /> */}

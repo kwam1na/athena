@@ -1,7 +1,7 @@
 import { useOnlineOrder } from "~/src/contexts/OnlineOrderContext";
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
 import { currencyFormatter } from "~/src/lib/utils";
-import { getDiscountValue } from "./utils";
+import { getAmountPaidForOrder, getDiscountValue } from "./utils";
 import { Tag } from "lucide-react";
 
 export const OrderSummary = () => {
@@ -19,9 +19,7 @@ export const OrderSummary = () => {
       ? discountValue
       : discountValue * 100;
 
-  const orderAmount = order.amount + (order.deliveryFee || 0) * 100;
-
-  const amountPaid = orderAmount - discount;
+  const amountPaid = getAmountPaidForOrder(order);
 
   const amountRefunded =
     order?.refunds?.reduce((acc, refund) => acc + refund.amount, 0) || 0;

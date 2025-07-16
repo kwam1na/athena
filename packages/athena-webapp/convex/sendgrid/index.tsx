@@ -212,7 +212,7 @@ export const sendDiscountCodeEmail = async (params: {
 }) => {
   // Format expiration date
   const expirationDate = new Date(
-    Date.now() + 30 * 24 * 60 * 60 * 1000
+    Date.now() + 1 * 24 * 60 * 60 * 1000
   ).toLocaleDateString("en-US", {
     year: "numeric",
     month: "long",

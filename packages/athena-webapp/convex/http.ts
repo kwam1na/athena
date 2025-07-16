@@ -86,8 +86,6 @@ app.route("/reviews", reviewRoutes);
 
 app.route("/me", meRoutes);
 
-app.route("/upsells", upsellRoutes);
-
 app.route("/rewards", rewardsRoutes);
 
 app.route("/offers", offersRoutes);

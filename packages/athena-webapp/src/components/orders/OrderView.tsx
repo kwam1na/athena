@@ -326,7 +326,7 @@ const Header = () => {
                     returnToStock: true,
                   })
                 }
-                className="text-red-500 hover:text-red-500 hover:bg-red-100 bg-red-50"
+                className="text-red-700 hover:text-red-500 hover:bg-red-100 bg-red-50"
               >
                 <XCircle className="h-4 w-4 mr-1" />
                 <p className="text-sm">Cancel Order</p>

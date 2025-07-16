@@ -91,8 +91,15 @@ export function EmailStatusView() {
           <div className="grid grid-cols-1 gap-2">
             <p className="text-sm">order received</p>
             <div className="flex items-center gap-2 text-muted-foreground">
-              <p className="text-xs">Sent</p>
-              <CheckIcon className="h-3.5 w-3.5" />
+              <p className="text-xs">
+                Sent{" "}
+                {order.orderReceivedEmailSentAt
+                  ? getRelativeTime(order.orderReceivedEmailSentAt)
+                  : ""}
+              </p>
+              {!order.orderReceivedEmailSentAt && (
+                <CheckIcon className="h-3.5 w-3.5" />
+              )}
             </div>
           </div>
         )}
@@ -119,8 +126,15 @@ export function EmailStatusView() {
                 : "out for delivery"}
             </p>
             <div className="flex items-center gap-2 text-muted-foreground">
-              <p className="text-xs">Sent</p>
-              <CheckIcon className="h-3.5 w-3.5" />
+              <p className="text-xs">
+                Sent{" "}
+                {order.orderReadyEmailSentAt
+                  ? getRelativeTime(order.orderReadyEmailSentAt)
+                  : ""}
+              </p>
+              {!order.orderReadyEmailSentAt && (
+                <CheckIcon className="h-3.5 w-3.5" />
+              )}
             </div>
           </div>
         )}
@@ -142,8 +156,15 @@ export function EmailStatusView() {
           <div className="grid grid-cols-1 gap-2">
             <p className="text-sm">order {slugToWords(order.status)}</p>
             <div className="flex items-center gap-2 text-muted-foreground">
-              <p className="text-xs">Sent</p>
-              <CheckIcon className="h-3.5 w-3.5" />
+              <p className="text-xs">
+                Sent{" "}
+                {order.orderCompletedEmailSentAt
+                  ? getRelativeTime(order.orderCompletedEmailSentAt)
+                  : ""}
+              </p>
+              {!order.orderCompletedEmailSentAt && (
+                <CheckIcon className="h-3.5 w-3.5" />
+              )}
             </div>
           </div>
         )}

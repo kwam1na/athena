@@ -22,7 +22,7 @@ export function CustomerJourneyStageCard({
         {/* <p className="text-xs text-muted-foreground mb-1">Customer Stage</p> */}
         <div className="flex items-center gap-2">
           {/* <span className="text-lg">{stageInfo.icon}</span> */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-baseline gap-2">
             <p className="text-xs text-muted-foreground">Stage</p>
             <p className="text-sm">{stageInfo.label}</p>
           </div>

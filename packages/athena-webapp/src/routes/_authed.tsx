@@ -63,7 +63,7 @@ export default function Layout() {
     <SidebarProvider defaultOpen={defaultOpen}>
       <AppSidebar />
       <SidebarInset>
-        <main className="flex-1">
+        <main className="flex-1 bg-transparent">
           <AuthedComponent />
         </main>
       </SidebarInset>

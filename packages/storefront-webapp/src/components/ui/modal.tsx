@@ -20,6 +20,7 @@ interface ModalProps {
   withoutCloseButton?: boolean;
   withoutBackground?: boolean;
   fullscreen?: boolean;
+  wideOnDesktop?: boolean;
 }
 
 export const Modal: React.FC<ModalProps> = ({
@@ -32,6 +33,7 @@ export const Modal: React.FC<ModalProps> = ({
   withoutCloseButton,
   withoutBackground,
   fullscreen,
+  wideOnDesktop,
 }) => {
   const onChange = (open: boolean) => {
     if (!open) {
@@ -46,6 +48,7 @@ export const Modal: React.FC<ModalProps> = ({
         <DialogContentFullscreen
           className={cn(
             "bg-transparent border-none p-0",
+            wideOnDesktop && "sm:max-w-[50vw]",
             withoutBackground && "bg-transparent"
           )}
         >

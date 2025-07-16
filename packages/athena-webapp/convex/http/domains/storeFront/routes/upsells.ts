@@ -3,7 +3,6 @@ import { HonoWithConvex } from "convex-helpers/server/hono";
 import { ActionCtx } from "../../../../_generated/server";
 import { api } from "../../../../_generated/api";
 import { Id } from "../../../../_generated/dataModel";
-import { getCookie } from "hono/cookie";
 import { getStorefrontUserFromRequest } from "../../../utils";
 
 const upsellRoutes: HonoWithConvex<ActionCtx> = new Hono();
@@ -15,11 +14,25 @@ upsellRoutes.get("/", async (c) => {
     return c.json(null, 200);
   }
 
+  // const ids = [
+  //   "md7bj057x4h3nnwxjgj0rfvadn7ggez0",
+  //   "md72weypcwt2mgjmxsbayxdpt57jnwze",
+  //   "kh7dn0q87d7jj7nxh78vbmhck97g5d6g",
+  //   "nx7dya3regfngq75mr1r7b5rq97akt8z",
+  // ];
+
+  // if (!ids.includes(userId)) {
+  //   return c.json(null);
+  // }
+
+  const category = c.req.query("category");
+
   try {
     const lastProduct = await c.env.runQuery(
       api.storeFront.user.getLastViewedProduct,
       {
         id: userId as Id<"storeFrontUser">,
+        category,
       }
     );
 

@@ -7,18 +7,19 @@ import { submitOffer, type OfferRequest } from "@/api/offers";
 import { validateEmail } from "@/lib/validations/email";
 import { WelcomeBackModalConfig } from "./config/welcomeBackModalConfig";
 import { Badge } from "../badge";
+import { PromoCode } from "./types";
 
 interface WelcomeBackModalFormProps {
   onClose: () => void;
   onSuccess: () => void;
-  promoCodeId: string;
+  promoCode: PromoCode;
   config: WelcomeBackModalConfig;
 }
 
 export const WelcomeBackModalForm: React.FC<WelcomeBackModalFormProps> = ({
   onClose,
   onSuccess,
-  promoCodeId,
+  promoCode,
   config,
 }) => {
   const [email, setEmail] = useState("");
@@ -43,7 +44,7 @@ export const WelcomeBackModalForm: React.FC<WelcomeBackModalFormProps> = ({
     // Submit email to the offers endpoint
     mutation.mutate({
       email,
-      promoCodeId,
+      promoCodeId: promoCode.promoCodeId,
     });
   };
 

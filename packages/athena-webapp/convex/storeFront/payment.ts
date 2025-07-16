@@ -413,6 +413,7 @@ export const verifyPayment = action({
                   `sent order confirmation for order #${order?.orderNumber} to ${order.customerDetails?.email}`
                 );
                 update.didSendConfirmationEmail = true;
+                update.orderReceivedEmailSentAt = Date.now();
               }
             } catch (e) {
               console.error("Failed to send order confirmation email", e);

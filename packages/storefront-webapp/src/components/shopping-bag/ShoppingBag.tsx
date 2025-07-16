@@ -521,7 +521,7 @@ export default function ShoppingBag() {
         isOpen={isDiscountModalOpen}
         onClose={handleCloseDiscountModal}
         onSuccess={completeDiscountModalFlow}
-        promoCodeId={store?.config?.homepageDiscountCodeModalPromoCode}
+        promoCode={store?.config?.homepageDiscountCodeModalPromoCode}
       />
     </FadeIn>
   );

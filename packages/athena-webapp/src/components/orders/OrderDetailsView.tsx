@@ -7,6 +7,9 @@ import {
   Smartphone,
   Clock,
   CircleCheck,
+  CircleFadingPlus,
+  Dot,
+  X,
 } from "lucide-react";
 import View from "../View";
 import { useOnlineOrder } from "~/src/contexts/OnlineOrderContext";
@@ -23,6 +26,7 @@ import { useEffect, useState } from "react";
 import { Button } from "../ui/button";
 import { toast } from "sonner";
 import { useAuth } from "~/src/hooks/useAuth";
+import { getAmountPaidForOrder } from "./utils";
 
 interface ExternalTransaction {
   id: string;
@@ -57,6 +61,15 @@ const ExternalTransaction = ({
 }: {
   transaction: ExternalTransaction;
 }) => {
+  const map = {
+    success: "Succeeded",
+    failed: "Failed",
+    pending: "Pending",
+    abandoned: "Abandoned",
+    cancelled: "Cancelled",
+    refunded: "Refunded",
+  };
+
   const statusColor = {
     success: "text-green-700",
     failed: "text-red-700",
@@ -69,17 +82,25 @@ const ExternalTransaction = ({
   return (
     <div className="space-y-2">
       <div className="w-full flex gap-2">
-        <div className="pt-2">
-          <Circle
-            className={`w-2 h-2 ${statusColor[transaction.status as keyof typeof statusColor]}`}
-          />
-        </div>
         <div className="space-y-2">
           <div className="flex items-center gap-2">
+            {transaction.status === "success" ? (
+              <Check
+                className={`w-3 h-3 ${statusColor[transaction.status as keyof typeof statusColor]}`}
+              />
+            ) : transaction.status === "failed" ? (
+              <X
+                className={`w-3 h-3 ${statusColor[transaction.status as keyof typeof statusColor]}`}
+              />
+            ) : (
+              <Circle
+                className={`w-2.5 h-2.5 ${statusColor[transaction.status as keyof typeof statusColor]}`}
+              />
+            )}
             <p
               className={`text-sm ${statusColor[transaction.status as keyof typeof statusColor]}`}
             >
-              {capitalizeFirstLetter(transaction.status)}
+              {map[transaction.status as keyof typeof map]}
             </p>
             <span className="text-sm font-medium">{transaction.reference}</span>
             <span className="text-sm">{transaction.formattedAmount}</span>
@@ -123,8 +144,7 @@ export function OrderDetailsView() {
           .filter(
             (transaction: any) =>
               transaction.metadata.checkout_session_id ==
-                order?.checkoutSessionId &&
-              transaction.reference !== order?.externalReference
+              order?.checkoutSessionId
           )
           .map((transaction: any) => {
             return {
@@ -196,6 +216,8 @@ export function OrderDetailsView() {
   const paymentChannel =
     paymentMethod?.channel == "mobile_money" ? "Mobile Money" : "Card";
 
+  const amountPaid = getAmountPaidForOrder(order);
+
   return (
     <View
       hideBorder
@@ -248,7 +270,10 @@ export function OrderDetailsView() {
               // Regular Payment Status
               <div>
                 {order.hasVerifiedPayment ? (
-                  <VerifiedBadge status="Verified" />
+                  <VerifiedBadge
+                    status={`Paid ${formatter.format(amountPaid / 100)}`}
+                    withCheck={false}
+                  />
                 ) : (
                   <div className="flex items-center gap-2">
                     <Badge

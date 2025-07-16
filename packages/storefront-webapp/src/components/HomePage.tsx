@@ -21,6 +21,9 @@ import { ChevronDown, GiftIcon } from "lucide-react";
 import { motion } from "framer-motion";
 import { useStoreContext } from "@/contexts/StoreContext";
 import { postAnalytics } from "@/api/analytics";
+import { useUpsellsQueries } from "@/lib/queries/upsells";
+import { UpsellModal } from "./ui/modals/UpsellModal";
+import { getRelativeTime } from "@/lib/utils";
 
 const origin = "homepage";
 
@@ -31,17 +34,19 @@ export default function HomePage() {
 
   const { store } = useStoreContext();
 
+  // console.log("store", store);
+
   const { setNavBarLayout, setAppLocation } = useNavigationBarContext();
 
   // Use extracted custom hooks
-  const { isPromoAlertOpen, handleClosePromoAlert } = usePromoAlert();
+  // const { isPromoAlertOpen, handleClosePromoAlert } = usePromoAlert();
 
-  const {
-    isRewardsAlertOpen,
-    isRewardsAlertDismissed,
-    handleCloseRewardsAlert,
-    lastRewardsAlertShownTime,
-  } = useRewardsAlert();
+  // const {
+  //   isRewardsAlertOpen,
+  //   isRewardsAlertDismissed,
+  //   handleCloseRewardsAlert,
+  //   lastRewardsAlertShownTime,
+  // } = useRewardsAlert();
 
   const {
     isDiscountModalOpen,
@@ -52,6 +57,7 @@ export default function HomePage() {
     hasCompletedDiscountModalFlow,
     setHasDiscountModalBeenShown,
     isDiscountModalDismissed,
+    lastDiscountModalShownTime,
     isDiscountModalStateLoaded,
     openDiscountModal,
   } = useDiscountCodeAlert();
@@ -157,6 +163,15 @@ export default function HomePage() {
 
   if (isLoading) return <div className="h-screen" />;
 
+  const lastDiscountModalShownTimeAgo =
+    Date.now() - (lastDiscountModalShownTime || 0);
+
+  const meetsConditionsToShowUpsell =
+    lastDiscountModalShownTimeAgo > 1000 * 60 * 60 * 24 &&
+    isDiscountModalDismissed;
+
+  // const meetsConditionsToShowUpsell = true;
+
   return (
     <>
       {/* <PromoAlert
@@ -169,11 +184,17 @@ export default function HomePage() {
         onClose={handleCloseRewardsAlert}
       /> */}
 
+      {meetsConditionsToShowUpsell && (
+        <UpsellModal
+          promoCode={store?.config?.homepageDiscountCodeModalPromoCode}
+        />
+      )}
+
       <WelcomeBackModal
         isOpen={isDiscountModalOpen}
         onClose={handleCloseDiscountModal}
         onSuccess={completeDiscountModalFlow}
-        promoCodeId={store?.config?.homepageDiscountCodeModalPromoCode}
+        promoCode={store?.config?.homepageDiscountCodeModalPromoCode}
       />
 
       {/* Floating welcome back button */}
@@ -191,8 +212,8 @@ export default function HomePage() {
           </motion.button>
         )}
 
-      <div className="min-h-screen">
-        <div className="overflow-visible">
+      <div className="min-h-screen overflow-x-hidden">
+        <div className="overflow-x-hidden">
           <div className="space-y-16 md:space-y-56 pb-32">
             {/* Hero Section */}
             <HomeHeroSectionWithRef

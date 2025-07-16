@@ -68,7 +68,7 @@ function PromoCodeView() {
       setIsExclusive(activePromoCode.isExclusive ?? false);
       // Check if this promo code is set as homepage discount code
       if (
-        activeStore?.config?.homepageDiscountCodeModalPromoCode ===
+        activeStore?.config?.homepageDiscountCodeModalPromoCode?.promoCodeId ===
         activePromoCode._id
       ) {
         setIsHomepageDiscountCode(true);
@@ -131,7 +131,12 @@ function PromoCodeView() {
           id: activeStore._id,
           config: {
             ...activeStore.config,
-            homepageDiscountCodeModalPromoCode: newPromoCode.promoCode._id,
+            homepageDiscountCodeModalPromoCode: {
+              promoCodeId: newPromoCode.promoCode._id,
+              value: newPromoCode.promoCode.discountValue,
+              displayText: newPromoCode.promoCode.displayText,
+              discountType: newPromoCode.promoCode.discountType,
+            },
           },
         });
         toast.success("Set as homepage discount code");
@@ -192,16 +197,21 @@ function PromoCodeView() {
         const isCurrentlyHomepageCode =
           currentHomepagePromoCodeId === promoCodeSlug;
 
-        if (isHomepageDiscountCode && !isCurrentlyHomepageCode) {
+        if (isHomepageDiscountCode) {
           // Add this promo code as homepage discount code
           await updateStoreConfig({
             id: activeStore._id,
             config: {
               ...activeStore.config,
-              homepageDiscountCodeModalPromoCode: promoCodeSlug,
+              homepageDiscountCodeModalPromoCode: {
+                promoCodeId: promoCodeSlug,
+                value: parseFloat(discount!),
+                displayText: displayText,
+                discountType: discountType,
+              },
             },
           });
-          toast.success("Set as homepage discount code");
+          toast.success("Updated homepage discount code");
         } else if (!isHomepageDiscountCode && isCurrentlyHomepageCode) {
           // Remove this promo code as homepage discount code
           const { homepageDiscountCodeModalPromoCode, ...restConfig } =
@@ -243,7 +253,12 @@ function PromoCodeView() {
           id: activeStore._id,
           config: {
             ...activeStore.config,
-            homepageDiscountCodeModalPromoCode: promoCodeSlug,
+            homepageDiscountCodeModalPromoCode: {
+              promoCodeId: promoCodeSlug,
+              value: activePromoCode?.discountValue,
+              displayText: activePromoCode?.displayText,
+              discountType: activePromoCode?.discountType,
+            },
           },
         });
         toast.success("Set as homepage discount code");

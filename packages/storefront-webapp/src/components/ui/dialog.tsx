@@ -135,7 +135,7 @@ const DialogContentFullscreen = React.forwardRef<
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        "fixed inset-0 z-50 flex items-center justify-center w-full h-full p-0 bg-background shadow-lg sm:left-[50%] sm:top-[50%] sm:max-h-[85vh] sm:max-w-lg sm:translate-x-[-50%] sm:translate-y-[-50%] sm:rounded-lg",
+        "fixed inset-0 z-50 flex items-center justify-center w-full h-full p-0 bg-background shadow-lg sm:left-[50%] sm:top-[50%] sm:max-h-[85vh] sm:max-w-2xl sm:translate-x-[-50%] sm:translate-y-[-50%] sm:rounded-lg",
         className
       )}
       {...props}
