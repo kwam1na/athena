@@ -128,7 +128,7 @@ export const create = mutation({
         .first();
 
       if (offer) {
-        await ctx.db.patch(offer._id, { isRedeemed: true });
+        await ctx.db.patch(offer._id, { isRedeemed: true, status: "redeemed" });
       }
     }
 
@@ -238,7 +238,7 @@ export const createFromSession = internalMutation({
         .first();
 
       if (offer) {
-        await ctx.db.patch(offer._id, { isRedeemed: true });
+        await ctx.db.patch(offer._id, { isRedeemed: true, status: "redeemed" });
       }
     }
 

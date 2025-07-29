@@ -89,7 +89,7 @@ export const HomeHero = ({ nextSectionRef }: HomeHeroProps) => {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 2, duration: 0.6 }}
-        className="absolute bottom-24 md:bottom-4 left-0 right-0 flex justify-center"
+        className="absolute bottom-28 md:bottom-4 left-0 right-0 flex justify-center"
       >
         <ScrollDownButton targetRef={nextSectionRef} />
       </motion.div>

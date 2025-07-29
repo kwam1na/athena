@@ -25,7 +25,7 @@ export function TimelineEventCard({
   showGrouping = false,
 }: TimelineEventCardProps) {
   const IconComponent = event.icon;
-  const isProductView = event.action === "viewed_product";
+  const isProductView = event.action.includes("viewed_");
   const isBagAction =
     event.action === "added_product_to_bag" ||
     event.action === "removed_product_from_bag";

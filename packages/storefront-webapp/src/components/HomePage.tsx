@@ -65,8 +65,7 @@ export default function HomePage() {
   const [hasScrolledPastThreshold, setHasScrolledPastThreshold] =
     useState(false);
 
-  // const { showReminderBar, setShowReminderBar, upsell } =
-  //   useProductReminder(homeHeroRef);
+  const { upsell, setShowReminderBar } = useProductReminder(homeHeroRef);
 
   const productQueries = useProductQueries();
 
@@ -167,7 +166,7 @@ export default function HomePage() {
     Date.now() - (lastDiscountModalShownTime || 0);
 
   const meetsConditionsToShowUpsell =
-    lastDiscountModalShownTimeAgo > 1000 * 60 * 60 * 24 &&
+    lastDiscountModalShownTimeAgo > 1000 * 60 * 60 * 1 &&
     isDiscountModalDismissed;
 
   // const meetsConditionsToShowUpsell = true;
@@ -179,12 +178,9 @@ export default function HomePage() {
         onClose={handleClosePromoAlert}
       /> */}
 
-      {/* <RewardsAlert
-        isOpen={isRewardsAlertOpen && !isRewardsAlertDismissed}
-        onClose={handleCloseRewardsAlert}
-      /> */}
+      {/* <RewardsAlert isOpen={true} onClose={() => {}} /> */}
 
-      {meetsConditionsToShowUpsell && (
+      {/* {meetsConditionsToShowUpsell && (
         <UpsellModal
           promoCode={store?.config?.homepageDiscountCodeModalPromoCode}
         />
@@ -195,10 +191,10 @@ export default function HomePage() {
         onClose={handleCloseDiscountModal}
         onSuccess={completeDiscountModalFlow}
         promoCode={store?.config?.homepageDiscountCodeModalPromoCode}
-      />
+      /> */}
 
       {/* Floating welcome back button */}
-      {!hasCompletedDiscountModalFlow &&
+      {/* {!hasCompletedDiscountModalFlow &&
         store?.config?.homepageDiscountCodeModalPromoCode && (
           <motion.button
             initial={{ opacity: 0 }}
@@ -210,7 +206,7 @@ export default function HomePage() {
           >
             <GiftIcon className="h-5 w-5" />
           </motion.button>
-        )}
+        )} */}
 
       <div className="min-h-screen overflow-x-hidden">
         <div className="overflow-x-hidden">
@@ -248,16 +244,16 @@ export default function HomePage() {
 
         <Footer ref={footerRef} />
 
-        {/* {upsell && !isPromoAlertOpen && (
+        {upsell && (
           <ProductReminderBar
             product={upsell}
-            isVisible={showReminderBar && upsell.quantityAvailable > 0}
+            isVisible={true}
             onDismiss={() => {
               setShowReminderBar(false);
             }}
             footerRef={footerRef}
           />
-        )} */}
+        )}
       </div>
     </>
   );

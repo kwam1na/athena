@@ -1,7 +1,7 @@
 import { PromoCode } from "../types";
 
 export interface WelcomeBackModalConfig {
-  title: string;
+  title: React.ReactNode;
   subtitle?: string;
   body: string;
   backgroundImageUrl: string;
@@ -49,16 +49,32 @@ export const getModalConfig = (
 ) => {
   if (type == "welcomeBack") {
     return {
-      title: `Get ${promoCode.displayText} off your first purchase`,
-      body: "Enter your email to get your exclusive discount code. Limited-time only!",
+      title: (
+        <p className="text-4xl space-y-4 flex flex-col items-center">
+          <p>Get</p>
+          <p className="text-accent2 text-8xl md:text-9xl">
+            {promoCode.displayText} off
+          </p>
+          <p>your first purchase</p>
+        </p>
+      ),
+      body: "Enter your email to get your exclusive discount code to use at checkout. Ends July 20th",
       backgroundImageUrl: defaultBackgroundImageUrl,
       ctaText: "Claim my discount",
     };
   }
 
   return {
-    title: `Get ${promoCode.displayText} off your next purchase`,
-    body: "Enter your email to get your exclusive discount code. Limited-time only!",
+    title: (
+      <div className="text-4xl space-y-4">
+        <p>Get</p>
+        <p className="text-accent2 text-8xl md:text-9xl">
+          {promoCode.displayText} off
+        </p>
+        <p>your next purchase</p>
+      </div>
+    ),
+    body: "Enter your email to get your exclusive discount code to use at checkout. Ends July 20th",
     backgroundImageUrl: defaultBackgroundImageUrl,
     ctaText: "Claim my discount",
   };

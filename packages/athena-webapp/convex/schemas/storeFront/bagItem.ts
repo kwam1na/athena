@@ -14,6 +14,7 @@ export const bagItemSchema = v.object({
   productName: v.optional(v.string()),
   productImage: v.optional(v.string()),
   productSlug: v.optional(v.string()),
+  otherBagsWithSku: v.optional(v.number()),
   size: v.optional(v.string()),
   length: v.optional(v.number()),
 });

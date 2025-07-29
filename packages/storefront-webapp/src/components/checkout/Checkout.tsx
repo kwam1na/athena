@@ -1,14 +1,14 @@
 import { CheckoutProvider, useCheckout } from "./CheckoutProvider";
 import { AnimatePresence, motion } from "framer-motion";
 import BagSummary from "./BagSummary";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import MobileBagSummary from "./MobileBagSummary";
 import { CheckoutForm } from "./CheckoutForm";
 import { useNavigationBarContext } from "@/contexts/NavigationBarProvider";
+import { TrustSignals } from "../communication/TrustSignals";
 
 const MainComponent = () => {
   const { activeSession } = useCheckout();
-  const { setAppLocation } = useNavigationBarContext();
 
   useEffect(() => {
     const needsVerification =
@@ -39,7 +39,11 @@ const MainComponent = () => {
           className="grid order-2 pb-16 lg:order-1 lg:col-span-6 px-6 lg:px-16"
         >
           <div className="py-8 space-y-12">
-            <p>Checkout</p>
+            <div className="space-y-4">
+              <p>Checkout</p>
+
+              <TrustSignals />
+            </div>
             <div className="space-y-32">
               <div className="lg:pr-24">
                 <CheckoutForm />

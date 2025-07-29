@@ -2,11 +2,10 @@ export const getDiscountValue = (
   subtotal: number,
   discount?: Record<string, any> | null
 ) => {
-  return (
-    (discount?.type === "percentage"
-      ? subtotal * (discount?.value / 100)
-      : discount?.value) || 0
-  );
+  const type = discount?.type || discount?.discountType;
+  const value = discount?.value || discount?.discountValue;
+
+  return (type === "percentage" ? subtotal * (value / 100) : value) || 0;
 };
 
 export const getOrderAmount = ({

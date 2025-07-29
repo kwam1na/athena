@@ -5,13 +5,13 @@ import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { api } from "~/convex/_generated/api";
 import AnalyticsItems from "./AnalyticsItems";
 import AnalyticsProducts from "./AnalyticsProducts";
-import AnalyticsUsers from "./AnalyticsUsers";
 import { FadeIn } from "../common/FadeIn";
 import StoreInsights from "./StoreInsights";
 import { formatNumber } from "../../utils/formatNumber";
 import EnhancedAnalyticsView from "./EnhancedAnalyticsView";
 import { Button } from "../ui/button";
 import { BarChart3, List } from "lucide-react";
+import AnalyticsCombinedUsers from "./AnalyticsCombinedUsers";
 
 const StoreVisitors = () => {
   const { activeStore } = useGetActiveStore();
@@ -72,7 +72,9 @@ export default function AnalyticsView() {
     activeStore?._id ? { storeId: activeStore._id } : "skip"
   );
 
-  if (!activeStore || !analytics) return null;
+  const items = analytics?.sort((a, b) => b._creationTime - a._creationTime);
+
+  if (!activeStore || !analytics || !items) return null;
 
   const Navigation = () => {
     return (
@@ -120,7 +122,6 @@ export default function AnalyticsView() {
   // }
 
   // Classic view
-  const items = analytics.sort((a, b) => b._creationTime - a._creationTime);
 
   return (
     <View
@@ -137,7 +138,7 @@ export default function AnalyticsView() {
           </div>
         </div>
         <div className="space-y-16">
-          <AnalyticsUsers items={items} />
+          <AnalyticsCombinedUsers items={items} />
           <div className="grid grid-cols-2 gap-16">
             <AnalyticsProducts items={items} />
             <AnalyticsItems items={items} />

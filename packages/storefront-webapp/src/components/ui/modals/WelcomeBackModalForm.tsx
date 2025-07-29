@@ -60,10 +60,10 @@ export const WelcomeBackModalForm: React.FC<WelcomeBackModalFormProps> = ({
     <div className="flex flex-col items-center gap-8">
       <div className="space-y-8">
         <div className="flex flex-col items-center gap-8">
-          <Badge className="border-none text-accent2" variant="outline">
-            Exclusive offer!
+          <Badge className="border-none text-lg text-white" variant="outline">
+            FINAL HOURS
           </Badge>
-          <h2 className="text-6xl font-light">{config.title}</h2>
+          <h2 className="font-light">{config.title}</h2>
           {config.subtitle && (
             <h3 className="text-5xl font-light">{config.subtitle}</h3>
           )}
@@ -80,7 +80,7 @@ export const WelcomeBackModalForm: React.FC<WelcomeBackModalFormProps> = ({
             placeholder="Email address"
             required
             className={cn(
-              "bg-white/10 backdrop-blur-sm border-none text-white placeholder:text-white/70 h-10 sm:h-12",
+              "bg-primary/60 backdrop-blur-sm border-none text-white placeholder:text-white/70 h-10 sm:h-12",
               (validationError || mutation.error) && "border-red-500 border-2"
             )}
             disabled={mutation.isPending}

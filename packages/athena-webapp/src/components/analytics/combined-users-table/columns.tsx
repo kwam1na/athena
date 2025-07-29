@@ -1,7 +1,15 @@
 import { ColumnDef } from "@tanstack/react-table";
 import { DataTableColumnHeader } from "./data-table-column-header";
 import { formatUserId, getRelativeTime } from "~/src/lib/utils";
-import { Monitor, Smartphone, User, Mail, Activity, Clock } from "lucide-react";
+import {
+  Monitor,
+  Smartphone,
+  User,
+  Activity,
+  Sparkle,
+  UserRoundCheck,
+  Crown,
+} from "lucide-react";
 import { Badge } from "../../ui/badge";
 import {
   Tooltip,
@@ -11,11 +19,14 @@ import {
 } from "../../ui/tooltip";
 import { Link } from "@tanstack/react-router";
 import { getOrigin } from "~/src/lib/navigationUtils";
+import { Doc } from "~/convex/_generated/dataModel";
 
-export interface AnalyticUser {
+export interface CombinedAnalyticUser {
   userId: string;
   email?: string;
   userType: "Registered" | "Guest";
+  isNewUser: boolean; // New registration (within 7 days)
+  isNewActivity: boolean; // New to analytics/activity (within 7 days)
   totalActions: number;
   lastActive: number;
   firstSeen: number;
@@ -28,12 +39,15 @@ export interface AnalyticUser {
     productImageUrl?: string;
     selectedVariant?: number;
   };
+  user?: Doc<"storeFrontUser"> | Doc<"guest">;
 }
 
-export const columns: ColumnDef<AnalyticUser>[] = [
+export const columns: ColumnDef<CombinedAnalyticUser>[] = [
   {
     accessorKey: "email",
-    header: ({ column }) => <DataTableColumnHeader column={column} title="" />,
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="User" />
+    ),
     cell: ({ row }) => {
       const user = row.original;
 
@@ -53,22 +67,39 @@ export const columns: ColumnDef<AnalyticUser>[] = [
             <User className="w-4 h-4" />
           </div>
           <div className="flex flex-col">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 mb-1">
               <span className="font-medium">
                 {user.email || formatUserId(user.userId)}
               </span>
-              {/* <Badge
-                variant={
-                  user.userType === "Registered" ? "default" : "secondary"
-                }
-                className="text-xs"
-              >
-                {user.userType}
-              </Badge> */}
             </div>
-            <span className="text-xs text-muted-foreground">
-              {user.totalActions} event{user.totalActions !== 1 ? "s" : ""}
-            </span>
+            <div className="flex items-center gap-2">
+              {user.isNewUser && (
+                <Badge
+                  variant="outline"
+                  className="bg-green-50 border-green-50 text-green-600 flex items-center gap-1 text-xs"
+                >
+                  <Sparkle className="w-3 h-3" />
+                  New User
+                </Badge>
+              )}
+              {!user.isNewUser && (
+                <Badge
+                  variant="outline"
+                  className="bg-blue-50 border-blue-50 text-blue-500 flex items-center gap-1 text-xs"
+                >
+                  <UserRoundCheck className="w-3 h-3" />
+                  Returning
+                </Badge>
+              )}
+              {/* {user.isNewActivity && !user.isNewUser && (
+                <Badge
+                  variant="outline"
+                  className="bg-purple-50 border-purple-200 text-purple-600 text-xs"
+                >
+                  New Activity
+                </Badge>
+              )} */}
+            </div>
           </div>
         </Link>
       );
@@ -78,7 +109,26 @@ export const columns: ColumnDef<AnalyticUser>[] = [
   },
   {
     accessorKey: "totalActions",
-    enableSorting: false,
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Engagement" />
+    ),
+    cell: ({ row }) => {
+      const user = row.original;
+
+      return (
+        <div className="flex flex-col">
+          <div className="flex items-center gap-2">
+            <span className="font-medium">{user.totalActions}</span>
+          </div>
+          <span className="text-xs text-muted-foreground">
+            {user.totalActions === 1 ? "interaction" : "interactions"}
+          </span>
+        </div>
+      );
+    },
+  },
+  {
+    accessorKey: "lastActive",
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Last Activity" />
     ),
@@ -104,33 +154,23 @@ export const columns: ColumnDef<AnalyticUser>[] = [
                       o: getOrigin(),
                       variant: user.mostRecentActionData?.productSku,
                     }}
-                    className="flex items-center gap-2"
+                    className="flex flex-col"
                   >
-                    <div className="flex items-center gap-2">
-                      {/* <Activity className="w-4 h-4 text-muted-foreground" /> */}
-                      <div className="flex flex-col">
-                        {/* <span className="font-medium">{user.totalActions}</span> */}
-                        <span className="text-sm capitalize text-muted-foreground">
-                          {user.mostRecentAction}
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                          {getRelativeTime(user.lastActive)}
-                        </span>
-                      </div>
-                    </div>
+                    <span className="text-sm capitalize font-medium">
+                      {user.mostRecentAction}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      {getRelativeTime(user.lastActive)}
+                    </span>
                   </Link>
                 ) : (
-                  <div className="flex items-center gap-2">
-                    {/* <Activity className="w-4 h-4 text-muted-foreground" /> */}
-                    <div className="flex flex-col">
-                      {/* <span className="font-medium">{user.totalActions}</span> */}
-                      <span className="text-sm capitalize text-muted-foreground">
-                        {user.mostRecentAction}
-                      </span>
-                      <span className="text-xs text-muted-foreground">
-                        {getRelativeTime(user.lastActive)}
-                      </span>
-                    </div>
+                  <div className="flex flex-col">
+                    <span className="text-sm capitalize font-medium">
+                      {user.mostRecentAction}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      {getRelativeTime(user.lastActive)}
+                    </span>
                   </div>
                 )}
               </TooltipTrigger>
@@ -139,7 +179,7 @@ export const columns: ColumnDef<AnalyticUser>[] = [
                   <div className="flex flex-col gap-2 items-center p-2">
                     <img
                       src={user.mostRecentActionData.productImageUrl}
-                      alt={"product image"}
+                      alt="product image"
                       className="w-24 h-24 aspect-square object-cover rounded-lg"
                     />
                   </div>
@@ -162,19 +202,24 @@ export const columns: ColumnDef<AnalyticUser>[] = [
   },
   {
     accessorKey: "uniqueProducts",
-    enableSorting: false,
     header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Products Viewed" />
+      <DataTableColumnHeader column={column} title="Products viewed" />
     ),
     cell: ({ row }) => {
       const user = row.original;
 
-      return <span className="font-medium">{user.uniqueProducts}</span>;
+      return (
+        <div className="flex flex-col">
+          <span className="font-medium">{user.uniqueProducts}</span>
+          <span className="text-xs text-muted-foreground">
+            {user.uniqueProducts === 1 ? "product" : "products"}
+          </span>
+        </div>
+      );
     },
   },
   {
     accessorKey: "devicePreference",
-    enableSorting: false,
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Device" />
     ),
@@ -184,15 +229,24 @@ export const columns: ColumnDef<AnalyticUser>[] = [
       return (
         <div className="flex items-center gap-2">
           {user.devicePreference === "desktop" && (
-            <Monitor className="w-4 h-4 text-muted-foreground" />
+            <>
+              <Monitor className="w-4 h-4 text-muted-foreground" />
+              <span className="text-sm text-muted-foreground">Desktop</span>
+            </>
           )}
           {user.devicePreference === "mobile" && (
-            <Smartphone className="w-4 h-4 text-muted-foreground" />
+            <>
+              <Smartphone className="w-4 h-4 text-muted-foreground" />
+              <span className="text-sm text-muted-foreground">Mobile</span>
+            </>
           )}
           {user.devicePreference === "unknown" && (
-            <span className="w-4 h-4 flex items-center justify-center text-muted-foreground">
-              ?
-            </span>
+            <>
+              <span className="w-4 h-4 flex items-center justify-center text-muted-foreground">
+                ?
+              </span>
+              <span className="text-sm text-muted-foreground">Unknown</span>
+            </>
           )}
         </div>
       );

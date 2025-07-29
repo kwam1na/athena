@@ -107,17 +107,13 @@ export const ShopLookSection = () => {
 
   const hasHighlightedItem = !!featuredItem;
 
-  const ctaText = hasHighlightedItem
-    ? "Edit highlighted product"
-    : "Add highlighted product";
+  const ctaText = hasHighlightedItem ? "Update product" : "Add product";
 
   const ctaIcon = hasHighlightedItem ? (
     <PencilIcon className="w-2.5 h-2.5 mr-2" />
   ) : (
     <PlusIcon className="w-2.5 h-2.5 mr-2" />
   );
-
-  console.log(activeStore?.config?.shopTheLookImage);
 
   return (
     <View
@@ -146,6 +142,9 @@ export const ShopLookSection = () => {
                 ref={provided.innerRef}
                 className="w-full space-y-2"
               >
+                <p className="text-sm text-muted-foreground">
+                  Highlighted product
+                </p>
                 {featuredItems?.map((featuredItem: any, index: number) => (
                   <Draggable
                     key={featuredItem._id}

@@ -63,7 +63,7 @@ export function formatDate(timestamp: number) {
 export const getProductName = (item: any) => {
   if (item.productCategory == "Hair") {
     if (!item.colorName) return capitalizeWords(item.productName);
-    return `${item.length}" ${capitalizeWords(item.colorName)} ${capitalizeWords(item.productName)}`;
+    return `${item.length ? `${item.length}" ` : ""} ${capitalizeWords(item.colorName)} ${capitalizeWords(item.productName)}`;
   }
 
   if (item.length) {

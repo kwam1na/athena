@@ -195,13 +195,9 @@ export const ShopLookImageUploader: React.FC<ShopLookImageUploaderProps> = ({
   );
 
   const ViewModeButton = () => (
-    <Button
-      variant="ghost"
-      size="icon"
-      onClick={handleEditClick}
-      disabled={disabled}
-    >
+    <Button variant="ghost" onClick={handleEditClick} disabled={disabled}>
       <PencilIcon className="h-4 w-4" />
+      <p className="text-xs">Update image</p>
     </Button>
   );
 
@@ -218,10 +214,10 @@ export const ShopLookImageUploader: React.FC<ShopLookImageUploaderProps> = ({
 
       {/* Controls */}
       <div className="flex items-center gap-4">
-        <div className="flex items-center gap-2 text-muted-foreground">
+        {/* <div className="flex items-center gap-2 text-muted-foreground">
           <Image className="h-4 w-4" />
           <p className="text-sm">Hero image</p>
-        </div>
+        </div> */}
 
         {/* Action Buttons */}
         {showEditMode ? <EditModeButtons /> : <ViewModeButton />}

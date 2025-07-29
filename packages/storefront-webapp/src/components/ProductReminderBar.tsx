@@ -38,6 +38,8 @@ export function ProductReminderBar({
 
   const queryClient = useQueryClient();
 
+  const showReminderBar = isVisible && !isInCooldown && shouldShow;
+
   useEffect(() => {
     const cooldownUntil = localStorage.getItem(COOLDOWN_KEY);
     if (cooldownUntil && Date.now() < parseInt(cooldownUntil)) {
@@ -68,7 +70,7 @@ export function ProductReminderBar({
       productSku: product.sku,
       productImageUrl: product.images[0],
     },
-    isReady: isVisible && !isInCooldown && shouldShow,
+    isReady: showReminderBar,
   });
 
   useEffect(() => {
@@ -99,7 +101,7 @@ export function ProductReminderBar({
       await Promise.all([
         postAnalytics({
           action: "added_product_to_bag",
-          origin: "homepage_upsell",
+          origin: "homepage_product_reminder_bar",
           data: {
             product: product.productId,
             productSku: product.sku,
@@ -139,7 +141,7 @@ export function ProductReminderBar({
 
     await postAnalytics({
       action: "dismissed_product_reminder_bar",
-      origin: "homepage_upsell",
+      origin: "homepage_product_reminder_bar",
       data: {
         product: product.productId,
         productSku: product.sku,
@@ -156,20 +158,19 @@ export function ProductReminderBar({
       </Sheet>
 
       <AnimatePresence>
-        {isVisible && !isInCooldown && shouldShow && (
+        {showReminderBar && (
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0, transition: { delay: 1.8 } }}
-            exit={{ opacity: 0, y: 20 }}
-            transition={{
-              type: "spring",
-              stiffness: 300,
-              damping: 25,
+            initial={{ opacity: 0, y: 8 }}
+            animate={{
+              opacity: 1,
+              y: 0,
+              transition: { delay: 2.4, ease: "easeInOut", duration: 0.4 },
             }}
-            className="fixed bottom-4 inset-x-0 z-10"
+            exit={{ opacity: 0, y: 20 }}
+            className="fixed bottom-4 z-10 inset-x-0 md:inset-x-auto md:right-4 md:w-auto"
           >
-            <div className="max-w-[600px] w-[90%] mx-auto">
-              <div className="bg-white rounded-lg shadow-md border border-gray-100 p-3 md:p-4">
+            <div className="w-[90%] max-w-[600px] mx-auto">
+              <div className="bg-primary/40 backdrop-blur-sm rounded-lg shadow-md border border-none text-white p-3 md:p-4">
                 <div className="flex items-center gap-2 md:gap-4">
                   <Link
                     to="/shop/product/$productSlug"
@@ -189,8 +190,12 @@ export function ProductReminderBar({
                       <p className="text-sm font-medium truncate">
                         {productName}
                       </p>
-                      <p className="text-xs md:text-sm mt-0.5 md:mt-1 text-muted-foreground">
-                        {`👀 Still eyeing this? Only ${product.quantityAvailable} left`}
+                      <p className="text-xs md:text-sm mt-0.5 md:mt-1">
+                        {`👀 Still got your eyes on this? ${
+                          product.quantityAvailable <= 3
+                            ? `Only ${product.quantityAvailable} left`
+                            : ""
+                        }`}
                       </p>
                     </div>
                   </Link>

@@ -6,10 +6,12 @@ import {
   Award,
   Gift,
   Heart,
+  HeartIcon,
   Info,
   InfoIcon,
   OctagonAlert,
   Trash2,
+  TrendingUp,
   TriangleAlert,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -253,7 +255,7 @@ export default function ShoppingBag() {
             </motion.div>
           )}
 
-          {!hasCompletedDiscountModalFlow &&
+          {/* {!hasCompletedDiscountModalFlow &&
             store?.config?.homepageDiscountCodeModalPromoCode && (
               <motion.div
                 initial={{ opacity: 0 }}
@@ -272,7 +274,7 @@ export default function ShoppingBag() {
                   </p>
                 </div>
               </motion.div>
-            )}
+            )} */}
 
           {operationSuccessful == false && (
             <div className="flex items-center font-medium">
@@ -329,139 +331,165 @@ export default function ShoppingBag() {
                   <motion.div
                     key={item._id}
                     layout={isNavbarShowing}
-                    className="relative flex space-x-4"
+                    className="space-y-4"
                   >
-                    <motion.div
-                      className="absolute inset-0 flex px-16 items-center pointer-events-none"
-                      variants={backgroundSvgVariants}
-                      exit={"exit"}
-                      transition={{ duration: 0.4, delay: 0.1 }}
-                    >
-                      {bagAction == "deleting-from-bag" ? (
-                        <Trash2 className="text-gray-300 w-16 h-16" />
-                      ) : (
-                        <HeartIconFilled width={56} height={56} />
-                      )}
-                    </motion.div>
-
-                    <motion.div
-                      exit="exit"
-                      variants={cellVariants}
-                      className="relative z-10 flex gap-8 items-center"
-                    >
-                      <Link
-                        key={index}
-                        to={"/shop/product/$productSlug"}
-                        params={() => ({ productSlug: item.productId })}
-                        search={{
-                          variant: item.productSku,
-                          origin: "shopping_bag",
-                        }}
+                    <div className="relative flex space-x-4">
+                      <motion.div
+                        className="absolute inset-0 flex px-16 items-center pointer-events-none"
+                        variants={backgroundSvgVariants}
+                        exit={"exit"}
+                        transition={{ duration: 0.4, delay: 0.1 }}
                       >
-                        <ImageWithFallback
-                          src={(item as any).productImage || placeholder}
-                          alt={(item as any).productName || "product image"}
-                          className="w-32 h-32 lg:w-40 lg:h-40 object-cover rounded-lg"
-                        />
-                      </Link>
+                        {bagAction == "deleting-from-bag" ? (
+                          <Trash2 className="text-gray-300 w-16 h-16" />
+                        ) : (
+                          <HeartIconFilled width={56} height={56} />
+                        )}
+                      </motion.div>
 
-                      <div className="flex-1 space-y-2 lg:space-y-6 text-sm">
-                        <div className="flex flex-col gap-2 lg:gap-4">
-                          <h2 className="font-medium">
-                            {item && getProductName(item)}
-                          </h2>
-                          {priceLabel != "Free" && (
-                            <p className="text-xs text-muted-foreground">
-                              {priceLabel}
-                            </p>
-                          )}
-                          {priceLabel == "Free" && (
-                            <div className="flex items-center gap-2 text-xs">
-                              <p className="text-muted-foreground line-through">
-                                GHS 180
+                      <motion.div
+                        exit="exit"
+                        variants={cellVariants}
+                        className="relative z-10 flex gap-8 items-center"
+                      >
+                        <Link
+                          key={index}
+                          to={"/shop/product/$productSlug"}
+                          params={() => ({ productSlug: item.productId })}
+                          search={{
+                            variant: item.productSku,
+                            origin: "shopping_bag",
+                          }}
+                          className="space-y-4"
+                        >
+                          <ImageWithFallback
+                            src={(item as any).productImage || placeholder}
+                            alt={(item as any).productName || "product image"}
+                            className="w-32 h-32 lg:w-40 lg:h-40 object-cover rounded-lg"
+                          />
+                        </Link>
+
+                        <div className="flex-1 space-y-2 lg:space-y-6 text-sm">
+                          <div className="flex flex-col gap-2 lg:gap-4">
+                            <h2 className="font-medium">
+                              {item && getProductName(item)}
+                            </h2>
+                            {priceLabel != "Free" && (
+                              <p className="text-xs text-muted-foreground">
+                                {priceLabel}
                               </p>
-                              <p className="text-xs">Free</p>
-                            </div>
-                          )}
-                          <select
-                            value={item.quantity}
-                            onChange={(e) =>
-                              updateBag({
-                                quantity: parseInt(e.target.value),
-                                itemId: item._id,
-                              })
-                            }
-                            disabled={!item.price}
-                            className={`w-12 py-2 bg-background text-xs ${isUpdatingBag ? "pointer-events-none" : ""}`}
-                          >
-                            {[...Array(10)].map((_, i) => (
-                              <option key={i + 1} value={i + 1}>
-                                {i + 1}
-                              </option>
-                            ))}
-                          </select>
-
-                          {unavailableSku && (
-                            <motion.p
-                              // variants={cellVariants}
-                              className="text-xs text-destructive"
+                            )}
+                            {priceLabel == "Free" && (
+                              <div className="flex items-center gap-2 text-xs">
+                                <p className="text-muted-foreground line-through">
+                                  GHS 180
+                                </p>
+                                <p className="text-xs">Free</p>
+                              </div>
+                            )}
+                            <select
+                              value={item.quantity}
+                              onChange={(e) =>
+                                updateBag({
+                                  quantity: parseInt(e.target.value),
+                                  itemId: item._id,
+                                })
+                              }
+                              disabled={!item.price}
+                              className={`w-12 py-2 bg-background text-xs ${isUpdatingBag ? "pointer-events-none" : ""}`}
                             >
-                              {unavailableSku.available === 0
-                                ? "Currently unavailable"
-                                : `Only ${unavailableSku.available} left`}
-                            </motion.p>
-                          )}
-                        </div>
+                              {[...Array(10)].map((_, i) => (
+                                <option key={i + 1} value={i + 1}>
+                                  {i + 1}
+                                </option>
+                              ))}
+                            </select>
 
-                        <div className="flex gap-2">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className={`${isUpdatingBag ? "pointer-events-none" : ""}`}
-                            disabled={!item.price}
-                            onClick={async () => {
-                              setBagAction("moving-to-saved-bag");
-                              await Promise.all([
-                                moveItemFromBagToSaved(item),
-                                postAnalytics({
-                                  action: "added_product_to_saved",
-                                  origin: "shopping_bag",
-                                  data: {
-                                    product: item.productId,
-                                    productSku: item.productSku,
-                                    productImageUrl: item.productImage,
-                                  },
-                                }),
-                              ]);
-                            }}
-                          >
-                            <Heart className="h-4 w-4" />
-                          </Button>
+                            {unavailableSku && (
+                              <motion.p
+                                // variants={cellVariants}
+                                className="text-xs text-destructive"
+                              >
+                                {unavailableSku.available === 0
+                                  ? "Currently unavailable"
+                                  : `Only ${unavailableSku.available} left`}
+                              </motion.p>
+                            )}
+                          </div>
 
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className={`${isUpdatingBag ? "pointer-events-none" : ""}`}
-                            onClick={async () => {
-                              setBagAction("deleting-from-bag");
-                              await Promise.all([
-                                deleteItemFromBag(item._id),
-                                postAnalytics({
-                                  action: "removed_product_from_bag",
-                                  data: {
-                                    product: item.productId,
-                                    productSku: item.productSku,
-                                    productImageUrl: item.productImage,
-                                  },
-                                }),
-                              ]);
-                            }}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          <div className="flex gap-2">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className={`${isUpdatingBag ? "pointer-events-none" : ""}`}
+                              disabled={!item.price}
+                              onClick={async () => {
+                                setBagAction("moving-to-saved-bag");
+                                await Promise.all([
+                                  moveItemFromBagToSaved(item),
+                                  postAnalytics({
+                                    action: "added_product_to_saved",
+                                    origin: "shopping_bag",
+                                    data: {
+                                      product: item.productId,
+                                      productSku: item.productSku,
+                                      productImageUrl: item.productImage,
+                                    },
+                                  }),
+                                ]);
+                              }}
+                            >
+                              <Heart className="h-4 w-4" />
+                            </Button>
+
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className={`${isUpdatingBag ? "pointer-events-none" : ""}`}
+                              onClick={async () => {
+                                setBagAction("deleting-from-bag");
+                                await Promise.all([
+                                  deleteItemFromBag(item._id),
+                                  postAnalytics({
+                                    action: "removed_product_from_bag",
+                                    data: {
+                                      product: item.productId,
+                                      productSku: item.productSku,
+                                      productImageUrl: item.productImage,
+                                    },
+                                  }),
+                                ]);
+                              }}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
                         </div>
+                      </motion.div>
+                    </div>
+
+                    {Boolean(
+                      item.otherBagsWithSku && item.otherBagsWithSku >= 3
+                    ) && (
+                      <div className="flex items-center gap-1 px-4 text-accent2">
+                        <motion.div
+                        // animate={{
+                        //   scale: [1, 1.1, 1],
+                        // }}
+                        // transition={{
+                        //   duration: 2,
+                        //   repeat: Infinity,
+                        //   ease: "easeInOut",
+                        // }}
+                        >
+                          <HeartIconFilled width={12} height={12} />
+                        </motion.div>
+                        <p className="text-xs font-medium">
+                          <b>High demand:</b> {item.otherBagsWithSku} others
+                          have this in their bag
+                        </p>
                       </div>
-                    </motion.div>
+                    )}
                   </motion.div>
                 );
               })}
@@ -494,7 +522,7 @@ export default function ShoppingBag() {
                     </div>
 
                     <p className="text-xs text-gray-500">
-                      * excluding taxes and shipping
+                      * excluding delivery fees
                     </p>
                   </div>
 

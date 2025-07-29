@@ -204,20 +204,93 @@ export const sendFeedbackRequestEmail = async (params: {
   });
 };
 
+// export const sendDiscountCodeEmail = async (params: {
+//   customerEmail: string;
+//   promoCode: string;
+//   discount: string;
+//   validTo: Date;
+// }) => {
+//   // Format expiration date
+//   const expirationDate = new Date(
+//     Date.now() + 1 * 24 * 60 * 60 * 1000
+//   ).toLocaleDateString("en-US", {
+//     year: "numeric",
+//     month: "long",
+//     day: "numeric",
+//   });
+
+//   const message = {
+//     from: {
+//       email: "offers@wigclub.store",
+//       name: "Wigclub",
+//     },
+//     personalizations: [
+//       {
+//         to: [
+//           {
+//             email: params.customerEmail,
+//           },
+//         ],
+//         dynamic_template_data: {
+//           promo_code: params.promoCode,
+//           discount: params.discount,
+//           expiration_date: expirationDate,
+//           shop_url: `${process.env.STORE_URL}/shop/hair`,
+//         },
+//       },
+//     ],
+//     template_id: "d-c5615c89ab4043b680c184d11eaa12a4",
+//   };
+
+//   return await fetch("https://api.sendgrid.com/v3/mail/send", {
+//     method: "POST",
+//     headers: {
+//       "Content-Type": "application/json",
+//       Authorization: `Bearer ${process.env.SENDGRID_API_KEY}`,
+//     },
+//     body: JSON.stringify(message),
+//   });
+// };
+
 export const sendDiscountCodeEmail = async (params: {
   customerEmail: string;
+  discountText: string;
   promoCode: string;
-  discount: string;
-  validTo: Date;
+  heroImageUrl: string;
+  promoCodeEndDate: string;
+  promoCodeSpan: "entire-order" | "selected-products";
+  bestSellers: Array<{
+    image: string;
+    name: string;
+    original_price: string;
+    discounted_price: string;
+    product_url: string;
+  }>;
+  recentlyViewed: Array<{
+    image: string;
+    name: string;
+    original_price: string;
+    discounted_price: string;
+    product_url: string;
+  }>;
 }) => {
+  // Helper function to chunk arrays into groups of 2 for two-column layout
+  const chunkArray = (array: any[], chunkSize: number = 2): any[][] => {
+    const chunks: any[][] = [];
+    for (let i = 0; i < array.length; i += chunkSize) {
+      chunks.push(array.slice(i, i + chunkSize));
+    }
+    return chunks;
+  };
+
   // Format expiration date
-  const expirationDate = new Date(
-    Date.now() + 1 * 24 * 60 * 60 * 1000
-  ).toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
+  const expirationDate = new Date(params.promoCodeEndDate).toLocaleDateString(
+    "en-US",
+    {
+      month: "long",
+      day: "numeric",
+    }
+  );
 
   const message = {
     from: {
@@ -232,14 +305,86 @@ export const sendDiscountCodeEmail = async (params: {
           },
         ],
         dynamic_template_data: {
+          hero_image_url: params.heroImageUrl,
+          best_sellers: chunkArray(params.bestSellers),
+          recently_viewed: chunkArray(params.recentlyViewed),
+          discount: params.discountText,
           promo_code: params.promoCode,
-          discount: params.discount,
-          expiration_date: expirationDate,
+          is_sitewide: params.promoCodeSpan === "entire-order",
+          is_restricted: params.promoCodeSpan === "selected-products",
+          promo_code_endDate: expirationDate,
+          show_urgency: true,
           shop_url: `${process.env.STORE_URL}/shop/hair`,
         },
       },
     ],
-    template_id: "d-c5615c89ab4043b680c184d11eaa12a4",
+    template_id: "d-1c4d782383334fc685abbb778b779e01",
+  };
+
+  return await fetch("https://api.sendgrid.com/v3/mail/send", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${process.env.SENDGRID_API_KEY}`,
+    },
+    body: JSON.stringify(message),
+  });
+};
+
+export const sendDiscountReminderEmail = async (params: {
+  customerEmail: string;
+  discountText: string;
+  promoCode: string;
+  heroImageUrl: string;
+  bestSellers: Array<{
+    image: string;
+    name: string;
+    original_price: string;
+    discounted_price: string;
+    product_url: string;
+  }>;
+  recentlyViewed: Array<{
+    image: string;
+    name: string;
+    original_price: string;
+    discounted_price: string;
+    product_url: string;
+  }>;
+}) => {
+  // Helper function to chunk arrays into groups of 2 for two-column layout
+  const chunkArray = (array: any[], chunkSize: number = 2): any[][] => {
+    const chunks: any[][] = [];
+    for (let i = 0; i < array.length; i += chunkSize) {
+      chunks.push(array.slice(i, i + chunkSize));
+    }
+    return chunks;
+  };
+
+  const message = {
+    from: {
+      email: "offers@wigclub.store",
+      name: "Wigclub",
+    },
+    personalizations: [
+      {
+        to: [
+          {
+            email: params.customerEmail,
+          },
+        ],
+        dynamic_template_data: {
+          hero_image_url: params.heroImageUrl,
+          best_sellers: chunkArray(params.bestSellers),
+          recently_viewed: chunkArray(params.recentlyViewed),
+          discount: params.discountText,
+          promo_code: params.promoCode,
+          promo_code_endDate: "July 20",
+          show_urgency: true,
+          shop_url: `${process.env.STORE_URL}/shop/hair`,
+        },
+      },
+    ],
+    template_id: "d-4fb6a2b235334fb89863b410327a2b24",
   };
 
   return await fetch("https://api.sendgrid.com/v3/mail/send", {

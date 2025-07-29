@@ -31,6 +31,8 @@ export const OrderSummary = () => {
       ? `${order.discount.value}%`
       : `${formatter.format(discountValue)}`;
 
+  console.log(order);
+
   return (
     <div className="space-y-4">
       <div className="flex justify-between">
@@ -38,7 +40,7 @@ export const OrderSummary = () => {
         <p className="text-sm">{formatter.format(order.amount / 100)}</p>
       </div>
 
-      {order.deliveryFee && (
+      {Boolean(order.deliveryFee) && order.deliveryFee && (
         <div className="flex justify-between">
           <p className="text-sm">Delivery fees</p>
           <p className="text-sm">{formatter.format(order.deliveryFee)}</p>

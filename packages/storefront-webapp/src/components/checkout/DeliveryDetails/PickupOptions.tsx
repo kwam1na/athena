@@ -63,15 +63,18 @@ export const PickupOptions = () => {
             Delivery
           </div>
 
-          {isFeeWaivedForCurrentOption ? (
-            <p className="text-xs text-start w-full">Free</p>
-          ) : (
-            Boolean(checkoutState.deliveryFee) && (
+          {isFeeWaivedForCurrentOption && (
+            <div className="flex items-center gap-2">
+              <p className="text-xs text-startl">Free</p>
+            </div>
+          )}
+
+          {Boolean(checkoutState.deliveryFee) &&
+            !isFeeWaivedForCurrentOption && (
               <p className="text-xs text-[#EC4683] text-start w-full">
                 {formatter.format(checkoutState.deliveryFee || 0)}
               </p>
-            )
-          )}
+            )}
         </div>
       </GhostButton>
     </div>

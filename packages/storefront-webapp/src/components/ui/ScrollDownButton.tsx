@@ -66,7 +66,9 @@ export function ScrollDownButton({
       }}
       aria-label="Scroll down"
     >
-      <span className="text-xs font-medium text-white/70 mb-1">Scroll</span>
+      {/* <span className="text-sm font-medium text-white/70 mb-1">
+        See why we're rated the #1 shop for all your hair needs
+      </span> */}
       <div className="bg-white/20 backdrop-blur-sm rounded-full p-1.5">
         <ChevronDown className="h-5 w-5 text-white" />
       </div>

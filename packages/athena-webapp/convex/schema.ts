@@ -60,7 +60,9 @@ const schema = defineSchema({
   appVerificationCode: defineTable(appVerificationCodeSchema),
   athenaUser: defineTable(athenaUserSchema),
   bag: defineTable(bagSchema).index("by_storeId", ["storeId"]),
-  bagItem: defineTable(bagItemSchema).index("by_bagId", ["bagId"]),
+  bagItem: defineTable(bagItemSchema)
+    .index("by_bagId", ["bagId"])
+    .index("by_productSkuId", ["productSkuId"]),
   bestSeller: defineTable(bestSellerSchema),
   category: defineTable(categorySchema),
   checkoutSession: defineTable(checkoutSessionSchema),

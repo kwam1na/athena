@@ -2,7 +2,7 @@ import { mutation, query } from "../_generated/server";
 import { v } from "convex/values";
 import { addressSchema } from "../schemas/storeFront";
 import { api } from "../_generated/api";
-import { Doc, Id } from "../_generated/dataModel";
+import { Id } from "../_generated/dataModel";
 
 const entity = "storeFrontUser";
 
@@ -196,7 +196,7 @@ export const getLastViewedProduct = query({
       return product?.skus?.find(
         (sku: any) =>
           sku.sku === skuToCheck &&
-          sku.productCategory === args.category &&
+          (!args.category || sku.productCategory === args.category) &&
           sku.quantityAvailable > 0
       );
     };
@@ -229,9 +229,9 @@ export const getLastViewedProduct = query({
 
       // Try each analytic in order until we find an available product
       for (const analytic of analytics) {
-        // if (bagSkus.has(analytic.data.productSku)) {
-        //   continue;
-        // }
+        if (bagSkus.has(analytic.data.productSku)) {
+          continue;
+        }
 
         const availableSku = await isSkuAvailable(
           analytic.data.product,
@@ -302,6 +302,130 @@ export const getLastViewedProduct = query({
 
     console.log(`No available products found for user ${args.id}`);
     return null;
+  },
+});
+
+export const getLastViewedProducts = query({
+  args: {
+    id: v.union(v.id(entity), v.id("guest")),
+    category: v.optional(v.string()),
+    limit: v.number(),
+  },
+  returns: v.array(v.any()),
+  handler: async (ctx, args) => {
+    const availableProducts: any[] = [];
+
+    // Helper function to check if a specific SKU is available
+    const isSkuAvailable = async (
+      productId: Id<"product">,
+      storeId: Id<"store">,
+      skuToCheck: string
+    ) => {
+      const product: any = await ctx.runQuery(api.inventory.products.getById, {
+        id: productId,
+        storeId,
+      });
+
+      return product?.skus?.find(
+        (sku: any) =>
+          sku.sku === skuToCheck &&
+          (!args.category || sku.productCategory === args.category) &&
+          sku.quantityAvailable > 0
+      );
+    };
+
+    // Get recent product views (increased limit to have more products to choose from)
+    const analytics = await ctx.db
+      .query("analytics")
+      .withIndex("by_storeFrontUserId", (q) =>
+        q.eq("storeFrontUserId", args.id)
+      )
+      .filter((q) => q.eq(q.field("action"), "viewed_product"))
+      .order("desc")
+      .take(200); // Increased limit to get more products
+
+    if (analytics.length) {
+      // Get all the product SKUs from analytics
+      // const productSkus = analytics.map((analytic) => analytic.data.productSku);
+
+      // Create a Set of SKUs that are in the bag for faster lookup
+      const addedSkus = new Set<string>(); // Track already added SKUs to avoid duplicates
+
+      // Try each analytic in order until we reach the limit
+      for (const analytic of analytics) {
+        if (availableProducts.length >= args.limit) {
+          break;
+        }
+
+        // Skip if we've already added this SKU
+        if (addedSkus.has(analytic.data.productSku)) {
+          continue;
+        }
+
+        const availableSku = await isSkuAvailable(
+          analytic.data.product,
+          analytic.storeId,
+          analytic.data.productSku
+        );
+
+        if (availableSku) {
+          availableProducts.push(availableSku);
+          addedSkus.add(analytic.data.productSku);
+          console.log(
+            `Found available product ${availableProducts.length}/${args.limit} for user ${args.id}: ${availableSku.sku}`
+          );
+        }
+      }
+    }
+
+    // If we haven't reached the limit, try to find more from all-time views
+    if (availableProducts.length < args.limit) {
+      const allTimeAnalytics = await ctx.db
+        .query("analytics")
+        .withIndex("by_storeFrontUserId", (q) =>
+          q.eq("storeFrontUserId", args.id)
+        )
+        .filter((q) => q.eq(q.field("action"), "viewed_product"))
+        .order("desc")
+        .take(500); // Check more all-time views
+
+      if (allTimeAnalytics.length) {
+        const addedSkus = new Set(
+          availableProducts.map((product) => product.sku)
+        );
+
+        // Try each analytic in order until we reach the limit
+        for (const analytic of allTimeAnalytics) {
+          if (availableProducts.length >= args.limit) {
+            break;
+          }
+
+          // Skip if we've already added this SKU
+          if (addedSkus.has(analytic.data.productSku)) {
+            continue;
+          }
+
+          const availableSku = await isSkuAvailable(
+            analytic.data.product,
+            analytic.storeId,
+            analytic.data.productSku
+          );
+
+          if (availableSku) {
+            availableProducts.push(availableSku);
+            addedSkus.add(analytic.data.productSku);
+            console.log(
+              `Found available product ${availableProducts.length}/${args.limit} for user ${args.id}: ${availableSku.sku}`
+            );
+          }
+        }
+      }
+    }
+
+    console.log(
+      `Found ${availableProducts.length} available products for user ${args.id}`
+    );
+    return availableProducts;
   },
 });
 

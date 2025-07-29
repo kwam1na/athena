@@ -162,11 +162,21 @@ export function DeliveryOptionsSelector() {
             <RadioGroupItem value="within-accra" id="r1" />
             <div className="flex w-full lg:w-[50%] justify-between">
               <p>Delivery within Greater Accra</p>
-              <p className="text-muted-foreground">
-                {shouldWaiveWithinAccraFee
-                  ? "Free"
-                  : formatter.format(withinAccra || 30)}
-              </p>
+
+              {shouldWaiveWithinAccraFee && (
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <p className="text-start line-through">
+                    {formatter.format(withinAccra || 30)}
+                  </p>
+                  <p className="text-start">Free</p>
+                </div>
+              )}
+
+              {!shouldWaiveWithinAccraFee && (
+                <p className="text-muted-foreground">
+                  {formatter.format(withinAccra || 30)}
+                </p>
+              )}
             </div>
           </div>
 
@@ -174,11 +184,21 @@ export function DeliveryOptionsSelector() {
             <RadioGroupItem value="outside-accra" id="r2" />
             <div className="flex w-full lg:w-[50%] justify-between">
               <p>Delivery to other regions</p>
-              <p className="text-muted-foreground">
-                {shouldWaiveOtherRegionsFee
-                  ? "Free"
-                  : formatter.format(otherRegions || 70)}
-              </p>
+
+              {shouldWaiveOtherRegionsFee && (
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <p className="text-start line-through">
+                    {formatter.format(otherRegions || 70)}
+                  </p>
+                  <p className="text-start">Free</p>
+                </div>
+              )}
+
+              {!shouldWaiveOtherRegionsFee && (
+                <p className="text-muted-foreground">
+                  {formatter.format(otherRegions || 70)}
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -190,11 +210,21 @@ export function DeliveryOptionsSelector() {
             <RadioGroupItem value="intl" id="r2" />
             <div className="flex w-full lg:w-[50%] justify-between">
               <p>Express shipping</p>
-              <p className="text-muted-foreground">
-                {shouldWaiveIntlFee
-                  ? "Free"
-                  : formatter.format(international || 800)}
-              </p>
+
+              {shouldWaiveIntlFee && (
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <p className="text-start line-through">
+                    {formatter.format(international || 800)}
+                  </p>
+                  <p className="text-start">Free</p>
+                </div>
+              )}
+
+              {!shouldWaiveIntlFee && (
+                <p className="text-muted-foreground">
+                  {formatter.format(international || 800)}
+                </p>
+              )}
             </div>
           </div>
         )}

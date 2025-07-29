@@ -12,12 +12,6 @@ interface RewardsAlertProps {
 }
 
 export function RewardsAlert({ isOpen, onClose }: RewardsAlertProps) {
-  // useTrackEvent({
-  //   action: "viewed_rewards_alert",
-  //   data: {},
-  //   isReady: isOpen,
-  // });
-
   const onRewardsAlertClose = () => {
     onClose();
 
@@ -41,7 +35,7 @@ export function RewardsAlert({ isOpen, onClose }: RewardsAlertProps) {
   return (
     <AnimatedCard
       isOpen={isOpen}
-      className="fixed top-[80px] left-0 right-0 z-10 max-w-md border rounded-md p-4 px-6 mx-4 md:mx-auto shadow-lg transition-colors duration-300 bg-accent4/30 backdrop-blur-sm border-white/20"
+      className="fixed top-[80px] left-0 right-0 z-10 max-w-md border rounded-md p-4 px-6 mx-4 md:mx-auto shadow-lg transition-colors duration-300 bg-accent4/20 backdrop-blur-sm border-white/20"
     >
       <div className="relative">
         <button
@@ -53,14 +47,14 @@ export function RewardsAlert({ isOpen, onClose }: RewardsAlertProps) {
         </button>
 
         <div className="flex items-center gap-4">
-          <div className="space-y-2">
+          <div className="space-y-8">
             <p className="font-medium text-sm text-white">
-              🥳 Introducing Wigclub Rewards
+              Welcome back, Deladem. Ready for your next slay?
             </p>
-            <div className="space-y-4">
+            <div className="space-y-8">
               <p className="text-sm text-white/80">
-                Earn 10 points for every GHS 1 you spend. Redeem points for
-                discounts on future purchases.
+                Here's 10% off your next purchase as a thank you 💝 <br /> Use
+                code <b className="text-accent2">SLAYYY</b> at checkout.
               </p>
 
               <div className="mt-2">

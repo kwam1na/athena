@@ -67,7 +67,7 @@ export function ProductInfo({
   return (
     <div className={`space-y-6 ${className}`}>
       <div className="flex items-baseline gap-3">
-        <p className="text-2xl md:text-3xl leading-tight">
+        <p className="text-2xl md:text-4xl leading-tight">
           {getProductName(selectedSku)}
         </p>
         {reviews && reviews.length > 0 && (
@@ -83,7 +83,9 @@ export function ProductInfo({
           <SellingFastSignal message={`Almost gone`} />
         )}
 
-        <p className="text-md">{formatter.format(selectedSku.price)}</p>
+        <p className="text-md md:text-2xl">
+          {formatter.format(selectedSku.price)}
+        </p>
       </div>
       {/* <ViewCount productId={selectedSku.productId} /> */}
     </div>

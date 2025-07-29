@@ -128,6 +128,23 @@ export const getByUserId = query({
           category = productCategory?.name;
         }
 
+        // Count how many other bags have this same product SKU
+        const otherBagItemsWithSameSku = await ctx.db
+          .query("bagItem")
+          .withIndex("by_productSkuId", (q) =>
+            q.eq("productSkuId", item.productSkuId)
+          )
+          .collect();
+
+        // Filter out items from the current user's bag and count unique bags
+        const uniqueOtherBagIds = new Set(
+          otherBagItemsWithSameSku
+            .filter((bagItem) => bagItem.bagId !== bag._id)
+            .map((bagItem) => bagItem.bagId)
+        );
+
+        const otherBagsWithSku = uniqueOtherBagIds.size;
+
         return {
           ...item,
           price: sku?.price,
@@ -137,6 +154,7 @@ export const getByUserId = query({
           productCategory: category,
           productImage: sku?.images?.[0],
           productSlug: product?.slug,
+          otherBagsWithSku,
         };
       })
     );

@@ -138,6 +138,7 @@ import type * as storeFront_savedBagItem from "../storeFront/savedBagItem.js";
 import type * as storeFront_supportTicket from "../storeFront/supportTicket.js";
 import type * as storeFront_user from "../storeFront/user.js";
 import type * as storeFront_userOffers from "../storeFront/userOffers.js";
+import type * as storeFront_users from "../storeFront/users.js";
 import type * as utils from "../utils.js";
 
 /**
@@ -274,6 +275,7 @@ declare const fullApi: ApiFromModules<{
   "storeFront/supportTicket": typeof storeFront_supportTicket;
   "storeFront/user": typeof storeFront_user;
   "storeFront/userOffers": typeof storeFront_userOffers;
+  "storeFront/users": typeof storeFront_users;
   utils: typeof utils;
 }>;
 export declare const api: FilterApi<

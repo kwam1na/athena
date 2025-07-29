@@ -13,6 +13,8 @@ import { OnsaleProduct } from "./OnSaleProduct";
 import { useProductPageLogic } from "@/hooks/useProductPageLogic";
 import { ProductInfo } from "./ProductInfo";
 import { ProductActions } from "./ProductActions";
+import { TrustSignals } from "../communication/TrustSignals";
+import { AboutProduct } from "./AboutProduct";
 
 // Main Product Page Component
 export default function ProductPage() {
@@ -110,7 +112,7 @@ export default function ProductPage() {
             </div>
 
             {selectedSku.productCategory === "Hair" && (
-              <About
+              <AboutProduct
                 productAttributes={product.attributes || {}}
                 productSku={selectedSku}
               />
@@ -118,14 +120,18 @@ export default function ProductPage() {
 
             {selectedSku.productCategory === "Hair" && <OnsaleProduct />}
 
-            <ProductActions
-              handleUpdateBag={handleUpdateBag}
-              handleUpdateSavedBag={handleUpdateSavedBag}
-              isUpdatingBag={isUpdatingBag}
-              savedBagItem={savedBagItem}
-              isSoldOut={isSoldOut}
-              addedItemSuccessfully={addedItemSuccessfully}
-            />
+            <div className="space-y-4">
+              <TrustSignals />
+
+              <ProductActions
+                handleUpdateBag={handleUpdateBag}
+                handleUpdateSavedBag={handleUpdateSavedBag}
+                isUpdatingBag={isUpdatingBag}
+                savedBagItem={savedBagItem}
+                isSoldOut={isSoldOut}
+                addedItemSuccessfully={addedItemSuccessfully}
+              />
+            </div>
 
             <PickupDetails showShippingPolicy={showShippingPolicy} />
 
@@ -173,7 +179,7 @@ export default function ProductPage() {
             </div>
 
             {selectedSku.productCategory === "Hair" && (
-              <About
+              <AboutProduct
                 productAttributes={product.attributes || {}}
                 productSku={selectedSku}
               />
@@ -181,14 +187,18 @@ export default function ProductPage() {
 
             {selectedSku.productCategory === "Hair" && <OnsaleProduct />}
 
-            <ProductActions
-              handleUpdateBag={handleUpdateBag}
-              handleUpdateSavedBag={handleUpdateSavedBag}
-              isUpdatingBag={isUpdatingBag}
-              savedBagItem={savedBagItem}
-              isSoldOut={isSoldOut}
-              addedItemSuccessfully={addedItemSuccessfully as boolean | null}
-            />
+            <div className="space-y-4">
+              <TrustSignals />
+
+              <ProductActions
+                handleUpdateBag={handleUpdateBag}
+                handleUpdateSavedBag={handleUpdateSavedBag}
+                isUpdatingBag={isUpdatingBag}
+                savedBagItem={savedBagItem}
+                isSoldOut={isSoldOut}
+                addedItemSuccessfully={addedItemSuccessfully as boolean | null}
+              />
+            </div>
 
             <PickupDetails showShippingPolicy={showShippingPolicy} />
 

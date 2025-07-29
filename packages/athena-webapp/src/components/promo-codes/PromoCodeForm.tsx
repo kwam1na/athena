@@ -7,6 +7,12 @@ import Products from "./Products";
 import { Id } from "~/convex/_generated/dataModel";
 import { Dispatch, SetStateAction } from "react";
 import { DiscountType, PromoCodeSpan } from "./types";
+import { Button } from "../ui/button";
+import { Calendar } from "../ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
+import { format } from "date-fns";
+import { Calendar as CalendarIcon } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface PromoCodeFormProps {
   promoCode: string | null;
@@ -32,6 +38,10 @@ interface PromoCodeFormProps {
   isUpdatingStoreConfig: boolean;
   promoCodeSlug?: Id<"promoCode">;
   products: any[];
+  validFrom: Date | undefined;
+  setValidFrom: Dispatch<SetStateAction<Date | undefined>>;
+  validTo: Date | undefined;
+  setValidTo: Dispatch<SetStateAction<Date | undefined>>;
 }
 
 const PromoCodeForm = ({
@@ -57,6 +67,10 @@ const PromoCodeForm = ({
   isUpdatingStoreConfig,
   promoCodeSlug,
   products,
+  validFrom,
+  setValidFrom,
+  validTo,
+  setValidTo,
 }: PromoCodeFormProps) => {
   const toggleDiscountType = (value: DiscountType) => {
     setDiscountType(value);
@@ -98,6 +112,68 @@ const PromoCodeForm = ({
           promoCodeSpan={promoCodeSpan}
           setPromoCodeSpan={setPromoCodeSpan}
         />
+      </div>
+
+      {/* Valid From and Valid To Date Section */}
+      <div className="space-y-4 border rounded-lg p-4">
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="validFrom">Valid From</Label>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={cn(
+                    "w-full justify-start text-left font-normal",
+                    !validFrom && "text-muted-foreground"
+                  )}
+                  disabled={isUpdatingPromoCode}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {validFrom ? (
+                    format(validFrom, "PPP")
+                  ) : (
+                    <span>Pick a date</span>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0">
+                <Calendar
+                  mode="single"
+                  selected={validFrom}
+                  onSelect={setValidFrom}
+                  initialFocus
+                />
+              </PopoverContent>
+            </Popover>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="validTo">Valid To</Label>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={cn(
+                    "w-full justify-start text-left font-normal",
+                    !validTo && "text-muted-foreground"
+                  )}
+                  disabled={isUpdatingPromoCode}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {validTo ? format(validTo, "PPP") : <span>Pick a date</span>}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0">
+                <Calendar
+                  mode="single"
+                  selected={validTo}
+                  onSelect={setValidTo}
+                  initialFocus
+                />
+              </PopoverContent>
+            </Popover>
+          </div>
+        </div>
       </div>
 
       <div className="flex items-center gap-8 border rounded-lg p-4 w-fit">

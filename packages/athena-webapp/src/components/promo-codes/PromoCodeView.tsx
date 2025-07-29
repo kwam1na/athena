@@ -37,6 +37,18 @@ function PromoCodeView() {
   const [isHomepageDiscountCode, setIsHomepageDiscountCode] = useState(false);
   const [isExclusive, setIsExclusive] = useState(false);
 
+  // Add state for valid from and valid to dates
+  const [validFrom, setValidFrom] = useState<Date | undefined>(() => {
+    // Default to today
+    return new Date();
+  });
+  const [validTo, setValidTo] = useState<Date | undefined>(() => {
+    // Default to 30 days from now
+    const futureDate = new Date();
+    futureDate.setDate(futureDate.getDate() + 30);
+    return futureDate;
+  });
+
   const [isAddingPromoCode, setIsAddingPromoCode] = useState(false);
   const [isUpdatingPromoCode, setIsUpdatingPromoCode] = useState(false);
   const [isUpdatingStoreConfig, setIsUpdatingStoreConfig] = useState(false);
@@ -66,6 +78,11 @@ function PromoCodeView() {
       setAutoApply(activePromoCode.autoApply ?? false);
       setIsSitewide(activePromoCode.sitewide ?? false);
       setIsExclusive(activePromoCode.isExclusive ?? false);
+
+      // Set the date values from the existing promo code
+      setValidFrom(new Date(activePromoCode.validFrom));
+      setValidTo(new Date(activePromoCode.validTo));
+
       // Check if this promo code is set as homepage discount code
       if (
         activeStore?.config?.homepageDiscountCodeModalPromoCode?.promoCodeId ===
@@ -118,8 +135,8 @@ function PromoCodeView() {
         isExclusive: isExclusive,
         span: promoCodeSpan,
         productSkus,
-        validFrom: Date.now(),
-        validTo: Date.now(),
+        validFrom: new Date(validFrom!).getTime(),
+        validTo: new Date(validTo!).getTime(),
         createdByUserId: user._id,
       });
 
@@ -184,8 +201,8 @@ function PromoCodeView() {
         displayText: displayText,
         span: promoCodeSpan,
         productSkus,
-        validFrom: Date.now(),
-        validTo: Date.now(),
+        validFrom: new Date(validFrom!).getTime(),
+        validTo: new Date(validTo!).getTime(),
       });
 
       toast.success(`Promo code ${promoCode} updated`);
@@ -326,6 +343,10 @@ function PromoCodeView() {
             isUpdatingStoreConfig={isUpdatingStoreConfig}
             promoCodeSlug={promoCodeSlug as Id<"promoCode">}
             products={productsFormatted}
+            validFrom={validFrom}
+            setValidFrom={setValidFrom}
+            validTo={validTo}
+            setValidTo={setValidTo}
           />
 
           <PromoCodePreview
