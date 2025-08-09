@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { Address, OnlineOrder, Store } from "../../types";
 import { action } from "../_generated/server";
-import { OrderEmailType, sendOrderEmail } from "../sendgrid";
+import { OrderEmailType, sendOrderEmail } from "../mailersend";
 import {
   capitalizeWords,
   currencyFormatter,

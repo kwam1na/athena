@@ -24,6 +24,8 @@ import { postAnalytics } from "@/api/analytics";
 import { useUpsellsQueries } from "@/lib/queries/upsells";
 import { UpsellModal } from "./ui/modals/UpsellModal";
 import { getRelativeTime } from "@/lib/utils";
+import { ProductActionBar } from "./ProductActionBar";
+import { useShoppingBag } from "@/hooks/useShoppingBag";
 
 const origin = "homepage";
 
@@ -60,6 +62,8 @@ export default function HomePage() {
     lastDiscountModalShownTime,
     isDiscountModalStateLoaded,
     openDiscountModal,
+    hasRedeemedOffers,
+    redeemedOffers,
   } = useDiscountCodeAlert();
 
   const [hasScrolledPastThreshold, setHasScrolledPastThreshold] =
@@ -247,6 +251,7 @@ export default function HomePage() {
         {upsell && (
           <ProductReminderBar
             product={upsell}
+            redeemedOffer={redeemedOffers?.[0]}
             isVisible={true}
             onDismiss={() => {
               setShowReminderBar(false);

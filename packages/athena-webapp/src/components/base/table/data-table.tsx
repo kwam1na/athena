@@ -24,17 +24,19 @@ import {
 } from "../../ui/table";
 
 import { DataTableToolbar } from "./data-table-toolbar";
-import { PAGE_INDEX_KEY, PAGE_SIZE_KEY } from "./constants";
 import { DataTablePagination } from "./data-table-pagination";
+import { usePaginationPersistence } from "~/src/hooks/use-pagination-persistence";
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
+  tableId: string; // Unique identifier for localStorage keys
 }
 
 export function GenericDataTable<TData, TValue>({
   columns,
   data,
+  tableId,
 }: DataTableProps<TData, TValue>) {
   const [rowSelection, setRowSelection] = React.useState({});
   const [columnVisibility, setColumnVisibility] =
@@ -44,30 +46,28 @@ export function GenericDataTable<TData, TValue>({
   );
   const [sorting, setSorting] = React.useState<SortingState>([]);
 
-  // const pageIndex = Number(localStorage.getItem(PAGE_INDEX_KEY) ?? 0);
-
-  // const pageSize = Number(localStorage.getItem(PAGE_SIZE_KEY) ?? 10);
+  // Use the pagination persistence hook
+  const { pagination, setPagination } = usePaginationPersistence({
+    tableId,
+    defaultPageSize: 10,
+  });
 
   const table = useReactTable({
     data,
     columns,
-    // initialState: {
-    //   pagination: {
-    //     pageIndex,
-    //     pageSize,
-    //   },
-    // },
     state: {
       sorting,
       columnVisibility,
       rowSelection,
       columnFilters,
+      pagination,
     },
     enableRowSelection: true,
     onRowSelectionChange: setRowSelection,
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
     onColumnVisibilityChange: setColumnVisibility,
+    onPaginationChange: setPagination,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),

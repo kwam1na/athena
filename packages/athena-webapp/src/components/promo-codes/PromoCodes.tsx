@@ -17,7 +17,11 @@ export default function PromoCodes({ promoCodes }: { promoCodes: any[] }) {
     <div className="container mx-auto">
       {promoCodes && promoCodes.length > 0 && (
         <div className="py-8">
-          <PromoCodesDataTable data={promoCodes} columns={columns} />
+          <PromoCodesDataTable
+            data={promoCodes}
+            columns={columns}
+            tableId="promo-codes"
+          />
         </div>
       )}
       {promoCodes && promoCodes.length == 0 && (

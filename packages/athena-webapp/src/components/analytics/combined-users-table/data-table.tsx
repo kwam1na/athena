@@ -23,6 +23,7 @@ import {
   TableRow,
 } from "../../ui/table";
 import { DataTablePagination } from "./data-table-pagination";
+import { usePaginationPersistence } from "~/src/hooks/use-pagination-persistence";
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
@@ -44,6 +45,11 @@ export function CombinedUsersTable<TData, TValue>({
   );
   const [sorting, setSorting] = React.useState<SortingState>([]);
 
+  const { pagination, setPagination } = usePaginationPersistence({
+    tableId: "combined-users",
+    defaultPageSize: pageSize,
+  });
+
   const table = useReactTable({
     data,
     columns,
@@ -57,7 +63,9 @@ export function CombinedUsersTable<TData, TValue>({
       columnVisibility,
       rowSelection,
       columnFilters,
+      pagination,
     },
+    onPaginationChange: setPagination,
     enableRowSelection: true,
     onRowSelectionChange: setRowSelection,
     onSortingChange: setSorting,

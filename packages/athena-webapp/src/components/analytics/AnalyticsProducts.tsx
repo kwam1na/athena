@@ -51,7 +51,11 @@ export default function AnalyticsProducts({ items }: { items: Analytic[] }) {
   return (
     <div className="container mx-auto">
       <div className="py-8">
-        <AnalyticsProductsTable data={data} columns={columns} />
+        <AnalyticsProductsTable
+          data={data}
+          columns={columns}
+          tableId="analytics-products"
+        />
       </div>
     </div>
   );

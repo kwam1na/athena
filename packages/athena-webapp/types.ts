@@ -93,7 +93,9 @@ export type Review = Doc<"review"> & {
   user: Guest | StoreFrontUser;
 };
 
-export type Offer = Doc<"offer">;
+export type Offer = Doc<"offer"> & {
+  promoCode?: PromoCode;
+};
 
 // POS System Types
 /**

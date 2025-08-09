@@ -87,7 +87,11 @@ export const UserActivity = () => {
         </TabsContent>
 
         <TabsContent value="table" className="mt-6">
-          <GenericDataTable data={items} columns={analyticsColumns} />
+          <GenericDataTable
+            data={items}
+            columns={analyticsColumns}
+            tableId="user-activity"
+          />
         </TabsContent>
       </Tabs>
     </div>

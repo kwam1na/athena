@@ -33,7 +33,11 @@ export const UnresolvedProducts = () => {
     >
       <FadeIn className="py-4">
         {products && products.length > 0 && (
-          <GenericDataTable data={products} columns={productColumns} />
+          <GenericDataTable
+            data={products}
+            columns={productColumns}
+            tableId="unresolved-products"
+          />
         )}
         {products && products.length == 0 && (
           <div className="flex items-center justify-center min-h-[60vh] w-full">

@@ -11,7 +11,7 @@ export const columns: ColumnDef<AnalyticProduct>[] = [
   {
     accessorKey: "action",
     header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Product" />
+      <DataTableColumnHeader column={column} title="Recently viewed" />
     ),
     cell: ({ row }) => {
       const item = row.original;
@@ -43,7 +43,7 @@ export const columns: ColumnDef<AnalyticProduct>[] = [
             <div className="aspect-square w-16 h-16 bg-gray-100 rounded-md" />
           )}
           <div className="flex flex-col gap-1">
-            <span className="max-w-[500px] truncate font-medium">
+            <span className="max-w-[240px] truncate font-medium">
               {capitalizeWords(product?.name || "")}
             </span>
           </div>

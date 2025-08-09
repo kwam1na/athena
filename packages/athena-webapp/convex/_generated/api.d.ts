@@ -74,6 +74,7 @@ import type * as llm_providers_openai from "../llm/providers/openai.js";
 import type * as llm_storeInsights from "../llm/storeInsights.js";
 import type * as llm_userInsights from "../llm/userInsights.js";
 import type * as llm_utils_analyticsUtils from "../llm/utils/analyticsUtils.js";
+import type * as mailersend_index from "../mailersend/index.js";
 import type * as otp_ResendOTP from "../otp/ResendOTP.js";
 import type * as otp_VerificationCodeEmail from "../otp/VerificationCodeEmail.js";
 import type * as paystack_index from "../paystack/index.js";
@@ -211,6 +212,7 @@ declare const fullApi: ApiFromModules<{
   "llm/storeInsights": typeof llm_storeInsights;
   "llm/userInsights": typeof llm_userInsights;
   "llm/utils/analyticsUtils": typeof llm_utils_analyticsUtils;
+  "mailersend/index": typeof mailersend_index;
   "otp/ResendOTP": typeof otp_ResendOTP;
   "otp/VerificationCodeEmail": typeof otp_VerificationCodeEmail;
   "paystack/index": typeof paystack_index;

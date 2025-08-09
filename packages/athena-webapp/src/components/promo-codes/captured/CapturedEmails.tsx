@@ -13,5 +13,11 @@ interface CapturedEmailsProps {
 export default function CapturedEmails({ offers }: CapturedEmailsProps = {}) {
   if (!offers) return null;
 
-  return <GenericDataTable data={offers} columns={capturedEmailsColumns} />;
+  return (
+    <GenericDataTable
+      data={offers}
+      columns={capturedEmailsColumns}
+      tableId="captured-emails"
+    />
+  );
 }

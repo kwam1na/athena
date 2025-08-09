@@ -41,5 +41,11 @@ export const UserOnlineOrders = () => {
       </p>
     );
 
-  return <GenericDataTable data={ordersFormatted} columns={orderColumns} />;
+  return (
+    <GenericDataTable
+      data={ordersFormatted}
+      columns={orderColumns}
+      tableId="user-online-orders"
+    />
+  );
 };

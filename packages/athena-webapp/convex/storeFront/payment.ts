@@ -3,13 +3,8 @@ import { action } from "../_generated/server";
 import { api, internal } from "../_generated/api";
 import { Address, CheckoutSession, OnlineOrder } from "../../types";
 import { orderDetailsSchema } from "../schemas/storeFront";
-import { sendNewOrderEmail, sendOrderEmail } from "../sendgrid";
-import {
-  capitalizeWords,
-  currencyFormatter,
-  formatDate,
-  getAddressString,
-} from "../utils";
+import { sendNewOrderEmail, sendOrderEmail } from "../mailersend";
+import { currencyFormatter, formatDate, getAddressString } from "../utils";
 import { getDiscountValue, getOrderAmount } from "../inventory/utils";
 import { formatOrderItems } from "./onlineOrderUtilFns";
 
@@ -200,6 +195,10 @@ export const createPODOrder = action({
               didSendConfirmationEmail: true,
             },
           });
+        } else {
+          console.info(
+            `Failed to send POD order confirmation email for order #${order.orderNumber} to ${order.customerDetails.email}`
+          );
         }
 
         const testAccounts = ["kwamina.0x00@gmail.com", "kwami.nuh@gmail.com"];

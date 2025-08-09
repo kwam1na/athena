@@ -52,6 +52,9 @@ export function useDiscountCodeAlert() {
     handleSuccessDiscountModal: handleSuccess,
     completeDiscountModalFlow: completeFlow,
     hasCompletedDiscountModalFlow: hasCompleted,
+    hasRedeemedOffers: redeemedOffers?.some(
+      (offer: any) => offer.status === "redeemed"
+    ),
     redeemedOffers,
   };
 }

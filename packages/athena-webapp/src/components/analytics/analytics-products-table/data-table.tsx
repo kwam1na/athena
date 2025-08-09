@@ -23,16 +23,19 @@ import {
   TableRow,
 } from "../../ui/table";
 import { DataTablePagination } from "./data-table-pagination";
+import { usePaginationPersistence } from "~/src/hooks/use-pagination-persistence";
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
+  tableId: string; // Unique identifier for localStorage keys
   showToolbar?: boolean;
 }
 
 export function AnalyticsProductsTable<TData, TValue>({
   columns,
   data,
+  tableId,
 }: DataTableProps<TData, TValue>) {
   const [rowSelection, setRowSelection] = React.useState({});
   const [columnVisibility, setColumnVisibility] =
@@ -42,25 +45,28 @@ export function AnalyticsProductsTable<TData, TValue>({
   );
   const [sorting, setSorting] = React.useState<SortingState>([]);
 
+  // Use the pagination persistence hook
+  const { pagination, setPagination } = usePaginationPersistence({
+    tableId,
+    defaultPageSize: 5,
+  });
+
   const table = useReactTable({
     data,
     columns,
-    initialState: {
-      pagination: {
-        pageSize: 5,
-      },
-    },
     state: {
       sorting,
       columnVisibility,
       rowSelection,
       columnFilters,
+      pagination,
     },
     enableRowSelection: true,
     onRowSelectionChange: setRowSelection,
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
     onColumnVisibilityChange: setColumnVisibility,
+    onPaginationChange: setPagination,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),

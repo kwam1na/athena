@@ -77,6 +77,7 @@ export default function ComplimentaryProducts({
           <GenericDataTable
             data={skus}
             columns={complimentaryProductsColumns}
+            tableId="complimentary-products"
           />
         </div>
       )}

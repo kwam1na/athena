@@ -17,7 +17,7 @@ export const analyticsColumns: ColumnDef<Analytic>[] = [
   {
     accessorKey: "action",
     header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Activity" />
+      <DataTableColumnHeader column={column} title="Recent user activity" />
     ),
     cell: ({ row }) => {
       const item = row.original;

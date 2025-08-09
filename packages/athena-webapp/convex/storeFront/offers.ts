@@ -515,14 +515,86 @@ export const getByStorefrontUserId = query({
   args: {
     storeFrontUserId: v.union(v.id("guest"), v.id("storeFrontUser")),
   },
+  returns: v.array(
+    v.object({
+      _id: v.id("offer"),
+      _creationTime: v.number(),
+      email: v.string(),
+      promoCodeId: v.id("promoCode"),
+      storeFrontUserId: v.union(v.id("guest"), v.id("storeFrontUser")),
+      storeId: v.id("store"),
+      status: v.union(
+        v.literal("pending"),
+        v.literal("sent"),
+        v.literal("error"),
+        v.literal("redeemed"),
+        v.literal("reminded")
+      ),
+      ipAddress: v.optional(v.string()),
+      sentAt: v.optional(v.number()),
+      errorMessage: v.optional(v.string()),
+      isRedeemed: v.optional(v.boolean()),
+      activity: v.optional(
+        v.array(
+          v.object({
+            action: v.string(),
+            timestamp: v.number(),
+          })
+        )
+      ),
+      promoCode: v.optional(
+        v.object({
+          _id: v.id("promoCode"),
+          _creationTime: v.number(),
+          code: v.string(),
+          storeId: v.id("store"),
+          discountType: v.union(v.literal("percentage"), v.literal("amount")),
+          discountValue: v.number(),
+          limit: v.optional(v.number()),
+          validFrom: v.number(),
+          validTo: v.number(),
+          span: v.union(
+            v.literal("entire-order"),
+            v.literal("selected-products")
+          ),
+          active: v.boolean(),
+          displayText: v.string(),
+          isExclusive: v.optional(v.boolean()),
+          autoApply: v.optional(v.boolean()),
+          sitewide: v.optional(v.boolean()),
+          createdByUserId: v.id("athenaUser"),
+        })
+      ),
+    })
+  ),
   handler: async (ctx, args) => {
-    return await ctx.db
+    const offers = await ctx.db
       .query(entity)
       .withIndex("by_storeFrontUserId", (q) =>
         q.eq("storeFrontUserId", args.storeFrontUserId)
       )
       .order("desc")
       .collect();
+
+    // Efficiently fetch promo codes for all offers
+    const promoCodeIds = [...new Set(offers.map((offer) => offer.promoCodeId))];
+    const promoCodes = await Promise.all(
+      promoCodeIds.map(async (promoCodeId) => {
+        const promoCode = await ctx.db.get(promoCodeId);
+        return { id: promoCodeId, data: promoCode };
+      })
+    );
+
+    // Create a map for quick lookup
+    const promoCodeMap = new Map(promoCodes.map((pc) => [pc.id, pc.data]));
+
+    // Attach promo code data to each offer
+    const offersWithPromoCodes = offers.map((offer) => ({
+      ...offer,
+      promoCode: promoCodeMap.get(offer.promoCodeId) || undefined,
+    }));
+
+    return offersWithPromoCodes;
   },
 });
 

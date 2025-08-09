@@ -7,7 +7,11 @@ export default function AnalyticsItems({ items }: { items: Analytic[] }) {
   return (
     <div className="container mx-auto">
       <div className="py-8">
-        <GenericDataTable data={items} columns={analyticsColumns} />
+        <GenericDataTable
+          data={items}
+          columns={analyticsColumns}
+          tableId="analytics-items"
+        />
       </div>
     </div>
   );

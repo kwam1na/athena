@@ -82,7 +82,7 @@ export default function AnalyticsView() {
         <div className="flex items-center">
           <p className="text-xl font-medium">Analytics</p>
         </div>
-        <div className="flex items-center gap-2">
+        {/* <div className="flex items-center gap-2">
           <Button
             variant={viewMode === "enhanced" ? "default" : "outline"}
             size="sm"
@@ -102,7 +102,7 @@ export default function AnalyticsView() {
             <List className="h-4 w-4" />
             Classic
           </Button>
-        </div>
+        </div> */}
       </div>
     );
   };
@@ -133,9 +133,9 @@ export default function AnalyticsView() {
       <FadeIn className="space-y-8 py-8">
         <div className="flex">
           {/* <StoreInsights storeId={activeStore._id} /> */}
-          <div className="ml-auto">
+          {/* <div className="ml-auto">
             <StoreVisitors />
-          </div>
+          </div> */}
         </div>
         <div className="space-y-16">
           <AnalyticsCombinedUsers items={items} />

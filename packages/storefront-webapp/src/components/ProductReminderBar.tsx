@@ -1,4 +1,4 @@
-import { ProductSku } from "@athena/webapp";
+import { Offer, ProductSku, PromoCode } from "@athena/webapp";
 import { Button } from "./ui/button";
 import { getProductName } from "@/lib/productUtils";
 import { X } from "lucide-react";
@@ -15,6 +15,7 @@ import { useQueryClient } from "@tanstack/react-query";
 interface ProductReminderBarProps {
   product: ProductSku;
   isVisible: boolean;
+  redeemedOffer?: Offer;
   onDismiss: () => void;
   footerRef: React.RefObject<HTMLDivElement>;
 }
@@ -25,6 +26,7 @@ const COOLDOWN_DURATION = 6 * 60 * 60 * 1000; // 6 hours in milliseconds
 export function ProductReminderBar({
   product,
   isVisible,
+  redeemedOffer,
   onDismiss,
   footerRef,
 }: ProductReminderBarProps) {
@@ -39,6 +41,9 @@ export function ProductReminderBar({
   const queryClient = useQueryClient();
 
   const showReminderBar = isVisible && !isInCooldown && shouldShow;
+
+  const hasDiscountCode =
+    redeemedOffer?.promoCode && redeemedOffer?.status !== "redeemed";
 
   useEffect(() => {
     const cooldownUntil = localStorage.getItem(COOLDOWN_KEY);
@@ -63,8 +68,15 @@ export function ProductReminderBar({
     return () => window.removeEventListener("scroll", checkScroll);
   }, [footerRef]);
 
+  const action = hasDiscountCode
+    ? "viewed_product_reminder_bar_with_discount_code"
+    : "viewed_product_reminder_bar";
+  const origin = hasDiscountCode
+    ? "homepage_product_reminder_bar_with_discount_code"
+    : "homepage_product_reminder_bar";
+
   useTrackEvent({
-    action: "viewed_product_reminder_bar",
+    action,
     data: {
       product: product.productId,
       productSku: product.sku,
@@ -101,7 +113,7 @@ export function ProductReminderBar({
       await Promise.all([
         postAnalytics({
           action: "added_product_to_bag",
-          origin: "homepage_product_reminder_bar",
+          origin,
           data: {
             product: product.productId,
             productSku: product.sku,
@@ -150,6 +162,24 @@ export function ProductReminderBar({
     });
   };
 
+  const defaultCTAText = `👀 Still got your eyes on this? ${
+    product.quantityAvailable <= 3
+      ? `Only ${product.quantityAvailable} left`
+      : ""
+  }`;
+
+  const promoCodeTitle = `Don't forget your ${redeemedOffer?.promoCode?.displayText} off`;
+
+  const title = hasDiscountCode ? promoCodeTitle : productName;
+
+  const ctaAction = hasDiscountCode ? "Use my offer" : "Add to Bag";
+
+  const withRedeemedPromoCodeCTAText = `Your exclusive discount is still active — no code needed.`;
+
+  const ctaText = hasDiscountCode
+    ? withRedeemedPromoCodeCTAText
+    : defaultCTAText;
+
   return (
     <>
       <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
@@ -186,16 +216,10 @@ export function ProductReminderBar({
                       alt={productName}
                       className="w-10 h-10 md:w-12 md:h-12 object-cover rounded"
                     />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">
-                        {productName}
-                      </p>
+                    <div className="flex-1 min-w-0 space-y-2">
+                      <p className="text-sm font-medium truncate">{title}</p>
                       <p className="text-xs md:text-sm mt-0.5 md:mt-1">
-                        {`👀 Still got your eyes on this? ${
-                          product.quantityAvailable <= 3
-                            ? `Only ${product.quantityAvailable} left`
-                            : ""
-                        }`}
+                        {ctaText}
                       </p>
                     </div>
                   </Link>
@@ -205,7 +229,7 @@ export function ProductReminderBar({
                       onClick={handleAddToBag}
                       disabled={isUpdatingBag}
                     >
-                      {isUpdatingBag ? "Adding to Bag.." : "Add to Bag"}
+                      {ctaAction}
                     </Button>
                     <Button
                       variant="ghost"

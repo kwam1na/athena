@@ -250,7 +250,11 @@ const PromoCodeAnalytics = ({
       {/* Use consistent height container for both views to prevent layout shift */}
       <div className="min-h-[500px]">
         {currentView === "table" ? (
-          <GenericDataTable data={analytics} columns={analyticsColumns} />
+          <GenericDataTable
+            data={analytics}
+            columns={analyticsColumns}
+            tableId="promo-code-analytics"
+          />
         ) : (
           <CapturedEmails offers={offers} />
         )}

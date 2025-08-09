@@ -164,6 +164,7 @@ const ProductVariantsTable = () => {
           <GenericDataTable
             data={sourceVariants}
             columns={productVariantColumns}
+            tableId="copy-images-source-variants"
           />
         </div>
 
@@ -171,6 +172,7 @@ const ProductVariantsTable = () => {
           <GenericDataTable
             data={destinationVariants}
             columns={productVariantColumns}
+            tableId="copy-images-destination-variants"
           />
         </div>
       </div>
