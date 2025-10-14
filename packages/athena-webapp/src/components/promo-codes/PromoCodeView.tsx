@@ -53,7 +53,7 @@ function PromoCodeView() {
   const [isUpdatingPromoCode, setIsUpdatingPromoCode] = useState(false);
   const [isUpdatingStoreConfig, setIsUpdatingStoreConfig] = useState(false);
 
-  const { selectedProductSkus } = useSelectedProducts();
+  const { selectedProductSkus, setSelectedProductSkus } = useSelectedProducts();
   const { user } = useAuth();
   const navigate = useNavigate();
 
@@ -66,6 +66,11 @@ function PromoCodeView() {
   const activePromoCode = useQuery(
     api.inventory.promoCode.getById,
     promoCodeSlug ? { id: promoCodeSlug as Id<"promoCode"> } : "skip"
+  );
+
+  const promoCodeProductSkus = useQuery(
+    api.inventory.promoCode.getPromoCodeItems,
+    promoCodeSlug ? { promoCodeId: promoCodeSlug as Id<"promoCode"> } : "skip"
   );
 
   useEffect(() => {
@@ -92,6 +97,15 @@ function PromoCodeView() {
       }
     }
   }, [activePromoCode, activeStore]);
+
+  // Set selected products when promo code product SKUs are loaded
+  useEffect(() => {
+    if (promoCodeProductSkus && promoCodeProductSkus.length > 0) {
+      setSelectedProductSkus(
+        new Set(promoCodeProductSkus.map((sku) => sku._id))
+      );
+    }
+  }, [promoCodeProductSkus, setSelectedProductSkus]);
 
   if (!products || !activeStore || !user) return null;
 
@@ -309,6 +323,13 @@ function PromoCodeView() {
     Boolean(promoCode && discount && discountType) &&
     (isEntireOrder || hasSelectedProducts);
 
+  // Filter products that match the promo code's product SKUs
+  const promoCodeProducts = products.filter((product: Product) => {
+    return product.skus.some((sku) =>
+      promoCodeProductSkus?.some((psku) => psku._id === sku._id)
+    );
+  });
+
   return (
     <View
       header={
@@ -358,6 +379,8 @@ function PromoCodeView() {
             promoCodeSlug={promoCodeSlug}
             isAddingPromoCode={isAddingPromoCode}
             handleAddPromoCode={handleAddPromoCode}
+            promoCodeSpan={promoCodeSpan}
+            products={promoCodeProductSkus}
           />
         </div>
 

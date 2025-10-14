@@ -9,9 +9,12 @@ import { FadeIn } from "../common/FadeIn";
 import { useSearch } from "@tanstack/react-router";
 import { slugToWords } from "~/src/lib/utils";
 import { Button } from "../ui/button";
-import { AlertTriangle, PackageXIcon } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 import { ToggleGroup, ToggleGroupItem } from "../ui/toggle-group";
 import { useMemo, useState } from "react";
+import { useAction } from "convex/react";
+import { api } from "~/convex/_generated/api";
+import { toast } from "sonner";
 
 const ProductActionsToggleGroup = ({
   outOfStockProductsCount,
@@ -49,6 +52,22 @@ const Navigation = ({
   setSelectedProductActions: (actions: string[]) => void;
 }) => {
   const { categorySlug } = useSearch({ strict: false });
+  const clearAllCache = useAction(api.inventory.productUtil.clearAllCache);
+  const [isClearCacheMutationPending, setIsClearCacheMutationPending] =
+    useState(false);
+
+  const handleClearCache = async () => {
+    setIsClearCacheMutationPending(true);
+    try {
+      await clearAllCache();
+      toast.success("Cache cleared");
+    } catch (error) {
+      toast.error("Failed to clear cache");
+    } finally {
+      setIsClearCacheMutationPending(false);
+    }
+  };
+
   return (
     <div className="container mx-auto flex gap-2">
       <div className="flex items-center gap-2">
@@ -63,6 +82,14 @@ const Navigation = ({
             setSelectedProductActions={setSelectedProductActions}
           />
         )}
+
+        <Button
+          variant="outline"
+          onClick={handleClearCache}
+          disabled={isClearCacheMutationPending}
+        >
+          Clear Cache
+        </Button>
       </div>
     </div>
   );

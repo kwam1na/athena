@@ -4,11 +4,14 @@ import { FeaturedItem, Product } from "@athena/webapp";
 
 const buildQueryString = (params?: FilterParams) => {
   if (!params) return null;
+
+  console.log("params", params);
   const query = new URLSearchParams();
   if (params.color) query.append("color", params.color); // Expecting comma-separated string for color
   if (params.length) query.append("length", params.length); // Expecting comma-separated string for length
   if (params.category) query.append("category", params.category); // Expecting comma-separated string for length
   if (params.subcategory) query.append("subcategory", params.subcategory); // Expecting comma-separated string for length
+  if (params.tags) query.append("tags", params.tags.join(",")); // Expecting comma-separated string for tags
   query.append("isVisible", "true");
   return query.toString();
 };

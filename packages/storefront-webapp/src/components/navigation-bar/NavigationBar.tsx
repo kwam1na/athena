@@ -213,6 +213,26 @@ export default function NavigationBar() {
                     </div>
                     {appLocation !== "checkout" && (
                       <div className="hidden lg:flex gap-12">
+                        <div
+                          key={"sale"}
+                          className="group relative h-full flex items-center"
+                          // onMouseEnter={() => setActiveMenu(s.value)}
+                        >
+                          <Link
+                            to="/shop/$categorySlug"
+                            params={(p) => ({
+                              ...p,
+                              categorySlug: "sale",
+                            })}
+                            className={`text-xs ${hoverClass} transition-colors`}
+                            onClick={() => setActiveMenu(null)}
+                          >
+                            Sale
+                          </Link>
+                          {/* Invisible extender to prevent hover gap */}
+                          <div className="absolute -bottom-6 left-0 w-full h-6" />
+                        </div>
+
                         {categories?.map((s) => (
                           <div
                             key={s.value}

@@ -12,4 +12,5 @@ export type FilterParams = {
   type?: string;
   category?: string;
   subcategory?: string;
+  tags?: string[];
 };

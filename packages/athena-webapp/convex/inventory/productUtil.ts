@@ -3,7 +3,6 @@
 import { v } from "convex/values";
 import { action } from "../_generated/server";
 import { api } from "../_generated/api";
-// import redisClient from "../r";
 import { ValkeyClient } from "../cache";
 
 export const getAllProducts = action({
@@ -75,6 +74,28 @@ export const invalidateProductCache = action({
       };
     } catch (e) {
       console.log("Cache invalidation error", (e as Error).message);
+      return {
+        success: false,
+        error: (e as Error).message,
+      };
+    }
+  },
+});
+
+export const clearAllCache = action({
+  args: {},
+  handler: async () => {
+    try {
+      const cache = new ValkeyClient();
+      // Use wildcard pattern to clear all keys
+      const keys = await cache.invalidate("*");
+
+      return {
+        success: true,
+        keysCleared: keys,
+      };
+    } catch (e) {
+      console.log("Cache clear error", (e as Error).message);
       return {
         success: false,
         error: (e as Error).message,

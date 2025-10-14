@@ -29,15 +29,23 @@ export function HomeHeroSection({
     <div ref={homeHeroRef}>
       <HomeHero nextSectionRef={nextSectionRef} />
       <motion.div className="flex flex-col lg:relative">
-        <motion.img
-          ref={shopTheLookRef}
-          initial={{ opacity: 0, y: 16 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.6, delay: 0.8 }}
-          src={store?.config?.shopTheLookImage}
-          className="w-full lg:w-[50%] h-screen object-cover"
-        />
+        <Link
+          to="/shop/product/$productSlug"
+          params={{ productSlug: shopLookProduct?.productId }}
+          search={{
+            origin: "shop_this_look",
+          }}
+        >
+          <motion.img
+            ref={shopTheLookRef}
+            initial={{ opacity: 0, y: 16 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6, delay: 0.8 }}
+            src={store?.config?.shopTheLookImage}
+            className="w-full lg:w-[50%] h-screen object-cover"
+          />
+        </Link>
 
         <motion.div
           initial={{ opacity: 0 }}

@@ -20,6 +20,7 @@ productRoutes.get("/", async (c) => {
   const lengths = params.length?.[0]?.split(",").map((l) => parseInt(l));
   const categories = params.category?.[0]?.split(",").map((s) => s);
   const subcategories = params.subcategory?.[0]?.split(",").map((s) => s);
+  const tags = params.tags?.[0]?.split(",").map((s) => s);
   const isVisible = params.isVisible?.[0] === "true";
 
   const products = await c.env.runAction(

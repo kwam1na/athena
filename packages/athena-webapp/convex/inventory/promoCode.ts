@@ -205,13 +205,79 @@ export const getAllItems = query({
 
 export const getById = query({
   args: { id: v.id(entity) },
+  returns: v.union(
+    v.object({
+      _id: v.id(entity),
+      _creationTime: v.number(),
+      code: v.string(),
+      storeId: v.id("store"),
+      discountType: v.union(v.literal("percentage"), v.literal("amount")),
+      discountValue: v.number(),
+      limit: v.optional(v.number()),
+      autoApply: v.optional(v.boolean()),
+      isExclusive: v.optional(v.boolean()),
+      sitewide: v.optional(v.boolean()),
+      displayText: v.string(),
+      validFrom: v.number(),
+      validTo: v.number(),
+      span: v.union(v.literal("entire-order"), v.literal("selected-products")),
+      createdByUserId: v.id("athenaUser"),
+      active: v.boolean(),
+    }),
+    v.null()
+  ),
   handler: async (ctx, args) => {
     return await ctx.db.get(args.id);
   },
 });
 
+export const getPromoCodeItems = query({
+  args: { promoCodeId: v.id(entity) },
+  returns: v.array(
+    v.object({
+      _id: v.id("productSku"),
+      _creationTime: v.number(),
+      attributes: v.optional(v.record(v.string(), v.any())),
+      color: v.optional(v.id("color")),
+      images: v.array(v.string()),
+      isVisible: v.optional(v.boolean()),
+      inventoryCount: v.number(),
+      length: v.optional(v.number()),
+      netPrice: v.optional(v.number()),
+      price: v.number(),
+      productId: v.id("product"),
+      productName: v.optional(v.string()),
+      quantityAvailable: v.number(),
+      size: v.optional(v.string()),
+      sku: v.optional(v.string()),
+      storeId: v.id("store"),
+      unitCost: v.optional(v.number()),
+      weight: v.optional(v.string()),
+    })
+  ),
+  handler: async (ctx, args) => {
+    const items = await ctx.db
+      .query("promoCodeItem")
+      .filter((q) => q.eq(q.field("promoCodeId"), args.promoCodeId))
+      .collect();
+
+    const productSkuIds = items
+      .map((item) => item.productSkuId)
+      .filter((id): id is Id<"productSku"> => id !== undefined);
+
+    // Fetch all productSku documents
+    const productSkus = await Promise.all(
+      productSkuIds.map((id) => ctx.db.get(id))
+    );
+
+    // Filter out any null values (in case some IDs don't exist)
+    return productSkus.filter((sku) => sku !== null);
+  },
+});
+
 export const remove = mutation({
   args: { id: v.id(entity) },
+  returns: v.object({ success: v.boolean() }),
   handler: async (ctx, args) => {
     const promoCodeItems = await ctx.db
       .query("promoCodeItem")
@@ -249,7 +315,13 @@ export const update = mutation({
     ),
     productSkus: v.optional(v.array(v.id("productSku"))),
   },
+  returns: v.object({ success: v.boolean() }),
   handler: async (ctx, args) => {
+    const promoCode = await ctx.db.get(args.id);
+    if (!promoCode) {
+      throw new Error("Promo code not found");
+    }
+
     await ctx.db.patch(args.id, {
       code: args.code,
       active: args.active,
@@ -265,14 +337,25 @@ export const update = mutation({
       span: args.span,
     });
 
-    // Remove all existing promo code items
-    if (args.span == "entire-order") {
-      const items = await ctx.db
-        .query("promoCodeItem")
-        .filter((q) => q.eq(q.field("promoCodeId"), args.id))
-        .collect();
+    // Remove all existing promo code items first
+    const existingItems = await ctx.db
+      .query("promoCodeItem")
+      .filter((q) => q.eq(q.field("promoCodeId"), args.id))
+      .collect();
 
-      await Promise.all(items.map((item) => ctx.db.delete(item._id)));
+    await Promise.all(existingItems.map((item) => ctx.db.delete(item._id)));
+
+    // Add new promo code items if span is "selected-products"
+    if (args.span === "selected-products" && args.productSkus) {
+      await Promise.all(
+        args.productSkus.map(async (productSkuId) => {
+          await ctx.db.insert("promoCodeItem", {
+            promoCodeId: args.id,
+            productSkuId,
+            storeId: promoCode.storeId,
+          });
+        })
+      );
     }
 
     return { success: true };
