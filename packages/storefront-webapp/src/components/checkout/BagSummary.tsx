@@ -2,7 +2,7 @@ import { useStoreContext } from "@/contexts/StoreContext";
 import { useShoppingBag } from "@/hooks/useShoppingBag";
 import { getProductName } from "@/lib/productUtils";
 import { ProductSku } from "@athena/webapp";
-import { useCheckout } from "./CheckoutProvider";
+import { useCheckout, type Discount } from "./CheckoutProvider";
 import { Link } from "@tanstack/react-router";
 import { Button } from "../ui/button";
 import { Separator } from "../ui/separator";
@@ -18,28 +18,43 @@ import { getDiscountValue } from "./utils";
 import { usePromoCodesQueries } from "@/lib/queries/promoCode";
 import { isFeeWaived } from "@/lib/feeUtils";
 import { Badge } from "../ui/badge";
-import OrderSummary from "./OrderDetails/OrderSummary";
 import { useDiscountCodeAlert } from "@/hooks/useDiscountCodeAlert";
 
 function SummaryItem({
   item,
   formatter,
+  discount,
+  totalItemsInBag,
 }: {
   item: any;
   formatter: Intl.NumberFormat;
+  discount?: Discount | null;
+  totalItemsInBag: number;
 }) {
-  const promoCodeQueries = usePromoCodesQueries();
+  // Determine if this item is eligible for the discount
+  const isEligible =
+    discount &&
+    (discount.span === "entire-order" ||
+      (discount.span === "selected-products" &&
+        discount.productSkus?.includes(item.productSkuId)));
 
-  const { data } = useQuery(promoCodeQueries.getAllItems());
+  // Calculate the discounted price per unit
+  const discountedPrice = isEligible
+    ? discount.type === "percentage"
+      ? item.price * (1 - discount.value / 100)
+      : Math.max(0, item.price - discount.value)
+    : item.price;
 
-  const isDiscounted = data?.some(
-    (promoCodeItem) => promoCodeItem?.productSku?._id === item.productSkuId
-  );
+  const isFree = isEligible && discountedPrice === 0;
 
-  const label =
-    isDiscounted && item.price == 0
-      ? "Free"
-      : formatter.format(item.price * item.quantity);
+  // For entire-order discounts, only show strikethrough if there's 1 item in bag
+  // For selected-products discounts, always show strikethrough for eligible items
+  const shouldShowDiscount =
+    isEligible &&
+    discountedPrice < item.price &&
+    (discount.span === "selected-products" || totalItemsInBag === 1);
+
+  const hasDiscount = shouldShowDiscount;
 
   return (
     <div className="flex items-center justify-between">
@@ -53,12 +68,26 @@ function SummaryItem({
         </div>
         <div className="space-y-2">
           <p className="text-sm font-medium">{getProductName(item)}</p>
-          {label != "Free" && (
-            <p className="text-xs text-muted-foreground">{label}</p>
+          {!isFree && !hasDiscount && (
+            <p className="text-xs text-muted-foreground">
+              {formatter.format(item.price * item.quantity)}
+            </p>
           )}
-          {label == "Free" && (
+          {hasDiscount && !isFree && (
             <div className="flex items-center gap-2 text-xs">
-              <p className="text-muted-foreground line-through">GHS 180</p>
+              <p className="text-muted-foreground line-through">
+                {formatter.format(item.price * item.quantity)}
+              </p>
+              <p className="text-xs">
+                {formatter.format(discountedPrice * item.quantity)}
+              </p>
+            </div>
+          )}
+          {isFree && (
+            <div className="flex items-center gap-2 text-xs">
+              <p className="text-muted-foreground line-through">
+                {formatter.format(item.price * item.quantity)}
+              </p>
               <p className="text-xs">Free</p>
             </div>
           )}
@@ -69,15 +98,29 @@ function SummaryItem({
   );
 }
 
-export function BagSummaryItems({ items }: { items: ProductSku[] }) {
+export function BagSummaryItems({
+  items,
+  discount,
+}: {
+  items: ProductSku[];
+  discount?: Discount | null;
+}) {
   const { formatter } = useStoreContext();
 
   if (!items) return null;
 
+  const totalItemsInBag = items.length;
+
   return (
     <div className="space-y-12 w-full">
       {items?.map((item: ProductSku, index: number) => (
-        <SummaryItem formatter={formatter} item={item} key={index} />
+        <SummaryItem
+          formatter={formatter}
+          item={item}
+          discount={discount}
+          totalItemsInBag={totalItemsInBag}
+          key={index}
+        />
       ))}
     </div>
   );
@@ -212,7 +255,10 @@ function BagSummary() {
       </div>
 
       <div className="px-8">
-        <BagSummaryItems items={checkoutState?.bag?.items} />
+        <BagSummaryItems
+          items={checkoutState?.bag?.items}
+          discount={checkoutState.discount}
+        />
       </div>
 
       {/* Promo Code */}

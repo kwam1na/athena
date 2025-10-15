@@ -166,7 +166,10 @@ export default function MobileBagSummary() {
               </Link>
             </div>
 
-            <BagSummaryItems items={checkoutState?.bag?.items} />
+            <BagSummaryItems
+              items={checkoutState?.bag?.items}
+              discount={checkoutState.discount}
+            />
 
             {/* Promo Code */}
             <div className="pt-8">

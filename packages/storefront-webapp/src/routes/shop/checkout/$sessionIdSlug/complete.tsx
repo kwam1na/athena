@@ -1,4 +1,5 @@
 import { BagSummaryItems } from "@/components/checkout/BagSummary";
+import type { Discount } from "@/components/checkout/CheckoutProvider";
 import {
   OrderDetails,
   PaymentDetails,
@@ -84,7 +85,10 @@ const CheckoutCompleteView = () => {
         >
           <p className="text-xs">Your order</p>
 
-          <BagSummaryItems items={sessionData.items} />
+          <BagSummaryItems
+            items={sessionData.items}
+            discount={sessionData.discount as Discount | null}
+          />
         </motion.div>
 
         <OrderDetails session={sessionData} delayAnimation />

@@ -179,7 +179,10 @@ export const CheckoutComplete = () => {
           }}
           className="space-y-8 w-full lg:w-[40%]"
         >
-          <BagSummaryItems items={checkoutState.bag.items} />
+          <BagSummaryItems
+            items={checkoutState.bag.items}
+            discount={checkoutState.discount}
+          />
         </motion.div>
 
         <OrderDetails session={activeSession} delayAnimation />

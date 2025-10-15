@@ -242,7 +242,10 @@ const PODConfirmationContent = () => {
         >
           <p className="text-xs">Your order</p>
 
-          <BagSummaryItems items={checkoutState.bag.items} />
+          <BagSummaryItems
+            items={checkoutState.bag.items}
+            discount={checkoutState.discount}
+          />
         </motion.div>
 
         <PODOrderDetails session={session} />

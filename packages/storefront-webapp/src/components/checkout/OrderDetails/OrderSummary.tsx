@@ -97,7 +97,10 @@ export default function OrderSummary() {
     <div className="space-y-12">
       <p>Order summary</p>
 
-      <BagSummaryItems items={checkoutState?.bag?.items} />
+      <BagSummaryItems
+        items={checkoutState?.bag?.items}
+        discount={checkoutState.discount}
+      />
 
       <div className="space-y-8 pt-4 mt-4">
         <div className="space-y-4 pb-8">
