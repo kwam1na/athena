@@ -490,12 +490,75 @@ export const CheckoutProvider = ({
 
   const { setNavBarLayout, setAppLocation } = useNavigationBarContext();
 
-  const { waiveDeliveryFees } = store?.config || {};
+  const { waiveDeliveryFees, fulfillment } = store?.config || {};
+  // Default to true if not set (for backward compatibility)
+  const isPickupEnabled = fulfillment?.enableStorePickup ?? true;
+  const isDeliveryEnabled = fulfillment?.enableDelivery ?? true;
+
+  // Helper function to check if restriction is within time window
+  const isWithinRestrictionTime = (restriction: any): boolean => {
+    if (!restriction?.isActive) return false;
+
+    const now = Date.now();
+    const { startTime, endTime } = restriction;
+
+    // If no times set, restriction is always active
+    if (!startTime && !endTime) return true;
+
+    // Check if within time window
+    if (startTime && now < startTime) return false;
+    if (endTime && now > endTime) return false;
+
+    return true;
+  };
+
+  // Check for temporary restrictions
+  const pickupRestriction = fulfillment?.pickupRestriction;
+  const deliveryRestriction = fulfillment?.deliveryRestriction;
+
+  const isPickupRestricted =
+    pickupRestriction?.isActive && isWithinRestrictionTime(pickupRestriction);
+  const isDeliveryRestricted =
+    deliveryRestriction?.isActive &&
+    isWithinRestrictionTime(deliveryRestriction);
+
+  const pickupAvailable = isPickupEnabled && !isPickupRestricted;
+  const deliveryAvailable = isDeliveryEnabled && !isDeliveryRestricted;
 
   useEffect(() => {
     setNavBarLayout("fixed");
     setAppLocation("shop");
   }, []);
+
+  // Auto-switch to delivery if pickup is disabled/restricted and currently selected
+  useEffect(() => {
+    if (!pickupAvailable && checkoutState.deliveryMethod === "pickup") {
+      if (deliveryAvailable) {
+        updateState({
+          deliveryMethod: "delivery",
+          deliveryOption: null,
+          deliveryFee: null,
+          pickupLocation: null,
+        });
+      }
+    }
+  }, [pickupAvailable, deliveryAvailable]);
+
+  // Auto-switch to pickup if delivery is disabled/restricted and currently selected
+  useEffect(() => {
+    if (!deliveryAvailable && checkoutState.deliveryMethod === "delivery") {
+      if (pickupAvailable) {
+        updateState({
+          deliveryMethod: "pickup",
+          deliveryOption: null,
+          deliveryFee: 0,
+          paymentMethod: "online_payment",
+          pickupLocation: "wigclub-hair-studio",
+          podPaymentMethod: null,
+        });
+      }
+    }
+  }, [pickupAvailable, deliveryAvailable]);
 
   useEffect(() => {
     if (bag?.items?.length && bag?.items?.length > 0) {
@@ -601,6 +664,22 @@ export const CheckoutProvider = ({
 
   const updateState = (updates: Partial<CheckoutState>) => {
     const anyFeeWaived = isAnyFeeWaived(waiveDeliveryFees);
+
+    // Prevent setting deliveryMethod to pickup when it's unavailable
+    if (!pickupAvailable && updates.deliveryMethod === "pickup") {
+      console.warn(
+        "Store pickup is currently unavailable. Cannot set delivery method to pickup."
+      );
+      return;
+    }
+
+    // Prevent setting deliveryMethod to delivery when it's unavailable
+    if (!deliveryAvailable && updates.deliveryMethod === "delivery") {
+      console.warn(
+        "Delivery is currently unavailable. Cannot set delivery method to delivery."
+      );
+      return;
+    }
 
     if (
       anyFeeWaived &&

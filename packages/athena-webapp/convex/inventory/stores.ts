@@ -1,4 +1,9 @@
-import { action, mutation, query } from "../_generated/server";
+import {
+  action,
+  internalMutation,
+  mutation,
+  query,
+} from "../_generated/server";
 import { v } from "convex/values";
 import { storeSchema } from "../schemas/inventory";
 import { listItemsInS3Directory, uploadFileToS3 } from "../aws/aws";
@@ -334,5 +339,54 @@ export const getReelVersions = action({
     });
 
     return versions;
+  },
+});
+
+export const clearExpiredRestrictions = internalMutation({
+  args: {},
+  returns: v.null(),
+  handler: async (ctx) => {
+    const now = Date.now();
+    const stores = await ctx.db.query(entity).collect();
+
+    for (const store of stores) {
+      const fulfillment = store.config?.fulfillment;
+      if (!fulfillment) continue;
+
+      let needsUpdate = false;
+      const updates = { ...fulfillment };
+
+      // Check pickup restriction
+      if (fulfillment.pickupRestriction?.isActive) {
+        const endTime = fulfillment.pickupRestriction.endTime;
+        if (endTime && now > endTime) {
+          updates.pickupRestriction = {
+            ...fulfillment.pickupRestriction,
+            isActive: false,
+          };
+          needsUpdate = true;
+        }
+      }
+
+      // Check delivery restriction
+      if (fulfillment.deliveryRestriction?.isActive) {
+        const endTime = fulfillment.deliveryRestriction.endTime;
+        if (endTime && now > endTime) {
+          updates.deliveryRestriction = {
+            ...fulfillment.deliveryRestriction,
+            isActive: false,
+          };
+          needsUpdate = true;
+        }
+      }
+
+      if (needsUpdate) {
+        await ctx.db.patch(store._id, {
+          config: { ...store.config, fulfillment: updates },
+        });
+      }
+    }
+
+    return null;
   },
 });
