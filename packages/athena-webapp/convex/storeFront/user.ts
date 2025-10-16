@@ -178,9 +178,11 @@ export const getLastViewedProduct = query({
   args: {
     id: v.union(v.id(entity), v.id("guest")),
     category: v.optional(v.string()),
+    minAgeHours: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000; // 1 day ago in ms
+    const minAgeMs = (args.minAgeHours ?? 24) * 60 * 60 * 1000;
+    const cutoff = Date.now() - minAgeMs;
 
     // Helper function to check if a specific SKU is available
     const isSkuAvailable = async (
@@ -207,7 +209,12 @@ export const getLastViewedProduct = query({
       .withIndex("by_storeFrontUserId", (q) =>
         q.eq("storeFrontUserId", args.id)
       )
-      .filter((q) => q.eq(q.field("action"), "viewed_product"))
+      .filter((q) =>
+        q.and(
+          q.eq(q.field("action"), "viewed_product"),
+          q.lte(q.field("_creationTime"), cutoff)
+        )
+      )
       .order("desc")
       .take(100);
 
@@ -259,7 +266,12 @@ export const getLastViewedProduct = query({
       .withIndex("by_storeFrontUserId", (q) =>
         q.eq("storeFrontUserId", args.id)
       )
-      .filter((q) => q.eq(q.field("action"), "viewed_product"))
+      .filter((q) =>
+        q.and(
+          q.eq(q.field("action"), "viewed_product"),
+          q.lte(q.field("_creationTime"), cutoff)
+        )
+      )
       .order("desc")
       .take(200); // check up to 20 most recent all-time views
 

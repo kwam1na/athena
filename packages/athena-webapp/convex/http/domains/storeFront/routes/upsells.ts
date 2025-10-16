@@ -26,6 +26,8 @@ upsellRoutes.get("/", async (c) => {
   // }
 
   const category = c.req.query("category");
+  const minAgeHoursParam = c.req.query("minAgeHours");
+  const minAgeHours = minAgeHoursParam ? Number(minAgeHoursParam) : undefined;
 
   try {
     const lastProduct = await c.env.runQuery(
@@ -33,6 +35,9 @@ upsellRoutes.get("/", async (c) => {
       {
         id: userId as Id<"storeFrontUser">,
         category,
+        ...(Number.isFinite(minAgeHours as number)
+          ? { minAgeHours: minAgeHours as number }
+          : {}),
       }
     );
 

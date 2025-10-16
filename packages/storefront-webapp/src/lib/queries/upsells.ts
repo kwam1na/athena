@@ -3,14 +3,20 @@ import { useQueryEnabled } from "@/hooks/useQueryEnabled";
 import { getLastViewedProduct } from "@/api/upsells";
 import { DEFAULT_STALE_TIME } from "../constants";
 
-export const useUpsellsQueries = ({ category }: { category?: string } = {}) => {
+export const useUpsellsQueries = ({
+  category,
+  minAgeHours,
+}: { category?: string; minAgeHours?: number } = {}) => {
   const queryEnabled = useQueryEnabled();
 
   return {
     upsells: () =>
       queryOptions({
-        queryKey: ["upsells"],
-        queryFn: () => getLastViewedProduct(category),
+        queryKey: [
+          "upsells",
+          { category: category ?? null, minAgeHours: minAgeHours ?? 24 },
+        ],
+        queryFn: () => getLastViewedProduct({ category, minAgeHours }),
         enabled: queryEnabled,
         staleTime: DEFAULT_STALE_TIME,
       }),

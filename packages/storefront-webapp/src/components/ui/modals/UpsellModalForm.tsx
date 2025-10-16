@@ -1,18 +1,12 @@
 import React, { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import {
-  capitalizeFirstLetter,
-  capitalizeWords,
-  cn,
-  getProductName,
-} from "@/lib/utils";
+import { capitalizeFirstLetter, cn } from "@/lib/utils";
 import { submitOffer, type OfferRequest } from "@/api/offers";
+import { usePromoCodesQueries } from "@/lib/queries/promoCode";
 import { validateEmail } from "@/lib/validations/email";
 import { WelcomeBackModalConfig } from "./config/welcomeBackModalConfig";
-import { Badge } from "../badge";
-import { useGetStore } from "@/hooks/useGetStore";
 import { useStoreContext } from "@/contexts/StoreContext";
 import { PromoCode } from "./types";
 
@@ -35,6 +29,13 @@ export const UpsellModalForm: React.FC<UpsellModalFormProps> = ({
   const [validationError, setValidationError] = useState<string | null>(null);
 
   const { formatter } = useStoreContext();
+
+  // Load promo code list to verify active status for the provided promo
+  const promoCodeQueries = usePromoCodesQueries();
+  const { data: promoCodes } = useQuery(promoCodeQueries.getAll());
+  const isPromoActive = promoCodes?.find(
+    (pc: any) => pc._id === promoCode.promoCodeId
+  )?.active;
 
   // Setup the mutation using React Query
   const mutation = useMutation({
@@ -88,7 +89,9 @@ export const UpsellModalForm: React.FC<UpsellModalFormProps> = ({
             <p className="text-xs sm:text-sm text-accent2/60">You pay</p>
             <p className="text-3xl text-white font-medium">
               {formatter.format(
-                upsell.price - (upsell.price * promoCode.value) / 100
+                isPromoActive
+                  ? upsell.price - (upsell.price * promoCode.value) / 100
+                  : upsell.price
               )}
             </p>
           </div>

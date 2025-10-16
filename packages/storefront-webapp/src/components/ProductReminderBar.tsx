@@ -43,7 +43,9 @@ export function ProductReminderBar({
   const showReminderBar = isVisible && !isInCooldown && shouldShow;
 
   const hasDiscountCode =
-    redeemedOffer?.promoCode && redeemedOffer?.status !== "redeemed";
+    redeemedOffer?.promoCode &&
+    redeemedOffer?.promoCode?.active &&
+    redeemedOffer?.status !== "redeemed";
 
   useEffect(() => {
     const cooldownUntil = localStorage.getItem(COOLDOWN_KEY);
