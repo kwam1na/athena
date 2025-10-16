@@ -5,6 +5,7 @@ import { useProduct } from "~/src/contexts/ProductContext";
 import { useGetCurrencyFormatter } from "~/src/hooks/useGetCurrencyFormatter";
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
 import { PAYSTACK_PROCESSING_FEE } from "~/src/lib/constants";
+import { useSkusReservedInCheckout } from "~/src/hooks/useSkusReservedInCheckout";
 
 export function ProcessingFeesView() {
   return (
@@ -35,6 +36,12 @@ function ProcessingFees() {
 
   const fullPriceMinusFees = (activeProductVariant.netPrice || 0) - fees;
 
+  const { isSkuReserved } = useSkusReservedInCheckout([
+    activeProductVariant.sku,
+  ]);
+
+  const shouldDisable = isSkuReserved(activeProductVariant.sku);
+
   return (
     <div className="flex">
       <div className="flex flex-col gap-16 pt-8 py-4 pl-8">
@@ -48,6 +55,7 @@ function ProcessingFees() {
           <Switch
             id="fees-toggle"
             checked={productData.areProcessingFeesAbsorbed}
+            disabled={shouldDisable}
             onCheckedChange={(checked) => {
               updateProductData({
                 areProcessingFeesAbsorbed: checked,

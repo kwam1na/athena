@@ -3,6 +3,7 @@ import { authTables } from "@convex-dev/auth/server";
 import {
   appVerificationCodeSchema,
   athenaUserSchema,
+  bannerMessageSchema,
   bestSellerSchema,
   categorySchema,
   colorSchema,
@@ -63,6 +64,9 @@ const schema = defineSchema({
   bagItem: defineTable(bagItemSchema)
     .index("by_bagId", ["bagId"])
     .index("by_productSkuId", ["productSkuId"]),
+  bannerMessage: defineTable(bannerMessageSchema).index("by_storeId", [
+    "storeId",
+  ]),
   bestSeller: defineTable(bestSellerSchema),
   category: defineTable(categorySchema),
   checkoutSession: defineTable(checkoutSessionSchema),

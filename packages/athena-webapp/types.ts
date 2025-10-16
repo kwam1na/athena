@@ -77,6 +77,8 @@ export type FeaturedItem = Doc<"featuredItem">;
 
 export type BestSeller = Doc<"bestSeller">;
 
+export type BannerMessage = Doc<"bannerMessage">;
+
 export type Analytic = Doc<"analytics"> & {
   userData?: {
     email?: string;

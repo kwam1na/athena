@@ -23,6 +23,7 @@ import type * as crons from "../crons.js";
 import type * as env from "../env.js";
 import type * as http_domains_inventory_routes_analytics from "../http/domains/inventory/routes/analytics.js";
 import type * as http_domains_inventory_routes_auth from "../http/domains/inventory/routes/auth.js";
+import type * as http_domains_inventory_routes_bannerMessage from "../http/domains/inventory/routes/bannerMessage.js";
 import type * as http_domains_inventory_routes_categories from "../http/domains/inventory/routes/categories.js";
 import type * as http_domains_inventory_routes_colors from "../http/domains/inventory/routes/colors.js";
 import type * as http_domains_inventory_routes_index from "../http/domains/inventory/routes/index.js";
@@ -49,6 +50,7 @@ import type * as http_utils from "../http/utils.js";
 import type * as http from "../http.js";
 import type * as inventory_athenaUser from "../inventory/athenaUser.js";
 import type * as inventory_auth from "../inventory/auth.js";
+import type * as inventory_bannerMessage from "../inventory/bannerMessage.js";
 import type * as inventory_bestSeller from "../inventory/bestSeller.js";
 import type * as inventory_categories from "../inventory/categories.js";
 import type * as inventory_colors from "../inventory/colors.js";
@@ -80,6 +82,7 @@ import type * as otp_VerificationCodeEmail from "../otp/VerificationCodeEmail.js
 import type * as paystack_index from "../paystack/index.js";
 import type * as schemas_inventory_appVerificationCode from "../schemas/inventory/appVerificationCode.js";
 import type * as schemas_inventory_athenaUser from "../schemas/inventory/athenaUser.js";
+import type * as schemas_inventory_bannerMessage from "../schemas/inventory/bannerMessage.js";
 import type * as schemas_inventory_bestSeller from "../schemas/inventory/bestSeller.js";
 import type * as schemas_inventory_category from "../schemas/inventory/category.js";
 import type * as schemas_inventory_color from "../schemas/inventory/color.js";
@@ -161,6 +164,7 @@ declare const fullApi: ApiFromModules<{
   env: typeof env;
   "http/domains/inventory/routes/analytics": typeof http_domains_inventory_routes_analytics;
   "http/domains/inventory/routes/auth": typeof http_domains_inventory_routes_auth;
+  "http/domains/inventory/routes/bannerMessage": typeof http_domains_inventory_routes_bannerMessage;
   "http/domains/inventory/routes/categories": typeof http_domains_inventory_routes_categories;
   "http/domains/inventory/routes/colors": typeof http_domains_inventory_routes_colors;
   "http/domains/inventory/routes/index": typeof http_domains_inventory_routes_index;
@@ -187,6 +191,7 @@ declare const fullApi: ApiFromModules<{
   http: typeof http;
   "inventory/athenaUser": typeof inventory_athenaUser;
   "inventory/auth": typeof inventory_auth;
+  "inventory/bannerMessage": typeof inventory_bannerMessage;
   "inventory/bestSeller": typeof inventory_bestSeller;
   "inventory/categories": typeof inventory_categories;
   "inventory/colors": typeof inventory_colors;
@@ -218,6 +223,7 @@ declare const fullApi: ApiFromModules<{
   "paystack/index": typeof paystack_index;
   "schemas/inventory/appVerificationCode": typeof schemas_inventory_appVerificationCode;
   "schemas/inventory/athenaUser": typeof schemas_inventory_athenaUser;
+  "schemas/inventory/bannerMessage": typeof schemas_inventory_bannerMessage;
   "schemas/inventory/bestSeller": typeof schemas_inventory_bestSeller;
   "schemas/inventory/category": typeof schemas_inventory_category;
   "schemas/inventory/color": typeof schemas_inventory_color;

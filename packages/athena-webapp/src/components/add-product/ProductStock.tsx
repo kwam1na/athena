@@ -48,8 +48,6 @@ import {
 } from "../ui/dropdown-menu";
 import { useSheet } from "./SheetProvider";
 import { useEffect } from "react";
-import { Checkbox } from "../ui/checkbox";
-import { Separator } from "../ui/separator";
 import { CopyImagesView } from "./copy-images/CopyImagesView";
 import { useSkusReservedInCheckout } from "@/hooks/useSkusReservedInCheckout";
 

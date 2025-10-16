@@ -6,6 +6,7 @@ import { ActionCtx } from "./_generated/server";
 import {
   analyticsRoutes,
   authRoutes,
+  bannerMessageRoutes,
   categoryRoutes,
   orgRoutes,
   productRoutes,
@@ -59,6 +60,8 @@ app.route("/webhooks/paystack", paystackRoutes);
 app.route("/analytics", analyticsRoutes);
 
 app.route("/auth", authRoutes);
+
+app.route("/banner-message", bannerMessageRoutes);
 
 app.route("/organizations", orgRoutes);
 

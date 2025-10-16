@@ -83,14 +83,15 @@ export default {
           },
         },
         scroll: {
-          from: { transform: "translateX(0)" },
-          to: { transform: "translateX(-50%)" },
+          "0%": { transform: "translateX(0)" },
+          "100%": { transform: "translateX(-33.333333%)" },
         },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
-        scroll: "scroll 12s linear infinite",
+        scroll: "scroll 14s linear infinite",
+        pause: "none",
       },
       fontFamily: {
         lavish: ["'Lavishly Yours'", "cursive"],
