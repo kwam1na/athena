@@ -165,9 +165,14 @@ function BagSummary() {
     }
   }, [promoCodes, checkoutState.discount, activeSession._id, redeemedOffers]);
 
-  const calculatedDiscount = checkoutState.discount?.totalDiscount;
-  const discountValue =
-    calculatedDiscount || getDiscountValue(bagSubtotal, checkoutState.discount);
+  const bagItems =
+    checkoutState.bag?.items?.map((item: any) => ({
+      productSkuId: item.productSkuId,
+      quantity: item.quantity,
+      price: item.price,
+    })) || [];
+
+  const discountValue = getDiscountValue(bagItems, checkoutState.discount);
   const total = (checkoutState.deliveryFee ?? 0) + bagSubtotal - discountValue;
 
   const discountText =

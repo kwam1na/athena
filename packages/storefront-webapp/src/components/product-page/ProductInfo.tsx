@@ -13,6 +13,16 @@ interface ProductInfoProps {
   isSoldOut: boolean;
   isLowStock: boolean;
   className?: string;
+  productDiscount?: {
+    hasDiscount: boolean;
+    discountedPrice: number;
+    originalPrice: number;
+    discount?: {
+      type: "percentage" | "amount";
+      value: number;
+      code: string;
+    };
+  };
 }
 
 function ViewCount({ productId }: { productId: string }) {
@@ -61,8 +71,14 @@ export function ProductInfo({
   isSoldOut,
   isLowStock,
   className = "",
+  productDiscount,
 }: ProductInfoProps) {
   const { data: reviews } = useGetProductReviewsQuery(selectedSku.productId);
+
+  const hasDiscount = productDiscount?.hasDiscount ?? false;
+  const discountedPrice = productDiscount?.discountedPrice ?? selectedSku.price;
+  const originalPrice = productDiscount?.originalPrice ?? selectedSku.price;
+  const isFree = hasDiscount && discountedPrice === 0;
 
   return (
     <div className={`space-y-6 ${className}`}>
@@ -83,9 +99,31 @@ export function ProductInfo({
           <SellingFastSignal message={`Almost gone`} />
         )}
 
-        <p className="text-md md:text-2xl">
-          {formatter.format(selectedSku.price)}
-        </p>
+        {!hasDiscount && (
+          <p className="text-md md:text-2xl">
+            {formatter.format(selectedSku.price)}
+          </p>
+        )}
+
+        {hasDiscount && !isFree && (
+          <div className="flex items-center gap-3">
+            <p className="text-md md:text-2xl line-through text-muted-foreground">
+              {formatter.format(originalPrice)}
+            </p>
+            <p className="text-md md:text-2xl font-medium">
+              {formatter.format(discountedPrice)}
+            </p>
+          </div>
+        )}
+
+        {isFree && (
+          <div className="flex items-center gap-3">
+            <p className="text-md md:text-2xl line-through text-muted-foreground">
+              {formatter.format(originalPrice)}
+            </p>
+            <p className="text-md md:text-2xl font-medium">Free</p>
+          </div>
+        )}
       </div>
       {/* <ViewCount productId={selectedSku.productId} /> */}
     </div>

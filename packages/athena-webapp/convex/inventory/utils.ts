@@ -1,26 +1,108 @@
-export const getDiscountValue = (
-  subtotal: number,
-  discount?: Record<string, any> | null
-) => {
-  const type = discount?.type || discount?.discountType;
-  const value = discount?.value || discount?.discountValue;
+type OrderItem = {
+  productSkuId: string;
+  quantity: number;
+  price: number;
+};
 
-  return (type === "percentage" ? subtotal * (value / 100) : value) || 0;
+type Discount = {
+  type?: "percentage" | "amount";
+  discountType?: "percentage" | "amount";
+  value?: number;
+  discountValue?: number;
+  span?: "entire-order" | "selected-products";
+  productSkus?: string[];
+  totalDiscount?: number;
+};
+
+/**
+ * Calculate the discount value based on discount type and span
+ * @param items - Array of order items with productSkuId, quantity, and price (in GHS)
+ * @param discount - Discount object with type, value, span, and optional productSkus
+ * @returns The total discount amount in pesewas/cents
+ */
+export const getDiscountValue = (
+  items: OrderItem[],
+  discount?: Discount | null
+): number => {
+  if (!discount) return 0;
+
+  // If totalDiscount is pre-calculated (from backend), use it directly
+  if (discount.totalDiscount !== undefined) {
+    return discount.totalDiscount * 100; // Convert to pesewas
+  }
+
+  const type = discount.type || discount.discountType;
+  const value = discount.value || discount.discountValue;
+
+  if (!type || value === undefined) return 0;
+
+  // Handle entire-order discounts
+  if (discount.span === "entire-order" || !discount.span) {
+    const subtotal = items.reduce(
+      (sum, item) => sum + item.price * item.quantity,
+      0
+    ); // subtotal is in GHS
+
+    if (type === "percentage") {
+      return subtotal * (value / 100) * 100; // Calculate discount in GHS, then convert to pesewas
+    }
+    // For amount type, discount value is in GHS, convert to pesewas
+    return value * 100;
+  }
+
+  // Handle selected-products discounts
+  if (discount.span === "selected-products" && discount.productSkus) {
+    // Calculate subtotal of only eligible items (in GHS)
+    const eligibleItemsSubtotal = items
+      .filter((item) => discount.productSkus?.includes(item.productSkuId))
+      .reduce((sum, item) => sum + item.price * item.quantity, 0);
+
+    if (type === "percentage") {
+      return eligibleItemsSubtotal * (value / 100) * 100; // Calculate discount in GHS, then convert to pesewas
+    }
+    // For amount type, discount value is in GHS, convert to pesewas
+    // Don't exceed the eligible items subtotal
+    return Math.min(value * 100, eligibleItemsSubtotal * 100);
+  }
+
+  return 0;
+};
+
+/**
+ * Calculate discount for a single product (useful for displaying individual product discounts)
+ * @param price - Product price in GHS
+ * @param discount - Discount object
+ * @returns The discount amount in GHS (for display/email purposes)
+ */
+export const getProductDiscountValue = (
+  price: number,
+  discount?: Discount | null
+): number => {
+  if (!discount) return 0;
+
+  const type = discount.type || discount.discountType;
+  const value = discount.value || discount.discountValue;
+
+  if (!type || value === undefined) return 0;
+
+  if (type === "percentage") {
+    return price * (value / 100);
+  }
+  // For amount type, discount value is in GHS, don't exceed product price
+  return Math.min(value, price);
 };
 
 export const getOrderAmount = ({
+  items,
   discount,
   deliveryFee,
   subtotal,
 }: {
-  discount?: Record<string, any> | null;
+  items: OrderItem[];
+  discount?: Discount | null;
   deliveryFee: number | null;
   subtotal: number;
 }) => {
-  const discountValue =
-    parseInt(discount?.totalDiscount) * 100 ||
-    getDiscountValue(subtotal, discount);
-
-  const baseForDiscount = discount?.type === "percentage" ? 1 : 100;
-  return subtotal - discountValue * baseForDiscount + (deliveryFee || 0) * 100;
+  const discountValue = getDiscountValue(items, discount);
+  return Math.round(subtotal - discountValue + (deliveryFee || 0));
 };

@@ -51,9 +51,9 @@ export const TrustSignals = () => {
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -10 }}
           transition={{
-            duration: 0.3,
+            duration: 0.47,
             ease: "easeInOut",
-            delay: 0.6,
+            delay: 0.9,
           }}
           className="space-y-2"
         >

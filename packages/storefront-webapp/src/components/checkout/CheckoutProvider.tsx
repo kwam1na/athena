@@ -1,4 +1,10 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { z, ZodError } from "zod";
 import { useGetActiveCheckoutSession } from "@/hooks/useGetActiveCheckoutSession";
 import {

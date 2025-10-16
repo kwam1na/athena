@@ -25,8 +25,16 @@ const OrderItem = ({
   order: OnlineOrder;
   formatter: Intl.NumberFormat;
 }) => {
+  const items =
+    order.items?.map((item) => ({
+      productSkuId: item.productSkuId,
+      quantity: item.quantity,
+      price: item.price,
+    })) || [];
+
   const amount = getOrderAmount({
-    discount: order?.discount,
+    items,
+    discount: order?.discount as any,
     deliveryFee: order?.deliveryFee || 0,
     subtotal: order.amount,
   });

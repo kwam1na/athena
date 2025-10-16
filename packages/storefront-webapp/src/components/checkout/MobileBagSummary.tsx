@@ -74,7 +74,14 @@ export default function MobileBagSummary() {
     }
   }, [promoCodes, checkoutState.discount, activeSession._id, redeemedOffers]);
 
-  const discountValue = getDiscountValue(bagSubtotal, checkoutState.discount);
+  const bagItems =
+    checkoutState.bag?.items?.map((item: any) => ({
+      productSkuId: item.productSkuId,
+      quantity: item.quantity,
+      price: item.price,
+    })) || [];
+
+  const discountValue = getDiscountValue(bagItems, checkoutState.discount);
 
   const total = (checkoutState.deliveryFee ?? 0) + bagSubtotal - discountValue;
 
@@ -146,6 +153,11 @@ export default function MobileBagSummary() {
     checkoutState.deliveryOption
   );
 
+  const discountSpan =
+    checkoutState.discount?.span == "entire-order"
+      ? "entire order"
+      : "select items";
+
   return (
     <div>
       <Accordion type="single" collapsible className="w-full space-y-4">
@@ -210,7 +222,9 @@ export default function MobileBagSummary() {
                       </Badge>
 
                       <p className="text-xs">
-                        <strong>- {discountText} off entire order</strong>
+                        <strong>
+                          - {discountText} off {discountSpan}
+                        </strong>
                       </p>
                     </motion.div>
                   )}

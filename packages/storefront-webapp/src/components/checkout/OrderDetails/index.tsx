@@ -46,13 +46,22 @@ export const PaymentDetails = ({ session }: { session?: CheckoutSession }) => {
 
   const { paymentMethod, discount } = session;
 
+  const sessionWithItems = session as CheckoutSession & { items?: any[] };
+  const items =
+    sessionWithItems.items?.map((item: any) => ({
+      productSkuId: item.productSkuId,
+      quantity: item.quantity,
+      price: item.price,
+    })) || [];
+
   const amountCharge = getOrderAmount({
-    discount,
+    items,
+    discount: discount as any,
     deliveryFee: session.deliveryFee,
     subtotal: session.amount,
   });
 
-  const discountValue = getDiscountValue(session.amount, discount);
+  const discountValue = getDiscountValue(items, discount as any);
 
   const text =
     paymentMethod?.channel == "mobile_money"

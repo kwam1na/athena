@@ -37,6 +37,7 @@ export default function ProductPage() {
     addedItemSuccessfully,
     isUpdatingBag,
     bagAction,
+    productDiscount,
   } = useProductPageLogic();
 
   const pageRef = useRef<HTMLDivElement | null>(null);
@@ -102,6 +103,7 @@ export default function ProductPage() {
                 formatter={formatter}
                 isSoldOut={isSoldOut}
                 isLowStock={isLowStock}
+                productDiscount={productDiscount}
               />
 
               <ProductAttribute
@@ -169,6 +171,7 @@ export default function ProductPage() {
                 formatter={formatter}
                 isSoldOut={isSoldOut}
                 isLowStock={isLowStock}
+                productDiscount={productDiscount}
               />
 
               <ProductAttribute

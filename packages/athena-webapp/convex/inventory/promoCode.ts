@@ -66,12 +66,12 @@ export const redeem = mutation({
       return { success: false, message: "Checkout session not found" };
     }
 
-    if (promoCode.span == "selected-products") {
-      const sessionItems = await ctx.db
-        .query("checkoutSessionItem")
-        .filter((q) => q.eq(q.field("sesionId"), args.checkoutSessionId))
-        .collect();
+    const sessionItems = await ctx.db
+      .query("checkoutSessionItem")
+      .filter((q) => q.eq(q.field("sesionId"), args.checkoutSessionId))
+      .collect();
 
+    if (promoCode.span == "selected-products") {
       const expectedProducts = await ctx.db
         .query("promoCodeItem")
         .filter((q) => q.eq(q.field("promoCodeId"), promoCode._id))
@@ -108,7 +108,28 @@ export const redeem = mutation({
       }
     }
 
-    return { success: true, promoCode };
+    // For entire-order discounts, calculate totalDiscount based on all items
+    let totalDiscount = 0;
+
+    if (promoCode.discountType === "percentage") {
+      // Calculate percentage discount on subtotal
+      const subtotal = sessionItems.reduce(
+        (sum, item) => sum + item.price * item.quantity,
+        0
+      );
+      totalDiscount = subtotal * (promoCode.discountValue / 100);
+    } else {
+      // Amount discount applies once to the order
+      totalDiscount = promoCode.discountValue;
+    }
+
+    return {
+      success: true,
+      promoCode: {
+        ...promoCode,
+        totalDiscount,
+      },
+    };
   },
 });
 

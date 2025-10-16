@@ -29,9 +29,17 @@ export const createTransaction = action({
       };
     }
 
-    const discount = session.discount;
+    const discount = session.discount || args.orderDetails.discount;
+
+    const items =
+      session.items?.map((item: any) => ({
+        productSkuId: item.productSkuId,
+        quantity: item.quantity,
+        price: item.price,
+      })) || [];
 
     const orderAmountLessDiscounts = getOrderAmount({
+      items,
       discount,
       deliveryFee: args.orderDetails.deliveryFee || 0,
       subtotal: args.amount,
@@ -295,18 +303,24 @@ export const verifyPayment = action({
 
       const discount = session?.discount || order?.discount;
 
+      // Get items from order (which includes items from the query)
+      const items =
+        order?.items?.map((item: any) => ({
+          productSkuId: item.productSkuId,
+          quantity: item.quantity,
+          price: item.price,
+        })) || [];
+
       const orderAmountLessDiscounts = getOrderAmount({
+        items,
         discount,
         deliveryFee: order?.deliveryFee || session?.deliveryFee || 0,
         subtotal,
       });
 
-      const discountValue =
-        discount?.totalDiscount || getDiscountValue(subtotal, discount);
+      const discountValue = getDiscountValue(items, discount);
 
-      const baseForDiscount = discount?.type === "percentage" ? 1 : 100;
-
-      const actualDiscount = discountValue * baseForDiscount;
+      const actualDiscount = discountValue;
 
       const isVerified = Boolean(
         res.data.status == "success" &&

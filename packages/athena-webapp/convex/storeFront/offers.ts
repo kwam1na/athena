@@ -13,7 +13,7 @@ import { z } from "zod";
 import { QueryCtx } from "../_generated/server";
 import { sendDiscountCodeEmail, sendDiscountReminderEmail } from "../sendgrid";
 import { currencyFormatter, getProductName, toSlug } from "../utils";
-import { getDiscountValue } from "../inventory/utils";
+import { getProductDiscountValue } from "../inventory/utils";
 import { GenericActionCtx } from "convex/server";
 
 const entity = "offer" as const;
@@ -313,7 +313,7 @@ export const sendOfferReminderEmail = internalAction({
             discounted_price: formatter.format(
               Math.round(
                 seller.productSku.price -
-                  getDiscountValue(seller.productSku.price, promoCode)
+                  getProductDiscountValue(seller.productSku.price, promoCode)
               )
             ),
             product_url: `${process.env.STORE_URL}/shop/product/${seller.productId}?variant=${seller.productSku.sku}&origin=discount_reminder_email`,
@@ -329,7 +329,8 @@ export const sendOfferReminderEmail = internalAction({
             original_price: formatter.format(productSku.price),
             discounted_price: formatter.format(
               Math.round(
-                productSku.price - getDiscountValue(productSku.price, promoCode)
+                productSku.price -
+                  getProductDiscountValue(productSku.price, promoCode)
               )
             ),
             product_url: `${process.env.STORE_URL}/shop/product/${productSku.productId}?variant=${productSku.sku}&origin=discount_reminder_email`,
@@ -680,7 +681,7 @@ const getUpsellProducts = async ({
         discounted_price: formatter.format(
           Math.round(
             seller.productSku.price -
-              getDiscountValue(seller.productSku.price, promoCode)
+              getProductDiscountValue(seller.productSku.price, promoCode)
           )
         ),
         product_url: `${process.env.STORE_URL}/shop/product/${seller.productId}?variant=${seller.productSku.sku}&origin=discount_reminder_email`,
@@ -696,7 +697,8 @@ const getUpsellProducts = async ({
         original_price: formatter.format(productSku.price),
         discounted_price: formatter.format(
           Math.round(
-            productSku.price - getDiscountValue(productSku.price, promoCode)
+            productSku.price -
+              getProductDiscountValue(productSku.price, promoCode)
           )
         ),
         product_url: `${process.env.STORE_URL}/shop/product/${productSku.productId}?variant=${productSku.sku}&origin=discount_reminder_email`,

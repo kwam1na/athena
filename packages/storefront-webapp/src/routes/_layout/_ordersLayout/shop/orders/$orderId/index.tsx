@@ -78,8 +78,14 @@ const OrderSummary = ({ order }: { order: any }) => {
 
   const subtotal = order.amount / 100;
 
-  const discountValue =
-    order.discount?.totalDiscount || getDiscountValue(subtotal, order.discount);
+  const items =
+    order.items?.map((item: any) => ({
+      productSkuId: item.productSkuId,
+      quantity: item.quantity,
+      price: item.price,
+    })) || [];
+
+  const discountValue = getDiscountValue(items, order.discount);
 
   const total = subtotal - discountValue + (order?.deliveryFee || 0);
 

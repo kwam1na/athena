@@ -152,6 +152,7 @@ export const PaymentSection = ({ form }: CheckoutFormSectionProps) => {
   };
 
   const processCheckoutSession = async (orderData: any, total: number) => {
+    console.log("Processing checkout session for order data", orderData);
     return await updateCheckoutSession({
       action: "finalize-payment",
       sessionId: activeSession._id,

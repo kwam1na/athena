@@ -8,6 +8,7 @@ import { usePromoCodesQueries } from "@/lib/queries/promoCode";
 import { useQuery } from "@tanstack/react-query";
 import { postAnalytics } from "@/api/analytics";
 import { isSoldOut, hasLowStock, sortSkusByLength } from "@/lib/productUtils";
+import { useProductDiscount } from "@/hooks/useProductDiscount";
 
 export function useProductPageLogic() {
   const { productSlug } = useParams({ strict: false });
@@ -178,6 +179,12 @@ export function useProductPageLogic() {
   const lowStock = selectedSku ? hasLowStock(selectedSku) : false;
   const isPromoCodeItem = promoCodeItem?.productId === productSlug;
 
+  // Get discount info for selected SKU
+  const productDiscount = useProductDiscount(
+    selectedSku?._id,
+    selectedSku?.price
+  );
+
   return {
     productSlug,
     product,
@@ -198,5 +205,6 @@ export function useProductPageLogic() {
     addedItemSuccessfully,
     isUpdatingBag,
     bagAction,
+    productDiscount,
   };
 }

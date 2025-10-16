@@ -57,7 +57,14 @@ export default function OrderSummary() {
     checkoutState.deliveryOption
   );
 
-  const discountValue = getDiscountValue(bagSubtotal, checkoutState.discount);
+  const bagItems =
+    checkoutState.bag?.items?.map((item: any) => ({
+      productSkuId: item.productSkuId,
+      quantity: item.quantity,
+      price: item.price,
+    })) || [];
+
+  const discountValue = getDiscountValue(bagItems, checkoutState.discount);
 
   const total = (checkoutState.deliveryFee ?? 0) + bagSubtotal - discountValue;
 
@@ -92,6 +99,11 @@ export default function OrderSummary() {
       handleRedeemPromoCode();
     }
   };
+
+  const discountSpan =
+    checkoutState.discount?.span == "entire-order"
+      ? "entire order"
+      : "select items";
 
   return (
     <div className="space-y-12">
@@ -157,7 +169,9 @@ export default function OrderSummary() {
               </Badge>
 
               <p className="text-xs">
-                <strong>- {discountText} off entire order</strong>
+                <strong>
+                  - {discountText} off {discountSpan}
+                </strong>
               </p>
             </div>
           )}
