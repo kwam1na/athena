@@ -243,7 +243,7 @@ export default function ShoppingBag() {
               className="space-y-2 border border-accent5 rounded-md p-4 w-fit bg-accent5/40"
             >
               <p className="text-sm font-medium">
-                🎉 Yay! You're earning{" "}
+                🎉 You're earning{" "}
                 <b className="text-accent2">
                   {potentialRewards.toLocaleString()}
                 </b>{" "}

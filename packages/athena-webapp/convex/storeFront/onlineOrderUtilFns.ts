@@ -10,19 +10,66 @@ import {
 } from "../utils";
 import { api } from "../_generated/api";
 
-export const formatOrderItems = (items: any, storeCurrency: string) => {
+// Order status constants
+const ORDER_STATUS = {
+  OPEN: "open",
+  READY_FOR_PICKUP: "ready-for-pickup",
+  OUT_FOR_DELIVERY: "out-for-delivery",
+  DELIVERED: "delivered",
+  PICKED_UP: "picked-up",
+  CANCELLED: "cancelled",
+} as const;
+
+const COMPLETED_STATUSES = [ORDER_STATUS.DELIVERED, ORDER_STATUS.PICKED_UP];
+
+export const formatOrderItems = (
+  items: Array<{
+    productName?: string;
+    productImage?: string;
+    price?: number;
+    quantity?: number;
+    colorName?: string;
+    length?: number;
+  }>,
+  storeCurrency: string
+) => {
   const formatter = currencyFormatter(storeCurrency);
 
-  return (
-    items?.map((item: any) => ({
-      text: capitalizeWords(item.productName),
-      image: item.productImage,
-      price: item.price == 0 ? "Free" : formatter.format(item.price),
-      quantity: item.quantity,
-      color: item.colorName,
-      length: item.length && `${item.length} inches`,
-    })) || []
-  );
+  return items.map((item) => ({
+    text: capitalizeWords(item.productName || ""),
+    image: item.productImage || "",
+    price: item.price === 0 ? "Free" : formatter.format(item.price || 0),
+    quantity: String(item.quantity || 0),
+    color: item.colorName || "",
+    length: item.length ? `${item.length} inches` : undefined,
+  }));
+};
+
+// Helper types
+type EmailResult = {
+  didSendConfirmationEmail?: boolean;
+  didSendReadyEmail?: boolean;
+  didSendCompletedEmail?: boolean;
+  didSendCancelledEmail?: boolean;
+};
+
+type EmailConfig = {
+  type: OrderEmailType;
+  statusMessaging: string;
+  pickupDetails: string;
+};
+
+// Helper functions
+const getPickupLocation = (store: Store): string =>
+  store.config?.contactInfo?.location || "Location not available";
+
+const getDeliveryAddress = (deliveryDetails?: Address): string =>
+  deliveryDetails ? getAddressString(deliveryDetails) : "Details not available";
+
+const getLocationDetails = (order: OnlineOrder, store: Store): string => {
+  return order.deliveryMethod === "pickup"
+    ? getPickupLocation(store)
+    : getDeliveryAddress(order.deliveryDetails as Address);
 };
 
 export async function handleOrderStatusUpdate({
@@ -33,27 +80,27 @@ export async function handleOrderStatusUpdate({
   order: OnlineOrder;
   newStatus: string;
   store: Store;
-}) {
-  console.info(`handling order status update for order #${order.orderNumber}`);
+}): Promise<EmailResult | undefined> {
+  console.info(
+    `handling order status update: ${newStatus} for order #${order.orderNumber}`
+  );
 
-  const completedStatuses = ["delivered", "picked-up"];
-
-  const formatter = currencyFormatter(store?.currency || "USD");
+  const formatter = currencyFormatter(store.currency || "USD");
+  const { firstName, email } = order.customerDetails;
 
   // Helper to send email
   async function sendEmail({
     type,
     statusMessaging,
     pickupDetails,
-  }: {
-    type: OrderEmailType;
-    statusMessaging: string;
-    pickupDetails: string;
-  }) {
-    const items = formatOrderItems(order.items, store.currency);
+  }: EmailConfig): Promise<boolean> {
+    console.info(`sending ${type} email for order #${order.orderNumber}`);
+
+    const items = formatOrderItems(order.items || [], store.currency);
+
     const emailResponse = await sendOrderEmail({
       type,
-      customerEmail: order.customerDetails.email,
+      customerEmail: email,
       store_name: "Wigclub",
       order_number: order.orderNumber,
       order_date: formatDate(order._creationTime),
@@ -62,251 +109,248 @@ export async function handleOrderStatusUpdate({
       items,
       pickup_type: order.deliveryMethod,
       pickup_details: pickupDetails,
-      customer_name: order.customerDetails.firstName,
+      customer_name: firstName,
     });
 
-    return emailResponse.ok;
+    if (emailResponse.ok) {
+      console.info(
+        `successfully sent ${type} email for order #${order.orderNumber} to ${email}`
+      );
+      return true;
+    }
+
+    console.log(
+      `failed to send ${type} email for order #${order.orderNumber} to ${email}`
+    );
+    const emailResponseBody = await emailResponse.json();
+    console.log("Email error details:", emailResponseBody);
+    return false;
   }
 
-  if (newStatus === "open") {
+  // Handle confirmation email (order opened)
+  if (newStatus === ORDER_STATUS.OPEN) {
     try {
       const statusMessaging =
-        order.deliveryMethod == "pickup"
+        order.deliveryMethod === "pickup"
           ? "We're processing your order. We'll notify you when your items are ready for pickup. Please note it takes 24 - 48 hours to process your order."
-          : "We're processing your order. We'll notify you when your items are are on their way. Please note it takes 24 - 48 hours to process your order.";
+          : "We're processing your order. We'll notify you when your items are on their way. Please note it takes 24 - 48 hours to process your order.";
 
-      const orderPickupLocation = store?.config?.contactInfo?.location;
+      const emailSent = await sendEmail({
+        type: "confirmation",
+        statusMessaging,
+        pickupDetails: getLocationDetails(order, store),
+      });
 
-      const deliveryAddress = order.deliveryDetails
-        ? getAddressString(order.deliveryDetails as Address)
-        : "Details not available";
-
-      const pickupDetails =
-        order.deliveryMethod == "pickup"
-          ? orderPickupLocation
-          : deliveryAddress;
-
-      if (
-        await sendEmail({
-          type: "confirmation",
-          statusMessaging,
-          pickupDetails,
-        })
-      ) {
-        console.info(
-          `sent order confirmation email for order #${order.orderNumber} to ${order.customerDetails.email}`
-        );
+      if (emailSent) {
         return { didSendConfirmationEmail: true };
       }
-    } catch (e) {
-      console.error("failed to send order confirmation email", e);
+    } catch (error) {
+      console.log("Failed to send order confirmation email:", error);
     }
+    return undefined;
   }
 
-  // Handle ready email
+  // Handle ready email (ready for pickup or out for delivery)
   if (!order.didSendReadyEmail) {
-    if (newStatus === "ready-for-pickup") {
+    if (newStatus === ORDER_STATUS.READY_FOR_PICKUP) {
       try {
-        const { firstName } = order.customerDetails;
-
         const statusMessaging = `Get excited, ${capitalizeWords(firstName)}! Your order is ready for pickup. Visit our store any time during our business hours to pick up your items.`;
 
-        const pickupLocation =
-          store?.config?.contactInfo?.location || "Location not available";
+        const emailSent = await sendEmail({
+          type: "ready",
+          statusMessaging,
+          pickupDetails: getPickupLocation(store),
+        });
 
-        if (
-          await sendEmail({
-            type: "ready",
-            statusMessaging,
-            pickupDetails: pickupLocation,
-          })
-        ) {
-          console.info(
-            `sent order ready email for order #${order.orderNumber} to ${order.customerDetails.email}`
-          );
+        if (emailSent) {
           return { didSendReadyEmail: true };
         }
-      } catch (e) {
-        console.error("failed to send order ready email", e);
+      } catch (error) {
+        console.log("Failed to send order ready email:", error);
       }
+      return undefined;
     }
 
-    if (newStatus === "out-for-delivery") {
+    if (newStatus === ORDER_STATUS.OUT_FOR_DELIVERY) {
       try {
-        const { firstName } = order.customerDetails;
-
         const statusMessaging = `Get excited, ${capitalizeWords(firstName)}! Your order is out for delivery.`;
-        const deliveryAddress =
-          order.deliveryDetails &&
-          getAddressString(order.deliveryDetails as Address);
 
-        if (
-          await sendEmail({
-            type: "ready",
-            statusMessaging,
-            pickupDetails: deliveryAddress || "Details not available",
-          })
-        ) {
-          console.info(
-            `sent order ready email for order #${order.orderNumber} to ${order.customerDetails.email}`
-          );
+        const emailSent = await sendEmail({
+          type: "ready",
+          statusMessaging,
+          pickupDetails: getDeliveryAddress(order.deliveryDetails as Address),
+        });
+
+        if (emailSent) {
           return { didSendReadyEmail: true };
         }
-      } catch (e) {
-        console.error("failed to send order ready email", e);
+      } catch (error) {
+        console.log("Failed to send order ready email:", error);
       }
+      return undefined;
     }
   }
 
-  // Handle completed email
-  if (!order.didSendCompletedEmail && completedStatuses.includes(newStatus)) {
+  // Handle completed email (delivered or picked up)
+  if (
+    !order.didSendCompletedEmail &&
+    COMPLETED_STATUSES.includes(newStatus as any)
+  ) {
     try {
       const isPickupOrder = order.deliveryMethod === "pickup";
       const statusMessaging = isPickupOrder
         ? "Your order was picked up. Thank you for shopping with us!"
         : "Your order has been delivered. Thank you for shopping with us!";
 
-      const pickupDetails = isPickupOrder
-        ? store?.config?.contactInfo?.location
-        : order.deliveryDetails &&
-          getAddressString(order.deliveryDetails as Address);
+      const emailSent = await sendEmail({
+        type: "complete",
+        statusMessaging,
+        pickupDetails: getLocationDetails(order, store),
+      });
 
-      if (
-        await sendEmail({ type: "complete", statusMessaging, pickupDetails })
-      ) {
-        console.info(
-          `sent order complete email for order #${order.orderNumber} to ${order.customerDetails.email}`
-        );
+      if (emailSent) {
         return { didSendCompletedEmail: true };
       }
-    } catch (e) {
-      console.error("Ffailed to send complete email", e);
+    } catch (error) {
+      console.log("Failed to send completed email:", error);
     }
+    return undefined;
   }
 
   // Handle cancelled email
-  if (newStatus === "cancelled" && !order.didSendCancelledEmail) {
+  if (newStatus === ORDER_STATUS.CANCELLED && !order.didSendCancelledEmail) {
     try {
-      const { firstName } = order.customerDetails;
-      const baseMessage = `Hi ${capitalizeWords(firstName)}, your order has been cancelled.`;
+      const statusMessaging = `Hi ${capitalizeWords(firstName)}, your order has been cancelled. If you have any questions, please contact our support team.`;
 
-      const statusMessaging = `${baseMessage} If you have any questions, please contact our support team.`;
+      const emailSent = await sendEmail({
+        type: "canceled",
+        statusMessaging,
+        pickupDetails: getLocationDetails(order, store),
+      });
 
-      const orderPickupLocation = store?.config?.contactInfo?.location;
-      const deliveryAddress = order.deliveryDetails
-        ? getAddressString(order.deliveryDetails as Address)
-        : "Details not available";
-
-      const pickupDetails =
-        order.deliveryMethod == "pickup"
-          ? orderPickupLocation
-          : deliveryAddress;
-
-      if (
-        await sendEmail({
-          type: "canceled",
-          statusMessaging,
-          pickupDetails,
-        })
-      ) {
-        console.info(
-          `sent order cancelled email for order #${order.orderNumber} to ${order.customerDetails.email}`
-        );
+      if (emailSent) {
         return { didSendCancelledEmail: true };
       }
-    } catch (e) {
-      console.error("failed to send order cancelled email", e);
+    } catch (error) {
+      console.log("Failed to send cancelled email:", error);
     }
+    return undefined;
   }
+
+  return undefined;
 }
+
+type UpdateEmailResult = {
+  success: boolean;
+  message: string;
+};
 
 export const sendOrderUpdateEmail = action({
   args: { orderId: v.id("onlineOrder"), newStatus: v.string() },
-  handler: async (ctx, args) => {
+  returns: v.object({
+    success: v.boolean(),
+    message: v.string(),
+  }),
+  handler: async (ctx, args): Promise<UpdateEmailResult> => {
+    // Fetch order
     const order = await ctx.runQuery(api.storeFront.onlineOrder.get, {
       identifier: args.orderId,
     });
 
     if (!order) {
-      console.error("Order not found in send order update email handler");
+      console.log("Order not found in send order update email handler");
+      return {
+        success: false,
+        message: "Order not found",
+      };
     }
 
+    // Fetch store
     const store = await ctx.runQuery(api.inventory.stores.findById, {
-      id: order!.storeId,
+      id: order.storeId,
     });
 
     if (!store) {
-      console.error("Store not found in send order update email handler");
+      console.log("Store not found in send order update email handler");
+      return {
+        success: false,
+        message: "Store not found",
+      };
     }
 
-    console.info(`sending order update email for order #${order!.orderNumber}`);
+    console.info(
+      `sending order update: ${args.newStatus} email for order #${order.orderNumber}`
+    );
 
+    // Handle order status update
+    const emailResult = await handleOrderStatusUpdate({
+      order,
+      newStatus: args.newStatus,
+      store,
+    });
+
+    if (!emailResult) {
+      return {
+        success: false,
+        message: "No email sent for this status",
+      };
+    }
+
+    // Update order based on which email was sent
     const {
-      didSendCompletedEmail,
-      didSendReadyEmail,
       didSendConfirmationEmail,
+      didSendReadyEmail,
+      didSendCompletedEmail,
       didSendCancelledEmail,
-    } =
-      (await handleOrderStatusUpdate({
-        order: order!,
-        newStatus: args.newStatus,
-        store: store!,
-      })) || {};
+    } = emailResult;
 
     if (didSendConfirmationEmail) {
-      console.info(
-        `successfully sent confirmation email for order #${order!.orderNumber}`
-      );
-
       await ctx.runMutation(api.storeFront.onlineOrder.update, {
-        orderId: order!._id,
+        orderId: order._id,
         update: {
           didSendConfirmationEmail,
           orderReceivedEmailSentAt: Date.now(),
         },
       });
+      return { success: true, message: "Confirmation email sent" };
     }
 
     if (didSendReadyEmail) {
-      console.info(
-        `successfully sent ready email for order #${order!.orderNumber}`
-      );
-
       await ctx.runMutation(api.storeFront.onlineOrder.update, {
-        orderId: order!._id,
+        orderId: order._id,
         update: {
           didSendReadyEmail,
           orderReadyEmailSentAt: Date.now(),
         },
       });
+      return { success: true, message: "Ready email sent" };
     }
 
     if (didSendCompletedEmail) {
-      console.info(
-        `successfully sent completed email for order #${order!.orderNumber}`
-      );
-
       await ctx.runMutation(api.storeFront.onlineOrder.update, {
-        orderId: order!._id,
+        orderId: order._id,
         update: {
           didSendCompletedEmail,
           orderCompletedEmailSentAt: Date.now(),
         },
       });
+      return { success: true, message: "Completed email sent" };
     }
 
     if (didSendCancelledEmail) {
-      console.info(
-        `successfully sent cancelled email for order #${order!.orderNumber}`
-      );
-
       await ctx.runMutation(api.storeFront.onlineOrder.update, {
-        orderId: order!._id,
+        orderId: order._id,
         update: {
           didSendCancelledEmail,
           orderCancelledEmailSentAt: Date.now(),
         },
       });
+      return { success: true, message: "Cancelled email sent" };
     }
+
+    return {
+      success: false,
+      message: "Email sending failed",
+    };
   },
 });

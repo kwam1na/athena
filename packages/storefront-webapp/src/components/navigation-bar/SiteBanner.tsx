@@ -6,6 +6,11 @@ import { cn } from "@/lib/utils";
 import { PromoCode, BannerMessage } from "@athena/webapp";
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
+import {
+  getBannerTextClass,
+  getBannerBGClass,
+  getBannerAnimationDelay,
+} from "./navBarStyles";
 
 export const SiteBanner = () => {
   const { navBarLayout, appLocation } = useNavigationBarContext();
@@ -15,8 +20,10 @@ export const SiteBanner = () => {
   const { data: promoCodes } = useQuery(promoCodeQueries.getAll());
   const { data: bannerMessage } = useQuery(bannerMessageQueries.get());
 
-  const textClass =
-    navBarLayout == "sticky" && appLocation == "homepage" ? "text-white" : "";
+  // Use styling utilities for consistency
+  const textClass = getBannerTextClass(navBarLayout, appLocation);
+  const bgClass = getBannerBGClass(navBarLayout, appLocation);
+  const animationDelay = getBannerAnimationDelay(appLocation);
 
   const getPromoMessage = (promoCode: PromoCode) => {
     if (!promoCode) return "";
@@ -50,10 +57,10 @@ export const SiteBanner = () => {
       animate={{ y: 0, opacity: 1 }}
       transition={{
         duration: 1.4,
-        delay: appLocation == "homepage" ? 1.85 : 0,
+        delay: animationDelay,
         ease: "easeInOut",
       }}
-      className={`w-full py-2 overflow-hidden ${textClass}`}
+      className={`w-full py-2 overflow-hidden ${textClass} ${bgClass}`}
     >
       <div className="flex items-center whitespace-nowrap text-xs md:justify-center">
         {/* Scrolling content for mobile */}

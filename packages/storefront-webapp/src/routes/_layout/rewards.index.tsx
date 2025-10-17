@@ -13,8 +13,6 @@ export const Route = createFileRoute("/_layout/rewards/")({
 
 export default function RewardsPage() {
   const { user, isLoading } = useAuth();
-  const userQueries = useUserQueries();
-  const { data: userData } = useQuery(userQueries.me());
 
   // Redirect to login if not authenticated and not loading
   if (!isLoading && !user) {
@@ -24,9 +22,9 @@ export default function RewardsPage() {
   return (
     <FadeIn className="min-h-screen space-y-8 lg:space-y-24 pb-56">
       <div className="space-y-8">
-        <div className="w-full bg-accent5">
+        <div className="w-full">
           <div className="container mx-auto max-w-[1024px] space-y-4">
-            <div className="flex items-center border-b py-2 px-6 lg:px-0">
+            <div className="flex items-center py-2 px-6 lg:px-0">
               <p className="text-lg font-light">Rewards</p>
             </div>
 

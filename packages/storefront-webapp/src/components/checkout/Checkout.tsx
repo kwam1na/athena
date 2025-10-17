@@ -4,7 +4,6 @@ import BagSummary from "./BagSummary";
 import { useEffect, useState } from "react";
 import MobileBagSummary from "./MobileBagSummary";
 import { CheckoutForm } from "./CheckoutForm";
-import { useNavigationBarContext } from "@/contexts/NavigationBarProvider";
 import { TrustSignals } from "../communication/TrustSignals";
 
 const MainComponent = () => {

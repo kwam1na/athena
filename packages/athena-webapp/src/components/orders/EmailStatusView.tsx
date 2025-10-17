@@ -60,12 +60,18 @@ export function EmailStatusView() {
     try {
       setSendingUpdateEmail(true);
 
-      await sendOrderEmail({
+      const res = await sendOrderEmail({
         orderId: order._id,
         newStatus: orderStatus,
       });
 
-      toast.success("Email sent successfully");
+      if (res.success) {
+        toast.success("Email sent successfully");
+      } else {
+        toast.error("Failed to send email", {
+          description: res.message,
+        });
+      }
     } catch (e) {
       toast.error("Failed to send email", {
         description: (e as Error).message,

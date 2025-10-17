@@ -104,10 +104,9 @@ export function FooterInner() {
           </div>
         </div>
       </div>
-      <div className="flex items-center w-full text-xs">
+      <div className="flex items-center w-full text-xs font-medium text-muted-foreground">
         <p>
-          Copyright © {new Date().getFullYear()} {store?.name}. All rights
-          reserved.
+          © {new Date().getFullYear()} {store?.name}. All rights reserved
         </p>
       </div>
     </footer>
@@ -116,7 +115,7 @@ export function FooterInner() {
 
 const Footer = forwardRef<HTMLDivElement>((_, ref) => {
   return (
-    <div ref={ref} className="border-t pt-8 bg-background">
+    <div ref={ref} className="pt-8 bg-accent5">
       <div className="container mx-auto max-w-[1024px] px-6 lg:px-0">
         <FooterInner />
       </div>

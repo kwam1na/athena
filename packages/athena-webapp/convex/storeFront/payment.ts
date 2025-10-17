@@ -1,15 +1,36 @@
 import { v } from "convex/values";
 import { action } from "../_generated/server";
 import { api, internal } from "../_generated/api";
-import { Address, CheckoutSession, OnlineOrder } from "../../types";
+import { CheckoutSession, OnlineOrder } from "../../types";
 import { orderDetailsSchema } from "../schemas/storeFront";
-import { sendNewOrderEmail, sendOrderEmail } from "../mailersend";
-import { currencyFormatter, formatDate, getAddressString } from "../utils";
-import { getDiscountValue, getOrderAmount } from "../inventory/utils";
-import { formatOrderItems } from "./onlineOrderUtilFns";
+import {
+  PaymentResult,
+  PaymentVerificationResult,
+  PaymentMethodDetails,
+} from "../types/payment";
+import {
+  initializeTransaction,
+  verifyTransaction,
+  initiateRefund,
+} from "../services/paystackService";
+import {
+  generatePODReference,
+  extractOrderItems,
+  calculateOrderAmount,
+  calculateRewardPoints,
+  validatePaymentAmount,
+  getOrderDiscountValue,
+} from "./helpers/paymentHelpers";
+import {
+  sendPODOrderEmails,
+  sendPaymentVerificationEmails,
+} from "../services/orderEmailService";
 
 const appUrl = process.env.APP_URL;
 
+/**
+ * Create a Paystack transaction for online payment
+ */
 export const createTransaction = action({
   args: {
     checkoutSessionId: v.id("checkoutSession"),
@@ -17,83 +38,92 @@ export const createTransaction = action({
     amount: v.number(),
     orderDetails: orderDetailsSchema,
   },
+  returns: v.union(
+    v.object({
+      success: v.boolean(),
+      message: v.string(),
+    }),
+    v.object({
+      authorization_url: v.string(),
+      access_code: v.string(),
+      reference: v.string(),
+    })
+  ),
   handler: async (ctx, args) => {
-    const session = await ctx.runQuery(api.storeFront.checkoutSession.getById, {
-      sessionId: args.checkoutSessionId,
-    });
+    try {
+      // Fetch the checkout session
+      const session = await ctx.runQuery(
+        api.storeFront.checkoutSession.getById,
+        {
+          sessionId: args.checkoutSessionId,
+        }
+      );
 
-    if (!session) {
-      return {
-        success: false,
-        message: "Session not found",
-      };
-    }
-
-    const discount = session.discount || args.orderDetails.discount;
-
-    const items =
-      session.items?.map((item: any) => ({
-        productSkuId: item.productSkuId,
-        quantity: item.quantity,
-        price: item.price,
-      })) || [];
-
-    const orderAmountLessDiscounts = getOrderAmount({
-      items,
-      discount,
-      deliveryFee: args.orderDetails.deliveryFee || 0,
-      subtotal: args.amount,
-    });
-
-    const amountToCharge = orderAmountLessDiscounts;
-
-    const response = await fetch(
-      "https://api.paystack.co/transaction/initialize",
-      {
-        method: "POST",
-        body: JSON.stringify({
-          email: args.customerEmail,
-          amount: amountToCharge.toString(),
-          callback_url: `${appUrl}/shop/checkout/verify`,
-          metadata: {
-            cancel_action: `${appUrl}/shop/checkout`,
-            checkout_session_id: args.checkoutSessionId,
-            checkout_session_amount: args.amount.toString(),
-            order_details: args.orderDetails,
-            amount_to_charge: amountToCharge.toString(),
-          },
-        }),
-        headers: {
-          Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
-          "Content-Type": "application/json",
-        },
+      if (!session) {
+        return {
+          success: false,
+          message: "Session not found",
+        };
       }
-    );
 
-    if (response.ok) {
-      const res = await response.json();
+      // Extract and calculate order amount
+      const discount = session.discount || args.orderDetails.discount;
+      const items = (session.items || [])
+        .filter(
+          (item) =>
+            item.productSkuId !== undefined &&
+            item.quantity !== undefined &&
+            item.price !== undefined
+        )
+        .map((item) => ({
+          productSkuId: item.productSkuId,
+          quantity: item.quantity,
+          price: item.price!,
+        }));
+      const amountToCharge = calculateOrderAmount({
+        items,
+        discount,
+        deliveryFee: args.orderDetails.deliveryFee || 0,
+        subtotal: args.amount,
+      });
 
+      // Initialize transaction with Paystack
+      const response = await initializeTransaction({
+        email: args.customerEmail,
+        amount: amountToCharge,
+        callbackUrl: `${appUrl}/shop/checkout/verify`,
+        metadata: {
+          cancel_action: `${appUrl}/shop/checkout`,
+          checkout_session_id: args.checkoutSessionId,
+          checkout_session_amount: args.amount.toString(),
+          order_details: args.orderDetails,
+          amount_to_charge: amountToCharge.toString(),
+        },
+      });
+
+      // Update checkout session with transaction reference
       try {
-        // update the checkout session with the transaction reference
         await ctx.runMutation(
           internal.storeFront.checkoutSession.updateCheckoutSession,
           {
             id: args.checkoutSessionId,
             isFinalizingPayment: true,
-            externalReference: res.data.reference,
+            externalReference: response.data.reference,
             orderDetails: args.orderDetails,
           }
         );
       } catch (error) {
-        console.error("Failed to update checkout session", error);
+        console.error(
+          "Failed to update checkout session with transaction reference",
+          error
+        );
       }
 
-      console.log(`finalizing payment for session: ${args.checkoutSessionId}`);
+      console.log(`Finalizing payment for session: ${args.checkoutSessionId}`);
 
-      return res.data;
-    } else {
-      const r = await response.json();
-      console.error("Failed to create transaction", r);
+      return response.data;
+    } catch (error) {
+      console.error("Failed to create transaction", error);
       return {
         success: false,
         message: "Failed to create payment transaction",
@@ -102,6 +132,9 @@ export const createTransaction = action({
   },
 });
 
+/**
+ * Create a Payment on Delivery (POD) order
+ */
 export const createPODOrder = action({
   args: {
     checkoutSessionId: v.id("checkoutSession"),
@@ -109,137 +142,75 @@ export const createPODOrder = action({
     amount: v.number(),
     orderDetails: orderDetailsSchema,
   },
-  handler: async (ctx, args) => {
+  returns: v.object({
+    success: v.boolean(),
+    message: v.string(),
+    reference: v.optional(v.string()),
+  }),
+  handler: async (ctx, args): Promise<PaymentResult> => {
     console.log(`Creating POD order for session: ${args.checkoutSessionId}`);
 
     try {
-      // Generate a POD reference
-      const podReference = `POD-${Date.now()}-${args.checkoutSessionId}`;
+      // Generate POD reference
+      const podReference = generatePODReference(args.checkoutSessionId);
 
-      // First update checkout session with order details (including customer details)
+      // Build payment method details
+      const paymentMethod: PaymentMethodDetails = {
+        type: "payment_on_delivery",
+        podPaymentMethod: args.orderDetails.podPaymentMethod || "cash",
+        channel: args.orderDetails.podPaymentMethod || "cash",
+      };
+
+      // Update checkout session with order details
       await ctx.runMutation(
         internal.storeFront.checkoutSession.updateCheckoutSession,
         {
           id: args.checkoutSessionId,
-          hasCompletedPayment: false, // Payment not completed yet - will be paid on delivery
-          hasVerifiedPayment: false, // Will be verified on delivery
+          hasCompletedPayment: false,
+          hasVerifiedPayment: false,
           externalReference: podReference,
           orderDetails: {
             ...args.orderDetails,
             paymentMethod: "payment_on_delivery",
           },
-          paymentMethod: {
-            type: "payment_on_delivery",
-            podPaymentMethod: args.orderDetails.podPaymentMethod || "cash",
-            channel: args.orderDetails.podPaymentMethod || "cash",
-          },
+          paymentMethod,
         }
       );
 
-      // Then create the order from the updated session
+      // Create the order from the updated session
       await ctx.runMutation(internal.storeFront.onlineOrder.createFromSession, {
         checkoutSessionId: args.checkoutSessionId,
         externalTransactionId: podReference,
-        paymentMethod: {
-          type: "payment_on_delivery",
-          podPaymentMethod: args.orderDetails.podPaymentMethod || "cash",
-          channel: args.orderDetails.podPaymentMethod || "cash",
-        },
+        paymentMethod,
       });
 
-      // Send POD order confirmation email
+      // Fetch the created order
       const order = await ctx.runQuery(api.storeFront.onlineOrder.get, {
         identifier: podReference,
       });
 
       if (order) {
+        // Fetch store details
         const store = await ctx.runQuery(api.inventory.stores.getById, {
           id: order.storeId,
         });
 
-        const formatter = currencyFormatter(store?.currency || "GHS");
-
-        const deliveryMethodText =
-          order.deliveryMethod === "pickup" ? "picked up" : "delivered";
-        const processingTimeMessage =
-          "We're currently processing your order and will notify you when it's ready. Please note that processing typically takes 24-48 hours.";
-        const paymentMessage = `You'll pay ${formatter.format(args.amount / 100)} via ${args.orderDetails.podPaymentMethod === "mobile_money" ? "mobile money" : "cash"} when your order is ${deliveryMethodText}.`;
-
-        const orderStatusMessaging = `Your order has been placed successfully! ${processingTimeMessage} ${paymentMessage}`;
-
-        const deliveryAddress = order.deliveryDetails
-          ? getAddressString(order.deliveryDetails as Address)
-          : "Details not available";
-
-        const items = formatOrderItems(order.items, store?.currency || "GHS");
-
-        // Send POD confirmation email
-        const emailResponse = await sendOrderEmail({
-          type: "confirmation",
-          customerEmail: order.customerDetails.email,
-          delivery_fee: order.deliveryFee
-            ? formatter.format(order.deliveryFee)
-            : undefined,
-          store_name: "Wigclub",
-          order_number: order.orderNumber,
-          order_date: formatDate(order._creationTime),
-          order_status_messaging: orderStatusMessaging,
-          total: formatter.format(args.amount / 100),
-          items,
-          pickup_type: order.deliveryMethod,
-          pickup_details: deliveryAddress,
-          customer_name: order.customerDetails.firstName,
+        // Send confirmation and admin notification emails
+        const emailResults = await sendPODOrderEmails({
+          order,
+          store,
+          amount: args.amount,
+          podPaymentMethod: args.orderDetails.podPaymentMethod,
         });
 
-        if (emailResponse.ok) {
-          console.log(
-            `Sent POD order confirmation for order #${order.orderNumber} to ${order.customerDetails.email}`
-          );
-
-          // Update the order to mark confirmation email as sent
-          await ctx.runMutation(api.storeFront.onlineOrder.update, {
-            orderId: order._id,
-            update: {
-              didSendConfirmationEmail: true,
-            },
-          });
-        } else {
-          console.info(
-            `Failed to send POD order confirmation email for order #${order.orderNumber} to ${order.customerDetails.email}`
-          );
-        }
-
-        const testAccounts = ["kwamina.0x00@gmail.com", "kwami.nuh@gmail.com"];
-
-        const isTestAccount = testAccounts.includes(
-          order.customerDetails.email
-        );
-
-        if (!isTestAccount) {
-          // Send new order notification to admins
-          const adminEmailResponse = await sendNewOrderEmail({
-            store_name: "Wigclub",
-            order_amount: formatter.format(args.amount / 100),
-            order_status: `Payment on Delivery (${args.orderDetails.podPaymentMethod === "mobile_money" ? "Mobile Money" : "Cash"})`,
-            order_date: formatDate(order._creationTime),
-            customer_name: `${order.customerDetails.firstName} ${order.customerDetails.lastName}`,
-            order_id: order._id,
-          });
-
-          if (adminEmailResponse.ok) {
-            console.log(
-              `Sent POD new order notification for order #${order.orderNumber} to admins`
-            );
-
-            // Update the order to mark admin notification email as sent
-            await ctx.runMutation(api.storeFront.onlineOrder.update, {
-              orderId: order._id,
-              update: {
-                didSendNewOrderReceivedEmail: true,
-              },
-            });
-          }
-        }
+        // Update order with email statuses
+        await ctx.runMutation(api.storeFront.onlineOrder.update, {
+          orderId: order._id,
+          update: {
+            didSendConfirmationEmail: emailResults.confirmationSent,
+            didSendNewOrderReceivedEmail: emailResults.adminNotificationSent,
+          },
+        });
       }
 
       console.log(
@@ -261,29 +232,32 @@ export const createPODOrder = action({
   },
 });
 
+/**
+ * Verify a payment transaction with Paystack
+ */
 export const verifyPayment = action({
   args: {
     storeFrontUserId: v.union(v.id("storeFrontUser"), v.id("guest")),
     externalReference: v.string(),
   },
-  handler: async (ctx, args): Promise<any> => {
+  returns: v.union(
+    v.object({
+      verified: v.boolean(),
+    }),
+    v.object({
+      message: v.string(),
+    })
+  ),
+  handler: async (ctx, args): Promise<PaymentVerificationResult> => {
     console.log(
-      `verifying payment for session with reference: ${args.externalReference}`
+      `Verifying payment for session with reference: ${args.externalReference}`
     );
 
-    const response = await fetch(
-      `https://api.paystack.co/transaction/verify/${args.externalReference}`,
-      {
-        headers: {
-          Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
-        },
-      }
-    );
+    try {
+      // Verify transaction with Paystack
+      const paystackResponse = await verifyTransaction(args.externalReference);
 
-    if (response.ok) {
-      const res = await response.json();
-
-      // Query for the first active session for the given storeFrontUserId
+      // Fetch session and order
       const session: CheckoutSession | null = await ctx.runQuery(
         api.storeFront.checkoutSession.getCheckoutSession,
         {
@@ -299,40 +273,44 @@ export const verifyPayment = action({
         }
       );
 
+      // Calculate expected order amount
       const subtotal = session?.amount || order?.amount || 0;
-
       const discount = session?.discount || order?.discount;
-
-      // Get items from order (which includes items from the query)
-      const items =
-        order?.items?.map((item: any) => ({
+      const items = (order?.items || [])
+        .filter(
+          (item) =>
+            item.productSkuId !== undefined &&
+            item.quantity !== undefined &&
+            item.price !== undefined
+        )
+        .map((item) => ({
           productSkuId: item.productSkuId,
           quantity: item.quantity,
-          price: item.price,
-        })) || [];
-
-      const orderAmountLessDiscounts = getOrderAmount({
+          price: item.price!,
+        }));
+      const orderAmountLessDiscounts = calculateOrderAmount({
         items,
         discount,
         deliveryFee: order?.deliveryFee || session?.deliveryFee || 0,
         subtotal,
       });
 
-      const discountValue = getDiscountValue(items, discount);
+      const discountValue = getOrderDiscountValue(items, discount);
 
-      const actualDiscount = discountValue;
-
-      const isVerified = Boolean(
-        res.data.status == "success" &&
-          res.data.amount == orderAmountLessDiscounts
-      );
+      // Validate payment
+      const isVerified = validatePaymentAmount({
+        paystackAmount: paystackResponse.data.amount,
+        orderAmount: orderAmountLessDiscounts,
+        paystackStatus: paystackResponse.data.status,
+      });
 
       if (isVerified) {
+        // Update session as verified
         if (session) {
           await ctx.runMutation(
             internal.storeFront.checkoutSession.updateCheckoutSession,
             {
-              id: session?._id,
+              id: session._id,
               hasVerifiedPayment: true,
             }
           );
@@ -340,120 +318,49 @@ export const verifyPayment = action({
 
         const update: Record<string, any> = { hasVerifiedPayment: true };
 
+        // Handle emails and rewards for the order
         if (order) {
           const store = await ctx.runQuery(api.inventory.stores.getById, {
             id: order.storeId,
           });
 
-          const formatter = currencyFormatter(store?.currency || "GHS");
+          // Send confirmation and admin notification emails
+          const emailResults = await sendPaymentVerificationEmails({
+            order,
+            store,
+            orderAmount: orderAmountLessDiscounts,
+            discountValue,
+            didSendNewOrderEmail: order.didSendNewOrderReceivedEmail || false,
+            didSendConfirmationEmail: order.didSendConfirmationEmail || false,
+          });
 
-          const testAccounts = [
-            "kwamina.0x00@gmail.com",
-            "kwami.nuh@gmail.com",
-          ];
-
-          const isTestAccount = testAccounts.includes(
-            order.customerDetails.email
-          );
-
-          if (!order.didSendNewOrderReceivedEmail && !isTestAccount) {
-            const emailResponse = await sendNewOrderEmail({
-              store_name: "Wigclub",
-              order_amount: formatter.format(orderAmountLessDiscounts / 100),
-              order_status: "Paid",
-              order_date: formatDate(order._creationTime),
-              customer_name: `${order.customerDetails.firstName} ${order.customerDetails.lastName}`,
-              order_id: order._id,
-            });
-            if (emailResponse.ok) {
-              console.log(
-                `sent new order received email for order #${order?.orderNumber} to admins`
-              );
-              update.didSendNewOrderReceivedEmail = true;
-            } else {
-              console.error(
-                `Failed to send new order received email for order #${order?.orderNumber}`
-              );
-            }
+          if (emailResults.confirmationSent) {
+            update.didSendConfirmationEmail = true;
+            update.orderReceivedEmailSentAt = Date.now();
           }
 
-          if (!order.didSendConfirmationEmail) {
-            try {
-              const orderStatusMessaging =
-                order.deliveryMethod == "pickup"
-                  ? "We're processing your order and will notify you once it's ready for pickup. Processing takes 24-48 hours."
-                  : "We're processing your order and will notify you once it's on the way. Processing takes 24-48 hours.";
-
-              const orderPickupLocation = store?.config?.contactInfo?.location;
-
-              const deliveryAddress = order.deliveryDetails
-                ? getAddressString(order.deliveryDetails as Address)
-                : "Details not available";
-
-              const pickupDetails =
-                order.deliveryMethod == "pickup"
-                  ? orderPickupLocation
-                  : deliveryAddress;
-
-              const items = formatOrderItems(
-                order.items,
-                store?.currency || "GHS"
-              );
-
-              // send confirmation email
-              const emailResponse = await sendOrderEmail({
-                type: "confirmation",
-                customerEmail: order.customerDetails.email,
-                delivery_fee: order.deliveryFee
-                  ? formatter.format(order.deliveryFee)
-                  : undefined,
-                discount: discountValue
-                  ? formatter.format(actualDiscount / 100)
-                  : undefined,
-                store_name: "Wigclub",
-                order_number: order.orderNumber,
-                order_date: formatDate(order._creationTime),
-                order_status_messaging: orderStatusMessaging,
-                total: formatter.format(orderAmountLessDiscounts / 100),
-                items,
-                pickup_type: order.deliveryMethod,
-                pickup_details: pickupDetails,
-                customer_name: order.customerDetails.firstName,
-              });
-
-              if (emailResponse.ok) {
-                console.log(
-                  `sent order confirmation for order #${order?.orderNumber} to ${order.customerDetails?.email}`
-                );
-                update.didSendConfirmationEmail = true;
-                update.orderReceivedEmailSentAt = Date.now();
-              }
-            } catch (e) {
-              console.error("Failed to send order confirmation email", e);
-            }
+          if (emailResults.adminNotificationSent) {
+            update.didSendNewOrderReceivedEmail = true;
           }
 
-          // Calculate points (10 points per dollar spent, rounded down)
-          const pointsToAward = (session?.amount || 0) / 1000;
-
-          // Award points if this is a registered user (not a guest)
-          const res = await ctx.runMutation(
+          // Award loyalty points
+          const points = calculateRewardPoints(session?.amount || 0);
+          const rewardResult = await ctx.runMutation(
             internal.storeFront.rewards.awardOrderPoints,
             {
               orderId: order._id,
-              points: Math.floor(pointsToAward),
+              points,
             }
           );
 
-          if (res.success) {
-            console.log(
-              `Awarded ${Math.floor(pointsToAward)} points for order ${order?._id}`
-            );
+          if (rewardResult.success) {
+            console.log(`Awarded ${points} points for order ${order._id}`);
           } else {
-            console.error("Failed to award points", res.error);
+            console.error("Failed to award points", rewardResult.error);
           }
         }
 
+        // Update order with verification and email statuses
         await ctx.runMutation(api.storeFront.onlineOrder.update, {
           externalReference: args.externalReference,
           update,
@@ -467,28 +374,29 @@ export const verifyPayment = action({
             `Customer: ${args.storeFrontUserId} | ` +
             `Reference: ${args.externalReference}`
         );
-      }
-
-      if (!isVerified) {
+      } else {
         console.error(
-          `unable to verify payment. [session: ${session?._id}, order: ${order?._id}, customer: ${args.storeFrontUserId}, externalReference: ${args.externalReference}]`
+          `Unable to verify payment. [session: ${session?._id}, order: ${order?._id}, customer: ${args.storeFrontUserId}, reference: ${args.externalReference}]`
         );
         console.info(
-          `status: ${res.data.status}, amount_from_paystack: ${res.data.amount}, amount_from_order: ${orderAmountLessDiscounts}`
+          `Status: ${paystackResponse.data.status}, Paystack amount: ${paystackResponse.data.amount}, Expected amount: ${orderAmountLessDiscounts}`
         );
       }
 
       return { verified: isVerified };
-    } else {
-      console.error("Failed to verify transaction", response);
+    } catch (error) {
+      console.error("Failed to verify transaction", error);
+      return {
+        verified: false,
+        message: "No active session found.",
+      };
     }
-
-    return {
-      message: "No active session found.",
-    };
   },
 });
 
+/**
+ * Refund a payment transaction
+ */
 export const refundPayment = action({
   args: {
     externalTransactionId: v.string(),
@@ -503,23 +411,21 @@ export const refundPayment = action({
       })
     ),
   },
-  handler: async (ctx, args) => {
-    const response = await fetch(`https://api.paystack.co/refund`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
-      },
-      body: JSON.stringify({
-        transaction: args.externalTransactionId,
+  returns: v.object({
+    success: v.boolean(),
+    message: v.string(),
+  }),
+  handler: async (ctx, args): Promise<PaymentResult> => {
+    try {
+      // Initiate refund with Paystack
+      const refundResponse = await initiateRefund({
+        transactionReference: args.externalTransactionId,
         amount: args.amount,
-      }),
-    });
+      });
 
-    const res = await response.json();
-
-    if (response.ok) {
+      // Update order status to refund-submitted
       await ctx.runMutation(api.storeFront.onlineOrder.update, {
-        externalReference: res.data?.transaction?.reference,
+        externalReference: refundResponse.data?.transaction?.reference,
         update: {
           status: "refund-submitted",
           didRefundDeliveryFee: args.refundItems?.includes("delivery-fee"),
@@ -527,31 +433,35 @@ export const refundPayment = action({
         signedInAthenaUser: args.signedInAthenaUser,
       });
 
-      console.log('updated order status to "refund-submitted"');
+      console.log('Updated order status to "refund-submitted"');
 
-      if (args.returnItemsToStock) {
+      // Handle stock returns if requested
+      if (args.returnItemsToStock && args.onlineOrderItemIds) {
         await ctx.runMutation(api.storeFront.onlineOrder.returnItemsToStock, {
           externalTransactionId: args.externalTransactionId,
           onlineOrderItemIds: args.onlineOrderItemIds,
         });
-
-        console.log("returned items to stock");
-        return { success: true, message: res.message };
-      }
-
-      if (args.onlineOrderItemIds) {
+        console.log("Returned items to stock");
+      } else if (args.onlineOrderItemIds) {
+        // Mark items as refunded without returning to stock
         await ctx.runMutation(api.storeFront.onlineOrder.updateOrderItems, {
           orderItemIds: args.onlineOrderItemIds,
           updates: { isRefunded: true },
         });
-
-        console.log("updated order items to refunded");
+        console.log("Updated order items to refunded");
       }
-      return { success: true, message: res.message };
-    } else {
-      console.error("Failed to refund payment", response);
-    }
 
-    return { success: false, message: res.message };
+      return {
+        success: true,
+        message: refundResponse.message,
+      };
+    } catch (error) {
+      console.error("Failed to refund payment", error);
+      return {
+        success: false,
+        message:
+          error instanceof Error ? error.message : "Failed to refund payment",
+      };
+    }
   },
 });

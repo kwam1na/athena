@@ -13,6 +13,14 @@ import { MobileMenu } from "./MobileMenu";
 import { useNavigationBarContext } from "@/contexts/NavigationBarProvider";
 import { SiteBanner } from "./SiteBanner";
 import { cn } from "@/lib/utils";
+import {
+  getMainWrapperClass,
+  getNavBGClass,
+  getHoverClass,
+  getSubmenuBGClass,
+  getNavBarAnimationDelay,
+  getOverlayClass,
+} from "./navBarStyles";
 
 const item = {
   hidden: { y: -2, opacity: 0 },
@@ -34,10 +42,8 @@ export default function NavigationBar() {
 
   const { navBarLayout, appLocation } = useNavigationBarContext();
 
-  const hoverClass =
-    navBarLayout == "sticky" && appLocation == "homepage"
-      ? "hover:text-gray-300 text-white"
-      : "hover:text-gray-500";
+  // Use styling utility instead of hardcoded hover class logic
+  const hoverClass = getHoverClass(navBarLayout, appLocation);
 
   const container = {
     hidden: { opacity: 1 },
@@ -113,7 +119,7 @@ export default function NavigationBar() {
         initial="hidden"
         animate="show"
         exit={"exit"}
-        className={`absolute w-full ${navBarLayout == "fixed" ? "bg-accent5" : ""} left-0 bg-opacity-95 animate-fadeIn z-50`}
+        className={`absolute w-full ${getSubmenuBGClass(navBarLayout, appLocation)} left-0 animate-fadeIn z-50`}
         onMouseEnter={() => setActiveMenu(slug)}
         onMouseLeave={() => setActiveMenu(null)}
       >
@@ -165,17 +171,16 @@ export default function NavigationBar() {
 
   if (!store || !appLocation) return null;
 
-  const mainWrapperlass =
-    navBarLayout == "sticky" ? "absolute bg-primary/20" : "bg-accent5";
+  // Use styling utilities instead of hardcoded class strings
+  const mainWrapperClass = getMainWrapperClass(navBarLayout);
+  const navBGClass = getNavBGClass(!!activeMenu, navBarLayout, appLocation);
 
-  const navBGClass = activeMenu
-    ? `${navBarLayout == "sticky" ? "bg-white bg-opacity-20 backdrop-blur-md" : "bg-accent5"}`
-    : "bg-transparent";
+  console.log(navBarLayout);
 
   return (
     <div className="flex flex-col">
       <motion.div
-        className={`w-full z-50 ${mainWrapperlass}`}
+        className={`w-full z-50 ${mainWrapperClass}`}
         initial={{ opacity: 0 }}
         animate={{
           opacity: 1,
@@ -184,7 +189,7 @@ export default function NavigationBar() {
             y: { duration: 0.3, ease: "easeInOut" },
             opacity: {
               duration: 1,
-              delay: appLocation == "homepage" ? 2.2 : 0,
+              delay: getNavBarAnimationDelay(appLocation),
               ease: [0.6, 0.05, 0.04, 0.9],
             },
           },
@@ -211,9 +216,9 @@ export default function NavigationBar() {
                         </h1>
                       </Link>
                     </div>
-                    {appLocation !== "checkout" && (
+                    {
                       <div className="hidden lg:flex gap-12">
-                        <div
+                        {/* <div
                           key={"sale"}
                           className="group relative h-full flex items-center"
                           // onMouseEnter={() => setActiveMenu(s.value)}
@@ -229,9 +234,8 @@ export default function NavigationBar() {
                           >
                             Sale
                           </Link>
-                          {/* Invisible extender to prevent hover gap */}
                           <div className="absolute -bottom-6 left-0 w-full h-6" />
-                        </div>
+                        </div> */}
 
                         {categories?.map((s) => (
                           <div
@@ -255,7 +259,7 @@ export default function NavigationBar() {
                           </div>
                         ))}
                       </div>
-                    )}
+                    }
                   </div>
 
                   <div className="flex gap-8">

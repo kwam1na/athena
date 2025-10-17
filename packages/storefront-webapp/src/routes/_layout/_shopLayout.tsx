@@ -48,7 +48,7 @@ function MobileFilters({
   }, []);
 
   return (
-    <div className="fixed inset-0 z-40 w-full h-screen bg-background">
+    <div className="fixed inset-0 z-50 w-full h-screen bg-background">
       <div className="absolute z-40 w-full h-screen bg-background">
         <div className="flex pt-4 px-2">
           <Button
@@ -141,7 +141,7 @@ function LayoutComponent() {
 
   return (
     <div className="pb-40">
-      <div className="bg-accent5  col-span-12 sticky top-0 z-40">
+      <div className="bg-white col-span-12 sticky top-0 z-40">
         <ProductFilterBar
           showFilters={showFilters}
           setShowFilters={setShowFilters}

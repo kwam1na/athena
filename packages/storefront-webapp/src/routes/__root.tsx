@@ -16,6 +16,7 @@ import {
   NavigationBarProvider,
   useNavigationBarContext,
 } from "@/contexts/NavigationBarProvider";
+import { getNavBarWrapperClass } from "@/components/navigation-bar/navBarStyles";
 
 const productsPageSchema = z.object({
   color: z.string().optional(),
@@ -55,8 +56,8 @@ export const Route = createRootRoute({
 function RootComponent() {
   const { navBarLayout } = useNavigationBarContext();
 
-  const navBarClassname =
-    navBarLayout == "sticky" ? "w-full sticky z-50 top-0" : "";
+  // Use styling utility for navbar wrapper positioning
+  const navBarClassname = getNavBarWrapperClass(navBarLayout);
 
   return (
     <StoreProvider>

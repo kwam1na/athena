@@ -533,7 +533,7 @@ export const CheckoutProvider = ({
 
   useEffect(() => {
     setNavBarLayout("fixed");
-    setAppLocation("shop");
+    setAppLocation("checkout");
   }, []);
 
   // Auto-switch to delivery if pickup is disabled/restricted and currently selected

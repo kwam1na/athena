@@ -14,7 +14,7 @@ export const sendVerificationCode = async (params: {
 
   const message = {
     from: {
-      email: "noreply@test-51ndgwvw8vdlzqx8.mlsender.net",
+      email: "noreply@wigclub.store",
       name: storeName,
     },
     to: [
@@ -107,7 +107,7 @@ export const sendOrderEmail = async (params: {
 
   const message = {
     from: {
-      email: "orders@test-51ndgwvw8vdlzqx8.mlsender.net",
+      email: "orders@wigclub.store",
       name: capitalizeWords(params.store_name),
     },
     to: [
@@ -203,14 +203,14 @@ export const sendNewOrderEmail = async (params: {
 }) => {
   const appUrl =
     process.env.STAGE == "prod"
-      ? "https://athena.test-51ndgwvw8vdlzqx8.mlsender.net"
+      ? "https://athena.wigclub.store"
       : "http://localhost:5173";
 
   const orderUrl = `${appUrl}/wigclub/store/wigclub/orders/${params.order_id}`;
 
   const message = {
     from: {
-      email: "orders@test-51ndgwvw8vdlzqx8.mlsender.net",
+      email: "orders@wigclub.store",
       name: capitalizeWords(params.store_name),
     },
     to: [
@@ -284,7 +284,7 @@ export const sendFeedbackRequestEmail = async (params: {
 }) => {
   const message = {
     from: {
-      email: "noreply@test-51ndgwvw8vdlzqx8.mlsender.net",
+      email: "noreply@wigclub.store",
       name: "Wigclub",
     },
     to: [
@@ -450,7 +450,7 @@ export const sendDiscountCodeEmail = async (params: {
 
   const message = {
     from: {
-      email: "offers@test-51ndgwvw8vdlzqx8.mlsender.net",
+      email: "offers@wigclub.store",
       name: "Wigclub",
     },
     to: [

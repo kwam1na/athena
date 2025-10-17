@@ -1,11 +1,7 @@
 import { useParams } from "@tanstack/react-router";
 import { Button } from "../ui/button";
 import { SlidersHorizontal } from "lucide-react";
-import {
-  capitalizeFirstLetter,
-  capitalizeWords,
-  slugToWords,
-} from "@/lib/utils";
+import { capitalizeWords, slugToWords } from "@/lib/utils";
 
 export default function ProductFilterBar({
   showFilters,
@@ -19,7 +15,6 @@ export default function ProductFilterBar({
   onFilterClickOnMobile: () => void;
 }) {
   const { categorySlug, subcategorySlug } = useParams({ strict: false });
-
   const showFiltersText =
     selectedFiltersCount == 0
       ? "Show filters"
@@ -28,7 +23,9 @@ export default function ProductFilterBar({
   const showFilterButton = ["hair"].includes(categorySlug || "");
 
   return (
-    <div className="flex justify-between items-center container mx-auto max-w-[1024px] px-6 lg:px-0 sticky">
+    <div
+      className={`flex justify-between items-center container mx-auto max-w-[1024px] px-6 lg:px-0 sticky bg-white`}
+    >
       <div className="flex items-center py-4">
         <p className="text-md font-medium">{`${capitalizeWords(slugToWords(subcategorySlug || categorySlug || ""))}`}</p>
       </div>
