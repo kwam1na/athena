@@ -1,0 +1,506 @@
+---
+description: Guidelines for adding new features to the Athena system, including database schema, backend functions, HTTP API routes, admin UI, and storefront integration
+---
+
+# Adding Features to Athena
+
+This guide outlines the standard pattern for adding new features to the Athena e-commerce system. Follow these steps in order to ensure consistency and completeness.
+
+## System Architecture Overview
+
+Athena is a monorepo with two main applications:
+
+- **athena-webapp**: Admin dashboard for store management (uses Convex directly)
+- **storefront-webapp**: Customer-facing storefront (uses Convex via HTTP API)
+
+## Feature Implementation Checklist
+
+### 1. Database Schema (Backend)
+
+**Location**: `packages/athena-webapp/convex/schemas/inventory/` or `packages/athena-webapp/convex/schemas/storeFront/`
+
+Steps:
+
+1. Create schema file: `[featureName].ts`
+
+   ```typescript
+   import { v } from "convex/values";
+
+   export const featureNameSchema = v.object({
+     storeId: v.id("store"),
+     // Add your fields with appropriate validators
+     active: v.boolean(),
+     // Use v.optional() for optional fields
+   });
+   ```
+
+2. Export from index: Update `packages/athena-webapp/convex/schemas/inventory/index.ts`
+
+   ```typescript
+   export * from "./featureName";
+   ```
+
+3. Register in schema: Update `packages/athena-webapp/convex/schema.ts`
+   - Import the schema
+   - Add to defineSchema object with appropriate indexes
+   ```typescript
+   featureName: defineTable(featureNameSchema).index("by_storeId", ["storeId"]);
+   ```
+
+**Index Naming Convention**: Always name indexes descriptively (e.g., `by_storeId`, `by_storeId_and_active`)
+
+### 2. Backend Functions (Convex)
+
+**Location**: `packages/athena-webapp/convex/inventory/[featureName].ts`
+
+Follow the established pattern from [convex_rules](mdc:.cursor/rules/convex_rules) and existing files like [bestSeller.ts](mdc:packages/athena-webapp/convex/inventory/bestSeller.ts).
+
+Required functions:
+
+```typescript
+import { v } from "convex/values";
+import { mutation, query } from "../_generated/server";
+
+const entity = "featureName";
+
+// Query to get data
+export const get = query({
+  args: { storeId: v.id("store") },
+  returns: v.union(v.null(), v.object({...})),
+  handler: async (ctx, args) => {
+    // Implementation
+  },
+});
+
+// Mutation to create/update
+export const upsert = mutation({
+  args: {
+    storeId: v.id("store"),
+    // other fields
+  },
+  returns: v.object({...}),
+  handler: async (ctx, args) => {
+    // Implementation
+  },
+});
+
+// Mutation to delete
+export const remove = mutation({
+  args: { id: v.id(entity) },
+  returns: v.boolean(),
+  handler: async (ctx, args) => {
+    await ctx.db.delete(args.id);
+    return true;
+  },
+});
+```
+
+**Important**:
+
+- Always include `args` and `returns` validators (required by new Convex function syntax)
+- Use `returns: v.null()` if function doesn't return anything
+- Follow query/mutation/action patterns from Convex guidelines
+
+### 3. HTTP API Routes (for Storefront Access)
+
+**Location**: `packages/athena-webapp/convex/http/domains/inventory/routes/[featureName].ts`
+
+Pattern:
+
+```typescript
+import { Hono } from "hono";
+import { HonoWithConvex } from "convex-helpers/server/hono";
+import { ActionCtx } from "../../../../_generated/server";
+import { api } from "../../../../_generated/api";
+import { Id } from "../../../../_generated/dataModel";
+import {
+  getStoreDataFromRequest,
+  getStorefrontUserFromRequest,
+} from "../../../utils";
+
+const featureNameRoutes: HonoWithConvex<ActionCtx> = new Hono();
+
+// Basic store-scoped endpoint
+featureNameRoutes.get("/", async (c) => {
+  const { storeId } = getStoreDataFromRequest(c);
+
+  if (!storeId)
+    return c.json({ error: "Missing data to retrieve feature" }, 400);
+
+  const data = await c.env.runQuery(api.inventory.featureName.get, {
+    storeId: storeId as Id<"store">,
+  });
+
+  return c.json({ data });
+});
+
+// User-specific endpoint (for storefront features)
+featureNameRoutes.get("/user-data", async (c) => {
+  const { storeId } = getStoreDataFromRequest(c);
+  const userId = getStorefrontUserFromRequest(c);
+
+  if (!storeId || !userId)
+    return c.json({ error: "Missing required data" }, 400);
+
+  const data = await c.env.runQuery(api.storeFront.featureName.getUserData, {
+    storeId: storeId as Id<"store">,
+    userId: userId as Id<"storeFrontUser"> | Id<"guest">,
+  });
+
+  return c.json({ data });
+});
+
+export { featureNameRoutes };
+```
+
+Register the route:
+
+1. Export from `packages/athena-webapp/convex/http/domains/inventory/routes/index.ts`
+2. Import and add to `packages/athena-webapp/convex/http.ts`:
+   ```typescript
+   app.route("/feature-name", featureNameRoutes);
+   ```
+
+**Route Naming**: Use kebab-case for URL paths
+
+**Authentication Helpers**:
+
+Located in [utils.ts](mdc:packages/athena-webapp/convex/http/utils.ts):
+
+1. `getStoreDataFromRequest(c)` - Extract store context
+
+   ```typescript
+   const { organizationId, storeId } = getStoreDataFromRequest(c);
+   ```
+
+2. `getStorefrontUserFromRequest(c)` - Extract user/guest ID (for storefront features)
+
+   ```typescript
+   const userId = getStorefrontUserFromRequest(c);
+   // Returns Id<"storeFrontUser"> | Id<"guest">
+   ```
+
+3. Direct cookie access (for specific cases)
+
+   ```typescript
+   import { getCookie } from "hono/cookie";
+
+   const userId = getCookie(c, "user_id") as Id<"storeFrontUser">;
+   const guestId = getCookie(c, "guest_id") as Id<"guest">;
+   ```
+
+**When to use each**:
+
+- Use `getStoreDataFromRequest()` for all store-scoped features
+- Use `getStorefrontUserFromRequest()` for user-specific storefront features (bags, orders, wishlists)
+- Use `getCookie()` directly only when you need to distinguish between user and guest explicitly
+
+### 4. Type Definitions
+
+**Location**: `packages/athena-webapp/types.ts`
+
+Add type export for shared use:
+
+```typescript
+export type FeatureName = Doc<"featureName">;
+```
+
+This allows both packages to use the same type definitions.
+
+### 5. Admin UI Component
+
+**Location**: `packages/athena-webapp/src/components/[section]/[FeatureName].tsx`
+
+**Pattern**: Use the `View` component wrapper for consistent styling across admin sections
+
+```typescript
+import { useMutation, useQuery } from "convex/react";
+import { useState, useEffect } from "react";
+import { toast } from "sonner";
+import { api } from "~/convex/_generated/api";
+import { Input } from "../ui/input";
+import { Label } from "../ui/label";
+import { Switch } from "../ui/switch";
+import { LoadingButton } from "../ui/loading-button";
+import { Id } from "~/convex/_generated/dataModel";
+import View from "../View";
+
+interface FeatureEditorProps {
+  storeId: Id<"store">;
+}
+
+export function FeatureEditor({ storeId }: FeatureEditorProps) {
+  const data = useQuery(api.inventory.featureName.get, { storeId });
+  const upsertData = useMutation(api.inventory.featureName.upsert);
+
+  const [field, setField] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    if (data) {
+      setField(data.field || "");
+    }
+  }, [data]);
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      await upsertData({ storeId, field });
+      toast.success("Saved successfully");
+    } catch (error) {
+      toast.error("Failed to save");
+      console.error(error);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Validation: disable save if required fields are empty
+  const isInvalid = !field.trim();
+
+  return (
+    <View
+      hideBorder
+      hideHeaderBottomBorder
+      className="py-4"
+      header={<p className="text-sm text-muted-foreground">Feature Name</p>}
+    >
+      <div className="py-4 space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="field">Field Label</Label>
+          <Input
+            id="field"
+            placeholder="Enter value"
+            value={field}
+            onChange={(e) => setField(e.target.value)}
+          />
+        </div>
+        <LoadingButton
+          onClick={handleSave}
+          isLoading={isSaving}
+          disabled={isInvalid}
+        >
+          Save
+        </LoadingButton>
+      </div>
+    </View>
+  );
+}
+```
+
+**View Component Pattern**:
+
+- Use `View` from `../View` for consistent layout
+- Set `hideBorder` and `hideHeaderBottomBorder` for cleaner appearance
+- Use `header` prop with muted text for section title
+- Wrap content in a `div` with `py-4 space-y-4` for proper spacing
+- See [FeaturedSection.tsx](mdc:packages/athena-webapp/src/components/homepage/FeaturedSection.tsx) and [BannerMessageEditor.tsx](mdc:packages/athena-webapp/src/components/homepage/BannerMessageEditor.tsx) for examples
+
+**Form Validation**:
+
+- Add validation logic before the return statement
+- Disable save button when required fields are invalid
+- Use `.trim()` to check for empty strings
+- Example: `const isInvalid = !field.trim();`
+- For multiple optional fields: `const isInvalid = !field1.trim() && !field2.trim();`
+
+**Immediate Save for Toggles/Switches**:
+
+For better UX, implement auto-save when toggling boolean fields instead of requiring a save button click:
+
+```typescript
+const handleActiveToggle = async (checked: boolean) => {
+  setActive(checked);
+  try {
+    await upsertData({
+      storeId,
+      // Include all current field values
+      field: field.trim() || undefined,
+      active: checked,
+    });
+    toast.success(checked ? "Feature activated" : "Feature deactivated");
+  } catch (error) {
+    toast.error("Failed to update active status");
+    console.error(error);
+    // Revert the toggle on error
+    setActive(!checked);
+  }
+};
+
+// In JSX:
+<Switch id="active" checked={active} onCheckedChange={handleActiveToggle} />;
+```
+
+**Key points**:
+
+- Update local state immediately for responsive UI
+- Save to backend asynchronously
+- Provide specific toast messages for activation/deactivation
+- Revert toggle on error to maintain data consistency
+- Include all current field values in the mutation
+
+**UI Components**: Use existing components from `packages/athena-webapp/src/components/ui/`
+
+**LoadingButton**:
+
+- Use `isLoading` prop (not `loading`)
+- Use `disabled` prop for validation states
+
+### 6. Storefront API Client
+
+**Location**: `packages/storefront-webapp/src/api/[featureName].ts`
+
+Pattern:
+
+```typescript
+import config from "@/config";
+import { FeatureName } from "@athena/webapp";
+
+export async function getFeature(): Promise<FeatureName | null> {
+  const response = await fetch(`${config.apiGateway.URL}/feature-name`, {
+    credentials: "include",
+  });
+
+  const res = await response.json();
+
+  if (!response.ok) {
+    throw new Error(res.error || "Error loading feature.");
+  }
+
+  return res.data;
+}
+```
+
+### 7. Storefront Query Hooks
+
+**Location**: `packages/storefront-webapp/src/lib/queries/[featureName].ts`
+
+Pattern:
+
+```typescript
+import { getFeature } from "@/api/featureName";
+import { DEFAULT_STALE_TIME } from "@/lib/constants";
+import { queryOptions } from "@tanstack/react-query";
+import { useQueryEnabled } from "@/hooks/useQueryEnabled";
+
+export const useFeatureQueries = () => {
+  const queryEnabled = useQueryEnabled();
+
+  return {
+    get: () =>
+      queryOptions({
+        queryKey: ["featureName"],
+        queryFn: () => getFeature(),
+        staleTime: DEFAULT_STALE_TIME,
+        enabled: queryEnabled,
+      }),
+  };
+};
+```
+
+### 8. Storefront Integration
+
+Use the query hook in components:
+
+```typescript
+import { useFeatureQueries } from "@/lib/queries/featureName";
+import { useQuery } from "@tanstack/react-query";
+
+export const Component = () => {
+  const featureQueries = useFeatureQueries();
+  const { data: feature } = useQuery(featureQueries.get());
+
+  if (!feature) return null;
+
+  return <div>{/* Use feature data */}</div>;
+};
+```
+
+## Common Patterns
+
+### Store-Scoped Features
+
+- Always include `storeId: v.id("store")` in schema
+- Always add `by_storeId` index
+- Filter queries by storeId
+
+### Active/Inactive Toggle
+
+- Use `active: v.boolean()` field
+- Filter queries with `.filter((q) => q.eq(q.field("active"), true))`
+
+### Upsert Pattern
+
+For single-instance-per-store features:
+
+```typescript
+const existing = await ctx.db
+  .query(entity)
+  .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
+  .first();
+
+if (existing) {
+  await ctx.db.patch(existing._id, { ...updates });
+  return await ctx.db.get(existing._id);
+}
+
+const id = await ctx.db.insert(entity, { ...data });
+return await ctx.db.get(id);
+```
+
+## Testing Checklist
+
+Before considering a feature complete:
+
+- [ ] Schema registered and deployed
+- [ ] Backend functions have validators for args and returns
+- [ ] HTTP routes accessible from storefront
+- [ ] Type definitions exported
+- [ ] Admin UI functional and styled consistently
+- [ ] Storefront integration working
+- [ ] No linter errors
+- [ ] Error handling with toast notifications
+
+## File Organization
+
+```
+packages/
+├── athena-webapp/          # Admin dashboard
+│   ├── convex/
+│   │   ├── schemas/
+│   │   │   ├── inventory/  # Store management schemas
+│   │   │   └── storeFront/ # Customer-facing schemas
+│   │   ├── inventory/      # Backend functions
+│   │   ├── storeFront/     # Backend functions
+│   │   └── http/
+│   │       └── domains/
+│   │           ├── inventory/
+│   │           │   └── routes/
+│   │           └── storeFront/
+│   │               └── routes/
+│   ├── src/
+│   │   └── components/     # Admin UI components
+│   └── types.ts            # Shared type definitions
+│
+└── storefront-webapp/      # Customer storefront
+    ├── src/
+    │   ├── api/            # HTTP API clients
+    │   ├── lib/
+    │   │   └── queries/    # React Query hooks
+    │   └── components/     # Storefront UI components
+```
+
+## Key Principles
+
+1. **Consistency**: Follow existing patterns in similar features
+2. **Type Safety**: Always use validators and TypeScript types
+3. **Error Handling**: Use toast notifications for user feedback
+4. **Separation of Concerns**: Admin logic in athena-webapp, customer-facing in storefront-webapp
+5. **Store Isolation**: All features are scoped to stores via storeId
+
+## Reference Examples
+
+- Banner Message Feature: Complete example of this pattern
+- Best Sellers: [bestSeller.ts](mdc:packages/athena-webapp/convex/inventory/bestSeller.ts)
+- Featured Items: [featuredItem.ts](mdc:packages/athena-webapp/convex/inventory/featuredItem.ts)
+- Promo Codes: Multi-file feature example

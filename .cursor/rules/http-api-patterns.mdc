@@ -1,0 +1,625 @@
+---
+description: HTTP API routing patterns and conventions for connecting the admin backend with the customer storefront
+---
+
+# HTTP API Patterns in Athena
+
+This guide explains how the Athena system uses HTTP APIs to connect the Convex backend with the customer-facing storefront.
+
+## Architecture Overview
+
+```
+Admin Dashboard (athena-webapp)
+    ↓ (Direct Convex)
+Convex Backend (queries, mutations, actions)
+    ↓ (HTTP API via Hono)
+Storefront (storefront-webapp)
+    ↓ (Fetch + React Query)
+Customer Browser
+```
+
+**Key Concept**: The admin dashboard uses Convex directly via React hooks, while the storefront uses HTTP API endpoints for security and separation of concerns.
+
+## HTTP Router Setup
+
+**Main File**: [http.ts](mdc:packages/athena-webapp/convex/http.ts)
+
+The HTTP router uses Hono and Convex helpers:
+
+```typescript
+import { Hono } from "hono";
+import { HonoWithConvex, HttpRouterWithHono } from "convex-helpers/server/hono";
+import { ActionCtx } from "./_generated/server";
+
+const app: HonoWithConvex<ActionCtx> = new Hono();
+
+// Register routes
+app.route("/feature-name", featureNameRoutes);
+
+export default new HttpRouterWithHono(app);
+```
+
+## Route Organization
+
+Routes are organized by domain:
+
+```
+convex/http/domains/
+├── inventory/          # Admin/store management features
+│   └── routes/
+│       ├── analytics.ts
+│       ├── bannerMessage.ts
+│       ├── categories.ts
+│       ├── colors.ts
+│       ├── products.ts
+│       └── stores.ts
+└── storeFront/         # Customer-facing features
+    └── routes/
+        ├── bag.ts
+        ├── checkout.ts
+        ├── guest.ts
+        ├── onlineOrder.ts
+        └── user.ts
+```
+
+## Creating a New Route
+
+### 1. Create Route File
+
+**Location**: `convex/http/domains/[domain]/routes/[feature].ts`
+
+**Template**:
+
+```typescript
+import { Hono } from "hono";
+import { HonoWithConvex } from "convex-helpers/server/hono";
+import { ActionCtx } from "../../../../_generated/server";
+import { api } from "../../../../_generated/api";
+import { Id } from "../../../../_generated/dataModel";
+import { getStoreDataFromRequest } from "../../../utils";
+
+const featureRoutes: HonoWithConvex<ActionCtx> = new Hono();
+
+// GET endpoint
+featureRoutes.get("/", async (c) => {
+  const { storeId } = getStoreDataFromRequest(c);
+
+  if (!storeId) {
+    return c.json({ error: "Missing storeId" }, 400);
+  }
+
+  const data = await c.env.runQuery(api.inventory.feature.get, {
+    storeId: storeId as Id<"store">,
+  });
+
+  return c.json({ data });
+});
+
+// GET endpoint with parameter
+featureRoutes.get("/:id", async (c) => {
+  const id = c.req.param("id");
+  const { storeId } = getStoreDataFromRequest(c);
+
+  if (!storeId || !id) {
+    return c.json({ error: "Missing required parameters" }, 400);
+  }
+
+  const data = await c.env.runQuery(api.inventory.feature.getById, {
+    id: id as Id<"feature">,
+  });
+
+  return c.json({ data });
+});
+
+// POST endpoint
+featureRoutes.post("/", async (c) => {
+  const { storeId } = getStoreDataFromRequest(c);
+  const body = await c.req.json();
+
+  if (!storeId) {
+    return c.json({ error: "Missing storeId" }, 400);
+  }
+
+  const result = await c.env.runMutation(api.inventory.feature.create, {
+    storeId: storeId as Id<"store">,
+    ...body,
+  });
+
+  return c.json({ result });
+});
+
+export { featureRoutes };
+```
+
+### 2. Export from Index
+
+Add to `convex/http/domains/[domain]/routes/index.ts`:
+
+```typescript
+export * from "./feature";
+```
+
+### 3. Register in Main Router
+
+In [http.ts](mdc:packages/athena-webapp/convex/http.ts):
+
+```typescript
+import { featureRoutes } from "./http/domains/inventory/routes";
+
+app.route("/feature-name", featureRoutes);
+```
+
+## Request Context Helpers
+
+Located in [utils.ts](mdc:packages/athena-webapp/convex/http/utils.ts)
+
+### 1. Store Context: `getStoreDataFromRequest()`
+
+Extracts store and organization IDs from request cookies:
+
+```typescript
+const { storeId, organizationId } = getStoreDataFromRequest(c);
+```
+
+**Returns**: `{ organizationId: Id<"organization">, storeId: Id<"store"> }`
+
+**Use for**: All store-scoped features (products, categories, settings, etc.)
+
+**Implementation**:
+
+```typescript
+export const getStoreDataFromRequest = (c: Context) => {
+  const organizationId = getCookie(c, "organization_id") as Id<"organization">;
+  const storeId = getCookie(c, "store_id") as Id<"store">;
+
+  return { organizationId, storeId };
+};
+```
+
+### 2. User Context: `getStorefrontUserFromRequest()`
+
+Extracts user or guest ID from request cookies:
+
+```typescript
+const userId = getStorefrontUserFromRequest(c);
+```
+
+**Returns**: `Id<"storeFrontUser"> | Id<"guest">` (whichever is present)
+
+**Use for**: User-specific storefront features (bags, orders, wishlists, user preferences)
+
+**Implementation**:
+
+```typescript
+export const getStorefrontUserFromRequest = (c: Context) => {
+  const userId = getCookie(c, "user_id") as Id<"storeFrontUser">;
+  const guestId = getCookie(c, "guest_id") as Id<"guest">;
+
+  return userId || guestId;
+};
+```
+
+**Note**: Returns `userId` if logged in, otherwise returns `guestId`. Always prefer this helper over direct cookie access unless you need to distinguish between user and guest explicitly.
+
+### 3. Direct Cookie Access
+
+For cases where you need explicit control:
+
+```typescript
+import { getCookie } from "hono/cookie";
+
+const userId = getCookie(c, "user_id") as Id<"storeFrontUser">;
+const guestId = getCookie(c, "guest_id") as Id<"guest">;
+```
+
+**Available Cookies**:
+
+- `organization_id` - Organization identifier
+- `store_id` - Store identifier
+- `user_id` - Logged-in storefront user
+- `guest_id` - Guest session identifier
+
+**When to use direct access**:
+
+- When you need to check if a user is authenticated vs guest
+- When you need to handle user and guest differently
+- When accessing specific cookies not covered by helpers
+
+## Storefront API Client Pattern
+
+### API Client File
+
+**Location**: `packages/storefront-webapp/src/api/[feature].ts`
+
+**Pattern**:
+
+```typescript
+import config from "@/config";
+import { FeatureType } from "@athena/webapp";
+
+export async function getFeature(): Promise<FeatureType> {
+  const response = await fetch(`${config.apiGateway.URL}/feature-name`, {
+    credentials: "include",
+  });
+
+  const res = await response.json();
+
+  if (!response.ok) {
+    throw new Error(res.error || "Error loading feature.");
+  }
+
+  return res.data;
+}
+
+export async function getFeatureById(id: string): Promise<FeatureType> {
+  const response = await fetch(`${config.apiGateway.URL}/feature-name/${id}`, {
+    credentials: "include",
+  });
+
+  const res = await response.json();
+
+  if (!response.ok) {
+    throw new Error(res.error || "Error loading feature.");
+  }
+
+  return res.data;
+}
+
+export async function createFeature(
+  data: Partial<FeatureType>
+): Promise<FeatureType> {
+  const response = await fetch(`${config.apiGateway.URL}/feature-name`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    credentials: "include",
+    body: JSON.stringify(data),
+  });
+
+  const res = await response.json();
+
+  if (!response.ok) {
+    throw new Error(res.error || "Error creating feature.");
+  }
+
+  return res.result;
+}
+```
+
+**Key Points**:
+
+- Always include `credentials: "include"` for cookie-based authentication
+- Use `config.apiGateway.URL` for the base URL
+- Handle errors by checking `response.ok`
+- Return parsed data from the JSON response
+
+### React Query Integration
+
+**Location**: `packages/storefront-webapp/src/lib/queries/[feature].ts`
+
+**Pattern**:
+
+```typescript
+import { getFeature, getFeatureById } from "@/api/feature";
+import { DEFAULT_STALE_TIME } from "@/lib/constants";
+import { queryOptions } from "@tanstack/react-query";
+import { useQueryEnabled } from "@/hooks/useQueryEnabled";
+
+export const useFeatureQueries = () => {
+  const queryEnabled = useQueryEnabled();
+
+  return {
+    all: () => ["feature"],
+
+    list: () =>
+      queryOptions({
+        queryKey: ["feature", "list"],
+        queryFn: () => getFeature(),
+        staleTime: DEFAULT_STALE_TIME,
+        enabled: queryEnabled,
+      }),
+
+    details: () => ["feature", "detail"],
+
+    detail: ({ id }: { id: string }) =>
+      queryOptions({
+        queryKey: ["feature", "detail", id],
+        queryFn: () => getFeatureById(id),
+        staleTime: DEFAULT_STALE_TIME,
+        enabled: queryEnabled,
+      }),
+  };
+};
+```
+
+**Query Key Pattern**: Follow the hierarchical pattern:
+
+- `["feature"]` - all feature queries
+- `["feature", "list"]` - list queries
+- `["feature", "detail"]` - all detail queries
+- `["feature", "detail", id]` - specific detail query
+
+This pattern enables efficient cache invalidation.
+
+### Usage in Components
+
+```typescript
+import { useFeatureQueries } from "@/lib/queries/feature";
+import { useQuery } from "@tanstack/react-query";
+
+export const FeatureComponent = () => {
+  const featureQueries = useFeatureQueries();
+  const { data: features, isLoading } = useQuery(featureQueries.list());
+
+  if (isLoading) return <Loading />;
+  if (!features) return null;
+
+  return <div>{/* Render features */}</div>;
+};
+```
+
+## HTTP Method Guidelines
+
+- **GET**: Retrieve data (use queries)
+- **POST**: Create new resources or complex queries (use mutations/actions)
+- **PATCH/PUT**: Update existing resources (use mutations)
+- **DELETE**: Remove resources (use mutations)
+
+## Error Handling Pattern
+
+**Backend**:
+
+```typescript
+if (!storeId) {
+  return c.json({ error: "Missing required field: storeId" }, 400);
+}
+
+try {
+  const result = await c.env.runQuery(api.feature.get, { storeId });
+  return c.json({ result });
+} catch (error) {
+  return c.json({ error: "Internal server error" }, 500);
+}
+```
+
+**Frontend**:
+
+```typescript
+const res = await response.json();
+
+if (!response.ok) {
+  throw new Error(res.error || "Error loading data.");
+}
+```
+
+## CORS Configuration
+
+Located in [http.ts](mdc:packages/athena-webapp/convex/http.ts):
+
+```typescript
+app.use(
+  "*",
+  cors({
+    origin: (origin) => origin,
+    allowMethods: ["OPTIONS", "GET", "POST", "PUT", "PATCH", "DELETE"],
+    credentials: true,
+  })
+);
+```
+
+**Important**: `credentials: true` is required for cookie-based authentication.
+
+## URL Path Conventions
+
+- Use **kebab-case** for URL paths: `/feature-name`, `/banner-message`
+- Use **plural nouns** for collections: `/products`, `/categories`
+- Use **singular nouns** for single resources: `/storefront`, `/checkout`
+- Use **IDs in path** for specific resources: `/products/:productId`
+- Use **query parameters** for filters: `/products?category=shoes&color=red`
+
+## Authentication Context
+
+The system uses cookies for authentication. All authentication is handled automatically via HTTP-only cookies set during login or store initialization.
+
+**Session cookies**:
+
+- `organization_id` - Current organization context
+- `store_id` - Current store context
+- `user_id` - Authenticated storefront user ID (only if logged in)
+- `guest_id` - Anonymous guest session ID (for non-logged-in users)
+
+**Best Practices**:
+
+1. **Always use helpers first**: Prefer `getStoreDataFromRequest()` and `getStorefrontUserFromRequest()` over direct cookie access
+2. **Validate required context**: Check if `storeId` or `userId` exist before proceeding
+3. **Return appropriate status codes**:
+   - `400` for missing required parameters
+   - `401` for unauthenticated requests requiring authentication
+   - `403` for authenticated but unauthorized access
+   - `404` for not found resources
+4. **Guest support**: Most storefront features should work for both users and guests using `getStorefrontUserFromRequest()`
+
+## Common Patterns
+
+### List with Filters
+
+```typescript
+featureRoutes.get("/", async (c) => {
+  const { storeId } = getStoreDataFromRequest(c);
+  const category = c.req.query("category");
+  const isVisible = c.req.query("isVisible");
+
+  const items = await c.env.runQuery(api.inventory.feature.getAll, {
+    storeId: storeId as Id<"store">,
+    category,
+    isVisible: isVisible === "true",
+  });
+
+  return c.json({ items });
+});
+```
+
+### Single Item by ID
+
+```typescript
+featureRoutes.get("/:id", async (c) => {
+  const id = c.req.param("id");
+
+  const item = await c.env.runQuery(api.inventory.feature.getById, {
+    id: id as Id<"feature">,
+  });
+
+  if (!item) {
+    return c.json({ error: "Item not found" }, 404);
+  }
+
+  return c.json({ item });
+});
+```
+
+### Create/Update
+
+```typescript
+featureRoutes.post("/", async (c) => {
+  const { storeId } = getStoreDataFromRequest(c);
+  const body = await c.req.json();
+
+  const result = await c.env.runMutation(api.inventory.feature.upsert, {
+    storeId: storeId as Id<"store">,
+    ...body,
+  });
+
+  return c.json({ result }, 201);
+});
+```
+
+### User-Specific Data (Storefront)
+
+```typescript
+featureRoutes.get("/my-data", async (c) => {
+  const { storeId } = getStoreDataFromRequest(c);
+  const userId = getStorefrontUserFromRequest(c);
+
+  if (!userId) {
+    return c.json({ error: "Authentication required" }, 401);
+  }
+
+  const data = await c.env.runQuery(api.storeFront.feature.getUserData, {
+    storeId: storeId as Id<"store">,
+    userId: userId as Id<"storeFrontUser"> | Id<"guest">,
+  });
+
+  return c.json({ data });
+});
+```
+
+### Dynamic Route with User Context
+
+Example: Get user's active bag
+
+```typescript
+bagRoutes.get("/:bagId", async (c) => {
+  const { bagId } = c.req.param();
+  const { storeId } = getStoreDataFromRequest(c);
+
+  // Special handling for "active" keyword
+  if (bagId === "active") {
+    const userId = getStorefrontUserFromRequest(c);
+
+    if (!userId) {
+      return c.json({ error: "User ID missing" }, 404);
+    }
+
+    const bag = await c.env.runQuery(api.storeFront.bag.getByUserId, {
+      storeFrontUserId: userId as Id<"storeFrontUser"> | Id<"guest">,
+    });
+
+    // Create bag if it doesn't exist
+    if (!bag) {
+      const newBag = await c.env.runMutation(api.storeFront.bag.create, {
+        storeFrontUserId: userId as Id<"storeFrontUser"> | Id<"guest">,
+        storeId: storeId as Id<"store">,
+      });
+
+      return c.json(newBag);
+    }
+
+    return c.json(bag);
+  }
+
+  // Regular bag ID lookup
+  const bag = await c.env.runQuery(api.storeFront.bag.getById, {
+    id: bagId as Id<"bag">,
+  });
+
+  return c.json(bag);
+});
+```
+
+### Distinguishing User vs Guest
+
+When you need to handle authenticated users differently:
+
+```typescript
+featureRoutes.get("/premium-content", async (c) => {
+  const { storeId } = getStoreDataFromRequest(c);
+  const userId = getCookie(c, "user_id") as Id<"storeFrontUser">;
+  const guestId = getCookie(c, "guest_id") as Id<"guest">;
+
+  // Premium content only for authenticated users
+  if (!userId) {
+    return c.json({ error: "Premium feature requires account" }, 403);
+  }
+
+  const content = await c.env.runQuery(api.storeFront.premium.getContent, {
+    userId: userId,
+    storeId: storeId as Id<"store">,
+  });
+
+  return c.json({ content });
+});
+```
+
+## Testing HTTP Routes
+
+Use tools like:
+
+- **Postman**: For manual API testing
+- **curl**: For command-line testing
+- **Browser DevTools**: For inspecting storefront requests
+
+Example curl command:
+
+```bash
+curl -X GET "https://your-app.convex.site/feature-name" \
+  -H "Content-Type: application/json" \
+  --cookie "convex_session=..."
+```
+
+## Security Considerations
+
+1. **Store Isolation**: Always filter by `storeId` from authenticated context
+2. **Input Validation**: Validate all request parameters and body data
+3. **Error Messages**: Don't expose sensitive information in error messages
+4. **Rate Limiting**: Consider implementing rate limiting for public endpoints
+5. **CORS**: Properly configure allowed origins in production
+
+## Reference Examples
+
+### Store-Scoped Routes (No User Auth)
+
+- Banner Message: [bannerMessage.ts](mdc:packages/athena-webapp/convex/http/domains/inventory/routes/bannerMessage.ts)
+- Products: [products.ts](mdc:packages/athena-webapp/convex/http/domains/inventory/routes/products.ts)
+- Colors: [colors.ts](mdc:packages/athena-webapp/convex/http/domains/inventory/routes/colors.ts)
+
+### User-Specific Routes (With Auth)
+
+- Bags: [bag.ts](mdc:packages/athena-webapp/convex/http/domains/storeFront/routes/bag.ts) - Uses `getStorefrontUserFromRequest()`
+- User Profile: [user.ts](mdc:packages/athena-webapp/convex/http/domains/storeFront/routes/user.ts) - Direct cookie access for user vs guest
+- Me Endpoint: [me.ts](mdc:packages/athena-webapp/convex/http/domains/storeFront/routes/me.ts) - Current user data
+- Orders: [onlineOrder.ts](mdc:packages/athena-webapp/convex/http/domains/storeFront/routes/onlineOrder.ts) - User-specific data
+
+### Helper Functions
+
+- Request Utilities: [utils.ts](mdc:packages/athena-webapp/convex/http/utils.ts) - Authentication helpers
