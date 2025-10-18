@@ -171,7 +171,7 @@ const OrderSummary = ({ order }: { order: any }) => {
           </div>
         )}
 
-        {!order.storeFrontUserId.toString().startsWith("guest") && (
+        {!order.discount && (
           <OrderPointsDisplay
             orderId={order._id}
             hasVerifiedPayment={order.hasVerifiedPayment}
@@ -510,7 +510,7 @@ const OrderDetail = () => {
 
         <OrderStatusSection data={data} />
 
-        {isGuest && data && data.hasVerifiedPayment && (
+        {isGuest && data && data.hasVerifiedPayment && !data.discount && (
           <GuestRewardsPrompt
             orderAmount={data.amount}
             orderEmail={data.customerDetails.email}

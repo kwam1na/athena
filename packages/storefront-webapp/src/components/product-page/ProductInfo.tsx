@@ -110,7 +110,7 @@ export function ProductInfo({
             <p className="text-md md:text-2xl line-through text-muted-foreground">
               {formatter.format(originalPrice)}
             </p>
-            <p className="text-md md:text-2xl font-medium">
+            <p className="text-md md:text-2xl">
               {formatter.format(discountedPrice)}
             </p>
           </div>
@@ -121,7 +121,7 @@ export function ProductInfo({
             <p className="text-md md:text-2xl line-through text-muted-foreground">
               {formatter.format(originalPrice)}
             </p>
-            <p className="text-md md:text-2xl font-medium">Free</p>
+            <p className="text-md md:text-2xl">Free</p>
           </div>
         )}
       </div>

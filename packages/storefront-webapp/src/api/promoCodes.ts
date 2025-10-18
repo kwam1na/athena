@@ -63,3 +63,28 @@ export async function getPromoCodeItems(): Promise<PromoCodeItem[]> {
 
   return res;
 }
+
+export interface RedeemedPromoCode {
+  _id: string;
+  _creationTime: number;
+  promoCodeId: string;
+  storeFrontUserId: string;
+}
+
+export async function getRedeemedPromoCodes(): Promise<RedeemedPromoCode[]> {
+  const response = await fetch(
+    `${config.apiGateway.URL}/stores/redeemedPromoCodes`,
+    {
+      method: "GET",
+      credentials: "include",
+    }
+  );
+
+  const res = await response.json();
+
+  if (!response.ok) {
+    throw new Error("Error getting redeemed promo codes");
+  }
+
+  return res;
+}

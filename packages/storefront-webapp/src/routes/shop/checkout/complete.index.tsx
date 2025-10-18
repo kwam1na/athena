@@ -187,7 +187,7 @@ export const CheckoutComplete = () => {
 
         <OrderDetails session={activeSession} delayAnimation />
 
-        {isGuest && (
+        {isGuest && !activeSession.discount && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{

@@ -36,6 +36,7 @@ import { postAnalytics } from "@/api/analytics";
 import { useTrackEvent } from "@/hooks/useTrackEvent";
 import { useDiscountCodeAlert } from "@/hooks/useDiscountCodeAlert";
 import { WelcomeBackModal } from "../ui/modals/WelcomeBackModal";
+import { useProductDiscount } from "@/hooks/useProductDiscount";
 
 const PendingItem = ({ session, count }: { session: any; count: number }) => {
   return (
@@ -78,8 +79,220 @@ const PendingItem = ({ session, count }: { session: any; count: number }) => {
   );
 };
 
+type BagItemWithDiscountProps = {
+  item: BagItem;
+  index: number;
+  bagAction: ShoppingBagAction;
+  isNavbarShowing: boolean;
+  isUpdatingBag: boolean;
+  formatter: Intl.NumberFormat;
+  unavailableProducts: any[];
+  onUpdateBag: (params: { quantity: number; itemId: string }) => void;
+  onMoveToSaved: (item: BagItem) => Promise<void>;
+  onDelete: (itemId: string) => Promise<void>;
+  onGetDiscountedTotal: (discountedAmount: number) => void;
+};
+
+const BagItemWithDiscount = ({
+  item,
+  index,
+  bagAction,
+  isNavbarShowing,
+  isUpdatingBag,
+  formatter,
+  unavailableProducts,
+  onUpdateBag,
+  onMoveToSaved,
+  onDelete,
+  onGetDiscountedTotal,
+}: BagItemWithDiscountProps) => {
+  const discountInfo = useProductDiscount(item.productSkuId, item.price);
+
+  // Calculate item total with discount
+  const itemPrice = discountInfo.hasDiscount
+    ? discountInfo.discountedPrice
+    : item.price || 0;
+  const itemTotal = itemPrice * item.quantity;
+
+  // Report discounted total to parent
+  useEffect(() => {
+    onGetDiscountedTotal(itemTotal);
+  }, [itemTotal]);
+
+  const unavailableSku = unavailableProducts.find(
+    (p) => p.productSkuId == item.productSkuId
+  );
+
+  let priceLabel = "Product unavailable";
+  let showDiscount = discountInfo.hasDiscount && item.price && item.price > 0;
+
+  if (item.price && item.price > 0) {
+    if (showDiscount) {
+      priceLabel = formatter.format(
+        discountInfo.discountedPrice * item.quantity
+      );
+    } else {
+      priceLabel = formatter.format(item.price * item.quantity);
+    }
+  } else if (discountInfo.hasDiscount && discountInfo.discountedPrice === 0) {
+    priceLabel = "Free";
+    showDiscount = true;
+  }
+
+  return (
+    <motion.div key={item._id} layout={isNavbarShowing} className="space-y-4">
+      <div className="relative flex space-x-4">
+        <motion.div
+          className="absolute inset-0 flex px-16 items-center pointer-events-none"
+          variants={{
+            exit: (bagAction: ShoppingBagAction) => ({
+              opacity: 0,
+              x: bagAction == "deleting-from-bag" ? 0 : -24,
+            }),
+          }}
+          exit={"exit"}
+          transition={{ duration: 0.4, delay: 0.1 }}
+        >
+          {bagAction == "deleting-from-bag" ? (
+            <Trash2 className="text-gray-300 w-16 h-16" />
+          ) : (
+            <HeartIconFilled width={56} height={56} />
+          )}
+        </motion.div>
+
+        <motion.div
+          exit="exit"
+          variants={{
+            exit: (bagAction: ShoppingBagAction) => ({
+              opacity: 0,
+              x: bagAction == "deleting-from-bag" ? 0 : -24,
+            }),
+          }}
+          className="relative z-10 flex gap-8 items-center"
+        >
+          <Link
+            key={index}
+            to={"/shop/product/$productSlug"}
+            params={() => ({ productSlug: item.productId })}
+            search={{
+              variant: item.productSku,
+              origin: "shopping_bag",
+            }}
+            className="space-y-4"
+          >
+            <ImageWithFallback
+              src={(item as any).productImage || placeholder}
+              alt={(item as any).productName || "product image"}
+              className="w-32 h-32 lg:w-40 lg:h-40 object-cover rounded-lg"
+            />
+          </Link>
+
+          <div className="flex-1 space-y-2 lg:space-y-6 text-sm">
+            <div className="flex flex-col gap-2 lg:gap-4">
+              <h2 className="font-medium">{item && getProductName(item)}</h2>
+
+              {showDiscount && item.price && item.price > 0 ? (
+                <div className="flex items-center gap-2">
+                  <p className="text-xs text-muted-foreground line-through">
+                    {formatter.format(item.price * item.quantity)}
+                  </p>
+                  <p className="text-xs font-medium text-accent2">
+                    {priceLabel}
+                  </p>
+                  {discountInfo.discount && (
+                    <span className="text-xs bg-accent5 text-accent2 px-2 py-0.5 rounded">
+                      {discountInfo.discount.type === "percentage"
+                        ? `${discountInfo.discount.value}% off`
+                        : `${formatter.format(discountInfo.discount.value)} off`}
+                    </span>
+                  )}
+                </div>
+              ) : priceLabel === "Free" ? (
+                <div className="flex items-center gap-2 text-xs">
+                  <p className="text-muted-foreground line-through">
+                    {formatter.format((item.price || 0) * item.quantity)}
+                  </p>
+                  <p className="text-xs font-medium text-accent2">Free</p>
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">{priceLabel}</p>
+              )}
+
+              <select
+                value={item.quantity}
+                onChange={(e) =>
+                  onUpdateBag({
+                    quantity: parseInt(e.target.value),
+                    itemId: item._id,
+                  })
+                }
+                disabled={!item.price}
+                className={`w-12 py-2 bg-background text-xs ${isUpdatingBag ? "pointer-events-none" : ""}`}
+              >
+                {[...Array(10)].map((_, i) => (
+                  <option key={i + 1} value={i + 1}>
+                    {i + 1}
+                  </option>
+                ))}
+              </select>
+
+              {unavailableSku && (
+                <motion.p className="text-xs text-destructive">
+                  {unavailableSku.available === 0
+                    ? "Currently unavailable"
+                    : `Only ${unavailableSku.available} left`}
+                </motion.p>
+              )}
+            </div>
+
+            <div className="flex gap-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                className={`${isUpdatingBag ? "pointer-events-none" : ""}`}
+                disabled={!item.price}
+                onClick={async () => {
+                  await onMoveToSaved(item);
+                }}
+              >
+                <Heart className="h-4 w-4" />
+              </Button>
+
+              <Button
+                variant="ghost"
+                size="icon"
+                className={`${isUpdatingBag ? "pointer-events-none" : ""}`}
+                onClick={async () => {
+                  await onDelete(item._id);
+                }}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        </motion.div>
+      </div>
+
+      {Boolean(item.otherBagsWithSku && item.otherBagsWithSku >= 3) && (
+        <div className="flex items-center gap-1 px-4 text-accent2">
+          <motion.div>
+            <HeartIconFilled width={12} height={12} />
+          </motion.div>
+          <p className="text-xs font-medium">
+            <b>High demand:</b> {item.otherBagsWithSku} others have this in
+            their bag
+          </p>
+        </div>
+      )}
+    </motion.div>
+  );
+};
+
 export default function ShoppingBag() {
   const [bagAction, setBagAction] = useState<ShoppingBagAction>("idle");
+  const [discountedItemTotals, setDiscountedItemTotals] = useState<
+    Record<string, number>
+  >({});
   const { formatter, userId, isNavbarShowing, store } = useStoreContext();
 
   const { setNavBarLayout, setAppLocation } = useNavigationBarContext();
@@ -125,9 +338,15 @@ export default function ShoppingBag() {
     openDiscountModal,
   } = useDiscountCodeAlert();
 
-  const total = bagSubtotal;
-
   const isBagEmpty = bag?.items?.length === 0;
+
+  // Calculate total with discounts
+  const totalWithDiscounts = Object.values(discountedItemTotals).reduce(
+    (sum, itemTotal) => sum + itemTotal,
+    0
+  );
+
+  const total = totalWithDiscounts > 0 ? totalWithDiscounts : bagSubtotal;
 
   const cellVariants = {
     exit: (bagAction: ShoppingBagAction) => ({
@@ -173,7 +392,7 @@ export default function ShoppingBag() {
         obtainCheckoutSession({
           bagItems,
           bagId: bag?._id as string,
-          bagSubtotal: bagSubtotal * 100,
+          bagSubtotal: bagSubtotal * 100, // Use original bag subtotal without discounts
         }),
         postAnalytics({
           action: "initiated_checkout",
@@ -218,7 +437,47 @@ export default function ShoppingBag() {
     pendingSessions && pendingSessions.length > 0
   );
 
-  const potentialRewards = Math.floor(bagSubtotal * 10);
+  const potentialRewards = Math.floor(total * 10);
+
+  const handleUpdateDiscountedTotal =
+    (itemId: string) => (discountedAmount: number) => {
+      setDiscountedItemTotals((prev) => ({
+        ...prev,
+        [itemId]: discountedAmount,
+      }));
+    };
+
+  const handleMoveToSaved = async (item: BagItem) => {
+    setBagAction("moving-to-saved-bag");
+    await Promise.all([
+      moveItemFromBagToSaved(item),
+      postAnalytics({
+        action: "added_product_to_saved",
+        origin: "shopping_bag",
+        data: {
+          product: item.productId,
+          productSku: item.productSku,
+          productImageUrl: item.productImage,
+        },
+      }),
+    ]);
+  };
+
+  const handleDeleteItem = async (itemId: string) => {
+    setBagAction("deleting-from-bag");
+    const item = bag?.items.find((i: BagItem) => i._id === itemId);
+    await Promise.all([
+      deleteItemFromBag(itemId),
+      postAnalytics({
+        action: "removed_product_from_bag",
+        data: {
+          product: item?.productId,
+          productSku: item?.productSku,
+          productImageUrl: item?.productImage,
+        },
+      }),
+    ]);
+  };
 
   return (
     <FadeIn className="container mx-auto max-w-[1024px] px-6 xl:px-0 space-y-8 lg:space-y-24 py-8">
@@ -311,188 +570,22 @@ export default function ShoppingBag() {
         <div className="grid grid-cols-1 gap-8 pb-56">
           <div className="md:col-span-2 space-y-24">
             <AnimatePresence initial={false} custom={bagAction}>
-              {bag?.items.map((item: BagItem, index: number) => {
-                const unavailableSku = isSkuUnavailable(item.productSkuId);
-
-                const isDiscounted = promoCodeItems?.some(
-                  (promoCodeItem) =>
-                    promoCodeItem?.productSku?._id === item.productSkuId
-                );
-
-                let priceLabel = "Product unavailable";
-
-                if (item.price) {
-                  priceLabel = formatter.format(item.price * item.quantity);
-                } else if (isDiscounted && item.price == 0) {
-                  priceLabel = "Free";
-                }
-
-                return (
-                  <motion.div
-                    key={item._id}
-                    layout={isNavbarShowing}
-                    className="space-y-4"
-                  >
-                    <div className="relative flex space-x-4">
-                      <motion.div
-                        className="absolute inset-0 flex px-16 items-center pointer-events-none"
-                        variants={backgroundSvgVariants}
-                        exit={"exit"}
-                        transition={{ duration: 0.4, delay: 0.1 }}
-                      >
-                        {bagAction == "deleting-from-bag" ? (
-                          <Trash2 className="text-gray-300 w-16 h-16" />
-                        ) : (
-                          <HeartIconFilled width={56} height={56} />
-                        )}
-                      </motion.div>
-
-                      <motion.div
-                        exit="exit"
-                        variants={cellVariants}
-                        className="relative z-10 flex gap-8 items-center"
-                      >
-                        <Link
-                          key={index}
-                          to={"/shop/product/$productSlug"}
-                          params={() => ({ productSlug: item.productId })}
-                          search={{
-                            variant: item.productSku,
-                            origin: "shopping_bag",
-                          }}
-                          className="space-y-4"
-                        >
-                          <ImageWithFallback
-                            src={(item as any).productImage || placeholder}
-                            alt={(item as any).productName || "product image"}
-                            className="w-32 h-32 lg:w-40 lg:h-40 object-cover rounded-lg"
-                          />
-                        </Link>
-
-                        <div className="flex-1 space-y-2 lg:space-y-6 text-sm">
-                          <div className="flex flex-col gap-2 lg:gap-4">
-                            <h2 className="font-medium">
-                              {item && getProductName(item)}
-                            </h2>
-                            {priceLabel != "Free" && (
-                              <p className="text-xs text-muted-foreground">
-                                {priceLabel}
-                              </p>
-                            )}
-                            {priceLabel == "Free" && (
-                              <div className="flex items-center gap-2 text-xs">
-                                <p className="text-muted-foreground line-through">
-                                  GHS 180
-                                </p>
-                                <p className="text-xs">Free</p>
-                              </div>
-                            )}
-                            <select
-                              value={item.quantity}
-                              onChange={(e) =>
-                                updateBag({
-                                  quantity: parseInt(e.target.value),
-                                  itemId: item._id,
-                                })
-                              }
-                              disabled={!item.price}
-                              className={`w-12 py-2 bg-background text-xs ${isUpdatingBag ? "pointer-events-none" : ""}`}
-                            >
-                              {[...Array(10)].map((_, i) => (
-                                <option key={i + 1} value={i + 1}>
-                                  {i + 1}
-                                </option>
-                              ))}
-                            </select>
-
-                            {unavailableSku && (
-                              <motion.p
-                                // variants={cellVariants}
-                                className="text-xs text-destructive"
-                              >
-                                {unavailableSku.available === 0
-                                  ? "Currently unavailable"
-                                  : `Only ${unavailableSku.available} left`}
-                              </motion.p>
-                            )}
-                          </div>
-
-                          <div className="flex gap-2">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className={`${isUpdatingBag ? "pointer-events-none" : ""}`}
-                              disabled={!item.price}
-                              onClick={async () => {
-                                setBagAction("moving-to-saved-bag");
-                                await Promise.all([
-                                  moveItemFromBagToSaved(item),
-                                  postAnalytics({
-                                    action: "added_product_to_saved",
-                                    origin: "shopping_bag",
-                                    data: {
-                                      product: item.productId,
-                                      productSku: item.productSku,
-                                      productImageUrl: item.productImage,
-                                    },
-                                  }),
-                                ]);
-                              }}
-                            >
-                              <Heart className="h-4 w-4" />
-                            </Button>
-
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className={`${isUpdatingBag ? "pointer-events-none" : ""}`}
-                              onClick={async () => {
-                                setBagAction("deleting-from-bag");
-                                await Promise.all([
-                                  deleteItemFromBag(item._id),
-                                  postAnalytics({
-                                    action: "removed_product_from_bag",
-                                    data: {
-                                      product: item.productId,
-                                      productSku: item.productSku,
-                                      productImageUrl: item.productImage,
-                                    },
-                                  }),
-                                ]);
-                              }}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </div>
-                      </motion.div>
-                    </div>
-
-                    {Boolean(
-                      item.otherBagsWithSku && item.otherBagsWithSku >= 3
-                    ) && (
-                      <div className="flex items-center gap-1 px-4 text-accent2">
-                        <motion.div
-                        // animate={{
-                        //   scale: [1, 1.1, 1],
-                        // }}
-                        // transition={{
-                        //   duration: 2,
-                        //   repeat: Infinity,
-                        //   ease: "easeInOut",
-                        // }}
-                        >
-                          <HeartIconFilled width={12} height={12} />
-                        </motion.div>
-                        <p className="text-xs font-medium">
-                          <b>High demand:</b> {item.otherBagsWithSku} others
-                          have this in their bag
-                        </p>
-                      </div>
-                    )}
-                  </motion.div>
-                );
-              })}
+              {bag?.items.map((item: BagItem, index: number) => (
+                <BagItemWithDiscount
+                  key={item._id}
+                  item={item}
+                  index={index}
+                  bagAction={bagAction}
+                  isNavbarShowing={isNavbarShowing}
+                  isUpdatingBag={isUpdatingBag}
+                  formatter={formatter}
+                  unavailableProducts={unavailableProducts}
+                  onUpdateBag={updateBag}
+                  onMoveToSaved={handleMoveToSaved}
+                  onDelete={handleDeleteItem}
+                  onGetDiscountedTotal={handleUpdateDiscountedTotal(item._id)}
+                />
+              ))}
             </AnimatePresence>
           </div>
 

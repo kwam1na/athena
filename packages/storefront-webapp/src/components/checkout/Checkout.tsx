@@ -1,7 +1,7 @@
 import { CheckoutProvider, useCheckout } from "./CheckoutProvider";
 import { AnimatePresence, motion } from "framer-motion";
 import BagSummary from "./BagSummary";
-import { useEffect, useState } from "react";
+import { act, useEffect, useState } from "react";
 import MobileBagSummary from "./MobileBagSummary";
 import { CheckoutForm } from "./CheckoutForm";
 import { TrustSignals } from "../communication/TrustSignals";
@@ -9,13 +9,15 @@ import { TrustSignals } from "../communication/TrustSignals";
 const MainComponent = () => {
   const { activeSession } = useCheckout();
 
+  console.log("active session", activeSession);
+
   useEffect(() => {
     const needsVerification =
       activeSession.externalReference &&
       activeSession.hasCompletedPayment &&
       !activeSession.placedOrderId;
 
-    if (needsVerification) {
+    if (needsVerification || activeSession.hasCompletedPayment) {
       window.open(
         `/shop/checkout/verify?reference=${activeSession.externalReference}`,
         "_self"

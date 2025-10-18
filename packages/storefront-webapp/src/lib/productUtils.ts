@@ -32,7 +32,7 @@ export function getProductName(
  * Checks if a product is sold out
  */
 export function isSoldOut(sku: ProductSku): boolean {
-  return sku.inventoryCount === 0;
+  return sku.inventoryCount === 0 || sku.quantityAvailable === 0;
 }
 
 /**

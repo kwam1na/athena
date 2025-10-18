@@ -1,6 +1,10 @@
 import { queryOptions } from "@tanstack/react-query";
 import { useQueryEnabled } from "@/hooks/useQueryEnabled";
-import { getPromoCodeItems, getPromoCodes } from "@/api/promoCodes";
+import {
+  getPromoCodeItems,
+  getPromoCodes,
+  getRedeemedPromoCodes,
+} from "@/api/promoCodes";
 
 export const usePromoCodesQueries = () => {
   const queryEnabled = useQueryEnabled();
@@ -18,6 +22,13 @@ export const usePromoCodesQueries = () => {
       queryOptions({
         queryKey: ["promoCodeItems"],
         queryFn: () => getPromoCodeItems(),
+        enabled: queryEnabled,
+        staleTime: 0.15 * 60 * 1000,
+      }),
+    getRedeemed: () =>
+      queryOptions({
+        queryKey: ["redeemedPromoCodes"],
+        queryFn: () => getRedeemedPromoCodes(),
         enabled: queryEnabled,
         staleTime: 0.15 * 60 * 1000,
       }),

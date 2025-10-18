@@ -12,6 +12,7 @@ import { z } from "zod";
 import NotFound from "@/components/states/not-found/NotFound";
 import { MaintenanceMode } from "@/components/states/maintenance/Maintenance";
 import { useAuth } from "@/hooks/useAuth";
+import { PostHogProvider } from "posthog-js/react";
 import {
   NavigationBarProvider,
   useNavigationBarContext,
@@ -77,9 +78,23 @@ function RootComponent() {
 
 function Body() {
   return (
-    <NavigationBarProvider>
-      <RootComponent />
-    </NavigationBarProvider>
+    <PostHogProvider
+      apiKey={import.meta.env.VITE_PUBLIC_POSTHOG_KEY}
+      options={{
+        api_host: import.meta.env.VITE_PUBLIC_POSTHOG_HOST,
+        defaults: "2025-05-24",
+        capture_exceptions: false, // Disable exception capturing to reduce logging
+        debug: false, // Disable debug logging
+        disable_session_recording: true, // Disable session recording to stop snapshot events
+        autocapture: false, // Disable automatic event capture
+        capture_pageview: false, // Disable automatic pageview capture
+        capture_pageleave: false, // Disable page leave events
+      }}
+    >
+      <NavigationBarProvider>
+        <RootComponent />
+      </NavigationBarProvider>
+    </PostHogProvider>
   );
 }
 

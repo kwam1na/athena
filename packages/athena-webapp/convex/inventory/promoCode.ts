@@ -408,3 +408,25 @@ export const updateQuantityClaimedForMiniStraightener = internalMutation({
     return { success: true };
   },
 });
+
+export const getRedeemedPromoCodesForUser = query({
+  args: {
+    storeFrontUserId: v.union(v.id("storeFrontUser"), v.id("guest")),
+  },
+  returns: v.array(
+    v.object({
+      _id: v.id("redeemedPromoCode"),
+      _creationTime: v.number(),
+      promoCodeId: v.id("promoCode"),
+      storeFrontUserId: v.union(v.id("storeFrontUser"), v.id("guest")),
+    })
+  ),
+  handler: async (ctx, args) => {
+    const redeemedPromoCodes = await ctx.db
+      .query("redeemedPromoCode")
+      .filter((q) => q.eq(q.field("storeFrontUserId"), args.storeFrontUserId))
+      .collect();
+
+    return redeemedPromoCodes;
+  },
+});

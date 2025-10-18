@@ -375,7 +375,7 @@ export const verifyPayment = action({
             `Reference: ${args.externalReference}`
         );
       } else {
-        console.error(
+        console.log(
           `Unable to verify payment. [session: ${session?._id}, order: ${order?._id}, customer: ${args.storeFrontUserId}, reference: ${args.externalReference}]`
         );
         console.info(

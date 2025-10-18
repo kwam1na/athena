@@ -39,7 +39,8 @@ const Verify = () => {
       if (
         data.verified ||
         session?.placedOrderId ||
-        session?.hasVerifiedPayment
+        session?.hasVerifiedPayment ||
+        !data.verified
       )
         navigate({ to: "/shop/checkout/complete" });
     }
@@ -47,10 +48,7 @@ const Verify = () => {
 
   if (isLoading || session === undefined) return null;
 
-  if (
-    !externalReference ||
-    (data?.verified === false && !session?.hasCompletedPayment)
-  ) {
+  if (!externalReference) {
     return <UnableToVerifyCheckoutPayment />;
   }
 

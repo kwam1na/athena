@@ -250,7 +250,7 @@ const PODConfirmationContent = () => {
 
         <PODOrderDetails session={session} />
 
-        {isGuest && (
+        {isGuest && !session.discount && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{

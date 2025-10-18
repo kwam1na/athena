@@ -46,24 +46,25 @@ storeRoutes.get("/promoCodeItems", async (c) => {
   }
 });
 
-storeRoutes.get("/:storeId", async (c) => {
-  const { storeId } = c.req.param();
-  const organizationId = c.req.param("organizationId");
+storeRoutes.get("/redeemedPromoCodes", async (c) => {
+  const userId = getStorefrontUserFromRequest(c);
 
-  if (!organizationId) {
-    return c.json({ error: "Organization id missing" }, 404);
+  if (!userId) {
+    return c.json({ error: "Customer id missing" }, 404);
   }
 
-  const store = await c.env.runQuery(api.inventory.stores.getByIdOrSlug, {
-    identifier: storeId,
-    organizationId: organizationId as Id<"organization">,
-  });
+  try {
+    const res = await c.env.runQuery(
+      api.inventory.promoCode.getRedeemedPromoCodesForUser,
+      {
+        storeFrontUserId: userId as Id<"storeFrontUser"> | Id<"guest">,
+      }
+    );
 
-  if (!store) {
-    return c.json({ error: "Store with identifier not found" }, 400);
+    return c.json(res);
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, 400);
   }
-
-  return c.json(store);
 });
 
 storeRoutes.post("/promoCodes", async (c) => {
@@ -86,6 +87,26 @@ storeRoutes.post("/promoCodes", async (c) => {
   } catch (e) {
     return c.json({ error: (e as Error).message }, 400);
   }
+});
+
+storeRoutes.get("/:storeId", async (c) => {
+  const { storeId } = c.req.param();
+  const organizationId = c.req.param("organizationId");
+
+  if (!organizationId) {
+    return c.json({ error: "Organization id missing" }, 404);
+  }
+
+  const store = await c.env.runQuery(api.inventory.stores.getByIdOrSlug, {
+    identifier: storeId,
+    organizationId: organizationId as Id<"organization">,
+  });
+
+  if (!store) {
+    return c.json({ error: "Store with identifier not found" }, 400);
+  }
+
+  return c.json(store);
 });
 
 export { storeRoutes };

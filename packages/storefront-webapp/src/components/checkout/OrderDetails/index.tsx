@@ -5,6 +5,7 @@ import { useStoreContext } from "@/contexts/StoreContext";
 import { motion } from "framer-motion";
 import { useAuth } from "@/hooks/useAuth";
 import { Award } from "lucide-react";
+import { useCheckout } from "../CheckoutProvider";
 
 export const PickupDetails = ({ session }: { session: any }) => {
   if (session.deliveryMethod == "pickup") {
@@ -43,12 +44,12 @@ export const PaymentDetails = ({ session }: { session?: CheckoutSession }) => {
   }
 
   const { formatter } = useStoreContext();
+  const { checkoutState } = useCheckout();
 
   const { paymentMethod, discount } = session;
 
-  const sessionWithItems = session as CheckoutSession & { items?: any[] };
   const items =
-    sessionWithItems.items?.map((item: any) => ({
+    checkoutState.bag?.items?.map((item: any) => ({
       productSkuId: item.productSkuId,
       quantity: item.quantity,
       price: item.price,
@@ -59,9 +60,12 @@ export const PaymentDetails = ({ session }: { session?: CheckoutSession }) => {
     discount: discount as any,
     deliveryFee: session.deliveryFee,
     subtotal: session.amount,
+    isInCents: true,
   });
 
   const discountValue = getDiscountValue(items, discount as any);
+  const originalAmount = session.amount + (session.deliveryFee || 0);
+  const hasDiscount = discount && discountValue > 0;
 
   const text =
     paymentMethod?.channel == "mobile_money"
@@ -73,6 +77,9 @@ export const PaymentDetails = ({ session }: { session?: CheckoutSession }) => {
       ? `${discount.value}%`
       : `${formatter.format(discountValue)}`;
 
+  const discountSpan =
+    discount?.span == "entire-order" ? "entire order" : "select items";
+
   const potentialRewards = Math.floor(session.amount / 10);
 
   return (
@@ -81,10 +88,21 @@ export const PaymentDetails = ({ session }: { session?: CheckoutSession }) => {
 
       <div className="space-y-2">
         <div className="flex items-center gap-2">
-          <p className="text-sm">{formatter.format(amountCharge / 100)}</p>
+          {hasDiscount ? (
+            <div className="flex items-center gap-2">
+              <p className="text-sm text-muted-foreground line-through">
+                {formatter.format(originalAmount / 100)}
+              </p>
+              <p className="text-sm font-medium">
+                {formatter.format(amountCharge / 100)}
+              </p>
+            </div>
+          ) : (
+            <p className="text-sm">{formatter.format(amountCharge / 100)}</p>
+          )}
           {discount && (
             <p className="text-sm font-medium">
-              {`${discount?.code} - ${discountText}`} off entire order
+              {`${discount?.code} - ${discountText}`} off {discountSpan}
             </p>
           )}
         </div>

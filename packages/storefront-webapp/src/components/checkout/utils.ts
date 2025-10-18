@@ -14,14 +14,10 @@ export type BagItem = {
  */
 export const getDiscountValue = (
   items: BagItem[],
-  discount?: Discount | null
+  discount?: Discount | null,
+  isInCents?: boolean
 ): number => {
   if (!discount) return 0;
-
-  // If totalDiscount is pre-calculated (from backend), use it directly
-  if (discount.totalDiscount !== undefined) {
-    return discount.totalDiscount;
-  }
 
   // Handle entire-order discounts
   if (discount.span === "entire-order") {
@@ -31,10 +27,10 @@ export const getDiscountValue = (
     );
 
     if (discount.type === "percentage") {
-      return subtotal * (discount.value / 100);
+      return subtotal * (discount.value / 100) * (isInCents ? 100 : 1);
     }
     // For amount type, apply discount value directly
-    return discount.value;
+    return discount.value * (isInCents ? 100 : 1);
   }
 
   // Handle selected-products discounts
@@ -45,11 +41,15 @@ export const getDiscountValue = (
       .reduce((sum, item) => sum + item.price * item.quantity, 0);
 
     if (discount.type === "percentage") {
-      return eligibleItemsSubtotal * (discount.value / 100);
+      return (
+        eligibleItemsSubtotal * (discount.value / 100) * (isInCents ? 100 : 1)
+      );
     }
     // For amount type, apply discount value to eligible items
     // Note: amount discounts are typically applied once, not per item
-    return Math.min(discount.value, eligibleItemsSubtotal);
+    return (
+      Math.min(discount.value, eligibleItemsSubtotal) * (isInCents ? 100 : 1)
+    );
   }
 
   return 0;
@@ -60,12 +60,14 @@ export const getOrderAmount = ({
   discount,
   deliveryFee,
   subtotal,
+  isInCents,
 }: {
   items: BagItem[];
   discount?: Discount | null;
   deliveryFee: number | null;
   subtotal: number;
+  isInCents?: boolean;
 }) => {
-  const discountValue = getDiscountValue(items, discount);
+  const discountValue = getDiscountValue(items, discount, isInCents);
   return subtotal - discountValue + (deliveryFee || 0);
 };
