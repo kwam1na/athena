@@ -6,10 +6,10 @@ import { BestSellers } from "./BestSellers";
 import { FeaturedSection } from "./FeaturedSection";
 import { api } from "~/convex/_generated/api";
 import { EmptyState } from "../states/empty/empty-state";
-import { Store, TvMinimalPlay } from "lucide-react";
+import { Store } from "lucide-react";
 import { ShopLookSection } from "./ShopLook";
 import { FadeIn } from "../common/FadeIn";
-import { LandingPageReelVersion } from "./LandingPageReelVersion";
+import { HeroSectionTabs } from "./HeroSectionTabs";
 import { BannerMessageEditor } from "./BannerMessageEditor";
 
 export default function Home() {
@@ -42,19 +42,8 @@ export default function Home() {
       <FadeIn>
         {hasProducts && (
           <div className="container mx-auto space-y-8 py-8">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-4">
-                <div className="w-[228px]">
-                  <LandingPageReelVersion />
-                </div>
-
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <TvMinimalPlay className="h-4 w-4" />
-                  <p className="text-sm">
-                    This is the video that loops on the landing page
-                  </p>
-                </div>
-              </div>
+            <div className="grid grid-cols-2 gap-80">
+              <HeroSectionTabs />
 
               <BannerMessageEditor storeId={activeStore._id} />
             </div>

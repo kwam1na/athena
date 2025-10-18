@@ -23,6 +23,12 @@ export const LandingPageReelVersion = () => {
     api.inventory.stores.updateLandingPageReel
   );
 
+  useEffect(() => {
+    if (activeStore) {
+      setReelVersion(activeStore?.config?.landingPageReelVersion);
+    }
+  }, [activeStore]);
+
   const hlsUrl = `${config.hlsURL}/stores/${activeStore?._id}/assets/hero/v${reelVersion}/reel.m3u8`;
 
   const handleUpdateConfig = async () => {
@@ -62,12 +68,6 @@ export const LandingPageReelVersion = () => {
     }
   };
 
-  useEffect(() => {
-    if (activeStore) {
-      setReelVersion(activeStore?.config?.landingPageReelVersion);
-    }
-  }, [activeStore]);
-
   // Determine if the save button should be disabled
   const isButtonDisabled =
     // Disable if no reel version is selected
@@ -80,7 +80,7 @@ export const LandingPageReelVersion = () => {
     updatedReelVersion === reelVersion;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-8">
       <div className="flex items-center gap-2">
         <div className="flex items-center px-1 gap-2 border border-input rounded-md">
           <p className="text-sm pl-2 w-[116px] text-muted-foreground">
@@ -108,7 +108,7 @@ export const LandingPageReelVersion = () => {
           Save
         </LoadingButton>
       </div>
-      <VideoPlayer hlsUrl={hlsUrl} />
+      {activeStore && <VideoPlayer hlsUrl={hlsUrl} />}
     </div>
   );
 };

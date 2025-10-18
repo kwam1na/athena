@@ -175,8 +175,6 @@ export default function NavigationBar() {
   const mainWrapperClass = getMainWrapperClass(navBarLayout);
   const navBGClass = getNavBGClass(!!activeMenu, navBarLayout, appLocation);
 
-  console.log(navBarLayout);
-
   return (
     <div className="flex flex-col">
       <motion.div
