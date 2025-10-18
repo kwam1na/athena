@@ -18,9 +18,9 @@ export const HeroSectionTabs: React.FC = () => {
     activeStore?.config?.homeHero?.headerImage
   );
 
-  const [heroDisplayType, setHeroDisplayType] = useState<"reel" | "image">(
-    (activeStore?.config?.homeHero?.displayType as "reel" | "image") || "reel"
-  );
+  const [heroDisplayType, setHeroDisplayType] = useState<
+    "reel" | "image" | undefined
+  >(activeStore?.config?.homeHero?.displayType as "reel" | "image");
 
   const [contentOptions, setContentOptions] = useState<{
     showOverlay: boolean;
@@ -230,42 +230,44 @@ export const HeroSectionTabs: React.FC = () => {
         </div>
       </div>
 
-      <Tabs defaultValue="reel" className="flex flex-col gap-4">
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="reel" className="flex items-center gap-2">
-            <TvMinimalPlay className="h-4 w-4" />
-            Landing Page Reel
-          </TabsTrigger>
-          <TabsTrigger value="hero" className="flex items-center gap-2">
-            <Image className="h-4 w-4" />
-            Hero Header Image
-          </TabsTrigger>
-        </TabsList>
+      {heroDisplayType && (
+        <Tabs defaultValue={heroDisplayType} className="flex flex-col gap-4">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="reel" className="flex items-center gap-2">
+              <TvMinimalPlay className="h-4 w-4" />
+              Landing Page Reel
+            </TabsTrigger>
+            <TabsTrigger value="image" className="flex items-center gap-2">
+              <Image className="h-4 w-4" />
+              Hero Header Image
+            </TabsTrigger>
+          </TabsList>
 
-        <TabsContent value="reel" className="space-y-4">
-          <LandingPageReelVersion />
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <TvMinimalPlay className="h-4 w-4" />
-            <p className="text-sm">
-              This is the video that loops on the landing page
-            </p>
-          </div>
-        </TabsContent>
+          <TabsContent value="reel" className="space-y-4">
+            <LandingPageReelVersion />
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <TvMinimalPlay className="h-4 w-4" />
+              <p className="text-sm">
+                This is the video that loops on the landing page
+              </p>
+            </div>
+          </TabsContent>
 
-        <TabsContent value="hero" className="space-y-4">
-          <HeroHeaderImageUploader
-            currentImageUrl={heroHeaderImage}
-            onImageUpdate={handleImageUpdate}
-            disabled={!activeStore}
-          />
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <Image className="h-4 w-4" />
-            <p className="text-sm">
-              This image appears as the hero header on your storefront
-            </p>
-          </div>
-        </TabsContent>
-      </Tabs>
+          <TabsContent value="image" className="space-y-4">
+            <HeroHeaderImageUploader
+              currentImageUrl={heroHeaderImage}
+              onImageUpdate={handleImageUpdate}
+              disabled={!activeStore}
+            />
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <Image className="h-4 w-4" />
+              <p className="text-sm">
+                This image appears as the hero header on your storefront
+              </p>
+            </div>
+          </TabsContent>
+        </Tabs>
+      )}
     </div>
   );
 };
