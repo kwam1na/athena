@@ -5,4 +5,5 @@ export const bannerMessageSchema = v.object({
   heading: v.optional(v.string()),
   message: v.optional(v.string()),
   active: v.boolean(),
+  countdownEndsAt: v.optional(v.number()), // Unix timestamp in milliseconds
 });

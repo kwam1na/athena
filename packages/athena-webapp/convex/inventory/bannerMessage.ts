@@ -16,6 +16,7 @@ export const get = query({
       heading: v.optional(v.string()),
       message: v.optional(v.string()),
       active: v.boolean(),
+      countdownEndsAt: v.optional(v.number()),
     })
   ),
   handler: async (ctx, args) => {
@@ -24,6 +25,14 @@ export const get = query({
       .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
       .filter((q) => q.eq(q.field("active"), true))
       .first();
+
+    // If banner has an expired countdown, treat it as inactive
+    if (
+      bannerMessage?.countdownEndsAt &&
+      bannerMessage.countdownEndsAt < Date.now()
+    ) {
+      return null;
+    }
 
     return bannerMessage ?? null;
   },
@@ -35,6 +44,7 @@ export const upsert = mutation({
     heading: v.optional(v.string()),
     message: v.optional(v.string()),
     active: v.boolean(),
+    countdownEndsAt: v.optional(v.number()),
   },
   returns: v.object({
     _id: v.id("bannerMessage"),
@@ -43,6 +53,7 @@ export const upsert = mutation({
     heading: v.optional(v.string()),
     message: v.optional(v.string()),
     active: v.boolean(),
+    countdownEndsAt: v.optional(v.number()),
   }),
   handler: async (ctx, args) => {
     const existing = await ctx.db
@@ -55,6 +66,7 @@ export const upsert = mutation({
         heading: args.heading,
         message: args.message,
         active: args.active,
+        countdownEndsAt: args.countdownEndsAt,
       });
 
       const updated = await ctx.db.get(existing._id);
@@ -69,6 +81,7 @@ export const upsert = mutation({
       heading: args.heading,
       message: args.message,
       active: args.active,
+      countdownEndsAt: args.countdownEndsAt,
     });
 
     const created = await ctx.db.get(id);

@@ -11,6 +11,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { z } from "zod";
 import NotFound from "@/components/states/not-found/NotFound";
 import { MaintenanceMode } from "@/components/states/maintenance/Maintenance";
+import { isInMaintenanceMode } from "@/lib/maintenanceUtils";
 import { useAuth } from "@/hooks/useAuth";
 import { PostHogProvider } from "posthog-js/react";
 import {
@@ -18,6 +19,7 @@ import {
   useNavigationBarContext,
 } from "@/contexts/NavigationBarProvider";
 import { getNavBarWrapperClass } from "@/components/navigation-bar/navBarStyles";
+import { useCountdown } from "@/components/common/hooks";
 
 const productsPageSchema = z.object({
   color: z.string().optional(),
@@ -109,10 +111,7 @@ const queryClient = new QueryClient({
 function RootDocument({ children }: { children: React.ReactNode }) {
   const { store } = useStoreContext();
 
-  const { inMaintenanceMode } = store?.config?.availability || {};
-
-  if (inMaintenanceMode) {
-    console.log("inMaintenanceMode", inMaintenanceMode);
+  if (isInMaintenanceMode(store?.config)) {
     return <MaintenanceMode />;
   }
 

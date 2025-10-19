@@ -1,27 +1,27 @@
-import { useMutation, useQuery } from "convex/react";
+import { useMutation } from "convex/react";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { api } from "~/convex/_generated/api";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
-import { Switch } from "../ui/switch";
-import { LoadingButton } from "../ui/loading-button";
+import { Button } from "../ui/button";
 import { Id } from "~/convex/_generated/dataModel";
 import View from "../View";
-import { Button } from "../ui/button";
 import { DateTimePicker } from "../ui/date-time-picker";
+import useGetActiveStore from "~/src/hooks/useGetActiveStore";
 
-interface BannerMessageEditorProps {
+interface MaintenanceMessageEditorProps {
   storeId: Id<"store">;
 }
 
-export function BannerMessageEditor({ storeId }: BannerMessageEditorProps) {
-  const bannerMessage = useQuery(api.inventory.bannerMessage.get, { storeId });
-  const upsertBannerMessage = useMutation(api.inventory.bannerMessage.upsert);
+export function MaintenanceMessageEditor({
+  storeId,
+}: MaintenanceMessageEditorProps) {
+  const { activeStore } = useGetActiveStore();
+  const updateConfig = useMutation(api.inventory.stores.updateConfig);
 
   const [heading, setHeading] = useState("");
   const [message, setMessage] = useState("");
-  const [active, setActive] = useState(false);
   const [countdownEndsAt, setCountdownEndsAt] = useState<number | undefined>(
     undefined
   );
@@ -31,56 +31,39 @@ export function BannerMessageEditor({ storeId }: BannerMessageEditorProps) {
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
-    if (bannerMessage) {
-      setHeading(bannerMessage.heading || "");
-      setMessage(bannerMessage.message || "");
-      setActive(bannerMessage.active);
-      setCountdownEndsAt(bannerMessage.countdownEndsAt);
+    if (activeStore?.config?.maintenance) {
+      const maintenance = activeStore.config.maintenance;
+      setHeading(maintenance.heading || "");
+      setMessage(maintenance.message || "");
+      setCountdownEndsAt(maintenance.countdownEndsAt);
       setCountdownDate(
-        bannerMessage.countdownEndsAt
-          ? new Date(bannerMessage.countdownEndsAt)
+        maintenance.countdownEndsAt
+          ? new Date(maintenance.countdownEndsAt)
           : undefined
       );
     }
-  }, [bannerMessage]);
+  }, [activeStore?.config?.maintenance]);
 
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      await upsertBannerMessage({
-        storeId,
-        heading: heading.trim() || undefined,
-        message: message.trim() || undefined,
-        active,
-        countdownEndsAt,
+      await updateConfig({
+        id: storeId,
+        config: {
+          ...activeStore?.config,
+          maintenance: {
+            heading: heading.trim() || undefined,
+            message: message.trim() || undefined,
+            countdownEndsAt,
+          },
+        },
       });
-      toast.success("Banner message updated successfully");
+      toast.success("Maintenance message updated successfully");
     } catch (error) {
-      toast.error("Failed to update banner message");
+      toast.error("Failed to update maintenance message");
       console.error(error);
     } finally {
       setIsSaving(false);
-    }
-  };
-
-  const handleActiveToggle = async (checked: boolean) => {
-    setActive(checked);
-    try {
-      await upsertBannerMessage({
-        storeId,
-        heading: heading.trim() || undefined,
-        message: message.trim() || undefined,
-        active: checked,
-        countdownEndsAt,
-      });
-      toast.success(
-        checked ? "Banner message activated" : "Banner message deactivated"
-      );
-    } catch (error) {
-      toast.error("Failed to update active status");
-      console.error(error);
-      // Revert the toggle on error
-      setActive(!checked);
     }
   };
 
@@ -125,64 +108,52 @@ export function BannerMessageEditor({ storeId }: BannerMessageEditorProps) {
       hideBorder
       hideHeaderBottomBorder
       className="py-4"
-      header={<p className="text-sm text-muted-foreground">Site Banner</p>}
+      header={
+        <p className="text-sm text-muted-foreground">Maintenance Message</p>
+      }
     >
       <div className="py-4 space-y-4">
         <div className="space-y-2">
-          <Label htmlFor="heading">Heading (optional)</Label>
+          <Label htmlFor="maintenance-heading">Heading (optional)</Label>
           <Input
-            id="heading"
-            placeholder="e.g., FLASH SALE"
+            id="maintenance-heading"
+            placeholder="e.g., We'll be back soon!"
             value={heading}
             onChange={(e) => setHeading(e.target.value)}
           />
           <p className="text-xs text-muted-foreground">
-            Displayed in bold uppercase
+            Displayed as the main heading
           </p>
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="message">Message (optional)</Label>
+          <Label htmlFor="maintenance-message">Message (optional)</Label>
           <Input
-            id="message"
-            placeholder="e.g., Get 50% off today only"
+            id="maintenance-message"
+            placeholder="e.g., We're updating our store with amazing new products"
             value={message}
             onChange={(e) => setMessage(e.target.value)}
           />
           <p className="text-xs text-muted-foreground">
-            Displayed as regular text
+            Displayed below the heading
           </p>
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="countdown">Countdown (optional)</Label>
+          <Label htmlFor="maintenance-countdown">Countdown (optional)</Label>
           <DateTimePicker
             value={countdownDate}
             onChange={handleCountdownChange}
-            placeholder="Pick countdown end date and time"
+            placeholder="Pick when maintenance ends"
           />
           {getCountdownStatus() && (
             <p className="text-xs text-muted-foreground">
               {getCountdownStatus()}
             </p>
           )}
-          {/* <p className="text-xs text-muted-foreground">
-            Banner will automatically hide when countdown reaches zero
-          </p> */}
-        </div>
-
-        <div className="flex items-center justify-between py-2">
-          <div className="space-y-0.5">
-            <Label htmlFor="active">Active</Label>
-            <p className="text-xs text-muted-foreground">
-              Banner message takes precedence over promo codes
-            </p>
-          </div>
-          <Switch
-            id="active"
-            checked={active}
-            onCheckedChange={handleActiveToggle}
-          />
+          <p className="text-xs text-muted-foreground">
+            Shows a countdown timer on the maintenance page
+          </p>
         </div>
 
         <Button
@@ -190,7 +161,7 @@ export function BannerMessageEditor({ storeId }: BannerMessageEditorProps) {
           disabled={areBothFieldsEmpty || isSaving}
           variant={"outline"}
         >
-          Save Banner Message
+          Save Maintenance Message
         </Button>
       </div>
     </View>

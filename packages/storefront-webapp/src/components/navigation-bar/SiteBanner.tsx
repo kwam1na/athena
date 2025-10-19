@@ -6,11 +6,13 @@ import { cn } from "@/lib/utils";
 import { PromoCode, BannerMessage } from "@athena/webapp";
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
+import { useState, useEffect } from "react";
 import {
   getBannerTextClass,
   getBannerBGClass,
   getBannerAnimationDelay,
 } from "./navBarStyles";
+import { useCountdown } from "../common/hooks";
 
 export const SiteBanner = () => {
   const { navBarLayout, appLocation } = useNavigationBarContext();
@@ -19,6 +21,9 @@ export const SiteBanner = () => {
   const bannerMessageQueries = useBannerMessageQueries();
   const { data: promoCodes } = useQuery(promoCodeQueries.getAll());
   const { data: bannerMessage } = useQuery(bannerMessageQueries.get());
+
+  // Track countdown for banner message
+  const { timeLeft } = useCountdown(bannerMessage?.countdownEndsAt);
 
   // Use styling utilities for consistency
   const textClass = getBannerTextClass(navBarLayout, appLocation);
@@ -41,6 +46,7 @@ export const SiteBanner = () => {
   };
 
   // Check for active banner message first (takes precedence)
+  // Hide banner if countdown has expired
   const hasActiveBannerMessage = bannerMessage?.active === true;
 
   // Fall back to promo code if no active banner message
@@ -67,13 +73,19 @@ export const SiteBanner = () => {
         <div className="md:hidden flex animate-scroll hover:animate-pause">
           {hasActiveBannerMessage && bannerMessage ? (
             <>
-              {[...Array(3)].map((_, idx) => (
+              {[...Array(4)].map((_, idx) => (
                 <div key={idx} className="flex gap-4 px-4">
                   {bannerMessage.heading && (
                     <p>
                       <b>{bannerMessage.heading.toUpperCase()}</b>
                     </p>
                   )}
+                  {timeLeft && (
+                    <p>
+                      <b>{timeLeft}</b>
+                    </p>
+                  )}
+
                   {bannerMessage.message && (
                     <p className="uppercase">{bannerMessage.message}</p>
                   )}
@@ -109,6 +121,13 @@ export const SiteBanner = () => {
                 <b>{bannerMessage.heading.toUpperCase()}</b>
               </p>
             )}
+
+            {timeLeft && (
+              <p>
+                <b>{timeLeft}</b>
+              </p>
+            )}
+
             {bannerMessage.message && (
               <p className="uppercase">{bannerMessage.message}</p>
             )}

@@ -7,6 +7,8 @@ import useGetActiveStore from "~/src/hooks/useGetActiveStore";
 import View from "../../View";
 import { Switch } from "../../ui/switch";
 import { Label } from "../../ui/label";
+import { MaintenanceMessageEditor } from "../../homepage/MaintenanceMessageEditor";
+import { isInMaintenanceMode as checkMaintenanceMode } from "~/src/lib/maintenanceUtils";
 
 export const MaintenanceView = () => {
   const { activeStore } = useGetActiveStore();
@@ -92,59 +94,63 @@ export const MaintenanceView = () => {
   };
 
   useEffect(() => {
-    setIsInMaintenanceMode(
-      activeStore?.config?.availability?.inMaintenanceMode || false
-    );
-
+    setIsInMaintenanceMode(checkMaintenanceMode(activeStore?.config));
     setIsInReadOnlyMode(
       activeStore?.config?.visibility?.inReadOnlyMode || false
     );
-  }, [activeStore?.config?.availability, activeStore?.config?.visibility]);
+  }, [activeStore?.config]);
 
   return (
-    <View
-      hideBorder
-      hideHeaderBottomBorder
-      className="h-auto w-full"
-      header={
-        <p className="text-sm text-muted-foreground">{`Store availability`}</p>
-      }
-    >
-      <div className="container mx-auto h-full py-8 grid grid-cols-1 gap-8">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Construction className="w-4 h-4 text-muted-foreground" />
-            <Label className="text-muted-foreground" htmlFor="maintenance-mode">
-              Maintenance mode
-            </Label>
+    <div className="space-y-8">
+      <View
+        hideBorder
+        hideHeaderBottomBorder
+        className="h-auto w-full"
+        header={
+          <p className="text-sm text-muted-foreground">{`Store availability`}</p>
+        }
+      >
+        <div className="container mx-auto h-full py-8 grid grid-cols-1 gap-8">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Construction className="w-4 h-4 text-muted-foreground" />
+              <Label
+                className="text-muted-foreground"
+                htmlFor="maintenance-mode"
+              >
+                Maintenance mode
+              </Label>
+            </div>
+            <Switch
+              id="maintenance-mode"
+              disabled={isUpdatingConfig}
+              checked={isInMaintenanceMode}
+              onCheckedChange={(e) => {
+                saveMaintenanceModeChanges(e);
+              }}
+            />
           </div>
-          <Switch
-            id="maintenance-mode"
-            disabled={isUpdatingConfig}
-            checked={isInMaintenanceMode}
-            onCheckedChange={(e) => {
-              saveMaintenanceModeChanges(e);
-            }}
-          />
-        </div>
 
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <EyeIcon className="w-4 h-4 text-muted-foreground" />
-            <Label className="text-muted-foreground" htmlFor="view-only-mode">
-              View-only mode
-            </Label>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <EyeIcon className="w-4 h-4 text-muted-foreground" />
+              <Label className="text-muted-foreground" htmlFor="view-only-mode">
+                View-only mode
+              </Label>
+            </div>
+            <Switch
+              id="view-only-mode"
+              disabled={isUpdatingConfig}
+              checked={isInReadOnlyMode}
+              onCheckedChange={(e) => {
+                saveReadOnlyeModeChanges(e);
+              }}
+            />
           </div>
-          <Switch
-            id="view-only-mode"
-            disabled={isUpdatingConfig}
-            checked={isInReadOnlyMode}
-            onCheckedChange={(e) => {
-              saveReadOnlyeModeChanges(e);
-            }}
-          />
         </div>
-      </div>
-    </View>
+      </View>
+
+      {activeStore && <MaintenanceMessageEditor storeId={activeStore._id} />}
+    </div>
   );
 };
