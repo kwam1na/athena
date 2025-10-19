@@ -1,4 +1,5 @@
-import { useCheckout } from "@/components/checkout/CheckoutProvider";
+import { BagSummaryItems } from "@/components/checkout/BagSummary";
+import { Discount, useCheckout } from "@/components/checkout/CheckoutProvider";
 import { Button } from "@/components/ui/button";
 import { useGetActiveCheckoutSession } from "@/hooks/useGetActiveCheckoutSession";
 import { Link } from "@tanstack/react-router";
@@ -89,6 +90,7 @@ export function CheckoutSessionGeneric({ message }: { message: string }) {
 
 export function UnableToVerifyCheckoutPayment() {
   const { data: activeSession } = useGetActiveCheckoutSession();
+  const { checkoutState } = useCheckout();
 
   const supportEmail = "kwami.nuh@gmail.com";
 
@@ -102,10 +104,10 @@ export function UnableToVerifyCheckoutPayment() {
   return (
     <div className="container mx-auto max-w-[1024px] h-full flex justify-center">
       <div className="flex flex-col gap-16 mt-24 w-[80%]">
-        <div className="space-y-4">
+        <div className="space-y-16">
           <p>
-            We couldn't find your payment information. Please try again. If this
-            continues,{" "}
+            We couldn't find payment information for your order. Please try
+            again. If this continues,{" "}
             <button
               onClick={handleSendEmail}
               className="text-accent2 hover:underline inline-block"
@@ -114,6 +116,14 @@ export function UnableToVerifyCheckoutPayment() {
             </button>{" "}
             for support.
           </p>
+
+          <div className="space-y-4 w-[400px]">
+            <p className="text-muted-foreground">Your order</p>
+            <BagSummaryItems
+              items={checkoutState.bag.items}
+              discount={activeSession?.discount as Discount | null}
+            />
+          </div>
 
           <p className="font-medium">{`Reference: ${activeSession?.externalReference || activeSession?._id}`}</p>
         </div>

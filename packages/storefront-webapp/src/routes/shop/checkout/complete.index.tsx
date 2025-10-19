@@ -29,10 +29,13 @@ export const Route = createFileRoute("/shop/checkout/complete/")({
 });
 
 export const CheckoutComplete = () => {
-  const { checkoutState, activeSession } = useCheckout();
+  const { checkoutState, activeSession, onlineOrder } = useCheckout();
   const [orderId, setOrderId] = useState<string | null>(null);
   const [attemptedOrderCreation, setAttemptedOrderCreation] = useState(false);
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
+
+  // console.log("checkout state", checkoutState);
+  // console.log("online order", onlineOrder);
 
   const queryClient = useQueryClient();
 
@@ -75,6 +78,12 @@ export const CheckoutComplete = () => {
     }
   }, [activeSession]);
 
+  // useEffect(() => {
+  //   if (onlineOrder) {
+  //     setHadToCompleteCheckoutSession(true);
+  //   }
+  // }, [onlineOrder]);
+
   const placeOrder = async () => {
     const { data } = webOrderSchema.safeParse(checkoutState);
     setAttemptedOrderCreation(false);
@@ -99,7 +108,7 @@ export const CheckoutComplete = () => {
     }
   };
 
-  if (!activeSession.hasCompletedPayment && !activeSession.hasVerifiedPayment) {
+  if (!activeSession.hasCompletedPayment) {
     return (
       <motion.div
         initial={{ opacity: 0 }}
@@ -143,6 +152,8 @@ export const CheckoutComplete = () => {
     );
   }
 
+  const bagItems = onlineOrder?.items || checkoutState.bag.items;
+
   return (
     <AnimatePresence>
       <div className="container mx-auto max-w-[1024px] pt-24 pb-40 px-6 lg:px-0 space-y-24">
@@ -181,7 +192,7 @@ export const CheckoutComplete = () => {
           className="space-y-8 w-full lg:w-[40%]"
         >
           <BagSummaryItems
-            items={checkoutState.bag.items}
+            items={bagItems}
             discount={activeSession.discount as Discount | null}
           />
         </motion.div>

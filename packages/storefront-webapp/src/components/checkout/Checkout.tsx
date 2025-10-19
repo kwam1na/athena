@@ -9,8 +9,6 @@ import { TrustSignals } from "../communication/TrustSignals";
 const MainComponent = () => {
   const { activeSession } = useCheckout();
 
-  // console.log("active session", activeSession);
-
   useEffect(() => {
     const needsVerification =
       activeSession.externalReference &&

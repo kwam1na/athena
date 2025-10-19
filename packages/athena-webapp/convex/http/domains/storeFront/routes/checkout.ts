@@ -103,20 +103,45 @@ checkoutRoutes.post("/:checkoutSessionId", async (c) => {
     }
 
     if (action == "complete-checkout") {
-      const res = await c.env.runMutation(
-        internal.storeFront.checkoutSession.updateCheckoutSession,
-        {
-          id: checkoutSessionId as Id<"checkoutSession">,
-          hasCompletedCheckoutSession,
-          orderDetails: {
-            ...orderDetails,
-            billingDetails: null,
-            deliveryDetails: orderDetails.deliveryDetails ?? null,
-          },
-        }
-      );
+      let orderDetailsToUse = orderDetails;
+      try {
+        if (!orderDetails) {
+          const order = await c.env.runQuery(
+            api.storeFront.onlineOrder.getByCheckoutSessionId,
+            {
+              checkoutSessionId: checkoutSessionId as Id<"checkoutSession">,
+            }
+          );
 
-      return c.json(res);
+          if (order) {
+            orderDetailsToUse = {
+              billingDetails: null,
+              customerDetails: order.customerDetails,
+              deliveryDetails: order.deliveryDetails,
+              deliveryInstructions: order.deliveryInstructions || undefined,
+              deliveryFee: order.deliveryFee,
+              deliveryMethod: order.deliveryMethod,
+              deliveryOption: order.deliveryOption,
+              discount: order.discount,
+              pickupLocation: order.pickupLocation,
+            };
+          }
+        }
+
+        const res = await c.env.runMutation(
+          internal.storeFront.checkoutSession.updateCheckoutSession,
+          {
+            id: checkoutSessionId as Id<"checkoutSession">,
+            hasCompletedCheckoutSession: true,
+            orderDetails: orderDetailsToUse,
+          }
+        );
+
+        return c.json(res);
+      } catch (e) {
+        console.error("error completing checkout session in api route", e);
+        return c.json({ success: false, message: (e as Error).message }, 400);
+      }
     }
 
     if (action == "place-order") {

@@ -30,7 +30,7 @@ export const orderDetailsSchema = v.object({
     }),
     v.null()
   ),
-  customerDetails: customerDetailsSchema,
+  customerDetails: v.optional(customerDetailsSchema),
   deliveryDetails: v.union(addressSchema, v.null(), v.string()),
   deliveryFee: v.union(v.number(), v.null()),
   deliveryMethod: v.string(),

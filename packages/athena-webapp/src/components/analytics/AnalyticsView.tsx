@@ -16,10 +16,10 @@ import AnalyticsCombinedUsers from "./AnalyticsCombinedUsers";
 const StoreVisitors = () => {
   const { activeStore } = useGetActiveStore();
 
-  const lifetimeVisitors = useQuery(
-    api.storeFront.guest.getUniqueVisitors,
-    activeStore?._id ? { storeId: activeStore._id } : "skip"
-  );
+  // const lifetimeVisitors = useQuery(
+  //   api.storeFront.guest.getUniqueVisitors,
+  //   activeStore?._id ? { storeId: activeStore._id } : "skip"
+  // );
 
   const uniqueVisitorsToday = useQuery(
     api.storeFront.guest.getUniqueVisitorsForDay,
@@ -55,10 +55,10 @@ const StoreVisitors = () => {
         </p>
       </div> */}
 
-      <div className="space-y-2">
+      {/* <div className="space-y-2">
         <p className="font-medium text-2xl">{formatNumber(lifetimeVisitors)}</p>
         <p className="text-sm text-muted-foreground">Lifetime visitors</p>
-      </div>
+      </div> */}
     </div>
   );
 };
@@ -133,9 +133,9 @@ export default function AnalyticsView() {
       <FadeIn className="space-y-8 py-8">
         <div className="flex">
           {/* <StoreInsights storeId={activeStore._id} /> */}
-          {/* <div className="ml-auto">
+          <div className="ml-auto">
             <StoreVisitors />
-          </div> */}
+          </div>
         </div>
         <div className="space-y-16">
           <AnalyticsCombinedUsers items={items} />

@@ -44,12 +44,14 @@ export const PaymentDetails = ({ session }: { session?: CheckoutSession }) => {
   }
 
   const { formatter } = useStoreContext();
-  const { checkoutState } = useCheckout();
+  const { checkoutState, onlineOrder } = useCheckout();
 
   const { paymentMethod, discount } = session;
 
+  const itemsToUse = onlineOrder?.items || checkoutState.bag?.items;
+
   const items =
-    checkoutState.bag?.items?.map((item: any) => ({
+    itemsToUse?.map((item: any) => ({
       productSkuId: item.productSkuId,
       quantity: item.quantity,
       price: item.price,

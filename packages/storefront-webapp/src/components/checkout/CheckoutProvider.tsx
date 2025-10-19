@@ -1,10 +1,4 @@
-import React, {
-  createContext,
-  useContext,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
+import React, { createContext, useContext, useEffect, useState } from "react";
 import { z, ZodError } from "zod";
 import { useGetActiveCheckoutSession } from "@/hooks/useGetActiveCheckoutSession";
 import {
@@ -16,11 +10,12 @@ import { useStoreContext } from "@/contexts/StoreContext";
 import { SESSION_STORAGE_KEY } from "@/lib/constants";
 import { customerDetailsSchema } from "./schemas/customerDetailsSchema";
 import { baseDeliveryDetailsSchema } from "./schemas/deliveryDetailsSchema";
-import { baseBillingDetailsSchema } from "./schemas/billingDetailsSchema";
-import { CheckoutSession } from "@athena/webapp";
+import { CheckoutSession, OnlineOrder } from "@athena/webapp";
 import { CheckoutUnavailable } from "../states/checkout unavailable/CheckoutUnavailable";
 import { useNavigationBarContext } from "@/contexts/NavigationBarProvider";
 import { isFeeWaived, isAnyFeeWaived } from "@/lib/feeUtils";
+import { useOnlineOrderQueries } from "@/lib/queries/onlineOrder";
+import { useQuery } from "@tanstack/react-query";
 
 export type Address = {
   address?: string;
@@ -385,6 +380,8 @@ type CheckoutState = {
 
   discount: Discount | null;
 
+  onlineOrder: OnlineOrder | null;
+
   // Payment method fields
   paymentMethod: PaymentMethodType | null;
   podPaymentMethod: PODPaymentMethod | null;
@@ -435,6 +432,7 @@ const initialState: CheckoutState = {
   failedFinalValidation: false,
   bag: null,
   discount: null,
+  onlineOrder: null,
 
   // Payment method defaults
   paymentMethod: "online_payment",
@@ -443,6 +441,7 @@ const initialState: CheckoutState = {
 
 type CheckoutContextType = {
   activeSession: CheckoutSession;
+  onlineOrder: OnlineOrder | null;
   actionsState: CheckoutActions;
   checkoutState: CheckoutState;
   canPlaceOrder: () => Promise<boolean>;
@@ -826,6 +825,11 @@ export const CheckoutProvider = ({
 
   const { data, isLoading, refetch } = useGetActiveCheckoutSession();
 
+  const onlineOrderQueries = useOnlineOrderQueries();
+  const { data: onlineOrder } = useQuery(
+    onlineOrderQueries.detail(data?.placedOrderId || "")
+  );
+
   const { config } = store || {};
 
   if (config?.visibility?.inReadOnlyMode) {
@@ -851,6 +855,7 @@ export const CheckoutProvider = ({
         updateState,
         updateActionsState,
         activeSession: data,
+        onlineOrder: onlineOrder || null,
       }}
     >
       {children}

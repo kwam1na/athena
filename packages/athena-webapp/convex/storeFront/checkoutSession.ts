@@ -136,7 +136,11 @@ export const create = mutation({
 
     let sessionItemsMap = new Map<string, number>();
 
-    if (existingSession) {
+    if (existingSession && existingSession.placedOrderId == undefined) {
+      console.log("existing session has no order placed");
+    }
+
+    if (existingSession && existingSession.placedOrderId === undefined) {
       // Fetch existing session items
       const sessionItems = await ctx.db
         .query("checkoutSessionItem")
@@ -164,7 +168,7 @@ export const create = mutation({
       };
     }
 
-    if (existingSession) {
+    if (existingSession && existingSession.placedOrderId === undefined) {
       await ctx.db.patch(existingSession._id, {
         expiresAt,
         amount: args.amount,
@@ -177,6 +181,11 @@ export const create = mutation({
         args.storeFrontUserId,
         args.products
       );
+    }
+
+    if (existingSession && existingSession.placedOrderId !== undefined) {
+      console.log("existing session has already been placed");
+      console.log("proceeding to create a new session");
     }
 
     // Create new session

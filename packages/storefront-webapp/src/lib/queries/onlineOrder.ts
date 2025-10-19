@@ -1,6 +1,5 @@
 import { getOrder, getOrders } from "@/api/onlineOrder";
 import { queryOptions } from "@tanstack/react-query";
-import { DEFAULT_STALE_TIME } from "../constants";
 import { useQueryEnabled } from "@/hooks/useQueryEnabled";
 
 export const useOnlineOrderQueries = () => {

@@ -229,6 +229,7 @@ const heading = {
   fontWeight: "bold",
   marginTop: "20px",
   marginBottom: "20px",
+  textColor: "#000000",
   lineHeight: "1.4",
 };
 

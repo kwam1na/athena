@@ -9,7 +9,7 @@ import {
   getAddressString,
 } from "../utils";
 import { api } from "../_generated/api";
-import { getProductDiscountValue } from "../inventory/utils";
+import { getDiscountValue, getProductDiscountValue } from "../inventory/utils";
 
 // Order status constants
 const ORDER_STATUS = {
@@ -128,21 +128,26 @@ export async function handleOrderStatusUpdate({
       order.discount
     );
 
-    // Calculate subtotal
-    const subtotal = (order.items || []).reduce(
-      (sum, item) => sum + (item.price || 0) * (item.quantity || 0),
-      0
-    );
+    const discountValue = getDiscountValue(order.items || [], order.discount);
+
+    const deliveryFee = (order.deliveryFee || 0) * 100;
+    const amountPaid = order.amount - discountValue + deliveryFee;
 
     const emailResponse = await sendOrderEmail({
       type,
       customerEmail: email,
       store_name: "Wigclub",
       order_number: order.orderNumber,
+      delivery_fee: deliveryFee
+        ? formatter.format(deliveryFee / 100)
+        : undefined,
       order_date: formatDate(order._creationTime),
       order_status_messaging: statusMessaging,
-      total: formatter.format(order.amount / 100),
-      subtotal: formatter.format(subtotal),
+      total: formatter.format(amountPaid / 100),
+      subtotal: formatter.format(order.amount / 100),
+      discount: discountValue
+        ? formatter.format(discountValue / 100)
+        : undefined,
       items,
       pickup_type: order.deliveryMethod,
       pickup_details: pickupDetails,

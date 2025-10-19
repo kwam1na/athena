@@ -382,7 +382,7 @@ export const verifyPayment = action({
         if (rewardResult.success) {
           console.log(`Awarded ${points} points for order ${order._id}`);
         } else {
-          console.error("Failed to award points", rewardResult.error);
+          console.log("Failed to award points", rewardResult.error);
         }
       }
 

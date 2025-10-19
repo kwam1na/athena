@@ -110,8 +110,6 @@ export const create = mutation({
       })
     );
 
-    console.log("args.discount", args.discount);
-
     // update used promo code for this order
     if (args.discount?.id) {
       // if the promo code is not multiple uses, insert a redeemed promo code record
@@ -389,6 +387,16 @@ export const getByExternalReference = query({
     return await ctx.db
       .query(entity)
       .filter((q) => q.eq(q.field("externalReference"), args.externalReference))
+      .first();
+  },
+});
+
+export const getByCheckoutSessionId = query({
+  args: { checkoutSessionId: v.id("checkoutSession") },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query(entity)
+      .filter((q) => q.eq(q.field("checkoutSessionId"), args.checkoutSessionId))
       .first();
   },
 });

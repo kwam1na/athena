@@ -29,6 +29,8 @@ paystackRoutes.post("/", async (c) => {
       },
     });
 
+    console.log("order details", order_details);
+
     // update important fields first
     await c.env.runMutation(
       internal.storeFront.checkoutSession.updateCheckoutSession,

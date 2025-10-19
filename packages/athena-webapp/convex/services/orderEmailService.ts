@@ -255,15 +255,14 @@ export async function sendPaymentVerificationEmails(params: {
         storeLocation: params.store?.config?.contactInfo?.location,
       });
 
-      // Calculate subtotal from order items
-      const subtotal = (params.order.items || []).reduce(
-        (sum, item) => sum + (item.price || 0) * (item.quantity || 0),
-        0
-      );
-
       const items = formatOrderItems(
         params.order.items || [],
         params.store?.currency || "GHS",
+        params.order.discount
+      );
+
+      const discountValue = getDiscountValue(
+        params.order.items || [],
         params.order.discount
       );
 
@@ -273,15 +272,15 @@ export async function sendPaymentVerificationEmails(params: {
         delivery_fee: params.order.deliveryFee
           ? formatter.format(params.order.deliveryFee)
           : undefined,
-        discount: params.discountValue
-          ? formatter.format(params.discountValue / 100)
+        discount: discountValue
+          ? formatter.format(discountValue / 100)
           : undefined,
         store_name: PAYMENT_CONSTANTS.STORE_NAME,
         order_number: params.order.orderNumber,
         order_date: formatDate(params.order._creationTime),
         order_status_messaging: orderStatusMessaging,
         total: formatter.format(params.orderAmount / 100),
-        subtotal: formatter.format(subtotal),
+        subtotal: formatter.format(params.orderAmount / 100),
         items,
         pickup_type: params.order.deliveryMethod,
         pickup_details: pickupDetails,

@@ -120,9 +120,13 @@ export const getUniqueVisitors = query({
     storeId: v.id("store"),
   },
   handler: async (ctx, args) => {
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+
     const uniqueVisitors = await ctx.db
       .query(entity)
       .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
+      .filter((q) => q.gte(q.field("_creationTime"), today.getTime()))
       .collect();
 
     return uniqueVisitors.length;
