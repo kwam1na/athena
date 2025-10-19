@@ -7,7 +7,7 @@ import {
 import { Link } from "@tanstack/react-router";
 import { useStoreContext } from "@/contexts/StoreContext";
 import { useShoppingBag } from "@/hooks/useShoppingBag";
-import { useCheckout } from "./CheckoutProvider";
+import { Discount, useCheckout } from "./CheckoutProvider";
 import { BagSummaryItems } from "./BagSummary";
 import { Button } from "../ui/button";
 import { Tag } from "lucide-react";
@@ -60,16 +60,21 @@ export default function MobileBagSummary() {
 
       if (codeToApply) {
         setIsAutoApplyingPromoCode(true);
-        if (isMobile) {
-          toast.success("Auto-applying available promo codes..", {
-            position: "top-center",
-            duration: 950,
-            style: {
-              background: "#FFF5F9",
-            },
-          });
-        }
-        handleRedeemPromoCode(codeToApply.code);
+        // Wait 2 seconds before auto-applying promo code
+        const timeoutId = setTimeout(() => {
+          if (isMobile) {
+            toast.success("Auto-applying available promo codes..", {
+              position: "top-center",
+              duration: 950,
+              style: {
+                background: "#FFF5F9",
+              },
+            });
+          }
+          handleRedeemPromoCode(codeToApply.code);
+        }, 500);
+
+        return () => clearTimeout(timeoutId);
       }
     }
   }, [promoCodes, checkoutState.discount, activeSession._id, redeemedOffers]);
@@ -102,6 +107,7 @@ export default function MobileBagSummary() {
             type: data.promoCode.discountType,
             span: data.promoCode.span,
             productSkus: data.promoCode.productSkus,
+            isMultipleUses: data.promoCode.isMultipleUses,
           },
         });
       } else {
@@ -147,6 +153,8 @@ export default function MobileBagSummary() {
     }
   };
 
+  const discount = checkoutState.discount || activeSession.discount;
+
   // Use the shared utility function to determine if fee should be waived
   const isFeeWaivedForCurrentOption = isFeeWaived(
     waiveDeliveryFees,
@@ -180,7 +188,7 @@ export default function MobileBagSummary() {
 
             <BagSummaryItems
               items={checkoutState?.bag?.items}
-              discount={checkoutState.discount}
+              discount={discount as Discount | null}
             />
 
             {/* Promo Code */}

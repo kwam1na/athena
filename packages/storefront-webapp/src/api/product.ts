@@ -5,7 +5,6 @@ import { FeaturedItem, Product } from "@athena/webapp";
 const buildQueryString = (params?: FilterParams) => {
   if (!params) return null;
 
-  console.log("params", params);
   const query = new URLSearchParams();
   if (params.color) query.append("color", params.color); // Expecting comma-separated string for color
   if (params.length) query.append("length", params.length); // Expecting comma-separated string for length

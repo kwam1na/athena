@@ -78,7 +78,7 @@ function SummaryItem({
               <p className="text-muted-foreground line-through">
                 {formatter.format(item.price * item.quantity)}
               </p>
-              <p className="text-xs">
+              <p className="text-xs text-accent2">
                 {formatter.format(discountedPrice * item.quantity)}
               </p>
             </div>
@@ -88,7 +88,7 @@ function SummaryItem({
               <p className="text-muted-foreground line-through">
                 {formatter.format(item.price * item.quantity)}
               </p>
-              <p className="text-xs">Free</p>
+              <p className="text-xs text-accent2">Free</p>
             </div>
           )}
         </div>
@@ -160,7 +160,12 @@ function BagSummary() {
 
       if (codeToApply) {
         setIsAutoApplyingPromoCode(true);
-        handleRedeemPromoCode(codeToApply.code);
+        // Wait 2 seconds before auto-applying promo code
+        const timeoutId = setTimeout(() => {
+          handleRedeemPromoCode(codeToApply.code);
+        }, 500);
+
+        return () => clearTimeout(timeoutId);
       }
     }
   }, [promoCodes, checkoutState.discount, activeSession._id, redeemedOffers]);
@@ -193,6 +198,7 @@ function BagSummary() {
             span: data.promoCode.span,
             productSkus: data.promoCode.productSkus,
             totalDiscount: data.promoCode.totalDiscount,
+            isMultipleUses: data.promoCode.isMultipleUses,
           },
         });
       } else {

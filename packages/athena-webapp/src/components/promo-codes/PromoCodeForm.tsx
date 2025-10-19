@@ -15,6 +15,8 @@ import { Calendar as CalendarIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface PromoCodeFormProps {
+  isMultipleUses: boolean;
+  setIsMultipleUses: Dispatch<SetStateAction<boolean>>;
   promoCode: string | null;
   setPromoCode: Dispatch<SetStateAction<string | null>>;
   discount: string | null;
@@ -45,6 +47,8 @@ interface PromoCodeFormProps {
 }
 
 const PromoCodeForm = ({
+  isMultipleUses,
+  setIsMultipleUses,
   promoCode,
   setPromoCode,
   discount,
@@ -77,7 +81,7 @@ const PromoCodeForm = ({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div className="flex items-center gap-8">
         <Input
           className="w-[320px]"
@@ -176,7 +180,7 @@ const PromoCodeForm = ({
         </div>
       </div>
 
-      <div className="flex items-center gap-8 border rounded-lg p-4 w-fit">
+      <div className="grid grid-cols-3 gap-8 border rounded-lg p-4 w-fit">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
             <Label className="text-muted-foreground" htmlFor="sitewide">
@@ -240,6 +244,22 @@ const PromoCodeForm = ({
             }}
           />
         </div>
+
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <Label className="text-muted-foreground" htmlFor="exclusive">
+              Multiple uses
+            </Label>
+          </div>
+          <Switch
+            id="exclusive"
+            disabled={isUpdatingPromoCode}
+            checked={isMultipleUses}
+            onCheckedChange={(e) => {
+              setIsMultipleUses(e);
+            }}
+          />
+        </div>
       </div>
 
       {promoCodeSlug && updateHomepageDiscountCode && (
@@ -264,7 +284,10 @@ const PromoCodeForm = ({
       )}
 
       {promoCodeSpan === "selected-products" && (
-        <Products products={products} />
+        <div className="pt-8">
+          <p className="text-sm">Select products</p>
+          <Products products={products} />
+        </div>
       )}
     </div>
   );

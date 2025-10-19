@@ -5,15 +5,15 @@ export const TrustSignals = () => {
   const [currentMessageIndex, setCurrentMessageIndex] = useState(0);
 
   const messages = [
-    {
-      id: "payment-delivery",
-      content: (
-        <p className="text-sm">
-          <b className="text-accent2">Payment on delivery</b> available on
-          orders within Accra
-        </p>
-      ),
-    },
+    // {
+    //   id: "payment-delivery",
+    //   content: (
+    //     <p className="text-sm">
+    //       <b className="text-accent2">Payment on delivery</b> available on
+    //       orders within Accra
+    //     </p>
+    //   ),
+    // },
     {
       id: "trusted",
       content: (

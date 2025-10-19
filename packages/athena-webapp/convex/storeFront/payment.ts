@@ -80,11 +80,12 @@ export const createTransaction = action({
           quantity: item.quantity,
           price: item.price!,
         }));
+
       const amountToCharge = calculateOrderAmount({
         items,
         discount,
-        deliveryFee: args.orderDetails.deliveryFee || 0,
-        subtotal: args.amount,
+        deliveryFee: (args.orderDetails.deliveryFee || 0) * 100,
+        subtotal: args.amount * 100,
       });
 
       // Initialize transaction with Paystack
@@ -195,11 +196,18 @@ export const createPODOrder = action({
           id: order.storeId,
         });
 
+        const amountToCharge = calculateOrderAmount({
+          items: order.items || [],
+          discount: order.discount || 0,
+          deliveryFee: (args.orderDetails.deliveryFee || 0) * 100,
+          subtotal: args.amount * 100,
+        });
+
         // Send confirmation and admin notification emails
         const emailResults = await sendPODOrderEmails({
           order,
           store,
-          amount: args.amount,
+          amount: amountToCharge,
           podPaymentMethod: args.orderDetails.podPaymentMethod,
         });
 
@@ -274,7 +282,7 @@ export const verifyPayment = action({
       );
 
       // Calculate expected order amount
-      const subtotal = session?.amount || order?.amount || 0;
+      const subtotal = session?.amount || order?.amount || 0; // already in cents
       const discount = session?.discount || order?.discount;
       const items = (order?.items || [])
         .filter(
@@ -288,10 +296,11 @@ export const verifyPayment = action({
           quantity: item.quantity,
           price: item.price!,
         }));
+
       const orderAmountLessDiscounts = calculateOrderAmount({
         items,
         discount,
-        deliveryFee: order?.deliveryFee || session?.deliveryFee || 0,
+        deliveryFee: (order?.deliveryFee || session?.deliveryFee || 0) * 100,
         subtotal,
       });
 
@@ -316,56 +325,6 @@ export const verifyPayment = action({
           );
         }
 
-        const update: Record<string, any> = { hasVerifiedPayment: true };
-
-        // Handle emails and rewards for the order
-        if (order) {
-          const store = await ctx.runQuery(api.inventory.stores.getById, {
-            id: order.storeId,
-          });
-
-          // Send confirmation and admin notification emails
-          const emailResults = await sendPaymentVerificationEmails({
-            order,
-            store,
-            orderAmount: orderAmountLessDiscounts,
-            discountValue,
-            didSendNewOrderEmail: order.didSendNewOrderReceivedEmail || false,
-            didSendConfirmationEmail: order.didSendConfirmationEmail || false,
-          });
-
-          if (emailResults.confirmationSent) {
-            update.didSendConfirmationEmail = true;
-            update.orderReceivedEmailSentAt = Date.now();
-          }
-
-          if (emailResults.adminNotificationSent) {
-            update.didSendNewOrderReceivedEmail = true;
-          }
-
-          // Award loyalty points
-          const points = calculateRewardPoints(session?.amount || 0);
-          const rewardResult = await ctx.runMutation(
-            internal.storeFront.rewards.awardOrderPoints,
-            {
-              orderId: order._id,
-              points,
-            }
-          );
-
-          if (rewardResult.success) {
-            console.log(`Awarded ${points} points for order ${order._id}`);
-          } else {
-            console.error("Failed to award points", rewardResult.error);
-          }
-        }
-
-        // Update order with verification and email statuses
-        await ctx.runMutation(api.storeFront.onlineOrder.update, {
-          externalReference: args.externalReference,
-          update,
-        });
-
         console.log(
           `Payment Verification Success | ` +
             `Session: ${session?._id || "N/A"} | ` +
@@ -382,6 +341,56 @@ export const verifyPayment = action({
           `Status: ${paystackResponse.data.status}, Paystack amount: ${paystackResponse.data.amount}, Expected amount: ${orderAmountLessDiscounts}`
         );
       }
+
+      const update: Record<string, any> = { hasVerifiedPayment: isVerified };
+
+      // Handle emails and rewards for the order
+      if (order) {
+        const store = await ctx.runQuery(api.inventory.stores.getById, {
+          id: order.storeId,
+        });
+
+        // Send confirmation and admin notification emails
+        const emailResults = await sendPaymentVerificationEmails({
+          order,
+          store,
+          orderAmount: orderAmountLessDiscounts,
+          discountValue,
+          didSendNewOrderEmail: order.didSendNewOrderReceivedEmail || false,
+          didSendConfirmationEmail: order.didSendConfirmationEmail || false,
+        });
+
+        if (emailResults.confirmationSent) {
+          update.didSendConfirmationEmail = true;
+          update.orderReceivedEmailSentAt = Date.now();
+        }
+
+        if (emailResults.adminNotificationSent) {
+          update.didSendNewOrderReceivedEmail = true;
+        }
+
+        // Award loyalty points
+        const points = calculateRewardPoints(session?.amount || 0);
+        const rewardResult = await ctx.runMutation(
+          internal.storeFront.rewards.awardOrderPoints,
+          {
+            orderId: order._id,
+            points,
+          }
+        );
+
+        if (rewardResult.success) {
+          console.log(`Awarded ${points} points for order ${order._id}`);
+        } else {
+          console.error("Failed to award points", rewardResult.error);
+        }
+      }
+
+      // Update order with verification and email statuses
+      await ctx.runMutation(api.storeFront.onlineOrder.update, {
+        externalReference: args.externalReference,
+        update,
+      });
 
       return { verified: isVerified };
     } catch (error) {

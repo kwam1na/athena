@@ -110,8 +110,17 @@ const queryClient = new QueryClient({
 
 function RootDocument({ children }: { children: React.ReactNode }) {
   const { store } = useStoreContext();
+  const { storeFrontUserId } = useAuth();
 
-  if (isInMaintenanceMode(store?.config)) {
+  const userIds = [
+    "kh7dn0q87d7jj7nxh78vbmhck97g5d6g",
+    "md72weypcwt2mgjmxsbayxdpt57jnwze",
+  ];
+
+  const canBypassMaintenanceMode =
+    storeFrontUserId && userIds.includes(storeFrontUserId as string);
+
+  if (isInMaintenanceMode(store?.config) && !canBypassMaintenanceMode) {
     return <MaintenanceMode />;
   }
 

@@ -82,7 +82,7 @@ export const SiteBanner = () => {
                   )}
                   {timeLeft && (
                     <p>
-                      <b>{timeLeft}</b>
+                      <b>ENDS IN {timeLeft}</b>
                     </p>
                   )}
 
@@ -124,7 +124,7 @@ export const SiteBanner = () => {
 
             {timeLeft && (
               <p>
-                <b>{timeLeft}</b>
+                <b>ENDS IN {timeLeft}</b>
               </p>
             )}
 

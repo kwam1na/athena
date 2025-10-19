@@ -15,12 +15,14 @@ import { useAuth } from "@/hooks/useAuth";
 import { GuestRewardsPrompt } from "@/components/rewards/GuestRewardsPrompt";
 import {
   CheckoutProvider,
+  Discount,
   useCheckout,
   webOrderSchema,
 } from "@/components/checkout/CheckoutProvider";
 import { DeliveryDetails } from "@/components/checkout/DeliveryDetails/DeliverySection";
 import { useBagQueries } from "@/lib/queries/bag";
 import { useEffect } from "react";
+import { getDiscountValue, getOrderAmount } from "@/components/checkout/utils";
 
 export const Route = createFileRoute("/shop/checkout/pod-confirmation")({
   component: PODConfirmationPage,
@@ -29,15 +31,45 @@ export const Route = createFileRoute("/shop/checkout/pod-confirmation")({
 // Payment details component specific to POD
 const PODPaymentDetails = ({ session }: { session: any }) => {
   const { formatter } = useStoreContext();
+  const { checkoutState } = useCheckout();
 
   if (!session?.paymentMethod) {
     return null;
   }
 
   const podPaymentMethod = session.paymentMethod?.podPaymentMethod || "cash";
-  const amountToPay = session.amount
-    ? formatter.format(session.amount / 100)
-    : "0";
+
+  const items =
+    checkoutState.bag?.items?.map((item: any) => ({
+      productSkuId: item.productSkuId,
+      quantity: item.quantity,
+      price: item.price,
+    })) || [];
+
+  const discount = session?.discount as any;
+
+  const amountCharge = getOrderAmount({
+    items,
+    discount,
+    deliveryFee: (session?.deliveryFee || 0) * 100,
+    subtotal: session?.amount || 0,
+    isInCents: true,
+  });
+
+  const discountValue = getDiscountValue(items, discount);
+
+  const originalAmount =
+    (session?.amount || 0) + (session?.deliveryFee || 0) * 100;
+
+  const hasDiscount = discount && discountValue > 0;
+
+  const discountText =
+    discount?.type === "percentage"
+      ? `${discount.value}%`
+      : `${formatter.format(discountValue)}`;
+
+  const discountSpan =
+    discount?.span == "entire-order" ? "entire order" : "select items";
 
   const paymentMethodText =
     podPaymentMethod === "mobile_money"
@@ -54,9 +86,27 @@ const PODPaymentDetails = ({ session }: { session: any }) => {
       <p className="text-xs">Payment</p>
 
       <div className="space-y-2">
-        <div className="flex items-center gap-2">
-          <p className="text-sm">{amountToPay}</p>
-          <p className="text-sm font-medium">Pay on Delivery</p>
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center gap-2">
+            {hasDiscount ? (
+              <div className="flex items-center gap-2">
+                <p className="text-sm text-muted-foreground line-through">
+                  {formatter.format(originalAmount / 100)}
+                </p>
+                <p className="text-sm font-medium">
+                  {formatter.format(amountCharge / 100)}
+                </p>
+              </div>
+            ) : (
+              <p className="text-sm">{formatter.format(amountCharge / 100)}</p>
+            )}
+            {discount && (
+              <p className="text-sm font-medium">
+                {`${discount?.code} - ${discountText}`} off {discountSpan}
+              </p>
+            )}
+          </div>
+          <p className="text-sm">Pay on Delivery</p>
         </div>
         <p className="text-sm">{paymentMethodText}</p>
         <p className="text-xs text-muted-foreground mt-2">
@@ -158,7 +208,6 @@ const PODConfirmationContent = () => {
         ]);
 
         queryClient.invalidateQueries({ queryKey: bagQueries.activeBagKey() });
-        console.log("POD checkout session completed successfully");
       } catch (error) {
         console.error("Failed to complete POD checkout session:", error);
       }
@@ -244,7 +293,7 @@ const PODConfirmationContent = () => {
 
           <BagSummaryItems
             items={checkoutState.bag.items}
-            discount={checkoutState.discount}
+            discount={session.discount as Discount | null}
           />
         </motion.div>
 

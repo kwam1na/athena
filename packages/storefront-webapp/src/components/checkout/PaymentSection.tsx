@@ -38,7 +38,7 @@ export const PaymentSection = ({ form }: CheckoutFormSectionProps) => {
       const canProceedToPayment = await canPlaceOrder();
       const { data } = webOrderSchema.safeParse(checkoutState);
 
-      const total = bagSubtotal * 100;
+      const total = bagSubtotal;
 
       if (!canProceedToPayment || !data || !activeSession._id) {
         throw new Error("Invalid order state");

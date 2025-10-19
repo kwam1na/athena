@@ -9,7 +9,8 @@
     "start": "vite",
     "test": "vitest",
     "test:ui": "vitest --ui",
-    "test:coverage": "vitest --coverage"
+    "test:coverage": "vitest --coverage",
+    "email:dev": "email dev --dir convex/emails"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.6.3",

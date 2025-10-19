@@ -28,6 +28,8 @@ export default defineConfig({
 
             if (id.includes("hls.js")) return "hls-js-vendor";
 
+            if (id.includes("posthog-js")) return "posthog-js-vendor";
+
             // Fallback for other node_modules
             return "vendor";
           }

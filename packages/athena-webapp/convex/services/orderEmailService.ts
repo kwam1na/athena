@@ -4,6 +4,7 @@ import { Address } from "../../types";
 import { currencyFormatter, formatDate, getAddressString } from "../utils";
 import { formatOrderItems } from "../storeFront/onlineOrderUtilFns";
 import { Id } from "../_generated/dataModel";
+import { getDiscountValue } from "../inventory/utils";
 
 type OrderDetails = {
   _id: Id<"onlineOrder">;
@@ -17,6 +18,7 @@ type OrderDetails = {
   deliveryMethod: string;
   deliveryDetails: any;
   deliveryFee?: number | null;
+  discount?: any;
   items?: any[];
   storeId: Id<"store">;
   didSendNewOrderReceivedEmail?: boolean;
@@ -99,8 +101,6 @@ export async function sendPODOrderEmails(params: {
   adminNotificationSent: boolean;
 }> {
   const formatter = currencyFormatter(params.store?.currency || "GHS");
-  const deliveryMethodText =
-    params.order.deliveryMethod === "pickup" ? "picked up" : "delivered";
 
   const orderStatusMessaging = buildOrderStatusMessage({
     deliveryMethod: params.order.deliveryMethod,
@@ -117,7 +117,13 @@ export async function sendPODOrderEmails(params: {
 
   const items = formatOrderItems(
     params.order.items || [],
-    params.store?.currency || "GHS"
+    params.store?.currency || "GHS",
+    params.order.discount
+  );
+
+  const discountValue = getDiscountValue(
+    params.order.items || [],
+    params.order.discount
   );
 
   let confirmationSent = false;
@@ -131,11 +137,15 @@ export async function sendPODOrderEmails(params: {
       delivery_fee: params.order.deliveryFee
         ? formatter.format(params.order.deliveryFee)
         : undefined,
+      discount: params.order.discount
+        ? formatter.format(discountValue / 100)
+        : undefined,
       store_name: PAYMENT_CONSTANTS.STORE_NAME,
       order_number: params.order.orderNumber,
       order_date: formatDate(params.order._creationTime),
       order_status_messaging: orderStatusMessaging,
       total: formatter.format(params.amount / 100),
+      subtotal: formatter.format(params.amount / 100),
       items,
       pickup_type: params.order.deliveryMethod,
       pickup_details: deliveryAddress,
@@ -245,9 +255,16 @@ export async function sendPaymentVerificationEmails(params: {
         storeLocation: params.store?.config?.contactInfo?.location,
       });
 
+      // Calculate subtotal from order items
+      const subtotal = (params.order.items || []).reduce(
+        (sum, item) => sum + (item.price || 0) * (item.quantity || 0),
+        0
+      );
+
       const items = formatOrderItems(
         params.order.items || [],
-        params.store?.currency || "GHS"
+        params.store?.currency || "GHS",
+        params.order.discount
       );
 
       const emailResponse = await sendOrderEmail({
@@ -264,6 +281,7 @@ export async function sendPaymentVerificationEmails(params: {
         order_date: formatDate(params.order._creationTime),
         order_status_messaging: orderStatusMessaging,
         total: formatter.format(params.orderAmount / 100),
+        subtotal: formatter.format(subtotal),
         items,
         pickup_type: params.order.deliveryMethod,
         pickup_details: pickupDetails,

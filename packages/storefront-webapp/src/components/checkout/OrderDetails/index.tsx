@@ -58,7 +58,7 @@ export const PaymentDetails = ({ session }: { session?: CheckoutSession }) => {
   const amountCharge = getOrderAmount({
     items,
     discount: discount as any,
-    deliveryFee: session.deliveryFee,
+    deliveryFee: (session.deliveryFee || 0) * 100,
     subtotal: session.amount,
     isInCents: true,
   });

@@ -1,5 +1,5 @@
 import { useStoreContext } from "@/contexts/StoreContext";
-import { useCheckout } from "../CheckoutProvider";
+import { Discount, useCheckout } from "../CheckoutProvider";
 import { useShoppingBag } from "@/hooks/useShoppingBag";
 import { getDiscountValue } from "../utils";
 import { BagSummaryItems } from "../BagSummary";
@@ -35,6 +35,7 @@ export default function OrderSummary() {
             type: data.promoCode.discountType,
             span: data.promoCode.span,
             productSkus: data.promoCode.productSkus,
+            isMultipleUses: data.promoCode.isMultipleUses,
           },
         });
       } else {
@@ -100,6 +101,8 @@ export default function OrderSummary() {
     }
   };
 
+  const discount = checkoutState.discount || activeSession.discount;
+
   const discountSpan =
     checkoutState.discount?.span == "entire-order"
       ? "entire order"
@@ -111,7 +114,7 @@ export default function OrderSummary() {
 
       <BagSummaryItems
         items={checkoutState?.bag?.items}
-        discount={checkoutState.discount}
+        discount={discount as Discount | null}
       />
 
       <div className="space-y-8 pt-4 mt-4">

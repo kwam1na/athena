@@ -9,6 +9,7 @@ import {
   getAddressString,
 } from "../utils";
 import { api } from "../_generated/api";
+import { getProductDiscountValue } from "../inventory/utils";
 
 // Order status constants
 const ORDER_STATUS = {
@@ -30,19 +31,44 @@ export const formatOrderItems = (
     quantity?: number;
     colorName?: string;
     length?: number;
+    productSkuId?: string;
   }>,
-  storeCurrency: string
+  storeCurrency: string,
+  discount?: any
 ) => {
   const formatter = currencyFormatter(storeCurrency);
 
-  return items.map((item) => ({
-    text: capitalizeWords(item.productName || ""),
-    image: item.productImage || "",
-    price: item.price === 0 ? "Free" : formatter.format(item.price || 0),
-    quantity: String(item.quantity || 0),
-    color: item.colorName || "",
-    length: item.length ? `${item.length} inches` : undefined,
-  }));
+  return items.map((item) => {
+    const originalPrice = item.price || 0;
+    const isEligibleForDiscount =
+      discount &&
+      (discount.span === "entire-order" ||
+        !discount.span ||
+        (discount.span === "selected-products" &&
+          discount.productSkus?.includes(item.productSkuId)));
+
+    // Calculate per-item discount
+    let itemDiscount = 0;
+    if (isEligibleForDiscount) {
+      itemDiscount = getProductDiscountValue(originalPrice, discount);
+    }
+
+    const discountedPrice = originalPrice - itemDiscount;
+    const totalItemSavings = itemDiscount * (item.quantity || 0);
+
+    return {
+      text: capitalizeWords(item.productName || ""),
+      image: item.productImage || "",
+      price: originalPrice === 0 ? "Free" : formatter.format(originalPrice),
+      discountedPrice:
+        itemDiscount > 0 ? formatter.format(discountedPrice) : undefined,
+      savings:
+        totalItemSavings > 0 ? formatter.format(totalItemSavings) : undefined,
+      quantity: String(item.quantity || 0),
+      color: item.colorName || "",
+      length: item.length ? `${item.length} inches` : undefined,
+    };
+  });
 };
 
 // Helper types
@@ -96,7 +122,17 @@ export async function handleOrderStatusUpdate({
   }: EmailConfig): Promise<boolean> {
     console.info(`sending ${type} email for order #${order.orderNumber}`);
 
-    const items = formatOrderItems(order.items || [], store.currency);
+    const items = formatOrderItems(
+      order.items || [],
+      store.currency,
+      order.discount
+    );
+
+    // Calculate subtotal
+    const subtotal = (order.items || []).reduce(
+      (sum, item) => sum + (item.price || 0) * (item.quantity || 0),
+      0
+    );
 
     const emailResponse = await sendOrderEmail({
       type,
@@ -106,6 +142,7 @@ export async function handleOrderStatusUpdate({
       order_date: formatDate(order._creationTime),
       order_status_messaging: statusMessaging,
       total: formatter.format(order.amount / 100),
+      subtotal: formatter.format(subtotal),
       items,
       pickup_type: order.deliveryMethod,
       pickup_details: pickupDetails,
@@ -154,7 +191,7 @@ export async function handleOrderStatusUpdate({
   if (!order.didSendReadyEmail) {
     if (newStatus === ORDER_STATUS.READY_FOR_PICKUP) {
       try {
-        const statusMessaging = `Get excited, ${capitalizeWords(firstName)}! Your order is ready for pickup. Visit our store any time during our business hours to pick up your items.`;
+        const statusMessaging = `Your order is ready for pickup. Visit our store any time during our business hours to pick up your items.`;
 
         const emailSent = await sendEmail({
           type: "ready",
@@ -173,7 +210,7 @@ export async function handleOrderStatusUpdate({
 
     if (newStatus === ORDER_STATUS.OUT_FOR_DELIVERY) {
       try {
-        const statusMessaging = `Get excited, ${capitalizeWords(firstName)}! Your order is out for delivery.`;
+        const statusMessaging = `Your order is out for delivery.`;
 
         const emailSent = await sendEmail({
           type: "ready",

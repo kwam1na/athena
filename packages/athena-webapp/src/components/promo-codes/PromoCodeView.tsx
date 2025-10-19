@@ -36,7 +36,7 @@ function PromoCodeView() {
   const [isSitewide, setIsSitewide] = useState(false);
   const [isHomepageDiscountCode, setIsHomepageDiscountCode] = useState(false);
   const [isExclusive, setIsExclusive] = useState(false);
-
+  const [isMultipleUses, setIsMultipleUses] = useState(false);
   // Add state for valid from and valid to dates
   const [validFrom, setValidFrom] = useState<Date | undefined>(() => {
     // Default to today
@@ -83,6 +83,7 @@ function PromoCodeView() {
       setAutoApply(activePromoCode.autoApply ?? false);
       setIsSitewide(activePromoCode.sitewide ?? false);
       setIsExclusive(activePromoCode.isExclusive ?? false);
+      setIsMultipleUses(activePromoCode.isMultipleUses ?? false);
 
       // Set the date values from the existing promo code
       setValidFrom(new Date(activePromoCode.validFrom));
@@ -147,6 +148,7 @@ function PromoCodeView() {
         sitewide: isSitewide,
         autoApply: autoApply,
         isExclusive: isExclusive,
+        isMultipleUses: isMultipleUses,
         span: promoCodeSpan,
         productSkus,
         validFrom: new Date(validFrom!).getTime(),
@@ -208,6 +210,7 @@ function PromoCodeView() {
         code: promoCode!,
         active: isActive,
         autoApply: autoApply,
+        isMultipleUses: isMultipleUses,
         isExclusive: isExclusive,
         sitewide: isSitewide,
         discountType: discountType,
@@ -323,12 +326,10 @@ function PromoCodeView() {
     Boolean(promoCode && discount && discountType) &&
     (isEntireOrder || hasSelectedProducts);
 
-  // Filter products that match the promo code's product SKUs
-  const promoCodeProducts = products.filter((product: Product) => {
-    return product.skus.some((sku) =>
-      promoCodeProductSkus?.some((psku) => psku._id === sku._id)
-    );
-  });
+  // Get currently selected product SKUs (flatten all products' SKUs and filter by selected)
+  const currentlySelectedProductSkus = products
+    .flatMap((product: Product) => product.skus)
+    .filter((sku) => selectedProductSkus.has(sku._id));
 
   return (
     <View
@@ -356,6 +357,8 @@ function PromoCodeView() {
             setAutoApply={setAutoApply}
             isExclusive={isExclusive}
             setIsExclusive={setIsExclusive}
+            isMultipleUses={isMultipleUses}
+            setIsMultipleUses={setIsMultipleUses}
             isSitewide={isSitewide}
             setIsSitewide={setIsSitewide}
             isHomepageDiscountCode={isHomepageDiscountCode}
@@ -380,7 +383,7 @@ function PromoCodeView() {
             isAddingPromoCode={isAddingPromoCode}
             handleAddPromoCode={handleAddPromoCode}
             promoCodeSpan={promoCodeSpan}
-            products={promoCodeProductSkus}
+            products={currentlySelectedProductSkus}
           />
         </div>
 

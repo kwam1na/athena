@@ -12,7 +12,7 @@ export const OrderSummary = () => {
 
   const formatter = currencyFormatter(activeStore.currency);
 
-  const discountValue = getDiscountValue(order.amount, order.discount);
+  const discountValue = getDiscountValue(order, true);
 
   const discount =
     order.discount && order.discount?.type === "percentage"
@@ -20,6 +20,15 @@ export const OrderSummary = () => {
       : discountValue * 100;
 
   const amountPaid = getAmountPaidForOrder(order);
+
+  const isPODOrder =
+    order.isPODOrder || order.paymentMethod?.type === "payment_on_delivery";
+
+  const amountPaidLabel = isPODOrder
+    ? order.paymentCollected
+      ? "Amount paid"
+      : "Amount to collect"
+    : "Amount paid";
 
   const amountRefunded =
     order?.refunds?.reduce((acc, refund) => acc + refund.amount, 0) || 0;
@@ -31,7 +40,8 @@ export const OrderSummary = () => {
       ? `${order.discount.value}%`
       : `${formatter.format(discountValue)}`;
 
-  console.log(order);
+  const discountSpan =
+    order.discount?.span == "entire-order" ? "entire order" : "select items";
 
   return (
     <div className="space-y-4">
@@ -55,7 +65,8 @@ export const OrderSummary = () => {
                 <p className="text-sm">Discounts</p>
                 <Tag className="w-3 h-3" />
                 <p className="text-sm">
-                  {`${order.discount?.code} - ${discountText}`} off entire order
+                  {`${order.discount?.code} - ${discountText}`} off{" "}
+                  {discountSpan}
                 </p>
               </div>
             </div>
@@ -64,7 +75,7 @@ export const OrderSummary = () => {
           </div>
 
           <div className="flex text-sm justify-between font-medium">
-            <strong>Amount paid</strong>
+            <strong>{amountPaidLabel}</strong>
             <strong>{formatter.format(amountPaid / 100)}</strong>
           </div>
         </>
@@ -72,7 +83,7 @@ export const OrderSummary = () => {
 
       {!order.discount && (
         <div className="flex text-sm justify-between">
-          <strong>Amount paid</strong>
+          <strong>{amountPaidLabel}</strong>
           <strong>{formatter.format(amountPaid / 100)}</strong>
         </div>
       )}

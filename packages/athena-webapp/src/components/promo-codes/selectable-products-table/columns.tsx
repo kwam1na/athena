@@ -26,30 +26,42 @@ export const selectableProductColumns: ColumnDef<Product>[] = [
       const { selectedProductSkus, setSelectedProductSkus } =
         useSelectedProducts();
 
-      const selectedAll = row.original.skus.every((sku) =>
+      const selectedCount = row.original.skus.filter((sku) =>
         selectedProductSkus.has(sku._id)
-      );
+      ).length;
+
+      const selectedAll = selectedCount === row.original.skus.length;
+      const isIndeterminate =
+        selectedCount > 0 && selectedCount < row.original.skus.length;
 
       const handleSelectAll = (value: CheckedState) => {
+        const newSelectedValues = new Set(selectedProductSkus);
+
         if (value) {
-          const newSelectedValues = new Set(
-            row.original.skus.map((sku) => sku._id)
-          );
-          setSelectedProductSkus(newSelectedValues);
+          // Add all SKUs of this product
+          row.original.skus.forEach((sku) => newSelectedValues.add(sku._id));
         } else {
-          setSelectedProductSkus(new Set());
+          // Remove only this product's SKUs
+          row.original.skus.forEach((sku) => newSelectedValues.delete(sku._id));
         }
+
+        setSelectedProductSkus(newSelectedValues);
       };
 
       return (
         <Accordion type="multiple">
           <AccordionItem className="border-none" value="item-1">
             <AccordionTrigger hideChevron>
-              <div className="flex items-center gap-8">
-                {/* <Checkbox
+              <div className="flex items-center gap-4">
+                <Checkbox
                   checked={selectedAll}
                   onCheckedChange={handleSelectAll}
-                /> */}
+                  aria-label="Select all SKUs of this product"
+                  className={
+                    isIndeterminate ? "data-[state=checked]:bg-primary" : ""
+                  }
+                  {...(isIndeterminate && { "data-state": "indeterminate" })}
+                />
                 <div className="flex items-center gap-8">
                   {sku?.images[0] ? (
                     <img
@@ -112,6 +124,20 @@ export const selectableProductColumns: ColumnDef<Product>[] = [
     },
     enableSorting: false,
     enableHiding: false,
+  },
+  {
+    accessorKey: "categoryId",
+    header: ({ column }) => <DataTableColumnHeader column={column} title="" />,
+    cell: () => null,
+    enableSorting: false,
+    enableHiding: true,
+  },
+  {
+    accessorKey: "subcategoryId",
+    header: ({ column }) => <DataTableColumnHeader column={column} title="" />,
+    cell: () => null,
+    enableSorting: false,
+    enableHiding: true,
   },
   // {
   //   accessorKey: "inventoryCount",

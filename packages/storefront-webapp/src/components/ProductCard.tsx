@@ -50,15 +50,15 @@ export function ProductCard({
           </div>
         )}
 
-        {!isSoldOut && hasDiscount && (
+        {!isSoldOut && isSellingFast && (
           <div className="font-medium text-xs absolute top-0 left-0 m-2 text-white bg-black bg-opacity-40 rounded-md px-2 py-1">
-            Sale
+            🔥 Selling fast — Few left
           </div>
         )}
 
-        {!isSoldOut && !hasDiscount && isSellingFast && (
+        {!isSoldOut && hasDiscount && !isSellingFast && (
           <div className="font-medium text-xs absolute top-0 left-0 m-2 text-white bg-black bg-opacity-40 rounded-md px-2 py-1">
-            🔥 Selling fast — Few left
+            Sale
           </div>
         )}
       </div>

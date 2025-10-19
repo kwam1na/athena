@@ -491,7 +491,7 @@ export default function ShoppingBag() {
           )}
           <h1 className="text-lg font-light">Bag</h1>
 
-          {potentialRewards > 0 && hasDiscountModalBeenShown && (
+          {/* {potentialRewards > 0 && hasDiscountModalBeenShown && (
             <motion.div
               initial={{ opacity: 0, y: -4 }}
               animate={{
@@ -512,7 +512,7 @@ export default function ShoppingBag() {
                 Redeemable for discounts on future purchases
               </p>
             </motion.div>
-          )}
+          )} */}
 
           {/* {!hasCompletedDiscountModalFlow &&
             store?.config?.homepageDiscountCodeModalPromoCode && (

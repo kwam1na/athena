@@ -351,6 +351,7 @@ export type Discount = {
   type: "percentage" | "amount";
   value: number;
   span: "entire-order" | "selected-products";
+  isMultipleUses: boolean;
   productSkus?: string[];
   totalDiscount?: number;
 };

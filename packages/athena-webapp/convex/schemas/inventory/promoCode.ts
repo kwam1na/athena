@@ -12,6 +12,7 @@ export const promoCodeSchema = v.object({
   active: v.boolean(),
   displayText: v.string(),
   isExclusive: v.optional(v.boolean()),
+  isMultipleUses: v.optional(v.boolean()),
   autoApply: v.optional(v.boolean()),
   sitewide: v.optional(v.boolean()),
   createdByUserId: v.id("athenaUser"),

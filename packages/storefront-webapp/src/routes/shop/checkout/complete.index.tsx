@@ -3,6 +3,7 @@ import { updateCheckoutSession } from "@/api/checkoutSession";
 import { BagSummaryItems } from "@/components/checkout/BagSummary";
 import {
   CheckoutProvider,
+  Discount,
   useCheckout,
   webOrderSchema,
 } from "@/components/checkout/CheckoutProvider";
@@ -181,7 +182,7 @@ export const CheckoutComplete = () => {
         >
           <BagSummaryItems
             items={checkoutState.bag.items}
-            discount={checkoutState.discount}
+            discount={activeSession.discount as Discount | null}
           />
         </motion.div>
 

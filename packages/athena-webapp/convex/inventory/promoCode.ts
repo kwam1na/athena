@@ -26,6 +26,22 @@ export const redeem = mutation({
       return { success: false, message: "Promo code is no longer active" };
     }
 
+    // Validate date range
+    const now = Date.now();
+    if (now < promoCode.validFrom) {
+      return {
+        success: false,
+        message: "Promo code is not yet valid",
+      };
+    }
+
+    if (now > promoCode.validTo) {
+      return {
+        success: false,
+        message: "Promo code has expired",
+      };
+    }
+
     // check if this code is already redeemed
     const redeemed = await ctx.db
       .query("redeemedPromoCode")
@@ -142,6 +158,7 @@ export const create = mutation({
     limit: v.optional(v.number()),
     autoApply: v.optional(v.boolean()),
     isExclusive: v.optional(v.boolean()),
+    isMultipleUses: v.optional(v.boolean()),
     sitewide: v.optional(v.boolean()),
     displayText: v.string(),
     validFrom: v.number(),
@@ -159,6 +176,7 @@ export const create = mutation({
       limit: args.limit,
       autoApply: args.autoApply,
       isExclusive: args.isExclusive,
+      isMultipleUses: args.isMultipleUses,
       sitewide: args.sitewide,
       displayText: args.displayText,
       validFrom: args.validFrom,
@@ -237,6 +255,7 @@ export const getById = query({
       limit: v.optional(v.number()),
       autoApply: v.optional(v.boolean()),
       isExclusive: v.optional(v.boolean()),
+      isMultipleUses: v.optional(v.boolean()),
       sitewide: v.optional(v.boolean()),
       displayText: v.string(),
       validFrom: v.number(),
@@ -321,6 +340,7 @@ export const update = mutation({
     active: v.optional(v.boolean()),
     autoApply: v.optional(v.boolean()),
     isExclusive: v.optional(v.boolean()),
+    isMultipleUses: v.optional(v.boolean()),
     sitewide: v.optional(v.boolean()),
     displayText: v.optional(v.string()),
     code: v.optional(v.string()),
@@ -348,6 +368,7 @@ export const update = mutation({
       active: args.active,
       autoApply: args.autoApply,
       isExclusive: args.isExclusive,
+      isMultipleUses: args.isMultipleUses,
       sitewide: args.sitewide,
       displayText: args.displayText,
       discountType: args.discountType,

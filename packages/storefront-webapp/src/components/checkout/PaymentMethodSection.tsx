@@ -84,7 +84,7 @@ export const PaymentMethodSection = () => {
             </div>
           </GhostButton>
 
-          {isDeliveryOrder &&
+          {/* {isDeliveryOrder &&
             checkoutState.deliveryOption === "within-accra" && (
               <GhostButton
                 type="button"
@@ -106,11 +106,11 @@ export const PaymentMethodSection = () => {
                   </div>
                 </div>
               </GhostButton>
-            )}
+            )} */}
         </div>
 
         {/* POD Payment Method Selection */}
-        {checkoutState.paymentMethod === "payment_on_delivery" &&
+        {/* {checkoutState.paymentMethod === "payment_on_delivery" &&
           checkoutState.deliveryOption === "within-accra" && (
             <motion.div
               initial={{ opacity: 0, height: 0 }}
@@ -180,7 +180,7 @@ export const PaymentMethodSection = () => {
                 </div>
               </Alert>
             </motion.div>
-          )}
+          )} */}
 
         {/* Pickup Order Notice */}
         {/* {!isDeliveryOrder && (

@@ -1,14 +1,10 @@
-import { Cross2Icon, PlusIcon } from "@radix-ui/react-icons";
+import { Cross2Icon } from "@radix-ui/react-icons";
 import { Table } from "@tanstack/react-table";
-
 import { Button } from "../../ui/button";
 import { Input } from "../../ui/input";
-import { Link } from "@tanstack/react-router";
-import { DataTableViewOptions } from "./data-table-view-options";
-// import { DataTableViewOptions } from "./data-table-view-options";
-
-// import { priorities, statuses } from "./data/data";
-// import { DataTableFacetedFilter } from "./data-table-faceted-filter";
+import { DataTableFacetedFilter } from "../../products/products-table/components/data-table-faceted-filter";
+import { useGetSubcategories } from "~/src/hooks/useGetSubcategories";
+import { useGetCategories } from "~/src/hooks/useGetCategories";
 
 interface DataTableToolbarProps<TData> {
   table: Table<TData>;
@@ -19,29 +15,60 @@ export function DataTableToolbar<TData>({
 }: DataTableToolbarProps<TData>) {
   const isFiltered = table.getState().columnFilters.length > 0;
 
+  const categories = useGetCategories();
+  const categoryOptions = categories
+    ?.map((c) => ({
+      label: c.name,
+      value: c._id,
+    }))
+    ?.sort((a, b) => a.label.localeCompare(b.label));
+
+  const subcategories = useGetSubcategories();
+  const subcategoryOptions = subcategories
+    ?.map((s) => ({
+      label: s.name,
+      value: s._id,
+    }))
+    ?.sort((a, b) => a.label.localeCompare(b.label));
+
   return (
     <div className="flex items-center justify-between">
-      <div className="flex flex-1 items-center justify-between space-x-2">
-        <div className="flex gap-2">
-          <Input
-            placeholder="Filter products..."
-            value={(table.getColumn("name")?.getFilterValue() as string) ?? ""}
-            onChange={(event) =>
-              table.getColumn("name")?.setFilterValue(event.target.value)
-            }
-            className="h-8 w-[150px] lg:w-[250px]"
+      <div className="flex flex-1 items-center space-x-2">
+        <Input
+          placeholder="Filter products..."
+          value={(table.getColumn("name")?.getFilterValue() as string) ?? ""}
+          onChange={(event) =>
+            table.getColumn("name")?.setFilterValue(event.target.value)
+          }
+          className="h-8 w-[150px] lg:w-[250px]"
+        />
+
+        {table.getColumn("categoryId") && (
+          <DataTableFacetedFilter
+            column={table.getColumn("categoryId")}
+            title="Category"
+            options={categoryOptions || []}
           />
-          {isFiltered && (
-            <Button
-              variant="ghost"
-              onClick={() => table.resetColumnFilters()}
-              className="h-8 px-2 lg:px-3"
-            >
-              Reset
-              <Cross2Icon className="ml-2 h-4 w-4" />
-            </Button>
-          )}
-        </div>
+        )}
+
+        {table.getColumn("subcategoryId") && (
+          <DataTableFacetedFilter
+            column={table.getColumn("subcategoryId")}
+            title="Subcategory"
+            options={subcategoryOptions || []}
+          />
+        )}
+
+        {isFiltered && (
+          <Button
+            variant="ghost"
+            onClick={() => table.resetColumnFilters()}
+            className="h-8 px-2 lg:px-3"
+          >
+            Reset
+            <Cross2Icon className="ml-2 h-4 w-4" />
+          </Button>
+        )}
       </div>
     </div>
   );

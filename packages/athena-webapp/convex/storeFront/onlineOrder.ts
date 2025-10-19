@@ -110,12 +110,16 @@ export const create = mutation({
       })
     );
 
+    console.log("args.discount", args.discount);
+
     // update used promo code for this order
     if (args.discount?.id) {
-      await ctx.db.insert("redeemedPromoCode", {
-        promoCodeId: args.discount.id as Id<"promoCode">,
-        storeFrontUserId: session.storeFrontUserId,
-      });
+      // if the promo code is not multiple uses, insert a redeemed promo code record
+      if (!args.discount.isMultipleUses)
+        await ctx.db.insert("redeemedPromoCode", {
+          promoCodeId: args.discount.id as Id<"promoCode">,
+          storeFrontUserId: session.storeFrontUserId,
+        });
 
       const offer = await ctx.db
         .query("offer")
@@ -217,12 +221,16 @@ export const createFromSession = internalMutation({
       })
     );
 
+    console.log("session.discount", session.discount);
+
     // update used promo code for this order
     if (session.discount?.id) {
-      await ctx.db.insert("redeemedPromoCode", {
-        promoCodeId: session.discount.id as Id<"promoCode">,
-        storeFrontUserId: session.storeFrontUserId,
-      });
+      // if the promo code is not multiple uses, insert a redeemed promo code record
+      if (!session.discount.isMultipleUses)
+        await ctx.db.insert("redeemedPromoCode", {
+          promoCodeId: session.discount.id as Id<"promoCode">,
+          storeFrontUserId: session.storeFrontUserId,
+        });
 
       const offer = await ctx.db
         .query("offer")

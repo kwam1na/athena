@@ -110,7 +110,7 @@ export function ProductInfo({
             <p className="text-md md:text-2xl line-through text-muted-foreground">
               {formatter.format(originalPrice)}
             </p>
-            <p className="text-md md:text-2xl">
+            <p className="text-md md:text-2xl text-accent2">
               {formatter.format(discountedPrice)}
             </p>
           </div>
