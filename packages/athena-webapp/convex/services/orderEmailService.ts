@@ -266,6 +266,11 @@ export async function sendPaymentVerificationEmails(params: {
         params.order.discount
       );
 
+      const amountMinusDeliveryFee =
+        params.orderAmount - (params.order.deliveryFee || 0) * 100;
+
+      const amountWithDiscount = amountMinusDeliveryFee + discountValue;
+
       const emailResponse = await sendOrderEmail({
         type: "confirmation",
         customerEmail: params.order.customerDetails.email,
@@ -280,7 +285,7 @@ export async function sendPaymentVerificationEmails(params: {
         order_date: formatDate(params.order._creationTime),
         order_status_messaging: orderStatusMessaging,
         total: formatter.format(params.orderAmount / 100),
-        subtotal: formatter.format(params.orderAmount / 100),
+        subtotal: formatter.format(amountWithDiscount / 100),
         items,
         pickup_type: params.order.deliveryMethod,
         pickup_details: pickupDetails,

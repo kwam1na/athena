@@ -85,6 +85,23 @@ checkoutRoutes.post("/:checkoutSessionId", async (c) => {
         });
       }
 
+      // check that the session is not already completed
+      const session = await c.env.runQuery(
+        api.storeFront.checkoutSession.getById,
+        {
+          sessionId: checkoutSessionId as Id<"checkoutSession">,
+        }
+      );
+
+      if (session?.hasCompletedPayment) {
+        return c.json({
+          success: false,
+          message:
+            "This checkout session has already been completed. Please refresh the page or return to your shopping bag to start a new checkout.",
+          code: "SESSION_ALREADY_FINALIZED",
+        });
+      }
+
       const payment = await c.env.runAction(
         api.storeFront.payment.createTransaction,
         {
@@ -104,6 +121,7 @@ checkoutRoutes.post("/:checkoutSessionId", async (c) => {
 
     if (action == "complete-checkout") {
       let orderDetailsToUse = orderDetails;
+
       try {
         if (!orderDetails) {
           const order = await c.env.runQuery(
@@ -115,7 +133,7 @@ checkoutRoutes.post("/:checkoutSessionId", async (c) => {
 
           if (order) {
             orderDetailsToUse = {
-              billingDetails: null,
+              billingDetails: order.billingDetails || null,
               customerDetails: order.customerDetails,
               deliveryDetails: order.deliveryDetails,
               deliveryInstructions: order.deliveryInstructions || undefined,
@@ -133,7 +151,10 @@ checkoutRoutes.post("/:checkoutSessionId", async (c) => {
           {
             id: checkoutSessionId as Id<"checkoutSession">,
             hasCompletedCheckoutSession: true,
-            orderDetails: orderDetailsToUse,
+            orderDetails: {
+              billingDetails: null,
+              ...orderDetailsToUse,
+            },
           }
         );
 

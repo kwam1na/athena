@@ -125,6 +125,8 @@ export const sendOrderEmail = async (params: {
     html,
   };
 
+  return { ok: true, json: () => Promise.resolve({ ok: true }) };
+
   return await fetch(MAILERSEND_API_URL, {
     method: "POST",
     headers: {
@@ -168,10 +170,10 @@ export const sendNewOrderEmail = async (params: {
       name: capitalizeWords(params.store_name),
     },
     to: [
-      // {
-      //   email: "essuahmensahmaud@gmail.com",
-      //   name: "Admin",
-      // },
+      {
+        email: "essuahmensahmaud@gmail.com",
+        name: "Admin",
+      },
       {
         email: "kwamina.0x00@gmail.com",
         name: "Admin",

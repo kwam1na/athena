@@ -12,6 +12,7 @@ import { z } from "zod";
 import NotFound from "@/components/states/not-found/NotFound";
 import { MaintenanceMode } from "@/components/states/maintenance/Maintenance";
 import { isInMaintenanceMode } from "@/lib/maintenanceUtils";
+import { ErrorBoundary } from "@/components/states/error/ErrorBoundary";
 import { useAuth } from "@/hooks/useAuth";
 import { PostHogProvider } from "posthog-js/react";
 import {
@@ -28,6 +29,7 @@ const productsPageSchema = z.object({
   email: z.string().optional(),
   origin: z.string().optional(),
   utm_source: z.string().optional(),
+  reference: z.string().optional(),
 });
 
 export const Route = createRootRoute({
@@ -50,6 +52,8 @@ export const Route = createRootRoute({
   validateSearch: productsPageSchema,
 
   component: Body,
+
+  errorComponent: ErrorBoundary,
 
   notFoundComponent: () => {
     return <NotFound />;

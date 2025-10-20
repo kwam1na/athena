@@ -78,6 +78,26 @@ export function AppSidebar() {
 
   const openOrders = orders?.filter((o: any) => o.status === "open")?.length;
 
+  const readyOrders = orders?.filter((o: any) =>
+    o.status.includes("ready")
+  )?.length;
+
+  const outForDeliveryOrders = orders?.filter(
+    (o: any) => o.status === "out-for-delivery"
+  )?.length;
+
+  const completedOrders = orders?.filter((o: any) =>
+    ["delivered", "picked-up"].includes(o.status)
+  )?.length;
+
+  const refundedOrders = orders?.filter(
+    (o: any) => o.status === "refunded"
+  )?.length;
+
+  const cancelledOrders = orders?.filter(
+    (o: any) => o.status === "cancelled"
+  )?.length;
+
   const unapprovedReviewsCount = useQuery(
     api.storeFront.reviews.getUnapprovedReviewsCount,
     activeStore?._id ? { storeId: activeStore._id } : "skip"
@@ -237,10 +257,15 @@ export function AppSidebar() {
                           orgUrlSlug: activeOrganization?.slug,
                           storeUrlSlug: activeStore?.slug,
                         })}
-                        className="flex items-center"
+                        className="flex items-center justify-between"
                       >
-                        <PackageCheckIcon className="w-4 h-4" />
-                        <p className="font-medium">Ready</p>
+                        <div className="flex items-center">
+                          <PackageCheckIcon className="w-4 h-4 mr-2" />
+                          <p className="font-medium">Ready</p>
+                        </div>
+                        {Boolean(readyOrders) && (
+                          <p className="text-xs font-medium">{readyOrders}</p>
+                        )}
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuSubItem>
@@ -256,10 +281,18 @@ export function AppSidebar() {
                           orgUrlSlug: activeOrganization?.slug,
                           storeUrlSlug: activeStore?.slug,
                         })}
-                        className="flex items-center"
+                        className="flex items-center justify-between"
                       >
-                        <Truck className="w-4 h-4" />
-                        <p className="font-medium">Out for delivery</p>
+                        <div className="flex items-center">
+                          <Truck className="w-4 h-4 mr-2" />
+                          <p className="font-medium">Out for delivery</p>
+                        </div>
+
+                        {Boolean(outForDeliveryOrders) && (
+                          <p className="text-xs font-medium">
+                            {outForDeliveryOrders}
+                          </p>
+                        )}
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuSubItem>
@@ -275,10 +308,18 @@ export function AppSidebar() {
                           orgUrlSlug: activeOrganization?.slug,
                           storeUrlSlug: activeStore?.slug,
                         })}
-                        className="flex items-center"
+                        className="flex items-center justify-between"
                       >
-                        <CheckCircle className="w-4 h-4" />
-                        <p className="font-medium">Completed</p>
+                        <div className="flex items-center">
+                          <CheckCircle className="w-4 h-4 mr-2" />
+                          <p className="font-medium">Completed</p>
+                        </div>
+
+                        {Boolean(completedOrders) && (
+                          <p className="text-xs font-medium">
+                            {completedOrders}
+                          </p>
+                        )}
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuSubItem>
@@ -294,10 +335,18 @@ export function AppSidebar() {
                           orgUrlSlug: activeOrganization?.slug,
                           storeUrlSlug: activeStore?.slug,
                         })}
-                        className="flex items-center"
+                        className="flex items-center justify-between"
                       >
-                        <RotateCcw className="w-4 h-4" />
-                        <p className="font-medium">Refunded</p>
+                        <div className="flex items-center">
+                          <RotateCcw className="w-4 h-4 mr-2" />
+                          <p className="font-medium">Refunded</p>
+                        </div>
+
+                        {Boolean(refundedOrders) && (
+                          <p className="text-xs font-medium">
+                            {refundedOrders}
+                          </p>
+                        )}
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuSubItem>
@@ -313,10 +362,18 @@ export function AppSidebar() {
                           orgUrlSlug: activeOrganization?.slug,
                           storeUrlSlug: activeStore?.slug,
                         })}
-                        className="flex items-center"
+                        className="flex items-center justify-between"
                       >
-                        <XCircle className="w-4 h-4" />
-                        <p className="font-medium">Cancelled</p>
+                        <div className="flex items-center">
+                          <XCircle className="w-4 h-4 mr-2" />
+                          <p className="font-medium">Cancelled</p>
+                        </div>
+
+                        {Boolean(cancelledOrders) && (
+                          <p className="text-xs font-medium">
+                            {cancelledOrders}
+                          </p>
+                        )}
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuSubItem>

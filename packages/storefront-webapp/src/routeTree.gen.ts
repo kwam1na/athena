@@ -32,6 +32,7 @@ import { Route as LayoutShopSavedIndexImport } from './routes/_layout/shop.saved
 import { Route as LayoutPoliciesTosIndexImport } from './routes/_layout/policies/tos.index'
 import { Route as LayoutPoliciesPrivacyIndexImport } from './routes/_layout/policies/privacy.index'
 import { Route as LayoutPoliciesDeliveryReturnsExchangesIndexImport } from './routes/_layout/policies/delivery-returns-exchanges.index'
+import { Route as ShopCheckoutSessionIdSlugIncompleteImport } from './routes/shop/checkout/$sessionIdSlug/incomplete'
 import { Route as ShopCheckoutSessionIdSlugCompleteImport } from './routes/shop/checkout/$sessionIdSlug/complete'
 import { Route as ShopCheckoutSessionIdSlugCanceledImport } from './routes/shop/checkout/$sessionIdSlug/canceled'
 import { Route as LayoutShopProductProductSlugImport } from './routes/_layout/shop.product.$productSlug'
@@ -170,6 +171,13 @@ const LayoutPoliciesDeliveryReturnsExchangesIndexRoute =
     id: '/policies/delivery-returns-exchanges/',
     path: '/policies/delivery-returns-exchanges/',
     getParentRoute: () => LayoutRoute,
+  } as any)
+
+const ShopCheckoutSessionIdSlugIncompleteRoute =
+  ShopCheckoutSessionIdSlugIncompleteImport.update({
+    id: '/shop/checkout/$sessionIdSlug/incomplete',
+    path: '/shop/checkout/$sessionIdSlug/incomplete',
+    getParentRoute: () => rootRoute,
   } as any)
 
 const ShopCheckoutSessionIdSlugCompleteRoute =
@@ -358,6 +366,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ShopCheckoutSessionIdSlugCompleteImport
       parentRoute: typeof rootRoute
     }
+    '/shop/checkout/$sessionIdSlug/incomplete': {
+      id: '/shop/checkout/$sessionIdSlug/incomplete'
+      path: '/shop/checkout/$sessionIdSlug/incomplete'
+      fullPath: '/shop/checkout/$sessionIdSlug/incomplete'
+      preLoaderRoute: typeof ShopCheckoutSessionIdSlugIncompleteImport
+      parentRoute: typeof rootRoute
+    }
     '/_layout/policies/delivery-returns-exchanges/': {
       id: '/_layout/policies/delivery-returns-exchanges/'
       path: '/policies/delivery-returns-exchanges'
@@ -536,6 +551,7 @@ export interface FileRoutesByFullPath {
   '/shop/product/$productSlug': typeof LayoutShopProductProductSlugRoute
   '/shop/checkout/$sessionIdSlug/canceled': typeof ShopCheckoutSessionIdSlugCanceledRoute
   '/shop/checkout/$sessionIdSlug/complete': typeof ShopCheckoutSessionIdSlugCompleteRoute
+  '/shop/checkout/$sessionIdSlug/incomplete': typeof ShopCheckoutSessionIdSlugIncompleteRoute
   '/policies/delivery-returns-exchanges': typeof LayoutPoliciesDeliveryReturnsExchangesIndexRoute
   '/policies/privacy': typeof LayoutPoliciesPrivacyIndexRoute
   '/policies/tos': typeof LayoutPoliciesTosIndexRoute
@@ -567,6 +583,7 @@ export interface FileRoutesByTo {
   '/shop/product/$productSlug': typeof LayoutShopProductProductSlugRoute
   '/shop/checkout/$sessionIdSlug/canceled': typeof ShopCheckoutSessionIdSlugCanceledRoute
   '/shop/checkout/$sessionIdSlug/complete': typeof ShopCheckoutSessionIdSlugCompleteRoute
+  '/shop/checkout/$sessionIdSlug/incomplete': typeof ShopCheckoutSessionIdSlugIncompleteRoute
   '/policies/delivery-returns-exchanges': typeof LayoutPoliciesDeliveryReturnsExchangesIndexRoute
   '/policies/privacy': typeof LayoutPoliciesPrivacyIndexRoute
   '/policies/tos': typeof LayoutPoliciesTosIndexRoute
@@ -601,6 +618,7 @@ export interface FileRoutesById {
   '/_layout/shop/product/$productSlug': typeof LayoutShopProductProductSlugRoute
   '/shop/checkout/$sessionIdSlug/canceled': typeof ShopCheckoutSessionIdSlugCanceledRoute
   '/shop/checkout/$sessionIdSlug/complete': typeof ShopCheckoutSessionIdSlugCompleteRoute
+  '/shop/checkout/$sessionIdSlug/incomplete': typeof ShopCheckoutSessionIdSlugIncompleteRoute
   '/_layout/policies/delivery-returns-exchanges/': typeof LayoutPoliciesDeliveryReturnsExchangesIndexRoute
   '/_layout/policies/privacy/': typeof LayoutPoliciesPrivacyIndexRoute
   '/_layout/policies/tos/': typeof LayoutPoliciesTosIndexRoute
@@ -634,6 +652,7 @@ export interface FileRouteTypes {
     | '/shop/product/$productSlug'
     | '/shop/checkout/$sessionIdSlug/canceled'
     | '/shop/checkout/$sessionIdSlug/complete'
+    | '/shop/checkout/$sessionIdSlug/incomplete'
     | '/policies/delivery-returns-exchanges'
     | '/policies/privacy'
     | '/policies/tos'
@@ -664,6 +683,7 @@ export interface FileRouteTypes {
     | '/shop/product/$productSlug'
     | '/shop/checkout/$sessionIdSlug/canceled'
     | '/shop/checkout/$sessionIdSlug/complete'
+    | '/shop/checkout/$sessionIdSlug/incomplete'
     | '/policies/delivery-returns-exchanges'
     | '/policies/privacy'
     | '/policies/tos'
@@ -696,6 +716,7 @@ export interface FileRouteTypes {
     | '/_layout/shop/product/$productSlug'
     | '/shop/checkout/$sessionIdSlug/canceled'
     | '/shop/checkout/$sessionIdSlug/complete'
+    | '/shop/checkout/$sessionIdSlug/incomplete'
     | '/_layout/policies/delivery-returns-exchanges/'
     | '/_layout/policies/privacy/'
     | '/_layout/policies/tos/'
@@ -724,6 +745,7 @@ export interface RootRouteChildren {
   ShopCheckoutIndexRoute: typeof ShopCheckoutIndexRoute
   ShopCheckoutSessionIdSlugCanceledRoute: typeof ShopCheckoutSessionIdSlugCanceledRoute
   ShopCheckoutSessionIdSlugCompleteRoute: typeof ShopCheckoutSessionIdSlugCompleteRoute
+  ShopCheckoutSessionIdSlugIncompleteRoute: typeof ShopCheckoutSessionIdSlugIncompleteRoute
   ShopCheckoutSessionIdSlugIndexRoute: typeof ShopCheckoutSessionIdSlugIndexRoute
   ShopCheckoutCompleteIndexRoute: typeof ShopCheckoutCompleteIndexRoute
   ShopCheckoutVerifyIndexRoute: typeof ShopCheckoutVerifyIndexRoute
@@ -743,6 +765,8 @@ const rootRouteChildren: RootRouteChildren = {
     ShopCheckoutSessionIdSlugCanceledRoute,
   ShopCheckoutSessionIdSlugCompleteRoute:
     ShopCheckoutSessionIdSlugCompleteRoute,
+  ShopCheckoutSessionIdSlugIncompleteRoute:
+    ShopCheckoutSessionIdSlugIncompleteRoute,
   ShopCheckoutSessionIdSlugIndexRoute: ShopCheckoutSessionIdSlugIndexRoute,
   ShopCheckoutCompleteIndexRoute: ShopCheckoutCompleteIndexRoute,
   ShopCheckoutVerifyIndexRoute: ShopCheckoutVerifyIndexRoute,
@@ -769,6 +793,7 @@ export const routeTree = rootRoute
         "/shop/checkout/",
         "/shop/checkout/$sessionIdSlug/canceled",
         "/shop/checkout/$sessionIdSlug/complete",
+        "/shop/checkout/$sessionIdSlug/incomplete",
         "/shop/checkout/$sessionIdSlug/",
         "/shop/checkout/complete/",
         "/shop/checkout/verify/"
@@ -852,6 +877,9 @@ export const routeTree = rootRoute
     },
     "/shop/checkout/$sessionIdSlug/complete": {
       "filePath": "shop/checkout/$sessionIdSlug/complete.tsx"
+    },
+    "/shop/checkout/$sessionIdSlug/incomplete": {
+      "filePath": "shop/checkout/$sessionIdSlug/incomplete.tsx"
     },
     "/_layout/policies/delivery-returns-exchanges/": {
       "filePath": "_layout/policies/delivery-returns-exchanges.index.tsx",

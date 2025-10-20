@@ -184,7 +184,10 @@ export const create = mutation({
     }
 
     if (existingSession && existingSession.placedOrderId !== undefined) {
-      console.log("existing session has already been placed");
+      console.log(
+        "existing session has already been placed. returning existing session"
+      );
+      return { success: true, session: existingSession };
       console.log("proceeding to create a new session");
     }
 
@@ -401,7 +404,6 @@ export const completeCheckoutSessions = internalMutation({
           q.lt(q.field("expiresAt"), oneHourAgo),
           q.eq(q.field("isFinalizingPayment"), true),
           q.eq(q.field("hasCompletedPayment"), true),
-          q.eq(q.field("hasVerifiedPayment"), true),
           q.eq(q.field("hasCompletedCheckoutSession"), false)
         )
       )

@@ -20,3 +20,5 @@ export const ErrorPage: React.FC<ErrorPageProps> = ({ title, subtitle }) => {
     </div>
   );
 };
+
+export { ErrorBoundary } from "./ErrorBoundary";

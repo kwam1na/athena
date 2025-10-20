@@ -26,7 +26,7 @@ const Verify = () => {
     session?.externalReference;
 
   const { data } = useQuery({
-    queryKey: ["verified-payment"],
+    queryKey: ["verified-payment", externalReference],
     queryFn: () =>
       verifyCheckoutSessionPayment({
         externalReference: externalReference!,
@@ -35,16 +35,14 @@ const Verify = () => {
   });
 
   useEffect(() => {
-    if (data) {
-      if (
-        data.verified ||
-        session?.placedOrderId ||
-        session?.hasVerifiedPayment ||
-        !data.verified
-      )
-        navigate({ to: "/shop/checkout/complete" });
+    if (
+      data &&
+      externalReference === session?.externalReference &&
+      (data.verified || session?.placedOrderId || session?.hasVerifiedPayment)
+    ) {
+      navigate({ to: "/shop/checkout/complete" });
     }
-  }, [data, session]);
+  }, [data, session, externalReference]);
 
   if (isLoading || session === undefined) return null;
 

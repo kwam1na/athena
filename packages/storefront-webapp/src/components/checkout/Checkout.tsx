@@ -5,21 +5,37 @@ import { act, useEffect, useState } from "react";
 import MobileBagSummary from "./MobileBagSummary";
 import { CheckoutForm } from "./CheckoutForm";
 import { TrustSignals } from "../communication/TrustSignals";
+import { useNavigate } from "@tanstack/react-router";
 
 const MainComponent = () => {
   const { activeSession } = useCheckout();
+  const navigate = useNavigate();
 
   useEffect(() => {
+    const origin = new URLSearchParams(window.location.search).get("origin");
+
     const needsVerification =
       activeSession.externalReference &&
       activeSession.hasCompletedPayment &&
-      !activeSession.placedOrderId;
+      activeSession.placedOrderId &&
+      origin === "paystack";
 
-    if (needsVerification || activeSession.hasCompletedPayment) {
-      window.open(
-        `/shop/checkout/verify?reference=${activeSession.externalReference}`,
-        "_self"
-      );
+    const isIncomplete =
+      activeSession.hasCompletedPayment &&
+      activeSession.placedOrderId &&
+      !activeSession.hasCompletedCheckoutSession &&
+      origin === null;
+
+    if (needsVerification) {
+      navigate({
+        to: `/shop/checkout/verify?reference=${activeSession.externalReference}`,
+      });
+    }
+
+    if (isIncomplete) {
+      navigate({
+        to: `/shop/checkout/${activeSession._id}/incomplete`,
+      });
     }
   }, [activeSession]);
 

@@ -141,7 +141,7 @@ export default function OrderEmail({
                             <Text style={itemPriceStrikethrough}>
                               {item.price}
                             </Text>
-                            <Text style={itemPrice}>
+                            <Text style={itemSavings}>
                               {item.discountedPrice}
                             </Text>
                             {/* {item.savings && (
@@ -225,8 +225,8 @@ const logo = {
 };
 
 const heading = {
-  fontSize: "24px",
-  fontWeight: "bold",
+  fontSize: "32px",
+  fontWeight: "900",
   marginTop: "20px",
   marginBottom: "20px",
   textColor: "#000000",
@@ -317,10 +317,9 @@ const itemPriceStrikethrough = {
 };
 
 const itemSavings = {
-  fontSize: "12px",
-  color: "#22c55e",
-  fontWeight: "600",
-  margin: "4px 0 0 0",
+  fontSize: "14px",
+  color: "#ee5d92",
+  fontWeight: "bold",
 };
 
 const itemDivider = {
@@ -342,7 +341,7 @@ const infoTextDiscount = {
 
 const infoTextTotal = {
   fontSize: "16px",
-  lineHeight: "24px",
+  lineHeight: "32px",
   margin: "8px 0",
   fontWeight: "bold",
 };

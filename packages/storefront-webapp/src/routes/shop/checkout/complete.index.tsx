@@ -17,12 +17,14 @@ import { Button } from "@/components/ui/button";
 import { LoadingButton } from "@/components/ui/loading-button";
 import { useAuth } from "@/hooks/useAuth";
 import { useGetActiveCheckoutSession } from "@/hooks/useGetActiveCheckoutSession";
+import { useShoppingBag } from "@/hooks/useShoppingBag";
 import { useBagQueries } from "@/lib/queries/bag";
 import { capitalizeFirstLetter } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
-import { act, useEffect, useState } from "react";
+import { ArrowLeft } from "lucide-react";
+import { useEffect, useState } from "react";
 
 export const Route = createFileRoute("/shop/checkout/complete/")({
   component: () => <CheckoutCompleteView />,
@@ -30,29 +32,28 @@ export const Route = createFileRoute("/shop/checkout/complete/")({
 
 export const CheckoutComplete = () => {
   const { checkoutState, activeSession, onlineOrder } = useCheckout();
-  const [orderId, setOrderId] = useState<string | null>(null);
-  const [attemptedOrderCreation, setAttemptedOrderCreation] = useState(false);
-  const [isPlacingOrder, setIsPlacingOrder] = useState(false);
-
-  // console.log("checkout state", checkoutState);
-  // console.log("online order", onlineOrder);
-
+  const { bag } = useShoppingBag();
+  const { userId } = useAuth();
   const queryClient = useQueryClient();
-
   const bagQueries = useBagQueries();
 
-  const { userId } = useAuth();
+  const [hasOrderError, setHasOrderError] = useState(false);
+  const [isRetrying, setIsRetrying] = useState(false);
 
   const isGuest = userId === undefined;
 
   useEffect(() => {
     const completeCheckoutSession = async () => {
+      if (
+        !activeSession.hasCompletedPayment &&
+        !activeSession.hasVerifiedPayment
+      ) {
+        return;
+      }
+
       const { data } = webOrderSchema.safeParse(checkoutState);
 
-      if (
-        activeSession.hasCompletedPayment ||
-        activeSession.hasVerifiedPayment
-      ) {
+      try {
         await Promise.allSettled([
           updateCheckoutSession({
             action: "complete-checkout",
@@ -60,7 +61,6 @@ export const CheckoutComplete = () => {
             hasCompletedCheckoutSession: true,
             orderDetails: data,
           }),
-
           postAnalytics({
             action: "completed_checkout",
             data: {
@@ -70,41 +70,38 @@ export const CheckoutComplete = () => {
         ]);
 
         queryClient.invalidateQueries({ queryKey: bagQueries.activeBagKey() });
+      } catch (error) {
+        console.error("Failed to complete checkout:", error);
+        setHasOrderError(true);
       }
     };
 
-    if (activeSession) {
-      completeCheckoutSession();
-    }
-  }, [activeSession]);
+    completeCheckoutSession();
+  }, [
+    activeSession._id,
+    activeSession.hasCompletedPayment,
+    activeSession.hasVerifiedPayment,
+  ]);
 
-  // useEffect(() => {
-  //   if (onlineOrder) {
-  //     setHadToCompleteCheckoutSession(true);
-  //   }
-  // }, [onlineOrder]);
-
-  const placeOrder = async () => {
+  const retryOrderCreation = async () => {
     const { data } = webOrderSchema.safeParse(checkoutState);
-    setAttemptedOrderCreation(false);
+    setIsRetrying(true);
+    setHasOrderError(false);
 
     try {
-      setIsPlacingOrder(true);
-
-      const res = await updateCheckoutSession({
+      await updateCheckoutSession({
         action: "complete-checkout",
         sessionId: activeSession._id,
         hasCompletedCheckoutSession: true,
         orderDetails: data,
       });
 
-      setOrderId(res.orderId);
-      setAttemptedOrderCreation(true);
-      setIsPlacingOrder(false);
-
       queryClient.invalidateQueries({ queryKey: bagQueries.activeBagKey() });
-    } catch (e) {
-      setIsPlacingOrder(false);
+    } catch (error) {
+      console.error("Failed to retry order creation:", error);
+      setHasOrderError(true);
+    } finally {
+      setIsRetrying(false);
     }
   };
 
@@ -122,8 +119,7 @@ export const CheckoutComplete = () => {
     );
   }
 
-  if ((!orderId && attemptedOrderCreation) || isPlacingOrder) {
-    console.log("returning issue order");
+  if (hasOrderError) {
     return (
       <div className="px-48 pt-24 pb-40 space-y-24">
         <motion.div
@@ -141,8 +137,8 @@ export const CheckoutComplete = () => {
           <p className="text-xs">{`Session id: ${activeSession._id}`}</p>
 
           <LoadingButton
-            isLoading={isPlacingOrder}
-            onClick={placeOrder}
+            isLoading={isRetrying}
+            onClick={retryOrderCreation}
             className="w-[240px]"
           >
             Try again
@@ -153,6 +149,12 @@ export const CheckoutComplete = () => {
   }
 
   const bagItems = onlineOrder?.items || checkoutState.bag.items;
+  const hasBagItems = (bag?.items?.length ?? 0) > 0;
+
+  const deliveryMessage =
+    activeSession.deliveryMethod === "delivery"
+      ? "Your order will be processed in 24 - 48 hours. We'll email you when it's out for delivery."
+      : "Your order will be processed in 24 - 48 hours. We'll email you when it's ready for pickup.";
 
   return (
     <AnimatePresence>
@@ -165,21 +167,10 @@ export const CheckoutComplete = () => {
           }}
           className="space-y-12"
         >
-          <p className="text-3xl font-light">{`Get excited, ${capitalizeFirstLetter(activeSession.customerDetails?.firstName || "")}!`}</p>
-
-          {activeSession.deliveryMethod == "delivery" && (
-            <p>
-              Your order will be processed in 24 - 48 hours. We'll email you
-              when it's out for delivery.
-            </p>
-          )}
-
-          {activeSession.deliveryMethod == "pickup" && (
-            <p>
-              Your order will be processed in 24 - 48 hours. We'll email you
-              when it's ready for pickup.
-            </p>
-          )}
+          <p className="text-3xl font-light">
+            {`Get excited, ${capitalizeFirstLetter(activeSession.customerDetails?.firstName || "")}!`}
+          </p>
+          <p>{deliveryMessage}</p>
         </motion.div>
 
         <motion.div
@@ -223,11 +214,22 @@ export const CheckoutComplete = () => {
           }}
           className="flex flex-col gap-4 md:gap-8 lg:flex-row pt-8"
         >
-          <Link to="/">
-            <Button variant={"clear"} className="px-0">
-              Continue shopping
-            </Button>
-          </Link>
+          {!hasBagItems && (
+            <Link to="/">
+              <Button variant="clear" className="px-0">
+                Continue shopping
+              </Button>
+            </Link>
+          )}
+
+          {hasBagItems && (
+            <Link to="/shop/bag">
+              <Button variant="clear" className="group px-0">
+                <ArrowLeft className="w-4 h-4 mr-2 -me-1 ms-2 transition-transform group-hover:-translate-x-0.5" />
+                Return to bag
+              </Button>
+            </Link>
+          )}
 
           {activeSession.placedOrderId && (
             <Link
@@ -235,8 +237,8 @@ export const CheckoutComplete = () => {
               params={{ orderId: activeSession.placedOrderId }}
               search={{ origin: "checkout" }}
             >
-              <Button variant={"link"} className="px-0">
-                <p className="w-full text-center">View order</p>
+              <Button variant="link" className="px-0">
+                View order
               </Button>
             </Link>
           )}
@@ -249,9 +251,11 @@ export const CheckoutComplete = () => {
 const CheckoutCompleteView = () => {
   const { data, isLoading } = useGetActiveCheckoutSession();
 
-  if (isLoading || data === undefined) return null;
+  if (isLoading || data === undefined) {
+    return null;
+  }
 
-  if (data == null) {
+  if (data === null) {
     return <CheckoutCompleted />;
   }
 

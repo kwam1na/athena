@@ -94,7 +94,7 @@ export const createTransaction = action({
         amount: amountToCharge,
         callbackUrl: `${appUrl}/shop/checkout/verify`,
         metadata: {
-          cancel_action: `${appUrl}/shop/checkout`,
+          cancel_action: `${appUrl}/shop/checkout?origin=paystack`,
           checkout_session_id: args.checkoutSessionId,
           checkout_session_amount: args.amount.toString(),
           order_details: args.orderDetails,

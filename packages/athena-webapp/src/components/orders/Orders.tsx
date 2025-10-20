@@ -15,6 +15,7 @@ export default function Orders({
   status: string;
   orders: OnlineOrder[];
 }) {
+  console.log("orders", orders);
   return (
     <div className="container mx-auto">
       {orders && orders.length > 0 && (

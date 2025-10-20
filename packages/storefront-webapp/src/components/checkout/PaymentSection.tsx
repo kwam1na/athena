@@ -119,6 +119,7 @@ export const PaymentSection = ({ form }: CheckoutFormSectionProps) => {
         const paymentResult = results[0];
         if (paymentResult.status === "fulfilled") {
           const paymentResponse = paymentResult.value;
+
           if (paymentResponse?.authorization_url) {
             window.open(paymentResponse.authorization_url, "_self");
           } else if (!paymentResponse?.success) {
@@ -152,7 +153,6 @@ export const PaymentSection = ({ form }: CheckoutFormSectionProps) => {
   };
 
   const processCheckoutSession = async (orderData: any, total: number) => {
-    console.log("Processing checkout session for order data", orderData);
     return await updateCheckoutSession({
       action: "finalize-payment",
       sessionId: activeSession._id,

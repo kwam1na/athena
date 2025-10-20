@@ -26,7 +26,6 @@ export function DataTableToolbar<TData>({
   const isFiltered = table.getState().columnFilters.length > 0;
 
   const {
-    selectedStatuses,
     selectedDeliveryMethods,
     setSelectedStatuses,
     setSelectedDeliveryMethods,
