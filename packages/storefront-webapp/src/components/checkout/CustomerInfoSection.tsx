@@ -9,13 +9,13 @@ import {
 } from "../ui/form";
 import { Input } from "../ui/input";
 import { UseFormReturn } from "react-hook-form";
+import { useCheckout } from "@/hooks/useCheckout";
 import {
   Address,
   BillingAddress,
   CustomerDetails,
   DeliveryMethod,
-  useCheckout,
-} from "./CheckoutProvider";
+} from "./types";
 
 export interface CheckoutFormSectionProps {
   form: UseFormReturn<

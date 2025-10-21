@@ -21,7 +21,7 @@ export const useOnlineOrderQueries = () => {
         queryKey: ["online-orders", "detail", orderId],
         queryFn: () => getOrder(orderId),
         staleTime: 0,
-        enabled: queryEnabled,
+        enabled: queryEnabled && Boolean(orderId),
       }),
   };
 };

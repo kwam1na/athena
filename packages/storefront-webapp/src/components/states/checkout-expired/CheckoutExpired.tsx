@@ -1,5 +1,6 @@
 import { BagSummaryItems } from "@/components/checkout/BagSummary";
-import { Discount, useCheckout } from "@/components/checkout/CheckoutProvider";
+import { Discount } from "@/components/checkout/types";
+import { useCheckout } from "@/hooks/useCheckout";
 import { Button } from "@/components/ui/button";
 import { useGetActiveCheckoutSession } from "@/hooks/useGetActiveCheckoutSession";
 import { Link } from "@tanstack/react-router";

@@ -20,7 +20,6 @@ import {
   useNavigationBarContext,
 } from "@/contexts/NavigationBarProvider";
 import { getNavBarWrapperClass } from "@/components/navigation-bar/navBarStyles";
-import { useCountdown } from "@/components/common/hooks";
 
 const productsPageSchema = z.object({
   color: z.string().optional(),

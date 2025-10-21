@@ -2,7 +2,8 @@ import React, { useEffect, useImperativeHandle, useState } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Address, CustomerDetails, useCheckout } from "./CheckoutProvider";
+import { useCheckout } from "@/hooks/useCheckout";
+import { Address, CustomerDetails } from "./types";
 import {
   Form,
   FormControl,

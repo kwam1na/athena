@@ -1,19 +1,20 @@
 import { BagSummaryItems } from "@/components/checkout/BagSummary";
-import {
-  CheckoutProvider,
-  Discount,
-  useCheckout,
-} from "@/components/checkout/CheckoutProvider";
-import { CheckoutSessionGeneric } from "@/components/states/checkout-expired/CheckoutExpired";
+import { CheckoutProvider } from "@/components/checkout/CheckoutProvider";
+import { useCheckout } from "@/hooks/useCheckout";
+import { Address, Discount } from "@/components/checkout/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Icons } from "@/components/ui/icons";
 import { formatDate } from "@/lib/utils";
-import { ProductSku } from "@athena/webapp";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowLeft, ArrowRight } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { useStoreContext } from "@/contexts/StoreContext";
+import {
+  formatDeliveryAddress,
+  getOrderAmount,
+} from "@/components/checkout/utils";
+import { useTrackEvent } from "@/hooks/useTrackEvent";
+import { CardTitle } from "@/components/ui/card";
 
 export const Route = createFileRoute(
   "/shop/checkout/$sessionIdSlug/incomplete"
@@ -24,6 +25,26 @@ export const Route = createFileRoute(
 function CheckoutIncompleteView() {
   const { onlineOrder } = useCheckout();
   const { formatter } = useStoreContext();
+
+  const { amountCharged, amountPaid } = getOrderAmount({
+    items: onlineOrder?.items || ([] as any),
+    discount: onlineOrder?.discount as Discount | null,
+    deliveryFee: (onlineOrder?.deliveryFee || 0) * 100,
+    subtotal: onlineOrder?.amount || 0,
+    isInCents: true,
+  });
+
+  const { addressLine } = formatDeliveryAddress(
+    onlineOrder?.deliveryDetails as Address
+  );
+
+  useTrackEvent({
+    action: "viewed_checkout_incomplete_screen",
+    data: {
+      order_id: onlineOrder?._id,
+      checkout_session_id: onlineOrder?.checkoutSessionId,
+    },
+  });
 
   return (
     <AnimatePresence>
@@ -41,25 +62,54 @@ function CheckoutIncompleteView() {
                 <p>Your payment is confirmed. Let's finalize your order</p>
               </div>
 
-              <div className="w-full lg:w-[40%] space-y-8">
-                <BagSummaryItems
-                  items={onlineOrder?.items || ([] as any)}
-                  discount={onlineOrder?.discount as Discount | null}
-                />
-                <Badge variant={"outline"}>
-                  Paid {formatter.format((onlineOrder?.amount || 0) / 100)}
-                </Badge>
-              </div>
-
               {onlineOrder?._creationTime && (
-                <div className="flex gap-4 text-sm">
+                <div className="flex flex-col md:flex-row gap-4 text-sm">
                   <p>{`Order #${onlineOrder?.orderNumber}`}</p>
-                  <p>·</p>
+                  <p className="hidden md:block">·</p>
+                  <p>
+                    {onlineOrder?.deliveryMethod === "delivery"
+                      ? "Delivery to"
+                      : "In-store pickup"}{" "}
+                    {addressLine}
+                  </p>
+                  <p className="hidden md:block">·</p>
                   {onlineOrder?._creationTime && (
                     <p>Placed {formatDate(onlineOrder?._creationTime)}</p>
                   )}
                 </div>
               )}
+
+              <div className="w-full lg:w-[40%] space-y-8">
+                <BagSummaryItems
+                  items={onlineOrder?.items || ([] as any)}
+                  discount={onlineOrder?.discount as Discount | null}
+                />
+              </div>
+
+              <Badge variant={"outline"}>
+                <div className="flex gap-8">
+                  <div className="flex items-center gap-1">
+                    <p className="font-light">Subtotal</p>
+                    <p className="font-medium">
+                      {formatter.format(amountPaid / 100)}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-1">
+                    <p className="font-light">Delivery</p>
+                    <p className="font-medium">
+                      {formatter.format(onlineOrder?.deliveryFee || 0 / 100)}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-1">
+                    <p className="font-light">Paid</p>
+                    <p className="font-medium">
+                      {formatter.format(amountCharged / 100)}
+                    </p>
+                  </div>
+                </div>
+              </Badge>
             </div>
 
             <Link

@@ -7,7 +7,8 @@ import {
 import { Link } from "@tanstack/react-router";
 import { useStoreContext } from "@/contexts/StoreContext";
 import { useShoppingBag } from "@/hooks/useShoppingBag";
-import { Discount, useCheckout } from "./CheckoutProvider";
+import { Discount } from "./types";
+import { useCheckout } from "@/hooks/useCheckout";
 import { BagSummaryItems } from "./BagSummary";
 import { Button } from "../ui/button";
 import { Tag } from "lucide-react";

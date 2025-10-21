@@ -2,7 +2,7 @@ import { motion } from "framer-motion";
 import { Form } from "../ui/form";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useCheckout } from "./CheckoutProvider";
+import { useCheckout } from "@/hooks/useCheckout";
 import { CustomerInfoSection } from "./CustomerInfoSection";
 import { checkoutFormSchema } from "./schemas/checkoutFormSchema";
 import { PickupOptions } from "./DeliveryDetails/PickupOptions";

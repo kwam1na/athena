@@ -1,12 +1,9 @@
 import { postAnalytics } from "@/api/analytics";
 import { updateCheckoutSession } from "@/api/checkoutSession";
 import { BagSummaryItems } from "@/components/checkout/BagSummary";
-import {
-  CheckoutProvider,
-  Discount,
-  useCheckout,
-  webOrderSchema,
-} from "@/components/checkout/CheckoutProvider";
+import { CheckoutProvider } from "@/components/checkout/CheckoutProvider";
+import { useCheckout } from "@/hooks/useCheckout";
+import { Discount } from "@/components/checkout/types";
 import { OrderDetails } from "@/components/checkout/OrderDetails";
 import { GuestRewardsPrompt } from "@/components/rewards/GuestRewardsPrompt";
 import {
@@ -14,6 +11,7 @@ import {
   UnableToVerifyCheckoutPayment,
 } from "@/components/states/checkout-expired/CheckoutExpired";
 import { Button } from "@/components/ui/button";
+import { CardTitle } from "@/components/ui/card";
 import { LoadingButton } from "@/components/ui/loading-button";
 import { useAuth } from "@/hooks/useAuth";
 import { useGetActiveCheckoutSession } from "@/hooks/useGetActiveCheckoutSession";
@@ -25,6 +23,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowLeft } from "lucide-react";
 import { useEffect, useState } from "react";
+import { webOrderSchema } from "@/components/checkout/CheckoutProvider";
 
 export const Route = createFileRoute("/shop/checkout/complete/")({
   component: () => <CheckoutCompleteView />,
@@ -167,9 +166,9 @@ export const CheckoutComplete = () => {
           }}
           className="space-y-12"
         >
-          <p className="text-3xl font-light">
+          <CardTitle className="text-3xl font-light">
             {`Get excited, ${capitalizeFirstLetter(activeSession.customerDetails?.firstName || "")}!`}
-          </p>
+          </CardTitle>
           <p>{deliveryMessage}</p>
         </motion.div>
 

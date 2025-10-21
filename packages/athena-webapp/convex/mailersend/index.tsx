@@ -125,8 +125,6 @@ export const sendOrderEmail = async (params: {
     html,
   };
 
-  return { ok: true, json: () => Promise.resolve({ ok: true }) };
-
   return await fetch(MAILERSEND_API_URL, {
     method: "POST",
     headers: {

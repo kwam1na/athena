@@ -15,14 +15,15 @@ import { useAuth } from "@/hooks/useAuth";
 import { GuestRewardsPrompt } from "@/components/rewards/GuestRewardsPrompt";
 import {
   CheckoutProvider,
-  Discount,
-  useCheckout,
   webOrderSchema,
 } from "@/components/checkout/CheckoutProvider";
+import { useCheckout } from "@/hooks/useCheckout";
+
 import { DeliveryDetails } from "@/components/checkout/DeliveryDetails/DeliverySection";
 import { useBagQueries } from "@/lib/queries/bag";
 import { useEffect } from "react";
 import { getDiscountValue, getOrderAmount } from "@/components/checkout/utils";
+import { Discount } from "@/components/checkout/types";
 
 export const Route = createFileRoute("/shop/checkout/pod-confirmation")({
   component: PODConfirmationPage,
@@ -48,7 +49,7 @@ const PODPaymentDetails = ({ session }: { session: any }) => {
 
   const discount = session?.discount as any;
 
-  const amountCharge = getOrderAmount({
+  const { amountCharged } = getOrderAmount({
     items,
     discount,
     deliveryFee: (session?.deliveryFee || 0) * 100,
@@ -94,11 +95,11 @@ const PODPaymentDetails = ({ session }: { session: any }) => {
                   {formatter.format(originalAmount / 100)}
                 </p>
                 <p className="text-sm font-medium">
-                  {formatter.format(amountCharge / 100)}
+                  {formatter.format(amountCharged / 100)}
                 </p>
               </div>
             ) : (
-              <p className="text-sm">{formatter.format(amountCharge / 100)}</p>
+              <p className="text-sm">{formatter.format(amountCharged / 100)}</p>
             )}
             {discount && (
               <p className="text-sm font-medium">

@@ -1,5 +1,5 @@
 import { useStoreContext } from "@/contexts/StoreContext";
-import { useCheckout } from "../CheckoutProvider";
+import { useCheckout } from "@/hooks/useCheckout";
 import { GhostButton } from "@/components/ui/ghost-button";
 import { Truck } from "lucide-react";
 import { StoreIcon } from "lucide-react";

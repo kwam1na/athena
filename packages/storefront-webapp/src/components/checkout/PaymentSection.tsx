@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { useCheckout, webOrderSchema } from "./CheckoutProvider";
+import { webOrderSchema } from "./CheckoutProvider";
+import { useCheckout } from "@/hooks/useCheckout";
 import { CheckedState } from "@radix-ui/react-checkbox";
 import { Separator } from "../ui/separator";
 import { Checkbox } from "../ui/checkbox";

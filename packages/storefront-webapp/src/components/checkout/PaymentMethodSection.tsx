@@ -1,15 +1,11 @@
 import { useEffect } from "react";
-import {
-  useCheckout,
-  PaymentMethodType,
-  PODPaymentMethod,
-} from "./CheckoutProvider";
+import { useCheckout } from "@/hooks/useCheckout";
+import { PaymentMethodType, PODPaymentMethod } from "./types";
 
 import { motion } from "framer-motion";
 import { CreditCard, Smartphone, Banknote, Info } from "lucide-react";
 import { GhostButton } from "../ui/ghost-button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Button } from "../ui/button";
 
 export const PaymentMethodSection = () => {
   const { checkoutState, updateState } = useCheckout();

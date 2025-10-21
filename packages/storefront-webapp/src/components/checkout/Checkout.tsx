@@ -1,7 +1,8 @@
-import { CheckoutProvider, useCheckout } from "./CheckoutProvider";
+import { CheckoutProvider } from "./CheckoutProvider";
+import { useCheckout } from "@/hooks/useCheckout";
 import { AnimatePresence, motion } from "framer-motion";
 import BagSummary from "./BagSummary";
-import { act, useEffect, useState } from "react";
+import { useEffect } from "react";
 import MobileBagSummary from "./MobileBagSummary";
 import { CheckoutForm } from "./CheckoutForm";
 import { TrustSignals } from "../communication/TrustSignals";
@@ -13,6 +14,8 @@ const MainComponent = () => {
 
   useEffect(() => {
     const origin = new URLSearchParams(window.location.search).get("origin");
+
+    if (!activeSession) return;
 
     const needsVerification =
       activeSession.externalReference &&

@@ -1,7 +1,8 @@
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Address, useCheckout } from "../CheckoutProvider";
+import { Address } from "../types";
+import { useCheckout } from "@/hooks/useCheckout";
 import {
   Form,
   FormControl,

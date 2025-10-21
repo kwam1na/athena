@@ -1,4 +1,7 @@
-import { Discount } from "./CheckoutProvider";
+import { Discount, Address } from "./types";
+import { ALL_COUNTRIES } from "@/lib/countries";
+import { GHANA_REGIONS } from "@/lib/ghanaRegions";
+import { accraNeighborhoods } from "@/lib/ghana";
 
 export type BagItem = {
   productSkuId: string;
@@ -69,5 +72,46 @@ export const getOrderAmount = ({
   isInCents?: boolean;
 }) => {
   const discountValue = getDiscountValue(items, discount, isInCents);
-  return subtotal - discountValue + (deliveryFee || 0);
+  const amountCharged = subtotal - discountValue + (deliveryFee || 0);
+  const amountPaid = subtotal - discountValue;
+
+  return { amountCharged, discountValue, amountPaid };
+};
+
+/**
+ * Format delivery address details based on country
+ * @param address - Address object containing delivery details
+ * @returns Object with formatted address line and country name
+ */
+export const formatDeliveryAddress = (address: Address) => {
+  if (!address) return { addressLine: "", country: "" };
+
+  const country = ALL_COUNTRIES.find((c) => c.code == address.country)?.name;
+
+  const isUSOrder = address.country === "US";
+  const isGHOrder = address.country === "GH";
+  const isROWOrder = !isUSOrder && !isGHOrder;
+
+  let addressLine = "";
+
+  if (isUSOrder) {
+    addressLine = `${address.address}, ${address.city}, ${address.state}, ${address.zip}`;
+  }
+
+  if (isROWOrder) {
+    addressLine = `${address.address}, ${address.city}`;
+  }
+
+  if (isGHOrder) {
+    const region = GHANA_REGIONS.find((r) => r.code == address.region)?.name;
+    const neighborhood = accraNeighborhoods.find(
+      (n) => n.value == address?.neighborhood
+    )?.label;
+    addressLine = `${address?.houseNumber || ""} ${address?.street}, ${neighborhood}, ${region}`;
+  }
+
+  return {
+    addressLine: addressLine.trim(),
+    country,
+  };
 };

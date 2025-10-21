@@ -1,6 +1,7 @@
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useEffect, useRef } from "react";
-import { Address, useCheckout } from "../CheckoutProvider";
+import { useCheckout } from "@/hooks/useCheckout";
+import { Address } from "../types";
 import { useStoreContext } from "@/contexts/StoreContext";
 import { isFeeWaived } from "@/lib/feeUtils";
 

@@ -1,45 +1,23 @@
-import { Address, useCheckout } from "../CheckoutProvider";
+import { useCheckout } from "@/hooks/useCheckout";
+import { Address } from "../types";
 import { capitalizeWords } from "@/lib/utils";
 import { motion } from "framer-motion";
-import { ALL_COUNTRIES } from "@/lib/countries";
-import { GHANA_REGIONS } from "@/lib/ghanaRegions";
 import {
   DeliveryOptionsSelector,
   StoreSelector,
 } from "./DeliveryOptionsSelector";
 import { Textarea } from "@/components/ui/textarea";
 import { PickupOptions } from "./PickupOptions";
-import { accraNeighborhoods } from "@/lib/ghana";
 import { CheckoutFormSectionProps } from "../CustomerInfoSection";
 import { CountryFields } from "../DeliveryDetailsSection";
+import { formatDeliveryAddress } from "../utils";
 
 export const DeliveryDetails = ({ address }: { address: Address }) => {
-  const country = ALL_COUNTRIES.find((c) => c.code == address.country)?.name;
-
-  const region = GHANA_REGIONS.find((r) => r.code == address.region)?.name;
-
-  const neighborhood = accraNeighborhoods.find(
-    (n) => n.value == address?.neighborhood
-  )?.label;
-
-  const isUSOrder = address.country === "US";
-
-  const isGHOrder = address.country === "GH";
-
-  const isROWOrder = !isUSOrder && !isGHOrder;
+  const { addressLine, country } = formatDeliveryAddress(address);
 
   return (
     <div className="space-y-2 text-sm">
-      {isUSOrder && (
-        <p>{`${address.address}, ${address.city}, ${address.state}, ${address.zip}`}</p>
-      )}
-
-      {isROWOrder && <p>{`${address.address}, ${address.city}`}</p>}
-
-      {isGHOrder && (
-        <p>{`${address?.houseNumber || ""} ${address?.street}, ${neighborhood}, ${region}`}</p>
-      )}
-
+      <p>{addressLine}</p>
       <p>{country}</p>
     </div>
   );

@@ -44,19 +44,14 @@ export function ErrorBoundary({ error, reset }: ErrorComponentProps) {
       <div className="w-full max-w-md space-y-12">
         <div className="space-y-8 px-8">
           <div className="flex items-center gap-2">
-            <CardTitle className="text-2xl">
-              Service temporarily unavailable
-            </CardTitle>
+            <CardTitle className="text-2xl">Oh no!</CardTitle>
           </div>
           <p className="text-base">
-            We're affected by an outage with our cloud provider that's impacting
-            parts of the site.
+            Something went wrong. Our team has been notified and is working to
+            fix the issue.
           </p>
 
-          <p className="text-base">
-            We've applied all available mitigations and are awaiting a fix on
-            their end. Please try again later.
-          </p>
+          <p className="text-base">Please try again later.</p>
         </div>
 
         {/* <CardContent className="space-y-4">
@@ -70,14 +65,6 @@ export function ErrorBoundary({ error, reset }: ErrorComponentProps) {
               </pre>
             </div>
           )}
-
-          <div className="text-sm text-muted-foreground">
-            <p>You can try:</p>
-            <ul className="list-disc list-inside mt-2 space-y-1 ml-2">
-              <li>Refreshing the page</li>
-              <li>Going back to the home page</li>
-            </ul>
-          </div>
         </CardContent> */}
 
         <CardFooter className="flex gap-2">

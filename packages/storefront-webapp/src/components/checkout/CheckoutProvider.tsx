@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useEffect, useState } from "react";
 import { z, ZodError } from "zod";
 import { useGetActiveCheckoutSession } from "@/hooks/useGetActiveCheckoutSession";
 import {
@@ -10,36 +10,17 @@ import { useStoreContext } from "@/contexts/StoreContext";
 import { SESSION_STORAGE_KEY } from "@/lib/constants";
 import { customerDetailsSchema } from "./schemas/customerDetailsSchema";
 import { baseDeliveryDetailsSchema } from "./schemas/deliveryDetailsSchema";
-import { CheckoutSession, OnlineOrder } from "@athena/webapp";
 import { CheckoutUnavailable } from "../states/checkout unavailable/CheckoutUnavailable";
 import { useNavigationBarContext } from "@/contexts/NavigationBarProvider";
 import { isFeeWaived, isAnyFeeWaived } from "@/lib/feeUtils";
 import { useOnlineOrderQueries } from "@/lib/queries/onlineOrder";
 import { useQuery } from "@tanstack/react-query";
-
-export type Address = {
-  address?: string;
-  city?: string;
-  state?: string;
-  zip?: string;
-  country: string;
-  region?: string;
-  street?: string;
-  houseNumber?: string;
-  neighborhood?: string;
-  landmark?: string;
-};
-
-export type BillingAddress = Address & {
-  billingAddressSameAsDelivery?: boolean;
-};
-
-export type CustomerDetails = {
-  firstName: string;
-  lastName: string;
-  email: string;
-  phoneNumber: string;
-};
+import {
+  DeliveryOption,
+  CheckoutState,
+  CheckoutActions,
+  CheckoutContextType,
+} from "./types";
 
 export const webOrderSchema = z
   .object({
@@ -336,68 +317,6 @@ export const webOrderSchema = z
     }
   });
 
-type DeliveryOption = "within-accra" | "outside-accra" | "intl";
-
-export type DeliveryMethod = "delivery" | "pickup";
-
-export type Discount = {
-  id: string;
-  code: string;
-  type: "percentage" | "amount";
-  value: number;
-  span: "entire-order" | "selected-products";
-  isMultipleUses: boolean;
-  productSkus?: string[];
-  totalDiscount?: number;
-};
-
-export type PaymentMethodType = "online_payment" | "payment_on_delivery";
-export type PODPaymentMethod = "cash" | "mobile_money";
-
-type CheckoutState = {
-  billingDetails: BillingAddress | null;
-  customerDetails: CustomerDetails | null;
-  deliveryMethod: DeliveryMethod | null;
-  deliveryOption: DeliveryOption | null;
-  deliveryFee: number | null;
-  deliveryDetails: Address | null;
-  deliveryInstructions: string;
-  pickupLocation: string | null;
-
-  didEnterDeliveryDetails: boolean;
-  didSelectPickupLocation: boolean;
-  didEnterBillingDetails: boolean;
-
-  isUSOrder: boolean;
-  isGhanaOrder: boolean;
-  isROWOrder: boolean;
-  isPickupOrder: boolean;
-  isDeliveryOrder: boolean;
-
-  failedFinalValidation: boolean;
-
-  bag: any;
-
-  discount: Discount | null;
-
-  onlineOrder: OnlineOrder | null;
-
-  // Payment method fields
-  paymentMethod: PaymentMethodType | null;
-  podPaymentMethod: PODPaymentMethod | null;
-};
-
-type CheckoutActions = {
-  isEditingCustomerDetails: boolean;
-  isEditingDeliveryDetails: boolean;
-  isEditingBillingDetails: boolean;
-
-  didEnterDeliveryDetails: boolean;
-  didEnterBillingDetails: boolean;
-
-  didToggleOrderSummary: boolean;
-};
-
 const initialActionsState: CheckoutActions = {
   isEditingCustomerDetails: false,
   isEditingDeliveryDetails: false,
@@ -439,25 +358,7 @@ const initialState: CheckoutState = {
   podPaymentMethod: null,
 };
 
-type CheckoutContextType = {
-  activeSession: CheckoutSession;
-  onlineOrder: OnlineOrder | null;
-  actionsState: CheckoutActions;
-  checkoutState: CheckoutState;
-  canPlaceOrder: () => Promise<boolean>;
-  updateState: (newState: Partial<CheckoutState>) => void;
-  updateActionsState: (newState: Partial<CheckoutActions>) => void;
-};
-
-const CheckoutContext = createContext<CheckoutContextType | null>(null);
-
-export const useCheckout = () => {
-  const context = useContext(CheckoutContext);
-  if (!context) {
-    throw new Error("useCheckout must be used within a CheckoutProvider");
-  }
-  return context;
-};
+export const CheckoutContext = createContext<CheckoutContextType | null>(null);
 
 export const defaultRegion = new Intl.Locale(navigator.language).region || "GH";
 

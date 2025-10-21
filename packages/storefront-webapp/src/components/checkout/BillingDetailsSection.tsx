@@ -1,28 +1,11 @@
 import { useEffect, useRef } from "react";
-import { Address, useCheckout } from "./CheckoutProvider";
-import {
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "../ui/form";
-import { Input } from "../ui/input";
+import { useCheckout } from "@/hooks/useCheckout";
 import { Checkbox } from "../ui/checkbox";
 import { CheckedState } from "@radix-ui/react-checkbox";
 import { motion } from "framer-motion";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "../ui/select";
-import { ALL_COUNTRIES } from "@/lib/countries";
 import { useStoreContext } from "@/contexts/StoreContext";
 import { CheckoutFormSectionProps } from "./CustomerInfoSection";
 import { EnteredBillingAddressDetails } from "./EnteredBillingAddressDetails";
-import { US_STATES } from "@/lib/states";
 
 export const BillingDetailsSection = ({ form }: CheckoutFormSectionProps) => {
   const { checkoutState, updateActionsState, updateState } = useCheckout();

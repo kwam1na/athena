@@ -1,10 +1,11 @@
 import { useStoreContext } from "@/contexts/StoreContext";
-import { Discount, useCheckout } from "../CheckoutProvider";
+import { Discount } from "../types";
+import { useCheckout } from "@/hooks/useCheckout";
 import { useShoppingBag } from "@/hooks/useShoppingBag";
 import { getDiscountValue } from "../utils";
 import { BagSummaryItems } from "../BagSummary";
 import { Tag } from "lucide-react";
-import { isFeeWaived, isAnyFeeWaived } from "@/lib/feeUtils";
+import { isFeeWaived } from "@/lib/feeUtils";
 import { Badge } from "@/components/ui/badge";
 import InputWithEndButton from "@/components/ui/input-with-end-button";
 import { useState } from "react";

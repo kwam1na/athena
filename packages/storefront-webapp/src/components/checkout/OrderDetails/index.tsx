@@ -1,11 +1,11 @@
 import { CheckoutSession } from "@athena/webapp";
 import { DeliveryDetails } from "../DeliveryDetails/DeliverySection";
-import { getDiscountValue, getOrderAmount } from "../utils";
+import { getOrderAmount } from "../utils";
 import { useStoreContext } from "@/contexts/StoreContext";
 import { motion } from "framer-motion";
 import { useAuth } from "@/hooks/useAuth";
 import { Award } from "lucide-react";
-import { useCheckout } from "../CheckoutProvider";
+import { useCheckout } from "@/hooks/useCheckout";
 
 export const PickupDetails = ({ session }: { session: any }) => {
   if (session.deliveryMethod == "pickup") {
@@ -57,7 +57,7 @@ export const PaymentDetails = ({ session }: { session?: CheckoutSession }) => {
       price: item.price,
     })) || [];
 
-  const amountCharge = getOrderAmount({
+  const { amountCharged, discountValue } = getOrderAmount({
     items,
     discount: discount as any,
     deliveryFee: (session.deliveryFee || 0) * 100,
@@ -65,7 +65,6 @@ export const PaymentDetails = ({ session }: { session?: CheckoutSession }) => {
     isInCents: true,
   });
 
-  const discountValue = getDiscountValue(items, discount as any);
   const originalAmount = session.amount + (session.deliveryFee || 0);
   const hasDiscount = discount && discountValue > 0;
 
@@ -96,11 +95,11 @@ export const PaymentDetails = ({ session }: { session?: CheckoutSession }) => {
                 {formatter.format(originalAmount / 100)}
               </p>
               <p className="text-sm font-medium">
-                {formatter.format(amountCharge / 100)}
+                {formatter.format(amountCharged / 100)}
               </p>
             </div>
           ) : (
-            <p className="text-sm">{formatter.format(amountCharge / 100)}</p>
+            <p className="text-sm">{formatter.format(amountCharged / 100)}</p>
           )}
           {discount && (
             <p className="text-sm font-medium">

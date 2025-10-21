@@ -1,11 +1,7 @@
 import { updateCheckoutSession } from "@/api/checkoutSession";
 import { BagSummaryItems } from "@/components/checkout/BagSummary";
-import type { Discount } from "@/components/checkout/CheckoutProvider";
-import {
-  OrderDetails,
-  PaymentDetails,
-  PickupDetails,
-} from "@/components/checkout/OrderDetails";
+import { Discount } from "@/components/checkout/types";
+import { OrderDetails } from "@/components/checkout/OrderDetails";
 import { FadeIn } from "@/components/common/FadeIn";
 import { CheckoutSessionGeneric } from "@/components/states/checkout-expired/CheckoutExpired";
 import { LoadingButton } from "@/components/ui/loading-button";

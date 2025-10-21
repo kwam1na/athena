@@ -219,8 +219,6 @@ export const createFromSession = internalMutation({
       })
     );
 
-    console.log("session.discount", session.discount);
-
     // update used promo code for this order
     if (session.discount?.id) {
       // if the promo code is not multiple uses, insert a redeemed promo code record

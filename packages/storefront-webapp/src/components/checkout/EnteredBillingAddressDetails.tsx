@@ -1,5 +1,5 @@
 import { ALL_COUNTRIES } from "@/lib/countries";
-import { useCheckout } from "./CheckoutProvider";
+import { useCheckout } from "@/hooks/useCheckout";
 import { motion } from "framer-motion";
 import { accraNeighborhoods, ghanaRegions } from "@/lib/ghana";
 
