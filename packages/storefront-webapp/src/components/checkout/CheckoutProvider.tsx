@@ -326,6 +326,7 @@ const initialActionsState: CheckoutActions = {
   didEnterBillingDetails: false,
 
   didToggleOrderSummary: false,
+  isApplyingDiscount: false,
 };
 
 const initialState: CheckoutState = {
@@ -730,6 +731,34 @@ export const CheckoutProvider = ({
   const { data: onlineOrder } = useQuery(
     onlineOrderQueries.detail(data?.placedOrderId || "")
   );
+
+  // Sync discount from session to checkout state
+  useEffect(() => {
+    if (actionsState.isApplyingDiscount) {
+      return;
+    }
+
+    const discount = data?.discount || (data as any)?.session?.discount;
+    if (discount && !checkoutState.discount) {
+      updateState({
+        discount: {
+          id: discount.promoCodeId || discount._id || discount.id,
+          code: discount.code,
+          value: discount.value ?? discount.discountValue,
+          type: discount.type ?? discount.discountType,
+          span: discount.span,
+          productSkus: discount.productSkus,
+          totalDiscount: discount.totalDiscount,
+          isMultipleUses: discount.isMultipleUses,
+          autoApply: discount.autoApply,
+        },
+      });
+    } else if (!discount && checkoutState.discount?.autoApply === true) {
+      updateState({
+        discount: null,
+      });
+    }
+  }, [data, checkoutState.discount, actionsState.isApplyingDiscount]);
 
   const { config } = store || {};
 

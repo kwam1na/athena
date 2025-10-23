@@ -10,6 +10,7 @@ import { StoreSelector } from "./DeliveryDetails/DeliveryOptionsSelector";
 import { PaymentSection } from "./PaymentSection";
 import { DeliveryDetailsSection } from "./DeliveryDetailsSection";
 import { DeliveryOptions } from "./DeliveryDetails/DeliverySection";
+import { InfoIcon } from "lucide-react";
 
 export const CheckoutForm = () => {
   const { checkoutState } = useCheckout();
@@ -77,11 +78,15 @@ export const CheckoutForm = () => {
     },
   });
 
+  const readyText = checkoutState.isDeliveryOrder
+    ? "Orders typically arrive within 1-2 business days"
+    : "Orders are typically ready for pickup within 1-2 business days";
+
   const onSubmit = (data: any) => {};
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="w-full space-y-8">
+      <form className="w-full space-y-8" onSubmit={form.handleSubmit(onSubmit)}>
         <motion.div
           initial={{ opacity: 0 }}
           animate={{
@@ -92,9 +97,15 @@ export const CheckoutForm = () => {
         >
           <PickupOptions />
 
-          {checkoutState.isDeliveryOrder && <DeliveryOptions form={form} />}
+          <div className="space-y-8">
+            {checkoutState.isDeliveryOrder && <DeliveryOptions form={form} />}
 
-          {checkoutState.isPickupOrder && <StoreSelector />}
+            {checkoutState.isPickupOrder && <StoreSelector />}
+
+            <div className="flex text-muted-foreground">
+              <p className="text-xs">{readyText}</p>
+            </div>
+          </div>
 
           {checkoutState.isDeliveryOrder && (
             <DeliveryDetailsSection form={form} />

@@ -301,6 +301,10 @@ function Stock({
     );
   };
 
+  const hasPriceError = (variant: ProductVariant) => {
+    return variant.price === 0 || variant.price === undefined;
+  };
+
   return (
     <>
       {productVariants.length > 0 && (
@@ -445,6 +449,7 @@ function Stock({
                       onChange={(e) => handleChange(e, variant.id, "netPrice")}
                       value={variant.netPrice || ""}
                       disabled={shouldDisable(variant)}
+                      className={hasPriceError(variant) ? "border-red-500" : ""}
                     />
                   )}
                   {error && getErrorForField(error, "price") && (

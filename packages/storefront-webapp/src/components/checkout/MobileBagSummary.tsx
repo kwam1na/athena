@@ -13,7 +13,7 @@ import { BagSummaryItems } from "./BagSummary";
 import { Button } from "../ui/button";
 import { Tag } from "lucide-react";
 import InputWithEndButton from "../ui/input-with-end-button";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
 import { useMedia } from "react-use";
 import { getDiscountValue } from "./utils";
@@ -34,51 +34,8 @@ export default function MobileBagSummary() {
   const [code, setCode] = useState("");
   const { userId, guestId } = useAuth();
   const { waiveDeliveryFees } = store?.config || {};
-  const [isAutoApplyingPromoCode, setIsAutoApplyingPromoCode] = useState(false);
-  const isMobile = useMedia("(max-width: 768px)");
 
-  const promoCodeQueries = usePromoCodesQueries();
-  const { data: promoCodes } = useQuery(promoCodeQueries.getAll());
-  const { redeemedOffers } = useDiscountCodeAlert();
-
-  useEffect(() => {
-    if (promoCodes?.length && !checkoutState.discount && activeSession._id) {
-      const autoApplyPromoCode = promoCodes.find(
-        (code) => code.autoApply && code.active && !code.isExclusive
-      );
-
-      const exclusivePromoCodes = promoCodes.filter(
-        (code) => code.isExclusive && code.active && code.autoApply
-      );
-
-      const exclusivePromoCode = exclusivePromoCodes.find((code) =>
-        redeemedOffers?.some(
-          (offer: any) => offer.promoCodeId === code._id && !offer.isRedeemed
-        )
-      );
-
-      const codeToApply = autoApplyPromoCode || exclusivePromoCode;
-
-      if (codeToApply) {
-        setIsAutoApplyingPromoCode(true);
-        // Wait 2 seconds before auto-applying promo code
-        const timeoutId = setTimeout(() => {
-          if (isMobile) {
-            toast.success("Auto-applying available promo codes..", {
-              position: "top-center",
-              duration: 950,
-              style: {
-                background: "#FFF5F9",
-              },
-            });
-          }
-          handleRedeemPromoCode(codeToApply.code);
-        }, 500);
-
-        return () => clearTimeout(timeoutId);
-      }
-    }
-  }, [promoCodes, checkoutState.discount, activeSession._id, redeemedOffers]);
+  const queryClient = useQueryClient();
 
   const bagItems =
     checkoutState.bag?.items?.map((item: any) => ({
@@ -109,20 +66,18 @@ export default function MobileBagSummary() {
             span: data.promoCode.span,
             productSkus: data.promoCode.productSkus,
             isMultipleUses: data.promoCode.isMultipleUses,
+            autoApply: data.promoCode.autoApply, // Include autoApply from backend
           },
         });
-      } else {
-        if (isAutoApplyingPromoCode) {
-          setIsAutoApplyingPromoCode(false);
-          return;
-        }
-        setInvalidMessage(data.message);
-      }
 
-      if (isAutoApplyingPromoCode) {
-        setTimeout(() => {
-          setIsAutoApplyingPromoCode(false);
-        }, 1000);
+        queryClient.invalidateQueries({
+          queryKey: ["active-checkout-session"],
+        });
+
+        setCode("");
+        setInvalidMessage("");
+      } else {
+        setInvalidMessage(data.message);
       }
     },
   });
@@ -206,7 +161,7 @@ export default function MobileBagSummary() {
                     onKeyDown={handleKeyDown}
                   />
                   {invalidMessage && (
-                    <p className="px-2 text-xs text-destructive">
+                    <p className="px-2 text-xs text-accent4">
                       {invalidMessage}
                     </p>
                   )}

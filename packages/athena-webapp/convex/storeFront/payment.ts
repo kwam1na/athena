@@ -247,6 +247,12 @@ export const verifyPayment = action({
   args: {
     storeFrontUserId: v.union(v.id("storeFrontUser"), v.id("guest")),
     externalReference: v.string(),
+    signedInAthenaUser: v.optional(
+      v.object({
+        id: v.id("athenaUser"),
+        email: v.string(),
+      })
+    ),
   },
   returns: v.union(
     v.object({
@@ -343,6 +349,22 @@ export const verifyPayment = action({
       }
 
       const update: Record<string, any> = { hasVerifiedPayment: isVerified };
+
+      // Add manual verification tracking if user is signed in and payment is verified
+      if (isVerified && args.signedInAthenaUser) {
+        update.manuallyVerifiedAt = Date.now();
+        update.manuallyVerifiedBy = args.signedInAthenaUser;
+
+        // Add transition entry for activity feed
+        update.transitions = [
+          ...(order?.transitions ?? []),
+          {
+            status: "payment_verified",
+            date: Date.now(),
+            signedInAthenaUser: args.signedInAthenaUser,
+          },
+        ];
+      }
 
       // Handle emails and rewards for the order
       if (order) {

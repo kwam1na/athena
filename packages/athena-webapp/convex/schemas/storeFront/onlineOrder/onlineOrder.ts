@@ -113,4 +113,11 @@ export const onlineOrderSchema = v.object({
   podPaymentMethod: v.optional(
     v.union(v.literal("cash"), v.literal("mobile_money"))
   ),
+  manuallyVerifiedAt: v.optional(v.number()),
+  manuallyVerifiedBy: v.optional(
+    v.object({
+      id: v.id("athenaUser"),
+      email: v.string(),
+    })
+  ),
 });

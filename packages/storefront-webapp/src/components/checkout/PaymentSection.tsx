@@ -69,7 +69,6 @@ export const PaymentSection = ({ form }: CheckoutFormSectionProps) => {
           }),
           user ? updateUserInformation() : updateUserInformation("guest"),
         ]);
-
         // Check the critical operation (order processing) result
         const podResult = results[0];
         if (podResult.status === "fulfilled") {
@@ -87,7 +86,6 @@ export const PaymentSection = ({ form }: CheckoutFormSectionProps) => {
           console.error("POD checkout failed:", podResult.reason);
           setErrorMessage("Failed to create payment on delivery order");
         }
-
         // Log any failures in non-critical operations
         results.slice(1).forEach((result, index) => {
           if (result.status === "rejected") {
@@ -120,7 +118,6 @@ export const PaymentSection = ({ form }: CheckoutFormSectionProps) => {
         const paymentResult = results[0];
         if (paymentResult.status === "fulfilled") {
           const paymentResponse = paymentResult.value;
-
           if (paymentResponse?.authorization_url) {
             window.open(paymentResponse.authorization_url, "_self");
           } else if (!paymentResponse?.success) {
@@ -134,7 +131,6 @@ export const PaymentSection = ({ form }: CheckoutFormSectionProps) => {
           console.error("Payment processing failed:", paymentResult.reason);
           setErrorMessage("Failed to finalize payment");
         }
-
         // Log any failures in non-critical operations
         results.slice(1).forEach((result, index) => {
           if (result.status === "rejected") {

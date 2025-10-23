@@ -20,7 +20,7 @@ export const NavigationBarProvider: React.FC<{ children: React.ReactNode }> = ({
     "sticky"
   );
 
-  const [location, setLocation] = useState<AppLocation>(null);
+  const [location, setLocation] = useState<AppLocation>("checkout");
 
   return (
     <NavigationBarContext.Provider

@@ -1,4 +1,11 @@
-import { useEffect, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+} from "react";
 import {
   AlertCircle,
   AlertCircleIcon,
@@ -37,6 +44,7 @@ import { useTrackEvent } from "@/hooks/useTrackEvent";
 import { useDiscountCodeAlert } from "@/hooks/useDiscountCodeAlert";
 import { WelcomeBackModal } from "../ui/modals/WelcomeBackModal";
 import { useProductDiscount } from "@/hooks/useProductDiscount";
+import { DiscountBadge } from "../product-page/DiscountBadge";
 
 const PendingItem = ({ session, count }: { session: any; count: number }) => {
   return (
@@ -90,7 +98,7 @@ type BagItemWithDiscountProps = {
   onUpdateBag: (params: { quantity: number; itemId: string }) => void;
   onMoveToSaved: (item: BagItem) => Promise<void>;
   onDelete: (itemId: string) => Promise<void>;
-  onGetDiscountedTotal: (discountedAmount: number) => void;
+  onUpdateItemTotal: (itemId: string, total: number) => void;
 };
 
 const BagItemWithDiscount = ({
@@ -104,7 +112,7 @@ const BagItemWithDiscount = ({
   onUpdateBag,
   onMoveToSaved,
   onDelete,
-  onGetDiscountedTotal,
+  onUpdateItemTotal,
 }: BagItemWithDiscountProps) => {
   const discountInfo = useProductDiscount(item.productSkuId, item.price);
 
@@ -116,8 +124,8 @@ const BagItemWithDiscount = ({
 
   // Report discounted total to parent
   useEffect(() => {
-    onGetDiscountedTotal(itemTotal);
-  }, [itemTotal]);
+    onUpdateItemTotal(item._id, itemTotal);
+  }, [item._id, itemTotal, onUpdateItemTotal]);
 
   const unavailableSku = unavailableProducts.find(
     (p) => p.productSkuId == item.productSkuId
@@ -180,11 +188,19 @@ const BagItemWithDiscount = ({
             }}
             className="space-y-4"
           >
-            <ImageWithFallback
-              src={(item as any).productImage || placeholder}
-              alt={(item as any).productName || "product image"}
-              className="w-32 h-32 lg:w-40 lg:h-40 object-cover rounded-lg"
-            />
+            <div className="relative w-32 h-32 lg:w-40 lg:h-40">
+              <ImageWithFallback
+                src={(item as any).productImage || placeholder}
+                alt={(item as any).productName || "product image"}
+                className="w-full h-full object-cover rounded-lg"
+              />
+
+              <DiscountBadge
+                size="xs"
+                productSkuId={item.productSkuId}
+                productPrice={item.price}
+              />
+            </div>
           </Link>
 
           <div className="flex-1 space-y-2 lg:space-y-6 text-sm">
@@ -192,21 +208,19 @@ const BagItemWithDiscount = ({
               <h2 className="font-medium">{item && getProductName(item)}</h2>
 
               {showDiscount && item.price && item.price > 0 ? (
-                <div className="flex items-center gap-2">
+                <motion.div
+                  initial={{ opacity: 0, y: -4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ ease: "easeInOut" }}
+                  className="flex items-center gap-2"
+                >
                   <p className="text-xs text-muted-foreground line-through">
                     {formatter.format(item.price * item.quantity)}
                   </p>
                   <p className="text-xs font-medium text-accent2">
                     {priceLabel}
                   </p>
-                  {discountInfo.discount && (
-                    <span className="text-xs bg-accent5 text-accent2 px-2 py-0.5 rounded">
-                      {discountInfo.discount.type === "percentage"
-                        ? `${discountInfo.discount.value}% off`
-                        : `${formatter.format(discountInfo.discount.value)} off`}
-                    </span>
-                  )}
-                </div>
+                </motion.div>
               ) : priceLabel === "Free" ? (
                 <div className="flex items-center gap-2 text-xs">
                   <p className="text-muted-foreground line-through">
@@ -237,7 +251,7 @@ const BagItemWithDiscount = ({
               </select>
 
               {unavailableSku && (
-                <motion.p className="text-xs text-destructive">
+                <motion.p className="text-xs font-medium text-accent2">
                   {unavailableSku.available === 0
                     ? "Currently unavailable"
                     : `Only ${unavailableSku.available} left`}
@@ -279,8 +293,8 @@ const BagItemWithDiscount = ({
             <HeartIconFilled width={12} height={12} />
           </motion.div>
           <p className="text-xs font-medium">
-            <b>High demand:</b> {item.otherBagsWithSku} others have this in
-            their bag
+            <b>High demand:</b> {item.otherBagsWithSku} other shoppers have this
+            in their bag
           </p>
         </div>
       )}
@@ -290,9 +304,8 @@ const BagItemWithDiscount = ({
 
 export default function ShoppingBag() {
   const [bagAction, setBagAction] = useState<ShoppingBagAction>("idle");
-  const [discountedItemTotals, setDiscountedItemTotals] = useState<
-    Record<string, number>
-  >({});
+  const [updateCounter, forceUpdate] = useReducer((x) => x + 1, 0);
+  const itemTotalsRef = useRef<Map<string, number>>(new Map());
   const { formatter, userId, isNavbarShowing, store } = useStoreContext();
 
   const { setNavBarLayout, setAppLocation } = useNavigationBarContext();
@@ -325,10 +338,6 @@ export default function ShoppingBag() {
 
   const checkoutSessionQueries = useCheckoutSessionQueries();
 
-  const promoCodeQueries = usePromoCodesQueries();
-
-  const { data: promoCodeItems } = useQuery(promoCodeQueries.getAllItems());
-
   const {
     isDiscountModalOpen,
     handleCloseDiscountModal,
@@ -340,27 +349,27 @@ export default function ShoppingBag() {
 
   const isBagEmpty = bag?.items?.length === 0;
 
-  // Calculate total with discounts
-  const totalWithDiscounts = Object.values(discountedItemTotals).reduce(
-    (sum, itemTotal) => sum + itemTotal,
-    0
-  );
+  // Calculate total with discounts from ref
+  const total = useMemo(() => {
+    if (!bag?.items || bag.items.length === 0) {
+      return bagSubtotal;
+    }
 
-  const total = totalWithDiscounts > 0 ? totalWithDiscounts : bagSubtotal;
+    // Clean up totals for removed items
+    const currentItemIds = new Set(bag.items.map((item) => item._id as string));
+    for (const itemId of itemTotalsRef.current.keys()) {
+      if (!currentItemIds.has(itemId)) {
+        itemTotalsRef.current.delete(itemId);
+      }
+    }
 
-  const cellVariants = {
-    exit: (bagAction: ShoppingBagAction) => ({
-      opacity: 0,
-      x: bagAction == "deleting-from-bag" ? 0 : -24,
-    }),
-  };
+    // Calculate total from current item totals
+    const totalWithDiscounts = Array.from(
+      itemTotalsRef.current.values()
+    ).reduce((sum, itemTotal) => sum + itemTotal, 0);
 
-  const backgroundSvgVariants = {
-    exit: (bagAction: ShoppingBagAction) => ({
-      opacity: 0,
-      x: bagAction == "deleting-from-bag" ? 0 : -24,
-    }),
-  };
+    return totalWithDiscounts > 0 ? totalWithDiscounts : bagSubtotal;
+  }, [bag?.items, bagSubtotal, updateCounter]);
 
   const { data: pendingSessions } = useQuery(
     checkoutSessionQueries.pendingSessions()
@@ -388,22 +397,22 @@ export default function ShoppingBag() {
     setError(null);
 
     try {
-      const [res] = await Promise.all([
-        obtainCheckoutSession({
-          bagItems,
-          bagId: bag?._id as string,
-          bagSubtotal: bagSubtotal * 100, // Use original bag subtotal without discounts
-        }),
-        postAnalytics({
-          action: "initiated_checkout",
-          data: {},
-        }).catch((error) => console.error("Failed to post analytics:", error)),
-      ]);
+      const res = await obtainCheckoutSession({
+        bagItems,
+        bagId: bag?._id as string,
+        bagSubtotal: bagSubtotal * 100, // Use original bag subtotal without discounts
+      });
 
       if (res.session) {
         queryClient.setQueryData(["active-checkout-session", userId], {
           session: res.session,
         });
+
+        await postAnalytics({
+          action: "initiated_checkout",
+          data: {},
+        }).catch((error) => console.error("Failed to post analytics:", error));
+
         navigate({
           to: "/shop/checkout",
         });
@@ -439,13 +448,10 @@ export default function ShoppingBag() {
 
   const potentialRewards = Math.floor(total * 10);
 
-  const handleUpdateDiscountedTotal =
-    (itemId: string) => (discountedAmount: number) => {
-      setDiscountedItemTotals((prev) => ({
-        ...prev,
-        [itemId]: discountedAmount,
-      }));
-    };
+  const updateItemTotal = useCallback((itemId: string, total: number) => {
+    itemTotalsRef.current.set(itemId, total);
+    forceUpdate(); // Trigger re-render to recalculate total
+  }, []);
 
   const handleMoveToSaved = async (item: BagItem) => {
     setBagAction("moving-to-saved-bag");
@@ -583,7 +589,7 @@ export default function ShoppingBag() {
                   onUpdateBag={updateBag}
                   onMoveToSaved={handleMoveToSaved}
                   onDelete={handleDeleteItem}
-                  onGetDiscountedTotal={handleUpdateDiscountedTotal(item._id)}
+                  onUpdateItemTotal={updateItemTotal}
                 />
               ))}
             </AnimatePresence>

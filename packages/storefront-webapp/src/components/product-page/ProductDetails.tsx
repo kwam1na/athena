@@ -30,7 +30,7 @@ export function PickupDetails({
       </div>
       <SheetTrigger asChild onClick={showShippingPolicy}>
         <p className="font-medium cursor-pointer">
-          Shipping, returns, and exchanges
+          Deliveries, returns, and exchanges
         </p>
       </SheetTrigger>
     </div>
@@ -80,10 +80,10 @@ export function ShippingPolicy() {
   return (
     <div className="space-y-12 pt-12" aria-describedby="shipping policy">
       <div className="space-y-4">
-        <p className="text-md">Shipping</p>
+        <p className="text-md">Deliveries</p>
         <p className="text-sm text-muted-foreground">
           Orders take 24 - 48 hours to process. You will receive an email when
-          your order has been shipped.
+          your order has been dispatched.
         </p>
       </div>
       <div className="space-y-4">

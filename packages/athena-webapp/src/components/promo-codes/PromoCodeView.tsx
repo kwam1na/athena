@@ -6,7 +6,7 @@ import { useNavigate, useParams } from "@tanstack/react-router";
 import { useGetProducts } from "~/src/hooks/useGetProducts";
 import { currencyFormatter } from "~/src/lib/utils";
 import { Product } from "~/types";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { BarChart3 } from "lucide-react";
 import {
   SelectedProductsProvider,
@@ -69,7 +69,7 @@ function PromoCodeView() {
   );
 
   const promoCodeProductSkus = useQuery(
-    api.inventory.promoCode.getPromoCodeItems,
+    api.inventory.promoCode.getPromoCodeItemsLightweight,
     promoCodeSlug ? { promoCodeId: promoCodeSlug as Id<"promoCode"> } : "skip"
   );
 
@@ -108,23 +108,25 @@ function PromoCodeView() {
     }
   }, [promoCodeProductSkus, setSelectedProductSkus]);
 
+  const formatter = currencyFormatter(activeStore?.currency || "GHS");
+
+  const productsFormatted = useMemo(() => {
+    return products?.map((product: Product) => {
+      const p = {
+        ...product,
+        skus: product.skus.map((sku) => {
+          return {
+            ...sku,
+            price: formatter.format(sku.price),
+          };
+        }),
+      };
+
+      return p;
+    });
+  }, [products, formatter]);
+
   if (!products || !activeStore || !user) return null;
-
-  const formatter = currencyFormatter(activeStore.currency);
-
-  const productsFormatted = products.map((product: Product) => {
-    const p = {
-      ...product,
-      skus: product.skus.map((sku) => {
-        return {
-          ...sku,
-          price: formatter.format(sku.price),
-        };
-      }),
-    };
-
-    return p;
-  });
 
   const handleAddPromoCode = async () => {
     const productSkus =
@@ -366,7 +368,7 @@ function PromoCodeView() {
             isUpdatingPromoCode={isUpdatingPromoCode}
             isUpdatingStoreConfig={isUpdatingStoreConfig}
             promoCodeSlug={promoCodeSlug as Id<"promoCode">}
-            products={productsFormatted}
+            products={productsFormatted || []}
             validFrom={validFrom}
             setValidFrom={setValidFrom}
             validTo={validTo}
@@ -383,7 +385,7 @@ function PromoCodeView() {
             isAddingPromoCode={isAddingPromoCode}
             handleAddPromoCode={handleAddPromoCode}
             promoCodeSpan={promoCodeSpan}
-            products={currentlySelectedProductSkus}
+            // products={currentlySelectedProductSkus}
           />
         </div>
 

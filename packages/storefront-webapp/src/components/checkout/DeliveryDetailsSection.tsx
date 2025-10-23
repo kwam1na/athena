@@ -869,8 +869,6 @@ export const DeliveryDetailsSection = ({ form }: CheckoutFormSectionProps) => {
       <div className="flex flex-col space-y-8">
         <p className="text-xs text-muted-foreground">Delivery details</p>
         <div className="grid grid-cols-1 md:grid-cols-1 gap-4">
-          {/* <CountryFields form={form} /> */}
-
           {checkoutState.isGhanaOrder && <RegionFields form={form} />}
 
           {!checkoutState.isGhanaOrder && <AddressField form={form} />}
@@ -894,8 +892,6 @@ export const DeliveryDetailsSection = ({ form }: CheckoutFormSectionProps) => {
       </div>
 
       {checkoutState.isGhanaOrder && <DeliveryInstructions form={form} />}
-
-      {/* {checkoutState.deliveryDetails?.country && <DeliveryOptions />} */}
     </div>
   );
 };

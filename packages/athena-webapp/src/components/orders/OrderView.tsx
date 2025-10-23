@@ -408,6 +408,7 @@ const Header = () => {
 const VerifyPaymentAlert = () => {
   const [isVerifyingPayment, setIsVerifyingPayment] = useState(false);
   const { order } = useOnlineOrder();
+  const { user } = useAuth();
 
   const verifyPayment = useAction(api.storeFront.payment.verifyPayment);
 
@@ -425,6 +426,12 @@ const VerifyPaymentAlert = () => {
       const res = await verifyPayment({
         storeFrontUserId: order.storeFrontUserId,
         externalReference: order.externalReference!,
+        signedInAthenaUser: user
+          ? {
+              id: user._id,
+              email: user.email,
+            }
+          : undefined,
       });
 
       if (!res.verified) {

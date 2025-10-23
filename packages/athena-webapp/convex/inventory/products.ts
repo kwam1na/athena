@@ -462,6 +462,11 @@ export const createSku = mutation({
       );
     }
 
+    // Validate price is not zero
+    if (args.price === 0 || args.price === undefined) {
+      throw new Error("Price cannot be zero or empty");
+    }
+
     // Fetch the product to verify existence and fetch storeId
     const product = await ctx.db
       .query("product")
@@ -554,6 +559,17 @@ export const updateSku = mutation({
       return {
         success: false,
         error: "Quantity available cannot exceed stock",
+      };
+    }
+
+    // Determine final price for validation
+    const finalPrice = args.price ?? currentSku.price;
+
+    // Validate price is not zero
+    if (finalPrice === 0 || finalPrice === undefined) {
+      return {
+        success: false,
+        error: "Price cannot be zero or empty",
       };
     }
 

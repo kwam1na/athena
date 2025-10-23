@@ -121,7 +121,9 @@ const schema = defineSchema({
     "productId",
   ]),
   promoCode: defineTable(promoCodeSchema),
-  promoCodeItem: defineTable(promoCodeItemSchema),
+  promoCodeItem: defineTable(promoCodeItemSchema).index("by_promoCodeId", [
+    "promoCodeId",
+  ]),
   redeemedPromoCode: defineTable(redeemedPromoCodeSchema),
   savedBag: defineTable(savedBagSchema),
   savedBagItem: defineTable(savedBagItemSchema),

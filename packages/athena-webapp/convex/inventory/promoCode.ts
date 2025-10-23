@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { internalMutation, mutation, query } from "../_generated/server";
-import { api } from "../_generated/api";
+import { api, internal } from "../_generated/api";
 import { Id } from "../_generated/dataModel";
 
 const entity = "promoCode";
@@ -12,6 +12,10 @@ export const redeem = mutation({
     storeFrontUserId: v.union(v.id("storeFrontUser"), v.id("guest")),
   },
   handler: async (ctx, args) => {
+    console.log(
+      `[Redeem] Starting redemption process for code: ${args.code}, session: ${args.checkoutSessionId}, user: ${args.storeFrontUserId}`
+    );
+
     // Find the invite code
     const promoCode = await ctx.db
       .query(entity)
@@ -19,16 +23,27 @@ export const redeem = mutation({
       .first();
 
     if (!promoCode) {
+      console.log(`[Redeem] Promo code not found: ${args.code}`);
       return { success: false, message: "Invalid promo code" };
     }
 
+    console.log(
+      `[Redeem] Found promo code: ${promoCode.code}, active: ${promoCode.active}, isExclusive: ${promoCode.isExclusive}`
+    );
+
     if (!promoCode.active) {
+      console.log(`[Redeem] Promo code is not active: ${args.code}`);
       return { success: false, message: "Promo code is no longer active" };
     }
 
     // Validate date range
     const now = Date.now();
+    console.log(
+      `[Redeem] Validating date range - now: ${now}, validFrom: ${promoCode.validFrom}, validTo: ${promoCode.validTo}`
+    );
+
     if (now < promoCode.validFrom) {
+      console.log(`[Redeem] Promo code not yet valid: ${args.code}`);
       return {
         success: false,
         message: "Promo code is not yet valid",
@@ -36,13 +51,17 @@ export const redeem = mutation({
     }
 
     if (now > promoCode.validTo) {
+      console.log(`[Redeem] Promo code has expired: ${args.code}`);
       return {
         success: false,
         message: "Promo code has expired",
       };
     }
 
+    console.log(`[Redeem] Date range validation passed for: ${args.code}`);
+
     // check if this code is already redeemed
+    console.log(`[Redeem] Checking if code already redeemed: ${args.code}`);
     const redeemed = await ctx.db
       .query("redeemedPromoCode")
       .filter((q) =>
@@ -54,10 +73,14 @@ export const redeem = mutation({
       .first();
 
     if (redeemed) {
+      console.log(`[Redeem] Code already redeemed: ${args.code}`);
       return { success: false, message: "Promo code already redeemed" };
     }
 
+    console.log(`[Redeem] Code not previously redeemed: ${args.code}`);
+
     if (promoCode.isExclusive) {
+      console.log(`[Redeem] Checking exclusive code eligibility: ${args.code}`);
       const hasOffer = await ctx.db
         .query("offer")
         .filter((q) =>
@@ -69,35 +92,62 @@ export const redeem = mutation({
         .first();
 
       if (!hasOffer) {
+        console.log(
+          `[Redeem] User has no offer for exclusive code: ${args.code}`
+        );
         return {
           success: false,
           message: "Promo code is not eligible for this order",
         };
       }
+      console.log(
+        `[Redeem] User has valid offer for exclusive code: ${args.code}`
+      );
     }
 
     const checkoutSession = await ctx.db.get(args.checkoutSessionId);
 
     if (!checkoutSession) {
+      console.log(
+        `[Redeem] Checkout session not found: ${args.checkoutSessionId}`
+      );
       return { success: false, message: "Checkout session not found" };
     }
+
+    console.log(`[Redeem] Found checkout session: ${args.checkoutSessionId}`);
 
     const sessionItems = await ctx.db
       .query("checkoutSessionItem")
       .filter((q) => q.eq(q.field("sesionId"), args.checkoutSessionId))
       .collect();
 
+    console.log(
+      `[Redeem] Found ${sessionItems.length} items in checkout session`
+    );
+
     if (promoCode.span == "selected-products") {
+      console.log(
+        `[Redeem] Processing selected-products discount for: ${args.code}`
+      );
+
       const expectedProducts = await ctx.db
         .query("promoCodeItem")
         .filter((q) => q.eq(q.field("promoCodeId"), promoCode._id))
         .collect();
+
+      console.log(
+        `[Redeem] Found ${expectedProducts.length} expected products for selected-products discount`
+      );
 
       const foundItems = sessionItems.filter((sessionItem) =>
         expectedProducts.some(
           (expectedProduct) =>
             expectedProduct.productSkuId == sessionItem.productSkuId
         )
+      );
+
+      console.log(
+        `[Redeem] Found ${foundItems.length} matching items in session`
       );
 
       const discounts = foundItems.map((item) => {
@@ -109,22 +159,49 @@ export const redeem = mutation({
       });
 
       const totalDiscount = discounts.reduce((a, b) => a + b, 0);
+      console.log(
+        `[Redeem] Calculated total discount for selected-products: ${totalDiscount}`
+      );
 
       if (foundItems.length == 0) {
+        console.log(
+          `[Redeem] No eligible products in bag for selected-products discount: ${args.code}`
+        );
         return { success: false, message: "No eligible products in bag" };
       } else {
+        console.log(
+          `[Redeem] Successfully applied selected-products discount: ${args.code}, totalDiscount: ${totalDiscount}`
+        );
+        const appliedPromoCode = {
+          ...promoCode,
+          productSkus: foundItems.map((i) => i.productSkuId),
+          totalDiscount,
+        };
+
+        console.log(
+          `[Redeem] Updating checkout session with discount: ${args.checkoutSessionId}`
+        );
+        await ctx.runMutation(
+          internal.storeFront.checkoutSession.updateCheckoutSession,
+          {
+            id: args.checkoutSessionId,
+            discount: appliedPromoCode,
+          }
+        );
+        console.log(
+          `[Redeem] Successfully updated checkout session with discount`
+        );
+
         return {
           success: true,
-          promoCode: {
-            ...promoCode,
-            productSkus: foundItems.map((i) => i.productSkuId),
-            totalDiscount,
-          },
+          promoCode: appliedPromoCode,
         };
       }
     }
 
     // For entire-order discounts, calculate totalDiscount based on all items
+    console.log(`[Redeem] Processing entire-order discount for: ${args.code}`);
+
     let totalDiscount = 0;
 
     if (promoCode.discountType === "percentage") {
@@ -134,17 +211,41 @@ export const redeem = mutation({
         0
       );
       totalDiscount = subtotal * (promoCode.discountValue / 100);
+      console.log(
+        `[Redeem] Percentage discount - subtotal: ${subtotal}, percentage: ${promoCode.discountValue}%, totalDiscount: ${totalDiscount}`
+      );
     } else {
       // Amount discount applies once to the order
       totalDiscount = promoCode.discountValue;
+      console.log(
+        `[Redeem] Fixed amount discount - totalDiscount: ${totalDiscount}`
+      );
     }
+
+    console.log(
+      `[Redeem] Successfully applied entire-order discount: ${args.code}, totalDiscount: ${totalDiscount}`
+    );
+
+    const appliedPromoCode = {
+      ...promoCode,
+      totalDiscount,
+    };
+
+    console.log(
+      `[Redeem] Updating checkout session with discount: ${args.checkoutSessionId}`
+    );
+    await ctx.runMutation(
+      internal.storeFront.checkoutSession.updateCheckoutSession,
+      {
+        id: args.checkoutSessionId,
+        discount: appliedPromoCode,
+      }
+    );
+    console.log(`[Redeem] Successfully updated checkout session with discount`);
 
     return {
       success: true,
-      promoCode: {
-        ...promoCode,
-        totalDiscount,
-      },
+      promoCode: appliedPromoCode,
     };
   },
 });
@@ -308,6 +409,48 @@ export const getPromoCodeItems = query({
     // Fetch all productSku documents
     const productSkus = await Promise.all(
       productSkuIds.map((id) => ctx.db.get(id))
+    );
+
+    // Filter out any null values (in case some IDs don't exist)
+    return productSkus.filter((sku) => sku !== null);
+  },
+});
+
+export const getPromoCodeItemsLightweight = query({
+  args: { promoCodeId: v.id(entity) },
+  returns: v.array(
+    v.object({
+      _id: v.id("productSku"),
+      productName: v.optional(v.string()),
+      price: v.number(),
+      images: v.array(v.string()),
+      productId: v.id("product"),
+    })
+  ),
+  handler: async (ctx, args) => {
+    const items = await ctx.db
+      .query("promoCodeItem")
+      .withIndex("by_promoCodeId", (q) => q.eq("promoCodeId", args.promoCodeId))
+      .collect();
+
+    const productSkuIds = items
+      .map((item) => item.productSkuId)
+      .filter((id): id is Id<"productSku"> => id !== undefined);
+
+    // Fetch only essential fields from productSku documents
+    const productSkus = await Promise.all(
+      productSkuIds.map(async (id) => {
+        const sku = await ctx.db.get(id);
+        if (!sku) return null;
+
+        return {
+          _id: sku._id,
+          productName: sku.productName,
+          price: sku.price,
+          images: sku.images,
+          productId: sku.productId,
+        };
+      })
     );
 
     // Filter out any null values (in case some IDs don't exist)

@@ -75,7 +75,7 @@ export function FooterInner() {
       links: [
         <Link to="/policies/privacy">Privacy policy</Link>,
         <Link to="/policies/delivery-returns-exchanges">
-          Delivery, returns and exchanges
+          Deliveries, returns and exchanges
         </Link>,
         <Link to="/policies/tos">Terms of service</Link>,
         // <Link>FAQs</Link>,

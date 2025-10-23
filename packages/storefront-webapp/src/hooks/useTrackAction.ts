@@ -15,16 +15,16 @@ export const useTrackAction = ({
   isReady?: boolean;
   deps?: any[];
 }) => {
-  const { origin } = useSearch({ strict: false });
+  const { origin, utm_source } = useSearch({ strict: false });
 
   useEffect(() => {
-    if (origin && isReady) {
+    if ((origin || utm_source) && isReady) {
       postAnalytics({
         action,
-        origin,
+        origin: origin ?? utm_source,
         data,
         productId,
       });
     }
-  }, [origin, isReady, ...deps]);
+  }, [origin, utm_source, isReady, ...deps]);
 };

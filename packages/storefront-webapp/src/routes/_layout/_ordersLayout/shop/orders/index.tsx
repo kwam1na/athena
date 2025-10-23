@@ -32,7 +32,7 @@ const OrderItem = ({
       price: item.price,
     })) || [];
 
-  const amount = getOrderAmount({
+  const { amountCharged } = getOrderAmount({
     items,
     discount: order?.discount as any,
     deliveryFee: order?.deliveryFee || 0,
@@ -99,7 +99,7 @@ const OrderItem = ({
       </div>
 
       <div className="flex items-center gap-4">
-        <p>{formatter.format(amount / 100)}</p>
+        <p>{formatter.format(amountCharged / 100)}</p>
         <Link to="/shop/orders/$orderId" params={{ orderId: order._id }}>
           <Button variant={"link"}>View</Button>
         </Link>

@@ -107,23 +107,23 @@ function App() {
   }, []);
 
   return (
-    <PostHogProvider
-      apiKey={import.meta.env.VITE_PUBLIC_POSTHOG_KEY}
-      options={{
-        api_host: import.meta.env.VITE_PUBLIC_POSTHOG_HOST,
-        defaults: "2025-05-24",
-        capture_exceptions: false, // Disable exception capturing to reduce logging
-        debug: false, // Disable debug logging
-        disable_session_recording: true, // Disable session recording to stop snapshot events
-        autocapture: false, // Disable automatic event capture
-        capture_pageview: false, // Disable automatic pageview capture
-        capture_pageleave: false, // Disable page leave events
-      }}
-    >
-      <QueryClientProvider client={queryClient}>
-        <RouterProvider router={router} />
-      </QueryClientProvider>
-    </PostHogProvider>
+    // <PostHogProvider
+    //   apiKey={import.meta.env.VITE_PUBLIC_POSTHOG_KEY}
+    //   options={{
+    //     api_host: import.meta.env.VITE_PUBLIC_POSTHOG_HOST,
+    //     defaults: "2025-05-24",
+    //     capture_exceptions: false, // Disable exception capturing to reduce logging
+    //     debug: false, // Disable debug logging
+    //     disable_session_recording: true, // Disable session recording to stop snapshot events
+    //     autocapture: false, // Disable automatic event capture
+    //     capture_pageview: false, // Disable automatic pageview capture
+    //     capture_pageleave: false, // Disable page leave events
+    //   }}
+    // >
+    <QueryClientProvider client={queryClient}>
+      <RouterProvider router={router} />
+    </QueryClientProvider>
+    // </PostHogProvider>
   );
 }
 

@@ -37,6 +37,7 @@ export type Discount = {
   isMultipleUses: boolean;
   productSkus?: string[];
   totalDiscount?: number;
+  autoApply?: boolean; // Track if discount was auto-applied (from backend)
 };
 
 export type PaymentMethodType = "online_payment" | "payment_on_delivery";
@@ -82,6 +83,7 @@ export type CheckoutActions = {
   didEnterDeliveryDetails: boolean;
   didEnterBillingDetails: boolean;
   didToggleOrderSummary: boolean;
+  isApplyingDiscount: boolean;
 };
 
 export type CheckoutContextType = {

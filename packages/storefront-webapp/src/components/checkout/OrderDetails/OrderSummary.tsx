@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import InputWithEndButton from "@/components/ui/input-with-end-button";
 import { useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { redeemPromoCode } from "@/api/promoCodes";
 
 export default function OrderSummary() {
@@ -23,6 +23,8 @@ export default function OrderSummary() {
   const [code, setCode] = useState("");
   const { userId, guestId } = useAuth();
   const [isAutoApplyingPromoCode, setIsAutoApplyingPromoCode] = useState(false);
+
+  const queryClient = useQueryClient();
 
   const redeemPromoCodeMutation = useMutation({
     mutationFn: redeemPromoCode,
@@ -37,8 +39,16 @@ export default function OrderSummary() {
             span: data.promoCode.span,
             productSkus: data.promoCode.productSkus,
             isMultipleUses: data.promoCode.isMultipleUses,
+            autoApply: data.promoCode.autoApply,
           },
         });
+
+        queryClient.invalidateQueries({
+          queryKey: ["active-checkout-session"],
+        });
+
+        setCode("");
+        setInvalidMessage("");
       } else {
         if (isAutoApplyingPromoCode) {
           setIsAutoApplyingPromoCode(false);
@@ -130,7 +140,7 @@ export default function OrderSummary() {
             onKeyDown={handleKeyDown}
           />
           {invalidMessage && (
-            <p className="px-2 text-xs text-destructive">{invalidMessage}</p>
+            <p className="px-2 text-xs text-accent4">{invalidMessage}</p>
           )}
         </div>
 

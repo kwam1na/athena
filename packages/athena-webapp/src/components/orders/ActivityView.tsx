@@ -100,15 +100,20 @@ function ActivityItem({
                   ? activity.user
                     ? `${activity.user} marked payment as collected`
                     : "payment marked as collected"
-                  : activity.user
-                    ? `${activity.user} transitioned order →`
-                    : "order transitioned →"}
+                  : activity.status === "payment_verified"
+                    ? activity.user
+                      ? `${activity.user} manually verified payment`
+                      : "payment manually verified"
+                    : activity.user
+                      ? `${activity.user} transitioned order →`
+                      : "order transitioned →"}
               </p>
-              {activity.status !== "payment_collected" && (
-                <p className="text-sm font-medium">
-                  {slugToWords(activity.status)}
-                </p>
-              )}
+              {activity.status !== "payment_collected" &&
+                activity.status !== "payment_verified" && (
+                  <p className="text-sm font-medium">
+                    {slugToWords(activity.status)}
+                  </p>
+                )}
             </div>
           )}
           {isFeedbackRequestAction(activity) && (

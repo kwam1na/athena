@@ -1,5 +1,5 @@
-import { useCheckout } from "./CheckoutProvider";
-import { Address } from "@/hooks/useCheckout";
+import { useCheckout } from "@/hooks/useCheckout";
+import { Address } from "./types";
 import {
   FormControl,
   FormField,

@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import NotFound from "../states/not-found/NotFound";
@@ -15,6 +15,8 @@ import { ProductInfo } from "./ProductInfo";
 import { ProductActions } from "./ProductActions";
 import { TrustSignals } from "../communication/TrustSignals";
 import { AboutProduct } from "./AboutProduct";
+import { useProductDiscount } from "@/hooks/useProductDiscount";
+import { DiscountBadge } from "./DiscountBadge";
 
 // Main Product Page Component
 export default function ProductPage() {
@@ -74,7 +76,7 @@ export default function ProductPage() {
   }
 
   return (
-    <>
+    <AnimatePresence>
       <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
         <SheetTitle />
         <SheetContent>{sheetContent.current}</SheetContent>
@@ -84,9 +86,14 @@ export default function ProductPage() {
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1, transition: { duration: 0.1 } }}
-            // className="px-4"
+            className="relative"
           >
             <GalleryViewer images={selectedSku.images} />
+            <DiscountBadge
+              size="sm"
+              productSkuId={selectedSku._id}
+              productPrice={selectedSku.price}
+            />
           </motion.div>
 
           <motion.div
@@ -152,9 +159,14 @@ export default function ProductPage() {
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1, transition: { duration: 0.1 } }}
-            className="col-span-1 md:col-span-2"
+            className="col-span-1 md:col-span-2 relative"
           >
             <GalleryViewer images={selectedSku.images} />
+            <DiscountBadge
+              size="md"
+              productSkuId={selectedSku._id}
+              productPrice={selectedSku.price}
+            />
           </motion.div>
 
           <motion.div
@@ -212,6 +224,6 @@ export default function ProductPage() {
           </motion.div>
         </motion.main>
       </Sheet>
-    </>
+    </AnimatePresence>
   );
 }

@@ -1,4 +1,5 @@
 import { postAnalytics } from "@/api/analytics";
+import { useSearch } from "@tanstack/react-router";
 import { useEffect, useRef } from "react";
 
 export const useTrackEvent = ({
@@ -13,6 +14,7 @@ export const useTrackEvent = ({
   isReady?: boolean;
 }) => {
   const hasRun = useRef(false);
+  const { origin: originParam, utm_source } = useSearch({ strict: false });
 
   useEffect(() => {
     // Wait for the next tick to ensure state is stable
@@ -20,7 +22,7 @@ export const useTrackEvent = ({
       if (isReady && !hasRun.current) {
         postAnalytics({
           action,
-          origin,
+          origin: origin || originParam || utm_source,
           data,
         });
         hasRun.current = true;
@@ -28,5 +30,5 @@ export const useTrackEvent = ({
     }, 0);
 
     return () => clearTimeout(timeoutId);
-  }, [isReady, action, origin, data]);
+  }, [isReady, action, origin, data, originParam, utm_source]);
 };

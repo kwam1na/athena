@@ -11,7 +11,7 @@ import placeholder from "@/assets/placeholder.png";
 import { motion } from "framer-motion";
 import { Tag } from "lucide-react";
 import InputWithEndButton from "../ui/input-with-end-button";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { redeemPromoCode } from "@/api/promoCodes";
 import { useAuth } from "@/hooks/useAuth";
 import { useEffect, useState } from "react";
@@ -130,46 +130,14 @@ export function BagSummaryItems({
 function BagSummary() {
   const { formatter, store } = useStoreContext();
   const { bagSubtotal } = useShoppingBag();
-  const { checkoutState, updateState, activeSession } = useCheckout();
+  const { checkoutState, updateState, activeSession, updateActionsState } =
+    useCheckout();
   const { userId, guestId } = useAuth();
   const [code, setCode] = useState("");
   const [invalidMessage, setInvalidMessage] = useState("");
-  const [isAutoApplyingPromoCode, setIsAutoApplyingPromoCode] = useState(false);
   const { waiveDeliveryFees } = store?.config || {};
 
-  const promoCodeQueries = usePromoCodesQueries();
-  const { data: promoCodes } = useQuery(promoCodeQueries.getAll());
-  const { redeemedOffers } = useDiscountCodeAlert();
-
-  useEffect(() => {
-    if (promoCodes?.length && !checkoutState.discount && activeSession._id) {
-      const autoApplyPromoCode = promoCodes.find(
-        (code) => code.autoApply && code.active && !code.isExclusive
-      );
-
-      const exclusivePromoCodes = promoCodes.filter(
-        (code) => code.isExclusive && code.active && code.autoApply
-      );
-
-      const exclusivePromoCode = exclusivePromoCodes.find((code) =>
-        redeemedOffers?.some(
-          (offer: any) => offer.promoCodeId === code._id && !offer.isRedeemed
-        )
-      );
-
-      const codeToApply = autoApplyPromoCode || exclusivePromoCode;
-
-      if (codeToApply) {
-        setIsAutoApplyingPromoCode(true);
-        // Wait 2 seconds before auto-applying promo code
-        const timeoutId = setTimeout(() => {
-          handleRedeemPromoCode(codeToApply.code);
-        }, 500);
-
-        return () => clearTimeout(timeoutId);
-      }
-    }
-  }, [promoCodes, checkoutState.discount, activeSession._id, redeemedOffers]);
+  const queryClient = useQueryClient();
 
   const bagItems =
     checkoutState.bag?.items?.map((item: any) => ({
@@ -200,22 +168,27 @@ function BagSummary() {
             productSkus: data.promoCode.productSkus,
             totalDiscount: data.promoCode.totalDiscount,
             isMultipleUses: data.promoCode.isMultipleUses,
+            autoApply: data.promoCode.autoApply, // Include autoApply from backend
           },
         });
-      } else {
-        if (isAutoApplyingPromoCode) {
-          setIsAutoApplyingPromoCode(false);
-          return;
-        }
-        setInvalidMessage(data.message);
-      }
 
-      if (isAutoApplyingPromoCode) {
-        setIsAutoApplyingPromoCode(false);
+        queryClient.invalidateQueries({
+          queryKey: ["active-checkout-session"],
+        });
+
+        setCode("");
+        setInvalidMessage("");
+      } else {
+        setInvalidMessage(data.message);
       }
     },
     onError: (error) => {
       setInvalidMessage(error.message);
+    },
+    onSettled: () => {
+      updateActionsState({
+        isApplyingDiscount: false,
+      });
     },
   });
 
@@ -228,6 +201,10 @@ function BagSummary() {
     }
 
     setInvalidMessage("");
+
+    updateActionsState({
+      isApplyingDiscount: true,
+    });
 
     if (!storeFrontUserId || !store || !codeToUse || !activeSession._id) return;
 
@@ -287,7 +264,7 @@ function BagSummary() {
               onKeyDown={handleKeyDown}
             />
             {invalidMessage && (
-              <p className="px-2 text-xs text-destructive">{invalidMessage}</p>
+              <p className="px-2 text-xs text-accent4">{invalidMessage}</p>
             )}
           </div>
 

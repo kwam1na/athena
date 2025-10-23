@@ -1,4 +1,4 @@
-import { useRouter, ErrorComponentProps } from "@tanstack/react-router";
+import { useRouter, ErrorComponentProps, Link } from "@tanstack/react-router";
 import { AlertCircle, Home, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -9,12 +9,15 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import NavigationBar from "@/components/navigation-bar/NavigationBar";
+import { StoreProvider } from "@/contexts/StoreContext";
+import { NavigationBarProvider } from "@/contexts/NavigationBarProvider";
 
 export function ErrorBoundary({ error, reset }: ErrorComponentProps) {
   const router = useRouter();
 
   const handleReset = () => {
-    reset();
+    window.location.reload();
   };
 
   const handleGoHome = () => {

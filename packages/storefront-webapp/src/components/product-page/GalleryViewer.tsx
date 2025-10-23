@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { ScrollArea } from "../ui/scroll-area";
+import { ProductSku } from "@athena/webapp";
 
 interface GalleryViewerProps {
   images: string[];

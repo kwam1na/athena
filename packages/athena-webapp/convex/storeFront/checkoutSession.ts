@@ -27,6 +27,16 @@ type Product = {
 
 type AvailabilityUpdate = { id: Id<"productSku">; change: number };
 
+const checkIfItemsHaveChanged = (
+  products: Product[],
+  sessionItemsMap: Map<string, number>
+) => {
+  return products.some((product) => {
+    const existingQuantity = sessionItemsMap.get(product.productSkuId);
+    return existingQuantity !== product.quantity;
+  });
+};
+
 export const create = mutation({
   args: {
     storeId: v.id("store"),
@@ -75,7 +85,7 @@ export const create = mutation({
     if (invalidProducts.length > 0) {
       return {
         success: false,
-        message: "Some items in your bag are no longer available",
+        message: "Some items in your bag are no longer availables",
         unavailableProducts: invalidProducts.map((p) => ({
           productSkuId: p.productSkuId,
           requested: p.quantity,
@@ -92,7 +102,7 @@ export const create = mutation({
     if (invisibleProducts.length > 0) {
       return {
         success: false,
-        message: "Some items in your bag are no longer available",
+        message: "Some items in your bag are no longer availablea",
         unavailableProducts: invisibleProducts.map((product) => {
           const correspondingProductData = args.products.find(
             (p) => p.productId === product?._id
@@ -117,7 +127,7 @@ export const create = mutation({
     if (invisibleProductSkus.length > 0) {
       return {
         success: false,
-        message: "Some items in your bag are no longer available",
+        message: "Some items in your bag are no longer availablet",
         unavailableProducts: invisibleProductSkus.map((sku) => ({
           productSkuId: sku._id,
           requested:
@@ -135,10 +145,6 @@ export const create = mutation({
     );
 
     let sessionItemsMap = new Map<string, number>();
-
-    if (existingSession && existingSession.placedOrderId == undefined) {
-      console.log("existing session has no order placed");
-    }
 
     if (existingSession && existingSession.placedOrderId === undefined) {
       // Fetch existing session items
@@ -163,32 +169,24 @@ export const create = mutation({
     if (unavailableProducts.length > 0) {
       return {
         success: false,
-        message: "Some items in your bag are no longer available",
+        message: "Some items in your bag are low in stock or unavailable",
         unavailableProducts,
       };
     }
 
     if (existingSession && existingSession.placedOrderId === undefined) {
-      await ctx.db.patch(existingSession._id, {
-        expiresAt,
-        amount: args.amount,
-      });
-
-      // Update the active session and product availability
-      return await updateExistingSession(
+      return await handleExistingSession(
         ctx,
         existingSession,
-        args.storeFrontUserId,
-        args.products
+        sessionItemsMap,
+        {
+          products: args.products,
+          amount: args.amount,
+          expiresAt,
+          storeId: args.storeId,
+          storeFrontUserId: args.storeFrontUserId,
+        }
       );
-    }
-
-    if (existingSession && existingSession.placedOrderId !== undefined) {
-      console.log(
-        "existing session has already been placed. returning existing session"
-      );
-      return { success: true, session: existingSession };
-      console.log("proceeding to create a new session");
     }
 
     // Create new session
@@ -223,11 +221,58 @@ export const create = mutation({
     // Update availability counts
     await updateProductAvailability(ctx, args.products, productSkus);
 
-    const session = await ctx.db.get(sessionId);
+    // Auto-apply best-value promo code
+    console.log(
+      `[NewSession] Starting auto-apply process for session ${sessionId}`
+    );
+
+    const eligiblePromoCode = await findBestValuePromoCode(
+      ctx,
+      args.storeId,
+      args.storeFrontUserId,
+      sessionId
+    );
+
+    console.log(
+      `[NewSession] Best-value promo code found: ${eligiblePromoCode}`
+    );
+
+    if (eligiblePromoCode) {
+      console.log(
+        `[NewSession] Attempting to redeem promo code: ${eligiblePromoCode}`
+      );
+      const redeemResult = await ctx.runMutation(
+        api.inventory.promoCode.redeem,
+        {
+          code: eligiblePromoCode,
+          checkoutSessionId: sessionId,
+          storeFrontUserId: args.storeFrontUserId,
+        }
+      );
+
+      console.log(`[NewSession] Redeem result:`, redeemResult);
+
+      if (redeemResult.success) {
+        console.log(
+          `[NewSession] Successfully applied promo code: ${eligiblePromoCode}`
+        );
+      } else {
+        console.log(
+          `[NewSession] Failed to apply promo code: ${redeemResult.message}`
+        );
+      }
+    } else {
+      console.log(`[NewSession] No eligible promo code found for auto-apply`);
+    }
+
+    // Fetch updated session with discount applied
+    const updatedSession = await ctx.db.get(sessionId);
+
+    console.log("updatedSession", updatedSession);
     return {
       success: true,
       session: {
-        ...session,
+        ...updatedSession,
         items: args.products,
       },
     };
@@ -483,6 +528,7 @@ export const updateCheckoutSession = internalMutation({
     amount: v.optional(v.number()),
     orderDetails: v.optional(orderDetailsSchema),
     placedOrderId: v.optional(v.string()),
+    discount: v.optional(v.any()),
     paymentMethod: v.optional(
       v.object({
         last4: v.optional(v.string()),
@@ -540,6 +586,13 @@ export const updateCheckoutSession = internalMutation({
   },
 });
 
+export const clearDiscount = internalMutation({
+  args: { id: v.id("checkoutSession") },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.id, { discount: null });
+  },
+});
+
 function createPatchObject(args: any) {
   const patchObject: Record<string, any> = {};
 
@@ -565,6 +618,7 @@ function createPatchObject(args: any) {
 
   // Payment method and order details
   if (args.paymentMethod) patchObject.paymentMethod = args.paymentMethod;
+  if (args.discount) patchObject.discount = args.discount;
   if (args.orderDetails) {
     Object.assign(patchObject, {
       billingDetails: args.orderDetails.billingDetails,
@@ -969,4 +1023,464 @@ async function updateAvailability(
       quantityAvailable: productSku.quantityAvailable + change,
     });
   }
+}
+
+/**
+ * Handle updating an existing checkout session with new items
+ * This consolidates the logic for:
+ * - Updating session expiry and amount
+ * - Updating session items
+ * - Validating existing discount
+ * - Finding and applying best-value promo code if needed
+ */
+async function handleExistingSession(
+  ctx: MutationCtx,
+  existingSession: any,
+  sessionItemsMap: Map<string, number>,
+  args: {
+    products: Product[];
+    amount: number;
+    expiresAt: number;
+    storeId: Id<"store">;
+    storeFrontUserId: Id<"storeFrontUser"> | Id<"guest">;
+  }
+) {
+  console.log(
+    `[HandleExisting] Processing existing session: ${existingSession._id}`
+  );
+
+  // Update session expiry and amount
+  await ctx.db.patch(existingSession._id, {
+    expiresAt: args.expiresAt,
+    amount: args.amount,
+  });
+
+  // Check if items have changed
+  const itemsChanged = checkIfItemsHaveChanged(args.products, sessionItemsMap);
+  console.log(`[HandleExisting] Items changed: ${itemsChanged}`);
+
+  // Update session items if changed
+  if (itemsChanged) {
+    console.log(`[HandleExisting] Updating session items`);
+    const updateResult = await updateExistingSession(
+      ctx,
+      existingSession,
+      args.storeFrontUserId,
+      args.products
+    );
+
+    if (!updateResult.success) {
+      console.log(`[HandleExisting] Failed to update session items`);
+      return {
+        success: false,
+        message: "Failed to update session",
+      };
+    }
+  }
+
+  // Handle discount validation and application
+  let shouldFindNewPromo = false;
+
+  if (existingSession.discount) {
+    console.log(
+      `[HandleExisting] Existing session has discount: ${existingSession.discount.code}`
+    );
+
+    // Validate existing discount against current session state
+    const isDiscountValid = await validateExistingDiscount(
+      ctx,
+      existingSession.discount,
+      args.storeFrontUserId,
+      existingSession._id
+    );
+
+    if (!isDiscountValid) {
+      console.log(`[HandleExisting] Existing discount is invalid, clearing it`);
+      await ctx.runMutation(internal.storeFront.checkoutSession.clearDiscount, {
+        id: existingSession._id,
+      });
+      shouldFindNewPromo = true;
+    } else {
+      console.log(
+        `[HandleExisting] Existing discount is still valid: ${existingSession.discount.code}`
+      );
+
+      // If items changed, re-apply the discount to recalculate values
+      if (itemsChanged) {
+        console.log(
+          `[HandleExisting] Re-applying existing discount due to item changes`
+        );
+        const redeemResult = await ctx.runMutation(
+          api.inventory.promoCode.redeem,
+          {
+            code: existingSession.discount.code,
+            checkoutSessionId: existingSession._id,
+            storeFrontUserId: args.storeFrontUserId,
+          }
+        );
+
+        if (!redeemResult.success) {
+          console.log(
+            `[HandleExisting] Failed to re-apply existing discount: ${redeemResult.message}`
+          );
+          await ctx.runMutation(
+            internal.storeFront.checkoutSession.clearDiscount,
+            {
+              id: existingSession._id,
+            }
+          );
+          shouldFindNewPromo = true;
+        }
+      }
+    }
+  } else {
+    // No existing discount
+    console.log(`[HandleExisting] No existing discount`);
+    shouldFindNewPromo = true;
+  }
+
+  // Find and apply best-value promo code if needed
+  if (shouldFindNewPromo) {
+    console.log(`[HandleExisting] Searching for best-value promo code`);
+    const eligiblePromoCode = await findBestValuePromoCode(
+      ctx,
+      args.storeId,
+      args.storeFrontUserId,
+      existingSession._id
+    );
+
+    if (eligiblePromoCode) {
+      console.log(
+        `[HandleExisting] Found best-value promo code: ${eligiblePromoCode}`
+      );
+      const redeemResult = await ctx.runMutation(
+        api.inventory.promoCode.redeem,
+        {
+          code: eligiblePromoCode,
+          checkoutSessionId: existingSession._id,
+          storeFrontUserId: args.storeFrontUserId,
+        }
+      );
+
+      if (redeemResult.success) {
+        console.log(
+          `[HandleExisting] Successfully applied promo code: ${eligiblePromoCode}`
+        );
+      } else {
+        console.log(
+          `[HandleExisting] Failed to apply promo code: ${redeemResult.message}`
+        );
+      }
+    } else {
+      console.log(`[HandleExisting] No eligible promo code found`);
+    }
+  }
+
+  // Fetch and return updated session
+  const updatedSession = await ctx.db.get(existingSession._id);
+  const updatedSessionItems = await ctx.db
+    .query("checkoutSessionItem")
+    .filter((q) => q.eq(q.field("sesionId"), existingSession._id))
+    .collect();
+
+  console.log(`[HandleExisting] Successfully processed existing session`);
+  return {
+    success: true,
+    session: { ...updatedSession, items: updatedSessionItems },
+  };
+}
+
+/**
+ * Validate if an existing discount is still valid and applicable to current session items
+ */
+async function validateExistingDiscount(
+  ctx: MutationCtx,
+  discount: any,
+  storeFrontUserId: Id<"storeFrontUser"> | Id<"guest">,
+  sessionId: Id<"checkoutSession">
+): Promise<boolean> {
+  const promoCodeId = discount.promoCodeId || discount._id || discount.id;
+  if (!discount || !promoCodeId) {
+    console.log(`[ValidateDiscount] No discount or promo code id found`);
+    return false;
+  }
+
+  console.log(
+    `[ValidateDiscount] Validating existing discount: ${discount.code}`
+  );
+
+  // Get the promo code
+  const promoCode = await ctx.db.get(promoCodeId);
+  if (!promoCode || promoCode._id !== promoCodeId) {
+    console.log(
+      `[ValidateDiscount] Promo code not found for existing discount: ${discount.code}`
+    );
+    return false;
+  }
+
+  // Type assertion since we know this is a promo code
+  const promoCodeDoc = promoCode as any;
+
+  // Check if still active
+  if (!promoCodeDoc.active) {
+    console.log(
+      `[ValidateDiscount] Promo code no longer active: ${discount.code}`
+    );
+    return false;
+  }
+
+  // Check date validity
+  const now = Date.now();
+  if (now < promoCodeDoc.validFrom || now > promoCodeDoc.validTo) {
+    console.log(
+      `[ValidateDiscount] Promo code outside valid date range: ${discount.code}`
+    );
+    return false;
+  }
+
+  // Check if already redeemed
+  const redeemed = await ctx.db
+    .query("redeemedPromoCode")
+    .filter((q) =>
+      q.and(
+        q.eq(q.field("promoCodeId"), promoCodeDoc._id),
+        q.eq(q.field("storeFrontUserId"), storeFrontUserId)
+      )
+    )
+    .first();
+
+  if (redeemed) {
+    console.log(
+      `[ValidateDiscount] Promo code already redeemed: ${discount.code}`
+    );
+    return false;
+  }
+
+  // For exclusive codes, check if user still has valid offer
+  if ((promoCodeDoc as any).isExclusive) {
+    const hasOffer = await ctx.db
+      .query("offer")
+      .filter((q) =>
+        q.and(
+          q.eq(q.field("promoCodeId"), promoCodeDoc._id),
+          q.eq(q.field("storeFrontUserId"), storeFrontUserId),
+          q.eq(q.field("isRedeemed"), false)
+        )
+      )
+      .first();
+
+    if (!hasOffer) {
+      console.log(
+        `[ValidateDiscount] User no longer has valid offer for exclusive code: ${discount.code}`
+      );
+      return false;
+    }
+  }
+
+  // Validate discount applies to current session items
+  const sessionItems = await ctx.db
+    .query("checkoutSessionItem")
+    .filter((q) => q.eq(q.field("sesionId"), sessionId))
+    .collect();
+
+  if (sessionItems.length === 0) {
+    console.log(`[ValidateDiscount] No items in session`);
+    return false;
+  }
+
+  // For selected-products discounts, ensure at least one item matches
+  if (promoCodeDoc.span === "selected-products") {
+    const expectedProducts = await ctx.db
+      .query("promoCodeItem")
+      .filter((q) => q.eq(q.field("promoCodeId"), promoCodeDoc._id))
+      .collect();
+
+    const foundItems = sessionItems.filter((sessionItem) =>
+      expectedProducts.some(
+        (expectedProduct) =>
+          expectedProduct.productSkuId === sessionItem.productSkuId
+      )
+    );
+
+    if (foundItems.length === 0) {
+      console.log(
+        `[ValidateDiscount] No eligible products in session for selected-products discount: ${discount.code}`
+      );
+      return false;
+    }
+  }
+
+  console.log(
+    `[ValidateDiscount] Existing discount is still valid: ${discount.code}`
+  );
+  return true;
+}
+
+/**
+ * Calculate the discount value for a promo code without applying it
+ */
+async function calculatePromoCodeValue(
+  ctx: MutationCtx,
+  promoCode: any,
+  sessionItems: any[]
+): Promise<number> {
+  if (promoCode.span === "selected-products") {
+    const expectedProducts = await ctx.db
+      .query("promoCodeItem")
+      .filter((q) => q.eq(q.field("promoCodeId"), promoCode._id))
+      .collect();
+
+    const foundItems = sessionItems.filter((sessionItem) =>
+      expectedProducts.some(
+        (expectedProduct) =>
+          expectedProduct.productSkuId === sessionItem.productSkuId
+      )
+    );
+
+    if (foundItems.length === 0) {
+      return 0;
+    }
+
+    const discounts = foundItems.map((item) => {
+      if (promoCode.discountType === "percentage") {
+        return item.price * item.quantity * (promoCode.discountValue / 100);
+      } else {
+        return promoCode.discountValue;
+      }
+    });
+
+    return discounts.reduce((a, b) => a + b, 0);
+  }
+
+  // For entire-order discounts
+  if (promoCode.discountType === "percentage") {
+    const subtotal = sessionItems.reduce(
+      (sum, item) => sum + item.price * item.quantity,
+      0
+    );
+    return subtotal * (promoCode.discountValue / 100);
+  } else {
+    return promoCode.discountValue;
+  }
+}
+
+/**
+ * Find the promo code that provides the best value (highest discount) for the customer
+ */
+async function findBestValuePromoCode(
+  ctx: MutationCtx,
+  storeId: Id<"store">,
+  storeFrontUserId: Id<"storeFrontUser"> | Id<"guest">,
+  sessionId: Id<"checkoutSession">
+): Promise<string | null> {
+  const now = Date.now();
+  console.log(
+    `[BestValue] Starting search for best-value promo code for store ${storeId}, user ${storeFrontUserId}`
+  );
+
+  // Get session items for discount calculation
+  const sessionItems = await ctx.db
+    .query("checkoutSessionItem")
+    .filter((q) => q.eq(q.field("sesionId"), sessionId))
+    .collect();
+
+  if (sessionItems.length === 0) {
+    console.log(`[BestValue] No items in session, skipping promo search`);
+    return null;
+  }
+
+  // Query all active promo codes for the store with autoApply enabled
+  const promoCodes = await ctx.db
+    .query("promoCode")
+    .filter((q) =>
+      q.and(
+        q.eq(q.field("storeId"), storeId),
+        q.eq(q.field("active"), true),
+        q.eq(q.field("autoApply"), true),
+        q.lte(q.field("validFrom"), now),
+        q.gte(q.field("validTo"), now)
+      )
+    )
+    .collect();
+
+  console.log(
+    `[BestValue] Found ${promoCodes.length} active auto-apply promo codes for store`
+  );
+
+  if (promoCodes.length === 0) {
+    console.log(`[BestValue] No eligible promo codes found`);
+    return null;
+  }
+
+  // Filter to eligible codes (not already redeemed, has offer if exclusive)
+  const eligibleCodes = [];
+
+  for (const code of promoCodes) {
+    // Check if user already redeemed this code
+    const redeemed = await ctx.db
+      .query("redeemedPromoCode")
+      .filter((q) =>
+        q.and(
+          q.eq(q.field("promoCodeId"), code._id),
+          q.eq(q.field("storeFrontUserId"), storeFrontUserId)
+        )
+      )
+      .first();
+
+    if (redeemed) {
+      console.log(`[BestValue] Code already redeemed: ${code.code}`);
+      continue;
+    }
+
+    // For exclusive codes, check if user has an offer
+    if (code.isExclusive) {
+      const offer = await ctx.db
+        .query("offer")
+        .filter((q) =>
+          q.and(
+            q.eq(q.field("promoCodeId"), code._id),
+            q.eq(q.field("storeFrontUserId"), storeFrontUserId),
+            q.eq(q.field("isRedeemed"), false)
+          )
+        )
+        .first();
+
+      if (!offer) {
+        console.log(
+          `[BestValue] User has no offer for exclusive code: ${code.code}`
+        );
+        continue;
+      }
+    }
+
+    eligibleCodes.push(code);
+  }
+
+  console.log(`[BestValue] Found ${eligibleCodes.length} eligible codes`);
+
+  if (eligibleCodes.length === 0) {
+    return null;
+  }
+
+  // Calculate value for each eligible code
+  const codeValues = await Promise.all(
+    eligibleCodes.map(async (code) => {
+      const value = await calculatePromoCodeValue(ctx, code, sessionItems);
+      console.log(
+        `[BestValue] Code ${code.code} provides discount of ${value}`
+      );
+      return { code: code.code, value };
+    })
+  );
+
+  // Find the code with the highest discount value
+  const bestCode = codeValues.reduce((best, current) => {
+    return current.value > best.value ? current : best;
+  });
+
+  console.log(
+    `[BestValue] Selected best-value code: ${bestCode.code} with discount of ${bestCode.value}`
+  );
+
+  return bestCode.value > 0 ? bestCode.code : null;
 }

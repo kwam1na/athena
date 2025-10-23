@@ -24,11 +24,4 @@ crons.interval(
   {}
 );
 
-crons.interval(
-  "clear-expired-fulfillment-restrictions",
-  { minutes: process.env.STAGE == "prod" ? 10 : 1440 },
-  internal.inventory.stores.clearExpiredRestrictions,
-  {}
-);
-
 export default crons;
