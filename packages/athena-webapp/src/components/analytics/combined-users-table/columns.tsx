@@ -19,7 +19,8 @@ import {
 } from "../../ui/tooltip";
 import { Link } from "@tanstack/react-router";
 import { getOrigin } from "~/src/lib/navigationUtils";
-import { Doc } from "~/convex/_generated/dataModel";
+import { Doc, Id } from "~/convex/_generated/dataModel";
+import { UserStatus } from "../../users/UserStatus";
 
 export interface CombinedAnalyticUser {
   userId: string;
@@ -49,7 +50,8 @@ export const columns: ColumnDef<CombinedAnalyticUser>[] = [
       <DataTableColumnHeader column={column} title="User" />
     ),
     cell: ({ row }) => {
-      const user = row.original;
+      const combinedUser = row.original;
+      const user = combinedUser.user;
 
       return (
         <Link
@@ -58,7 +60,7 @@ export const columns: ColumnDef<CombinedAnalyticUser>[] = [
             ...p,
             orgUrlSlug: p.orgUrlSlug!,
             storeUrlSlug: p.storeUrlSlug!,
-            userId: user.userId,
+            userId: user?._id as string,
           })}
           search={{ o: getOrigin() }}
           className="flex items-center gap-3"
@@ -69,28 +71,14 @@ export const columns: ColumnDef<CombinedAnalyticUser>[] = [
           <div className="flex flex-col">
             <div className="flex items-center gap-2 mb-1">
               <span className="font-medium">
-                {user.email || formatUserId(user.userId)}
+                {user?.email || formatUserId(user?._id as string)}
               </span>
             </div>
             <div className="flex items-center gap-2">
-              {user.isNewUser && (
-                <Badge
-                  variant="outline"
-                  className="bg-green-50 border-green-50 text-green-600 flex items-center gap-1 text-xs"
-                >
-                  <Sparkle className="w-3 h-3" />
-                  New User
-                </Badge>
-              )}
-              {!user.isNewUser && (
-                <Badge
-                  variant="outline"
-                  className="bg-blue-50 border-blue-50 text-blue-500 flex items-center gap-1 text-xs"
-                >
-                  <UserRoundCheck className="w-3 h-3" />
-                  Returning
-                </Badge>
-              )}
+              <UserStatus
+                creationTime={user?._creationTime as number}
+                userId={user?._id as Id<"storeFrontUser"> | Id<"guest">}
+              />
               {/* {user.isNewActivity && !user.isNewUser && (
                 <Badge
                   variant="outline"

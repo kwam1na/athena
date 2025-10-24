@@ -67,6 +67,25 @@ export function getRelativeTime(timestamp: number) {
   return rtf.format(-days, "days");
 }
 
+export function getTimeRemaining(futureTimestamp: number) {
+  const now = Date.now();
+  const diff = futureTimestamp - now; // Difference in milliseconds
+
+  if (diff <= 0) return "expired";
+
+  const seconds = Math.floor(diff / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+
+  const rtf = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
+
+  if (days > 0) return rtf.format(days, "days");
+  if (hours > 0) return rtf.format(hours, "hours");
+  if (minutes > 0) return rtf.format(minutes, "minutes");
+  return rtf.format(seconds, "seconds");
+}
+
 // Add the formatUserId function to format user IDs
 export const formatUserId = (id: string) => {
   const lastFive = id.slice(-5);

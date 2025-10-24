@@ -37,54 +37,10 @@ import useGetActiveStore from "~/src/hooks/useGetActiveStore";
 import { toast } from "sonner";
 import { EmptyState } from "../states/empty/empty-state";
 import { CounterClockwiseClockIcon } from "@radix-ui/react-icons";
+import { UserStatus } from "./UserStatus";
+import { UserCheckoutSession } from "./UserCheckoutSession";
 
 // Component to determine if user is new or returning
-const UserStatus = ({
-  creationTime,
-  userId,
-}: {
-  creationTime: number;
-  userId: Id<"storeFrontUser"> | Id<"guest">;
-}) => {
-  // Get just the most recent user activity for efficiency
-  const mostRecentActivity = useQuery(
-    api.storeFront.user.getMostRecentActivity,
-    { id: userId }
-  );
-
-  // Consider a user new if account created within the last 30 days
-  const thirtyDaysInMs = 30 * 24 * 60 * 60 * 1000;
-  const isNewAccount = Date.now() - creationTime < thirtyDaysInMs;
-
-  if (mostRecentActivity === undefined) {
-    return null;
-  }
-
-  // Check if most recent activity exists and is > 1 day after account creation
-  let hasRecentActivity = false;
-  if (mostRecentActivity) {
-    const oneDayInMs = 24 * 60 * 60 * 1000;
-    hasRecentActivity =
-      mostRecentActivity._creationTime > creationTime + oneDayInMs;
-  }
-
-  const isReturning = !isNewAccount || hasRecentActivity;
-
-  return (
-    <Badge
-      variant="outline"
-      className={
-        isReturning
-          ? "bg-blue-50 border-blue-50 text-blue-500 flex items-center gap-1"
-          : "bg-green-50 border-green-50 text-green-600 flex items-center gap-1"
-      }
-    >
-      {isReturning && <UserRoundCheck className="w-3 h-3" />}
-      {!isReturning && <Sparkle className="w-3 h-3" />}
-      {isReturning ? "Returning" : "New"}
-    </Badge>
-  );
-};
 
 const UserActions = () => {
   const { userId } = useParams({ strict: false });
@@ -137,7 +93,10 @@ export const UserView = () => {
     userId ? { id: userId as Id<"storeFrontUser"> } : "skip"
   );
 
-  const copyUserId = useCopyText(user?._id as string);
+  const checkoutSession = useQuery(
+    api.storeFront.checkoutSession.getActiveCheckoutSession,
+    userId ? { storeFrontUserId: userId as Id<"storeFrontUser"> } : "skip"
+  );
 
   if (!user)
     return (
@@ -167,7 +126,7 @@ export const UserView = () => {
         <ComposedPageHeader
           leadingContent={
             <div className="flex items-center gap-2">
-              <p className="text-sm font-medium">User details</p>{" "}
+              <p className="text-sm font-medium">User details</p>
               <UserStatus creationTime={user._creationTime} userId={user._id} />
             </div>
           }
@@ -177,7 +136,7 @@ export const UserView = () => {
     >
       <FadeIn className="container mx-auto h-full w-full p-8 space-y-12">
         <div className="flex justify-between gap-24">
-          <div className="space-y-16 w-[60%]">
+          <div className="space-y-32 w-[60%]">
             <div className="space-y-8">
               {/* <p className="text-sm font-medium">Contact Details</p> */}
               {!hasContactDetails ? (
@@ -230,20 +189,26 @@ export const UserView = () => {
               <UserBehaviorInsights userId={user._id} />
             </div>
 
-            <div className="space-y-8">
-              <p className="text-sm font-medium">Bag details</p>
-              <UserBag />
-            </div>
+            {checkoutSession && (
+              <UserCheckoutSession checkoutSession={checkoutSession} />
+            )}
+
+            {!checkoutSession && (
+              <div className="space-y-8">
+                <p className="text-sm font-medium">Bag details</p>
+                <UserBag />
+              </div>
+            )}
 
             <div className="space-y-8">
               <p className="text-sm font-medium">Online orders</p>
               <UserOnlineOrders />
             </div>
 
-            <div className="space-y-8">
+            {/* <div className="space-y-8">
               <p className="text-sm font-medium">Linked accounts</p>
               <LinkedAccounts />
-            </div>
+            </div> */}
           </div>
 
           <div className="w-[40%] space-y-24">

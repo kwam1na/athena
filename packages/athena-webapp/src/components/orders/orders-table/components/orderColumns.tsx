@@ -144,7 +144,7 @@ export const orderColumns: ColumnDef<OnlineOrder>[] = [
   {
     accessorKey: "amount",
     header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Amount" />
+      <DataTableColumnHeader column={column} title="Amount Paid" />
     ),
     cell: ({ row }) => {
       const s = window.location.pathname.split("/").pop();

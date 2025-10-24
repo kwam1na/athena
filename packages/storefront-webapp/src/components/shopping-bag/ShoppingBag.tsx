@@ -17,9 +17,11 @@ import {
   Info,
   InfoIcon,
   OctagonAlert,
+  Timer,
   Trash2,
   TrendingUp,
   TriangleAlert,
+  Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useStoreContext } from "@/contexts/StoreContext";
@@ -45,6 +47,7 @@ import { useDiscountCodeAlert } from "@/hooks/useDiscountCodeAlert";
 import { WelcomeBackModal } from "../ui/modals/WelcomeBackModal";
 import { useProductDiscount } from "@/hooks/useProductDiscount";
 import { DiscountBadge } from "../product-page/DiscountBadge";
+import { useInventoryStatus } from "@/hooks/useInventoryStatus";
 
 const PendingItem = ({ session, count }: { session: any; count: number }) => {
   return (
@@ -95,6 +98,7 @@ type BagItemWithDiscountProps = {
   isUpdatingBag: boolean;
   formatter: Intl.NumberFormat;
   unavailableProducts: any[];
+  inventoryStatus?: { inventoryCount: number; quantityAvailable: number };
   onUpdateBag: (params: { quantity: number; itemId: string }) => void;
   onMoveToSaved: (item: BagItem) => Promise<void>;
   onDelete: (itemId: string) => Promise<void>;
@@ -109,6 +113,7 @@ const BagItemWithDiscount = ({
   isUpdatingBag,
   formatter,
   unavailableProducts,
+  inventoryStatus,
   onUpdateBag,
   onMoveToSaved,
   onDelete,
@@ -146,6 +151,15 @@ const BagItemWithDiscount = ({
     priceLabel = "Free";
     showDiscount = true;
   }
+
+  const showHurryMessage =
+    inventoryStatus &&
+    inventoryStatus.quantityAvailable > 0 &&
+    inventoryStatus.quantityAvailable <= 3;
+
+  const showHighDemandMessage = Boolean(
+    item.otherBagsWithSku && item.otherBagsWithSku >= 3
+  );
 
   return (
     <motion.div key={item._id} layout={isNavbarShowing} className="space-y-4">
@@ -287,7 +301,7 @@ const BagItemWithDiscount = ({
         </motion.div>
       </div>
 
-      {Boolean(item.otherBagsWithSku && item.otherBagsWithSku >= 3) && (
+      {showHighDemandMessage && !showHurryMessage && (
         <div className="flex items-center gap-1 px-4 text-accent2">
           <motion.div>
             <HeartIconFilled width={12} height={12} />
@@ -295,6 +309,17 @@ const BagItemWithDiscount = ({
           <p className="text-xs font-medium">
             <b>High demand:</b> {item.otherBagsWithSku} other shoppers have this
             in their bag
+          </p>
+        </div>
+      )}
+
+      {showHurryMessage && (
+        <div className="flex items-center gap-1 px-4 text-accent2">
+          <motion.div>
+            <Timer className="w-3.5 h-3.5" />
+          </motion.div>
+          <p className="text-xs">
+            <b>Hurry! Only {inventoryStatus.quantityAvailable} left</b>
           </p>
         </div>
       )}
@@ -326,6 +351,15 @@ export default function ShoppingBag() {
     obtainCheckoutSession,
     unavailableProducts,
   } = useShoppingBag();
+
+  // Extract all productSkuIds from bag items
+  const productSkuIds = useMemo(
+    () => bag?.items?.map((item: BagItem) => item.productSkuId) || [],
+    [bag?.items]
+  );
+
+  // Fetch inventory status for all bag items
+  const { inventoryMap } = useInventoryStatus(productSkuIds);
 
   const [isProcessingCheckoutRequest, setIsProcessingCheckoutRequest] =
     useState(false);
@@ -586,6 +620,7 @@ export default function ShoppingBag() {
                   isUpdatingBag={isUpdatingBag}
                   formatter={formatter}
                   unavailableProducts={unavailableProducts}
+                  inventoryStatus={inventoryMap.get(item.productSkuId)}
                   onUpdateBag={updateBag}
                   onMoveToSaved={handleMoveToSaved}
                   onDelete={handleDeleteItem}

@@ -83,3 +83,33 @@ export async function getFeatured(): Promise<FeaturedItem[]> {
 
   return res;
 }
+
+export type InventoryStatus = {
+  _id: string;
+  inventoryCount: number;
+  quantityAvailable: number;
+};
+
+export async function getInventoryBySkuIds(
+  skuIds: string[]
+): Promise<InventoryStatus[]> {
+  const response = await fetch(
+    `${config.apiGateway.URL}/storefront/inventory/batch`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      credentials: "include",
+      body: JSON.stringify({ skuIds }),
+    }
+  );
+
+  const res = await response.json();
+
+  if (!response.ok) {
+    throw new Error(res.error || "Error loading inventory data.");
+  }
+
+  return res.inventory;
+}

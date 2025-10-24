@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { HonoWithConvex } from "convex-helpers/server/hono";
 import { ActionCtx } from "../../../../_generated/server";
 import { api } from "../../../../_generated/api";
+import { Id } from "../../../../_generated/dataModel";
 import { setCookie } from "hono/cookie";
 import { getStorefrontUserFromRequest } from "../../../utils";
 
@@ -72,6 +73,29 @@ storefrontRoutes.get("/", async (c) => {
   c.header("Access-Control-Allow-Credentials", "true");
 
   return c.json(store);
+});
+
+storefrontRoutes.post("/inventory/batch", async (c) => {
+  try {
+    const body = await c.req.json();
+    const { skuIds } = body;
+
+    if (!skuIds || !Array.isArray(skuIds)) {
+      return c.json({ error: "skuIds array is required" }, 400);
+    }
+
+    const inventory = await c.env.runQuery(
+      api.inventory.productSku.getInventoryBySkuIds,
+      {
+        skuIds: skuIds as Array<Id<"productSku">>,
+      }
+    );
+
+    return c.json({ inventory });
+  } catch (error) {
+    console.error("Failed to fetch batch inventory:", error);
+    return c.json({ error: "Failed to fetch inventory data" }, 500);
+  }
 });
 
 export { storefrontRoutes };

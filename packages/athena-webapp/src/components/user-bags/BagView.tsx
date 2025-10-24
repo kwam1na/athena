@@ -16,7 +16,7 @@ import { getOrigin } from "~/src/lib/navigationUtils";
 import { FadeIn } from "../common/FadeIn";
 import { SimplePageHeader } from "../common/PageHeader";
 
-const BagItemView = ({
+export const BagItemView = ({
   item,
   formatter,
 }: {

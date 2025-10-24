@@ -5,8 +5,9 @@ import {
   customerDetailsSchema,
   paymentMethodSchema,
 } from "../schemas/storeFront";
-import { api, internal } from "../_generated/api";
+import { api } from "../_generated/api";
 import { Id } from "../_generated/dataModel";
+import { getDiscountValue } from "../inventory/utils";
 
 const entity = "onlineOrder";
 
@@ -402,38 +403,25 @@ export const getByCheckoutSessionId = query({
 export const getAllOnlineOrders = query({
   args: { storeId: v.id("store") },
   handler: async (ctx, args) => {
-    return await ctx.db
+    const orders = await ctx.db
       .query(entity)
       .filter((q) => q.eq(q.field("storeId"), args.storeId))
       .order("desc")
       .collect();
 
-    // const ordersWithItems = await Promise.all(
-    //   orders.map(async (order) => {
-    //     const items = await ctx.db
-    //       .query("onlineOrderItem")
-    //       .filter((q) => q.eq(q.field("orderId"), order._id))
-    //       .collect();
+    // Include items for net amount calculation
+    const ordersWithItems = await Promise.all(
+      orders.map(async (order) => {
+        const items = await ctx.db
+          .query("onlineOrderItem")
+          .filter((q) => q.eq(q.field("orderId"), order._id))
+          .collect();
 
-    //     const itemsWithImages = await Promise.all(
-    //       items.map(async (item) => {
-    //         const [product, productSku] = await Promise.all([
-    //           ctx.db.get(item.productId),
-    //           ctx.db.get(item.productSkuId),
-    //         ]);
+        return { ...order, items };
+      })
+    );
 
-    //         return {
-    //           ...item,
-    //           productName: product?.name,
-    //           productImage: productSku?.images?.[0] ?? null,
-    //         };
-    //       })
-    //     );
-    //     return { ...order, items: itemsWithImages };
-    //   })
-    // );
-
-    // return ordersWithItems;
+    return ordersWithItems;
   },
 });
 
@@ -806,5 +794,109 @@ export const isDuplicateOrder = query({
       .collect();
 
     return orders.length > 1;
+  },
+});
+
+export const getOrderMetrics = query({
+  args: {
+    storeId: v.id("store"),
+    timeRange: v.union(
+      v.literal("day"),
+      v.literal("week"),
+      v.literal("month"),
+      v.literal("all")
+    ),
+  },
+  returns: v.object({
+    totalOrders: v.number(),
+    grossSales: v.number(),
+    totalDiscounts: v.number(),
+    netRevenue: v.number(),
+  }),
+  handler: async (ctx, args) => {
+    // Calculate time filter based on time range
+    let timeFilter: number | undefined;
+    const now = Date.now();
+
+    switch (args.timeRange) {
+      case "day":
+        timeFilter = now - 24 * 60 * 60 * 1000; // Last 24 hours
+        break;
+      case "week":
+        timeFilter = now - 7 * 24 * 60 * 60 * 1000; // Last 7 days
+        break;
+      case "month":
+        timeFilter = now - 30 * 24 * 60 * 60 * 1000; // Last 30 days
+        break;
+      case "all":
+        timeFilter = undefined; // No time filter
+        break;
+    }
+
+    // Query orders filtered by store and time range
+    let ordersQuery = ctx.db
+      .query(entity)
+      .filter((q) => q.eq(q.field("storeId"), args.storeId));
+
+    // Apply time filter if specified
+    if (timeFilter !== undefined) {
+      ordersQuery = ordersQuery.filter((q) =>
+        q.gte(q.field("_creationTime"), timeFilter!)
+      );
+    }
+
+    const allOrders = await ordersQuery.collect();
+
+    // Filter for open and completed orders only
+    const allowedStatuses = [
+      "picked-up",
+      "delivered",
+      "out-for-delivery",
+      "ready-for-pickup",
+      "ready-for-delivery",
+      "open",
+    ];
+
+    const filteredOrders = allOrders.filter((order) =>
+      allowedStatuses.includes(order.status)
+    );
+
+    // Get all order items for discount calculations
+    const ordersWithItems = await Promise.all(
+      filteredOrders.map(async (order) => {
+        const items = await ctx.db
+          .query("onlineOrderItem")
+          .filter((q) => q.eq(q.field("orderId"), order._id))
+          .collect();
+        return { ...order, items };
+      })
+    );
+
+    // Calculate metrics
+    const totalOrders = ordersWithItems.length;
+    let grossSales = 0;
+    let totalDiscounts = 0;
+    let netRevenue = 0;
+
+    ordersWithItems.forEach((order) => {
+      // Gross sales = subtotal (order.amount is in cents/pesewas)
+      const subtotal = order.amount || 0;
+      grossSales += subtotal;
+
+      // Calculate discount using the utility function for consistency
+      const discountValue = getDiscountValue(order.items, order.discount);
+      totalDiscounts += discountValue;
+
+      // Net revenue = subtotal + delivery fees - discounts
+      const deliveryFee = (order.deliveryFee || 0) * 100; // Convert to cents
+      netRevenue += subtotal + deliveryFee - discountValue;
+    });
+
+    return {
+      totalOrders,
+      grossSales,
+      totalDiscounts,
+      netRevenue,
+    };
   },
 });

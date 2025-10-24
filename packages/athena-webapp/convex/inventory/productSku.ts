@@ -69,6 +69,32 @@ export const retrieve = query({
   },
 });
 
+export const getInventoryBySkuIds = query({
+  args: { skuIds: v.array(v.id("productSku")) },
+  returns: v.array(
+    v.object({
+      _id: v.id("productSku"),
+      inventoryCount: v.number(),
+      quantityAvailable: v.number(),
+    })
+  ),
+  handler: async (ctx, args) => {
+    // Fetch all SKUs in parallel
+    const skus = await Promise.all(
+      args.skuIds.map((skuId) => ctx.db.get(skuId))
+    );
+
+    // Filter out nulls and return only inventory fields
+    return skus
+      .filter((sku): sku is NonNullable<typeof sku> => sku !== null)
+      .map((sku) => ({
+        _id: sku._id,
+        inventoryCount: sku.inventoryCount,
+        quantityAvailable: sku.quantityAvailable,
+      }));
+  },
+});
+
 export const update = mutation({
   args: { id: v.id("productSku"), update: v.record(v.string(), v.any()) },
   handler: async (ctx, args) => {

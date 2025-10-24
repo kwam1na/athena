@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useQuery } from "convex/react";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { api } from "~/convex/_generated/api";
@@ -11,9 +12,14 @@ import {
 import { OrdersTableToolbarProvider } from "./orders-table/components/data-table-toolbar-provider";
 import { OnlineOrder } from "~/types";
 import { FadeIn } from "../common/FadeIn";
+import OrderMetricsPanel from "./OrderMetricsPanel";
+import { getAmountPaidForOrder } from "./utils";
+
+type TimeRange = "day" | "week" | "month" | "all";
 
 export default function OrdersView({ status }: { status?: string }) {
   const { activeStore } = useGetActiveStore();
+  const [selectedTimeRange, setSelectedTimeRange] = useState<TimeRange>("all");
 
   const orders = useQuery(
     api.storeFront.onlineOrder.getAllOnlineOrders,
@@ -24,8 +30,26 @@ export default function OrdersView({ status }: { status?: string }) {
 
   const formatter = currencyFormatter(activeStore.currency);
 
+  // Calculate time filter based on selected time range
+  const getTimeFilter = (timeRange: TimeRange): number | undefined => {
+    const now = Date.now();
+    switch (timeRange) {
+      case "day":
+        return now - 24 * 60 * 60 * 1000;
+      case "week":
+        return now - 7 * 24 * 60 * 60 * 1000;
+      case "month":
+        return now - 30 * 24 * 60 * 60 * 1000;
+      case "all":
+        return undefined;
+    }
+  };
+
+  const timeFilter = getTimeFilter(selectedTimeRange);
+
   const ordersFormatted = orders
     .filter((o: OnlineOrder) => {
+      // Apply status filter based on the page
       if (status) {
         if (status == "completed") {
           return ["picked-up", "delivered"].includes(o.status);
@@ -39,10 +63,13 @@ export default function OrdersView({ status }: { status?: string }) {
       return true;
     })
     .map((order: any) => {
+      // Calculate net amount (amount paid after discounts and including fees)
+      const netAmount = getAmountPaidForOrder(order);
+
       return {
         ...order,
-        amountValue: order.amount,
-        amount: formatter.format(order.amount / 100),
+        amountValue: netAmount,
+        amount: formatter.format(netAmount / 100),
       };
     });
 
@@ -60,22 +87,33 @@ export default function OrdersView({ status }: { status?: string }) {
     );
   };
 
+  const handleTimeRangeChange = (timeRange: TimeRange) => {
+    setSelectedTimeRange(timeRange);
+  };
+
   return (
-    <View
-      hideBorder
-      hideHeaderBottomBorder
-      className="bg-background"
-      header={hasOrders && <Navigation />}
-    >
-      <FadeIn>
-        <OrdersTableToolbarProvider>
-          <Orders
-            store={activeStore}
-            status={status || "open"}
-            orders={ordersFormatted}
-          />
-        </OrdersTableToolbarProvider>
-      </FadeIn>
-    </View>
+    <div>
+      <OrderMetricsPanel
+        storeId={activeStore._id}
+        currency={activeStore.currency}
+        onTimeRangeChange={handleTimeRangeChange}
+      />
+      <View
+        hideBorder
+        hideHeaderBottomBorder
+        className="bg-background"
+        header={hasOrders && <Navigation />}
+      >
+        <FadeIn>
+          <OrdersTableToolbarProvider>
+            <Orders
+              store={activeStore}
+              status={status || "open"}
+              orders={ordersFormatted}
+            />
+          </OrdersTableToolbarProvider>
+        </FadeIn>
+      </View>
+    </div>
   );
 }
