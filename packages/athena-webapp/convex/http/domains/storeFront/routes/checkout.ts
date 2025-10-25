@@ -67,6 +67,25 @@ checkoutRoutes.post("/:checkoutSessionId", async (c) => {
 
   try {
     if (action == "finalize-payment") {
+      // Log entry point for payment finalization
+      console.log(
+        `[CHECKOUT-START] Finalize payment request received | Session: ${checkoutSessionId} | Email: ${customerEmail} | Amount: ${amount} | Delivery method: ${orderDetails?.deliveryMethod} | Delivery fee: ${orderDetails?.deliveryFee} | POD method: ${orderDetails?.podPaymentMethod || "N/A"}`
+      );
+      console.log(
+        `[CHECKOUT-START] Order details:`,
+        JSON.stringify(
+          {
+            customerDetails: orderDetails?.customerDetails,
+            deliveryDetails: orderDetails?.deliveryDetails,
+            deliveryOption: orderDetails?.deliveryOption,
+            pickupLocation: orderDetails?.pickupLocation,
+            discount: orderDetails?.discount,
+          },
+          null,
+          2
+        )
+      );
+
       // check that the store is still active
       const store = await c.env.runQuery(api.inventory.stores.getByIdOrSlug, {
         identifier: storeId,
@@ -94,6 +113,9 @@ checkoutRoutes.post("/:checkoutSessionId", async (c) => {
       );
 
       if (session?.hasCompletedPayment) {
+        console.log(
+          `[CHECKOUT-FAILURE] Session already completed | Session: ${checkoutSessionId}`
+        );
         return c.json({
           success: false,
           message:
@@ -114,6 +136,13 @@ checkoutRoutes.post("/:checkoutSessionId", async (c) => {
             deliveryDetails: orderDetails.deliveryDetails ?? null,
           },
         }
+      );
+
+      // Log successful payment response
+      const hasAuthUrl = "authorization_url" in payment;
+      const isSuccess = "success" in payment && payment.success;
+      console.log(
+        `[CHECKOUT-${hasAuthUrl || isSuccess ? "SUCCESS" : "FAILURE"}] Payment action completed | Session: ${checkoutSessionId} | Has Auth URL: ${hasAuthUrl}`
       );
 
       return c.json(payment);
@@ -240,6 +269,9 @@ checkoutRoutes.post("/:checkoutSessionId", async (c) => {
 
     return c.json({});
   } catch (e) {
+    console.log(
+      `[CHECKOUT-FAILURE] Error in checkout endpoint | Session: ${checkoutSessionId} | Action: ${action} | Error: ${(e as Error).message}`
+    );
     return c.json({ error: (e as Error).message }, 400);
   }
 });

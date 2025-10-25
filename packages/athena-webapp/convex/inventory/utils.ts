@@ -108,7 +108,7 @@ export const getOrderAmount = ({
   subtotal: number;
 }) => {
   const discountValue = getDiscountValue(items, discount);
-  return Math.round(subtotal - discountValue + (deliveryFee || 0) * 100);
+  return Math.round(subtotal - discountValue + (deliveryFee || 0));
 };
 
 /**

@@ -389,6 +389,37 @@ export const getActiveCheckoutSession = query({
   },
 });
 
+export const getActiveCheckoutSessionsForStore = query({
+  args: {
+    storeId: v.id("store"),
+  },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+
+    // Query for the first active session for the given storeFrontUserId
+
+    // a session is active if:
+    // it has not expired, or isFinalizingPayment is true, or has
+    return await ctx.db
+      .query("checkoutSession")
+      .filter((q) =>
+        q.and(
+          q.and(
+            q.eq(q.field("storeId"), args.storeId),
+            q.or(
+              q.gt(q.field("expiresAt"), now),
+              q.eq(q.field("isFinalizingPayment"), true)
+            )
+          ),
+          q.eq(q.field("hasCompletedCheckoutSession"), false)
+          // q.eq(q.field("placedOrderId"), undefined)
+          // q.eq(q.field("hasCompletedPayment"), false)
+        )
+      )
+      .collect();
+  },
+});
+
 export const cancelOrder = action({
   args: { id: v.id("checkoutSession") },
   handler: async (ctx, args) => {
@@ -1046,7 +1077,7 @@ async function handleExistingSession(
   }
 ) {
   console.log(
-    `[HandleExisting] Processing existing session: ${existingSession._id}`
+    `[HandleExisting] Processing existing session: ${existingSession._id} | User: ${args.storeFrontUserId}`
   );
 
   // Update session expiry and amount

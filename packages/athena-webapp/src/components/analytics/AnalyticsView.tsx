@@ -6,30 +6,20 @@ import { api } from "~/convex/_generated/api";
 import AnalyticsItems from "./AnalyticsItems";
 import AnalyticsProducts from "./AnalyticsProducts";
 import { FadeIn } from "../common/FadeIn";
-import StoreInsights from "./StoreInsights";
 import { formatNumber } from "../../utils/formatNumber";
-import EnhancedAnalyticsView from "./EnhancedAnalyticsView";
 import { Button } from "../ui/button";
-import { BarChart3, List } from "lucide-react";
 import AnalyticsCombinedUsers from "./AnalyticsCombinedUsers";
+import { Link } from "@tanstack/react-router";
 
 const StoreVisitors = () => {
   const { activeStore } = useGetActiveStore();
-
-  // const lifetimeVisitors = useQuery(
-  //   api.storeFront.guest.getUniqueVisitors,
-  //   activeStore?._id ? { storeId: activeStore._id } : "skip"
-  // );
 
   const uniqueVisitorsToday = useQuery(
     api.storeFront.guest.getUniqueVisitorsForDay,
     activeStore?._id ? { storeId: activeStore._id } : "skip"
   );
 
-  // const returningVisitorsToday = useQuery(
-  //   api.storeFront.guest.getReturningVisitorsForDay,
-  //   activeStore?._id ? { storeId: activeStore._id } : "skip"
-  // );
+  // if (!activeStore) return null;
 
   return (
     <div className="flex items-center gap-16 border rounded-lg p-4">
@@ -43,22 +33,46 @@ const StoreVisitors = () => {
             : "Unique visitors today"}
         </p>
       </div>
+    </div>
+  );
+};
 
-      {/* <div className="space-y-2">
-        <p className="font-medium text-2xl">
-          {formatNumber(returningVisitorsToday)}
-        </p>
+const ActiveCheckoutSessions = () => {
+  const { activeStore } = useGetActiveStore();
+
+  const activeCheckoutSessions = useQuery(
+    api.storeFront.checkoutSession.getActiveCheckoutSessionsForStore,
+    activeStore?._id ? { storeId: activeStore._id } : "skip"
+  );
+
+  // if (!activeCheckoutSessions) return null;
+
+  return (
+    <div className="flex items-center gap-16 border rounded-lg p-4">
+      <div className="space-y-2">
+        <div className="flex base justify-between">
+          <p className="font-medium text-2xl">
+            {activeCheckoutSessions?.length}
+          </p>
+          <Link
+            to="/$orgUrlSlug/store/$storeUrlSlug/checkout-sessions"
+            params={(p) => ({
+              ...p,
+              orgUrlSlug: p.orgUrlSlug!,
+              storeUrlSlug: p.storeUrlSlug!,
+            })}
+          >
+            <Button variant="link" className="p-0">
+              View all
+            </Button>
+          </Link>
+        </div>
         <p className="text-sm text-muted-foreground">
-          {returningVisitorsToday === 1
-            ? "Returning visitor today"
-            : "Returning visitors today"}
+          {activeCheckoutSessions?.length === 1
+            ? "Active checkout session"
+            : "Active checkout sessions"}
         </p>
-      </div> */}
-
-      {/* <div className="space-y-2">
-        <p className="font-medium text-2xl">{formatNumber(lifetimeVisitors)}</p>
-        <p className="text-sm text-muted-foreground">Lifetime visitors</p>
-      </div> */}
+      </div>
     </div>
   );
 };
@@ -82,27 +96,6 @@ export default function AnalyticsView() {
         <div className="flex items-center">
           <p className="text-xl font-medium">Analytics</p>
         </div>
-        {/* <div className="flex items-center gap-2">
-          <Button
-            variant={viewMode === "enhanced" ? "default" : "outline"}
-            size="sm"
-            onClick={() => setViewMode("enhanced")}
-            className="flex items-center gap-1"
-            disabled={true}
-          >
-            <BarChart3 className="h-4 w-4" />
-            Enhanced
-          </Button>
-          <Button
-            variant={viewMode === "classic" ? "default" : "outline"}
-            size="sm"
-            onClick={() => setViewMode("classic")}
-            className="flex items-center gap-1"
-          >
-            <List className="h-4 w-4" />
-            Classic
-          </Button>
-        </div> */}
       </div>
     );
   };
@@ -134,7 +127,10 @@ export default function AnalyticsView() {
         <div className="flex">
           {/* <StoreInsights storeId={activeStore._id} /> */}
           <div className="ml-auto">
-            <StoreVisitors />
+            <div className="grid grid-cols-2 gap-4">
+              <ActiveCheckoutSessions />
+              <StoreVisitors />
+            </div>
           </div>
         </div>
         <div className="space-y-16">

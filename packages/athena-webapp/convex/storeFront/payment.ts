@@ -81,12 +81,44 @@ export const createTransaction = action({
           price: item.price!,
         }));
 
+      // Log calculation inputs
+      console.log(
+        `[CHECKOUT-CALCULATION] Amount calculation inputs | Session: ${args.checkoutSessionId} | Items count: ${items.length} | Subtotal: ${args.amount * 100} | Delivery fee: ${(args.orderDetails.deliveryFee || 0) * 100} | Has discount: ${!!discount}`
+      );
+      console.log(
+        `[CHECKOUT-CALCULATION] Items breakdown:`,
+        items.map((item) => ({
+          sku: item.productSkuId,
+          qty: item.quantity,
+          price: item.price,
+          total: item.price * item.quantity,
+        }))
+      );
+      if (discount) {
+        console.log(`[CHECKOUT-CALCULATION] Discount details:`, {
+          type: discount.discountType,
+          value: discount.discountValue,
+          code: discount.code,
+          span: discount.span,
+        });
+      }
+
       const amountToCharge = calculateOrderAmount({
         items,
         discount,
         deliveryFee: (args.orderDetails.deliveryFee || 0) * 100,
         subtotal: args.amount * 100,
       });
+
+      // Log calculation result
+      console.log(
+        `[CHECKOUT-CALCULATION] Amount calculated | Session: ${args.checkoutSessionId} | Final amount to charge: ${amountToCharge} (${amountToCharge / 100} in currency)`
+      );
+
+      // Log pre-Paystack details
+      console.log(
+        `[CHECKOUT-PRE-PAYSTACK] Initiating Paystack transaction | Session: ${args.checkoutSessionId} | Email: ${args.customerEmail} | Amount to charge: ${amountToCharge} | Has discount: ${!!discount}`
+      );
 
       // Initialize transaction with Paystack
       const response = await initializeTransaction({
@@ -101,6 +133,11 @@ export const createTransaction = action({
           amount_to_charge: amountToCharge.toString(),
         },
       });
+
+      // Log successful Paystack initialization
+      console.log(
+        `[CHECKOUT-SUCCESS] Paystack transaction initialized | Session: ${args.checkoutSessionId} | Reference: ${response.data.reference} | Access code: ${response.data.access_code}`
+      );
 
       // Update checkout session with transaction reference
       try {
@@ -124,7 +161,10 @@ export const createTransaction = action({
 
       return response.data;
     } catch (error) {
-      console.error("Failed to create transaction", error);
+      console.error(
+        `[CHECKOUT-FAILURE] Failed to create transaction | Session: ${args.checkoutSessionId} | Error:`,
+        error
+      );
       return {
         success: false,
         message: "Failed to create payment transaction",

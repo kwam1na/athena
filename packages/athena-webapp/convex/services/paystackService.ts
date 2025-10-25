@@ -24,6 +24,11 @@ export async function initializeTransaction(params: {
   callbackUrl: string;
   metadata: any;
 }): Promise<PaystackInitializeResponse> {
+  // Log Paystack API request
+  console.log(
+    `[CHECKOUT-PAYSTACK-API] Calling Paystack initialize endpoint | Session: ${params.metadata?.checkout_session_id} | Email: ${params.email} | Amount: ${params.amount}`
+  );
+
   const response = await fetch(PAYMENT_CONSTANTS.PAYSTACK_API.INITIALIZE, {
     method: "POST",
     headers: getPaystackHeaders(),
@@ -37,11 +42,21 @@ export async function initializeTransaction(params: {
 
   if (!response.ok) {
     const error = await response.json();
-    console.error("Failed to initialize Paystack transaction", error);
+    console.error(
+      `[CHECKOUT-FAILURE] Paystack API error | Session: ${params.metadata?.checkout_session_id} | Status: ${response.status} | Error:`,
+      error
+    );
     throw new Error("Failed to create payment transaction");
   }
 
-  return await response.json();
+  const result = await response.json();
+
+  // Log successful API response
+  console.log(
+    `[CHECKOUT-PAYSTACK-API] Paystack API success | Session: ${params.metadata?.checkout_session_id} | Reference: ${result.data?.reference} | Has Auth URL: ${!!result.data?.authorization_url}`
+  );
+
+  return result;
 }
 
 /**

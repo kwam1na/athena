@@ -452,17 +452,24 @@ const VerifyPaymentAlert = () => {
   };
 
   return (
-    <div className="flex gap-2 items-center px-4 rounded-lg text-yellow-700 bg-yellow-50 w-fit">
-      <AlertCircleIcon className="h-4 w-4" />
-      <div className="flex items-center">
-        <p className="text-sm">Payment for this order has not been verified.</p>
-        <LoadingButton
-          isLoading={isVerifyingPayment}
-          onClick={handleVerifyPayment}
-          variant={"link"}
-        >
-          <p className="text-sm text-yellow-700 underline">Verify payment</p>
-        </LoadingButton>
+    <div className="flex gap-2 px-4 rounded-lg text-yellow-700 bg-yellow-50 w-fit">
+      <AlertCircleIcon className="h-4 w-4 mt-3" />
+      <div className="space-y-2">
+        <div className="flex items-center gap-2">
+          <p className="text-sm">
+            Payment for this order has not been verified.
+          </p>
+          <LoadingButton
+            isLoading={isVerifyingPayment}
+            onClick={handleVerifyPayment}
+            variant={"link"}
+          >
+            <p className="text-sm text-yellow-700 underline">Verify payment</p>
+          </LoadingButton>
+        </div>
+        <p className="text-sm">
+          Payments are verified when the amount paid matches the order amount
+        </p>
       </div>
     </div>
   );

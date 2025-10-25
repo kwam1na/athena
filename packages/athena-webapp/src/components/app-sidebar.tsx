@@ -39,6 +39,7 @@ import {
   Tag,
   XCircle,
   ChevronDown,
+  ShoppingCart,
 } from "lucide-react";
 import { AppHeader } from "./Navbar";
 import { Link } from "@tanstack/react-router";
@@ -526,6 +527,45 @@ export function AppSidebar() {
                     <p className="font-medium">Storefront</p>
                   </div>
                 </SidebarMenuButton>
+
+                <SidebarMenuSub>
+                  <SidebarMenuSubItem>
+                    <SidebarMenuButton asChild>
+                      <Link
+                        to="/$orgUrlSlug/store/$storeUrlSlug/assets"
+                        params={(p) => ({
+                          ...p,
+                          orgUrlSlug: activeOrganization?.slug,
+                          storeUrlSlug: activeStore?.slug,
+                        })}
+                        className="flex items-center"
+                      >
+                        <Image className="w-4 h-4" />
+                        <p className="font-medium">Assets</p>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuSubItem>
+                </SidebarMenuSub>
+
+                <SidebarMenuSub>
+                  <SidebarMenuSubItem>
+                    <SidebarMenuButton asChild>
+                      <Link
+                        to="/$orgUrlSlug/store/$storeUrlSlug/checkout-sessions"
+                        params={(p) => ({
+                          ...p,
+                          orgUrlSlug: activeOrganization?.slug,
+                          storeUrlSlug: activeStore?.slug,
+                        })}
+                        className="flex items-center"
+                      >
+                        <ShoppingCart className="w-4 h-4" />
+                        <p className="font-medium">Checkout sessions</p>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuSubItem>
+                </SidebarMenuSub>
+
                 <SidebarMenuSub>
                   <SidebarMenuSubItem>
                     <SidebarMenuButton asChild>
@@ -549,7 +589,7 @@ export function AppSidebar() {
                   <SidebarMenuSubItem>
                     <SidebarMenuButton asChild>
                       <Link
-                        to="/$orgUrlSlug/store/$storeUrlSlug/assets"
+                        to="/$orgUrlSlug/store/$storeUrlSlug/bags"
                         params={(p) => ({
                           ...p,
                           orgUrlSlug: activeOrganization?.slug,
@@ -557,29 +597,12 @@ export function AppSidebar() {
                         })}
                         className="flex items-center"
                       >
-                        <Image className="w-4 h-4" />
-                        <p className="font-medium">Assets</p>
+                        <ShoppingBasket className="w-4 h-4" />
+                        <p className="font-medium">User bags</p>
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuSubItem>
                 </SidebarMenuSub>
-              </SidebarMenuItem>
-
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild>
-                  <Link
-                    to="/$orgUrlSlug/store/$storeUrlSlug/bags"
-                    params={(p) => ({
-                      ...p,
-                      orgUrlSlug: activeOrganization?.slug,
-                      storeUrlSlug: activeStore?.slug,
-                    })}
-                    className="flex items-center"
-                  >
-                    <ShoppingBasket className="w-4 h-4" />
-                    <p className="font-medium">User bags</p>
-                  </Link>
-                </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>

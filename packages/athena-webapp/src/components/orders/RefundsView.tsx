@@ -1,64 +1,54 @@
-import {
-  AlertTriangleIcon,
-  AtSign,
-  Ban,
-  Circle,
-  InfoIcon,
-  Package2,
-  Phone,
-  RotateCcw,
-  Send,
-  UserRound,
-} from "lucide-react";
+import { Ban, InfoIcon, RotateCcw } from "lucide-react";
 import View from "../View";
 import { Button } from "../ui/button";
 import { useOnlineOrder } from "~/src/contexts/OnlineOrderContext";
-import { Checkbox } from "../ui/checkbox";
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
-import { currencyFormatter, getRelativeTime } from "~/src/lib/utils";
-import { useState } from "react";
+import { currencyFormatter } from "~/src/lib/utils";
+import { useReducer, Reducer } from "react";
 import { getProductName } from "~/src/lib/productUtils";
-import { AnyRouter } from "@tanstack/react-router";
 import { useAction } from "convex/react";
 import { api } from "~/convex/_generated/api";
 import { toast } from "sonner";
-import { CheckCircledIcon, InfoCircledIcon } from "@radix-ui/react-icons";
-import { AlertModal } from "../ui/modals/alert-modal";
+import { CheckCircledIcon } from "@radix-ui/react-icons";
 import { ActionModal } from "../ui/modals/action-modal";
 import { Switch } from "../ui/switch";
 import { Label } from "../ui/label";
-import { Separator } from "../ui/separator";
 import { useAuth } from "~/src/hooks/useAuth";
+import { RadioGroup, RadioGroupItem } from "../ui/radio-group";
+import {
+  refundReducer,
+  calculateRefundAmount,
+  validateRefund,
+  getAmountRefunded,
+  getNetAmount,
+  getAvailableItems,
+  getItemsToRefund,
+  shouldShowReturnToStock,
+  type RefundMode,
+  type RefundState,
+  type RefundAction,
+} from "./refundUtils";
 
 export function RefundsView() {
   const { order } = useOnlineOrder();
   const { activeStore } = useGetActiveStore();
-  const [state, setState] = useState<{
-    entireOrder: boolean;
-    deliveryFees: boolean;
-    subtotal: boolean;
-    partial: boolean;
-    remainingAmount: boolean;
-    amountToRefund: number;
-    returnToStock: boolean;
-    showModal: boolean;
-    onlineOrderItemIds: string[];
-  }>({
-    entireOrder: false,
-    deliveryFees: false,
-    subtotal: false,
-    partial: false,
-    amountToRefund: 0,
-    returnToStock: false,
-    showModal: false,
-    remainingAmount: false,
-    onlineOrderItemIds: [],
-  });
+  const [state, dispatch] = useReducer<Reducer<RefundState, RefundAction>>(
+    refundReducer,
+    {
+      mode: null,
+      selectedItemIds: new Set<string>(),
+      includeDeliveryFee: false,
+      returnToStock: false,
+      showModal: false,
+    }
+  );
 
-  const [isRefundingOrder, setIsRefundingOrder] = useState(false);
+  const [isRefundingOrder, toggleIsRefundingOrder] = useReducer(
+    (state: boolean) => !state,
+    false
+  );
 
   const { user } = useAuth();
-
   const refundOrder = useAction(api.storeFront.payment.refundPayment);
 
   if (!order || !activeStore) return null;
@@ -68,29 +58,60 @@ export function RefundsView() {
 
   const formatter = currencyFormatter(activeStore.currency);
 
+  // Calculate amounts
+  const amountRefunded = getAmountRefunded(order);
+  const netAmount = getNetAmount(order);
+  const refundAmount = calculateRefundAmount(
+    order,
+    state.mode,
+    state.selectedItemIds,
+    state.includeDeliveryFee
+  );
+  const availableItems = getAvailableItems(order);
+
+  const canRefund = netAmount > 0;
+
   const refundText =
-    state.amountToRefund > 0
-      ? `Refund ${formatter.format(state.amountToRefund / 100)}`
+    refundAmount > 0
+      ? `Refund ${formatter.format(refundAmount / 100)}`
       : "Refund";
 
   const handleRefundOrder = async () => {
-    // console.table(state);
-
-    const refundItems = state.deliveryFees ? ["delivery-fee"] : [];
+    // Validate before submitting
+    const validation = validateRefund(
+      order,
+      state.mode,
+      state.selectedItemIds,
+      state.includeDeliveryFee
+    );
+    if (!validation.isValid) {
+      toast("Invalid refund", {
+        icon: <Ban className="w-4 h-4" />,
+        description: validation.error,
+      });
+      return;
+    }
 
     try {
-      setIsRefundingOrder(true);
+      toggleIsRefundingOrder();
 
-      const ids =
-        state.subtotal || state.entireOrder || state.remainingAmount
-          ? order.items?.map((item: any) => item._id)
-          : state.onlineOrderItemIds;
+      const itemIds = getItemsToRefund(
+        order,
+        state.mode,
+        state.selectedItemIds
+      );
+
+      // Include delivery fee in refund items if selected
+      const refundItems =
+        state.includeDeliveryFee && !order.didRefundDeliveryFee
+          ? ["delivery-fee"]
+          : [];
 
       const res = await refundOrder({
-        externalTransactionId: order?.externalTransactionId!,
-        amount: state.amountToRefund,
+        externalTransactionId: order.externalTransactionId!,
+        amount: refundAmount,
         returnItemsToStock: state.returnToStock,
-        onlineOrderItemIds: ids,
+        onlineOrderItemIds: itemIds as any,
         refundItems,
         signedInAthenaUser: user
           ? {
@@ -101,48 +122,28 @@ export function RefundsView() {
       });
 
       if (res.success) {
-        toast("Operation succeeded", {
+        toast("Refund successful", {
           icon: <CheckCircledIcon className="w-4 h-4" />,
           description: res.message,
         });
+        dispatch({ type: "RESET" });
       } else {
-        toast("Operation failed", {
+        toast("Refund failed", {
           icon: <Ban className="w-4 h-4" />,
           description: res.message,
         });
       }
     } catch (error) {
       console.error(error);
-      toast("Operation failed", {
+      toast("Refund failed", {
         icon: <Ban className="w-4 h-4" />,
         description: (error as Error).message,
       });
     } finally {
-      setIsRefundingOrder(false);
-      setState((prev) => ({
-        ...prev,
-        showModal: false,
-        returnToStock: false,
-      }));
+      toggleIsRefundingOrder();
+      dispatch({ type: "HIDE_MODAL" });
     }
   };
-
-  const amountRefunded =
-    order?.refunds?.reduce((acc, refund) => acc + refund.amount, 0) || 0;
-
-  const isPartiallyRefunded =
-    amountRefunded > 0 && amountRefunded < order.amount;
-
-  const canRefund = amountRefunded < order.amount || isPartiallyRefunded;
-
-  const netAmount = order.amount - amountRefunded;
-
-  const isFullRefund = state.deliveryFees && state.subtotal;
-
-  const isEntireOrderRefund =
-    !state.deliveryFees && !state.partial && !state.remainingAmount;
-
-  const shouldShowInventoryOption = isFullRefund || isEntireOrderRefund;
 
   if (!canRefund) return null;
 
@@ -191,225 +192,215 @@ export function RefundsView() {
       hideBorder
       hideHeaderBottomBorder
       className="h-auto w-full"
-      header={<p className="text-sm text-sm text-muted-foreground">Refund</p>}
+      header={<p className="text-sm text-muted-foreground">Refund</p>}
     >
       <ActionModal
         isOpen={state.showModal}
         loading={isRefundingOrder}
-        title={`Refund ${formatter.format(state.amountToRefund! / 100)}`}
-        description=""
+        title={`Refund ${formatter.format(refundAmount / 100)}`}
+        description="This action cannot be undone. The refund will be processed immediately."
         declineText="Cancel"
-        confirmText="Proceed"
-        onClose={() =>
-          setState((prev) => ({
-            ...prev,
-            showModal: false,
-            returnToStock: false,
-          }))
-        }
-        onConfirm={() => handleRefundOrder()}
+        confirmText="Proceed with Refund"
+        onClose={() => dispatch({ type: "HIDE_MODAL" })}
+        onConfirm={handleRefundOrder}
       >
-        {shouldShowInventoryOption && (
-          <div className="flex">
-            <div className="ml-auto flex items-center gap-4">
+        <div className="space-y-4 py-4">
+          {/* Refund breakdown */}
+          <div className="space-y-2 text-sm">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Items to refund:</span>
+              <span className="font-medium">
+                {state.mode === "entire-order" || state.mode === "remaining"
+                  ? availableItems.length
+                  : state.selectedItemIds.size}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Refund amount:</span>
+              <span className="font-medium">
+                {formatter.format(refundAmount / 100)}
+              </span>
+            </div>
+          </div>
+
+          {/* Return to stock option */}
+          {shouldShowReturnToStock(state.mode, order) && (
+            <div className="flex items-center gap-3 pt-4 border-t">
               <Switch
                 id="inventory"
                 checked={state.returnToStock}
-                disabled={
-                  !state.entireOrder && !state.subtotal && !state.partial
+                onCheckedChange={() =>
+                  dispatch({ type: "TOGGLE_RETURN_TO_STOCK" })
                 }
-                onCheckedChange={(checked) => {
-                  setState((prev) => ({
-                    ...prev,
-                    returnToStock: checked,
-                  }));
-                }}
               />
-              <Label className="text-muted-foreground" htmlFor="inventory">
+              <Label htmlFor="inventory" className="cursor-pointer">
                 Return items to inventory
               </Label>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </ActionModal>
-      <div className="py-4 space-y-12">
-        <div className="space-y-4">
-          <div className="flex items-center gap-2">
-            <Checkbox
-              checked={state.entireOrder}
-              disabled={!canRefund || state.remainingAmount}
-              onCheckedChange={() => {
-                setState((prev) => ({
-                  ...prev,
-                  entireOrder: !prev.entireOrder,
-                  deliveryFees: false,
-                  subtotal: false,
-                  partial: false,
-                  amountToRefund: !prev.entireOrder ? order.amount : 0,
-                }));
-              }}
-            />
-            <p className="text-sm">Entire order</p>
-          </div>
 
-          {order.deliveryFee && (
-            <div className="flex items-center gap-2">
-              <Checkbox
-                disabled={
-                  state.entireOrder ||
-                  state.remainingAmount ||
-                  !canRefund ||
-                  order.didRefundDeliveryFee
-                }
-                checked={
-                  state.deliveryFees || Boolean(order.didRefundDeliveryFee)
-                }
-                onCheckedChange={() => {
-                  setState((prev) => ({
-                    ...prev,
-                    deliveryFees: !prev.deliveryFees,
-                    amountToRefund: !prev.deliveryFees
-                      ? prev.amountToRefund + order.deliveryFee! * 100
-                      : prev.amountToRefund - order.deliveryFee! * 100,
-                  }));
-                }}
-              />
-              <p className="text-sm">Delivery fees</p>
+      <div className="py-4 space-y-6">
+        {/* Amount summary */}
+        <div className="bg-muted/50 rounded-lg p-4 space-y-2 text-sm">
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Original amount:</span>
+            <span>{formatter.format(order.amount / 100)}</span>
+          </div>
+          {amountRefunded > 0 && (
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Already refunded:</span>
+              <span className="text-destructive">
+                -{formatter.format(amountRefunded / 100)}
+              </span>
             </div>
           )}
-
-          <div className="flex items-center gap-2">
-            <Checkbox
-              disabled={
-                state.entireOrder ||
-                state.partial ||
-                state.remainingAmount ||
-                !canRefund
-              }
-              checked={state.subtotal}
-              onCheckedChange={() => {
-                setState((prev) => ({
-                  ...prev,
-                  subtotal: !prev.subtotal,
-                  amountToRefund: !prev.subtotal
-                    ? prev.amountToRefund +
-                      (order.amount -
-                        (order.deliveryFee ? order.deliveryFee * 100 : 0))
-                    : prev.amountToRefund -
-                      (order.amount -
-                        (order.deliveryFee ? order.deliveryFee * 100 : 0)),
-                }));
-              }}
-            />
-            <p className="text-sm">Subtotal</p>
+          <div className="flex justify-between font-medium pt-2 border-t">
+            <span>Available to refund:</span>
+            <span>{formatter.format(netAmount / 100)}</span>
           </div>
+        </div>
 
-          <div className="flex items-center gap-2">
-            <Checkbox
-              disabled={
-                state.entireOrder ||
-                state.subtotal ||
-                state.remainingAmount ||
-                !canRefund
-              }
-              checked={state.partial}
-              onCheckedChange={() => {
-                setState((prev) => ({
-                  ...prev,
-                  partial: !prev.partial,
-                  amountToRefund: 0,
-                }));
-              }}
-            />
-            <p className="text-sm">Partial</p>
-          </div>
+        {/* Refund options */}
+        <div className="space-y-4">
+          <p className="text-sm font-medium">Select refund option:</p>
 
-          {state.partial && (
-            <div className="ml-4 space-y-4">
-              {order.items?.map((item: any) => {
-                return (
-                  <div key={item._id} className="flex items-center gap-4">
-                    <Checkbox
-                      disabled={
-                        state.entireOrder || state.subtotal || item.isRefunded
+          <RadioGroup
+            value={state.mode || ""}
+            onValueChange={(value: string) =>
+              dispatch({ type: "SET_MODE", mode: value as RefundMode })
+            }
+          >
+            <div className="flex items-center space-x-2">
+              <RadioGroupItem value="entire-order" id="entire-order" />
+              <Label htmlFor="entire-order" className="cursor-pointer">
+                Entire order
+                <span className="ml-2 text-xs text-muted-foreground">
+                  (Refund all {availableItems.length} items -{" "}
+                  {formatter.format(netAmount / 100)})
+                </span>
+              </Label>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <RadioGroupItem value="partial" id="partial" />
+              <Label htmlFor="partial" className="cursor-pointer">
+                Partial refund
+                <span className="ml-2 text-xs text-muted-foreground">
+                  (Select specific items)
+                </span>
+              </Label>
+            </div>
+
+            {amountRefunded > 0 && (
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="remaining" id="remaining" />
+                <Label htmlFor="remaining" className="cursor-pointer">
+                  Remaining balance
+                  <span className="ml-2 text-xs text-muted-foreground">
+                    ({formatter.format(netAmount / 100)})
+                  </span>
+                </Label>
+              </div>
+            )}
+          </RadioGroup>
+
+          {/* Partial items selection */}
+          {state.mode === "partial" && (
+            <div className="ml-6 space-y-3 pt-2">
+              {availableItems.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  All items have been refunded
+                </p>
+              ) : (
+                availableItems.map((item) => (
+                  <div
+                    key={item._id}
+                    className="flex items-center gap-4 p-2 rounded-lg hover:bg-muted/50 cursor-pointer"
+                    onClick={() =>
+                      dispatch({ type: "TOGGLE_ITEM", itemId: item._id })
+                    }
+                  >
+                    <input
+                      type="checkbox"
+                      checked={state.selectedItemIds.has(item._id)}
+                      onChange={() =>
+                        dispatch({ type: "TOGGLE_ITEM", itemId: item._id })
                       }
-                      onCheckedChange={(checked) => {
-                        setState((prev) => ({
-                          ...prev,
-                          amountToRefund: checked
-                            ? prev.amountToRefund +
-                              item.quantity * item.price * 100
-                            : prev.amountToRefund -
-                              item.quantity * item.price * 100,
-                          onlineOrderItemIds: checked
-                            ? [...prev.onlineOrderItemIds, item._id]
-                            : prev.onlineOrderItemIds.filter(
-                                (id) => id !== item._id
-                              ),
-                        }));
-                      }}
+                      className="cursor-pointer"
                     />
 
                     <img
                       src={item.productImage}
                       alt={item.productName || "product image"}
-                      className="w-8 h-8 aspect-square object-cover rounded-lg"
+                      className="w-10 h-10 aspect-square object-cover rounded-lg"
                     />
 
-                    <div className="space-y-2 text-xs">
-                      <p>{getProductName(item)}</p>
-                      <p className="text-muted-foreground">{`x${item.quantity}`}</p>
+                    <div className="flex-1 space-y-1 text-sm">
+                      <p className="font-medium">{getProductName(item)}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Qty: {item.quantity} × {formatter.format(item.price)}
+                      </p>
                     </div>
 
-                    {item.isRefunded && (
-                      <div className="flex ml-auto items-center gap-2 text-muted-foreground">
-                        <RotateCcw className="h-3 w-3" />
-                        <p className="text-xs">Refunded</p>
-                      </div>
-                    )}
+                    <div className="text-sm font-medium">
+                      {formatter.format(item.price * item.quantity)}
+                    </div>
                   </div>
-                );
-              })}
+                ))
+              )}
+
+              {/* Delivery fee option */}
+              {order.deliveryFee && !order.didRefundDeliveryFee && (
+                <div
+                  className="flex items-center gap-4 p-2 rounded-lg hover:bg-muted/50 cursor-pointer border-t pt-3"
+                  onClick={() => dispatch({ type: "TOGGLE_DELIVERY_FEE" })}
+                >
+                  <input
+                    type="checkbox"
+                    checked={state.includeDeliveryFee}
+                    onChange={() => dispatch({ type: "TOGGLE_DELIVERY_FEE" })}
+                    className="cursor-pointer"
+                  />
+
+                  <div className="flex-1 text-sm">
+                    <p className="font-medium">Delivery fee</p>
+                    <p className="text-xs text-muted-foreground">
+                      Include delivery charge in refund
+                    </p>
+                  </div>
+
+                  <div className="text-sm font-medium">
+                    {formatter.format(order.deliveryFee)}
+                  </div>
+                </div>
+              )}
             </div>
           )}
+        </div>
 
-          <div className="flex items-center gap-2">
-            <Checkbox
-              disabled={
-                state.entireOrder ||
-                state.deliveryFees ||
-                state.subtotal ||
-                state.partial ||
-                !canRefund
-              }
-              checked={state.remainingAmount}
-              onCheckedChange={(checked) => {
-                setState((prev) => ({
-                  ...prev,
-                  remainingAmount: checked as boolean,
-                  amountToRefund: checked ? netAmount : 0,
-                }));
-              }}
-            />
-            <p className="text-sm">Remaining amount</p>
+        {/* Refund preview and action */}
+        {state.mode && (
+          <div className="flex items-center justify-between pt-4 border-t">
+            <div className="space-y-1">
+              <p className="text-sm text-muted-foreground">Refund amount</p>
+              <p className="text-2xl font-semibold">
+                {formatter.format(refundAmount / 100)}
+              </p>
+            </div>
+
+            <Button
+              variant="outline"
+              disabled={refundAmount <= 0 || isRefundingOrder}
+              onClick={() => dispatch({ type: "SHOW_MODAL" })}
+              className="min-w-[140px]"
+            >
+              <RotateCcw className="h-4 w-4 mr-2" />
+              {refundText}
+            </Button>
           </div>
-        </div>
-
-        <div className="flex">
-          <Button
-            variant="outline"
-            disabled={state.amountToRefund <= 0 || isRefundingOrder}
-            onClick={() =>
-              setState((prev) => ({
-                ...prev,
-                showModal: true,
-              }))
-            }
-          >
-            <RotateCcw className="h-4 w-4 mr-2" />
-            {refundText}
-          </Button>
-        </div>
+        )}
       </div>
     </View>
   );
