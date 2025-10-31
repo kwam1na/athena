@@ -26,6 +26,7 @@ import { ExistingReviewMessage } from "./ExistingReviewMessage";
 import { ArrowRight, CheckCircle } from "lucide-react";
 import { useTrackEvent } from "@/hooks/useTrackEvent";
 import { postAnalytics } from "@/api/analytics";
+import { cn } from "@/lib/utils";
 
 const PublishedReviewMessage = ({ productId }: { productId: string }) => {
   return (
@@ -216,7 +217,12 @@ export const ReviewEditor = () => {
   };
 
   return (
-    <FadeIn className="container mx-auto max-w-[1024px] px-6 xl:px-0 space-y-8 lg:space-y-24 py-8 pb-56">
+    <FadeIn
+      className={cn(
+        "container mx-auto max-w-[1024px] h-screen px-6 xl:px-0 space-y-8 lg:space-y-24 py-8 pb-56",
+        !hasReviewedThisOrderItem && !isSubmitted && "h-full"
+      )}
+    >
       <div className="space-y-8">
         <OrderNavigation />
 

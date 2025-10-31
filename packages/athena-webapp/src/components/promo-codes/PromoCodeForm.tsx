@@ -36,6 +36,9 @@ interface PromoCodeFormProps {
   isHomepageDiscountCode: boolean;
   setIsHomepageDiscountCode?: Dispatch<SetStateAction<boolean>>;
   updateHomepageDiscountCode?: (checked: boolean) => Promise<void>;
+  isLeaveAReviewDiscountCode: boolean;
+  setIsLeaveAReviewDiscountCode?: Dispatch<SetStateAction<boolean>>;
+  updateLeaveAReviewDiscountCode?: (checked: boolean) => Promise<void>;
   isUpdatingPromoCode: boolean;
   isUpdatingStoreConfig: boolean;
   promoCodeSlug?: Id<"promoCode">;
@@ -67,6 +70,8 @@ const PromoCodeForm = ({
   setIsSitewide,
   isHomepageDiscountCode,
   updateHomepageDiscountCode,
+  isLeaveAReviewDiscountCode,
+  updateLeaveAReviewDiscountCode,
   isUpdatingPromoCode,
   isUpdatingStoreConfig,
   promoCodeSlug,
@@ -172,7 +177,6 @@ const PromoCodeForm = ({
                   mode="single"
                   selected={validTo}
                   onSelect={setValidTo}
-                  initialFocus
                 />
               </PopoverContent>
             </Popover>
@@ -262,7 +266,7 @@ const PromoCodeForm = ({
         </div>
       </div>
 
-      {promoCodeSlug && updateHomepageDiscountCode && (
+      {updateHomepageDiscountCode && (
         <div className="flex items-center gap-8 border rounded-lg p-4 w-fit">
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
@@ -275,9 +279,30 @@ const PromoCodeForm = ({
             </div>
             <Switch
               id="homepage-discount"
-              disabled={isUpdatingStoreConfig}
+              // disabled={isUpdatingStoreConfig || isLeaveAReviewDiscountCode}
               checked={isHomepageDiscountCode}
               onCheckedChange={updateHomepageDiscountCode}
+            />
+          </div>
+        </div>
+      )}
+
+      {updateLeaveAReviewDiscountCode && (
+        <div className="flex items-center gap-8 border rounded-lg p-4 w-fit">
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <Label
+                className="text-muted-foreground"
+                htmlFor="leave-a-review-discount"
+              >
+                Use as leave a review discount code
+              </Label>
+            </div>
+            <Switch
+              id="leave-a-review-discount"
+              // disabled={isUpdatingStoreConfig || isHomepageDiscountCode}
+              checked={isLeaveAReviewDiscountCode}
+              onCheckedChange={updateLeaveAReviewDiscountCode}
             />
           </div>
         </div>

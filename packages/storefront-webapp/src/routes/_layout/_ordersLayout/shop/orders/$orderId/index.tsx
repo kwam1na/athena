@@ -66,7 +66,7 @@ export function OrderNavigation() {
           }
         }}
       >
-        <ArrowLeft className="w-4 h-4 mr-2 -me-1 ms-2 transition-transform group-hover:-translate-x-0.5" />
+        <ArrowLeft className="w-4 h-4 mr-2 transition-transform group-hover:-translate-x-0.5" />
         <p>All orders</p>
       </Button>
     </div>

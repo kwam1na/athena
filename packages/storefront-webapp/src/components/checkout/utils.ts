@@ -2,6 +2,7 @@ import { Discount, Address } from "./types";
 import { ALL_COUNTRIES } from "@/lib/countries";
 import { GHANA_REGIONS } from "@/lib/ghanaRegions";
 import { accraNeighborhoods } from "@/lib/ghana";
+import { OnlineOrder } from "@athena/webapp";
 
 export type BagItem = {
   productSkuId: string;
@@ -114,4 +115,16 @@ export const formatDeliveryAddress = (address: Address) => {
     addressLine: addressLine.trim(),
     country,
   };
+};
+
+export const getPotentialPoints = (order: OnlineOrder) => {
+  const { amountCharged } = getOrderAmount({
+    items: order.items || [],
+    discount: order?.discount as any,
+    deliveryFee: (order?.deliveryFee || 0) * 100,
+    subtotal: order.amount,
+    isInCents: true,
+  });
+
+  return Math.floor(amountCharged / 10);
 };

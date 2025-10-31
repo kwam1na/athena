@@ -121,11 +121,11 @@ const buttonContainer = {
 };
 
 const button = {
-  backgroundColor: "#ff6b6b",
+  backgroundColor: "#ee5d92",
   color: "#ffffff",
   padding: "15px 30px",
   textDecoration: "none",
-  borderRadius: "25px",
+  borderRadius: "8px",
   display: "inline-block",
   fontWeight: "bold",
 };

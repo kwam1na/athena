@@ -101,6 +101,56 @@ reviewRoutes.post("/", async (c) => {
 });
 
 /**
+ * Check if any review exists for an order item
+ * GET /reviews/order-item/:orderItemId/exists
+ */
+reviewRoutes.get("/order-item/:orderItemId/exists", async (c) => {
+  try {
+    const orderItemId = c.req.param("orderItemId");
+
+    const exists = await c.env.runQuery(
+      api.storeFront.reviews.hasReviewForOrderItem,
+      {
+        orderItemId: orderItemId as Id<"onlineOrderItem">,
+      }
+    );
+
+    return c.json({ exists });
+  } catch (error) {
+    console.error("Failed to check if review exists:", error);
+    return c.json({ error: "Failed to check if review exists" }, 500);
+  }
+});
+
+/**
+ * Check if the current user has reviewed an order item
+ * GET /reviews/order-item/:orderItemId/user-exists
+ */
+reviewRoutes.get("/order-item/:orderItemId/user-exists", async (c) => {
+  try {
+    const orderItemId = c.req.param("orderItemId");
+    const userId = getStorefrontUserFromRequest(c);
+
+    if (!userId) {
+      return c.json({ error: "User id missing" }, 400);
+    }
+
+    const exists = await c.env.runQuery(
+      api.storeFront.reviews.hasUserReviewForOrderItem,
+      {
+        orderItemId: orderItemId as Id<"onlineOrderItem">,
+        userId: userId as Id<"storeFrontUser"> | Id<"guest">,
+      }
+    );
+
+    return c.json({ exists });
+  } catch (error) {
+    console.error("Failed to check if user has reviewed:", error);
+    return c.json({ error: "Failed to check if user has reviewed" }, 500);
+  }
+});
+
+/**
  * Get review by order item ID
  * GET /reviews/order-item/:orderItemId
  */

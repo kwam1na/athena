@@ -35,6 +35,8 @@ function PromoCodeView() {
   const [autoApply, setAutoApply] = useState(false);
   const [isSitewide, setIsSitewide] = useState(false);
   const [isHomepageDiscountCode, setIsHomepageDiscountCode] = useState(false);
+  const [isLeaveAReviewDiscountCode, setIsLeaveAReviewDiscountCode] =
+    useState(false);
   const [isExclusive, setIsExclusive] = useState(false);
   const [isMultipleUses, setIsMultipleUses] = useState(false);
   // Add state for valid from and valid to dates
@@ -95,6 +97,14 @@ function PromoCodeView() {
         activePromoCode._id
       ) {
         setIsHomepageDiscountCode(true);
+      }
+
+      // Check if this promo code is set as leave a review discount code
+      if (
+        activeStore?.config?.leaveAReviewDiscountCodeModalPromoCode
+          ?.promoCodeId === activePromoCode._id
+      ) {
+        setIsLeaveAReviewDiscountCode(true);
       }
     }
   }, [activePromoCode, activeStore]);
@@ -289,6 +299,7 @@ function PromoCodeView() {
           id: activeStore._id,
           config: {
             ...activeStore.config,
+            leaveAReviewDiscountCodeModalPromoCode: undefined,
             homepageDiscountCodeModalPromoCode: {
               promoCodeId: promoCodeSlug,
               value: activePromoCode?.discountValue,
@@ -312,6 +323,49 @@ function PromoCodeView() {
       setIsHomepageDiscountCode(checked);
     } catch (e) {
       toast.error("Failed to update homepage discount code", {
+        description: (e as Error).message,
+      });
+    } finally {
+      setIsUpdatingStoreConfig(false);
+    }
+  };
+
+  const updateLeaveAReviewDiscountCode = async (checked: boolean) => {
+    if (!activeStore || !promoCodeSlug) return;
+
+    try {
+      setIsUpdatingStoreConfig(true);
+
+      if (checked) {
+        // Set this promo code as leave a review discount code
+        await updateStoreConfig({
+          id: activeStore._id,
+          config: {
+            ...activeStore.config,
+            homepageDiscountCodeModalPromoCode: undefined,
+            leaveAReviewDiscountCodeModalPromoCode: {
+              promoCodeId: promoCodeSlug,
+              value: activePromoCode?.discountValue,
+              displayText: activePromoCode?.displayText,
+              discountType: activePromoCode?.discountType,
+            },
+          },
+        });
+        toast.success("Set as leave a review discount code");
+      } else {
+        // Remove this promo code as leave a review discount code
+        const { leaveAReviewDiscountCodeModalPromoCode, ...restConfig } =
+          activeStore.config || {};
+        await updateStoreConfig({
+          id: activeStore._id,
+          config: restConfig,
+        });
+        toast.success("Removed as leave a review discount code");
+      }
+
+      setIsLeaveAReviewDiscountCode(checked);
+    } catch (e) {
+      toast.error("Failed to update leave a review discount code", {
         description: (e as Error).message,
       });
     } finally {
@@ -365,6 +419,8 @@ function PromoCodeView() {
             setIsSitewide={setIsSitewide}
             isHomepageDiscountCode={isHomepageDiscountCode}
             updateHomepageDiscountCode={updateHomepageDiscountCode}
+            isLeaveAReviewDiscountCode={isLeaveAReviewDiscountCode}
+            updateLeaveAReviewDiscountCode={updateLeaveAReviewDiscountCode}
             isUpdatingPromoCode={isUpdatingPromoCode}
             isUpdatingStoreConfig={isUpdatingStoreConfig}
             promoCodeSlug={promoCodeSlug as Id<"promoCode">}

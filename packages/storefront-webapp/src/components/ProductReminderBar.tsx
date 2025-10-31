@@ -176,7 +176,7 @@ export function ProductReminderBar({
 
   const ctaAction = hasDiscountCode ? "Use my offer" : "Add to Bag";
 
-  const withRedeemedPromoCodeCTAText = `Your exclusive discount is still active — no code needed.`;
+  const withRedeemedPromoCodeCTAText = `Your exclusive discount is still active — don't miss out`;
 
   const ctaText = hasDiscountCode
     ? withRedeemedPromoCodeCTAText

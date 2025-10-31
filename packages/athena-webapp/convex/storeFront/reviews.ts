@@ -2,7 +2,7 @@ import { mutation, query, action } from "../_generated/server";
 import { v } from "convex/values";
 import { Id } from "../_generated/dataModel";
 import { api } from "../_generated/api";
-import { sendFeedbackRequestEmail } from "../sendgrid";
+import { sendFeedbackRequestEmail } from "../mailersend";
 import { getProductName } from "../utils";
 
 const entity = "review" as const;
@@ -69,6 +69,113 @@ export const create = mutation({
       updatedAt: new Date().getTime(),
     });
 
+    // Check if this is the user's first review and send them an offer
+    const allUserReviews = await ctx.db
+      .query(entity)
+      .filter((q) =>
+        q.eq(q.field("createdByStoreFrontUserId"), createdByStoreFrontUserId)
+      )
+      .collect();
+
+    console.log(
+      `[FirstReviewOffer] User ${createdByStoreFrontUserId} has ${allUserReviews.length} review(s)`
+    );
+
+    if (allUserReviews.length === 1) {
+      console.log(
+        `[FirstReviewOffer] This is the user's first review, checking for offer eligibility`
+      );
+
+      // This is the user's first review
+      const store = await ctx.db.get(storeId);
+      const promoCodeConfig =
+        store?.config?.leaveAReviewDiscountCodeModalPromoCode;
+
+      if (promoCodeConfig?.promoCodeId) {
+        console.log(
+          `[FirstReviewOffer] Store has leave-a-review promo code configured: ${promoCodeConfig.promoCodeId}`
+        );
+
+        // Validate the promo code
+        const promoCode = await ctx.db.get(
+          promoCodeConfig.promoCodeId as Id<"promoCode">
+        );
+
+        if (promoCode) {
+          const now = Date.now();
+          const isActive = promoCode.active;
+          const isValidDate =
+            now >= promoCode.validFrom && now <= promoCode.validTo;
+
+          console.log(
+            `[FirstReviewOffer] Promo code validation - Active: ${isActive}, Valid date: ${isValidDate} (code: ${promoCode.code})`
+          );
+
+          if (isActive && isValidDate) {
+            // Get user email (works for both storeFrontUser and guest)
+            const user = await ctx.db.get(createdByStoreFrontUserId);
+
+            if (user?.email) {
+              console.log(
+                `[FirstReviewOffer] User has email: ${user.email}, checking for duplicate offers`
+              );
+
+              // Check for duplicate offer
+              const existingOffer = await ctx.db
+                .query("offer")
+                .withIndex("by_storeFrontUserId", (q) =>
+                  q.eq("storeFrontUserId", createdByStoreFrontUserId)
+                )
+                .filter((q) => q.eq(q.field("promoCodeId"), promoCode._id))
+                .first();
+
+              if (!existingOffer) {
+                console.log(
+                  `[FirstReviewOffer] No duplicate offer found, creating offer for user ${createdByStoreFrontUserId}`
+                );
+
+                // Create the offer
+                await ctx.runMutation(api.storeFront.offers.create, {
+                  email: user.email,
+                  promoCodeId: promoCode._id,
+                  storeFrontUserId: createdByStoreFrontUserId,
+                  storeId: storeId,
+                });
+
+                console.log(
+                  `[FirstReviewOffer] Successfully created offer for user ${createdByStoreFrontUserId} with promo code ${promoCode.code}`
+                );
+              } else {
+                console.log(
+                  `[FirstReviewOffer] Skipping offer creation - user already has an offer for this promo code`
+                );
+              }
+            } else {
+              console.log(
+                `[FirstReviewOffer] Skipping offer creation - user has no email address`
+              );
+            }
+          } else {
+            console.log(
+              `[FirstReviewOffer] Skipping offer creation - promo code is not active or outside valid date range`
+            );
+          }
+        } else {
+          console.log(
+            `[FirstReviewOffer] Skipping offer creation - promo code not found in database`
+          );
+        }
+      } else {
+        console.log(
+          `[FirstReviewOffer] Skipping offer creation - no leave-a-review promo code configured for store`
+        );
+      }
+    } else {
+      console.log(
+        `[FirstReviewOffer] Skipping offer creation - not the user's first review`
+      );
+    }
+
     return review;
   },
 });
@@ -86,6 +193,42 @@ export const getByOrderItem = query({
       .first();
 
     return review;
+  },
+});
+
+export const hasReviewForOrderItem = query({
+  args: {
+    orderItemId: v.id("onlineOrderItem"),
+  },
+  returns: v.boolean(),
+  handler: async (ctx, args) => {
+    const { orderItemId } = args;
+
+    const review = await ctx.db
+      .query(entity)
+      .withIndex("by_orderItemId", (q) => q.eq("orderItemId", orderItemId))
+      .first();
+
+    return review !== null;
+  },
+});
+
+export const hasUserReviewForOrderItem = query({
+  args: {
+    orderItemId: v.id("onlineOrderItem"),
+    userId: v.union(v.id("storeFrontUser"), v.id("guest")),
+  },
+  returns: v.boolean(),
+  handler: async (ctx, args) => {
+    const { orderItemId, userId } = args;
+
+    const review = await ctx.db
+      .query(entity)
+      .withIndex("by_orderItemId", (q) => q.eq("orderItemId", orderItemId))
+      .filter((q) => q.eq(q.field("createdByStoreFrontUserId"), userId))
+      .first();
+
+    return review !== null;
   },
 });
 

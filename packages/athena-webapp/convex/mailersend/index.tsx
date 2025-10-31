@@ -282,7 +282,7 @@ export const sendDiscountCodeEmail = async (params: {
         name: "",
       },
     ],
-    subject: `🎉 Exclusive ${params.discountText} Off - Use Code ${params.promoCode}`,
+    subject: `🎉 Your exclusive ${params.discountText} discount code`,
     html,
   };
 

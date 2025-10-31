@@ -52,7 +52,7 @@ export const UpsellModal: React.FC<UpsellModalProps> = ({ promoCode }) => {
   const [hasScrolledPastThreshold, setHasScrolledPastThreshold] =
     useState(false);
 
-  const isNextOrder = onlineOrders?.length > 1;
+  const isNextOrder = onlineOrders && onlineOrders?.length > 1;
 
   useEffect(() => {
     // Don't add scroll listener until localStorage state is fully loaded

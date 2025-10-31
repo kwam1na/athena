@@ -1,8 +1,6 @@
-import React, { useState, useRef } from "react";
+import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Modal } from "@/components/ui/modal";
-import { WelcomeBackModalForm } from "./WelcomeBackModalForm";
-import { WelcomeBackModalSuccess } from "./WelcomeBackModalSuccess";
 import {
   containerVariants,
   backgroundVariants,
@@ -10,42 +8,48 @@ import {
   contentVariants,
 } from "./animations/welcomeBackModalAnimations";
 import {
-  welcomeBackConfigs,
   defaultBackgroundImageUrl,
-  nextOrderConfigs,
   getModalConfig,
-} from "./config/welcomeBackModalConfig";
+} from "./config/leaveReviewModalConfig";
 import { useTrackEvent } from "@/hooks/useTrackEvent";
 import { postAnalytics } from "@/api/analytics";
 import { useOnlineOrderQueries } from "@/lib/queries/onlineOrder";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { PromoCode } from "./types";
+import { LeaveAReviewModalForm } from "./LeaveAReviewModalForm";
+import { getPotentialPoints } from "@/components/checkout/utils";
+import { useReviewQueries } from "@/lib/queries/reviews";
 
-interface WelcomeBackModalProps {
+interface LeaveAReviewModalProps {
   isOpen: boolean;
   onClose: () => void;
-  promoCode?: PromoCode;
   onSuccess?: () => void;
+  promoCode?: PromoCode;
 }
 
-export const WelcomeBackModal: React.FC<WelcomeBackModalProps> = ({
+export const LeaveAReviewModal: React.FC<LeaveAReviewModalProps> = ({
   isOpen,
   onClose,
   onSuccess,
   promoCode,
 }) => {
-  const [isSuccess, setIsSuccess] = useState(false);
-
   const onlineOrderQueries = useOnlineOrderQueries();
   const { data: onlineOrders } = useQuery(onlineOrderQueries.list());
+  const { hasUserReviewForOrderItem } = useReviewQueries();
 
-  const isNextOrder = onlineOrders && onlineOrders?.length > 1;
+  const orderToReview = onlineOrders?.[onlineOrders.length - 1];
+  const itemToReview = orderToReview?.items?.[0];
+  const { data: hasReviewed } = useQuery(
+    hasUserReviewForOrderItem((itemToReview as any)?._id)
+  );
+
+  const incentiveType = promoCode ? "discount" : "points";
 
   useTrackEvent({
-    action: "viewed_WELCOMEBACK25_modal",
-    isReady: isOpen,
+    action: `viewed_LEAVE_A_REVIEW_(${incentiveType})_modal`,
+    isReady: isOpen && !hasReviewed,
     data: {
-      isNextOrder,
+      incentiveType,
       promoCodeId: promoCode?.promoCodeId,
     },
   });
@@ -56,44 +60,35 @@ export const WelcomeBackModal: React.FC<WelcomeBackModalProps> = ({
     // Log analytics if needed
     if (logAnalytics) {
       await postAnalytics({
-        action: "dismissed_WELCOMEBACK25_modal",
+        action: `dismissed_LEAVE_A_REVIEW_(${incentiveType})_modal`,
         data: {
-          isNextOrder,
+          incentiveType,
           promoCodeId: promoCode?.promoCodeId,
         },
       });
     }
   };
 
-  const handleSuccess = async () => {
-    setIsSuccess(true);
-    // Call the onSuccess callback if provided
-    if (onSuccess) {
-      onSuccess();
-    }
+  const canReview = ["delivered", "picked-up"].includes(
+    orderToReview?.status || ""
+  );
 
-    // await queryClient.invalidateQueries({
-    //   queryKey: ["userOffers", "redeemed"],
-    // });
-
-    await postAnalytics({
-      action: "submitted_WELCOMEBACK25_modal",
-      data: {
-        isNextOrder,
-        promoCodeId: promoCode?.promoCodeId,
-      },
-    });
-  };
-
-  console.log(promoCode, isOpen);
-
-  if (!promoCode || !isOpen) {
+  if (
+    !isOpen ||
+    !orderToReview ||
+    hasReviewed ||
+    hasReviewed === undefined ||
+    !canReview ||
+    (!promoCode && orderToReview)
+  ) {
     return null;
   }
 
-  const modalType = isNextOrder ? "nextOrder" : "welcomeBack";
+  const incentiveValue = promoCode
+    ? promoCode
+    : getPotentialPoints(orderToReview).toLocaleString();
 
-  const currentConfig = getModalConfig(promoCode, modalType);
+  const currentConfig = getModalConfig(incentiveValue, incentiveType);
 
   return (
     <Modal
@@ -146,16 +141,12 @@ export const WelcomeBackModal: React.FC<WelcomeBackModalProps> = ({
                 animate={"visible"}
                 className="flex flex-col items-center"
               >
-                {isSuccess ? (
-                  <WelcomeBackModalSuccess onClose={() => handleClose(false)} />
-                ) : (
-                  <WelcomeBackModalForm
-                    onClose={handleClose}
-                    onSuccess={handleSuccess}
-                    promoCode={promoCode}
-                    config={currentConfig}
-                  />
-                )}
+                <LeaveAReviewModalForm
+                  onClose={handleClose}
+                  onSuccess={onSuccess}
+                  orderToReview={orderToReview}
+                  config={currentConfig}
+                />
               </motion.div>
 
               <div className="flex-1" />

@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { action, mutation } from "../_generated/server";
-import { sendVerificationCode } from "../sendgrid";
+import { sendVerificationCode } from "../mailersend";
 import { api } from "../_generated/api";
 import { SignJWT } from "jose";
 

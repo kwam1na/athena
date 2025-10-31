@@ -214,8 +214,8 @@ const mainHeading = {
 
 const promoBox = {
   textAlign: "center" as const,
-  backgroundColor: "#ff6b6b",
-  color: "#ffffff",
+  backgroundColor: "#faeaf0",
+  color: "#000",
   padding: "20px",
   borderRadius: "10px",
   margin: "30px 0",
@@ -243,11 +243,11 @@ const buttonContainer = {
 };
 
 const mainButton = {
-  backgroundColor: "#007cba",
-  color: "#ffffff",
+  backgroundColor: "#ee5d92",
+  color: "#fff",
   padding: "15px 30px",
   textDecoration: "none",
-  borderRadius: "25px",
+  borderRadius: "8px",
   display: "inline-block",
   fontWeight: "bold",
   fontSize: "18px",
@@ -298,7 +298,7 @@ const originalPrice = {
 
 const discountedPrice = {
   margin: "0",
-  color: "#ff6b6b",
+  color: "#ee5d92",
   fontWeight: "bold",
   fontSize: "14px",
 };
@@ -306,7 +306,7 @@ const discountedPrice = {
 const shopNowButton = {
   display: "inline-block",
   marginTop: "8px",
-  backgroundColor: "#007cba",
+  backgroundColor: "#ee5d92",
   color: "#ffffff",
   padding: "8px 15px",
   textDecoration: "none",

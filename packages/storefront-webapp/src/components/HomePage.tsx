@@ -16,6 +16,7 @@ import { useSearch } from "@tanstack/react-router";
 import { RewardsAlert } from "./home/RewardsAlert";
 import { useDiscountCodeAlert } from "@/hooks/useDiscountCodeAlert";
 import { useRewardsAlert } from "@/hooks/useRewardsAlert";
+import { useLeaveAReviewModal } from "@/hooks/useLeaveAReviewModal";
 import { WelcomeBackModal } from "./ui/modals/WelcomeBackModal";
 import { ChevronDown, GiftIcon } from "lucide-react";
 import { motion } from "framer-motion";
@@ -26,6 +27,7 @@ import { UpsellModal } from "./ui/modals/UpsellModal";
 import { getRelativeTime } from "@/lib/utils";
 import { ProductActionBar } from "./ProductActionBar";
 import { useShoppingBag } from "@/hooks/useShoppingBag";
+import { LeaveAReviewModal } from "./ui/modals/LeaveAReviewModal";
 
 const origin = "homepage";
 
@@ -65,6 +67,15 @@ export default function HomePage() {
     hasRedeemedOffers,
     redeemedOffers,
   } = useDiscountCodeAlert();
+
+  const {
+    isLeaveReviewModalOpen,
+    handleCloseLeaveReviewModal,
+    handleSuccessLeaveReviewModal,
+    hasCompletedLeaveReviewModalFlow,
+    openLeaveReviewModal,
+    canShowModal,
+  } = useLeaveAReviewModal();
 
   const [hasScrolledPastThreshold, setHasScrolledPastThreshold] =
     useState(false);
@@ -144,6 +155,18 @@ export default function HomePage() {
     });
   };
 
+  const handleClickOnLeaveReviewButton = async () => {
+    openLeaveReviewModal();
+
+    await postAnalytics({
+      action: "clicked_on_leave_review_trigger",
+      origin: "homepage",
+      data: {
+        promoCodeId: store?.config?.leaveAReviewDiscountCodeModalPromoCode,
+      },
+    });
+  };
+
   const bestSellersSorted = bestSellers?.sort(
     (a: any, b: any) => a.rank - b.rank
   );
@@ -197,20 +220,35 @@ export default function HomePage() {
         promoCode={store?.config?.homepageDiscountCodeModalPromoCode}
       /> */}
 
-      {/* Floating welcome back button */}
-      {/* {!hasCompletedDiscountModalFlow &&
-        store?.config?.homepageDiscountCodeModalPromoCode && (
+      {/* <WelcomeBackModal
+        isOpen={isDiscountModalOpen}
+        onClose={handleCloseDiscountModal}
+        onSuccess={completeDiscountModalFlow}
+        promoCode={store?.config?.homepageDiscountCodeModalPromoCode}
+      /> */}
+
+      {/* Floating leave a review button */}
+      {!hasCompletedLeaveReviewModalFlow &&
+        store?.config?.leaveAReviewDiscountCodeModalPromoCode &&
+        canShowModal && (
           <motion.button
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.4, delay: 2.6, ease: "easeIn" }}
-            onClick={handleClickOnDiscountCode}
+            onClick={handleClickOnLeaveReviewButton}
             className="fixed right-4 top-1/2 transform -translate-y-1/2 z-10 bg-accent5/60 text-primary rounded-full p-3 shadow-md flex items-center transition-all duration-100 hover:scale-105"
-            aria-label="Special offer"
+            aria-label="Leave a review"
           >
             <GiftIcon className="h-5 w-5" />
           </motion.button>
-        )} */}
+        )}
+
+      <LeaveAReviewModal
+        isOpen={isLeaveReviewModalOpen && canShowModal}
+        onClose={handleCloseLeaveReviewModal}
+        onSuccess={handleSuccessLeaveReviewModal}
+        promoCode={store?.config?.leaveAReviewDiscountCodeModalPromoCode}
+      />
 
       <div className="min-h-screen overflow-x-hidden">
         <div className="overflow-x-hidden">

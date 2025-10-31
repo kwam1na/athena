@@ -160,3 +160,41 @@ export async function markReviewHelpful(
   }
   return res;
 }
+
+export async function hasReviewForOrderItem(
+  orderItemId: string
+): Promise<boolean> {
+  const response = await fetch(
+    `${getBaseUrl()}/order-item/${orderItemId}/exists`,
+    {
+      credentials: "include",
+    }
+  );
+
+  const res = await response.json();
+
+  if (!response.ok) {
+    throw new Error(res.error || "Failed to check if review exists");
+  }
+
+  return res.exists;
+}
+
+export async function hasUserReviewForOrderItem(
+  orderItemId: string
+): Promise<boolean> {
+  const response = await fetch(
+    `${getBaseUrl()}/order-item/${orderItemId}/user-exists`,
+    {
+      credentials: "include",
+    }
+  );
+
+  const res = await response.json();
+
+  if (!response.ok) {
+    throw new Error(res.error || "Failed to check if user has reviewed");
+  }
+
+  return res.exists;
+}

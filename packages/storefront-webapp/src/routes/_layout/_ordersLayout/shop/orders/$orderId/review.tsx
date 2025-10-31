@@ -45,7 +45,20 @@ export const Route = createFileRoute(
 export function OrderNavigation() {
   return (
     <div className="container mx-auto xl:px-0 py-2 lg:py-8">
-      <p className="font-medium">Write a review</p>
+      <div className="space-y-4">
+        <Button
+          className="group px-0"
+          variant={"clear"}
+          onClick={() => {
+            window.history.back();
+          }}
+        >
+          <ArrowLeft className="w-4 h-4 mr-2 transition-transform group-hover:-translate-x-0.5" />
+          <p>Back to order</p>
+        </Button>
+
+        <p className="font-medium">Leave a review</p>
+      </div>
     </div>
   );
 }

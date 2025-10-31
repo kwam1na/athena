@@ -3,7 +3,7 @@ import { OnlineOrder } from "@athena/webapp";
 
 const getBaseUrl = () => `${config.apiGateway.URL}/orders`;
 
-export async function getOrders() {
+export async function getOrders(): Promise<OnlineOrder[]> {
   const response = await fetch(getBaseUrl(), {
     method: "GET",
     headers: {

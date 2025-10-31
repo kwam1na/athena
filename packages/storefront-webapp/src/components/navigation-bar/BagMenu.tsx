@@ -5,12 +5,13 @@ import SavedIcon from "../saved-items/SavedIcon";
 import placeholder from "@/assets/placeholder.png";
 import { getProductName } from "@/lib/productUtils";
 import { Button } from "../ui/button";
-import { Cog, Package, Award } from "lucide-react";
+import { Cog, Package, Award, ShoppingBagIcon } from "lucide-react";
 import { PersonIcon } from "@radix-ui/react-icons";
 import { useStoreContext } from "@/contexts/StoreContext";
 import { useLogout } from "@/hooks/useLogout";
 import ImageWithFallback from "../ui/image-with-fallback";
 import { useNavigationBarContext } from "@/contexts/NavigationBarProvider";
+import ShoppingBag from "../shopping-bag/ShoppingBag";
 
 export const BagMenu = ({
   isMobile,
@@ -109,7 +110,7 @@ export const BagMenu = ({
           className={`flex items-center gap-4 ${hoverClass}`}
           onClick={() => handleOnLinkClick()}
         >
-          <Package className="w-4 h-4" />
+          <ShoppingBagIcon className="w-4 h-4" />
           <p className="text-sm">Orders</p>
         </Link>
 
