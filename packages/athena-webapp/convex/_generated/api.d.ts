@@ -68,6 +68,7 @@ import type * as inventory_organizationMembers from "../inventory/organizationMe
 import type * as inventory_organizations from "../inventory/organizations.js";
 import type * as inventory_pos from "../inventory/pos.js";
 import type * as inventory_posCustomers from "../inventory/posCustomers.js";
+import type * as inventory_posSessionItems from "../inventory/posSessionItems.js";
 import type * as inventory_posSessions from "../inventory/posSessions.js";
 import type * as inventory_productSku from "../inventory/productSku.js";
 import type * as inventory_productUtil from "../inventory/productUtil.js";
@@ -107,6 +108,7 @@ import type * as schemas_inventory_subcategory from "../schemas/inventory/subcat
 import type * as schemas_pos_customer from "../schemas/pos/customer.js";
 import type * as schemas_pos_index from "../schemas/pos/index.js";
 import type * as schemas_pos_posSession from "../schemas/pos/posSession.js";
+import type * as schemas_pos_posSessionItem from "../schemas/pos/posSessionItem.js";
 import type * as schemas_pos_posTransaction from "../schemas/pos/posTransaction.js";
 import type * as schemas_pos_posTransactionItem from "../schemas/pos/posTransactionItem.js";
 import type * as schemas_storeFront_analytics from "../schemas/storeFront/analytics.js";
@@ -220,6 +222,7 @@ declare const fullApi: ApiFromModules<{
   "inventory/organizations": typeof inventory_organizations;
   "inventory/pos": typeof inventory_pos;
   "inventory/posCustomers": typeof inventory_posCustomers;
+  "inventory/posSessionItems": typeof inventory_posSessionItems;
   "inventory/posSessions": typeof inventory_posSessions;
   "inventory/productSku": typeof inventory_productSku;
   "inventory/productUtil": typeof inventory_productUtil;
@@ -259,6 +262,7 @@ declare const fullApi: ApiFromModules<{
   "schemas/pos/customer": typeof schemas_pos_customer;
   "schemas/pos/index": typeof schemas_pos_index;
   "schemas/pos/posSession": typeof schemas_pos_posSession;
+  "schemas/pos/posSessionItem": typeof schemas_pos_posSessionItem;
   "schemas/pos/posTransaction": typeof schemas_pos_posTransaction;
   "schemas/pos/posTransactionItem": typeof schemas_pos_posTransactionItem;
   "schemas/storeFront/analytics": typeof schemas_storeFront_analytics;

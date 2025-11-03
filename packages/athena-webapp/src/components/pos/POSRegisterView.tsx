@@ -12,6 +12,12 @@ import { CartItems } from "./CartItems";
 import { OrderSummary } from "./OrderSummary";
 import { usePOSOperations } from "@/hooks/usePOSOperations";
 import { usePOSBarcodeSearch } from "@/hooks/usePOSProducts";
+import { useDebounce } from "@/hooks/useDebounce";
+import { extractBarcodeFromInput } from "@/lib/pos/barcodeUtils";
+import {
+  POS_SEARCH_DEBOUNCE_MS,
+  POS_AUTO_ADD_DELAY_MS,
+} from "@/lib/pos/constants";
 
 export function POSRegisterView() {
   const { activeStore } = useGetActiveStore();
@@ -25,22 +31,56 @@ export function POSRegisterView() {
     }
   }, [activeStore, state.storeId, store]);
 
-  // Get barcode search result for manual entry
+  // Auto-replace URL with extracted barcode in the input field
+  useEffect(() => {
+    if (state.productSearchQuery.trim()) {
+      const extractedBarcode = extractBarcodeFromInput(
+        state.productSearchQuery
+      );
+      // If the extracted barcode is different from the input (meaning we parsed a URL),
+      // replace the input with just the barcode
+      if (extractedBarcode !== state.productSearchQuery) {
+        ui.setProductSearchQuery(extractedBarcode);
+      }
+    }
+  }, [state.productSearchQuery]);
+
+  // Extract barcode from unified search input (handles both URLs and plain barcodes)
+  const actualBarcode = extractBarcodeFromInput(state.productSearchQuery);
+
+  // Debounce the barcode to prevent flickering "no product found" UI while user types
+  const debouncedBarcode = useDebounce(actualBarcode, POS_SEARCH_DEBOUNCE_MS);
+
+  // Get barcode search result using debounced barcode
   const barcodeSearchResult = usePOSBarcodeSearch(
     activeStore?._id,
-    state.barcodeInput
+    debouncedBarcode
   );
 
-  // Handle barcode form submission
+  // Auto-add product to cart when barcode match is found
+  // Uses a delay to allow search completion and user verification before adding
+  useEffect(() => {
+    if (!actualBarcode.trim() || !barcodeSearchResult) {
+      return;
+    }
+
+    const timeoutId = setTimeout(async () => {
+      await cart.addFromBarcode(actualBarcode, barcodeSearchResult);
+      ui.setProductSearchQuery("");
+    }, POS_AUTO_ADD_DELAY_MS);
+
+    // Cleanup: cancel timeout if barcode changes before delay completes
+    return () => clearTimeout(timeoutId);
+  }, [actualBarcode, barcodeSearchResult]);
+
+  // Handle barcode/URL submission from unified search input
   const handleBarcodeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!state.barcodeInput.trim()) return;
+    if (!state.productSearchQuery.trim()) return;
 
     if (barcodeSearchResult) {
-      await cart.addFromBarcode(state.barcodeInput, barcodeSearchResult);
-      ui.setBarcodeInput("");
-    } else {
-      console.warn("Product not found for barcode:", state.barcodeInput);
+      await cart.addFromBarcode(actualBarcode, barcodeSearchResult);
+      ui.setProductSearchQuery("");
     }
   };
 
@@ -96,6 +136,14 @@ export function POSRegisterView() {
           trailingContent={
             !state.isTransactionCompleted ? (
               <div className="flex items-center gap-4">
+                {/* Quick Actions Section */}
+                <div className="flex items-center gap-3 px-3 py-2 bg-gray-50 rounded-lg border">
+                  <QuickActionsBar
+                    showCustomerInfo={state.isCustomerPanelOpen}
+                    setShowCustomerInfo={ui.setShowCustomerPanel}
+                  />
+                </div>
+
                 {/* Session Management Section */}
                 <div className="flex items-center gap-3 px-3 py-2 bg-gray-50 rounded-lg border">
                   <SessionManager
@@ -134,16 +182,6 @@ export function POSRegisterView() {
     >
       <FadeIn className="container mx-auto h-full w-full p-6">
         <div className="space-y-6">
-          {/* Quick Actions Section */}
-          {!state.isTransactionCompleted && (
-            <div className="bg-white rounded-lg border shadow-sm p-4">
-              <QuickActionsBar
-                showCustomerInfo={state.isCustomerPanelOpen}
-                setShowCustomerInfo={ui.setShowCustomerPanel}
-              />
-            </div>
-          )}
-
           {/* Customer Information Panel */}
           {!state.isTransactionCompleted && (
             <CustomerInfoPanel
@@ -191,8 +229,8 @@ export function POSRegisterView() {
                     <p className="text-sm text-gray-500">Search for products</p>
                   </div>
                   <ProductEntry
-                    barcodeInput={state.barcodeInput}
-                    setBarcodeInput={ui.setBarcodeInput}
+                    barcodeInput=""
+                    setBarcodeInput={() => {}}
                     isScanning={state.isScanning}
                     setIsScanning={ui.setIsScanning}
                     showProductLookup={state.isProductEntryOpen}
@@ -201,6 +239,7 @@ export function POSRegisterView() {
                     setProductSearchQuery={ui.setProductSearchQuery}
                     onBarcodeSubmit={handleBarcodeSubmit}
                     onAddProduct={cart.addProduct}
+                    barcodeSearchResult={barcodeSearchResult}
                   />
                 </div>
 

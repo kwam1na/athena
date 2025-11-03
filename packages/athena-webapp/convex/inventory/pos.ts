@@ -1,7 +1,7 @@
 import { query, mutation } from "../_generated/server";
 import { v } from "convex/values";
 import type { Id } from "../_generated/dataModel";
-import { capitalizeWords } from "../utils";
+import { capitalizeWords, generateTransactionNumber } from "../utils";
 
 export const searchProducts = query({
   args: {
@@ -18,13 +18,13 @@ export const searchProducts = query({
     // Get all products for the store
     const allProducts = await ctx.db
       .query("product")
-      .filter((q) => q.eq(q.field("storeId"), args.storeId))
+      .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
       .collect();
 
     // Get all SKUs for the store
     const allSkus = await ctx.db
       .query("productSku")
-      .filter((q) => q.eq(q.field("storeId"), args.storeId))
+      .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
       .collect();
 
     // Create a map of products by ID for easy lookup
@@ -33,12 +33,15 @@ export const searchProducts = query({
       productMap.set(product._id, product);
     });
 
-    // Find matching SKUs (by SKU code or product name)
+    // Find matching SKUs (by SKU code, barcode, or product name)
     const matchingSkus = allSkus.filter((sku) => {
       const product = productMap.get(sku.productId);
       if (!product) return false;
 
-      // Search in SKU code (barcode)
+      // Search in barcode field
+      const barcodeMatches = sku.barcode?.toLowerCase().includes(query);
+
+      // Search in SKU code
       const skuMatches = sku.sku?.toLowerCase().includes(query);
 
       // Search in product name
@@ -49,7 +52,7 @@ export const searchProducts = query({
         ?.toLowerCase()
         .includes(query);
 
-      return skuMatches || nameMatches || descriptionMatches;
+      return barcodeMatches || skuMatches || nameMatches || descriptionMatches;
     });
 
     // Transform to POS-friendly format
@@ -78,8 +81,9 @@ export const searchProducts = query({
           return {
             id: sku._id,
             name: product.name,
-            barcode: sku.sku || "",
-            price: sku.price,
+            sku: sku.sku || "",
+            barcode: sku.barcode || sku.sku || "",
+            price: sku.netPrice || sku.price, // Use netPrice if available, fallback to price
             category: categoryName,
             description: product.description || "",
             inStock: sku.quantityAvailable > 0,
@@ -111,16 +115,26 @@ export const lookupByBarcode = query({
       return null;
     }
 
-    // Find SKU by barcode (sku field)
-    const sku = await ctx.db
+    // Find SKU by barcode field using index
+    let sku = await ctx.db
       .query("productSku")
-      .filter((q) =>
-        q.and(
-          q.eq(q.field("storeId"), args.storeId),
-          q.eq(q.field("sku"), args.barcode)
-        )
+      .withIndex("by_storeId_barcode", (q) =>
+        q.eq("storeId", args.storeId).eq("barcode", args.barcode)
       )
       .first();
+
+    // Fallback: search by sku field if barcode field is not populated
+    if (!sku) {
+      sku = await ctx.db
+        .query("productSku")
+        .filter((q) =>
+          q.and(
+            q.eq(q.field("storeId"), args.storeId),
+            q.eq(q.field("sku"), args.barcode)
+          )
+        )
+        .first();
+    }
 
     if (!sku || sku.quantityAvailable <= 0) {
       return null;
@@ -147,8 +161,9 @@ export const lookupByBarcode = query({
     return {
       id: sku._id,
       name: product.name,
-      barcode: sku.sku || "",
-      price: sku.price,
+      sku: sku.sku || "",
+      barcode: sku.barcode || sku.sku || "",
+      price: sku.netPrice || sku.price, // Use netPrice if available, fallback to price
       category: categoryName,
       description: product.description || "",
       inStock: sku.quantityAvailable > 0,
@@ -260,18 +275,14 @@ export const completeTransaction = mutation({
       }
     }
 
-    // Generate transaction number
-    const timestamp = Math.floor(Date.now() / 1000);
-    const baseTransactionNumber = timestamp % 100000;
-    const randomPadding = Math.floor(Math.random() * 10);
-    const transactionNumber = (baseTransactionNumber * 10 + randomPadding)
-      .toString()
-      .padStart(6, "0");
+    // Generate transaction number using shared utility
+    const transactionNumber = generateTransactionNumber();
 
     // Create the POS transaction
     const transactionId = await ctx.db.insert("posTransaction", {
-      transactionNumber: `POS-${transactionNumber}`,
+      transactionNumber,
       storeId: args.storeId,
+      sessionId: undefined, // Direct transaction - no session
       customerId: args.customerId,
       cashierId: args.cashierId,
       registerNumber: args.registerNumber,
@@ -334,7 +345,7 @@ export const completeTransaction = mutation({
     return {
       success: true,
       transactionId,
-      transactionNumber: `POS-${transactionNumber}`,
+      transactionNumber,
       transactionItems,
     };
   },
@@ -443,22 +454,27 @@ export const createTransactionFromSession = mutation({
       throw new Error("Session not found");
     }
 
-    if (session.cartItems.length === 0) {
+    // Query all items for this session from posSessionItem table
+    const items = await ctx.db
+      .query("posSessionItem")
+      .withIndex("by_sessionId", (q) => q.eq("sessionId", args.sessionId))
+      .collect();
+
+    if (items.length === 0) {
       throw new Error("Cannot complete session with no items");
     }
 
-    // Validate inventory availability with cumulative quantity tracking
-    const skuQuantityMap = new Map<Id<"productSku">, number>();
+    // Note: Inventory is already held via quantityAvailable reduction
+    // We only need to deduct from inventoryCount (actual stock)
 
-    // First, aggregate quantities by SKU to handle multiple items of the same product
-    for (const item of session.cartItems) {
-      if (item.skuId) {
-        const currentQuantity = skuQuantityMap.get(item.skuId) || 0;
-        skuQuantityMap.set(item.skuId, currentQuantity + item.quantity);
-      }
+    // Aggregate quantities by SKU to handle multiple items of the same product
+    const skuQuantityMap = new Map<Id<"productSku">, number>();
+    for (const item of items) {
+      const currentQuantity = skuQuantityMap.get(item.productSkuId) || 0;
+      skuQuantityMap.set(item.productSkuId, currentQuantity + item.quantity);
     }
 
-    // Then validate each unique SKU against its total required quantity
+    // Validate SKUs exist (holds should already be in place)
     for (const [skuId, totalQuantity] of skuQuantityMap) {
       const sku = await ctx.db.get(skuId);
       if (!sku) {
@@ -466,27 +482,22 @@ export const createTransactionFromSession = mutation({
       }
 
       // Type guard to ensure we have a productSku
-      if (!("quantityAvailable" in sku) || !("sku" in sku)) {
+      if (!("inventoryCount" in sku) || !("sku" in sku)) {
         throw new Error(`Invalid product SKU data for ${skuId}`);
       }
 
-      if (sku.quantityAvailable < totalQuantity) {
-        const itemName =
-          session.cartItems.find((item) => item.skuId === skuId)?.name ||
-          "Unknown Product";
+      // Check inventoryCount (actual stock) is sufficient
+      if (sku.inventoryCount < totalQuantity) {
+        const item = items.find((item) => item.productSkuId === skuId);
+        const itemName = item?.productName || "Unknown Product";
         throw new Error(
-          `Insufficient inventory for ${capitalizeWords(itemName)} (${sku.sku}). Available: ${sku.quantityAvailable}, Total Requested: ${totalQuantity}`
+          `Insufficient inventory for ${capitalizeWords(itemName)} (${sku.sku}). In Stock: ${sku.inventoryCount}, Needed: ${totalQuantity}`
         );
       }
     }
 
-    // Generate transaction number
-    const timestamp = Math.floor(Date.now() / 1000);
-    const baseTransactionNumber = timestamp % 100000;
-    const randomPadding = Math.floor(Math.random() * 10);
-    const transactionNumber = (baseTransactionNumber * 10 + randomPadding)
-      .toString()
-      .padStart(6, "0");
+    // Generate transaction number using shared utility
+    const transactionNumber = generateTransactionNumber();
 
     // Calculate totals from session data
     const subtotal = session.subtotal || 0;
@@ -495,8 +506,9 @@ export const createTransactionFromSession = mutation({
 
     // Create the POS transaction
     const transactionId = await ctx.db.insert("posTransaction", {
-      transactionNumber: `POS-${transactionNumber}`,
+      transactionNumber,
       storeId: session.storeId,
+      sessionId: args.sessionId, // Link to the session for audit trail
       customerId: session.customerId,
       cashierId: session.cashierId,
       registerNumber: session.registerNumber,
@@ -527,41 +539,46 @@ export const createTransactionFromSession = mutation({
 
     // Create transaction items and update inventory
     const transactionItems = await Promise.all(
-      session.cartItems.map(async (item) => {
-        if (!item.skuId) {
-          // Handle items without SKU (shouldn't happen in normal flow)
-          return null;
-        }
-
+      items.map(async (item) => {
         // Get product details
-        const sku = await ctx.db.get(item.skuId);
+        const sku = await ctx.db.get(item.productSkuId);
         if (!sku) {
           throw new Error(
-            `SKU ${item.skuId} not found during transaction processing`
+            `SKU ${item.productSkuId} not found during transaction processing`
           );
         }
 
         // Create transaction item
         const transactionItemId = await ctx.db.insert("posTransactionItem", {
           transactionId,
-          productId: sku.productId,
-          productSkuId: item.skuId,
-          productName: item.name,
-          productSku: item.barcode,
+          productId: item.productId,
+          productSkuId: item.productSkuId,
+          productName: item.productName,
+          productSku: item.productSku,
           quantity: item.quantity,
           unitPrice: item.price,
           totalPrice: item.price * item.quantity,
         });
 
         // Update inventory
-        await ctx.db.patch(item.skuId, {
-          quantityAvailable: sku.quantityAvailable - item.quantity,
+        // Note: quantityAvailable was already reduced when item was added to session (hold)
+        // Now we need to:
+        // 1. Reduce inventoryCount (actual stock)
+        await ctx.db.patch(item.productSkuId, {
           inventoryCount: Math.max(0, sku.inventoryCount - item.quantity),
         });
 
         return transactionItemId;
       })
     );
+
+    // Note: We preserve posSessionItem records and session data for audit purposes
+    // They are NOT deleted after transaction completion
+
+    // Link the transaction back to the session for bidirectional audit trail
+    await ctx.db.patch(args.sessionId, {
+      transactionId,
+    });
 
     return {
       success: true,

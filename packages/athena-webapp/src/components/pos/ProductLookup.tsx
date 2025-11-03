@@ -81,6 +81,7 @@ export function ProductLookup({
                             {product.name}
                           </h4>
                           <p className="text-xs text-muted-foreground">
+                            {product.sku && `SKU: ${product.sku} • `}
                             {product.barcode}{" "}
                             {product.category && `• ${product.category}`}
                           </p>

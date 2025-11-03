@@ -1,8 +1,8 @@
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
-import { POSSession } from "../../types";
 import { CartItem, CustomerInfo } from "../components/pos/types";
+import { logger } from "../lib/logger";
 
 // Hook to get sessions for a store
 export const usePOSStoreSessions = (
@@ -53,10 +53,10 @@ export const usePOSSessionCreate = () => {
           registerNumber,
         });
 
-        console.log("✅ Session created successfully:", sessionId);
+        logger.debug("Session created successfully", { sessionId });
         return sessionId;
       } catch (error) {
-        console.error("❌ Failed to create session:", error);
+        logger.error("Failed to create session", error as Error);
         throw error;
       }
     },
@@ -71,7 +71,6 @@ export const usePOSSessionUpdate = () => {
     updateSession: async (
       sessionId: Id<"posSession">,
       updates: {
-        cartItems?: CartItem[];
         customerId?: Id<"posCustomer">;
         customerInfo?: CustomerInfo;
         subtotal?: number;
@@ -80,22 +79,9 @@ export const usePOSSessionUpdate = () => {
       }
     ) => {
       try {
-        // Convert CartItem[] to the expected format
-        const formattedCartItems = updates.cartItems?.map((item) => ({
-          id: item.id,
-          name: item.name,
-          barcode: item.barcode,
-          price: item.price,
-          quantity: item.quantity,
-          image: item.image || undefined,
-          size: item.size,
-          length: item.length ?? undefined,
-          skuId: item.skuId,
-        }));
-
+        // Cart items are now managed via posSessionItems mutations
         return await updateSession({
           sessionId,
-          cartItems: formattedCartItems,
           customerId: updates.customerId,
           customerInfo: updates.customerInfo,
           subtotal: updates.subtotal,
@@ -103,7 +89,7 @@ export const usePOSSessionUpdate = () => {
           total: updates.total,
         });
       } catch (error) {
-        console.error("Failed to update session:", error);
+        logger.error("Failed to update session", error as Error);
         throw error;
       }
     },
@@ -119,7 +105,7 @@ export const usePOSSessionHold = () => {
       try {
         return await holdSession({ sessionId, holdReason });
       } catch (error) {
-        console.error("Failed to hold session:", error);
+        logger.error("Failed to hold session", error as Error);
         throw error;
       }
     },
@@ -135,7 +121,7 @@ export const usePOSSessionResume = () => {
       try {
         return await resumeSession({ sessionId });
       } catch (error) {
-        console.error("Failed to resume session:", error);
+        logger.error("Failed to resume session", error as Error);
         throw error;
       }
     },
@@ -156,6 +142,9 @@ export const usePOSSessionComplete = () => {
         amountPaid: number;
         changeGiven?: number;
         notes?: string;
+        subtotal: number;
+        tax: number;
+        total: number;
       }
     ) => {
       try {
@@ -164,7 +153,7 @@ export const usePOSSessionComplete = () => {
           ...paymentDetails,
         });
       } catch (error) {
-        console.error("Failed to complete session:", error);
+        logger.error("Failed to complete session", error as Error);
         throw error;
       }
     },
@@ -180,7 +169,7 @@ export const usePOSSessionVoid = () => {
       try {
         return await voidSession({ sessionId, voidReason });
       } catch (error) {
-        console.error("Failed to void session:", error);
+        logger.error("Failed to void session", error as Error);
         throw error;
       }
     },

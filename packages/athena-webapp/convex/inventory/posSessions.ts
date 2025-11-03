@@ -1,6 +1,7 @@
 import { v } from "convex/values";
-import { mutation, query } from "../_generated/server";
+import { mutation, query, internalMutation } from "../_generated/server";
 import { api } from "../_generated/api";
+import { Id } from "../_generated/dataModel";
 
 // Get sessions for a store (with filtering)
 export const getStoreSessions = query({
@@ -26,15 +27,23 @@ export const getStoreSessions = query({
 
     const sessions = await sessionsQuery.order("desc").take(limit);
 
-    // Enrich with customer info if available
+    // Enrich with customer info and cart items if available
     const enrichedSessions = await Promise.all(
       sessions.map(async (session) => {
         let customer = null;
         if (session.customerId) {
           customer = await ctx.db.get(session.customerId);
         }
+
+        // Get cart items from posSessionItem table
+        const cartItems = await ctx.db
+          .query("posSessionItem")
+          .withIndex("by_sessionId", (q) => q.eq("sessionId", session._id))
+          .collect();
+
         return {
           ...session,
+          cartItems,
           customer,
         };
       })
@@ -57,8 +66,15 @@ export const getSessionById = query({
       customer = await ctx.db.get(session.customerId);
     }
 
+    // Get cart items from posSessionItem table
+    const cartItems = await ctx.db
+      .query("posSessionItem")
+      .withIndex("by_sessionId", (q) => q.eq("sessionId", session._id))
+      .collect();
+
     return {
       ...session,
+      cartItems,
       customer,
     };
   },
@@ -71,6 +87,10 @@ export const createSession = mutation({
     cashierId: v.optional(v.id("athenaUser")),
     registerNumber: v.optional(v.string()),
   },
+  returns: v.object({
+    sessionId: v.id("posSession"),
+    expiresAt: v.number(),
+  }),
   handler: async (ctx, args) => {
     const now = Date.now();
     const registerNumber = args.registerNumber || "1";
@@ -89,8 +109,16 @@ export const createSession = mutation({
     );
 
     if (existingSession) {
+      // Check if existing session has items by querying posSessionItem table
+      const existingItems = await ctx.db
+        .query("posSessionItem")
+        .withIndex("by_sessionId", (q) =>
+          q.eq("sessionId", existingSession._id)
+        )
+        .collect();
+
       // Auto-complete the existing session if it has no items, otherwise hold it
-      if (existingSession.cartItems.length === 0) {
+      if (existingItems.length === 0) {
         await ctx.db.patch(existingSession._id, {
           status: "completed",
           completedAt: now,
@@ -114,41 +142,30 @@ export const createSession = mutation({
 
     const sessionNumber = `SES-${String(sessionCount.length + 1).padStart(3, "0")}`;
 
+    // Session expires in 20 minutes
+    const sessionExpiry = 20 * 60 * 1000;
+    const expiresAt = now + sessionExpiry;
+
     const sessionId = await ctx.db.insert("posSession", {
       sessionNumber,
       storeId: args.storeId,
       cashierId: args.cashierId,
       registerNumber,
       status: "active",
-      cartItems: [],
       createdAt: now,
       updatedAt: now,
+      expiresAt,
     });
 
-    return sessionId;
+    return { sessionId, expiresAt };
   },
 });
 
-// Update session cart and customer info
+// Update session metadata (customer info, totals)
+// Note: Cart items are now managed via posSessionItems mutations
 export const updateSession = mutation({
   args: {
     sessionId: v.id("posSession"),
-    cartItems: v.optional(
-      v.array(
-        v.object({
-          id: v.string(),
-          name: v.string(),
-          barcode: v.string(),
-          price: v.number(),
-          quantity: v.number(),
-          image: v.optional(v.string()),
-          size: v.optional(v.string()),
-          length: v.optional(v.number()),
-          skuId: v.optional(v.id("productSku")),
-          areProcessingFeesAbsorbed: v.optional(v.boolean()),
-        })
-      )
-    ),
     customerId: v.optional(v.id("posCustomer")),
     customerInfo: v.optional(
       v.object({
@@ -161,15 +178,43 @@ export const updateSession = mutation({
     tax: v.optional(v.number()),
     total: v.optional(v.number()),
   },
+  returns: v.object({
+    sessionId: v.id("posSession"),
+    expiresAt: v.number(),
+  }),
   handler: async (ctx, args) => {
     const { sessionId, ...updates } = args;
+    const now = Date.now();
 
+    // Get current session
+    const currentSession = await ctx.db.get(sessionId);
+    if (!currentSession) {
+      throw new Error("Session not found");
+    }
+
+    // Prevent updating completed or void sessions (for audit integrity)
+    if (
+      currentSession.status === "completed" ||
+      currentSession.status === "void"
+    ) {
+      console.warn(
+        `Attempted to update ${currentSession.status} session ${sessionId}. Ignoring update.`
+      );
+      return { sessionId, expiresAt: currentSession.expiresAt };
+    }
+
+    // Extend session expiration time
+    const sessionExpiry = 20 * 60 * 1000;
+    const expiresAt = now + sessionExpiry;
+
+    // Update session with new data
     await ctx.db.patch(sessionId, {
       ...updates,
-      updatedAt: Date.now(),
+      updatedAt: now,
+      expiresAt,
     });
 
-    return sessionId;
+    return { sessionId, expiresAt };
   },
 });
 
@@ -182,6 +227,8 @@ export const holdSession = mutation({
   handler: async (ctx, args) => {
     const now = Date.now();
 
+    // Keep inventory holds in place when suspending
+    // DO NOT update expiresAt - let holds expire naturally if not resumed
     await ctx.db.patch(args.sessionId, {
       status: "held",
       heldAt: now,
@@ -198,16 +245,104 @@ export const resumeSession = mutation({
   args: {
     sessionId: v.id("posSession"),
   },
+  returns: v.object({
+    sessionId: v.id("posSession"),
+    expiresAt: v.number(),
+  }),
   handler: async (ctx, args) => {
     const now = Date.now();
+
+    // Get the session
+    const session = await ctx.db.get(args.sessionId);
+    if (!session) {
+      throw new Error("Session not found");
+    }
+
+    // Query all items for this session
+    const items = await ctx.db
+      .query("posSessionItem")
+      .withIndex("by_sessionId", (q) => q.eq("sessionId", args.sessionId))
+      .collect();
+
+    // Validate all items still have available inventory
+    // Calculate total quantities needed per SKU
+    const requiredQuantities = new Map<string, number>();
+    for (const item of items) {
+      const currentQty = requiredQuantities.get(item.productSkuId) || 0;
+      requiredQuantities.set(item.productSkuId, currentQty + item.quantity);
+    }
+
+    // Check availability and re-acquire holds if needed
+    const unavailableItems: string[] = [];
+
+    // Fetch all SKUs in parallel
+    const skuEntries = Array.from(requiredQuantities.entries());
+    const skuFetches = await Promise.all(
+      skuEntries.map(([skuId]) => ctx.db.get(skuId as Id<"productSku">))
+    );
+
+    // Validate availability
+    for (let i = 0; i < skuEntries.length; i++) {
+      const [skuId, requiredQty] = skuEntries[i];
+      const sku = skuFetches[i];
+
+      if (!sku) {
+        unavailableItems.push(`Product SKU ${skuId} not found`);
+        continue;
+      }
+
+      // Type guard
+      if (!("quantityAvailable" in sku) || !("sku" in sku)) {
+        unavailableItems.push(`Invalid product SKU data for ${skuId}`);
+        continue;
+      }
+
+      // Check if enough inventory is available
+      if (sku.quantityAvailable < requiredQty) {
+        const item = items.find(
+          (item) => item.productSkuId === (skuId as Id<"productSku">)
+        );
+        const itemName = item?.productName || "Unknown Product";
+        unavailableItems.push(
+          `${itemName}: Available ${sku.quantityAvailable}, Need ${requiredQty}`
+        );
+      }
+    }
+
+    if (unavailableItems.length > 0) {
+      throw new Error(
+        `Cannot resume session - some items no longer available:\n${unavailableItems.join("\n")}`
+      );
+    }
+
+    // Re-acquire holds in parallel (decrease quantityAvailable)
+    await Promise.all(
+      skuEntries.map(async ([skuId, requiredQty], i) => {
+        const sku = skuFetches[i];
+        if (
+          sku &&
+          "quantityAvailable" in sku &&
+          typeof sku.quantityAvailable === "number"
+        ) {
+          await ctx.db.patch(skuId as Id<"productSku">, {
+            quantityAvailable: sku.quantityAvailable - requiredQty,
+          });
+        }
+      })
+    );
+
+    // Reset expiration to new 20-minute window
+    const sessionExpiry = 20 * 60 * 1000;
+    const expiresAt = now + sessionExpiry;
 
     await ctx.db.patch(args.sessionId, {
       status: "active",
       resumedAt: now,
       updatedAt: now,
+      expiresAt,
     });
 
-    return args.sessionId;
+    return { sessionId: args.sessionId, expiresAt };
   },
 });
 
@@ -219,6 +354,10 @@ export const completeSession = mutation({
     amountPaid: v.number(),
     changeGiven: v.optional(v.number()),
     notes: v.optional(v.string()),
+    // Explicitly save final transaction totals for audit integrity
+    subtotal: v.number(),
+    tax: v.number(),
+    total: v.number(),
   },
   handler: async (ctx, args): Promise<string> => {
     const session = await ctx.db.get(args.sessionId);
@@ -230,13 +369,18 @@ export const completeSession = mutation({
       throw new Error("Can only complete active sessions");
     }
 
-    // Mark session as completed first
+    // Mark session as completed and lock in final transaction totals
+    // This ensures audit integrity by capturing exact values at completion time
     const now = Date.now();
     await ctx.db.patch(args.sessionId, {
       status: "completed",
       completedAt: now,
       updatedAt: now,
       notes: args.notes,
+      // Save final transaction totals for audit trail
+      subtotal: args.subtotal,
+      tax: args.tax,
+      total: args.total,
     });
 
     // Schedule the transaction creation to avoid circular dependencies
@@ -265,6 +409,45 @@ export const voidSession = mutation({
   },
   handler: async (ctx, args) => {
     const now = Date.now();
+
+    // Get the session
+    const session = await ctx.db.get(args.sessionId);
+    if (!session) {
+      throw new Error("Session not found");
+    }
+
+    // Query all items for this session
+    const items = await ctx.db
+      .query("posSessionItem")
+      .withIndex("by_sessionId", (q) => q.eq("sessionId", args.sessionId))
+      .collect();
+
+    // Release ALL inventory holds by restoring quantityAvailable
+    // Calculate total quantities held per SKU
+    const heldQuantities = new Map<Id<"productSku">, number>();
+    for (const item of items) {
+      const currentQty = heldQuantities.get(item.productSkuId) || 0;
+      heldQuantities.set(item.productSkuId, currentQty + item.quantity);
+    }
+
+    // Restore quantityAvailable for each SKU in parallel
+    await Promise.all(
+      Array.from(heldQuantities.entries()).map(async ([skuId, quantity]) => {
+        const sku = await ctx.db.get(skuId);
+        if (
+          sku &&
+          "quantityAvailable" in sku &&
+          typeof sku.quantityAvailable === "number"
+        ) {
+          await ctx.db.patch(skuId, {
+            quantityAvailable: sku.quantityAvailable + quantity,
+          });
+        }
+      })
+    );
+
+    // Delete all items for this session
+    await Promise.all(items.map((item) => ctx.db.delete(item._id)));
 
     await ctx.db.patch(args.sessionId, {
       status: "void",
@@ -320,9 +503,101 @@ export const getActiveSession = query({
       customer = await ctx.db.get(activeSession.customerId);
     }
 
+    // Get cart items from posSessionItem table
+    const cartItems = await ctx.db
+      .query("posSessionItem")
+      .withIndex("by_sessionId", (q) => q.eq("sessionId", activeSession._id))
+      .collect();
+
     return {
       ...activeSession,
+      cartItems,
       customer,
+    };
+  },
+});
+
+// Release inventory holds from expired sessions (called by cron job)
+export const releasePosSessionItems = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const now = Date.now();
+
+    // Find all active sessions that have expired
+    const expiredSessions = await ctx.db
+      .query("posSession")
+      .withIndex("by_status", (q) => q.eq("status", "active"))
+      .filter((q) => q.lt(q.field("expiresAt"), now))
+      .collect();
+
+    if (expiredSessions.length === 0) {
+      console.log("[POS] No expired sessions found");
+      return { releasedCount: 0, sessionIds: [] };
+    }
+
+    console.log(
+      `[POS] Found ${expiredSessions.length} expired sessions to process`
+    );
+
+    const releasedSessionIds: string[] = [];
+
+    // Process each expired session
+    for (const session of expiredSessions) {
+      try {
+        // Query all items for this session from posSessionItem table
+        const items = await ctx.db
+          .query("posSessionItem")
+          .withIndex("by_sessionId", (q) => q.eq("sessionId", session._id))
+          .collect();
+
+        // Calculate total quantities held per SKU
+        const heldQuantities = new Map<Id<"productSku">, number>();
+        for (const item of items) {
+          const currentQty = heldQuantities.get(item.productSkuId) || 0;
+          heldQuantities.set(item.productSkuId, currentQty + item.quantity);
+        }
+
+        // Restore quantityAvailable for each SKU
+        const releasePromises = Array.from(heldQuantities.entries()).map(
+          async ([skuId, quantity]) => {
+            const sku = await ctx.db.get(skuId);
+            if (sku && "quantityAvailable" in sku) {
+              await ctx.db.patch(skuId, {
+                quantityAvailable: sku.quantityAvailable + quantity,
+              });
+              console.log(`[POS] Released ${quantity} units for SKU ${skuId}`);
+            }
+          }
+        );
+
+        await Promise.all(releasePromises);
+
+        // Delete all session items
+        await Promise.all(items.map((item) => ctx.db.delete(item._id)));
+
+        // Mark session as expired by changing status
+        await ctx.db.patch(session._id, {
+          status: "expired",
+          updatedAt: now,
+          notes: "Session expired - inventory holds released",
+        });
+
+        releasedSessionIds.push(session._id);
+        console.log(
+          `[POS] Released inventory holds for session ${session.sessionNumber}`
+        );
+      } catch (error) {
+        console.error(`[POS] Error releasing session ${session._id}:`, error);
+        // Continue processing other sessions even if one fails
+      }
+    }
+
+    console.log(
+      `[POS] Successfully released ${releasedSessionIds.length} sessions`
+    );
+    return {
+      releasedCount: releasedSessionIds.length,
+      sessionIds: releasedSessionIds,
     };
   },
 });
@@ -344,7 +619,8 @@ export const cleanupOldSessions = mutation({
         q.and(
           q.or(
             q.eq(q.field("status"), "completed"),
-            q.eq(q.field("status"), "void")
+            q.eq(q.field("status"), "void"),
+            q.eq(q.field("status"), "expired")
           ),
           q.lt(q.field("updatedAt"), cutoffTime)
         )

@@ -8,22 +8,10 @@ export const posSessionSchema = v.object({
 
   // Session state
   status: v.string(), // "active", "held", "completed", "void"
+  transactionId: v.optional(v.id("posTransaction")), // Link to transaction created from this session
 
-  // Cart contents
-  cartItems: v.array(
-    v.object({
-      id: v.string(),
-      name: v.string(),
-      barcode: v.string(),
-      price: v.number(),
-      quantity: v.number(),
-      image: v.optional(v.string()),
-      size: v.optional(v.string()),
-      length: v.optional(v.number()),
-      skuId: v.optional(v.id("productSku")),
-      areProcessingFeesAbsorbed: v.optional(v.boolean()),
-    })
-  ),
+  // Cart contents - now stored in separate posSessionItem table
+  // Kept here for backward compatibility queries only
 
   // Customer information
   customerId: v.optional(v.id("posCustomer")),
@@ -38,6 +26,7 @@ export const posSessionSchema = v.object({
   // Session metadata
   createdAt: v.number(),
   updatedAt: v.number(),
+  expiresAt: v.number(), // Session expiration time (20 min from creation/update)
   heldAt: v.optional(v.number()),
   resumedAt: v.optional(v.number()),
   completedAt: v.optional(v.number()),

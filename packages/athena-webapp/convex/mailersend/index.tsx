@@ -19,23 +19,13 @@ export const sendVerificationCode = async (params: {
     ? capitalizeWords(params.storeName)
     : "Wigclub";
 
-  const html = render(
+  const html = await render(
     <VerificationCode
       customerEmail={params.customerEmail}
       verificationCode={params.verificationCode}
       storeName={storeName}
       validTime={params.validTime}
     />
-  );
-
-  const text = render(
-    <VerificationCode
-      customerEmail={params.customerEmail}
-      verificationCode={params.verificationCode}
-      storeName={storeName}
-      validTime={params.validTime}
-    />,
-    { plainText: true }
   );
 
   const message = {
@@ -51,7 +41,6 @@ export const sendVerificationCode = async (params: {
     ],
     subject: "Email Verification Code",
     html,
-    text,
   };
 
   return await fetch(MAILERSEND_API_URL, {

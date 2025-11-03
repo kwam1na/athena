@@ -33,6 +33,7 @@ import { Id } from "../../../convex/_generated/dataModel";
 import { POSSession } from "../../../types";
 import { CartItem, CustomerInfo } from "./types";
 import { toast } from "sonner";
+import { logger } from "@/lib/logger";
 
 interface SessionManagerProps {
   storeId: Id<"store">;
@@ -76,27 +77,6 @@ export function SessionManager(props: SessionManagerProps) {
   // Get POS operations for better session data handling
   const posOperations = usePOSOperations();
 
-  // Debug logging
-  React.useEffect(() => {
-    console.log("🔄 SessionManager - activeSession changed:", {
-      sessionId: activeSession?._id,
-      sessionNumber: activeSession?.sessionNumber,
-      status: activeSession?.status,
-      hasSession: !!activeSession,
-      timestamp: new Date().toLocaleTimeString(),
-    });
-  }, [activeSession]);
-
-  // Additional debug logging for session state changes
-  React.useEffect(() => {
-    console.log("📊 SessionManager - session state:", {
-      hasActiveSession,
-      hasHeldSessions,
-      heldSessionsCount: heldSessions?.length || 0,
-      cartItemsCount: cartItems.length,
-    });
-  }, [hasActiveSession, hasHeldSessions, heldSessions, cartItems.length]);
-
   const [holdReason, setHoldReason] = useState("");
   const [voidReason, setVoidReason] = useState("");
   const [showHoldDialog, setShowHoldDialog] = useState(false);
@@ -111,7 +91,6 @@ export function SessionManager(props: SessionManagerProps) {
       // First update the session with current cart state
       if (cartItems.length > 0 || customerInfo.customerId) {
         await updateSession(activeSession._id, {
-          cartItems,
           customerId: customerInfo.customerId,
           customerInfo,
           subtotal,

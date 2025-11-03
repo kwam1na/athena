@@ -47,6 +47,7 @@ import {
 import {
   posTransactionSchema,
   posTransactionItemSchema,
+  posSessionItemSchema,
   posCustomerSchema,
 } from "./schemas/pos";
 import { posSessionSchema } from "./schemas/pos/posSession";
@@ -105,7 +106,8 @@ const schema = defineSchema({
     .index("by_transactionNumber", ["transactionNumber"])
     .index("by_status", ["status"])
     .index("by_cashierId", ["cashierId"])
-    .index("by_customerId", ["customerId"]),
+    .index("by_customerId", ["customerId"])
+    .index("by_sessionId", ["sessionId"]),
   posTransactionItem: defineTable(posTransactionItemSchema)
     .index("by_transactionId", ["transactionId"])
     .index("by_productId", ["productId"])
@@ -116,10 +118,15 @@ const schema = defineSchema({
     .index("by_cashierId", ["cashierId"])
     .index("by_storeId_and_status", ["storeId", "status"])
     .index("by_sessionNumber", ["sessionNumber"]),
+  posSessionItem: defineTable(posSessionItemSchema)
+    .index("by_sessionId", ["sessionId"])
+    .index("by_productSkuId", ["productSkuId"])
+    .index("by_storeId", ["storeId"]),
   product: defineTable(productSchema).index("by_storeId", ["storeId"]),
-  productSku: defineTable(productSkuSchema).index("by_productId", [
-    "productId",
-  ]),
+  productSku: defineTable(productSkuSchema)
+    .index("by_productId", ["productId"])
+    .index("by_storeId", ["storeId"])
+    .index("by_storeId_barcode", ["storeId", "barcode"]),
   promoCode: defineTable(promoCodeSchema),
   promoCodeItem: defineTable(promoCodeItemSchema).index("by_promoCodeId", [
     "promoCodeId",

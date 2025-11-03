@@ -6,7 +6,8 @@ import { usePOSStore, posSelectors } from "../stores/posStore";
 import { Product, CustomerInfo } from "../components/pos/types";
 import { Id } from "../../convex/_generated/dataModel";
 import { usePOSCustomerUpdate } from "./usePOSCustomers";
-import { PAYSTACK_PROCESSING_FEE } from "@/lib/constants";
+import { generateTransactionNumber } from "../lib/pos/transactionUtils";
+import { logger } from "../lib/logger";
 
 /**
  * Unified hook for POS operations
@@ -37,6 +38,13 @@ export const usePOSOperations = () => {
   const createCustomerMutation = useMutation(
     api.inventory.posCustomers.createCustomer
   );
+  // Item mutations
+  const addOrUpdateItemMutation = useMutation(
+    api.inventory.posSessionItems.addOrUpdateItem
+  );
+  const removeItemMutation = useMutation(
+    api.inventory.posSessionItems.removeItem
+  );
 
   // Customer operations hooks
   const updateCustomerHook = usePOSCustomerUpdate();
@@ -48,10 +56,9 @@ export const usePOSOperations = () => {
       if (!sessionId || !store.customer.current) return;
 
       try {
-        console.log(
-          "🔄 Auto-updating session with customer data:",
-          store.customer.current
-        );
+        logger.debug("Auto-updating session with customer data", {
+          customerId: store.customer.current.customerId,
+        });
 
         await updateSessionMutation({
           sessionId: sessionId as Id<"posSession">,
@@ -61,25 +68,17 @@ export const usePOSOperations = () => {
             email: store.customer.current.email,
             phone: store.customer.current.phone,
           },
-          cartItems: store.cart.items.map((item) => ({
-            id: item.id,
-            name: item.name,
-            barcode: item.barcode,
-            price: item.price,
-            quantity: item.quantity,
-            image: item.image || undefined,
-            size: item.size,
-            length: item.length ?? undefined,
-            skuId: item.skuId,
-          })),
           subtotal: store.cart.subtotal,
           tax: store.cart.tax,
           total: store.cart.total,
         });
 
-        console.log("✅ Session updated with customer data");
+        logger.debug("Session updated with customer data");
       } catch (error) {
-        console.error("❌ Failed to update session with customer data:", error);
+        logger.error(
+          "Failed to update session with customer data",
+          error as Error
+        );
       }
     };
 
@@ -94,25 +93,14 @@ export const usePOSOperations = () => {
     store,
   ]);
 
-  // Helper function to auto-update session
+  // Helper function to auto-update session (metadata only)
   const autoUpdateSession = useCallback(async () => {
     const sessionId = store.session.currentSessionId;
     if (!sessionId) return;
 
     try {
-      await updateSessionMutation({
+      const result = await updateSessionMutation({
         sessionId: sessionId as Id<"posSession">,
-        cartItems: store.cart.items.map((item) => ({
-          id: item.id,
-          name: item.name,
-          barcode: item.barcode,
-          price: item.price,
-          quantity: item.quantity,
-          image: item.image || undefined,
-          size: item.size,
-          length: item.length ?? undefined,
-          skuId: item.skuId,
-        })),
         customerInfo: store.customer.current
           ? {
               name: store.customer.current.name,
@@ -124,8 +112,11 @@ export const usePOSOperations = () => {
         tax: store.cart.tax,
         total: store.cart.total,
       });
+
+      // Update session expiration time from server
+      store.setSessionExpiresAt(result.expiresAt);
     } catch (error) {
-      console.error("❌ Failed to auto-update session:", error);
+      logger.error("Failed to auto-update session", error as Error);
       // Don't throw - this is a background operation
     }
   }, [store, updateSessionMutation]);
@@ -137,19 +128,23 @@ export const usePOSOperations = () => {
     }
 
     try {
-      console.log("🔄 Auto-creating session for first cart item...");
+      logger.debug("Auto-creating session for first cart item");
 
-      const sessionId = await createSessionMutation({
+      const result = await createSessionMutation({
         storeId: store.storeId,
         registerNumber: store.ui.registerNumber,
       });
 
-      store.setCurrentSessionId(sessionId);
-      console.log("✅ Session created:", sessionId);
+      store.setCurrentSessionId(result.sessionId);
+      store.setSessionExpiresAt(result.expiresAt);
+      logger.debug("Session created", {
+        sessionId: result.sessionId,
+        expiresAt: result.expiresAt,
+      });
 
-      return sessionId;
+      return result.sessionId;
     } catch (error) {
-      console.error("❌ Failed to auto-create session:", error);
+      logger.error("Failed to auto-create session", error as Error);
       throw error;
     }
   }, [store, createSessionMutation]);
@@ -181,68 +176,94 @@ export const usePOSOperations = () => {
     };
   }, [store]);
 
-  // Utility function to calculate net price for transactions
-  const calculateNetPrice = (product: Product): number => {
-    if (!product.areProcessingFeesAbsorbed) {
-      // If merchant doesn't absorb fees, use base price (minus processing fees)
-      const processingFee = (product.price * PAYSTACK_PROCESSING_FEE) / 100;
-      return Math.ceil(product.price - processingFee);
-    }
-    // If merchant absorbs fees, use full price
-    return product.price;
-  };
-
   // Individual cart operation functions
   const addProduct = useCallback(
     async (product: Product) => {
-      try {
-        // Validate product data
-        if (!product.skuId) {
-          throw new Error("Product missing SKU ID - cannot add to cart");
-        }
+      // Validate product data
+      if (!product.skuId) {
+        toast.error("Product missing SKU ID - cannot add to cart");
+        return;
+      }
 
-        if (product.price <= 0) {
-          throw new Error("Product has invalid price");
-        }
+      if (product.price <= 0) {
+        toast.error("Product has invalid price");
+        return;
+      }
 
-        // Convert product to cart item
-        const cartItem = {
+      if (!product.productId) {
+        toast.error("Product missing product ID");
+        return;
+      }
+
+      // Auto-create session if this is the first item
+      let sessionId = store.session.currentSessionId;
+      if (!sessionId) {
+        try {
+          sessionId = await autoCreateSession();
+        } catch (error) {
+          toast.error("Failed to create session. Please try again.");
+          logger.error("Failed to create session", error as Error);
+          return;
+        }
+      }
+
+      // Check if item already exists in cart by SKU ID
+      const existingItem = store.cart.items.find(
+        (item) => item.skuId === product.skuId
+      );
+      const newQuantity = existingItem ? existingItem.quantity + 1 : 1;
+
+      // Call server mutation to add/update item with inventory hold
+      const result = await addOrUpdateItemMutation({
+        sessionId: sessionId as Id<"posSession">,
+        productId: product.productId,
+        productSkuId: product.skuId,
+        productSku: product.barcode,
+        productName: product.name,
+        price: product.price, // Backend returns netPrice or price
+        quantity: newQuantity,
+        image: product.image || undefined,
+        size: product.size || undefined,
+        length: product.length || undefined,
+        areProcessingFeesAbsorbed: product.areProcessingFeesAbsorbed,
+      });
+
+      // Handle result
+      if (!result.success) {
+        toast.error(result.message);
+        logger.error("Failed to add product to cart", {
+          message: result.message,
+        });
+        return;
+      }
+
+      // Update local store with the database ID
+      if (existingItem) {
+        store.updateCartQuantity(existingItem.id, newQuantity);
+      } else {
+        store.addToCart({
+          id: result.data.itemId, // Database ID is the cart item ID
           name: product.name,
           barcode: product.barcode,
-          price: calculateNetPrice(product),
+          sku: product.sku,
+          price: product.price, // Backend returns netPrice or price
           quantity: 1,
-          image: product.image,
-          size: product.size,
+          image: product.image || undefined,
+          size: product.size || undefined,
           length: product.length,
+          productId: product.productId,
           skuId: product.skuId,
           areProcessingFeesAbsorbed: product.areProcessingFeesAbsorbed,
-        };
-
-        console.log("🛒 Adding cart item:", cartItem);
-
-        // Add to cart
-        store.addToCart(cartItem);
-
-        console.log("🛒 Cart after adding:", {
-          itemCount: store.cart.items.length,
-          subtotal: store.cart.subtotal,
-          total: store.cart.total,
         });
-
-        // Auto-create session if this is the first item
-        if (store.cart.items.length === 1 && !store.session.activeSession) {
-          await autoCreateSession();
-        }
-
-        // Auto-update session if one exists
-        await autoUpdateSession();
-
-        // toast.success(`Added ${product.name} to cart`);
-      } catch (error) {
-        toast.error((error as Error).message);
       }
+
+      // Update session expiration time
+      store.setSessionExpiresAt(result.data.expiresAt);
+
+      // Update session metadata (totals, customer)
+      await autoUpdateSession();
     },
-    [store, autoCreateSession, autoUpdateSession]
+    [store, autoCreateSession, autoUpdateSession, addOrUpdateItemMutation]
   );
 
   const addFromBarcode = useCallback(
@@ -265,37 +286,103 @@ export const usePOSOperations = () => {
   );
 
   const updateQuantity = useCallback(
-    async (itemId: string, quantity: number) => {
-      try {
-        if (quantity < 0) {
-          throw new Error("Quantity cannot be negative");
-        }
-
-        store.updateCartQuantity(itemId, quantity);
-
-        // Auto-update session
-        await autoUpdateSession();
-      } catch (error) {
-        toast.error((error as Error).message);
+    async (itemId: Id<"posSessionItem">, quantity: number) => {
+      if (quantity < 0) {
+        toast.error("Quantity cannot be negative");
+        return;
       }
+
+      const sessionId = store.session.currentSessionId;
+      if (!sessionId) {
+        toast.error("No active session. Please start a new transaction.");
+        return;
+      }
+
+      const item = store.cart.items.find((item) => item.id === itemId);
+      if (!item || !item.skuId) {
+        toast.error("Item not found in cart");
+        return;
+      }
+
+      // Ensure we have a productId
+      if (!item.productId) {
+        toast.error("Product information missing - cannot update quantity");
+        return;
+      }
+
+      // Call server mutation to update quantity with inventory hold
+      const result = await addOrUpdateItemMutation({
+        sessionId: sessionId as Id<"posSession">,
+        productId: item.productId,
+        productSkuId: item.skuId,
+        productSku: item.barcode,
+        productName: item.name,
+        price: item.price,
+        quantity,
+        image: item.image || undefined,
+        size: item.size || undefined,
+        length: item.length || undefined,
+        areProcessingFeesAbsorbed: item.areProcessingFeesAbsorbed,
+      });
+
+      // Handle result
+      if (!result.success) {
+        toast.error(result.message);
+        logger.error("Failed to update quantity", { message: result.message });
+        return;
+      }
+
+      // Update local store after successful server update
+      store.updateCartQuantity(itemId, quantity);
+
+      // Update session expiration time
+      store.setSessionExpiresAt(result.data.expiresAt);
+
+      // Update session metadata (totals)
+      await autoUpdateSession();
     },
-    [store, autoUpdateSession]
+    [store, autoUpdateSession, addOrUpdateItemMutation]
   );
 
   const removeItem = useCallback(
-    async (itemId: string) => {
-      try {
-        store.removeFromCart(itemId);
-
-        // Auto-update session
-        await autoUpdateSession();
-
-        toast.success("Item removed from cart");
-      } catch (error) {
-        toast.error((error as Error).message);
+    async (itemId: Id<"posSessionItem">) => {
+      const sessionId = store.session.currentSessionId;
+      if (!sessionId) {
+        toast.error("No active session. Please start a new transaction.");
+        return;
       }
+
+      const item = store.cart.items.find((item) => item.id === itemId);
+      if (!item) {
+        toast.error("Item not found in cart");
+        return;
+      }
+
+      // Call server mutation to remove item and release inventory hold
+      const result = await removeItemMutation({
+        sessionId: sessionId as Id<"posSession">,
+        itemId, // itemId is already the database ID
+      });
+
+      // Handle result
+      if (!result.success) {
+        toast.error(result.message);
+        logger.error("Failed to remove item", { message: result.message });
+        return;
+      }
+
+      // Update local store after successful server update
+      store.removeFromCart(itemId);
+
+      // Update session expiration time
+      store.setSessionExpiresAt(result.data.expiresAt);
+
+      // Update session metadata (totals)
+      await autoUpdateSession();
+
+      toast.success("Item removed from cart");
     },
-    [store, autoUpdateSession]
+    [store, autoUpdateSession, removeItemMutation]
   );
 
   const clearCart = useCallback(() => {
@@ -320,15 +407,16 @@ export const usePOSOperations = () => {
         try {
           store.setSessionCreating(true);
 
-          const sessionId = await createSessionMutation({
+          const result = await createSessionMutation({
             storeId,
             registerNumber: store.ui.registerNumber,
           });
 
-          store.setCurrentSessionId(sessionId);
+          store.setCurrentSessionId(result.sessionId);
+          store.setSessionExpiresAt(result.expiresAt);
           toast.success("New session created");
 
-          return sessionId;
+          return result.sessionId;
         } catch (error) {
           toast.error((error as Error).message);
           throw error;
@@ -343,7 +431,7 @@ export const usePOSOperations = () => {
       try {
         await autoUpdateSession();
       } catch (error) {
-        console.error("Failed to update session:", error);
+        logger.error("Failed to update session", error as Error);
         // Don't show toast for automatic updates
       }
     }, [autoUpdateSession]),
@@ -376,16 +464,31 @@ export const usePOSOperations = () => {
     resumeSession: useCallback(
       async (sessionId: string) => {
         try {
-          await resumeSessionMutation({
+          const result = await resumeSessionMutation({
             sessionId: sessionId as Id<"posSession">,
           });
 
+          // Update expiration time from server
+          store.setSessionExpiresAt(result.expiresAt);
+
           toast.success("Session resumed");
         } catch (error) {
-          toast.error((error as Error).message);
+          const errorMessage = (error as Error).message;
+
+          // Provide user-friendly error messages for inventory issues
+          if (errorMessage.includes("no longer available")) {
+            toast.error("Cannot resume session - some items are out of stock", {
+              description: errorMessage,
+              duration: 5000,
+            });
+          } else {
+            toast.error(errorMessage);
+          }
+
+          logger.error("Failed to resume session", error as Error);
         }
       },
-      [resumeSessionMutation]
+      [resumeSessionMutation, store]
     ),
 
     startNewSession: useCallback(() => {
@@ -415,25 +518,26 @@ export const usePOSOperations = () => {
 
           if (sessionId) {
             // Session-based transaction completion
-            console.log("🔄 Processing session-based transaction:", sessionId);
+            logger.debug("Processing session-based transaction", { sessionId });
+
+            // Capture final totals at completion time for audit integrity
+            const finalSubtotal = store.cart.subtotal;
+            const finalTax = store.cart.tax;
+            const finalTotal = store.cart.total;
 
             await completeSessionMutation({
               sessionId: sessionId as Id<"posSession">,
               paymentMethod,
-              amountPaid: store.cart.total,
+              amountPaid: finalTotal,
               notes: `Register: ${store.ui.registerNumber}`,
+              // Explicitly pass final transaction totals
+              subtotal: finalSubtotal,
+              tax: finalTax,
+              total: finalTotal,
             });
 
-            // Generate POS transaction number (consistent with backend format)
-            const timestamp = Math.floor(Date.now() / 1000);
-            const baseTransactionNumber = timestamp % 100000;
-            const randomPadding = Math.floor(Math.random() * 10);
-            const transactionNumber = `POS-${(
-              baseTransactionNumber * 10 +
-              randomPadding
-            )
-              .toString()
-              .padStart(6, "0")}`;
+            // Generate POS transaction number using extracted utility
+            const transactionNumber = generateTransactionNumber();
 
             // Update transaction state
             store.setTransactionCompleted(true, transactionNumber, {
@@ -464,7 +568,7 @@ export const usePOSOperations = () => {
             };
           } else {
             // Direct transaction completion
-            console.log("🔄 Processing direct transaction");
+            logger.debug("Processing direct transaction");
 
             if (!store.storeId) {
               throw new Error("Store ID not set");
@@ -496,28 +600,17 @@ export const usePOSOperations = () => {
               registerNumber: store.ui.registerNumber,
             };
 
-            console.log("📊 Transaction data:", transactionData);
-            console.log("🔄 Calling completeTransactionMutation...");
-
-            // Debug: Log customer data specifically
-            if (transactionData.customerId) {
-              console.log("👤 Customer data being sent to transaction:", {
-                customerId: transactionData.customerId,
-                customerInfo: transactionData.customerInfo,
-                hasLinkedCustomer: !!transactionData.customerId,
-              });
-            } else {
-              console.log(
-                "⚠️ No customer data in transaction - this transaction will not be linked to a customer"
-              );
-            }
+            logger.debug("Transaction data prepared", {
+              itemCount: transactionData.items.length,
+              hasCustomer: !!transactionData.customerId,
+            });
 
             const result = await completeTransactionMutation(transactionData);
 
-            console.log("📨 Transaction result:", result);
-
             if (result.success) {
-              console.log("✅ Transaction successful, updating state...");
+              logger.info("Transaction completed successfully", {
+                transactionNumber: result.transactionNumber,
+              });
 
               // Update transaction state
               store.setTransactionCompleted(true, result.transactionNumber, {
@@ -536,26 +629,15 @@ export const usePOSOperations = () => {
                   : undefined,
               });
 
-              console.log(
-                "✅ Transaction state updated, showing success message"
-              );
-              console.log("📊 Store state after completion:", {
-                isTransactionCompleted: store.transaction.isCompleted,
-                completedOrderNumber: store.transaction.completedOrderNumber,
-                completedTransactionData:
-                  store.transaction.completedTransactionData,
-              });
-
-              // toast.success(
-              //   `Transaction completed! Order: ${result.transactionNumber}`
-              // );
-
               return {
                 success: true,
                 transactionNumber: result.transactionNumber,
               };
             } else {
-              console.error("❌ Transaction failed:", result.error);
+              logger.error(
+                "Transaction failed",
+                new Error(result.error || "Unknown error")
+              );
               toast.error(result.error || "Transaction failed");
               return {
                 success: false,
@@ -588,7 +670,7 @@ export const usePOSOperations = () => {
     // Note: Print functionality is handled by the usePrint hook in the UI component
     // This method is kept for backward compatibility but should not be used directly
     printReceipt: useCallback(() => {
-      console.log(
+      logger.warn(
         "Print receipt requested - this should be handled by the UI component using usePrint hook"
       );
       toast.info("Please use the Print Receipt button in the UI");
@@ -615,7 +697,7 @@ export const usePOSOperations = () => {
             store.setCustomerSearching(false);
           }, 500);
         } catch (error) {
-          console.error("❌ Failed to search customers:", error);
+          logger.error("Failed to search customers", error as Error);
           store.setCustomerSearchResults([]);
           toast.error("Failed to search customers");
           store.setCustomerSearching(false);

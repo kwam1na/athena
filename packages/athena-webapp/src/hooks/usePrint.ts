@@ -63,45 +63,50 @@ export const usePrint = () => {
               box-sizing: border-box;
             }
             
-                         body {
-               font-family: 'Courier New', monospace;
-               font-size: 12px;
-               line-height: 1.3;
-               color: #000;
-               background: #fff;
-               padding: 5mm;
-               -webkit-print-color-adjust: exact;
-               print-color-adjust: exact;
-             }
-            
-                         .receipt {
-               max-width: 80mm;
-               margin: 0 auto;
-               width: 100%;
-             }
+            body {
+              font-family: 'Consolas', 'Monaco', 'Lucida Console', 'DejaVu Sans Mono', 'Courier New', monospace;
+              font-size: 13px;
+              line-height: 1.35;
+              color: #000;
+              background: #fff;
+              padding: 5mm;
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
+              font-weight: 600;
+            }
+           
+                        .receipt {
+              max-width: 80mm;
+              margin: 0 auto;
+              width: 100%;
+            }
             
             .text-center {
               text-align: center;
             }
             
             .text-xs {
-              font-size: 10px;
+              font-size: 11px;
+              font-weight: 600;
             }
             
             .text-sm {
-              font-size: 11px;
+              font-size: 12px;
+              font-weight: 600;
             }
             
             .text-base {
-              font-size: 12px;
+              font-size: 13px;
+              font-weight: 600;
             }
             
             .text-lg {
-              font-size: 14px;
+              font-size: 16px;
+              font-weight: 900;
             }
             
             .font-bold {
-              font-weight: bold;
+              font-weight: 900;
             }
             
             .mb-1 {
@@ -149,11 +154,11 @@ export const usePrint = () => {
             }
             
             .border-b {
-              border-bottom: 1px dashed #000;
+              border-bottom: 2px dashed #000;
             }
             
             .border-t {
-              border-top: 1px solid #000;
+              border-top: 2px solid #000;
             }
             
             .flex {
@@ -206,7 +211,9 @@ export const usePrint = () => {
                 padding: 0;
                 margin: 0;
                 width: 80mm;
-                font-size: 10px;
+                font-size: 11px;
+                font-weight: 600;
+                color: #000 !important;
               }
               
               .receipt {
@@ -217,32 +224,36 @@ export const usePrint = () => {
               }
               
               .text-lg {
-                font-size: 12px;
+                font-size: 14px;
+                font-weight: 900 !important;
               }
               
               .text-base {
-                font-size: 10px;
+                font-size: 11px;
+                font-weight: 600 !important;
               }
               
               .text-sm {
-                font-size: 9px;
+                font-size: 10px;
+                font-weight: 600 !important;
               }
               
-                             .text-xs {
-                 font-size: 8px;
-               }
-               
-               .border-b {
-                 border-bottom: 1px dashed #000 !important;
-               }
-               
-               .border-t {
-                 border-top: 1px solid #000 !important;
-               }
-               
-               .font-bold {
-                 font-weight: bold !important;
-               }
+                            .text-xs {
+                font-size: 9px;
+                font-weight: 600 !important;
+              }
+              
+              .border-b {
+                border-bottom: 2px dashed #000 !important;
+              }
+              
+              .border-t {
+                border-top: 2px solid #000 !important;
+              }
+              
+              .font-bold {
+                font-weight: 900 !important;
+              }
                
                /* Ensure proper spacing for thermal printers */
                .mb-1 { margin-bottom: 2mm !important; }

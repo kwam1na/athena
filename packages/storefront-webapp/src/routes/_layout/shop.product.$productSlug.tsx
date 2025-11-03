@@ -5,6 +5,7 @@ import { z } from "zod";
 
 const productPageSchema = z.object({
   variant: z.string().optional().catch(""),
+  barcode: z.string().optional().catch(""),
 });
 
 export const Route = createFileRoute("/_layout/shop/product/$productSlug")({

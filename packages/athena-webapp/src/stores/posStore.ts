@@ -4,6 +4,8 @@ import { immer } from "zustand/middleware/immer";
 import { Id } from "../../convex/_generated/dataModel";
 import { CartItem, CustomerInfo, Product } from "../components/pos/types";
 import { POSSession } from "../../types";
+import { calculateCartTotals } from "../lib/pos/calculations";
+import { logger } from "../lib/logger";
 
 // State interfaces
 interface CartState {
@@ -26,6 +28,7 @@ interface SessionState {
   heldSessions: POSSession[];
   isCreating: boolean;
   isUpdating: boolean;
+  expiresAt: number | null;
 }
 
 interface TransactionState {
@@ -66,9 +69,9 @@ interface POSState {
   storeId: Id<"store"> | null;
 
   // Cart Actions
-  addToCart: (item: Omit<CartItem, "id">) => void;
-  updateCartQuantity: (id: string, quantity: number) => void;
-  removeFromCart: (id: string) => void;
+  addToCart: (item: CartItem) => void;
+  updateCartQuantity: (id: Id<"posSessionItem">, quantity: number) => void;
+  removeFromCart: (id: Id<"posSessionItem">) => void;
   clearCart: () => void;
   calculateTotals: () => void;
 
@@ -85,6 +88,7 @@ interface POSState {
   setHeldSessions: (sessions: POSSession[]) => void;
   setSessionCreating: (isCreating: boolean) => void;
   setSessionUpdating: (isUpdating: boolean) => void;
+  setSessionExpiresAt: (expiresAt: number | null) => void;
   loadSessionData: (session: POSSession) => void;
 
   // Transaction Actions
@@ -142,6 +146,7 @@ const initialState = {
     heldSessions: [],
     isCreating: false,
     isUpdating: false,
+    expiresAt: null,
   },
   transaction: {
     isCompleting: false,
@@ -170,49 +175,20 @@ export const usePOSStore = create<POSState>()(
         addToCart: (item) =>
           set((state) => {
             const existingItem = state.cart.items.find(
-              (cartItem: CartItem) => cartItem.barcode === item.barcode
+              (cartItem: CartItem) => cartItem.id === item.id
             );
 
             if (existingItem) {
-              existingItem.quantity += 1;
+              existingItem.quantity = item.quantity;
             } else {
-              state.cart.items.push({
-                ...item,
-                id:
-                  Date.now().toString() +
-                  Math.random().toString(36).substr(2, 9),
-              });
+              state.cart.items.push(item);
             }
 
             // Recalculate totals within the same state update
-            console.log(
-              "🧮 calculateTotals in addToCart, cart items:",
-              state.cart.items.map((item) => ({
-                name: item.name,
-                price: item.price,
-                quantity: item.quantity,
-                lineTotal: item.price * item.quantity,
-              }))
-            );
-
-            const subtotal = state.cart.items.reduce(
-              (sum: number, item: CartItem) => sum + item.price * item.quantity,
-              0
-            );
-
-            // Tax calculation would come from store config
-            const tax = 0; // TODO: Get from store config
-            const total = subtotal + tax;
-
-            console.log("🧮 Calculated totals in addToCart:", {
-              subtotal,
-              tax,
-              total,
-            });
-
-            state.cart.subtotal = subtotal;
-            state.cart.tax = tax;
-            state.cart.total = total;
+            const totals = calculateCartTotals(state.cart.items);
+            state.cart.subtotal = totals.subtotal;
+            state.cart.tax = totals.tax;
+            state.cart.total = totals.total;
           }),
 
         updateCartQuantity: (id, quantity) =>
@@ -231,17 +207,10 @@ export const usePOSStore = create<POSState>()(
             }
 
             // Recalculate totals within the same state update
-            const subtotal = state.cart.items.reduce(
-              (sum: number, item: CartItem) => sum + item.price * item.quantity,
-              0
-            );
-
-            const tax = 0; // TODO: Get from store config
-            const total = subtotal + tax;
-
-            state.cart.subtotal = subtotal;
-            state.cart.tax = tax;
-            state.cart.total = total;
+            const totals = calculateCartTotals(state.cart.items);
+            state.cart.subtotal = totals.subtotal;
+            state.cart.tax = totals.tax;
+            state.cart.total = totals.total;
           }),
 
         removeFromCart: (id) =>
@@ -251,17 +220,10 @@ export const usePOSStore = create<POSState>()(
             );
 
             // Recalculate totals within the same state update
-            const subtotal = state.cart.items.reduce(
-              (sum: number, item: CartItem) => sum + item.price * item.quantity,
-              0
-            );
-
-            const tax = 0; // TODO: Get from store config
-            const total = subtotal + tax;
-
-            state.cart.subtotal = subtotal;
-            state.cart.tax = tax;
-            state.cart.total = total;
+            const totals = calculateCartTotals(state.cart.items);
+            state.cart.subtotal = totals.subtotal;
+            state.cart.tax = totals.tax;
+            state.cart.total = totals.total;
           }),
 
         clearCart: () =>
@@ -274,30 +236,10 @@ export const usePOSStore = create<POSState>()(
 
         calculateTotals: () =>
           set((state) => {
-            console.log(
-              "🧮 calculateTotals called, cart items:",
-              state.cart.items.map((item) => ({
-                name: item.name,
-                price: item.price,
-                quantity: item.quantity,
-                lineTotal: item.price * item.quantity,
-              }))
-            );
-
-            const subtotal = state.cart.items.reduce(
-              (sum: number, item: CartItem) => sum + item.price * item.quantity,
-              0
-            );
-
-            // Tax calculation would come from store config
-            const tax = 0; // TODO: Get from store config
-            const total = subtotal + tax;
-
-            console.log("🧮 Calculated totals:", { subtotal, tax, total });
-
-            state.cart.subtotal = subtotal;
-            state.cart.tax = tax;
-            state.cart.total = total;
+            const totals = calculateCartTotals(state.cart.items);
+            state.cart.subtotal = totals.subtotal;
+            state.cart.tax = totals.tax;
+            state.cart.total = totals.total;
           }),
 
         // Customer Actions
@@ -352,19 +294,27 @@ export const usePOSStore = create<POSState>()(
             state.session.isUpdating = isUpdating;
           }),
 
+        setSessionExpiresAt: (expiresAt) =>
+          set((state) => {
+            state.session.expiresAt = expiresAt;
+          }),
+
         loadSessionData: (session) =>
           set((state) => {
             // Load cart items from session
-            state.cart.items = session.cartItems.map((item) => ({
-              id: item.id,
-              name: item.name,
-              barcode: item.barcode,
+            const sessionCartItems = (session as any).cartItems || [];
+            state.cart.items = sessionCartItems.map((item: any) => ({
+              id: item._id, // Database ID is the single source of truth
+              name: item.productName,
+              barcode: item.productSku,
+              sku: item.productSku, // Use productSku as the SKU display value
               price: item.price,
               quantity: item.quantity,
               image: item.image,
               size: item.size,
               length: item.length,
-              skuId: item.skuId,
+              productId: item.productId,
+              skuId: item.productSkuId,
               areProcessingFeesAbsorbed: item.areProcessingFeesAbsorbed,
             }));
 
@@ -380,6 +330,7 @@ export const usePOSStore = create<POSState>()(
 
             state.session.currentSessionId = session._id;
             state.session.activeSession = session;
+            state.session.expiresAt = session.expiresAt || null;
             state.transaction.isCompleted = false;
 
             // Recalculate totals
@@ -489,6 +440,14 @@ export const posSelectors = {
   hasActiveSession: (state: POSState) => !!state.session.activeSession,
   getHeldSessions: (state: POSState) => state.session.heldSessions,
   hasHeldSessions: (state: POSState) => state.session.heldSessions.length > 0,
+  getSessionExpiresAt: (state: POSState) => state.session.expiresAt,
+  isSessionExpiringSoon: (state: POSState) => {
+    const expiresAt = state.session.expiresAt;
+    if (!expiresAt) return false;
+    const now = Date.now();
+    const twoMinutes = 2 * 60 * 1000;
+    return expiresAt - now < twoMinutes && expiresAt > now;
+  },
 
   // Transaction selectors
   isTransactionCompleted: (state: POSState) => state.transaction.isCompleted,

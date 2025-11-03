@@ -5,11 +5,12 @@ import { CartItem } from "./types";
 import { currencyFormatter } from "~/convex/utils";
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
 import { capitalizeWords } from "~/src/lib/utils";
+import { Id } from "~/convex/_generated/dataModel";
 
 interface CartItemsProps {
   cartItems: CartItem[];
-  onUpdateQuantity: (id: string, newQuantity: number) => void;
-  onRemoveItem: (id: string) => void;
+  onUpdateQuantity: (id: Id<"posSessionItem">, newQuantity: number) => void;
+  onRemoveItem: (id: Id<"posSessionItem">) => void;
 }
 
 export function CartItems({

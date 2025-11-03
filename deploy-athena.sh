@@ -21,7 +21,7 @@ function deploy-athena {
   VITE_CONVEX_URL=https://colorless-cardinal-870.convex.cloud \
   VITE_API_GATEWAY_URL='https://colorless-cardinal-870.convex.site' \
   VITE_STOREFRONT_URL='https://wigclub.store' \
-  VITE_HLS_URL='https://d37wmi4mfpeer9.cloudfront.net' \
+  VITE_HLS_URL='https://d1sjmzps5tlpbc.cloudfront.net' \
   bun run build &&
 
   ssh -i /Users/kwamina/Desktop/athena-webserver/athena-eu-west-key.pem \
@@ -44,7 +44,7 @@ function deploy-storefront {
   SYMLINK_PATH="/home/ec2-user/athena/storefront/current"
 
   VITE_API_URL='https://api.wigclub.store' \
-  VITE_HLS_URL='https://d37wmi4mfpeer9.cloudfront.net' \
+  VITE_HLS_URL='https://d1sjmzps5tlpbc.cloudfront.net' \
   bun run build &&
 
   ssh -i /Users/kwamina/Desktop/athena-webserver/athena-eu-west-key.pem \

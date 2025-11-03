@@ -54,41 +54,15 @@ export function OrderSummary({
   const { transaction, state } = usePOSOperations();
   const { printReceipt } = usePrint();
 
-  // Debug logging to track component updates
-  console.log("📊 OrderSummary render:", {
-    cartItemsCount: cartItems.length,
-    stateCartItemsCount: state.cartItems.length,
-    subtotal: propSubtotal,
-    stateSubtotal: state.cartSubtotal,
-    isTransactionCompleted: state.isTransactionCompleted,
-    isTransactionCompleting: state.isTransactionCompleting,
-  });
-
   // Use store state for most current data, fall back to props for compatibility
   const currentCartItems =
     state.cartItems.length > 0 ? state.cartItems : cartItems;
   const currentCustomerInfo = state.currentCustomer || customerInfo;
 
-  console.log("💰 Totals debug:", {
-    propSubtotal,
-    propTax,
-    propTotal,
-    stateSubtotal: state.cartSubtotal,
-    stateTax: state.cartTax,
-    stateTotal: state.cartTotal,
-    cartItemsInState: state.cartItems.map((item) => ({
-      name: item.name,
-      price: item.price,
-      quantity: item.quantity,
-    })),
-  });
-
   // Use store state for real-time totals, fallback to props for session-based POS
   const subtotal = state.cartSubtotal || propSubtotal || 0;
   const tax = state.cartTax || propTax || 0;
   const total = state.cartTotal || propTotal || 0;
-
-  console.log("💰 Final totals used:", { subtotal, tax, total });
 
   const handleCompleteTransaction = async (paymentMethod: string) => {
     // Prevent multiple concurrent calls
@@ -202,7 +176,7 @@ export function OrderSummary({
           </div>
           <div class="flex justify-between">
             <span>Time:</span>
-            <span>${completedTransactionData.completedAt.toLocaleTimeString()}</span>
+            <span>${completedTransactionData.completedAt.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })}</span>
           </div>
           ${
             registerNumber
@@ -269,10 +243,10 @@ export function OrderSummary({
                 <span class="flex-1 truncate pr-2">${capitalizeWords(item.name)}</span>
                 <span class="whitespace-nowrap">${formatter.format(item.price * item.quantity)}</span>
               </div>
-              <div class="text-xs" style="color: #666;">
+              <div class="text-xs font-bold" style="color: #000;">
                 <div class="flex justify-between">
                   <span>Qty: ${item.quantity} × ${formatter.format(item.price)}</span>
-                  <span>${item.barcode}</span>
+                  <span>${item.sku || item.barcode}</span>
                 </div>
               </div>
             </div>
@@ -384,8 +358,6 @@ export function OrderSummary({
       </Card>
     );
   }
-
-  console.log("cartItems", cartItems);
 
   return (
     <Card>

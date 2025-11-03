@@ -1,14 +1,16 @@
 import { Id } from "../../../convex/_generated/dataModel";
 
 export interface CartItem {
-  id: string;
+  id: Id<"posSessionItem">; // Database ID is the single source of truth
   name: string;
   barcode: string;
+  sku?: string;
   price: number;
   quantity: number;
   image?: string | null;
   size?: string;
   length?: number | null;
+  productId?: Id<"product">; // Product ID for backend operations
   skuId?: Id<"productSku">; // Product SKU ID for backend operations
   areProcessingFeesAbsorbed?: boolean;
 }
@@ -23,6 +25,7 @@ export interface CustomerInfo {
 export interface Product {
   id: string;
   name: string;
+  sku?: string;
   barcode: string;
   price: number;
   category: string;

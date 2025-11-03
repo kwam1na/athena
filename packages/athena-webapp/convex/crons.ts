@@ -24,4 +24,11 @@ crons.interval(
   {}
 );
 
+crons.interval(
+  "release-pos-session-items",
+  { minutes: process.env.STAGE == "prod" ? 10 : 1440 },
+  internal.inventory.posSessions.releasePosSessionItems,
+  {}
+);
+
 export default crons;

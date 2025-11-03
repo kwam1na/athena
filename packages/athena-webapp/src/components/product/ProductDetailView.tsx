@@ -17,6 +17,7 @@ import { ComposedPageHeader } from "../common/PageHeader";
 import { capitalizeWords } from "~/src/lib/utils";
 import { getOrigin } from "~/src/lib/navigationUtils";
 import { AnalyticsInsights } from "./AnalyticsInsights";
+import { BarcodeView } from "./BarcodeView";
 
 const ProductDetailViewHeader = () => {
   const { activeProduct } = useGetActiveProduct();
@@ -43,7 +44,7 @@ export const ProductDetailView = () => {
     <ProductProvider>
       <View header={<ProductDetailViewHeader />}>
         <div className="container mx-auto h-full w-full p-8 space-y-12">
-          <div className="grid grid-cols-2">
+          <div className="grid grid-cols-2 gap-16">
             <div className="space-y-8">
               <SKUSelector />
 
@@ -52,10 +53,13 @@ export const ProductDetailView = () => {
               <AttributesView />
 
               <CategorizationView />
+
+              <BarcodeView />
             </div>
 
             <div className="space-y-8">
               <ImagesView />
+
               <AnalyticsInsights />
             </div>
           </div>
