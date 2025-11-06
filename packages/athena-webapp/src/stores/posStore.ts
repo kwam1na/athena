@@ -4,7 +4,7 @@ import { immer } from "zustand/middleware/immer";
 import { Id } from "../../convex/_generated/dataModel";
 import { CartItem, CustomerInfo, Product } from "../components/pos/types";
 import { POSSession } from "../../types";
-import { calculateCartTotals } from "../lib/pos/calculations";
+import { calculateCartTotals } from "../lib/pos/services/calculationService";
 import { logger } from "../lib/logger";
 
 // State interfaces
@@ -66,7 +66,7 @@ interface POSState {
   session: SessionState;
   transaction: TransactionState;
   ui: UIState;
-  storeId: Id<"store"> | null;
+  storeId?: Id<"store">;
 
   // Cart Actions
   addToCart: (item: CartItem) => void;
@@ -121,7 +121,7 @@ interface POSState {
   setRegisterNumber: (registerNumber: string) => void;
 
   // Global Actions
-  setStoreId: (storeId: Id<"store"> | null) => void;
+  setStoreId: (storeId?: Id<"store">) => void;
   resetAll: () => void;
   startNewTransaction: () => void;
 }
@@ -162,7 +162,6 @@ const initialState = {
     isScanning: false,
     registerNumber: "1",
   },
-  storeId: null,
 };
 
 export const usePOSStore = create<POSState>()(
@@ -301,6 +300,24 @@ export const usePOSStore = create<POSState>()(
 
         loadSessionData: (session) =>
           set((state) => {
+            // Check if session has expired before loading
+            const now = Date.now();
+            if (session.expiresAt && session.expiresAt < now) {
+              logger.warn(
+                "[POS] Attempted to load expired session, clearing state",
+                {
+                  sessionId: session._id,
+                  expiresAt: session.expiresAt,
+                  now,
+                }
+              );
+              // Clear session state instead of loading expired session
+              state.session.currentSessionId = null;
+              state.session.activeSession = null;
+              state.session.expiresAt = null;
+              return;
+            }
+
             // Load cart items from session
             const sessionCartItems = (session as any).cartItems || [];
             state.cart.items = sessionCartItems.map((item: any) => ({
@@ -333,8 +350,11 @@ export const usePOSStore = create<POSState>()(
             state.session.expiresAt = session.expiresAt || null;
             state.transaction.isCompleted = false;
 
-            // Recalculate totals
-            get().calculateTotals();
+            // Recalculate totals within the same state update
+            const totals = calculateCartTotals(state.cart.items);
+            state.cart.subtotal = totals.subtotal;
+            state.cart.tax = totals.tax;
+            state.cart.total = totals.total;
           }),
 
         // Transaction Actions
@@ -426,7 +446,8 @@ export const posSelectors = {
   getCartTotal: (state: POSState) => state.cart.total,
   getCartSubtotal: (state: POSState) => state.cart.subtotal,
   getCartTax: (state: POSState) => state.cart.tax,
-  getCartItemCount: (state: POSState) => state.cart.items.length,
+  getCartItemCount: (state: POSState) =>
+    state.cart.items.reduce((sum, item) => sum + item.quantity, 0),
   isCartEmpty: (state: POSState) => state.cart.items.length === 0,
 
   // Customer selectors

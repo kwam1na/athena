@@ -9,6 +9,7 @@ import {
   Printer,
   Banknote,
   Plus,
+  Smartphone,
 } from "lucide-react";
 import { CartItem } from "./types";
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
@@ -17,6 +18,8 @@ import { usePOSOperations } from "~/src/hooks/usePOSOperations";
 import { usePrint } from "~/src/hooks/usePrint";
 import { capitalizeWords } from "~/src/lib/utils";
 import { Id } from "~/convex/_generated/dataModel";
+import { POSSession } from "~/types";
+import { usePOSActiveSession } from "~/src/hooks/usePOSSessions";
 
 interface OrderSummaryProps {
   cartItems: CartItem[];
@@ -54,6 +57,7 @@ export function OrderSummary({
   const { transaction, state } = usePOSOperations();
   const { printReceipt } = usePrint();
 
+  const activeSession = usePOSActiveSession(activeStore?._id as Id<"store">);
   // Use store state for most current data, fall back to props for compatibility
   const currentCartItems =
     state.cartItems.length > 0 ? state.cartItems : cartItems;
@@ -64,7 +68,18 @@ export function OrderSummary({
   const tax = state.cartTax || propTax || 0;
   const total = state.cartTotal || propTotal || 0;
 
-  const handleCompleteTransaction = async (paymentMethod: string) => {
+  const cartItemsCount = state.cartItems.reduce(
+    (sum, item) => sum + item.quantity,
+    0
+  );
+
+  const cartItemsCountText =
+    cartItemsCount > 1 ? `${cartItemsCount} items` : `${cartItemsCount} item`;
+
+  const handleCompleteTransaction = async (
+    paymentMethod: string,
+    session: POSSession
+  ) => {
     // Prevent multiple concurrent calls
     if (
       state.isTransactionCompleting ||
@@ -74,7 +89,7 @@ export function OrderSummary({
       return;
 
     // Use the transaction service to process payment
-    const result = await transaction.processPayment(paymentMethod);
+    const result = await transaction.processPayment(paymentMethod, session);
 
     if (result.success) {
       // Notify parent that transaction is completed
@@ -360,16 +375,19 @@ export function OrderSummary({
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Order Summary</CardTitle>
+    <div className="border rounded-lg">
+      <CardHeader className="flex flex-row baseline justify-between">
+        <p className="text-lg font-medium">Summary</p>
+        {cartItemsCount > 0 && (
+          <p className="text-sm text-gray-600">{cartItemsCountText}</p>
+        )}
       </CardHeader>
-      <CardContent className="space-y-4">
+      <div className="p-6 space-y-40">
         {/* Order totals */}
-        <div className="space-y-2">
+        <div className="space-y-8">
           <div className="flex justify-between">
-            <span>Subtotal</span>
-            <span>{formatter.format(subtotal)}</span>
+            <span className="text-lg">Subtotal</span>
+            <span className="text-xl">{formatter.format(subtotal)}</span>
           </div>
           {tax > 0 && (
             <div className="flex justify-between">
@@ -377,10 +395,10 @@ export function OrderSummary({
               <span>{formatter.format(tax)}</span>
             </div>
           )}
-          <Separator />
-          <div className="flex justify-between font-semibold text-lg">
-            <span>Total</span>
-            <span>{formatter.format(total)}</span>
+          {/* <Separator /> */}
+          <div className="flex justify-between items-baseline">
+            <span className="text-xl">Total</span>
+            <span className="text-4xl">{formatter.format(total)}</span>
           </div>
         </div>
 
@@ -401,53 +419,50 @@ export function OrderSummary({
           )}
 
         {/* Payment buttons */}
-        {currentCartItems.length > 0 && (
-          <div className="space-y-2">
-            <Button
-              onClick={() => handleCompleteTransaction("cash")}
-              disabled={state.isTransactionCompleting}
-              className="w-full"
-              size="lg"
-            >
-              {state.isTransactionCompleting ? (
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              ) : (
-                <Banknote className="w-4 h-4 mr-2" />
-              )}
-              Pay with Cash
-            </Button>
-            <Button
-              onClick={() => handleCompleteTransaction("card")}
-              disabled={state.isTransactionCompleting}
-              variant="outline"
-              className="w-full"
-              size="lg"
-            >
-              {state.isTransactionCompleting ? (
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              ) : (
-                <CreditCard className="w-4 h-4 mr-2" />
-              )}
-              Pay with Card
-            </Button>
-            <Button
-              onClick={() => handleCompleteTransaction("digital_wallet")}
-              disabled={state.isTransactionCompleting}
-              variant="outline"
-              className="w-full"
-              size="lg"
-            >
-              {state.isTransactionCompleting ? (
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              ) : (
-                <Wallet className="w-4 h-4 mr-2" />
-              )}
-              Digital Wallet
-            </Button>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+        <div className="space-y-2">
+          <Button
+            onClick={() =>
+              handleCompleteTransaction("cash", activeSession as POSSession)
+            }
+            disabled={state.isTransactionCompleting || cartItemsCount == 0}
+            className="w-full py-8 bg-green-200 hover:bg-green-300 text-green-900 hover:text-green-800"
+            size="lg"
+            variant="outline"
+          >
+            <Banknote className="w-4 h-4 mr-2" />
+            Pay with Cash
+          </Button>
+          <Button
+            onClick={() =>
+              handleCompleteTransaction(
+                "digital_wallet",
+                activeSession as POSSession
+              )
+            }
+            disabled={state.isTransactionCompleting || cartItemsCount == 0}
+            variant="outline"
+            className="w-full py-8 bg-yellow-200 hover:bg-yellow-300 text-yellow-900 hover:text-yellow-800"
+            size="lg"
+          >
+            <Smartphone className="w-4 h-4 mr-2" />
+            Pay with Mobile Money
+          </Button>
+
+          <Button
+            onClick={() =>
+              handleCompleteTransaction("card", activeSession as POSSession)
+            }
+            disabled={state.isTransactionCompleting || cartItemsCount == 0}
+            variant="outline"
+            className="w-full py-8 bg-blue-200 hover:bg-blue-300 text-blue-900 hover:text-blue-800"
+            size="lg"
+          >
+            <CreditCard className="w-4 h-4 mr-2" />
+            Pay with Card
+          </Button>
+        </div>
+      </div>
+    </div>
   );
 
   function formatPaymentMethod(method: string) {

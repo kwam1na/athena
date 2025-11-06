@@ -22,7 +22,7 @@ import {
 } from "@/hooks/usePOSCustomers";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { useState } from "react";
-import { toast } from "sonner";
+import { POS_MESSAGES, showValidationError } from "../../lib/pos/toastService";
 import { currencyFormatter } from "~/convex/utils";
 import { POSCustomerSummary } from "~/types";
 
@@ -76,7 +76,7 @@ export function CustomerInfoPanel({
 
   const handleCreateCustomer = async () => {
     if (!activeStore || !customerInfo.name.trim()) {
-      toast.error("Please enter a customer name");
+      showValidationError([POS_MESSAGES.customer.nameRequired]);
       return;
     }
 
@@ -96,10 +96,9 @@ export function CustomerInfoPanel({
       });
       setShowCreateForm(false);
       // Keep the panel open so user can see the edit button and customer details
-      // onOpenChange(false); // Removed - don't close panel
-      toast.success(`Created new customer: ${result.customer.name}`);
+      // Toast already shown by createCustomer hook
     } else {
-      toast.error(result.error || "Failed to create customer");
+      // Error already shown by createCustomer hook
     }
   };
 
@@ -115,12 +114,12 @@ export function CustomerInfoPanel({
 
   const handleSaveEdit = async () => {
     if (!editingCustomer.customerId) {
-      toast.error("Cannot update customer without ID");
+      showValidationError([POS_MESSAGES.customer.noIdForUpdate]);
       return;
     }
 
     if (!editingCustomer.name.trim()) {
-      toast.error("Customer name is required");
+      showValidationError([POS_MESSAGES.customer.nameRequired]);
       return;
     }
 
@@ -138,9 +137,9 @@ export function CustomerInfoPanel({
         phone: editingCustomer.phone.trim(),
       });
       setIsEditing(false);
-      toast.success("Customer updated successfully");
+      // Toast already shown by updateCustomer hook
     } else {
-      toast.error(result.error || "Failed to update customer");
+      // Error already shown by updateCustomer hook
     }
   };
 

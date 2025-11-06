@@ -1,6 +1,13 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ShoppingCart, Trash2, Plus, Minus } from "lucide-react";
+import {
+  ShoppingCart,
+  Trash2,
+  Plus,
+  Minus,
+  ShoppingBasket,
+  ShoppingBag,
+} from "lucide-react";
 import { CartItem } from "./types";
 import { currencyFormatter } from "~/convex/utils";
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
@@ -21,20 +28,25 @@ export function CartItems({
   const { activeStore } = useGetActiveStore();
   const formatter = currencyFormatter(activeStore?.currency || "GHS");
 
+  // Compute total quantity once
+  const totalQuantity = cartItems.reduce((sum, item) => sum + item.quantity, 0);
+
   return (
-    <Card className="flex-1">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-sm font-medium">
-          <ShoppingCart className="w-4 h-4" />
-          Items ({cartItems.length})
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
+    <div className="flex-1">
+      {totalQuantity > 0 && (
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-sm font-medium">
+            <ShoppingBasket className="w-4 h-4" />
+            Items · {totalQuantity}
+          </CardTitle>
+        </CardHeader>
+      )}
+      <div className="p-4">
         {cartItems.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground">
-            <ShoppingCart className="w-12 h-12 mx-auto mb-4 opacity-50" />
+            <ShoppingBasket className="w-16 h-16 mx-auto mb-4 opacity-50" />
             <div className="space-y-1">
-              <p className="text-sm">No items in cart</p>
+              <p className="text-sm">No items</p>
               {/* <p className="text-sm">Scan or enter a barcode to add items</p> */}
             </div>
           </div>
@@ -68,12 +80,12 @@ export function CartItems({
                     </p>
                     {(item.size || item.length) && (
                       <p className="text-xs text-muted-foreground">
-                        {item.size && `Size: ${item.size}`}
+                        {item.length && `${item.length}"`}
                         {item.size && item.length && " • "}
-                        {item.length && `Length: ${item.length}"`}
+                        {item.size && `${item.size}`}
                       </p>
                     )}
-                    <p className="text-sm font-medium">
+                    <p className="text-sm font-medium pt-2">
                       {formatter.format(item.price)} each
                     </p>
                   </div>
@@ -120,7 +132,7 @@ export function CartItems({
                   <Button
                     variant="ghost"
                     size="default"
-                    className="h-9 w-9 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                    className="h-9 w-9 p-8 text-destructive hover:text-destructive hover:bg-destructive/10"
                     onClick={() => onRemoveItem(item.id)}
                   >
                     <Trash2 className="w-5 h-5" />
@@ -130,7 +142,7 @@ export function CartItems({
             ))}
           </div>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }

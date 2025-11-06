@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo } from "react";
-import { toast } from "sonner";
 import { useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { usePOSStore, posSelectors } from "../stores/posStore";
@@ -8,6 +7,16 @@ import { Id } from "../../convex/_generated/dataModel";
 import { usePOSCustomerUpdate } from "./usePOSCustomers";
 import { generateTransactionNumber } from "../lib/pos/transactionUtils";
 import { logger } from "../lib/logger";
+import { validateSession } from "../lib/pos/validation";
+import {
+  handlePOSOperation,
+  POS_MESSAGES,
+  showValidationError,
+  showNoActiveSessionError,
+  showInventoryError,
+} from "../lib/pos/toastService";
+import { usePOSActiveSession } from "./usePOSSessions";
+import { POSSession } from "~/types";
 
 /**
  * Unified hook for POS operations
@@ -48,6 +57,8 @@ export const usePOSOperations = () => {
 
   // Customer operations hooks
   const updateCustomerHook = usePOSCustomerUpdate();
+
+  const activeSession = usePOSActiveSession(store.storeId);
 
   // Auto-update session when customer data changes
   useEffect(() => {
@@ -181,17 +192,17 @@ export const usePOSOperations = () => {
     async (product: Product) => {
       // Validate product data
       if (!product.skuId) {
-        toast.error("Product missing SKU ID - cannot add to cart");
+        showValidationError([POS_MESSAGES.validation.missingSkuId]);
         return;
       }
 
       if (product.price <= 0) {
-        toast.error("Product has invalid price");
+        showValidationError([POS_MESSAGES.validation.invalidPrice]);
         return;
       }
 
       if (!product.productId) {
-        toast.error("Product missing product ID");
+        showValidationError([POS_MESSAGES.validation.missingProductId]);
         return;
       }
 
@@ -201,7 +212,7 @@ export const usePOSOperations = () => {
         try {
           sessionId = await autoCreateSession();
         } catch (error) {
-          toast.error("Failed to create session. Please try again.");
+          showValidationError([POS_MESSAGES.errors.sessionCreationFailed]);
           logger.error("Failed to create session", error as Error);
           return;
         }
@@ -230,7 +241,7 @@ export const usePOSOperations = () => {
 
       // Handle result
       if (!result.success) {
-        toast.error(result.message);
+        showValidationError([result.message]);
         logger.error("Failed to add product to cart", {
           message: result.message,
         });
@@ -279,7 +290,7 @@ export const usePOSOperations = () => {
 
         await addProduct(productData);
       } catch (error) {
-        toast.error((error as Error).message);
+        // Error already shown by addProduct
       }
     },
     [addProduct]
@@ -288,25 +299,25 @@ export const usePOSOperations = () => {
   const updateQuantity = useCallback(
     async (itemId: Id<"posSessionItem">, quantity: number) => {
       if (quantity < 0) {
-        toast.error("Quantity cannot be negative");
+        showValidationError([POS_MESSAGES.cart.quantityNegative]);
         return;
       }
 
       const sessionId = store.session.currentSessionId;
       if (!sessionId) {
-        toast.error("No active session. Please start a new transaction.");
+        showNoActiveSessionError("update quantities");
         return;
       }
 
       const item = store.cart.items.find((item) => item.id === itemId);
       if (!item || !item.skuId) {
-        toast.error("Item not found in cart");
+        showValidationError([POS_MESSAGES.cart.itemNotFound]);
         return;
       }
 
       // Ensure we have a productId
       if (!item.productId) {
-        toast.error("Product information missing - cannot update quantity");
+        showValidationError([POS_MESSAGES.validation.missingProductId]);
         return;
       }
 
@@ -327,7 +338,7 @@ export const usePOSOperations = () => {
 
       // Handle result
       if (!result.success) {
-        toast.error(result.message);
+        showValidationError([result.message]);
         logger.error("Failed to update quantity", { message: result.message });
         return;
       }
@@ -348,13 +359,13 @@ export const usePOSOperations = () => {
     async (itemId: Id<"posSessionItem">) => {
       const sessionId = store.session.currentSessionId;
       if (!sessionId) {
-        toast.error("No active session. Please start a new transaction.");
+        showNoActiveSessionError("remove items");
         return;
       }
 
       const item = store.cart.items.find((item) => item.id === itemId);
       if (!item) {
-        toast.error("Item not found in cart");
+        showValidationError([POS_MESSAGES.cart.itemNotFound]);
         return;
       }
 
@@ -366,7 +377,7 @@ export const usePOSOperations = () => {
 
       // Handle result
       if (!result.success) {
-        toast.error(result.message);
+        showValidationError([result.message]);
         logger.error("Failed to remove item", { message: result.message });
         return;
       }
@@ -380,7 +391,8 @@ export const usePOSOperations = () => {
       // Update session metadata (totals)
       await autoUpdateSession();
 
-      toast.success("Item removed from cart");
+      // Silent removal for better UX (can show toast if needed)
+      // toast.success(POS_MESSAGES.cart.itemRemoved);
     },
     [store, autoUpdateSession, removeItemMutation]
   );
@@ -414,11 +426,12 @@ export const usePOSOperations = () => {
 
           store.setCurrentSessionId(result.sessionId);
           store.setSessionExpiresAt(result.expiresAt);
-          toast.success("New session created");
+          // Success toast shown by underlying operation if needed
+          // toast.success(POS_MESSAGES.session.created);
 
           return result.sessionId;
         } catch (error) {
-          toast.error((error as Error).message);
+          // Error already shown by underlying operation
           throw error;
         } finally {
           store.setSessionCreating(false);
@@ -453,9 +466,9 @@ export const usePOSOperations = () => {
           store.setCurrentSessionId(null);
           store.setActiveSession(null);
 
-          toast.success("Session held successfully");
+          // Success toast shown by underlying operation
         } catch (error) {
-          toast.error((error as Error).message);
+          // Error already shown by underlying operation
         }
       },
       [holdSessionMutation, store]
@@ -468,24 +481,29 @@ export const usePOSOperations = () => {
             sessionId: sessionId as Id<"posSession">,
           });
 
-          // Update expiration time from server
-          store.setSessionExpiresAt(result.expiresAt);
+          if (!result.success) {
+            // Provide user-friendly error messages for inventory issues
+            if (result.message.includes("no longer available")) {
+              showInventoryError(result.message);
+            } else {
+              showValidationError([result.message]);
+            }
 
-          toast.success("Session resumed");
-        } catch (error) {
-          const errorMessage = (error as Error).message;
-
-          // Provide user-friendly error messages for inventory issues
-          if (errorMessage.includes("no longer available")) {
-            toast.error("Cannot resume session - some items are out of stock", {
-              description: errorMessage,
-              duration: 5000,
+            logger.error("Failed to resume session", {
+              sessionId,
+              message: result.message,
             });
-          } else {
-            toast.error(errorMessage);
+            return;
           }
 
-          logger.error("Failed to resume session", error as Error);
+          // Update expiration time from server
+          store.setSessionExpiresAt(result.data.expiresAt);
+
+          // Success toast shown by underlying operation
+        } catch (error) {
+          // Handle unexpected errors (network, etc.)
+          logger.error("Unexpected error resuming session", error as Error);
+          // Error already shown above or by underlying operation
         }
       },
       [resumeSessionMutation, store]
@@ -493,26 +511,37 @@ export const usePOSOperations = () => {
 
     startNewSession: useCallback(() => {
       store.startNewTransaction();
-      toast.success("Started new session");
+      // Silent operation - new session will be created on first item add
     }, [store]),
   };
 
   // Transaction Operations
   const transactionOperations = {
     processPayment: useCallback(
-      async (paymentMethod: string) => {
+      async (paymentMethod: string, session: POSSession) => {
         try {
           // Validate cart first
           const cartValidation = validateCart();
           if (!cartValidation.isValid) {
-            toast.error(cartValidation.errors.join(", "));
+            showValidationError(cartValidation.errors);
             return {
               success: false,
               error: cartValidation.errors.join(", "),
             };
           }
 
-          store.setTransactionCompleting(true);
+          const sessionValidation = validateSession(
+            session,
+            store.session.expiresAt
+          );
+
+          if (!sessionValidation.isValid) {
+            showValidationError(sessionValidation.errors);
+            return {
+              success: false,
+              error: sessionValidation.errors.join(", "),
+            };
+          }
 
           const sessionId = store.session.currentSessionId;
 
@@ -525,7 +554,7 @@ export const usePOSOperations = () => {
             const finalTax = store.cart.tax;
             const finalTotal = store.cart.total;
 
-            await completeSessionMutation({
+            const completeResult = await completeSessionMutation({
               sessionId: sessionId as Id<"posSession">,
               paymentMethod,
               amountPaid: finalTotal,
@@ -535,6 +564,18 @@ export const usePOSOperations = () => {
               tax: finalTax,
               total: finalTotal,
             });
+
+            if (!completeResult.success) {
+              logger.error("Failed to complete session", {
+                sessionId,
+                message: completeResult.message,
+              });
+              showValidationError([completeResult.message]);
+              return {
+                success: false,
+                error: completeResult.message,
+              };
+            }
 
             // Generate POS transaction number using extracted utility
             const transactionNumber = generateTransactionNumber();
@@ -638,7 +679,9 @@ export const usePOSOperations = () => {
                 "Transaction failed",
                 new Error(result.error || "Unknown error")
               );
-              toast.error(result.error || "Transaction failed");
+              showValidationError([
+                result.error || POS_MESSAGES.transaction.failed,
+              ]);
               return {
                 success: false,
                 error: result.error,
@@ -646,7 +689,7 @@ export const usePOSOperations = () => {
             }
           }
         } catch (error) {
-          toast.error((error as Error).message);
+          // Error already handled above or by underlying operations
           return {
             success: false,
             error: (error as Error).message,
@@ -673,7 +716,7 @@ export const usePOSOperations = () => {
       logger.warn(
         "Print receipt requested - this should be handled by the UI component using usePrint hook"
       );
-      toast.info("Please use the Print Receipt button in the UI");
+      // Info message for dev purposes - no toast needed
     }, []),
   };
 
@@ -684,22 +727,20 @@ export const usePOSOperations = () => {
         try {
           if (!query.trim()) {
             store.setCustomerSearchResults([]);
+            store.setCustomerSearching(false);
+            store.setCustomerSearchQuery("");
             return;
           }
 
           store.setCustomerSearching(true);
           store.setCustomerSearchQuery(query);
 
-          // For now, use a simple mock search since the API is still being set up
-          // TODO: Replace with actual Convex API call
-          setTimeout(() => {
-            store.setCustomerSearchResults([]);
-            store.setCustomerSearching(false);
-          }, 500);
+          // Note: Results are handled by the real-time Convex query in useCustomerOperations hook
+          // This function is kept for backward compatibility but delegates to the query hook
         } catch (error) {
           logger.error("Failed to search customers", error as Error);
           store.setCustomerSearchResults([]);
-          toast.error("Failed to search customers");
+          showValidationError([POS_MESSAGES.customer.searchFailed]);
           store.setCustomerSearching(false);
         }
       },
@@ -750,14 +791,15 @@ export const usePOSOperations = () => {
           store.setCustomer(newCustomer);
           store.setShowCustomerPanel(false);
 
-          toast.success(`Created customer: ${newCustomer.name}`);
+          // Success toast shown by underlying operation if needed
+          // toast.success(POS_MESSAGES.customer.created(newCustomer.name));
 
           return {
             success: true,
             customer: newCustomer,
           };
         } catch (error) {
-          toast.error((error as Error).message);
+          // Error already shown by underlying operation
           return {
             success: false,
             error: (error as Error).message,
@@ -788,15 +830,15 @@ export const usePOSOperations = () => {
           if (result.success) {
             // Update the current customer in the store
             store.setCustomer(customer);
-            toast.success(`Customer updated: ${customer.name}`);
+            // Success toast shown by underlying operation
             return { success: true };
           } else {
-            toast.error(result.error || "Failed to update customer");
+            // Error already shown by underlying operation
             return { success: false, error: result.error };
           }
         } catch (error) {
           const errorMessage = (error as Error).message;
-          toast.error(errorMessage);
+          // Error already shown by underlying operation
           return { success: false, error: errorMessage };
         }
       },
@@ -892,7 +934,7 @@ export const usePOSOperations = () => {
   // Store Operations
   const storeOperations = {
     setStoreId: useCallback(
-      (storeId: Id<"store"> | null) => {
+      (storeId?: Id<"store">) => {
         store.setStoreId(storeId);
       },
       [store]

@@ -47,14 +47,16 @@ export const usePOSSessionCreate = () => {
       registerNumber?: string
     ) => {
       try {
-        const sessionId = await createSession({
+        const result = await createSession({
           storeId,
           cashierId,
           registerNumber,
         });
 
-        logger.debug("Session created successfully", { sessionId });
-        return sessionId;
+        logger.debug("Session created successfully", {
+          sessionId: result.sessionId,
+        });
+        return result.sessionId;
       } catch (error) {
         logger.error("Failed to create session", error as Error);
         throw error;

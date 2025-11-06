@@ -1,6 +1,25 @@
 import { v } from "convex/values";
 import { mutation, query } from "../_generated/server";
 import { Id } from "../_generated/dataModel";
+import {
+  acquireInventoryHold,
+  releaseInventoryHold,
+  adjustInventoryHold,
+  validateInventoryAvailability,
+} from "./helpers/inventoryHolds";
+import {
+  validateSessionActive,
+  validateSessionModifiable,
+  validateItemBelongsToSession,
+} from "./helpers/sessionValidation";
+import {
+  itemResultValidator,
+  operationSuccessValidator,
+  error,
+  itemSuccess,
+  operationSuccess,
+} from "./helpers/resultTypes";
+import { calculateSessionExpiration } from "./helpers/sessionExpiration";
 
 // Get all items for a session
 export const getSessionItems = query({
@@ -50,38 +69,20 @@ export const addOrUpdateItem = mutation({
     length: v.optional(v.number()),
     areProcessingFeesAbsorbed: v.optional(v.boolean()),
   },
-  returns: v.union(
-    v.object({
-      success: v.literal(true),
-      data: v.object({
-        itemId: v.id("posSessionItem"),
-        expiresAt: v.number(),
-      }),
-    }),
-    v.object({
-      success: v.literal(false),
-      message: v.string(),
-    })
-  ),
+  returns: itemResultValidator,
   handler: async (ctx, args) => {
     try {
       const now = Date.now();
 
-      // Validate session exists and is active
-      const session = await ctx.db.get(args.sessionId);
-      if (!session) {
-        return {
-          success: false as const,
-          message: "Your session has expired. Please start a new transaction.",
-        };
+      // Validate session is active using helper
+      const validation = await validateSessionActive(ctx.db, args.sessionId);
+      if (!validation.success) {
+        return error(validation.message!);
       }
 
-      if (session.status !== "active") {
-        return {
-          success: false as const,
-          message:
-            "Can only add items to active sessions. Please resume or create a new session.",
-        };
+      const session = await ctx.db.get(args.sessionId);
+      if (!session) {
+        return error("Session not found");
       }
 
       // Check if item already exists in session
@@ -97,59 +98,16 @@ export const addOrUpdateItem = mutation({
       let itemId: Id<"posSessionItem">;
 
       if (existingItem) {
-        // Item exists - update quantity and adjust inventory holds
-        const oldQuantity = existingItem.quantity;
-        const quantityChange = args.quantity - oldQuantity;
+        // Item exists - update quantity and adjust inventory holds using helper
+        const adjustResult = await adjustInventoryHold(
+          ctx.db,
+          args.productSkuId,
+          existingItem.quantity,
+          args.quantity
+        );
 
-        if (quantityChange !== 0) {
-          // Get SKU to adjust inventory holds
-          const sku = await ctx.db.get(args.productSkuId);
-          if (!sku) {
-            return {
-              success: false as const,
-              message: "Product information is missing. Please scan again.",
-            };
-          }
-
-          // Type guard
-          if (
-            !("quantityAvailable" in sku) ||
-            !("sku" in sku) ||
-            typeof sku.quantityAvailable !== "number"
-          ) {
-            return {
-              success: false as const,
-              message: "Invalid product data. Please contact support.",
-            };
-          }
-
-          if (quantityChange > 0) {
-            if (sku.quantityAvailable === 0) {
-              return {
-                success: false as const,
-                message: "No more units available for this product",
-              };
-            }
-
-            // Need to hold more inventory
-            if (sku.quantityAvailable < quantityChange) {
-              return {
-                success: false as const,
-                message: `Only ${sku.quantityAvailable} unit${sku.quantityAvailable !== 1 ? "s" : ""} available for ${args.productName}`,
-              };
-            }
-
-            // Decrease available quantity (place hold)
-            await ctx.db.patch(args.productSkuId, {
-              quantityAvailable: sku.quantityAvailable - quantityChange,
-            });
-          } else {
-            // Release some inventory (quantityChange is negative)
-            await ctx.db.patch(args.productSkuId, {
-              quantityAvailable:
-                sku.quantityAvailable + Math.abs(quantityChange),
-            });
-          }
+        if (!adjustResult.success) {
+          return error(adjustResult.message || "Failed to adjust inventory");
         }
 
         // Update the item
@@ -161,46 +119,18 @@ export const addOrUpdateItem = mutation({
 
         itemId = existingItem._id;
       } else {
-        // New item - validate inventory and place hold
-        const sku = await ctx.db.get(args.productSkuId);
-        if (!sku) {
-          return {
-            success: false as const,
-            message: "Product information is missing. Please scan again.",
-          };
-        }
+        // New item - acquire inventory hold using helper
+        const holdResult = await acquireInventoryHold(
+          ctx.db,
+          args.productSkuId,
+          args.quantity
+        );
 
-        // Type guard
-        if (
-          !("quantityAvailable" in sku) ||
-          !("sku" in sku) ||
-          typeof sku.quantityAvailable !== "number"
-        ) {
-          return {
-            success: false as const,
-            message: "Invalid product data. Please contact support.",
-          };
+        if (!holdResult.success) {
+          return error(
+            holdResult.message || "Failed to acquire inventory hold"
+          );
         }
-
-        if (sku.quantityAvailable === 0) {
-          return {
-            success: false as const,
-            message: "No more units available for this product",
-          };
-        }
-
-        // Check if enough inventory is available
-        if (sku.quantityAvailable < args.quantity) {
-          return {
-            success: false as const,
-            message: `Only ${sku.quantityAvailable} unit${sku.quantityAvailable !== 1 ? "s" : ""} available for ${args.productName}`,
-          };
-        }
-
-        // Place hold by decreasing available quantity
-        await ctx.db.patch(args.productSkuId, {
-          quantityAvailable: sku.quantityAvailable - args.quantity,
-        });
 
         // Create new item
         itemId = await ctx.db.insert("posSessionItem", {
@@ -222,24 +152,21 @@ export const addOrUpdateItem = mutation({
       }
 
       // Extend session expiration time
-      const sessionExpiry = 20 * 60 * 1000; // 20 minutes
-      const expiresAt = now + sessionExpiry;
+      const expiresAt = calculateSessionExpiration(now);
 
       await ctx.db.patch(args.sessionId, {
         updatedAt: now,
         expiresAt,
       });
 
-      return { success: true as const, data: { itemId, expiresAt } };
-    } catch (error) {
-      console.error("Error in addOrUpdateItem:", error);
-      return {
-        success: false as const,
-        message:
-          error instanceof Error
-            ? error.message
-            : "Failed to add item. Please try again.",
-      };
+      return itemSuccess(itemId, expiresAt);
+    } catch (err) {
+      console.error("Error in addOrUpdateItem:", err);
+      return error(
+        err instanceof Error
+          ? err.message
+          : "Failed to add item. Please try again."
+      );
     }
   },
 });
@@ -250,72 +177,55 @@ export const removeItem = mutation({
     sessionId: v.id("posSession"),
     itemId: v.id("posSessionItem"),
   },
-  returns: v.union(
-    v.object({
-      success: v.literal(true),
-      data: v.object({
-        expiresAt: v.number(),
-      }),
-    }),
-    v.object({
-      success: v.literal(false),
-      message: v.string(),
-    })
-  ),
+  returns: operationSuccessValidator,
   handler: async (ctx, args) => {
     try {
       const now = Date.now();
 
+      // Validate session can be modified (checks expiration)
+      const sessionValidation = await validateSessionModifiable(
+        ctx.db,
+        args.sessionId
+      );
+      if (!sessionValidation.success) {
+        return error(sessionValidation.message!);
+      }
+
+      // Validate item belongs to session using helper
+      const validation = await validateItemBelongsToSession(
+        ctx.db,
+        args.itemId,
+        args.sessionId
+      );
+      if (!validation.success) {
+        return error(validation.message!);
+      }
+
       // Get the item to release its inventory hold
       const item = await ctx.db.get(args.itemId);
       if (!item) {
-        return {
-          success: false as const,
-          message: "Item not found in cart",
-        };
+        return error("Item not found in cart");
       }
 
-      // Verify item belongs to this session
-      if (item.sessionId !== args.sessionId) {
-        return {
-          success: false as const,
-          message: "Item does not belong to this session",
-        };
-      }
-
-      // Release inventory hold
-      const sku = await ctx.db.get(item.productSkuId);
-      if (
-        sku &&
-        "quantityAvailable" in sku &&
-        typeof sku.quantityAvailable === "number"
-      ) {
-        await ctx.db.patch(item.productSkuId, {
-          quantityAvailable: sku.quantityAvailable + item.quantity,
-        });
-      }
+      // Release inventory hold using helper
+      await releaseInventoryHold(ctx.db, item.productSkuId, item.quantity);
 
       // Delete the item
       await ctx.db.delete(args.itemId);
 
       // Extend session expiration time
-      const sessionExpiry = 20 * 60 * 1000; // 20 minutes
-      const expiresAt = now + sessionExpiry;
+      const expiresAt = calculateSessionExpiration(now);
 
       await ctx.db.patch(args.sessionId, {
         updatedAt: now,
         expiresAt,
       });
 
-      return { success: true as const, data: { expiresAt } };
-    } catch (error) {
-      return {
-        success: false as const,
-        message:
-          error instanceof Error
-            ? error.message
-            : "Failed to remove item from cart",
-      };
+      return operationSuccess(expiresAt);
+    } catch (err) {
+      return error(
+        err instanceof Error ? err.message : "Failed to remove item from cart"
+      );
     }
   },
 });
