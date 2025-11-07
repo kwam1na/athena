@@ -87,11 +87,14 @@ export function CartItems({
                       {capitalizeWords(item.name)}
                     </h4>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1">
                       {item.sku && (
                         <p className="text-xs text-muted-foreground">
                           {item.sku}
                         </p>
+                      )}
+                      {item.sku && item.barcode && (
+                        <p className="text-xs text-muted-foreground">•</p>
                       )}
                       {item.barcode && (
                         <p className="text-xs text-muted-foreground">

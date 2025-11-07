@@ -58,7 +58,7 @@ export const searchProducts = query({
     // Transform to POS-friendly format
     const results = await Promise.all(
       matchingSkus
-        .filter((sku) => sku.quantityAvailable > 0) // Only show available items
+        // .filter((sku) => sku.quantityAvailable > 0) // Only show available items
         .slice(0, 20) // Limit results for performance
         .map(async (sku) => {
           const product = productMap.get(sku.productId);
@@ -136,7 +136,7 @@ export const lookupByBarcode = query({
         .first();
     }
 
-    if (!sku || sku.quantityAvailable <= 0) {
+    if (!sku) {
       return null;
     }
 

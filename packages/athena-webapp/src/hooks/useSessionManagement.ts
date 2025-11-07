@@ -6,6 +6,7 @@ import { usePOSStore } from "../stores/posStore";
 import { Id } from "../../convex/_generated/dataModel";
 import { logger } from "../lib/logger";
 import { usePOSActiveSession } from "./usePOSSessions";
+import { useGetTerminal } from "./useGetTerminal";
 
 /**
  * Hook for POS Session Management
@@ -16,7 +17,7 @@ import { usePOSActiveSession } from "./usePOSSessions";
 export const useSessionManagement = () => {
   const store = usePOSStore();
 
-  const activeSession = usePOSActiveSession(store.storeId);
+  const activeSession = usePOSActiveSession(store.storeId, store.terminalId);
 
   // Convex mutations
   const createSessionMutation = useMutation(
@@ -46,7 +47,13 @@ export const useSessionManagement = () => {
       logger.info("[POS] Creating new session", {
         storeId,
         registerNumber: store.ui.registerNumber,
+        terminalId: store.terminalId,
       });
+
+      if (!store.terminalId) {
+        toast.error("Terminal details missing");
+        throw new Error("Terminal details missing");
+      }
 
       try {
         store.setSessionCreating(true);
@@ -58,6 +65,7 @@ export const useSessionManagement = () => {
         const result = await createSessionMutation({
           storeId,
           registerNumber: store.ui.registerNumber,
+          terminalId: store.terminalId,
         });
 
         store.setCurrentSessionId(result.sessionId);

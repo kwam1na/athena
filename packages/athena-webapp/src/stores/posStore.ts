@@ -67,6 +67,7 @@ interface POSState {
   transaction: TransactionState;
   ui: UIState;
   storeId?: Id<"store">;
+  terminalId?: Id<"posTerminal">;
 
   // Cart Actions
   addToCart: (item: CartItem) => void;
@@ -122,6 +123,7 @@ interface POSState {
 
   // Global Actions
   setStoreId: (storeId?: Id<"store">) => void;
+  setTerminalId: (terminalId?: Id<"posTerminal">) => void;
   resetAll: () => void;
   startNewTransaction: () => void;
 }
@@ -296,6 +298,11 @@ export const usePOSStore = create<POSState>()(
         setSessionExpiresAt: (expiresAt) =>
           set((state) => {
             state.session.expiresAt = expiresAt;
+          }),
+
+        setTerminalId: (terminalId) =>
+          set((state) => {
+            state.terminalId = terminalId;
           }),
 
         loadSessionData: (session) =>

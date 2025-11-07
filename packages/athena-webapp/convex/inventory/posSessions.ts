@@ -23,6 +23,7 @@ import { calculateSessionExpiration } from "./helpers/sessionExpiration";
 export const getStoreSessions = query({
   args: {
     storeId: v.id("store"),
+    terminalId: v.optional(v.id("posTerminal")),
     status: v.optional(v.string()), // "active", "held", "completed", "void"
     limit: v.optional(v.number()),
   },
@@ -41,7 +42,13 @@ export const getStoreSessions = query({
         );
     }
 
-    const sessions = await sessionsQuery.order("desc").take(limit);
+    let sessions = await sessionsQuery.order("desc").take(limit);
+
+    if (args.terminalId) {
+      sessions = sessions.filter(
+        (session) => session.terminalId === args.terminalId
+      );
+    }
 
     // Enrich with customer info and cart items if available
     const enrichedSessions = await Promise.all(
@@ -100,6 +107,7 @@ export const getSessionById = query({
 export const createSession = mutation({
   args: {
     storeId: v.id("store"),
+    terminalId: v.id("posTerminal"),
     cashierId: v.optional(v.id("athenaUser")),
     registerNumber: v.optional(v.string()),
   },
@@ -125,9 +133,9 @@ export const createSession = mutation({
       (session) => !session.expiresAt || session.expiresAt >= now
     );
 
-    // Filter by register number and close any existing active session
+    // Filter by terminal id and close any existing active session
     const existingSession = nonExpiredActiveSessions.find(
-      (s) => s.registerNumber === registerNumber
+      (s) => s.terminalId === args.terminalId
     );
 
     if (existingSession) {
@@ -163,8 +171,6 @@ export const createSession = mutation({
 
     const sessionNumber = `SES-${String(sessionCount.length + 1).padStart(3, "0")}`;
 
-    console.log("creating new session");
-
     // Calculate session expiration time
     const expiresAt = calculateSessionExpiration(now);
 
@@ -172,6 +178,7 @@ export const createSession = mutation({
       sessionNumber,
       storeId: args.storeId,
       cashierId: args.cashierId,
+      terminalId: args.terminalId,
       registerNumber,
       status: "active",
       createdAt: now,
@@ -547,6 +554,7 @@ export const releaseSessionInventoryHoldsAndDeleteItems = mutation({
 export const getActiveSession = query({
   args: {
     storeId: v.id("store"),
+    terminalId: v.id("posTerminal"),
     cashierId: v.optional(v.id("athenaUser")),
     registerNumber: v.optional(v.string()),
   },
@@ -577,7 +585,7 @@ export const getActiveSession = query({
 
     if (args.registerNumber) {
       filteredSessions = filteredSessions.filter(
-        (s) => s.registerNumber === args.registerNumber
+        (s) => s.terminalId === args.terminalId
       );
     }
 

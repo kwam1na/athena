@@ -30,8 +30,13 @@ import { logger } from "@/lib/logger";
 import { Button } from "../ui/button";
 import { toast } from "sonner";
 import { Id } from "~/convex/_generated/dataModel";
-import { XIcon } from "lucide-react";
+import { ScanBarcode, Terminal, XIcon } from "lucide-react";
 import { motion } from "framer-motion";
+import { useGetTerminal } from "~/src/hooks/useGetTerminal";
+import { EmptyState } from "../states/empty/empty-state";
+import { Link } from "@tanstack/react-router";
+import { getOrigin } from "~/src/lib/navigationUtils";
+import { CashierView } from "./CashierView";
 
 export function POSRegisterView() {
   const { activeStore } = useGetActiveStore();
@@ -43,8 +48,7 @@ export function POSRegisterView() {
   const { createSession, releaseSessionInventoryHoldsAndDeleteItems } =
     useSessionManagement();
 
-  // Compute total quantity once (total items across all SKUs)
-  const totalCartQuantity = posSelectors.getCartItemCount(store);
+  const terminal = useGetTerminal();
 
   // Track if we've already attempted auto-session initialization
   const autoSessionInitialized = useRef(false);
@@ -55,6 +59,12 @@ export function POSRegisterView() {
       store.setStoreId(activeStore._id);
     }
   }, [activeStore, store]);
+
+  useEffect(() => {
+    if (terminal?._id && store.terminalId !== terminal._id) {
+      store.setTerminalId(terminal._id);
+    }
+  }, [terminal, store]);
 
   // Handle session loading from SessionManager
   const handleSessionLoaded = (sessionData: any) => {
@@ -72,13 +82,14 @@ export function POSRegisterView() {
   // Query for active session for this store/register
   const activeSessionQuery = usePOSActiveSession(
     activeStore?._id,
+    store.terminalId,
     undefined, // cashierId - could be passed if available from auth context
     store.ui.registerNumber
   );
 
   // Auto-check for active session or create one on mount
   useEffect(() => {
-    // Skip if no store is set yet
+    // Skip if no store is set yet or terminal is not registered
     if (!activeStore?._id || !store.storeId) {
       return;
     }
@@ -456,6 +467,50 @@ export function POSRegisterView() {
     }
   };
 
+  if (terminal === null) {
+    return (
+      <View
+        header={
+          <ComposedPageHeader
+            leadingContent={
+              <div className="flex items-center gap-3">
+                <div>
+                  <p className="text-lg font-semibold text-gray-900">POS</p>
+                </div>
+              </div>
+            }
+          />
+        }
+      >
+        <FadeIn className="container mx-auto h-full w-full p-6">
+          <div className="flex items-center justify-center min-h-[60vh] w-full">
+            <EmptyState
+              title="Terminal not registered"
+              icon={<ScanBarcode className="w-16 h-16 text-muted-foreground" />}
+              cta={
+                <Button variant={"outline"}>
+                  <Link
+                    params={(params) => ({
+                      ...params,
+                      orgUrlSlug: params.orgUrlSlug!,
+                      storeUrlSlug: params.storeUrlSlug!,
+                    })}
+                    search={{
+                      o: getOrigin(),
+                    }}
+                    to="/$orgUrlSlug/store/$storeUrlSlug/pos/settings"
+                  >
+                    Register Terminal
+                  </Link>
+                </Button>
+              }
+            />
+          </div>
+        </FadeIn>
+      </View>
+    );
+  }
+
   if (!activeStore) {
     return (
       <View
@@ -472,9 +527,7 @@ export function POSRegisterView() {
         }
       >
         <FadeIn className="container mx-auto h-full w-full p-6">
-          <div className="flex items-center justify-center h-64">
-            {/* <p className="text-gray-500">No active store found</p> */}
-          </div>
+          <div className="flex items-center justify-center h-64" />
         </FadeIn>
       </View>
     );
@@ -507,33 +560,36 @@ export function POSRegisterView() {
                 </div>
 
                 {/* Session Management Section */}
-                <div className="flex items-center gap-3 px-3 py-2 bg-gray-50 rounded-lg border">
-                  <SessionManager
-                    key={`session-manager-${store.session.currentSessionId || "no-session"}-${store.session.activeSession?.sessionNumber || "empty"}`}
-                    storeId={activeStore._id}
-                    registerNumber={store.ui.registerNumber}
-                    cartItems={store.cart.items}
-                    customerInfo={
-                      store.customer.current || {
-                        customerId: undefined,
-                        name: "",
-                        email: "",
-                        phone: "",
+                {terminal && (
+                  <div className="flex items-center gap-3 px-3 py-2 bg-gray-50 rounded-lg border">
+                    <SessionManager
+                      key={`session-manager-${store.session.currentSessionId || "no-session"}-${store.session.activeSession?.sessionNumber || "empty"}`}
+                      storeId={activeStore._id}
+                      terminalId={terminal._id}
+                      registerNumber={store.ui.registerNumber}
+                      cartItems={store.cart.items}
+                      customerInfo={
+                        store.customer.current || {
+                          customerId: undefined,
+                          name: "",
+                          email: "",
+                          phone: "",
+                        }
                       }
-                    }
-                    subtotal={store.cart.subtotal}
-                    tax={store.cart.tax}
-                    total={store.cart.total}
-                    onSessionLoaded={handleSessionLoaded}
-                    onNewSession={handleNewSession}
-                  />
-                </div>
+                      subtotal={store.cart.subtotal}
+                      tax={store.cart.tax}
+                      total={store.cart.total}
+                      onSessionLoaded={handleSessionLoaded}
+                      onNewSession={handleNewSession}
+                    />
+                  </div>
+                )}
 
                 {/* Register Info Section */}
                 <div className="flex items-center gap-3 px-3 py-2 bg-gray-50 rounded-lg border">
                   <RegisterActions
                     customerName={store.customer.current?.name}
-                    registerNumber={store.ui.registerNumber}
+                    registerNumber={terminal?.displayName || "No terminal"}
                   />
                 </div>
               </div>
@@ -616,7 +672,7 @@ export function POSRegisterView() {
             <div
               className={store.transaction.isCompleted ? "lg:col-span-3" : ""}
             >
-              <div className="bg-white rounded-lg p-6">
+              <div className="bg-white rounded-lg p-6 space-y-6">
                 <div className="mb-4">
                   <h3 className="text-lg font-semibold text-gray-900">
                     {store.transaction.isCompleted && "Transaction Complete"}
@@ -651,6 +707,8 @@ export function POSRegisterView() {
                     }
                   }}
                 />
+
+                <CashierView />
               </div>
             </div>
           </div>

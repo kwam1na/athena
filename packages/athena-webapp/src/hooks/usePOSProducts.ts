@@ -57,9 +57,7 @@ export function usePOSProductIdSearch(
 
   // Transform product data to POS Product format
   // Filter to only available SKUs and transform each SKU to Product format
-  const availableSkus = productData.skus.filter(
-    (sku) => sku.quantityAvailable > 0
-  );
+  const availableSkus = productData.skus.filter((sku) => sku.isVisible);
 
   if (availableSkus.length === 0) {
     return [];

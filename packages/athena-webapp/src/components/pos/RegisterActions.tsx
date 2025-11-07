@@ -1,5 +1,5 @@
 import { Badge } from "@/components/ui/badge";
-import { User } from "lucide-react";
+import { Store, Terminal, User } from "lucide-react";
 
 interface RegisterActionsProps {
   customerName?: string;
@@ -12,10 +12,10 @@ export function RegisterActions({
 }: RegisterActionsProps) {
   return (
     <div className="flex items-center gap-2">
-      <Badge variant="secondary" className="flex items-center gap-1">
-        <User className="w-3 h-3" />
-        Register {registerNumber}
-      </Badge>
+      <div className="flex items-center gap-2">
+        <Store className="w-3.5 h-3.5" />
+        <p className="text-sm font-semibold">{registerNumber}</p>
+      </div>
       {customerName && (
         <Badge
           variant="default"

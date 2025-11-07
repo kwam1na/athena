@@ -160,7 +160,7 @@ export function ProductEntry({
                         key={product.id}
                         className={`group flex items-center gap-4 p-4 border rounded-lg transition-all duration-200 cursor-pointer bg-white/80 backdrop-blur-sm ${
                           !product.inStock
-                            ? "opacity-50 border-gray-200 hover:border-gray-300"
+                            ? "opacity-95 border-gray-200 hover:border-gray-300"
                             : "border-gray-200 hover:border-blue-200 hover:shadow-md hover:shadow-blue-100/50"
                         }`}
                         onClick={() => {
@@ -195,15 +195,6 @@ export function ProductEntry({
                               >
                                 {formatter.format(product.price)}
                               </Badge>
-
-                              {!product.inStock && (
-                                <Badge
-                                  variant="destructive"
-                                  className="text-xs"
-                                >
-                                  Out of Stock
-                                </Badge>
-                              )}
                             </div>
                           </div>
 
@@ -240,11 +231,9 @@ export function ProductEntry({
                             </div>
                           )}
 
-                          {product.quantityAvailable && (
-                            <p className="text-xs text-gray-500 mt-4">
-                              <b>{product.quantityAvailable}</b> available
-                            </p>
-                          )}
+                          <p className="text-xs text-gray-500 mt-4">
+                            <b>{product.quantityAvailable}</b> available
+                          </p>
                         </div>
                       </div>
                     ))}

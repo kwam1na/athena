@@ -20,6 +20,7 @@ import { capitalizeWords } from "~/src/lib/utils";
 import { Id } from "~/convex/_generated/dataModel";
 import { POSSession } from "~/types";
 import { usePOSActiveSession } from "~/src/hooks/usePOSSessions";
+import { useGetTerminal } from "~/src/hooks/useGetTerminal";
 
 interface OrderSummaryProps {
   cartItems: CartItem[];
@@ -53,11 +54,15 @@ export function OrderSummary({
   onTransactionStateChange,
 }: OrderSummaryProps) {
   const { activeStore } = useGetActiveStore();
+  const terminal = useGetTerminal();
   const formatter = currencyFormatter(activeStore?.currency || "GHS");
   const { transaction, state } = usePOSOperations();
   const { printReceipt } = usePrint();
 
-  const activeSession = usePOSActiveSession(activeStore?._id as Id<"store">);
+  const activeSession = usePOSActiveSession(
+    activeStore?._id as Id<"store">,
+    terminal?._id as Id<"posTerminal">
+  );
   // Use store state for most current data, fall back to props for compatibility
   const currentCartItems =
     state.cartItems.length > 0 ? state.cartItems : cartItems;

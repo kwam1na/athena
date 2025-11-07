@@ -25,6 +25,9 @@ import {
 import { useGetActiveOrganization } from "@/hooks/useGetOrganizations";
 import { getOrigin } from "~/src/lib/navigationUtils";
 import { useGetCurrencyFormatter } from "~/src/hooks/useGetCurrencyFormatter";
+import { useGetTerminal } from "~/src/hooks/useGetTerminal";
+import { Badge } from "../ui/badge";
+import { cn } from "~/src/lib/utils";
 
 const Navigation = () => {
   return (
@@ -39,7 +42,8 @@ const Navigation = () => {
 export default function PointOfSaleView() {
   const { activeStore } = useGetActiveStore();
   const { activeOrganization } = useGetActiveOrganization();
-  const { orgUrlSlug, storeUrlSlug } = useParams({ strict: false });
+
+  const terminal = useGetTerminal();
 
   const analytics = useQuery(
     api.storeFront.analytics.getAll,
@@ -59,13 +63,16 @@ export default function PointOfSaleView() {
 
   const posFeatures = [
     {
-      title: "Register",
+      title: "POS",
       description:
-        "Complete POS interface with barcode scanning and customer management",
+        terminal !== null
+          ? "Complete POS interface with barcode scanning and customer management"
+          : "Register this terminal in settings to access the POS interface",
       icon: ScanBarcode,
       href: "/$orgUrlSlug/store/$storeUrlSlug/pos/register" as const,
       color: "bg-blue-500",
       available: true,
+      enabled: terminal !== null,
     },
     {
       title: "Product Lookup",
@@ -179,9 +186,9 @@ export default function PointOfSaleView() {
 
               if (!feature.available || !feature.href) {
                 return (
-                  <Card
+                  <div
                     key={feature.title}
-                    className="opacity-50 cursor-not-allowed"
+                    className="border rounded-lg opacity-50 cursor-not-allowed"
                   >
                     <CardHeader className="pb-3">
                       <div className="flex items-center space-x-3">
@@ -201,17 +208,21 @@ export default function PointOfSaleView() {
                         {feature.description}
                       </CardDescription>
                     </CardContent>
-                  </Card>
+                  </div>
                 );
               }
 
               return (
-                <Card
+                <div
                   key={feature.title}
-                  className="hover:shadow-sm transition-shadow cursor-pointer"
+                  className={cn(
+                    "border rounded-lg cursor-pointer",
+                    feature.enabled === false && "cursor-not-allowed"
+                  )}
                 >
                   <Link
                     to={feature.href}
+                    disabled={feature.enabled === false}
                     params={{
                       orgUrlSlug: activeOrganization.slug,
                       storeUrlSlug: activeStore.slug,
@@ -229,6 +240,9 @@ export default function PointOfSaleView() {
                         <CardTitle className="text-lg">
                           {feature.title}
                         </CardTitle>
+                        {feature.enabled === false && (
+                          <Badge variant="outline">Disabled</Badge>
+                        )}
                       </div>
                     </CardHeader>
                     <CardContent>
@@ -237,7 +251,7 @@ export default function PointOfSaleView() {
                       </CardDescription>
                     </CardContent>
                   </Link>
-                </Card>
+                </div>
               );
             })}
           </div>

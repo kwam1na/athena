@@ -19,6 +19,7 @@ import { motion } from "framer-motion";
 
 interface SessionManagerProps {
   storeId: Id<"store">;
+  terminalId: Id<"posTerminal">;
   cashierId?: Id<"athenaUser">;
   registerNumber?: string;
   cartItems: CartItem[];
@@ -31,19 +32,29 @@ interface SessionManagerProps {
 }
 
 export function SessionManager(props: SessionManagerProps) {
-  const { storeId, cashierId, registerNumber, onSessionLoaded, onNewSession } =
-    props;
+  const {
+    storeId,
+    terminalId,
+    cashierId,
+    registerNumber,
+    onSessionLoaded,
+    onNewSession,
+  } = props;
 
   // Use focused session manager operations hook
   const {
     activeSession,
     heldSessions,
-    hasActiveSession,
     handleHoldCurrentSession,
     handleResumeSession,
     handleVoidSession,
     handleNewSession,
-  } = useSessionManagerOperations(storeId, cashierId, registerNumber);
+  } = useSessionManagerOperations(
+    storeId,
+    terminalId,
+    cashierId,
+    registerNumber
+  );
 
   const store = usePOSStore();
 

@@ -116,9 +116,7 @@ export const addOrUpdateItem = mutation({
         await ctx.db.patch(existingItem._id, {
           quantity: args.quantity,
           price: args.price,
-          ...(args.barcode !== undefined
-            ? { barcode: args.barcode }
-            : {}),
+          barcode: args.barcode,
           updatedAt: now,
         });
 
@@ -144,7 +142,7 @@ export const addOrUpdateItem = mutation({
           productId: args.productId,
           productSkuId: args.productSkuId,
           productSku: args.productSku,
-          ...(args.barcode !== undefined ? { barcode: args.barcode } : {}),
+          barcode: args.barcode,
           productName: args.productName,
           price: args.price,
           quantity: args.quantity,

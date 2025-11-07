@@ -15,6 +15,7 @@ import { showNoActiveSessionError } from "../lib/pos/toastService";
  */
 export const useSessionManagerOperations = (
   storeId: Id<"store">,
+  terminalId: Id<"posTerminal">,
   cashierId?: Id<"athenaUser">,
   registerNumber?: string
 ) => {
@@ -28,7 +29,7 @@ export const useSessionManagerOperations = (
     updateSession,
     hasActiveSession,
     hasHeldSessions,
-  } = usePOSSessionManager(storeId, cashierId, registerNumber);
+  } = usePOSSessionManager(storeId, terminalId, cashierId, registerNumber);
 
   const { holdSession, resumeSession, voidSession } = useSessionManagement();
 
@@ -39,9 +40,7 @@ export const useSessionManagerOperations = (
     async (
       holdReason?: string
     ): Promise<{ success: true } | { success: false; error: string }> => {
-      console.log("activeSession in handleHoldCurrentSession", activeSession);
       if (!activeSession) {
-        console.log("no active session in handleHoldCurrentSession");
         showNoActiveSessionError("hold");
         return { success: false, error: "No active session to hold" };
       }
@@ -272,7 +271,10 @@ export const useSessionManagerOperations = (
 
       try {
         // Errors handled by createSession
-        const newSessionId: Id<"posSession"> = await createSession(storeId);
+        const newSessionId: Id<"posSession"> = await createSession(
+          storeId,
+          terminalId
+        );
 
         // Immediately set the new session ID in the store to prevent
         // the auto-init effect from loading a different session

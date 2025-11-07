@@ -9,6 +9,7 @@ export const posSessionSchema = v.object({
   // Session state
   status: v.string(), // "active", "held", "completed", "void"
   transactionId: v.optional(v.id("posTransaction")), // Link to transaction created from this session
+  terminalId: v.id("posTerminal"),
 
   // Cart contents - now stored in separate posSessionItem table
   // Kept here for backward compatibility queries only

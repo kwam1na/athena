@@ -163,7 +163,7 @@ export function CustomerInfoPanel({
   return (
     <Collapsible.Root open={isOpen} onOpenChange={onOpenChange}>
       <Collapsible.Content>
-        <Card className="mb-6">
+        <div className="mb-6 border rounded-lg p-4 bg-muted/20">
           <CardHeader>
             <CardTitle className="text-sm font-medium flex items-center gap-2">
               <User className="w-4 h-4" />
@@ -468,7 +468,7 @@ export function CustomerInfoPanel({
               </div>
             )}
           </CardContent>
-        </Card>
+        </div>
       </Collapsible.Content>
     </Collapsible.Root>
   );

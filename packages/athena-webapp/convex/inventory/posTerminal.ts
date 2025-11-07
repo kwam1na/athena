@@ -54,6 +54,40 @@ export const listTerminals = query({
   },
 });
 
+export const getTerminalByFingerprint = query({
+  args: {
+    storeId: v.id("store"),
+    fingerprintHash: v.string(),
+  },
+  returns: v.union(terminalReturnValidator, v.null()),
+  handler: async (ctx, args) => {
+    const terminal = await ctx.db
+      .query("posTerminal")
+      .withIndex("by_storeId_and_fingerprintHash", (q) =>
+        q
+          .eq("storeId", args.storeId)
+          .eq("fingerprintHash", args.fingerprintHash)
+      )
+      .first();
+
+    if (!terminal) {
+      return null;
+    }
+
+    return {
+      _id: terminal._id,
+      _creationTime: terminal._creationTime,
+      storeId: terminal.storeId,
+      fingerprintHash: terminal.fingerprintHash,
+      displayName: terminal.displayName,
+      registeredByUserId: terminal.registeredByUserId,
+      browserInfo: terminal.browserInfo,
+      registeredAt: terminal.registeredAt,
+      status: terminal.status,
+    };
+  },
+});
+
 export const registerTerminal = mutation({
   args: {
     storeId: v.id("store"),

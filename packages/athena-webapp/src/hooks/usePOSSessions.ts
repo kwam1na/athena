@@ -7,12 +7,13 @@ import { logger } from "../lib/logger";
 // Hook to get sessions for a store
 export const usePOSStoreSessions = (
   storeId: Id<"store"> | undefined,
+  terminalId: Id<"posTerminal"> | undefined,
   status?: "active" | "held" | "completed" | "void",
   limit?: number
 ) => {
   return useQuery(
     api.inventory.posSessions.getStoreSessions,
-    storeId ? { storeId, status, limit } : "skip"
+    storeId ? { storeId, terminalId, status, limit } : "skip"
   );
 };
 
@@ -27,12 +28,15 @@ export const usePOSSession = (sessionId: Id<"posSession"> | undefined) => {
 // Hook to get active session for current register/cashier
 export const usePOSActiveSession = (
   storeId: Id<"store"> | undefined,
+  terminalId: Id<"posTerminal"> | undefined,
   cashierId?: Id<"athenaUser">,
   registerNumber?: string
 ) => {
   return useQuery(
     api.inventory.posSessions.getActiveSession,
-    storeId ? { storeId, cashierId, registerNumber } : "skip"
+    storeId && terminalId
+      ? { storeId, cashierId, terminalId, registerNumber }
+      : "skip"
   );
 };
 
@@ -43,12 +47,14 @@ export const usePOSSessionCreate = () => {
   return {
     createSession: async (
       storeId: Id<"store">,
+      terminalId: Id<"posTerminal">,
       cashierId?: Id<"athenaUser">,
       registerNumber?: string
     ) => {
       try {
         const result = await createSession({
           storeId,
+          terminalId,
           cashierId,
           registerNumber,
         });
@@ -181,6 +187,7 @@ export const usePOSSessionVoid = () => {
 // Composite hook that provides all session operations
 export const usePOSSessionManager = (
   storeId: Id<"store"> | undefined,
+  terminalId: Id<"posTerminal">,
   cashierId?: Id<"athenaUser">,
   registerNumber?: string
 ) => {
@@ -191,8 +198,14 @@ export const usePOSSessionManager = (
   const { completeSession } = usePOSSessionComplete();
   const { voidSession } = usePOSSessionVoid();
 
-  const activeSession = usePOSActiveSession(storeId, cashierId, registerNumber);
-  const heldSessions = usePOSStoreSessions(storeId, "held", 10);
+  const activeSession = usePOSActiveSession(
+    storeId,
+    terminalId,
+    cashierId,
+    registerNumber
+  );
+
+  const heldSessions = usePOSStoreSessions(storeId, terminalId, "held", 10);
 
   return {
     // Data
@@ -200,8 +213,8 @@ export const usePOSSessionManager = (
     heldSessions,
 
     // Operations
-    createSession: (storeId: Id<"store">) =>
-      createSession(storeId, cashierId, registerNumber),
+    createSession: (storeId: Id<"store">, terminalId: Id<"posTerminal">) =>
+      createSession(storeId, terminalId, cashierId, registerNumber),
     updateSession,
     holdSession,
     resumeSession,
