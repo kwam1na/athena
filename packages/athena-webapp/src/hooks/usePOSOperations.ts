@@ -229,7 +229,8 @@ export const usePOSOperations = () => {
         sessionId: sessionId as Id<"posSession">,
         productId: product.productId,
         productSkuId: product.skuId,
-        productSku: product.barcode,
+        productSku: product.sku || "",
+        barcode: product.barcode || undefined,
         productName: product.name,
         price: product.price, // Backend returns netPrice or price
         quantity: newQuantity,
@@ -255,8 +256,8 @@ export const usePOSOperations = () => {
         store.addToCart({
           id: result.data.itemId, // Database ID is the cart item ID
           name: product.name,
-          barcode: product.barcode,
-          sku: product.sku,
+          barcode: product.barcode || "",
+          sku: product.sku || "",
           price: product.price, // Backend returns netPrice or price
           quantity: 1,
           image: product.image || undefined,
@@ -326,7 +327,8 @@ export const usePOSOperations = () => {
         sessionId: sessionId as Id<"posSession">,
         productId: item.productId,
         productSkuId: item.skuId,
-        productSku: item.barcode,
+        productSku: item.sku || "",
+        barcode: item.barcode || undefined,
         productName: item.name,
         price: item.price,
         quantity,
@@ -625,6 +627,7 @@ export const usePOSOperations = () => {
                   price: item.price,
                   name: item.name,
                   barcode: item.barcode,
+                  sku: item.sku || "",
                 })),
               paymentMethod,
               subtotal: store.cart.subtotal,

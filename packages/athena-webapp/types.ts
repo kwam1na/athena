@@ -128,7 +128,10 @@ export type POSTransaction = Doc<"posTransaction"> & {
 export type POSTransactionItem = Doc<"posTransactionItem"> & {
   product?: Product; // Populated product data
   productSku?: ProductSku; // Populated SKU data
+  barcode?: string | null;
 };
+
+export type POSTerminal = Doc<"posTerminal">;
 
 // Enhanced POS types with relationships for analytics and detailed views
 export type POSCustomerWithStats = POSCustomer & {

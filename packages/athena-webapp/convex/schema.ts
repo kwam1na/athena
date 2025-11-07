@@ -49,6 +49,7 @@ import {
   posTransactionItemSchema,
   posSessionItemSchema,
   posCustomerSchema,
+  posTerminalSchema,
 } from "./schemas/pos";
 import { posSessionSchema } from "./schemas/pos/posSession";
 
@@ -101,6 +102,10 @@ const schema = defineSchema({
     .index("by_linkedGuestId", ["linkedGuestId"])
     .index("by_loyaltyTier", ["loyaltyTier"])
     .index("by_createdBy", ["createdBy"]),
+  posTerminal: defineTable(posTerminalSchema)
+    .index("by_storeId", ["storeId"])
+    .index("by_storeId_and_fingerprintHash", ["storeId", "fingerprintHash"])
+    .index("by_storeId_and_status", ["storeId", "status"]),
   posTransaction: defineTable(posTransactionSchema)
     .index("by_storeId", ["storeId"])
     .index("by_transactionNumber", ["transactionNumber"])

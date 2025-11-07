@@ -323,8 +323,8 @@ export const usePOSStore = create<POSState>()(
             state.cart.items = sessionCartItems.map((item: any) => ({
               id: item._id, // Database ID is the single source of truth
               name: item.productName,
-              barcode: item.productSku,
-              sku: item.productSku, // Use productSku as the SKU display value
+              barcode: item.barcode ?? "",
+              sku: item.productSku ?? "",
               price: item.price,
               quantity: item.quantity,
               image: item.image,

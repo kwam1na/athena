@@ -33,6 +33,14 @@ export const SimplePageHeader = ({ title }: { title: string }) => {
   );
 };
 
+export const ViewHeader = ({ title }: { title: string }) => {
+  return (
+    <div className="px-6 py-4">
+      <p className="font-semibold">{title}</p>
+    </div>
+  );
+};
+
 export const ComposedPageHeader = ({
   leadingContent,
   trailingContent,

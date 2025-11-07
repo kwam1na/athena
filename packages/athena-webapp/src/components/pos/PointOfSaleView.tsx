@@ -103,7 +103,7 @@ export default function PointOfSaleView() {
       title: "POS Settings",
       description: "Configure hardware, tax rates, and payment methods",
       icon: Settings,
-      href: "/$orgUrlSlug/store/$storeUrlSlug/configuration" as const,
+      href: "/$orgUrlSlug/store/$storeUrlSlug/pos/settings" as const,
       color: "bg-gray-500",
       available: true,
     },

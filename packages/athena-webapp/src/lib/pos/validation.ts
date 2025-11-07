@@ -80,9 +80,9 @@ export function validateProduct(product: Product): ValidationResult {
     errors.push("Product has invalid price");
   }
 
-  if (!product.barcode || product.barcode.trim() === "") {
-    errors.push("Product missing barcode");
-  }
+  // if (!product.barcode || product.barcode.trim() === "") {
+  //   errors.push("Product missing barcode");
+  // }
 
   if (!product.name || product.name.trim() === "") {
     errors.push("Product missing name");

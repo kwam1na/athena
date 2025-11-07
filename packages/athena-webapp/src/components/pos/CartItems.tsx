@@ -18,12 +18,14 @@ interface CartItemsProps {
   cartItems: CartItem[];
   onUpdateQuantity: (id: Id<"posSessionItem">, newQuantity: number) => void;
   onRemoveItem: (id: Id<"posSessionItem">) => void;
+  clearCart: () => void;
 }
 
 export function CartItems({
   cartItems,
   onUpdateQuantity,
   onRemoveItem,
+  clearCart,
 }: CartItemsProps) {
   const { activeStore } = useGetActiveStore();
   const formatter = currencyFormatter(activeStore?.currency || "GHS");
@@ -32,13 +34,22 @@ export function CartItems({
   const totalQuantity = cartItems.reduce((sum, item) => sum + item.quantity, 0);
 
   return (
-    <div className="flex-1">
+    <div className="flex-1 border rounded-lg bg-gradient-to-br from-gray-50/50 to-gray-100/30 border-gray-200">
       {totalQuantity > 0 && (
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="flex items-center gap-2 text-sm font-medium">
             <ShoppingBasket className="w-4 h-4" />
             Items · {totalQuantity}
           </CardTitle>
+          <Button
+            variant="outline"
+            size="sm"
+            className="p-8 border-none bg-transparent text-red-500 hover:bg-red-50 hover:text-red-500"
+            onClick={clearCart}
+          >
+            <Trash2 className="w-4 h-4" />
+            Clear all
+          </Button>
         </CardHeader>
       )}
       <div className="p-4">
@@ -55,7 +66,7 @@ export function CartItems({
             {cartItems.map((item) => (
               <div
                 key={item.id}
-                className="grid grid-cols-12 gap-2 p-3 border rounded-lg items-center"
+                className="grid grid-cols-12 gap-2 p-3 border bg-white rounded-lg items-center"
               >
                 {/* Product Image & Info Combined */}
                 <div className="col-span-5 flex items-center gap-4">
@@ -75,9 +86,20 @@ export function CartItems({
                     <h4 className="font-medium text-sm leading-tight truncate">
                       {capitalizeWords(item.name)}
                     </h4>
-                    <p className="text-xs text-muted-foreground">
-                      {item.barcode}
-                    </p>
+
+                    <div className="flex items-center gap-2">
+                      {item.sku && (
+                        <p className="text-xs text-muted-foreground">
+                          {item.sku}
+                        </p>
+                      )}
+                      {item.barcode && (
+                        <p className="text-xs text-muted-foreground">
+                          {item.barcode}
+                        </p>
+                      )}
+                    </div>
+
                     {(item.size || item.length) && (
                       <p className="text-xs text-muted-foreground">
                         {item.length && `${item.length}"`}
@@ -86,7 +108,7 @@ export function CartItems({
                       </p>
                     )}
                     <p className="text-sm font-medium pt-2">
-                      {formatter.format(item.price)} each
+                      {formatter.format(item.price)}
                     </p>
                   </div>
                 </div>

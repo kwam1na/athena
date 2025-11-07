@@ -5,7 +5,8 @@ export const posTransactionItemSchema = v.object({
   productId: v.id("product"),
   productSkuId: v.id("productSku"),
   productName: v.string(),
-  productSku: v.string(), // barcode
+  productSku: v.string(), // human-readable SKU reference
+  barcode: v.optional(v.string()),
   quantity: v.number(),
   unitPrice: v.number(),
   totalPrice: v.number(),

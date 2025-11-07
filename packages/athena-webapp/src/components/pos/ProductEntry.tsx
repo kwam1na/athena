@@ -36,6 +36,7 @@ interface ProductEntryProps {
   onBarcodeSubmit: (e: React.FormEvent) => void;
   onAddProduct: (product: Product) => void;
   barcodeSearchResult?: Product | null;
+  productIdSearchResults?: Product[] | null;
 }
 
 export function ProductEntry({
@@ -46,6 +47,7 @@ export function ProductEntry({
   onBarcodeSubmit,
   onAddProduct,
   barcodeSearchResult,
+  productIdSearchResults,
 }: ProductEntryProps) {
   const { activeStore } = useGetActiveStore();
   const searchResults = usePOSProductSearch(
@@ -65,8 +67,11 @@ export function ProductEntry({
   const inputIsUrlOrBarcode = isUrlOrBarcode(productSearchQuery);
   const showResults =
     productSearchQuery.trim().length > 0 && !inputIsUrlOrBarcode;
-  const filteredProducts = searchResults || [];
-  const isLoading = showResults && searchResults === undefined;
+
+  // Use product ID results if available, otherwise use regular search results
+  const filteredProducts = productIdSearchResults || searchResults || [];
+  const isLoading =
+    showResults && searchResults === undefined && !productIdSearchResults;
 
   const formatter = currencyFormatter(activeStore?.currency || "GHS");
   return (
@@ -82,7 +87,7 @@ export function ProductEntry({
       <div className="space-y-6">
         {/* Product Lookup Section */}
         {showProductLookup && (
-          <div className="space-y-4 border-2 rounded-xl p-5 bg-gradient-to-br from-gray-50/50 to-gray-100/30 border-gray-200">
+          <div className="space-y-4 border rounded-lg p-5 bg-gradient-to-br from-gray-50/50 to-gray-100/30 border-gray-200">
             {/* Unified Search Input - handles both product search and barcode scanning */}
             <div className="relative">
               <div className="absolute left-4 top-1/2 transform -translate-y-1/2 flex items-center gap-2">
@@ -90,7 +95,7 @@ export function ProductEntry({
                 <ScanBarcode className="text-gray-400 w-4 h-4" />
               </div>
               <Input
-                placeholder="Search by name, scan barcode, or paste QR code URL..."
+                placeholder="Search by name, bar/qr code, or product url..."
                 value={productSearchQuery}
                 onChange={(e) => setProductSearchQuery(e.target.value)}
                 onKeyDown={(e) => {
@@ -100,7 +105,7 @@ export function ProductEntry({
                     onBarcodeSubmit(e);
                   }
                 }}
-                className="h-12 pl-20 pr-10 border-2 border-gray-200 focus:border-blue-400 rounded-lg text-sm font-medium bg-white/80 backdrop-blur-sm"
+                className="h-12 pl-20 pr-10  border-gray-200 focus:border-blue-400 rounded-lg text-sm font-medium bg-white/80 backdrop-blur-sm"
                 autoFocus
                 autoComplete="off"
               />
@@ -119,7 +124,9 @@ export function ProductEntry({
             {/* Barcode/URL No Result Message */}
             {inputIsUrlOrBarcode &&
               debouncedForNoResults.trim() &&
-              !barcodeSearchResult && (
+              !barcodeSearchResult &&
+              (!productIdSearchResults ||
+                productIdSearchResults.length === 0) && (
                 <div className="p-4 bg-amber-50 border-2 border-amber-200 rounded-lg">
                   <div className="flex items-center gap-3 text-amber-700">
                     <div className="w-8 h-8 bg-amber-200 rounded-full flex items-center justify-center flex-shrink-0">
@@ -136,8 +143,10 @@ export function ProductEntry({
                 </div>
               )}
 
-            {/* Search Results */}
-            {showResults && (
+            {/* Search Results - Show if regular search OR product ID results */}
+            {(showResults ||
+              (productIdSearchResults &&
+                productIdSearchResults.length > 0)) && (
               <div className="max-h-[586px] overflow-y-auto space-y-1">
                 {isLoading ? (
                   <div className="text-center py-8 text-gray-500">
@@ -149,7 +158,7 @@ export function ProductEntry({
                     {filteredProducts.slice(0, 10).map((product: Product) => (
                       <div
                         key={product.id}
-                        className={`group flex items-center gap-4 p-4 border-2 rounded-xl transition-all duration-200 cursor-pointer bg-white/80 backdrop-blur-sm ${
+                        className={`group flex items-center gap-4 p-4 border rounded-lg transition-all duration-200 cursor-pointer bg-white/80 backdrop-blur-sm ${
                           !product.inStock
                             ? "opacity-50 border-gray-200 hover:border-gray-300"
                             : "border-gray-200 hover:border-blue-200 hover:shadow-md hover:shadow-blue-100/50"
@@ -200,13 +209,15 @@ export function ProductEntry({
 
                           <div className="flex items-center gap-2 mt-1">
                             {product.sku && (
-                              <span className="text-xs font-mono text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                              <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
                                 {product.sku}
                               </span>
                             )}
-                            <span className="text-xs font-mono text-gray-500 bg-gray-100 px-2 py-1 rounded">
-                              {product.barcode}
-                            </span>
+                            {product.barcode && (
+                              <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                                {product.barcode}
+                              </span>
+                            )}
                           </div>
 
                           {(product.size || product.length) && (
@@ -231,8 +242,7 @@ export function ProductEntry({
 
                           {product.quantityAvailable && (
                             <p className="text-xs text-gray-500 mt-4">
-                              <b>{product.quantityAvailable}</b> available in
-                              stock
+                              <b>{product.quantityAvailable}</b> available
                             </p>
                           )}
                         </div>

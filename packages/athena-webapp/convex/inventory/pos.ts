@@ -82,7 +82,7 @@ export const searchProducts = query({
             id: sku._id,
             name: product.name,
             sku: sku.sku || "",
-            barcode: sku.barcode || sku.sku || "",
+            barcode: sku.barcode || "",
             price: sku.netPrice || sku.price, // Use netPrice if available, fallback to price
             category: categoryName,
             description: product.description || "",
@@ -162,7 +162,7 @@ export const lookupByBarcode = query({
       id: sku._id,
       name: product.name,
       sku: sku.sku || "",
-      barcode: sku.barcode || sku.sku || "",
+      barcode: sku.barcode || "",
       price: sku.netPrice || sku.price, // Use netPrice if available, fallback to price
       category: categoryName,
       description: product.description || "",
@@ -218,7 +218,8 @@ export const completeTransaction = mutation({
         quantity: v.number(),
         price: v.number(),
         name: v.string(),
-        barcode: v.string(),
+        barcode: v.optional(v.string()),
+        sku: v.string(),
       })
     ),
     paymentMethod: v.string(), // "cash", "card", "digital_wallet"
@@ -326,7 +327,8 @@ export const completeTransaction = mutation({
           productId: sku.productId,
           productSkuId: item.skuId,
           productName: item.name,
-          productSku: item.barcode,
+          productSku: item.sku,
+          barcode: item.barcode,
           quantity: item.quantity,
           unitPrice: item.price,
           totalPrice: item.price * item.quantity,
@@ -554,7 +556,8 @@ export const createTransactionFromSession = mutation({
           productId: item.productId,
           productSkuId: item.productSkuId,
           productName: item.productName,
-          productSku: item.productSku,
+          productSku: item.productSku ?? "",
+          barcode: item.barcode,
           quantity: item.quantity,
           unitPrice: item.price,
           totalPrice: item.price * item.quantity,

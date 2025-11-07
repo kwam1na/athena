@@ -1,28 +1,21 @@
 import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { DialogTrigger } from "@/components/ui/dialog";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import {
-  PauseCircle,
-  PlayCircle,
-  Clock,
-  Plus,
-  Trash2,
-  Ban,
-} from "lucide-react";
+import { PauseCircle, PlayCircle, Clock, Plus, Ban } from "lucide-react";
 import { useSessionManagerOperations } from "@/hooks/useSessionManagerOperations";
 import { Id } from "../../../convex/_generated/dataModel";
 import { POSSession } from "../../../types";
 import { CartItem, CustomerInfo } from "./types";
 import { HeldSessionsList } from "./session/HeldSessionsList";
 import { HoldSessionDialog } from "./session/HoldSessionDialog";
-import { VoidSessionDialog } from "./session/VoidSessionDialog";
 import { usePOSStore } from "~/src/stores/posStore";
+import { FadeIn } from "../common/FadeIn";
+import { motion } from "framer-motion";
 
 interface SessionManagerProps {
   storeId: Id<"store">;
@@ -86,20 +79,28 @@ export function SessionManager(props: SessionManagerProps) {
     <div className="flex items-center gap-2">
       {/* Active Session Badge */}
       {activeSession && activeSession.status === "active" && (
-        <Badge variant="outline" className="flex items-center gap-1">
-          <Clock className="h-3 w-3" />
-          {activeSession.sessionNumber}
-        </Badge>
+        <FadeIn>
+          <Badge variant="outline" className="flex items-center gap-1">
+            <Clock className="h-3 w-3" />
+            {activeSession.sessionNumber}
+          </Badge>
+        </FadeIn>
       )}
 
       {hasSessionExpired && (
-        <Badge
-          variant="outline"
-          className="flex items-center gap-1 text-red-500 bg-red-50"
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1, transition: { delay: 0.6 } }}
+          exit={{ opacity: 0 }}
         >
-          <Clock className="h-3 w-3" />
-          Expired
-        </Badge>
+          <Badge
+            variant="outline"
+            className="flex items-center gap-1 text-red-500 bg-red-50"
+          >
+            <Clock className="h-3 w-3" />
+            Expired
+          </Badge>
+        </motion.div>
       )}
       {/* Hold Current Session */}
       {activeSession && (

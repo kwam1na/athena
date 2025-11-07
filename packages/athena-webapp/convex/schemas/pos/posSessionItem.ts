@@ -7,7 +7,8 @@ export const posSessionItemSchema = v.object({
   // Product references
   productId: v.id("product"),
   productSkuId: v.id("productSku"),
-  productSku: v.string(), // barcode
+  productSku: v.string(), // human-readable SKU reference
+  barcode: v.optional(v.string()),
 
   // Item details
   productName: v.string(),

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import View from "../View";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { FadeIn } from "../common/FadeIn";
@@ -15,7 +15,11 @@ import { useCustomerOperations } from "@/hooks/useCustomerOperations";
 import { usePOSStore, posSelectors } from "@/stores/posStore";
 import { usePOSBarcodeSearch } from "@/hooks/usePOSProducts";
 import { useDebounce } from "@/hooks/useDebounce";
-import { extractBarcodeFromInput } from "@/lib/pos/barcodeUtils";
+import {
+  extractBarcodeFromInput,
+  type ExtractResult,
+} from "@/lib/pos/barcodeUtils";
+import { usePOSProductIdSearch } from "@/hooks/usePOSProducts";
 import {
   POS_SEARCH_DEBOUNCE_MS,
   POS_AUTO_ADD_DELAY_MS,
@@ -27,6 +31,7 @@ import { Button } from "../ui/button";
 import { toast } from "sonner";
 import { Id } from "~/convex/_generated/dataModel";
 import { XIcon } from "lucide-react";
+import { motion } from "framer-motion";
 
 export function POSRegisterView() {
   const { activeStore } = useGetActiveStore();
@@ -206,56 +211,235 @@ export function POSRegisterView() {
     }
   }, [activeSessionQuery, store]);
 
-  // Auto-replace URL with extracted barcode in the input field
+  // Extract barcode or product ID from unified search input (handles both URLs and plain barcodes)
+  const extractionCacheRef = useRef<ExtractResult | null>(null);
+  const rawExtraction = extractBarcodeFromInput(store.ui.productSearchQuery);
+  const shouldReuseCachedProductId =
+    rawExtraction.type === "barcode" &&
+    extractionCacheRef.current?.type === "productId" &&
+    extractionCacheRef.current.value === rawExtraction.value;
+
+  const extractResult = shouldReuseCachedProductId
+    ? extractionCacheRef.current!
+    : rawExtraction;
+  const extractionSource = shouldReuseCachedProductId ? "cached" : "raw";
+  const extractedValue = extractResult.value;
+
+  useEffect(() => {
+    if (
+      !extractionCacheRef.current ||
+      extractionCacheRef.current.type !== extractResult.type ||
+      extractionCacheRef.current.value !== extractResult.value
+    ) {
+      extractionCacheRef.current = extractResult;
+    }
+  }, [extractResult.type, extractResult.value]);
+
+  // Log extraction result for debugging
   useEffect(() => {
     if (store.ui.productSearchQuery.trim()) {
-      const extractedBarcode = extractBarcodeFromInput(
-        store.ui.productSearchQuery
-      );
-      // If the extracted barcode is different from the input (meaning we parsed a URL),
-      // replace the input with just the barcode
-      if (extractedBarcode !== store.ui.productSearchQuery) {
-        store.setProductSearchQuery(extractedBarcode);
+      logger.debug("[POS] Extracted value from input", {
+        input: store.ui.productSearchQuery,
+        extractedValue,
+        type: extractResult.type,
+        isUrl: store.ui.productSearchQuery !== extractedValue,
+        source: extractionSource,
+      });
+    }
+  }, [
+    store.ui.productSearchQuery,
+    extractedValue,
+    extractResult.type,
+    extractionSource,
+  ]);
+
+  // Auto-replace URL with extracted value in the input field
+  useEffect(() => {
+    if (store.ui.productSearchQuery.trim()) {
+      // If the extracted value is different from the input (meaning we parsed a URL),
+      // replace the input with just the extracted value
+      if (
+        extractResult.type === "barcode" &&
+        extractedValue !== store.ui.productSearchQuery
+      ) {
+        logger.debug("[POS] Replacing URL input with extracted value", {
+          originalInput: store.ui.productSearchQuery,
+          extractedValue,
+          type: extractResult.type,
+        });
+        store.setProductSearchQuery(extractedValue);
       }
     }
-  }, [store.ui.productSearchQuery, store]);
+  }, [store.ui.productSearchQuery, extractedValue, store, extractResult.type]);
 
-  // Extract barcode from unified search input (handles both URLs and plain barcodes)
-  const actualBarcode = extractBarcodeFromInput(store.ui.productSearchQuery);
+  // Debounce the extracted value to prevent flickering "no product found" UI while user types
+  const debouncedValue = useDebounce(extractedValue, POS_SEARCH_DEBOUNCE_MS);
 
-  // Debounce the barcode to prevent flickering "no product found" UI while user types
-  const debouncedBarcode = useDebounce(actualBarcode, POS_SEARCH_DEBOUNCE_MS);
+  // Log debounced value changes
+  useEffect(() => {
+    if (debouncedValue !== extractedValue) {
+      logger.debug("[POS] Debouncing search value", {
+        originalValue: extractedValue,
+        debouncedValue,
+        type: extractResult.type,
+        source: extractionSource,
+      });
+    }
+  }, [debouncedValue, extractedValue, extractResult.type, extractionSource]);
 
-  // Get barcode search result using debounced barcode
-  const barcodeSearchResult = usePOSBarcodeSearch(
+  // Get product ID search results (array of SKUs)
+  const productIdSearchQuery =
+    extractResult.type === "productId" ? debouncedValue : "";
+  const productIdSearchResults = usePOSProductIdSearch(
     activeStore?._id,
-    debouncedBarcode
+    productIdSearchQuery
   );
 
-  // Auto-add product to cart when barcode match is found
+  // Log product ID search
+  useEffect(() => {
+    if (extractResult.type === "productId" && productIdSearchQuery) {
+      logger.debug("[POS] Product ID search triggered", {
+        productId: productIdSearchQuery,
+        storeId: activeStore?._id,
+        resultsCount: productIdSearchResults?.length ?? 0,
+        isLoading: productIdSearchResults === undefined,
+      });
+    }
+  }, [
+    extractResult.type,
+    productIdSearchQuery,
+    activeStore?._id,
+    productIdSearchResults,
+  ]);
+
+  // Get barcode search result (single product or null)
+  const barcodeSearchQuery =
+    extractResult.type === "barcode" ? debouncedValue : "";
+  const barcodeSearchResult = usePOSBarcodeSearch(
+    activeStore?._id,
+    barcodeSearchQuery
+  );
+
+  // Log barcode search
+  useEffect(() => {
+    if (extractResult.type === "barcode" && barcodeSearchQuery) {
+      logger.debug("[POS] Barcode search triggered", {
+        barcode: barcodeSearchQuery,
+        storeId: activeStore?._id,
+        found:
+          barcodeSearchResult !== null && barcodeSearchResult !== undefined,
+        isLoading: barcodeSearchResult === undefined,
+      });
+    }
+  }, [
+    extractResult.type,
+    barcodeSearchQuery,
+    activeStore?._id,
+    barcodeSearchResult,
+  ]);
+
+  // Auto-add product to cart when match is found
   // Uses a delay to allow search completion and user verification before adding
   useEffect(() => {
-    if (!actualBarcode.trim() || !barcodeSearchResult) {
+    if (!extractedValue.trim()) {
       return;
     }
 
-    const timeoutId = setTimeout(async () => {
-      await cart.addFromBarcode(actualBarcode, barcodeSearchResult);
-      store.setProductSearchQuery("");
-    }, POS_AUTO_ADD_DELAY_MS);
+    // For product ID: auto-add if only one SKU available
+    if (
+      extractResult.type === "productId" &&
+      productIdSearchResults &&
+      productIdSearchResults.length === 1
+    ) {
+      logger.info("[POS] Auto-adding product from product ID", {
+        productId: extractedValue,
+        skuId: productIdSearchResults[0].skuId,
+        productName: productIdSearchResults[0].name,
+        delay: POS_AUTO_ADD_DELAY_MS,
+      });
+      const timeoutId = setTimeout(async () => {
+        logger.debug("[POS] Executing auto-add product (product ID)", {
+          productId: extractedValue,
+          skuId: productIdSearchResults[0].skuId,
+        });
+        await cart.addProduct(productIdSearchResults[0]);
+        store.setProductSearchQuery("");
+      }, POS_AUTO_ADD_DELAY_MS);
 
-    // Cleanup: cancel timeout if barcode changes before delay completes
-    return () => clearTimeout(timeoutId);
-  }, [actualBarcode, barcodeSearchResult, cart, store]);
+      return () => clearTimeout(timeoutId);
+    }
+
+    // For barcode: auto-add if result found (existing behavior)
+    if (extractResult.type === "barcode" && barcodeSearchResult) {
+      logger.info("[POS] Auto-adding product from barcode", {
+        barcode: extractedValue,
+        productName: barcodeSearchResult.name,
+        delay: POS_AUTO_ADD_DELAY_MS,
+      });
+      const timeoutId = setTimeout(async () => {
+        logger.debug("[POS] Executing auto-add product (barcode)", {
+          barcode: extractedValue,
+        });
+        await cart.addFromBarcode(extractedValue, barcodeSearchResult);
+        store.setProductSearchQuery("");
+      }, POS_AUTO_ADD_DELAY_MS);
+
+      return () => clearTimeout(timeoutId);
+    }
+  }, [
+    extractedValue,
+    extractResult.type,
+    productIdSearchResults,
+    barcodeSearchResult,
+    cart,
+    store,
+  ]);
 
   // Handle barcode/URL submission from unified search input
   const handleBarcodeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!store.ui.productSearchQuery.trim()) return;
 
-    if (barcodeSearchResult) {
-      await cart.addFromBarcode(actualBarcode, barcodeSearchResult);
+    logger.debug("[POS] Handling barcode/URL submission", {
+      input: store.ui.productSearchQuery,
+      extractedValue,
+      type: extractResult.type,
+      source: extractionSource,
+    });
+
+    // For product ID: if single SKU, add it; otherwise let user select from results
+    if (extractResult.type === "productId" && productIdSearchResults) {
+      if (productIdSearchResults.length === 1) {
+        logger.info("[POS] Adding product from product ID (manual submit)", {
+          productId: extractedValue,
+          skuId: productIdSearchResults[0].skuId,
+          productName: productIdSearchResults[0].name,
+        });
+        await cart.addProduct(productIdSearchResults[0]);
+        store.setProductSearchQuery("");
+      } else {
+        logger.debug("[POS] Multiple SKUs found, showing selection", {
+          productId: extractedValue,
+          skuCount: productIdSearchResults.length,
+        });
+      }
+      // If multiple SKUs, they'll be shown in search results for user to select
+      return;
+    }
+
+    // For barcode: add directly if found
+    if (extractResult.type === "barcode" && barcodeSearchResult) {
+      logger.info("[POS] Adding product from barcode (manual submit)", {
+        barcode: extractedValue,
+        productName: barcodeSearchResult.name,
+      });
+      await cart.addFromBarcode(extractedValue, barcodeSearchResult);
       store.setProductSearchQuery("");
+    } else if (extractResult.type === "barcode" && !barcodeSearchResult) {
+      logger.warn("[POS] Barcode not found", {
+        barcode: extractedValue,
+        storeId: activeStore?._id,
+      });
     }
   };
 
@@ -280,9 +464,7 @@ export function POSRegisterView() {
             leadingContent={
               <div className="flex items-center gap-3">
                 <div>
-                  <p className="text-lg font-semibold text-gray-900">
-                    POS Register
-                  </p>
+                  <p className="text-lg font-semibold text-gray-900">POS</p>
                 </div>
               </div>
             }
@@ -306,10 +488,10 @@ export function POSRegisterView() {
             <div className="flex items-center gap-3">
               <p className="text-lg font-semibold text-gray-900">POS</p>
               {activeSessionQuery && (
-                <div className="flex items-center gap-2">
+                <FadeIn className="flex items-center gap-2">
                   <div className="w-2 h-2 bg-green-600 rounded-full animate-pulse" />
                   <p className="text-sm text-green-600">Active Session</p>
-                </div>
+                </FadeIn>
               )}
             </div>
           }
@@ -399,9 +581,9 @@ export function POSRegisterView() {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Left Panel - Product Entry */}
             {!store.transaction.isCompleted && (
-              <div className="lg:col-span-2 space-y-6">
+              <div className="lg:col-span-2 space-y-56">
                 {/* Product Entry Section */}
-                <div className="p-6">
+                <div className="px-6">
                   <ProductEntry
                     barcodeInput=""
                     setBarcodeInput={() => {}}
@@ -414,33 +596,17 @@ export function POSRegisterView() {
                     onBarcodeSubmit={handleBarcodeSubmit}
                     onAddProduct={cart.addProduct}
                     barcodeSearchResult={barcodeSearchResult}
+                    productIdSearchResults={productIdSearchResults || undefined}
                   />
                 </div>
 
                 {/* Cart Items Section */}
                 <div className="bg-white rounded-lg p-6">
-                  <div className="mb-4 flex items-center justify-between">
-                    {/* <div>
-                      <h3 className="text-lg font-semibold text-gray-900">
-                        Cart Items
-                      </h3>
-                    </div> */}
-                    {cart.cartItems.length > 0 && (
-                      <Button
-                        variant="outline"
-                        onClick={handleClearCart}
-                        className="ml-auto hover:bg-red-50 hover:text-red-500"
-                        // disabled={!activeSessionQuery}
-                      >
-                        <XIcon className="w-4 h-4" />
-                        Clear Items
-                      </Button>
-                    )}
-                  </div>
                   <CartItems
                     cartItems={store.cart.items}
                     onUpdateQuantity={cart.updateQuantity}
                     onRemoveItem={cart.removeItem}
+                    clearCart={handleClearCart}
                   />
                 </div>
               </div>
