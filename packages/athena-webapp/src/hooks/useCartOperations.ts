@@ -13,7 +13,6 @@ import {
   showValidationError,
   showNoActiveSessionError,
 } from "../lib/pos/toastService";
-import { usePOSActiveSession } from "./usePOSSessions";
 
 /**
  * Hook for POS Cart Operations
@@ -134,11 +133,14 @@ export const useCartOperations = () => {
           newQuantity,
         });
 
+        console.log("store in addProduct", store);
+
         // Call server mutation to add/update item with inventory hold
         const { success, data } = await handlePOSOperation(
           () =>
             addOrUpdateItemMutation({
               sessionId: sessionId as Id<"posSession">,
+              cashierId: store.cashier.id as Id<"cashier">,
               productId: product.productId!,
               productSkuId: product.skuId!,
               productSku: product.sku || "",
@@ -203,11 +205,14 @@ export const useCartOperations = () => {
    * Adds a product from barcode scan
    */
   const addFromBarcode = useCallback(
-    async (barcode: string, productData: Product) => {
+    async (barcode: string, productData: Product | Product[]) => {
       logger.info("[POS] Adding product from barcode", {
         barcode,
         productFound: !!productData,
-        productName: productData?.name,
+        isArray: Array.isArray(productData),
+        productName: Array.isArray(productData)
+          ? `${productData.length} variants`
+          : productData?.name,
       });
 
       try {
@@ -221,7 +226,36 @@ export const useCartOperations = () => {
           throw new Error(`Product not found for barcode: ${barcode}`);
         }
 
-        await addProduct(productData);
+        // Handle array of products (from product ID lookup)
+        if (Array.isArray(productData)) {
+          if (productData.length === 0) {
+            logger.warn("[POS] Empty product array for barcode", { barcode });
+            throw new Error(`No products found for barcode: ${barcode}`);
+          }
+
+          if (productData.length === 1) {
+            // Single SKU - auto-add it
+            logger.info("[POS] Single SKU from product ID, auto-adding", {
+              productName: productData[0].name,
+              skuId: productData[0].skuId,
+            });
+            await addProduct(productData[0]);
+          } else {
+            // Multiple SKUs - should be handled upstream (user selection)
+            logger.info(
+              "[POS] Multiple SKUs detected, skipping auto-add (user must select)",
+              {
+                barcode,
+                count: productData.length,
+              }
+            );
+            // Don't throw error - this is expected behavior
+            return;
+          }
+        } else {
+          // Single product object - normal barcode lookup
+          await addProduct(productData);
+        }
       } catch (error) {
         logger.error("[POS] Barcode scan error", {
           barcode,
@@ -264,10 +298,10 @@ export const useCartOperations = () => {
         () =>
           removeItemMutation({
             sessionId: sessionId as Id<"posSession">,
+            cashierId: store.cashier.id as Id<"cashier">,
             itemId,
           }),
         {
-          successMessage: POS_MESSAGES.cart.itemRemoved,
           onSuccess: (data) => {
             // Update local store after successful server update
             store.removeFromCart(itemId);
@@ -346,6 +380,7 @@ export const useCartOperations = () => {
         () =>
           addOrUpdateItemMutation({
             sessionId: sessionId as Id<"posSession">,
+            cashierId: store.cashier.id as Id<"cashier">,
             productId: item.productId!,
             productSkuId: item.skuId!,
             productSku: item.sku || "",

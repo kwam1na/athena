@@ -2,26 +2,40 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
 import type { Product } from "../components/pos/types";
-import { isValidConvexId } from "@/lib/pos/barcodeUtils";
+import {
+  extractBarcodeFromInput,
+  isValidConvexId,
+} from "@/lib/pos/barcodeUtils";
 
 export function usePOSProductSearch(
   storeId: Id<"store"> | undefined,
   searchQuery: string
 ) {
+  const extracted = extractBarcodeFromInput(searchQuery);
+
+  let query = searchQuery;
+
+  if (extracted.type === "productId") {
+    query = extracted.value;
+  }
+
   return useQuery(
     api.inventory.pos.searchProducts,
-    storeId && searchQuery.trim().length > 0 ? { storeId, searchQuery } : "skip"
+    storeId && searchQuery.trim().length > 0
+      ? { storeId, searchQuery: query }
+      : "skip"
   );
 }
 
 export function usePOSBarcodeSearch(
   storeId: Id<"store"> | undefined,
   barcode: string
-) {
-  return useQuery(
+): Product | Product[] | null | undefined {
+  const result = useQuery(
     api.inventory.pos.lookupByBarcode,
     storeId && barcode.trim().length > 0 ? { storeId, barcode } : "skip"
   );
+  return result;
 }
 
 export function usePOSProductIdSearch(

@@ -43,9 +43,10 @@ export const useSessionManagement = () => {
    * Creates a new session
    */
   const createSession = useCallback(
-    async (storeId: Id<"store">) => {
+    async (storeId: Id<"store">, cashierId?: Id<"cashier">) => {
       logger.info("[POS] Creating new session", {
         storeId,
+        cashierId,
         registerNumber: store.ui.registerNumber,
         terminalId: store.terminalId,
       });
@@ -64,22 +65,28 @@ export const useSessionManagement = () => {
 
         const result = await createSessionMutation({
           storeId,
+          cashierId: cashierId || (store.cashier.id as Id<"cashier">),
           registerNumber: store.ui.registerNumber,
           terminalId: store.terminalId,
         });
 
-        store.setCurrentSessionId(result.sessionId);
-        store.setSessionExpiresAt(result.expiresAt);
+        if (!result.success) {
+          throw new Error(result.message);
+        }
+
+        store.setCurrentSessionId(result.data.sessionId);
+        store.setSessionExpiresAt(result.data.expiresAt);
 
         logger.info("[POS] Session created successfully", {
-          sessionId: result.sessionId,
-          expiresAt: result.expiresAt,
+          sessionId: result.data.sessionId,
+          expiresAt: result.data.expiresAt,
           registerNumber: store.ui.registerNumber,
+          cashierId,
         });
 
         toast.success("New session created");
 
-        return result.sessionId;
+        return result.data.sessionId;
       } catch (error) {
         logger.error("[POS] Failed to create session", error as Error);
         toast.error((error as Error).message);
@@ -97,6 +104,7 @@ export const useSessionManagement = () => {
   const updateSession = useCallback(
     async (updates: {
       customerId?: Id<"posCustomer">;
+      cashierId: Id<"cashier">;
       customerInfo?: {
         name?: string;
         email?: string;
@@ -176,6 +184,7 @@ export const useSessionManagement = () => {
           logger.debug("[POS] Saving session state before hold");
           await updateSession({
             customerId: store.customer.current?.customerId,
+            cashierId: store.cashier.id as Id<"cashier">,
             customerInfo: store.customer.current
               ? {
                   name: store.customer.current.name,
@@ -192,6 +201,7 @@ export const useSessionManagement = () => {
         // Then hold the session
         const result = await holdSessionMutation({
           sessionId: sessionId as Id<"posSession">,
+          cashierId: store.cashier.id as Id<"cashier">,
           holdReason: reason,
         });
 
@@ -234,7 +244,9 @@ export const useSessionManagement = () => {
    */
   const resumeSession = useCallback(
     async (
-      sessionId: Id<"posSession">
+      sessionId: Id<"posSession">,
+      cashierId: Id<"cashier">,
+      terminalId: Id<"posTerminal">
     ): Promise<
       | {
           success: true;
@@ -247,6 +259,8 @@ export const useSessionManagement = () => {
       try {
         const result = await resumeSessionMutation({
           sessionId,
+          cashierId,
+          terminalId,
         });
 
         if (!result.success) {

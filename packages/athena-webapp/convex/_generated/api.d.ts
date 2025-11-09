@@ -26,6 +26,7 @@ import type * as emails_DiscountReminder from "../emails/DiscountReminder.js";
 import type * as emails_FeedbackRequest from "../emails/FeedbackRequest.js";
 import type * as emails_NewOrderAdmin from "../emails/NewOrderAdmin.js";
 import type * as emails_OrderEmail from "../emails/OrderEmail.js";
+import type * as emails_PosReceiptEmail from "../emails/PosReceiptEmail.js";
 import type * as emails_VerificationCode from "../emails/VerificationCode.js";
 import type * as env from "../env.js";
 import type * as http_domains_inventory_routes_analytics from "../http/domains/inventory/routes/analytics.js";
@@ -59,6 +60,7 @@ import type * as inventory_athenaUser from "../inventory/athenaUser.js";
 import type * as inventory_auth from "../inventory/auth.js";
 import type * as inventory_bannerMessage from "../inventory/bannerMessage.js";
 import type * as inventory_bestSeller from "../inventory/bestSeller.js";
+import type * as inventory_cashier from "../inventory/cashier.js";
 import type * as inventory_categories from "../inventory/categories.js";
 import type * as inventory_colors from "../inventory/colors.js";
 import type * as inventory_complimentaryProduct from "../inventory/complimentaryProduct.js";
@@ -97,6 +99,7 @@ import type * as schemas_inventory_appVerificationCode from "../schemas/inventor
 import type * as schemas_inventory_athenaUser from "../schemas/inventory/athenaUser.js";
 import type * as schemas_inventory_bannerMessage from "../schemas/inventory/bannerMessage.js";
 import type * as schemas_inventory_bestSeller from "../schemas/inventory/bestSeller.js";
+import type * as schemas_inventory_cashier from "../schemas/inventory/cashier.js";
 import type * as schemas_inventory_category from "../schemas/inventory/category.js";
 import type * as schemas_inventory_color from "../schemas/inventory/color.js";
 import type * as schemas_inventory_complimentaryProduct from "../schemas/inventory/complimentaryProduct.js";
@@ -186,6 +189,7 @@ declare const fullApi: ApiFromModules<{
   "emails/FeedbackRequest": typeof emails_FeedbackRequest;
   "emails/NewOrderAdmin": typeof emails_NewOrderAdmin;
   "emails/OrderEmail": typeof emails_OrderEmail;
+  "emails/PosReceiptEmail": typeof emails_PosReceiptEmail;
   "emails/VerificationCode": typeof emails_VerificationCode;
   env: typeof env;
   "http/domains/inventory/routes/analytics": typeof http_domains_inventory_routes_analytics;
@@ -219,6 +223,7 @@ declare const fullApi: ApiFromModules<{
   "inventory/auth": typeof inventory_auth;
   "inventory/bannerMessage": typeof inventory_bannerMessage;
   "inventory/bestSeller": typeof inventory_bestSeller;
+  "inventory/cashier": typeof inventory_cashier;
   "inventory/categories": typeof inventory_categories;
   "inventory/colors": typeof inventory_colors;
   "inventory/complimentaryProduct": typeof inventory_complimentaryProduct;
@@ -257,6 +262,7 @@ declare const fullApi: ApiFromModules<{
   "schemas/inventory/athenaUser": typeof schemas_inventory_athenaUser;
   "schemas/inventory/bannerMessage": typeof schemas_inventory_bannerMessage;
   "schemas/inventory/bestSeller": typeof schemas_inventory_bestSeller;
+  "schemas/inventory/cashier": typeof schemas_inventory_cashier;
   "schemas/inventory/category": typeof schemas_inventory_category;
   "schemas/inventory/color": typeof schemas_inventory_color;
   "schemas/inventory/complimentaryProduct": typeof schemas_inventory_complimentaryProduct;

@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { render } from "@react-email/components";
 import {
   CreditCard,
   Wallet,
@@ -16,11 +17,14 @@ import useGetActiveStore from "~/src/hooks/useGetActiveStore";
 import { currencyFormatter } from "~/convex/utils";
 import { usePOSOperations } from "~/src/hooks/usePOSOperations";
 import { usePrint } from "~/src/hooks/usePrint";
-import { capitalizeWords } from "~/src/lib/utils";
+import { capitalizeWords, cn } from "~/src/lib/utils";
 import { Id } from "~/convex/_generated/dataModel";
 import { POSSession } from "~/types";
 import { usePOSActiveSession } from "~/src/hooks/usePOSSessions";
 import { useGetTerminal } from "~/src/hooks/useGetTerminal";
+import PosReceiptEmail from "~/convex/emails/PosReceiptEmail";
+import { usePOSCashier } from "./hooks";
+import config from "~/src/config";
 
 interface OrderSummaryProps {
   cartItems: CartItem[];
@@ -63,6 +67,8 @@ export function OrderSummary({
     activeStore?._id as Id<"store">,
     terminal?._id as Id<"posTerminal">
   );
+
+  const cashier = usePOSCashier();
   // Use store state for most current data, fall back to props for compatibility
   const currentCartItems =
     state.cartItems.length > 0 ? state.cartItems : cartItems;
@@ -109,7 +115,7 @@ export function OrderSummary({
     onTransactionStateChange?.(false);
   };
 
-  const handlePrintReceipt = () => {
+  const handlePrintReceipt = async () => {
     console.log("Print receipt clicked");
     console.log("State check:", {
       completedOrderNumber: state.completedOrderNumber,
@@ -137,186 +143,82 @@ export function OrderSummary({
       const completedTransactionData =
         state.transaction.completedTransactionData!;
 
-      const receiptItems = completedTransactionData.cartItems;
-      const receiptSubtotal = completedTransactionData.subtotal;
-      const receiptTax = completedTransactionData.tax;
-      const receiptTotal = completedTransactionData.total;
-      const receiptCustomerInfo = completedTransactionData.customerInfo;
-
-      console.log("Receipt data:", {
-        receiptItems: receiptItems.length,
-        receiptSubtotal,
-        receiptTax,
-        receiptTotal,
-        receiptCustomerInfo,
-      });
-
-      // Generate receipt HTML directly without React rendering issues
       const formatter = currencyFormatter(activeStore.currency || "GHS");
+      const completedAtDate =
+        completedTransactionData.completedAt instanceof Date
+          ? completedTransactionData.completedAt
+          : new Date(completedTransactionData.completedAt);
 
-      const formatPaymentMethod = (method: string) => {
-        switch (method) {
-          case "card":
-            return "Card Payment";
-          case "cash":
-            return "Cash Payment";
-          case "digital_wallet":
-            return "Digital Wallet";
-          default:
-            return method;
+      const receiptItems = completedTransactionData.cartItems.map(
+        (item, index) => {
+          const attributeParts: string[] = [];
+          if (item.size) {
+            attributeParts.push(`${item.size}`);
+          }
+          if (item.length) {
+            attributeParts.push(`${item.length}"`);
+          }
+
+          return {
+            name: capitalizeWords(item.name),
+            totalPrice: formatter.format(item.price * item.quantity),
+            quantityLabel: `${item.quantity} × ${formatter.format(item.price)}`,
+            skuOrBarcode: item.sku || item.barcode,
+            attributes:
+              attributeParts.length > 0
+                ? attributeParts.join(" • ")
+                : undefined,
+          };
         }
-      };
-
-      const receiptHTML = `
-        <div class="text-center mb-6 border-b pb-4">
-          <h1 class="text-lg font-bold mb-2">${activeStore.name || "Store Name"}</h1>
-          ${
-            activeStore.config?.address
-              ? `
-            <div class="text-xs space-y-1">
-              <p>${activeStore.config.address.street || ""}</p>
-              <p>${activeStore.config.address.city || ""}, ${activeStore.config.address.state || ""} ${activeStore.config.address.zipCode || ""}</p>
-              <p>${activeStore.config.address.country || ""}</p>
-              ${activeStore.config.phone ? `<p>Tel: ${activeStore.config.phone}</p>` : ""}
-              ${activeStore.config.email ? `<p>Email: ${activeStore.config.email}</p>` : ""}
-            </div>
-          `
-              : ""
-          }
-        </div>
-
-        <div class="mb-4 border-b pb-4">
-          <div class="flex justify-between">
-            <span>Receipt #:</span>
-            <span class="font-bold">${state.completedOrderNumber}</span>
-          </div>
-          <div class="flex justify-between">
-            <span>Date:</span>
-            <span>${completedTransactionData.completedAt.toLocaleDateString()}</span>
-          </div>
-          <div class="flex justify-between">
-            <span>Time:</span>
-            <span>${completedTransactionData.completedAt.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })}</span>
-          </div>
-          ${
-            registerNumber
-              ? `
-            <div class="flex justify-between">
-              <span>Register:</span>
-              <span>${registerNumber}</span>
-            </div>
-          `
-              : ""
-          }
-        </div>
-
-        ${
-          receiptCustomerInfo &&
-          (receiptCustomerInfo.name ||
-            receiptCustomerInfo.email ||
-            receiptCustomerInfo.phone)
-            ? `
-          <div class="mb-4 border-b pb-4">
-            <div class="font-bold mb-2">Customer Information:</div>
-            ${
-              receiptCustomerInfo.name
-                ? `
-              <div class="flex justify-between">
-                <span>Name:</span>
-                <span>${receiptCustomerInfo.name}</span>
-              </div>
-            `
-                : ""
-            }
-            ${
-              receiptCustomerInfo.email
-                ? `
-              <div class="flex justify-between">
-                <span>Email:</span>
-                <span class="text-xs">${receiptCustomerInfo.email}</span>
-              </div>
-            `
-                : ""
-            }
-            ${
-              receiptCustomerInfo.phone
-                ? `
-              <div class="flex justify-between">
-                <span>Phone:</span>
-                <span>${receiptCustomerInfo.phone}</span>
-              </div>
-            `
-                : ""
-            }
-          </div>
-        `
-            : ""
-        }
-
-        <div class="mb-4 border-b pb-4">
-          <div class="font-bold mb-3">Items:</div>
-          ${receiptItems
-            .map(
-              (item, index) => `
-            <div class="mb-3">
-              <div class="flex justify-between">
-                <span class="flex-1 truncate pr-2">${capitalizeWords(item.name)}</span>
-                <span class="whitespace-nowrap">${formatter.format(item.price * item.quantity)}</span>
-              </div>
-              <div class="text-xs font-bold" style="color: #000;">
-                <div class="flex justify-between">
-                  <span>Qty: ${item.quantity} × ${formatter.format(item.price)}</span>
-                  <span>${item.sku || item.barcode}</span>
-                </div>
-              </div>
-            </div>
-          `
-            )
-            .join("")}
-        </div>
-
-        <div class="mb-4 border-b pb-4">
-          <div class="flex justify-between">
-            <span>Subtotal:</span>
-            <span>${formatter.format(receiptSubtotal)}</span>
-          </div>
-          ${
-            receiptTax > 0
-              ? `
-            <div class="flex justify-between">
-              <span>Tax:</span>
-              <span>${formatter.format(receiptTax)}</span>
-            </div>
-          `
-              : ""
-          }
-          <div class="flex justify-between font-bold">
-            <span>Total:</span>
-            <span>${formatter.format(receiptTotal)}</span>
-          </div>
-        </div>
-
-        <div class="mb-4 border-b pb-4">
-          <div class="flex justify-between">
-            <span>Payment Method:</span>
-            <span>${formatPaymentMethod(completedTransactionData.paymentMethod)}</span>
-          </div>
-          <div class="flex justify-between">
-            <span>Amount Paid:</span>
-            <span>${formatter.format(receiptTotal)}</span>
-          </div>
-        </div>
-
-        <div class="text-center text-xs">
-          <p>Thank you for your business!</p>
-          <p>Please keep this receipt for your records.</p>
-        </div>
-      `;
-
-      console.log(
-        "Calling printReceipt with HTML:",
-        receiptHTML.substring(0, 100) + "..."
       );
+
+      const paymentMethodLabel = formatPaymentMethod(
+        completedTransactionData.paymentMethod
+      );
+
+      const storeContact = activeStore.config?.contactInfo;
+      const [street, city, addressState, zipCode, country] =
+        storeContact?.location?.split(",") || [];
+
+      const receiptHTML = await render(
+        <PosReceiptEmail
+          storeName={activeStore.name || "Store Name"}
+          storeContact={
+            activeStore.config
+              ? {
+                  street,
+                  city,
+                  state: addressState,
+                  zipCode,
+                  country,
+                  phone: storeContact?.phoneNumber,
+                  website: config.storeFrontUrl.replace("https://", "wwww."),
+                }
+              : undefined
+          }
+          receiptNumber={state.completedOrderNumber}
+          completedDate={completedAtDate.toLocaleDateString()}
+          completedTime={completedAtDate.toLocaleTimeString("en-US", {
+            hour: "numeric",
+            minute: "2-digit",
+            hour12: true,
+          })}
+          itemsCount={cartItemsCount}
+          cashierName={`${cashier?.firstName} ${cashier?.lastName.charAt(0)}.`}
+          registerNumber={registerNumber || undefined}
+          customerInfo={completedTransactionData.customerInfo}
+          items={receiptItems}
+          subtotal={formatter.format(completedTransactionData.subtotal)}
+          tax={
+            completedTransactionData.tax > 0
+              ? formatter.format(completedTransactionData.tax)
+              : undefined
+          }
+          total={formatter.format(completedTransactionData.total)}
+          paymentMethodLabel={paymentMethodLabel}
+        />
+      );
+
       printReceipt(receiptHTML);
     } catch (error) {
       console.error("Error in handlePrintReceipt:", error);
@@ -380,7 +282,12 @@ export function OrderSummary({
   }
 
   return (
-    <div className="border rounded-lg">
+    <div
+      className={cn(
+        "border rounded-lg",
+        terminal === null && "opacity-60 transition-all duration-300"
+      )}
+    >
       <CardHeader className="flex flex-row baseline justify-between">
         <p className="text-lg font-medium">Summary</p>
         {cartItemsCount > 0 && (
@@ -403,7 +310,7 @@ export function OrderSummary({
           {/* <Separator /> */}
           <div className="flex justify-between items-baseline">
             <span className="text-xl">Total</span>
-            <span className="text-4xl">{formatter.format(total)}</span>
+            <span className="text-3xl">{formatter.format(total)}</span>
           </div>
         </div>
 

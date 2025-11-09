@@ -13,7 +13,10 @@ import { OrderSummary } from "./OrderSummary";
 import { useCartOperations } from "@/hooks/useCartOperations";
 import { useCustomerOperations } from "@/hooks/useCustomerOperations";
 import { usePOSStore, posSelectors } from "@/stores/posStore";
-import { usePOSBarcodeSearch } from "@/hooks/usePOSProducts";
+import {
+  usePOSBarcodeSearch,
+  usePOSProductSearch,
+} from "@/hooks/usePOSProducts";
 import { useDebounce } from "@/hooks/useDebounce";
 import {
   extractBarcodeFromInput,
@@ -30,13 +33,16 @@ import { logger } from "@/lib/logger";
 import { Button } from "../ui/button";
 import { toast } from "sonner";
 import { Id } from "~/convex/_generated/dataModel";
-import { ScanBarcode, Terminal, XIcon } from "lucide-react";
-import { motion } from "framer-motion";
+import { ArrowRightIcon, ScanBarcode } from "lucide-react";
 import { useGetTerminal } from "~/src/hooks/useGetTerminal";
 import { EmptyState } from "../states/empty/empty-state";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { getOrigin } from "~/src/lib/navigationUtils";
 import { CashierView } from "./CashierView";
+import { CashierAuthDialog } from "./CashierAuthDialog";
+import { useNavigateBack } from "~/src/hooks/use-navigate-back";
+import { cn } from "~/src/lib/utils";
+import { useProductSearchResults } from "~/src/hooks/useProductSearchResults";
 
 export function POSRegisterView() {
   const { activeStore } = useGetActiveStore();
@@ -68,29 +74,51 @@ export function POSRegisterView() {
 
   // Handle session loading from SessionManager
   const handleSessionLoaded = (sessionData: any) => {
-    console.log("sessionData received", sessionData);
     store.loadSessionData(sessionData);
+  };
+
+  const resetAutoSessionInitialized = () => {
+    autoSessionInitialized.current = false;
   };
 
   // Handle new session from SessionManager
   const handleNewSession = () => {
     store.startNewTransaction();
     // Reset flag so auto-session check will run again for new transaction
-    autoSessionInitialized.current = false;
+    resetAutoSessionInitialized();
   };
 
   // Query for active session for this store/register
   const activeSessionQuery = usePOSActiveSession(
     activeStore?._id,
     store.terminalId,
-    undefined, // cashierId - could be passed if available from auth context
+    store.cashier.id || undefined,
     store.ui.registerNumber
   );
+
+  // console.log("activeSessionQuery in POSRegisterView", activeSessionQuery);
+
+  const isSessionActive = Boolean(
+    activeSessionQuery?.status === "active" &&
+      activeSessionQuery.expiresAt &&
+      activeSessionQuery.expiresAt > Date.now()
+  );
+
+  // Handle cashier authentication
+  const handleCashierAuthenticated = (cashierId: Id<"cashier">) => {
+    store.setCashier(cashierId);
+    resetAutoSessionInitialized();
+  };
 
   // Auto-check for active session or create one on mount
   useEffect(() => {
     // Skip if no store is set yet or terminal is not registered
     if (!activeStore?._id || !store.storeId) {
+      return;
+    }
+
+    // Wait for cashier authentication before proceeding
+    if (!store.cashier.isAuthenticated) {
       return;
     }
 
@@ -101,7 +129,6 @@ export function POSRegisterView() {
 
     // Wait for query to finish loading
     if (activeSessionQuery === undefined) {
-      console.log("still loading - wait");
       // Still loading - wait
       return;
     }
@@ -175,18 +202,23 @@ export function POSRegisterView() {
       logger.info("[POS] No active session found, creating new session", {
         storeId: activeStore._id,
         registerNumber: store.ui.registerNumber,
+        cashierId: store.cashier.id,
       });
 
-      createSession(activeStore._id).catch((error) => {
-        logger.error("[POS] Failed to auto-create session", error);
-        // Error toast already shown by createSession
-        // Reset flag so we can retry
-        autoSessionInitialized.current = false;
-      });
+      createSession(activeStore._id, store.cashier.id || undefined).catch(
+        (error) => {
+          logger.error("[POS] Failed to auto-create session", error);
+          // Error toast already shown by createSession
+          // Reset flag so we can retry
+          autoSessionInitialized.current = false;
+        }
+      );
     }
   }, [
     activeStore?._id,
     store.storeId,
+    store.cashier.isAuthenticated,
+    store.cashier.id,
     activeSessionQuery,
     createSession,
     store.ui.registerNumber,
@@ -265,23 +297,23 @@ export function POSRegisterView() {
   ]);
 
   // Auto-replace URL with extracted value in the input field
-  useEffect(() => {
-    if (store.ui.productSearchQuery.trim()) {
-      // If the extracted value is different from the input (meaning we parsed a URL),
-      // replace the input with just the extracted value
-      if (
-        extractResult.type === "barcode" &&
-        extractedValue !== store.ui.productSearchQuery
-      ) {
-        logger.debug("[POS] Replacing URL input with extracted value", {
-          originalInput: store.ui.productSearchQuery,
-          extractedValue,
-          type: extractResult.type,
-        });
-        store.setProductSearchQuery(extractedValue);
-      }
-    }
-  }, [store.ui.productSearchQuery, extractedValue, store, extractResult.type]);
+  // useEffect(() => {
+  //   if (store.ui.productSearchQuery.trim()) {
+  //     // If the extracted value is different from the input (meaning we parsed a URL),
+  //     // replace the input with just the extracted value
+  //     // if (
+  //     //   extractResult.type === "barcode" &&
+  //     //   extractedValue !== store.ui.productSearchQuery
+  //     // ) {
+  //     //   logger.debug("[POS] Replacing URL input with extracted value", {
+  //     //     originalInput: store.ui.productSearchQuery,
+  //     //     extractedValue,
+  //     //     type: extractResult.type,
+  //     //   });
+  //     //   store.setProductSearchQuery(extractedValue);
+  //     // }
+  //   }
+  // }, [store.ui.productSearchQuery, extractedValue, store, extractResult.type]);
 
   // Debounce the extracted value to prevent flickering "no product found" UI while user types
   const debouncedValue = useDebounce(extractedValue, POS_SEARCH_DEBOUNCE_MS);
@@ -301,7 +333,8 @@ export function POSRegisterView() {
   // Get product ID search results (array of SKUs)
   const productIdSearchQuery =
     extractResult.type === "productId" ? debouncedValue : "";
-  const productIdSearchResults = usePOSProductIdSearch(
+
+  const productIdSearchResults = usePOSProductSearch(
     activeStore?._id,
     productIdSearchQuery
   );
@@ -326,6 +359,7 @@ export function POSRegisterView() {
   // Get barcode search result (single product or null)
   const barcodeSearchQuery =
     extractResult.type === "barcode" ? debouncedValue : "";
+
   const barcodeSearchResult = usePOSBarcodeSearch(
     activeStore?._id,
     barcodeSearchQuery
@@ -360,7 +394,8 @@ export function POSRegisterView() {
     if (
       extractResult.type === "productId" &&
       productIdSearchResults &&
-      productIdSearchResults.length === 1
+      productIdSearchResults.length === 1 &&
+      productIdSearchResults[0].quantityAvailable > 0
     ) {
       logger.info("[POS] Auto-adding product from product ID", {
         productId: extractedValue,
@@ -380,22 +415,42 @@ export function POSRegisterView() {
       return () => clearTimeout(timeoutId);
     }
 
-    // For barcode: auto-add if result found (existing behavior)
+    // For barcode: auto-add if result found
     if (extractResult.type === "barcode" && barcodeSearchResult) {
-      logger.info("[POS] Auto-adding product from barcode", {
-        barcode: extractedValue,
-        productName: barcodeSearchResult.name,
-        delay: POS_AUTO_ADD_DELAY_MS,
-      });
-      const timeoutId = setTimeout(async () => {
-        logger.debug("[POS] Executing auto-add product (barcode)", {
-          barcode: extractedValue,
-        });
-        await cart.addFromBarcode(extractedValue, barcodeSearchResult);
-        store.setProductSearchQuery("");
-      }, POS_AUTO_ADD_DELAY_MS);
+      // Handle both single result and array results
+      const shouldAutoAdd = Array.isArray(barcodeSearchResult)
+        ? barcodeSearchResult.length === 1 &&
+          barcodeSearchResult[0]?.quantityAvailable &&
+          barcodeSearchResult[0].quantityAvailable > 0
+        : true;
 
-      return () => clearTimeout(timeoutId);
+      if (shouldAutoAdd) {
+        const productToAdd = Array.isArray(barcodeSearchResult)
+          ? barcodeSearchResult[0]
+          : barcodeSearchResult;
+
+        logger.info("[POS] Auto-adding product from barcode", {
+          barcode: extractedValue,
+          productName: productToAdd.name,
+          isArray: Array.isArray(barcodeSearchResult),
+          delay: POS_AUTO_ADD_DELAY_MS,
+        });
+        const timeoutId = setTimeout(async () => {
+          logger.debug("[POS] Executing auto-add product (barcode)", {
+            barcode: extractedValue,
+          });
+          await cart.addFromBarcode(extractedValue, barcodeSearchResult);
+          store.setProductSearchQuery("");
+        }, POS_AUTO_ADD_DELAY_MS);
+
+        return () => clearTimeout(timeoutId);
+      } else {
+        // Multiple SKUs - let user select from search results
+        logger.info("[POS] Multiple SKUs found for barcode, showing results", {
+          barcode: extractedValue,
+          count: barcodeSearchResult.length,
+        });
+      }
     }
   }, [
     extractedValue,
@@ -418,6 +473,11 @@ export function POSRegisterView() {
       source: extractionSource,
     });
 
+    console.log(
+      "product id search results in handleBarcodeSubmit",
+      productIdSearchResults
+    );
+
     // For product ID: if single SKU, add it; otherwise let user select from results
     if (extractResult.type === "productId" && productIdSearchResults) {
       if (productIdSearchResults.length === 1) {
@@ -438,14 +498,34 @@ export function POSRegisterView() {
       return;
     }
 
-    // For barcode: add directly if found
+    // For barcode: add directly if found (single or single-item array)
     if (extractResult.type === "barcode" && barcodeSearchResult) {
-      logger.info("[POS] Adding product from barcode (manual submit)", {
-        barcode: extractedValue,
-        productName: barcodeSearchResult.name,
-      });
-      await cart.addFromBarcode(extractedValue, barcodeSearchResult);
-      store.setProductSearchQuery("");
+      const shouldAutoAdd = Array.isArray(barcodeSearchResult)
+        ? barcodeSearchResult.length === 1
+        : true;
+
+      if (shouldAutoAdd) {
+        const productToAdd = Array.isArray(barcodeSearchResult)
+          ? barcodeSearchResult[0]
+          : barcodeSearchResult;
+
+        logger.info("[POS] Adding product from barcode (manual submit)", {
+          barcode: extractedValue,
+          productName: productToAdd.name,
+          isArray: Array.isArray(barcodeSearchResult),
+        });
+        await cart.addFromBarcode(extractedValue, barcodeSearchResult);
+        store.setProductSearchQuery("");
+      } else {
+        // Multiple SKUs - they'll be shown in search results for user to select
+        logger.debug(
+          "[POS] Multiple SKUs found for barcode, showing selection",
+          {
+            barcode: extractedValue,
+            skuCount: barcodeSearchResult.length,
+          }
+        );
+      }
     } else if (extractResult.type === "barcode" && !barcodeSearchResult) {
       logger.warn("[POS] Barcode not found", {
         barcode: extractedValue,
@@ -467,49 +547,23 @@ export function POSRegisterView() {
     }
   };
 
-  if (terminal === null) {
-    return (
-      <View
-        header={
-          <ComposedPageHeader
-            leadingContent={
-              <div className="flex items-center gap-3">
-                <div>
-                  <p className="text-lg font-semibold text-gray-900">POS</p>
-                </div>
-              </div>
-            }
-          />
+  // Focus search input when transaction completes
+  useEffect(() => {
+    if (!store.transaction.isCompleted && store.ui.showProductEntry) {
+      // Small delay to ensure DOM is updated
+      const timer = setTimeout(() => {
+        const searchInput = document.querySelector(
+          'input[placeholder*="Lookup product"]'
+        ) as HTMLInputElement;
+        if (searchInput) {
+          searchInput.focus();
         }
-      >
-        <FadeIn className="container mx-auto h-full w-full p-6">
-          <div className="flex items-center justify-center min-h-[60vh] w-full">
-            <EmptyState
-              title="Terminal not registered"
-              icon={<ScanBarcode className="w-16 h-16 text-muted-foreground" />}
-              cta={
-                <Button variant={"outline"}>
-                  <Link
-                    params={(params) => ({
-                      ...params,
-                      orgUrlSlug: params.orgUrlSlug!,
-                      storeUrlSlug: params.storeUrlSlug!,
-                    })}
-                    search={{
-                      o: getOrigin(),
-                    }}
-                    to="/$orgUrlSlug/store/$storeUrlSlug/pos/settings"
-                  >
-                    Register Terminal
-                  </Link>
-                </Button>
-              }
-            />
-          </div>
-        </FadeIn>
-      </View>
-    );
-  }
+      }, 150);
+      return () => clearTimeout(timer);
+    }
+  }, [store.transaction.isCompleted, store.ui.showProductEntry]);
+
+  const navigateBack = useNavigateBack();
 
   if (!activeStore) {
     return (
@@ -540,7 +594,7 @@ export function POSRegisterView() {
           leadingContent={
             <div className="flex items-center gap-3">
               <p className="text-lg font-semibold text-gray-900">POS</p>
-              {activeSessionQuery && (
+              {isSessionActive && (
                 <FadeIn className="flex items-center gap-2">
                   <div className="w-2 h-2 bg-green-600 rounded-full animate-pulse" />
                   <p className="text-sm text-green-600">Active Session</p>
@@ -556,16 +610,18 @@ export function POSRegisterView() {
                   <QuickActionsBar
                     showCustomerInfo={store.ui.showCustomerPanel}
                     setShowCustomerInfo={store.setShowCustomerPanel}
+                    disabled={terminal === null}
                   />
                 </div>
 
                 {/* Session Management Section */}
-                {terminal && (
+                {terminal && store.cashier.id && (
                   <div className="flex items-center gap-3 px-3 py-2 bg-gray-50 rounded-lg border">
                     <SessionManager
                       key={`session-manager-${store.session.currentSessionId || "no-session"}-${store.session.activeSession?.sessionNumber || "empty"}`}
                       storeId={activeStore._id}
                       terminalId={terminal._id}
+                      cashierId={store.cashier.id}
                       registerNumber={store.ui.registerNumber}
                       cartItems={store.cart.items}
                       customerInfo={
@@ -581,16 +637,40 @@ export function POSRegisterView() {
                       total={store.cart.total}
                       onSessionLoaded={handleSessionLoaded}
                       onNewSession={handleNewSession}
+                      resetAutoSessionInitialized={resetAutoSessionInitialized}
                     />
                   </div>
                 )}
 
                 {/* Register Info Section */}
-                <div className="flex items-center gap-3 px-3 py-2 bg-gray-50 rounded-lg border">
+                <div
+                  className={cn(
+                    "flex items-center gap-3 px-3 py-2 bg-gray-50 rounded-lg border",
+                    terminal === null && "animate-pulse text-red-500"
+                  )}
+                >
                   <RegisterActions
                     customerName={store.customer.current?.name}
                     registerNumber={terminal?.displayName || "No terminal"}
+                    hasTerminal={terminal !== null}
                   />
+                  {terminal === null && (
+                    <Link
+                      params={(p) => ({
+                        ...p,
+                        orgUrlSlug: p.orgUrlSlug!,
+                        storeUrlSlug: p.storeUrlSlug!,
+                      })}
+                      to="/$orgUrlSlug/store/$storeUrlSlug/pos/settings"
+                      search={{
+                        o: getOrigin(),
+                      }}
+                      className="flex items-center gap-2"
+                    >
+                      <p className="text-sm font-semibold">Configure</p>
+                      <ArrowRightIcon className="w-4 h-4" />
+                    </Link>
+                  )}
                 </div>
               </div>
             ) : undefined
@@ -637,14 +717,11 @@ export function POSRegisterView() {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Left Panel - Product Entry */}
             {!store.transaction.isCompleted && (
-              <div className="lg:col-span-2 space-y-56">
+              <div className="lg:col-span-2 space-y-16">
                 {/* Product Entry Section */}
                 <div className="px-6">
                   <ProductEntry
-                    barcodeInput=""
-                    setBarcodeInput={() => {}}
-                    isScanning={store.ui.isScanning}
-                    setIsScanning={store.setIsScanning}
+                    disabled={!terminal}
                     showProductLookup={store.ui.showProductEntry}
                     setShowProductLookup={store.setShowProductEntry}
                     productSearchQuery={store.ui.productSearchQuery}
@@ -708,12 +785,29 @@ export function POSRegisterView() {
                   }}
                 />
 
-                <CashierView />
+                {activeStore?._id && terminal?._id && store.cashier.id && (
+                  <CashierView
+                    storeId={activeStore._id}
+                    terminalId={terminal._id}
+                    cashierId={store.cashier.id}
+                  />
+                )}
               </div>
             </div>
           </div>
         </div>
       </FadeIn>
+
+      {/* Cashier Authentication Dialog */}
+      {activeStore?._id && terminal?._id && (
+        <CashierAuthDialog
+          open={!store.cashier.isAuthenticated}
+          storeId={activeStore._id}
+          terminalId={terminal._id}
+          onAuthenticated={handleCashierAuthenticated}
+          onDismiss={navigateBack}
+        />
+      )}
     </View>
   );
 }

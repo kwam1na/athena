@@ -3,7 +3,7 @@ import { v } from "convex/values";
 export const posSessionSchema = v.object({
   sessionNumber: v.string(), // Human-readable session ID (e.g., "SES-001")
   storeId: v.id("store"),
-  cashierId: v.optional(v.id("athenaUser")), // Staff member who created the session
+  cashierId: v.optional(v.id("cashier")), // Cashier who created the session
   registerNumber: v.optional(v.string()),
 
   // Session state

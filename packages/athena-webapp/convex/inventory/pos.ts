@@ -47,12 +47,20 @@ export const searchProducts = query({
       // Search in product name
       const nameMatches = product.name.toLowerCase().includes(query);
 
+      const productIdMatches = product._id.toLowerCase().includes(query);
+
       // Search in product description
       const descriptionMatches = product.description
         ?.toLowerCase()
         .includes(query);
 
-      return barcodeMatches || skuMatches || nameMatches || descriptionMatches;
+      return (
+        barcodeMatches ||
+        skuMatches ||
+        nameMatches ||
+        descriptionMatches ||
+        productIdMatches
+      );
     });
 
     // Transform to POS-friendly format
@@ -110,10 +118,53 @@ export const lookupByBarcode = query({
     storeId: v.id("store"),
     barcode: v.string(),
   },
+  returns: v.union(
+    v.null(),
+    v.object({
+      id: v.id("productSku"),
+      name: v.string(),
+      sku: v.string(),
+      barcode: v.string(),
+      price: v.number(),
+      category: v.string(),
+      description: v.string(),
+      inStock: v.boolean(),
+      quantityAvailable: v.number(),
+      image: v.union(v.string(), v.null()),
+      size: v.string(),
+      length: v.union(v.number(), v.null()),
+      color: v.string(),
+      productId: v.id("product"),
+      skuId: v.id("productSku"),
+      areProcessingFeesAbsorbed: v.boolean(),
+    }),
+    v.array(
+      v.object({
+        id: v.id("productSku"),
+        name: v.string(),
+        sku: v.string(),
+        barcode: v.string(),
+        price: v.number(),
+        category: v.string(),
+        description: v.string(),
+        inStock: v.boolean(),
+        quantityAvailable: v.number(),
+        image: v.union(v.string(), v.null()),
+        size: v.string(),
+        length: v.union(v.number(), v.null()),
+        color: v.string(),
+        productId: v.id("product"),
+        skuId: v.id("productSku"),
+        areProcessingFeesAbsorbed: v.boolean(),
+      })
+    )
+  ),
   handler: async (ctx, args) => {
     if (!args.barcode.trim()) {
       return null;
     }
+
+    console.log("requesting lookup by barcode", args.barcode);
 
     // Find SKU by barcode field using index
     let sku = await ctx.db
@@ -122,6 +173,8 @@ export const lookupByBarcode = query({
         q.eq("storeId", args.storeId).eq("barcode", args.barcode)
       )
       .first();
+
+    console.log("sku", sku);
 
     // Fallback: search by sku field if barcode field is not populated
     if (!sku) {
@@ -136,12 +189,71 @@ export const lookupByBarcode = query({
         .first();
     }
 
+    // Fallback: Search by product ID - return all SKUs for the product
+    if (!sku) {
+      const product = await ctx.db
+        .query("product")
+        .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
+        .filter((q) => q.eq(q.field("_id"), args.barcode))
+        .first();
+
+      if (product) {
+        // Get all SKUs for this product
+        const allSkus = await ctx.db
+          .query("productSku")
+          .withIndex("by_productId", (q) => q.eq("productId", product._id))
+          .collect();
+
+        // Get category name
+        let categoryName = "";
+        if (product.categoryId) {
+          const category = await ctx.db.get(product.categoryId);
+          categoryName = category?.name || "";
+        }
+
+        // Transform SKUs to POS-friendly format
+        const results = await Promise.all(
+          allSkus.map(async (sku) => {
+            // Get color name if exists
+            let colorName = "";
+            if (sku.color) {
+              const color = await ctx.db.get(sku.color);
+              colorName = color?.name || "";
+            }
+
+            return {
+              id: sku._id,
+              name: product.name,
+              sku: sku.sku || "",
+              barcode: sku.barcode || "",
+              price: sku.netPrice || sku.price,
+              category: categoryName,
+              description: product.description || "",
+              inStock: sku.quantityAvailable > 0,
+              quantityAvailable: sku.quantityAvailable,
+              image: sku.images?.[0] || null,
+              size: sku.size || "",
+              length: sku.length || null,
+              color: colorName,
+              productId: product._id,
+              skuId: sku._id,
+              areProcessingFeesAbsorbed:
+                product.areProcessingFeesAbsorbed || false,
+            };
+          })
+        );
+
+        return results;
+      }
+    }
+
     if (!sku) {
       return null;
     }
 
     // Get the product details
     const product = await ctx.db.get(sku.productId);
+
     if (!product) return null;
 
     // Get category name
@@ -235,7 +347,7 @@ export const completeTransaction = mutation({
       })
     ),
     registerNumber: v.optional(v.string()),
-    cashierId: v.optional(v.id("athenaUser")),
+    cashierId: v.optional(v.id("cashier")),
   },
   handler: async (ctx, args) => {
     // Validate inventory availability with cumulative quantity tracking
@@ -392,7 +504,7 @@ export const voidTransaction = mutation({
   args: {
     transactionId: v.id("posTransaction"),
     reason: v.string(),
-    cashierId: v.optional(v.id("athenaUser")),
+    cashierId: v.optional(v.id("cashier")),
   },
   handler: async (ctx, args) => {
     const transaction = await ctx.db.get(args.transactionId);

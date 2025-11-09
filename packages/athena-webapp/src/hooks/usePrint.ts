@@ -22,7 +22,7 @@ export const usePrint = () => {
       const printDiv = document.createElement("div");
       printDiv.style.display = "none";
       printDiv.innerHTML = `
-        <div class="receipt" style="font-family: 'Courier New', monospace; font-size: 12px; line-height: 1.3; color: #000; background: #fff; padding: 5mm; max-width: 80mm; margin: 0 auto; width: 100%;">
+        <div class="receipt" style="font-family: 'Courier New', monospace; font-size: 12px; line-height: 1.3; color: #000; background: #fff; max-width: 80mm; margin: 0 auto; width: 100%;">
           ${receiptContent}
         </div>
       `;
@@ -69,10 +69,10 @@ export const usePrint = () => {
               line-height: 1.35;
               color: #000;
               background: #fff;
-              padding: 5mm;
+              padding: 0;
               -webkit-print-color-adjust: exact;
               print-color-adjust: exact;
-              font-weight: 600;
+              font-weight: 800;
             }
            
                         .receipt {
@@ -220,7 +220,7 @@ export const usePrint = () => {
                 max-width: none;
                 width: 100%;
                 margin: 0;
-                padding: 5mm;
+                padding: 0;
               }
               
               .text-lg {
@@ -287,9 +287,9 @@ export const usePrint = () => {
         // Close the window after a brief delay to allow print dialog to process
         setTimeout(() => {
           if (printWindow && !printWindow.closed && !isClosing) {
-            isClosing = true;
-            printWindow.close();
-            console.log("Print window closed via timeout");
+            // isClosing = true;
+            // printWindow.close();
+            // console.log("Print window closed via timeout");
           }
         }, 1500);
       } catch (error) {

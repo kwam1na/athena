@@ -29,41 +29,6 @@ const emailSchema = z
   .email("Invalid email address")
   .refine((value) => value.trim().length > 0, "Email cannot be empty");
 
-// Rate limiting: check if there are too many requests from this IP
-const isRateLimited = async (
-  ctx: QueryCtx,
-  ipAddress: string | undefined,
-  email: string
-) => {
-  if (!ipAddress) return false;
-
-  // Check IP-based rate limiting (10 attempts per hour)
-  const hourAgo = Date.now() - 60 * 60 * 1000;
-  const ipRequests = await ctx.db
-    .query(entity)
-    .withIndex("by_ipAddress", (q) => q.eq("ipAddress", ipAddress))
-    .filter((q) => q.gte(q.field("_creationTime"), hourAgo))
-    .collect();
-
-  if (ipRequests.length >= 10) {
-    return true;
-  }
-
-  // Check email-based rate limiting (3 attempts per day)
-  const dayAgo = Date.now() - 24 * 60 * 60 * 1000;
-  const emailRequests = await ctx.db
-    .query(entity)
-    .withIndex("by_email", (q) => q.eq("email", email))
-    .filter((q) => q.gte(q.field("_creationTime"), dayAgo))
-    .collect();
-
-  if (emailRequests.length >= 3) {
-    return true;
-  }
-
-  return false;
-};
-
 // Check if this email + guest combination already exists for this promo
 const isDuplicate = async (
   ctx: QueryCtx,

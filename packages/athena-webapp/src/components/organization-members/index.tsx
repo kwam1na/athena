@@ -13,24 +13,19 @@ import {
 import { Input } from "../ui/input";
 import { Button } from "../ui/button";
 import { Plus } from "lucide-react";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "../ui/select";
 import { useState } from "react";
 import { LoadingButton } from "../ui/loading-button";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "~/convex/_generated/api";
 import { useAuth } from "~/src/hooks/useAuth";
 import { useGetActiveOrganization } from "~/src/hooks/useGetOrganizations";
+import useGetActiveStore from "~/src/hooks/useGetActiveStore";
 import { toast } from "sonner";
 import { InviteDataTable } from "./invites-table/components/data-table";
 import { inviteColumns } from "./invites-table/components/inviteColumns";
 import { MembersDataTable } from "./members-table/components/data-table";
 import { membersColumns } from "./members-table/components/membersColumns";
+import { CashierManagement } from "../cashiers";
 
 const organizationMemberSchema = z.object({
   email: z.string().email(),
@@ -207,26 +202,39 @@ const MemberForm = ({ onCancelClick }: { onCancelClick: () => void }) => {
 
 export const OrganizationMembersView = () => {
   const [showMemberForm, setShowMemberForm] = useState(false);
+  const { activeOrganization } = useGetActiveOrganization();
+  const { activeStore } = useGetActiveStore();
 
   return (
     <View hideBorder hideHeaderBottomBorder header={<Header />}>
-      <div className="container mx-auto h-full w-full py-8 grid grid-cols-2 gap-40">
-        <div className="space-y-8">
-          <Members />
-          {showMemberForm && (
-            <div>
-              <MemberForm onCancelClick={() => setShowMemberForm(false)} />
-            </div>
-          )}
-          {!showMemberForm && (
-            <Button variant={"ghost"} onClick={() => setShowMemberForm(true)}>
-              <Plus className="w-4 h-4 mr-2" />
-              Add Member
-            </Button>
-          )}
+      <div className="container mx-auto h-full w-full py-8 space-y-12">
+        <div className="grid grid-cols-2 gap-40">
+          <div className="space-y-8">
+            <Members />
+            {showMemberForm && (
+              <div>
+                <MemberForm onCancelClick={() => setShowMemberForm(false)} />
+              </div>
+            )}
+            {!showMemberForm && (
+              <Button variant={"ghost"} onClick={() => setShowMemberForm(true)}>
+                <Plus className="w-4 h-4 mr-2" />
+                Add Member
+              </Button>
+            )}
+          </div>
+
+          <Invites />
         </div>
 
-        <Invites />
+        {activeStore && activeOrganization && (
+          <div className="border-t pt-12">
+            <CashierManagement
+              storeId={activeStore._id}
+              organizationId={activeOrganization._id}
+            />
+          </div>
+        )}
       </div>
     </View>
   );

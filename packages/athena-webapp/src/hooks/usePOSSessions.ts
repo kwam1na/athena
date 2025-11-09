@@ -8,12 +8,15 @@ import { logger } from "../lib/logger";
 export const usePOSStoreSessions = (
   storeId: Id<"store"> | undefined,
   terminalId: Id<"posTerminal"> | undefined,
+  cashierId?: Id<"cashier">,
   status?: "active" | "held" | "completed" | "void",
   limit?: number
 ) => {
   return useQuery(
     api.inventory.posSessions.getStoreSessions,
-    storeId ? { storeId, terminalId, status, limit } : "skip"
+    storeId && cashierId
+      ? { storeId, cashierId, terminalId, status, limit }
+      : "skip"
   );
 };
 
@@ -29,7 +32,7 @@ export const usePOSSession = (sessionId: Id<"posSession"> | undefined) => {
 export const usePOSActiveSession = (
   storeId: Id<"store"> | undefined,
   terminalId: Id<"posTerminal"> | undefined,
-  cashierId?: Id<"athenaUser">,
+  cashierId?: Id<"cashier">,
   registerNumber?: string
 ) => {
   return useQuery(
@@ -48,7 +51,7 @@ export const usePOSSessionCreate = () => {
     createSession: async (
       storeId: Id<"store">,
       terminalId: Id<"posTerminal">,
-      cashierId?: Id<"athenaUser">,
+      cashierId?: Id<"cashier">,
       registerNumber?: string
     ) => {
       try {
@@ -59,10 +62,14 @@ export const usePOSSessionCreate = () => {
           registerNumber,
         });
 
-        logger.debug("Session created successfully", {
-          sessionId: result.sessionId,
-        });
-        return result.sessionId;
+        if (result.success) {
+          logger.debug("Session created successfully", {
+            sessionId: result.data.sessionId,
+          });
+          return result.data.sessionId;
+        } else {
+          throw new Error(result.message);
+        }
       } catch (error) {
         logger.error("Failed to create session", error as Error);
         throw error;
@@ -78,6 +85,7 @@ export const usePOSSessionUpdate = () => {
   return {
     updateSession: async (
       sessionId: Id<"posSession">,
+      cashierId: Id<"cashier">,
       updates: {
         customerId?: Id<"posCustomer">;
         customerInfo?: CustomerInfo;
@@ -90,6 +98,7 @@ export const usePOSSessionUpdate = () => {
         // Cart items are now managed via posSessionItems mutations
         return await updateSession({
           sessionId,
+          cashierId,
           customerId: updates.customerId,
           customerInfo: updates.customerInfo,
           subtotal: updates.subtotal,
@@ -109,9 +118,13 @@ export const usePOSSessionHold = () => {
   const holdSession = useMutation(api.inventory.posSessions.holdSession);
 
   return {
-    holdSession: async (sessionId: Id<"posSession">, holdReason?: string) => {
+    holdSession: async (
+      sessionId: Id<"posSession">,
+      cashierId: Id<"cashier">,
+      holdReason?: string
+    ) => {
       try {
-        return await holdSession({ sessionId, holdReason });
+        return await holdSession({ sessionId, cashierId, holdReason });
       } catch (error) {
         logger.error("Failed to hold session", error as Error);
         throw error;
@@ -125,9 +138,13 @@ export const usePOSSessionResume = () => {
   const resumeSession = useMutation(api.inventory.posSessions.resumeSession);
 
   return {
-    resumeSession: async (sessionId: Id<"posSession">) => {
+    resumeSession: async (
+      sessionId: Id<"posSession">,
+      cashierId: Id<"cashier">,
+      terminalId: Id<"posTerminal">
+    ) => {
       try {
-        return await resumeSession({ sessionId });
+        return await resumeSession({ sessionId, cashierId, terminalId });
       } catch (error) {
         logger.error("Failed to resume session", error as Error);
         throw error;
@@ -188,7 +205,7 @@ export const usePOSSessionVoid = () => {
 export const usePOSSessionManager = (
   storeId: Id<"store"> | undefined,
   terminalId: Id<"posTerminal">,
-  cashierId?: Id<"athenaUser">,
+  cashierId?: Id<"cashier">,
   registerNumber?: string
 ) => {
   const { createSession } = usePOSSessionCreate();
@@ -205,7 +222,13 @@ export const usePOSSessionManager = (
     registerNumber
   );
 
-  const heldSessions = usePOSStoreSessions(storeId, terminalId, "held", 10);
+  const heldSessions = usePOSStoreSessions(
+    storeId,
+    terminalId,
+    cashierId,
+    "held",
+    10
+  );
 
   return {
     // Data

@@ -92,7 +92,6 @@ export const getAll = query({
     }
 
     if (args.category && !categoryId) {
-      console.log("returning empty array");
       return [];
     }
 
@@ -116,7 +115,6 @@ export const getAll = query({
     }
 
     if (args.subcategory && !subcategoryId) {
-      console.log("returning empty array for subcategory");
       return [];
     }
 

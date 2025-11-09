@@ -1,6 +1,5 @@
 import { OrganizationModal } from "@/components/ui/modals/organization-modal";
 import { StoreModal } from "@/components/ui/modals/store-modal";
-import { AppLayoutProvider } from "@/contexts/AppLayoutContext";
 import { createFileRoute, Outlet, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import {
@@ -27,11 +26,11 @@ function AuthedComponent() {
   }, [user]);
 
   return (
-    <AppLayoutProvider>
+    <>
       <StoreModal />
       <OrganizationModal />
       <Outlet />
-    </AppLayoutProvider>
+    </>
   );
 }
 

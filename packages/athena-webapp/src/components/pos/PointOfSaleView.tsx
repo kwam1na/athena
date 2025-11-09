@@ -64,15 +64,12 @@ export default function PointOfSaleView() {
   const posFeatures = [
     {
       title: "POS",
-      description:
-        terminal !== null
-          ? "Complete POS interface with barcode scanning and customer management"
-          : "Register this terminal in settings to access the POS interface",
+      description: "Transact in-store sales",
       icon: ScanBarcode,
       href: "/$orgUrlSlug/store/$storeUrlSlug/pos/register" as const,
       color: "bg-blue-500",
       available: true,
-      enabled: terminal !== null,
+      enabled: true,
     },
     {
       title: "Product Lookup",
@@ -108,7 +105,7 @@ export default function PointOfSaleView() {
     },
     {
       title: "POS Settings",
-      description: "Configure hardware, tax rates, and payment methods",
+      description: "Configure terminal settings",
       icon: Settings,
       href: "/$orgUrlSlug/store/$storeUrlSlug/pos/settings" as const,
       color: "bg-gray-500",
@@ -125,7 +122,7 @@ export default function PointOfSaleView() {
     >
       <FadeIn className="space-y-8 py-8">
         {/* Quick Actions */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+        {/* <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
           <Card className="border-2 border-blue-200">
             <CardContent className="p-6">
               <div className="flex items-center space-x-4">
@@ -175,11 +172,11 @@ export default function PointOfSaleView() {
               </div>
             </CardContent>
           </Card>
-        </div>
+        </div> */}
 
         {/* POS Features Grid */}
         <div>
-          <h2 className="text-2xl font-semibold mb-6">POS Features</h2>
+          {/* <h2 className="text-2xl font-semibold mb-6">POS Features</h2> */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {posFeatures.map((feature) => {
               const Icon = feature.icon;
@@ -222,7 +219,6 @@ export default function PointOfSaleView() {
                 >
                   <Link
                     to={feature.href}
-                    disabled={feature.enabled === false}
                     params={{
                       orgUrlSlug: activeOrganization.slug,
                       storeUrlSlug: activeStore.slug,

@@ -61,6 +61,7 @@ export const addOrUpdateItem = mutation({
     sessionId: v.id("posSession"),
     productId: v.id("product"),
     productSkuId: v.id("productSku"),
+    cashierId: v.id("cashier"),
     productSku: v.string(),
     barcode: v.optional(v.string()),
     productName: v.string(),
@@ -77,7 +78,11 @@ export const addOrUpdateItem = mutation({
       const now = Date.now();
 
       // Validate session is active using helper
-      const validation = await validateSessionActive(ctx.db, args.sessionId);
+      const validation = await validateSessionActive(
+        ctx.db,
+        args.sessionId,
+        args.cashierId
+      );
       if (!validation.success) {
         return error(validation.message!);
       }
@@ -179,6 +184,7 @@ export const addOrUpdateItem = mutation({
 export const removeItem = mutation({
   args: {
     sessionId: v.id("posSession"),
+    cashierId: v.id("cashier"),
     itemId: v.id("posSessionItem"),
   },
   returns: operationSuccessValidator,
@@ -189,7 +195,8 @@ export const removeItem = mutation({
       // Validate session can be modified (checks expiration)
       const sessionValidation = await validateSessionModifiable(
         ctx.db,
-        args.sessionId
+        args.sessionId,
+        args.cashierId
       );
       if (!sessionValidation.success) {
         return error(sessionValidation.message!);

@@ -4,20 +4,23 @@
  * Helper functions for transaction processing and formatting.
  */
 
+const TRANSACTION_MODULO = 1_000_000;
+let lastTransactionNumber: number | null = null;
+
 /**
- * Generates a unique transaction number based on timestamp
+ * Generates a unique 6-digit transaction number derived from the current timestamp.
+ * Ensures sequential uniqueness even when multiple calls occur within the same millisecond.
  */
 export function generateTransactionNumber(): string {
-  const now = new Date();
-  const year = now.getFullYear().toString().slice(-2);
-  const month = (now.getMonth() + 1).toString().padStart(2, "0");
-  const day = now.getDate().toString().padStart(2, "0");
-  const hours = now.getHours().toString().padStart(2, "0");
-  const minutes = now.getMinutes().toString().padStart(2, "0");
-  const seconds = now.getSeconds().toString().padStart(2, "0");
-  const ms = now.getMilliseconds().toString().padStart(3, "0");
+  const base = Number(Date.now() % TRANSACTION_MODULO);
+  let candidate = base;
 
-  return `TXN-${year}${month}${day}-${hours}${minutes}${seconds}-${ms}`;
+  if (lastTransactionNumber !== null && candidate <= lastTransactionNumber) {
+    candidate = (lastTransactionNumber + 1) % TRANSACTION_MODULO;
+  }
+
+  lastTransactionNumber = candidate;
+  return candidate.toString().padStart(6, "0");
 }
 
 /**

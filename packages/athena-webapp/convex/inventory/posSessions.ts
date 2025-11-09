@@ -16,6 +16,7 @@ import {
   sessionResultValidator,
   sessionSuccess,
   error,
+  createSessionResultValidator,
 } from "./helpers/resultTypes";
 import { calculateSessionExpiration } from "./helpers/sessionExpiration";
 
@@ -24,6 +25,7 @@ export const getStoreSessions = query({
   args: {
     storeId: v.id("store"),
     terminalId: v.optional(v.id("posTerminal")),
+    cashierId: v.optional(v.id("cashier")),
     status: v.optional(v.string()), // "active", "held", "completed", "void"
     limit: v.optional(v.number()),
   },
@@ -47,6 +49,12 @@ export const getStoreSessions = query({
     if (args.terminalId) {
       sessions = sessions.filter(
         (session) => session.terminalId === args.terminalId
+      );
+    }
+
+    if (args.cashierId) {
+      sessions = sessions.filter(
+        (session) => session.cashierId === args.cashierId
       );
     }
 
@@ -108,13 +116,10 @@ export const createSession = mutation({
   args: {
     storeId: v.id("store"),
     terminalId: v.id("posTerminal"),
-    cashierId: v.optional(v.id("athenaUser")),
+    cashierId: v.optional(v.id("cashier")),
     registerNumber: v.optional(v.string()),
   },
-  returns: v.object({
-    sessionId: v.id("posSession"),
-    expiresAt: v.number(),
-  }),
+  returns: createSessionResultValidator,
   handler: async (ctx, args) => {
     const now = Date.now();
     const registerNumber = args.registerNumber || "1";
@@ -135,8 +140,19 @@ export const createSession = mutation({
 
     // Filter by terminal id and close any existing active session
     const existingSession = nonExpiredActiveSessions.find(
-      (s) => s.terminalId === args.terminalId
+      (s) => s.terminalId === args.terminalId && s.cashierId === args.cashierId
     );
+
+    const existingSessionOnDifferentTerminal = nonExpiredActiveSessions.find(
+      (s) => s.terminalId !== args.terminalId && s.cashierId === args.cashierId
+    );
+
+    if (existingSessionOnDifferentTerminal) {
+      return {
+        success: false as const,
+        message: "A session is active for this cashier on a different terminal",
+      };
+    }
 
     if (existingSession) {
       // Check if existing session has items by querying posSessionItem table
@@ -158,8 +174,11 @@ export const createSession = mutation({
       }
 
       return {
-        sessionId: existingSession._id,
-        expiresAt: existingSession.expiresAt,
+        success: true as const,
+        data: {
+          sessionId: existingSession._id,
+          expiresAt: existingSession.expiresAt,
+        },
       };
     }
 
@@ -186,7 +205,7 @@ export const createSession = mutation({
       expiresAt,
     });
 
-    return { sessionId, expiresAt };
+    return { success: true as const, data: { sessionId, expiresAt } };
   },
 });
 
@@ -195,6 +214,7 @@ export const createSession = mutation({
 export const updateSession = mutation({
   args: {
     sessionId: v.id("posSession"),
+    cashierId: v.id("cashier"),
     customerId: v.optional(v.id("posCustomer")),
     customerInfo: v.optional(
       v.object({
@@ -213,7 +233,11 @@ export const updateSession = mutation({
     const now = Date.now();
 
     // Validate session can be modified (not completed or void)
-    const validation = await validateSessionModifiable(ctx.db, sessionId);
+    const validation = await validateSessionModifiable(
+      ctx.db,
+      sessionId,
+      args.cashierId
+    );
     if (!validation.success) {
       // For completed/void sessions, return current state without update
       const currentSession = await ctx.db.get(sessionId);
@@ -244,6 +268,7 @@ export const updateSession = mutation({
 export const holdSession = mutation({
   args: {
     sessionId: v.id("posSession"),
+    cashierId: v.id("cashier"),
     holdReason: v.optional(v.string()),
   },
   returns: sessionResultValidator,
@@ -251,7 +276,11 @@ export const holdSession = mutation({
     const now = Date.now();
 
     // Validate session can be modified (checks expiration)
-    const validation = await validateSessionModifiable(ctx.db, args.sessionId);
+    const validation = await validateSessionModifiable(
+      ctx.db,
+      args.sessionId,
+      args.cashierId
+    );
     if (!validation.success) {
       return error(validation.message!);
     }
@@ -279,6 +308,8 @@ export const holdSession = mutation({
 export const resumeSession = mutation({
   args: {
     sessionId: v.id("posSession"),
+    cashierId: v.id("cashier"),
+    terminalId: v.id("posTerminal"),
   },
   returns: sessionResultValidator,
   handler: async (ctx, args) => {
@@ -298,52 +329,20 @@ export const resumeSession = mutation({
       return error("This session has expired. Start a new one to proceed.");
     }
 
-    // Query all items for this session
-    // const items = await ctx.db
-    //   .query("posSessionItem")
-    //   .withIndex("by_sessionId", (q) => q.eq("sessionId", args.sessionId))
-    //   .collect();
+    // Check that this cashier does not have an active session on a different terminal
+    const cashierSessions = await ctx.db
+      .query("posSession")
+      .withIndex("by_cashierId", (q) => q.eq("cashierId", args.cashierId))
+      .filter((q) => q.eq(q.field("status"), "active"))
+      .collect();
 
-    // Calculate total quantities needed per SKU
-    // const skuQuantities = new Map<
-    //   Id<"productSku">,
-    //   { quantity: number; name: string }
-    // >();
-    // for (const item of items) {
-    //   const existing = skuQuantities.get(item.productSkuId);
-    //   if (existing) {
-    //     existing.quantity += item.quantity;
-    //   } else {
-    //     skuQuantities.set(item.productSkuId, {
-    //       quantity: item.quantity,
-    //       name: item.productName,
-    //     });
-    //   }
-    // }
+    const activeSessionsOnOtherTerminals = cashierSessions.filter(
+      (s) => s.expiresAt > now && s.terminalId !== args.terminalId
+    );
 
-    // ONLY validate that inventory is still available
-    // DO NOT acquire new holds - the holds are already in place from when session was held
-    // Acquiring new holds would double-count the inventory (held once when session was suspended,
-    // then held again on resume, causing incorrect stock levels)
-    // const unavailableItems: string[] = [];
-    // for (const [skuId, data] of skuQuantities.entries()) {
-    //   const validation = await validateInventoryAvailability(
-    //     ctx.db,
-    //     skuId,
-    //     data.quantity
-    //   );
-    //   if (!validation.success) {
-    //     unavailableItems.push(
-    //       `${data.name}: ${validation.message} (Available: ${validation.available || 0}, Need: ${data.quantity})`
-    //     );
-    //   }
-    // }
-
-    // if (unavailableItems.length > 0) {
-    //   return error(
-    //     `Cannot resume session - some items no longer available:\n${unavailableItems.join("\n")}`
-    //   );
-    // }
+    if (activeSessionsOnOtherTerminals.length > 0) {
+      return error("This cashier has an active session on another terminal");
+    }
 
     // Reset expiration to new window
     const expiresAt = calculateSessionExpiration(now);
@@ -555,7 +554,7 @@ export const getActiveSession = query({
   args: {
     storeId: v.id("store"),
     terminalId: v.id("posTerminal"),
-    cashierId: v.optional(v.id("athenaUser")),
+    cashierId: v.optional(v.id("cashier")),
     registerNumber: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
@@ -736,5 +735,26 @@ export const cleanupOldSessions = mutation({
     await Promise.all(oldSessions.map((session) => ctx.db.delete(session._id)));
 
     return oldSessions.length;
+  },
+});
+
+export const expireAllSessionsForCashier = mutation({
+  args: {
+    cashierId: v.id("cashier"),
+    terminalId: v.id("posTerminal"),
+  },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+    const sessions = await ctx.db
+      .query("posSession")
+      .withIndex("by_cashierId", (q) => q.eq("cashierId", args.cashierId))
+      .filter((q) => q.neq(q.field("terminalId"), args.terminalId))
+      .collect();
+
+    await Promise.all(
+      sessions.map((session) => ctx.db.patch(session._id, { expiresAt: now }))
+    );
+
+    return { success: true as const, data: { cashierId: args.cashierId } };
   },
 });

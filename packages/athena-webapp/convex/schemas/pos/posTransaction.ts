@@ -5,7 +5,7 @@ export const posTransactionSchema = v.object({
   storeId: v.id("store"),
   sessionId: v.optional(v.id("posSession")), // Link to the session that created this transaction (if created from session)
   customerId: v.optional(v.id("posCustomer")), // Link to POS customer
-  cashierId: v.optional(v.id("athenaUser")), // Staff member who processed the transaction
+  cashierId: v.optional(v.id("cashier")), // Cashier who processed the transaction
   registerNumber: v.optional(v.string()),
   subtotal: v.number(),
   tax: v.number(),

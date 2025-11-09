@@ -38,15 +38,25 @@ export async function validateSessionExists(
  */
 export async function validateSessionActive(
   db: DatabaseReader,
-  sessionId: Id<"posSession">
+  sessionId: Id<"posSession">,
+  cashierId: Id<"cashier">
 ): Promise<ValidationResult> {
   const session = await db.get(sessionId);
   const now = Date.now();
+
+  console.log("session in validateSessionActive", session);
 
   if (!session) {
     return {
       success: false,
       message: "Your session has expired. Start a new one to proceed.",
+    };
+  }
+
+  if (session.cashierId !== cashierId) {
+    return {
+      success: false,
+      message: "This session is not associated with your cashier.",
     };
   }
 
@@ -83,7 +93,8 @@ export async function validateSessionActive(
  */
 export async function validateSessionModifiable(
   db: DatabaseReader,
-  sessionId: Id<"posSession">
+  sessionId: Id<"posSession">,
+  cashierId: Id<"cashier">
 ): Promise<ValidationResult> {
   const session = await db.get(sessionId);
   const now = Date.now();
@@ -92,6 +103,13 @@ export async function validateSessionModifiable(
     return {
       success: false,
       message: "Session not found",
+    };
+  }
+
+  if (session.cashierId !== cashierId) {
+    return {
+      success: false,
+      message: "This session is not associated with your cashier.",
     };
   }
 
@@ -123,7 +141,7 @@ export async function validateSessionOwnership(
   sessionId: Id<"posSession">,
   options: {
     storeId?: Id<"store">;
-    cashierId?: Id<"athenaUser">;
+    cashierId?: Id<"cashier">;
     registerNumber?: string;
   }
 ): Promise<ValidationResult> {

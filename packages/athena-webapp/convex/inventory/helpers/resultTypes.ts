@@ -90,6 +90,23 @@ export const itemResultValidator = v.union(
 );
 
 /**
+ * Sucess/Error result validator for create session operation
+ */
+export const createSessionResultValidator = v.union(
+  v.object({
+    success: v.literal(true),
+    data: v.object({
+      sessionId: v.id("posSession"),
+      expiresAt: v.number(),
+    }),
+  }),
+  v.object({
+    success: v.literal(false),
+    message: v.string(),
+  })
+);
+
+/**
  * Success/Error result validator for general operations
  */
 export const operationSuccessValidator = v.union(

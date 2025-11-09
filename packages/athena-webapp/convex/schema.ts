@@ -5,6 +5,7 @@ import {
   athenaUserSchema,
   bannerMessageSchema,
   bestSellerSchema,
+  cashierSchema,
   categorySchema,
   colorSchema,
   featuredItemSchema,
@@ -70,6 +71,10 @@ const schema = defineSchema({
     "storeId",
   ]),
   bestSeller: defineTable(bestSellerSchema),
+  cashier: defineTable(cashierSchema)
+    .index("by_storeId", ["storeId"])
+    .index("by_storeId_and_active", ["storeId", "active"])
+    .index("by_store_and_username", ["storeId", "username"]),
   category: defineTable(categorySchema),
   checkoutSession: defineTable(checkoutSessionSchema),
   checkoutSessionItem: defineTable(checkoutSessionItemSchema).index(
@@ -98,10 +103,7 @@ const schema = defineSchema({
     .index("by_storeId_and_name", ["storeId", "name"])
     .index("by_storeId_and_email", ["storeId", "email"])
     .index("by_storeId_and_phone", ["storeId", "phone"])
-    .index("by_linkedStoreFrontUserId", ["linkedStoreFrontUserId"])
-    .index("by_linkedGuestId", ["linkedGuestId"])
-    .index("by_loyaltyTier", ["loyaltyTier"])
-    .index("by_createdBy", ["createdBy"]),
+    .index("by_linkedStoreFrontUserId", ["linkedStoreFrontUserId"]),
   posTerminal: defineTable(posTerminalSchema)
     .index("by_storeId", ["storeId"])
     .index("by_storeId_and_fingerprintHash", ["storeId", "fingerprintHash"])
@@ -159,8 +161,7 @@ const schema = defineSchema({
     .index("by_email", ["email"])
     .index("by_storeFrontUserId", ["storeFrontUserId"])
     .index("by_promoCodeId", ["promoCodeId"])
-    .index("by_storeId", ["storeId"])
-    .index("by_ipAddress", ["ipAddress"]),
+    .index("by_storeId", ["storeId"]),
 });
 
 export default schema;

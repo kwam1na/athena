@@ -375,7 +375,6 @@ function SubcategoryManager() {
 
   const save = async () => {
     if (!name || !activeStore || !categoryId) {
-      console.log("returning because null...");
       throw new Error("Missing data to save subcategory");
     }
 

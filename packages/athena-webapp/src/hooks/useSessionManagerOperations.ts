@@ -16,7 +16,7 @@ import { showNoActiveSessionError } from "../lib/pos/toastService";
 export const useSessionManagerOperations = (
   storeId: Id<"store">,
   terminalId: Id<"posTerminal">,
-  cashierId?: Id<"athenaUser">,
+  cashierId: Id<"cashier">,
   registerNumber?: string
 ) => {
   const store = usePOSStore();
@@ -47,7 +47,7 @@ export const useSessionManagerOperations = (
 
       // First update the session with current cart state
       if (store.cart.items.length > 0 || store.customer.current) {
-        await updateSession(activeSession._id, {
+        await updateSession(activeSession._id, cashierId, {
           customerId: store.customer.current?.customerId,
           customerInfo: store.customer.current
             ? {
@@ -87,6 +87,8 @@ export const useSessionManagerOperations = (
   const handleResumeSession = useCallback(
     async (
       sessionId: Id<"posSession">,
+      cashierId: Id<"cashier">,
+      terminalId: Id<"posTerminal">,
       onSessionLoaded: (session: POSSession) => void
     ): Promise<{ success: true } | { success: false; error: string }> => {
       logger.debug("Resuming session", { sessionId });
@@ -154,7 +156,7 @@ export const useSessionManagerOperations = (
       onSessionLoaded(posSession);
 
       // Then resume the session in the backend (errors handled by resumeSession)
-      const result = await resumeSession(sessionId);
+      const result = await resumeSession(sessionId, cashierId, terminalId);
 
       if (!result.success) {
         logger.info("Failed to resume session", {

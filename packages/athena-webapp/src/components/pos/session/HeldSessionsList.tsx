@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Users, ShoppingCart, PlayCircle, Ban, Clock } from "lucide-react";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { useGetCurrencyFormatter } from "~/src/hooks/useGetCurrencyFormatter";
+import { usePOSStore } from "~/src/stores/posStore";
 
 interface HeldSession {
   _id: Id<"posSession">;
@@ -25,7 +26,11 @@ interface HeldSession {
 
 interface HeldSessionsListProps {
   sessions: HeldSession[];
-  onResumeSession: (sessionId: Id<"posSession">) => void;
+  onResumeSession: (
+    sessionId: Id<"posSession">,
+    cashierId: Id<"cashier">,
+    terminalId: Id<"posTerminal">
+  ) => void;
   onVoidSession: (sessionId: Id<"posSession">) => void;
 }
 
@@ -34,9 +39,7 @@ export function HeldSessionsList({
   onResumeSession,
   onVoidSession,
 }: HeldSessionsListProps) {
-  const formatTime = (timestamp: number) => {
-    return new Date(timestamp).toLocaleTimeString();
-  };
+  const store = usePOSStore();
 
   const formatter = useGetCurrencyFormatter();
 
@@ -110,7 +113,13 @@ export function HeldSessionsList({
                   variant="ghost"
                   size="sm"
                   disabled={hasExpired(session.expiresAt)}
-                  onClick={() => onResumeSession(session._id)}
+                  onClick={() =>
+                    onResumeSession(
+                      session._id,
+                      store.cashier.id as Id<"cashier">,
+                      store.terminalId as Id<"posTerminal">
+                    )
+                  }
                   title="Resume session"
                 >
                   <PlayCircle className="h-4 w-4" />

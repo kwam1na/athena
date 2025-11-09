@@ -59,6 +59,11 @@ interface UIState {
   registerNumber: string;
 }
 
+interface CashierState {
+  id: Id<"cashier"> | null;
+  isAuthenticated: boolean;
+}
+
 interface POSState {
   // State
   cart: CartState;
@@ -66,6 +71,7 @@ interface POSState {
   session: SessionState;
   transaction: TransactionState;
   ui: UIState;
+  cashier: CashierState;
   storeId?: Id<"store">;
   terminalId?: Id<"posTerminal">;
 
@@ -121,6 +127,10 @@ interface POSState {
   setIsScanning: (isScanning: boolean) => void;
   setRegisterNumber: (registerNumber: string) => void;
 
+  // Cashier Actions
+  setCashier: (cashierId: Id<"cashier"> | null) => void;
+  clearCashier: () => void;
+
   // Global Actions
   setStoreId: (storeId?: Id<"store">) => void;
   setTerminalId: (terminalId?: Id<"posTerminal">) => void;
@@ -163,6 +173,10 @@ const initialState = {
     barcodeInput: "",
     isScanning: false,
     registerNumber: "1",
+  },
+  cashier: {
+    id: null,
+    isAuthenticated: false,
   },
 };
 
@@ -414,6 +428,19 @@ export const usePOSStore = create<POSState>()(
         setRegisterNumber: (registerNumber) =>
           set((state) => {
             state.ui.registerNumber = registerNumber;
+          }),
+
+        // Cashier Actions
+        setCashier: (cashierId) =>
+          set((state) => {
+            state.cashier.id = cashierId;
+            state.cashier.isAuthenticated = !!cashierId;
+          }),
+
+        clearCashier: () =>
+          set((state) => {
+            state.cashier.id = null;
+            state.cashier.isAuthenticated = false;
           }),
 
         // Global Actions

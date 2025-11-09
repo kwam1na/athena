@@ -1,6 +1,7 @@
 export * from "./athenaUser";
 export * from "./appVerificationCode";
 export * from "./bannerMessage";
+export * from "./cashier";
 export * from "./category";
 export * from "./inviteCode";
 export * from "./subcategory";

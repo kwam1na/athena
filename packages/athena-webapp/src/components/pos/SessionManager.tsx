@@ -16,11 +16,12 @@ import { HoldSessionDialog } from "./session/HoldSessionDialog";
 import { usePOSStore } from "~/src/stores/posStore";
 import { FadeIn } from "../common/FadeIn";
 import { motion } from "framer-motion";
+import { usePOSActiveSession } from "~/src/hooks/usePOSSessions";
 
 interface SessionManagerProps {
   storeId: Id<"store">;
   terminalId: Id<"posTerminal">;
-  cashierId?: Id<"athenaUser">;
+  cashierId: Id<"cashier">;
   registerNumber?: string;
   cartItems: CartItem[];
   customerInfo: CustomerInfo;
@@ -29,6 +30,7 @@ interface SessionManagerProps {
   total: number;
   onSessionLoaded: (session: POSSession) => void;
   onNewSession: () => void;
+  resetAutoSessionInitialized: () => void;
 }
 
 export function SessionManager(props: SessionManagerProps) {
@@ -39,12 +41,13 @@ export function SessionManager(props: SessionManagerProps) {
     registerNumber,
     onSessionLoaded,
     onNewSession,
+    resetAutoSessionInitialized,
   } = props;
 
   // Use focused session manager operations hook
   const {
-    activeSession,
     heldSessions,
+    activeSession: activeSessionResponse,
     handleHoldCurrentSession,
     handleResumeSession,
     handleVoidSession,
@@ -58,18 +61,30 @@ export function SessionManager(props: SessionManagerProps) {
 
   const store = usePOSStore();
 
+  const { activeSession: activeSessionStore } = store.session;
+
+  const activeSession = activeSessionResponse || activeSessionStore;
+
   // Local UI state
   const [showHoldDialog, setShowHoldDialog] = useState(false);
-  const [showVoidDialog, setShowVoidDialog] = useState(false);
 
   // Wrapper functions to handle UI state
   const onHoldConfirm = async (reason?: string) => {
     await handleHoldCurrentSession(reason);
-    setShowHoldDialog(false);
+    resetAutoSessionInitialized();
   };
 
-  const onResumeSession = async (sessionId: Id<"posSession">) => {
-    await handleResumeSession(sessionId, onSessionLoaded);
+  const onResumeSession = async (
+    sessionId: Id<"posSession">,
+    cashierId: Id<"cashier">,
+    terminalId: Id<"posTerminal">
+  ) => {
+    await handleResumeSession(
+      sessionId,
+      cashierId,
+      terminalId,
+      onSessionLoaded
+    );
   };
 
   const onVoidConfirm = async (reason?: string) => {

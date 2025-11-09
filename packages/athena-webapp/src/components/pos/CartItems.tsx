@@ -66,11 +66,11 @@ export function CartItems({
             {cartItems.map((item) => (
               <div
                 key={item.id}
-                className="grid grid-cols-12 gap-2 p-3 border bg-white rounded-lg items-center"
+                className="grid grid-cols-12 gap-2 p-8 border bg-white rounded-lg items-center"
               >
                 {/* Product Image & Info Combined */}
                 <div className="col-span-5 flex items-center gap-4">
-                  <div className="w-12 h-12 bg-muted rounded flex items-center justify-center flex-shrink-0">
+                  <div className="w-16 h-16 bg-muted rounded flex items-center justify-center flex-shrink-0">
                     {item.image ? (
                       <img
                         src={item.image}
@@ -82,7 +82,7 @@ export function CartItems({
                     )}
                   </div>
 
-                  <div className="flex-1 min-w-0 space-y-1">
+                  <div className="flex-1 min-w-0 space-y-2">
                     <h4 className="font-medium text-sm leading-tight truncate">
                       {capitalizeWords(item.name)}
                     </h4>
