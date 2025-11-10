@@ -9,6 +9,7 @@ import {
 } from "../components/ui/sidebar";
 import { AppSidebar } from "../components/app-sidebar";
 import { useAuth } from "../hooks/useAuth";
+import { PermissionsProvider } from "../contexts/PermissionsContext";
 
 export const Route = createFileRoute("/_authed")({
   component: Layout,
@@ -59,13 +60,15 @@ export default function Layout() {
   }
 
   return (
-    <SidebarProvider defaultOpen={defaultOpen}>
-      <AppSidebar />
-      <SidebarInset>
-        <main className="flex-1 bg-transparent">
-          <AuthedComponent />
-        </main>
-      </SidebarInset>
-    </SidebarProvider>
+    <PermissionsProvider>
+      <SidebarProvider defaultOpen={defaultOpen}>
+        <AppSidebar />
+        <SidebarInset>
+          <main className="flex-1 bg-transparent">
+            <AuthedComponent />
+          </main>
+        </SidebarInset>
+      </SidebarProvider>
+    </PermissionsProvider>
   );
 }

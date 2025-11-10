@@ -19,10 +19,13 @@ import config from "~/src/config";
 import useGetActiveProduct from "~/src/hooks/useGetActiveProduct";
 import { Link } from "@tanstack/react-router";
 import { getOrigin } from "~/src/lib/navigationUtils";
+import { usePermissions } from "~/src/hooks/usePermissions";
 
 export function ImagesView() {
   const { activeProductVariant } = useProduct();
   const { activeProduct } = useGetActiveProduct();
+
+  const { hasFullAdmin } = usePermissions();
 
   return (
     <View
@@ -54,40 +57,42 @@ export function ImagesView() {
           )}
         </div>
 
-        <div className="flex items-center gap-4">
-          <Link
-            to="/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/edit"
-            params={(prev) => ({
-              ...prev,
-              orgUrlSlug: prev.orgUrlSlug!,
-              storeUrlSlug: prev.storeUrlSlug!,
-              productSlug: activeProduct?._id!,
-            })}
-            search={{
-              o: getOrigin(),
-              variant: activeProductVariant?.sku,
-            }}
-          >
-            <Button variant="outline" className="flex items-center gap-2">
-              Edit product
-              <PenIcon className="h-3.5 w-3.5" />
-            </Button>
-          </Link>
+        {hasFullAdmin() && (
+          <div className="flex items-center gap-4">
+            <Link
+              to="/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/edit"
+              params={(prev) => ({
+                ...prev,
+                orgUrlSlug: prev.orgUrlSlug!,
+                storeUrlSlug: prev.storeUrlSlug!,
+                productSlug: activeProduct?._id!,
+              })}
+              search={{
+                o: getOrigin(),
+                variant: activeProductVariant?.sku,
+              }}
+            >
+              <Button variant="outline" className="flex items-center gap-2">
+                Edit product
+                <PenIcon className="h-3.5 w-3.5" />
+              </Button>
+            </Link>
 
-          <Button
-            variant={"outline"}
-            onClick={() => {
-              window.open(
-                `${config.storeFrontUrl}/shop/product/${activeProduct?._id}?variant=${activeProductVariant?.sku}`,
-                "_blank"
-              );
-            }}
-            className="flex items-center gap-2"
-          >
-            View on store
-            <EyeIcon className="h-3.5 w-3.5" />
-          </Button>
-        </div>
+            <Button
+              variant={"outline"}
+              onClick={() => {
+                window.open(
+                  `${config.storeFrontUrl}/shop/product/${activeProduct?._id}?variant=${activeProductVariant?.sku}`,
+                  "_blank"
+                );
+              }}
+              className="flex items-center gap-2"
+            >
+              View on store
+              <EyeIcon className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        )}
       </div>
     </View>
   );

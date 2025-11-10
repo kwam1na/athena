@@ -23,6 +23,10 @@ export const productColumns: ColumnDef<Product>[] = [
         (sku) => sku.images.length === 0
       );
 
+      const someSkusHavePriceZero = row.original.skus.some(
+        (sku) => sku.price === 0
+      );
+
       return (
         <div className="flex space-x-2">
           <Link
@@ -53,10 +57,19 @@ export const productColumns: ColumnDef<Product>[] = [
               {hasNoImages && (
                 <Badge
                   variant="outline"
-                  className="flex items-center gap-2 bg-blue-100 text-blue-700"
+                  className="flex items-center gap-2 bg-blue-50 text-blue-700"
                 >
                   <AlertOctagon className="w-3.5 h-3.5" />
                   <p className="text-xs">Missing product images</p>
+                </Badge>
+              )}
+              {someSkusHavePriceZero && (
+                <Badge
+                  variant="outline"
+                  className="flex items-center gap-2 bg-red-50 text-red-700"
+                >
+                  <AlertOctagon className="w-3.5 h-3.5" />
+                  <p className="text-xs">Price not set on some variants</p>
                 </Badge>
               )}
             </div>
@@ -66,6 +79,20 @@ export const productColumns: ColumnDef<Product>[] = [
     },
     enableSorting: false,
     enableHiding: false,
+    filterFn: (row, columnId, filterValue) => {
+      const productName = row.original.name.toLowerCase();
+      const searchValue = filterValue.toLowerCase();
+
+      // Check if product name matches
+      if (productName.includes(searchValue)) {
+        return true;
+      }
+
+      // Check if any SKU matches
+      return row.original.skus.some((sku) =>
+        sku.sku?.toLowerCase().includes(searchValue)
+      );
+    },
   },
   {
     accessorKey: "categoryId",

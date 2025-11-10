@@ -76,6 +76,8 @@ export const getAll = query({
     filters: v.optional(
       v.object({
         isMissingImages: v.optional(v.boolean()),
+        isMissingPrice: v.optional(v.boolean()),
+        isPriceZero: v.optional(v.boolean()),
       })
     ),
   },
@@ -198,13 +200,18 @@ export const getAll = query({
       .map((product) => {
         const skus = skusByProductId[product._id] || [];
         const validSkus = skus
-          .filter((sku) => sku.price > 0)
           .filter((sku) => {
-            if (args.filters?.isMissingImages && sku.images.length == 0) {
-              return true;
-            } else if (!args.filters?.isMissingImages) {
-              return true;
+            // If filtering for unresolved issues (missing images or prices)
+            if (args.filters?.isMissingImages || args.filters?.isMissingPrice) {
+              const hasMissingImage =
+                args.filters?.isMissingImages && sku.images.length === 0;
+              const hasMissingPrice =
+                args.filters?.isMissingPrice &&
+                (sku.price === 0 || sku.price === undefined);
+              return hasMissingImage || hasMissingPrice;
             }
+            // Default behavior: only show SKUs with valid prices
+            return args.filters?.isPriceZero ? true : sku.price > 0;
           })
           .sort((a, b) => a.price - b.price);
 
@@ -483,9 +490,9 @@ export const createSku = mutation({
     }
 
     // Validate price is not zero
-    if (args.price === 0 || args.price === undefined) {
-      throw new Error("Price cannot be zero or empty");
-    }
+    // if (args.price === 0 || args.price === undefined) {
+    //   throw new Error("Price cannot be zero or empty");
+    // }
 
     // Fetch the product to verify existence and fetch storeId
     const product = await ctx.db
@@ -495,6 +502,21 @@ export const createSku = mutation({
 
     if (!product) {
       throw new Error(`Product with id ${args.productId} not found`);
+    }
+
+    if (args.barcode) {
+      const skuWithBarcode = await ctx.db
+        .query("productSku")
+        .withIndex("by_storeId_barcode", (q) =>
+          q.eq("storeId", product.storeId).eq("barcode", args.barcode)
+        )
+        .first();
+
+      if (skuWithBarcode) {
+        throw new Error(
+          `Barcode ${args.barcode} already assigned to another SKU`
+        );
+      }
     }
 
     // Insert a temporary SKU with "TEMP_SKU"
@@ -637,15 +659,25 @@ export const updateSku = mutation({
       };
     }
 
-    // Determine final price for validation
-    const finalPrice = args.price ?? currentSku.price;
+    console.log("args.barcode", args.barcode);
 
-    // Validate price is not zero
-    if (finalPrice === 0 || finalPrice === undefined) {
-      return {
-        success: false,
-        error: "Price cannot be zero or empty",
-      };
+    if (args.barcode) {
+      const skuWithBarcode = await ctx.db
+        .query("productSku")
+        .withIndex("by_storeId_barcode", (q) =>
+          q.eq("storeId", currentSku.storeId).eq("barcode", args.barcode)
+        )
+        .first();
+
+      console.log("skuWithBarcode", skuWithBarcode);
+      console.log("currentSku", currentSku);
+
+      if (skuWithBarcode && skuWithBarcode._id !== currentSku._id) {
+        return {
+          success: false,
+          error: "Barcode assigned to another SKU",
+        };
+      }
     }
 
     const { id, ...rest } = args;

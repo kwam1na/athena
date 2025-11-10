@@ -279,17 +279,14 @@ export const usePrint = () => {
 
     // Wait for content to load, then print
     printWindow.onload = () => {
-      console.log("Print window loaded, calling print()");
       try {
         printWindow.print();
-        console.log("Print dialog should be open now");
 
         // Close the window after a brief delay to allow print dialog to process
         setTimeout(() => {
           if (printWindow && !printWindow.closed && !isClosing) {
-            // isClosing = true;
-            // printWindow.close();
-            // console.log("Print window closed via timeout");
+            isClosing = true;
+            printWindow.close();
           }
         }, 1500);
       } catch (error) {
@@ -311,9 +308,6 @@ export const usePrint = () => {
         !printWindow.closed &&
         printWindow.document.readyState !== "complete"
       ) {
-        console.log(
-          "Fallback: window still loading, triggering onload manually"
-        );
         if (printWindow.onload) {
           (printWindow.onload as () => void)();
         }

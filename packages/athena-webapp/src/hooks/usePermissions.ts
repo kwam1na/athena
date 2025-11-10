@@ -1,0 +1,23 @@
+import { usePermissionsContext } from "../contexts/PermissionsContext";
+import { Role } from "~/types";
+
+interface UsePermissionsReturn {
+  canAccessPOS: () => boolean;
+  canAccessAdmin: () => boolean;
+  hasFullAdmin: () => boolean;
+  role: Role | null;
+  isLoading: boolean;
+}
+
+export function usePermissions(): UsePermissionsReturn {
+  const { canAccessAdmin, canAccessPOS, role, isLoading } =
+    usePermissionsContext();
+
+  return {
+    canAccessPOS: () => canAccessPOS,
+    canAccessAdmin: () => canAccessAdmin,
+    hasFullAdmin: () => role === "full_admin",
+    role,
+    isLoading,
+  };
+}

@@ -121,6 +121,8 @@ const BagItemWithDiscount = ({
 }: BagItemWithDiscountProps) => {
   const discountInfo = useProductDiscount(item.productSkuId, item.price);
 
+  const { store } = useStoreContext();
+
   // Calculate item total with discount
   const itemPrice = discountInfo.hasDiscount
     ? discountInfo.discountedPrice
@@ -204,7 +206,11 @@ const BagItemWithDiscount = ({
           >
             <div className="relative w-32 h-32 lg:w-40 lg:h-40">
               <ImageWithFallback
-                src={(item as any).productImage || placeholder}
+                src={
+                  (item as any).productImage ||
+                  store?.config?.ui?.fallbackImageUrl ||
+                  placeholder
+                }
                 alt={(item as any).productName || "product image"}
                 className="w-full h-full object-cover rounded-lg"
               />

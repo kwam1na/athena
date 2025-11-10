@@ -14,6 +14,7 @@ import { OnlineOrder } from "~/types";
 import { FadeIn } from "../common/FadeIn";
 import OrderMetricsPanel from "./OrderMetricsPanel";
 import { getAmountPaidForOrder } from "./utils";
+import { ProtectedRoute } from "../ProtectedRoute";
 
 type TimeRange = "day" | "week" | "month" | "all";
 
@@ -93,27 +94,29 @@ export default function OrdersView({ status }: { status?: string }) {
 
   return (
     <div>
-      <OrderMetricsPanel
-        storeId={activeStore._id}
-        currency={activeStore.currency}
-        onTimeRangeChange={handleTimeRangeChange}
-      />
-      <View
-        hideBorder
-        hideHeaderBottomBorder
-        className="bg-background"
-        header={hasOrders && <Navigation />}
-      >
-        <FadeIn>
-          <OrdersTableToolbarProvider>
-            <Orders
-              store={activeStore}
-              status={status || "open"}
-              orders={ordersFormatted}
-            />
-          </OrdersTableToolbarProvider>
-        </FadeIn>
-      </View>
+      <ProtectedRoute requires="full_admin">
+        <OrderMetricsPanel
+          storeId={activeStore._id}
+          currency={activeStore.currency}
+          onTimeRangeChange={handleTimeRangeChange}
+        />
+        <View
+          hideBorder
+          hideHeaderBottomBorder
+          className="bg-background"
+          header={hasOrders && <Navigation />}
+        >
+          <FadeIn>
+            <OrdersTableToolbarProvider>
+              <Orders
+                store={activeStore}
+                status={status || "open"}
+                orders={ordersFormatted}
+              />
+            </OrdersTableToolbarProvider>
+          </FadeIn>
+        </View>
+      </ProtectedRoute>
     </div>
   );
 }

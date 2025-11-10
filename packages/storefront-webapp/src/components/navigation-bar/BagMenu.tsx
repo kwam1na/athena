@@ -11,7 +11,6 @@ import { useStoreContext } from "@/contexts/StoreContext";
 import { useLogout } from "@/hooks/useLogout";
 import ImageWithFallback from "../ui/image-with-fallback";
 import { useNavigationBarContext } from "@/contexts/NavigationBarProvider";
-import ShoppingBag from "../shopping-bag/ShoppingBag";
 
 export const BagMenu = ({
   isMobile,
@@ -33,6 +32,8 @@ export const BagMenu = ({
   const { user } = useStoreContext();
 
   const handleLogout = useLogout();
+
+  const { store } = useStoreContext();
 
   const { navBarLayout, appLocation } = useNavigationBarContext();
 
@@ -72,7 +73,11 @@ export const BagMenu = ({
                   className={`flex items-center gap-4 ${hoverClass}`}
                 >
                   <ImageWithFallback
-                    src={item.productImage || placeholder}
+                    src={
+                      item.productImage ||
+                      store?.config?.ui?.fallbackImageUrl ||
+                      placeholder
+                    }
                     alt={item.productName || "product image"}
                     className="w-16 h-16 aspect-square object-cover rounded-lg"
                   />

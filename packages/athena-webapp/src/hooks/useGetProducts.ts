@@ -18,6 +18,9 @@ export const useGetProducts = ({
           storeId: activeStore._id,
           subcategory: subcategorySlug ? [subcategorySlug] : undefined,
           category: categorySlug ? [categorySlug] : undefined,
+          filters: {
+            isPriceZero: true,
+          },
         }
       : "skip"
   );
@@ -35,6 +38,7 @@ export const useGetProductsWithNoImages = () => {
           storeId: activeStore._id,
           filters: {
             isMissingImages: true,
+            isMissingPrice: true,
           },
         }
       : "skip"

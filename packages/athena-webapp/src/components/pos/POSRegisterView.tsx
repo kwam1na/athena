@@ -157,14 +157,19 @@ export function POSRegisterView() {
       // Check if session has expired
       const now = Date.now();
       if (activeSessionQuery.expiresAt && activeSessionQuery.expiresAt < now) {
-        logger.warn("[POS] Active session has expired, clearing state", {
-          sessionId: activeSessionQuery._id,
-          expiresAt: activeSessionQuery.expiresAt,
-          now,
-        });
+        logger.warn(
+          "[POS] Active session has expired, clearing state and cashier",
+          {
+            sessionId: activeSessionQuery._id,
+            expiresAt: activeSessionQuery.expiresAt,
+            now,
+          }
+        );
         // Clear stale session ID
         store.setCurrentSessionId(null);
         store.setActiveSession(null);
+        // Clear cashier authentication
+        store.clearCashier();
         // Reset flag so we can create a new session
         autoSessionInitialized.current = false;
         return;
@@ -184,11 +189,15 @@ export function POSRegisterView() {
     if (activeSessionQuery === null) {
       // Clear any stale session ID from store (query is null, so store ID is stale)
       if (store.session.currentSessionId) {
-        logger.debug("[POS] Clearing stale session ID", {
+        logger.debug("[POS] Clearing stale session ID and cashier", {
           staleSessionId: store.session.currentSessionId,
         });
         store.setCurrentSessionId(null);
         store.setActiveSession(null);
+        // Clear cashier if there's no active session
+        if (store.cashier.isAuthenticated) {
+          store.clearCashier();
+        }
       }
 
       // Prevent creating if session is already being created
@@ -205,14 +214,14 @@ export function POSRegisterView() {
         cashierId: store.cashier.id,
       });
 
-      createSession(activeStore._id, store.cashier.id || undefined).catch(
-        (error) => {
+      createSession(activeStore._id, store.cashier.id || undefined)
+        .then(() => store.startNewTransaction())
+        .catch((error) => {
           logger.error("[POS] Failed to auto-create session", error);
           // Error toast already shown by createSession
           // Reset flag so we can retry
           autoSessionInitialized.current = false;
-        }
-      );
+        });
     }
   }, [
     activeStore?._id,
@@ -230,6 +239,53 @@ export function POSRegisterView() {
   useEffect(() => {
     autoSessionInitialized.current = false;
   }, [activeStore?._id, store.ui.registerNumber]);
+
+  // Monitor active session for real-time expiration
+  useEffect(() => {
+    if (!activeSessionQuery || !activeSessionQuery.expiresAt) {
+      return;
+    }
+
+    const now = Date.now();
+    const timeUntilExpiry = activeSessionQuery.expiresAt - now;
+
+    // If already expired
+    if (timeUntilExpiry <= 0) {
+      logger.warn("[POS] Session already expired, clearing cashier", {
+        sessionId: activeSessionQuery._id,
+        expiresAt: activeSessionQuery.expiresAt,
+      });
+      store.clearCashier();
+      store.setCurrentSessionId(null);
+      store.setActiveSession(null);
+      autoSessionInitialized.current = false;
+      return;
+    }
+
+    // Set timeout to clear cashier when session expires
+    logger.debug("[POS] Setting expiration timer", {
+      sessionId: activeSessionQuery._id,
+      timeUntilExpiry,
+      expiresAt: activeSessionQuery.expiresAt,
+    });
+
+    const timeoutId = setTimeout(() => {
+      logger.warn("[POS] Session expired, clearing cashier", {
+        sessionId: activeSessionQuery._id,
+      });
+      store.clearCashier();
+      store.setCurrentSessionId(null);
+      store.setActiveSession(null);
+      autoSessionInitialized.current = false;
+    }, timeUntilExpiry);
+
+    return () => {
+      logger.debug("[POS] Clearing expiration timer", {
+        sessionId: activeSessionQuery._id,
+      });
+      clearTimeout(timeoutId);
+    };
+  }, [activeSessionQuery?.expiresAt, activeSessionQuery?._id, store]);
 
   // Sync currentSessionId with activeSessionQuery to prevent stale IDs
   useEffect(() => {
@@ -295,25 +351,6 @@ export function POSRegisterView() {
     extractResult.type,
     extractionSource,
   ]);
-
-  // Auto-replace URL with extracted value in the input field
-  // useEffect(() => {
-  //   if (store.ui.productSearchQuery.trim()) {
-  //     // If the extracted value is different from the input (meaning we parsed a URL),
-  //     // replace the input with just the extracted value
-  //     // if (
-  //     //   extractResult.type === "barcode" &&
-  //     //   extractedValue !== store.ui.productSearchQuery
-  //     // ) {
-  //     //   logger.debug("[POS] Replacing URL input with extracted value", {
-  //     //     originalInput: store.ui.productSearchQuery,
-  //     //     extractedValue,
-  //     //     type: extractResult.type,
-  //     //   });
-  //     //   store.setProductSearchQuery(extractedValue);
-  //     // }
-  //   }
-  // }, [store.ui.productSearchQuery, extractedValue, store, extractResult.type]);
 
   // Debounce the extracted value to prevent flickering "no product found" UI while user types
   const debouncedValue = useDebounce(extractedValue, POS_SEARCH_DEBOUNCE_MS);
@@ -606,13 +643,13 @@ export function POSRegisterView() {
             !store.transaction.isCompleted ? (
               <div className="flex items-center gap-4">
                 {/* Quick Actions Section */}
-                <div className="flex items-center gap-3 px-3 py-2 bg-gray-50 rounded-lg border">
+                {/* <div className="flex items-center gap-3 px-3 py-2 bg-gray-50 rounded-lg border">
                   <QuickActionsBar
                     showCustomerInfo={store.ui.showCustomerPanel}
                     setShowCustomerInfo={store.setShowCustomerPanel}
                     disabled={terminal === null}
                   />
-                </div>
+                </div> */}
 
                 {/* Session Management Section */}
                 {terminal && store.cashier.id && (
@@ -750,15 +787,6 @@ export function POSRegisterView() {
               className={store.transaction.isCompleted ? "lg:col-span-3" : ""}
             >
               <div className="bg-white rounded-lg p-6 space-y-6">
-                <div className="mb-4">
-                  <h3 className="text-lg font-semibold text-gray-900">
-                    {store.transaction.isCompleted && "Transaction Complete"}
-                  </h3>
-                  <p className="text-sm text-gray-500">
-                    {store.transaction.isCompleted &&
-                      "Transaction has been processed successfully"}
-                  </p>
-                </div>
                 <OrderSummary
                   cartItems={store.cart.items}
                   onClearCart={cart.clearCart}

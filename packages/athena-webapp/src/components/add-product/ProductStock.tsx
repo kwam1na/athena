@@ -22,6 +22,7 @@ import { useProduct } from "@/contexts/ProductContext";
 import { ImageFile } from "../ui/image-uploader";
 import {
   Barcode,
+  Check,
   Eye,
   EyeClosed,
   EyeOff,
@@ -33,6 +34,8 @@ import {
   Sparkles,
   TriangleAlert,
   X,
+  CreditCard,
+  ScanBarcode,
 } from "lucide-react";
 import useGetActiveProduct from "@/hooks/useGetActiveProduct";
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
@@ -58,6 +61,7 @@ import { useSheet } from "./SheetProvider";
 import { useEffect, useState } from "react";
 import { CopyImagesView } from "./copy-images/CopyImagesView";
 import { useSkusReservedInCheckout } from "@/hooks/useSkusReservedInCheckout";
+import { useSkusReservedInPosSession } from "@/hooks/useSkusReservedInPosSession";
 import { AlertModal } from "../ui/modals/alert-modal";
 
 export type ProductVariant = {
@@ -83,8 +87,10 @@ export type ProductVariant = {
 
 const StockHeader = ({
   isSkuReserved,
+  getReservationType,
 }: {
   isSkuReserved: (sku?: string) => boolean;
+  getReservationType: (sku?: string) => "checkout" | "pos" | null;
 }) => {
   const { updateProductVariants, productVariants } = useProduct();
 
@@ -159,24 +165,49 @@ export function ProductStockView() {
 
   // Check which SKUs are reserved in active checkout sessions
   const skusToCheck = productVariants.map((variant) => variant.sku);
-  const { isSkuReserved } = useSkusReservedInCheckout(skusToCheck);
+  const { isSkuReserved: isSkuReservedInCheckout } =
+    useSkusReservedInCheckout(skusToCheck);
+  const { isSkuReserved: isSkuReservedInPosSession } =
+    useSkusReservedInPosSession(skusToCheck);
+
+  // Combined check for both checkout and POS sessions
+  const isSkuReserved = (sku?: string) =>
+    isSkuReservedInCheckout(sku) || isSkuReservedInPosSession(sku);
+
+  // Helper to determine which type of reservation
+  const getReservationType = (sku?: string): "checkout" | "pos" | null => {
+    if (!sku) return null;
+    if (isSkuReservedInCheckout(sku)) return "checkout";
+    if (isSkuReservedInPosSession(sku)) return "pos";
+    return null;
+  };
 
   return (
     <View
       hideBorder
       hideHeaderBottomBorder
       className="h-auto"
-      header={<StockHeader isSkuReserved={isSkuReserved} />}
+      header={
+        <StockHeader
+          isSkuReserved={isSkuReserved}
+          getReservationType={getReservationType}
+        />
+      }
     >
-      <Stock isSkuReserved={isSkuReserved} />
+      <Stock
+        isSkuReserved={isSkuReserved}
+        getReservationType={getReservationType}
+      />
     </View>
   );
 }
 
 function Stock({
   isSkuReserved,
+  getReservationType,
 }: {
   isSkuReserved: (sku?: string) => boolean;
+  getReservationType: (sku?: string) => "checkout" | "pos" | null;
 }) {
   const {
     error,
@@ -248,6 +279,21 @@ function Stock({
       console.error(error);
     } finally {
       setIsGeneratingBarcode(false);
+    }
+  };
+
+  const handleSaveBarcode = async (variantId: string) => {
+    const variant = productVariants.find((v) => v.id === variantId);
+    if (!variant || !variant.barcode) return;
+
+    const result = await updateSkuMutation({
+      id: variantId as Id<"productSku">,
+      barcode: variant.barcode,
+    });
+
+    if ((result as any)?.error) {
+      toast.error((result as any)?.error || "Failed to save barcode");
+      return;
     }
   };
 
@@ -464,7 +510,9 @@ function Stock({
   };
 
   const hasPriceError = (variant: ProductVariant) => {
-    return variant.price === 0 || variant.price === undefined;
+    return (
+      (variant.price === 0 || variant.price === undefined) && variant.existsInDB
+    );
   };
 
   return (
@@ -483,7 +531,7 @@ function Stock({
                           <Info className="w-3.5 h-3.5 text-muted-foreground" />
                         </TooltipTrigger>
                         <TooltipContent>
-                          <p>auto-generated if left blank</p>
+                          <p>auto-generated</p>
                         </TooltipContent>
                       </Tooltip>
                     </TooltipProvider>
@@ -517,6 +565,7 @@ function Stock({
                           placeholder="SKU"
                           onChange={(e) => handleChange(e, variant.id, "sku")}
                           value={variant.sku || ""}
+                          readOnly
                           disabled={shouldDisable(variant)}
                         />
                       ) : (
@@ -531,10 +580,18 @@ function Stock({
                       <TooltipProvider>
                         <Tooltip>
                           <TooltipTrigger>
-                            <ShoppingCart className="w-4 h-4 text-green-500" />
+                            {getReservationType(variant.sku) === "checkout" ? (
+                              <ShoppingCart className="w-4 h-4 text-green-500" />
+                            ) : (
+                              <ScanBarcode className="w-4 h-4 text-blue-500" />
+                            )}
                           </TooltipTrigger>
                           <TooltipContent>
-                            <p>SKU is reserved in an active checkout session</p>
+                            <p>
+                              {getReservationType(variant.sku) === "checkout"
+                                ? "SKU is reserved in an active checkout session"
+                                : "SKU is reserved in an active POS session"}
+                            </p>
                           </TooltipContent>
                         </Tooltip>
                       </TooltipProvider>
@@ -565,6 +622,7 @@ function Stock({
                           }
                           value={variant.barcode || ""}
                           readOnly={variant.barcodePersistedInDb === true}
+                          disabled={shouldDisable(variant)}
                           className={
                             variant.barcodePersistedInDb === true
                               ? "bg-muted"
@@ -581,7 +639,10 @@ function Stock({
                                   onClick={() =>
                                     handleGenerateBarcode(variant.id)
                                   }
-                                  disabled={isGeneratingBarcode}
+                                  disabled={
+                                    isGeneratingBarcode ||
+                                    shouldDisable(variant)
+                                  }
                                 >
                                   <Barcode className="w-4 h-4" />
                                 </Button>
@@ -592,7 +653,32 @@ function Stock({
                             </Tooltip>
                           </TooltipProvider>
                         )}
-                        {variant.barcode && variant.existsInDB && (
+                        {variant.barcode &&
+                          variant.barcodePersistedInDb === false && (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() =>
+                                      handleSaveBarcode(variant.id)
+                                    }
+                                    disabled={
+                                      isGeneratingBarcode ||
+                                      shouldDisable(variant)
+                                    }
+                                  >
+                                    <Check className="w-4 h-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>Save barcode</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          )}
+                        {variant.barcode && variant.barcodePersistedInDb && (
                           <>
                             <TooltipProvider>
                               <Tooltip>
@@ -652,7 +738,7 @@ function Stock({
                     <Input
                       id={`stock-${index}`}
                       type="number"
-                      placeholder="1"
+                      placeholder="0"
                       onChange={(e) => handleChange(e, variant.id, "stock")}
                       value={variant.stock || ""}
                       disabled={shouldDisable(variant)}
@@ -675,7 +761,7 @@ function Stock({
                     <Input
                       id={`quantity-available-${index}`}
                       type="number"
-                      placeholder="1"
+                      placeholder="0"
                       onChange={(e) =>
                         handleChange(e, variant.id, "quantityAvailable")
                       }

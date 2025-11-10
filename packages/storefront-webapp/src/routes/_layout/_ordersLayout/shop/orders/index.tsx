@@ -45,6 +45,8 @@ const OrderItem = ({
   const podMethod =
     order.podPaymentMethod || order.paymentMethod?.podPaymentMethod || "cash";
 
+  const { store } = useStoreContext();
+
   return (
     <div className="space-y-8 text-sm">
       <div className="space-y-4">
@@ -109,7 +111,11 @@ const OrderItem = ({
         {order?.items?.slice(0, 3).map((item: any, idx: number) => (
           <div key={idx} className="h-32 w-32">
             <ImageWithFallback
-              src={item.productImage || placeholder}
+              src={
+                item.productImage ||
+                store?.config?.ui?.fallbackImageUrl ||
+                placeholder
+              }
               alt={"product image"}
               className="aspect-square object-cover rounded-sm"
             />
@@ -127,7 +133,11 @@ const OrderItem = ({
           order?.items.slice(0, 2).map((item: any, idx: number) => (
             <div key={idx} className="h-32 w-32">
               <ImageWithFallback
-                src={item.productImage || placeholder}
+                src={
+                  item.productImage ||
+                  store?.config?.ui?.fallbackImageUrl ||
+                  placeholder
+                }
                 alt={"product image"}
                 className="aspect-square object-cover rounded-sm"
               />

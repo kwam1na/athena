@@ -204,8 +204,8 @@ describe("POS System - Basic Tests", () => {
             return "Credit/Debit Card";
           case "cash":
             return "Cash";
-          case "digital_wallet":
-            return "Digital Wallet";
+          case "mobile_money":
+            return "Mobile Money";
           case "check":
             return "Check";
           default:
@@ -215,7 +215,7 @@ describe("POS System - Basic Tests", () => {
 
       expect(formatPaymentMethod("card")).toBe("Credit/Debit Card");
       expect(formatPaymentMethod("cash")).toBe("Cash");
-      expect(formatPaymentMethod("digital_wallet")).toBe("Digital Wallet");
+      expect(formatPaymentMethod("mobile_money")).toBe("Mobile Money");
       expect(formatPaymentMethod("unknown")).toBe("Unknown");
     });
   });

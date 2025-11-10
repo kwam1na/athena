@@ -22,7 +22,7 @@ import useGetActiveStore from "@/hooks/useGetActiveStore";
 import useGetActiveProduct from "@/hooks/useGetActiveProduct";
 import { useAction, useMutation } from "convex/react";
 import { api } from "~/convex/_generated/api";
-import { toSlug } from "../../lib/utils";
+import { capitalizeWords, toSlug } from "../../lib/utils";
 import { Id } from "~/convex/_generated/dataModel";
 import { productSchema } from "../../lib/schemas/product";
 import { useAuth } from "../../hooks/useAuth";
@@ -31,6 +31,9 @@ import { PAYSTACK_PROCESSING_FEE } from "~/src/lib/constants";
 import { Tooltip, TooltipProvider, TooltipTrigger } from "../ui/tooltip";
 import { Badge } from "../ui/badge";
 import { ProductStatus } from "../product/ProductStatus";
+import { ProtectedRoute } from "../ProtectedRoute";
+import { ProductStockStatus } from "../product/ProductStock";
+import { Product } from "~/types";
 
 function ProductViewContent() {
   const { productData, revertChanges, productVariants, updateProductVariants } =
@@ -384,7 +387,9 @@ function ProductViewContent() {
 
     const { activeProduct } = useGetActiveProduct();
 
-    const header = productSlug ? "Edit Product" : "Add New Product";
+    const header = productSlug
+      ? `Edit ${capitalizeWords(activeProduct?.name || "")}`
+      : "Add New Product";
 
     const ctaIcon = !productSlug ? (
       <PlusIcon className="w-3.5 h-3.5" />
@@ -447,6 +452,7 @@ function ProductViewContent() {
                 <p className="text-xs ">This product is hidden</p>
               </Badge>
             )}
+            {activeProduct && <ProductStatus product={activeProduct} />}
           </div>
         }
         trailingContent={
@@ -551,8 +557,10 @@ function ProductViewContent() {
 
 export default function ProductView() {
   return (
-    <ProductProvider>
-      <ProductViewContent />
-    </ProductProvider>
+    <ProtectedRoute requires="full_admin">
+      <ProductProvider>
+        <ProductViewContent />
+      </ProductProvider>
+    </ProtectedRoute>
   );
 }

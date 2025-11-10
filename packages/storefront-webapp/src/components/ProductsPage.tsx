@@ -26,7 +26,7 @@ export default function ProductsPage({
   products?: Product[];
   productSkus?: ProductSku[];
 }) {
-  const { formatter } = useStoreContext();
+  const { formatter, store } = useStoreContext();
 
   const { filtersCount } = useGetProductFilters();
 
@@ -102,7 +102,11 @@ export default function ProductsPage({
             search={{ variant: sku.sku, origin }}
             className="block mb-4"
           >
-            <ProductSkuCard sku={sku} currencyFormatter={formatter} />
+            <ProductSkuCard
+              fallbackImageUrl={store?.config?.ui?.fallbackImageUrl}
+              sku={sku}
+              currencyFormatter={formatter}
+            />
           </Link>
         ))}
 
@@ -118,7 +122,11 @@ export default function ProductsPage({
             search={{ variant: product?.skus?.[0].sku, origin }}
             className="block mb-4"
           >
-            <ProductCard product={product} currencyFormatter={formatter} />
+            <ProductCard
+              fallbackImageUrl={store?.config?.ui?.fallbackImageUrl}
+              product={product}
+              currencyFormatter={formatter}
+            />
           </Link>
         ))}
     </div>

@@ -8,9 +8,11 @@ import {
 export function ProductCard({
   product,
   currencyFormatter,
+  fallbackImageUrl,
 }: {
   product: Product;
   currencyFormatter: Intl.NumberFormat;
+  fallbackImageUrl?: string;
 }) {
   if (!product) return null;
 
@@ -42,7 +44,7 @@ export function ProductCard({
         <img
           alt={`${product?.name} image`}
           className="aspect-square md:aspect-auto md:w-[300px] md:h-[400px] object-cover rounded"
-          src={displayedSku.images[0]}
+          src={displayedSku.images[0] || fallbackImageUrl}
         />
         {isSoldOut && (
           <div className="font-medium text-xs absolute top-0 left-0 m-2 text-white bg-black bg-opacity-40 rounded-md px-2 py-1">
@@ -98,9 +100,11 @@ export function ProductCard({
 export function ProductSkuCard({
   sku,
   currencyFormatter,
+  fallbackImageUrl,
 }: {
   sku: ProductSku;
   currencyFormatter: Intl.NumberFormat;
+  fallbackImageUrl?: string;
 }) {
   const isSoldOut = sku.quantityAvailable === 0;
 
@@ -117,7 +121,7 @@ export function ProductSkuCard({
         <img
           alt={`${sku?.productName} image`}
           className="aspect-square md:aspect-auto md:w-[300px] md:h-[400px] object-cover rounded"
-          src={sku.images[0]}
+          src={sku.images[0] || fallbackImageUrl}
         />
 
         {isSoldOut && (

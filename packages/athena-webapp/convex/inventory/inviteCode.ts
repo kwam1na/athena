@@ -3,6 +3,22 @@ import { mutation, query } from "../_generated/server";
 
 export const redeem = mutation({
   args: { code: v.string(), email: v.string() },
+  returns: v.object({
+    success: v.boolean(),
+    message: v.optional(v.string()),
+    inviteCode: v.optional(
+      v.object({
+        _id: v.id("inviteCode"),
+        _creationTime: v.number(),
+        code: v.string(),
+        recipientEmail: v.string(),
+        recipientUserId: v.id("athenaUser"),
+        organizationId: v.id("organization"),
+        createdByUserId: v.id("athenaUser"),
+        redeemedAt: v.optional(v.number()),
+      })
+    ),
+  }),
   handler: async (ctx, args) => {
     // Find the invite code
     const inviteCode = await ctx.db
@@ -34,8 +50,13 @@ export const create = mutation({
     organizationId: v.id("organization"),
     recipientEmail: v.string(),
     createdByUserId: v.id("athenaUser"),
-    role: v.string(),
+    role: v.union(v.literal("full_admin"), v.literal("pos_only")),
   },
+  returns: v.object({
+    success: v.boolean(),
+    message: v.optional(v.string()),
+    inviteCode: v.optional(v.id("inviteCode")),
+  }),
   handler: async (ctx, args) => {
     // check if the email is associated with an existing user
     const user = await ctx.db
@@ -92,6 +113,18 @@ export const create = mutation({
 
 export const getAll = query({
   args: { organizationId: v.id("organization") },
+  returns: v.array(
+    v.object({
+      _id: v.id("inviteCode"),
+      _creationTime: v.number(),
+      code: v.string(),
+      recipientEmail: v.string(),
+      recipientUserId: v.id("athenaUser"),
+      organizationId: v.id("organization"),
+      createdByUserId: v.id("athenaUser"),
+      redeemedAt: v.optional(v.number()),
+    })
+  ),
   handler: async (ctx, args) => {
     return await ctx.db
       .query("inviteCode")

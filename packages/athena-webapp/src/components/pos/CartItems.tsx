@@ -16,9 +16,10 @@ import { Id } from "~/convex/_generated/dataModel";
 
 interface CartItemsProps {
   cartItems: CartItem[];
-  onUpdateQuantity: (id: Id<"posSessionItem">, newQuantity: number) => void;
-  onRemoveItem: (id: Id<"posSessionItem">) => void;
-  clearCart: () => void;
+  onUpdateQuantity?: (id: Id<"posSessionItem">, newQuantity: number) => void;
+  onRemoveItem?: (id: Id<"posSessionItem">) => void;
+  clearCart?: () => void;
+  readOnly?: boolean;
 }
 
 export function CartItems({
@@ -26,6 +27,7 @@ export function CartItems({
   onUpdateQuantity,
   onRemoveItem,
   clearCart,
+  readOnly = false,
 }: CartItemsProps) {
   const { activeStore } = useGetActiveStore();
   const formatter = currencyFormatter(activeStore?.currency || "GHS");
@@ -41,15 +43,17 @@ export function CartItems({
             <ShoppingBasket className="w-4 h-4" />
             Items · {totalQuantity}
           </CardTitle>
-          <Button
-            variant="outline"
-            size="sm"
-            className="p-8 border-none bg-transparent text-red-500 hover:bg-red-50 hover:text-red-500"
-            onClick={clearCart}
-          >
-            <Trash2 className="w-4 h-4" />
-            Clear all
-          </Button>
+          {!readOnly && clearCart && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="p-8 border-none bg-transparent text-red-500 hover:bg-red-50 hover:text-red-500"
+              onClick={clearCart}
+            >
+              <Trash2 className="w-4 h-4" />
+              Clear all
+            </Button>
+          )}
         </CardHeader>
       )}
       <div className="p-4">
@@ -118,31 +122,43 @@ export function CartItems({
 
                 {/* Quantity Controls */}
                 <div className="col-span-4 flex items-center justify-center">
-                  <div className="flex items-center gap-1">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-8 w-8 p-0"
-                      onClick={() =>
-                        onUpdateQuantity(item.id, item.quantity - 1)
-                      }
-                    >
-                      <Minus className="w-4 h-4" />
-                    </Button>
-                    <span className="w-10 text-center font-medium text-sm">
-                      {item.quantity}
-                    </span>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-8 w-8 p-0"
-                      onClick={() =>
-                        onUpdateQuantity(item.id, item.quantity + 1)
-                      }
-                    >
-                      <Plus className="w-4 h-4" />
-                    </Button>
-                  </div>
+                  {readOnly ? (
+                    <span className="text-sm font-medium">{item.quantity}</span>
+                  ) : (
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 w-8 p-0"
+                        onClick={() =>
+                          onUpdateQuantity &&
+                          onUpdateQuantity(
+                            item.id as Id<"posSessionItem">,
+                            item.quantity - 1
+                          )
+                        }
+                      >
+                        <Minus className="w-4 h-4" />
+                      </Button>
+                      <span className="w-10 text-center font-medium text-sm">
+                        {item.quantity}
+                      </span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 w-8 p-0"
+                        onClick={() =>
+                          onUpdateQuantity &&
+                          onUpdateQuantity(
+                            item.id as Id<"posSessionItem">,
+                            item.quantity + 1
+                          )
+                        }
+                      >
+                        <Plus className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  )}
                 </div>
 
                 {/* Total Price */}
@@ -153,16 +169,21 @@ export function CartItems({
                 </div>
 
                 {/* Remove Button */}
-                <div className="col-span-1 flex justify-center">
-                  <Button
-                    variant="ghost"
-                    size="default"
-                    className="h-9 w-9 p-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                    onClick={() => onRemoveItem(item.id)}
-                  >
-                    <Trash2 className="w-5 h-5" />
-                  </Button>
-                </div>
+                {!readOnly && onRemoveItem && (
+                  <div className="col-span-1 flex justify-center">
+                    <Button
+                      variant="ghost"
+                      size="default"
+                      className="h-9 w-9 p-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                      onClick={() =>
+                        onRemoveItem &&
+                        onRemoveItem(item.id as Id<"posSessionItem">)
+                      }
+                    >
+                      <Trash2 className="w-5 h-5" />
+                    </Button>
+                  </div>
+                )}
               </div>
             ))}
           </div>

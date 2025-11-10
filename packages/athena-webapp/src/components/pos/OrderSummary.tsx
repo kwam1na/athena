@@ -11,6 +11,8 @@ import {
   Banknote,
   Plus,
   Smartphone,
+  RotateCcw,
+  Receipt,
 } from "lucide-react";
 import { CartItem } from "./types";
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
@@ -42,6 +44,22 @@ interface OrderSummaryProps {
   total?: number;
   currentSessionId?: string | null;
   onTransactionStateChange?: (isCompleted: boolean) => void;
+  readOnly?: boolean;
+  completedTransactionData?: {
+    paymentMethod: string;
+    completedAt: Date | number;
+    cartItems: CartItem[];
+    subtotal: number;
+    tax: number;
+    total: number;
+    customerInfo?: {
+      name?: string;
+      email?: string;
+      phone?: string;
+    };
+  };
+  cashierNameOverride?: string;
+  receiptNumberOverride?: string;
 }
 
 export function OrderSummary({
@@ -56,6 +74,10 @@ export function OrderSummary({
   total: propTotal,
   currentSessionId,
   onTransactionStateChange,
+  readOnly = false,
+  completedTransactionData,
+  cashierNameOverride,
+  receiptNumberOverride,
 }: OrderSummaryProps) {
   const { activeStore } = useGetActiveStore();
   const terminal = useGetTerminal();
@@ -70,16 +92,28 @@ export function OrderSummary({
 
   const cashier = usePOSCashier();
   // Use store state for most current data, fall back to props for compatibility
-  const currentCartItems =
-    state.cartItems.length > 0 ? state.cartItems : cartItems;
-  const currentCustomerInfo = state.currentCustomer || customerInfo;
+  const currentCartItems = readOnly
+    ? cartItems
+    : state.cartItems.length > 0
+      ? state.cartItems
+      : cartItems;
+  const currentCustomerInfo =
+    readOnly && customerInfo
+      ? customerInfo
+      : state.currentCustomer || customerInfo;
 
   // Use store state for real-time totals, fallback to props for session-based POS
-  const subtotal = state.cartSubtotal || propSubtotal || 0;
-  const tax = state.cartTax || propTax || 0;
-  const total = state.cartTotal || propTotal || 0;
+  const subtotal = readOnly
+    ? (completedTransactionData?.subtotal ?? propSubtotal ?? 0)
+    : state.cartSubtotal || propSubtotal || 0;
+  const tax = readOnly
+    ? (completedTransactionData?.tax ?? propTax ?? 0)
+    : state.cartTax || propTax || 0;
+  const total = readOnly
+    ? (completedTransactionData?.total ?? propTotal ?? 0)
+    : state.cartTotal || propTotal || 0;
 
-  const cartItemsCount = state.cartItems.reduce(
+  const cartItemsCount = currentCartItems.reduce(
     (sum, item) => sum + item.quantity,
     0
   );
@@ -91,6 +125,7 @@ export function OrderSummary({
     paymentMethod: string,
     session: POSSession
   ) => {
+    if (readOnly) return;
     // Prevent multiple concurrent calls
     if (
       state.isTransactionCompleting ||
@@ -109,6 +144,7 @@ export function OrderSummary({
   };
 
   const handleNewTransaction = () => {
+    if (readOnly) return;
     transaction.startNewTransaction();
     onClearCart();
     onClearCustomer?.();
@@ -125,8 +161,8 @@ export function OrderSummary({
     });
 
     if (
-      !state.completedOrderNumber ||
-      !state.transaction.completedTransactionData ||
+      (!readOnly && !state.completedOrderNumber) ||
+      (!readOnly && !state.transaction.completedTransactionData) ||
       !activeStore
     ) {
       console.error("Missing required data for receipt:", {
@@ -140,40 +176,42 @@ export function OrderSummary({
     try {
       // Use the completed transaction data for accurate totals
       // Get the totals from the stored completed transaction, not current cart state
-      const completedTransactionData =
-        state.transaction.completedTransactionData!;
+      const completedData = readOnly
+        ? completedTransactionData
+        : state.transaction.completedTransactionData!;
+
+      if (!completedData) {
+        console.error("No completed transaction data available for receipt");
+        return;
+      }
 
       const formatter = currencyFormatter(activeStore.currency || "GHS");
       const completedAtDate =
-        completedTransactionData.completedAt instanceof Date
-          ? completedTransactionData.completedAt
-          : new Date(completedTransactionData.completedAt);
+        completedData.completedAt instanceof Date
+          ? completedData.completedAt
+          : new Date(completedData.completedAt);
 
-      const receiptItems = completedTransactionData.cartItems.map(
-        (item, index) => {
-          const attributeParts: string[] = [];
-          if (item.size) {
-            attributeParts.push(`${item.size}`);
-          }
-          if (item.length) {
-            attributeParts.push(`${item.length}"`);
-          }
-
-          return {
-            name: capitalizeWords(item.name),
-            totalPrice: formatter.format(item.price * item.quantity),
-            quantityLabel: `${item.quantity} × ${formatter.format(item.price)}`,
-            skuOrBarcode: item.sku || item.barcode,
-            attributes:
-              attributeParts.length > 0
-                ? attributeParts.join(" • ")
-                : undefined,
-          };
+      const receiptItems = completedData.cartItems.map((item, index) => {
+        const attributeParts: string[] = [];
+        if (item.size) {
+          attributeParts.push(`${item.size}`);
         }
-      );
+        if (item.length) {
+          attributeParts.push(`${item.length}"`);
+        }
+
+        return {
+          name: capitalizeWords(item.name),
+          totalPrice: formatter.format(item.price * item.quantity),
+          quantityLabel: `${item.quantity} × ${formatter.format(item.price)}`,
+          skuOrBarcode: item.sku || item.barcode,
+          attributes:
+            attributeParts.length > 0 ? attributeParts.join(" • ") : undefined,
+        };
+      });
 
       const paymentMethodLabel = formatPaymentMethod(
-        completedTransactionData.paymentMethod
+        completedData.paymentMethod
       );
 
       const storeContact = activeStore.config?.contactInfo;
@@ -196,7 +234,13 @@ export function OrderSummary({
                 }
               : undefined
           }
-          receiptNumber={state.completedOrderNumber}
+          receiptNumber={
+            readOnly
+              ? (receiptNumberOverride ??
+                state.completedOrderNumber ??
+                "Transaction")
+              : (state.completedOrderNumber ?? "Transaction")
+          }
           completedDate={completedAtDate.toLocaleDateString()}
           completedTime={completedAtDate.toLocaleTimeString("en-US", {
             hour: "numeric",
@@ -204,17 +248,22 @@ export function OrderSummary({
             hour12: true,
           })}
           itemsCount={cartItemsCount}
-          cashierName={`${cashier?.firstName} ${cashier?.lastName.charAt(0)}.`}
+          cashierName={
+            cashierNameOverride ??
+            `${cashier?.firstName ?? ""} ${
+              cashier?.lastName ? `${cashier.lastName.charAt(0)}.` : ""
+            }`.trim()
+          }
           registerNumber={registerNumber || undefined}
-          customerInfo={completedTransactionData.customerInfo}
+          customerInfo={completedData.customerInfo}
           items={receiptItems}
-          subtotal={formatter.format(completedTransactionData.subtotal)}
+          subtotal={formatter.format(completedData.subtotal)}
           tax={
-            completedTransactionData.tax > 0
-              ? formatter.format(completedTransactionData.tax)
+            completedData.tax > 0
+              ? formatter.format(completedData.tax)
               : undefined
           }
-          total={formatter.format(completedTransactionData.total)}
+          total={formatter.format(completedData.total)}
           paymentMethodLabel={paymentMethodLabel}
         />
       );
@@ -225,73 +274,29 @@ export function OrderSummary({
     }
   };
 
-  // Show completed transaction state
-  if (state.isTransactionCompleted) {
-    return (
-      <Card>
-        <CardHeader className="text-center">
-          <div className="mx-auto w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mb-4">
-            <Check className="w-6 h-6 text-green-600" />
-          </div>
-          <CardTitle className="text-green-600">
-            Transaction Complete!
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="text-center">
-            <p className="text-sm text-gray-600">Order Number</p>
-            <p className="text-lg font-semibold">
-              {state.completedOrderNumber}
-            </p>
-          </div>
-
-          {state.transaction.completedTransactionData && (
-            <div className="text-center text-sm text-gray-600">
-              <p>
-                Completed at{" "}
-                {state.transaction.completedTransactionData.completedAt.toLocaleTimeString()}
-              </p>
-              <p>
-                Payment:{" "}
-                {formatPaymentMethod(
-                  state.transaction.completedTransactionData.paymentMethod
-                )}
-              </p>
-            </div>
-          )}
-
-          <Separator />
-
-          <div className="flex gap-2">
-            <Button
-              onClick={handlePrintReceipt}
-              variant="outline"
-              className="flex-1"
-            >
-              <Printer className="w-4 h-4 mr-2" />
-              Print Receipt
-            </Button>
-            <Button onClick={handleNewTransaction} className="flex-1">
-              <Plus className="w-4 h-4 mr-2" />
-              New Transaction
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
-
   return (
     <div
       className={cn(
-        "border rounded-lg",
-        terminal === null && "opacity-60 transition-all duration-300"
+        state.isTransactionCompleted && "border rounded-lg",
+        terminal === null &&
+          !readOnly &&
+          "opacity-60 transition-all duration-300"
+        // state.isTransactionCompleted && "h-[70vh]"
       )}
     >
+      {state.isTransactionCompleted && (
+        <CardHeader className="space-y-4 mt-8 mb-16">
+          <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mb-4">
+            <Check className="w-6 h-6 text-green-600" />
+          </div>
+          <CardTitle className="text-green-600">Transaction complete</CardTitle>
+        </CardHeader>
+      )}
+
       <CardHeader className="flex flex-row baseline justify-between">
         <p className="text-lg font-medium">Summary</p>
         {cartItemsCount > 0 && (
-          <p className="text-sm text-gray-600">{cartItemsCountText}</p>
+          <p className="text-gray-600">{cartItemsCountText}</p>
         )}
       </CardHeader>
       <div className="p-6 space-y-40">
@@ -331,48 +336,75 @@ export function OrderSummary({
           )}
 
         {/* Payment buttons */}
-        <div className="space-y-2">
-          <Button
-            onClick={() =>
-              handleCompleteTransaction("cash", activeSession as POSSession)
-            }
-            disabled={state.isTransactionCompleting || cartItemsCount == 0}
-            className="w-full py-8 bg-green-200 hover:bg-green-300 text-green-900 hover:text-green-800"
-            size="lg"
-            variant="outline"
-          >
-            <Banknote className="w-4 h-4 mr-2" />
-            Pay with Cash
-          </Button>
-          <Button
-            onClick={() =>
-              handleCompleteTransaction(
-                "digital_wallet",
-                activeSession as POSSession
-              )
-            }
-            disabled={state.isTransactionCompleting || cartItemsCount == 0}
-            variant="outline"
-            className="w-full py-8 bg-yellow-200 hover:bg-yellow-300 text-yellow-900 hover:text-yellow-800"
-            size="lg"
-          >
-            <Smartphone className="w-4 h-4 mr-2" />
-            Pay with Mobile Money
-          </Button>
+        {!readOnly && !state.isTransactionCompleted && (
+          <div className="space-y-2">
+            <Button
+              onClick={() =>
+                handleCompleteTransaction("cash", activeSession as POSSession)
+              }
+              disabled={state.isTransactionCompleting || cartItemsCount == 0}
+              className="w-full py-10 bg-green-200 hover:bg-green-300 text-green-900 hover:text-green-800"
+              size="lg"
+              variant="outline"
+            >
+              <Banknote className="w-4 h-4 mr-2" />
+              Pay with Cash
+            </Button>
+            <Button
+              onClick={() =>
+                handleCompleteTransaction(
+                  "mobile_money",
+                  activeSession as POSSession
+                )
+              }
+              disabled={state.isTransactionCompleting || cartItemsCount == 0}
+              variant="outline"
+              className="w-full py-10 bg-yellow-200 hover:bg-yellow-300 text-yellow-900 hover:text-yellow-800"
+              size="lg"
+            >
+              <Smartphone className="w-4 h-4 mr-2" />
+              Pay with Mobile Money
+            </Button>
 
-          <Button
-            onClick={() =>
-              handleCompleteTransaction("card", activeSession as POSSession)
-            }
-            disabled={state.isTransactionCompleting || cartItemsCount == 0}
-            variant="outline"
-            className="w-full py-8 bg-blue-200 hover:bg-blue-300 text-blue-900 hover:text-blue-800"
-            size="lg"
-          >
-            <CreditCard className="w-4 h-4 mr-2" />
-            Pay with Card
-          </Button>
-        </div>
+            <Button
+              onClick={() =>
+                handleCompleteTransaction("card", activeSession as POSSession)
+              }
+              disabled={state.isTransactionCompleting || cartItemsCount == 0}
+              variant="outline"
+              className="w-full py-10 bg-blue-200 hover:bg-blue-300 text-blue-900 hover:text-blue-800"
+              size="lg"
+            >
+              <CreditCard className="w-4 h-4 mr-2" />
+              Pay with Card
+            </Button>
+          </div>
+        )}
+
+        {(readOnly || state.isTransactionCompleted) && (
+          <div className="space-y-4">
+            <Button
+              onClick={handlePrintReceipt}
+              className="w-full py-12 text-lg"
+              size="lg"
+              variant="outline"
+            >
+              <Printer className="w-10 h-10 mr-2" />
+              Print Receipt
+            </Button>
+            {!readOnly && (
+              <Button
+                onClick={handleNewTransaction}
+                variant="outline"
+                className="w-full py-12 text-lg"
+                size="lg"
+              >
+                <RotateCcw className="w-10 h-10 mr-2" />
+                New Transaction
+              </Button>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -383,8 +415,8 @@ export function OrderSummary({
         return "Card Payment";
       case "cash":
         return "Cash Payment";
-      case "digital_wallet":
-        return "Digital Wallet";
+      case "mobile_money":
+        return "Mobile Money";
       default:
         return method;
     }

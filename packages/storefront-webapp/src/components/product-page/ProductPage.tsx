@@ -17,6 +17,7 @@ import { TrustSignals } from "../communication/TrustSignals";
 import { AboutProduct } from "./AboutProduct";
 import { useProductDiscount } from "@/hooks/useProductDiscount";
 import { DiscountBadge } from "./DiscountBadge";
+import { useStoreContext } from "@/contexts/StoreContext";
 
 // Main Product Page Component
 export default function ProductPage() {
@@ -43,6 +44,8 @@ export default function ProductPage() {
   } = useProductPageLogic();
 
   const pageRef = useRef<HTMLDivElement | null>(null);
+
+  const { store } = useStoreContext();
 
   useTrackAction({
     action: "viewed_product",
@@ -71,9 +74,18 @@ export default function ProductPage() {
 
   if (error) return <NotFound />;
   if (!selectedSku || !product) return <div className="h-screen" />;
-  if (product?.isVisible === false || isPromoCodeItem) {
+  if (
+    product?.isVisible === false ||
+    isPromoCodeItem ||
+    selectedSku.price === 0 ||
+    selectedSku.price === undefined
+  ) {
     return <NotFound />;
   }
+
+  const images = selectedSku.images.length
+    ? selectedSku.images
+    : [store?.config?.ui?.fallbackImageUrl];
 
   return (
     <AnimatePresence>
@@ -88,7 +100,7 @@ export default function ProductPage() {
             animate={{ opacity: 1, transition: { duration: 0.1 } }}
             className="relative"
           >
-            <GalleryViewer images={selectedSku.images} />
+            <GalleryViewer images={images} />
             <DiscountBadge
               size="sm"
               productSkuId={selectedSku._id}
@@ -161,7 +173,7 @@ export default function ProductPage() {
             animate={{ opacity: 1, transition: { duration: 0.1 } }}
             className="col-span-1 md:col-span-2 relative"
           >
-            <GalleryViewer images={selectedSku.images} />
+            <GalleryViewer images={images} />
             <DiscountBadge
               size="md"
               productSkuId={selectedSku._id}

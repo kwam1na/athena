@@ -19,6 +19,7 @@ import {
   createSessionResultValidator,
 } from "./helpers/resultTypes";
 import { calculateSessionExpiration } from "./helpers/sessionExpiration";
+import { createTransactionFromSession } from "./pos";
 
 // Get sessions for a store (with filtering)
 export const getStoreSessions = query({
@@ -377,6 +378,7 @@ export const completeSession = mutation({
       success: v.literal(true),
       data: v.object({
         sessionId: v.id("posSession"),
+        transactionNumber: v.string(),
       }),
     }),
     v.object({
@@ -413,21 +415,22 @@ export const completeSession = mutation({
       total: args.total,
     });
 
-    // Schedule the transaction creation to avoid circular dependencies
-    await ctx.scheduler.runAfter(
-      0,
-      api.inventory.pos.createTransactionFromSession,
-      {
-        sessionId: args.sessionId,
-        paymentMethod: args.paymentMethod,
-        amountPaid: args.amountPaid,
-        changeGiven: args.changeGiven,
-        notes: args.notes,
-      }
-    );
+    const { transactionNumber } = await createTransactionFromSession(ctx, {
+      sessionId: args.sessionId,
+      paymentMethod: args.paymentMethod,
+      amountPaid: args.amountPaid,
+      changeGiven: args.changeGiven,
+      notes: args.notes,
+    });
 
     // Return the session ID since the transaction will be created asynchronously
-    return { success: true as const, data: { sessionId: args.sessionId } };
+    return {
+      success: true as const,
+      data: {
+        sessionId: args.sessionId,
+        transactionNumber,
+      },
+    };
   },
 });
 

@@ -48,6 +48,8 @@ function SummaryItem({
 
   const isFree = isEligible && discountedPrice === 0;
 
+  const { store } = useStoreContext();
+
   // For entire-order discounts, only show strikethrough if there's 1 item in bag
   // For selected-products discounts, always show strikethrough for eligible items
   const shouldShowDiscount =
@@ -62,7 +64,11 @@ function SummaryItem({
       <div className="flex items-center space-x-4">
         <div className="h-12 w-12 rounded-lg overflow-hidden">
           <img
-            src={item.productImage || placeholder}
+            src={
+              item.productImage ||
+              store?.config?.ui?.fallbackImageUrl ||
+              placeholder
+            }
             alt={item.productName || "product image"}
             className="aspect-square object-cover rounded-lg"
           />

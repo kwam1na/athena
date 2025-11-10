@@ -67,7 +67,7 @@ export const create = mutation({
     await ctx.db.insert("organizationMember", {
       userId: args.createdByUserId,
       organizationId: id,
-      role: "admin",
+      role: "full_admin",
     });
 
     return await ctx.db.get(id);

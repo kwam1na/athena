@@ -332,9 +332,10 @@ export const completeTransaction = mutation({
         name: v.string(),
         barcode: v.optional(v.string()),
         sku: v.string(),
+        image: v.optional(v.string()),
       })
     ),
-    paymentMethod: v.string(), // "cash", "card", "digital_wallet"
+    paymentMethod: v.string(), // "cash", "card", "mobile_money"
     subtotal: v.number(),
     tax: v.number(),
     total: v.number(),
@@ -433,6 +434,8 @@ export const completeTransaction = mutation({
           };
         }
 
+        const image = item.image ?? sku.images?.[0];
+
         // Create transaction item
         const transactionItemId = await ctx.db.insert("posTransactionItem", {
           transactionId,
@@ -441,6 +444,7 @@ export const completeTransaction = mutation({
           productName: item.name,
           productSku: item.sku,
           barcode: item.barcode,
+          ...(image ? { image } : {}),
           quantity: item.quantity,
           unitPrice: item.price,
           totalPrice: item.price * item.quantity,
@@ -497,6 +501,215 @@ export const getTransactionsByStore = query({
       .take(args.limit || 50);
 
     return transactions;
+  },
+});
+
+export const getCompletedTransactions = query({
+  args: {
+    storeId: v.id("store"),
+    limit: v.optional(v.number()),
+  },
+  returns: v.array(
+    v.object({
+      _id: v.id("posTransaction"),
+      transactionNumber: v.string(),
+      total: v.number(),
+      paymentMethod: v.string(),
+      completedAt: v.number(),
+      cashierName: v.union(v.string(), v.null()),
+      customerName: v.union(v.string(), v.null()),
+      itemCount: v.number(),
+    })
+  ),
+  handler: async (ctx, args) => {
+    const limit = args.limit ?? 50;
+
+    const transactions = await ctx.db
+      .query("posTransaction")
+      .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
+      .order("desc")
+      .take(limit);
+
+    const completedTransactions = transactions.filter(
+      (transaction) => transaction.status === "completed"
+    );
+
+    return Promise.all(
+      completedTransactions.map(async (transaction) => {
+        let cashierName: string | null = null;
+        if (transaction.cashierId) {
+          const cashier = await ctx.db.get(transaction.cashierId);
+          if (cashier) {
+            cashierName = [cashier.firstName, `${cashier.lastName.charAt(0)}.`]
+              .filter(Boolean)
+              .join(" ")
+              .trim();
+          }
+        }
+
+        let customerName: string | null = null;
+        if (transaction.customerId) {
+          const customer = await ctx.db.get(transaction.customerId);
+          customerName = customer?.name ?? null;
+        } else if (transaction.customerInfo?.name) {
+          customerName = transaction.customerInfo.name;
+        }
+
+        const items = await ctx.db
+          .query("posTransactionItem")
+          .withIndex("by_transactionId", (q) =>
+            q.eq("transactionId", transaction._id)
+          )
+          .collect();
+
+        const itemCount = items.reduce((acc, item) => acc + item.quantity, 0);
+
+        return {
+          _id: transaction._id,
+          transactionNumber: transaction.transactionNumber,
+          total: transaction.total,
+          paymentMethod: transaction.paymentMethod,
+          completedAt: transaction.completedAt,
+          cashierName: cashierName || null,
+          customerName: customerName || null,
+          itemCount,
+        };
+      })
+    );
+  },
+});
+
+export const getTransactionById = query({
+  args: {
+    transactionId: v.id("posTransaction"),
+  },
+  returns: v.union(
+    v.null(),
+    v.object({
+      _id: v.id("posTransaction"),
+      transactionNumber: v.string(),
+      subtotal: v.number(),
+      tax: v.number(),
+      total: v.number(),
+      paymentMethod: v.string(),
+      amountPaid: v.optional(v.number()),
+      changeGiven: v.optional(v.number()),
+      status: v.string(),
+      completedAt: v.number(),
+      notes: v.optional(v.string()),
+      cashier: v.union(
+        v.null(),
+        v.object({
+          _id: v.id("cashier"),
+          firstName: v.string(),
+          lastName: v.string(),
+        })
+      ),
+      customer: v.union(
+        v.null(),
+        v.object({
+          _id: v.optional(v.id("posCustomer")),
+          name: v.optional(v.string()),
+          email: v.optional(v.string()),
+          phone: v.optional(v.string()),
+        })
+      ),
+      customerInfo: v.optional(
+        v.object({
+          name: v.optional(v.string()),
+          email: v.optional(v.string()),
+          phone: v.optional(v.string()),
+        })
+      ),
+      items: v.array(
+        v.object({
+          _id: v.id("posTransactionItem"),
+          productId: v.id("product"),
+          productSkuId: v.id("productSku"),
+          productName: v.string(),
+          productSku: v.string(),
+          barcode: v.optional(v.string()),
+          image: v.optional(v.string()),
+          quantity: v.number(),
+          unitPrice: v.number(),
+          totalPrice: v.number(),
+          discount: v.optional(v.number()),
+          discountReason: v.optional(v.string()),
+        })
+      ),
+    })
+  ),
+  handler: async (ctx, args) => {
+    const transaction = await ctx.db.get(args.transactionId);
+    if (!transaction) {
+      return null;
+    }
+
+    const cashier = transaction.cashierId
+      ? await ctx.db.get(transaction.cashierId)
+      : null;
+
+    const customer = transaction.customerId
+      ? await ctx.db.get(transaction.customerId)
+      : null;
+
+    const items = await ctx.db
+      .query("posTransactionItem")
+      .withIndex("by_transactionId", (q) =>
+        q.eq("transactionId", transaction._id)
+      )
+      .collect();
+
+    return {
+      _id: transaction._id,
+      transactionNumber: transaction.transactionNumber,
+      subtotal: transaction.subtotal ?? 0,
+      tax: transaction.tax ?? 0,
+      total: transaction.total,
+      paymentMethod: transaction.paymentMethod,
+      amountPaid: transaction.amountPaid,
+      changeGiven: transaction.changeGiven,
+      status: transaction.status,
+      completedAt: transaction.completedAt,
+      notes: transaction.notes,
+      cashier: cashier
+        ? {
+            _id: cashier._id,
+            firstName: cashier.firstName,
+            lastName: cashier.lastName,
+          }
+        : null,
+      customer: customer
+        ? {
+            _id: customer._id,
+            name: customer.name ?? undefined,
+            email: customer.email ?? undefined,
+            phone: customer.phone ?? undefined,
+          }
+        : transaction.customerInfo
+          ? {
+              _id: undefined,
+              name: transaction.customerInfo.name,
+              email: transaction.customerInfo.email,
+              phone: transaction.customerInfo.phone,
+            }
+          : null,
+      customerInfo: transaction.customerInfo,
+      items: items.map((item) => ({
+        _id: item._id,
+        productId: item.productId,
+        productSkuId: item.productSkuId,
+        productName: item.productName,
+        productSku: item.productSku,
+        barcode: item.barcode,
+        image: item.image,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        totalPrice: item.totalPrice,
+        discount: item.discount,
+        discountReason: item.discountReason,
+      })),
+    };
   },
 });
 
@@ -662,6 +875,8 @@ export const createTransactionFromSession = mutation({
           );
         }
 
+        const image = item.image ?? sku.images?.[0];
+
         // Create transaction item
         const transactionItemId = await ctx.db.insert("posTransactionItem", {
           transactionId,
@@ -670,6 +885,7 @@ export const createTransactionFromSession = mutation({
           productName: item.productName,
           productSku: item.productSku ?? "",
           barcode: item.barcode,
+          ...(image ? { image } : {}),
           quantity: item.quantity,
           unitPrice: item.price,
           totalPrice: item.price * item.quantity,
@@ -698,7 +914,7 @@ export const createTransactionFromSession = mutation({
     return {
       success: true,
       transactionId,
-      transactionNumber: `POS-${transactionNumber}`,
+      transactionNumber,
       transactionItems: transactionItems.filter((item) => item !== null),
     };
   },

@@ -6,6 +6,7 @@ import { usePOSStore } from "~/src/stores/posStore";
 import { toast } from "sonner";
 import { usePOSActiveSession } from "~/src/hooks/usePOSSessions";
 import { useSessionManagerOperations } from "~/src/hooks/useSessionManagerOperations";
+import { usePOSOperations } from "~/src/hooks/usePOSOperations";
 
 interface CashierViewProps {
   storeId: Id<"store">;
@@ -19,6 +20,7 @@ export const CashierView = ({
   cashierId,
 }: CashierViewProps) => {
   const store = usePOSStore();
+  const { state } = usePOSOperations();
 
   const activeSession = usePOSActiveSession(storeId, terminalId, cashierId);
 
@@ -66,6 +68,10 @@ export const CashierView = ({
       store.clearCashier();
     }
   };
+
+  if (state.isTransactionCompleted) {
+    return null;
+  }
 
   return (
     <div className="h-[96px] w-full border rounded-lg p-4">

@@ -21,6 +21,7 @@ import {
   Settings,
   Receipt,
   Search,
+  ClockFading,
 } from "lucide-react";
 import { useGetActiveOrganization } from "@/hooks/useGetOrganizations";
 import { getOrigin } from "~/src/lib/navigationUtils";
@@ -88,12 +89,12 @@ export default function PointOfSaleView() {
       available: false,
     },
     {
-      title: "Session History",
-      description: "View past POS sessions and their details",
-      icon: Clock,
-      href: null,
+      title: "Transactions",
+      description: "View completed transaction history",
+      icon: Receipt,
+      href: "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions" as const,
       color: "bg-orange-500",
-      available: false,
+      available: true,
     },
     {
       title: "Customers",
@@ -178,86 +179,88 @@ export default function PointOfSaleView() {
         <div>
           {/* <h2 className="text-2xl font-semibold mb-6">POS Features</h2> */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {posFeatures.map((feature) => {
-              const Icon = feature.icon;
+            {posFeatures
+              .filter((f) => f.available)
+              .map((feature) => {
+                const Icon = feature.icon;
 
-              if (!feature.available || !feature.href) {
+                if (!feature.available || !feature.href) {
+                  return (
+                    <div
+                      key={feature.title}
+                      className="border rounded-lg opacity-50 cursor-not-allowed"
+                    >
+                      <CardHeader className="pb-3">
+                        <div className="flex items-center space-x-3">
+                          <div className={`p-2 rounded-lg ${feature.color}`}>
+                            <Icon className="h-5 w-5 text-white" />
+                          </div>
+                          <CardTitle className="text-lg flex items-center gap-2">
+                            {feature.title}
+                            <span className="text-xs bg-muted px-2 py-1 rounded">
+                              Coming Soon
+                            </span>
+                          </CardTitle>
+                        </div>
+                      </CardHeader>
+                      <CardContent>
+                        <CardDescription className="text-sm">
+                          {feature.description}
+                        </CardDescription>
+                      </CardContent>
+                    </div>
+                  );
+                }
+
                 return (
                   <div
                     key={feature.title}
-                    className="border rounded-lg opacity-50 cursor-not-allowed"
+                    className={cn(
+                      "border rounded-lg cursor-pointer",
+                      feature.enabled === false && "cursor-not-allowed"
+                    )}
                   >
-                    <CardHeader className="pb-3">
-                      <div className="flex items-center space-x-3">
-                        <div className={`p-2 rounded-lg ${feature.color}`}>
-                          <Icon className="h-5 w-5 text-white" />
+                    <Link
+                      to={feature.href}
+                      params={{
+                        orgUrlSlug: activeOrganization.slug,
+                        storeUrlSlug: activeStore.slug,
+                      }}
+                      search={{
+                        o: getOrigin(),
+                      }}
+                      className="block h-full"
+                    >
+                      <CardHeader className="pb-3">
+                        <div className="flex items-center space-x-3">
+                          <div className={`p-2 rounded-lg ${feature.color}`}>
+                            <Icon className="h-5 w-5 text-white" />
+                          </div>
+                          <CardTitle className="text-lg">
+                            {feature.title}
+                          </CardTitle>
+                          {feature.enabled === false && (
+                            <Badge variant="outline">Disabled</Badge>
+                          )}
                         </div>
-                        <CardTitle className="text-lg flex items-center gap-2">
-                          {feature.title}
-                          <span className="text-xs bg-muted px-2 py-1 rounded">
-                            Coming Soon
-                          </span>
-                        </CardTitle>
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      <CardDescription className="text-sm">
-                        {feature.description}
-                      </CardDescription>
-                    </CardContent>
+                      </CardHeader>
+                      <CardContent>
+                        <CardDescription className="text-sm">
+                          {feature.description}
+                        </CardDescription>
+                      </CardContent>
+                    </Link>
                   </div>
                 );
-              }
-
-              return (
-                <div
-                  key={feature.title}
-                  className={cn(
-                    "border rounded-lg cursor-pointer",
-                    feature.enabled === false && "cursor-not-allowed"
-                  )}
-                >
-                  <Link
-                    to={feature.href}
-                    params={{
-                      orgUrlSlug: activeOrganization.slug,
-                      storeUrlSlug: activeStore.slug,
-                    }}
-                    search={{
-                      o: getOrigin(),
-                    }}
-                    className="block h-full"
-                  >
-                    <CardHeader className="pb-3">
-                      <div className="flex items-center space-x-3">
-                        <div className={`p-2 rounded-lg ${feature.color}`}>
-                          <Icon className="h-5 w-5 text-white" />
-                        </div>
-                        <CardTitle className="text-lg">
-                          {feature.title}
-                        </CardTitle>
-                        {feature.enabled === false && (
-                          <Badge variant="outline">Disabled</Badge>
-                        )}
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      <CardDescription className="text-sm">
-                        {feature.description}
-                      </CardDescription>
-                    </CardContent>
-                  </Link>
-                </div>
-              );
-            })}
+              })}
           </div>
         </div>
 
         {/* Today's Summary */}
         <div>
-          <h2 className="text-2xl font-semibold mb-6">Today's Summary</h2>
+          <h2 className="text-xl font-medium mb-6">Summary</h2>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <Card>
+            <div className="border rounded-lg">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm text-muted-foreground">
                   Transactions
@@ -273,9 +276,9 @@ export default function PointOfSaleView() {
                 </div>
                 <p className="text-xs text-muted-foreground">Today</p>
               </CardContent>
-            </Card>
+            </div>
 
-            <Card>
+            <div className="border rounded-lg">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm text-muted-foreground">
                   Total Sales
@@ -291,9 +294,9 @@ export default function PointOfSaleView() {
                 </div>
                 <p className="text-xs text-muted-foreground">Today</p>
               </CardContent>
-            </Card>
+            </div>
 
-            <Card>
+            <div className="border rounded-lg">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm text-muted-foreground">
                   Items Sold
@@ -309,9 +312,9 @@ export default function PointOfSaleView() {
                 </div>
                 <p className="text-xs text-muted-foreground">Today</p>
               </CardContent>
-            </Card>
+            </div>
 
-            <Card>
+            <div className="border rounded-lg">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm text-muted-foreground">
                   Avg. Transaction
@@ -327,7 +330,7 @@ export default function PointOfSaleView() {
                 </div>
                 <p className="text-xs text-muted-foreground">Today</p>
               </CardContent>
-            </Card>
+            </div>
           </div>
         </div>
       </FadeIn>

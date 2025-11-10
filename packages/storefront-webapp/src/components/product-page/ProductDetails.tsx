@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import placeholder from "@/assets/placeholder.png";
 import { WIGLUB_HAIR_STUDIO_LOCATION_URL } from "@/lib/constants";
 import { ShoppingBagAction } from "@/hooks/useShoppingBag";
+import { useStoreContext } from "@/contexts/StoreContext";
 
 // Product Details Section
 export function PickupDetails({
@@ -54,6 +55,8 @@ export function BagProduct({
 
   const buttonLink = action == "adding-to-bag" ? "/shop/bag" : "/shop/saved";
 
+  const { store } = useStoreContext();
+
   return (
     <div className="flex flex-col gap-12 pt-12">
       <div className="space-y-8">
@@ -62,7 +65,11 @@ export function BagProduct({
           <img
             alt={`Bag image`}
             className="w-[140px] h-[180px] aspect-square object-cover rounded"
-            src={product.images[0] || placeholder}
+            src={
+              product.images[0] ||
+              store?.config?.ui?.fallbackImageUrl ||
+              placeholder
+            }
           />
           <p className="text-sm">{getProductName(product)}</p>
         </div>

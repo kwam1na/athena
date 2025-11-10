@@ -85,7 +85,7 @@ export const create = mutation({
     if (invalidProducts.length > 0) {
       return {
         success: false,
-        message: "Some items in your bag are no longer availables",
+        message: "Some items in your bag are no longer available",
         unavailableProducts: invalidProducts.map((p) => ({
           productSkuId: p.productSkuId,
           requested: p.quantity,
@@ -102,7 +102,7 @@ export const create = mutation({
     if (invisibleProducts.length > 0) {
       return {
         success: false,
-        message: "Some items in your bag are no longer availablea",
+        message: "Some items in your bag are no longer available",
         unavailableProducts: invisibleProducts.map((product) => {
           const correspondingProductData = args.products.find(
             (p) => p.productId === product?._id
@@ -127,7 +127,7 @@ export const create = mutation({
     if (invisibleProductSkus.length > 0) {
       return {
         success: false,
-        message: "Some items in your bag are no longer availablet",
+        message: "Some items in your bag are no longer available",
         unavailableProducts: invisibleProductSkus.map((sku) => ({
           productSkuId: sku._id,
           requested:

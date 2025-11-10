@@ -7,6 +7,7 @@ export const posTransactionItemSchema = v.object({
   productName: v.string(),
   productSku: v.string(), // human-readable SKU reference
   barcode: v.optional(v.string()),
+  image: v.optional(v.string()),
   quantity: v.number(),
   unitPrice: v.number(),
   totalPrice: v.number(),

@@ -158,7 +158,10 @@ export const useCartOperations = () => {
             onSuccess: (data) => {
               // Update local store with the database ID
               if (existingItem) {
-                store.updateCartQuantity(existingItem.id, newQuantity);
+                store.updateCartQuantity(
+                  existingItem.id as Id<"posSessionItem">,
+                  newQuantity
+                );
               } else {
                 store.addToCart({
                   id: data.itemId,

@@ -75,3 +75,77 @@ export const getSkusReservedInCheckout = query({
     return reservedSkus;
   },
 });
+
+/**
+ * Get SKUs that are currently reserved in active POS sessions.
+ * This prevents editing stock/quantity fields for SKUs that are actively
+ * in use at a POS terminal.
+ */
+export const getSkusReservedInPosSession = query({
+  args: {
+    skus: v.array(v.string()),
+    storeId: v.id("store"),
+  },
+  returns: v.array(v.string()),
+  handler: async (ctx, args) => {
+    // Early exit for empty arrays
+    if (args.skus.length === 0) {
+      return [];
+    }
+
+    // Batch size limit to prevent excessive OR conditions
+    if (args.skus.length > MAX_SKUS_PER_REQUEST) {
+      throw new Error(
+        `Too many SKUs to check at once (${args.skus.length}). ` +
+          `Maximum allowed is ${MAX_SKUS_PER_REQUEST}. Please batch your requests.`
+      );
+    }
+
+    const now = Date.now();
+
+    // Step 1: Get active and held POS sessions (session-first approach)
+    // Only check sessions that haven't expired
+    const activeSessions = await ctx.db
+      .query("posSession")
+      .withIndex("by_storeId_and_status", (q) =>
+        q.eq("storeId", args.storeId).eq("status", "active")
+      )
+      .filter((q) => q.gte(q.field("expiresAt"), now))
+      .collect();
+
+    const heldSessions = await ctx.db
+      .query("posSession")
+      .withIndex("by_storeId_and_status", (q) =>
+        q.eq("storeId", args.storeId).eq("status", "held")
+      )
+      .filter((q) => q.gte(q.field("expiresAt"), now))
+      .collect();
+
+    const allActiveSessions = [...activeSessions, ...heldSessions];
+
+    // Early exit if no active/held sessions
+    if (allActiveSessions.length === 0) {
+      return [];
+    }
+
+    // Step 2: Get POS session items for these sessions that match our SKUs
+    const sessionIds = allActiveSessions.map((s) => s._id);
+    const posItemsPromises = sessionIds.map((sessionId) =>
+      ctx.db
+        .query("posSessionItem")
+        .withIndex("by_sessionId", (q) => q.eq("sessionId", sessionId))
+        .filter((q) =>
+          q.or(...args.skus.map((sku) => q.eq(q.field("productSku"), sku)))
+        )
+        .collect()
+    );
+
+    const posItemsArrays = await Promise.all(posItemsPromises);
+    const posItems = posItemsArrays.flat();
+
+    // Step 3: Return unique SKUs that are reserved
+    const reservedSkus = [...new Set(posItems.map((item) => item.productSku))];
+
+    return reservedSkus;
+  },
+});

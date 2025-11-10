@@ -15,6 +15,13 @@ import { Button } from "../ui/button";
 import { Plus } from "lucide-react";
 import { useState } from "react";
 import { LoadingButton } from "../ui/loading-button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../ui/select";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "~/convex/_generated/api";
 import { useAuth } from "~/src/hooks/useAuth";
@@ -29,7 +36,7 @@ import { CashierManagement } from "../cashiers";
 
 const organizationMemberSchema = z.object({
   email: z.string().email(),
-  role: z.string(),
+  role: z.enum(["full_admin", "pos_only"]),
 });
 
 const Header = () => {
@@ -87,7 +94,7 @@ const MemberForm = ({ onCancelClick }: { onCancelClick: () => void }) => {
 
   const form = useForm({
     resolver: zodResolver(organizationMemberSchema),
-    defaultValues: { email: "", role: "admin" },
+    defaultValues: { email: "", role: "full_admin" as const },
   });
 
   const createInviteCode = useMutation(api.inventory.inviteCode.create);
@@ -101,7 +108,7 @@ const MemberForm = ({ onCancelClick }: { onCancelClick: () => void }) => {
       const res = await createInviteCode({
         organizationId: activeOrganization?._id!,
         recipientEmail: data.email,
-        role: "admin",
+        role: data.role,
         createdByUserId: user?._id!,
       });
 
@@ -122,8 +129,8 @@ const MemberForm = ({ onCancelClick }: { onCancelClick: () => void }) => {
   };
 
   const roles = [
-    { label: "Admin", value: "admin" },
-    { label: "Member", value: "member" },
+    { label: "Full Admin", value: "full_admin" },
+    { label: "POS Only", value: "pos_only" },
   ];
 
   return (
@@ -150,37 +157,39 @@ const MemberForm = ({ onCancelClick }: { onCancelClick: () => void }) => {
           />
         </div>
 
-        {/* <FormField
-          control={form.control}
-          name="role"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel className="text-muted-foreground text-xs">
-                Role
-              </FormLabel>
-              <Select
-                onValueChange={(role) => {
-                  field.onChange(role);
-                }}
-                value={field.value}
-              >
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select role" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  {roles.map((role) => (
-                    <SelectItem key={role.value} value={role.value}>
-                      {role.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <FormMessage className="text-xs" />
-            </FormItem>
-          )}
-        /> */}
+        <div className="w-[400px]">
+          <FormField
+            control={form.control}
+            name="role"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-muted-foreground text-xs">
+                  Role
+                </FormLabel>
+                <Select
+                  onValueChange={(role) => {
+                    field.onChange(role);
+                  }}
+                  value={field.value}
+                >
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select role" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {roles.map((role) => (
+                      <SelectItem key={role.value} value={role.value}>
+                        {role.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormMessage className="text-xs" />
+              </FormItem>
+            )}
+          />
+        </div>
 
         <div className="flex items-center gap-4">
           <LoadingButton

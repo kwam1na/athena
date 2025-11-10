@@ -8,18 +8,30 @@ import { useNavigate, useParams } from "@tanstack/react-router";
 // import { getProducts } from '@/server-actions/products'
 // import { getStore } from '@/server-actions/stores'
 import { createFileRoute, notFound } from "@tanstack/react-router";
+import { usePermissions } from "@/hooks/usePermissions";
 
 function StoreRootRedirect() {
   const navigate = useNavigate();
   const { orgUrlSlug, storeUrlSlug } = useParams({ strict: false });
+  const { role, isLoading } = usePermissions();
+
   useEffect(() => {
-    if (orgUrlSlug && storeUrlSlug) {
-      navigate({
-        to: "/$orgUrlSlug/store/$storeUrlSlug/analytics",
-        params: { orgUrlSlug, storeUrlSlug },
-      });
+    if (orgUrlSlug && storeUrlSlug && !isLoading) {
+      // Redirect based on user role
+      if (role === "pos_only") {
+        navigate({
+          to: "/$orgUrlSlug/store/$storeUrlSlug/pos",
+          params: { orgUrlSlug, storeUrlSlug },
+        });
+      } else {
+        // full_admin or default to analytics
+        navigate({
+          to: "/$orgUrlSlug/store/$storeUrlSlug/analytics",
+          params: { orgUrlSlug, storeUrlSlug },
+        });
+      }
     }
-  }, [orgUrlSlug, storeUrlSlug]);
+  }, [orgUrlSlug, storeUrlSlug, role, isLoading]);
   return null;
 }
 

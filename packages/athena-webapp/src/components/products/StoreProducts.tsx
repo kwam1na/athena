@@ -6,7 +6,6 @@ import { Link, useSearch } from "@tanstack/react-router";
 import { Button } from "../ui/button";
 import { PlusIcon } from "@radix-ui/react-icons";
 import { Product } from "~/types";
-import useGetActiveStore from "../../hooks/useGetActiveStore";
 import { getOrigin } from "~/src/lib/navigationUtils";
 import { slugToWords } from "~/src/lib/utils";
 

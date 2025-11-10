@@ -55,6 +55,10 @@ export type Address = Infer<typeof addressSchema>;
 
 export type AthenaUser = Doc<"athenaUser">;
 
+// Role and Permission Types
+export type Role = "full_admin" | "pos_only";
+export type Permission = "access_admin" | "access_pos";
+
 export type CheckoutSessionItem = Doc<"checkoutSessionItem">;
 
 export type InviteCode = Doc<"inviteCode">;

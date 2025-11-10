@@ -16,7 +16,7 @@ import { useTrackEvent } from "@/hooks/useTrackEvent";
 
 export default function SavedBag() {
   const [bagAction, setBagAction] = useState<ShoppingBagAction>("idle");
-  const { formatter, isNavbarShowing } = useStoreContext();
+  const { formatter, isNavbarShowing, store } = useStoreContext();
   const {
     savedBag,
     deleteItemFromSavedBag,
@@ -99,7 +99,11 @@ export default function SavedBag() {
                       }}
                     >
                       <ImageWithFallback
-                        src={(item as any).productImage || placeholder}
+                        src={
+                          (item as any).productImage ||
+                          store?.config?.ui?.fallbackImageUrl ||
+                          placeholder
+                        }
                         alt={(item as any).productName || "product image"}
                         className="w-32 h-32 lg:w-40 lg:h-40 object-cover rounded-lg"
                       />

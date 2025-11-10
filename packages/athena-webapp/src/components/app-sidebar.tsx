@@ -57,6 +57,8 @@ import {
   CollapsibleTrigger,
 } from "@radix-ui/react-collapsible";
 import { useGetCategories } from "../hooks/useGetCategories";
+import { PermissionGate } from "./PermissionGate";
+import { usePermissions } from "../hooks/usePermissions";
 
 export function AppSidebar() {
   const { activeStore } = useGetActiveStore();
@@ -103,6 +105,10 @@ export function AppSidebar() {
     api.storeFront.reviews.getUnapprovedReviewsCount,
     activeStore?._id ? { storeId: activeStore._id } : "skip"
   );
+
+  const { hasFullAdmin } = usePermissions();
+
+  const hasFullAdminAccess = hasFullAdmin();
 
   if (!activeStore || !activeOrganization) {
     return null;
@@ -157,8 +163,9 @@ export function AppSidebar() {
                 </SidebarMenuButton>
               </SidebarMenuItem>
 
+              {/* Analytics section */}
               <SidebarMenuItem>
-                <SidebarMenuButton asChild>
+                <SidebarMenuButton disabled={!hasFullAdminAccess} asChild>
                   <Link
                     to="/$orgUrlSlug/store/$storeUrlSlug/analytics"
                     params={(p) => ({
@@ -174,8 +181,9 @@ export function AppSidebar() {
                 </SidebarMenuButton>
               </SidebarMenuItem>
 
+              {/* Homepage section */}
               <SidebarMenuItem>
-                <SidebarMenuButton asChild>
+                <SidebarMenuButton disabled={!hasFullAdminAccess} asChild>
                   <Link
                     to="/$orgUrlSlug/store/$storeUrlSlug/home"
                     params={(p) => ({
@@ -191,25 +199,9 @@ export function AppSidebar() {
                 </SidebarMenuButton>
               </SidebarMenuItem>
 
-              {/* <SidebarMenuItem>
-                <SidebarMenuButton asChild>
-                  <Link
-                    to="/$orgUrlSlug/store/$storeUrlSlug/logs"
-                    params={(p) => ({
-                      ...p,
-                      orgUrlSlug: activeOrganization?.slug,
-                      storeUrlSlug: activeStore?.slug,
-                    })}
-                    className="flex items-center"
-                  >
-                    <Logs className="w-4 h-4" />
-                    <p className="font-medium">Logs</p>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem> */}
-
+              {/* Orders section */}
               <SidebarMenuItem>
-                <SidebarMenuButton asChild>
+                <SidebarMenuButton disabled={!hasFullAdminAccess} asChild>
                   <Link
                     to="/$orgUrlSlug/store/$storeUrlSlug/orders/all"
                     params={(p) => ({
@@ -226,7 +218,7 @@ export function AppSidebar() {
 
                 <SidebarMenuSub>
                   <SidebarMenuSubItem>
-                    <SidebarMenuButton asChild>
+                    <SidebarMenuButton disabled={!hasFullAdminAccess} asChild>
                       <Link
                         to="/$orgUrlSlug/store/$storeUrlSlug/orders/open"
                         params={(p) => ({
@@ -250,7 +242,7 @@ export function AppSidebar() {
 
                 <SidebarMenuSub>
                   <SidebarMenuSubItem>
-                    <SidebarMenuButton asChild>
+                    <SidebarMenuButton disabled={!hasFullAdminAccess} asChild>
                       <Link
                         to="/$orgUrlSlug/store/$storeUrlSlug/orders/ready"
                         params={(p) => ({
@@ -274,7 +266,7 @@ export function AppSidebar() {
 
                 <SidebarMenuSub>
                   <SidebarMenuSubItem>
-                    <SidebarMenuButton asChild>
+                    <SidebarMenuButton disabled={!hasFullAdminAccess} asChild>
                       <Link
                         to="/$orgUrlSlug/store/$storeUrlSlug/orders/out-for-delivery"
                         params={(p) => ({
@@ -301,7 +293,7 @@ export function AppSidebar() {
 
                 <SidebarMenuSub>
                   <SidebarMenuSubItem>
-                    <SidebarMenuButton asChild>
+                    <SidebarMenuButton disabled={!hasFullAdminAccess} asChild>
                       <Link
                         to="/$orgUrlSlug/store/$storeUrlSlug/orders/completed"
                         params={(p) => ({
@@ -328,7 +320,7 @@ export function AppSidebar() {
 
                 <SidebarMenuSub>
                   <SidebarMenuSubItem>
-                    <SidebarMenuButton asChild>
+                    <SidebarMenuButton disabled={!hasFullAdminAccess} asChild>
                       <Link
                         to="/$orgUrlSlug/store/$storeUrlSlug/orders/refunded"
                         params={(p) => ({
@@ -355,7 +347,7 @@ export function AppSidebar() {
 
                 <SidebarMenuSub>
                   <SidebarMenuSubItem>
-                    <SidebarMenuButton asChild>
+                    <SidebarMenuButton disabled={!hasFullAdminAccess} asChild>
                       <Link
                         to="/$orgUrlSlug/store/$storeUrlSlug/orders/cancelled"
                         params={(p) => ({
@@ -381,6 +373,7 @@ export function AppSidebar() {
                 </SidebarMenuSub>
               </SidebarMenuItem>
 
+              {/* Products section */}
               <SidebarMenuItem>
                 <SidebarMenuButton asChild>
                   <Link
@@ -396,6 +389,7 @@ export function AppSidebar() {
                     <p className="font-medium">Products</p>
                   </Link>
                 </SidebarMenuButton>
+
                 {categories?.map((category) => (
                   <SidebarMenuSub key={category._id}>
                     <SidebarMenuSubItem>
@@ -418,20 +412,6 @@ export function AppSidebar() {
                     </SidebarMenuSubItem>
                   </SidebarMenuSub>
                 ))}
-                {/* <SidebarMenuButton asChild>
-                  <Link
-                    to="/$orgUrlSlug/store/$storeUrlSlug/products"
-                    params={(p) => ({
-                      ...p,
-                      orgUrlSlug: activeOrganization?.slug,
-                      storeUrlSlug: activeStore?.slug,
-                    })}
-                    className="flex items-center"
-                  >
-                    <Tag className="w-4 h-4" />
-                    <p className="font-medium">Products</p>
-                  </Link>
-                </SidebarMenuButton> */}
 
                 {productsWithNoImages && productsWithNoImages.length > 0 && (
                   <SidebarMenuSub>
@@ -479,8 +459,9 @@ export function AppSidebar() {
                 </SidebarMenuSub> */}
               </SidebarMenuItem>
 
+              {/* Promo codes section */}
               <SidebarMenuItem>
-                <SidebarMenuButton asChild>
+                <SidebarMenuButton disabled={!hasFullAdminAccess} asChild>
                   <Link
                     to="/$orgUrlSlug/store/$storeUrlSlug/promo-codes"
                     params={(p) => ({
@@ -496,8 +477,9 @@ export function AppSidebar() {
                 </SidebarMenuButton>
               </SidebarMenuItem>
 
+              {/* Reviews section */}
               <SidebarMenuItem>
-                <SidebarMenuButton asChild>
+                <SidebarMenuButton disabled={!hasFullAdminAccess} asChild>
                   <Link
                     to="/$orgUrlSlug/store/$storeUrlSlug/reviews/new"
                     params={(p) => ({
@@ -520,17 +502,26 @@ export function AppSidebar() {
                 </SidebarMenuButton>
               </SidebarMenuItem>
 
+              {/* Storefront section */}
               <SidebarMenuItem>
-                <SidebarMenuButton asChild>
-                  <div className="flex items-center">
+                <SidebarMenuButton disabled={!hasFullAdminAccess} asChild>
+                  <Link
+                    to="/$orgUrlSlug/store/$storeUrlSlug/assets"
+                    params={(p) => ({
+                      ...p,
+                      orgUrlSlug: activeOrganization?.slug,
+                      storeUrlSlug: activeStore?.slug,
+                    })}
+                    className="flex items-center"
+                  >
                     <PanelTop className="w-4 h-4" />
                     <p className="font-medium">Storefront</p>
-                  </div>
+                  </Link>
                 </SidebarMenuButton>
 
                 <SidebarMenuSub>
                   <SidebarMenuSubItem>
-                    <SidebarMenuButton asChild>
+                    <SidebarMenuButton disabled={!hasFullAdminAccess} asChild>
                       <Link
                         to="/$orgUrlSlug/store/$storeUrlSlug/assets"
                         params={(p) => ({
@@ -549,7 +540,7 @@ export function AppSidebar() {
 
                 <SidebarMenuSub>
                   <SidebarMenuSubItem>
-                    <SidebarMenuButton asChild>
+                    <SidebarMenuButton disabled={!hasFullAdminAccess} asChild>
                       <Link
                         to="/$orgUrlSlug/store/$storeUrlSlug/checkout-sessions"
                         params={(p) => ({
@@ -568,7 +559,7 @@ export function AppSidebar() {
 
                 <SidebarMenuSub>
                   <SidebarMenuSubItem>
-                    <SidebarMenuButton asChild>
+                    <SidebarMenuButton disabled={!hasFullAdminAccess} asChild>
                       <Link
                         to="/$orgUrlSlug/store/$storeUrlSlug/configuration"
                         params={(p) => ({
@@ -587,7 +578,7 @@ export function AppSidebar() {
 
                 <SidebarMenuSub>
                   <SidebarMenuSubItem>
-                    <SidebarMenuButton asChild>
+                    <SidebarMenuButton disabled={!hasFullAdminAccess} asChild>
                       <Link
                         to="/$orgUrlSlug/store/$storeUrlSlug/bags"
                         params={(p) => ({
@@ -608,29 +599,31 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        <SidebarGroup>
-          <SidebarGroupLabel>Organization</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild>
-                  <Link
-                    to="/$orgUrlSlug/store/$storeUrlSlug/members"
-                    params={(p) => ({
-                      ...p,
-                      orgUrlSlug: activeOrganization?.slug,
-                      storeUrlSlug: activeStore?.slug,
-                    })}
-                    className="flex items-center"
-                  >
-                    <Users className="w-4 h-4" />
-                    <p className="font-medium">Members</p>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        <PermissionGate requires="full_admin">
+          <SidebarGroup>
+            <SidebarGroupLabel>Organization</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild>
+                    <Link
+                      to="/$orgUrlSlug/store/$storeUrlSlug/members"
+                      params={(p) => ({
+                        ...p,
+                        orgUrlSlug: activeOrganization?.slug,
+                        storeUrlSlug: activeStore?.slug,
+                      })}
+                      className="flex items-center"
+                    >
+                      <Users className="w-4 h-4" />
+                      <p className="font-medium">Members</p>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        </PermissionGate>
       </SidebarContent>
 
       <SidebarFooter>

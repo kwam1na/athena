@@ -357,8 +357,10 @@ export const CashierManagement = ({
                 {activeCashiers.map((cashier) => (
                   <TableRow key={cashier._id}>
                     <TableCell>
-                      {cashier.firstName} {cashier.lastName} ({cashier.username}
-                      )
+                      {cashier.firstName} {cashier.lastName}{" "}
+                      <span className="text-muted-foreground">
+                        {cashier.username}
+                      </span>
                     </TableCell>
                     <TableCell>
                       <span className="font-mono">{"•".repeat(6)}</span>

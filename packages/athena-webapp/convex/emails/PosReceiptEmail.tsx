@@ -220,8 +220,6 @@ export default function PosReceiptEmail({
             <Text style={styles.footerLine}>
               Please keep this receipt for your records.
             </Text>
-            <Hr style={styles.footerDivider} />
-            <Text style={styles.footerLine}>Powered by Athena POS</Text>
           </Section>
         </Container>
       </Body>

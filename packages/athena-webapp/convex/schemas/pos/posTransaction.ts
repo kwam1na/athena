@@ -10,7 +10,7 @@ export const posTransactionSchema = v.object({
   subtotal: v.number(),
   tax: v.number(),
   total: v.number(),
-  paymentMethod: v.string(), // "cash", "card", "digital_wallet"
+  paymentMethod: v.string(), // "cash", "card", "mobile_money"
   amountPaid: v.optional(v.number()), // Amount customer paid
   changeGiven: v.optional(v.number()), // Change given to customer
   status: v.string(), // "completed", "void", "refunded"

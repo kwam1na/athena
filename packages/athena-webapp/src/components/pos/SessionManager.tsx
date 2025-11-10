@@ -102,7 +102,7 @@ export function SessionManager(props: SessionManagerProps) {
     (!activeSession && !!store.session.currentSessionId);
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-4">
       {/* Active Session Badge */}
       {activeSession && activeSession.status === "active" && (
         <FadeIn>

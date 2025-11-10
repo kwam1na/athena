@@ -120,8 +120,9 @@ export const usePOSOperations = () => {
               };
             }
 
+            const { transactionNumber } = completeResult.data;
+
             // Generate POS transaction number using extracted utility
-            const transactionNumber = generateTransactionNumber();
 
             // Update transaction state
             store.setTransactionCompleted(true, transactionNumber, {
@@ -169,6 +170,7 @@ export const usePOSOperations = () => {
                   name: item.name,
                   barcode: item.barcode,
                   sku: item.sku || "",
+                  image: item.image || undefined,
                 })),
               paymentMethod,
               subtotal: store.cart.subtotal,

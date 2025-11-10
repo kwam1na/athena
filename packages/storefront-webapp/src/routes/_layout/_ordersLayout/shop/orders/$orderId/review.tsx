@@ -157,10 +157,16 @@ const OrderItem = ({
   const priceLabel = item.price
     ? formatter.format(item.price * item.quantity)
     : "Free";
+
+  const { store } = useStoreContext();
   return (
     <div className="flex gap-8 text-sm">
       <ImageWithFallback
-        src={item.productImage || placeholder}
+        src={
+          item.productImage ||
+          store?.config?.ui?.fallbackImageUrl ||
+          placeholder
+        }
         alt={"product image"}
         className="w-32 h-32 aspect-square object-cover rounded-sm"
       />

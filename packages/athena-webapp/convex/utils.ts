@@ -81,5 +81,5 @@ export function generateTransactionNumber(): string {
     .toString()
     .padStart(6, "0");
 
-  return `POS-${transactionNumber}`;
+  return transactionNumber;
 }
