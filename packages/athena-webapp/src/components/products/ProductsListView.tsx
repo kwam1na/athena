@@ -1,20 +1,18 @@
-import StoreProducts from "./StoreProducts";
-import View from "../View";
-import { useGetProducts } from "../../hooks/useGetProducts";
+import { useSearch } from "@tanstack/react-router";
 import {
   ProductsTableProvider,
   useProductsTableState,
 } from "./ProductsTableContext";
+import { useGetProducts } from "~/src/hooks/useGetProducts";
+import { useState, useMemo } from "react";
+import View from "../View";
 import { FadeIn } from "../common/FadeIn";
-import { useSearch } from "@tanstack/react-router";
+import StoreProducts from "./StoreProducts";
 import { slugToWords } from "~/src/lib/utils";
-import { Button } from "../ui/button";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, ArrowLeftIcon } from "lucide-react";
 import { ToggleGroup, ToggleGroupItem } from "../ui/toggle-group";
-import { useMemo, useState } from "react";
-import { useAction } from "convex/react";
-import { api } from "~/convex/_generated/api";
-import { toast } from "sonner";
+import { useNavigateBack } from "~/src/hooks/use-navigate-back";
+import { Button } from "../ui/button";
 
 const ProductActionsToggleGroup = ({
   outOfStockProductsCount,
@@ -43,37 +41,32 @@ const ProductActionsToggleGroup = ({
 };
 
 const Navigation = ({
+  categorySlug,
   outOfStockProductsCount,
   selectedProductActions,
   setSelectedProductActions,
 }: {
+  categorySlug: string;
   outOfStockProductsCount: number;
   selectedProductActions: string[];
   setSelectedProductActions: (actions: string[]) => void;
 }) => {
-  const { categorySlug } = useSearch({ strict: false });
-  const clearAllCache = useAction(api.inventory.productUtil.clearAllCache);
-  const [isClearCacheMutationPending, setIsClearCacheMutationPending] =
-    useState(false);
-
-  const handleClearCache = async () => {
-    setIsClearCacheMutationPending(true);
-    try {
-      await clearAllCache();
-      toast.success("Cache cleared");
-    } catch (error) {
-      toast.error("Failed to clear cache");
-    } finally {
-      setIsClearCacheMutationPending(false);
-    }
-  };
+  const navigateBack = useNavigateBack();
+  const { o } = useSearch({ strict: false });
 
   return (
     <div className="container mx-auto flex gap-2">
       <div className="flex items-center gap-2">
-        <p className="text-xl font-medium capitalize">
-          {slugToWords(categorySlug ?? "Products")}
-        </p>
+        <div className="flex items-center gap-2">
+          {o && (
+            <Button variant="ghost" onClick={navigateBack}>
+              <ArrowLeftIcon className="w-4 h-4" />
+            </Button>
+          )}
+          <p className="text-xl font-medium capitalize">
+            {slugToWords(categorySlug)}
+          </p>
+        </div>
 
         {outOfStockProductsCount > 0 && (
           <ProductActionsToggleGroup
@@ -82,23 +75,16 @@ const Navigation = ({
             setSelectedProductActions={setSelectedProductActions}
           />
         )}
-
-        {/* <Button
-          variant="outline"
-          onClick={handleClearCache}
-          disabled={isClearCacheMutationPending}
-        >
-          Clear Cache
-        </Button> */}
       </div>
     </div>
   );
 };
 
 function Body() {
-  const { productsTableState } = useProductsTableState();
   const { categorySlug } = useSearch({ strict: false });
+  const { productsTableState } = useProductsTableState();
   const { subcategorySlug } = productsTableState;
+
   const products = useGetProducts({
     subcategorySlug: subcategorySlug ?? undefined,
     categorySlug: categorySlug ?? undefined,
@@ -107,8 +93,6 @@ function Body() {
   const [selectedProductActions, setSelectedProductActions] = useState<
     string[]
   >([]);
-
-  const hasProducts = products && products.length > 0;
 
   const outOfStockProducts = products?.filter(
     (product) => product.inventoryCount === 0
@@ -119,7 +103,7 @@ function Body() {
       return outOfStockProducts;
     }
     return products;
-  }, [selectedProductActions, products]);
+  }, [selectedProductActions, products, outOfStockProducts]);
 
   if (!filteredProducts) return null;
 
@@ -128,8 +112,9 @@ function Body() {
       hideBorder
       hideHeaderBottomBorder
       header={
-        hasProducts && (
+        categorySlug && (
           <Navigation
+            categorySlug={categorySlug}
             outOfStockProductsCount={outOfStockProducts?.length || 0}
             selectedProductActions={selectedProductActions}
             setSelectedProductActions={setSelectedProductActions}
@@ -144,7 +129,7 @@ function Body() {
   );
 }
 
-export default function StoreProductsView() {
+export default function ProductsListView() {
   return (
     <ProductsTableProvider>
       <Body />

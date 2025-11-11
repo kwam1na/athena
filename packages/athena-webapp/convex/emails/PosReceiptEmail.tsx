@@ -113,16 +113,20 @@ export default function PosReceiptEmail({
       <Body style={styles.body}>
         <Container style={styles.container}>
           <Section style={sectionBorder}>
-            <Text style={styles.storeName}>{storeName}</Text>
+            <Text style={{ ...styles.baseTextStyle, ...styles.storeName }}>
+              {storeName}
+            </Text>
             {storeContact && (
               <div style={styles.contactBlock}>
                 {storeContact.street && (
-                  <Text style={styles.contact}>{storeContact.street}</Text>
+                  <Text style={{ ...styles.baseTextStyle, ...styles.contact }}>
+                    {storeContact.street}
+                  </Text>
                 )}
                 {(storeContact.city ||
                   storeContact.state ||
                   storeContact.zipCode) && (
-                  <Text style={styles.contact}>
+                  <Text style={{ ...styles.baseTextStyle, ...styles.contact }}>
                     {[
                       storeContact.city,
                       storeContact.state,
@@ -133,18 +137,24 @@ export default function PosReceiptEmail({
                   </Text>
                 )}
                 {storeContact.country && (
-                  <Text style={styles.contact}>{storeContact.country}</Text>
+                  <Text style={{ ...styles.baseTextStyle, ...styles.contact }}>
+                    {storeContact.country}
+                  </Text>
                 )}
                 {storeContact.phone && (
-                  <Text style={styles.contact}>Tel {storeContact.phone}</Text>
+                  <Text style={{ ...styles.baseTextStyle, ...styles.contact }}>
+                    Tel {storeContact.phone}
+                  </Text>
                 )}
                 {storeContact.email && (
-                  <Text style={styles.contact}>
+                  <Text style={{ ...styles.baseTextStyle, ...styles.contact }}>
                     Email: {storeContact.email}
                   </Text>
                 )}
                 {storeContact.website && (
-                  <Text style={styles.contact}>{storeContact.website}</Text>
+                  <Text style={{ ...styles.baseTextStyle, ...styles.contact }}>
+                    {storeContact.website}
+                  </Text>
                 )}
               </div>
             )}
@@ -154,9 +164,13 @@ export default function PosReceiptEmail({
             <Block>
               <LineItem>
                 <DateTime date={completedDate} time={completedTime} />
-                <Text>#{receiptNumber}</Text>
+                <Text style={{ ...styles.baseTextStyle }}>
+                  #{receiptNumber}
+                </Text>
               </LineItem>
-              <Text style={styles.cashierName}>Cashier: {cashierName}</Text>
+              <Text style={{ ...styles.baseTextStyle, ...styles.cashierName }}>
+                Cashier: {cashierName}
+              </Text>
             </Block>
           </Section>
 
@@ -184,21 +198,35 @@ export default function PosReceiptEmail({
             {items.map((item, index) => (
               <div key={`${item.name}-${index}`} style={styles.itemBlock}>
                 <div style={styles.itemTopRow}>
-                  <Text style={styles.itemName}>{item.name}</Text>
-                  <Text style={styles.itemPrice}>{item.totalPrice}</Text>
+                  <Text style={{ ...styles.baseTextStyle, ...styles.itemName }}>
+                    {item.name}
+                  </Text>
+                  <Text
+                    style={{ ...styles.baseTextStyle, ...styles.itemPrice }}
+                  >
+                    {item.totalPrice}
+                  </Text>
                 </div>
                 <div style={styles.itemMetaRow}>
                   {item.skuOrBarcode && (
-                    <Text style={styles.itemName}>{item.skuOrBarcode}</Text>
+                    <Text
+                      style={{ ...styles.baseTextStyle, ...styles.itemName }}
+                    >
+                      {item.skuOrBarcode}
+                    </Text>
                   )}
-                  <Text style={styles.itemName}>{item.quantityLabel}</Text>
+                  <Text style={{ ...styles.baseTextStyle, ...styles.itemName }}>
+                    {item.quantityLabel}
+                  </Text>
                 </div>
               </div>
             ))}
           </Section>
 
           <Section style={sectionBorder}>
-            <Text>{itemsCount} items</Text>
+            <Text style={{ ...styles.baseTextStyle }}>
+              {itemsCount} item{itemsCount > 1 ? "s" : ""}
+            </Text>
             <Row label="Subtotal" value={subtotal} />
             {tax && <Row label="Tax:" value={tax} />}
             {/* <Hr style={styles.summaryDivider} /> */}
@@ -213,11 +241,13 @@ export default function PosReceiptEmail({
             />
           </Section>
 
-          <Spacer height={80} />
+          <Spacer height={40} />
 
           <Section>
-            <Text style={styles.footerLine}>Thank you for your business!</Text>
-            <Text style={styles.footerLine}>
+            <Text style={{ ...styles.baseTextStyle, ...styles.footerLine }}>
+              Thank you for your business!
+            </Text>
+            <Text style={{ ...styles.baseTextStyle, ...styles.footerLine }}>
               Please keep this receipt for your records.
             </Text>
           </Section>
@@ -238,8 +268,14 @@ function Row({
 }) {
   return (
     <div style={styles.row}>
-      <Text style={styles.rowLabel}>{label}</Text>
-      <Text style={{ ...styles.rowValue, ...valueStyle }}>{value}</Text>
+      <Text style={{ ...styles.baseTextStyle, ...styles.rowLabel }}>
+        {label}
+      </Text>
+      <Text
+        style={{ ...styles.baseTextStyle, ...styles.rowValue, ...valueStyle }}
+      >
+        {value}
+      </Text>
     </div>
   );
 }
@@ -247,8 +283,12 @@ function Row({
 function DateTime({ date, time }: { date: string; time: string }) {
   return (
     <div style={styles.dateTime}>
-      <Text style={styles.dateTimeText}>{date}</Text>
-      <Text style={styles.dateTimeText}>{time}</Text>
+      <Text style={{ ...styles.baseTextStyle, ...styles.dateTimeText }}>
+        {date}
+      </Text>
+      <Text style={{ ...styles.baseTextStyle, ...styles.dateTimeText }}>
+        {time}
+      </Text>
     </div>
   );
 }
@@ -289,6 +329,10 @@ const styles: Record<string, CSSProperties> = {
     display: "flex",
     flexDirection: "column" as const,
     gap: "2px",
+  },
+  baseTextStyle: {
+    height: "fit-content",
+    margin: "0px",
   },
   cashierName: {
     // fontSize: "12px",

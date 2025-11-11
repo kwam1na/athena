@@ -106,9 +106,7 @@ export function AppSidebar() {
     activeStore?._id ? { storeId: activeStore._id } : "skip"
   );
 
-  const { hasFullAdmin } = usePermissions();
-
-  const hasFullAdminAccess = hasFullAdmin();
+  const { hasFullAdminAccess } = usePermissions();
 
   if (!activeStore || !activeOrganization) {
     return null;

@@ -262,7 +262,7 @@ function Stock({
               : v
           )
         );
-        toast.success("Barcode generated successfully");
+        toast.success("Barcode generated");
 
         // Open the QR viewer after successful generation
         setSelectedVariant({
@@ -328,7 +328,7 @@ function Stock({
             : v
         )
       );
-      toast.success("Barcode cleared successfully");
+      toast.success("Barcode cleared");
       setClearBarcodeModalOpen(false);
       setVariantToClear(null);
       return;
@@ -363,7 +363,7 @@ function Stock({
         )
       );
 
-      toast.success("Barcode cleared successfully");
+      toast.success("Barcode cleared");
       setClearBarcodeModalOpen(false);
       setVariantToClear(null);
     } catch (error) {

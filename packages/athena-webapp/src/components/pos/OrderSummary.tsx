@@ -399,7 +399,7 @@ export function OrderSummary({
                 className="w-full py-12 text-lg"
                 size="lg"
               >
-                <RotateCcw className="w-10 h-10 mr-2" />
+                <Plus className="w-10 h-10 mr-2" />
                 New Transaction
               </Button>
             )}

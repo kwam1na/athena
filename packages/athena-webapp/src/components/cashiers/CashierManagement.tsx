@@ -145,7 +145,7 @@ const CashierForm = ({
       });
 
       if (result?.success) {
-        toast.success("Cashier added successfully");
+        toast.success("Cashier added");
         onSuccess();
       } else {
         toast.error(result?.error || "Failed to add cashier");
@@ -324,7 +324,7 @@ export const CashierManagement = ({
       const result = await removeCashier({ id: cashierToDelete });
 
       if (result.success) {
-        toast.success("Cashier removed successfully");
+        toast.success("Cashier removed");
       } else {
         toast.error(result.error || "Failed to remove cashier");
       }

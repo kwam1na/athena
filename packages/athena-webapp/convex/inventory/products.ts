@@ -762,6 +762,10 @@ export const clear = action({
       }),
       await deleteDirectoryInS3(`stores/${args.storeId}/products/${args.id}`),
     ]);
+
+    await ctx.runAction(api.inventory.productUtil.invalidateProductCache, {
+      storeId: args.storeId,
+    });
   },
 });
 

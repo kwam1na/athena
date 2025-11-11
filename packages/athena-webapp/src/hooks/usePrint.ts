@@ -288,7 +288,7 @@ export const usePrint = () => {
             isClosing = true;
             printWindow.close();
           }
-        }, 1500);
+        }, 500);
       } catch (error) {
         console.error("Error during printing:", error);
         // Close window even if printing fails

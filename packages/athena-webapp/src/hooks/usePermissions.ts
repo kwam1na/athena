@@ -4,7 +4,7 @@ import { Role } from "~/types";
 interface UsePermissionsReturn {
   canAccessPOS: () => boolean;
   canAccessAdmin: () => boolean;
-  hasFullAdmin: () => boolean;
+  hasFullAdminAccess: boolean;
   role: Role | null;
   isLoading: boolean;
 }
@@ -16,7 +16,7 @@ export function usePermissions(): UsePermissionsReturn {
   return {
     canAccessPOS: () => canAccessPOS,
     canAccessAdmin: () => canAccessAdmin,
-    hasFullAdmin: () => role === "full_admin",
+    hasFullAdminAccess: role === "full_admin",
     role,
     isLoading,
   };

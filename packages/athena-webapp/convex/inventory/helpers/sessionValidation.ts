@@ -71,10 +71,11 @@ export async function validateSessionActive(
 
   if (session.status !== "active") {
     const statusMessages: Record<string, string> = {
-      completed: "This session has been completed and cannot be modified.",
-      void: "This session has been voided and cannot be modified.",
-      held: "Can only add items to active sessions. Please resume or create a new session.",
-      expired: "This session has expired. Start a new one to proceed.",
+      completed:
+        "This session has been completed and cannot be modified. Start a new one to proceed",
+      void: "This session has been voided and cannot be modified. Start a new one to proceed",
+      held: "Can only add items to active sessions. Please resume or create a new session",
+      expired: "This session has expired. Start a new one to proceed",
     };
 
     return {

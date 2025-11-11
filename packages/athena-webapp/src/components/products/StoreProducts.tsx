@@ -26,7 +26,6 @@ export default function StoreProducts({ products }: { products: Product[] }) {
             title={
               <div className="flex gap-1 text-sm">
                 <p className="text-muted-foreground">{`No ${slugToWords(categorySlug ?? "products")}`}</p>
-                {/* <p className="font-medium">{activeStore?.name}</p> */}
               </div>
             }
             cta={

@@ -107,7 +107,6 @@ export function POSRegisterView() {
   // Handle cashier authentication
   const handleCashierAuthenticated = (cashierId: Id<"cashier">) => {
     store.setCashier(cashierId);
-    resetAutoSessionInitialized();
   };
 
   // Auto-check for active session or create one on mount
@@ -168,6 +167,12 @@ export function POSRegisterView() {
         // Clear stale session ID
         store.setCurrentSessionId(null);
         store.setActiveSession(null);
+        logger.debug("[POS] Clearing cashier after session expiration", {
+          sessionId: activeSessionQuery._id,
+          expiresAt: activeSessionQuery.expiresAt,
+          now,
+          cashierId: store.cashier.id,
+        });
         // Clear cashier authentication
         store.clearCashier();
         // Reset flag so we can create a new session
@@ -196,6 +201,9 @@ export function POSRegisterView() {
         store.setActiveSession(null);
         // Clear cashier if there's no active session
         if (store.cashier.isAuthenticated) {
+          logger.debug("[POS] Clearing cashier after session expiration", {
+            cashierId: store.cashier.id,
+          });
           store.clearCashier();
         }
       }
@@ -688,7 +696,9 @@ export function POSRegisterView() {
                 >
                   <RegisterActions
                     customerName={store.customer.current?.name}
-                    registerNumber={terminal?.displayName || "No terminal"}
+                    registerNumber={
+                      terminal?.displayName || "No terminal configured"
+                    }
                     hasTerminal={terminal !== null}
                   />
                   {terminal === null && (

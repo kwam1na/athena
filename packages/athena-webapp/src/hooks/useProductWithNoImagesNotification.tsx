@@ -11,7 +11,7 @@ export const useProductWithNoImagesNotification = () => {
   useEffect(() => {
     if (productsWithNoImages && productsWithNoImages.length > 0) {
       if (!toastIdRef.current) {
-        toastIdRef.current = toast("Some products require your attention", {
+        toastIdRef.current = toast("Some products require attention", {
           icon: <AlertOctagon className="w-4 h-4 text-[#1e3a8a]" />,
           duration: Infinity,
           className: "border border-blue-200 bg-[#e0edff] text-[#1e3a8a]",

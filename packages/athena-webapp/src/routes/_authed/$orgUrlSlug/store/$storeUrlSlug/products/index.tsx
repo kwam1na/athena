@@ -1,11 +1,12 @@
 import StoreProductsView from "~/src/components/products/StoreProductsView";
 import { NotFoundView } from "@/components/states/not-found/NotFoundView";
 import { createFileRoute } from "@tanstack/react-router";
+import ProductsView from "~/src/components/products/ProductsView";
 
 export const Route = createFileRoute(
   "/_authed/$orgUrlSlug/store/$storeUrlSlug/products/"
 )({
-  component: StoreProductsView,
+  component: ProductsView,
 
   notFoundComponent: ({ data }) => {
     const { orgUrlSlug, storeUrlSlug } = Route.useParams();

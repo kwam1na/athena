@@ -126,7 +126,7 @@ export function TransactionView() {
         <div className="container mx-auto p-6 space-y-8">
           <div className="grid gap-8 lg:grid-cols-[380px,1fr]">
             <div className="space-y-6">
-              <div className="border rounded-lg">
+              <div>
                 <CardHeader className="space-y-3">
                   <Badge
                     variant="outline"
@@ -141,6 +141,18 @@ export function TransactionView() {
                   {/* <CardTitle className="text-lg">Transaction details</CardTitle> */}
                 </CardHeader>
                 <CardContent className="space-y-4 text-sm">
+                  {transaction.cashier && (
+                    <div className="flex items-center gap-3">
+                      <User className="w-4 h-4 text-muted-foreground" />
+                      <div>
+                        <p className="font-medium">
+                          {`${transaction.cashier.firstName} ${transaction.cashier.lastName.charAt(0)}.`}
+                        </p>
+                        <p className="text-xs text-muted-foreground">Cashier</p>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="flex items-center gap-3">
                     <PaymentIcon className="w-4 h-4 text-muted-foreground" />
                     <div>
@@ -162,18 +174,6 @@ export function TransactionView() {
                         )}
                     </div>
                   </div>
-
-                  {transaction.cashier && (
-                    <div className="flex items-center gap-3">
-                      <User className="w-4 h-4 text-muted-foreground" />
-                      <div>
-                        <p className="font-medium">
-                          {`${transaction.cashier.firstName} ${transaction.cashier.lastName.charAt(0)}.`}
-                        </p>
-                        <p className="text-xs text-muted-foreground">Cashier</p>
-                      </div>
-                    </div>
-                  )}
 
                   {(transaction.customer || transaction.customerInfo) && (
                     <div className="flex flex-col gap-1">

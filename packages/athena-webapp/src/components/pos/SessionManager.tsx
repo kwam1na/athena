@@ -94,6 +94,12 @@ export function SessionManager(props: SessionManagerProps) {
   };
 
   const onNewSessionClick = async () => {
+    if (hasSessionExpired) {
+      store.clearCashier();
+      store.startNewTransaction();
+      return;
+    }
+
     await handleNewSession(onNewSession);
   };
 

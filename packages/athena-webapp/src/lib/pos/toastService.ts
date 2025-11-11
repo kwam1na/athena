@@ -15,7 +15,7 @@ import { logger } from "../logger";
 export const POS_MESSAGES = {
   session: {
     created: "New session created",
-    held: "Session held successfully",
+    held: "Session held",
     resumed: "Session resumed",
     voided: "Session voided",
     noActive: "No active session",

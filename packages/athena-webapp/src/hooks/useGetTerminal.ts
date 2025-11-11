@@ -22,5 +22,9 @@ export const useGetTerminal = () => {
       : "skip"
   );
 
+  if (fingerprintHash == null) {
+    return null;
+  }
+
   return terminal;
 };

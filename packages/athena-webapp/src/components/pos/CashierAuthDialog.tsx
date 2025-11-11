@@ -114,9 +114,9 @@ export const CashierAuthDialog = ({
           });
 
           if (expireResult.success) {
-            toast.success("Signed out of all other terminals");
+            toast.success("Signed out of all terminals");
           } else {
-            toast.error("Failed to sign out of all other sessions");
+            toast.error("Failed to sign out of all terminals");
             setPin("");
             return;
           }
@@ -148,10 +148,10 @@ export const CashierAuthDialog = ({
   };
 
   const header =
-    state === "auth" ? "Start POS session" : "Sign out of all other terminals";
+    state === "auth" ? "Start POS session" : "Sign out of all terminals";
 
   const switchStateButtonText =
-    state === "auth" ? "Sign out of all other terminals" : "Start POS session";
+    state === "auth" ? "Sign out of all terminals" : "Start POS session";
 
   const mainButtonText = state === "auth" ? "Sign In" : "Sign Out";
 

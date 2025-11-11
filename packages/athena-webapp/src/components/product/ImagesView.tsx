@@ -25,7 +25,7 @@ export function ImagesView() {
   const { activeProductVariant } = useProduct();
   const { activeProduct } = useGetActiveProduct();
 
-  const { hasFullAdmin } = usePermissions();
+  const { hasFullAdminAccess } = usePermissions();
 
   return (
     <View
@@ -57,7 +57,7 @@ export function ImagesView() {
           )}
         </div>
 
-        {hasFullAdmin() && (
+        {hasFullAdminAccess && (
           <div className="flex items-center gap-4">
             <Link
               to="/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/edit"

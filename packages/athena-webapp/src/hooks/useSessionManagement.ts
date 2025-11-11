@@ -226,7 +226,7 @@ export const useSessionManagement = () => {
           sessionId,
           itemsHeld: store.cart.items.length,
         });
-        toast.success("Session held successfully");
+        toast.success("Session held");
         return { success: true };
       } catch (error) {
         // Handle unexpected errors (network, etc.)

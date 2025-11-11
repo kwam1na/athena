@@ -69,7 +69,7 @@ export const productColumns: ColumnDef<Product>[] = [
                   className="flex items-center gap-2 bg-red-50 text-red-700"
                 >
                   <AlertOctagon className="w-3.5 h-3.5" />
-                  <p className="text-xs">Price not set on some variants</p>
+                  <p className="text-xs">Missing pricing on some variants</p>
                 </Badge>
               )}
             </div>
