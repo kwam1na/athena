@@ -73,7 +73,7 @@ export function TransactionView() {
   const completedData = useMemo(() => {
     if (!transaction) return undefined;
     return {
-      paymentMethod: transaction.paymentMethod,
+      paymentMethod: transaction.paymentMethod || "cash",
       completedAt: transaction.completedAt,
       cartItems,
       subtotal: transaction.subtotal,
@@ -157,7 +157,8 @@ export function TransactionView() {
                     <PaymentIcon className="w-4 h-4 text-muted-foreground" />
                     <div>
                       <p className="font-medium capitalize">
-                        {transaction.paymentMethod.replace("_", " ")}
+                        {transaction.paymentMethod?.replace("_", " ") ||
+                          "Unknown"}
                       </p>
                       {/* {transaction.amountPaid !== undefined && (
                         <p className="text-xs text-muted-foreground">

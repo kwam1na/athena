@@ -364,9 +364,13 @@ export const resumeSession = mutation({
 export const completeSession = mutation({
   args: {
     sessionId: v.id("posSession"),
-    paymentMethod: v.string(),
-    amountPaid: v.number(),
-    changeGiven: v.optional(v.number()),
+    payments: v.array(
+      v.object({
+        method: v.string(), // "cash", "card", "mobile_money"
+        amount: v.number(),
+        timestamp: v.number(),
+      })
+    ),
     notes: v.optional(v.string()),
     // Explicitly save final transaction totals for audit integrity
     subtotal: v.number(),
@@ -417,9 +421,7 @@ export const completeSession = mutation({
 
     const { transactionNumber } = await createTransactionFromSession(ctx, {
       sessionId: args.sessionId,
-      paymentMethod: args.paymentMethod,
-      amountPaid: args.amountPaid,
-      changeGiven: args.changeGiven,
+      payments: args.payments,
       notes: args.notes,
     });
 

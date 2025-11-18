@@ -28,7 +28,7 @@ export const useGetProducts = ({
   return products?.sort((a: any, b: any) => a.name.localeCompare(b.name));
 };
 
-export const useGetProductsWithNoImages = () => {
+export const useGetUnresolvedProducts = () => {
   const { activeStore } = useGetActiveStore();
 
   const products = useQuery(

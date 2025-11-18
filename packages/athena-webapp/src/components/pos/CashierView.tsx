@@ -74,7 +74,7 @@ export const CashierView = ({
   }
 
   return (
-    <div className="h-[96px] w-full border rounded-lg p-4">
+    <div className="h-[96px] w-full border rounded-lg p-4 bg-gradient-to-br from-gray-50/50 to-gray-100/30">
       <div className="flex items-center justify-between">
         <p className="text-md font-medium">Cashier</p>
         <div className="flex items-center gap-2">

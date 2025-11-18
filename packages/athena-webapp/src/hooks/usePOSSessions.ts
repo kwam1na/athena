@@ -163,9 +163,11 @@ export const usePOSSessionComplete = () => {
     completeSession: async (
       sessionId: Id<"posSession">,
       paymentDetails: {
-        paymentMethod: string;
-        amountPaid: number;
-        changeGiven?: number;
+        payments: Array<{
+          method: string;
+          amount: number;
+          timestamp: number;
+        }>;
         notes?: string;
         subtotal: number;
         tax: number;

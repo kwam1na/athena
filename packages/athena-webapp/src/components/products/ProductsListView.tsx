@@ -63,9 +63,7 @@ const Navigation = ({
               <ArrowLeftIcon className="w-4 h-4" />
             </Button>
           )}
-          <p className="text-xl font-medium capitalize">
-            {slugToWords(categorySlug)}
-          </p>
+          <p className="font-medium capitalize">{slugToWords(categorySlug)}</p>
         </div>
 
         {outOfStockProductsCount > 0 && (

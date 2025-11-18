@@ -49,8 +49,8 @@ import { useNewOrderNotification } from "../hooks/useNewOrderNotification";
 import { useAuth } from "../hooks/useAuth";
 import { useQuery } from "convex/react";
 import { api } from "~/convex/_generated/api";
-import { useGetProductsWithNoImages } from "../hooks/useGetProducts";
-import { useProductWithNoImagesNotification } from "../hooks/useProductWithNoImagesNotification";
+import { useGetUnresolvedProducts } from "../hooks/useGetProducts";
+// import { useProductWithNoImagesNotification } from "../hooks/useProductWithNoImagesNotification";
 import {
   Collapsible,
   CollapsibleContent,
@@ -64,13 +64,13 @@ export function AppSidebar() {
   const { activeStore } = useGetActiveStore();
   const { activeOrganization } = useGetActiveOrganization();
 
-  const productsWithNoImages = useGetProductsWithNoImages();
+  const productsWithNoImages = useGetUnresolvedProducts();
 
   const { user } = useAuth();
 
   useNewOrderNotification();
 
-  useProductWithNoImagesNotification();
+  // useProductWithNoImagesNotification();
 
   const categories = useGetCategories();
 

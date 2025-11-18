@@ -83,7 +83,7 @@ export function ProductInfo({
   return (
     <div className={`space-y-6 ${className}`}>
       <div className="flex items-baseline gap-3">
-        <p className="text-2xl md:text-4xl leading-tight">
+        <p className="text-2xl md:text-4xl leading-tight capitalize">
           {getProductName(selectedSku)}
         </p>
         {reviews && reviews.length > 0 && (

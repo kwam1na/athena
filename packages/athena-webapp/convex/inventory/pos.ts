@@ -70,7 +70,7 @@ export const searchProducts = query({
         .slice(0, 20) // Limit results for performance
         .map(async (sku) => {
           const product = productMap.get(sku.productId);
-          if (!product) return null;
+          if (!product || !sku.netPrice) return null;
 
           // Get category name
           let categoryName = "";
@@ -335,7 +335,13 @@ export const completeTransaction = mutation({
         image: v.optional(v.string()),
       })
     ),
-    paymentMethod: v.string(), // "cash", "card", "mobile_money"
+    payments: v.array(
+      v.object({
+        method: v.string(), // "cash", "card", "mobile_money"
+        amount: v.number(),
+        timestamp: v.number(),
+      })
+    ),
     subtotal: v.number(),
     tax: v.number(),
     total: v.number(),
@@ -389,6 +395,35 @@ export const completeTransaction = mutation({
       }
     }
 
+    // Validate payments
+    if (args.payments.length === 0) {
+      return {
+        success: false,
+        error: "At least one payment is required",
+      };
+    }
+
+    // Calculate total paid from payments array
+    const totalPaid = args.payments.reduce(
+      (sum, payment) => sum + payment.amount,
+      0
+    );
+
+    // Validate that total paid is sufficient
+    if (totalPaid < args.total) {
+      return {
+        success: false,
+        error: `Insufficient payment. Total: ${args.total.toFixed(2)}, Paid: ${totalPaid.toFixed(2)}`,
+      };
+    }
+
+    // Calculate change given (only if total paid exceeds total due)
+    const changeGiven =
+      totalPaid > args.total ? totalPaid - args.total : undefined;
+
+    // Get primary payment method for backward compatibility
+    const primaryPaymentMethod = args.payments[0]?.method || "cash";
+
     // Generate transaction number using shared utility
     const transactionNumber = generateTransactionNumber();
 
@@ -403,7 +438,10 @@ export const completeTransaction = mutation({
       subtotal: args.subtotal,
       tax: args.tax,
       total: args.total,
-      paymentMethod: args.paymentMethod,
+      payments: args.payments,
+      totalPaid,
+      changeGiven,
+      paymentMethod: primaryPaymentMethod, // Backward compatibility
       status: "completed",
       completedAt: Date.now(),
       customerInfo: args.customerInfo,
@@ -514,7 +552,7 @@ export const getCompletedTransactions = query({
       _id: v.id("posTransaction"),
       transactionNumber: v.string(),
       total: v.number(),
-      paymentMethod: v.string(),
+      paymentMethod: v.union(v.string(), v.null()),
       completedAt: v.number(),
       cashierName: v.union(v.string(), v.null()),
       customerName: v.union(v.string(), v.null()),
@@ -568,7 +606,7 @@ export const getCompletedTransactions = query({
           _id: transaction._id,
           transactionNumber: transaction.transactionNumber,
           total: transaction.total,
-          paymentMethod: transaction.paymentMethod,
+          paymentMethod: transaction.paymentMethod || null,
           completedAt: transaction.completedAt,
           cashierName: cashierName || null,
           customerName: customerName || null,
@@ -591,8 +629,15 @@ export const getTransactionById = query({
       subtotal: v.number(),
       tax: v.number(),
       total: v.number(),
-      paymentMethod: v.string(),
-      amountPaid: v.optional(v.number()),
+      paymentMethod: v.optional(v.string()),
+      payments: v.array(
+        v.object({
+          method: v.string(),
+          amount: v.number(),
+          timestamp: v.number(),
+        })
+      ),
+      totalPaid: v.number(),
       changeGiven: v.optional(v.number()),
       status: v.string(),
       completedAt: v.number(),
@@ -667,7 +712,8 @@ export const getTransactionById = query({
       tax: transaction.tax ?? 0,
       total: transaction.total,
       paymentMethod: transaction.paymentMethod,
-      amountPaid: transaction.amountPaid,
+      payments: transaction.payments,
+      totalPaid: transaction.totalPaid ?? transaction.total,
       changeGiven: transaction.changeGiven,
       status: transaction.status,
       completedAt: transaction.completedAt,
@@ -770,9 +816,13 @@ export const voidTransaction = mutation({
 export const createTransactionFromSession = mutation({
   args: {
     sessionId: v.id("posSession"),
-    paymentMethod: v.string(),
-    amountPaid: v.number(),
-    changeGiven: v.optional(v.number()),
+    payments: v.array(
+      v.object({
+        method: v.string(), // "cash", "card", "mobile_money"
+        amount: v.number(),
+        timestamp: v.number(),
+      })
+    ),
     notes: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
@@ -823,6 +873,17 @@ export const createTransactionFromSession = mutation({
       }
     }
 
+    // Validate payments
+    if (args.payments.length === 0) {
+      throw new Error("At least one payment is required");
+    }
+
+    // Calculate total paid from payments array
+    const totalPaid = args.payments.reduce(
+      (sum, payment) => sum + payment.amount,
+      0
+    );
+
     // Generate transaction number using shared utility
     const transactionNumber = generateTransactionNumber();
 
@@ -830,6 +891,19 @@ export const createTransactionFromSession = mutation({
     const subtotal = session.subtotal || 0;
     const tax = session.tax || 0;
     const total = session.total || 0;
+
+    // Validate that total paid is sufficient
+    if (totalPaid < total) {
+      throw new Error(
+        `Insufficient payment. Total: ${total.toFixed(2)}, Paid: ${totalPaid.toFixed(2)}`
+      );
+    }
+
+    // Calculate change given (only if total paid exceeds total due)
+    const changeGiven = totalPaid > total ? totalPaid - total : undefined;
+
+    // Get primary payment method for backward compatibility
+    const primaryPaymentMethod = args.payments[0]?.method || "cash";
 
     // Create the POS transaction
     const transactionId = await ctx.db.insert("posTransaction", {
@@ -842,9 +916,10 @@ export const createTransactionFromSession = mutation({
       subtotal,
       tax,
       total,
-      paymentMethod: args.paymentMethod,
-      amountPaid: args.amountPaid,
-      changeGiven: args.changeGiven,
+      payments: args.payments,
+      totalPaid,
+      changeGiven,
+      paymentMethod: primaryPaymentMethod, // Backward compatibility
       status: "completed",
       completedAt: Date.now(),
       customerInfo: session.customerInfo,

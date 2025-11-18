@@ -37,6 +37,17 @@ export const posSessionSchema = v.object({
   tax: v.optional(v.number()),
   total: v.optional(v.number()),
 
+  // Payment tracking (for multi-payment support)
+  payments: v.optional(
+    v.array(
+      v.object({
+        method: v.string(), // "cash", "card", "mobile_money"
+        amount: v.number(),
+        timestamp: v.number(),
+      })
+    )
+  ),
+
   // Notes
   holdReason: v.optional(v.string()),
   notes: v.optional(v.string()),

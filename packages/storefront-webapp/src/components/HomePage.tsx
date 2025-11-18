@@ -80,7 +80,8 @@ export default function HomePage() {
   const [hasScrolledPastThreshold, setHasScrolledPastThreshold] =
     useState(false);
 
-  const { upsell, setShowReminderBar } = useProductReminder(homeHeroRef);
+  const { upsell, setShowReminderBar, showReminderBar } =
+    useProductReminder(homeHeroRef);
 
   const productQueries = useProductQueries();
 
@@ -290,7 +291,7 @@ export default function HomePage() {
           <ProductReminderBar
             product={upsell}
             redeemedOffer={redeemedOffers?.[0]}
-            isVisible={true}
+            isVisible={showReminderBar}
             onDismiss={() => {
               setShowReminderBar(false);
             }}

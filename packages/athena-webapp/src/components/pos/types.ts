@@ -128,3 +128,16 @@ export const CATEGORIES = [
   "Dairy",
   "Snacks",
 ];
+
+export type Payment = {
+  id: string;
+  method: "cash" | "card" | "mobile_money";
+  amount: number;
+  timestamp: number;
+};
+
+export type PaymentState = {
+  payments: Payment[];
+  totalPaid: number;
+  remainingDue: number;
+};

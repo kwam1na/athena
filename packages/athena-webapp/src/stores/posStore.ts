@@ -2,7 +2,12 @@ import { create } from "zustand";
 import { devtools, subscribeWithSelector } from "zustand/middleware";
 import { immer } from "zustand/middleware/immer";
 import { Id } from "../../convex/_generated/dataModel";
-import { CartItem, CustomerInfo, Product } from "../components/pos/types";
+import {
+  CartItem,
+  CustomerInfo,
+  Product,
+  Payment,
+} from "../components/pos/types";
 import { POSSession } from "../../types";
 import { calculateCartTotals } from "../lib/pos/services/calculationService";
 import { logger } from "../lib/logger";
@@ -31,12 +36,19 @@ interface SessionState {
   expiresAt: number | null;
 }
 
+interface PaymentState {
+  payments: Payment[];
+  totalPaid: number;
+  remainingDue: number;
+}
+
 interface TransactionState {
   isCompleting: boolean;
   isCompleted: boolean;
   completedOrderNumber: string | null;
   completedTransactionData: {
     paymentMethod: string;
+    payments?: Payment[];
     completedAt: Date;
     cartItems: CartItem[];
     subtotal: number;
@@ -70,6 +82,7 @@ interface POSState {
   customer: CustomerState;
   session: SessionState;
   transaction: TransactionState;
+  payment: PaymentState;
   ui: UIState;
   cashier: CashierState;
   storeId?: Id<"store">;
@@ -98,6 +111,16 @@ interface POSState {
   setSessionExpiresAt: (expiresAt: number | null) => void;
   loadSessionData: (session: POSSession) => void;
 
+  // Payment Actions
+  addPayment: (
+    method: "cash" | "card" | "mobile_money",
+    amount: number
+  ) => void;
+  removePayment: (id: string) => void;
+  updatePayment: (id: string, amount: number) => void;
+  clearPayments: () => void;
+  calculateRemainingDue: (totalDue: number) => void;
+
   // Transaction Actions
   setTransactionCompleting: (isCompleting: boolean) => void;
   setTransactionCompleted: (
@@ -105,6 +128,7 @@ interface POSState {
     orderNumber?: string,
     transactionData?: {
       paymentMethod: string;
+      payments?: Payment[];
       completedAt: Date;
       cartItems: CartItem[];
       subtotal: number;
@@ -165,6 +189,11 @@ const initialState = {
     isCompleted: false,
     completedOrderNumber: null,
     completedTransactionData: null,
+  },
+  payment: {
+    payments: [],
+    totalPaid: 0,
+    remainingDue: 0,
   },
   ui: {
     showCustomerPanel: false,
@@ -378,6 +407,98 @@ export const usePOSStore = create<POSState>()(
             state.cart.total = totals.total;
           }),
 
+        // Payment Actions
+        addPayment: (method, amount) =>
+          set((state) => {
+            // Check if a payment of the same type already exists
+            const existingPayment = state.payment.payments.find(
+              (p) => p.method === method
+            );
+
+            if (existingPayment) {
+              // Combine with existing payment of the same type
+              existingPayment.amount += amount;
+              existingPayment.timestamp = Date.now(); // Update timestamp to most recent
+            } else {
+              // Create new payment entry if no payment of this type exists
+              const newPayment: Payment = {
+                id: `${Date.now()}-${Math.random()}`,
+                method,
+                amount,
+                timestamp: Date.now(),
+              };
+              state.payment.payments.push(newPayment);
+            }
+
+            state.payment.totalPaid = state.payment.payments.reduce(
+              (sum, p) => sum + p.amount,
+              0
+            );
+            // Recalculate remaining due if total is available
+            if (state.cart.total > 0) {
+              state.payment.remainingDue = Math.max(
+                0,
+                state.cart.total - state.payment.totalPaid
+              );
+            }
+          }),
+
+        removePayment: (id) =>
+          set((state) => {
+            state.payment.payments = state.payment.payments.filter(
+              (p) => p.id !== id
+            );
+            state.payment.totalPaid = state.payment.payments.reduce(
+              (sum, p) => sum + p.amount,
+              0
+            );
+            // Recalculate remaining due if total is available
+            if (state.cart.total > 0) {
+              state.payment.remainingDue = Math.max(
+                0,
+                state.cart.total - state.payment.totalPaid
+              );
+            }
+          }),
+
+        updatePayment: (id, amount) =>
+          set((state) => {
+            const payment = state.payment.payments.find((p) => p.id === id);
+            if (payment) {
+              payment.amount = amount;
+              state.payment.totalPaid = state.payment.payments.reduce(
+                (sum, p) => sum + p.amount,
+                0
+              );
+              // Recalculate remaining due if total is available
+              if (state.cart.total > 0) {
+                state.payment.remainingDue = Math.max(
+                  0,
+                  state.cart.total - state.payment.totalPaid
+                );
+              }
+            }
+          }),
+
+        clearPayments: () =>
+          set((state) => {
+            state.payment.payments = [];
+            state.payment.totalPaid = 0;
+            state.payment.remainingDue = state.cart.total || 0;
+          }),
+
+        calculateRemainingDue: (totalDue) =>
+          set((state) => {
+            state.payment.totalPaid = state.payment.payments.reduce(
+              (sum, p) => sum + p.amount,
+              0
+            );
+            state.payment.remainingDue = Math.max(
+              0,
+              totalDue - state.payment.totalPaid
+            );
+          }),
+
         // Transaction Actions
         setTransactionCompleting: (isCompleting) =>
           set((state) => {
@@ -461,8 +582,12 @@ export const usePOSStore = create<POSState>()(
             state.session.currentSessionId = null;
             state.session.activeSession = null;
             state.transaction.isCompleted = false;
+            state.transaction.isCompleting = false;
             state.transaction.completedOrderNumber = null;
             state.transaction.completedTransactionData = null;
+            state.payment.payments = [];
+            state.payment.totalPaid = 0;
+            state.payment.remainingDue = 0;
             state.ui.productSearchQuery = "";
             state.ui.barcodeInput = "";
             state.ui.showCustomerPanel = false;

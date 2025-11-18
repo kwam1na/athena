@@ -91,17 +91,16 @@ function ProductViewContent() {
       });
 
       if (o) {
-        navigate({ to: decodeURIComponent(o) });
+        navigate({
+          to: "/$orgUrlSlug/store/$storeUrlSlug/products",
+          params: (prev) => ({
+            ...prev,
+            orgUrlSlug: prev.orgUrlSlug!,
+            storeUrlSlug: prev.storeUrlSlug!,
+          }),
+          search: { categorySlug: activeProduct.categorySlug },
+        });
       }
-
-      // navigate({
-      //   to: "/$orgUrlSlug/store/$storeUrlSlug/products",
-      //   params: (prev) => ({
-      //     ...prev,
-      //     storeUrlSlug: prev.storeUrlSlug!,
-      //     orgUrlSlug: prev.orgUrlSlug!,
-      //   }),
-      // });
     } catch (e) {
       toast("Something went wrong", {
         icon: <Ban className="w-4 h-4" />,

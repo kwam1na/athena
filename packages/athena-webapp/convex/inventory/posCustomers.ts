@@ -238,7 +238,7 @@ export const getCustomerTransactions = query({
       _creationTime: v.number(),
       transactionNumber: v.string(),
       total: v.number(),
-      paymentMethod: v.string(),
+      paymentMethod: v.optional(v.string()),
       status: v.string(),
       completedAt: v.number(),
     })

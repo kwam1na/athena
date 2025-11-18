@@ -307,3 +307,103 @@ function isValidPhone(phone: string): boolean {
   // Check if it's a reasonable phone number length (7-15 digits)
   return /^\d{7,15}$/.test(cleaned);
 }
+
+/**
+ * Validates a payment amount is valid for the remaining due
+ * @param amount - The payment amount
+ * @param remainingDue - The remaining amount due
+ * @param paymentMethod - Optional payment method. If "cash", allows amount to exceed remaining due (for change)
+ */
+export function validatePaymentAmount(
+  amount: number,
+  remainingDue: number,
+  formatter: Intl.NumberFormat,
+  paymentMethod?: "cash" | "card" | "mobile_money"
+): ValidationResult {
+  const errors: string[] = [];
+
+  if (amount <= 0) {
+    errors.push("Payment amount must be greater than zero");
+  }
+
+  // For cash payments, allow amount to exceed remaining due (change will be given)
+  // For card and mobile_money, amount cannot exceed remaining due
+  if (amount > remainingDue && paymentMethod !== "cash") {
+    errors.push(
+      `Payment amount (${formatter.format(amount)}) cannot exceed remaining due (${formatter.format(remainingDue)})`
+    );
+  }
+
+  if (!Number.isFinite(amount)) {
+    errors.push("Payment amount must be a valid number");
+  }
+
+  if (errors.length > 0) {
+    logger.warn("[POS] Payment amount validation failed", {
+      amount,
+      remainingDue,
+      paymentMethod,
+      errors,
+    });
+  }
+
+  return {
+    isValid: errors.length === 0,
+    errors,
+  };
+}
+
+/**
+ * Validates that payments array is sufficient to complete transaction
+ */
+export function validatePayments(
+  payments: Array<{ amount: number }>,
+  totalDue: number,
+  formatter: Intl.NumberFormat
+): ValidationResult {
+  const errors: string[] = [];
+
+  if (payments.length === 0) {
+    errors.push("At least one payment is required");
+  }
+
+  const totalPaid = payments.reduce((sum, payment) => sum + payment.amount, 0);
+
+  if (totalPaid < totalDue) {
+    errors.push(
+      `Insufficient payment. Total due: ${formatter.format(totalDue)}, Total paid: ${formatter.format(totalPaid)}`
+    );
+  }
+
+  // Check for invalid amounts
+  const invalidPayments = payments.filter(
+    (p) => !Number.isFinite(p.amount) || p.amount <= 0
+  );
+  if (invalidPayments.length > 0) {
+    errors.push("Some payments have invalid amounts");
+  }
+
+  if (errors.length > 0) {
+    logger.warn("[POS] Payments validation failed", {
+      paymentCount: payments.length,
+      totalPaid,
+      totalDue,
+      errors,
+    });
+  }
+
+  return {
+    isValid: errors.length === 0,
+    errors,
+  };
+}
+
+/**
+ * Checks if transaction can be completed based on total paid
+ */
+export function canCompleteTransaction(
+  totalPaid: number,
+  totalDue: number
+): boolean {
+  return totalPaid >= totalDue && totalPaid > 0 && totalDue > 0;
+}

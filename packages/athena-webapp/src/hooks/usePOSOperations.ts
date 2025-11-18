@@ -2,12 +2,16 @@ import { useCallback, useEffect, useMemo } from "react";
 import { useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { usePOSStore, posSelectors } from "../stores/posStore";
-import { Product, CustomerInfo } from "../components/pos/types";
+import { Product, CustomerInfo, Payment } from "../components/pos/types";
 import { Id } from "../../convex/_generated/dataModel";
 import { usePOSCustomerUpdate } from "./usePOSCustomers";
 import { generateTransactionNumber } from "../lib/pos/transactionUtils";
 import { logger } from "../lib/logger";
-import { validateCart, validateSession } from "../lib/pos/validation";
+import {
+  validateCart,
+  validateSession,
+  validatePayments,
+} from "../lib/pos/validation";
 import {
   handlePOSOperation,
   POS_MESSAGES,
@@ -17,6 +21,7 @@ import {
 } from "../lib/pos/toastService";
 import { usePOSActiveSession } from "./usePOSSessions";
 import { POSSession } from "~/types";
+import { useGetCurrencyFormatter } from "./useGetCurrencyFormatter";
 
 /**
  * Unified hook for POS operations
@@ -24,6 +29,7 @@ import { POSSession } from "~/types";
  */
 export const usePOSOperations = () => {
   const store = usePOSStore();
+  const formatter = useGetCurrencyFormatter();
 
   // Convex mutations
   const createSessionMutation = useMutation(
@@ -61,7 +67,7 @@ export const usePOSOperations = () => {
   // Transaction Operations
   const transactionOperations = {
     processPayment: useCallback(
-      async (paymentMethod: string, session: POSSession) => {
+      async (session: POSSession) => {
         try {
           // Validate cart first
           const cartValidation = validateCart(store.cart.items);
@@ -86,6 +92,28 @@ export const usePOSOperations = () => {
             };
           }
 
+          // Validate payments
+          const finalTotal = store.cart.total;
+          const paymentsValidation = validatePayments(
+            store.payment.payments,
+            finalTotal,
+            formatter
+          );
+          if (!paymentsValidation.isValid) {
+            showValidationError(paymentsValidation.errors);
+            return {
+              success: false,
+              error: paymentsValidation.errors.join(", "),
+            };
+          }
+
+          // Convert payments to backend format
+          const payments = store.payment.payments.map((p) => ({
+            method: p.method,
+            amount: p.amount,
+            timestamp: p.timestamp,
+          }));
+
           const sessionId = store.session.currentSessionId;
 
           if (sessionId) {
@@ -95,12 +123,10 @@ export const usePOSOperations = () => {
             // Capture final totals at completion time for audit integrity
             const finalSubtotal = store.cart.subtotal;
             const finalTax = store.cart.tax;
-            const finalTotal = store.cart.total;
 
             const completeResult = await completeSessionMutation({
               sessionId: sessionId as Id<"posSession">,
-              paymentMethod,
-              amountPaid: finalTotal,
+              payments,
               notes: `Register: ${store.ui.registerNumber}`,
               // Explicitly pass final transaction totals
               subtotal: finalSubtotal,
@@ -124,9 +150,13 @@ export const usePOSOperations = () => {
 
             // Generate POS transaction number using extracted utility
 
-            // Update transaction state
-            store.setTransactionCompleted(true, transactionNumber, {
-              paymentMethod,
+            // Get primary payment method for display
+            const primaryPaymentMethod = payments[0]?.method || "cash";
+
+            // Update transaction state - store payments before clearing
+            const transactionData = {
+              paymentMethod: primaryPaymentMethod,
+              payments: [...store.payment.payments] as Payment[], // Store a copy of payments
               completedAt: new Date(),
               cartItems: store.cart.items,
               subtotal: store.cart.subtotal,
@@ -139,7 +169,12 @@ export const usePOSOperations = () => {
                     phone: store.customer.current.phone,
                   }
                 : undefined,
-            });
+            };
+            store.setTransactionCompleted(
+              true,
+              transactionNumber,
+              transactionData
+            );
 
             // Clear session state
             store.setCurrentSessionId(null);
@@ -172,7 +207,7 @@ export const usePOSOperations = () => {
                   sku: item.sku || "",
                   image: item.image || undefined,
                 })),
-              paymentMethod,
+              payments,
               subtotal: store.cart.subtotal,
               tax: store.cart.tax,
               total: store.cart.total,
@@ -199,9 +234,13 @@ export const usePOSOperations = () => {
                 transactionNumber: result.transactionNumber,
               });
 
-              // Update transaction state
-              store.setTransactionCompleted(true, result.transactionNumber, {
-                paymentMethod,
+              // Get primary payment method for display
+              const primaryPaymentMethod = payments[0]?.method || "cash";
+
+              // Update transaction state - store payments before clearing
+              const transactionData2 = {
+                paymentMethod: primaryPaymentMethod,
+                payments: [...store.payment.payments] as Payment[], // Store a copy of payments
                 completedAt: new Date(),
                 cartItems: store.cart.items,
                 subtotal: store.cart.subtotal,
@@ -214,7 +253,12 @@ export const usePOSOperations = () => {
                       phone: store.customer.current.phone,
                     }
                   : undefined,
-              });
+              };
+              store.setTransactionCompleted(
+                true,
+                result.transactionNumber,
+                transactionData2
+              );
 
               return {
                 success: true,
@@ -246,14 +290,17 @@ export const usePOSOperations = () => {
       },
       [
         validateCart,
+        validatePayments,
         completeSessionMutation,
         completeTransactionMutation,
         store,
+        formatter,
       ]
     ),
 
     startNewTransaction: useCallback(() => {
       store.startNewTransaction();
+      store.clearPayments();
     }, [store]),
 
     // Note: Print functionality is handled by the usePrint hook in the UI component

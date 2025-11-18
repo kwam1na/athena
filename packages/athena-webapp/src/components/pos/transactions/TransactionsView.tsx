@@ -15,7 +15,8 @@ import {
 } from "./transactionColumns";
 import { SimplePageHeader } from "../../common/PageHeader";
 
-function formatPaymentMethod(method: string) {
+function formatPaymentMethod(method: string | null) {
+  if (!method) return "Unknown";
   return capitalizeWords(method.replace(/_/g, " "));
 }
 
@@ -35,12 +36,12 @@ export function TransactionsView() {
   const tableData: CompletedTransactionRow[] = useMemo(() => {
     if (!transactions || !formatter) return [];
 
-    return transactions.map((transaction) => ({
+    return transactions.map((transaction: any) => ({
       _id: transaction._id,
       transactionNumber: transaction.transactionNumber,
       formattedTotal: formatter.format(transaction.total),
       paymentMethodLabel: formatPaymentMethod(transaction.paymentMethod),
-      paymentMethod: transaction.paymentMethod,
+      paymentMethod: transaction.paymentMethod || "cash",
       cashierName: transaction.cashierName,
       customerName: transaction.customerName,
       itemCount: transaction.itemCount,

@@ -1,20 +1,15 @@
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
+import { CardHeader, CardTitle } from "@/components/ui/card";
 import { render } from "@react-email/components";
 import {
   CreditCard,
-  Wallet,
-  Loader2,
   Check,
   Printer,
   Banknote,
   Plus,
   Smartphone,
-  RotateCcw,
-  Receipt,
 } from "lucide-react";
-import { CartItem } from "./types";
+import { CartItem, Payment } from "./types";
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
 import { currencyFormatter } from "~/convex/utils";
 import { usePOSOperations } from "~/src/hooks/usePOSOperations";
@@ -27,6 +22,11 @@ import { useGetTerminal } from "~/src/hooks/useGetTerminal";
 import PosReceiptEmail from "~/convex/emails/PosReceiptEmail";
 import { usePOSCashier } from "./hooks";
 import config from "~/src/config";
+import { useEffect, useState } from "react";
+import { usePOSStore } from "~/src/stores/posStore";
+import { PaymentView, type SelectedPaymentMethod } from "./PaymentView";
+import { TotalsDisplay } from "./TotalsDisplay";
+import { PaymentsAddedList } from "./PaymentsAddedList";
 
 interface OrderSummaryProps {
   cartItems: CartItem[];
@@ -47,6 +47,7 @@ interface OrderSummaryProps {
   readOnly?: boolean;
   completedTransactionData?: {
     paymentMethod: string;
+    payments?: Payment[];
     completedAt: Date | number;
     cartItems: CartItem[];
     subtotal: number;
@@ -84,6 +85,9 @@ export function OrderSummary({
   const formatter = currencyFormatter(activeStore?.currency || "GHS");
   const { transaction, state } = usePOSOperations();
   const { printReceipt } = usePrint();
+  const store = usePOSStore();
+  const [selectedPaymentMethod, setSelectedPaymentMethod] =
+    useState<SelectedPaymentMethod | null>(null);
 
   const activeSession = usePOSActiveSession(
     activeStore?._id as Id<"store">,
@@ -121,10 +125,7 @@ export function OrderSummary({
   const cartItemsCountText =
     cartItemsCount > 1 ? `${cartItemsCount} items` : `${cartItemsCount} item`;
 
-  const handleCompleteTransaction = async (
-    paymentMethod: string,
-    session: POSSession
-  ) => {
+  const handleCompleteTransaction = async (session: POSSession) => {
     if (readOnly) return;
     // Prevent multiple concurrent calls
     if (
@@ -134,18 +135,34 @@ export function OrderSummary({
     )
       return;
 
-    // Use the transaction service to process payment
-    const result = await transaction.processPayment(paymentMethod, session);
+    // Use the transaction service to process payment with payments array
+    const result = await transaction.processPayment(session);
 
     if (result.success) {
+      // Clear payments after successful transaction
+      // store.clearPayments();
+      setSelectedPaymentMethod(null);
       // Notify parent that transaction is completed
       onTransactionStateChange?.(true);
     }
   };
 
+  const handleSelectedPaymentMethod = (
+    method: SelectedPaymentMethod | null
+  ) => {
+    if (method) {
+      store.setTransactionCompleting(true);
+    } else {
+      store.setTransactionCompleting(false);
+    }
+
+    setSelectedPaymentMethod(method);
+  };
+
   const handleNewTransaction = () => {
     if (readOnly) return;
     transaction.startNewTransaction();
+
     onClearCart();
     onClearCustomer?.();
     onTransactionStateChange?.(false);
@@ -214,12 +231,50 @@ export function OrderSummary({
         completedData.paymentMethod
       );
 
+      // Format payments - use completedTransactionData payments if transaction is completed,
+      // otherwise use store payments for active transactions
+      const paymentsToFormat =
+        readOnly && completedTransactionData?.payments
+          ? completedTransactionData.payments
+          : !readOnly &&
+              state.isTransactionCompleted &&
+              state.transaction.completedTransactionData?.payments
+            ? state.transaction.completedTransactionData.payments
+            : !readOnly &&
+                !state.isTransactionCompleted &&
+                store.payment.payments.length > 0
+              ? store.payment.payments
+              : undefined;
+
+      const formattedPayments =
+        paymentsToFormat && paymentsToFormat.length > 0
+          ? paymentsToFormat.map((payment: Payment) => ({
+              method: payment.method,
+              amount: formatter.format(payment.amount),
+            }))
+          : undefined;
+
+      // Calculate change given if payments exist
+      const totalPaidFromPayments = paymentsToFormat
+        ? paymentsToFormat.reduce(
+            (sum: number, p: Payment) => sum + p.amount,
+            0
+          )
+        : 0;
+      const changeGiven =
+        formattedPayments &&
+        formattedPayments.length > 0 &&
+        totalPaidFromPayments > completedData.total
+          ? formatter.format(totalPaidFromPayments - completedData.total)
+          : undefined;
+
       const storeContact = activeStore.config?.contactInfo;
       const [street, city, addressState, zipCode, country] =
         storeContact?.location?.split(",") || [];
 
       const receiptHTML = await render(
         <PosReceiptEmail
+          amountPaid={formatter.format(totalPaidFromPayments)}
           storeName={activeStore.name || "Store Name"}
           storeContact={
             activeStore.config
@@ -265,6 +320,8 @@ export function OrderSummary({
           }
           total={formatter.format(completedData.total)}
           paymentMethodLabel={paymentMethodLabel}
+          payments={formattedPayments}
+          changeGiven={changeGiven}
         />
       );
 
@@ -273,6 +330,14 @@ export function OrderSummary({
       console.error("Error in handlePrintReceipt:", error);
     }
   };
+
+  const changeDue = store.payment.totalPaid - total;
+
+  const hasProvidedPayment =
+    store.payment.payments.length > 0 && store.payment.remainingDue == 0;
+
+  const showPaymentButtons =
+    !readOnly && !hasProvidedPayment && !state.isTransactionCompleting;
 
   return (
     <div
@@ -300,23 +365,58 @@ export function OrderSummary({
         )}
       </CardHeader>
       <div className="p-6 space-y-40">
-        {/* Order totals */}
-        <div className="space-y-8">
-          <div className="flex justify-between">
-            <span className="text-lg">Subtotal</span>
-            <span className="text-xl">{formatter.format(subtotal)}</span>
-          </div>
-          {tax > 0 && (
-            <div className="flex justify-between">
-              <span>Tax</span>
-              <span>{formatter.format(tax)}</span>
-            </div>
+        {/* Order totals and payment totals */}
+        <div className="space-y-16">
+          <TotalsDisplay
+            items={[
+              { label: "Subtotal", value: subtotal, formatter },
+              ...(tax > 0 ? [{ label: "Tax", value: tax, formatter }] : []),
+              { label: "Total", value: total, formatter, highlight: true },
+            ]}
+          />
+
+          {/* Payment totals - shown when payments exist */}
+          {store.payment.payments.length > 0 && (
+            <TotalsDisplay
+              items={[
+                {
+                  label: "Total Paid",
+                  value: store.payment.totalPaid,
+                  formatter,
+                  highlight: true,
+                },
+                ...(store.payment.totalPaid < total
+                  ? [
+                      {
+                        label: "Remaining",
+                        value: total - store.payment.totalPaid,
+                        formatter,
+                        highlight: true,
+                      },
+                    ]
+                  : []),
+                ...(store.payment.totalPaid > total
+                  ? [
+                      {
+                        label: "Change Due",
+                        value: changeDue,
+                        formatter,
+                        highlight: true,
+                      },
+                    ]
+                  : []),
+              ]}
+            />
           )}
-          {/* <Separator /> */}
-          <div className="flex justify-between items-baseline">
-            <span className="text-xl">Total</span>
-            <span className="text-3xl">{formatter.format(total)}</span>
-          </div>
+
+          {/* Payments Added List - shown when payments exist */}
+          {store.payment.payments.length > 0 && (
+            <PaymentsAddedList
+              formatter={formatter}
+              totalAmountDue={total}
+              readOnly={readOnly}
+            />
+          )}
         </div>
 
         {/* Customer info if present */}
@@ -336,13 +436,11 @@ export function OrderSummary({
           )}
 
         {/* Payment buttons */}
-        {!readOnly && !state.isTransactionCompleted && (
+        {showPaymentButtons && (
           <div className="space-y-2">
             <Button
-              onClick={() =>
-                handleCompleteTransaction("cash", activeSession as POSSession)
-              }
-              disabled={state.isTransactionCompleting || cartItemsCount == 0}
+              onClick={() => handleSelectedPaymentMethod("cash")}
+              disabled={cartItemsCount == 0}
               className="w-full py-10 bg-green-200 hover:bg-green-300 text-green-900 hover:text-green-800"
               size="lg"
               variant="outline"
@@ -351,13 +449,8 @@ export function OrderSummary({
               Pay with Cash
             </Button>
             <Button
-              onClick={() =>
-                handleCompleteTransaction(
-                  "mobile_money",
-                  activeSession as POSSession
-                )
-              }
-              disabled={state.isTransactionCompleting || cartItemsCount == 0}
+              onClick={() => handleSelectedPaymentMethod("mobile_money")}
+              disabled={cartItemsCount == 0}
               variant="outline"
               className="w-full py-10 bg-yellow-200 hover:bg-yellow-300 text-yellow-900 hover:text-yellow-800"
               size="lg"
@@ -367,10 +460,8 @@ export function OrderSummary({
             </Button>
 
             <Button
-              onClick={() =>
-                handleCompleteTransaction("card", activeSession as POSSession)
-              }
-              disabled={state.isTransactionCompleting || cartItemsCount == 0}
+              onClick={() => handleSelectedPaymentMethod("card")}
+              disabled={cartItemsCount == 0}
               variant="outline"
               className="w-full py-10 bg-blue-200 hover:bg-blue-300 text-blue-900 hover:text-blue-800"
               size="lg"
@@ -379,6 +470,25 @@ export function OrderSummary({
               Pay with Card
             </Button>
           </div>
+        )}
+
+        {!showPaymentButtons && !readOnly && (
+          <PaymentView
+            amountDue={total}
+            formatter={formatter}
+            selectedPaymentMethod={selectedPaymentMethod}
+            onAddAnotherPaymentMethod={() => handleSelectedPaymentMethod(null)}
+            onCancel={() => {
+              handleSelectedPaymentMethod(null);
+              store.clearPayments();
+            }}
+            onComplete={async () => {
+              if (activeSession && activeSession.status === "active") {
+                await handleCompleteTransaction(activeSession as POSSession);
+              }
+            }}
+            setSelectedPaymentMethod={handleSelectedPaymentMethod}
+          />
         )}
 
         {(readOnly || state.isTransactionCompleted) && (

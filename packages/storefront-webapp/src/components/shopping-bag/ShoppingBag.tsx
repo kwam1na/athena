@@ -207,9 +207,8 @@ const BagItemWithDiscount = ({
             <div className="relative w-32 h-32 lg:w-40 lg:h-40">
               <ImageWithFallback
                 src={
-                  (item as any).productImage ||
-                  store?.config?.ui?.fallbackImageUrl ||
-                  placeholder
+                  (item as any)?.productImage ||
+                  store?.config?.ui?.fallbackImageUrl
                 }
                 alt={(item as any).productName || "product image"}
                 className="w-full h-full object-cover rounded-lg"

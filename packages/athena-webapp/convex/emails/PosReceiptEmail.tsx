@@ -34,6 +34,11 @@ export interface PosReceiptItem {
   attributes?: string;
 }
 
+export interface PosReceiptPayment {
+  method: string;
+  amount: string; // Formatted amount string
+}
+
 export interface PosReceiptEmailProps {
   storeName: string;
   storeContact?: PosReceiptStoreContact;
@@ -49,6 +54,9 @@ export interface PosReceiptEmailProps {
   tax?: string;
   total: string;
   paymentMethodLabel: string;
+  payments?: Array<PosReceiptPayment>;
+  amountPaid?: string;
+  changeGiven?: string;
 }
 
 const sectionBorder = {
@@ -101,11 +109,14 @@ export default function PosReceiptEmail({
   registerNumber,
   customerInfo,
   items = mockItems,
-  itemsCount,
+  itemsCount = 4,
   subtotal = "GHS 2,720",
   tax,
   total = "GHS 2,720",
   paymentMethodLabel = "Card Payment",
+  payments,
+  amountPaid,
+  changeGiven,
 }: PosReceiptEmailProps) {
   return (
     <Html>
@@ -234,11 +245,55 @@ export default function PosReceiptEmail({
           </Section>
 
           <Section style={sectionBorder}>
-            <Row
-              label={paymentMethodLabel}
-              value={total}
-              valueStyle={styles.paymentMethod}
-            />
+            {payments && payments.length > 0 ? (
+              <>
+                {/* <Text
+                  style={{ ...styles.baseTextStyle, ...styles.sectionHeading }}
+                >
+                  Payment
+                </Text> */}
+                {payments.map((payment, index) => {
+                  const methodLabel =
+                    payment.method === "cash"
+                      ? "Cash"
+                      : payment.method === "card"
+                        ? "Card"
+                        : payment.method === "mobile_money"
+                          ? "Mobile Money"
+                          : payment.method
+                              .replace("_", " ")
+                              .replace(/\b\w/g, (l) => l.toUpperCase());
+                  return (
+                    <Row
+                      key={index}
+                      label={methodLabel}
+                      value={payment.amount}
+                      valueStyle={styles.paymentMethod}
+                    />
+                  );
+                })}
+                {amountPaid && (
+                  <Row
+                    label="Amount Paid"
+                    value={amountPaid}
+                    valueStyle={styles.paymentMethod}
+                  />
+                )}
+                {changeGiven && (
+                  <Row
+                    label="Change"
+                    value={changeGiven}
+                    valueStyle={styles.paymentMethod}
+                  />
+                )}
+              </>
+            ) : (
+              <Row
+                label={paymentMethodLabel}
+                value={total}
+                valueStyle={styles.paymentMethod}
+              />
+            )}
           </Section>
 
           <Spacer height={40} />
@@ -283,12 +338,8 @@ function Row({
 function DateTime({ date, time }: { date: string; time: string }) {
   return (
     <div style={styles.dateTime}>
-      <Text style={{ ...styles.baseTextStyle, ...styles.dateTimeText }}>
-        {date}
-      </Text>
-      <Text style={{ ...styles.baseTextStyle, ...styles.dateTimeText }}>
-        {time}
-      </Text>
+      <Text style={{ ...styles.baseTextStyle }}>{date}</Text>
+      <Text style={{ ...styles.baseTextStyle }}>{time}</Text>
     </div>
   );
 }
@@ -333,6 +384,7 @@ const styles: Record<string, CSSProperties> = {
   baseTextStyle: {
     height: "fit-content",
     margin: "0px",
+    fontSize: "12px",
   },
   cashierName: {
     // fontSize: "12px",
@@ -359,11 +411,7 @@ const styles: Record<string, CSSProperties> = {
     display: "flex",
     // flexDirection: "column" as const,
     gap: "8px",
-    fontSize: "12px",
     fontWeight: 600,
-  },
-  dateTimeText: {
-    fontSize: "14px",
   },
   lineItem: {
     display: "flex",
@@ -375,7 +423,6 @@ const styles: Record<string, CSSProperties> = {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
-    fontSize: "12px",
     marginBottom: "6px",
   },
   rowLabel: {
@@ -394,7 +441,6 @@ const styles: Record<string, CSSProperties> = {
   itemTopRow: {
     display: "flex",
     justifyContent: "space-between",
-    fontSize: "12px",
     fontWeight: 600,
   },
   itemName: {
@@ -407,14 +453,12 @@ const styles: Record<string, CSSProperties> = {
   itemMetaRow: {
     display: "flex",
     justifyContent: "space-between",
-    fontSize: "11px",
     // color: "#555555",
     marginTop: "0px",
     paddingTop: "0px",
     fontWeight: 800,
   },
   itemMeta: {
-    fontSize: "11px",
     color: "#555555",
   },
   itemDivider: {
@@ -426,7 +470,6 @@ const styles: Record<string, CSSProperties> = {
     margin: "8px 0",
   },
   total: {
-    fontSize: "14px",
     fontWeight: 700,
   },
   paymentMethod: {
@@ -434,12 +477,10 @@ const styles: Record<string, CSSProperties> = {
   },
   footerLine: {
     textAlign: "center" as const,
-    fontSize: "12px",
     margin: "6px 0",
   },
   footerLineMuted: {
     textAlign: "center" as const,
-    fontSize: "10px",
     color: "#666666",
     marginTop: "10px",
   },

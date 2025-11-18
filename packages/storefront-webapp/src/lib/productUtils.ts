@@ -19,10 +19,10 @@ export function getProductName(
     }
 
     if (item.length) {
-      return `${item.length}" ${item.colorName} ${capitalizeWords(item.productName || "")}`;
+      return `${item.length}" ${capitalizeWords(item.colorName)} ${capitalizeWords(item.productName || "")}`;
     }
 
-    return `${item.colorName} ${capitalizeWords(item.productName || "")}`;
+    return `${capitalizeWords(item.colorName)} ${capitalizeWords(item.productName || "")}`;
   }
 
   return capitalizeWords(item.productName || "Unavailable");

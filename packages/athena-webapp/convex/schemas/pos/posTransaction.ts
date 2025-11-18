@@ -10,9 +10,18 @@ export const posTransactionSchema = v.object({
   subtotal: v.number(),
   tax: v.number(),
   total: v.number(),
-  paymentMethod: v.string(), // "cash", "card", "mobile_money"
-  amountPaid: v.optional(v.number()), // Amount customer paid
-  changeGiven: v.optional(v.number()), // Change given to customer
+  // Multi-payment support
+  payments: v.array(
+    v.object({
+      method: v.string(), // "cash", "card", "mobile_money"
+      amount: v.number(),
+      timestamp: v.number(),
+    })
+  ),
+  totalPaid: v.number(), // Sum of all payment amounts
+  changeGiven: v.optional(v.number()), // Change given to customer (only for cash overpayment)
+  // Backward compatibility - store primary payment method
+  paymentMethod: v.optional(v.string()), // "cash", "card", "mobile_money" - primary method for backward compatibility
   status: v.string(), // "completed", "void", "refunded"
   completedAt: v.number(),
   customerInfo: v.optional(

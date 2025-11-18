@@ -7,6 +7,7 @@ import {
   Minus,
   ShoppingBasket,
   ShoppingBag,
+  Package,
 } from "lucide-react";
 import { CartItem } from "./types";
 import { currencyFormatter } from "~/convex/utils";
@@ -82,7 +83,9 @@ export function CartItems({
                         className="w-full h-full object-cover rounded"
                       />
                     ) : (
-                      <span className="text-xs text-muted-foreground">IMG</span>
+                      <span className="text-xs text-muted-foreground">
+                        <Package className="w-5 h-5" />
+                      </span>
                     )}
                   </div>
 

@@ -1,11 +1,11 @@
 import { useEffect, useRef } from "react";
 import { toast } from "sonner";
-import { useGetProductsWithNoImages } from "./useGetProducts";
+import { useGetUnresolvedProducts } from "./useGetProducts";
 import { AlertOctagon } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 
 export const useProductWithNoImagesNotification = () => {
-  const productsWithNoImages = useGetProductsWithNoImages();
+  const productsWithNoImages = useGetUnresolvedProducts();
   const toastIdRef = useRef<string | number | null>(null);
 
   useEffect(() => {
