@@ -17,15 +17,55 @@ import { api } from "~/convex/_generated/api";
 import { Button } from "../ui/button";
 import config from "~/src/config";
 import useGetActiveProduct from "~/src/hooks/useGetActiveProduct";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { getOrigin } from "~/src/lib/navigationUtils";
 import { usePermissions } from "~/src/hooks/usePermissions";
+import { FadeIn } from "../common/FadeIn";
+import { Skeleton } from "../ui/skeleton";
+import { useEffect } from "react";
 
 export function ImagesView() {
   const { activeProductVariant } = useProduct();
   const { activeProduct } = useGetActiveProduct();
 
   const { hasFullAdminAccess } = usePermissions();
+
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "e" && hasFullAdminAccess && activeProduct) {
+        navigate({
+          to: "/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/edit",
+          params: (prev) => ({
+            ...prev,
+            orgUrlSlug: prev.orgUrlSlug!,
+            storeUrlSlug: prev.storeUrlSlug!,
+            productSlug: activeProduct?._id!,
+          }),
+          search: {
+            o: getOrigin(),
+            variant: activeProductVariant?.sku,
+          },
+        });
+      }
+
+      if (event.key === "v" && activeProduct) {
+        window.open(
+          `${config.storeFrontUrl}/shop/product/${activeProduct?._id}?variant=${activeProductVariant?.sku}`,
+          "_blank"
+        );
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [navigate, activeProduct?._id, activeProductVariant?.sku]);
+
+  if (activeProduct === undefined)
+    return <Skeleton className="w-[320px] h-80" />;
+  if (activeProduct === null) return null;
 
   return (
     <View
@@ -34,7 +74,7 @@ export function ImagesView() {
       className="h-auto w-full"
       header={null}
     >
-      <div className="space-y-8">
+      <FadeIn className="space-y-8">
         <div className="py-4 grid grid-cols-2 gap-2">
           {activeProductVariant.images.map((image, i) => {
             return (
@@ -57,7 +97,7 @@ export function ImagesView() {
           )}
         </div>
 
-        {hasFullAdminAccess && (
+        {hasFullAdminAccess && activeProduct && (
           <div className="flex items-center gap-4">
             <Link
               to="/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/edit"
@@ -93,7 +133,7 @@ export function ImagesView() {
             </Button>
           </div>
         )}
-      </div>
+      </FadeIn>
     </View>
   );
 }

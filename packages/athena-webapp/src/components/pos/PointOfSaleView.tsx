@@ -22,6 +22,7 @@ import {
   Receipt,
   Search,
   ClockFading,
+  BanknoteArrowDown,
 } from "lucide-react";
 import { useGetActiveOrganization } from "@/hooks/useGetOrganizations";
 import { getOrigin } from "~/src/lib/navigationUtils";
@@ -29,6 +30,7 @@ import { useGetCurrencyFormatter } from "~/src/hooks/useGetCurrencyFormatter";
 import { useGetTerminal } from "~/src/hooks/useGetTerminal";
 import { Badge } from "../ui/badge";
 import { cn } from "~/src/lib/utils";
+import { usePermissions } from "~/src/hooks/usePermissions";
 
 const Navigation = () => {
   return (
@@ -44,8 +46,6 @@ export default function PointOfSaleView() {
   const { activeStore } = useGetActiveStore();
   const { activeOrganization } = useGetActiveOrganization();
 
-  const terminal = useGetTerminal();
-
   const analytics = useQuery(
     api.storeFront.analytics.getAll,
     activeStore?._id ? { storeId: activeStore._id } : "skip"
@@ -60,6 +60,8 @@ export default function PointOfSaleView() {
   // Currency formatter
   const currencyFormatter = useGetCurrencyFormatter();
 
+  const { hasFullAdminAccess } = usePermissions();
+
   if (!activeStore || !analytics || !activeOrganization) return null;
 
   const posFeatures = [
@@ -73,6 +75,15 @@ export default function PointOfSaleView() {
       enabled: true,
     },
     {
+      title: "Expense Products",
+      description: "Track products expensed",
+      icon: BanknoteArrowDown,
+      href: "/$orgUrlSlug/store/$storeUrlSlug/pos/expense" as const,
+      color: "bg-rose-500",
+      available: true,
+      enabled: true,
+    },
+    {
       title: "Product Lookup",
       description: "Search and scan products for quick reference",
       icon: Search,
@@ -80,6 +91,7 @@ export default function PointOfSaleView() {
       color: "bg-green-500",
       available: true,
     },
+
     {
       title: "Sales Reports",
       description: "View daily sales and transaction reports",
@@ -97,6 +109,14 @@ export default function PointOfSaleView() {
       available: true,
     },
     {
+      title: "Expense Reports",
+      description: "View expense reports",
+      icon: Receipt,
+      href: "/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports" as const,
+      color: "bg-yellow-500",
+      available: true,
+    },
+    {
       title: "Customers",
       description: "Manage customer information and purchase history",
       icon: Users,
@@ -110,7 +130,7 @@ export default function PointOfSaleView() {
       icon: Settings,
       href: "/$orgUrlSlug/store/$storeUrlSlug/pos/settings" as const,
       color: "bg-gray-500",
-      available: true,
+      available: hasFullAdminAccess,
     },
   ];
 
@@ -122,59 +142,6 @@ export default function PointOfSaleView() {
       header={<Navigation />}
     >
       <FadeIn className="space-y-8 py-8">
-        {/* Quick Actions */}
-        {/* <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-          <Card className="border-2 border-blue-200">
-            <CardContent className="p-6">
-              <div className="flex items-center space-x-4">
-                <div className="p-3 bg-blue-500 rounded-lg">
-                  <ShoppingCart className="h-6 w-6 text-white" />
-                </div>
-                <div className="flex-1">
-                  <h3 className="font-semibold text-lg">Start New Sale</h3>
-                  <p className="text-muted-foreground text-sm">
-                    Begin a new transaction
-                  </p>
-                </div>
-                <Button asChild size="lg">
-                  <Link
-                    to="/$orgUrlSlug/store/$storeUrlSlug/pos/register"
-                    params={{
-                      orgUrlSlug: activeOrganization.slug,
-                      storeUrlSlug: activeStore.slug,
-                    }}
-                    search={{
-                      o: getOrigin(),
-                    }}
-                  >
-                    Start Sale
-                  </Link>
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-2 border-green-200">
-            <CardContent className="p-6">
-              <div className="flex items-center space-x-4">
-                <div className="p-3 bg-green-500 rounded-lg">
-                  <Receipt className="h-6 w-6 text-white" />
-                </div>
-                <div className="flex-1">
-                  <h3 className="font-semibold text-lg">View Receipts</h3>
-                  <p className="text-muted-foreground text-sm">
-                    Recent transaction receipts
-                  </p>
-                </div>
-                <Button variant="outline" disabled>
-                  View Reports
-                  <span className="text-xs ml-2">(Coming Soon)</span>
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div> */}
-
         {/* POS Features Grid */}
         <div>
           {/* <h2 className="text-2xl font-semibold mb-6">POS Features</h2> */}
@@ -278,23 +245,27 @@ export default function PointOfSaleView() {
               </CardContent>
             </div>
 
-            <div className="border rounded-lg">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm text-muted-foreground">
-                  Total Sales
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {todaySummary ? (
-                    currencyFormatter.format(todaySummary.totalSales)
-                  ) : (
-                    <span className="text-muted-foreground">--</span>
-                  )}
+            {hasFullAdminAccess && (
+              <>
+                <div className="border rounded-lg">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm text-muted-foreground">
+                      Total Sales
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">
+                      {todaySummary ? (
+                        currencyFormatter.format(todaySummary.totalSales)
+                      ) : (
+                        <span className="text-muted-foreground">--</span>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground">Today</p>
+                  </CardContent>
                 </div>
-                <p className="text-xs text-muted-foreground">Today</p>
-              </CardContent>
-            </div>
+              </>
+            )}
 
             <div className="border rounded-lg">
               <CardHeader className="pb-2">
@@ -314,23 +285,25 @@ export default function PointOfSaleView() {
               </CardContent>
             </div>
 
-            <div className="border rounded-lg">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm text-muted-foreground">
-                  Avg. Transaction
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {todaySummary ? (
-                    currencyFormatter.format(todaySummary.averageTransaction)
-                  ) : (
-                    <span className="text-muted-foreground">--</span>
-                  )}
-                </div>
-                <p className="text-xs text-muted-foreground">Today</p>
-              </CardContent>
-            </div>
+            {hasFullAdminAccess && (
+              <div className="border rounded-lg">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm text-muted-foreground">
+                    Avg. Transaction
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">
+                    {todaySummary ? (
+                      currencyFormatter.format(todaySummary.averageTransaction)
+                    ) : (
+                      <span className="text-muted-foreground">--</span>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground">Today</p>
+                </CardContent>
+              </div>
+            )}
           </div>
         </div>
       </FadeIn>

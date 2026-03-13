@@ -1,4 +1,3 @@
-import { Badge } from "@/components/ui/badge";
 import { Search } from "lucide-react";
 import { Product } from "./types";
 import { ProductCard } from "./ProductCard";
@@ -48,7 +47,7 @@ export function SearchResultsSection({
   return (
     <div className="max-h-[586px] overflow-y-auto space-y-1">
       <div className="space-y-8 py-8">
-        {products.slice(0, 10).map((product: Product) => (
+        {products.map((product: Product) => (
           <ProductCard
             key={product.id}
             product={product}
@@ -57,13 +56,6 @@ export function SearchResultsSection({
             onAfterAdd={onClearSearch}
           />
         ))}
-        {products.length > 10 && (
-          <div className="text-center py-3">
-            <Badge variant="secondary" className="text-xs">
-              Showing first 10 results • Type more to narrow down
-            </Badge>
-          </div>
-        )}
       </div>
     </div>
   );

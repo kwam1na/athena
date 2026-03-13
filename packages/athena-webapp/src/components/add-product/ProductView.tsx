@@ -263,7 +263,9 @@ function ProductViewContent() {
 
         images = imageUrls;
       } catch (e) {
-        toast.error("Error processing images");
+        toast.error("Error processing images", {
+          description: (e as Error).message,
+        });
       }
     }
 
@@ -324,7 +326,9 @@ function ProductViewContent() {
           update: { images: imageUrls },
         });
       } catch (e) {
-        toast.error("Error processing images");
+        toast.error("Error processing images.", {
+          description: (e as Error).message,
+        });
       }
     }
 
@@ -379,12 +383,13 @@ function ProductViewContent() {
   // };
 
   // const isValid = didProvideRequiredData();
-  const isValid = true;
 
   const Navigation = () => {
     const { productSlug } = useParams({ strict: false });
 
     const { activeProduct } = useGetActiveProduct();
+
+    const isValid = productSlug ? !!activeProduct : true;
 
     const header = productSlug
       ? `Edit ${capitalizeWords(activeProduct?.name || "")}`
@@ -437,8 +442,12 @@ function ProductViewContent() {
       }
     };
 
+    const isUpdatingProduct =
+      isCreateMutationPending || isUpdateMutationPending;
+
     return (
       <ComposedPageHeader
+        disableBackButton={isUpdatingProduct}
         leadingContent={
           <div className="flex items-center gap-4">
             <p className="text-sm">{header}</p>
@@ -463,6 +472,7 @@ function ProductViewContent() {
                   className="text-red-400 flex gap-2 items-center bg-red-50 hover:bg-red-100 hover:text-red-800"
                   variant={"outline"}
                   onClick={() => setIsDeleteModalOpen(true)}
+                  disabled={isUpdatingProduct}
                 >
                   <p>Delete</p>
                   <TrashIcon className="w-3.5 h-3.5" />
@@ -477,6 +487,7 @@ function ProductViewContent() {
                         isVisible: !activeProduct?.isVisible,
                       });
                     }}
+                    disabled={isUpdatingProduct}
                   >
                     {(activeProduct?.isVisible == undefined ||
                       activeProduct?.isVisible) && (
@@ -500,6 +511,7 @@ function ProductViewContent() {
                   variant={"outline"}
                   onClick={() => revertChanges()}
                   className="flex gap-2 items-center"
+                  disabled={isUpdatingProduct}
                 >
                   <p>Revert changes</p>
                   <RotateCcw className="w-3.5 h-3.5" />
@@ -508,7 +520,7 @@ function ProductViewContent() {
             )}
             <LoadingButton
               disabled={!isValid}
-              isLoading={isCreateMutationPending || isUpdateMutationPending}
+              isLoading={isUpdatingProduct}
               onClick={onSubmit}
               variant={"outline"}
               className="flex gap-2 items-center text-blue-700 bg-blue-50 hover:bg-blue-100"

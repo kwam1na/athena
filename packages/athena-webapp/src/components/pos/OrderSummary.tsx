@@ -399,7 +399,7 @@ export function OrderSummary({
                   ? [
                       {
                         label: "Change Due",
-                        value: changeDue,
+                        value: -changeDue,
                         formatter,
                         highlight: true,
                       },
@@ -441,7 +441,7 @@ export function OrderSummary({
             <Button
               onClick={() => handleSelectedPaymentMethod("cash")}
               disabled={cartItemsCount == 0}
-              className="w-full py-10 bg-green-200 hover:bg-green-300 text-green-900 hover:text-green-800"
+              className="w-full py-10 bg-primary text-white hover:bg-primary/90 hover:text-white"
               size="lg"
               variant="outline"
             >
@@ -463,7 +463,7 @@ export function OrderSummary({
               onClick={() => handleSelectedPaymentMethod("card")}
               disabled={cartItemsCount == 0}
               variant="outline"
-              className="w-full py-10 bg-blue-200 hover:bg-blue-300 text-blue-900 hover:text-blue-800"
+              className="w-full py-10 bg-rose-200 hover:bg-rose-300 text-rose-900 hover:text-rose-800"
               size="lg"
             >
               <CreditCard className="w-4 h-4 mr-2" />
@@ -472,7 +472,7 @@ export function OrderSummary({
           </div>
         )}
 
-        {!showPaymentButtons && !readOnly && (
+        {!showPaymentButtons && !readOnly && !state.isTransactionCompleted && (
           <PaymentView
             amountDue={total}
             formatter={formatter}

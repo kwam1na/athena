@@ -624,7 +624,9 @@ const GhanaAddressLocaleFields = ({
                   }}
                   className="text-muted-foreground text-xs p-0"
                 >
-                  {isEnteringNewNeighborhood ? "Choose from list" : "Add"}
+                  {isEnteringNewNeighborhood
+                    ? "Choose from list"
+                    : "Add suburb"}
                 </Button>
               )}
 

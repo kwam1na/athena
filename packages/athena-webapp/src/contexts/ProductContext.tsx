@@ -13,6 +13,7 @@ import useGetActiveProduct from "@/hooks/useGetActiveProduct";
 import { Product, ProductSku } from "~/types";
 import { productSchema } from "../lib/schemas/product";
 import { toast } from "sonner";
+import { useParams } from "@tanstack/react-router";
 
 interface ProductContextType {
   activeProductVariant: ProductVariant;
@@ -36,6 +37,7 @@ interface ProductContextType {
   isLoading: boolean;
   updateVariantImages: (variantId: string, newImages: ImageFile[]) => void;
   updateAppState: (newState: Partial<AppState>) => void;
+  showLoaderForProduct: boolean;
 
   // actions
   appState: AppState;
@@ -79,6 +81,8 @@ export function ProductProvider({ children }: { children: ReactNode }) {
   const [images, updateImages] = useState<ImageFile[]>([]);
   const [error, setError] = useState<ZodError | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+
+  const { productSlug } = useParams({ strict: false });
 
   const { activeProduct } = useGetActiveProduct();
 
@@ -181,6 +185,7 @@ export function ProductProvider({ children }: { children: ReactNode }) {
     netPrice: sku.netPrice,
     size: sku.size || undefined,
     color: sku.color || undefined,
+    colorName: sku.colorName || undefined,
     length: sku.length || undefined,
     weight: sku.weight || undefined,
     images: sku.images.map((imageUrl) => ({
@@ -265,6 +270,7 @@ export function ProductProvider({ children }: { children: ReactNode }) {
     updateProductVariant,
     updateAppState,
     isLoading,
+    showLoaderForProduct: Boolean(productSlug && activeProduct === undefined),
   };
 
   return (

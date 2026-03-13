@@ -85,8 +85,6 @@ export const WelcomeBackModal: React.FC<WelcomeBackModalProps> = ({
     });
   };
 
-  console.log(promoCode, isOpen);
-
   if (!promoCode || !isOpen) {
     return null;
   }

@@ -29,8 +29,6 @@ export function LoginForm({
 
       const res = await verifyEmail({ email: value.email });
 
-      console.log("res", res);
-
       if (res.success) {
         setStep({ email: value.email });
       }

@@ -132,12 +132,10 @@ export default function ProductPage() {
               />
             </div>
 
-            {selectedSku.productCategory === "Hair" && (
-              <AboutProduct
-                productAttributes={product.attributes || {}}
-                productSku={selectedSku}
-              />
-            )}
+            <AboutProduct
+              productAttributes={product.attributes || {}}
+              productSku={selectedSku}
+            />
 
             {selectedSku.productCategory === "Hair" && <OnsaleProduct />}
 
@@ -205,12 +203,10 @@ export default function ProductPage() {
               />
             </div>
 
-            {selectedSku.productCategory === "Hair" && (
-              <AboutProduct
-                productAttributes={product.attributes || {}}
-                productSku={selectedSku}
-              />
-            )}
+            <AboutProduct
+              productAttributes={product.attributes || {}}
+              productSku={selectedSku}
+            />
 
             {selectedSku.productCategory === "Hair" && <OnsaleProduct />}
 

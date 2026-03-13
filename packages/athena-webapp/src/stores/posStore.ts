@@ -72,7 +72,7 @@ interface UIState {
 }
 
 interface CashierState {
-  id: Id<"cashier"> | null;
+  id?: Id<"cashier"> | null;
   isAuthenticated: boolean;
 }
 
@@ -154,6 +154,7 @@ interface POSState {
   // Cashier Actions
   setCashier: (cashierId: Id<"cashier"> | null) => void;
   clearCashier: () => void;
+  clearSession: () => void;
 
   // Global Actions
   setStoreId: (storeId?: Id<"store">) => void;
@@ -278,6 +279,13 @@ export const usePOSStore = create<POSState>()(
             state.cart.total = 0;
           }),
 
+        clearSession: () =>
+          set((state) => {
+            state.session.currentSessionId = null;
+            state.session.activeSession = null;
+            state.session.expiresAt = null;
+          }),
+
         calculateTotals: () =>
           set((state) => {
             const totals = calculateCartTotals(state.cart.items);
@@ -380,6 +388,7 @@ export const usePOSStore = create<POSState>()(
               image: item.image,
               size: item.size,
               length: item.length,
+              color: item.color,
               productId: item.productId,
               skuId: item.productSkuId,
               areProcessingFeesAbsorbed: item.areProcessingFeesAbsorbed,

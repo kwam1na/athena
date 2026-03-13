@@ -3,29 +3,53 @@ import { api } from "~/convex/_generated/api";
 import { Id } from "~/convex/_generated/dataModel";
 import { Button } from "../ui/button";
 import { usePOSStore } from "~/src/stores/posStore";
+import { useExpenseStore } from "~/src/stores/expenseStore";
 import { toast } from "sonner";
 import { usePOSActiveSession } from "~/src/hooks/usePOSSessions";
+import { useExpenseActiveSession } from "~/src/hooks/useExpenseSessions";
 import { useSessionManagerOperations } from "~/src/hooks/useSessionManagerOperations";
 import { usePOSOperations } from "~/src/hooks/usePOSOperations";
+import { useSessionManagementExpense } from "~/src/hooks/useSessionManagementExpense";
 
 interface CashierViewProps {
   storeId: Id<"store">;
   terminalId: Id<"posTerminal">;
   cashierId: Id<"cashier">;
+  sessionType?: "pos" | "expense";
 }
 
 export const CashierView = ({
   storeId,
   terminalId,
   cashierId,
+  sessionType = "pos",
 }: CashierViewProps) => {
-  const store = usePOSStore();
-  const { state } = usePOSOperations();
+  const posStore = usePOSStore();
+  const expenseStore = useExpenseStore();
+  const store = sessionType === "pos" ? posStore : expenseStore;
 
-  const activeSession = usePOSActiveSession(storeId, terminalId, cashierId);
+  const { state: posState } = usePOSOperations();
+  const isTransactionCompleted =
+    sessionType === "pos"
+      ? posState.isTransactionCompleted
+      : expenseStore.transaction.isCompleted;
 
-  const { handleHoldCurrentSession, handleVoidSession } =
-    useSessionManagerOperations(storeId, terminalId, cashierId);
+  const posActiveSession = usePOSActiveSession(storeId, terminalId, cashierId);
+  const expenseActiveSession = useExpenseActiveSession(
+    storeId,
+    terminalId,
+    cashierId
+  );
+  const activeSession =
+    sessionType === "pos" ? posActiveSession : expenseActiveSession;
+
+  const {
+    handleHoldCurrentSession: handleHoldPOSSession,
+    handleVoidSession: handleVoidPOSSession,
+  } = useSessionManagerOperations(storeId, terminalId, cashierId);
+
+  const { holdSession: holdExpenseSession, voidSession: voidExpenseSession } =
+    useSessionManagementExpense();
 
   const cashier = useQuery(
     api.inventory.cashier.getById,
@@ -39,28 +63,42 @@ export const CashierView = ({
   const handleSignOut = async () => {
     const session = activeSession || store.session.activeSession;
 
-    // if (session?.status === "active" && store.cart.items.length) {
-    //   toast.error("Hold or void the session before signing out");
-    //   return;
-    // }
-
     if (session) {
       if (store.cart.items.length) {
-        const holdResult = await handleHoldCurrentSession("Signing out");
-
-        if (!holdResult.success) {
-          toast.error(holdResult.error);
-          return;
+        // Hold session if it has items
+        if (sessionType === "pos") {
+          const holdResult = await handleHoldPOSSession("Signing out");
+          if (!holdResult.success) {
+            toast.error(holdResult.error);
+            return;
+          }
+        } else {
+          const holdResult = await voidExpenseSession();
+          if (!holdResult.success) {
+            toast.error(holdResult.error);
+            return;
+          }
         }
         store.clearCashier();
         return;
       }
 
-      const voidResult = await handleVoidSession(session._id);
-
-      if (!voidResult.success) {
-        toast.error(voidResult.error);
-        return;
+      // Void empty session
+      if (sessionType === "pos") {
+        const voidResult = await handleVoidPOSSession(
+          session._id as Id<"posSession">
+        );
+        if (!voidResult.success) {
+          toast.error(voidResult.error);
+          return;
+        }
+      } else {
+        // Expense voidSession uses active session from store, no sessionId needed
+        const voidResult = await voidExpenseSession();
+        if (!voidResult.success) {
+          toast.error(voidResult.error);
+          return;
+        }
       }
 
       store.clearCashier();
@@ -69,7 +107,7 @@ export const CashierView = ({
     }
   };
 
-  if (state.isTransactionCompleted) {
+  if (isTransactionCompleted) {
     return null;
   }
 

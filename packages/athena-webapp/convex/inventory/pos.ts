@@ -67,7 +67,7 @@ export const searchProducts = query({
     const results = await Promise.all(
       matchingSkus
         // .filter((sku) => sku.quantityAvailable > 0) // Only show available items
-        .slice(0, 20) // Limit results for performance
+        // .slice(0, 20) // Limit results for performance
         .map(async (sku) => {
           const product = productMap.get(sku.productId);
           if (!product || !sku.netPrice) return null;
@@ -180,11 +180,8 @@ export const lookupByBarcode = query({
     if (!sku) {
       sku = await ctx.db
         .query("productSku")
-        .filter((q) =>
-          q.and(
-            q.eq(q.field("storeId"), args.storeId),
-            q.eq(q.field("sku"), args.barcode)
-          )
+        .withIndex("by_storeId_sku", (q) =>
+          q.eq("storeId", args.storeId).eq("sku", args.barcode)
         )
         .first();
     }

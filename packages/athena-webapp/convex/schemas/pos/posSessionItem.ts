@@ -19,6 +19,7 @@ export const posSessionItemSchema = v.object({
   image: v.optional(v.string()),
   size: v.optional(v.string()),
   length: v.optional(v.number()),
+  color: v.optional(v.string()),
   areProcessingFeesAbsorbed: v.optional(v.boolean()),
 
   // Timestamps

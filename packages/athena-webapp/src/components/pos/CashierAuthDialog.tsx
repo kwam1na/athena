@@ -148,10 +148,10 @@ export const CashierAuthDialog = ({
   };
 
   const header =
-    state === "auth" ? "Start POS session" : "Sign out of all terminals";
+    state === "auth" ? "Start session" : "Sign out of all terminals";
 
   const switchStateButtonText =
-    state === "auth" ? "Sign out of all terminals" : "Start POS session";
+    state === "auth" ? "Sign out of all terminals" : "Start session";
 
   const mainButtonText = state === "auth" ? "Sign In" : "Sign Out";
 

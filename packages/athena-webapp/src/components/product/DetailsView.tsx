@@ -19,13 +19,18 @@ import {
   TooltipTrigger,
 } from "../ui/tooltip";
 import { ProductStockStatus } from "./ProductStock";
+import { FadeIn } from "../common/FadeIn";
+import { Skeleton } from "../ui/skeleton";
 
 export function DetailsView() {
   const { activeStore } = useGetActiveStore();
 
   const { activeProductVariant, activeProduct } = useProduct();
 
-  if (!activeStore) return null;
+  if (!activeStore || activeProduct === undefined)
+    return <Skeleton className="w-full h-80" />;
+
+  if (activeProduct === null) return null;
 
   const formatter = currencyFormatter(activeStore.currency);
 
@@ -42,7 +47,7 @@ export function DetailsView() {
 
   return (
     <View hideBorder hideHeaderBottomBorder className="h-auto w-full">
-      <div className="py-4 grid grid-cols-3">
+      <FadeIn className="py-4 grid grid-cols-3">
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">Price</p>
           <div className="flex items-center gap-2">
@@ -89,7 +94,7 @@ export function DetailsView() {
           <p className="text-sm text-muted-foreground"># Available</p>
           <p className="text-sm">{activeProductVariant.quantityAvailable}</p>
         </div>
-      </div>
+      </FadeIn>
     </View>
   );
 }

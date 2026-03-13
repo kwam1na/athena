@@ -13,7 +13,6 @@ import {
 } from "@/lib/pos/constants";
 import { useRef, useEffect } from "react";
 import { SearchResultsSection } from "./SearchResultsSection";
-import { NoResultsMessage } from "./NoResultsMessage";
 import { useProductSearchResults } from "@/hooks/useProductSearchResults";
 
 interface ProductEntryProps {

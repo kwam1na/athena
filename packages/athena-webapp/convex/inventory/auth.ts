@@ -2,7 +2,6 @@ import { v } from "convex/values";
 import { action, mutation } from "../_generated/server";
 import { sendVerificationCode } from "../mailersend";
 import { api } from "../_generated/api";
-import { SignJWT } from "jose";
 
 const expirationTimeInMinutes = 10;
 
@@ -29,8 +28,6 @@ export const requestVerificationCode = mutation({
       expiration,
       isUsed: false,
     });
-
-    console.log("inserted....");
 
     return await ctx.db.get(id);
   },
@@ -80,7 +77,9 @@ export const verifyCode = mutation({
 
     let user = await ctx.db
       .query("athenaUser")
-      .filter((q) => q.eq(q.field("email"), verificationCode.email))
+      .filter((q) =>
+        q.eq(q.field("email"), verificationCode.email.toLowerCase())
+      )
       .first();
 
     if (!user) {
@@ -100,30 +99,9 @@ export const verifyCode = mutation({
       };
     }
 
-    // 2. Generate keys for signing tokens
-    const secret = new TextEncoder().encode("your-secret-key");
-
-    // 3. Generate tokens
-    const accessToken = await new SignJWT({ userId: user._id })
-      .setProtectedHeader({ alg: "HS256" })
-      .setExpirationTime("15m")
-      .sign(secret);
-
-    const refreshToken = await new SignJWT({ userId: user._id })
-      .setProtectedHeader({ alg: "HS256" })
-      .setExpirationTime("7d")
-      .sign(secret);
-
-    // await ctx.db.insert("storeFrontSession", {
-    //   userId: user._id,
-    //   refreshToken,
-    // });
-
     return {
       success: true,
       user,
-      accessToken,
-      refreshToken,
     };
   },
 });
@@ -135,17 +113,6 @@ export const sendVerificationCodeViaProvider = action({
     lastName: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    // const [data, store] = await Promise.all([
-    //   ctx.runMutation(api.inventory.auth.requestVerificationCode, {
-    //     email: args.email,
-    //     firstName: args.firstName,
-    //     lastName: args.lastName,
-    //   }),
-    //   ctx.runQuery(api.inventory.stores.findById, {
-    //     id: args.storeId,
-    //   }),
-    // ]);
-
     const data: any = await ctx.runMutation(
       api.inventory.auth.requestVerificationCode,
       {
@@ -161,16 +128,6 @@ export const sendVerificationCodeViaProvider = action({
         message: "Could not send verification code",
       };
     }
-
-    // return {
-    //   success: true,
-    //   message: "Verification code sent mofo!!!",
-    //   data: {
-    //     email: data.email,
-    //     code: data.code,
-    //   },
-    //   // d: data,
-    // };
 
     const response = await sendVerificationCode({
       customerEmail: args.email,

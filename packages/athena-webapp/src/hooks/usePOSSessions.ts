@@ -32,12 +32,12 @@ export const usePOSSession = (sessionId: Id<"posSession"> | undefined) => {
 export const usePOSActiveSession = (
   storeId: Id<"store"> | undefined,
   terminalId: Id<"posTerminal"> | undefined,
-  cashierId?: Id<"cashier">,
+  cashierId?: Id<"cashier"> | null,
   registerNumber?: string
 ) => {
   return useQuery(
     api.inventory.posSessions.getActiveSession,
-    storeId && terminalId
+    storeId && terminalId && cashierId
       ? { storeId, cashierId, terminalId, registerNumber }
       : "skip"
   );

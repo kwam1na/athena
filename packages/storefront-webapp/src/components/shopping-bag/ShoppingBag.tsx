@@ -29,7 +29,7 @@ import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import placeholder from "@/assets/placeholder.png";
 import { ShoppingBagAction, useShoppingBag } from "@/hooks/useShoppingBag";
 import { BagItem, ProductSku } from "@athena/webapp";
-import { getProductName } from "@/lib/utils";
+import { capitalizeWords, getProductName } from "@/lib/utils";
 import { motion, AnimatePresence, easeInOut } from "framer-motion";
 import { HeartIconFilled } from "@/assets/icons/HeartIconFilled";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -248,7 +248,14 @@ const BagItemWithDiscount = ({
                   <p className="text-xs font-medium text-accent2">Free</p>
                 </div>
               ) : (
-                <p className="text-xs text-muted-foreground">{priceLabel}</p>
+                <div className="space-y-4">
+                  {item.productCategory !== "Hair" && item.colorName && (
+                    <p className="text-xs font-medium">
+                      {capitalizeWords(item.colorName)}
+                    </p>
+                  )}
+                  <p className="text-xs text-muted-foreground">{priceLabel}</p>
+                </div>
               )}
 
               <select

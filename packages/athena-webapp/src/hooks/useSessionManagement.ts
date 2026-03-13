@@ -17,7 +17,11 @@ import { useGetTerminal } from "./useGetTerminal";
 export const useSessionManagement = () => {
   const store = usePOSStore();
 
-  const activeSession = usePOSActiveSession(store.storeId, store.terminalId);
+  const activeSession = usePOSActiveSession(
+    store.storeId,
+    store.terminalId,
+    store.cashier.id
+  );
 
   // Convex mutations
   const createSessionMutation = useMutation(

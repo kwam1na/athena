@@ -17,8 +17,11 @@ import { Id } from "~/convex/_generated/dataModel";
 
 interface CartItemsProps {
   cartItems: CartItem[];
-  onUpdateQuantity?: (id: Id<"posSessionItem">, newQuantity: number) => void;
-  onRemoveItem?: (id: Id<"posSessionItem">) => void;
+  onUpdateQuantity?: (
+    id: Id<"posSessionItem"> | Id<"expenseSessionItem">,
+    newQuantity: number
+  ) => void;
+  onRemoveItem?: (id: Id<"posSessionItem"> | Id<"expenseSessionItem">) => void;
   clearCart?: () => void;
   readOnly?: boolean;
 }
@@ -110,13 +113,16 @@ export function CartItems({
                       )}
                     </div>
 
-                    {(item.size || item.length) && (
+                    {(item.size || item.length || item.color) && (
                       <p className="text-xs text-muted-foreground">
                         {item.length && `${item.length}"`}
                         {item.size && item.length && " • "}
                         {item.size && `${item.size}`}
+                        {item.color && (item.size || item.length) && " • "}
+                        {item.color && capitalizeWords(item.color)}
                       </p>
                     )}
+
                     <p className="text-sm font-medium pt-2">
                       {formatter.format(item.price)}
                     </p>
@@ -136,7 +142,9 @@ export function CartItems({
                         onClick={() =>
                           onUpdateQuantity &&
                           onUpdateQuantity(
-                            item.id as Id<"posSessionItem">,
+                            item.id as
+                              | Id<"posSessionItem">
+                              | Id<"expenseSessionItem">,
                             item.quantity - 1
                           )
                         }
@@ -153,7 +161,9 @@ export function CartItems({
                         onClick={() =>
                           onUpdateQuantity &&
                           onUpdateQuantity(
-                            item.id as Id<"posSessionItem">,
+                            item.id as
+                              | Id<"posSessionItem">
+                              | Id<"expenseSessionItem">,
                             item.quantity + 1
                           )
                         }
@@ -180,7 +190,11 @@ export function CartItems({
                       className="h-9 w-9 p-8 text-destructive hover:text-destructive hover:bg-destructive/10"
                       onClick={() =>
                         onRemoveItem &&
-                        onRemoveItem(item.id as Id<"posSessionItem">)
+                        onRemoveItem(
+                          item.id as
+                            | Id<"posSessionItem">
+                            | Id<"expenseSessionItem">
+                        )
                       }
                     >
                       <Trash2 className="w-5 h-5" />

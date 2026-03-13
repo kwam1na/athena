@@ -10,6 +10,7 @@ import { Button } from "../ui/button";
 import useGetActiveProduct from "~/src/hooks/useGetActiveProduct";
 import config from "~/src/config";
 import { EyeIcon } from "lucide-react";
+import { Skeleton } from "../ui/skeleton";
 
 const Header = () => {
   const { activeProductVariant, productVariants, setActiveProductVariant } =
@@ -66,7 +67,8 @@ const Header = () => {
 };
 
 export default function ProductImagesView() {
-  const { activeProductVariant, updateVariantImages } = useProduct();
+  const { activeProductVariant, updateVariantImages, showLoaderForProduct } =
+    useProduct();
   const { activeProduct } = useGetActiveProduct();
 
   return (
@@ -76,13 +78,19 @@ export default function ProductImagesView() {
       className="h-auto"
       header={<Header />}
     >
-      <ImageUploader
-        images={activeProductVariant?.images}
-        variantMarkedForDeletion={activeProductVariant?.markedForDeletion}
-        updateImages={(newImages) =>
-          updateVariantImages(activeProductVariant.id, newImages)
-        }
-      />
+      {!showLoaderForProduct && (
+        <ImageUploader
+          images={activeProductVariant?.images}
+          variantMarkedForDeletion={activeProductVariant?.markedForDeletion}
+          updateImages={(newImages) =>
+            updateVariantImages(activeProductVariant.id, newImages)
+          }
+        />
+      )}
+
+      {showLoaderForProduct && (
+        <Skeleton className="mt-4 h-[320px] w-[320px]" />
+      )}
 
       {activeProduct && (
         <div className="w-full flex">

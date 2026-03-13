@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useCallback } from "react";
 import View from "../View";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { FadeIn } from "../common/FadeIn";
@@ -27,8 +27,12 @@ import {
   POS_SEARCH_DEBOUNCE_MS,
   POS_AUTO_ADD_DELAY_MS,
 } from "@/lib/pos/constants";
-import { usePOSActiveSession } from "@/hooks/usePOSSessions";
+import {
+  usePOSActiveSession,
+  usePOSStoreSessions,
+} from "@/hooks/usePOSSessions";
 import { useSessionManagement } from "@/hooks/useSessionManagement";
+import { useSessionManagerOperations } from "@/hooks/useSessionManagerOperations";
 import { logger } from "@/lib/logger";
 import { Button } from "../ui/button";
 import { toast } from "sonner";
@@ -51,8 +55,11 @@ export function POSRegisterView() {
   const cart = useCartOperations();
   const customer = useCustomerOperations();
   const store = usePOSStore();
-  const { createSession, releaseSessionInventoryHoldsAndDeleteItems } =
-    useSessionManagement();
+  const {
+    createSession,
+    holdSession,
+    releaseSessionInventoryHoldsAndDeleteItems,
+  } = useSessionManagement();
 
   const terminal = useGetTerminal();
 
@@ -96,6 +103,24 @@ export function POSRegisterView() {
     store.ui.registerNumber
   );
 
+  // Query for held sessions (for auto-resume)
+  const heldSessionsQuery = usePOSStoreSessions(
+    activeStore?._id,
+    store.terminalId,
+    store.cashier.id || undefined,
+    "held",
+    1 // Only need the most recent one
+  );
+
+  // Get session manager operations for auto-resume (only when we have required values)
+  const sessionManagerOps = useSessionManagerOperations(
+    activeStore?._id || ("" as Id<"store">),
+    store.terminalId || ("" as Id<"posTerminal">),
+    store.cashier.id || ("" as Id<"cashier">),
+    store.ui.registerNumber
+  );
+  const handleResumeSession = sessionManagerOps.handleResumeSession;
+
   // console.log("activeSessionQuery in POSRegisterView", activeSessionQuery);
 
   const isSessionActive = Boolean(
@@ -108,6 +133,43 @@ export function POSRegisterView() {
   const handleCashierAuthenticated = (cashierId: Id<"cashier">) => {
     store.setCashier(cashierId);
   };
+
+  // Helper function to create a new session
+  const createNewSession = useCallback(() => {
+    if (!activeStore?._id) {
+      return;
+    }
+
+    // Prevent creating if session is already being created
+    if (store.session.isCreating) {
+      logger.debug(
+        "[POS] Session creation already in progress, skipping auto-init"
+      );
+      return;
+    }
+
+    logger.info("[POS] No active or held session found, creating new session", {
+      storeId: activeStore._id,
+      registerNumber: store.ui.registerNumber,
+      cashierId: store.cashier.id,
+    });
+
+    createSession(activeStore._id, store.cashier.id || undefined)
+      .then(() => store.startNewTransaction())
+      .catch((error) => {
+        logger.error("[POS] Failed to auto-create session", error);
+        // Error toast already shown by createSession
+        // Reset flag so we can retry
+        autoSessionInitialized.current = false;
+      });
+  }, [
+    activeStore?._id,
+    store.session.isCreating,
+    store.ui.registerNumber,
+    store.cashier.id,
+    createSession,
+    store,
+  ]);
 
   // Auto-check for active session or create one on mount
   useEffect(() => {
@@ -126,8 +188,8 @@ export function POSRegisterView() {
       return;
     }
 
-    // Wait for query to finish loading
-    if (activeSessionQuery === undefined) {
+    // Wait for queries to finish loading
+    if (activeSessionQuery === undefined || heldSessionsQuery === undefined) {
       // Still loading - wait
       return;
     }
@@ -190,46 +252,76 @@ export function POSRegisterView() {
       return;
     }
 
-    // No active session found - clear any stale session ID and auto-create one
+    // No active session found - check for held sessions to auto-resume
     if (activeSessionQuery === null) {
       // Clear any stale session ID from store (query is null, so store ID is stale)
       if (store.session.currentSessionId) {
-        logger.debug("[POS] Clearing stale session ID and cashier", {
+        logger.debug("[POS] Clearing stale session ID", {
           staleSessionId: store.session.currentSessionId,
         });
         store.setCurrentSessionId(null);
         store.setActiveSession(null);
-        // Clear cashier if there's no active session
-        if (store.cashier.isAuthenticated) {
-          logger.debug("[POS] Clearing cashier after session expiration", {
-            cashierId: store.cashier.id,
-          });
-          store.clearCashier();
-        }
       }
 
-      // Prevent creating if session is already being created
-      if (store.session.isCreating) {
-        logger.debug(
-          "[POS] Session creation already in progress, skipping auto-init"
-        );
+      // Check if there are held sessions to auto-resume
+      const mostRecentHeldSession =
+        heldSessionsQuery && heldSessionsQuery.length > 0
+          ? heldSessionsQuery[0]
+          : null;
+
+      if (
+        mostRecentHeldSession &&
+        activeStore?._id &&
+        store.terminalId &&
+        store.cashier.id
+      ) {
+        logger.info("[POS] Found held session, attempting auto-resume", {
+          sessionId: mostRecentHeldSession._id,
+          sessionNumber: mostRecentHeldSession.sessionNumber,
+          itemCount: mostRecentHeldSession.cartItems?.length || 0,
+        });
+
+        // Attempt to auto-resume the most recent held session
+        handleResumeSession(
+          mostRecentHeldSession._id,
+          store.cashier.id,
+          store.terminalId,
+          handleSessionLoaded
+        )
+          .then((result) => {
+            if (result.success) {
+              logger.info("[POS] Auto-resumed held session successfully", {
+                sessionId: mostRecentHeldSession._id,
+              });
+              // Session data is loaded via handleSessionLoaded callback
+            } else {
+              logger.warn(
+                "[POS] Auto-resume failed, falling back to new session",
+                {
+                  sessionId: mostRecentHeldSession._id,
+                  error: result.error,
+                }
+              );
+              // Fall through to create new session
+              createNewSession();
+            }
+          })
+          .catch((error) => {
+            logger.error(
+              "[POS] Auto-resume error, falling back to new session",
+              {
+                sessionId: mostRecentHeldSession._id,
+                error,
+              }
+            );
+            // Fall through to create new session
+            createNewSession();
+          });
         return;
       }
 
-      logger.info("[POS] No active session found, creating new session", {
-        storeId: activeStore._id,
-        registerNumber: store.ui.registerNumber,
-        cashierId: store.cashier.id,
-      });
-
-      createSession(activeStore._id, store.cashier.id || undefined)
-        .then(() => store.startNewTransaction())
-        .catch((error) => {
-          logger.error("[POS] Failed to auto-create session", error);
-          // Error toast already shown by createSession
-          // Reset flag so we can retry
-          autoSessionInitialized.current = false;
-        });
+      // No held sessions or auto-resume not possible - create new session
+      createNewSession();
     }
   }, [
     activeStore?._id,
@@ -237,10 +329,14 @@ export function POSRegisterView() {
     store.cashier.isAuthenticated,
     store.cashier.id,
     activeSessionQuery,
+    heldSessionsQuery,
     createSession,
     store.ui.registerNumber,
     store.session.currentSessionId,
     handleSessionLoaded,
+    handleResumeSession,
+    store.terminalId,
+    createNewSession,
   ]);
 
   // Reset auto-session flag when store or register changes
@@ -610,6 +706,16 @@ export function POSRegisterView() {
 
   const navigateBack = useNavigateBack();
 
+  const handleNavigateBack = async () => {
+    const sessionId = activeSessionQuery?._id || store.session.currentSessionId;
+    if (sessionId && store.cart.items.length > 0) {
+      await holdSession();
+    }
+    store.clearCart();
+    store.clearCashier();
+    navigateBack();
+  };
+
   if (!activeStore) {
     return (
       <View
@@ -636,6 +742,7 @@ export function POSRegisterView() {
     <View
       header={
         <ComposedPageHeader
+          onNavigateBack={handleNavigateBack}
           leadingContent={
             <div className="flex items-center gap-3">
               <p className="text-lg font-semibold text-gray-900">POS</p>
@@ -784,8 +891,17 @@ export function POSRegisterView() {
                 <div className="bg-white rounded-lg p-6">
                   <CartItems
                     cartItems={store.cart.items}
-                    onUpdateQuantity={cart.updateQuantity}
-                    onRemoveItem={cart.removeItem}
+                    onUpdateQuantity={(
+                      id: Id<"expenseSessionItem"> | Id<"posSessionItem">,
+                      quantity: number
+                    ): void => {
+                      cart.updateQuantity(id as Id<"posSessionItem">, quantity);
+                    }}
+                    onRemoveItem={(
+                      id: Id<"expenseSessionItem"> | Id<"posSessionItem">
+                    ): void => {
+                      cart.removeItem(id as Id<"posSessionItem">);
+                    }}
                     clearCart={handleClearCart}
                   />
                 </div>
@@ -828,6 +944,7 @@ export function POSRegisterView() {
                     storeId={activeStore._id}
                     terminalId={terminal._id}
                     cashierId={store.cashier.id}
+                    sessionType="pos"
                   />
                 )}
               </div>

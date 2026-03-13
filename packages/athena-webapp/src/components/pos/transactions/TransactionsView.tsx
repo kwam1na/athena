@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "convex/react";
 import { Receipt } from "lucide-react";
 
@@ -14,14 +14,23 @@ import {
   CompletedTransactionRow,
 } from "./transactionColumns";
 import { SimplePageHeader } from "../../common/PageHeader";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 function formatPaymentMethod(method: string | null) {
   if (!method) return "Unknown";
   return capitalizeWords(method.replace(/_/g, " "));
 }
 
+// Helper to check if timestamp is today
+const isToday = (timestamp: number) => {
+  const date = new Date(timestamp);
+  const today = new Date();
+  return date.toDateString() === today.toDateString();
+};
+
 export function TransactionsView() {
   const { activeStore } = useGetActiveStore();
+  const [filter, setFilter] = useState<"today" | "all">("today");
 
   const transactions = useQuery(
     api.inventory.pos.getCompletedTransactions,
@@ -49,11 +58,14 @@ export function TransactionsView() {
     }));
   }, [transactions, formatter]);
 
+  const filteredData = useMemo(() => {
+    if (filter === "all") return tableData;
+    return tableData.filter((t) => isToday(t.completedAt));
+  }, [tableData, filter]);
+
   if (!activeStore || !transactions || !formatter) return null;
 
-  const hasTransactions = tableData.length > 0;
-
-  console.log(tableData);
+  const hasTransactions = filteredData.length > 0;
 
   return (
     <View
@@ -65,10 +77,20 @@ export function TransactionsView() {
       }
     >
       <FadeIn>
-        <div className="container mx-auto p-6">
+        <div className="container mx-auto p-6 space-y-4">
+          <Tabs
+            value={filter}
+            onValueChange={(v) => setFilter(v as "today" | "all")}
+          >
+            <TabsList>
+              <TabsTrigger value="today">Today</TabsTrigger>
+              <TabsTrigger value="all">All Time</TabsTrigger>
+            </TabsList>
+          </Tabs>
+
           {hasTransactions ? (
             <GenericDataTable
-              data={tableData}
+              data={filteredData}
               columns={transactionColumns}
               tableId="pos-completed-transactions"
             />
@@ -78,7 +100,9 @@ export function TransactionsView() {
                 icon={<Receipt className="w-16 h-16 text-muted-foreground" />}
                 title={
                   <p className="text-muted-foreground">
-                    No completed transactions
+                    {filter === "today"
+                      ? "No completed transactions today"
+                      : "No completed transactions"}
                   </p>
                 }
               />

@@ -5,11 +5,13 @@ import { DraftingCompass, Palette, Ruler, Shirt, Weight } from "lucide-react";
 interface DefaultAttributesToggleGroupProps {
   selectedAttributes: string[];
   setSelectedAttributes: (attrs: string[]) => void;
+  disabled?: boolean;
 }
 
 function DefaultAttributesToggleGroup({
   selectedAttributes,
   setSelectedAttributes,
+  disabled = false,
 }: DefaultAttributesToggleGroupProps) {
   return (
     <ToggleGroup
@@ -33,6 +35,7 @@ function DefaultAttributesToggleGroup({
         value="color"
         className="text-muted-foreground"
         aria-label="Toggle color"
+        disabled={disabled}
       >
         <Palette className="w-4 h-4 mr-2" />
         Color
@@ -41,6 +44,7 @@ function DefaultAttributesToggleGroup({
         value="length"
         className="text-muted-foreground"
         aria-label="Toggle length"
+        disabled={disabled}
       >
         <Ruler className="w-4 h-4 mr-2" />
         Length
@@ -49,6 +53,7 @@ function DefaultAttributesToggleGroup({
         value="size"
         className="text-muted-foreground"
         aria-label="Toggle size"
+        disabled={disabled}
       >
         <DraftingCompass className="w-4 h-4 mr-2" />
         Size
@@ -58,6 +63,7 @@ function DefaultAttributesToggleGroup({
         value="weight"
         className="text-muted-foreground"
         aria-label="Toggle weight"
+        disabled={disabled}
       >
         <Weight className="w-4 h-4 mr-2" />
         Weight

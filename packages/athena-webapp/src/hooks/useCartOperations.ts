@@ -151,6 +151,7 @@ export const useCartOperations = () => {
               image: product.image || undefined,
               size: product.size || undefined,
               length: product.length || undefined,
+              color: product.color || undefined,
               areProcessingFeesAbsorbed: product.areProcessingFeesAbsorbed,
             }),
           {
@@ -173,6 +174,7 @@ export const useCartOperations = () => {
                   image: product.image || undefined,
                   size: product.size || undefined,
                   length: product.length,
+                  color: product.color,
                   productId: product.productId!,
                   skuId: product.skuId!,
                   areProcessingFeesAbsorbed: product.areProcessingFeesAbsorbed,

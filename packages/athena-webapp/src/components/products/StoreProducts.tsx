@@ -8,9 +8,11 @@ import { PlusIcon } from "@radix-ui/react-icons";
 import { Product } from "~/types";
 import { getOrigin } from "~/src/lib/navigationUtils";
 import { slugToWords } from "~/src/lib/utils";
+import { usePermissions } from "~/src/hooks/usePermissions";
 
 export default function StoreProducts({ products }: { products: Product[] }) {
   const { categorySlug } = useSearch({ strict: false });
+  const { hasFullAdminAccess } = usePermissions();
 
   return (
     <div className="container mx-auto">
@@ -29,22 +31,24 @@ export default function StoreProducts({ products }: { products: Product[] }) {
               </div>
             }
             cta={
-              <Link
-                to="/$orgUrlSlug/store/$storeUrlSlug/products/new"
-                params={(prev) => ({
-                  ...prev,
-                  storeUrlSlug: prev.storeUrlSlug!,
-                  orgUrlSlug: prev.orgUrlSlug!,
-                })}
-                search={{
-                  o: getOrigin(),
-                }}
-              >
-                <Button variant={"outline"}>
-                  <PlusIcon className="w-3 h-3 mr-2" />
-                  Add product
-                </Button>
-              </Link>
+              hasFullAdminAccess && (
+                <Link
+                  to="/$orgUrlSlug/store/$storeUrlSlug/products/new"
+                  params={(prev) => ({
+                    ...prev,
+                    storeUrlSlug: prev.storeUrlSlug!,
+                    orgUrlSlug: prev.orgUrlSlug!,
+                  })}
+                  search={{
+                    o: getOrigin(),
+                  }}
+                >
+                  <Button variant={"outline"}>
+                    <PlusIcon className="w-3 h-3 mr-2" />
+                    Add product
+                  </Button>
+                </Link>
+              )
             }
           />
         </div>

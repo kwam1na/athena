@@ -349,7 +349,7 @@ export const CashierManagement = ({
               <TableHeader>
                 <TableRow>
                   <TableHead>Name</TableHead>
-                  <TableHead>PIN</TableHead>
+                  {/* <TableHead>PIN</TableHead> */}
                   <TableHead className="w-[100px]">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -362,9 +362,9 @@ export const CashierManagement = ({
                         {cashier.username}
                       </span>
                     </TableCell>
-                    <TableCell>
+                    {/* <TableCell>
                       <span className="font-mono">{"•".repeat(6)}</span>
-                    </TableCell>
+                    </TableCell> */}
                     <TableCell>
                       <Button
                         variant="ghost"

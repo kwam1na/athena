@@ -76,6 +76,11 @@ export function ProductCard({
         {/* Category, Size, Length */}
         {(product.size || product.length || product.category) && (
           <div className="flex items-center gap-2 mt-2">
+            {product.color && (
+              <Badge variant="outline" className="text-xs">
+                {capitalizeWords(product.color)}
+              </Badge>
+            )}
             {product.category && (
               <Badge variant="outline" className="text-xs">
                 {product.category}

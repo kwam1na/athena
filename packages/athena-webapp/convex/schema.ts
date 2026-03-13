@@ -51,6 +51,10 @@ import {
   posSessionItemSchema,
   posCustomerSchema,
   posTerminalSchema,
+  expenseSessionSchema,
+  expenseSessionItemSchema,
+  expenseTransactionSchema,
+  expenseTransactionItemSchema,
 } from "./schemas/pos";
 import { posSessionSchema } from "./schemas/pos/posSession";
 
@@ -73,9 +77,11 @@ const schema = defineSchema({
   bestSeller: defineTable(bestSellerSchema),
   cashier: defineTable(cashierSchema)
     .index("by_storeId", ["storeId"])
-    .index("by_storeId_and_active", ["storeId", "active"])
     .index("by_store_and_username", ["storeId", "username"]),
-  category: defineTable(categorySchema),
+  category: defineTable(categorySchema).index("by_storeId_slug", [
+    "storeId",
+    "slug",
+  ]),
   checkoutSession: defineTable(checkoutSessionSchema),
   checkoutSessionItem: defineTable(checkoutSessionItemSchema).index(
     "by_sessionId",
@@ -92,48 +98,56 @@ const schema = defineSchema({
   featuredItem: defineTable(featuredItemSchema),
   guest: defineTable(guestSchema).index("by_storeId", ["storeId"]),
   inviteCode: defineTable(inviteCodeSchema),
-  onlineOrder: defineTable(onlineOrderSchema).index("by_storeFrontUserId", [
-    "storeFrontUserId",
-  ]),
+  onlineOrder: defineTable(onlineOrderSchema),
   onlineOrderItem: defineTable(onlineOrderItemSchema),
   organization: defineTable(organizationSchema),
   organizationMember: defineTable(organizationMemberSchema),
   posCustomer: defineTable(posCustomerSchema)
     .index("by_storeId", ["storeId"])
-    .index("by_storeId_and_name", ["storeId", "name"])
     .index("by_storeId_and_email", ["storeId", "email"])
     .index("by_storeId_and_phone", ["storeId", "phone"])
     .index("by_linkedStoreFrontUserId", ["linkedStoreFrontUserId"]),
   posTerminal: defineTable(posTerminalSchema)
     .index("by_storeId", ["storeId"])
-    .index("by_storeId_and_fingerprintHash", ["storeId", "fingerprintHash"])
-    .index("by_storeId_and_status", ["storeId", "status"]),
-  posTransaction: defineTable(posTransactionSchema)
-    .index("by_storeId", ["storeId"])
-    .index("by_transactionNumber", ["transactionNumber"])
-    .index("by_status", ["status"])
-    .index("by_cashierId", ["cashierId"])
-    .index("by_customerId", ["customerId"])
-    .index("by_sessionId", ["sessionId"]),
-  posTransactionItem: defineTable(posTransactionItemSchema)
-    .index("by_transactionId", ["transactionId"])
-    .index("by_productId", ["productId"])
-    .index("by_productSkuId", ["productSkuId"]),
+    .index("by_storeId_and_fingerprintHash", ["storeId", "fingerprintHash"]),
+  posTransaction: defineTable(posTransactionSchema).index("by_storeId", [
+    "storeId",
+  ]),
+  posTransactionItem: defineTable(posTransactionItemSchema).index(
+    "by_transactionId",
+    ["transactionId"]
+  ),
   posSession: defineTable(posSessionSchema)
     .index("by_storeId", ["storeId"])
     .index("by_status", ["status"])
     .index("by_cashierId", ["cashierId"])
-    .index("by_storeId_and_status", ["storeId", "status"])
-    .index("by_sessionNumber", ["sessionNumber"]),
-  posSessionItem: defineTable(posSessionItemSchema)
-    .index("by_sessionId", ["sessionId"])
-    .index("by_productSkuId", ["productSkuId"])
-    .index("by_storeId", ["storeId"]),
+    .index("by_storeId_and_status", ["storeId", "status"]),
+  posSessionItem: defineTable(posSessionItemSchema).index("by_sessionId", [
+    "sessionId",
+  ]),
+  expenseSession: defineTable(expenseSessionSchema)
+    .index("by_storeId", ["storeId"])
+    .index("by_status", ["status"])
+    .index("by_cashierId", ["cashierId"])
+    .index("by_storeId_and_status", ["storeId", "status"]),
+  expenseSessionItem: defineTable(expenseSessionItemSchema).index(
+    "by_sessionId",
+    ["sessionId"]
+  ),
+  expenseTransaction: defineTable(expenseTransactionSchema)
+    .index("by_storeId", ["storeId"])
+    .index("by_status", ["status"])
+    .index("by_sessionId", ["sessionId"]),
+  expenseTransactionItem: defineTable(expenseTransactionItemSchema).index(
+    "by_transactionId",
+    ["transactionId"]
+  ),
   product: defineTable(productSchema).index("by_storeId", ["storeId"]),
   productSku: defineTable(productSkuSchema)
     .index("by_productId", ["productId"])
     .index("by_storeId", ["storeId"])
-    .index("by_storeId_barcode", ["storeId", "barcode"]),
+    .index("by_storeId_barcode", ["storeId", "barcode"])
+    .index("by_storeId_sku", ["storeId", "sku"]),
   promoCode: defineTable(promoCodeSchema),
   promoCodeItem: defineTable(promoCodeItemSchema).index("by_promoCodeId", [
     "promoCodeId",
@@ -146,7 +160,9 @@ const schema = defineSchema({
   storeFrontSession: defineTable(storeFrontSessionSchema),
   storeFrontUser: defineTable(storeFrontUserSchema),
   storeFrontVerificationCode: defineTable(storeFrontVerificationCode),
-  subcategory: defineTable(subcategorySchema),
+  subcategory: defineTable(subcategorySchema)
+    .index("by_slug", ["slug"])
+    .index("by_categoryId_slug", ["categoryId", "slug"]),
   supportTicket: defineTable(supportTicketSchema),
   review: defineTable(reviewSchema).index("by_orderItemId", ["orderItemId"]),
   rewardPoints: defineTable(rewardPointsSchema).index("by_user_store", [

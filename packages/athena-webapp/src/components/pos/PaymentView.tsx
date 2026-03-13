@@ -11,6 +11,9 @@ import {
   SquareChevronLeft,
   SquareChevronLeftIcon,
   ChevronLeft,
+  RotateCcw,
+  RefreshCw,
+  Trash2,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
@@ -50,42 +53,51 @@ const ActionButtons = ({
 
   return (
     <div className="space-y-4">
-      {canComplete ? (
+      {store.cart.items.length > 0 && (
         <>
-          <Button
-            variant="outline"
-            className={cn("w-full p-8 text-lg text-green-600")}
-            onClick={onComplete}
-          >
-            Complete Transaction
-            <ArrowRight className="w-4 h-4 ml-2" />
-          </Button>
+          {canComplete ? (
+            <>
+              <Button
+                variant="outline"
+                className={cn(
+                  "w-full p-8 text-lg bg-green-600 text-white hover:bg-green-700 hover:text-white"
+                )}
+                onClick={onComplete}
+              >
+                Complete Transaction
+                <ArrowRight className="w-4 h-4 ml-2" />
+              </Button>
+            </>
+          ) : (
+            <Button
+              variant="outline"
+              className="w-full p-8 text-lg flex items-center gap-2 text-sky-700 hover:text-sky-800"
+              onClick={onAddAnotherPaymentMethod}
+            >
+              <RefreshCw className="w-4 h-4" />
+              Change Payment Method
+            </Button>
+          )}
+          {!canComplete && (
+            <Button
+              variant="outline"
+              className="w-full p-8 text-lg flex items-center gap-2 text-red-700 hover:text-red-800"
+              onClick={() => setSelectedPaymentMethod(null)}
+            >
+              <ChevronLeft className="w-4 h-4" />
+              Cancel
+            </Button>
+          )}
         </>
-      ) : (
-        <Button
-          variant="outline"
-          className="w-full p-8 text-lg"
-          onClick={onAddAnotherPaymentMethod}
-        >
-          Change Payment Method
-        </Button>
-      )}
-      {!canComplete && (
-        <Button
-          variant="outline"
-          className="w-full p-8 text-lg"
-          onClick={() => setSelectedPaymentMethod(null)}
-        >
-          Cancel
-        </Button>
       )}
 
       {store.payment.payments.length >= 1 && (
         <Button
           variant="outline"
-          className="w-full p-8 text-lg"
+          className="w-full p-8 text-lg flex items-center gap-2 text-red-700 hover:text-red-800"
           onClick={onCancel}
         >
+          <Trash2 className="w-4 h-4" />
           {store.payment.payments.length > 1
             ? "Clear all payments"
             : "Clear payment"}
@@ -138,10 +150,10 @@ export const PaymentView = ({
 
   const paymentMethodStylesMap = {
     cash: {
-      bg: "bg-green-200",
-      text: "text-green-900",
-      hoverBg: "hover:bg-green-300",
-      hoverText: "hover:text-green-800",
+      bg: "bg-primary",
+      text: "text-white",
+      hoverBg: "hover:bg-primary/90",
+      hoverText: "hover:text-white",
     },
     mobile_money: {
       bg: "bg-yellow-200",
@@ -150,10 +162,10 @@ export const PaymentView = ({
       hoverText: "hover:text-yellow-800",
     },
     card: {
-      bg: "bg-blue-200",
-      text: "text-blue-900",
-      hoverBg: "hover:bg-blue-300",
-      hoverText: "hover:text-blue-800",
+      bg: "bg-rose-200",
+      text: "text-rose-900",
+      hoverBg: "hover:bg-rose-300",
+      hoverText: "hover:text-rose-800",
     },
   };
 

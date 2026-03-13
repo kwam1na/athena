@@ -51,9 +51,13 @@ export const ViewHeader = ({ title }: { title: string }) => {
 export const ComposedPageHeader = ({
   leadingContent,
   trailingContent,
+  onNavigateBack,
+  disableBackButton = false,
 }: {
   leadingContent: React.ReactNode;
   trailingContent?: React.ReactNode;
+  onNavigateBack?: () => void;
+  disableBackButton?: boolean;
 }) => {
   const { o } = useSearch({ strict: false });
   const navigateBack = useNavigateBack();
@@ -63,9 +67,10 @@ export const ComposedPageHeader = ({
       <div className="flex items-center gap-4">
         {o && (
           <Button
-            onClick={navigateBack}
+            onClick={onNavigateBack ? onNavigateBack : navigateBack}
             variant="ghost"
             className="h-8 px-2 lg:px-3 "
+            disabled={disableBackButton}
           >
             <ArrowLeftIcon className="h-4 w-4" />
           </Button>

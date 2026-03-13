@@ -8,6 +8,8 @@ import QRCode from "react-qr-code";
 import { toPng } from "html-to-image";
 import { toast } from "sonner";
 import config from "~/src/config";
+import { FadeIn } from "../common/FadeIn";
+import { Skeleton } from "../ui/skeleton";
 
 export function BarcodeView() {
   const { activeProductVariant } = useProduct();
@@ -49,7 +51,7 @@ export function BarcodeView() {
 
   return (
     <View hideBorder hideHeaderBottomBorder className="h-auto w-full">
-      <div className="py-4 space-y-4">
+      <FadeIn className="py-4 space-y-4">
         <div className="flex items-center justify-between">
           <p className="text-sm font-medium">Barcode</p>
           <div className="flex items-center gap-2">
@@ -89,7 +91,7 @@ export function BarcodeView() {
             </div>
           </div>
         </div>
-      </div>
+      </FadeIn>
     </View>
   );
 }

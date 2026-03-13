@@ -4,6 +4,7 @@ import { useProduct } from "~/src/contexts/ProductContext";
 import { api } from "~/convex/_generated/api";
 import { DraftingCompass, Palette, Ruler } from "lucide-react";
 import { Id } from "~/convex/_generated/dataModel";
+import { FadeIn } from "../common/FadeIn";
 
 export function AttributesView() {
   const { activeProductVariant } = useProduct();
@@ -25,7 +26,7 @@ export function AttributesView() {
 
   return (
     <View hideBorder hideHeaderBottomBorder className="h-auto w-full">
-      <div className="py-4 grid grid-cols-3">
+      <FadeIn className="py-4 grid grid-cols-3">
         {color && (
           <div className="space-y-4">
             <div className="flex items-center gap-2 text-muted-foreground">
@@ -55,7 +56,7 @@ export function AttributesView() {
             <p className="text-sm">{activeProductVariant.size}</p>
           </div>
         )}
-      </div>
+      </FadeIn>
     </View>
   );
 }

@@ -1,7 +1,11 @@
 import { Id } from "../../../convex/_generated/dataModel";
 
 export interface CartItem {
-  id: Id<"posSessionItem"> | Id<"posTransactionItem">; // Database ID is the single source of truth
+  id:
+    | Id<"posSessionItem">
+    | Id<"posTransactionItem">
+    | Id<"expenseSessionItem">
+    | Id<"expenseTransactionItem">; // Database ID is the single source of truth
   name: string;
   barcode: string;
   sku?: string;
@@ -10,6 +14,7 @@ export interface CartItem {
   image?: string | null;
   size?: string;
   length?: number | null;
+  color?: string;
   productId?: Id<"product">; // Product ID for backend operations
   skuId?: Id<"productSku">; // Product SKU ID for backend operations
   areProcessingFeesAbsorbed?: boolean;

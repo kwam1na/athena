@@ -10,6 +10,12 @@ export const AboutProduct = ({
 }) => {
   const { wigMake, wigTexture } = productAttributes || {};
 
+  const hasDetails = Boolean(
+    productSku.size || productSku.weight || wigMake || wigTexture
+  );
+
+  if (!hasDetails || productSku.productCategory !== "Hair") return null;
+
   return (
     <div className="space-y-4">
       <p className="text-sm">Details</p>

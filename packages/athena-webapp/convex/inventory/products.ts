@@ -85,10 +85,13 @@ export const getAll = query({
     let categoryId: Id<"category"> | undefined;
     let subcategoryId: Id<"subcategory"> | undefined;
 
-    if (args.category) {
+    if (args.category && args.category.length > 0) {
+      const categorySlug = args.category[0];
       const s = await ctx.db
         .query("category")
-        .filter((q) => q.eq(q.field("slug"), args.category?.[0]))
+        .withIndex("by_storeId_slug", (q) =>
+          q.eq("storeId", args.storeId).eq("slug", categorySlug)
+        )
         .first();
       categoryId = s?._id;
     }
@@ -100,19 +103,22 @@ export const getAll = query({
     // this will fetch all products with the given subcategory.
     // not problematic because the subcategory name is the same as
     // the one in the db because the it's not set by the frontend
-    if (args.subcategory) {
-      const s = await ctx.db
-        .query("subcategory")
-        .filter((q) => {
-          if (categoryId) {
-            return q.and(
-              q.eq(q.field("slug"), args.subcategory?.[0]),
-              q.eq(q.field("categoryId"), categoryId)
-            );
-          }
-          return q.eq(q.field("slug"), args.subcategory?.[0]);
-        })
-        .first();
+    if (args.subcategory && args.subcategory.length > 0) {
+      const subcategorySlug = args.subcategory[0];
+      let s;
+      if (categoryId) {
+        s = await ctx.db
+          .query("subcategory")
+          .withIndex("by_categoryId_slug", (q) =>
+            q.eq("categoryId", categoryId).eq("slug", subcategorySlug)
+          )
+          .first();
+      } else {
+        s = await ctx.db
+          .query("subcategory")
+          .withIndex("by_slug", (q) => q.eq("slug", subcategorySlug))
+          .first();
+      }
       subcategoryId = s?._id;
     }
 
@@ -120,60 +126,45 @@ export const getAll = query({
       return [];
     }
 
-    const products = await ctx.db
+    // Use index for products query, then filter by category/subcategory in memory
+    const allProducts = await ctx.db
       .query(entity)
-      .filter((q) => {
-        if (subcategoryId) {
-          return q.and(
-            q.eq(q.field("storeId"), args.storeId),
-            q.eq(q.field("subcategoryId"), subcategoryId)
-          );
-        }
-
-        if (categoryId) {
-          return q.and(
-            q.eq(q.field("storeId"), args.storeId),
-            q.eq(q.field("categoryId"), categoryId)
-          );
-        }
-
-        return q.eq(q.field("storeId"), args.storeId);
-      })
+      .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
       .collect();
 
-    const skusQuery = ctx.db.query("productSku").filter((q) => {
-      if (args.color && args.length) {
-        return q.and(
-          q.eq(q.field("storeId"), args.storeId),
-          q.and(
-            q.or(...args.color.map((color) => q.eq(q.field("color"), color))),
-            q.or(
-              ...args.length.map((length) => q.eq(q.field("length"), length))
-            )
-          )
-        );
+    // Filter by category/subcategory in memory
+    const products = allProducts.filter((product) => {
+      if (subcategoryId) {
+        return product.subcategoryId === subcategoryId;
       }
-
-      if (args.color) {
-        return q.and(
-          q.eq(q.field("storeId"), args.storeId),
-          q.or(...args?.color!.map((color) => q.eq(q.field("color"), color)))
-        );
+      if (categoryId) {
+        return product.categoryId === categoryId;
       }
-
-      if (args.length) {
-        return q.and(
-          q.eq(q.field("storeId"), args.storeId),
-          q.or(
-            ...args?.length!.map((length) => q.eq(q.field("length"), length))
-          )
-        );
-      }
-
-      return q.eq(q.field("storeId"), args.storeId);
+      return true;
     });
 
-    const skus = await skusQuery.collect();
+    // Use index for SKUs query, then filter colors/lengths in memory
+    // (Convex indexes don't support dynamic OR conditions)
+    const allSkus = await ctx.db
+      .query("productSku")
+      .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
+      .collect();
+
+    // Filter by color and length in memory
+    const skus = allSkus.filter((sku) => {
+      if (args.color && args.length) {
+        const colorMatch = sku.color ? args.color.includes(sku.color) : false;
+        const lengthMatch = sku.length && args.length.includes(sku.length);
+        return colorMatch && lengthMatch;
+      }
+      if (args.color) {
+        return sku.color ? args.color.includes(sku.color) : false;
+      }
+      if (args.length) {
+        return sku.length && args.length.includes(sku.length);
+      }
+      return true;
+    });
 
     type SkusByProductId = { [key: string]: (typeof skus)[0][] };
 
@@ -669,9 +660,6 @@ export const updateSku = mutation({
         )
         .first();
 
-      console.log("skuWithBarcode", skuWithBarcode);
-      console.log("currentSku", currentSku);
-
       if (skuWithBarcode && skuWithBarcode._id !== currentSku._id) {
         return {
           success: false,
@@ -680,14 +668,15 @@ export const updateSku = mutation({
       }
     }
 
-    const { id, ...rest } = args;
-    await ctx.db.patch(args.id, {
-      ...rest,
-      size: args.size ?? undefined,
-      length: args.length ?? undefined,
-      color: args.color ?? undefined,
-      weight: args.weight ?? undefined,
-    });
+    // Build patch object with only explicitly provided fields (not undefined)
+    // This automatically handles all fields without needing to list each one
+    const patch = Object.fromEntries(
+      Object.entries(args).filter(
+        ([key, value]) => key !== "id" && value !== undefined
+      )
+    );
+
+    await ctx.db.patch(args.id, patch);
 
     return await ctx.db.get(args.id);
   },

@@ -20,7 +20,7 @@ import { useState } from "react";
 import CategorySubcategoryManager, {
   CategoryManageOption,
 } from "./CategorySubcategoryManager";
-import { CogIcon, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import { Skeleton } from "../ui/skeleton";
 import { useProduct } from "@/contexts/ProductContext";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
@@ -28,19 +28,16 @@ import { useQuery } from "convex/react";
 import { api } from "~/convex/_generated/api";
 import { Id } from "~/convex/_generated/dataModel";
 import { Input } from "../ui/input";
+import { getProductName } from "~/src/lib/productUtils";
+import { FadeIn } from "../common/FadeIn";
 
 function ProductCategorization({
   setInitialSelectedOption,
 }: {
   setInitialSelectedOption: (option: CategoryManageOption) => void;
 }) {
-  const categoryId = "categoryId";
-  const subcategoryId = "subcategoryId";
-
-  const { error, isLoading, productData, updateProductData } = useProduct();
-
-  const categoryError = getErrorForField(error, categoryId);
-  const subcategoryError = getErrorForField(error, subcategoryId);
+  const { showLoaderForProduct, isLoading, productData, updateProductData } =
+    useProduct();
 
   const { activeStore } = useGetActiveStore();
 
@@ -74,9 +71,6 @@ function ProductCategorization({
       )
       .sort((a, b) => a.name.localeCompare(b.name)) || [];
 
-  const showCategoriesSkeleton = isLoading;
-  const showSubcategoriesSkeleton = isLoading;
-
   return (
     <>
       <div className="flex gap-8 px-4 py-8">
@@ -94,11 +88,16 @@ function ProductCategorization({
               New
             </Button>
           </div>
-          {showCategoriesSkeleton && <Skeleton className="h-[40px]" />}
-          {!showCategoriesSkeleton && (
+          {showLoaderForProduct && <Skeleton className="h-[40px]" />}
+          {!showLoaderForProduct && (
             <Select
               onValueChange={(value: string) => {
-                updateProductData({ categoryId: value as Id<"category"> });
+                updateProductData({
+                  categoryId: value as Id<"category">,
+                  categoryName: categories.find(
+                    (category) => category.id === value
+                  )?.name,
+                });
               }}
               value={productData.categoryId?.toString()}
             >
@@ -139,8 +138,8 @@ function ProductCategorization({
               New
             </Button>
           </div>
-          {showSubcategoriesSkeleton && <Skeleton className="h-[40px]" />}
-          {!showSubcategoriesSkeleton && (
+          {showLoaderForProduct && <Skeleton className="h-[40px]" />}
+          {!showLoaderForProduct && (
             <Select
               onValueChange={(value: string) => {
                 updateProductData({
@@ -149,7 +148,11 @@ function ProductCategorization({
               }}
               value={productData.subcategoryId?.toString()}
             >
-              <SelectTrigger id="subcategory" aria-label="Select subcategory">
+              <SelectTrigger
+                id="subcategory"
+                aria-label="Select subcategory"
+                disabled={!productData.categoryId}
+              >
                 <SelectValue placeholder="Select subcategory" />
               </SelectTrigger>
               <SelectContent>
@@ -214,7 +217,15 @@ export function ProductCategorizationView() {
     setDialogOptions({ isOpen: true, initialSelected: option });
   };
 
-  const { productData, updateProductData } = useProduct();
+  const {
+    productData,
+    updateProductData,
+    showLoaderForProduct,
+    activeProductVariant,
+  } = useProduct();
+
+  // console.log(productData);
+  // console.log(activeProductVariant);
 
   return (
     <View
@@ -232,31 +243,40 @@ export function ProductCategorizationView() {
         initialSelectedOption={dialogOptions.initialSelected}
         onClose={() => setDialogOptions((prev) => ({ ...prev, isOpen: false }))}
       />
-      <div className="space-y-2 px-4 pt-4">
+      <div className="space-y-4 px-4 pt-4">
         <Label className="text-muted-foreground" htmlFor="name">
           Name
         </Label>
-        <Input
-          value={productData.name || ""}
-          onChange={(e) => updateProductData({ name: e.target.value })}
-        />
+
+        {showLoaderForProduct ? (
+          <Skeleton className="h-10 w-full" />
+        ) : (
+          <Input
+            value={productData.name || ""}
+            onChange={(e) => updateProductData({ name: e.target.value })}
+          />
+        )}
+
+        {!showLoaderForProduct && productData.name && (
+          <FadeIn className="flex items-center gap-1 py-2">
+            <p className="text-sm text-muted-foreground">
+              Displays on storefront as
+            </p>
+            <b className="text-sm">
+              {getProductName({
+                productCategory: productData.categoryName,
+                productName: productData.name,
+                length: activeProductVariant.length,
+                colorName: activeProductVariant.colorName,
+              })}
+            </b>
+          </FadeIn>
+        )}
       </div>
 
       <ProductCategorization
         setInitialSelectedOption={setInitialSelectedOption}
       />
-      {/* <div className="px-4">
-        <Button
-          className="text-xs text-muted-foreground"
-          variant={"link"}
-          onClick={() =>
-            setDialogOptions((prev) => ({ ...prev, isOpen: true }))
-          }
-        >
-          <CogIcon className="w-3.5 h-3.5 mr-2" />
-          Manage categorization options
-        </Button>
-      </div> */}
     </View>
   );
 }

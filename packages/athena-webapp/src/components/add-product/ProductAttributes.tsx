@@ -5,6 +5,7 @@ import { Skeleton } from "../ui/skeleton";
 import DefaultAttributesToggleGroup from "./DefaultAttributesToggleGroup";
 import AttributesTable from "./AttributesTable";
 import useGetActiveProduct from "@/hooks/useGetActiveProduct";
+import { FadeIn } from "../common/FadeIn";
 
 // Define the allowed attributes
 type AllowedAttribute = "color" | "length" | "size" | "weight";
@@ -96,14 +97,17 @@ function ProductAttributes() {
 
   const availabilityValidationError = getErrorForField(error, "availability");
 
+  const { showLoaderForProduct } = useProduct();
+
   return (
-    <div className="flex flex-col gap-8 py-4">
+    <FadeIn className="flex flex-col gap-8 py-4">
       {isLoading && <Skeleton className="h-[40px] w-full" />}
 
       <div className="flex w-full px-4">
         <DefaultAttributesToggleGroup
           selectedAttributes={selectedAttributes}
           setSelectedAttributes={setSelectedAttributes}
+          disabled={showLoaderForProduct}
         />
       </div>
 
@@ -116,7 +120,7 @@ function ProductAttributes() {
           {availabilityValidationError.message}
         </p>
       )}
-    </div>
+    </FadeIn>
   );
 }
 

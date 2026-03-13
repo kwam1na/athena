@@ -59,7 +59,7 @@ export function ProductLookup({
                   </div>
                 ) : filteredProducts.length > 0 ? (
                   <div className="space-y-2">
-                    {filteredProducts.slice(0, 10).map((product) => (
+                    {filteredProducts.map((product) => (
                       <div
                         key={product.id}
                         className={`flex items-center gap-3 p-3 border rounded-lg hover:bg-muted/50 transition-colors ${!product.inStock ? "opacity-60" : ""}`}
@@ -121,11 +121,6 @@ export function ProductLookup({
                         </Button>
                       </div>
                     ))}
-                    {filteredProducts.length > 10 && (
-                      <p className="text-xs text-muted-foreground text-center py-2">
-                        Showing first 10 results. Type more to narrow down.
-                      </p>
-                    )}
                   </div>
                 ) : (
                   <div className="text-center py-6 text-muted-foreground">

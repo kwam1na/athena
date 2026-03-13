@@ -107,7 +107,12 @@ function AttributesTable({ selectedAttributes }: AttributesTableProps) {
                 ) : attr == "color" ? (
                   <Select
                     onValueChange={(value: string) => {
-                      updateProductVariant(variant.id, { color: value });
+                      updateProductVariant(variant.id, {
+                        color: value,
+                        colorName: colors.find(
+                          (color: any) => color.id === value
+                        )?.name,
+                      });
                     }}
                     value={variant.color}
                   >

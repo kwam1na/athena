@@ -14,6 +14,7 @@ export const accraNeighborhoods = [
   { label: "Labone", value: "labone" },
   { label: "Madina", value: "madina" },
   { label: "Osu", value: "osu" },
+  { label: "Oyarifa", value: "oyarifa" },
   { label: "Roman Ridge", value: "roman_ridge" },
   { label: "Spintex", value: "spintex" },
   { label: "Tema", value: "tema" },

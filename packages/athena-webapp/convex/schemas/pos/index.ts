@@ -3,3 +3,7 @@ export * from "./posTransactionItem";
 export * from "./posSessionItem";
 export * from "./customer";
 export * from "./posTerminal";
+export * from "./expenseSession";
+export * from "./expenseSessionItem";
+export * from "./expenseTransaction";
+export * from "./expenseTransactionItem";

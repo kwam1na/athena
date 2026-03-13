@@ -21,7 +21,12 @@ export function ProcessingFeesView() {
 }
 
 function ProcessingFees() {
-  const { productData, updateProductData, activeProductVariant } = useProduct();
+  const {
+    productData,
+    updateProductData,
+    activeProductVariant,
+    showLoaderForProduct,
+  } = useProduct();
 
   const { activeStore } = useGetActiveStore();
 
@@ -40,7 +45,8 @@ function ProcessingFees() {
     activeProductVariant.sku,
   ]);
 
-  const shouldDisable = isSkuReserved(activeProductVariant.sku);
+  const shouldDisable =
+    isSkuReserved(activeProductVariant.sku) || showLoaderForProduct;
 
   return (
     <div className="flex">

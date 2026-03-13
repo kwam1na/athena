@@ -178,3 +178,114 @@ export function isError<TData>(
 ): result is { success: false; message: string } {
   return result.success === false;
 }
+
+/**
+ * Expense Session operation result with expiration
+ */
+export interface ExpenseSessionOperationResult {
+  sessionId: Id<"expenseSession">;
+  expiresAt: number;
+}
+
+/**
+ * Validator for expense session operation result
+ */
+export const expenseSessionOperationResultValidator = v.object({
+  sessionId: v.id("expenseSession"),
+  expiresAt: v.number(),
+});
+
+/**
+ * Expense Item operation result with expiration
+ */
+export interface ExpenseItemOperationResult {
+  itemId: Id<"expenseSessionItem">;
+  expiresAt: number;
+}
+
+/**
+ * Validator for expense item operation result
+ */
+export const expenseItemOperationResultValidator = v.object({
+  itemId: v.id("expenseSessionItem"),
+  expiresAt: v.number(),
+});
+
+/**
+ * Success/Error result validator for expense item operations
+ */
+export const expenseItemResultValidator = v.union(
+  v.object({
+    success: v.literal(true),
+    data: expenseItemOperationResultValidator,
+  }),
+  v.object({
+    success: v.literal(false),
+    message: v.string(),
+  })
+);
+
+/**
+ * Success/Error result validator for create expense session operation
+ */
+export const createExpenseSessionResultValidator = v.union(
+  v.object({
+    success: v.literal(true),
+    data: v.object({
+      sessionId: v.id("expenseSession"),
+      expiresAt: v.number(),
+    }),
+  }),
+  v.object({
+    success: v.literal(false),
+    message: v.string(),
+  })
+);
+
+/**
+ * Success/Error result validator for expense session operations
+ */
+export const expenseSessionResultValidator = v.union(
+  v.object({
+    success: v.literal(true),
+    data: expenseSessionOperationResultValidator,
+  }),
+  v.object({
+    success: v.literal(false),
+    message: v.string(),
+  })
+);
+
+/**
+ * Success/Error result validator for expense operation results
+ */
+export const expenseOperationSuccessValidator = v.union(
+  v.object({
+    success: v.literal(true),
+    data: operationResultValidator,
+  }),
+  v.object({
+    success: v.literal(false),
+    message: v.string(),
+  })
+);
+
+/**
+ * Helper to create a successful expense item operation result
+ */
+export function expenseItemSuccess(
+  itemId: Id<"expenseSessionItem">,
+  expiresAt: number
+): Result<ExpenseItemOperationResult> {
+  return success({ itemId, expiresAt });
+}
+
+/**
+ * Helper to create a successful expense session operation result
+ */
+export function expenseSessionSuccess(
+  sessionId: Id<"expenseSession">,
+  expiresAt: number
+): Result<ExpenseSessionOperationResult> {
+  return success({ sessionId, expiresAt });
+}

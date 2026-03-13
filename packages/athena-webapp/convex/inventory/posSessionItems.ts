@@ -40,6 +40,7 @@ export const getSessionItems = query({
       image: v.optional(v.string()),
       size: v.optional(v.string()),
       length: v.optional(v.number()),
+      color: v.optional(v.string()),
       areProcessingFeesAbsorbed: v.optional(v.boolean()),
       createdAt: v.number(),
       updatedAt: v.number(),
@@ -70,6 +71,7 @@ export const addOrUpdateItem = mutation({
     image: v.optional(v.string()),
     size: v.optional(v.string()),
     length: v.optional(v.number()),
+    color: v.optional(v.string()),
     areProcessingFeesAbsorbed: v.optional(v.boolean()),
   },
   returns: itemResultValidator,
@@ -122,6 +124,7 @@ export const addOrUpdateItem = mutation({
           quantity: args.quantity,
           price: args.price,
           barcode: args.barcode,
+          color: args.color,
           updatedAt: now,
         });
 
@@ -154,6 +157,7 @@ export const addOrUpdateItem = mutation({
           image: args.image,
           size: args.size,
           length: args.length,
+          color: args.color,
           areProcessingFeesAbsorbed: args.areProcessingFeesAbsorbed,
           createdAt: now,
           updatedAt: now,

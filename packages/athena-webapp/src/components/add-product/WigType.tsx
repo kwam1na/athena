@@ -3,6 +3,7 @@ import View from "../View";
 import { Switch } from "../ui/switch";
 import { useState } from "react";
 import { useProduct } from "~/src/contexts/ProductContext";
+import { FadeIn } from "../common/FadeIn";
 
 export function WigTypeView() {
   return (
@@ -28,7 +29,7 @@ function WigType() {
   };
 
   return (
-    <div className="flex">
+    <FadeIn className="flex">
       <div className="flex flex-col gap-4 pt-8 py-4 pl-8">
         <div className="flex items-center gap-2">
           <Switch
@@ -101,6 +102,6 @@ function WigType() {
           </Label>
         </div>
       </div>
-    </div>
+    </FadeIn>
   );
 }

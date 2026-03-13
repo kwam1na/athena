@@ -31,4 +31,11 @@ crons.interval(
   {}
 );
 
+crons.interval(
+  "release-expired-expense-sessions",
+  { minutes: process.env.STAGE == "prod" ? 5 : 1440 },
+  internal.inventory.expenseSessions.releaseExpenseSessionItems,
+  {}
+);
+
 export default crons;

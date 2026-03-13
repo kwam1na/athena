@@ -12,6 +12,8 @@ import {
 } from "lucide-react";
 import useGetActiveProduct from "~/src/hooks/useGetActiveProduct";
 import { getRelativeTime } from "~/src/lib/utils";
+import { FadeIn } from "../common/FadeIn";
+import { Skeleton } from "../ui/skeleton";
 
 export const AnalyticsInsights = () => {
   const { activeStore } = useGetActiveStore();
@@ -49,7 +51,7 @@ export const AnalyticsInsights = () => {
   )[0]?._creationTime;
 
   return (
-    <div className="space-y-4">
+    <FadeIn className="space-y-4">
       <div className="flex items-center gap-2">
         <ChartNoAxesColumn className="w-4 h-4 text-muted-foreground" />
         <h3 className="font-medium">Analytics</h3>
@@ -93,6 +95,6 @@ export const AnalyticsInsights = () => {
           </CardContent>
         </Card>
       </div>
-    </div>
+    </FadeIn>
   );
 };

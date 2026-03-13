@@ -1,5 +1,4 @@
 import { Product, ProductSku } from "@athena/webapp";
-import { useNavigate } from "@tanstack/react-router";
 import { Button } from "../ui/button";
 import { capitalizeWords } from "@/lib/utils";
 
@@ -31,14 +30,33 @@ export function ProductAttribute({
     )
   );
 
-  const sizes: number[] = Array.from(
+  const allSizes = Array.from(
     new Set(
       product.skus
-        .map((sku: any) => parseInt(sku.size))
-        .filter((size: any) => !isNaN(size))
-        .sort((a: number, b: number) => a - b)
+        .map((sku: any) => sku.size)
+        .filter((size: any) => size != null && size !== "")
     )
   );
+
+  // Separate numeric and string sizes
+  const numericSizes: number[] = allSizes
+    .map((size) => {
+      const parsed = typeof size === "string" ? parseInt(size) : size;
+      return typeof parsed === "number" && !isNaN(parsed) ? parsed : null;
+    })
+    .filter((size): size is number => size !== null)
+    .sort((a, b) => a - b);
+
+  const stringSizes: string[] = allSizes
+    .filter((size) => {
+      const parsed = typeof size === "string" ? parseInt(size) : size;
+      return !(typeof parsed === "number" && !isNaN(parsed));
+    })
+    .map((size) => String(size))
+    .sort((a, b) => a.localeCompare(b));
+
+  // Combine: numeric sizes first, then string sizes
+  const sizes: Array<number | string> = [...numericSizes, ...stringSizes];
 
   const handleClick = (
     attribute: "color" | "length" | "size",
@@ -117,14 +135,20 @@ export function ProductAttribute({
 
           <div className="flex flex-wrap gap-4">
             {sizes.map((size, index) => {
+              const sizeStr = String(size);
+              const isNumeric = typeof size === "number";
+              const displayText = isNumeric
+                ? `${size}"`
+                : capitalizeWords(sizeStr);
+
               return (
                 <Button
                   variant={"ghost"}
                   key={index}
-                  className={`${selectedSku?.size == size.toString() ? "border text-[#EC4683] border-[#EC4683] shadow-md" : "border border-background-muted"} hover:shadow-md hover:border-[#EC4683]`}
-                  onClick={() => handleClick("size", size.toString())}
+                  className={`${selectedSku?.size == sizeStr ? "border text-[#EC4683] border-[#EC4683] shadow-md" : "border border-background-muted"} hover:shadow-md hover:border-[#EC4683]`}
+                  onClick={() => handleClick("size", sizeStr)}
                 >
-                  {`${size}"`}
+                  {displayText}
                 </Button>
               );
             })}

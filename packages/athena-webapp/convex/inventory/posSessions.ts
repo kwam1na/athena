@@ -67,11 +67,27 @@ export const getStoreSessions = query({
           customer = await ctx.db.get(session.customerId);
         }
 
-        // Get cart items from posSessionItem table
-        const cartItems = await ctx.db
+        // Get cart items from posSessionItem table and enrich with color from SKU
+        const cartItemsRaw = await ctx.db
           .query("posSessionItem")
           .withIndex("by_sessionId", (q) => q.eq("sessionId", session._id))
           .collect();
+
+        const cartItems = await Promise.all(
+          cartItemsRaw.map(async (item) => {
+            // Fetch SKU to get color
+            const sku = await ctx.db.get(item.productSkuId);
+            let colorName: string | undefined;
+            if (sku?.color) {
+              const color = await ctx.db.get(sku.color);
+              colorName = color?.name;
+            }
+            return {
+              ...item,
+              color: colorName,
+            };
+          })
+        );
 
         return {
           ...session,
@@ -98,11 +114,27 @@ export const getSessionById = query({
       customer = await ctx.db.get(session.customerId);
     }
 
-    // Get cart items from posSessionItem table
-    const cartItems = await ctx.db
+    // Get cart items from posSessionItem table and enrich with color from SKU
+    const cartItemsRaw = await ctx.db
       .query("posSessionItem")
       .withIndex("by_sessionId", (q) => q.eq("sessionId", session._id))
       .collect();
+
+    const cartItems = await Promise.all(
+      cartItemsRaw.map(async (item) => {
+        // Fetch SKU to get color
+        const sku = await ctx.db.get(item.productSkuId);
+        let colorName: string | undefined;
+        if (sku?.color) {
+          const color = await ctx.db.get(sku.color);
+          colorName = color?.name;
+        }
+        return {
+          ...item,
+          color: colorName,
+        };
+      })
+    );
 
     return {
       ...session,
@@ -627,19 +659,30 @@ export const releasePosSessionItems = internalMutation({
     const now = Date.now();
 
     // Find all active and void sessions that have expired
-    const expiredActiveSessions = await ctx.db
-      .query("posSession")
-      .withIndex("by_status", (q) => q.eq("status", "active"))
-      .filter((q) => q.lt(q.field("expiresAt"), now))
-      .collect();
+    const [expiredActiveSessions, expiredVoidSessions, expiredHeldSessions] =
+      await Promise.all([
+        ctx.db
+          .query("posSession")
+          .withIndex("by_status", (q) => q.eq("status", "active"))
+          .filter((q) => q.lt(q.field("expiresAt"), now))
+          .collect(),
+        ctx.db
+          .query("posSession")
+          .withIndex("by_status", (q) => q.eq("status", "void"))
+          .filter((q) => q.lt(q.field("expiresAt"), now))
+          .collect(),
+        ctx.db
+          .query("posSession")
+          .withIndex("by_status", (q) => q.eq("status", "held"))
+          .filter((q) => q.lt(q.field("expiresAt"), now))
+          .collect(),
+      ]);
 
-    const expiredVoidSessions = await ctx.db
-      .query("posSession")
-      .withIndex("by_status", (q) => q.eq("status", "void"))
-      .filter((q) => q.lt(q.field("expiresAt"), now))
-      .collect();
-
-    const expiredSessions = [...expiredActiveSessions, ...expiredVoidSessions];
+    const expiredSessions = [
+      ...expiredActiveSessions,
+      ...expiredVoidSessions,
+      ...expiredHeldSessions,
+    ];
 
     if (expiredSessions.length === 0) {
       console.log("[POS] No expired sessions found");

@@ -1,6 +1,7 @@
 import useGetActiveProduct from "~/src/hooks/useGetActiveProduct";
 import View from "../View";
 import { useProduct } from "~/src/contexts/ProductContext";
+import { FadeIn } from "../common/FadeIn";
 
 export function CategorizationView() {
   const { activeProduct } = useGetActiveProduct();
@@ -9,7 +10,7 @@ export function CategorizationView() {
 
   return (
     <View hideBorder hideHeaderBottomBorder className="h-auto w-full">
-      <div className="py-4 grid grid-cols-3">
+      <FadeIn className="py-4 grid grid-cols-3">
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">Category</p>
           <p className="text-sm">{activeProduct.categoryName}</p>
@@ -19,7 +20,7 @@ export function CategorizationView() {
           <p className="text-sm text-muted-foreground">Subcategory</p>
           <p className="text-sm">{activeProduct.subcategoryName}</p>
         </div>
-      </div>
+      </FadeIn>
     </View>
   );
 }

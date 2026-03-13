@@ -98,27 +98,14 @@ export const UserView = () => {
     userId ? { storeFrontUserId: userId as Id<"storeFrontUser"> } : "skip"
   );
 
-  if (!user)
-    return (
-      <View>
-        <FadeIn className="flex items-center justify-center min-h-[60vh] w-full">
-          <EmptyState
-            title={
-              <div className="flex gap-1 text-sm">
-                <p className="text-muted-foreground">User not found</p>
-              </div>
-            }
-          />
-        </FadeIn>
-      </View>
-    );
+  if (!user) return null;
 
   const name =
-    !user.firstName || !user.lastName
+    !user?.firstName || !user?.lastName
       ? null
       : `${user.firstName} ${user.lastName}`;
 
-  const hasContactDetails = name || user.email || user.phoneNumber;
+  const hasContactDetails = name || user?.email || user?.phoneNumber;
 
   return (
     <View
