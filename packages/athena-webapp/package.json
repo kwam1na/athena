@@ -7,9 +7,10 @@
     "build": "vite build && tsc --noEmit",
     "serve": "vite preview",
     "start": "vite",
-    "test": "vitest",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
     "test:ui": "vitest --ui",
-    "test:coverage": "vitest --coverage",
     "email:dev": "email dev --dir convex/emails"
   },
   "devDependencies": {

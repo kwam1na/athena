@@ -3,41 +3,34 @@ import { HonoWithConvex } from "convex-helpers/server/hono";
 import { ActionCtx } from "../../../../_generated/server";
 import { api } from "../../../../_generated/api";
 import { Id } from "../../../../_generated/dataModel";
-import { getCookie } from "hono/cookie";
-import { getStorefrontUserFromRequest } from "../../../utils";
+import { enforceActorAccess } from "./actorAuth";
 
 const userRoutes: HonoWithConvex<ActionCtx> = new Hono();
+
+userRoutes.use("/:userId", async (c, next) => {
+  const response = await enforceActorAccess(c, "userId");
+  if (response) {
+    return response;
+  }
+  await next();
+});
+
+userRoutes.use("/:userId/*", async (c, next) => {
+  const response = await enforceActorAccess(c, "userId");
+  if (response) {
+    return response;
+  }
+  await next();
+});
 
 userRoutes.get("/:userId", async (c) => {
   const { userId } = c.req.param();
 
-  if (userId == "me") {
-    const userId = getCookie(c, "user_id");
+  const user = await c.env.runQuery(api.storeFront.user.getById, {
+    id: userId as Id<"storeFrontUser">,
+  });
 
-    if (!userId) {
-      return c.json(null, 200);
-    }
-
-    try {
-      const user = await c.env.runQuery(api.storeFront.user.getById, {
-        id: userId as Id<"storeFrontUser">,
-      });
-
-      return c.json(user);
-    } catch (e) {
-      return c.json({ error: (e as Error).message }, 400);
-    }
-  }
-
-  try {
-    const user = await c.env.runQuery(api.storeFront.user.getById, {
-      id: userId as Id<"storeFrontUser">,
-    });
-
-    return c.json(user);
-  } catch (e) {
-    return c.json({ error: (e as Error).message }, 400);
-  }
+  return c.json(user);
 });
 
 userRoutes.put("/:userId", async (c) => {
@@ -51,28 +44,6 @@ userRoutes.put("/:userId", async (c) => {
     shippingAddress,
     billingAddress,
   } = await c.req.json();
-
-  if (userId == "me") {
-    // const userId = getCookie(c, "user_id");
-
-    const userId = getStorefrontUserFromRequest(c);
-
-    if (!userId) {
-      return c.json(null, 200);
-    }
-
-    const user = await c.env.runMutation(api.storeFront.user.update, {
-      id: userId as Id<"storeFrontUser">,
-      email,
-      firstName,
-      lastName,
-      shippingAddress,
-      billingAddress,
-      phoneNumber,
-    });
-
-    return c.json(user);
-  }
 
   const user = await c.env.runMutation(api.storeFront.user.update, {
     id: userId as Id<"storeFrontUser">,

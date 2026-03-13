@@ -1,11 +1,12 @@
-import path from "path";
-import { defineConfig } from "vite";
+/// <reference types="vitest/config" />
+
 import react from "@vitejs/plugin-react";
 import { TanStackRouterVite } from "@tanstack/router-plugin/vite";
+import path from "path";
 import { visualizer } from "rollup-plugin-visualizer";
-
+import { defineConfig } from "vite";
 // https://vitejs.dev/config/
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   base: "/",
   build: {
     rollupOptions: {
@@ -19,26 +20,15 @@ export default defineConfig({
       output: {
         manualChunks(id) {
           if (id.includes("node_modules")) {
-            // if (id.includes("@tanstack")) return "tanstack-vendor";
-
-            // // if (id.includes("zod")) return "zod-vendor";
-
-            // if (id.includes("framer-motion")) return "framer-motion-vendor";
-
-            // if (id.includes("@radix-ui")) return "radix-ui-vendor";
-
-            // if (id.includes("@hello-pangea")) return "hello-pangea-vendor";
-
             if (id.includes("hls.js")) return "hls-js-vendor";
 
-            // Fallback for other node_modules
             return "vendor";
           }
         },
       },
     },
   },
-  plugins: [TanStackRouterVite(), react()],
+  plugins: mode === "test" ? [react()] : [TanStackRouterVite(), react()],
   resolve: {
     alias: {
       "~": __dirname,
@@ -46,4 +36,24 @@ export default defineConfig({
       "@cvx": path.resolve(__dirname, "./convex"),
     },
   },
-});
+  test: {
+    environment: "jsdom",
+    setupFiles: "./src/test/setup.ts",
+    include: ["src/**/*.test.{ts,tsx}", "convex/**/*.test.{ts,tsx}"],
+    coverage: {
+      provider: "v8",
+      reportsDirectory: "./coverage",
+      reporter: ["text-summary", "json-summary", "html", "lcov"],
+      all: true,
+      include: ["src/**/*.{ts,tsx}", "convex/**/*.{ts,tsx}"],
+      exclude: [
+        "**/*.d.ts",
+        "src/**/*.test.{ts,tsx}",
+        "src/test/**",
+        "src/routeTree.gen.ts",
+        "src/assets/**",
+        "convex/_generated/**",
+      ],
+    },
+  },
+}));

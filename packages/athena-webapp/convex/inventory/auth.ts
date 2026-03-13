@@ -1,9 +1,11 @@
 import { v } from "convex/values";
 import { action, mutation } from "../_generated/server";
-import { sendVerificationCode } from "../mailersend";
+import { sendVerificationCode } from "../sendgrid";
 import { api } from "../_generated/api";
+import { SignJWT } from "jose";
 
 const expirationTimeInMinutes = 10;
+const verificationCodeCooldownMs = 60 * 1000;
 
 export const requestVerificationCode = mutation({
   args: {
@@ -12,6 +14,22 @@ export const requestVerificationCode = mutation({
     lastName: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    const mostRecentCode = await ctx.db
+      .query("appVerificationCode")
+      .filter((q) => q.eq(q.field("email"), args.email))
+      .order("desc")
+      .first();
+
+    if (
+      mostRecentCode &&
+      Date.now() - mostRecentCode._creationTime < verificationCodeCooldownMs
+    ) {
+      return {
+        rateLimited: true,
+        message: "Please wait before requesting another verification code.",
+      };
+    }
+
     const verificationCode = Math.floor(
       100000 + Math.random() * 900000
     ).toString();
@@ -28,6 +46,8 @@ export const requestVerificationCode = mutation({
       expiration,
       isUsed: false,
     });
+
+    console.log("inserted....");
 
     return await ctx.db.get(id);
   },
@@ -77,9 +97,7 @@ export const verifyCode = mutation({
 
     let user = await ctx.db
       .query("athenaUser")
-      .filter((q) =>
-        q.eq(q.field("email"), verificationCode.email.toLowerCase())
-      )
+      .filter((q) => q.eq(q.field("email"), verificationCode.email))
       .first();
 
     if (!user) {
@@ -99,9 +117,30 @@ export const verifyCode = mutation({
       };
     }
 
+    // 2. Generate keys for signing tokens
+    const secret = new TextEncoder().encode("your-secret-key");
+
+    // 3. Generate tokens
+    const accessToken = await new SignJWT({ userId: user._id })
+      .setProtectedHeader({ alg: "HS256" })
+      .setExpirationTime("15m")
+      .sign(secret);
+
+    const refreshToken = await new SignJWT({ userId: user._id })
+      .setProtectedHeader({ alg: "HS256" })
+      .setExpirationTime("7d")
+      .sign(secret);
+
+    // await ctx.db.insert("storeFrontSession", {
+    //   userId: user._id,
+    //   refreshToken,
+    // });
+
     return {
       success: true,
       user,
+      accessToken,
+      refreshToken,
     };
   },
 });
@@ -113,6 +152,17 @@ export const sendVerificationCodeViaProvider = action({
     lastName: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    // const [data, store] = await Promise.all([
+    //   ctx.runMutation(api.inventory.auth.requestVerificationCode, {
+    //     email: args.email,
+    //     firstName: args.firstName,
+    //     lastName: args.lastName,
+    //   }),
+    //   ctx.runQuery(api.inventory.stores.findById, {
+    //     id: args.storeId,
+    //   }),
+    // ]);
+
     const data: any = await ctx.runMutation(
       api.inventory.auth.requestVerificationCode,
       {
@@ -129,27 +179,42 @@ export const sendVerificationCodeViaProvider = action({
       };
     }
 
-    const response = await sendVerificationCode({
-      customerEmail: args.email,
-      verificationCode: data.code,
-      storeName: "Wigclub",
-      validTime: `${expirationTimeInMinutes} minutes`,
-    });
-
-    if (response.ok) {
-      return {
-        success: true,
-        message: "Verification code sent",
-        data: {
-          email: args.email,
-        },
-      };
-    } else {
-      console.error("Failed to send verification code", response);
+    if ((data as any)?.rateLimited) {
       return {
         success: false,
-        message: "Could not send verification code",
+        message: (data as any).message,
       };
     }
+
+    return {
+      success: true,
+      message: "Verification code sent.",
+      data: {
+        email: data.email,
+      },
+    };
+
+    // const response = await sendVerificationCode({
+    //   customerEmail: args.email,
+    //   verificationCode: data.code,
+    //   storeName: store.name,
+    //   validTime: `${expirationTimeInMinutes} minutes`,
+    // });
+
+    // if (response.ok) {
+    //   return {
+    //     success: true,
+    //     message: "Verification code sent",
+    //     data: {
+    //       email: args.email,
+    //     },
+    //   };
+    // } else {
+    //   console.error("Failed to send verification code", response);
+    //   return {
+    //     success: false,
+    //     message: "Could not send verification code",
+    //   };
+    // }
   },
 });

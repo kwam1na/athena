@@ -14,6 +14,20 @@ bun run index.ts
 
 This project was created using `bun init` in bun v1.1.29. [Bun](https://bun.sh) is a fast all-in-one JavaScript runtime.
 
+## Testing
+
+Install dependencies, then run:
+
+```bash
+bun run test
+```
+
+For watch mode:
+
+```bash
+bun run test:watch
+```
+
 ## LLM Providers
 
 The codebase supports multiple LLM providers.

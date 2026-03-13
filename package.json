@@ -1,5 +1,16 @@
 {
-  "dependencies": { "@anthropic-ai/sdk": "^0.40.0" },
+  "name": "athena",
+  "private": true,
+  "scripts": {
+    "test": "bun run --filter '@athena/webapp' test && bun run --filter '@athena/storefront-webapp' test",
+    "test:coverage": "bun run --filter '@athena/webapp' test:coverage && bun run --filter '@athena/storefront-webapp' test:coverage && bun scripts/coverage-summary.mjs"
+  },
+  "workspaces": [
+    "packages/*"
+  ],
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.40.0"
+  },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.3.0",

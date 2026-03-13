@@ -4,9 +4,7 @@ import { auth } from "./auth";
 import { HonoWithConvex, HttpRouterWithHono } from "convex-helpers/server/hono";
 import { ActionCtx } from "./_generated/server";
 import {
-  analyticsRoutes,
   authRoutes,
-  bannerMessageRoutes,
   categoryRoutes,
   orgRoutes,
   productRoutes,
@@ -14,23 +12,14 @@ import {
   subcategoryRoutes,
 } from "./http/domains/inventory/routes";
 import {
-  onlineOrderRoutes,
-  userRoutes,
-  bagRoutes,
   checkoutRoutes,
-  meRoutes,
-  upsellRoutes,
-  reviewRoutes,
-  rewardsRoutes,
   paystackRoutes,
-  storefrontRoutes,
-  offersRoutes,
-  userOffersRoutes,
+  userRoutes,
 } from "./http/domains/storeFront/routes";
 import { httpRouter } from "convex/server";
 import { guestRoutes } from "./http/domains/storeFront/routes/guest";
 import { colorRoutes } from "./http/domains/inventory/routes/colors";
-import { savedBagRoutes } from "./http/domains/storeFront/routes/savedBag";
+import { HOST_URL, SITE_URL } from "./env";
 
 const app: HonoWithConvex<ActionCtx> = new Hono();
 
@@ -38,62 +27,59 @@ const http = httpRouter();
 
 auth.addHttpRoutes(http);
 
+const allowedOrigins = new Set(
+  [
+    SITE_URL,
+    HOST_URL,
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "https://jovial-wildebeest-179.convex.site",
+  ].filter((origin): origin is string => Boolean(origin))
+);
+
 app.use(
   "*",
   cors({
-    origin: (origin) => {
-      return origin;
-    },
-    allowMethods: ["OPTIONS", "GET", "POST", "PUT", "PATCH", "DELETE"],
+    origin: Array.from(allowedOrigins),
+    allowHeaders: ["Content-Type", "Authorization", "x-athena-actor-token"],
+    allowMethods: ["OPTIONS", "GET", "POST", "PUT", "DELETE"],
     credentials: true,
   })
 );
 
-app.route("/upsells", upsellRoutes);
-
-app.route("/stores", storeRoutes);
-
-app.route("/storefront", storefrontRoutes);
-
 app.route("/webhooks/paystack", paystackRoutes);
-
-app.route("/analytics", analyticsRoutes);
 
 app.route("/auth", authRoutes);
 
-app.route("/banner-message", bannerMessageRoutes);
-
 app.route("/organizations", orgRoutes);
 
-app.route("/bags", bagRoutes);
+app.route("/organizations/:organizationId/stores", storeRoutes);
 
-app.route("/savedBags", savedBagRoutes);
+app.route(
+  "/organizations/:organizationId/stores/:storeId/products",
+  productRoutes
+);
 
-app.route("/products", productRoutes);
+app.route(
+  "/organizations/:organizationId/stores/:storeId/categories",
+  categoryRoutes
+);
 
-app.route("/categories", categoryRoutes);
+app.route(
+  "/organizations/:organizationId/stores/:storeId/subcategories",
+  subcategoryRoutes
+);
 
-app.route("/subcategories", subcategoryRoutes);
+app.route("/organizations/:organizationId/stores/:storeId/colors", colorRoutes);
 
-app.route("/colors", colorRoutes);
+app.route("/organizations/:organizationId/stores/:storeId/guests", guestRoutes);
 
-app.route("/guests", guestRoutes);
+app.route("/organizations/:organizationId/stores/:storeId/users", userRoutes);
 
-app.route("/users", userRoutes);
-
-app.route("/checkout", checkoutRoutes);
-
-app.route("/orders", onlineOrderRoutes);
-
-app.route("/reviews", reviewRoutes);
-
-app.route("/me", meRoutes);
-
-app.route("/rewards", rewardsRoutes);
-
-app.route("/offers", offersRoutes);
-
-app.route("/user-offers", userOffersRoutes);
+app.route(
+  "/organizations/:organizationId/stores/:storeId/checkout",
+  checkoutRoutes
+);
 
 app.get("/.well-known/openid-configuration", async (c) => {
   const [httpAction] = http.lookup(

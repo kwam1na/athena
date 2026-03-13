@@ -7,7 +7,9 @@
     "build": "vite build && tsc --noEmit",
     "serve": "vite preview",
     "start": "vite",
-    "test": "vitest"
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.645.0",
@@ -83,6 +85,7 @@
     "@types/react": "^18.2.65",
     "@types/react-dom": "^18.2.21",
     "@vitejs/plugin-react": "^4.3.2",
+    "@vitest/coverage-v8": "^1.0.0",
     "autoprefixer": "^10.4.20",
     "eslint": "^9.9.0",
     "eslint-plugin-react-hooks": "^5.1.0-rc.0",
