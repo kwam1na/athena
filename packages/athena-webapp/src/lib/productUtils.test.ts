@@ -11,7 +11,7 @@ describe("getProductName", () => {
         colorName: "natural black",
         productName: "body wave",
       })
-    ).toBe('24" Natural Black body wave');
+    ).toBe('24" Natural Black Body Wave');
   });
 
   it("returns the raw name for non-hair products", () => {

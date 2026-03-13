@@ -51,14 +51,22 @@ function createDbHarness({
   };
 
   const db = {
-    query: vi.fn((table: string) => ({
-      filter: vi.fn(() => ({
-        collect: vi.fn(async () => take(`${table}:collect`) || []),
-        first: vi.fn(async () => take(`${table}:first`) || null),
-      })),
-      collect: vi.fn(async () => take(`${table}:collect`) || []),
-      first: vi.fn(async () => take(`${table}:first`) || null),
-    })),
+    query: vi.fn((table: string) => {
+      const collect = vi.fn(async () => take(`${table}:collect`) || []);
+      const first = vi.fn(async () => take(`${table}:first`) || null);
+      return {
+        filter: vi.fn(() => ({
+          collect,
+          first,
+        })),
+        withIndex: vi.fn(() => ({
+          collect,
+          first,
+        })),
+        collect,
+        first,
+      };
+    }),
     get: vi.fn(async (id: string) => recordMap.get(id) ?? null),
     insert: vi.fn(async (table: string, data: any) => {
       insertCount += 1;
@@ -98,6 +106,7 @@ describe("bag backend flows", () => {
       storeId: "store_1",
       storeFrontUserId: "guest_1",
       updatedAt: Date.now(),
+      items: [],
     });
     expect(result).toEqual({
       _id: "bag_1",
@@ -246,7 +255,13 @@ describe("bag backend flows", () => {
       quantity: 3,
     });
 
-    expect(db.patch).toHaveBeenCalledWith("bag_item_1", { quantity: 5 });
+    expect(db.patch).toHaveBeenCalledWith("bag_1", {
+      updatedAt: Date.now(),
+    });
+    expect(db.patch).toHaveBeenCalledWith("bag_item_1", {
+      quantity: 5,
+      updatedAt: Date.now(),
+    });
     expect(db.insert).not.toHaveBeenCalled();
   });
 });

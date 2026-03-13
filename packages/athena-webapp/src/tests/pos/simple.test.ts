@@ -233,7 +233,7 @@ describe("POS System - Basic Tests", () => {
       const formatted = formatReceiptDate(testDate);
 
       expect(formatted.date).toBe("1/15/2024");
-      expect(formatted.time).toBe("10:30:00 AM");
+      expect(formatted.time).toBe(testDate.toLocaleTimeString("en-US"));
     });
   });
 

@@ -50,8 +50,10 @@ async function loadProductsRoute() {
   vi.doMock("../../../../_generated/api", () => ({
     api: {
       inventory: {
+        productUtil: {
+          getAllProducts: "inventory.productUtil.getAllProducts",
+        },
         products: {
-          getAll: "inventory.products.getAll",
           getByIdOrSlug: "inventory.products.getByIdOrSlug",
         },
         bestSeller: {
@@ -133,6 +135,7 @@ describe("inventory HTTP routes", () => {
   it("parses product filter query params and forwards them to the inventory query", async () => {
     const productRoutes = await loadProductsRoute();
     const env = {
+      runAction: vi.fn().mockResolvedValue([{ _id: "product_1" }]),
       runQuery: vi.fn().mockResolvedValue([{ _id: "product_1" }]),
     };
 
@@ -140,17 +143,24 @@ describe("inventory HTTP routes", () => {
       "http://localhost/stores/store_1/products?color=color_1,color_2&length=12,16&category=wigs&subcategory=lace-front",
       {
         method: "GET",
+        headers: {
+          Cookie: "store_id=store_1",
+        },
       },
       env as never
     );
 
-    expect(env.runQuery).toHaveBeenCalledWith("inventory.products.getAll", {
+    expect(env.runAction).toHaveBeenCalledWith(
+      "inventory.productUtil.getAllProducts",
+      {
       storeId: "store_1",
       color: ["color_1", "color_2"],
       length: [12, 16],
       category: ["wigs"],
       subcategory: ["lace-front"],
-    });
+      isVisible: false,
+    }
+    );
     expect(await response.json()).toEqual({
       products: [{ _id: "product_1" }],
     });
@@ -170,7 +180,12 @@ describe("inventory HTTP routes", () => {
 
     const okResponse = await productRoutes.request(
       "http://localhost/stores/store_1/products/body-wave",
-      { method: "GET" },
+      {
+        method: "GET",
+        headers: {
+          Cookie: "store_id=store_1",
+        },
+      },
       env as never
     );
 
@@ -182,7 +197,12 @@ describe("inventory HTTP routes", () => {
 
     const missingResponse = await productRoutes.request(
       "http://localhost/stores/store_1/products/missing-product",
-      { method: "GET" },
+      {
+        method: "GET",
+        headers: {
+          Cookie: "store_id=store_1",
+        },
+      },
       env as never
     );
 

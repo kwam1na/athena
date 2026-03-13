@@ -20,6 +20,7 @@ const mockPrintWindow = {
 describe("usePrint Hook", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.useRealTimers();
 
     // Reset window.open mock
     (window.open as any) = vi.fn(() => mockPrintWindow);
@@ -125,6 +126,7 @@ describe("usePrint Hook", () => {
     });
 
     it("should close window after printing with delay", () => {
+      vi.useFakeTimers();
       const { result } = renderHook(() => usePrint());
 
       act(() => {
@@ -138,10 +140,8 @@ describe("usePrint Hook", () => {
         }
       });
 
-      // Fast-forward timers to trigger window close
-      vi.useFakeTimers();
       act(() => {
-        vi.advanceTimersByTime(1500);
+        vi.advanceTimersByTime(500);
       });
       vi.useRealTimers();
 
@@ -149,6 +149,7 @@ describe("usePrint Hook", () => {
     });
 
     it("should prevent multiple close attempts", () => {
+      vi.useFakeTimers();
       const { result } = renderHook(() => usePrint());
 
       act(() => {
@@ -165,9 +166,8 @@ describe("usePrint Hook", () => {
       // Simulate window already closed
       mockPrintWindow.closed = true;
 
-      vi.useFakeTimers();
       act(() => {
-        vi.advanceTimersByTime(1500);
+        vi.advanceTimersByTime(500);
       });
       vi.useRealTimers();
 
@@ -176,6 +176,7 @@ describe("usePrint Hook", () => {
     });
 
     it("should handle fallback timeout for slow loading", () => {
+      vi.useFakeTimers();
       const { result } = renderHook(() => usePrint());
 
       // Set document as not ready
@@ -186,7 +187,6 @@ describe("usePrint Hook", () => {
       });
 
       // Don't trigger onload, let fallback timeout handle it
-      vi.useFakeTimers();
       act(() => {
         vi.advanceTimersByTime(1000); // Fallback timeout
       });

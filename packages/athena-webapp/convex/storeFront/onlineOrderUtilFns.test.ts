@@ -6,7 +6,7 @@ const { sendOrderEmail } = vi.hoisted(() => ({
   sendOrderEmail: vi.fn(),
 }));
 
-vi.mock("../sendgrid", () => ({
+vi.mock("../mailersend", () => ({
   sendOrderEmail,
 }));
 
@@ -119,7 +119,7 @@ describe("handleOrderStatusUpdate", () => {
         type: "ready",
         pickup_type: "delivery",
         pickup_details: "123 Main St, Austin, TX 78701, United States",
-        order_status_messaging: "Get excited, Ada! Your order is out for delivery.",
+        order_status_messaging: "Your order is out for delivery.",
       })
     );
     expect(result).toEqual({ didSendReadyEmail: true });

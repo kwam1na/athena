@@ -15,6 +15,7 @@ async function loadModule() {
   vi.doMock("../_generated/server", () => ({
     mutation: wrapDefinition,
     query: wrapDefinition,
+    internalMutation: wrapDefinition,
   }));
 
   vi.doMock("../_generated/api", () => ({
@@ -25,10 +26,6 @@ async function loadModule() {
         },
       },
     },
-  }));
-
-  vi.doMock("../sendgrid", () => ({
-    sendOrderEmail: vi.fn(),
   }));
 
   return import("./onlineOrder");

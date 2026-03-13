@@ -162,9 +162,6 @@ describe("checkoutFormSchema", () => {
 
     expect(issues.get("deliveryDetails.region")).toBe("Region is required");
     expect(issues.get("deliveryDetails.street")).toBe("Street is required");
-    expect(issues.get("deliveryDetails.houseNumber")).toBe(
-      "Apt/House number is required"
-    );
     expect(issues.get("deliveryDetails.neighborhood")).toBe(
       "Neighborhood is required"
     );

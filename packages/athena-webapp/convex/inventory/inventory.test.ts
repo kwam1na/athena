@@ -15,6 +15,8 @@ async function loadModule(modulePath: string) {
   vi.doMock("../_generated/server", () => ({
     mutation: wrapDefinition,
     query: wrapDefinition,
+    action: wrapDefinition,
+    internalMutation: wrapDefinition,
   }));
 
   return import(modulePath);
@@ -41,14 +43,26 @@ function createDbHarness({
   };
 
   const db = {
-    query: vi.fn((table: string) => ({
-      filter: vi.fn(() => ({
-        collect: vi.fn(async () => take(`${table}:collect`) || []),
-        first: vi.fn(async () => take(`${table}:first`) || null),
-      })),
-      collect: vi.fn(async () => take(`${table}:collect`) || []),
-      first: vi.fn(async () => take(`${table}:first`) || null),
-    })),
+    query: vi.fn((table: string) => {
+      const collect = vi.fn(async () => take(`${table}:collect`) || []);
+      const first = vi.fn(async () => take(`${table}:first`) || null);
+      return {
+        filter: vi.fn(() => ({
+          collect,
+          first,
+        })),
+        withIndex: vi.fn(() => ({
+          collect,
+          first,
+          order: vi.fn(() => ({
+            collect,
+            first,
+          })),
+        })),
+        collect,
+        first,
+      };
+    }),
     get: vi.fn(async (id: string) => recordMap.get(id) ?? null),
     insert: vi.fn(async (table: string, data: any) => {
       insertCount += 1;

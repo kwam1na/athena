@@ -98,6 +98,7 @@ describe("savedBag backend flows", () => {
       storeId: "store_1",
       storeFrontUserId: "guest_1",
       updatedAt: Date.now(),
+      items: [],
     });
     expect(result).toEqual({
       _id: "savedBag_1",

@@ -50,13 +50,13 @@ export const usePrint = () => {
     printWindow.addEventListener("beforeunload", handleClose);
     printWindow.addEventListener("unload", handleClose);
 
-    // Write the receipt HTML to the new window
-    printWindow.document.write(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>Receipt</title>
-          <style>
+    try {
+      printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>Receipt</title>
+            <style>
             * {
               margin: 0;
               padding: 0;
@@ -265,54 +265,59 @@ export const usePrint = () => {
                .pt-2 { padding-top: 2mm !important; }
                .pt-4 { padding-top: 3mm !important; }
              }
-          </style>
-        </head>
-        <body>
-          <div class="receipt">
-            ${receiptContent}
-          </div>
-        </body>
-      </html>
-    `);
+            </style>
+          </head>
+          <body>
+            <div class="receipt">
+              ${receiptContent}
+            </div>
+          </body>
+        </html>
+      `);
 
-    printWindow.document.close();
+      printWindow.document.close();
 
-    // Wait for content to load, then print
-    printWindow.onload = () => {
-      try {
-        printWindow.print();
+      // Wait for content to load, then print
+      printWindow.onload = () => {
+        try {
+          printWindow.print();
 
-        // Close the window after a brief delay to allow print dialog to process
-        setTimeout(() => {
-          if (printWindow && !printWindow.closed && !isClosing) {
-            isClosing = true;
-            printWindow.close();
-          }
-        }, 500);
-      } catch (error) {
-        console.error("Error during printing:", error);
-        // Close window even if printing fails
-        setTimeout(() => {
-          if (printWindow && !printWindow.closed && !isClosing) {
-            isClosing = true;
-            printWindow.close();
-          }
-        }, 500);
-      }
-    };
-
-    // Fallback in case onload doesn't fire (but don't duplicate print call)
-    setTimeout(() => {
-      if (
-        printWindow &&
-        !printWindow.closed &&
-        printWindow.document.readyState !== "complete"
-      ) {
-        if (printWindow.onload) {
-          (printWindow.onload as () => void)();
+          // Close the window after a brief delay to allow print dialog to process
+          setTimeout(() => {
+            if (printWindow && !printWindow.closed && !isClosing) {
+              isClosing = true;
+              printWindow.close();
+            }
+          }, 500);
+        } catch (error) {
+          console.error("Error during printing:", error);
+          setTimeout(() => {
+            if (printWindow && !printWindow.closed && !isClosing) {
+              isClosing = true;
+              printWindow.close();
+            }
+          }, 500);
         }
+      };
+
+      // Fallback in case onload doesn't fire (but don't duplicate print call)
+      setTimeout(() => {
+        if (
+          printWindow &&
+          !printWindow.closed &&
+          printWindow.document.readyState !== "complete"
+        ) {
+          if (printWindow.onload) {
+            (printWindow.onload as () => void)();
+          }
+        }
+      }, 1000);
+    } catch (error) {
+      console.error("Error preparing print window:", error);
+      if (!printWindow.closed) {
+        printWindow.close();
       }
-    }, 1000);
+    }
   }, []);
 
   return { printReceipt };
