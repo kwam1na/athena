@@ -56,6 +56,26 @@ async function loadModule(secret?: string) {
 }
 
 describe("paystackRoutes", () => {
+  it("returns 500 when the secret key is not configured", async () => {
+    const paystackRoutes = await loadModule();
+    const response = await paystackRoutes.request(
+      "http://localhost/",
+      {
+        method: "POST",
+        body: JSON.stringify({}),
+      },
+      {
+        runQuery: vi.fn(),
+        runMutation: vi.fn(),
+      } as never
+    );
+
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({
+      error: "Paystack secret key is not configured.",
+    });
+  });
+
   it("rejects missing webhook signatures", async () => {
     const paystackRoutes = await loadModule("secret");
     const env = {
@@ -77,6 +97,56 @@ describe("paystackRoutes", () => {
       error: "Missing webhook signature.",
     });
     expect(env.runQuery).not.toHaveBeenCalled();
+  });
+
+  it("rejects invalid signatures and malformed payloads", async () => {
+    const paystackRoutes = await loadModule("secret");
+    const invalidBody = JSON.stringify({
+      event: "charge.success",
+      data: {
+        id: 1,
+      },
+    });
+    const invalidSignatureResponse = await paystackRoutes.request(
+      "http://localhost/",
+      {
+        method: "POST",
+        headers: {
+          "x-paystack-signature": "not-valid",
+        },
+        body: invalidBody,
+      },
+      {
+        runQuery: vi.fn(),
+        runMutation: vi.fn(),
+      } as never
+    );
+
+    expect(invalidSignatureResponse.status).toBe(401);
+    expect(await invalidSignatureResponse.json()).toEqual({
+      error: "Invalid webhook signature.",
+    });
+
+    const malformedBody = "{";
+    const malformedResponse = await paystackRoutes.request(
+      "http://localhost/",
+      {
+        method: "POST",
+        headers: {
+          "x-paystack-signature": await createSignature("secret", malformedBody),
+        },
+        body: malformedBody,
+      },
+      {
+        runQuery: vi.fn(),
+        runMutation: vi.fn(),
+      } as never
+    );
+
+    expect(malformedResponse.status).toBe(400);
+    expect(await malformedResponse.json()).toEqual({
+      error: "Malformed webhook payload.",
+    });
   });
 
   it("updates the checkout session for valid charge.success webhooks", async () => {
@@ -176,6 +246,54 @@ describe("paystackRoutes", () => {
     );
   });
 
+  it("sets delivery fee to null when absent from order details", async () => {
+    const paystackRoutes = await loadModule("secret");
+    const env = {
+      runQuery: vi.fn().mockResolvedValue({
+        hasCompletedPayment: false,
+        externalTransactionId: null,
+      }),
+      runMutation: vi.fn(),
+    };
+    const body = JSON.stringify({
+      event: "charge.success",
+      data: {
+        id: 52,
+        amount: 10000,
+        metadata: {
+          checkout_session_id: "session_124",
+          order_details: {
+            billingDetails: {
+              country: "US",
+              billingAddressSameAsDelivery: 0,
+            },
+          },
+        },
+      },
+    });
+
+    const response = await paystackRoutes.request(
+      "http://localhost/",
+      {
+        method: "POST",
+        headers: {
+          "x-paystack-signature": await createSignature("secret", body),
+        },
+        body,
+      },
+      env as never
+    );
+
+    expect(response.status).toBe(200);
+    expect(env.runMutation.mock.calls[0]?.[1]).toEqual(
+      expect.objectContaining({
+        orderDetails: expect.objectContaining({
+          deliveryFee: null,
+        }),
+      })
+    );
+  });
+
   it("deduplicates already-processed successful charges", async () => {
     const paystackRoutes = await loadModule("secret");
     const env = {
@@ -219,6 +337,119 @@ describe("paystackRoutes", () => {
       deduplicated: true,
     });
     expect(env.runMutation).not.toHaveBeenCalled();
+  });
+
+  it("validates charge.success metadata and session resolution", async () => {
+    const paystackRoutes = await loadModule("secret");
+
+    const missingTransactionBody = JSON.stringify({
+      event: "charge.success",
+      data: {
+        metadata: {
+          checkout_session_id: "session_123",
+          order_details: {
+            billingDetails: {
+              country: "US",
+            },
+          },
+        },
+      },
+    });
+
+    const missingTransactionResponse = await paystackRoutes.request(
+      "http://localhost/",
+      {
+        method: "POST",
+        headers: {
+          "x-paystack-signature": await createSignature(
+            "secret",
+            missingTransactionBody
+          ),
+        },
+        body: missingTransactionBody,
+      },
+      {
+        runQuery: vi.fn(),
+        runMutation: vi.fn(),
+      } as never
+    );
+
+    expect(missingTransactionResponse.status).toBe(400);
+    expect(await missingTransactionResponse.json()).toEqual({
+      error: "Missing transaction id.",
+    });
+
+    const missingOrderDetailsBody = JSON.stringify({
+      event: "charge.success",
+      data: {
+        id: 42,
+        metadata: {
+          checkout_session_id: "session_123",
+          order_details: {},
+        },
+      },
+    });
+
+    const missingOrderDetailsResponse = await paystackRoutes.request(
+      "http://localhost/",
+      {
+        method: "POST",
+        headers: {
+          "x-paystack-signature": await createSignature(
+            "secret",
+            missingOrderDetailsBody
+          ),
+        },
+        body: missingOrderDetailsBody,
+      },
+      {
+        runQuery: vi.fn(),
+        runMutation: vi.fn(),
+      } as never
+    );
+
+    expect(missingOrderDetailsResponse.status).toBe(400);
+    expect(await missingOrderDetailsResponse.json()).toEqual({
+      error: "Missing order details metadata.",
+    });
+
+    const missingSessionBody = JSON.stringify({
+      event: "charge.success",
+      data: {
+        id: 42,
+        metadata: {
+          checkout_session_id: "session_123",
+          order_details: {
+            billingDetails: {
+              country: "US",
+            },
+          },
+        },
+      },
+    });
+
+    const missingSessionResponse = await paystackRoutes.request(
+      "http://localhost/",
+      {
+        method: "POST",
+        headers: {
+          "x-paystack-signature": await createSignature(
+            "secret",
+            missingSessionBody
+          ),
+        },
+        body: missingSessionBody,
+      },
+      {
+        runQuery: vi.fn().mockResolvedValue(null),
+        runMutation: vi.fn(),
+      } as never
+    );
+
+    expect(missingSessionResponse.status).toBe(404);
+    expect(await missingSessionResponse.json()).toEqual({
+      error: "Checkout session not found.",
+    });
   });
 
   it("updates refund status for refund webhooks and deduplicates repeats", async () => {
@@ -286,5 +517,71 @@ describe("paystackRoutes", () => {
       deduplicated: true,
     });
     expect(secondEnv.runMutation).not.toHaveBeenCalled();
+  });
+
+  it("updates processing, pending and failed refund statuses", async () => {
+    const paystackRoutes = await loadModule("secret");
+    const runQuery = vi.fn().mockResolvedValue({ refunds: [] });
+    const runMutation = vi.fn();
+
+    const events = [
+      { event: "refund.processing", status: "refund-processing" },
+      { event: "refund.pending", status: "refund-pending" },
+      { event: "refund.failed", status: "refund-failed" },
+    ];
+
+    for (const entry of events) {
+      const body = JSON.stringify({
+        event: entry.event,
+        data: {
+          id: 91,
+          amount: 1000,
+          transaction_reference: "ref_123",
+        },
+      });
+
+      const response = await paystackRoutes.request(
+        "http://localhost/",
+        {
+          method: "POST",
+          headers: {
+            "x-paystack-signature": await createSignature("secret", body),
+          },
+          body,
+        },
+        {
+          runQuery,
+          runMutation,
+        } as never
+      );
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({});
+    }
+
+    expect(runMutation.mock.calls[0]?.[1]).toEqual({
+      externalReference: "ref_123",
+      update: {
+        refund_amount: 1000,
+        refund_id: "91",
+        status: "refund-processing",
+      },
+    });
+    expect(runMutation.mock.calls[1]?.[1]).toEqual({
+      externalReference: "ref_123",
+      update: {
+        refund_amount: 1000,
+        refund_id: "91",
+        status: "refund-pending",
+      },
+    });
+    expect(runMutation.mock.calls[2]?.[1]).toEqual({
+      externalReference: "ref_123",
+      update: {
+        refund_amount: 1000,
+        refund_id: "91",
+        status: "refund-failed",
+      },
+    });
   });
 });

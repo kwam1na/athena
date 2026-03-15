@@ -43,6 +43,7 @@ async function loadModule(signingKey?: string) {
 
   return {
     enforceActorAccess: module.enforceActorAccess,
+    enforceActorStoreAccess: module.enforceActorStoreAccess,
     jwtVerify,
   };
 }
@@ -160,6 +161,163 @@ describe("enforceActorAccess", () => {
     });
 
     await expect(enforceActorAccess(context as never)).resolves.toBeNull();
+    expect(context.json).not.toHaveBeenCalled();
+  });
+
+  it("returns null claims for invalid payload shape and verification failures", async () => {
+    const { jwtVerify } = await loadModule("secret");
+    const { getActorClaims } = await import("./actorAuth");
+
+    const context = createContext({
+      headers: {
+        "x-athena-actor-token": "token",
+      },
+    });
+
+    jwtVerify.mockResolvedValueOnce({
+      payload: {
+        sub: 42,
+        storeId: "store_1",
+        organizationId: "org_1",
+      },
+    });
+    await expect(getActorClaims(context as never)).resolves.toBeNull();
+
+    jwtVerify.mockResolvedValueOnce({
+      payload: {
+        sub: "actor_1",
+        storeId: "store_1",
+        organizationId: "org_1",
+        actorType: "admin",
+      },
+    });
+    await expect(getActorClaims(context as never)).resolves.toEqual({
+      actorId: "actor_1",
+      organizationId: "org_1",
+      storeId: "store_1",
+      actorType: undefined,
+    });
+
+    jwtVerify.mockRejectedValueOnce(new Error("invalid token"));
+    await expect(getActorClaims(context as never)).resolves.toBeNull();
+  });
+});
+
+describe("enforceActorStoreAccess", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("returns 403 when the store or organization claims do not match", async () => {
+    const { enforceActorStoreAccess, jwtVerify } = await loadModule("secret");
+    const context = createContext({
+      headers: {
+        "x-athena-actor-token": "token",
+      },
+      params: {
+        storeId: "store_123",
+        organizationId: "org_123",
+      },
+    });
+
+    jwtVerify.mockResolvedValue({
+      payload: {
+        sub: "guest_123",
+        storeId: "store_999",
+        organizationId: "org_123",
+        actorType: "guest",
+      },
+    });
+
+    const response = await enforceActorStoreAccess(context as never);
+
+    expect(context.json).toHaveBeenCalledWith({ error: "Forbidden." }, 403);
+    expect(response?.status).toBe(403);
+  });
+
+  it("returns 401 when actor claims are missing for store enforcement", async () => {
+    const { enforceActorStoreAccess } = await loadModule("secret");
+    const context = createContext({
+      params: {
+        storeId: "store_123",
+        organizationId: "org_123",
+      },
+    });
+
+    const response = await enforceActorStoreAccess(context as never);
+    expect(response?.status).toBe(401);
+    expect(context.json).toHaveBeenCalledWith(
+      { error: "Unauthorized request." },
+      401
+    );
+  });
+
+  it("returns 400 when store enforcement route params are incomplete", async () => {
+    const { enforceActorStoreAccess, jwtVerify } = await loadModule("secret");
+    const context = createContext({
+      headers: {
+        "x-athena-actor-token": "token",
+      },
+      params: {
+        storeId: "store_123",
+      },
+    });
+    jwtVerify.mockResolvedValue({
+      payload: {
+        sub: "guest_1",
+        storeId: "store_123",
+        organizationId: "org_123",
+      },
+    });
+
+    const response = await enforceActorStoreAccess(context as never);
+    expect(response?.status).toBe(400);
+    expect(context.json).toHaveBeenCalledWith(
+      { error: "Invalid route context." },
+      400
+    );
+  });
+
+  it("returns 500 when the signing key is missing for store enforcement", async () => {
+    const { enforceActorStoreAccess } = await loadModule();
+    const context = createContext({
+      params: {
+        storeId: "store_123",
+        organizationId: "org_123",
+      },
+    });
+
+    const response = await enforceActorStoreAccess(context as never);
+
+    expect(context.json).toHaveBeenCalledWith(
+      { error: "Storefront actor signing key is not configured." },
+      500
+    );
+    expect(response?.status).toBe(500);
+  });
+
+  it("returns null when the store and organization claims match", async () => {
+    const { enforceActorStoreAccess, jwtVerify } = await loadModule("secret");
+    const context = createContext({
+      headers: {
+        "x-athena-actor-token": "token",
+      },
+      params: {
+        storeId: "store_123",
+        organizationId: "org_123",
+      },
+    });
+
+    jwtVerify.mockResolvedValue({
+      payload: {
+        sub: "guest_123",
+        storeId: "store_123",
+        organizationId: "org_123",
+        actorType: "guest",
+      },
+    });
+
+    await expect(enforceActorStoreAccess(context as never)).resolves.toBeNull();
     expect(context.json).not.toHaveBeenCalled();
   });
 });

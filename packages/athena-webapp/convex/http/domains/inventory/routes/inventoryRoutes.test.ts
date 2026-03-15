@@ -36,6 +36,7 @@ async function loadStoresRoute() {
 
   vi.doMock("../../storeFront/routes/actorAuth", () => ({
     enforceActorAccess: vi.fn().mockResolvedValue(null),
+    getActorClaims: vi.fn().mockResolvedValue(null),
   }));
 
     const module = await import("./stores");
@@ -64,6 +65,10 @@ async function loadProductsRoute() {
         },
       },
     },
+  }));
+
+  vi.doMock("../../storeFront/routes/actorAuth", () => ({
+    getActorClaims: vi.fn().mockResolvedValue(null),
   }));
 
     const module = await import("./products");
@@ -210,5 +215,99 @@ describe("inventory HTTP routes", () => {
     expect(await missingResponse.json()).toEqual({
       error: "Product with identifier not found",
     });
+  });
+
+  it("covers product sub-routes and missing-store guards", async () => {
+    const productRoutes = await loadProductsRoute();
+
+    const missingStoreList = await productRoutes.request(
+      "http://localhost/stores/store_1/products",
+      { method: "GET" },
+      { runAction: vi.fn(), runQuery: vi.fn() } as never
+    );
+    const missingStoreColors = await productRoutes.request(
+      "http://localhost/stores/store_1/products/colors",
+      { method: "GET" },
+      { runAction: vi.fn(), runQuery: vi.fn() } as never
+    );
+    const missingStoreBest = await productRoutes.request(
+      "http://localhost/stores/store_1/products/bestSellers",
+      { method: "GET" },
+      { runAction: vi.fn(), runQuery: vi.fn() } as never
+    );
+    const missingStoreFeatured = await productRoutes.request(
+      "http://localhost/stores/store_1/products/featured",
+      { method: "GET" },
+      { runAction: vi.fn(), runQuery: vi.fn() } as never
+    );
+    const missingStoreProduct = await productRoutes.request(
+      "http://localhost/stores/store_1/products/body-wave",
+      { method: "GET" },
+      { runAction: vi.fn(), runQuery: vi.fn() } as never
+    );
+
+    expect(missingStoreList.status).toBe(404);
+    expect(missingStoreColors.status).toBe(404);
+    expect(missingStoreBest.status).toBe(404);
+    expect(missingStoreFeatured.status).toBe(404);
+    expect(missingStoreProduct.status).toBe(404);
+
+    const env = {
+      runAction: vi.fn().mockResolvedValue([]),
+      runQuery: vi
+        .fn()
+        .mockResolvedValueOnce([{ _id: "best_1" }])
+        .mockResolvedValueOnce([{ _id: "featured_1" }]),
+    };
+    const headers = { Cookie: "store_id=store_1" };
+    const colors = await productRoutes.request(
+      "http://localhost/stores/store_1/products/colors",
+      { method: "GET", headers },
+      env as never
+    );
+    const best = await productRoutes.request(
+      "http://localhost/stores/store_1/products/bestSellers",
+      { method: "GET", headers },
+      env as never
+    );
+    const featured = await productRoutes.request(
+      "http://localhost/stores/store_1/products/featured",
+      { method: "GET", headers },
+      env as never
+    );
+
+    expect(colors.status).toBe(200);
+    expect(await colors.json()).toEqual({});
+    expect(best.status).toBe(200);
+    expect(await best.json()).toEqual([{ _id: "best_1" }]);
+    expect(featured.status).toBe(200);
+    expect(await featured.json()).toEqual([{ _id: "featured_1" }]);
+  });
+
+  it("parses optional tags and isVisible=true query values", async () => {
+    const productRoutes = await loadProductsRoute();
+    const env = {
+      runAction: vi.fn().mockResolvedValue([]),
+      runQuery: vi.fn(),
+    };
+
+    const response = await productRoutes.request(
+      "http://localhost/stores/store_1/products?tags=featured,new&isVisible=true",
+      {
+        method: "GET",
+        headers: {
+          Cookie: "store_id=store_1",
+        },
+      },
+      env as never
+    );
+
+    expect(response.status).toBe(200);
+    expect(env.runAction).toHaveBeenCalledWith(
+      "inventory.productUtil.getAllProducts",
+      expect.objectContaining({
+        isVisible: true,
+      })
+    );
   });
 });
