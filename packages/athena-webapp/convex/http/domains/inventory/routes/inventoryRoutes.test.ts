@@ -71,10 +71,10 @@ async function loadProductsRoute() {
     getActorClaims: vi.fn().mockResolvedValue(null),
   }));
 
-    const module = await import("./products");
-    const app = new Hono();
-    app.route("/stores/:storeId/products", module.productRoutes);
-    return app;
+  const module = await import("./products");
+  const app = new Hono();
+  app.route("/stores/:storeId/products", module.productRoutes);
+  return app;
 }
 
 describe("inventory HTTP routes", () => {
@@ -141,30 +141,29 @@ describe("inventory HTTP routes", () => {
     const productRoutes = await loadProductsRoute();
     const env = {
       runAction: vi.fn().mockResolvedValue([{ _id: "product_1" }]),
-      runQuery: vi.fn().mockResolvedValue([{ _id: "product_1" }]),
-    };
+    } as never;
 
     const response = await productRoutes.request(
       "http://localhost/stores/store_1/products?color=color_1,color_2&length=12,16&category=wigs&subcategory=lace-front",
       {
         method: "GET",
         headers: {
-          Cookie: "store_id=store_1",
+          cookie: "store_id=store_1; organization_id=org_1",
         },
       },
-      env as never
+      env
     );
 
     expect(env.runAction).toHaveBeenCalledWith(
       "inventory.productUtil.getAllProducts",
       {
-      storeId: "store_1",
-      color: ["color_1", "color_2"],
-      length: [12, 16],
-      category: ["wigs"],
-      subcategory: ["lace-front"],
-      isVisible: false,
-    }
+        storeId: "store_1",
+        color: ["color_1", "color_2"],
+        length: [12, 16],
+        category: ["wigs"],
+        subcategory: ["lace-front"],
+        isVisible: false,
+      }
     );
     expect(await response.json()).toEqual({
       products: [{ _id: "product_1" }],

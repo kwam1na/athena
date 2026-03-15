@@ -18,12 +18,15 @@ vi.mock("convex/react", () => ({
   useAction: vi.fn(),
 }));
 
+// Only run browser-specific mocks when a window object exists (e.g. jsdom).
 if (typeof window !== "undefined") {
+  // Mock window.print for receipt printing tests
   Object.defineProperty(window, "print", {
     value: vi.fn(),
     writable: true,
   });
 
+  // Mock window.open for print window tests
   Object.defineProperty(window, "open", {
     value: vi.fn(() => ({
       document: {
@@ -39,6 +42,7 @@ if (typeof window !== "undefined") {
     writable: true,
   });
 
+  // Mock localStorage
   const localStorageMock = {
     getItem: vi.fn(),
     setItem: vi.fn(),
@@ -49,6 +53,7 @@ if (typeof window !== "undefined") {
     value: localStorageMock,
   });
 
+  // Mock sessionStorage
   const sessionStorageMock = {
     getItem: vi.fn(),
     setItem: vi.fn(),

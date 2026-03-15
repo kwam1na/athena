@@ -26,7 +26,7 @@ import { UserInsightsSection } from "./UserInsightsSection";
 import { LinkedAccounts } from "./LinkedAccounts";
 import { UserBehaviorInsights } from "./behavioral-insights";
 import { formatDate } from "~/convex/utils";
-import { formatUserId } from "~/src/lib/utils";
+import { formatUserId, getRelativeTime } from "~/src/lib/utils";
 import { Badge } from "../ui/badge";
 import CopyButton from "../ui/copy-button";
 import CopyWrapper from "../ui/copy-wrapper";
@@ -90,12 +90,12 @@ export const UserView = () => {
 
   const user = useQuery(
     api.storeFront.user.getByIdentifier,
-    userId ? { id: userId as Id<"storeFrontUser"> } : "skip"
+    userId ? { id: userId as Id<"storeFrontUser"> } : "skip",
   );
 
   const checkoutSession = useQuery(
     api.storeFront.checkoutSession.getActiveCheckoutSession,
-    userId ? { storeFrontUserId: userId as Id<"storeFrontUser"> } : "skip"
+    userId ? { storeFrontUserId: userId as Id<"storeFrontUser"> } : "skip",
   );
 
   if (!user) return null;
@@ -135,6 +135,9 @@ export const UserView = () => {
                   <div className="flex items-center gap-2">
                     <CalendarPlus className="w-4 h-4 text-muted-foreground" />
                     <p className="text-sm">{formatDate(user._creationTime)}</p>
+                    <p className="text-xs font-medium">
+                      {getRelativeTime(user._creationTime)}
+                    </p>
                   </div>
                 </div>
               ) : (
@@ -163,6 +166,9 @@ export const UserView = () => {
                   <div className="flex items-center gap-2">
                     <CalendarPlus className="w-4 h-4 text-muted-foreground" />
                     <p className="text-sm">{formatDate(user._creationTime)}</p>
+                    <p className="text-xs font-medium">
+                      {getRelativeTime(user._creationTime)}
+                    </p>
                   </div>
                 </div>
               )}
