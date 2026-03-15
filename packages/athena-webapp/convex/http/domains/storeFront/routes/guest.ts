@@ -5,24 +5,29 @@ import { api } from "../../../../_generated/api";
 import { Id } from "../../../../_generated/dataModel";
 import { getCookie, deleteCookie, setCookie } from "hono/cookie";
 import { getStoreDataFromRequest } from "../../../utils";
+import { getActorClaims } from "./actorAuth";
 
 const guestRoutes: HonoWithConvex<ActionCtx> = new Hono();
 
 // Get all bags
 guestRoutes.get("/", async (c) => {
   const guestId = getCookie(c, "guest_id");
+  const claims = await getActorClaims(c);
 
   const marker = c.req.query("marker");
 
-  const { storeId, organizationId } = getStoreDataFromRequest(c);
+  const { storeId, organizationId } = await getStoreDataFromRequest(c);
 
-  if (!guestId) {
+  const actorGuestId =
+    claims?.actorType === "guest" ? (claims.actorId as Id<"guest">) : undefined;
+
+  if (!guestId && !actorGuestId) {
     return c.json({ error: "Guest id missing" }, 404);
   }
 
   try {
     const guest = await c.env.runQuery(api.storeFront.guest.getById, {
-      id: guestId as Id<"guest">,
+      id: (guestId || actorGuestId) as Id<"guest">,
     });
 
     return c.json(guest);
@@ -62,11 +67,14 @@ guestRoutes.get("/", async (c) => {
 
 guestRoutes.put("/", async (c) => {
   const guestId = getCookie(c, "guest_id");
+  const claims = await getActorClaims(c);
+  const actorGuestId =
+    claims?.actorType === "guest" ? (claims.actorId as Id<"guest">) : undefined;
 
   const { email, firstName, lastName, phoneNumber } = await c.req.json();
 
   const guest = await c.env.runMutation(api.storeFront.guest.update, {
-    id: guestId as Id<"guest">,
+    id: (guestId || actorGuestId) as Id<"guest">,
     email,
     firstName,
     lastName,

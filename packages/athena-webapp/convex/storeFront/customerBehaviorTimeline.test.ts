@@ -162,6 +162,23 @@ describe("customerBehaviorTimeline", () => {
     expect(result[0].userData).toEqual({ email: "guest@example.com" });
   });
 
+  it("supports 7d timeline filtering", async () => {
+    const { getCustomerBehaviorTimeline } = await loadModule();
+    const { db } = createDbHarness({
+      "analytics:take": [[{ _id: "analytic_7d", action: "ping", data: {} }]],
+      "productSku:collect": [[]],
+    });
+
+    db.get.mockResolvedValue({ _id: "user_1", email: "ada@example.com" });
+
+    const result = await getCustomerBehaviorTimeline.handler({ db } as never, {
+      userId: "user_1",
+      timeRange: "7d",
+    });
+
+    expect(result).toHaveLength(1);
+  });
+
   it("handles unknown users and product fetch failures", async () => {
     const { getCustomerBehaviorTimeline } = await loadModule();
     const { db } = createDbHarness({
@@ -266,5 +283,32 @@ describe("customerBehaviorTimeline", () => {
       },
       lastActiveTime: undefined,
     });
+  });
+
+  it("supports additional summary time ranges", async () => {
+    const { getCustomerBehaviorSummary } = await loadModule();
+    const firstHarness = createDbHarness({
+      "analytics:take": [[{ _creationTime: 1, action: "viewed_product", data: {} }]],
+    });
+    const secondHarness = createDbHarness({
+      "analytics:take": [[{ _creationTime: 2, action: "opened_storefront", data: {} }]],
+    });
+
+    const result24h = await getCustomerBehaviorSummary.handler(
+      { db: firstHarness.db } as never,
+      {
+        userId: "user_1",
+        timeRange: "24h",
+      }
+    );
+    expect(result24h.totalActions).toBe(1);
+
+    const result30d = await getCustomerBehaviorSummary.handler(
+      { db: secondHarness.db } as never,
+      {
+        userId: "user_1",
+      }
+    );
+    expect(result30d.totalActions).toBe(1);
   });
 });

@@ -25,14 +25,14 @@ const emailSchema = z
 offersRoutes.post("/", async (c) => {
   try {
     // Extract guest ID from cookie
-    const guestId = getStorefrontUserFromRequest(c);
+    const guestId = await getStorefrontUserFromRequest(c);
 
     if (!guestId) {
       return c.json({ error: "Guest ID is required" }, 400);
     }
 
     // Get store data
-    const { storeId } = getStoreDataFromRequest(c);
+    const { storeId } = await getStoreDataFromRequest(c);
 
     if (!storeId) {
       return c.json({ error: "Store ID is required" }, 400);
@@ -80,7 +80,7 @@ offersRoutes.post("/", async (c) => {
 
 offersRoutes.get("/", async (c) => {
   try {
-    const guestId = getStorefrontUserFromRequest(c);
+    const guestId = await getStorefrontUserFromRequest(c);
 
     if (!guestId) {
       return c.json({ error: "Guest ID is required" }, 400);

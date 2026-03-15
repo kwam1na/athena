@@ -8,7 +8,7 @@ import { getStorefrontUserFromRequest } from "../../../utils";
 const onlineOrderRoutes: HonoWithConvex<ActionCtx> = new Hono();
 
 onlineOrderRoutes.get("/", async (c) => {
-  const userId = getStorefrontUserFromRequest(c);
+  const userId = await getStorefrontUserFromRequest(c);
 
   if (!userId) {
     return c.json({ error: "User id missing" }, 404);

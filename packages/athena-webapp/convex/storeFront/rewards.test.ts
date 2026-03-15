@@ -642,7 +642,11 @@ describe("storeFront rewards", () => {
         guest_2: { _id: "guest_2", email: "guest@example.com" },
       },
       queryQueues: {
-        "rewardTransactions:first": [{ _id: "txn_existing", points: 10 }, null],
+        "rewardTransactions:first": [
+          { _id: "txn_existing", points: 10 },
+          null,
+          null,
+        ],
         "rewardPoints:first": [{ _id: "rp_7", points: 100 }, null],
       },
     });
@@ -663,6 +667,12 @@ describe("storeFront rewards", () => {
             orderNumber: "WIG-202",
             potentialPoints: 25,
           },
+          {
+            _id: "order_c",
+            storeId: "store_1",
+            orderNumber: "WIG-203",
+            potentialPoints: 5,
+          },
         ]),
       } as never,
       { storeFrontUserId: "user_1", guestId: "guest_2" }
@@ -670,14 +680,14 @@ describe("storeFront rewards", () => {
 
     expect(success).toEqual({
       success: true,
-      pointsAwarded: 65,
-      ordersProcessed: 2,
+      pointsAwarded: 70,
+      ordersProcessed: 3,
     });
     expect(successHarness.db.patch).toHaveBeenCalledWith("txn_existing", {
       points: 50,
     });
     expect(successHarness.db.patch).toHaveBeenCalledWith("rp_7", {
-      points: 140,
+      points: 145,
       updatedAt: Date.now(),
     });
     expect(successHarness.db.insert).toHaveBeenCalledWith(

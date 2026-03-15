@@ -10,7 +10,7 @@ const productRoutes: HonoWithConvex<ActionCtx> = new Hono();
 productRoutes.get("/", async (c) => {
   const params = c.req.queries();
 
-  const { storeId } = getStoreDataFromRequest(c);
+  const { storeId } = await getStoreDataFromRequest(c);
 
   if (!storeId) {
     return c.json({ error: "Store id missing" }, 404);
@@ -39,7 +39,7 @@ productRoutes.get("/", async (c) => {
 });
 
 productRoutes.get("/colors", async (c) => {
-  const { storeId } = getStoreDataFromRequest(c);
+  const { storeId } = await getStoreDataFromRequest(c);
 
   if (!storeId) {
     return c.json({ error: "Store id missing" }, 404);
@@ -51,7 +51,7 @@ productRoutes.get("/colors", async (c) => {
 });
 
 productRoutes.get("/bestSellers", async (c) => {
-  const { storeId } = getStoreDataFromRequest(c);
+  const { storeId } = await getStoreDataFromRequest(c);
 
   if (!storeId) {
     return c.json({ error: "Store id missing" }, 404);
@@ -65,7 +65,7 @@ productRoutes.get("/bestSellers", async (c) => {
 });
 
 productRoutes.get("/featured", async (c) => {
-  const { storeId } = getStoreDataFromRequest(c);
+  const { storeId } = await getStoreDataFromRequest(c);
 
   if (!storeId) {
     return c.json({ error: "Store id missing" }, 404);
@@ -79,7 +79,7 @@ productRoutes.get("/featured", async (c) => {
 });
 
 productRoutes.get("/:productId", async (c) => {
-  const { storeId } = getStoreDataFromRequest(c);
+  const { storeId } = await getStoreDataFromRequest(c);
   const { productId } = c.req.param();
 
   const params = c.req.queries();

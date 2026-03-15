@@ -15,14 +15,14 @@ const bagRoutes: HonoWithConvex<ActionCtx> = new Hono();
 bagRoutes.get("/:bagId", async (c) => {
   const { bagId } = c.req.param();
 
-  const { storeId } = getStoreDataFromRequest(c);
+  const { storeId } = await getStoreDataFromRequest(c);
 
   if (!storeId) {
     return c.json({ error: "Store id missing" }, 404);
   }
 
   if (bagId == "active") {
-    const userId = getStorefrontUserFromRequest(c);
+    const userId = await getStorefrontUserFromRequest(c);
 
     if (!userId) {
       return c.json({ error: "Customer id missing" }, 404);
@@ -56,7 +56,7 @@ bagRoutes.post("/:bagId/items", async (c) => {
   const { bagId } = c.req.param();
   const { productId, productSkuId, quantity, productSku } = await c.req.json();
 
-  const userId = getStorefrontUserFromRequest(c);
+  const userId = await getStorefrontUserFromRequest(c);
 
   const b = await c.env.runMutation(api.storeFront.bagItem.addItemToBag, {
     productId: productId as Id<"product">,

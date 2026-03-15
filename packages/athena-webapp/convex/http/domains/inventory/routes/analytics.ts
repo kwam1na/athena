@@ -11,9 +11,9 @@ import {
 const analyticsRoutes: HonoWithConvex<ActionCtx> = new Hono();
 
 analyticsRoutes.post("/", async (c) => {
-  const { storeId, organizationId } = getStoreDataFromRequest(c);
+  const { storeId, organizationId } = await getStoreDataFromRequest(c);
 
-  const userId = getStorefrontUserFromRequest(c);
+  const userId = await getStorefrontUserFromRequest(c);
 
   if (!userId) {
     return c.json({ error: "Customer id missing" }, 400);

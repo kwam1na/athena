@@ -11,8 +11,8 @@ import { Id } from "../../../../_generated/dataModel";
 const checkoutRoutes: HonoWithConvex<ActionCtx> = new Hono();
 
 checkoutRoutes.post("/", async (c) => {
-  const { storeId } = getStoreDataFromRequest(c);
-  const userId = getStorefrontUserFromRequest(c);
+  const { storeId } = await getStoreDataFromRequest(c);
+  const userId = await getStorefrontUserFromRequest(c);
 
   if (!userId) {
     return c.json({ error: "Customer id missing" }, 404);
@@ -45,8 +45,8 @@ checkoutRoutes.post("/", async (c) => {
 checkoutRoutes.post("/:checkoutSessionId", async (c) => {
   const { checkoutSessionId } = c.req.param();
 
-  const userId = getStorefrontUserFromRequest(c);
-  const { storeId, organizationId } = getStoreDataFromRequest(c);
+  const userId = await getStorefrontUserFromRequest(c);
+  const { storeId, organizationId } = await getStoreDataFromRequest(c);
 
   if (!userId) {
     return c.json({ error: "Customer id missing" }, 404);
@@ -277,7 +277,7 @@ checkoutRoutes.post("/:checkoutSessionId", async (c) => {
 });
 
 checkoutRoutes.get("/active", async (c) => {
-  const userId = getStorefrontUserFromRequest(c);
+  const userId = await getStorefrontUserFromRequest(c);
 
   if (!userId) {
     return c.json({ error: "Customer id missing" }, 404);
@@ -298,7 +298,7 @@ checkoutRoutes.get("/active", async (c) => {
 });
 
 checkoutRoutes.get("/pending", async (c) => {
-  const userId = getStorefrontUserFromRequest(c);
+  const userId = await getStorefrontUserFromRequest(c);
 
   if (!userId) {
     return c.json({ error: "Customer id missing" }, 404);
@@ -325,7 +325,7 @@ checkoutRoutes.get("/:sessionId", async (c) => {
 checkoutRoutes.get("/verify/:reference", async (c) => {
   const { reference } = c.req.param();
 
-  const userId = getStorefrontUserFromRequest(c);
+  const userId = await getStorefrontUserFromRequest(c);
 
   if (!userId) {
     return c.json({ error: "Customer id missing" }, 404);

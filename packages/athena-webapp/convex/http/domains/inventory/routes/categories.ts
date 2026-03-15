@@ -8,7 +8,7 @@ import { getStoreDataFromRequest } from "../../../utils";
 const categoryRoutes: HonoWithConvex<ActionCtx> = new Hono();
 
 categoryRoutes.get("/", async (c) => {
-  const { storeId } = getStoreDataFromRequest(c);
+  const { storeId } = await getStoreDataFromRequest(c);
 
   const queryParams = c.req.queries();
 

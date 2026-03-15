@@ -50,9 +50,9 @@ const reviewRoutes: HonoWithConvex<ActionCtx> = new Hono();
 reviewRoutes.post("/", async (c) => {
   try {
     const body = (await c.req.json()) as CreateReviewRequest;
-    const userId = getStorefrontUserFromRequest(c);
+    const userId = await getStorefrontUserFromRequest(c);
 
-    const { storeId } = getStoreDataFromRequest(c);
+    const { storeId } = await getStoreDataFromRequest(c);
 
     if (!storeId) {
       return c.json({ error: "Store id missing" }, 404);
@@ -129,7 +129,7 @@ reviewRoutes.get("/order-item/:orderItemId/exists", async (c) => {
 reviewRoutes.get("/order-item/:orderItemId/user-exists", async (c) => {
   try {
     const orderItemId = c.req.param("orderItemId");
-    const userId = getStorefrontUserFromRequest(c);
+    const userId = await getStorefrontUserFromRequest(c);
 
     if (!userId) {
       return c.json({ error: "User id missing" }, 400);
@@ -241,7 +241,7 @@ reviewRoutes.get("/product-sku/:productSkuId", async (c) => {
  */
 reviewRoutes.get("/user", async (c) => {
   try {
-    const userId = getStorefrontUserFromRequest(c);
+    const userId = await getStorefrontUserFromRequest(c);
 
     if (!userId) {
       return c.json({ error: "User id missing" }, 400);
@@ -264,7 +264,7 @@ reviewRoutes.get("/user", async (c) => {
  */
 reviewRoutes.get("/user/product-sku/:productSkuId", async (c) => {
   try {
-    const userId = getStorefrontUserFromRequest(c);
+    const userId = await getStorefrontUserFromRequest(c);
     const productSkuId = c.req.param("productSkuId");
 
     if (!userId) {
@@ -315,7 +315,7 @@ reviewRoutes.get("/product/:productId", async (c) => {
 reviewRoutes.post("/:reviewId/helpful", async (c) => {
   try {
     const reviewId = c.req.param("reviewId");
-    const userId = getStorefrontUserFromRequest(c);
+    const userId = await getStorefrontUserFromRequest(c);
     if (!userId) {
       return c.json({ error: "User id missing" }, 400);
     }

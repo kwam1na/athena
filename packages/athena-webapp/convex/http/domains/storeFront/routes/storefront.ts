@@ -21,7 +21,7 @@ storefrontRoutes.get("/", async (c) => {
     name: storeName,
   });
 
-  const userId = getStorefrontUserFromRequest(c);
+  const userId = await getStorefrontUserFromRequest(c);
 
   if (!userId && asNewUser === "true") {
     let guest = await c.env.runQuery(api.storeFront.guest.getByMarker, {

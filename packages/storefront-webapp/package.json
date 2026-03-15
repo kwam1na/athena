@@ -9,7 +9,9 @@
     "start": "vite",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.645.0",
@@ -79,8 +81,12 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.9.0",
+    "@playwright/test": "^1.58.2",
     "@tanstack/react-query-devtools": "^5.51.21",
     "@tanstack/router-devtools": "^1.53.0",
+    "@testing-library/jest-dom": "^6.0.0",
+    "@testing-library/react": "^14.0.0",
+    "@testing-library/user-event": "^14.4.3",
     "@types/bun": "latest",
     "@types/react": "^18.2.65",
     "@types/react-dom": "^18.2.21",
@@ -91,6 +97,7 @@
     "eslint-plugin-react-hooks": "^5.1.0-rc.0",
     "eslint-plugin-react-refresh": "^0.4.9",
     "globals": "^15.9.0",
+    "jose": "^5.9.6",
     "postcss": "^8.4.44",
     "rollup-plugin-visualizer": "^5.14.0",
     "tailwindcss": "^3.4.16",
@@ -99,9 +106,6 @@
     "vite": "^5.4.8",
     "vite-plugin-commonjs": "^0.10.3",
     "vite-tsconfig-paths": "^5.1.4",
-    "vitest": "^3.2.3",
-    "@testing-library/react": "^14.0.0",
-    "@testing-library/jest-dom": "^6.0.0",
-    "@testing-library/user-event": "^14.4.3"
+    "vitest": "^3.2.3"
   }
 }

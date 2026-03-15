@@ -13,6 +13,7 @@ import {
 } from "./http/domains/inventory/routes";
 import {
   checkoutRoutes,
+  e2eRoutes,
   paystackRoutes,
   userRoutes,
 } from "./http/domains/storeFront/routes";
@@ -80,6 +81,8 @@ app.route(
   "/organizations/:organizationId/stores/:storeId/checkout",
   checkoutRoutes
 );
+
+app.route("/organizations/:organizationId/stores/:storeId/e2e", e2eRoutes);
 
 app.get("/.well-known/openid-configuration", async (c) => {
   const [httpAction] = http.lookup(

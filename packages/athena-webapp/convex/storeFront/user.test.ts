@@ -376,6 +376,34 @@ describe("storeFront user", () => {
     );
   });
 
+  it("returns null when all-time viewed products are unavailable", async () => {
+    const { getLastViewedProduct } = await loadModule();
+    const { db } = createDbHarness({
+      queryQueues: {
+        "analytics:take": [
+          [],
+          [
+            {
+              _id: "a5",
+              data: { product: "product_4", productSku: "SKU-MISSING" },
+              storeId: "store_1",
+            },
+          ],
+        ],
+        "bagItem:collect": [[]],
+      },
+    });
+
+    const result = await getLastViewedProduct.handler(
+      { db, runQuery: vi.fn().mockResolvedValue({ skus: [] }) } as never,
+      {
+        id: "user_1",
+      }
+    );
+
+    expect(result).toBeNull();
+  });
+
   it("returns multiple unique last viewed products and backfills from all-time history", async () => {
     const { getLastViewedProducts } = await loadModule();
     const { db } = createDbHarness({
@@ -465,6 +493,79 @@ describe("storeFront user", () => {
     );
 
     expect(result).toEqual([]);
+  });
+
+  it("breaks early in recent-view loop when limit is reached", async () => {
+    const { getLastViewedProducts } = await loadModule();
+    const { db } = createDbHarness({
+      queryQueues: {
+        "analytics:take": [
+          [
+            {
+              data: { product: "product_1", productSku: "SKU-1" },
+              storeId: "store_1",
+            },
+            {
+              data: { product: "product_2", productSku: "SKU-2" },
+              storeId: "store_1",
+            },
+          ],
+        ],
+      },
+    });
+
+    const result = await getLastViewedProducts.handler(
+      {
+        db,
+        runQuery: vi.fn().mockResolvedValue({
+          skus: [{ sku: "SKU-1", quantityAvailable: 1, productCategory: "Hair" }],
+        }),
+      } as never,
+      {
+        id: "user_1",
+        limit: 1,
+        category: "Hair",
+      }
+    );
+
+    expect(result).toHaveLength(1);
+  });
+
+  it("breaks early in all-time loop when limit is reached", async () => {
+    const { getLastViewedProducts } = await loadModule();
+    const { db } = createDbHarness({
+      queryQueues: {
+        "analytics:take": [
+          [],
+          [
+            {
+              data: { product: "product_3", productSku: "SKU-3" },
+              storeId: "store_1",
+            },
+            {
+              data: { product: "product_4", productSku: "SKU-4" },
+              storeId: "store_1",
+            },
+          ],
+        ],
+      },
+    });
+
+    const result = await getLastViewedProducts.handler(
+      {
+        db,
+        runQuery: vi.fn().mockResolvedValue({
+          skus: [{ sku: "SKU-3", quantityAvailable: 1, productCategory: "Hair" }],
+        }),
+      } as never,
+      {
+        id: "user_1",
+        limit: 1,
+        category: "Hair",
+      }
+    );
+
+    expect(result).toHaveLength(1);
   });
 
   it("gets online order by id and most recent activity", async () => {
