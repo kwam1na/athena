@@ -6,7 +6,11 @@ const { sendOrderEmail } = vi.hoisted(() => ({
   sendOrderEmail: vi.fn(),
 }));
 
-function createOrder(overrides: Record<string, unknown> = {}) {
+function h(fn: any): (...args: any[]) => any {
+  return fn.handler;
+}
+
+function createOrder(overrides: Record<string, unknown> = {}): any {
   return {
     _id: "order_123",
     _creationTime: Date.UTC(2026, 2, 13, 12, 0, 0),
@@ -42,7 +46,7 @@ function createOrder(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function createStore(overrides: Record<string, unknown> = {}) {
+function createStore(overrides: Record<string, unknown> = {}): any {
   return {
     _id: "store_1",
     currency: "USD",
@@ -231,7 +235,7 @@ describe("onlineOrderUtilFns coverage", () => {
   it("returns early when order or store cannot be loaded", async () => {
     const mod = await loadModule();
 
-    const missingOrder = await mod.sendOrderUpdateEmail.handler(
+    const missingOrder = await h(mod.sendOrderUpdateEmail)(
       {
         runQuery: vi.fn().mockResolvedValueOnce(null),
         runMutation: vi.fn(),
@@ -246,7 +250,7 @@ describe("onlineOrderUtilFns coverage", () => {
       message: "Order not found",
     });
 
-    const missingStore = await mod.sendOrderUpdateEmail.handler(
+    const missingStore = await h(mod.sendOrderUpdateEmail)(
       {
         runQuery: vi
           .fn()
@@ -277,7 +281,7 @@ describe("onlineOrderUtilFns coverage", () => {
       runMutation: vi.fn(),
     });
 
-    const none = await mod.sendOrderUpdateEmail.handler(
+    const none = await h(mod.sendOrderUpdateEmail)(
       makeCtx({ didSendReadyEmail: true, didSendCompletedEmail: true }) as never,
       {
       orderId: "order_1",
@@ -289,7 +293,7 @@ describe("onlineOrderUtilFns coverage", () => {
       message: "No email sent for this status",
     });
 
-    const confirmation = await mod.sendOrderUpdateEmail.handler(
+    const confirmation = await h(mod.sendOrderUpdateEmail)(
       makeCtx() as never,
       {
         orderId: "order_1",
@@ -301,7 +305,7 @@ describe("onlineOrderUtilFns coverage", () => {
       message: "Confirmation email sent",
     });
 
-    const ready = await mod.sendOrderUpdateEmail.handler(
+    const ready = await h(mod.sendOrderUpdateEmail)(
       makeCtx() as never,
       {
         orderId: "order_1",
@@ -313,7 +317,7 @@ describe("onlineOrderUtilFns coverage", () => {
       message: "Ready email sent",
     });
 
-    const complete = await mod.sendOrderUpdateEmail.handler(
+    const complete = await h(mod.sendOrderUpdateEmail)(
       makeCtx({ deliveryMethod: "delivery" }) as never,
       {
         orderId: "order_1",
@@ -325,7 +329,7 @@ describe("onlineOrderUtilFns coverage", () => {
       message: "Completed email sent",
     });
 
-    const cancelled = await mod.sendOrderUpdateEmail.handler(
+    const cancelled = await h(mod.sendOrderUpdateEmail)(
       makeCtx() as never,
       {
         orderId: "order_1",

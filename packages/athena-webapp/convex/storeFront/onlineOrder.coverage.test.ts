@@ -11,6 +11,10 @@ function wrapDefinition<T extends { handler: (...args: any[]) => any }>(
   );
 }
 
+function h(fn: any): (...args: any[]) => any {
+  return fn.handler;
+}
+
 function createDbHarness({
   queryQueues = {},
   records = {},
@@ -143,7 +147,7 @@ describe("onlineOrder coverage", () => {
   it("covers create invalid-session and promo/discount branches", async () => {
     const { create } = await loadModule();
 
-    const invalid = await create.handler(
+    const invalid = await h(create)(
       { db: createDbHarness().db } as never,
       orderArgs()
     );
@@ -193,7 +197,7 @@ describe("onlineOrder coverage", () => {
       },
     });
 
-    const created = await create.handler({ db } as never, {
+    const created = await h(create)({ db } as never, {
       ...orderArgs(),
       discount: { id: "promo_1", isMultipleUses: false },
     });
@@ -215,7 +219,7 @@ describe("onlineOrder coverage", () => {
   it("covers createFromSession invalid and success paths", async () => {
     const { createFromSession } = await loadModule();
 
-    const invalid = await createFromSession.handler(
+    const invalid = await h(createFromSession)(
       { db: createDbHarness().db, runMutation: vi.fn() } as never,
       {
         checkoutSessionId: "missing",
@@ -265,7 +269,7 @@ describe("onlineOrder coverage", () => {
     });
     const runMutation = vi.fn();
 
-    const result = await createFromSession.handler(
+    const result = await h(createFromSession)(
       { db, runMutation } as never,
       {
         checkoutSessionId: "session_2",
@@ -308,7 +312,7 @@ describe("onlineOrder coverage", () => {
       },
     });
 
-    const allOrders = await mod.getAll.handler({ db: getAllHarness.db } as never, {
+    const allOrders = await h(mod.getAll)({ db: getAllHarness.db } as never, {
       storeFrontUserId: "guest_1",
     });
     expect(allOrders[0].items[0]).toEqual(
@@ -318,7 +322,7 @@ describe("onlineOrder coverage", () => {
       })
     );
 
-    const missingOrder = await mod.get.handler(
+    const missingOrder = await h(mod.get)(
       {
         db: createDbHarness({
           queryQueues: { "onlineOrder:first": [null] },
@@ -378,7 +382,7 @@ describe("onlineOrder coverage", () => {
       },
     });
 
-    const order = await mod.get.handler({ db: getHarness.db } as never, {
+    const order = await h(mod.get)({ db: getHarness.db } as never, {
       identifier: "order_2",
     });
     expect(order).toEqual(
@@ -402,7 +406,7 @@ describe("onlineOrder coverage", () => {
   it("covers order query helper handlers", async () => {
     const mod = await loadModule();
 
-    const byExternal = await mod.getByExternalReference.handler(
+    const byExternal = await h(mod.getByExternalReference)(
       {
         db: createDbHarness({
           queryQueues: { "onlineOrder:first": [{ _id: "order_ext" }] },
@@ -412,7 +416,7 @@ describe("onlineOrder coverage", () => {
     );
     expect(byExternal).toEqual({ _id: "order_ext" });
 
-    const bySession = await mod.getByCheckoutSessionId.handler(
+    const bySession = await h(mod.getByCheckoutSessionId)(
       {
         db: createDbHarness({
           queryQueues: { "onlineOrder:first": [{ _id: "order_session" }] },
@@ -428,7 +432,7 @@ describe("onlineOrder coverage", () => {
         "onlineOrderItem:collect": [[{ _id: "item_3", orderId: "order_3" }]],
       },
     });
-    const ordersForStore = await mod.getAllOnlineOrders.handler(
+    const ordersForStore = await h(mod.getAllOnlineOrders)(
       { db: getAllByStore.db } as never,
       { storeId: "store_1" }
     );
@@ -439,7 +443,7 @@ describe("onlineOrder coverage", () => {
       }),
     ]);
 
-    const byStoreFrontUser = await mod.getAllOnlineOrdersByStoreFrontUserId.handler(
+    const byStoreFrontUser = await h(mod.getAllOnlineOrdersByStoreFrontUserId)(
       {
         db: createDbHarness({
           queryQueues: {
@@ -451,7 +455,7 @@ describe("onlineOrder coverage", () => {
     );
     expect(byStoreFrontUser).toEqual([{ _id: "order_4", storeFrontUserId: "guest_1" }]);
 
-    const newestOrder = await mod.newOrder.handler(
+    const newestOrder = await h(mod.newOrder)(
       {
         db: createDbHarness({
           queryQueues: { "onlineOrder:first": [{ _id: "order_latest" }] },
@@ -461,7 +465,7 @@ describe("onlineOrder coverage", () => {
     );
     expect(newestOrder).toEqual({ _id: "order_latest" });
 
-    const orderItems = await mod.getOrderItems.handler(
+    const orderItems = await h(mod.getOrderItems)(
       {
         db: createDbHarness({
           queryQueues: {
@@ -477,7 +481,7 @@ describe("onlineOrder coverage", () => {
   it("covers update mutation branches for orderId and externalReference", async () => {
     const { update } = await loadModule();
 
-    const notFound = await update.handler(
+    const notFound = await h(update)(
       {
         db: createDbHarness().db,
         runMutation: vi.fn(),
@@ -502,7 +506,7 @@ describe("onlineOrder coverage", () => {
     const scheduler = { runAfter: vi.fn() };
     const runMutation = vi.fn();
 
-    const cancelled = await update.handler(
+    const cancelled = await h(update)(
       {
         db: orderHarness.db,
         runMutation,
@@ -532,7 +536,7 @@ describe("onlineOrder coverage", () => {
         },
       },
     });
-    const completed = await update.handler(
+    const completed = await h(update)(
       {
         db: completedHarness.db,
         runMutation: vi.fn(),
@@ -561,7 +565,7 @@ describe("onlineOrder coverage", () => {
     );
     expect(completed).toEqual({ success: true, message: "Order updated" });
 
-    const noExternalOrder = await update.handler(
+    const noExternalOrder = await h(update)(
       {
         db: createDbHarness({
           queryQueues: { "onlineOrder:first": [null] },
@@ -588,7 +592,7 @@ describe("onlineOrder coverage", () => {
       },
     });
     const externalRunMutation = vi.fn();
-    const externalWithStatus = await update.handler(
+    const externalWithStatus = await h(update)(
       {
         db: externalWithStatusHarness.db,
         runMutation: externalRunMutation,
@@ -619,7 +623,7 @@ describe("onlineOrder coverage", () => {
         ],
       },
     });
-    const externalWithoutStatus = await update.handler(
+    const externalWithoutStatus = await h(update)(
       {
         db: externalWithoutStatusHarness.db,
         runMutation: vi.fn(),
@@ -646,7 +650,7 @@ describe("onlineOrder coverage", () => {
     const { returnItemsToStock, updateOrderItems, returnAllItemsToStock } =
       await loadModule();
 
-    const noOrder = await returnItemsToStock.handler(
+    const noOrder = await h(returnItemsToStock)(
       {
         db: createDbHarness({
           queryQueues: { "onlineOrder:first": [null] },
@@ -676,7 +680,7 @@ describe("onlineOrder coverage", () => {
         },
       },
     });
-    const selectedItems = await returnItemsToStock.handler(
+    const selectedItems = await h(returnItemsToStock)(
       { db: selectedItemsHarness.db } as never,
       {
         externalTransactionId: "txn_1",
@@ -716,7 +720,7 @@ describe("onlineOrder coverage", () => {
         sku_3: { _id: "sku_3", quantityAvailable: 6, inventoryCount: 8 },
       },
     });
-    const allItems = await returnItemsToStock.handler(
+    const allItems = await h(returnItemsToStock)(
       { db: allItemsHarness.db } as never,
       {
         externalTransactionId: "txn_2",
@@ -732,7 +736,7 @@ describe("onlineOrder coverage", () => {
     });
     expect(allItems).toBe(true);
 
-    const updatedItems = await updateOrderItems.handler(
+    const updatedItems = await h(updateOrderItems)(
       { db: createDbHarness().db } as never,
       {
         orderItemIds: ["item_4", "item_5"],
@@ -778,7 +782,7 @@ describe("onlineOrder coverage", () => {
       },
     });
 
-    const restocked = await returnAllItemsToStock.handler(
+    const restocked = await h(returnAllItemsToStock)(
       { db: restockHarness.db } as never,
       { orderId: "order_12" }
     );
@@ -800,7 +804,7 @@ describe("onlineOrder coverage", () => {
   it("covers duplicate detection and order metrics for all time ranges", async () => {
     const { isDuplicateOrder, getOrderMetrics } = await loadModule();
 
-    const missingDuplicateCheck = await isDuplicateOrder.handler(
+    const missingDuplicateCheck = await h(isDuplicateOrder)(
       { db: createDbHarness().db } as never,
       { id: "missing_order" }
     );
@@ -814,7 +818,7 @@ describe("onlineOrder coverage", () => {
         "onlineOrder:collect": [[{ _id: "order_dup" }, { _id: "order_dup_2" }]],
       },
     });
-    const duplicateCheck = await isDuplicateOrder.handler(
+    const duplicateCheck = await h(isDuplicateOrder)(
       { db: duplicateHarness.db } as never,
       { id: "order_dup" }
     );
@@ -857,7 +861,7 @@ describe("onlineOrder coverage", () => {
         },
       });
 
-      return getOrderMetrics.handler({ db: metricsHarness.db } as never, {
+      return h(getOrderMetrics)({ db: metricsHarness.db } as never, {
         storeId: "store_1",
         timeRange,
       });

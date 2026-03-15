@@ -175,7 +175,7 @@ describe("customerBehaviorTimeline", () => {
 
     db.get.mockResolvedValue({ _id: "user_1", email: "ada@example.com" });
 
-    const result = await getCustomerBehaviorTimeline.handler({ db } as never, {
+    const result = await h(getCustomerBehaviorTimeline)({ db } as never, {
       userId: "user_1",
       timeRange: "7d",
     });
@@ -298,7 +298,7 @@ describe("customerBehaviorTimeline", () => {
       "analytics:take": [[{ _creationTime: 2, action: "opened_storefront", data: {} }]],
     });
 
-    const result24h = await getCustomerBehaviorSummary.handler(
+    const result24h = await h(getCustomerBehaviorSummary)(
       { db: firstHarness.db } as never,
       {
         userId: "user_1",
@@ -307,7 +307,7 @@ describe("customerBehaviorTimeline", () => {
     );
     expect(result24h.totalActions).toBe(1);
 
-    const result30d = await getCustomerBehaviorSummary.handler(
+    const result30d = await h(getCustomerBehaviorSummary)(
       { db: secondHarness.db } as never,
       {
         userId: "user_1",

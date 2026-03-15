@@ -23,6 +23,10 @@ function wrapDefinition<T extends { handler: (...args: any[]) => any }>(
   );
 }
 
+function h(fn: any): (...args: any[]) => any {
+  return fn.handler;
+}
+
 function createDbHarness({
   queryQueues = {},
   records = {},
@@ -165,7 +169,7 @@ describe("storeFront offers", () => {
       db: createDbHarness().db,
       scheduler: { runAfter: vi.fn() },
     };
-    const invalid = await create.handler(invalidCtx as never, {
+    const invalid = await h(create)(invalidCtx as never, {
       email: "not-an-email",
       promoCodeId: "promo_1",
       storeFrontUserId: "user_1",
@@ -186,7 +190,7 @@ describe("storeFront offers", () => {
       db: duplicateHarness.db,
       scheduler: { runAfter: vi.fn() },
     };
-    const duplicate = await create.handler(duplicateCtx as never, {
+    const duplicate = await h(create)(duplicateCtx as never, {
       email: "ada@example.com",
       promoCodeId: "promo_1",
       storeFrontUserId: "user_1",
@@ -207,7 +211,7 @@ describe("storeFront offers", () => {
       db: successHarness.db,
       scheduler: { runAfter: vi.fn().mockResolvedValue(undefined) },
     };
-    const success = await create.handler(successCtx as never, {
+    const success = await h(create)(successCtx as never, {
       email: "ada@example.com",
       promoCodeId: "promo_1",
       storeFrontUserId: "user_1",
@@ -237,7 +241,7 @@ describe("storeFront offers", () => {
       runQuery: vi.fn().mockResolvedValue(null),
       runMutation: vi.fn(),
     };
-    const missingOffer = await sendOfferEmail.handler(missingOfferCtx as never, {
+    const missingOffer = await h(sendOfferEmail)(missingOfferCtx as never, {
       offerId: "offer_1",
     });
     expect(missingOffer).toEqual({
@@ -259,7 +263,7 @@ describe("storeFront offers", () => {
         .mockResolvedValueOnce(null),
       runMutation: vi.fn(),
     };
-    const missingPromo = await sendOfferEmail.handler(missingPromoCtx as never, {
+    const missingPromo = await h(sendOfferEmail)(missingPromoCtx as never, {
       offerId: "offer_1",
     });
     expect(missingPromo).toEqual({
@@ -320,7 +324,7 @@ describe("storeFront offers", () => {
         ]),
       runMutation: vi.fn(),
     };
-    const success = await sendOfferEmail.handler(successCtx as never, {
+    const success = await h(sendOfferEmail)(successCtx as never, {
       offerId: "offer_2",
     });
     expect(success).toEqual({
@@ -363,7 +367,7 @@ describe("storeFront offers", () => {
         .mockResolvedValueOnce(null),
       runMutation: vi.fn(),
     };
-    const error = await sendOfferEmail.handler(errorCtx as never, {
+    const error = await h(sendOfferEmail)(errorCtx as never, {
       offerId: "offer_3",
     });
     expect(error).toEqual({
@@ -384,7 +388,7 @@ describe("storeFront offers", () => {
       runQuery: vi.fn().mockResolvedValue(null),
       runMutation: vi.fn(),
     };
-    const missingOffer = await sendOfferReminderEmail.handler(
+    const missingOffer = await h(sendOfferReminderEmail)(
       missingOfferCtx as never,
       {
         offerId: "offer_1",
@@ -409,7 +413,7 @@ describe("storeFront offers", () => {
         .mockResolvedValueOnce(null),
       runMutation: vi.fn(),
     };
-    const missingPromo = await sendOfferReminderEmail.handler(
+    const missingPromo = await h(sendOfferReminderEmail)(
       missingPromoCtx as never,
       {
         offerId: "offer_2",
@@ -446,7 +450,7 @@ describe("storeFront offers", () => {
         .mockResolvedValueOnce(null),
       runMutation: vi.fn(),
     };
-    const missingStore = await sendOfferReminderEmail.handler(
+    const missingStore = await h(sendOfferReminderEmail)(
       missingStoreCtx as never,
       {
         offerId: "offer_3",
@@ -513,7 +517,7 @@ describe("storeFront offers", () => {
         ]),
       runMutation: vi.fn(),
     };
-    const success = await sendOfferReminderEmail.handler(successCtx as never, {
+    const success = await h(sendOfferReminderEmail)(successCtx as never, {
       offerId: "offer_4",
     });
     expect(success).toEqual({
@@ -566,7 +570,7 @@ describe("storeFront offers", () => {
         .mockResolvedValueOnce([]),
       runMutation: vi.fn(),
     };
-    const error = await sendOfferReminderEmail.handler(errorCtx as never, {
+    const error = await h(sendOfferReminderEmail)(errorCtx as never, {
       offerId: "offer_5",
     });
     expect(error).toEqual({
@@ -582,7 +586,7 @@ describe("storeFront offers", () => {
       runQuery: vi.fn().mockResolvedValue([]),
       scheduler: { runAfter: vi.fn() },
     };
-    const none = await sendOfferReminderEmails.handler(noneCtx as never, {
+    const none = await h(sendOfferReminderEmails)(noneCtx as never, {
       storeId: "store_1",
     });
     expect(none).toEqual({
@@ -596,7 +600,7 @@ describe("storeFront offers", () => {
         .mockResolvedValue([{ _id: "offer_1" }, { _id: "offer_2" }]),
       scheduler: { runAfter: vi.fn().mockResolvedValue(undefined) },
     };
-    const bulk = await sendOfferReminderEmails.handler(bulkCtx as never, {
+    const bulk = await h(sendOfferReminderEmails)(bulkCtx as never, {
       storeId: "store_1",
     });
     expect(bulk).toEqual({
@@ -617,7 +621,7 @@ describe("storeFront offers", () => {
       },
     });
 
-    await updateStatus.handler({ db } as never, {
+    await h(updateStatus)({ db } as never, {
       id: "offer_1",
       status: "sent",
       sentAt: 2000,
@@ -634,7 +638,7 @@ describe("storeFront offers", () => {
       ],
     });
 
-    await updateStatus.handler({ db } as never, {
+    await h(updateStatus)({ db } as never, {
       id: "offer_missing",
       status: "error",
     });
@@ -667,25 +671,25 @@ describe("storeFront offers", () => {
       },
     });
 
-    const byId = await mod.getById.handler({ db } as never, { id: "offer_1" });
+    const byId = await h(mod.getById)({ db } as never, { id: "offer_1" });
     expect(byId).toEqual({ _id: "offer_1", status: "sent" });
 
-    const byStore = await mod.getByStoreId.handler({ db } as never, {
+    const byStore = await h(mod.getByStoreId)({ db } as never, {
       storeId: "store_1",
     });
     expect(byStore).toEqual([{ _id: "offer_store_1" }]);
 
-    const byPromo = await mod.getByPromoCodeId.handler({ db } as never, {
+    const byPromo = await h(mod.getByPromoCodeId)({ db } as never, {
       promoCodeId: "promo_1",
     });
     expect(byPromo).toEqual([{ _id: "offer_promo_1" }]);
 
-    const byEmail = await mod.getByEmail.handler({ db } as never, {
+    const byEmail = await h(mod.getByEmail)({ db } as never, {
       email: "ada@example.com",
     });
     expect(byEmail).toEqual([{ _id: "offer_email_1" }]);
 
-    const byUser = await mod.getByStorefrontUserId.handler({ db } as never, {
+    const byUser = await h(mod.getByStorefrontUserId)({ db } as never, {
       storeFrontUserId: "user_1",
     });
     expect(byUser).toEqual([
@@ -696,13 +700,13 @@ describe("storeFront offers", () => {
       },
     ]);
 
-    const withStatus = await mod.getAll.handler({ db } as never, {
+    const withStatus = await h(mod.getAll)({ db } as never, {
       storeId: "store_1",
       status: "sent",
     });
     expect(withStatus).toEqual([{ _id: "offer_all_status" }]);
 
-    const withoutStatus = await mod.getAll.handler({ db } as never, {
+    const withoutStatus = await h(mod.getAll)({ db } as never, {
       storeId: "store_1",
     });
     expect(withoutStatus).toEqual([{ _id: "offer_all_any" }]);

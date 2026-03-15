@@ -16,6 +16,10 @@ function wrapDefinition<T extends { handler: (...args: any[]) => any }>(
   );
 }
 
+function h(fn: any): (...args: any[]) => any {
+  return fn.handler;
+}
+
 function createDbHarness({
   queryQueues = {},
   records = {},
@@ -184,7 +188,7 @@ describe("storeFront reviews", () => {
       runMutation: vi.fn(),
     };
 
-    const result = await create.handler(ctx as never, baseCreateArgs() as never);
+    const result = await h(create)(ctx as never, baseCreateArgs() as never);
 
     expect(result).toBe("review_1");
     expect(ctx.runMutation).toHaveBeenCalledWith("offers.create", {
@@ -207,7 +211,7 @@ describe("storeFront reviews", () => {
       db: nonFirstHarness.db,
       runMutation: vi.fn(),
     };
-    await create.handler(nonFirstCtx as never, baseCreateArgs() as never);
+    await h(create)(nonFirstCtx as never, baseCreateArgs() as never);
     expect(nonFirstCtx.runMutation).not.toHaveBeenCalled();
 
     const noConfigHarness = createDbHarness({
@@ -222,7 +226,7 @@ describe("storeFront reviews", () => {
       db: noConfigHarness.db,
       runMutation: vi.fn(),
     };
-    await create.handler(noConfigCtx as never, baseCreateArgs() as never);
+    await h(create)(noConfigCtx as never, baseCreateArgs() as never);
     expect(noConfigCtx.runMutation).not.toHaveBeenCalled();
   });
 
@@ -244,7 +248,7 @@ describe("storeFront reviews", () => {
         },
       },
     });
-    await create.handler(
+    await h(create)(
       { db: missingPromoHarness.db, runMutation: vi.fn() } as never,
       baseCreateArgs() as never
     );
@@ -270,7 +274,7 @@ describe("storeFront reviews", () => {
         },
       },
     });
-    await create.handler(
+    await h(create)(
       { db: inactivePromoHarness.db, runMutation: vi.fn() } as never,
       baseCreateArgs() as never
     );
@@ -297,7 +301,7 @@ describe("storeFront reviews", () => {
         user_1: { _id: "user_1" },
       },
     });
-    await create.handler(
+    await h(create)(
       { db: noEmailHarness.db, runMutation: vi.fn() } as never,
       baseCreateArgs() as never
     );
@@ -331,7 +335,7 @@ describe("storeFront reviews", () => {
       db: duplicateOfferHarness.db,
       runMutation: vi.fn(),
     };
-    await create.handler(duplicateCtx as never, baseCreateArgs() as never);
+    await h(create)(duplicateCtx as never, baseCreateArgs() as never);
     expect(duplicateCtx.runMutation).not.toHaveBeenCalled();
   });
 
@@ -372,17 +376,17 @@ describe("storeFront reviews", () => {
       },
     });
 
-    const byOrderItem = await mod.getByOrderItem.handler({ db } as never, {
+    const byOrderItem = await h(mod.getByOrderItem)({ db } as never, {
       orderItemId: "order_item_1",
     });
     expect(byOrderItem).toEqual({ _id: "review_1" });
 
-    const hasReview = await mod.hasReviewForOrderItem.handler({ db } as never, {
+    const hasReview = await h(mod.hasReviewForOrderItem)({ db } as never, {
       orderItemId: "order_item_1",
     });
     expect(hasReview).toBe(true);
 
-    const hasUserReview = await mod.hasUserReviewForOrderItem.handler(
+    const hasUserReview = await h(mod.hasUserReviewForOrderItem)(
       { db } as never,
       {
         orderItemId: "order_item_1",
@@ -391,7 +395,7 @@ describe("storeFront reviews", () => {
     );
     expect(hasUserReview).toBe(false);
 
-    await mod.update.handler({ db } as never, {
+    await h(mod.update)({ db } as never, {
       id: "review_1",
       title: "Updated",
       content: "Updated content",
@@ -405,20 +409,20 @@ describe("storeFront reviews", () => {
       })
     );
 
-    await mod.deleteReview.handler({ db } as never, { id: "review_1" });
+    await h(mod.deleteReview)({ db } as never, { id: "review_1" });
     expect(db.delete).toHaveBeenCalledWith("review_1");
 
-    const bySku = await mod.getByProductSkuId.handler({ db } as never, {
+    const bySku = await h(mod.getByProductSkuId)({ db } as never, {
       productSkuId: "sku_1",
     });
     expect(bySku).toEqual([{ _id: "review_a" }]);
 
-    const byUser = await mod.getByUser.handler({ db } as never, {
+    const byUser = await h(mod.getByUser)({ db } as never, {
       userId: "user_1",
     });
     expect(byUser).toEqual([{ _id: "review_b" }]);
 
-    const byUserAndSku = await mod.getByUserAndProductSkuId.handler(
+    const byUserAndSku = await h(mod.getByUserAndProductSkuId)(
       { db } as never,
       {
         userId: "user_1",
@@ -427,7 +431,7 @@ describe("storeFront reviews", () => {
     );
     expect(byUserAndSku).toEqual([{ _id: "review_c" }]);
 
-    const allStoreReviews = await mod.getAllReviewsForStore.handler(
+    const allStoreReviews = await h(mod.getAllReviewsForStore)(
       { db } as never,
       { storeId: "store_1" }
     );
@@ -439,10 +443,10 @@ describe("storeFront reviews", () => {
       },
     ]);
 
-    await mod.approve.handler({ db } as never, { id: "review_1", userId: "athena_1" });
-    await mod.reject.handler({ db } as never, { id: "review_1", userId: "athena_1" });
-    await mod.publish.handler({ db } as never, { id: "review_1", userId: "athena_1" });
-    await mod.unpublish.handler({ db } as never, { id: "review_1", userId: "athena_1" });
+    await h(mod.approve)({ db } as never, { id: "review_1", userId: "athena_1" });
+    await h(mod.reject)({ db } as never, { id: "review_1", userId: "athena_1" });
+    await h(mod.publish)({ db } as never, { id: "review_1", userId: "athena_1" });
+    await h(mod.unpublish)({ db } as never, { id: "review_1", userId: "athena_1" });
 
     const ctxForProduct = {
       db,
@@ -451,7 +455,7 @@ describe("storeFront reviews", () => {
         images: ["https://cdn.example.com/sku-10.png"],
       }),
     };
-    const byProduct = await mod.getByProductId.handler(ctxForProduct as never, {
+    const byProduct = await h(mod.getByProductId)(ctxForProduct as never, {
       productId: "product_1",
     });
     expect(byProduct).toEqual([
@@ -465,13 +469,13 @@ describe("storeFront reviews", () => {
       }),
     ]);
 
-    const addedHelpful = await mod.markHelpful.handler({ db } as never, {
+    const addedHelpful = await h(mod.markHelpful)({ db } as never, {
       reviewId: "review_vote",
       userId: "user_2",
     });
     expect(addedHelpful).toEqual({ helpfulCount: 2 });
 
-    const removedHelpful = await mod.markHelpful.handler({ db } as never, {
+    const removedHelpful = await h(mod.markHelpful)({ db } as never, {
       reviewId: "review_vote",
       userId: "user_1",
     });
@@ -479,13 +483,13 @@ describe("storeFront reviews", () => {
 
     recordMap.delete("review_vote");
     await expect(
-      mod.markHelpful.handler({ db } as never, {
+      h(mod.markHelpful)({ db } as never, {
         reviewId: "review_vote",
         userId: "user_3",
       })
     ).rejects.toThrow("Review not found");
 
-    const unapprovedCount = await mod.getUnapprovedReviewsCount.handler(
+    const unapprovedCount = await h(mod.getUnapprovedReviewsCount)(
       { db } as never,
       { storeId: "store_1" }
     );
@@ -500,7 +504,7 @@ describe("storeFront reviews", () => {
       },
     });
 
-    const result = await getByProductId.handler(
+    const result = await h(getByProductId)(
       { db, runQuery: vi.fn() } as never,
       {
         productId: "product_1",
@@ -525,7 +529,7 @@ describe("storeFront reviews", () => {
       runQuery: vi.fn().mockResolvedValueOnce(null),
       runMutation: vi.fn(),
     };
-    const missingOrder = await sendFeedbackRequest.handler(
+    const missingOrder = await h(sendFeedbackRequest)(
       missingOrderCtx as never,
       {
         productSkuId: "sku_1",
@@ -547,7 +551,7 @@ describe("storeFront reviews", () => {
       }),
       runMutation: vi.fn(),
     };
-    const alreadyRequested = await sendFeedbackRequest.handler(
+    const alreadyRequested = await h(sendFeedbackRequest)(
       alreadyRequestedCtx as never,
       {
         productSkuId: "sku_1",
@@ -569,7 +573,7 @@ describe("storeFront reviews", () => {
         .mockResolvedValueOnce(null),
       runMutation: vi.fn(),
     };
-    const missingSku = await sendFeedbackRequest.handler(missingSkuCtx as never, {
+    const missingSku = await h(sendFeedbackRequest)(missingSkuCtx as never, {
       productSkuId: "sku_1",
       customerEmail: "ada@example.com",
       customerName: "Ada",
@@ -589,7 +593,7 @@ describe("storeFront reviews", () => {
         .mockResolvedValueOnce({ _id: "sku_1", name: "Body Wave", images: ["img"] }),
       runMutation: vi.fn(),
     };
-    const failedEmail = await sendFeedbackRequest.handler(failedEmailCtx as never, {
+    const failedEmail = await h(sendFeedbackRequest)(failedEmailCtx as never, {
       productSkuId: "sku_1",
       customerEmail: "ada@example.com",
       customerName: "Ada",
@@ -613,7 +617,7 @@ describe("storeFront reviews", () => {
         }),
       runMutation: vi.fn(),
     };
-    const success = await sendFeedbackRequest.handler(successCtx as never, {
+    const success = await h(sendFeedbackRequest)(successCtx as never, {
       productSkuId: "sku_1",
       customerEmail: "ada@example.com",
       customerName: "Ada",

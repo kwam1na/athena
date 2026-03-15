@@ -300,7 +300,7 @@ describe("payment actions", () => {
     const { createTransaction } = await loadModule({ paystackKey: "" });
 
     await expect(
-      createTransaction.handler(
+      h(createTransaction)(
         { runMutation: vi.fn() } as never,
         {
           checkoutSessionId: "session_123",
@@ -332,7 +332,7 @@ describe("payment actions", () => {
       }),
     } as Response);
 
-    const result = await createTransaction.handler(ctx as never, {
+    const result = await h(createTransaction)(ctx as never, {
       checkoutSessionId: "session_123",
       customerEmail: "ada@example.com",
       amount: 12500,
@@ -371,7 +371,7 @@ describe("payment actions", () => {
       json: async () => ({}),
     } as Response);
 
-    const result = await createTransaction.handler(ctx as never, {
+    const result = await h(createTransaction)(ctx as never, {
       checkoutSessionId: "session_123",
       customerEmail: "ada@example.com",
       amount: 12500,
@@ -413,7 +413,7 @@ describe("payment actions", () => {
       }),
     } as Response);
 
-    const mismatchResult = await verifyPayment.handler(mismatchCtx as never, {
+    const mismatchResult = await h(verifyPayment)(mismatchCtx as never, {
       storeFrontUserId: "user_123",
       externalReference: "ref_bad",
     });
@@ -427,7 +427,7 @@ describe("payment actions", () => {
       status: 500,
       json: async () => ({}),
     } as Response);
-    const failedFetch = await verifyPayment.handler(
+    const failedFetch = await h(verifyPayment)(
       {
         runQuery: vi.fn(),
         runMutation: vi.fn(),
@@ -499,7 +499,7 @@ describe("payment actions", () => {
       }),
     } as Response);
 
-    const result = await verifyPayment.handler(ctx as never, {
+    const result = await h(verifyPayment)(ctx as never, {
       storeFrontUserId: "guest_123",
       externalReference: "ref_pickup",
     });
@@ -535,7 +535,7 @@ describe("payment actions", () => {
       }),
     } as Response);
 
-    const result = await refundPayment.handler(ctx as never, {
+    const result = await h(refundPayment)(ctx as never, {
       externalTransactionId: "txn_999",
       amount: 1000,
       returnItemsToStock: true,
@@ -566,7 +566,7 @@ describe("payment actions", () => {
       }),
     } as Response);
 
-    const result = await refundPayment.handler(
+    const result = await h(refundPayment)(
       { runMutation: vi.fn() } as never,
       {
         externalTransactionId: "txn_777",

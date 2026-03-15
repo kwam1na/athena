@@ -11,6 +11,10 @@ function wrapDefinition<T extends { handler: (...args: any[]) => any }>(
   );
 }
 
+function h(fn: any): (...args: any[]) => any {
+  return fn.handler;
+}
+
 function createDbHarness({
   queryQueues = {},
   records = {},
@@ -163,7 +167,7 @@ describe("checkoutSession coverage", () => {
         "checkoutSession:first": [null],
       },
     });
-    const unavailable = await create.handler(
+    const unavailable = await h(create)(
       { db: unavailableHarness.db } as never,
       {
         storeId: "store_1",
@@ -263,7 +267,7 @@ describe("checkoutSession coverage", () => {
       },
     });
 
-    const updated = await create.handler({ db: existingHarness.db } as never, {
+    const updated = await h(create)({ db: existingHarness.db } as never, {
       storeId: "store_1",
       storeFrontUserId: "guest_1",
       bagId: "bag_1",
@@ -319,7 +323,7 @@ describe("checkoutSession coverage", () => {
         "checkoutSession:collect": [[]],
       },
     });
-    await mod.releaseCheckoutItems.handler({ db: noExpiredHarness.db } as never, {});
+    await h(mod.releaseCheckoutItems)({ db: noExpiredHarness.db } as never, {});
 
     const missingSkuHarness = createDbHarness({
       queryQueues: {
@@ -329,11 +333,11 @@ describe("checkoutSession coverage", () => {
         ],
       },
     });
-    await mod.releaseCheckoutItems.handler({ db: missingSkuHarness.db } as never, {});
+    await h(mod.releaseCheckoutItems)({ db: missingSkuHarness.db } as never, {});
     expect(missingSkuHarness.db.delete).toHaveBeenCalledWith("item_1");
     expect(missingSkuHarness.db.delete).toHaveBeenCalledWith("session_expired");
 
-    const noActive = await mod.getActiveCheckoutSession.handler(
+    const noActive = await h(mod.getActiveCheckoutSession)(
       { db: createDbHarness({ queryQueues: { "checkoutSession:first": [null] } }).db } as never,
       { storeFrontUserId: "guest_1" }
     );
@@ -342,7 +346,7 @@ describe("checkoutSession coverage", () => {
 
   it("covers cancelOrder invalid, failed refund, and missing paystack-key paths", async () => {
     const { cancelOrder } = await loadModule();
-    const invalid = await cancelOrder.handler(
+    const invalid = await h(cancelOrder)(
       {
         runQuery: vi.fn().mockResolvedValue(null),
         runMutation: vi.fn(),
@@ -354,7 +358,7 @@ describe("checkoutSession coverage", () => {
     vi.mocked(fetch).mockResolvedValue({
       status: 500,
     } as Response);
-    const failedRefund = await cancelOrder.handler(
+    const failedRefund = await h(cancelOrder)(
       {
         runQuery: vi.fn().mockResolvedValue({
           _id: "session_1",
@@ -371,7 +375,7 @@ describe("checkoutSession coverage", () => {
 
     const { cancelOrder: cancelNoKey } = await loadModule("");
     await expect(
-      cancelNoKey.handler(
+      h(cancelNoKey)(
         {
           runQuery: vi.fn().mockResolvedValue({
             _id: "session_1",
@@ -390,7 +394,7 @@ describe("checkoutSession coverage", () => {
     const missingSessionHarness = createDbHarness();
     missingSessionHarness.db.patch.mockImplementationOnce(async () => {});
     missingSessionHarness.db.get.mockResolvedValueOnce(null);
-    const missingSession = await updateCheckoutSession.handler(
+    const missingSession = await h(updateCheckoutSession)(
       {
         db: missingSessionHarness.db,
         runMutation: vi.fn(),
@@ -413,7 +417,7 @@ describe("checkoutSession coverage", () => {
         },
       },
     });
-    const duplicate = await updateCheckoutSession.handler(
+    const duplicate = await h(updateCheckoutSession)(
       {
         db: duplicateHarness.db,
         runMutation: vi.fn(),
@@ -439,7 +443,7 @@ describe("checkoutSession coverage", () => {
         },
       },
     });
-    const failedCreate = await updateCheckoutSession.handler(
+    const failedCreate = await h(updateCheckoutSession)(
       {
         db: failedCreateHarness.db,
         runMutation: vi.fn().mockResolvedValue({ success: false, error: "oops" }),
@@ -467,7 +471,7 @@ describe("checkoutSession coverage", () => {
         },
       },
     });
-    const duplicateAfterPayment = await updateCheckoutSession.handler(
+    const duplicateAfterPayment = await h(updateCheckoutSession)(
       {
         db: duplicateAfterPaymentHarness.db,
         runMutation: vi.fn(),
@@ -493,7 +497,7 @@ describe("checkoutSession coverage", () => {
         },
       },
     });
-    const noOrderCreation = await updateCheckoutSession.handler(
+    const noOrderCreation = await h(updateCheckoutSession)(
       {
         db: noOrderCreationHarness.db,
         runMutation: vi.fn(),
@@ -513,7 +517,7 @@ describe("checkoutSession coverage", () => {
       },
     });
     errorHarness.db.patch.mockRejectedValueOnce(new Error("patch failed"));
-    const errored = await updateCheckoutSession.handler(
+    const errored = await h(updateCheckoutSession)(
       {
         db: errorHarness.db,
         runMutation: vi.fn(),
@@ -565,24 +569,24 @@ describe("checkoutSession coverage", () => {
       },
     });
 
-    const checkout = await mod.getCheckoutSession.handler({ db } as never, {
+    const checkout = await h(mod.getCheckoutSession)({ db } as never, {
       storeFrontUserId: "user_1",
       externalReference: "ref_1",
       sessionId: "session_1",
     });
     expect(checkout).toEqual({ _id: "session_1" });
 
-    const pending = await mod.getPendingCheckoutSessions.handler({ db } as never, {
+    const pending = await h(mod.getPendingCheckoutSessions)({ db } as never, {
       storeFrontUserId: "user_1",
     });
     expect(pending).toEqual([{ _id: "session_pending_1" }]);
 
-    const missingById = await mod.getById.handler({ db } as never, {
+    const missingById = await h(mod.getById)({ db } as never, {
       sessionId: "session_404",
     });
     expect(missingById).toBeNull();
 
-    const byId = await mod.getById.handler({ db } as never, {
+    const byId = await h(mod.getById)({ db } as never, {
       sessionId: "session_with_items",
     });
     expect(byId).toEqual(

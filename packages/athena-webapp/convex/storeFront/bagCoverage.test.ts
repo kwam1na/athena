@@ -11,6 +11,10 @@ function wrapDefinition<T extends { handler: (...args: any[]) => any }>(
   );
 }
 
+function h(fn: any): (...args: any[]) => any {
+  return fn.handler;
+}
+
 function createDbHarness({
   queryQueues = {},
   records = {},
@@ -260,15 +264,15 @@ describe("storeFront bag and saved bag coverage", () => {
       },
     });
 
-    const all = await bag.getAll.handler({ db } as never, {});
+    const all = await h(bag.getAll)({ db } as never, {});
     expect(all).toEqual([{ _id: "bag_1" }]);
 
-    const missingById = await bag.getById.handler({ db } as never, {
+    const missingById = await h(bag.getById)({ db } as never, {
       id: "bag_404",
     });
     expect(missingById).toBeNull();
 
-    const byUser = await bag.getByUserId.handler({ db } as never, {
+    const byUser = await h(bag.getByUserId)({ db } as never, {
       storeFrontUserId: "user_1",
     });
     expect(byUser).toEqual(
@@ -284,17 +288,17 @@ describe("storeFront bag and saved bag coverage", () => {
       })
     );
 
-    const missingByUser = await bag.getByUserId.handler({ db } as never, {
+    const missingByUser = await h(bag.getByUserId)({ db } as never, {
       storeFrontUserId: "missing",
     });
     expect(missingByUser).toBeNull();
 
-    const deleted = await bag.deleteBag.handler({ db } as never, { id: "bag_1" });
+    const deleted = await h(bag.deleteBag)({ db } as never, { id: "bag_1" });
     expect(deleted).toEqual({ message: "Bag and its items deleted" });
     expect(db.delete).toHaveBeenCalledWith("bag_item_del_1");
     expect(db.delete).toHaveBeenCalledWith("bag_item_del_2");
 
-    const cleared = await bag.clearBag.handler({ db } as never, { id: "bag_2" });
+    const cleared = await h(bag.clearBag)({ db } as never, { id: "bag_2" });
     expect(cleared).toEqual({ message: "Items in bag cleared" });
     expect(db.delete).toHaveBeenCalledWith("bag_item_clear_1");
 
@@ -303,7 +307,7 @@ describe("storeFront bag and saved bag coverage", () => {
         "bag:first": [null, null],
       },
     });
-    const missingOwnerUpdate = await bag.updateOwner.handler(
+    const missingOwnerUpdate = await h(bag.updateOwner)(
       { db: missingOwnerHarness.db } as never,
       {
         currentOwner: "guest_none",
@@ -329,7 +333,7 @@ describe("storeFront bag and saved bag coverage", () => {
         },
       },
     });
-    const reassigned = await bag.updateOwner.handler(
+    const reassigned = await h(bag.updateOwner)(
       { db: reassignHarness.db } as never,
       {
         currentOwner: "guest_1",
@@ -346,7 +350,7 @@ describe("storeFront bag and saved bag coverage", () => {
       updatedAt: Date.now(),
     });
 
-    const paginated = await bag.getPaginatedBags.handler({ db } as never, {
+    const paginated = await h(bag.getPaginatedBags)({ db } as never, {
       storeId: "store_1",
       pagination: { pageIndex: 0, pageSize: 5 },
       sorting: [{ id: "updatedAt", desc: false }],
@@ -365,7 +369,7 @@ describe("storeFront bag and saved bag coverage", () => {
       })
     );
 
-    const paginatedDefaultSort = await bag.getPaginatedBags.handler(
+    const paginatedDefaultSort = await h(bag.getPaginatedBags)(
       { db } as never,
       {
         storeId: "store_1",
@@ -411,25 +415,25 @@ describe("storeFront bag and saved bag coverage", () => {
       },
     });
 
-    await bag.getPaginatedBags.handler({ db: sortHarness.db } as never, {
+    await h(bag.getPaginatedBags)({ db: sortHarness.db } as never, {
       storeId: "store_1",
       pagination: { pageIndex: 0, pageSize: 10 },
       sorting: [{ id: "updatedAt", desc: true }],
     });
 
-    await bag.getPaginatedBags.handler({ db: sortHarness.db } as never, {
+    await h(bag.getPaginatedBags)({ db: sortHarness.db } as never, {
       storeId: "store_1",
       pagination: { pageIndex: 0, pageSize: 10 },
       sorting: [{ id: "storeFrontUserId", desc: true }],
     });
 
-    await bag.getPaginatedBags.handler({ db: sortHarness.db } as never, {
+    await h(bag.getPaginatedBags)({ db: sortHarness.db } as never, {
       storeId: "store_1",
       pagination: { pageIndex: 0, pageSize: 10 },
       sorting: [{ id: "storeFrontUserId", desc: false }],
     });
 
-    await bag.getPaginatedBags.handler({ db: sortHarness.db } as never, {
+    await h(bag.getPaginatedBags)({ db: sortHarness.db } as never, {
       storeId: "store_1",
       pagination: { pageIndex: 0, pageSize: 10 },
       sorting: [{ id: "items", desc: false }],
@@ -445,7 +449,7 @@ describe("storeFront bag and saved bag coverage", () => {
       },
     });
 
-    const insertedId = await bagItem.addItemToBag.handler({ db } as never, {
+    const insertedId = await h(bagItem.addItemToBag)({ db } as never, {
       bagId: "bag_1",
       productId: "product_1",
       productSkuId: "sku_1",
@@ -455,18 +459,18 @@ describe("storeFront bag and saved bag coverage", () => {
     });
     expect(insertedId).toBe("bagItem_1");
 
-    await bagItem.updateItemInBag.handler({ db } as never, {
+    await h(bagItem.updateItemInBag)({ db } as never, {
       itemId: "bagItem_1",
       quantity: 5,
     });
     expect(db.patch).toHaveBeenCalledWith("bagItem_1", { quantity: 5 });
 
-    const deleted = await bagItem.deleteItemFromBag.handler({ db } as never, {
+    const deleted = await h(bagItem.deleteItemFromBag)({ db } as never, {
       itemId: "bagItem_1",
     });
     expect(deleted).toEqual({ message: "Item deleted from bag" });
 
-    const itemsForStore = await bagItem.getBagItemsForStore.handler(
+    const itemsForStore = await h(bagItem.getBagItemsForStore)(
       {
         db,
         runQuery: vi
@@ -539,15 +543,15 @@ describe("storeFront bag and saved bag coverage", () => {
       },
     });
 
-    const allSaved = await savedBag.getAll.handler({ db } as never, {});
+    const allSaved = await h(savedBag.getAll)({ db } as never, {});
     expect(allSaved).toEqual([{ _id: "savedBag_1" }]);
 
-    const missingSavedById = await savedBag.getById.handler({ db } as never, {
+    const missingSavedById = await h(savedBag.getById)({ db } as never, {
       id: "savedBag_404",
     });
     expect(missingSavedById).toBeNull();
 
-    const savedByUser = await savedBag.getByUserId.handler({ db } as never, {
+    const savedByUser = await h(savedBag.getByUserId)({ db } as never, {
       storeFrontUserId: "user_1",
     });
     expect(savedByUser).toEqual(
@@ -557,7 +561,7 @@ describe("storeFront bag and saved bag coverage", () => {
       })
     );
 
-    const missingSavedByUser = await savedBag.getByUserId.handler(
+    const missingSavedByUser = await h(savedBag.getByUserId)(
       { db } as never,
       {
         storeFrontUserId: "missing",
@@ -565,7 +569,7 @@ describe("storeFront bag and saved bag coverage", () => {
     );
     expect(missingSavedByUser).toBeNull();
 
-    const deletedSaved = await savedBag.deleteSavedBag.handler(
+    const deletedSaved = await h(savedBag.deleteSavedBag)(
       { db } as never,
       { id: "savedBag_1" }
     );
@@ -577,7 +581,7 @@ describe("storeFront bag and saved bag coverage", () => {
         "savedBag:first": [null, null],
       },
     });
-    const missingUpdateOwner = await savedBag.updateOwner.handler(
+    const missingUpdateOwner = await h(savedBag.updateOwner)(
       { db: missingSavedOwnerHarness.db } as never,
       {
         currentOwner: "guest_none",
@@ -603,7 +607,7 @@ describe("storeFront bag and saved bag coverage", () => {
         },
       },
     });
-    const reassigned = await savedBag.updateOwner.handler(
+    const reassigned = await h(savedBag.updateOwner)(
       { db: savedReassignHarness.db } as never,
       {
         currentOwner: "guest_1",
@@ -646,7 +650,7 @@ describe("storeFront bag and saved bag coverage", () => {
         saved_user: { _id: "saved_user", storeFrontUserId: "user_1" },
       },
     });
-    await savedBag.updateOwner.handler(
+    await h(savedBag.updateOwner)(
       { db: mergeWithoutExistingHarness.db } as never,
       {
         currentOwner: "guest_1",
@@ -661,7 +665,7 @@ describe("storeFront bag and saved bag coverage", () => {
       }
     );
 
-    const insertedId = await savedBagItem.addItemToBag.handler({ db } as never, {
+    const insertedId = await h(savedBagItem.addItemToBag)({ db } as never, {
       savedBagId: "savedBag_1",
       productId: "product_1",
       productSkuId: "sku_1",
@@ -671,13 +675,13 @@ describe("storeFront bag and saved bag coverage", () => {
     });
     expect(insertedId).toBe("savedBagItem_1");
 
-    await savedBagItem.updateItemInBag.handler({ db } as never, {
+    await h(savedBagItem.updateItemInBag)({ db } as never, {
       itemId: "savedBagItem_1",
       quantity: 3,
     });
     expect(db.patch).toHaveBeenCalledWith("savedBagItem_1", { quantity: 3 });
 
-    const deletedItem = await savedBagItem.deleteItemFromSavedBag.handler(
+    const deletedItem = await h(savedBagItem.deleteItemFromSavedBag)(
       { db } as never,
       { itemId: "savedBagItem_1" }
     );

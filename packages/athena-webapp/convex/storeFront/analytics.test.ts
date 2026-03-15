@@ -11,6 +11,10 @@ function wrapDefinition<T extends { handler: (...args: any[]) => any }>(
   );
 }
 
+function h(fn: any): (...args: any[]) => any {
+  return fn.handler;
+}
+
 function createDbHarness({
   queryQueues = {},
   records = {},
@@ -127,7 +131,7 @@ describe("storeFront analytics", () => {
       },
     });
 
-    const created = await mod.create.handler({ db } as never, {
+    const created = await h(mod.create)({ db } as never, {
       storeId: "store_1",
       storeFrontUserId: "user_1",
       origin: "web",
@@ -138,32 +142,32 @@ describe("storeFront analytics", () => {
     });
     expect(created).toEqual(recordMap.get("analytics_1"));
 
-    const updated = await mod.updateOwner.handler({ db } as never, {
+    const updated = await h(mod.updateOwner)({ db } as never, {
       guestId: "guest_1",
       userId: "user_1",
     });
     expect(updated).toEqual({ updated: 2 });
     expect(db.patch).toHaveBeenCalledTimes(2);
 
-    const withProductAndAction = await mod.getAll.handler({ db } as never, {
+    const withProductAndAction = await h(mod.getAll)({ db } as never, {
       storeId: "store_1",
       action: "viewed_product",
       productId: "product_1",
     });
     expect(withProductAndAction).toEqual([{ _id: "a_filter_1" }]);
 
-    const withActionOnly = await mod.getAll.handler({ db } as never, {
+    const withActionOnly = await h(mod.getAll)({ db } as never, {
       storeId: "store_1",
       action: "viewed_product",
     });
     expect(withActionOnly).toEqual([{ _id: "a_all_1" }]);
 
-    const all = await mod.getAll.handler({ db } as never, {
+    const all = await h(mod.getAll)({ db } as never, {
       storeId: "store_1",
     });
     expect(all).toEqual([{ _id: "a_take_1" }]);
 
-    const paginated = await mod.getAllPaginated.handler({ db } as never, {
+    const paginated = await h(mod.getAllPaginated)({ db } as never, {
       storeId: "store_1",
       cursor: null,
       action: "viewed_product",
@@ -174,7 +178,7 @@ describe("storeFront analytics", () => {
       isDone: false,
     });
 
-    const byId = await mod.get.handler({ db } as never, {
+    const byId = await h(mod.get)({ db } as never, {
       id: "analytics_1",
     });
     expect(byId).toEqual(
@@ -184,19 +188,19 @@ describe("storeFront analytics", () => {
       })
     );
 
-    const byPromoCode = await mod.getByPromoCodeId.handler({ db } as never, {
+    const byPromoCode = await h(mod.getByPromoCodeId)({ db } as never, {
       promoCodeId: "promo_1",
     });
     expect(byPromoCode).toEqual([]);
 
-    const clearedByAction = await mod.clear.handler({ db } as never, {
+    const clearedByAction = await h(mod.clear)({ db } as never, {
       storeId: "store_1",
       storeFrontUserId: "user_1",
       action: "viewed_product",
     });
     expect(clearedByAction).toEqual({ deleted: 0 });
 
-    const clearedAll = await mod.clear.handler({ db } as never, {
+    const clearedAll = await h(mod.clear)({ db } as never, {
       storeId: "store_1",
       storeFrontUserId: "user_1",
     });
@@ -224,12 +228,12 @@ describe("storeFront analytics", () => {
       },
     });
 
-    const count = await mod.getProductViewCount.handler({ db } as never, {
+    const count = await h(mod.getProductViewCount)({ db } as never, {
       productId: "product_1",
     });
     expect(count).toEqual({ daily: 1, total: 2 });
 
-    const revenue = await mod.getRevenueAnalytics.handler({ db } as never, {
+    const revenue = await h(mod.getRevenueAnalytics)({ db } as never, {
       storeId: "store_1",
       startDate: startOfDay,
       endDate: startOfDay + 10_000,
@@ -243,7 +247,7 @@ describe("storeFront analytics", () => {
       },
     });
 
-    const emptyRevenue = await mod.getRevenueAnalytics.handler({ db } as never, {
+    const emptyRevenue = await h(mod.getRevenueAnalytics)({ db } as never, {
       storeId: "store_1",
     });
     expect(emptyRevenue).toEqual({
@@ -304,7 +308,7 @@ describe("storeFront analytics", () => {
       },
     });
 
-    const enhanced = await mod.getEnhancedAnalytics.handler({ db } as never, {
+    const enhanced = await h(mod.getEnhancedAnalytics)({ db } as never, {
       storeId: "store_1",
       startDate: now - 1000,
       endDate: now + 1000,
@@ -333,7 +337,7 @@ describe("storeFront analytics", () => {
       })
     );
 
-    const enhancedNoViews = await mod.getEnhancedAnalytics.handler({ db } as never, {
+    const enhancedNoViews = await h(mod.getEnhancedAnalytics)({ db } as never, {
       storeId: "store_1",
     });
     expect(enhancedNoViews.conversions).toEqual({
@@ -343,7 +347,7 @@ describe("storeFront analytics", () => {
       overallConversionRate: 0,
     });
 
-    const topProducts = await mod.getTopProducts.handler({ db } as never, {
+    const topProducts = await h(mod.getTopProducts)({ db } as never, {
       storeId: "store_1",
       limit: 1,
     });
@@ -422,7 +426,7 @@ describe("storeFront analytics", () => {
       },
     });
 
-    const visitorInsights = await mod.getVisitorInsights.handler({ db } as never, {
+    const visitorInsights = await h(mod.getVisitorInsights)({ db } as never, {
       storeId: "store_1",
       startDate: now - 1000,
       endDate: now,
@@ -436,7 +440,7 @@ describe("storeFront analytics", () => {
       })
     );
 
-    const timeline24h = await mod.getStoreActivityTimeline.handler({ db } as never, {
+    const timeline24h = await h(mod.getStoreActivityTimeline)({ db } as never, {
       storeId: "store_1",
       limit: 5,
       timeRange: "24h",
@@ -453,20 +457,20 @@ describe("storeFront analytics", () => {
       })
     );
 
-    const timeline7d = await mod.getStoreActivityTimeline.handler({ db } as never, {
+    const timeline7d = await h(mod.getStoreActivityTimeline)({ db } as never, {
       storeId: "store_1",
       limit: 5,
       timeRange: "7d",
     });
     expect(timeline7d).toHaveLength(1);
 
-    const timeline30d = await mod.getStoreActivityTimeline.handler({ db } as never, {
+    const timeline30d = await h(mod.getStoreActivityTimeline)({ db } as never, {
       storeId: "store_1",
       timeRange: "30d",
     });
     expect(timeline30d).toEqual([]);
 
-    const timelineAll = await mod.getStoreActivityTimeline.handler({ db } as never, {
+    const timelineAll = await h(mod.getStoreActivityTimeline)({ db } as never, {
       storeId: "store_1",
       timeRange: "all",
     });
@@ -523,7 +527,7 @@ describe("storeFront analytics", () => {
       return null;
     });
 
-    const result = await getStoreActivityTimeline.handler({ db } as never, {
+    const result = await h(getStoreActivityTimeline)({ db } as never, {
       storeId: "store_1",
       timeRange: "24h",
     });
@@ -558,7 +562,7 @@ describe("storeFront analytics", () => {
       },
     });
 
-    const topProductsWithDate = await mod.getTopProducts.handler({ db } as never, {
+    const topProductsWithDate = await h(mod.getTopProducts)({ db } as never, {
       storeId: "store_1",
       startDate: now - 1000,
       endDate: now + 1000,
@@ -568,7 +572,7 @@ describe("storeFront analytics", () => {
       { productId: "product_2", views: 1 },
     ]);
 
-    const visitorInsightsEmpty = await mod.getVisitorInsights.handler(
+    const visitorInsightsEmpty = await h(mod.getVisitorInsights)(
       { db } as never,
       {
         storeId: "store_1",
@@ -583,7 +587,7 @@ describe("storeFront analytics", () => {
     });
 
     const consolidatedWithUndefinedAmount =
-      await mod.getConsolidatedAnalytics.handler({ db } as never, {
+      await h(mod.getConsolidatedAnalytics)({ db } as never, {
         storeId: "store_1",
       });
     expect(consolidatedWithUndefinedAmount).toEqual(
@@ -608,7 +612,7 @@ describe("storeFront analytics", () => {
       })
     );
 
-    const consolidatedNoOrders = await mod.getConsolidatedAnalytics.handler(
+    const consolidatedNoOrders = await h(mod.getConsolidatedAnalytics)(
       { db } as never,
       {
         storeId: "store_1",
@@ -672,7 +676,7 @@ describe("storeFront analytics", () => {
       },
     });
 
-    const consolidated = await mod.getConsolidatedAnalytics.handler(
+    const consolidated = await h(mod.getConsolidatedAnalytics)(
       { db } as never,
       {
         storeId: "store_1",

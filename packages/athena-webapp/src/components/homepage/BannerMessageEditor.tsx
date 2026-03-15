@@ -23,10 +23,10 @@ export function BannerMessageEditor({ storeId }: BannerMessageEditorProps) {
   const [message, setMessage] = useState("");
   const [active, setActive] = useState(false);
   const [countdownEndsAt, setCountdownEndsAt] = useState<number | undefined>(
-    undefined
+    undefined,
   );
   const [countdownDate, setCountdownDate] = useState<Date | undefined>(
-    undefined
+    undefined,
   );
   const [isSaving, setIsSaving] = useState(false);
 
@@ -39,7 +39,7 @@ export function BannerMessageEditor({ storeId }: BannerMessageEditorProps) {
       setCountdownDate(
         bannerMessage.countdownEndsAt
           ? new Date(bannerMessage.countdownEndsAt)
-          : undefined
+          : undefined,
       );
     }
   }, [bannerMessage]);
@@ -51,12 +51,36 @@ export function BannerMessageEditor({ storeId }: BannerMessageEditorProps) {
         storeId,
         heading: heading.trim() || undefined,
         message: message.trim() || undefined,
-        active,
+        active: true,
         countdownEndsAt,
       });
       toast.success("Banner message updated successfully");
     } catch (error) {
       toast.error("Failed to update banner message");
+      console.error(error);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleClear = async () => {
+    try {
+      setIsSaving(true);
+      await upsertBannerMessage({
+        storeId,
+        heading: undefined,
+        message: undefined,
+        active: false,
+        countdownEndsAt: undefined,
+      });
+      setHeading("");
+      setMessage("");
+      setCountdownEndsAt(undefined);
+      setCountdownDate(undefined);
+      setActive(false);
+      toast.success("Banner message cleared");
+    } catch (error) {
+      toast.error("Failed to clear banner message");
       console.error(error);
     } finally {
       setIsSaving(false);
@@ -74,7 +98,7 @@ export function BannerMessageEditor({ storeId }: BannerMessageEditorProps) {
         countdownEndsAt,
       });
       toast.success(
-        checked ? "Banner message activated" : "Banner message deactivated"
+        checked ? "Banner message activated" : "Banner message deactivated",
       );
     } catch (error) {
       toast.error("Failed to update active status");
@@ -105,7 +129,7 @@ export function BannerMessageEditor({ storeId }: BannerMessageEditorProps) {
 
     const days = Math.floor(timeLeft / (1000 * 60 * 60 * 24));
     const hours = Math.floor(
-      (timeLeft % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)
+      (timeLeft % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60),
     );
     const minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
 
@@ -119,6 +143,7 @@ export function BannerMessageEditor({ storeId }: BannerMessageEditorProps) {
   };
 
   const areBothFieldsEmpty = !heading.trim() && !message.trim();
+  const fieldsAreFilled = heading.trim() || message.trim();
 
   return (
     <View
@@ -185,13 +210,23 @@ export function BannerMessageEditor({ storeId }: BannerMessageEditorProps) {
           />
         </div>
 
-        <Button
-          onClick={handleSave}
-          disabled={areBothFieldsEmpty || isSaving}
-          variant={"outline"}
-        >
-          Save Banner Message
-        </Button>
+        <div className="flex gap-4">
+          <Button
+            onClick={handleSave}
+            disabled={areBothFieldsEmpty || isSaving}
+            variant={"outline"}
+          >
+            Save Banner Message
+          </Button>
+
+          <Button
+            onClick={handleClear}
+            disabled={isSaving || !fieldsAreFilled}
+            variant={"outline"}
+          >
+            Clear Banner Message
+          </Button>
+        </div>
       </div>
     </View>
   );

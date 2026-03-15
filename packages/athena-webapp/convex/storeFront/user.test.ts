@@ -398,7 +398,7 @@ describe("storeFront user", () => {
       },
     });
 
-    const result = await getLastViewedProduct.handler(
+    const result = await h(getLastViewedProduct)(
       { db, runQuery: vi.fn().mockResolvedValue({ skus: [] }) } as never,
       {
         id: "user_1",
@@ -518,7 +518,7 @@ describe("storeFront user", () => {
       },
     });
 
-    const result = await getLastViewedProducts.handler(
+    const result = await h(getLastViewedProducts)(
       {
         db,
         runQuery: vi.fn().mockResolvedValue({
@@ -555,7 +555,7 @@ describe("storeFront user", () => {
       },
     });
 
-    const result = await getLastViewedProducts.handler(
+    const result = await h(getLastViewedProducts)(
       {
         db,
         runQuery: vi.fn().mockResolvedValue({
