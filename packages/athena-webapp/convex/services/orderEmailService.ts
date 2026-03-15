@@ -153,17 +153,10 @@ export async function sendPODOrderEmails(params: {
     });
 
     if (emailResponse.ok) {
-      console.log(
-        `Sent POD order confirmation for order #${params.order.orderNumber} to ${params.order.customerDetails.email}`
-      );
       confirmationSent = true;
-    } else {
-      console.info(
-        `Failed to send POD order confirmation email for order #${params.order.orderNumber} to ${params.order.customerDetails.email}`
-      );
     }
   } catch (error) {
-    console.error("Error sending POD confirmation email:", error);
+    // handled
   }
 
   // Send admin notification if not a test account
@@ -181,13 +174,10 @@ export async function sendPODOrderEmails(params: {
       });
 
       if (adminEmailResponse.ok) {
-        console.log(
-          `Sent POD new order notification for order #${params.order.orderNumber} to admins`
-        );
         adminNotificationSent = true;
       }
     } catch (error) {
-      console.error("Error sending POD admin notification:", error);
+      // handled
     }
   }
 
@@ -228,17 +218,10 @@ export async function sendPaymentVerificationEmails(params: {
       });
 
       if (emailResponse.ok) {
-        console.log(
-          `Sent new order received email for order #${params.order.orderNumber} to admins`
-        );
         adminNotificationSent = true;
-      } else {
-        console.error(
-          `Failed to send new order received email for order #${params.order.orderNumber}`
-        );
       }
     } catch (error) {
-      console.error("Error sending admin notification:", error);
+      // handled
     }
   }
 
@@ -293,13 +276,10 @@ export async function sendPaymentVerificationEmails(params: {
       });
 
       if (emailResponse.ok) {
-        console.log(
-          `Sent order confirmation for order #${params.order.orderNumber} to ${params.order.customerDetails.email}`
-        );
         confirmationSent = true;
       }
     } catch (error) {
-      console.error("Failed to send order confirmation email", error);
+      // handled
     }
   }
 

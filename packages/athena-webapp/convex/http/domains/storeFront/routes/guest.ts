@@ -11,23 +11,26 @@ const guestRoutes: HonoWithConvex<ActionCtx> = new Hono();
 
 // Get all bags
 guestRoutes.get("/", async (c) => {
-  const guestId = getCookie(c, "guest_id");
-  const claims = await getActorClaims(c);
+  let guestId = getCookie(c, "guest_id");
+
+  if (!guestId) {
+    const claims = await getActorClaims(c);
+    if (claims?.actorType === "guest") {
+      guestId = claims.actorId;
+    }
+  }
 
   const marker = c.req.query("marker");
 
   const { storeId, organizationId } = await getStoreDataFromRequest(c);
 
-  const actorGuestId =
-    claims?.actorType === "guest" ? (claims.actorId as Id<"guest">) : undefined;
-
-  if (!guestId && !actorGuestId) {
+  if (!guestId) {
     return c.json({ error: "Guest id missing" }, 404);
   }
 
   try {
     const guest = await c.env.runQuery(api.storeFront.guest.getById, {
-      id: (guestId || actorGuestId) as Id<"guest">,
+      id: guestId as Id<"guest">,
     });
 
     return c.json(guest);
@@ -66,15 +69,19 @@ guestRoutes.get("/", async (c) => {
 });
 
 guestRoutes.put("/", async (c) => {
-  const guestId = getCookie(c, "guest_id");
-  const claims = await getActorClaims(c);
-  const actorGuestId =
-    claims?.actorType === "guest" ? (claims.actorId as Id<"guest">) : undefined;
+  let guestId = getCookie(c, "guest_id");
+
+  if (!guestId) {
+    const claims = await getActorClaims(c);
+    if (claims?.actorType === "guest") {
+      guestId = claims.actorId;
+    }
+  }
 
   const { email, firstName, lastName, phoneNumber } = await c.req.json();
 
   const guest = await c.env.runMutation(api.storeFront.guest.update, {
-    id: (guestId || actorGuestId) as Id<"guest">,
+    id: guestId as Id<"guest">,
     email,
     firstName,
     lastName,

@@ -113,13 +113,7 @@ export function RefundsView() {
         returnItemsToStock: state.returnToStock,
         onlineOrderItemIds: itemIds as any,
         refundItems,
-        signedInAthenaUser: user
-          ? {
-              id: user._id,
-              email: user.email,
-            }
-          : undefined,
-      });
+      } as any);
 
       if (res.success) {
         toast("Refund successful", {

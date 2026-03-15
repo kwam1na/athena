@@ -10,6 +10,10 @@ function wrapDefinition<T extends { handler: (...args: any[]) => any }>(
     definition
   );
 }
+function h(fn: any): (...args: any[]) => any {
+  return fn.handler;
+}
+
 
 async function loadModule() {
   vi.resetModules();
@@ -29,7 +33,7 @@ describe("onlineOrderItem", () => {
       get: vi.fn().mockResolvedValue({ _id: "item_1" }),
     };
 
-    const result = await get.handler({ db } as never, { id: "item_1" });
+    const result = await h(get)({ db } as never, { id: "item_1" });
 
     expect(db.get).toHaveBeenCalledWith("item_1");
     expect(result).toEqual({ _id: "item_1" });
@@ -53,7 +57,7 @@ describe("onlineOrderItem", () => {
         }),
     };
 
-    await update.handler({ db } as never, {
+    await h(update)({ db } as never, {
       id: "item_1",
       updates: { isReady: true, note: "packed" },
     });
@@ -85,7 +89,7 @@ describe("onlineOrderItem", () => {
         }),
     };
 
-    await update.handler({ db } as never, {
+    await h(update)({ db } as never, {
       id: "item_1",
       updates: { isReady: false },
     });
@@ -104,7 +108,7 @@ describe("onlineOrderItem", () => {
     };
 
     await expect(
-      update.handler({ db } as never, {
+      h(update)({ db } as never, {
         id: "item_1",
         updates: { isReady: true },
       })
@@ -129,7 +133,7 @@ describe("onlineOrderItem", () => {
     };
 
     await expect(
-      update.handler({ db } as never, {
+      h(update)({ db } as never, {
         id: "item_1",
         updates: { isReady: true },
       })
@@ -146,7 +150,7 @@ describe("onlineOrderItem", () => {
       get: vi.fn(),
     };
 
-    await update.handler({ db } as never, {
+    await h(update)({ db } as never, {
       id: "item_1",
       updates: { note: "no inventory change" },
     });
@@ -167,7 +171,7 @@ describe("onlineOrderItem", () => {
     };
 
     await expect(
-      update.handler({ db } as never, {
+      h(update)({ db } as never, {
         id: "item_1",
         updates: { isReady: false },
       })
@@ -192,7 +196,7 @@ describe("onlineOrderItem", () => {
     };
 
     await expect(
-      update.handler({ db } as never, {
+      h(update)({ db } as never, {
         id: "item_1",
         updates: { isReady: false },
       })

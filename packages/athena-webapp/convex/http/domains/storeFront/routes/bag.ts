@@ -43,7 +43,6 @@ bagRoutes.get("/:bagId", async (c) => {
       }
       return c.json(bag);
     } catch (e) {
-      console.error(e);
       return c.json({ error: "Internal server error" }, 400);
     }
   }
@@ -81,7 +80,6 @@ bagRoutes.post("/:bagId/owner", async (c) => {
     });
     return c.json(b);
   } catch (e) {
-    console.error(e);
     return c.json({ error: "Internal server error" }, 400);
   }
 });

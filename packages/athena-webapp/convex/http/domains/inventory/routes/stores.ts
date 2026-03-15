@@ -142,8 +142,6 @@ storeRoutes.get("/:storeId/users/:userId/bags/:bagId", async (c) => {
 
 // Create a new bag
 storeRoutes.post("/:storeId/users/:userId/bags", async (c) => {
-  console.log("hit post bags endpoint");
-
   const { userId } = await c.req.json();
   return c.json({});
 });
@@ -180,8 +178,6 @@ storeRoutes.post("/:storeId/users/:userId/bags/:bagId/items", async (c) => {
 
 // Update the owner of the bag
 storeRoutes.post("/:storeId/users/:userId/bags/:bagId/owner", async (c) => {
-  console.log("hit endpont...");
-
   try {
     const { userId } = c.req.param();
     const { currentOwnerId, newOwnerId } = await c.req.json();
@@ -196,7 +192,6 @@ storeRoutes.post("/:storeId/users/:userId/bags/:bagId/owner", async (c) => {
     });
     return c.json(b);
   } catch (e) {
-    console.error(e);
     return c.json({ error: "Internal server error" }, 400);
   }
 });
@@ -342,7 +337,6 @@ storeRoutes.post(
       });
       return c.json(b);
     } catch (e) {
-      console.error(e);
       return c.json({ error: "Internal server error" }, 400);
     }
   }
@@ -429,7 +423,6 @@ storeRoutes.post(
       }
 
       if (action == "complete-checkout") {
-        console.log("sending complete checkout action"), orderDetails;
         const res = await c.env.runMutation(
           internal.storeFront.checkoutSession.updateCheckoutSession,
           {
@@ -535,7 +528,7 @@ storeRoutes.get("/:storeId/users/:userId/orders/:orderId", async (c) => {
   const { orderId } = c.req.param();
 
   const order = await c.env.runQuery(api.storeFront.onlineOrder.get, {
-    orderId: orderId as Id<"onlineOrder">,
+    identifier: orderId as Id<"onlineOrder">,
   });
 
   return c.json(order);
@@ -557,7 +550,6 @@ storeRoutes.post("/:storeId/users/:userId/orders/owner", async (c) => {
     });
     return c.json(b);
   } catch (e) {
-    console.error(e);
     return c.json({ error: "Internal server error" }, 400);
   }
 });

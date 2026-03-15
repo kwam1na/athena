@@ -105,7 +105,6 @@ export function ProductReminderBar({
 
   const handleAddToBag = async () => {
     if (!product.productId || !product._id || !product.sku) {
-      console.error("Missing required product properties");
       return;
     }
 
@@ -142,7 +141,7 @@ export function ProductReminderBar({
       setIsSheetOpen(true);
       onDismiss(); // Close the reminder bar after successful add
     } catch (error) {
-      console.error("Failed to add to bag:", error);
+      // handled
     }
   };
 

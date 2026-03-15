@@ -33,11 +33,9 @@ export const getAllProducts = action({
       const cachedData = await cache.get(cacheKey);
 
       if (cachedData) {
-        console.log("hit cache");
         return JSON.parse(cachedData);
       }
 
-      console.log("miss cache. Fetching data...");
       const products: any[] = await ctx.runQuery(
         api.inventory.products.getAll,
         args
@@ -46,12 +44,12 @@ export const getAllProducts = action({
       try {
         await cache.set(cacheKey, JSON.stringify(products));
       } catch (e) {
-        console.log("Cache set error", (e as Error).message);
+        // handled
       }
 
       return products;
     } catch (e) {
-      console.log("error", (e as Error).message);
+      // handled
     }
   },
 });
@@ -73,7 +71,6 @@ export const invalidateProductCache = action({
         keysCleared: keys,
       };
     } catch (e) {
-      console.log("Cache invalidation error", (e as Error).message);
       return {
         success: false,
         error: (e as Error).message,
@@ -95,7 +92,6 @@ export const clearAllCache = action({
         keysCleared: keys,
       };
     } catch (e) {
-      console.log("Cache clear error", (e as Error).message);
       return {
         success: false,
         error: (e as Error).message,

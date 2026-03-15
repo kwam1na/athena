@@ -650,8 +650,6 @@ export const updateSku = mutation({
       };
     }
 
-    console.log("args.barcode", args.barcode);
-
     if (args.barcode) {
       const skuWithBarcode = await ctx.db
         .query("productSku")

@@ -70,7 +70,6 @@ export const CheckoutComplete = () => {
 
         queryClient.invalidateQueries({ queryKey: bagQueries.activeBagKey() });
       } catch (error) {
-        console.error("Failed to complete checkout:", error);
         setHasOrderError(true);
       }
     };
@@ -97,7 +96,6 @@ export const CheckoutComplete = () => {
 
       queryClient.invalidateQueries({ queryKey: bagQueries.activeBagKey() });
     } catch (error) {
-      console.error("Failed to retry order creation:", error);
       setHasOrderError(true);
     } finally {
       setIsRetrying(false);

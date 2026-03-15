@@ -68,7 +68,6 @@ function App() {
           // Reload the page to get the new version
           window.location.reload();
         } catch (error) {
-          console.error("Error saving state before reload:", error);
           window.location.reload();
         }
       },
@@ -99,7 +98,7 @@ function App() {
         sessionStorage.removeItem("activeElementValue");
       }
     } catch (error) {
-      console.error("Error restoring state after reload:", error);
+      // handled
     }
 
     // Clean up on unmount

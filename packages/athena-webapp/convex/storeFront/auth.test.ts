@@ -37,6 +37,10 @@ function wrapDefinition<T extends { handler: (...args: any[]) => any }>(
   );
 }
 
+function h(fn: any): (...args: any[]) => any {
+  return fn.handler;
+}
+
 function createDbHarness({
   queryQueues = {},
   records = {},
@@ -174,7 +178,7 @@ describe("storeFront auth", () => {
       },
     });
 
-    const result = await requestVerificationCode.handler({ db } as never, {
+    const result = await h(requestVerificationCode)({ db } as never, {
       email: "ada@example.com",
       firstName: "Ada",
       lastName: "Lovelace",
@@ -201,7 +205,7 @@ describe("storeFront auth", () => {
       },
     });
 
-    const result = await requestVerificationCode.handler({ db } as never, {
+    const result = await h(requestVerificationCode)({ db } as never, {
       email: "ada@example.com",
       firstName: "Ada",
       lastName: "Lovelace",
@@ -227,7 +231,7 @@ describe("storeFront auth", () => {
       },
     });
 
-    const result = await verifyCode.handler({ db } as never, {
+    const result = await h(verifyCode)({ db } as never, {
       code: "111111",
       email: "ada@example.com",
       storeId: "store_1",
@@ -256,7 +260,7 @@ describe("storeFront auth", () => {
       },
     });
 
-    const expiredResult = await verifyCode.handler(
+    const expiredResult = await h(verifyCode)(
       { db: expiredHarness.db } as never,
       {
         code: "111111",
@@ -285,7 +289,7 @@ describe("storeFront auth", () => {
       },
     });
 
-    const usedResult = await verifyCode.handler({ db: usedHarness.db } as never, {
+    const usedResult = await h(verifyCode)({ db: usedHarness.db } as never, {
       code: "111111",
       email: "ada@example.com",
       storeId: "store_1",
@@ -321,7 +325,7 @@ describe("storeFront auth", () => {
       },
     });
 
-    const result = await verifyCode.handler({ db } as never, {
+    const result = await h(verifyCode)({ db } as never, {
       code: "123456",
       email: "ada@example.com",
       storeId: "store_1",
@@ -372,7 +376,7 @@ describe("storeFront auth", () => {
       return null;
     });
 
-    const result = await verifyCode.handler({ db } as never, {
+    const result = await h(verifyCode)({ db } as never, {
       code: "123456",
       email: "new@example.com",
       storeId: "store_1",
@@ -393,7 +397,7 @@ describe("storeFront auth", () => {
       runQuery: vi.fn().mockResolvedValue({ _id: "store_1" }),
     };
 
-    const missingResult = await sendVerificationCodeViaProvider.handler(
+    const missingResult = await h(sendVerificationCodeViaProvider)(
       missingCtx as never,
       {
         email: "ada@example.com",
@@ -416,7 +420,7 @@ describe("storeFront auth", () => {
       runQuery: vi.fn().mockResolvedValue({ _id: "store_1" }),
     };
 
-    const rateLimitedResult = await sendVerificationCodeViaProvider.handler(
+    const rateLimitedResult = await h(sendVerificationCodeViaProvider)(
       rateLimitedCtx as never,
       {
         email: "ada@example.com",
@@ -439,7 +443,7 @@ describe("storeFront auth", () => {
       runQuery: vi.fn().mockResolvedValue({ _id: "store_1", name: "Athena" }),
     };
 
-    const successResult = await sendVerificationCodeViaProvider.handler(
+    const successResult = await h(sendVerificationCodeViaProvider)(
       successCtx as never,
       {
         email: "ada@example.com",

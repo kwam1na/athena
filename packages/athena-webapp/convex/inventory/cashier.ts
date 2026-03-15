@@ -256,7 +256,6 @@ export const authenticate = mutation({
     ),
   }),
   handler: async (ctx, args) => {
-    console.log("Authenticating cashier", args);
     // Validate required fields
     if (!args.username.trim()) {
       return {

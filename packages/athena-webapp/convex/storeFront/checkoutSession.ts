@@ -126,6 +126,7 @@ export const create = mutation({
       deliveryInstructions: null,
       deliveryOption: null,
       deliveryFee: null,
+      discount: null,
       pickupLocation: null,
     });
 
@@ -171,7 +172,6 @@ export const releaseCheckoutItems = internalMutation({
       .collect();
 
     if (expiredSessions.length === 0) {
-      console.log("No expired sessions found.");
       return;
     }
 
@@ -215,7 +215,6 @@ export const releaseCheckoutItems = internalMutation({
         ctx.db.delete(session._id),
       ]);
 
-      console.log(`Released quantities for session: ${session._id}`);
     }
   },
 });
@@ -292,7 +291,6 @@ export const cancelOrder = action({
 
       return { success: true, message: "Order has been cancelled." };
     } else {
-      console.error("Failed to refund payment", response);
       return { success: false, message: "Failed to cancel order." };
     }
   },
@@ -345,7 +343,6 @@ export const updateCheckoutSession = internalMutation({
 
       return { success: true, orderId: session.placedOrderId };
     } catch (e) {
-      console.error(e);
       return { success: false };
     }
   },
@@ -393,7 +390,6 @@ function createPatchObject(args: any) {
 
 async function handlePlaceOrder(ctx: any, sessionId: string, session: any) {
   if (session.placedOrderId) {
-    console.log(`Order has already been placed for session: ${sessionId}`);
     return {
       success: false,
       orderId: session.placedOrderId,
@@ -453,9 +449,6 @@ async function createOnlineOrder(
   });
 
   if (!response.success) {
-    console.error(
-      `Failed to create online order for session: ${sessionId} with error: ${response.error}`
-    );
     return { success: false, message: "Failed to create online order." };
   }
 
@@ -588,7 +581,7 @@ function checkAdjustedAvailability(
         productSkuId,
         requested: quantity,
         available: Math.min(
-          sku?.quantityAvailable + existingQuantity || 0,
+          (sku?.quantityAvailable ?? 0) + existingQuantity || 0,
           sku?.inventoryCount || 0
         ),
       });
@@ -638,8 +631,8 @@ async function updateExistingSession(
         productSkuId: product.productSkuId,
         quantity: product.quantity,
         price: product.price,
-        storeFrontUserId: storeFrontUserId,
-      });
+        storeFrontUserId: storeFrontUserId as any,
+      } as any);
       availabilityUpdates.push({
         id: product.productSkuId,
         change: -product.quantity,

@@ -73,7 +73,6 @@ offersRoutes.post("/", async (c) => {
 
     return c.json(result);
   } catch (error) {
-    console.error("Failed to create offer:", error);
     return c.json({ error: "Failed to create offer" }, 500);
   }
 });
@@ -95,7 +94,6 @@ offersRoutes.get("/", async (c) => {
 
     return c.json(result);
   } catch (error) {
-    console.error("Failed to get offers:", error);
     return c.json({ error: "Failed to get offers" }, 500);
   }
 });

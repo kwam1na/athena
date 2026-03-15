@@ -79,10 +79,7 @@ export const useEnhancedTracking = (config: Partial<TrackingConfig> = {}) => {
           )
         );
 
-        console.debug(`Successfully sent batch of ${events.length} events`);
       } catch (error) {
-        console.warn(`Batch send failed (attempt ${retryCount + 1}):`, error);
-
         // Retry logic
         if (retryCount < finalConfig.retryAttempts) {
           const delay = Math.pow(2, retryCount) * 1000; // Exponential backoff
@@ -92,9 +89,6 @@ export const useEnhancedTracking = (config: Partial<TrackingConfig> = {}) => {
         } else {
           // Move to offline queue if all retries failed
           offlineQueueRef.current.push(...events);
-          console.warn(
-            `Failed to send batch after ${finalConfig.retryAttempts} attempts, queued for retry`
-          );
         }
       }
     },
@@ -180,9 +174,6 @@ export const useEnhancedTracking = (config: Partial<TrackingConfig> = {}) => {
     (action: string, data: Record<string, any> = {}) => {
       // Rate limiting check
       if (isRateLimited()) {
-        console.warn(
-          `Rate limit exceeded for tracking. Dropping event: ${action}`
-        );
         return;
       }
 
@@ -209,7 +200,6 @@ export const useEnhancedTracking = (config: Partial<TrackingConfig> = {}) => {
 
       // Prevent queue from growing too large
       if (queueRef.current.length > finalConfig.maxQueueSize) {
-        console.warn("Tracking queue overflow, dropping oldest events");
         queueRef.current = queueRef.current.slice(-finalConfig.maxQueueSize);
       }
     },
@@ -220,9 +210,6 @@ export const useEnhancedTracking = (config: Partial<TrackingConfig> = {}) => {
   const trackEventImmediate = useCallback(
     async (action: string, data: Record<string, any> = {}) => {
       if (isRateLimited()) {
-        console.warn(
-          `Rate limit exceeded for immediate tracking. Dropping event: ${action}`
-        );
         return;
       }
 

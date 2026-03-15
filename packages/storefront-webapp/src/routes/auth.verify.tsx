@@ -130,7 +130,6 @@ function InputOTPForm() {
       }
     },
     onError: (error) => {
-      console.log("error", error);
       setErrorMessage(error.message);
     },
   });
@@ -191,7 +190,6 @@ function InputOTPForm() {
         window.location.href = "/";
       }
     } catch (e) {
-      console.error(e);
       setErrorMessage(
         (e as Error).message ??
           "There was an error verifying your account. Please try again."

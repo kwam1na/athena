@@ -95,9 +95,7 @@ const Login = () => {
         });
       }
     },
-    onError: (error) => {
-      console.log("error", error);
-    },
+    onError: () => {},
   });
 
   if (!store) return <div className="h-screen" />;

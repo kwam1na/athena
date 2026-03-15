@@ -148,7 +148,6 @@ rewardsRoutes.get("/order-points", async (c) => {
 
     return c.json(result);
   } catch (error) {
-    console.error("Error fetching order points:", error);
     return c.json({ error: "Failed to fetch order points", points: 0 }, 500);
   }
 });

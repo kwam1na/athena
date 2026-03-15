@@ -93,7 +93,6 @@ storefrontRoutes.post("/inventory/batch", async (c) => {
 
     return c.json({ inventory });
   } catch (error) {
-    console.error("Failed to fetch batch inventory:", error);
     return c.json({ error: "Failed to fetch inventory data" }, 500);
   }
 });

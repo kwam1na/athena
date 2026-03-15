@@ -10,6 +10,10 @@ function wrapDefinition<T extends { handler: (...args: any[]) => any }>(
     definition
   );
 }
+function h(fn: any): (...args: any[]) => any {
+  return fn.handler;
+}
+
 
 function createDbHarness({
   queryQueues = {},
@@ -112,18 +116,18 @@ describe("storeFront guest", () => {
       },
     });
 
-    const all = await mod.getAll.handler({ db } as never, {});
+    const all = await h(mod.getAll)({ db } as never, {});
     expect(all).toEqual([{ _id: "guest_1", marker: "mk_1" }]);
 
-    const byId = await mod.getById.handler({ db } as never, { id: "guest_1" });
+    const byId = await h(mod.getById)({ db } as never, { id: "guest_1" });
     expect(byId).toEqual({ _id: "guest_1", marker: "mk_1" });
 
-    const byMarker = await mod.getByMarker.handler({ db } as never, {
+    const byMarker = await h(mod.getByMarker)({ db } as never, {
       marker: "mk_1",
     });
     expect(byMarker).toEqual({ _id: "guest_1", marker: "mk_1" });
 
-    const created = await mod.create.handler({ db } as never, {
+    const created = await h(mod.create)({ db } as never, {
       marker: "mk_2",
       creationOrigin: "web",
       storeId: "store_1",
@@ -131,7 +135,7 @@ describe("storeFront guest", () => {
     });
     expect(created).toEqual(recordMap.get("guest_1"));
 
-    const deleted = await mod.deleteGuest.handler({ db } as never, {
+    const deleted = await h(mod.deleteGuest)({ db } as never, {
       id: "guest_1",
     });
     expect(deleted).toEqual({ message: "Guest deleted" });
@@ -145,7 +149,7 @@ describe("storeFront guest", () => {
       },
     });
 
-    const withFields = await update.handler({ db } as never, {
+    const withFields = await h(update)({ db } as never, {
       id: "guest_3",
       email: "ada@example.com",
       firstName: "Ada",
@@ -161,7 +165,7 @@ describe("storeFront guest", () => {
     });
     expect(withFields).toEqual(recordMap.get("guest_3"));
 
-    await update.handler({ db } as never, {
+    await h(update)({ db } as never, {
       id: "guest_3",
       email: undefined,
       firstName: undefined,
@@ -193,18 +197,18 @@ describe("storeFront guest", () => {
       },
     });
 
-    const uniqueForDay = await mod.getUniqueVisitorsForDay.handler(
+    const uniqueForDay = await h(mod.getUniqueVisitorsForDay)(
       { db } as never,
       { storeId: "store_1" }
     );
     expect(uniqueForDay).toBe(2);
 
-    const unique = await mod.getUniqueVisitors.handler({ db } as never, {
+    const unique = await h(mod.getUniqueVisitors)({ db } as never, {
       storeId: "store_1",
     });
     expect(unique).toBe(1);
 
-    const returning = await mod.getReturningVisitorsForDay.handler(
+    const returning = await h(mod.getReturningVisitorsForDay)(
       { db } as never,
       { storeId: "store_1" }
     );

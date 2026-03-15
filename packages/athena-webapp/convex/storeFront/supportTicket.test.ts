@@ -10,6 +10,10 @@ function wrapDefinition<T extends { handler: (...args: any[]) => any }>(
     definition
   );
 }
+function h(fn: any): (...args: any[]) => any {
+  return fn.handler;
+}
+
 
 async function loadModule() {
   vi.resetModules();
@@ -36,7 +40,7 @@ describe("supportTicket", () => {
       }),
     };
 
-    const result = await create.handler({ db } as never, {
+    const result = await h(create)({ db } as never, {
       storeId: "store_1",
       storeFrontUserId: "guest_1",
       origin: "checkout",

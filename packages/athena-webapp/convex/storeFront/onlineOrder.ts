@@ -42,8 +42,6 @@ export const create = mutation({
     // get the session
     const session = await ctx.db.get(args.checkoutSessionId);
 
-    console.log(`creating online order for session: ${session?._id}`);
-
     if (!session) {
       return {
         error: "Invalid session",
@@ -135,7 +133,6 @@ export const create = mutation({
       }
     }
 
-    console.log("created online order for session.");
 
     return {
       success: true,
@@ -252,14 +249,12 @@ export const createFromSession = internalMutation({
       placedOrderId: orderId,
     });
 
-    console.log("created online order for session. clearing bag..");
 
     // clear the bag for the sesion
     await ctx.runMutation(api.storeFront.bag.clearBag, {
       id: session.bagId,
     });
 
-    console.log("cleared bag for session.");
 
     return {
       success: true,
@@ -686,7 +681,6 @@ export const returnAllItemsToStock = mutation({
     await Promise.all(
       orderItems.map(async (item) => {
         if (item.isRestocked) {
-          console.log("item already restocked", item._id);
           return true;
         }
 
@@ -743,9 +737,6 @@ export const updateOwner = mutation({
       .filter((q) => q.eq(q.field("storeFrontUserId"), args.currentOwner))
       .collect();
 
-    console.info(
-      `updating owner for orders from ${args.currentOwner} to ${args.newOwner}`
-    );
 
     // Update all orders
     await Promise.all(
@@ -770,7 +761,6 @@ export const updateOwner = mutation({
       })
     );
 
-    console.info("successfully updated owner for orders");
 
     return true;
   },

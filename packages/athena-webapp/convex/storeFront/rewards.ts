@@ -69,8 +69,6 @@ export const awardOrderPoints = internalMutation({
       return { success: false, error: "Guest orders don't earn points" };
     }
 
-    console.log("userId", userId);
-
     try {
       const user = await ctx.db
         .query("storeFrontUser")
@@ -80,10 +78,7 @@ export const awardOrderPoints = internalMutation({
       if (!user) {
         return { success: false, error: "Guest orders don't earn points" };
       }
-
-      console.log("User found", user);
     } catch (e) {
-      console.error("Error finding user", e);
       return { success: false, error: "Guest orders don't earn points" };
     }
 

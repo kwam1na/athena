@@ -34,7 +34,6 @@ export class ValkeyClient {
       const data = await response.json();
       return data.value as T;
     } catch (error) {
-      console.error("Error retrieving value from Valkey:", error);
       throw error;
     }
   }
@@ -62,7 +61,6 @@ export class ValkeyClient {
       const data = await response.json();
       return data.ok === true;
     } catch (error) {
-      console.error("Error setting value in Valkey:", error);
       throw error;
     }
   }
@@ -89,7 +87,6 @@ export class ValkeyClient {
       const data = await response.json();
       return data.keysCleared;
     } catch (error) {
-      console.error("Error invalidating keys in Valkey:", error);
       throw error;
     }
   }

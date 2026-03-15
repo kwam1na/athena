@@ -25,7 +25,7 @@ export const uploadFileToS3 = async (file: any, key: string) => {
     await s3.send(new PutObjectCommand(params));
     return `https://${process.env.AWS_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
   } catch (error) {
-    console.error("Error uploading file", error);
+    // handled
   }
 };
 
@@ -43,7 +43,7 @@ export const deleteFileInS3 = async (path: string) => {
     await s3.send(new DeleteObjectCommand(params));
     return { success: true, key };
   } catch (error) {
-    console.error("Error deleting file", error);
+    // handled
   }
 };
 
@@ -85,7 +85,6 @@ export const deleteDirectoryInS3 = async (directory: string) => {
 
     return { success: true, directory };
   } catch (error) {
-    console.error("Error deleting directory", error);
     return { success: false, error, directory };
   }
 };
@@ -149,7 +148,6 @@ export const listItemsInS3Directory = async ({
 
     return { success: true, items, directory };
   } catch (error) {
-    console.error("Error listing directory items", error);
     return { success: false, error, directory };
   }
 };

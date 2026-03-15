@@ -457,7 +457,7 @@ export default function ShoppingBag() {
         await postAnalytics({
           action: "initiated_checkout",
           data: {},
-        }).catch((error) => console.error("Failed to post analytics:", error));
+        }).catch(() => {});
 
         navigate({
           to: "/shop/checkout",

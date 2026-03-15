@@ -16,7 +16,7 @@ export const VideoPlayer = ({ hlsUrl }: VideoPlayerProps) => {
     // Use native Safari HLS playback first
     if (video.canPlayType("application/vnd.apple.mpegurl")) {
       video.src = hlsUrl;
-      video.play().catch((e) => console.error("Error playing video:", e));
+      video.play().catch(() => {});
     }
     // Fall back to HLS.js
     else if (Hls.isSupported()) {
@@ -24,7 +24,7 @@ export const VideoPlayer = ({ hlsUrl }: VideoPlayerProps) => {
       hls.loadSource(hlsUrl);
       hls.attachMedia(video);
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        video.play().catch((e) => console.error("Error playing video:", e));
+        video.play().catch(() => {});
       });
 
       return () => {

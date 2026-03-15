@@ -10,6 +10,10 @@ function wrapDefinition<T extends { handler: (...args: any[]) => any }>(
     definition
   );
 }
+function h(fn: any): (...args: any[]) => any {
+  return fn.handler;
+}
+
 
 function createDbHarness(queryQueues: Record<string, any[]> = {}) {
   const queueMap = new Map<string, any[]>(
@@ -45,7 +49,7 @@ function createDbHarness(queryQueues: Record<string, any[]> = {}) {
       chain.collect = vi.fn(async () => take(`${table}:collect`) ?? []);
       return chain;
     }),
-    get: vi.fn(async () => null),
+    get: vi.fn(async (_id: string): Promise<any> => null),
   };
 
   return { db };
@@ -118,7 +122,7 @@ describe("customerBehaviorTimeline", () => {
       return null;
     });
 
-    const result = await getCustomerBehaviorTimeline.handler({ db } as never, {
+    const result = await h(getCustomerBehaviorTimeline)({ db } as never, {
       userId: "user_1",
       limit: 5,
     });
@@ -154,7 +158,7 @@ describe("customerBehaviorTimeline", () => {
       .mockRejectedValueOnce(new Error("not a storefront user"))
       .mockResolvedValueOnce({ _id: "guest_1", email: "guest@example.com" });
 
-    const result = await getCustomerBehaviorTimeline.handler({ db } as never, {
+    const result = await h(getCustomerBehaviorTimeline)({ db } as never, {
       userId: "guest_1",
       timeRange: "24h",
     });
@@ -202,7 +206,7 @@ describe("customerBehaviorTimeline", () => {
       .mockRejectedValueOnce(new Error("missing guest"))
       .mockRejectedValueOnce(new Error("missing product"));
 
-    const result = await getCustomerBehaviorTimeline.handler({ db } as never, {
+    const result = await h(getCustomerBehaviorTimeline)({ db } as never, {
       userId: "ghost_1",
       timeRange: "all",
     });
@@ -245,7 +249,7 @@ describe("customerBehaviorTimeline", () => {
       ],
     });
 
-    const result = await getCustomerBehaviorSummary.handler({ db } as never, {
+    const result = await h(getCustomerBehaviorSummary)({ db } as never, {
       userId: "user_1",
       timeRange: "7d",
     });
@@ -268,7 +272,7 @@ describe("customerBehaviorTimeline", () => {
       "analytics:take": [[]],
     });
 
-    const result = await getCustomerBehaviorSummary.handler({ db } as never, {
+    const result = await h(getCustomerBehaviorSummary)({ db } as never, {
       userId: "user_1",
       timeRange: "all",
     });

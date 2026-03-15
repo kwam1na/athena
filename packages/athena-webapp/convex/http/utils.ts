@@ -14,10 +14,10 @@ export const getStoreDataFromRequest = async (c: Context) => {
   const claims = await getActorClaims(c);
 
   return {
-    organizationId: (organizationId || claims?.organizationId) as
+    organizationId: (organizationId ?? claims?.organizationId) as
       | Id<"organization">
       | undefined,
-    storeId: (storeId || claims?.storeId) as Id<"store"> | undefined,
+    storeId: (storeId ?? claims?.storeId) as Id<"store"> | undefined,
   };
 };
 

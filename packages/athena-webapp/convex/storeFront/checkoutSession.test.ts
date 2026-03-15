@@ -8,6 +8,10 @@ function wrapDefinition<T extends { handler: (...args: any[]) => any }>(definiti
     definition
   );
 }
+function h(fn: any): (...args: any[]) => any {
+  return fn.handler;
+}
+
 
 async function loadModule(paystackSecretKey = "secret") {
   vi.resetModules();
@@ -165,7 +169,7 @@ describe("checkoutSession backend flows", () => {
       },
     });
 
-    const result = await create.handler({ db } as never, {
+    const result = await h(create)({ db } as never, {
       storeId: "store_1",
       storeFrontUserId: "guest_1",
       bagId: "bag_1",
@@ -219,7 +223,7 @@ describe("checkoutSession backend flows", () => {
       },
     });
 
-    const result = await create.handler({ db } as never, {
+    const result = await h(create)({ db } as never, {
       storeId: "store_1",
       storeFrontUserId: "guest_1",
       bagId: "bag_1",
@@ -339,7 +343,7 @@ describe("checkoutSession backend flows", () => {
       },
     });
 
-    const result = await create.handler({ db } as never, {
+    const result = await h(create)({ db } as never, {
       storeId: "store_1",
       storeFrontUserId: "guest_1",
       bagId: "bag_1",
@@ -412,7 +416,7 @@ describe("checkoutSession backend flows", () => {
       },
     });
 
-    await releaseCheckoutItems.handler({ db } as never, {});
+    await h(releaseCheckoutItems)({ db } as never, {});
 
     expect(db.patch).toHaveBeenCalledWith("sku_1", {
       quantityAvailable: 7,
@@ -448,7 +452,7 @@ describe("checkoutSession backend flows", () => {
         .mockResolvedValueOnce(undefined),
     };
 
-    const result = await updateCheckoutSession.handler(ctx as never, {
+    const result = await h(updateCheckoutSession)(ctx as never, {
       id: "session_1",
       hasCompletedPayment: true,
       orderDetails: baseOrderDetails(),
@@ -499,7 +503,7 @@ describe("checkoutSession backend flows", () => {
       status: 200,
     } as Response);
 
-    const result = await cancelOrder.handler(ctx as never, {
+    const result = await h(cancelOrder)(ctx as never, {
       id: "session_1",
     });
 

@@ -10,6 +10,10 @@ function wrapDefinition<T extends { handler: (...args: any[]) => any }>(
     definition
   );
 }
+function h(fn: any): (...args: any[]) => any {
+  return fn.handler;
+}
+
 
 async function loadModule() {
   vi.resetModules();
@@ -34,7 +38,7 @@ describe("users", () => {
       get: vi.fn(async (id: string) => records.get(id) ?? null),
     };
 
-    const result = await getByIds.handler({ db } as never, {
+    const result = await h(getByIds)({ db } as never, {
       ids: ["guest_1", "user_1"],
     });
 

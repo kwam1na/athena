@@ -47,8 +47,6 @@ export const requestVerificationCode = mutation({
       isUsed: false,
     });
 
-    console.log("inserted....");
-
     return await ctx.db.get(id);
   },
 });

@@ -13,14 +13,14 @@ crons.interval(
 crons.interval(
   "clear-abandoned-sessions",
   { minutes: process.env.STAGE == "prod" ? 30 : 1440 },
-  internal.storeFront.checkoutSession.clearAbandonedSessions,
+  (internal.storeFront.checkoutSession as any).clearAbandonedSessions,
   {}
 );
 
 crons.interval(
   "complete-checkout-sessions",
   { minutes: process.env.STAGE == "prod" ? 30 : 1440 },
-  internal.storeFront.checkoutSession.completeCheckoutSessions,
+  (internal.storeFront.checkoutSession as any).completeCheckoutSessions,
   {}
 );
 

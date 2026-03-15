@@ -183,7 +183,7 @@ export const UserView = () => {
             </div>
 
             {checkoutSession && (
-              <UserCheckoutSession checkoutSession={checkoutSession} />
+              <UserCheckoutSession checkoutSession={checkoutSession as any} />
             )}
 
             {!checkoutSession && (

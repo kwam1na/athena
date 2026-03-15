@@ -120,7 +120,6 @@ export async function releaseInventoryHold(
 
   if (!sku) {
     // Don't fail if SKU doesn't exist - it may have been deleted
-    console.warn(`[InventoryHolds] SKU ${skuId} not found during release`);
     return {
       success: true,
       message: "SKU not found, but continuing",
@@ -131,7 +130,6 @@ export async function releaseInventoryHold(
     !("quantityAvailable" in sku) ||
     typeof sku.quantityAvailable !== "number"
   ) {
-    console.warn(`[InventoryHolds] Invalid SKU data for ${skuId}`);
     return {
       success: false,
       message: "Invalid product data",

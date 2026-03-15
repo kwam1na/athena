@@ -8,6 +8,10 @@ function wrapDefinition<T extends { handler: (...args: any[]) => any }>(definiti
     definition
   );
 }
+function h(fn: any): (...args: any[]) => any {
+  return fn.handler;
+}
+
 
 async function loadModule() {
   vi.resetModules();
@@ -162,7 +166,7 @@ describe("onlineOrder backend flows", () => {
       },
     });
 
-    const result = await create.handler({ db } as never, orderArgs());
+    const result = await h(create)({ db } as never, orderArgs());
 
     expect(db.insert).toHaveBeenNthCalledWith(
       1,
@@ -205,7 +209,7 @@ describe("onlineOrder backend flows", () => {
       runAfter: vi.fn(),
     };
 
-    const result = await update.handler({ db, scheduler } as never, {
+    const result = await h(update)({ db, scheduler } as never, {
       orderId: "order_1",
       update: {
         status: "ready-for-pickup",
@@ -248,7 +252,7 @@ describe("onlineOrder backend flows", () => {
       },
     });
 
-    const result = await update.handler({ db } as never, {
+    const result = await h(update)({ db } as never, {
       externalReference: "ref_123",
       update: {
         status: "refunded",
@@ -299,7 +303,7 @@ describe("onlineOrder backend flows", () => {
       },
     });
 
-    const result = await returnItemsToStock.handler({ db } as never, {
+    const result = await h(returnItemsToStock)({ db } as never, {
       externalTransactionId: "txn_123",
       onlineOrderItemIds: ["item_1"],
     });
@@ -332,7 +336,7 @@ describe("onlineOrder backend flows", () => {
       },
     });
 
-    const result = await updateOwner.handler({ db } as never, {
+    const result = await h(updateOwner)({ db } as never, {
       currentOwner: "guest_1",
       newOwner: "user_1",
     });

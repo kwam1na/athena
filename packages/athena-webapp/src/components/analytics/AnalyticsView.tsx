@@ -41,7 +41,7 @@ const ActiveCheckoutSessions = () => {
   const { activeStore } = useGetActiveStore();
 
   const activeCheckoutSessions = useQuery(
-    api.storeFront.checkoutSession.getActiveCheckoutSessionsForStore,
+    (api.storeFront.checkoutSession as any).getActiveCheckoutSessionsForStore,
     activeStore?._id ? { storeId: activeStore._id } : "skip"
   );
 

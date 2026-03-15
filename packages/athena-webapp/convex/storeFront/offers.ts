@@ -125,28 +125,17 @@ export const sendOfferEmail = internalAction({
     offerId: v.id(entity),
   },
   handler: async (ctx, args) => {
-    console.log(
-      `[SendOfferEmail] Starting email send process for offer ${args.offerId}`
-    );
-
     // Get the offer
     const offer = await ctx.runQuery(api.storeFront.offers.getById, {
       id: args.offerId,
     });
 
     if (!offer || offer.status !== "pending") {
-      console.log(
-        `[SendOfferEmail] Offer validation failed - Offer found: ${!!offer}, Status: ${offer?.status}`
-      );
       return {
         success: false,
         message: "Offer not found or already processed",
       };
     }
-
-    console.log(
-      `[SendOfferEmail] Offer validated - Email: ${offer.email}, User: ${offer.storeFrontUserId}, PromoCode: ${offer.promoCodeId}`
-    );
 
     // Get the promo code
     const promoCode = await ctx.runQuery(api.inventory.promoCode.getById, {
@@ -154,9 +143,6 @@ export const sendOfferEmail = internalAction({
     });
 
     if (!promoCode) {
-      console.log(
-        `[SendOfferEmail] Promo code not found for offer ${args.offerId}`
-      );
       await ctx.runMutation(internal.storeFront.offers.updateStatus, {
         id: args.offerId,
         status: "error",
@@ -168,28 +154,13 @@ export const sendOfferEmail = internalAction({
       };
     }
 
-    console.log(
-      `[SendOfferEmail] Promo code retrieved - Code: ${promoCode.code}, Value: ${promoCode.discountValue}, Type: ${promoCode.discountType}`
-    );
-
     try {
-      console.log(
-        `[SendOfferEmail] Fetching upsell products for offer ${args.offerId}`
-      );
       const { bestSellers, recentlyViewed } = await getUpsellProducts({
         ctx,
         storeId: offer.storeId,
         offer,
         promoCode,
       });
-
-      console.log(
-        `[SendOfferEmail] Upsell products fetched - Best sellers: ${bestSellers.length}, Recently viewed: ${recentlyViewed.length}`
-      );
-
-      console.log(
-        `[SendOfferEmail] Sending email to ${offer.email} with promo code ${promoCode.code}`
-      );
 
       // Send the email
       await sendDiscountCodeEmail({
@@ -203,8 +174,6 @@ export const sendOfferEmail = internalAction({
         heroImageUrl,
       });
 
-      console.log(`[SendOfferEmail] Email sent successfully to ${offer.email}`);
-
       // Mark as sent
       await ctx.runMutation(internal.storeFront.offers.updateStatus, {
         id: args.offerId,
@@ -212,30 +181,17 @@ export const sendOfferEmail = internalAction({
         sentAt: Date.now(),
       });
 
-      console.log(
-        `[SendOfferEmail] Offer ${args.offerId} marked as sent successfully`
-      );
-
       return {
         success: true,
         message: "Discount code email sent",
       };
     } catch (error) {
-      console.error(
-        `[SendOfferEmail] Error sending email for offer ${args.offerId}:`,
-        error
-      );
-
       // Handle errors
       await ctx.runMutation(internal.storeFront.offers.updateStatus, {
         id: args.offerId,
         status: "error",
         errorMessage: error instanceof Error ? error.message : "Unknown error",
       });
-
-      console.log(
-        `[SendOfferEmail] Offer ${args.offerId} marked as error with message: ${error instanceof Error ? error.message : "Unknown error"}`
-      );
 
       return {
         success: false,
@@ -369,7 +325,6 @@ export const sendOfferReminderEmail = internalAction({
         },
       });
 
-      console.log(`Discount reminder email sent to ${offer.email}`);
 
       return {
         success: true,
@@ -415,7 +370,6 @@ export const sendOfferReminderEmails = internalAction({
 
     await Promise.all(queries);
 
-    console.log(`Discount reminder emails sent for ${offers.length} offer(s)`);
 
     return {
       success: true,

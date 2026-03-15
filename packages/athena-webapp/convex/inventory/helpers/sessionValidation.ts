@@ -44,8 +44,6 @@ export async function validateSessionActive(
   const session = await db.get(sessionId);
   const now = Date.now();
 
-  console.log("session in validateSessionActive", session);
-
   if (!session) {
     return {
       success: false,
