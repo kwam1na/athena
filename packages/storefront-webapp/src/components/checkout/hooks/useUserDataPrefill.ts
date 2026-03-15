@@ -1,10 +1,11 @@
 import { useEffect } from "react";
+import { Store, StoreFrontUser } from "@athena/webapp";
 import { isFeeWaived } from "@/lib/feeUtils";
 import { CheckoutState, DeliveryOption } from "../types";
 
 export function useUserDataPrefill(
-  user: any,
-  store: any,
+  user: StoreFrontUser | undefined,
+  store: Store | undefined,
   updateState: (updates: Partial<CheckoutState>) => void
 ): void {
   const { waiveDeliveryFees } = store?.config || {};
