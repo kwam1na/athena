@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { LoadingButton } from "../ui/loading-button";
 import { SelectNative } from "../ui/select-native";
 import { VideoPlayer } from "./VideoPlayer";
+import { getStoreConfigV2 } from "~/src/lib/storeConfig";
 
 type StreamReel = {
   version: number;
@@ -17,6 +18,10 @@ type StreamReel = {
 
 export const LandingPageReelVersion = () => {
   const { activeStore } = useGetActiveStore();
+  const storeConfig = useMemo(
+    () => getStoreConfigV2(activeStore),
+    [activeStore?.config],
+  );
 
   const [isUpdatingConfig, setIsUpdatingConfig] = useState(false);
 
@@ -31,7 +36,7 @@ export const LandingPageReelVersion = () => {
   );
 
   const streamReels = useMemo(() => {
-    const raw = activeStore?.config?.streamReels;
+    const raw = storeConfig.media.reels.streamReels;
     if (!Array.isArray(raw)) return [] as StreamReel[];
 
     return raw
@@ -40,7 +45,7 @@ export const LandingPageReelVersion = () => {
           typeof reel?.version === "number" && typeof reel?.hlsUrl === "string",
       )
       .sort((a, b) => b.version - a.version);
-  }, [activeStore?.config?.streamReels]);
+  }, [storeConfig.media.reels.streamReels]);
 
   const selectedReel = streamReels.find((reel) => reel.version === reelVersion);
 
@@ -57,7 +62,7 @@ export const LandingPageReelVersion = () => {
       return;
     }
 
-    const activeVersion = activeStore.config?.activeStreamReel;
+    const activeVersion = storeConfig.media.reels.activeVersion;
 
     if (typeof activeVersion === "number") {
       setReelVersion(activeVersion);
@@ -70,10 +75,10 @@ export const LandingPageReelVersion = () => {
     }
 
     setReelVersion(null);
-  }, [activeStore, streamReels, reelVersion]);
+  }, [activeStore, storeConfig, streamReels, reelVersion]);
 
   const hlsUrl =
-    selectedReel?.hlsUrl || activeStore?.config?.activeStreamReelHlsUrl || "";
+    selectedReel?.hlsUrl || storeConfig.media.reels.activeHlsUrl || "";
 
   const handleUpdateConfig = async () => {
     if (!activeStore || !selectedReel) return;
@@ -106,7 +111,7 @@ export const LandingPageReelVersion = () => {
   const isButtonDisabled =
     !reelVersion ||
     !selectedReel ||
-    (reelVersion === activeStore?.config?.activeStreamReel &&
+    (reelVersion === storeConfig.media.reels.activeVersion &&
       !updatedReelVersion) ||
     updatedReelVersion === reelVersion;
 

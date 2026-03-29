@@ -9,6 +9,7 @@ import { api } from "~/convex/_generated/api";
 import { useState } from "react";
 import { toast } from "sonner";
 import { LoadingButton } from "../../ui/loading-button";
+import { getStoreConfigV2 } from "~/src/lib/storeConfig";
 
 export type Asset = {
   url: string;
@@ -25,18 +26,22 @@ export const assetColumns: ColumnDef<Asset>[] = [
       const [isUpdatingShopTheLook, setIsUpdatingShopTheLook] = useState(false);
       const [isUpdatingFallbackImage, setIsUpdatingFallbackImage] =
         useState(false);
-      const updateConfig = useMutation(api.inventory.stores.updateConfig);
+      const patchConfig = useMutation(api.inventory.stores.patchConfigV2);
       const { activeStore } = useGetActiveStore();
+      const storeConfig = getStoreConfigV2(activeStore);
 
       const handleUpdateShowroomImage = async () => {
         setIsUpdating(true);
 
         try {
-          await updateConfig({
+          await patchConfig({
             id: activeStore?._id!,
-            config: {
-              ...activeStore?.config,
-              showroomImage: row.original.url,
+            patch: {
+              media: {
+                images: {
+                  showroomImage: row.original.url,
+                },
+              },
             },
           });
           toast.success("Showroom image updated");
@@ -54,11 +59,14 @@ export const assetColumns: ColumnDef<Asset>[] = [
         setIsUpdatingShopTheLook(true);
 
         try {
-          await updateConfig({
+          await patchConfig({
             id: activeStore?._id!,
-            config: {
-              ...activeStore?.config,
-              shopTheLookImage: row.original.url,
+            patch: {
+              media: {
+                images: {
+                  shopTheLookImage: row.original.url,
+                },
+              },
             },
           });
           toast.success("Shop the Look image updated");
@@ -79,12 +87,14 @@ export const assetColumns: ColumnDef<Asset>[] = [
         setIsUpdatingFallbackImage(true);
 
         try {
-          await updateConfig({
+          await patchConfig({
             id: activeStore?._id!,
-            config: {
-              ...activeStore?.config,
-              ui: {
-                fallbackImageUrl: row.original.url,
+            patch: {
+              media: {
+                images: {
+                  ...storeConfig.media.images,
+                  fallbackImageUrl: row.original.url,
+                },
               },
             },
           });

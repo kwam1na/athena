@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
 import View from "../../View";
 import { Input } from "../../ui/input";
@@ -6,14 +6,23 @@ import { LoadingButton } from "../../ui/loading-button";
 import { Switch } from "../../ui/switch";
 import { Label } from "../../ui/label";
 import { useStoreConfigUpdate } from "../hooks/useStoreConfigUpdate";
+import { getStoreConfigV2 } from "~/src/lib/storeConfig";
 
 export const FeesView = () => {
   const { activeStore } = useGetActiveStore();
   const { updateConfig, isUpdating } = useStoreConfigUpdate();
+  const storeConfig = useMemo(
+    () => getStoreConfigV2(activeStore),
+    [activeStore?.config],
+  );
 
-  const [enteredOtherRegionsFee, setEnteredOtherRegionsFee] = useState(0);
-  const [enteredWithinAccraFee, setEnteredWithinAccraFee] = useState(0);
-  const [enteredIntlFee, setEnteredIntlFee] = useState(0);
+  const [enteredOtherRegionsFee, setEnteredOtherRegionsFee] = useState<
+    number | undefined
+  >(0);
+  const [enteredWithinAccraFee, setEnteredWithinAccraFee] = useState<
+    number | undefined
+  >(0);
+  const [enteredIntlFee, setEnteredIntlFee] = useState<number | undefined>(0);
 
   // Replace the single waiveDeliveryFees with separate states for each fee type
   const [waiveWithinAccraFee, setWaiveWithinAccraFee] = useState(false);
@@ -38,10 +47,11 @@ export const FeesView = () => {
 
     await updateConfig({
       storeId: activeStore?._id!,
-      config: {
-        ...activeStore?.config,
-        deliveryFees: updates,
-        waiveDeliveryFees: waiveDeliveryFeesConfig,
+      patch: {
+        commerce: {
+          deliveryFees: updates,
+          waiveDeliveryFees: waiveDeliveryFeesConfig,
+        },
       },
       successMessage: "Delivery fees updated",
       errorMessage: "An error occurred while updating delivery fees",
@@ -51,15 +61,15 @@ export const FeesView = () => {
   useEffect(() => {
     // Sync state with store data when `activeStore` changes
     setEnteredWithinAccraFee(
-      activeStore?.config?.deliveryFees?.withinAccra || undefined
+      storeConfig.commerce.deliveryFees?.withinAccra || undefined
     );
     setEnteredOtherRegionsFee(
-      activeStore?.config?.deliveryFees?.otherRegions || undefined
+      storeConfig.commerce.deliveryFees?.otherRegions || undefined
     );
-    setEnteredIntlFee(activeStore?.config?.deliveryFees?.international || 0);
+    setEnteredIntlFee(storeConfig.commerce.deliveryFees?.international || 0);
 
     // Handle both old boolean format and new object format for backward compatibility
-    const waiveConfig = activeStore?.config?.waiveDeliveryFees;
+    const waiveConfig = storeConfig.commerce.waiveDeliveryFees;
     if (typeof waiveConfig === "boolean") {
       // Old format - single boolean
       setWaiveWithinAccraFee(waiveConfig);
@@ -76,7 +86,7 @@ export const FeesView = () => {
       setWaiveOtherRegionsFee(false);
       setWaiveIntlFee(false);
     }
-  }, [activeStore]);
+  }, [storeConfig]);
 
   // Function to check if all fees are being waived
   const areAllFeesWaived =

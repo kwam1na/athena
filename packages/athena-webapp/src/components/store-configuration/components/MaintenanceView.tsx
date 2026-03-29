@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Construction, Disc2, EyeIcon } from "lucide-react";
 import { toast } from "sonner";
 import { useMutation } from "convex/react";
@@ -8,16 +8,20 @@ import View from "../../View";
 import { Switch } from "../../ui/switch";
 import { Label } from "../../ui/label";
 import { MaintenanceMessageEditor } from "../../homepage/MaintenanceMessageEditor";
-import { isInMaintenanceMode as checkMaintenanceMode } from "~/src/lib/maintenanceUtils";
+import { getStoreConfigV2 } from "~/src/lib/storeConfig";
 
 export const MaintenanceView = () => {
   const { activeStore } = useGetActiveStore();
+  const storeConfig = useMemo(
+    () => getStoreConfigV2(activeStore),
+    [activeStore?.config],
+  );
 
   const [isUpdatingConfig, setIsUpdatingConfig] = useState(false);
   const [isInMaintenanceMode, setIsInMaintenanceMode] = useState(false);
   const [isInReadOnlyMode, setIsInReadOnlyMode] = useState(false);
 
-  const updateConfig = useMutation(api.inventory.stores.updateConfig);
+  const patchConfig = useMutation(api.inventory.stores.patchConfigV2);
 
   const saveMaintenanceModeChanges = async (toggled: boolean) => {
     setIsUpdatingConfig(true);
@@ -28,11 +32,12 @@ export const MaintenanceView = () => {
     };
 
     try {
-      await updateConfig({
+      await patchConfig({
         id: activeStore?._id!,
-        config: {
-          ...activeStore?.config,
-          availability: updates,
+        patch: {
+          operations: {
+            availability: updates,
+          },
         },
       });
       const message = toggled
@@ -65,11 +70,12 @@ export const MaintenanceView = () => {
     };
 
     try {
-      await updateConfig({
+      await patchConfig({
         id: activeStore?._id!,
-        config: {
-          ...activeStore?.config,
-          visibility: updates,
+        patch: {
+          operations: {
+            visibility: updates,
+          },
         },
       });
       const message = toggled
@@ -94,11 +100,9 @@ export const MaintenanceView = () => {
   };
 
   useEffect(() => {
-    setIsInMaintenanceMode(checkMaintenanceMode(activeStore?.config));
-    setIsInReadOnlyMode(
-      activeStore?.config?.visibility?.inReadOnlyMode || false
-    );
-  }, [activeStore?.config]);
+    setIsInMaintenanceMode(storeConfig.operations.availability.inMaintenanceMode);
+    setIsInReadOnlyMode(storeConfig.operations.visibility.inReadOnlyMode);
+  }, [storeConfig]);
 
   return (
     <div className="space-y-8">

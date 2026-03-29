@@ -1,5 +1,5 @@
 import { useAction, useMutation, useQuery } from "convex/react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { api } from "~/convex/_generated/api";
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
@@ -8,7 +8,6 @@ import { Input } from "../ui/input";
 import { LoadingButton } from "../ui/loading-button";
 import { Switch } from "../ui/switch";
 import { Label } from "../ui/label";
-import { set } from "zod";
 import { EmptyState } from "../states/empty/empty-state";
 import { ArrowUp, Image, PlusIcon } from "lucide-react";
 import { Button } from "../ui/button";
@@ -17,6 +16,7 @@ import { assetColumns } from "./assets-table/assetsColumns";
 import { useImageUpload } from "~/src/hooks/use-image-upload";
 import ImageUploader, { ImageFile } from "../ui/image-uploader";
 import { convertImagesToWebp } from "~/src/lib/imageUtils";
+import { getStoreConfigV2 } from "~/src/lib/storeConfig";
 
 const Header = () => {
   return (
@@ -28,14 +28,22 @@ const Header = () => {
 
 const FeesView = () => {
   const { activeStore } = useGetActiveStore();
+  const storeConfig = useMemo(
+    () => getStoreConfigV2(activeStore),
+    [activeStore?.config],
+  );
 
   const [isUpdatingFees, setIsUpdatingFees] = useState(false);
 
-  const [enteredOtherRegionsFee, setEnteredOtherRegionsFee] = useState(0);
-  const [enteredWithinAccraFee, setEnteredWithinAccraFee] = useState(0);
-  const [enteredIntlFee, setEnteredIntlFee] = useState(0);
+  const [enteredOtherRegionsFee, setEnteredOtherRegionsFee] = useState<
+    number | undefined
+  >(0);
+  const [enteredWithinAccraFee, setEnteredWithinAccraFee] = useState<
+    number | undefined
+  >(0);
+  const [enteredIntlFee, setEnteredIntlFee] = useState<number | undefined>(0);
 
-  const updateFees = useMutation(api.inventory.stores.updateConfig);
+  const patchConfig = useMutation(api.inventory.stores.patchConfigV2);
 
   const handleUpdateFees = async () => {
     setIsUpdatingFees(true);
@@ -47,11 +55,12 @@ const FeesView = () => {
     };
 
     try {
-      await updateFees({
+      await patchConfig({
         id: activeStore?._id!,
-        config: {
-          ...activeStore?.config,
-          deliveryFees: updates,
+        patch: {
+          commerce: {
+            deliveryFees: updates,
+          },
         },
       });
       toast.success("Delivery fees updated", { position: "top-right" });
@@ -69,13 +78,13 @@ const FeesView = () => {
   useEffect(() => {
     // Sync state with store data when `activeStore` changes
     setEnteredWithinAccraFee(
-      activeStore?.config?.deliveryFees?.withinAccra || undefined
+      storeConfig.commerce.deliveryFees?.withinAccra || undefined
     );
     setEnteredOtherRegionsFee(
-      activeStore?.config?.deliveryFees?.otherRegions || undefined
+      storeConfig.commerce.deliveryFees?.otherRegions || undefined
     );
-    setEnteredIntlFee(activeStore?.config?.deliveryFees?.international || 0);
-  }, [activeStore]);
+    setEnteredIntlFee(storeConfig.commerce.deliveryFees?.international || 0);
+  }, [storeConfig]);
 
   return (
     <View
@@ -132,17 +141,21 @@ const FeesView = () => {
 
 const ContactView = () => {
   const { activeStore } = useGetActiveStore();
+  const storeConfig = useMemo(
+    () => getStoreConfigV2(activeStore),
+    [activeStore?.config],
+  );
 
   const [isUpdatingContactInfo, setIsUpdatingContactInfo] = useState(false);
 
   const [enteredPhoneNumber, setEnteredPhoneNumber] = useState(
-    activeStore?.config?.contactInfo?.phoneNumber || ""
+    storeConfig.contact.phoneNumber || ""
   );
   const [enteredLocation, setEnteredLocation] = useState(
-    activeStore?.config?.contactInfo?.location || ""
+    storeConfig.contact.location || ""
   );
 
-  const updateContactInfo = useMutation(api.inventory.stores.updateConfig);
+  const patchConfig = useMutation(api.inventory.stores.patchConfigV2);
 
   const handleUpdateContactInfo = async () => {
     setIsUpdatingContactInfo(true);
@@ -153,11 +166,10 @@ const ContactView = () => {
     };
 
     try {
-      await updateContactInfo({
+      await patchConfig({
         id: activeStore?._id!,
-        config: {
-          ...activeStore?.config,
-          contactInfo: updates,
+        patch: {
+          contact: updates,
         },
       });
       toast.success("Contact information updated", { position: "top-right" });
@@ -174,9 +186,9 @@ const ContactView = () => {
 
   useEffect(() => {
     // Sync state with store data when `activeStore` changes
-    setEnteredPhoneNumber(activeStore?.config?.contactInfo?.phoneNumber || "");
-    setEnteredLocation(activeStore?.config?.contactInfo?.location || "");
-  }, [activeStore]);
+    setEnteredPhoneNumber(storeConfig.contact.phoneNumber || "");
+    setEnteredLocation(storeConfig.contact.location || "");
+  }, [storeConfig]);
 
   return (
     <View
@@ -220,12 +232,16 @@ const ContactView = () => {
 
 const MaintenanceView = () => {
   const { activeStore } = useGetActiveStore();
+  const storeConfig = useMemo(
+    () => getStoreConfigV2(activeStore),
+    [activeStore?.config],
+  );
 
   const [isUpdatingConfig, setIsUpdatingConfig] = useState(false);
 
   const [isInMaintenanceMode, setIsInMaintenanceMode] = useState(false);
 
-  const updateConfig = useMutation(api.inventory.stores.updateConfig);
+  const patchConfig = useMutation(api.inventory.stores.patchConfigV2);
 
   const saveChanges = async (toggled: boolean) => {
     setIsUpdatingConfig(true);
@@ -238,11 +254,12 @@ const MaintenanceView = () => {
     };
 
     try {
-      await updateConfig({
+      await patchConfig({
         id: activeStore?._id!,
-        config: {
-          ...activeStore?.config,
-          availability: updates,
+        patch: {
+          operations: {
+            availability: updates,
+          },
         },
       });
       const message = toggled
@@ -262,11 +279,11 @@ const MaintenanceView = () => {
 
   useEffect(() => {
     console.log("updating maintenance mode in effect");
-    console.log(activeStore?.config);
+    console.log(storeConfig);
     setIsInMaintenanceMode(
-      activeStore?.config?.availability?.inMaintenanceMode || false
+      storeConfig.operations.availability.inMaintenanceMode || false
     );
-  }, [activeStore?.config?.availability]);
+  }, [storeConfig]);
 
   console.log("in maintenance mode: ", isInMaintenanceMode);
 
