@@ -48,6 +48,7 @@ import { WelcomeBackModal } from "../ui/modals/WelcomeBackModal";
 import { useProductDiscount } from "@/hooks/useProductDiscount";
 import { DiscountBadge } from "../product-page/DiscountBadge";
 import { useInventoryStatus } from "@/hooks/useInventoryStatus";
+import { getStoreConfigV2 } from "@/lib/storeConfig";
 
 const PendingItem = ({ session, count }: { session: any; count: number }) => {
   return (
@@ -122,6 +123,7 @@ const BagItemWithDiscount = ({
   const discountInfo = useProductDiscount(item.productSkuId, item.price);
 
   const { store } = useStoreContext();
+  const storeConfig = getStoreConfigV2(store);
 
   // Calculate item total with discount
   const itemPrice = discountInfo.hasDiscount
@@ -208,7 +210,7 @@ const BagItemWithDiscount = ({
               <ImageWithFallback
                 src={
                   (item as any)?.productImage ||
-                  store?.config?.ui?.fallbackImageUrl
+                  storeConfig.media.images.fallbackImageUrl
                 }
                 alt={(item as any).productName || "product image"}
                 className="w-full h-full object-cover rounded-lg"
@@ -344,6 +346,7 @@ export default function ShoppingBag() {
   const [updateCounter, forceUpdate] = useReducer((x) => x + 1, 0);
   const itemTotalsRef = useRef<Map<string, number>>(new Map());
   const { formatter, userId, isNavbarShowing, store } = useStoreContext();
+  const storeConfig = getStoreConfigV2(store);
 
   const { setNavBarLayout, setAppLocation } = useNavigationBarContext();
 
@@ -479,7 +482,7 @@ export default function ShoppingBag() {
       action: "clicked_on_discount_code_trigger",
       origin: "shopping_bag",
       data: {
-        promoCodeId: store?.config?.homepageDiscountCodeModalPromoCode,
+        promoCodeId: storeConfig.promotions.homepageDiscountCodeModalPromoCode,
       },
     });
   };
@@ -695,7 +698,7 @@ export default function ShoppingBag() {
         isOpen={isDiscountModalOpen}
         onClose={handleCloseDiscountModal}
         onSuccess={completeDiscountModalFlow}
-        promoCode={store?.config?.homepageDiscountCodeModalPromoCode}
+        promoCode={storeConfig.promotions.homepageDiscountCodeModalPromoCode}
       />
     </FadeIn>
   );

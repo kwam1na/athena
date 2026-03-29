@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useOnlineOrderQueries } from "@/lib/queries/onlineOrder";
 import { useReviewQueries } from "@/lib/queries/reviews";
 import { useStoreContext } from "@/contexts/StoreContext";
+import { getStoreConfigV2 } from "@/lib/storeConfig";
 
 const LEAVE_REVIEW_COOLDOWN_DAYS = 7;
 const LEAVE_REVIEW_LAST_SHOWN_KEY = "leave_review_modal_last_shown";
@@ -15,6 +16,7 @@ const LEAVE_REVIEW_DISMISSED_KEY = "leave_review_modal_dismissed";
  */
 export function useLeaveAReviewModal() {
   const { store } = useStoreContext();
+  const storeConfig = getStoreConfigV2(store);
   const onlineOrderQueries = useOnlineOrderQueries();
   const { data: onlineOrders } = useQuery(onlineOrderQueries.list());
   const { hasUserReviewForOrderItem } = useReviewQueries();
@@ -35,7 +37,7 @@ export function useLeaveAReviewModal() {
 
   // Check if store has promo code configured
   const hasPromoCode = Boolean(
-    store?.config?.leaveAReviewDiscountCodeModalPromoCode
+    storeConfig.promotions.leaveAReviewDiscountCodeModalPromoCode
   );
 
   // Determine if all conditions are met to show modal

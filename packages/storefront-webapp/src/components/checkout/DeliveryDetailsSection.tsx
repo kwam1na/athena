@@ -25,6 +25,7 @@ import { Button } from "../ui/button";
 import { US_STATES } from "@/lib/states";
 import { useStoreContext } from "@/contexts/StoreContext";
 import { isFeeWaived } from "@/lib/feeUtils";
+import { getStoreConfigV2 } from "@/lib/storeConfig";
 
 export const CountryFields = ({ form }: CheckoutFormSectionProps) => {
   const { checkoutState, updateState } = useCheckout();
@@ -116,7 +117,8 @@ export const CountryFields = ({ form }: CheckoutFormSectionProps) => {
 const RegionFields = ({ form }: CheckoutFormSectionProps) => {
   const { checkoutState, updateState } = useCheckout();
   const { store } = useStoreContext();
-  const { waiveDeliveryFees, deliveryFees } = store?.config || {};
+  const storeConfig = getStoreConfigV2(store);
+  const { waiveDeliveryFees, deliveryFees } = storeConfig.commerce;
 
   return (
     <>
@@ -771,8 +773,8 @@ export const DeliveryDetailsSection = ({ form }: CheckoutFormSectionProps) => {
   const { country, region } = deliveryDetails || {};
 
   const { store } = useStoreContext();
-
-  const { deliveryFees, waiveDeliveryFees } = store?.config || {};
+  const storeConfig = getStoreConfigV2(store);
+  const { deliveryFees, waiveDeliveryFees } = storeConfig.commerce;
 
   const previousCountryRef = useRef(
     checkoutState.deliveryDetails?.country || undefined

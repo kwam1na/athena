@@ -25,6 +25,7 @@ import { Badge } from "../ui/badge";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { useDiscountCodeAlert } from "@/hooks/useDiscountCodeAlert";
+import { getStoreConfigV2 } from "@/lib/storeConfig";
 
 export default function MobileBagSummary() {
   const { formatter, store } = useStoreContext();
@@ -33,7 +34,8 @@ export default function MobileBagSummary() {
   const [invalidMessage, setInvalidMessage] = useState("");
   const [code, setCode] = useState("");
   const { userId, guestId } = useAuth();
-  const { waiveDeliveryFees } = store?.config || {};
+  const storeConfig = getStoreConfigV2(store);
+  const { waiveDeliveryFees } = storeConfig.commerce;
 
   const queryClient = useQueryClient();
 

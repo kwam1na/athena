@@ -11,6 +11,7 @@ import { useStoreContext } from "@/contexts/StoreContext";
 import { useLogout } from "@/hooks/useLogout";
 import ImageWithFallback from "../ui/image-with-fallback";
 import { useNavigationBarContext } from "@/contexts/NavigationBarProvider";
+import { getStoreFallbackImageUrl } from "@/lib/storeConfig";
 
 export const BagMenu = ({
   isMobile,
@@ -34,6 +35,7 @@ export const BagMenu = ({
   const handleLogout = useLogout();
 
   const { store } = useStoreContext();
+  const fallbackImageUrl = getStoreFallbackImageUrl(store);
 
   const { navBarLayout, appLocation } = useNavigationBarContext();
 
@@ -75,7 +77,7 @@ export const BagMenu = ({
                   <ImageWithFallback
                     src={
                       item.productImage ||
-                      store?.config?.ui?.fallbackImageUrl ||
+                      fallbackImageUrl ||
                       placeholder
                     }
                     alt={item.productName || "product image"}

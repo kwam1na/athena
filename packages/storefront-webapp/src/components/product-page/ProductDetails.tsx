@@ -7,6 +7,7 @@ import placeholder from "@/assets/placeholder.png";
 import { WIGLUB_HAIR_STUDIO_LOCATION_URL } from "@/lib/constants";
 import { ShoppingBagAction } from "@/hooks/useShoppingBag";
 import { useStoreContext } from "@/contexts/StoreContext";
+import { getStoreFallbackImageUrl } from "@/lib/storeConfig";
 
 // Product Details Section
 export function PickupDetails({
@@ -56,6 +57,7 @@ export function BagProduct({
   const buttonLink = action == "adding-to-bag" ? "/shop/bag" : "/shop/saved";
 
   const { store } = useStoreContext();
+  const fallbackImageUrl = getStoreFallbackImageUrl(store);
 
   return (
     <div className="flex flex-col gap-12 pt-12">
@@ -67,7 +69,7 @@ export function BagProduct({
             className="w-[140px] h-[180px] aspect-square object-cover rounded"
             src={
               product.images[0] ||
-              store?.config?.ui?.fallbackImageUrl ||
+              fallbackImageUrl ||
               placeholder
             }
           />

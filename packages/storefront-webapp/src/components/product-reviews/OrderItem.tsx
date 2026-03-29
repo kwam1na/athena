@@ -2,6 +2,7 @@ import ImageWithFallback from "../ui/image-with-fallback";
 import { getProductName } from "@/lib/productUtils";
 import placeholder from "@/assets/placeholder.png";
 import { useStoreContext } from "@/contexts/StoreContext";
+import { getStoreFallbackImageUrl } from "@/lib/storeConfig";
 
 interface OrderItemProps {
   item: any;
@@ -14,13 +15,14 @@ export const OrderItem = ({ item, formatter }: OrderItemProps) => {
     : "Free";
 
   const { store } = useStoreContext();
+  const fallbackImageUrl = getStoreFallbackImageUrl(store);
 
   return (
     <div className="flex gap-8 text-sm">
       <ImageWithFallback
         src={
           item.productImage ||
-          store?.config?.ui?.fallbackImageUrl ||
+          fallbackImageUrl ||
           placeholder
         }
         alt={"product image"}

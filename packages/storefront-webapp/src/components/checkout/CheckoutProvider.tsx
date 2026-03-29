@@ -21,6 +21,7 @@ import {
   CheckoutActions,
   CheckoutContextType,
 } from "./types";
+import { getStoreConfigV2, isStoreReadOnlyMode } from "@/lib/storeConfig";
 
 export const webOrderSchema = z
   .object({
@@ -395,10 +396,11 @@ export const CheckoutProvider = ({
   const { bag } = useShoppingBag();
 
   const { user, store } = useStoreContext();
+  const storeConfig = getStoreConfigV2(store);
 
   const { setNavBarLayout, setAppLocation } = useNavigationBarContext();
 
-  const { waiveDeliveryFees, fulfillment } = store?.config || {};
+  const { waiveDeliveryFees, fulfillment, deliveryFees } = storeConfig.commerce;
   // Default to true if not set (for backward compatibility)
   const isPickupEnabled = fulfillment?.enableStorePickup ?? true;
   const isDeliveryEnabled = fulfillment?.enableDelivery ?? true;
@@ -515,7 +517,7 @@ export const CheckoutProvider = ({
       const shouldWaiveIntlFee = isFeeWaived(waiveDeliveryFees, "intl");
       let deliveryFee = shouldWaiveIntlFee
         ? 0
-        : store?.config?.deliveryFees?.international || 800;
+        : deliveryFees?.international || 800;
 
       if (isGhanaAddress) {
         deliveryOption = isGreaterAccraAddress
@@ -619,7 +621,7 @@ export const CheckoutProvider = ({
         newUpdates.deliveryOption = "intl";
         newUpdates.deliveryFee = shouldWaiveIntlFee
           ? 0
-          : store?.config?.deliveryFees?.international || 800;
+          : deliveryFees?.international || 800;
       }
 
       const isUSOrder =
@@ -760,9 +762,7 @@ export const CheckoutProvider = ({
     }
   }, [data, checkoutState.discount, actionsState.isApplyingDiscount]);
 
-  const { config } = store || {};
-
-  if (config?.visibility?.inReadOnlyMode) {
+  if (isStoreReadOnlyMode(store)) {
     return <CheckoutUnavailable />;
   }
 

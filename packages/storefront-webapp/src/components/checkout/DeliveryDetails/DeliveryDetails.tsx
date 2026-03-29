@@ -28,12 +28,14 @@ import { ALL_COUNTRIES } from "@/lib/countries";
 import { useEffect, useRef } from "react";
 import { deliveryDetailsSchema } from "./schema";
 import { useStoreContext } from "@/contexts/StoreContext";
+import { getStoreConfigV2 } from "@/lib/storeConfig";
 
 export const DeliveryDetailsForm = () => {
   const { checkoutState, actionsState, updateActionsState, updateState } =
     useCheckout();
   const { store } = useStoreContext();
-  const { waiveDeliveryFees, deliveryFees } = store?.config || {};
+  const storeConfig = getStoreConfigV2(store);
+  const { waiveDeliveryFees, deliveryFees } = storeConfig.commerce;
 
   const form = useForm({
     resolver: zodResolver(deliveryDetailsSchema),

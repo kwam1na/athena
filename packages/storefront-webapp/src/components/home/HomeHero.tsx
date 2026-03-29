@@ -5,6 +5,7 @@ import Hls from "hls.js";
 import { useEffect, useRef } from "react";
 import { ScrollDownButton } from "../ui/ScrollDownButton";
 import { VideoPlayer } from "./VideoPlayer";
+import { getStoreConfigV2 } from "@/lib/storeConfig";
 
 interface HomeHeroProps {
   nextSectionRef?: React.RefObject<HTMLDivElement>;
@@ -12,30 +13,32 @@ interface HomeHeroProps {
 
 export const HomeHero = ({ nextSectionRef }: HomeHeroProps) => {
   const { store } = useStoreContext();
+  const storeConfig = getStoreConfigV2(store);
 
   const videoRef = useRef<HTMLVideoElement>(null);
-  const hlsUrl = store?.config?.activeStreamReelHlsUrl;
+  const hlsUrl = storeConfig.media.reels.activeHlsUrl;
 
   // Determine which hero to display (default to "reel" for backward compatibility)
-  const heroDisplayType = store?.config?.homeHero?.displayType || "reel";
+  const heroDisplayType = storeConfig.media.homeHero.displayType || "reel";
 
   const shouldShowImage =
-    heroDisplayType === "image" && store?.config?.homeHero?.headerImage;
+    heroDisplayType === "image" && storeConfig.media.homeHero.headerImage;
 
   const shouldShowVideo =
-    heroDisplayType === "reel" ||
-    (heroDisplayType === "image" &&
-      store?.config?.homeHero?.headerImage === undefined);
+    (heroDisplayType === "reel" ||
+      (heroDisplayType === "image" &&
+        storeConfig.media.homeHero.headerImage === undefined)) &&
+    Boolean(hlsUrl);
 
   // Determine overlay and text visibility (default to true for backward compatibility)
-  const shouldShowOverlay = store?.config?.homeHero?.showOverlay === true;
+  const shouldShowOverlay = storeConfig.media.homeHero.showOverlay === true;
 
-  const shouldShowText = store?.config?.homeHero?.showText === true;
+  const shouldShowText = storeConfig.media.homeHero.showText === true;
 
   return (
     <section className="relative w-full h-screen flex items-center justify-center text-white text-center">
       {/* Background Video - shown when heroDisplayType is "reel" or not set */}
-      {shouldShowVideo && <VideoPlayer hlsUrl={hlsUrl} />}
+      {shouldShowVideo && <VideoPlayer hlsUrl={hlsUrl!} />}
 
       {/* Background Image - shown when heroDisplayType is "image" */}
       {shouldShowImage && (
@@ -49,7 +52,7 @@ export const HomeHero = ({ nextSectionRef }: HomeHeroProps) => {
               ease: [0.6, 0.05, 0.01, 0.9],
             },
           }}
-          src={store?.config?.homeHero?.headerImage}
+          src={storeConfig.media.homeHero.headerImage}
           className="absolute top-0 left-0 w-full h-full object-cover"
           alt="Hero header"
         />
