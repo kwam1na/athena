@@ -11,10 +11,9 @@ if ! command -v fzf &> /dev/null; then
 fi
 
 # Remote server configuration
-REMOTE_USER="ec2-user"
-REMOTE_HOST="ec2-34-244-249-177.eu-west-1.compute.amazonaws.com"
+REMOTE_USER="root"
+REMOTE_HOST="178.128.161.200"
 REMOTE="$REMOTE_USER@$REMOTE_HOST"
-KEY_PATH="/Users/kwamina/Desktop/athena-webserver/athena-eu-west-key.pem"
 
 # Local paths
 ATHENA_WEBAPP_DIR="$HOME/athena/packages/athena-webapp"
@@ -28,11 +27,11 @@ VALKEY_PROXY_DIR="$HOME/athena/packages/valkey-proxy-server"
 # Get current version info for an app
 get_current_version_info() {
   local app="$1"
-  local versions_dir="/home/ec2-user/athena/$app/versions"
-  local symlink_path="/home/ec2-user/athena/$app/current"
+  local versions_dir="/root/athena/$app/versions"
+  local symlink_path="/root/athena/$app/current"
   
-  local current_version=$(ssh -i "$KEY_PATH" "$REMOTE" "readlink $symlink_path | xargs basename")
-  local fun_name=$(ssh -i "$KEY_PATH" "$REMOTE" "if [ -f $versions_dir/$current_version/fun-name.txt ]; then cat $versions_dir/$current_version/fun-name.txt; fi")
+  local current_version=$(ssh "$REMOTE" "readlink $symlink_path | xargs basename")
+  local fun_name=$(ssh "$REMOTE" "if [ -f $versions_dir/$current_version/fun-name.txt ]; then cat $versions_dir/$current_version/fun-name.txt; fi")
   
   if [ -n "$fun_name" ]; then
     echo "$app: $fun_name ($current_version)"
@@ -52,7 +51,7 @@ show_current_versions() {
 # Get list of versions with their fun names if available
 get_version_list_with_fun_names() {
   local versions_dir="$VERSIONS_DIR"
-  ssh -i "$KEY_PATH" "$REMOTE" '
+  ssh "$REMOTE" '
     for d in $(ls -1 '"$versions_dir"' | sort -r); do
       fun_name_file="'"$versions_dir"'/$d/fun-name.txt"
       if [ -f "$fun_name_file" ]; then
@@ -68,7 +67,7 @@ get_version_list_with_fun_names() {
 # Get fun name for a specific version
 get_fun_name() {
   local version="$1"
-  ssh -i "$KEY_PATH" "$REMOTE" "
+  ssh "$REMOTE" "
     if [ -f $VERSIONS_DIR/$version/fun-name.txt ]; then
       cat $VERSIONS_DIR/$version/fun-name.txt
     fi
@@ -107,8 +106,8 @@ deploy_app() {
   # Generate deployment info
   local timestamp=$(date +%Y%m%d%H%M%S)
   local fun_name=$(generate_fun_name)
-  local version_path="/home/ec2-user/athena/$app_name/versions/$timestamp"
-  local symlink_path="/home/ec2-user/athena/$app_name/current"
+  local version_path="/root/athena/$app_name/versions/$timestamp"
+  local symlink_path="/root/athena/$app_name/current"
   
   # Build the app
   echo "Building $app_name..."
@@ -117,28 +116,28 @@ deploy_app() {
   
   # Deploy to server
   echo "Deploying to server..."
-  ssh -i "$KEY_PATH" "$REMOTE" "mkdir -p $version_path && echo '$fun_name' > $version_path/fun-name.txt" || return 1
-  scp -i "$KEY_PATH" -r dist/* "$REMOTE:$version_path" || return 1
-  ssh -i "$KEY_PATH" "$REMOTE" "ln -sfn $version_path $symlink_path" || return 1
+  ssh "$REMOTE" "mkdir -p $version_path && echo '$fun_name' > $version_path/fun-name.txt" || return 1
+  scp -r dist/* "$REMOTE:$version_path" || return 1
+  ssh "$REMOTE" "ln -sfn $version_path $symlink_path" || return 1
   
   echo "✅ Deployed $app_name version: $fun_name ($timestamp)"
 }
 
-# Copy valkey proxy server to EC2 instance
+# Copy valkey proxy server to remote server
 copy_valkey_proxy() {
-  echo "Deploying valkey-proxy-server to EC2 instance..."
+  echo "Deploying valkey-proxy-server to server..."
   
   if [ ! -d "$VALKEY_PROXY_DIR" ]; then
     echo "Error: valkey-proxy-server directory not found at $VALKEY_PROXY_DIR"
     return 1
   fi
   
-  scp -i "$KEY_PATH" -r "$VALKEY_PROXY_DIR" "$REMOTE:/home/ec2-user/"
+  scp -r "$VALKEY_PROXY_DIR" "$REMOTE:/root/"
   
   if [ $? -eq 0 ]; then
-    echo "✅ Successfully deployed valkey-proxy-server to EC2 instance"
+    echo "✅ Successfully deployed valkey-proxy-server to server"
   else
-    echo "❌ Failed to deploy valkey-proxy-server to EC2 instance"
+    echo "❌ Failed to deploy valkey-proxy-server to server"
     return 1
   fi
 }
@@ -156,14 +155,12 @@ deploy_convex() {
 deploy_athena() {
   local env_vars="VITE_CONVEX_URL=https://colorless-cardinal-870.convex.cloud \
     VITE_API_GATEWAY_URL='https://colorless-cardinal-870.convex.site' \
-    VITE_HLS_URL='https://d37wmi4mfpeer9.cloudfront.net' \
     VITE_STOREFRONT_URL='https://wigclub.store'"
   deploy_app "athena-webapp" "$ATHENA_WEBAPP_DIR" "$env_vars"
 }
 
 deploy_storefront() {
-  local env_vars="VITE_API_URL='https://api.wigclub.store' \
-    VITE_HLS_URL='https://d37wmi4mfpeer9.cloudfront.net'"
+  local env_vars="VITE_API_URL='https://api.wigclub.store'"
   deploy_app "storefront" "$STOREFRONT_DIR" "$env_vars"
 }
 
@@ -226,8 +223,8 @@ if [ -z "$APP" ]; then
 fi
 
 # Set up paths
-VERSIONS_DIR="/home/ec2-user/athena/$APP/versions"
-SYMLINK_PATH="/home/ec2-user/athena/$APP/current"
+VERSIONS_DIR="/root/athena/$APP/versions"
+SYMLINK_PATH="/root/athena/$APP/current"
 
 echo "Fetching available versions for $APP..."
 
@@ -246,13 +243,13 @@ if [ "$OPERATION" = "rollback" ]; then
   fi
 
   # Get current version info
-  CURRENT_VERSION=$(ssh -i "$KEY_PATH" "$REMOTE" "readlink $SYMLINK_PATH | xargs basename")
+  CURRENT_VERSION=$(ssh "$REMOTE" "readlink $SYMLINK_PATH | xargs basename")
   CURRENT_FUN_NAME=$(get_fun_name "$CURRENT_VERSION")
   
   echo "Rolling back $APP from version $CURRENT_VERSION${CURRENT_FUN_NAME:+ ($CURRENT_FUN_NAME)} to version $SELECTED_VERSION..."
 
   # Perform rollback
-  ssh -i "$KEY_PATH" "$REMOTE" "ln -sfn $VERSIONS_DIR/$SELECTED_VERSION $SYMLINK_PATH"
+  ssh "$REMOTE" "ln -sfn $VERSIONS_DIR/$SELECTED_VERSION $SYMLINK_PATH"
 
   # Get selected version's fun name for success message
   SELECTED_FUN_NAME=$(get_fun_name "$SELECTED_VERSION")
@@ -263,7 +260,7 @@ if [ "$OPERATION" = "rollback" ]; then
 # =============================================
 else
   # Get current version info
-  CURRENT_VERSION=$(ssh -i "$KEY_PATH" "$REMOTE" "readlink $SYMLINK_PATH | xargs basename")
+  CURRENT_VERSION=$(ssh "$REMOTE" "readlink $SYMLINK_PATH | xargs basename")
   CURRENT_FUN_NAME=$(get_fun_name "$CURRENT_VERSION")
   
   echo "Current version: $CURRENT_VERSION${CURRENT_FUN_NAME:+ ($CURRENT_FUN_NAME)} (will be protected from deletion)"
@@ -300,7 +297,7 @@ else
       version_id=$(extract_version "$version")
       if [ "$version_id" != "$CURRENT_VERSION" ]; then
         echo "Deleting version $version_id..."
-        ssh -i "$KEY_PATH" "$REMOTE" "rm -rf $VERSIONS_DIR/$version_id"
+        ssh "$REMOTE" "rm -rf $VERSIONS_DIR/$version_id"
       fi
     done
     echo -e "✅ Deleted selected versions"
