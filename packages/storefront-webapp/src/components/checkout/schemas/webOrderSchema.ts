@@ -2,18 +2,35 @@ import { z } from "zod";
 import { customerDetailsSchema } from "./customerDetailsSchema";
 import { baseDeliveryDetailsSchema } from "./deliveryDetailsSchema";
 
-export const checkoutFormSchema = z
+export const webOrderSchema = z
   .object({
+    customerDetails: customerDetailsSchema,
     deliveryMethod: z
       .enum(["pickup", "delivery"])
       .refine((value) => !!value, { message: "Delivery method is required" }),
-    customerDetails: z.object({ ...customerDetailsSchema.shape }),
-    deliveryDetails: z.object({ ...baseDeliveryDetailsSchema.shape }),
+    deliveryOption: z
+      .enum(["within-accra", "outside-accra", "intl"])
+      .refine((value) => !!value, { message: "Delivery option is required" })
+      .nullable(),
+    deliveryFee: z.number().nullable(),
+    pickupLocation: z.string().min(1).nullable(),
+    deliveryDetails: baseDeliveryDetailsSchema.optional().nullable(),
+    deliveryInstructions: z.string().optional(),
+    discount: z.record(z.string(), z.any()).nullable(),
   })
   .superRefine((data, ctx) => {
-    const { deliveryMethod, deliveryDetails } = data;
+    const { deliveryFee, deliveryMethod, deliveryDetails, pickupLocation } =
+      data;
 
     if (deliveryMethod == "delivery") {
+      if (deliveryFee == null) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["deliveryFee"],
+          message: "Delivery fee is required",
+        });
+      }
+
       if (!deliveryDetails) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
@@ -138,6 +155,22 @@ export const checkoutFormSchema = z
         }
       }
     }
-  });
 
-export type CheckoutFormData = z.infer<typeof checkoutFormSchema>;
+    if (deliveryMethod == "pickup") {
+      if (!pickupLocation) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["pickupLocation"],
+          message: "Pickup location is required",
+        });
+      }
+
+      if (pickupLocation?.trim().length == 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["pickupLocation"],
+          message: "Pickup location cannot be empty or whitespace",
+        });
+      }
+    }
+  });

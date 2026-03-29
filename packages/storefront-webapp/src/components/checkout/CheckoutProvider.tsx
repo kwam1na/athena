@@ -1,5 +1,5 @@
 import React, { createContext, useEffect, useState } from "react";
-import { z, ZodError } from "zod";
+import { ZodError } from "zod";
 import { useGetActiveCheckoutSession } from "@/hooks/useGetActiveCheckoutSession";
 import {
   CheckoutExpired,
@@ -7,316 +7,19 @@ import {
 } from "../states/checkout-expired/CheckoutExpired";
 import { useShoppingBag } from "@/hooks/useShoppingBag";
 import { useStoreContext } from "@/contexts/StoreContext";
-import { SESSION_STORAGE_KEY } from "@/lib/constants";
-import { customerDetailsSchema } from "./schemas/customerDetailsSchema";
-import { baseDeliveryDetailsSchema } from "./schemas/deliveryDetailsSchema";
 import { CheckoutUnavailable } from "../states/checkout unavailable/CheckoutUnavailable";
 import { useNavigationBarContext } from "@/contexts/NavigationBarProvider";
 import { isFeeWaived, isAnyFeeWaived } from "@/lib/feeUtils";
 import { useOnlineOrderQueries } from "@/lib/queries/onlineOrder";
 import { useQuery } from "@tanstack/react-query";
-import {
-  DeliveryOption,
-  CheckoutState,
-  CheckoutActions,
-  CheckoutContextType,
-} from "./types";
+import { CheckoutState, CheckoutActions, CheckoutContextType } from "./types";
 import { getStoreConfigV2, isStoreReadOnlyMode } from "@/lib/storeConfig";
+import { webOrderSchema } from "./schemas/webOrderSchema";
+import { calculateDeliveryFee } from "./deliveryFees";
+import { deriveCheckoutState } from "./deriveCheckoutState";
+import { loadCheckoutState, saveCheckoutState } from "./checkoutStorage";
 
-export const webOrderSchema = z
-  .object({
-    // billingDetails: baseBillingDetailsSchema,
-    customerDetails: customerDetailsSchema,
-    deliveryMethod: z
-      .enum(["pickup", "delivery"])
-      .refine((value) => !!value, { message: "Delivery method is required" }),
-    deliveryOption: z
-      .enum(["within-accra", "outside-accra", "intl"])
-      .refine((value) => !!value, { message: "Delivery option is required" })
-      .nullable(),
-    deliveryFee: z.number().nullable(),
-    pickupLocation: z.string().min(1).nullable(),
-    deliveryDetails: baseDeliveryDetailsSchema.optional().nullable(),
-    deliveryInstructions: z.string().optional(),
-    discount: z.record(z.string(), z.any()).nullable(),
-  })
-  .superRefine((data, ctx) => {
-    const { deliveryFee, deliveryMethod, deliveryDetails, pickupLocation } =
-      data;
-
-    if (deliveryMethod == "delivery") {
-      // if (!billingDetails) {
-      //   ctx.addIssue({
-      //     code: z.ZodIssueCode.custom,
-      //     path: ["billingDetails"],
-      //     message: "Billing details are required",
-      //   });
-      // }
-
-      // const {
-      //   address: billingAddress,
-      //   billingAddressSameAsDelivery,
-      //   city: billingCity,
-      //   state: billingState,
-      //   zip: billingZip,
-      //   country: billingCountry,
-      // } = billingDetails || {};
-
-      // const isUSBillingAddress = billingCountry == "US";
-
-      // if (!billingAddressSameAsDelivery) {
-      //   if (!billingAddress) {
-      //     ctx.addIssue({
-      //       code: z.ZodIssueCode.custom,
-      //       path: ["billingDetails", "address"],
-      //       message: "Address is required",
-      //     });
-      //   }
-
-      //   if (billingAddress?.trim().length == 0) {
-      //     ctx.addIssue({
-      //       code: z.ZodIssueCode.custom,
-      //       path: ["billingDetails", "address"],
-      //       message: "Address cannot be empty or whitespace",
-      //     });
-      //   }
-
-      //   if (!billingCity) {
-      //     ctx.addIssue({
-      //       code: z.ZodIssueCode.custom,
-      //       path: ["billingDetails", "city"],
-      //       message: "City is required",
-      //     });
-      //   }
-
-      //   if (billingCity?.trim().length == 0) {
-      //     ctx.addIssue({
-      //       code: z.ZodIssueCode.custom,
-      //       path: ["billingDetails", "city"],
-      //       message: "City cannot be empty or whitespace",
-      //     });
-      //   }
-
-      //   if (!billingCountry) {
-      //     ctx.addIssue({
-      //       code: z.ZodIssueCode.custom,
-      //       path: ["billingDetails", "country"],
-      //       message: "Country is required",
-      //     });
-      //   }
-      // }
-
-      // if (billingCountry?.trim().length == 0) {
-      //   ctx.addIssue({
-      //     code: z.ZodIssueCode.custom,
-      //     path: ["billingDetails", "country"],
-      //     message: "Country cannot be empty or whitespace",
-      //   });
-      // }
-
-      // if (isUSBillingAddress) {
-      //   if (!billingState) {
-      //     ctx.addIssue({
-      //       code: z.ZodIssueCode.custom,
-      //       path: ["billingDetails", "state"],
-      //       message: "State is required",
-      //     });
-
-      //     if (billingState?.trim().length == 0) {
-      //       ctx.addIssue({
-      //         code: z.ZodIssueCode.custom,
-      //         path: ["billingDetails", "state"],
-      //         message: "State cannot be empty or whitespace",
-      //       });
-      //     }
-      //   }
-
-      //   if (!billingZip) {
-      //     ctx.addIssue({
-      //       code: z.ZodIssueCode.custom,
-      //       path: ["billingDetails", "zip"],
-      //       message: "Zip is required",
-      //     });
-      //   }
-
-      //   if (billingZip?.trim().length == 0) {
-      //     ctx.addIssue({
-      //       code: z.ZodIssueCode.custom,
-      //       path: ["billingDetails", "zip"],
-      //       message: "Zip code cannot be empty or whitespace",
-      //     });
-      //   }
-
-      //   if (billingZip && !/^\d{5}$/.test(billingZip)) {
-      //     ctx.addIssue({
-      //       code: z.ZodIssueCode.custom,
-      //       path: ["billingDetails", "zip"],
-      //       message: "Zip code must be a 5-digit number",
-      //     });
-      //   }
-      // }
-
-      if (deliveryFee == null) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["deliveryFee"],
-          message: "Delivery fee is required",
-        });
-      }
-
-      if (!deliveryDetails) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["deliveryDetails"],
-          message: "Delivery details are required",
-        });
-      }
-
-      const {
-        address,
-        city,
-        street,
-        neighborhood,
-        state,
-        zip,
-        region,
-        country,
-      } = deliveryDetails || {};
-
-      const isGhanaAddress = country == "GH";
-
-      const isUSAddress = country == "US";
-
-      // validate the address fields for US and ROW orders
-      if (!isGhanaAddress) {
-        if (!address) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: ["deliveryDetails", "address"],
-            message: "Address is required",
-          });
-        }
-
-        if (address?.trim().length == 0) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: ["deliveryDetails", "address"],
-            message: "Address cannot be empty or whitespace",
-          });
-        }
-
-        if (!city) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: ["deliveryDetails", "city"],
-            message: "City is required",
-          });
-        }
-
-        if (city?.trim().length == 0) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: ["deliveryDetails", "city"],
-            message: "City cannot be empty or whitespace",
-          });
-        }
-      }
-
-      if (!country) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["deliveryDetails", "country"],
-          message: "Country is required",
-        });
-      }
-
-      if (isUSAddress) {
-        if (!state) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: ["deliveryDetails", "state"],
-            message: "State is required",
-          });
-        }
-
-        if (!zip) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: ["deliveryDetails", "zip"],
-            message: "Zip is required",
-          });
-        }
-
-        if (zip?.trim().length == 0) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: ["deliveryDetails", "zip"],
-            message: "Zip code cannot be empty or whitespace",
-          });
-        }
-
-        if (zip && !/^\d{5}$/.test(zip)) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: ["deliveryDetails", "zip"],
-            message: "Zip code must be a 5-digit number",
-          });
-        }
-      }
-
-      if (isGhanaAddress) {
-        if (!region) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: ["deliveryDetails", "region"],
-            message: "Region is required",
-          });
-        }
-
-        if (!street) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: ["deliveryDetails", "street"],
-            message: "Street is required",
-          });
-        }
-
-        // if (!houseNumber) {
-        //   ctx.addIssue({
-        //     code: z.ZodIssueCode.custom,
-        //     path: ["deliveryDetails", "houseNumber"],
-        //     message: "Apt/House number is required",
-        //   });
-        // }
-
-        if (!neighborhood) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: ["deliveryDetails", "neighborhood"],
-            message: "Neighborhood is required",
-          });
-        }
-      }
-    }
-
-    if (deliveryMethod == "pickup") {
-      if (!pickupLocation) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["pickupLocation"],
-          message: "Pickup location is required",
-        });
-      }
-
-      if (pickupLocation?.trim().length == 0) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["pickupLocation"],
-          message: "Pickup location cannot be empty or whitespace",
-        });
-      }
-    }
-  });
+export { webOrderSchema } from "./schemas/webOrderSchema";
 
 const initialActionsState: CheckoutActions = {
   isEditingCustomerDetails: false,
@@ -369,26 +72,9 @@ export const CheckoutProvider = ({
 }: {
   children: React.ReactNode;
 }) => {
-  const [checkoutState, setCheckoutState] = useState<CheckoutState>(() => {
-    if (typeof window === "undefined") return initialState;
-
-    try {
-      const savedState = sessionStorage.getItem(SESSION_STORAGE_KEY);
-      if (savedState) {
-        const parsed = JSON.parse(savedState);
-        return {
-          ...initialState,
-          ...parsed,
-          // Ensure new fields have defaults
-          paymentMethod: parsed.paymentMethod || "online_payment",
-          podPaymentMethod: parsed.podPaymentMethod || null,
-        };
-      }
-      return initialState;
-    } catch {
-      return initialState;
-    }
-  });
+  const [checkoutState, setCheckoutState] = useState<CheckoutState>(() =>
+    loadCheckoutState(initialState)
+  );
 
   const [actionsState, setActionsState] =
     useState<CheckoutActions>(initialActionsState);
@@ -472,10 +158,7 @@ export const CheckoutProvider = ({
 
   useEffect(() => {
     if (bag?.items?.length && bag?.items?.length > 0) {
-      sessionStorage.setItem(
-        SESSION_STORAGE_KEY,
-        JSON.stringify({ ...checkoutState, discount: null, bag })
-      );
+      saveCheckoutState({ ...checkoutState, bag });
     }
   }, [checkoutState, bag]);
 
@@ -509,38 +192,13 @@ export const CheckoutProvider = ({
 
       const { email, firstName, lastName, phoneNumber } = user;
 
-      const isGhanaAddress = country == "GH";
-
-      const isGreaterAccraAddress = region == "GA";
-
-      let deliveryOption: DeliveryOption = "intl";
-      const shouldWaiveIntlFee = isFeeWaived(waiveDeliveryFees, "intl");
-      let deliveryFee = shouldWaiveIntlFee
-        ? 0
-        : deliveryFees?.international || 800;
-
-      if (isGhanaAddress) {
-        deliveryOption = isGreaterAccraAddress
-          ? "within-accra"
-          : "outside-accra";
-
-        const shouldWaiveRegionFee =
-          typeof waiveDeliveryFees === "boolean"
-            ? waiveDeliveryFees
-            : isGreaterAccraAddress
-              ? waiveDeliveryFees?.withinAccra ||
-                waiveDeliveryFees?.all ||
-                false
-              : waiveDeliveryFees?.otherRegions ||
-                waiveDeliveryFees?.all ||
-                false;
-
-        deliveryFee = shouldWaiveRegionFee
-          ? 0
-          : isGreaterAccraAddress
-            ? 30
-            : 70;
-      }
+      const { deliveryFee, deliveryOption } = calculateDeliveryFee({
+        deliveryMethod: "delivery",
+        country: country || "",
+        region: region || null,
+        waiveDeliveryFees,
+        deliveryFees,
+      });
 
       updateState({
         customerDetails: {
@@ -603,11 +261,6 @@ export const CheckoutProvider = ({
       const newUpdates = { ...prev, ...updates };
 
       const isDeliveryOrder = newUpdates.deliveryMethod == "delivery";
-      const isPickupOrder = newUpdates.deliveryMethod == "pickup";
-
-      const isGhanaOrder =
-        isPickupOrder ||
-        (isDeliveryOrder && newUpdates.deliveryDetails?.country == "GH");
 
       // Always set international delivery for non-Ghana countries
       if (
@@ -624,73 +277,7 @@ export const CheckoutProvider = ({
           : deliveryFees?.international || 800;
       }
 
-      const isUSOrder =
-        isDeliveryOrder && newUpdates.deliveryDetails?.country == "US";
-
-      const isROWOrder = isDeliveryOrder && !isUSOrder && !isGhanaOrder;
-
-      const didSelectPickupLocation = Boolean(
-        isPickupOrder && newUpdates.pickupLocation
-      );
-
-      const didProvideAllUSAddressFields = Boolean(
-        newUpdates.deliveryDetails?.address &&
-          newUpdates.deliveryDetails?.city &&
-          newUpdates.deliveryDetails?.state &&
-          newUpdates.deliveryDetails?.zip
-      );
-
-      const didProvideAllRestOfWorldFields = Boolean(
-        newUpdates.deliveryDetails?.address && newUpdates.deliveryDetails?.city
-      );
-
-      const didProvideAllGhanaAddressFields = Boolean(
-        newUpdates.deliveryDetails?.street && newUpdates.deliveryDetails?.region
-      );
-
-      const didEnterDeliveryDetails =
-        (isUSOrder
-          ? didProvideAllUSAddressFields
-          : isGhanaOrder && isDeliveryOrder
-            ? didProvideAllGhanaAddressFields
-            : didProvideAllRestOfWorldFields) &&
-        Boolean(newUpdates.deliveryOption);
-
-      const didProvideAllUSBillingAddressFields = Boolean(
-        newUpdates.billingDetails?.address &&
-          newUpdates.billingDetails?.city &&
-          newUpdates.billingDetails?.state &&
-          newUpdates.billingDetails?.zip
-      );
-
-      const didProvideAllRestOfWorldBillingFields = Boolean(
-        newUpdates.billingDetails?.address && newUpdates.billingDetails?.city
-      );
-
-      const didProvideAllGhanaBillingAddressFields = Boolean(
-        newUpdates.billingDetails?.address && newUpdates.billingDetails?.city
-      );
-
-      const isGhanaBillingAddrss = newUpdates.billingDetails?.country == "GH";
-      const isUSBillingAddrss = newUpdates.billingDetails?.country == "US";
-
-      const didEnterBillingDetails = isGhanaBillingAddrss
-        ? didProvideAllGhanaBillingAddressFields
-        : isUSBillingAddrss
-          ? didProvideAllUSBillingAddressFields
-          : didProvideAllRestOfWorldBillingFields;
-
-      return {
-        ...newUpdates,
-        didEnterDeliveryDetails,
-        didEnterBillingDetails,
-        didSelectPickupLocation,
-        isGhanaOrder,
-        isUSOrder,
-        isROWOrder,
-        isPickupOrder,
-        isDeliveryOrder,
-      };
+      return deriveCheckoutState(newUpdates);
     });
   };
 
