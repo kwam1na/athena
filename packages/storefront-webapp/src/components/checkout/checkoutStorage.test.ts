@@ -25,7 +25,7 @@ describe("loadCheckoutState", () => {
     );
 
     const result = loadCheckoutState(initialState as any);
-    expect(result.deliveryMethod).toBe("pickup");
+    expect(result.deliveryMethod).toBe("delivery");
     expect(result.paymentMethod).toBe("online_payment");
   });
 
