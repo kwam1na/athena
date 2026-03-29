@@ -2,6 +2,9 @@
   "name": "athena",
   "private": true,
   "scripts": {
+    "symphony": "bun run --filter '@athena/symphony-service' start ../../WORKFLOW.md",
+    "symphony:watch": "bun run --filter '@athena/symphony-service' start ../../WORKFLOW.md --watch",
+    "test:symphony": "bun run --filter '@athena/symphony-service' test",
     "test": "bun run --filter '@athena/webapp' test && bun run --filter '@athena/storefront-webapp' test",
     "test:coverage": "bun run --filter '@athena/webapp' test:coverage && bun run --filter '@athena/storefront-webapp' test:coverage && bun scripts/coverage-summary.mjs"
   },
