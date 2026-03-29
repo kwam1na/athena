@@ -8,15 +8,12 @@
  * @module
  */
 
-import type {
-  ApiFromModules,
-  FilterApi,
-  FunctionReference,
-} from "convex/server";
 import type * as app from "../app.js";
 import type * as auth from "../auth.js";
-import type * as aws_aws from "../aws/aws.js";
 import type * as cache_index from "../cache/index.js";
+import type * as cloudflare_migrateUrls from "../cloudflare/migrateUrls.js";
+import type * as cloudflare_r2 from "../cloudflare/r2.js";
+import type * as cloudflare_stream from "../cloudflare/stream.js";
 import type * as constants_countries from "../constants/countries.js";
 import type * as constants_ghana from "../constants/ghana.js";
 import type * as constants_payment from "../constants/payment.js";
@@ -29,6 +26,7 @@ import type * as emails_OrderEmail from "../emails/OrderEmail.js";
 import type * as emails_PosReceiptEmail from "../emails/PosReceiptEmail.js";
 import type * as emails_VerificationCode from "../emails/VerificationCode.js";
 import type * as env from "../env.js";
+import type * as http from "../http.js";
 import type * as http_domains_inventory_routes_analytics from "../http/domains/inventory/routes/analytics.js";
 import type * as http_domains_inventory_routes_auth from "../http/domains/inventory/routes/auth.js";
 import type * as http_domains_inventory_routes_bannerMessage from "../http/domains/inventory/routes/bannerMessage.js";
@@ -55,7 +53,6 @@ import type * as http_domains_storeFront_routes_upsells from "../http/domains/st
 import type * as http_domains_storeFront_routes_user from "../http/domains/storeFront/routes/user.js";
 import type * as http_domains_storeFront_routes_userOffers from "../http/domains/storeFront/routes/userOffers.js";
 import type * as http_utils from "../http/utils.js";
-import type * as http from "../http.js";
 import type * as inventory_athenaUser from "../inventory/athenaUser.js";
 import type * as inventory_auth from "../inventory/auth.js";
 import type * as inventory_bannerMessage from "../inventory/bannerMessage.js";
@@ -176,19 +173,19 @@ import type * as storeFront_users from "../storeFront/users.js";
 import type * as types_payment from "../types/payment.js";
 import type * as utils from "../utils.js";
 
-/**
- * A utility for referencing Convex functions in your app's API.
- *
- * Usage:
- * ```js
- * const myFunctionReference = api.myModule.myFunction;
- * ```
- */
+import type {
+  ApiFromModules,
+  FilterApi,
+  FunctionReference,
+} from "convex/server";
+
 declare const fullApi: ApiFromModules<{
   app: typeof app;
   auth: typeof auth;
-  "aws/aws": typeof aws_aws;
   "cache/index": typeof cache_index;
+  "cloudflare/migrateUrls": typeof cloudflare_migrateUrls;
+  "cloudflare/r2": typeof cloudflare_r2;
+  "cloudflare/stream": typeof cloudflare_stream;
   "constants/countries": typeof constants_countries;
   "constants/ghana": typeof constants_ghana;
   "constants/payment": typeof constants_payment;
@@ -201,6 +198,7 @@ declare const fullApi: ApiFromModules<{
   "emails/PosReceiptEmail": typeof emails_PosReceiptEmail;
   "emails/VerificationCode": typeof emails_VerificationCode;
   env: typeof env;
+  http: typeof http;
   "http/domains/inventory/routes/analytics": typeof http_domains_inventory_routes_analytics;
   "http/domains/inventory/routes/auth": typeof http_domains_inventory_routes_auth;
   "http/domains/inventory/routes/bannerMessage": typeof http_domains_inventory_routes_bannerMessage;
@@ -227,7 +225,6 @@ declare const fullApi: ApiFromModules<{
   "http/domains/storeFront/routes/user": typeof http_domains_storeFront_routes_user;
   "http/domains/storeFront/routes/userOffers": typeof http_domains_storeFront_routes_userOffers;
   "http/utils": typeof http_utils;
-  http: typeof http;
   "inventory/athenaUser": typeof inventory_athenaUser;
   "inventory/auth": typeof inventory_auth;
   "inventory/bannerMessage": typeof inventory_bannerMessage;
@@ -348,11 +345,31 @@ declare const fullApi: ApiFromModules<{
   "types/payment": typeof types_payment;
   utils: typeof utils;
 }>;
+
+/**
+ * A utility for referencing Convex functions in your app's public API.
+ *
+ * Usage:
+ * ```js
+ * const myFunctionReference = api.myModule.myFunction;
+ * ```
+ */
 export declare const api: FilterApi<
   typeof fullApi,
   FunctionReference<any, "public">
 >;
+
+/**
+ * A utility for referencing Convex functions in your app's internal API.
+ *
+ * Usage:
+ * ```js
+ * const myFunctionReference = internal.myModule.myFunction;
+ * ```
+ */
 export declare const internal: FilterApi<
   typeof fullApi,
   FunctionReference<any, "internal">
 >;
+
+export declare const components: {};

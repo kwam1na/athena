@@ -8,827 +8,1087 @@
 // You should NOT make any changes in this file as it will be overwritten.
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
-import { createFileRoute } from '@tanstack/react-router'
+import { Route as rootRouteImport } from './routes/__root'
+import { Route as AuthedRouteImport } from './routes/_authed'
+import { Route as IndexRouteImport } from './routes/index'
+import { Route as JoinTeamIndexRouteImport } from './routes/join-team.index'
+import { Route as LoginLayoutRouteImport } from './routes/login/_layout'
+import { Route as LoginLayoutIndexRouteImport } from './routes/login/_layout.index'
+import { Route as AuthedOrgUrlSlugIndexRouteImport } from './routes/_authed/$orgUrlSlug/index'
+import { Route as AuthedOrgUrlSlugStoreIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/index'
+import { Route as AuthedOrgUrlSlugSettingsIndexRouteImport } from './routes/_authed/$orgUrlSlug/settings/index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/index'
+import { Route as AuthedOrgUrlSlugSettingsOrganizationIndexRouteImport } from './routes/_authed/$orgUrlSlug/settings/organization/index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugHomeRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/home'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugAnalyticsRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/analytics'
+import { Route as AuthedOrgUrlSlugSettingsStoresStoreUrlSlugRouteImport } from './routes/_authed/$orgUrlSlug/settings/stores/$storeUrlSlug'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugReviewsIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/reviews/index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/promo-codes/index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugProductsIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/products/index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugPosIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugOrdersIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugMembersIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/members.index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugLogsIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/logs.index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugDashboardIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/dashboard.index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugConfigurationIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/configuration.index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugCheckoutSessionsIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/checkout-sessions.index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugBagsIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/bags.index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugAssetsIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/assets.index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugUsersUserIdRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/users.$userId'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesNewRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/promo-codes/new'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesPromoCodeSlugRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/promo-codes/$promoCodeSlug'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugProductsUnresolvedRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/products/unresolved'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugProductsNewRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/products/new'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugLogsLogIdRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/logs.$logId'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugBagsBagIdRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/bags.$bagId'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugReviewsPublishedIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/reviews/published.index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugReviewsNewIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/reviews/new.index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugProductsComplimentaryIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugProductsProductSlugIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugPosTransactionsIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/transactions.index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugPosSettingsIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/settings.index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugPosRegisterIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/register.index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/expense.index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseReportsIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports.index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugOrdersRefundedIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/refunded.index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugOrdersReadyIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/ready.index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOutForDeliveryIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/out-for-delivery.index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOpenIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/open.index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugOrdersCompletedIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/completed.index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugOrdersCancelledIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/cancelled.index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugOrdersAllIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/all.index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOrderSlugIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug/index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugProductsComplimentaryNewRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/new'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugProductsProductSlugEditRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/edit'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugPosTransactionsTransactionIdRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseReportsReportIdRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/$reportId'
 
-// Import Routes
-
-import { Route as rootRoute } from './routes/__root'
-import { Route as AuthedImport } from './routes/_authed'
-import { Route as IndexImport } from './routes/index'
-import { Route as JoinTeamIndexImport } from './routes/join-team.index'
-import { Route as LoginLayoutImport } from './routes/login/_layout'
-import { Route as LoginLayoutIndexImport } from './routes/login/_layout.index'
-import { Route as AuthedOrgUrlSlugIndexImport } from './routes/_authed/$orgUrlSlug/index'
-import { Route as AuthedOrgUrlSlugStoreIndexImport } from './routes/_authed/$orgUrlSlug/store/index'
-import { Route as AuthedOrgUrlSlugSettingsIndexImport } from './routes/_authed/$orgUrlSlug/settings/index'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugIndexImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/index'
-import { Route as AuthedOrgUrlSlugSettingsOrganizationIndexImport } from './routes/_authed/$orgUrlSlug/settings/organization/index'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugHomeImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/home'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugAnalyticsImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/analytics'
-import { Route as AuthedOrgUrlSlugSettingsStoresStoreUrlSlugImport } from './routes/_authed/$orgUrlSlug/settings/stores/$storeUrlSlug'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugReviewsIndexImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/reviews/index'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesIndexImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/promo-codes/index'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugProductsIndexImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/products/index'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugPosIndexImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/index'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugOrdersIndexImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/index'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugMembersIndexImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/members.index'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugLogsIndexImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/logs.index'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugDashboardIndexImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/dashboard.index'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugConfigurationIndexImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/configuration.index'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugCheckoutSessionsIndexImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/checkout-sessions.index'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugBagsIndexImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/bags.index'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugAssetsIndexImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/assets.index'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugUsersUserIdImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/users.$userId'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesNewImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/promo-codes/new'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesPromoCodeSlugImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/promo-codes/$promoCodeSlug'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugProductsUnresolvedImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/products/unresolved'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugProductsNewImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/products/new'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugLogsLogIdImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/logs.$logId'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugBagsBagIdImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/bags.$bagId'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugReviewsPublishedIndexImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/reviews/published.index'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugReviewsNewIndexImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/reviews/new.index'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugProductsComplimentaryIndexImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/index'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugProductsProductSlugIndexImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/index'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugPosTransactionsIndexImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/transactions.index'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugPosSettingsIndexImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/settings.index'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugPosRegisterIndexImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/register.index'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseIndexImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/expense.index'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseReportsIndexImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports.index'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugOrdersRefundedIndexImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/refunded.index'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugOrdersReadyIndexImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/ready.index'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOutForDeliveryIndexImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/out-for-delivery.index'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOpenIndexImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/open.index'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugOrdersCompletedIndexImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/completed.index'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugOrdersCancelledIndexImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/cancelled.index'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugOrdersAllIndexImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/all.index'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOrderSlugIndexImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug/index'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugProductsComplimentaryNewImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/new'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugProductsProductSlugEditImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/edit'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugPosTransactionsTransactionIdImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId'
-import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseReportsReportIdImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/$reportId'
-
-// Create Virtual Routes
-
-const LoginImport = createFileRoute('/login')()
-
-// Create/Update Routes
-
-const LoginRoute = LoginImport.update({
-  id: '/login',
-  path: '/login',
-  getParentRoute: () => rootRoute,
-} as any)
-
-const AuthedRoute = AuthedImport.update({
+const AuthedRoute = AuthedRouteImport.update({
   id: '/_authed',
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => rootRouteImport,
 } as any)
-
-const IndexRoute = IndexImport.update({
+const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => rootRouteImport,
 } as any)
-
-const JoinTeamIndexRoute = JoinTeamIndexImport.update({
+const JoinTeamIndexRoute = JoinTeamIndexRouteImport.update({
   id: '/join-team/',
   path: '/join-team/',
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => rootRouteImport,
 } as any)
-
-const LoginLayoutRoute = LoginLayoutImport.update({
-  id: '/_layout',
-  getParentRoute: () => LoginRoute,
+const LoginLayoutRoute = LoginLayoutRouteImport.update({
+  id: '/login/_layout',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
 } as any)
-
-const LoginLayoutIndexRoute = LoginLayoutIndexImport.update({
+const LoginLayoutIndexRoute = LoginLayoutIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => LoginLayoutRoute,
 } as any)
-
-const AuthedOrgUrlSlugIndexRoute = AuthedOrgUrlSlugIndexImport.update({
+const AuthedOrgUrlSlugIndexRoute = AuthedOrgUrlSlugIndexRouteImport.update({
   id: '/$orgUrlSlug/',
   path: '/$orgUrlSlug/',
   getParentRoute: () => AuthedRoute,
 } as any)
-
-const AuthedOrgUrlSlugStoreIndexRoute = AuthedOrgUrlSlugStoreIndexImport.update(
-  {
+const AuthedOrgUrlSlugStoreIndexRoute =
+  AuthedOrgUrlSlugStoreIndexRouteImport.update({
     id: '/$orgUrlSlug/store/',
     path: '/$orgUrlSlug/store/',
     getParentRoute: () => AuthedRoute,
-  } as any,
-)
-
+  } as any)
 const AuthedOrgUrlSlugSettingsIndexRoute =
-  AuthedOrgUrlSlugSettingsIndexImport.update({
+  AuthedOrgUrlSlugSettingsIndexRouteImport.update({
     id: '/$orgUrlSlug/settings/',
     path: '/$orgUrlSlug/settings/',
     getParentRoute: () => AuthedRoute,
   } as any)
-
 const AuthedOrgUrlSlugStoreStoreUrlSlugIndexRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugIndexImport.update({
+  AuthedOrgUrlSlugStoreStoreUrlSlugIndexRouteImport.update({
     id: '/$orgUrlSlug/store/$storeUrlSlug/',
     path: '/$orgUrlSlug/store/$storeUrlSlug/',
     getParentRoute: () => AuthedRoute,
   } as any)
-
 const AuthedOrgUrlSlugSettingsOrganizationIndexRoute =
-  AuthedOrgUrlSlugSettingsOrganizationIndexImport.update({
+  AuthedOrgUrlSlugSettingsOrganizationIndexRouteImport.update({
     id: '/$orgUrlSlug/settings/organization/',
     path: '/$orgUrlSlug/settings/organization/',
     getParentRoute: () => AuthedRoute,
   } as any)
-
 const AuthedOrgUrlSlugStoreStoreUrlSlugHomeRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugHomeImport.update({
+  AuthedOrgUrlSlugStoreStoreUrlSlugHomeRouteImport.update({
     id: '/$orgUrlSlug/store/$storeUrlSlug/home',
     path: '/$orgUrlSlug/store/$storeUrlSlug/home',
     getParentRoute: () => AuthedRoute,
   } as any)
-
 const AuthedOrgUrlSlugStoreStoreUrlSlugAnalyticsRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugAnalyticsImport.update({
+  AuthedOrgUrlSlugStoreStoreUrlSlugAnalyticsRouteImport.update({
     id: '/$orgUrlSlug/store/$storeUrlSlug/analytics',
     path: '/$orgUrlSlug/store/$storeUrlSlug/analytics',
     getParentRoute: () => AuthedRoute,
   } as any)
-
 const AuthedOrgUrlSlugSettingsStoresStoreUrlSlugRoute =
-  AuthedOrgUrlSlugSettingsStoresStoreUrlSlugImport.update({
+  AuthedOrgUrlSlugSettingsStoresStoreUrlSlugRouteImport.update({
     id: '/$orgUrlSlug/settings/stores/$storeUrlSlug',
     path: '/$orgUrlSlug/settings/stores/$storeUrlSlug',
     getParentRoute: () => AuthedRoute,
   } as any)
-
 const AuthedOrgUrlSlugStoreStoreUrlSlugReviewsIndexRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugReviewsIndexImport.update({
+  AuthedOrgUrlSlugStoreStoreUrlSlugReviewsIndexRouteImport.update({
     id: '/$orgUrlSlug/store/$storeUrlSlug/reviews/',
     path: '/$orgUrlSlug/store/$storeUrlSlug/reviews/',
     getParentRoute: () => AuthedRoute,
   } as any)
-
 const AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesIndexRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesIndexImport.update({
+  AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesIndexRouteImport.update({
     id: '/$orgUrlSlug/store/$storeUrlSlug/promo-codes/',
     path: '/$orgUrlSlug/store/$storeUrlSlug/promo-codes/',
     getParentRoute: () => AuthedRoute,
   } as any)
-
 const AuthedOrgUrlSlugStoreStoreUrlSlugProductsIndexRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugProductsIndexImport.update({
+  AuthedOrgUrlSlugStoreStoreUrlSlugProductsIndexRouteImport.update({
     id: '/$orgUrlSlug/store/$storeUrlSlug/products/',
     path: '/$orgUrlSlug/store/$storeUrlSlug/products/',
     getParentRoute: () => AuthedRoute,
   } as any)
-
 const AuthedOrgUrlSlugStoreStoreUrlSlugPosIndexRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugPosIndexImport.update({
+  AuthedOrgUrlSlugStoreStoreUrlSlugPosIndexRouteImport.update({
     id: '/$orgUrlSlug/store/$storeUrlSlug/pos/',
     path: '/$orgUrlSlug/store/$storeUrlSlug/pos/',
     getParentRoute: () => AuthedRoute,
   } as any)
-
 const AuthedOrgUrlSlugStoreStoreUrlSlugOrdersIndexRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugOrdersIndexImport.update({
+  AuthedOrgUrlSlugStoreStoreUrlSlugOrdersIndexRouteImport.update({
     id: '/$orgUrlSlug/store/$storeUrlSlug/orders/',
     path: '/$orgUrlSlug/store/$storeUrlSlug/orders/',
     getParentRoute: () => AuthedRoute,
   } as any)
-
 const AuthedOrgUrlSlugStoreStoreUrlSlugMembersIndexRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugMembersIndexImport.update({
+  AuthedOrgUrlSlugStoreStoreUrlSlugMembersIndexRouteImport.update({
     id: '/$orgUrlSlug/store/$storeUrlSlug/members/',
     path: '/$orgUrlSlug/store/$storeUrlSlug/members/',
     getParentRoute: () => AuthedRoute,
   } as any)
-
 const AuthedOrgUrlSlugStoreStoreUrlSlugLogsIndexRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugLogsIndexImport.update({
+  AuthedOrgUrlSlugStoreStoreUrlSlugLogsIndexRouteImport.update({
     id: '/$orgUrlSlug/store/$storeUrlSlug/logs/',
     path: '/$orgUrlSlug/store/$storeUrlSlug/logs/',
     getParentRoute: () => AuthedRoute,
   } as any)
-
 const AuthedOrgUrlSlugStoreStoreUrlSlugDashboardIndexRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugDashboardIndexImport.update({
+  AuthedOrgUrlSlugStoreStoreUrlSlugDashboardIndexRouteImport.update({
     id: '/$orgUrlSlug/store/$storeUrlSlug/dashboard/',
     path: '/$orgUrlSlug/store/$storeUrlSlug/dashboard/',
     getParentRoute: () => AuthedRoute,
   } as any)
-
 const AuthedOrgUrlSlugStoreStoreUrlSlugConfigurationIndexRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugConfigurationIndexImport.update({
+  AuthedOrgUrlSlugStoreStoreUrlSlugConfigurationIndexRouteImport.update({
     id: '/$orgUrlSlug/store/$storeUrlSlug/configuration/',
     path: '/$orgUrlSlug/store/$storeUrlSlug/configuration/',
     getParentRoute: () => AuthedRoute,
   } as any)
-
 const AuthedOrgUrlSlugStoreStoreUrlSlugCheckoutSessionsIndexRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugCheckoutSessionsIndexImport.update({
+  AuthedOrgUrlSlugStoreStoreUrlSlugCheckoutSessionsIndexRouteImport.update({
     id: '/$orgUrlSlug/store/$storeUrlSlug/checkout-sessions/',
     path: '/$orgUrlSlug/store/$storeUrlSlug/checkout-sessions/',
     getParentRoute: () => AuthedRoute,
   } as any)
-
 const AuthedOrgUrlSlugStoreStoreUrlSlugBagsIndexRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugBagsIndexImport.update({
+  AuthedOrgUrlSlugStoreStoreUrlSlugBagsIndexRouteImport.update({
     id: '/$orgUrlSlug/store/$storeUrlSlug/bags/',
     path: '/$orgUrlSlug/store/$storeUrlSlug/bags/',
     getParentRoute: () => AuthedRoute,
   } as any)
-
 const AuthedOrgUrlSlugStoreStoreUrlSlugAssetsIndexRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugAssetsIndexImport.update({
+  AuthedOrgUrlSlugStoreStoreUrlSlugAssetsIndexRouteImport.update({
     id: '/$orgUrlSlug/store/$storeUrlSlug/assets/',
     path: '/$orgUrlSlug/store/$storeUrlSlug/assets/',
     getParentRoute: () => AuthedRoute,
   } as any)
-
 const AuthedOrgUrlSlugStoreStoreUrlSlugUsersUserIdRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugUsersUserIdImport.update({
+  AuthedOrgUrlSlugStoreStoreUrlSlugUsersUserIdRouteImport.update({
     id: '/$orgUrlSlug/store/$storeUrlSlug/users/$userId',
     path: '/$orgUrlSlug/store/$storeUrlSlug/users/$userId',
     getParentRoute: () => AuthedRoute,
   } as any)
-
 const AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesNewRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesNewImport.update({
+  AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesNewRouteImport.update({
     id: '/$orgUrlSlug/store/$storeUrlSlug/promo-codes/new',
     path: '/$orgUrlSlug/store/$storeUrlSlug/promo-codes/new',
     getParentRoute: () => AuthedRoute,
   } as any)
-
 const AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesPromoCodeSlugRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesPromoCodeSlugImport.update({
+  AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesPromoCodeSlugRouteImport.update({
     id: '/$orgUrlSlug/store/$storeUrlSlug/promo-codes/$promoCodeSlug',
     path: '/$orgUrlSlug/store/$storeUrlSlug/promo-codes/$promoCodeSlug',
     getParentRoute: () => AuthedRoute,
   } as any)
-
 const AuthedOrgUrlSlugStoreStoreUrlSlugProductsUnresolvedRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugProductsUnresolvedImport.update({
+  AuthedOrgUrlSlugStoreStoreUrlSlugProductsUnresolvedRouteImport.update({
     id: '/$orgUrlSlug/store/$storeUrlSlug/products/unresolved',
     path: '/$orgUrlSlug/store/$storeUrlSlug/products/unresolved',
     getParentRoute: () => AuthedRoute,
   } as any)
-
 const AuthedOrgUrlSlugStoreStoreUrlSlugProductsNewRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugProductsNewImport.update({
+  AuthedOrgUrlSlugStoreStoreUrlSlugProductsNewRouteImport.update({
     id: '/$orgUrlSlug/store/$storeUrlSlug/products/new',
     path: '/$orgUrlSlug/store/$storeUrlSlug/products/new',
     getParentRoute: () => AuthedRoute,
   } as any)
-
 const AuthedOrgUrlSlugStoreStoreUrlSlugLogsLogIdRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugLogsLogIdImport.update({
+  AuthedOrgUrlSlugStoreStoreUrlSlugLogsLogIdRouteImport.update({
     id: '/$orgUrlSlug/store/$storeUrlSlug/logs/$logId',
     path: '/$orgUrlSlug/store/$storeUrlSlug/logs/$logId',
     getParentRoute: () => AuthedRoute,
   } as any)
-
 const AuthedOrgUrlSlugStoreStoreUrlSlugBagsBagIdRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugBagsBagIdImport.update({
+  AuthedOrgUrlSlugStoreStoreUrlSlugBagsBagIdRouteImport.update({
     id: '/$orgUrlSlug/store/$storeUrlSlug/bags/$bagId',
     path: '/$orgUrlSlug/store/$storeUrlSlug/bags/$bagId',
     getParentRoute: () => AuthedRoute,
   } as any)
-
 const AuthedOrgUrlSlugStoreStoreUrlSlugReviewsPublishedIndexRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugReviewsPublishedIndexImport.update({
+  AuthedOrgUrlSlugStoreStoreUrlSlugReviewsPublishedIndexRouteImport.update({
     id: '/$orgUrlSlug/store/$storeUrlSlug/reviews/published/',
     path: '/$orgUrlSlug/store/$storeUrlSlug/reviews/published/',
     getParentRoute: () => AuthedRoute,
   } as any)
-
 const AuthedOrgUrlSlugStoreStoreUrlSlugReviewsNewIndexRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugReviewsNewIndexImport.update({
+  AuthedOrgUrlSlugStoreStoreUrlSlugReviewsNewIndexRouteImport.update({
     id: '/$orgUrlSlug/store/$storeUrlSlug/reviews/new/',
     path: '/$orgUrlSlug/store/$storeUrlSlug/reviews/new/',
     getParentRoute: () => AuthedRoute,
   } as any)
-
 const AuthedOrgUrlSlugStoreStoreUrlSlugProductsComplimentaryIndexRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugProductsComplimentaryIndexImport.update({
-    id: '/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/',
-    path: '/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/',
-    getParentRoute: () => AuthedRoute,
-  } as any)
-
+  AuthedOrgUrlSlugStoreStoreUrlSlugProductsComplimentaryIndexRouteImport.update(
+    {
+      id: '/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/',
+      path: '/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/',
+      getParentRoute: () => AuthedRoute,
+    } as any,
+  )
 const AuthedOrgUrlSlugStoreStoreUrlSlugProductsProductSlugIndexRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugProductsProductSlugIndexImport.update({
+  AuthedOrgUrlSlugStoreStoreUrlSlugProductsProductSlugIndexRouteImport.update({
     id: '/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/',
     path: '/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/',
     getParentRoute: () => AuthedRoute,
   } as any)
-
 const AuthedOrgUrlSlugStoreStoreUrlSlugPosTransactionsIndexRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugPosTransactionsIndexImport.update({
+  AuthedOrgUrlSlugStoreStoreUrlSlugPosTransactionsIndexRouteImport.update({
     id: '/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/',
     path: '/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/',
     getParentRoute: () => AuthedRoute,
   } as any)
-
 const AuthedOrgUrlSlugStoreStoreUrlSlugPosSettingsIndexRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugPosSettingsIndexImport.update({
+  AuthedOrgUrlSlugStoreStoreUrlSlugPosSettingsIndexRouteImport.update({
     id: '/$orgUrlSlug/store/$storeUrlSlug/pos/settings/',
     path: '/$orgUrlSlug/store/$storeUrlSlug/pos/settings/',
     getParentRoute: () => AuthedRoute,
   } as any)
-
 const AuthedOrgUrlSlugStoreStoreUrlSlugPosRegisterIndexRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugPosRegisterIndexImport.update({
+  AuthedOrgUrlSlugStoreStoreUrlSlugPosRegisterIndexRouteImport.update({
     id: '/$orgUrlSlug/store/$storeUrlSlug/pos/register/',
     path: '/$orgUrlSlug/store/$storeUrlSlug/pos/register/',
     getParentRoute: () => AuthedRoute,
   } as any)
-
 const AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseIndexRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseIndexImport.update({
+  AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseIndexRouteImport.update({
     id: '/$orgUrlSlug/store/$storeUrlSlug/pos/expense/',
     path: '/$orgUrlSlug/store/$storeUrlSlug/pos/expense/',
     getParentRoute: () => AuthedRoute,
   } as any)
-
 const AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseReportsIndexRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseReportsIndexImport.update({
+  AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseReportsIndexRouteImport.update({
     id: '/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/',
     path: '/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/',
     getParentRoute: () => AuthedRoute,
   } as any)
-
 const AuthedOrgUrlSlugStoreStoreUrlSlugOrdersRefundedIndexRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugOrdersRefundedIndexImport.update({
+  AuthedOrgUrlSlugStoreStoreUrlSlugOrdersRefundedIndexRouteImport.update({
     id: '/$orgUrlSlug/store/$storeUrlSlug/orders/refunded/',
     path: '/$orgUrlSlug/store/$storeUrlSlug/orders/refunded/',
     getParentRoute: () => AuthedRoute,
   } as any)
-
 const AuthedOrgUrlSlugStoreStoreUrlSlugOrdersReadyIndexRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugOrdersReadyIndexImport.update({
+  AuthedOrgUrlSlugStoreStoreUrlSlugOrdersReadyIndexRouteImport.update({
     id: '/$orgUrlSlug/store/$storeUrlSlug/orders/ready/',
     path: '/$orgUrlSlug/store/$storeUrlSlug/orders/ready/',
     getParentRoute: () => AuthedRoute,
   } as any)
-
 const AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOutForDeliveryIndexRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOutForDeliveryIndexImport.update({
+  AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOutForDeliveryIndexRouteImport.update({
     id: '/$orgUrlSlug/store/$storeUrlSlug/orders/out-for-delivery/',
     path: '/$orgUrlSlug/store/$storeUrlSlug/orders/out-for-delivery/',
     getParentRoute: () => AuthedRoute,
   } as any)
-
 const AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOpenIndexRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOpenIndexImport.update({
+  AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOpenIndexRouteImport.update({
     id: '/$orgUrlSlug/store/$storeUrlSlug/orders/open/',
     path: '/$orgUrlSlug/store/$storeUrlSlug/orders/open/',
     getParentRoute: () => AuthedRoute,
   } as any)
-
 const AuthedOrgUrlSlugStoreStoreUrlSlugOrdersCompletedIndexRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugOrdersCompletedIndexImport.update({
+  AuthedOrgUrlSlugStoreStoreUrlSlugOrdersCompletedIndexRouteImport.update({
     id: '/$orgUrlSlug/store/$storeUrlSlug/orders/completed/',
     path: '/$orgUrlSlug/store/$storeUrlSlug/orders/completed/',
     getParentRoute: () => AuthedRoute,
   } as any)
-
 const AuthedOrgUrlSlugStoreStoreUrlSlugOrdersCancelledIndexRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugOrdersCancelledIndexImport.update({
+  AuthedOrgUrlSlugStoreStoreUrlSlugOrdersCancelledIndexRouteImport.update({
     id: '/$orgUrlSlug/store/$storeUrlSlug/orders/cancelled/',
     path: '/$orgUrlSlug/store/$storeUrlSlug/orders/cancelled/',
     getParentRoute: () => AuthedRoute,
   } as any)
-
 const AuthedOrgUrlSlugStoreStoreUrlSlugOrdersAllIndexRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugOrdersAllIndexImport.update({
+  AuthedOrgUrlSlugStoreStoreUrlSlugOrdersAllIndexRouteImport.update({
     id: '/$orgUrlSlug/store/$storeUrlSlug/orders/all/',
     path: '/$orgUrlSlug/store/$storeUrlSlug/orders/all/',
     getParentRoute: () => AuthedRoute,
   } as any)
-
 const AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOrderSlugIndexRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOrderSlugIndexImport.update({
+  AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOrderSlugIndexRouteImport.update({
     id: '/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug/',
     path: '/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug/',
     getParentRoute: () => AuthedRoute,
   } as any)
-
 const AuthedOrgUrlSlugStoreStoreUrlSlugProductsComplimentaryNewRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugProductsComplimentaryNewImport.update({
+  AuthedOrgUrlSlugStoreStoreUrlSlugProductsComplimentaryNewRouteImport.update({
     id: '/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/new',
     path: '/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/new',
     getParentRoute: () => AuthedRoute,
   } as any)
-
 const AuthedOrgUrlSlugStoreStoreUrlSlugProductsProductSlugEditRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugProductsProductSlugEditImport.update({
+  AuthedOrgUrlSlugStoreStoreUrlSlugProductsProductSlugEditRouteImport.update({
     id: '/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/edit',
     path: '/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/edit',
     getParentRoute: () => AuthedRoute,
   } as any)
-
 const AuthedOrgUrlSlugStoreStoreUrlSlugPosTransactionsTransactionIdRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugPosTransactionsTransactionIdImport.update({
-    id: '/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId',
-    path: '/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId',
-    getParentRoute: () => AuthedRoute,
-  } as any)
-
+  AuthedOrgUrlSlugStoreStoreUrlSlugPosTransactionsTransactionIdRouteImport.update(
+    {
+      id: '/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId',
+      path: '/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId',
+      getParentRoute: () => AuthedRoute,
+    } as any,
+  )
 const AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseReportsReportIdRoute =
-  AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseReportsReportIdImport.update({
+  AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseReportsReportIdRouteImport.update({
     id: '/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/$reportId',
     path: '/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/$reportId',
     getParentRoute: () => AuthedRoute,
   } as any)
 
-// Populate the FileRoutesByPath interface
+export interface FileRoutesByFullPath {
+  '/': typeof IndexRoute
+  '/login': typeof LoginLayoutRouteWithChildren
+  '/join-team/': typeof JoinTeamIndexRoute
+  '/$orgUrlSlug/': typeof AuthedOrgUrlSlugIndexRoute
+  '/login/': typeof LoginLayoutIndexRoute
+  '/$orgUrlSlug/settings/': typeof AuthedOrgUrlSlugSettingsIndexRoute
+  '/$orgUrlSlug/store/': typeof AuthedOrgUrlSlugStoreIndexRoute
+  '/$orgUrlSlug/settings/stores/$storeUrlSlug': typeof AuthedOrgUrlSlugSettingsStoresStoreUrlSlugRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/analytics': typeof AuthedOrgUrlSlugStoreStoreUrlSlugAnalyticsRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/home': typeof AuthedOrgUrlSlugStoreStoreUrlSlugHomeRoute
+  '/$orgUrlSlug/settings/organization/': typeof AuthedOrgUrlSlugSettingsOrganizationIndexRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugIndexRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/bags/$bagId': typeof AuthedOrgUrlSlugStoreStoreUrlSlugBagsBagIdRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/logs/$logId': typeof AuthedOrgUrlSlugStoreStoreUrlSlugLogsLogIdRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/products/new': typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsNewRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/products/unresolved': typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsUnresolvedRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/promo-codes/$promoCodeSlug': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesPromoCodeSlugRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/promo-codes/new': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesNewRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/users/$userId': typeof AuthedOrgUrlSlugStoreStoreUrlSlugUsersUserIdRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/assets/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugAssetsIndexRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/bags/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugBagsIndexRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/checkout-sessions/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugCheckoutSessionsIndexRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/configuration/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugConfigurationIndexRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/dashboard/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugDashboardIndexRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/logs/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugLogsIndexRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/members/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugMembersIndexRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/orders/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersIndexRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/pos/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosIndexRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/products/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsIndexRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/promo-codes/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesIndexRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/reviews/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugReviewsIndexRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/$reportId': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseReportsReportIdRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosTransactionsTransactionIdRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/edit': typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsProductSlugEditRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/new': typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsComplimentaryNewRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOrderSlugIndexRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/orders/all/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersAllIndexRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/orders/cancelled/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersCancelledIndexRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/orders/completed/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersCompletedIndexRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/orders/open/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOpenIndexRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/orders/out-for-delivery/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOutForDeliveryIndexRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/orders/ready/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersReadyIndexRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/orders/refunded/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersRefundedIndexRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseReportsIndexRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/pos/expense/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseIndexRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/pos/register/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosRegisterIndexRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/pos/settings/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosSettingsIndexRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosTransactionsIndexRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsProductSlugIndexRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsComplimentaryIndexRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/reviews/new/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugReviewsNewIndexRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/reviews/published/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugReviewsPublishedIndexRoute
+}
+export interface FileRoutesByTo {
+  '/': typeof IndexRoute
+  '/join-team': typeof JoinTeamIndexRoute
+  '/$orgUrlSlug': typeof AuthedOrgUrlSlugIndexRoute
+  '/login': typeof LoginLayoutIndexRoute
+  '/$orgUrlSlug/settings': typeof AuthedOrgUrlSlugSettingsIndexRoute
+  '/$orgUrlSlug/store': typeof AuthedOrgUrlSlugStoreIndexRoute
+  '/$orgUrlSlug/settings/stores/$storeUrlSlug': typeof AuthedOrgUrlSlugSettingsStoresStoreUrlSlugRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/analytics': typeof AuthedOrgUrlSlugStoreStoreUrlSlugAnalyticsRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/home': typeof AuthedOrgUrlSlugStoreStoreUrlSlugHomeRoute
+  '/$orgUrlSlug/settings/organization': typeof AuthedOrgUrlSlugSettingsOrganizationIndexRoute
+  '/$orgUrlSlug/store/$storeUrlSlug': typeof AuthedOrgUrlSlugStoreStoreUrlSlugIndexRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/bags/$bagId': typeof AuthedOrgUrlSlugStoreStoreUrlSlugBagsBagIdRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/logs/$logId': typeof AuthedOrgUrlSlugStoreStoreUrlSlugLogsLogIdRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/products/new': typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsNewRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/products/unresolved': typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsUnresolvedRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/promo-codes/$promoCodeSlug': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesPromoCodeSlugRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/promo-codes/new': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesNewRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/users/$userId': typeof AuthedOrgUrlSlugStoreStoreUrlSlugUsersUserIdRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/assets': typeof AuthedOrgUrlSlugStoreStoreUrlSlugAssetsIndexRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/bags': typeof AuthedOrgUrlSlugStoreStoreUrlSlugBagsIndexRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/checkout-sessions': typeof AuthedOrgUrlSlugStoreStoreUrlSlugCheckoutSessionsIndexRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/configuration': typeof AuthedOrgUrlSlugStoreStoreUrlSlugConfigurationIndexRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/dashboard': typeof AuthedOrgUrlSlugStoreStoreUrlSlugDashboardIndexRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/logs': typeof AuthedOrgUrlSlugStoreStoreUrlSlugLogsIndexRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/members': typeof AuthedOrgUrlSlugStoreStoreUrlSlugMembersIndexRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/orders': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersIndexRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/pos': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosIndexRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/products': typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsIndexRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/promo-codes': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesIndexRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/reviews': typeof AuthedOrgUrlSlugStoreStoreUrlSlugReviewsIndexRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/$reportId': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseReportsReportIdRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosTransactionsTransactionIdRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/edit': typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsProductSlugEditRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/new': typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsComplimentaryNewRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOrderSlugIndexRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/orders/all': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersAllIndexRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/orders/cancelled': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersCancelledIndexRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/orders/completed': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersCompletedIndexRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/orders/open': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOpenIndexRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/orders/out-for-delivery': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOutForDeliveryIndexRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/orders/ready': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersReadyIndexRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/orders/refunded': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersRefundedIndexRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseReportsIndexRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/pos/expense': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseIndexRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/pos/register': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosRegisterIndexRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/pos/settings': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosSettingsIndexRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/pos/transactions': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosTransactionsIndexRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug': typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsProductSlugIndexRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/products/complimentary': typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsComplimentaryIndexRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/reviews/new': typeof AuthedOrgUrlSlugStoreStoreUrlSlugReviewsNewIndexRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/reviews/published': typeof AuthedOrgUrlSlugStoreStoreUrlSlugReviewsPublishedIndexRoute
+}
+export interface FileRoutesById {
+  __root__: typeof rootRouteImport
+  '/': typeof IndexRoute
+  '/_authed': typeof AuthedRouteWithChildren
+  '/login/_layout': typeof LoginLayoutRouteWithChildren
+  '/join-team/': typeof JoinTeamIndexRoute
+  '/_authed/$orgUrlSlug/': typeof AuthedOrgUrlSlugIndexRoute
+  '/login/_layout/': typeof LoginLayoutIndexRoute
+  '/_authed/$orgUrlSlug/settings/': typeof AuthedOrgUrlSlugSettingsIndexRoute
+  '/_authed/$orgUrlSlug/store/': typeof AuthedOrgUrlSlugStoreIndexRoute
+  '/_authed/$orgUrlSlug/settings/stores/$storeUrlSlug': typeof AuthedOrgUrlSlugSettingsStoresStoreUrlSlugRoute
+  '/_authed/$orgUrlSlug/store/$storeUrlSlug/analytics': typeof AuthedOrgUrlSlugStoreStoreUrlSlugAnalyticsRoute
+  '/_authed/$orgUrlSlug/store/$storeUrlSlug/home': typeof AuthedOrgUrlSlugStoreStoreUrlSlugHomeRoute
+  '/_authed/$orgUrlSlug/settings/organization/': typeof AuthedOrgUrlSlugSettingsOrganizationIndexRoute
+  '/_authed/$orgUrlSlug/store/$storeUrlSlug/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugIndexRoute
+  '/_authed/$orgUrlSlug/store/$storeUrlSlug/bags/$bagId': typeof AuthedOrgUrlSlugStoreStoreUrlSlugBagsBagIdRoute
+  '/_authed/$orgUrlSlug/store/$storeUrlSlug/logs/$logId': typeof AuthedOrgUrlSlugStoreStoreUrlSlugLogsLogIdRoute
+  '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/new': typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsNewRoute
+  '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/unresolved': typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsUnresolvedRoute
+  '/_authed/$orgUrlSlug/store/$storeUrlSlug/promo-codes/$promoCodeSlug': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesPromoCodeSlugRoute
+  '/_authed/$orgUrlSlug/store/$storeUrlSlug/promo-codes/new': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesNewRoute
+  '/_authed/$orgUrlSlug/store/$storeUrlSlug/users/$userId': typeof AuthedOrgUrlSlugStoreStoreUrlSlugUsersUserIdRoute
+  '/_authed/$orgUrlSlug/store/$storeUrlSlug/assets/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugAssetsIndexRoute
+  '/_authed/$orgUrlSlug/store/$storeUrlSlug/bags/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugBagsIndexRoute
+  '/_authed/$orgUrlSlug/store/$storeUrlSlug/checkout-sessions/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugCheckoutSessionsIndexRoute
+  '/_authed/$orgUrlSlug/store/$storeUrlSlug/configuration/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugConfigurationIndexRoute
+  '/_authed/$orgUrlSlug/store/$storeUrlSlug/dashboard/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugDashboardIndexRoute
+  '/_authed/$orgUrlSlug/store/$storeUrlSlug/logs/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugLogsIndexRoute
+  '/_authed/$orgUrlSlug/store/$storeUrlSlug/members/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugMembersIndexRoute
+  '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersIndexRoute
+  '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosIndexRoute
+  '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsIndexRoute
+  '/_authed/$orgUrlSlug/store/$storeUrlSlug/promo-codes/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesIndexRoute
+  '/_authed/$orgUrlSlug/store/$storeUrlSlug/reviews/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugReviewsIndexRoute
+  '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/$reportId': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseReportsReportIdRoute
+  '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosTransactionsTransactionIdRoute
+  '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/edit': typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsProductSlugEditRoute
+  '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/new': typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsComplimentaryNewRoute
+  '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOrderSlugIndexRoute
+  '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/all/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersAllIndexRoute
+  '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/cancelled/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersCancelledIndexRoute
+  '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/completed/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersCompletedIndexRoute
+  '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/open/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOpenIndexRoute
+  '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/out-for-delivery/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOutForDeliveryIndexRoute
+  '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/ready/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersReadyIndexRoute
+  '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/refunded/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersRefundedIndexRoute
+  '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseReportsIndexRoute
+  '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/expense/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseIndexRoute
+  '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/register/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosRegisterIndexRoute
+  '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/settings/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosSettingsIndexRoute
+  '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosTransactionsIndexRoute
+  '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsProductSlugIndexRoute
+  '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsComplimentaryIndexRoute
+  '/_authed/$orgUrlSlug/store/$storeUrlSlug/reviews/new/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugReviewsNewIndexRoute
+  '/_authed/$orgUrlSlug/store/$storeUrlSlug/reviews/published/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugReviewsPublishedIndexRoute
+}
+export interface FileRouteTypes {
+  fileRoutesByFullPath: FileRoutesByFullPath
+  fullPaths:
+    | '/'
+    | '/login'
+    | '/join-team/'
+    | '/$orgUrlSlug/'
+    | '/login/'
+    | '/$orgUrlSlug/settings/'
+    | '/$orgUrlSlug/store/'
+    | '/$orgUrlSlug/settings/stores/$storeUrlSlug'
+    | '/$orgUrlSlug/store/$storeUrlSlug/analytics'
+    | '/$orgUrlSlug/store/$storeUrlSlug/home'
+    | '/$orgUrlSlug/settings/organization/'
+    | '/$orgUrlSlug/store/$storeUrlSlug/'
+    | '/$orgUrlSlug/store/$storeUrlSlug/bags/$bagId'
+    | '/$orgUrlSlug/store/$storeUrlSlug/logs/$logId'
+    | '/$orgUrlSlug/store/$storeUrlSlug/products/new'
+    | '/$orgUrlSlug/store/$storeUrlSlug/products/unresolved'
+    | '/$orgUrlSlug/store/$storeUrlSlug/promo-codes/$promoCodeSlug'
+    | '/$orgUrlSlug/store/$storeUrlSlug/promo-codes/new'
+    | '/$orgUrlSlug/store/$storeUrlSlug/users/$userId'
+    | '/$orgUrlSlug/store/$storeUrlSlug/assets/'
+    | '/$orgUrlSlug/store/$storeUrlSlug/bags/'
+    | '/$orgUrlSlug/store/$storeUrlSlug/checkout-sessions/'
+    | '/$orgUrlSlug/store/$storeUrlSlug/configuration/'
+    | '/$orgUrlSlug/store/$storeUrlSlug/dashboard/'
+    | '/$orgUrlSlug/store/$storeUrlSlug/logs/'
+    | '/$orgUrlSlug/store/$storeUrlSlug/members/'
+    | '/$orgUrlSlug/store/$storeUrlSlug/orders/'
+    | '/$orgUrlSlug/store/$storeUrlSlug/pos/'
+    | '/$orgUrlSlug/store/$storeUrlSlug/products/'
+    | '/$orgUrlSlug/store/$storeUrlSlug/promo-codes/'
+    | '/$orgUrlSlug/store/$storeUrlSlug/reviews/'
+    | '/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/$reportId'
+    | '/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId'
+    | '/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/edit'
+    | '/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/new'
+    | '/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug/'
+    | '/$orgUrlSlug/store/$storeUrlSlug/orders/all/'
+    | '/$orgUrlSlug/store/$storeUrlSlug/orders/cancelled/'
+    | '/$orgUrlSlug/store/$storeUrlSlug/orders/completed/'
+    | '/$orgUrlSlug/store/$storeUrlSlug/orders/open/'
+    | '/$orgUrlSlug/store/$storeUrlSlug/orders/out-for-delivery/'
+    | '/$orgUrlSlug/store/$storeUrlSlug/orders/ready/'
+    | '/$orgUrlSlug/store/$storeUrlSlug/orders/refunded/'
+    | '/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/'
+    | '/$orgUrlSlug/store/$storeUrlSlug/pos/expense/'
+    | '/$orgUrlSlug/store/$storeUrlSlug/pos/register/'
+    | '/$orgUrlSlug/store/$storeUrlSlug/pos/settings/'
+    | '/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/'
+    | '/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/'
+    | '/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/'
+    | '/$orgUrlSlug/store/$storeUrlSlug/reviews/new/'
+    | '/$orgUrlSlug/store/$storeUrlSlug/reviews/published/'
+  fileRoutesByTo: FileRoutesByTo
+  to:
+    | '/'
+    | '/join-team'
+    | '/$orgUrlSlug'
+    | '/login'
+    | '/$orgUrlSlug/settings'
+    | '/$orgUrlSlug/store'
+    | '/$orgUrlSlug/settings/stores/$storeUrlSlug'
+    | '/$orgUrlSlug/store/$storeUrlSlug/analytics'
+    | '/$orgUrlSlug/store/$storeUrlSlug/home'
+    | '/$orgUrlSlug/settings/organization'
+    | '/$orgUrlSlug/store/$storeUrlSlug'
+    | '/$orgUrlSlug/store/$storeUrlSlug/bags/$bagId'
+    | '/$orgUrlSlug/store/$storeUrlSlug/logs/$logId'
+    | '/$orgUrlSlug/store/$storeUrlSlug/products/new'
+    | '/$orgUrlSlug/store/$storeUrlSlug/products/unresolved'
+    | '/$orgUrlSlug/store/$storeUrlSlug/promo-codes/$promoCodeSlug'
+    | '/$orgUrlSlug/store/$storeUrlSlug/promo-codes/new'
+    | '/$orgUrlSlug/store/$storeUrlSlug/users/$userId'
+    | '/$orgUrlSlug/store/$storeUrlSlug/assets'
+    | '/$orgUrlSlug/store/$storeUrlSlug/bags'
+    | '/$orgUrlSlug/store/$storeUrlSlug/checkout-sessions'
+    | '/$orgUrlSlug/store/$storeUrlSlug/configuration'
+    | '/$orgUrlSlug/store/$storeUrlSlug/dashboard'
+    | '/$orgUrlSlug/store/$storeUrlSlug/logs'
+    | '/$orgUrlSlug/store/$storeUrlSlug/members'
+    | '/$orgUrlSlug/store/$storeUrlSlug/orders'
+    | '/$orgUrlSlug/store/$storeUrlSlug/pos'
+    | '/$orgUrlSlug/store/$storeUrlSlug/products'
+    | '/$orgUrlSlug/store/$storeUrlSlug/promo-codes'
+    | '/$orgUrlSlug/store/$storeUrlSlug/reviews'
+    | '/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/$reportId'
+    | '/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId'
+    | '/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/edit'
+    | '/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/new'
+    | '/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug'
+    | '/$orgUrlSlug/store/$storeUrlSlug/orders/all'
+    | '/$orgUrlSlug/store/$storeUrlSlug/orders/cancelled'
+    | '/$orgUrlSlug/store/$storeUrlSlug/orders/completed'
+    | '/$orgUrlSlug/store/$storeUrlSlug/orders/open'
+    | '/$orgUrlSlug/store/$storeUrlSlug/orders/out-for-delivery'
+    | '/$orgUrlSlug/store/$storeUrlSlug/orders/ready'
+    | '/$orgUrlSlug/store/$storeUrlSlug/orders/refunded'
+    | '/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports'
+    | '/$orgUrlSlug/store/$storeUrlSlug/pos/expense'
+    | '/$orgUrlSlug/store/$storeUrlSlug/pos/register'
+    | '/$orgUrlSlug/store/$storeUrlSlug/pos/settings'
+    | '/$orgUrlSlug/store/$storeUrlSlug/pos/transactions'
+    | '/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug'
+    | '/$orgUrlSlug/store/$storeUrlSlug/products/complimentary'
+    | '/$orgUrlSlug/store/$storeUrlSlug/reviews/new'
+    | '/$orgUrlSlug/store/$storeUrlSlug/reviews/published'
+  id:
+    | '__root__'
+    | '/'
+    | '/_authed'
+    | '/login/_layout'
+    | '/join-team/'
+    | '/_authed/$orgUrlSlug/'
+    | '/login/_layout/'
+    | '/_authed/$orgUrlSlug/settings/'
+    | '/_authed/$orgUrlSlug/store/'
+    | '/_authed/$orgUrlSlug/settings/stores/$storeUrlSlug'
+    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/analytics'
+    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/home'
+    | '/_authed/$orgUrlSlug/settings/organization/'
+    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/'
+    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/bags/$bagId'
+    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/logs/$logId'
+    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/new'
+    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/unresolved'
+    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/promo-codes/$promoCodeSlug'
+    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/promo-codes/new'
+    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/users/$userId'
+    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/assets/'
+    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/bags/'
+    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/checkout-sessions/'
+    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/configuration/'
+    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/dashboard/'
+    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/logs/'
+    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/members/'
+    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/'
+    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/'
+    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/'
+    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/promo-codes/'
+    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/reviews/'
+    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/$reportId'
+    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId'
+    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/edit'
+    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/new'
+    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug/'
+    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/all/'
+    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/cancelled/'
+    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/completed/'
+    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/open/'
+    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/out-for-delivery/'
+    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/ready/'
+    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/refunded/'
+    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/'
+    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/expense/'
+    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/register/'
+    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/settings/'
+    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/'
+    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/'
+    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/'
+    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/reviews/new/'
+    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/reviews/published/'
+  fileRoutesById: FileRoutesById
+}
+export interface RootRouteChildren {
+  IndexRoute: typeof IndexRoute
+  AuthedRoute: typeof AuthedRouteWithChildren
+  LoginLayoutRoute: typeof LoginLayoutRouteWithChildren
+  JoinTeamIndexRoute: typeof JoinTeamIndexRoute
+}
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/_authed': {
+      id: '/_authed'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AuthedRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
       fullPath: '/'
-      preLoaderRoute: typeof IndexImport
-      parentRoute: typeof rootRoute
+      preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/_authed': {
-      id: '/_authed'
-      path: ''
-      fullPath: ''
-      preLoaderRoute: typeof AuthedImport
-      parentRoute: typeof rootRoute
-    }
-    '/login': {
-      id: '/login'
-      path: '/login'
-      fullPath: '/login'
-      preLoaderRoute: typeof LoginImport
-      parentRoute: typeof rootRoute
+    '/join-team/': {
+      id: '/join-team/'
+      path: '/join-team'
+      fullPath: '/join-team/'
+      preLoaderRoute: typeof JoinTeamIndexRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/login/_layout': {
       id: '/login/_layout'
       path: '/login'
       fullPath: '/login'
-      preLoaderRoute: typeof LoginLayoutImport
-      parentRoute: typeof LoginRoute
-    }
-    '/join-team/': {
-      id: '/join-team/'
-      path: '/join-team'
-      fullPath: '/join-team'
-      preLoaderRoute: typeof JoinTeamIndexImport
-      parentRoute: typeof rootRoute
-    }
-    '/_authed/$orgUrlSlug/': {
-      id: '/_authed/$orgUrlSlug/'
-      path: '/$orgUrlSlug'
-      fullPath: '/$orgUrlSlug'
-      preLoaderRoute: typeof AuthedOrgUrlSlugIndexImport
-      parentRoute: typeof AuthedImport
+      preLoaderRoute: typeof LoginLayoutRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/login/_layout/': {
       id: '/login/_layout/'
       path: '/'
       fullPath: '/login/'
-      preLoaderRoute: typeof LoginLayoutIndexImport
-      parentRoute: typeof LoginLayoutImport
+      preLoaderRoute: typeof LoginLayoutIndexRouteImport
+      parentRoute: typeof LoginLayoutRoute
     }
-    '/_authed/$orgUrlSlug/settings/': {
-      id: '/_authed/$orgUrlSlug/settings/'
-      path: '/$orgUrlSlug/settings'
-      fullPath: '/$orgUrlSlug/settings'
-      preLoaderRoute: typeof AuthedOrgUrlSlugSettingsIndexImport
-      parentRoute: typeof AuthedImport
+    '/_authed/$orgUrlSlug/': {
+      id: '/_authed/$orgUrlSlug/'
+      path: '/$orgUrlSlug'
+      fullPath: '/$orgUrlSlug/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugIndexRouteImport
+      parentRoute: typeof AuthedRoute
     }
     '/_authed/$orgUrlSlug/store/': {
       id: '/_authed/$orgUrlSlug/store/'
       path: '/$orgUrlSlug/store'
-      fullPath: '/$orgUrlSlug/store'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreIndexImport
-      parentRoute: typeof AuthedImport
+      fullPath: '/$orgUrlSlug/store/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreIndexRouteImport
+      parentRoute: typeof AuthedRoute
     }
-    '/_authed/$orgUrlSlug/settings/stores/$storeUrlSlug': {
-      id: '/_authed/$orgUrlSlug/settings/stores/$storeUrlSlug'
-      path: '/$orgUrlSlug/settings/stores/$storeUrlSlug'
-      fullPath: '/$orgUrlSlug/settings/stores/$storeUrlSlug'
-      preLoaderRoute: typeof AuthedOrgUrlSlugSettingsStoresStoreUrlSlugImport
-      parentRoute: typeof AuthedImport
+    '/_authed/$orgUrlSlug/settings/': {
+      id: '/_authed/$orgUrlSlug/settings/'
+      path: '/$orgUrlSlug/settings'
+      fullPath: '/$orgUrlSlug/settings/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugSettingsIndexRouteImport
+      parentRoute: typeof AuthedRoute
     }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/analytics': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/analytics'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/analytics'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/analytics'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugAnalyticsImport
-      parentRoute: typeof AuthedImport
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugIndexRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/$orgUrlSlug/settings/organization/': {
+      id: '/_authed/$orgUrlSlug/settings/organization/'
+      path: '/$orgUrlSlug/settings/organization'
+      fullPath: '/$orgUrlSlug/settings/organization/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugSettingsOrganizationIndexRouteImport
+      parentRoute: typeof AuthedRoute
     }
     '/_authed/$orgUrlSlug/store/$storeUrlSlug/home': {
       id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/home'
       path: '/$orgUrlSlug/store/$storeUrlSlug/home'
       fullPath: '/$orgUrlSlug/store/$storeUrlSlug/home'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugHomeImport
-      parentRoute: typeof AuthedImport
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugHomeRouteImport
+      parentRoute: typeof AuthedRoute
     }
-    '/_authed/$orgUrlSlug/settings/organization/': {
-      id: '/_authed/$orgUrlSlug/settings/organization/'
-      path: '/$orgUrlSlug/settings/organization'
-      fullPath: '/$orgUrlSlug/settings/organization'
-      preLoaderRoute: typeof AuthedOrgUrlSlugSettingsOrganizationIndexImport
-      parentRoute: typeof AuthedImport
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/analytics': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/analytics'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/analytics'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/analytics'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugAnalyticsRouteImport
+      parentRoute: typeof AuthedRoute
     }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/'
-      path: '/$orgUrlSlug/store/$storeUrlSlug'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugIndexImport
-      parentRoute: typeof AuthedImport
+    '/_authed/$orgUrlSlug/settings/stores/$storeUrlSlug': {
+      id: '/_authed/$orgUrlSlug/settings/stores/$storeUrlSlug'
+      path: '/$orgUrlSlug/settings/stores/$storeUrlSlug'
+      fullPath: '/$orgUrlSlug/settings/stores/$storeUrlSlug'
+      preLoaderRoute: typeof AuthedOrgUrlSlugSettingsStoresStoreUrlSlugRouteImport
+      parentRoute: typeof AuthedRoute
     }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/bags/$bagId': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/bags/$bagId'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/bags/$bagId'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/bags/$bagId'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugBagsBagIdImport
-      parentRoute: typeof AuthedImport
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/reviews/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/reviews/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/reviews'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/reviews/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugReviewsIndexRouteImport
+      parentRoute: typeof AuthedRoute
     }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/logs/$logId': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/logs/$logId'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/logs/$logId'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/logs/$logId'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugLogsLogIdImport
-      parentRoute: typeof AuthedImport
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/promo-codes/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/promo-codes/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/promo-codes'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/promo-codes/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesIndexRouteImport
+      parentRoute: typeof AuthedRoute
     }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/new': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/new'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/products/new'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/products/new'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsNewImport
-      parentRoute: typeof AuthedImport
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/products'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/products/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsIndexRouteImport
+      parentRoute: typeof AuthedRoute
     }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/unresolved': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/unresolved'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/products/unresolved'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/products/unresolved'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsUnresolvedImport
-      parentRoute: typeof AuthedImport
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/pos'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/pos/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosIndexRouteImport
+      parentRoute: typeof AuthedRoute
     }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/promo-codes/$promoCodeSlug': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/promo-codes/$promoCodeSlug'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/promo-codes/$promoCodeSlug'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/promo-codes/$promoCodeSlug'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesPromoCodeSlugImport
-      parentRoute: typeof AuthedImport
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/orders'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/orders/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersIndexRouteImport
+      parentRoute: typeof AuthedRoute
     }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/promo-codes/new': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/promo-codes/new'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/promo-codes/new'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/promo-codes/new'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesNewImport
-      parentRoute: typeof AuthedImport
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/members/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/members/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/members'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/members/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugMembersIndexRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/logs/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/logs/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/logs'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/logs/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugLogsIndexRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/dashboard/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/dashboard/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/dashboard'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/dashboard/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugDashboardIndexRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/configuration/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/configuration/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/configuration'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/configuration/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugConfigurationIndexRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/checkout-sessions/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/checkout-sessions/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/checkout-sessions'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/checkout-sessions/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugCheckoutSessionsIndexRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/bags/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/bags/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/bags'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/bags/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugBagsIndexRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/assets/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/assets/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/assets'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/assets/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugAssetsIndexRouteImport
+      parentRoute: typeof AuthedRoute
     }
     '/_authed/$orgUrlSlug/store/$storeUrlSlug/users/$userId': {
       id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/users/$userId'
       path: '/$orgUrlSlug/store/$storeUrlSlug/users/$userId'
       fullPath: '/$orgUrlSlug/store/$storeUrlSlug/users/$userId'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugUsersUserIdImport
-      parentRoute: typeof AuthedImport
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugUsersUserIdRouteImport
+      parentRoute: typeof AuthedRoute
     }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/assets/': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/assets/'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/assets'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/assets'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugAssetsIndexImport
-      parentRoute: typeof AuthedImport
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/promo-codes/new': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/promo-codes/new'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/promo-codes/new'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/promo-codes/new'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesNewRouteImport
+      parentRoute: typeof AuthedRoute
     }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/bags/': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/bags/'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/bags'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/bags'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugBagsIndexImport
-      parentRoute: typeof AuthedImport
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/promo-codes/$promoCodeSlug': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/promo-codes/$promoCodeSlug'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/promo-codes/$promoCodeSlug'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/promo-codes/$promoCodeSlug'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesPromoCodeSlugRouteImport
+      parentRoute: typeof AuthedRoute
     }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/checkout-sessions/': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/checkout-sessions/'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/checkout-sessions'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/checkout-sessions'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugCheckoutSessionsIndexImport
-      parentRoute: typeof AuthedImport
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/unresolved': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/unresolved'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/products/unresolved'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/products/unresolved'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsUnresolvedRouteImport
+      parentRoute: typeof AuthedRoute
     }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/configuration/': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/configuration/'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/configuration'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/configuration'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugConfigurationIndexImport
-      parentRoute: typeof AuthedImport
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/new': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/new'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/products/new'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/products/new'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsNewRouteImport
+      parentRoute: typeof AuthedRoute
     }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/dashboard/': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/dashboard/'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/dashboard'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/dashboard'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugDashboardIndexImport
-      parentRoute: typeof AuthedImport
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/logs/$logId': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/logs/$logId'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/logs/$logId'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/logs/$logId'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugLogsLogIdRouteImport
+      parentRoute: typeof AuthedRoute
     }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/logs/': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/logs/'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/logs'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/logs'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugLogsIndexImport
-      parentRoute: typeof AuthedImport
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/bags/$bagId': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/bags/$bagId'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/bags/$bagId'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/bags/$bagId'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugBagsBagIdRouteImport
+      parentRoute: typeof AuthedRoute
     }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/members/': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/members/'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/members'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/members'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugMembersIndexImport
-      parentRoute: typeof AuthedImport
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/reviews/published/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/reviews/published/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/reviews/published'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/reviews/published/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugReviewsPublishedIndexRouteImport
+      parentRoute: typeof AuthedRoute
     }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/orders'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/orders'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersIndexImport
-      parentRoute: typeof AuthedImport
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/reviews/new/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/reviews/new/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/reviews/new'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/reviews/new/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugReviewsNewIndexRouteImport
+      parentRoute: typeof AuthedRoute
     }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/pos'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/pos'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosIndexImport
-      parentRoute: typeof AuthedImport
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/products/complimentary'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsComplimentaryIndexRouteImport
+      parentRoute: typeof AuthedRoute
     }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/products'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/products'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsIndexImport
-      parentRoute: typeof AuthedImport
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsProductSlugIndexRouteImport
+      parentRoute: typeof AuthedRoute
     }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/promo-codes/': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/promo-codes/'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/promo-codes'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/promo-codes'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesIndexImport
-      parentRoute: typeof AuthedImport
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/pos/transactions'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosTransactionsIndexRouteImport
+      parentRoute: typeof AuthedRoute
     }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/reviews/': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/reviews/'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/reviews'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/reviews'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugReviewsIndexImport
-      parentRoute: typeof AuthedImport
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/settings/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/settings/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/pos/settings'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/pos/settings/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosSettingsIndexRouteImport
+      parentRoute: typeof AuthedRoute
     }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/$reportId': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/$reportId'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/$reportId'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/$reportId'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseReportsReportIdImport
-      parentRoute: typeof AuthedImport
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/register/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/register/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/pos/register'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/pos/register/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosRegisterIndexRouteImport
+      parentRoute: typeof AuthedRoute
     }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosTransactionsTransactionIdImport
-      parentRoute: typeof AuthedImport
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/expense/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/expense/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/pos/expense'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/pos/expense/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseIndexRouteImport
+      parentRoute: typeof AuthedRoute
     }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/edit': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/edit'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/edit'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/edit'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsProductSlugEditImport
-      parentRoute: typeof AuthedImport
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseReportsIndexRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/refunded/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/refunded/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/orders/refunded'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/orders/refunded/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersRefundedIndexRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/ready/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/ready/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/orders/ready'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/orders/ready/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersReadyIndexRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/out-for-delivery/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/out-for-delivery/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/orders/out-for-delivery'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/orders/out-for-delivery/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOutForDeliveryIndexRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/open/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/open/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/orders/open'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/orders/open/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOpenIndexRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/completed/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/completed/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/orders/completed'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/orders/completed/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersCompletedIndexRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/cancelled/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/cancelled/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/orders/cancelled'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/orders/cancelled/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersCancelledIndexRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/all/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/all/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/orders/all'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/orders/all/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersAllIndexRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOrderSlugIndexRouteImport
+      parentRoute: typeof AuthedRoute
     }
     '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/new': {
       id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/new'
       path: '/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/new'
       fullPath: '/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/new'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsComplimentaryNewImport
-      parentRoute: typeof AuthedImport
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsComplimentaryNewRouteImport
+      parentRoute: typeof AuthedRoute
     }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug/': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug/'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOrderSlugIndexImport
-      parentRoute: typeof AuthedImport
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/edit': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/edit'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/edit'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/edit'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsProductSlugEditRouteImport
+      parentRoute: typeof AuthedRoute
     }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/all/': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/all/'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/orders/all'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/orders/all'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersAllIndexImport
-      parentRoute: typeof AuthedImport
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosTransactionsTransactionIdRouteImport
+      parentRoute: typeof AuthedRoute
     }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/cancelled/': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/cancelled/'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/orders/cancelled'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/orders/cancelled'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersCancelledIndexImport
-      parentRoute: typeof AuthedImport
-    }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/completed/': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/completed/'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/orders/completed'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/orders/completed'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersCompletedIndexImport
-      parentRoute: typeof AuthedImport
-    }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/open/': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/open/'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/orders/open'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/orders/open'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOpenIndexImport
-      parentRoute: typeof AuthedImport
-    }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/out-for-delivery/': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/out-for-delivery/'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/orders/out-for-delivery'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/orders/out-for-delivery'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOutForDeliveryIndexImport
-      parentRoute: typeof AuthedImport
-    }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/ready/': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/ready/'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/orders/ready'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/orders/ready'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersReadyIndexImport
-      parentRoute: typeof AuthedImport
-    }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/refunded/': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/refunded/'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/orders/refunded'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/orders/refunded'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersRefundedIndexImport
-      parentRoute: typeof AuthedImport
-    }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseReportsIndexImport
-      parentRoute: typeof AuthedImport
-    }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/expense/': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/expense/'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/pos/expense'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/pos/expense'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseIndexImport
-      parentRoute: typeof AuthedImport
-    }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/register/': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/register/'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/pos/register'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/pos/register'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosRegisterIndexImport
-      parentRoute: typeof AuthedImport
-    }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/settings/': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/settings/'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/pos/settings'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/pos/settings'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosSettingsIndexImport
-      parentRoute: typeof AuthedImport
-    }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/pos/transactions'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/pos/transactions'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosTransactionsIndexImport
-      parentRoute: typeof AuthedImport
-    }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsProductSlugIndexImport
-      parentRoute: typeof AuthedImport
-    }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/products/complimentary'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/products/complimentary'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsComplimentaryIndexImport
-      parentRoute: typeof AuthedImport
-    }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/reviews/new/': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/reviews/new/'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/reviews/new'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/reviews/new'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugReviewsNewIndexImport
-      parentRoute: typeof AuthedImport
-    }
-    '/_authed/$orgUrlSlug/store/$storeUrlSlug/reviews/published/': {
-      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/reviews/published/'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/reviews/published'
-      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/reviews/published'
-      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugReviewsPublishedIndexImport
-      parentRoute: typeof AuthedImport
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/$reportId': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/$reportId'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/$reportId'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/$reportId'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseReportsReportIdRouteImport
+      parentRoute: typeof AuthedRoute
     }
   }
 }
-
-// Create and export the route tree
 
 interface AuthedRouteChildren {
   AuthedOrgUrlSlugIndexRoute: typeof AuthedOrgUrlSlugIndexRoute
@@ -992,652 +1252,12 @@ const LoginLayoutRouteWithChildren = LoginLayoutRoute._addFileChildren(
   LoginLayoutRouteChildren,
 )
 
-interface LoginRouteChildren {
-  LoginLayoutRoute: typeof LoginLayoutRouteWithChildren
-}
-
-const LoginRouteChildren: LoginRouteChildren = {
-  LoginLayoutRoute: LoginLayoutRouteWithChildren,
-}
-
-const LoginRouteWithChildren = LoginRoute._addFileChildren(LoginRouteChildren)
-
-export interface FileRoutesByFullPath {
-  '/': typeof IndexRoute
-  '': typeof AuthedRouteWithChildren
-  '/login': typeof LoginLayoutRouteWithChildren
-  '/join-team': typeof JoinTeamIndexRoute
-  '/$orgUrlSlug': typeof AuthedOrgUrlSlugIndexRoute
-  '/login/': typeof LoginLayoutIndexRoute
-  '/$orgUrlSlug/settings': typeof AuthedOrgUrlSlugSettingsIndexRoute
-  '/$orgUrlSlug/store': typeof AuthedOrgUrlSlugStoreIndexRoute
-  '/$orgUrlSlug/settings/stores/$storeUrlSlug': typeof AuthedOrgUrlSlugSettingsStoresStoreUrlSlugRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/analytics': typeof AuthedOrgUrlSlugStoreStoreUrlSlugAnalyticsRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/home': typeof AuthedOrgUrlSlugStoreStoreUrlSlugHomeRoute
-  '/$orgUrlSlug/settings/organization': typeof AuthedOrgUrlSlugSettingsOrganizationIndexRoute
-  '/$orgUrlSlug/store/$storeUrlSlug': typeof AuthedOrgUrlSlugStoreStoreUrlSlugIndexRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/bags/$bagId': typeof AuthedOrgUrlSlugStoreStoreUrlSlugBagsBagIdRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/logs/$logId': typeof AuthedOrgUrlSlugStoreStoreUrlSlugLogsLogIdRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/products/new': typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsNewRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/products/unresolved': typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsUnresolvedRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/promo-codes/$promoCodeSlug': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesPromoCodeSlugRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/promo-codes/new': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesNewRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/users/$userId': typeof AuthedOrgUrlSlugStoreStoreUrlSlugUsersUserIdRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/assets': typeof AuthedOrgUrlSlugStoreStoreUrlSlugAssetsIndexRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/bags': typeof AuthedOrgUrlSlugStoreStoreUrlSlugBagsIndexRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/checkout-sessions': typeof AuthedOrgUrlSlugStoreStoreUrlSlugCheckoutSessionsIndexRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/configuration': typeof AuthedOrgUrlSlugStoreStoreUrlSlugConfigurationIndexRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/dashboard': typeof AuthedOrgUrlSlugStoreStoreUrlSlugDashboardIndexRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/logs': typeof AuthedOrgUrlSlugStoreStoreUrlSlugLogsIndexRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/members': typeof AuthedOrgUrlSlugStoreStoreUrlSlugMembersIndexRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/orders': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersIndexRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/pos': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosIndexRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/products': typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsIndexRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/promo-codes': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesIndexRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/reviews': typeof AuthedOrgUrlSlugStoreStoreUrlSlugReviewsIndexRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/$reportId': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseReportsReportIdRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosTransactionsTransactionIdRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/edit': typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsProductSlugEditRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/new': typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsComplimentaryNewRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOrderSlugIndexRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/orders/all': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersAllIndexRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/orders/cancelled': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersCancelledIndexRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/orders/completed': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersCompletedIndexRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/orders/open': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOpenIndexRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/orders/out-for-delivery': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOutForDeliveryIndexRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/orders/ready': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersReadyIndexRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/orders/refunded': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersRefundedIndexRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseReportsIndexRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/pos/expense': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseIndexRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/pos/register': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosRegisterIndexRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/pos/settings': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosSettingsIndexRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/pos/transactions': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosTransactionsIndexRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug': typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsProductSlugIndexRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/products/complimentary': typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsComplimentaryIndexRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/reviews/new': typeof AuthedOrgUrlSlugStoreStoreUrlSlugReviewsNewIndexRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/reviews/published': typeof AuthedOrgUrlSlugStoreStoreUrlSlugReviewsPublishedIndexRoute
-}
-
-export interface FileRoutesByTo {
-  '/': typeof IndexRoute
-  '': typeof AuthedRouteWithChildren
-  '/login': typeof LoginLayoutIndexRoute
-  '/join-team': typeof JoinTeamIndexRoute
-  '/$orgUrlSlug': typeof AuthedOrgUrlSlugIndexRoute
-  '/$orgUrlSlug/settings': typeof AuthedOrgUrlSlugSettingsIndexRoute
-  '/$orgUrlSlug/store': typeof AuthedOrgUrlSlugStoreIndexRoute
-  '/$orgUrlSlug/settings/stores/$storeUrlSlug': typeof AuthedOrgUrlSlugSettingsStoresStoreUrlSlugRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/analytics': typeof AuthedOrgUrlSlugStoreStoreUrlSlugAnalyticsRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/home': typeof AuthedOrgUrlSlugStoreStoreUrlSlugHomeRoute
-  '/$orgUrlSlug/settings/organization': typeof AuthedOrgUrlSlugSettingsOrganizationIndexRoute
-  '/$orgUrlSlug/store/$storeUrlSlug': typeof AuthedOrgUrlSlugStoreStoreUrlSlugIndexRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/bags/$bagId': typeof AuthedOrgUrlSlugStoreStoreUrlSlugBagsBagIdRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/logs/$logId': typeof AuthedOrgUrlSlugStoreStoreUrlSlugLogsLogIdRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/products/new': typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsNewRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/products/unresolved': typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsUnresolvedRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/promo-codes/$promoCodeSlug': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesPromoCodeSlugRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/promo-codes/new': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesNewRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/users/$userId': typeof AuthedOrgUrlSlugStoreStoreUrlSlugUsersUserIdRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/assets': typeof AuthedOrgUrlSlugStoreStoreUrlSlugAssetsIndexRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/bags': typeof AuthedOrgUrlSlugStoreStoreUrlSlugBagsIndexRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/checkout-sessions': typeof AuthedOrgUrlSlugStoreStoreUrlSlugCheckoutSessionsIndexRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/configuration': typeof AuthedOrgUrlSlugStoreStoreUrlSlugConfigurationIndexRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/dashboard': typeof AuthedOrgUrlSlugStoreStoreUrlSlugDashboardIndexRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/logs': typeof AuthedOrgUrlSlugStoreStoreUrlSlugLogsIndexRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/members': typeof AuthedOrgUrlSlugStoreStoreUrlSlugMembersIndexRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/orders': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersIndexRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/pos': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosIndexRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/products': typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsIndexRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/promo-codes': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesIndexRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/reviews': typeof AuthedOrgUrlSlugStoreStoreUrlSlugReviewsIndexRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/$reportId': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseReportsReportIdRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosTransactionsTransactionIdRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/edit': typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsProductSlugEditRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/new': typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsComplimentaryNewRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOrderSlugIndexRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/orders/all': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersAllIndexRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/orders/cancelled': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersCancelledIndexRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/orders/completed': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersCompletedIndexRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/orders/open': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOpenIndexRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/orders/out-for-delivery': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOutForDeliveryIndexRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/orders/ready': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersReadyIndexRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/orders/refunded': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersRefundedIndexRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseReportsIndexRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/pos/expense': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseIndexRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/pos/register': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosRegisterIndexRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/pos/settings': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosSettingsIndexRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/pos/transactions': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosTransactionsIndexRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug': typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsProductSlugIndexRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/products/complimentary': typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsComplimentaryIndexRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/reviews/new': typeof AuthedOrgUrlSlugStoreStoreUrlSlugReviewsNewIndexRoute
-  '/$orgUrlSlug/store/$storeUrlSlug/reviews/published': typeof AuthedOrgUrlSlugStoreStoreUrlSlugReviewsPublishedIndexRoute
-}
-
-export interface FileRoutesById {
-  __root__: typeof rootRoute
-  '/': typeof IndexRoute
-  '/_authed': typeof AuthedRouteWithChildren
-  '/login': typeof LoginRouteWithChildren
-  '/login/_layout': typeof LoginLayoutRouteWithChildren
-  '/join-team/': typeof JoinTeamIndexRoute
-  '/_authed/$orgUrlSlug/': typeof AuthedOrgUrlSlugIndexRoute
-  '/login/_layout/': typeof LoginLayoutIndexRoute
-  '/_authed/$orgUrlSlug/settings/': typeof AuthedOrgUrlSlugSettingsIndexRoute
-  '/_authed/$orgUrlSlug/store/': typeof AuthedOrgUrlSlugStoreIndexRoute
-  '/_authed/$orgUrlSlug/settings/stores/$storeUrlSlug': typeof AuthedOrgUrlSlugSettingsStoresStoreUrlSlugRoute
-  '/_authed/$orgUrlSlug/store/$storeUrlSlug/analytics': typeof AuthedOrgUrlSlugStoreStoreUrlSlugAnalyticsRoute
-  '/_authed/$orgUrlSlug/store/$storeUrlSlug/home': typeof AuthedOrgUrlSlugStoreStoreUrlSlugHomeRoute
-  '/_authed/$orgUrlSlug/settings/organization/': typeof AuthedOrgUrlSlugSettingsOrganizationIndexRoute
-  '/_authed/$orgUrlSlug/store/$storeUrlSlug/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugIndexRoute
-  '/_authed/$orgUrlSlug/store/$storeUrlSlug/bags/$bagId': typeof AuthedOrgUrlSlugStoreStoreUrlSlugBagsBagIdRoute
-  '/_authed/$orgUrlSlug/store/$storeUrlSlug/logs/$logId': typeof AuthedOrgUrlSlugStoreStoreUrlSlugLogsLogIdRoute
-  '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/new': typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsNewRoute
-  '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/unresolved': typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsUnresolvedRoute
-  '/_authed/$orgUrlSlug/store/$storeUrlSlug/promo-codes/$promoCodeSlug': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesPromoCodeSlugRoute
-  '/_authed/$orgUrlSlug/store/$storeUrlSlug/promo-codes/new': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesNewRoute
-  '/_authed/$orgUrlSlug/store/$storeUrlSlug/users/$userId': typeof AuthedOrgUrlSlugStoreStoreUrlSlugUsersUserIdRoute
-  '/_authed/$orgUrlSlug/store/$storeUrlSlug/assets/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugAssetsIndexRoute
-  '/_authed/$orgUrlSlug/store/$storeUrlSlug/bags/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugBagsIndexRoute
-  '/_authed/$orgUrlSlug/store/$storeUrlSlug/checkout-sessions/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugCheckoutSessionsIndexRoute
-  '/_authed/$orgUrlSlug/store/$storeUrlSlug/configuration/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugConfigurationIndexRoute
-  '/_authed/$orgUrlSlug/store/$storeUrlSlug/dashboard/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugDashboardIndexRoute
-  '/_authed/$orgUrlSlug/store/$storeUrlSlug/logs/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugLogsIndexRoute
-  '/_authed/$orgUrlSlug/store/$storeUrlSlug/members/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugMembersIndexRoute
-  '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersIndexRoute
-  '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosIndexRoute
-  '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsIndexRoute
-  '/_authed/$orgUrlSlug/store/$storeUrlSlug/promo-codes/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesIndexRoute
-  '/_authed/$orgUrlSlug/store/$storeUrlSlug/reviews/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugReviewsIndexRoute
-  '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/$reportId': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseReportsReportIdRoute
-  '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosTransactionsTransactionIdRoute
-  '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/edit': typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsProductSlugEditRoute
-  '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/new': typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsComplimentaryNewRoute
-  '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOrderSlugIndexRoute
-  '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/all/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersAllIndexRoute
-  '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/cancelled/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersCancelledIndexRoute
-  '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/completed/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersCompletedIndexRoute
-  '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/open/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOpenIndexRoute
-  '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/out-for-delivery/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOutForDeliveryIndexRoute
-  '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/ready/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersReadyIndexRoute
-  '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/refunded/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersRefundedIndexRoute
-  '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseReportsIndexRoute
-  '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/expense/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseIndexRoute
-  '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/register/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosRegisterIndexRoute
-  '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/settings/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosSettingsIndexRoute
-  '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosTransactionsIndexRoute
-  '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsProductSlugIndexRoute
-  '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsComplimentaryIndexRoute
-  '/_authed/$orgUrlSlug/store/$storeUrlSlug/reviews/new/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugReviewsNewIndexRoute
-  '/_authed/$orgUrlSlug/store/$storeUrlSlug/reviews/published/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugReviewsPublishedIndexRoute
-}
-
-export interface FileRouteTypes {
-  fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths:
-    | '/'
-    | ''
-    | '/login'
-    | '/join-team'
-    | '/$orgUrlSlug'
-    | '/login/'
-    | '/$orgUrlSlug/settings'
-    | '/$orgUrlSlug/store'
-    | '/$orgUrlSlug/settings/stores/$storeUrlSlug'
-    | '/$orgUrlSlug/store/$storeUrlSlug/analytics'
-    | '/$orgUrlSlug/store/$storeUrlSlug/home'
-    | '/$orgUrlSlug/settings/organization'
-    | '/$orgUrlSlug/store/$storeUrlSlug'
-    | '/$orgUrlSlug/store/$storeUrlSlug/bags/$bagId'
-    | '/$orgUrlSlug/store/$storeUrlSlug/logs/$logId'
-    | '/$orgUrlSlug/store/$storeUrlSlug/products/new'
-    | '/$orgUrlSlug/store/$storeUrlSlug/products/unresolved'
-    | '/$orgUrlSlug/store/$storeUrlSlug/promo-codes/$promoCodeSlug'
-    | '/$orgUrlSlug/store/$storeUrlSlug/promo-codes/new'
-    | '/$orgUrlSlug/store/$storeUrlSlug/users/$userId'
-    | '/$orgUrlSlug/store/$storeUrlSlug/assets'
-    | '/$orgUrlSlug/store/$storeUrlSlug/bags'
-    | '/$orgUrlSlug/store/$storeUrlSlug/checkout-sessions'
-    | '/$orgUrlSlug/store/$storeUrlSlug/configuration'
-    | '/$orgUrlSlug/store/$storeUrlSlug/dashboard'
-    | '/$orgUrlSlug/store/$storeUrlSlug/logs'
-    | '/$orgUrlSlug/store/$storeUrlSlug/members'
-    | '/$orgUrlSlug/store/$storeUrlSlug/orders'
-    | '/$orgUrlSlug/store/$storeUrlSlug/pos'
-    | '/$orgUrlSlug/store/$storeUrlSlug/products'
-    | '/$orgUrlSlug/store/$storeUrlSlug/promo-codes'
-    | '/$orgUrlSlug/store/$storeUrlSlug/reviews'
-    | '/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/$reportId'
-    | '/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId'
-    | '/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/edit'
-    | '/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/new'
-    | '/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug'
-    | '/$orgUrlSlug/store/$storeUrlSlug/orders/all'
-    | '/$orgUrlSlug/store/$storeUrlSlug/orders/cancelled'
-    | '/$orgUrlSlug/store/$storeUrlSlug/orders/completed'
-    | '/$orgUrlSlug/store/$storeUrlSlug/orders/open'
-    | '/$orgUrlSlug/store/$storeUrlSlug/orders/out-for-delivery'
-    | '/$orgUrlSlug/store/$storeUrlSlug/orders/ready'
-    | '/$orgUrlSlug/store/$storeUrlSlug/orders/refunded'
-    | '/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports'
-    | '/$orgUrlSlug/store/$storeUrlSlug/pos/expense'
-    | '/$orgUrlSlug/store/$storeUrlSlug/pos/register'
-    | '/$orgUrlSlug/store/$storeUrlSlug/pos/settings'
-    | '/$orgUrlSlug/store/$storeUrlSlug/pos/transactions'
-    | '/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug'
-    | '/$orgUrlSlug/store/$storeUrlSlug/products/complimentary'
-    | '/$orgUrlSlug/store/$storeUrlSlug/reviews/new'
-    | '/$orgUrlSlug/store/$storeUrlSlug/reviews/published'
-  fileRoutesByTo: FileRoutesByTo
-  to:
-    | '/'
-    | ''
-    | '/login'
-    | '/join-team'
-    | '/$orgUrlSlug'
-    | '/$orgUrlSlug/settings'
-    | '/$orgUrlSlug/store'
-    | '/$orgUrlSlug/settings/stores/$storeUrlSlug'
-    | '/$orgUrlSlug/store/$storeUrlSlug/analytics'
-    | '/$orgUrlSlug/store/$storeUrlSlug/home'
-    | '/$orgUrlSlug/settings/organization'
-    | '/$orgUrlSlug/store/$storeUrlSlug'
-    | '/$orgUrlSlug/store/$storeUrlSlug/bags/$bagId'
-    | '/$orgUrlSlug/store/$storeUrlSlug/logs/$logId'
-    | '/$orgUrlSlug/store/$storeUrlSlug/products/new'
-    | '/$orgUrlSlug/store/$storeUrlSlug/products/unresolved'
-    | '/$orgUrlSlug/store/$storeUrlSlug/promo-codes/$promoCodeSlug'
-    | '/$orgUrlSlug/store/$storeUrlSlug/promo-codes/new'
-    | '/$orgUrlSlug/store/$storeUrlSlug/users/$userId'
-    | '/$orgUrlSlug/store/$storeUrlSlug/assets'
-    | '/$orgUrlSlug/store/$storeUrlSlug/bags'
-    | '/$orgUrlSlug/store/$storeUrlSlug/checkout-sessions'
-    | '/$orgUrlSlug/store/$storeUrlSlug/configuration'
-    | '/$orgUrlSlug/store/$storeUrlSlug/dashboard'
-    | '/$orgUrlSlug/store/$storeUrlSlug/logs'
-    | '/$orgUrlSlug/store/$storeUrlSlug/members'
-    | '/$orgUrlSlug/store/$storeUrlSlug/orders'
-    | '/$orgUrlSlug/store/$storeUrlSlug/pos'
-    | '/$orgUrlSlug/store/$storeUrlSlug/products'
-    | '/$orgUrlSlug/store/$storeUrlSlug/promo-codes'
-    | '/$orgUrlSlug/store/$storeUrlSlug/reviews'
-    | '/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/$reportId'
-    | '/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId'
-    | '/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/edit'
-    | '/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/new'
-    | '/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug'
-    | '/$orgUrlSlug/store/$storeUrlSlug/orders/all'
-    | '/$orgUrlSlug/store/$storeUrlSlug/orders/cancelled'
-    | '/$orgUrlSlug/store/$storeUrlSlug/orders/completed'
-    | '/$orgUrlSlug/store/$storeUrlSlug/orders/open'
-    | '/$orgUrlSlug/store/$storeUrlSlug/orders/out-for-delivery'
-    | '/$orgUrlSlug/store/$storeUrlSlug/orders/ready'
-    | '/$orgUrlSlug/store/$storeUrlSlug/orders/refunded'
-    | '/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports'
-    | '/$orgUrlSlug/store/$storeUrlSlug/pos/expense'
-    | '/$orgUrlSlug/store/$storeUrlSlug/pos/register'
-    | '/$orgUrlSlug/store/$storeUrlSlug/pos/settings'
-    | '/$orgUrlSlug/store/$storeUrlSlug/pos/transactions'
-    | '/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug'
-    | '/$orgUrlSlug/store/$storeUrlSlug/products/complimentary'
-    | '/$orgUrlSlug/store/$storeUrlSlug/reviews/new'
-    | '/$orgUrlSlug/store/$storeUrlSlug/reviews/published'
-  id:
-    | '__root__'
-    | '/'
-    | '/_authed'
-    | '/login'
-    | '/login/_layout'
-    | '/join-team/'
-    | '/_authed/$orgUrlSlug/'
-    | '/login/_layout/'
-    | '/_authed/$orgUrlSlug/settings/'
-    | '/_authed/$orgUrlSlug/store/'
-    | '/_authed/$orgUrlSlug/settings/stores/$storeUrlSlug'
-    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/analytics'
-    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/home'
-    | '/_authed/$orgUrlSlug/settings/organization/'
-    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/'
-    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/bags/$bagId'
-    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/logs/$logId'
-    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/new'
-    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/unresolved'
-    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/promo-codes/$promoCodeSlug'
-    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/promo-codes/new'
-    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/users/$userId'
-    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/assets/'
-    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/bags/'
-    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/checkout-sessions/'
-    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/configuration/'
-    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/dashboard/'
-    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/logs/'
-    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/members/'
-    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/'
-    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/'
-    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/'
-    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/promo-codes/'
-    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/reviews/'
-    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/$reportId'
-    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId'
-    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/edit'
-    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/new'
-    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug/'
-    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/all/'
-    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/cancelled/'
-    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/completed/'
-    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/open/'
-    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/out-for-delivery/'
-    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/ready/'
-    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/refunded/'
-    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/'
-    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/expense/'
-    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/register/'
-    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/settings/'
-    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/'
-    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/'
-    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/'
-    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/reviews/new/'
-    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/reviews/published/'
-  fileRoutesById: FileRoutesById
-}
-
-export interface RootRouteChildren {
-  IndexRoute: typeof IndexRoute
-  AuthedRoute: typeof AuthedRouteWithChildren
-  LoginRoute: typeof LoginRouteWithChildren
-  JoinTeamIndexRoute: typeof JoinTeamIndexRoute
-}
-
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthedRoute: AuthedRouteWithChildren,
-  LoginRoute: LoginRouteWithChildren,
+  LoginLayoutRoute: LoginLayoutRouteWithChildren,
   JoinTeamIndexRoute: JoinTeamIndexRoute,
 }
-
-export const routeTree = rootRoute
+export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-/* ROUTE_MANIFEST_START
-{
-  "routes": {
-    "__root__": {
-      "filePath": "__root.tsx",
-      "children": [
-        "/",
-        "/_authed",
-        "/login",
-        "/join-team/"
-      ]
-    },
-    "/": {
-      "filePath": "index.tsx"
-    },
-    "/_authed": {
-      "filePath": "_authed.tsx",
-      "children": [
-        "/_authed/$orgUrlSlug/",
-        "/_authed/$orgUrlSlug/settings/",
-        "/_authed/$orgUrlSlug/store/",
-        "/_authed/$orgUrlSlug/settings/stores/$storeUrlSlug",
-        "/_authed/$orgUrlSlug/store/$storeUrlSlug/analytics",
-        "/_authed/$orgUrlSlug/store/$storeUrlSlug/home",
-        "/_authed/$orgUrlSlug/settings/organization/",
-        "/_authed/$orgUrlSlug/store/$storeUrlSlug/",
-        "/_authed/$orgUrlSlug/store/$storeUrlSlug/bags/$bagId",
-        "/_authed/$orgUrlSlug/store/$storeUrlSlug/logs/$logId",
-        "/_authed/$orgUrlSlug/store/$storeUrlSlug/products/new",
-        "/_authed/$orgUrlSlug/store/$storeUrlSlug/products/unresolved",
-        "/_authed/$orgUrlSlug/store/$storeUrlSlug/promo-codes/$promoCodeSlug",
-        "/_authed/$orgUrlSlug/store/$storeUrlSlug/promo-codes/new",
-        "/_authed/$orgUrlSlug/store/$storeUrlSlug/users/$userId",
-        "/_authed/$orgUrlSlug/store/$storeUrlSlug/assets/",
-        "/_authed/$orgUrlSlug/store/$storeUrlSlug/bags/",
-        "/_authed/$orgUrlSlug/store/$storeUrlSlug/checkout-sessions/",
-        "/_authed/$orgUrlSlug/store/$storeUrlSlug/configuration/",
-        "/_authed/$orgUrlSlug/store/$storeUrlSlug/dashboard/",
-        "/_authed/$orgUrlSlug/store/$storeUrlSlug/logs/",
-        "/_authed/$orgUrlSlug/store/$storeUrlSlug/members/",
-        "/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/",
-        "/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/",
-        "/_authed/$orgUrlSlug/store/$storeUrlSlug/products/",
-        "/_authed/$orgUrlSlug/store/$storeUrlSlug/promo-codes/",
-        "/_authed/$orgUrlSlug/store/$storeUrlSlug/reviews/",
-        "/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/$reportId",
-        "/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId",
-        "/_authed/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/edit",
-        "/_authed/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/new",
-        "/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug/",
-        "/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/all/",
-        "/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/cancelled/",
-        "/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/completed/",
-        "/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/open/",
-        "/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/out-for-delivery/",
-        "/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/ready/",
-        "/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/refunded/",
-        "/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/",
-        "/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/expense/",
-        "/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/register/",
-        "/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/settings/",
-        "/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/",
-        "/_authed/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/",
-        "/_authed/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/",
-        "/_authed/$orgUrlSlug/store/$storeUrlSlug/reviews/new/",
-        "/_authed/$orgUrlSlug/store/$storeUrlSlug/reviews/published/"
-      ]
-    },
-    "/login": {
-      "filePath": "login",
-      "children": [
-        "/login/_layout"
-      ]
-    },
-    "/login/_layout": {
-      "filePath": "login/_layout.tsx",
-      "parent": "/login",
-      "children": [
-        "/login/_layout/"
-      ]
-    },
-    "/join-team/": {
-      "filePath": "join-team.index.tsx"
-    },
-    "/_authed/$orgUrlSlug/": {
-      "filePath": "_authed/$orgUrlSlug/index.tsx",
-      "parent": "/_authed"
-    },
-    "/login/_layout/": {
-      "filePath": "login/_layout.index.tsx",
-      "parent": "/login/_layout"
-    },
-    "/_authed/$orgUrlSlug/settings/": {
-      "filePath": "_authed/$orgUrlSlug/settings/index.tsx",
-      "parent": "/_authed"
-    },
-    "/_authed/$orgUrlSlug/store/": {
-      "filePath": "_authed/$orgUrlSlug/store/index.tsx",
-      "parent": "/_authed"
-    },
-    "/_authed/$orgUrlSlug/settings/stores/$storeUrlSlug": {
-      "filePath": "_authed/$orgUrlSlug/settings/stores/$storeUrlSlug.tsx",
-      "parent": "/_authed"
-    },
-    "/_authed/$orgUrlSlug/store/$storeUrlSlug/analytics": {
-      "filePath": "_authed/$orgUrlSlug/store/$storeUrlSlug/analytics.tsx",
-      "parent": "/_authed"
-    },
-    "/_authed/$orgUrlSlug/store/$storeUrlSlug/home": {
-      "filePath": "_authed/$orgUrlSlug/store/$storeUrlSlug/home.tsx",
-      "parent": "/_authed"
-    },
-    "/_authed/$orgUrlSlug/settings/organization/": {
-      "filePath": "_authed/$orgUrlSlug/settings/organization/index.tsx",
-      "parent": "/_authed"
-    },
-    "/_authed/$orgUrlSlug/store/$storeUrlSlug/": {
-      "filePath": "_authed/$orgUrlSlug/store/$storeUrlSlug/index.tsx",
-      "parent": "/_authed"
-    },
-    "/_authed/$orgUrlSlug/store/$storeUrlSlug/bags/$bagId": {
-      "filePath": "_authed/$orgUrlSlug/store/$storeUrlSlug/bags.$bagId.tsx",
-      "parent": "/_authed"
-    },
-    "/_authed/$orgUrlSlug/store/$storeUrlSlug/logs/$logId": {
-      "filePath": "_authed/$orgUrlSlug/store/$storeUrlSlug/logs.$logId.tsx",
-      "parent": "/_authed"
-    },
-    "/_authed/$orgUrlSlug/store/$storeUrlSlug/products/new": {
-      "filePath": "_authed/$orgUrlSlug/store/$storeUrlSlug/products/new.tsx",
-      "parent": "/_authed"
-    },
-    "/_authed/$orgUrlSlug/store/$storeUrlSlug/products/unresolved": {
-      "filePath": "_authed/$orgUrlSlug/store/$storeUrlSlug/products/unresolved.tsx",
-      "parent": "/_authed"
-    },
-    "/_authed/$orgUrlSlug/store/$storeUrlSlug/promo-codes/$promoCodeSlug": {
-      "filePath": "_authed/$orgUrlSlug/store/$storeUrlSlug/promo-codes/$promoCodeSlug.tsx",
-      "parent": "/_authed"
-    },
-    "/_authed/$orgUrlSlug/store/$storeUrlSlug/promo-codes/new": {
-      "filePath": "_authed/$orgUrlSlug/store/$storeUrlSlug/promo-codes/new.tsx",
-      "parent": "/_authed"
-    },
-    "/_authed/$orgUrlSlug/store/$storeUrlSlug/users/$userId": {
-      "filePath": "_authed/$orgUrlSlug/store/$storeUrlSlug/users.$userId.tsx",
-      "parent": "/_authed"
-    },
-    "/_authed/$orgUrlSlug/store/$storeUrlSlug/assets/": {
-      "filePath": "_authed/$orgUrlSlug/store/$storeUrlSlug/assets.index.tsx",
-      "parent": "/_authed"
-    },
-    "/_authed/$orgUrlSlug/store/$storeUrlSlug/bags/": {
-      "filePath": "_authed/$orgUrlSlug/store/$storeUrlSlug/bags.index.tsx",
-      "parent": "/_authed"
-    },
-    "/_authed/$orgUrlSlug/store/$storeUrlSlug/checkout-sessions/": {
-      "filePath": "_authed/$orgUrlSlug/store/$storeUrlSlug/checkout-sessions.index.tsx",
-      "parent": "/_authed"
-    },
-    "/_authed/$orgUrlSlug/store/$storeUrlSlug/configuration/": {
-      "filePath": "_authed/$orgUrlSlug/store/$storeUrlSlug/configuration.index.tsx",
-      "parent": "/_authed"
-    },
-    "/_authed/$orgUrlSlug/store/$storeUrlSlug/dashboard/": {
-      "filePath": "_authed/$orgUrlSlug/store/$storeUrlSlug/dashboard.index.tsx",
-      "parent": "/_authed"
-    },
-    "/_authed/$orgUrlSlug/store/$storeUrlSlug/logs/": {
-      "filePath": "_authed/$orgUrlSlug/store/$storeUrlSlug/logs.index.tsx",
-      "parent": "/_authed"
-    },
-    "/_authed/$orgUrlSlug/store/$storeUrlSlug/members/": {
-      "filePath": "_authed/$orgUrlSlug/store/$storeUrlSlug/members.index.tsx",
-      "parent": "/_authed"
-    },
-    "/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/": {
-      "filePath": "_authed/$orgUrlSlug/store/$storeUrlSlug/orders/index.tsx",
-      "parent": "/_authed"
-    },
-    "/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/": {
-      "filePath": "_authed/$orgUrlSlug/store/$storeUrlSlug/pos/index.tsx",
-      "parent": "/_authed"
-    },
-    "/_authed/$orgUrlSlug/store/$storeUrlSlug/products/": {
-      "filePath": "_authed/$orgUrlSlug/store/$storeUrlSlug/products/index.tsx",
-      "parent": "/_authed"
-    },
-    "/_authed/$orgUrlSlug/store/$storeUrlSlug/promo-codes/": {
-      "filePath": "_authed/$orgUrlSlug/store/$storeUrlSlug/promo-codes/index.tsx",
-      "parent": "/_authed"
-    },
-    "/_authed/$orgUrlSlug/store/$storeUrlSlug/reviews/": {
-      "filePath": "_authed/$orgUrlSlug/store/$storeUrlSlug/reviews/index.tsx",
-      "parent": "/_authed"
-    },
-    "/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/$reportId": {
-      "filePath": "_authed/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/$reportId.tsx",
-      "parent": "/_authed"
-    },
-    "/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId": {
-      "filePath": "_authed/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId.tsx",
-      "parent": "/_authed"
-    },
-    "/_authed/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/edit": {
-      "filePath": "_authed/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/edit.tsx",
-      "parent": "/_authed"
-    },
-    "/_authed/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/new": {
-      "filePath": "_authed/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/new.tsx",
-      "parent": "/_authed"
-    },
-    "/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug/": {
-      "filePath": "_authed/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug/index.tsx",
-      "parent": "/_authed"
-    },
-    "/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/all/": {
-      "filePath": "_authed/$orgUrlSlug/store/$storeUrlSlug/orders/all.index.tsx",
-      "parent": "/_authed"
-    },
-    "/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/cancelled/": {
-      "filePath": "_authed/$orgUrlSlug/store/$storeUrlSlug/orders/cancelled.index.tsx",
-      "parent": "/_authed"
-    },
-    "/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/completed/": {
-      "filePath": "_authed/$orgUrlSlug/store/$storeUrlSlug/orders/completed.index.tsx",
-      "parent": "/_authed"
-    },
-    "/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/open/": {
-      "filePath": "_authed/$orgUrlSlug/store/$storeUrlSlug/orders/open.index.tsx",
-      "parent": "/_authed"
-    },
-    "/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/out-for-delivery/": {
-      "filePath": "_authed/$orgUrlSlug/store/$storeUrlSlug/orders/out-for-delivery.index.tsx",
-      "parent": "/_authed"
-    },
-    "/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/ready/": {
-      "filePath": "_authed/$orgUrlSlug/store/$storeUrlSlug/orders/ready.index.tsx",
-      "parent": "/_authed"
-    },
-    "/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/refunded/": {
-      "filePath": "_authed/$orgUrlSlug/store/$storeUrlSlug/orders/refunded.index.tsx",
-      "parent": "/_authed"
-    },
-    "/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/": {
-      "filePath": "_authed/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports.index.tsx",
-      "parent": "/_authed"
-    },
-    "/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/expense/": {
-      "filePath": "_authed/$orgUrlSlug/store/$storeUrlSlug/pos/expense.index.tsx",
-      "parent": "/_authed"
-    },
-    "/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/register/": {
-      "filePath": "_authed/$orgUrlSlug/store/$storeUrlSlug/pos/register.index.tsx",
-      "parent": "/_authed"
-    },
-    "/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/settings/": {
-      "filePath": "_authed/$orgUrlSlug/store/$storeUrlSlug/pos/settings.index.tsx",
-      "parent": "/_authed"
-    },
-    "/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/": {
-      "filePath": "_authed/$orgUrlSlug/store/$storeUrlSlug/pos/transactions.index.tsx",
-      "parent": "/_authed"
-    },
-    "/_authed/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/": {
-      "filePath": "_authed/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/index.tsx",
-      "parent": "/_authed"
-    },
-    "/_authed/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/": {
-      "filePath": "_authed/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/index.tsx",
-      "parent": "/_authed"
-    },
-    "/_authed/$orgUrlSlug/store/$storeUrlSlug/reviews/new/": {
-      "filePath": "_authed/$orgUrlSlug/store/$storeUrlSlug/reviews/new.index.tsx",
-      "parent": "/_authed"
-    },
-    "/_authed/$orgUrlSlug/store/$storeUrlSlug/reviews/published/": {
-      "filePath": "_authed/$orgUrlSlug/store/$storeUrlSlug/reviews/published.index.tsx",
-      "parent": "/_authed"
-    }
-  }
-}
-ROUTE_MANIFEST_END */

@@ -4,7 +4,7 @@ import {
   createRootRoute,
   createRootRouteWithContext,
 } from "@tanstack/react-router";
-import { Scripts } from "@tanstack/start";
+
 import { TanStackRouterDevtools } from "@tanstack/router-devtools";
 import { QueryClient } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/sonner";
@@ -72,7 +72,6 @@ function RootDocument({ children }: { children: React.ReactNode }) {
       <Toaster expand />
       {children}
       <ScrollRestoration />
-      <Scripts />
     </main>
   );
 }

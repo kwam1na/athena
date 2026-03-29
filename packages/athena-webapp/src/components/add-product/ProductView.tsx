@@ -67,11 +67,11 @@ function ProductViewContent() {
   const updateSku = useMutation(api.inventory.products.updateSku);
 
   const uploadProductSkuImages = useAction(
-    api.inventory.productSku.uploadImages
+    api.inventory.productSku.uploadImages,
   );
 
   const deleteProductSkuImages = useAction(
-    api.inventory.productSku.deleteImages
+    api.inventory.productSku.deleteImages,
   );
 
   const updateProductSku = useMutation(api.inventory.productSku.update);
@@ -146,8 +146,8 @@ function ProductViewContent() {
 
       await Promise.all(
         productVariants.map((variant) =>
-          createVariantSku(product!._id, variant)
-        )
+          createVariantSku(product!._id, variant),
+        ),
       );
 
       toast.success(`Product created`);
@@ -204,12 +204,12 @@ function ProductViewContent() {
           } else {
             return createVariantSku(_productId, variant);
           }
-        })
+        }),
       );
 
       // Remove variants marked for deletion from the state
       updateProductVariants((prevVariants) =>
-        prevVariants.filter((variant) => !variant.markedForDeletion)
+        prevVariants.filter((variant) => !variant.markedForDeletion),
       );
 
       if (res.some((r: any) => r === false)) {
@@ -430,7 +430,7 @@ function ProductViewContent() {
           subcategoryId: updatedProductData.subcategoryId as Id<"subcategory">,
         });
         toast.success(
-          `Product visibility set to ${isVisible ? "visible" : "hidden"}`
+          `Product visibility set to ${isVisible ? "visible" : "hidden"}`,
         );
       } catch (e) {
         toast.error("Something went wrong", {
