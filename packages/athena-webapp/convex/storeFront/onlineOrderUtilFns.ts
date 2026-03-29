@@ -390,11 +390,9 @@ export const sendOrderUpdateEmail = action({
       return { success: true, message: "Cancelled email sent" };
     }
 
-    /* v8 ignore start -- defensive fallback when emailResult shape is unexpected */
     return {
       success: false,
       message: "Email sending failed",
     };
-    /* v8 ignore stop */
   },
 });

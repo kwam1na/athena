@@ -12,12 +12,12 @@ const rewardsRoutes: HonoWithConvex<ActionCtx> = new Hono();
 
 // Get user's current points
 rewardsRoutes.get("/points", async (c) => {
-  const userId = await getStorefrontUserFromRequest(c);
+  const userId = getStorefrontUserFromRequest(c);
   if (!userId || userId.toString().startsWith("guest")) {
     return c.json({ points: 0 });
   }
 
-  const { storeId } = await getStoreDataFromRequest(c);
+  const { storeId } = getStoreDataFromRequest(c);
 
   if (!storeId) {
     return c.json({ error: "Store ID is required" }, 400);
@@ -33,7 +33,7 @@ rewardsRoutes.get("/points", async (c) => {
 
 // Get user's point history
 rewardsRoutes.get("/history", async (c) => {
-  const userId = await getStorefrontUserFromRequest(c);
+  const userId = getStorefrontUserFromRequest(c);
   if (!userId || userId.toString().startsWith("guest")) {
     return c.json({ transactions: [] });
   }
@@ -50,7 +50,7 @@ rewardsRoutes.get("/history", async (c) => {
 
 // Get available reward tiers
 rewardsRoutes.get("/tiers", async (c) => {
-  const { storeId } = await getStoreDataFromRequest(c);
+  const { storeId } = getStoreDataFromRequest(c);
   if (!storeId) {
     return c.json({ error: "Store ID is required" }, 400);
   }
@@ -64,12 +64,12 @@ rewardsRoutes.get("/tiers", async (c) => {
 
 // Redeem points for a reward
 rewardsRoutes.post("/redeem", async (c) => {
-  const userId = await getStorefrontUserFromRequest(c);
+  const userId = getStorefrontUserFromRequest(c);
   if (!userId || userId.toString().startsWith("guest")) {
     return c.json({ error: "Must be logged in to redeem points" }, 401);
   }
 
-  const { storeId } = await getStoreDataFromRequest(c);
+  const { storeId } = getStoreDataFromRequest(c);
   if (!storeId) {
     return c.json({ error: "Store ID is required" }, 400);
   }
@@ -90,7 +90,7 @@ rewardsRoutes.post("/redeem", async (c) => {
 
 // Add endpoints for past eligible orders and awarding points for them
 rewardsRoutes.get("/eligible-past-orders", async (c) => {
-  const userId = await getStorefrontUserFromRequest(c);
+  const userId = getStorefrontUserFromRequest(c);
   if (!userId || userId.toString().startsWith("guest")) {
     return c.json({ error: "Must be logged in to view eligible orders" }, 401);
   }
@@ -112,7 +112,7 @@ rewardsRoutes.get("/eligible-past-orders", async (c) => {
 });
 
 rewardsRoutes.post("/award-past-order", async (c) => {
-  const userId = await getStorefrontUserFromRequest(c);
+  const userId = getStorefrontUserFromRequest(c);
   if (!userId || userId.toString().startsWith("guest")) {
     return c.json({ error: "Must be logged in to award points" }, 401);
   }

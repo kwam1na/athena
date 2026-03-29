@@ -16,14 +16,14 @@ const userOffersRoutes: HonoWithConvex<ActionCtx> = new Hono();
  */
 userOffersRoutes.get("/", async (c) => {
   try {
-    const userId = await getStorefrontUserFromRequest(c);
+    const userId = getStorefrontUserFromRequest(c);
 
     if (!userId) {
       return c.json({ error: "User ID is required" }, 400);
     }
 
     // Get store data
-    const { storeId } = await getStoreDataFromRequest(c);
+    const { storeId } = getStoreDataFromRequest(c);
 
     if (!storeId) {
       return c.json({ error: "Store ID is required" }, 400);
