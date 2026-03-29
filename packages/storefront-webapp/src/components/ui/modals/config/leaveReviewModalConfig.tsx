@@ -10,7 +10,7 @@ export interface WelcomeBackModalConfig {
 
 // Default background image URL
 export const defaultBackgroundImageUrl =
-  "https://athena-amzn-bucket.s3.eu-west-1.amazonaws.com/stores/nn7byz68a3j4tfjvgdf9evpt3n78kk38/products/n5790y3zfjn41k43ghjtqhjbxh7c5n5j/66093c1a-01c0-4f90-5e91-4f91231e906a.webp";
+  "https://images.wigclub.store/stores/nn7byz68a3j4tfjvgdf9evpt3n78kk38/products/n5790y3zfjn41k43ghjtqhjbxh7c5n5j/66093c1a-01c0-4f90-5e91-4f91231e906a.webp";
 
 // Modal configurations
 export const welcomeBackConfigs: WelcomeBackModalConfig[] = [

@@ -21,7 +21,7 @@ import { getProductDiscountValue } from "../inventory/utils";
 const entity = "offer" as const;
 
 const heroImageUrl =
-  "https://athena-amzn-bucket.s3.eu-west-1.amazonaws.com/stores/nn7byz68a3j4tfjvgdf9evpt3n78kk38/assets/a0171a4f-036a-4928-3387-8b578e4f297d.webp";
+  "https://images.wigclub.store/stores/nn7byz68a3j4tfjvgdf9evpt3n78kk38/assets/a0171a4f-036a-4928-3387-8b578e4f297d.webp";
 
 // Email validation with Zod
 const emailSchema = z
