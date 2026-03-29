@@ -1,8 +1,4 @@
-import {
-  Outlet,
-  ScrollRestoration,
-  createRootRoute,
-} from "@tanstack/react-router";
+import { Outlet, createRootRoute } from "@tanstack/react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import NavigationBar from "@/components/navigation-bar/NavigationBar";
 import { StoreProvider, useStoreContext } from "@/contexts/StoreContext";
@@ -12,8 +8,6 @@ import NotFound from "@/components/states/not-found/NotFound";
 import { MaintenanceMode } from "@/components/states/maintenance/Maintenance";
 import { isInMaintenanceMode } from "@/lib/maintenanceUtils";
 import { ErrorBoundary } from "@/components/states/error/ErrorBoundary";
-import { useAuth } from "@/hooks/useAuth";
-import { PostHogProvider } from "posthog-js/react";
 import {
   NavigationBarProvider,
   useNavigationBarContext,
@@ -98,17 +92,8 @@ const queryClient = new QueryClient({
 
 function RootDocument({ children }: { children: React.ReactNode }) {
   const { store } = useStoreContext();
-  const { storeFrontUserId } = useAuth();
 
-  const userIds = [
-    "kh7dn0q87d7jj7nxh78vbmhck97g5d6g",
-    "md72weypcwt2mgjmxsbayxdpt57jnwze",
-  ];
-
-  const canBypassMaintenanceMode =
-    storeFrontUserId && userIds.includes(storeFrontUserId as string);
-
-  if (isInMaintenanceMode(store?.config) && !canBypassMaintenanceMode) {
+  if (isInMaintenanceMode(store?.config)) {
     return <MaintenanceMode />;
   }
 
@@ -118,7 +103,6 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         <Toaster />
         {children}
       </QueryClientProvider>
-      <ScrollRestoration />
     </div>
   );
 }
