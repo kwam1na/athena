@@ -1,8 +1,8 @@
 import { internalMutation } from "../_generated/server";
 import { v } from "convex/values";
 
-const OLD_PREFIX = "https://athena-amzn-bucket.s3.eu-west-1.amazonaws.com/";
-const NEW_PREFIX = "https://images.wigclub.store/";
+const OLD_PREFIX = `https://${process.env.AWS_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/`;
+const NEW_PREFIX = `${process.env.IMAGES_URL}`;
 const BATCH_SIZE = 100; // Stay well within Convex transaction limits
 
 // Migrate productSku image URLs — run repeatedly until isDone: true
@@ -21,13 +21,13 @@ export const migrateProductSkuImages = internalMutation({
       if (!Array.isArray(sku.images)) continue;
 
       const hasOldUrls = sku.images.some(
-        (img: string) => typeof img === "string" && img.startsWith(OLD_PREFIX)
+        (img: string) => typeof img === "string" && img.startsWith(OLD_PREFIX),
       );
 
       if (!hasOldUrls) continue;
 
       const newImages = sku.images.map((img: string) =>
-        typeof img === "string" ? img.replace(OLD_PREFIX, NEW_PREFIX) : img
+        typeof img === "string" ? img.replace(OLD_PREFIX, NEW_PREFIX) : img,
       );
 
       await ctx.db.patch(sku._id, { images: newImages });

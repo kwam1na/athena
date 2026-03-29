@@ -51,8 +51,6 @@ export async function getActiveCheckoutSession(): Promise<CheckoutSession | null
     throw new Error("Error loading active session.");
   }
 
-  console.log("returning res", res);
-
   return res;
 }
 
