@@ -55,7 +55,7 @@ export default function OrderEmail({
     {
       text: "Sample Product",
       image:
-        "https://athena-amzn-bucket.s3.eu-west-1.amazonaws.com/stores/nn7byz68a3j4tfjvgdf9evpt3n78kk38/assets/1d23a4ff-7f3c-4c8e-c7d2-6efc6a217079.webp",
+        "https://images.wigclub.store/stores/nn7byz68a3j4tfjvgdf9evpt3n78kk38/assets/1d23a4ff-7f3c-4c8e-c7d2-6efc6a217079.webp",
       price: "$50.00",
       discountedPrice: "$45.00",
       savings: "$10.00",
@@ -66,7 +66,7 @@ export default function OrderEmail({
     {
       text: "Another Product",
       image:
-        "https://athena-amzn-bucket.s3.eu-west-1.amazonaws.com/stores/nn7byz68a3j4tfjvgdf9evpt3n78kk38/assets/1d23a4ff-7f3c-4c8e-c7d2-6efc6a217079.webp",
+        "https://images.wigclub.store/stores/nn7byz68a3j4tfjvgdf9evpt3n78kk38/assets/1d23a4ff-7f3c-4c8e-c7d2-6efc6a217079.webp",
       price: "$30.00",
       quantity: "1",
       color: "Brown",
@@ -83,7 +83,7 @@ export default function OrderEmail({
       <Body style={main}>
         <Container style={container}>
           <Img
-            src="https://athena-amzn-bucket.s3.eu-west-1.amazonaws.com/stores/nn7byz68a3j4tfjvgdf9evpt3n78kk38/assets/1d23a4ff-7f3c-4c8e-c7d2-6efc6a217079.webp"
+            src="https://images.wigclub.store/stores/nn7byz68a3j4tfjvgdf9evpt3n78kk38/assets/1d23a4ff-7f3c-4c8e-c7d2-6efc6a217079.webp"
             alt="Wigclub"
             style={logo}
           />
