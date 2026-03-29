@@ -8,7 +8,7 @@ import { getStoreDataFromRequest } from "../../../utils";
 const bannerMessageRoutes: HonoWithConvex<ActionCtx> = new Hono();
 
 bannerMessageRoutes.get("/", async (c) => {
-  const { storeId } = await getStoreDataFromRequest(c);
+  const { storeId } = getStoreDataFromRequest(c);
 
   if (!storeId)
     return c.json({ error: "Missing data to retrieve banner message" }, 400);

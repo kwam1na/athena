@@ -8,7 +8,7 @@ import { getStoreDataFromRequest } from "../../../utils";
 const colorRoutes: HonoWithConvex<ActionCtx> = new Hono();
 
 colorRoutes.get("/", async (c) => {
-  const { storeId } = await getStoreDataFromRequest(c);
+  const { storeId } = getStoreDataFromRequest(c);
 
   if (!storeId)
     return c.json({ error: "Missing data to retrieve colors" }, 400);

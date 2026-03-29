@@ -8,7 +8,7 @@ import { getStorefrontUserFromRequest } from "../../../utils";
 const upsellRoutes: HonoWithConvex<ActionCtx> = new Hono();
 
 upsellRoutes.get("/", async (c) => {
-  const userId = await getStorefrontUserFromRequest(c);
+  const userId = getStorefrontUserFromRequest(c);
 
   if (!userId) {
     return c.json(null, 200);

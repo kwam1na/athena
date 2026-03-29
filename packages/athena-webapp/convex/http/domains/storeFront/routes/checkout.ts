@@ -11,8 +11,8 @@ import { Id } from "../../../../_generated/dataModel";
 const checkoutRoutes: HonoWithConvex<ActionCtx> = new Hono();
 
 checkoutRoutes.post("/", async (c) => {
-  const { storeId } = await getStoreDataFromRequest(c);
-  const userId = await getStorefrontUserFromRequest(c);
+  const { storeId } = getStoreDataFromRequest(c);
+  const userId = getStorefrontUserFromRequest(c);
 
   if (!userId) {
     return c.json({ error: "Customer id missing" }, 404);
@@ -45,8 +45,8 @@ checkoutRoutes.post("/", async (c) => {
 checkoutRoutes.post("/:checkoutSessionId", async (c) => {
   const { checkoutSessionId } = c.req.param();
 
-  const userId = await getStorefrontUserFromRequest(c);
-  const { storeId, organizationId } = await getStoreDataFromRequest(c);
+  const userId = getStorefrontUserFromRequest(c);
+  const { storeId, organizationId } = getStoreDataFromRequest(c);
 
   if (!userId) {
     return c.json({ error: "Customer id missing" }, 404);
@@ -67,6 +67,25 @@ checkoutRoutes.post("/:checkoutSessionId", async (c) => {
 
   try {
     if (action == "finalize-payment") {
+      // Log entry point for payment finalization
+      console.log(
+        `[CHECKOUT-START] Finalize payment request received | Session: ${checkoutSessionId} | Email: ${customerEmail} | Amount: ${amount} | Delivery method: ${orderDetails?.deliveryMethod} | Delivery fee: ${orderDetails?.deliveryFee} | POD method: ${orderDetails?.podPaymentMethod || "N/A"}`
+      );
+      console.log(
+        `[CHECKOUT-START] Order details:`,
+        JSON.stringify(
+          {
+            customerDetails: orderDetails?.customerDetails,
+            deliveryDetails: orderDetails?.deliveryDetails,
+            deliveryOption: orderDetails?.deliveryOption,
+            pickupLocation: orderDetails?.pickupLocation,
+            discount: orderDetails?.discount,
+          },
+          null,
+          2
+        )
+      );
+
       // check that the store is still active
       const store = await c.env.runQuery(api.inventory.stores.getByIdOrSlug, {
         identifier: storeId,
@@ -94,6 +113,9 @@ checkoutRoutes.post("/:checkoutSessionId", async (c) => {
       );
 
       if (session?.hasCompletedPayment) {
+        console.log(
+          `[CHECKOUT-FAILURE] Session already completed | Session: ${checkoutSessionId}`
+        );
         return c.json({
           success: false,
           message:
@@ -114,6 +136,13 @@ checkoutRoutes.post("/:checkoutSessionId", async (c) => {
             deliveryDetails: orderDetails.deliveryDetails ?? null,
           },
         }
+      );
+
+      // Log successful payment response
+      const hasAuthUrl = "authorization_url" in payment;
+      const isSuccess = "success" in payment && payment.success;
+      console.log(
+        `[CHECKOUT-${hasAuthUrl || isSuccess ? "SUCCESS" : "FAILURE"}] Payment action completed | Session: ${checkoutSessionId} | Has Auth URL: ${hasAuthUrl}`
       );
 
       return c.json(payment);
@@ -240,12 +269,15 @@ checkoutRoutes.post("/:checkoutSessionId", async (c) => {
 
     return c.json({});
   } catch (e) {
+    console.log(
+      `[CHECKOUT-FAILURE] Error in checkout endpoint | Session: ${checkoutSessionId} | Action: ${action} | Error: ${(e as Error).message}`
+    );
     return c.json({ error: (e as Error).message }, 400);
   }
 });
 
 checkoutRoutes.get("/active", async (c) => {
-  const userId = await getStorefrontUserFromRequest(c);
+  const userId = getStorefrontUserFromRequest(c);
 
   if (!userId) {
     return c.json({ error: "Customer id missing" }, 404);
@@ -266,7 +298,7 @@ checkoutRoutes.get("/active", async (c) => {
 });
 
 checkoutRoutes.get("/pending", async (c) => {
-  const userId = await getStorefrontUserFromRequest(c);
+  const userId = getStorefrontUserFromRequest(c);
 
   if (!userId) {
     return c.json({ error: "Customer id missing" }, 404);
@@ -293,7 +325,7 @@ checkoutRoutes.get("/:sessionId", async (c) => {
 checkoutRoutes.get("/verify/:reference", async (c) => {
   const { reference } = c.req.param();
 
-  const userId = await getStorefrontUserFromRequest(c);
+  const userId = getStorefrontUserFromRequest(c);
 
   if (!userId) {
     return c.json({ error: "Customer id missing" }, 404);

@@ -1,11 +1,10 @@
 import { v } from "convex/values";
 import { action, mutation } from "../_generated/server";
-import { sendVerificationCode } from "../sendgrid";
+import { sendVerificationCode } from "../mailersend";
 import { api } from "../_generated/api";
 import { SignJWT } from "jose";
 
 const expirationTimeInMinutes = 10;
-const verificationCodeCooldownMs = 60 * 1000;
 
 export const requestVerificationCode = mutation({
   args: {
@@ -15,22 +14,6 @@ export const requestVerificationCode = mutation({
     storeId: v.id("store"),
   },
   handler: async (ctx, args) => {
-    const mostRecentCode = await ctx.db
-      .query("storeFrontVerificationCode")
-      .filter((q) => q.eq(q.field("email"), args.email))
-      .order("desc")
-      .first();
-
-    if (
-      mostRecentCode &&
-      Date.now() - mostRecentCode._creationTime < verificationCodeCooldownMs
-    ) {
-      return {
-        rateLimited: true,
-        message: "Please wait before requesting another verification code.",
-      };
-    }
-
     const verificationCode = Math.floor(
       100000 + Math.random() * 900000
     ).toString();
@@ -59,6 +42,7 @@ export const verifyCode = mutation({
     email: v.string(),
     storeId: v.id("store"),
     organizationId: v.id("organization"),
+    userId: v.union(v.id("storeFrontUser"), v.id("guest")),
   },
   handler: async (ctx, args) => {
     const verificationCode = await ctx.db
@@ -103,12 +87,15 @@ export const verifyCode = mutation({
       .first();
 
     if (!user) {
+      // get the guest user
+      const guestUser = await ctx.db.get(args.userId);
+
       const id = await ctx.db.insert("storeFrontUser", {
         email: verificationCode.email,
         storeId: args.storeId,
         organizationId: args.organizationId,
-        firstName: verificationCode.firstName,
-        lastName: verificationCode.lastName,
+        firstName: verificationCode.firstName || guestUser?.firstName,
+        lastName: verificationCode.lastName || guestUser?.lastName,
       });
 
       user = await ctx.db.get(id);
@@ -156,7 +143,7 @@ export const sendVerificationCodeViaProvider = action({
     lastName: v.optional(v.string()),
     storeId: v.id("store"),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<any> => {
     const [data, store] = await Promise.all([
       ctx.runMutation(api.storeFront.auth.requestVerificationCode, {
         email: args.email,
@@ -176,42 +163,36 @@ export const sendVerificationCodeViaProvider = action({
       };
     }
 
-    if ((data as any)?.rateLimited) {
+    // return {
+    //   success: true,
+    //   message: "Verification code sent",
+    //   data: {
+    //     code: data.code,
+    //     email: args.email,
+    //   },
+    // };
+
+    const response = await sendVerificationCode({
+      customerEmail: args.email,
+      verificationCode: data.code,
+      storeName: store.name,
+      validTime: `${expirationTimeInMinutes} minutes`,
+    });
+
+    if (response.ok) {
+      return {
+        success: true,
+        message: "Verification code sent",
+        data: {
+          email: args.email,
+        },
+      };
+    } else {
+      console.error("Failed to send verification code", response);
       return {
         success: false,
-        message: (data as any).message,
+        message: "Could not send verification code",
       };
     }
-
-    return {
-      success: true,
-      message: "Verification code sent",
-      data: {
-        email: args.email,
-      },
-    };
-
-    // const response = await sendVerificationCode({
-    //   customerEmail: args.email,
-    //   verificationCode: data.code,
-    //   storeName: store.name,
-    //   validTime: `${expirationTimeInMinutes} minutes`,
-    // });
-
-    // if (response.ok) {
-    //   return {
-    //     success: true,
-    //     message: "Verification code sent",
-    //     data: {
-    //       email: args.email,
-    //     },
-    //   };
-    // } else {
-    //   console.error("Failed to send verification code", response);
-    //   return {
-    //     success: false,
-    //     message: "Could not send verification code",
-    //   };
-    // }
   },
 });

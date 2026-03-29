@@ -6,94 +6,86 @@ import {
   DeleteObjectsCommand,
 } from "@aws-sdk/client-s3";
 
-const BUCKET = process.env.R2_BUCKET!;
-const PUBLIC_URL = process.env.R2_PUBLIC_URL!; // https://images.wigclub.store
-
-const r2 = new S3Client({
-  region: "auto",
-  endpoint: `https://${process.env.CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+const s3 = new S3Client({
+  region: process.env.AWS_REGION!,
   credentials: {
-    accessKeyId: process.env.R2_ACCESS_KEY_ID!,
-    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
+    accessKeyId: process.env.AWS_ACCESS!,
+    secretAccessKey: process.env.AWS_SECRET!,
   },
 });
 
-export const uploadFileToR2 = async (file: any, key: string) => {
+export const uploadFileToS3 = async (file: any, key: string) => {
   try {
     const params = {
-      Bucket: BUCKET,
+      Bucket: process.env.AWS_BUCKET,
       Key: key,
       Body: file,
     };
 
-    await r2.send(new PutObjectCommand(params));
-    return `${PUBLIC_URL}/${key}`;
+    await s3.send(new PutObjectCommand(params));
+    return `https://${process.env.AWS_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
   } catch (error) {
-    // handled
-    console.log(
-      `https://${process.env.CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com`,
-    );
-    console.error(error);
+    console.error("Error uploading file", error);
   }
 };
 
-export const deleteFileInR2 = async (path: string) => {
-  const OLD_S3_PREFIX =
-    "https://athena-amzn-bucket.s3.eu-west-1.amazonaws.com/";
-  let key = path.split(`${PUBLIC_URL}/`)[1];
-  // Fallback: handle legacy S3 URLs during transition period
-  if (!key) key = path.split(OLD_S3_PREFIX)[1];
-
-  if (!key) return;
+export const deleteFileInS3 = async (path: string) => {
+  const key = path.split(
+    `https://${process.env.AWS_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/`
+  )[1];
 
   try {
     const params = {
-      Bucket: BUCKET,
+      Bucket: process.env.AWS_BUCKET,
       Key: key,
     };
 
-    await r2.send(new DeleteObjectCommand(params));
+    await s3.send(new DeleteObjectCommand(params));
     return { success: true, key };
   } catch (error) {
-    // handled
+    console.error("Error deleting file", error);
   }
 };
 
-export const deleteDirectoryInR2 = async (directory: string) => {
+export const deleteDirectoryInS3 = async (directory: string) => {
   try {
     let continuationToken: string | undefined;
 
     do {
+      // List objects in the "directory"
       const listParams = {
-        Bucket: BUCKET,
+        Bucket: `${process.env.AWS_BUCKET}`,
         Prefix: `${directory}/`,
         ContinuationToken: continuationToken,
       };
 
-      const listResponse = await r2.send(new ListObjectsV2Command(listParams));
+      const listResponse = await s3.send(new ListObjectsV2Command(listParams));
 
       if (listResponse.Contents && listResponse.Contents.length > 0) {
+        // Delete objects in batches of 1000 (S3 limit)
         const deleteParams = {
-          Bucket: BUCKET,
+          Bucket: `${process.env.AWS_BUCKET}`,
           Delete: {
             Objects: listResponse.Contents.map(({ Key }) => ({ Key })),
           },
         };
 
-        await r2.send(new DeleteObjectsCommand(deleteParams));
+        await s3.send(new DeleteObjectsCommand(deleteParams));
       }
 
       continuationToken = listResponse.NextContinuationToken;
     } while (continuationToken);
 
+    // Optionally, delete the "directory" object itself if it exists
     const dirParams = {
-      Bucket: BUCKET,
+      Bucket: `${process.env.AWS_BUCKET}`,
       Key: `${directory}/`,
     };
-    await r2.send(new DeleteObjectCommand(dirParams));
+    await s3.send(new DeleteObjectCommand(dirParams));
 
     return { success: true, directory };
   } catch (error) {
+    console.error("Error deleting directory", error);
     return { success: false, error, directory };
   }
 };
@@ -103,37 +95,35 @@ export interface ListItemsOptions {
   firstLevelOnly?: boolean;
 }
 
-export const listItemsInR2Directory = async ({
+export const listItemsInS3Directory = async ({
   directory,
   firstLevelOnly = false,
 }: ListItemsOptions) => {
   try {
-    const items: Array<{
-      key: string;
-      url: string;
-      size?: number;
-      type: string;
-    }> = [];
+    const items = [];
     let continuationToken: string | undefined;
 
     do {
+      // List objects in the "directory"
       const listParams = {
-        Bucket: BUCKET,
+        Bucket: `${process.env.AWS_BUCKET}`,
         Prefix: `${directory}/`,
         Delimiter: firstLevelOnly ? "/" : undefined,
         ContinuationToken: continuationToken,
       };
 
-      const listResponse = await r2.send(new ListObjectsV2Command(listParams));
+      const listResponse = await s3.send(new ListObjectsV2Command(listParams));
 
+      // Process regular contents
       if (listResponse.Contents && listResponse.Contents.length > 0) {
         for (const item of listResponse.Contents) {
           if (item.Key) {
+            // When in firstLevelOnly mode, skip the directory itself
             if (firstLevelOnly && item.Key === `${directory}/`) continue;
 
             items.push({
               key: item.Key,
-              url: `${PUBLIC_URL}/${item.Key}`,
+              url: `https://${process.env.AWS_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/${item.Key}`,
               size: item.Size,
               type: "file",
             });
@@ -141,12 +131,13 @@ export const listItemsInR2Directory = async ({
         }
       }
 
+      // Process CommonPrefixes (folders) when in firstLevelOnly mode
       if (firstLevelOnly && listResponse.CommonPrefixes) {
         for (const prefix of listResponse.CommonPrefixes) {
           if (prefix.Prefix) {
             items.push({
               key: prefix.Prefix,
-              url: `${PUBLIC_URL}/${prefix.Prefix}`,
+              url: `https://${process.env.AWS_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/${prefix.Prefix}`,
               type: "directory",
             });
           }
@@ -158,6 +149,7 @@ export const listItemsInR2Directory = async ({
 
     return { success: true, items, directory };
   } catch (error) {
+    console.error("Error listing directory items", error);
     return { success: false, error, directory };
   }
 };
