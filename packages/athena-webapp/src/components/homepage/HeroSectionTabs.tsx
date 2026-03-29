@@ -11,11 +11,12 @@ import { Label } from "../ui/label";
 import { useMutation } from "convex/react";
 import { api } from "~/convex/_generated/api";
 import { toast } from "sonner";
+import { ReelUploader } from "./ReelUploader";
 
 export const HeroSectionTabs: React.FC = () => {
   const { activeStore } = useGetActiveStore();
   const [heroHeaderImage, setHeroHeaderImage] = useState<string | undefined>(
-    activeStore?.config?.homeHero?.headerImage
+    activeStore?.config?.homeHero?.headerImage,
   );
 
   const [heroDisplayType, setHeroDisplayType] = useState<
@@ -81,7 +82,7 @@ export const HeroSectionTabs: React.FC = () => {
         },
       });
       toast.success(
-        `Hero display updated to ${newType === "reel" ? "video reel" : "header image"}`
+        `Hero display updated to ${newType === "reel" ? "video reel" : "header image"}`,
       );
     } catch (error) {
       console.error("Failed to update hero display type:", error);
@@ -251,6 +252,8 @@ export const HeroSectionTabs: React.FC = () => {
                 This is the video that loops on the landing page
               </p>
             </div>
+
+            <ReelUploader />
           </TabsContent>
 
           <TabsContent value="image" className="space-y-4">
