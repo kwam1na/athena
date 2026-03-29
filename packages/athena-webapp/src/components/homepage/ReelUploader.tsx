@@ -1,5 +1,5 @@
-import { useRef, useState, useCallback } from "react";
-import { Upload, Loader2, CheckCircle2, Trash2, X } from "lucide-react";
+import { useRef, useState, useCallback, useEffect } from "react";
+import { Upload, Loader2, CheckCircle2, X } from "lucide-react";
 import { Button } from "../ui/button";
 import { LoadingButton } from "../ui/loading-button";
 import { toast } from "sonner";
@@ -28,11 +28,11 @@ export const ReelUploader = () => {
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const getDirectUploadUrl = useAction(
-    api.cloudflare.stream.getDirectUploadUrl
+    api.cloudflare.stream.getDirectUploadUrl,
   );
   const getVideoStatus = useAction(api.cloudflare.stream.getVideoStatus);
   const addStreamReelVersion = useAction(
-    api.cloudflare.stream.addStreamReelVersion
+    api.cloudflare.stream.addStreamReelVersion,
   );
 
   const formatFileSize = (bytes: number) => {
@@ -78,6 +78,10 @@ export const ReelUploader = () => {
     }
   }, []);
 
+  useEffect(() => {
+    return () => cleanup();
+  }, [cleanup]);
+
   const reset = useCallback(() => {
     cleanup();
     setSelectedFile(null);
@@ -116,7 +120,7 @@ export const ReelUploader = () => {
             }
           } else if (status.status?.pctComplete) {
             setProgress(
-              `Transcoding: ${status.status.pctComplete}% complete...`
+              `Transcoding: ${status.status.pctComplete}% complete...`,
             );
           }
         } catch (err) {
@@ -125,7 +129,7 @@ export const ReelUploader = () => {
         }
       }, 5000);
     },
-    [activeStore, getVideoStatus, addStreamReelVersion, cleanup, reset]
+    [activeStore, getVideoStatus, addStreamReelVersion, cleanup, reset],
   );
 
   const handleUpload = async () => {
@@ -192,7 +196,7 @@ export const ReelUploader = () => {
             "w-full border-2 border-dashed rounded-lg p-8",
             "flex flex-col items-center justify-center gap-2",
             "text-muted-foreground hover:text-foreground hover:border-foreground/30",
-            "transition-colors cursor-pointer"
+            "transition-colors cursor-pointer",
           )}
         >
           <Upload className="h-8 w-8" />
@@ -232,18 +236,11 @@ export const ReelUploader = () => {
         <div className="flex items-center gap-3 border rounded-lg p-4">
           {stateIcon[uploadState]}
           <div className="flex-1">
-            <p className="text-sm font-medium">
-              {selectedFile?.name}
-            </p>
+            <p className="text-sm font-medium">{selectedFile?.name}</p>
             <p className="text-xs text-muted-foreground">{progress}</p>
           </div>
           {uploadState === "processing" && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={reset}
-              title="Cancel"
-            >
+            <Button variant="ghost" size="sm" onClick={reset} title="Cancel">
               <X className="h-4 w-4" />
             </Button>
           )}
@@ -254,7 +251,9 @@ export const ReelUploader = () => {
       {uploadState === "error" && (
         <div className="flex items-center justify-between border border-destructive/50 rounded-lg p-4">
           <div>
-            <p className="text-sm font-medium text-destructive">Upload failed</p>
+            <p className="text-sm font-medium text-destructive">
+              Upload failed
+            </p>
             <p className="text-xs text-muted-foreground">{error}</p>
           </div>
           <Button variant="outline" size="sm" onClick={reset}>

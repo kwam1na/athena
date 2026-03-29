@@ -14,7 +14,7 @@ export const HomeHero = ({ nextSectionRef }: HomeHeroProps) => {
   const { store } = useStoreContext();
 
   const videoRef = useRef<HTMLVideoElement>(null);
-  const hlsUrl = `${config.hlsURL}/stores/${store?._id}/assets/hero/v${store?.config?.landingPageReelVersion}/reel.m3u8`;
+  const hlsUrl = store?.config?.activeStreamReelHlsUrl;
 
   // Determine which hero to display (default to "reel" for backward compatibility)
   const heroDisplayType = store?.config?.homeHero?.displayType || "reel";
@@ -31,19 +31,6 @@ export const HomeHero = ({ nextSectionRef }: HomeHeroProps) => {
   const shouldShowOverlay = store?.config?.homeHero?.showOverlay === true;
 
   const shouldShowText = store?.config?.homeHero?.showText === true;
-
-  useEffect(() => {
-    if (!videoRef.current || !store?._id) return;
-    const video = videoRef.current;
-
-    if (video.canPlayType("application/vnd.apple.mpegurl")) {
-      video.src = hlsUrl;
-    } else if (Hls.isSupported()) {
-      const hls = new Hls();
-      hls.loadSource(hlsUrl);
-      hls.attachMedia(video);
-    }
-  }, [store?._id]);
 
   return (
     <section className="relative w-full h-screen flex items-center justify-center text-white text-center">

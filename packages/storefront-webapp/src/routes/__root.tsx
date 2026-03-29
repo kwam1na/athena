@@ -6,7 +6,6 @@ import {
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import NavigationBar from "@/components/navigation-bar/NavigationBar";
 import { StoreProvider, useStoreContext } from "@/contexts/StoreContext";
-import { Scripts } from "@tanstack/start";
 import { Toaster } from "@/components/ui/sonner";
 import { z } from "zod";
 import NotFound from "@/components/states/not-found/NotFound";
@@ -120,7 +119,6 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         {children}
       </QueryClientProvider>
       <ScrollRestoration />
-      <Scripts />
     </div>
   );
 }

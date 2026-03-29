@@ -92,7 +92,7 @@ export function HomeHeroSection({
  */
 export const withHomeHeroRef = (Component: typeof HomeHeroSection) => {
   return (
-    props: HomeHeroSectionProps & { heroRef: React.RefObject<HTMLDivElement> }
+    props: HomeHeroSectionProps & { heroRef: React.RefObject<HTMLDivElement> },
   ) => {
     const { heroRef, ...rest } = props;
 

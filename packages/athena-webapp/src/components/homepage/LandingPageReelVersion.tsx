@@ -1,62 +1,96 @@
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAction } from "convex/react";
 import { api } from "~/convex/_generated/api";
 import { toast } from "sonner";
 import { LoadingButton } from "../ui/loading-button";
 import { SelectNative } from "../ui/select-native";
-import config from "~/src/config";
 import { VideoPlayer } from "./VideoPlayer";
+
+type StreamReel = {
+  version: number;
+  hlsUrl: string;
+  streamUid?: string;
+  thumbnailUrl?: string;
+  createdAt?: number;
+};
 
 export const LandingPageReelVersion = () => {
   const { activeStore } = useGetActiveStore();
 
   const [isUpdatingConfig, setIsUpdatingConfig] = useState(false);
 
-  const [reelVersion, setReelVersion] = useState<string | null>();
+  const [reelVersion, setReelVersion] = useState<number | null>(null);
 
-  const [updatedReelVersion, setUpdatedReelVersion] = useState<string | null>(
-    null
+  const [updatedReelVersion, setUpdatedReelVersion] = useState<number | null>(
+    null,
   );
 
-  const updateLandingPageReel = useAction(
-    api.inventory.stores.updateLandingPageReel
+  const setActiveStreamReel = useAction(
+    api.cloudflare.stream.setActiveStreamReel,
   );
+
+  const streamReels = useMemo(() => {
+    const raw = activeStore?.config?.streamReels;
+    if (!Array.isArray(raw)) return [] as StreamReel[];
+
+    return raw
+      .filter(
+        (reel): reel is StreamReel =>
+          typeof reel?.version === "number" && typeof reel?.hlsUrl === "string",
+      )
+      .sort((a, b) => b.version - a.version);
+  }, [activeStore?.config?.streamReels]);
+
+  const selectedReel = streamReels.find((reel) => reel.version === reelVersion);
 
   useEffect(() => {
-    if (activeStore) {
-      setReelVersion(activeStore?.config?.landingPageReelVersion);
+    if (!activeStore) {
+      setReelVersion(null);
+      return;
     }
-  }, [activeStore]);
 
-  const hlsUrl = `${config.hlsURL}/stores/${activeStore?._id}/assets/hero/v${reelVersion}/reel.m3u8`;
+    if (
+      typeof reelVersion === "number" &&
+      streamReels.some((reel) => reel.version === reelVersion)
+    ) {
+      return;
+    }
+
+    const activeVersion = activeStore.config?.activeStreamReel;
+
+    if (typeof activeVersion === "number") {
+      setReelVersion(activeVersion);
+      return;
+    }
+
+    if (streamReels.length > 0) {
+      setReelVersion(streamReels[0].version);
+      return;
+    }
+
+    setReelVersion(null);
+  }, [activeStore, streamReels, reelVersion]);
+
+  const hlsUrl =
+    selectedReel?.hlsUrl || activeStore?.config?.activeStreamReelHlsUrl || "";
 
   const handleUpdateConfig = async () => {
-    if (!activeStore || !reelVersion) return;
+    if (!activeStore || !selectedReel) return;
 
     setIsUpdatingConfig(true);
 
     try {
-      const res = await updateLandingPageReel({
+      await setActiveStreamReel({
         storeId: activeStore._id,
-        data: {
-          reelVersion,
-        },
-        config: {
-          ...activeStore.config,
-          landingPageReelVersion: reelVersion,
-        },
+        version: selectedReel.version,
+        hlsUrl: selectedReel.hlsUrl,
       });
-
-      if (!res.success) {
-        toast.error(res.errorMessage, { position: "top-right" });
-        return;
-      }
-      toast.success(`Reel version updated to v${reelVersion}`, {
+      toast.success(`Reel version updated to v${selectedReel.version}`, {
         position: "top-right",
       });
 
-      setUpdatedReelVersion(reelVersion);
+      setUpdatedReelVersion(selectedReel.version);
     } catch (error) {
       console.error("Error updating config:", error);
       toast.error("An error occurred while updating the reel version", {
@@ -70,13 +104,10 @@ export const LandingPageReelVersion = () => {
 
   // Determine if the save button should be disabled
   const isButtonDisabled =
-    // Disable if no reel version is selected
     !reelVersion ||
-    // Disable if the selected version matches the current store version
-    // and no update has been attempted yet
-    (reelVersion === activeStore?.config?.landingPageReelVersion &&
+    !selectedReel ||
+    (reelVersion === activeStore?.config?.activeStreamReel &&
       !updatedReelVersion) ||
-    // Disable if we're trying to update to the same version we just updated to
     updatedReelVersion === reelVersion;
 
   return (
@@ -88,12 +119,12 @@ export const LandingPageReelVersion = () => {
           </p>
           <SelectNative
             className="bg-background/0 border-none text-muted-foreground hover:text-foreground w-fit"
-            value={reelVersion || ""}
-            onChange={(e) => setReelVersion(e.target.value)}
+            value={reelVersion?.toString() || ""}
+            onChange={(e) => setReelVersion(Number(e.target.value))}
           >
-            {activeStore?.config?.reelVersions?.map((version: string) => (
-              <option key={version} value={version}>
-                {version}
+            {streamReels.map((reel) => (
+              <option key={reel.version} value={reel.version}>
+                {`v${reel.version}`}
               </option>
             ))}
           </SelectNative>
@@ -108,7 +139,12 @@ export const LandingPageReelVersion = () => {
           Save
         </LoadingButton>
       </div>
-      {activeStore && <VideoPlayer hlsUrl={hlsUrl} />}
+      {streamReels.length === 0 && (
+        <p className="text-sm text-muted-foreground">
+          No reel versions yet. Upload a video below to create one.
+        </p>
+      )}
+      {activeStore && hlsUrl && <VideoPlayer hlsUrl={hlsUrl} />}
     </div>
   );
 };

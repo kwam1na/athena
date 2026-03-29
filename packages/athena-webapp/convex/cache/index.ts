@@ -8,7 +8,7 @@ export class ValkeyClient {
    * Creates a new Valkey client
    * @param baseUrl The URL of the Valkey proxy server
    */
-  constructor(baseUrl = "http://34.244.249.177:3000") {
+  constructor(baseUrl = "https://cache.wigclub.store") {
     this.baseUrl = baseUrl;
   }
 

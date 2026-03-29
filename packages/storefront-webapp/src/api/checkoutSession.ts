@@ -51,6 +51,8 @@ export async function getActiveCheckoutSession(): Promise<CheckoutSession | null
     throw new Error("Error loading active session.");
   }
 
+  console.log("returning res", res);
+
   return res;
 }
 
@@ -69,7 +71,7 @@ export async function getPendingCheckoutSessions(): Promise<CheckoutSession[]> {
 }
 
 export async function getCheckoutSession(
-  sessionId: string
+  sessionId: string,
 ): Promise<CheckoutSession & { items: ProductSku[] }> {
   const response = await fetch(`${getBaseUrl()}/${sessionId}`, {
     credentials: "include",

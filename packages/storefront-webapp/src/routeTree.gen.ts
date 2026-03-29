@@ -8,466 +8,636 @@
 // You should NOT make any changes in this file as it will be overwritten.
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
-// Import Routes
+import { Route as rootRouteImport } from './routes/__root'
+import { Route as SignupRouteImport } from './routes/signup'
+import { Route as LoginRouteImport } from './routes/login'
+import { Route as LayoutRouteImport } from './routes/_layout'
+import { Route as IndexRouteImport } from './routes/index'
+import { Route as AuthVerifyRouteImport } from './routes/auth.verify'
+import { Route as LayoutContactUsRouteImport } from './routes/_layout/contact-us'
+import { Route as LayoutAccountRouteImport } from './routes/_layout/account'
+import { Route as LayoutShopLayoutRouteImport } from './routes/_layout/_shopLayout'
+import { Route as LayoutOrdersLayoutRouteImport } from './routes/_layout/_ordersLayout'
+import { Route as ShopCheckoutIndexRouteImport } from './routes/shop/checkout/index'
+import { Route as ShopBagIndexRouteImport } from './routes/shop/bag.index'
+import { Route as LayoutRewardsIndexRouteImport } from './routes/_layout/rewards.index'
+import { Route as ShopCheckoutPodConfirmationRouteImport } from './routes/shop/checkout/pod-confirmation'
+import { Route as ShopCheckoutPendingRouteImport } from './routes/shop/checkout/pending'
+import { Route as ShopCheckoutVerifyIndexRouteImport } from './routes/shop/checkout/verify.index'
+import { Route as ShopCheckoutCompleteIndexRouteImport } from './routes/shop/checkout/complete.index'
+import { Route as ShopCheckoutSessionIdSlugIndexRouteImport } from './routes/shop/checkout/$sessionIdSlug/index'
+import { Route as LayoutShopSavedIndexRouteImport } from './routes/_layout/shop.saved.index'
+import { Route as LayoutPoliciesTosIndexRouteImport } from './routes/_layout/policies/tos.index'
+import { Route as LayoutPoliciesPrivacyIndexRouteImport } from './routes/_layout/policies/privacy.index'
+import { Route as LayoutPoliciesDeliveryReturnsExchangesIndexRouteImport } from './routes/_layout/policies/delivery-returns-exchanges.index'
+import { Route as ShopCheckoutSessionIdSlugIncompleteRouteImport } from './routes/shop/checkout/$sessionIdSlug/incomplete'
+import { Route as ShopCheckoutSessionIdSlugCompleteRouteImport } from './routes/shop/checkout/$sessionIdSlug/complete'
+import { Route as ShopCheckoutSessionIdSlugCanceledRouteImport } from './routes/shop/checkout/$sessionIdSlug/canceled'
+import { Route as LayoutShopProductProductSlugRouteImport } from './routes/_layout/shop.product.$productSlug'
+import { Route as LayoutShopLayoutShopCategorySlugIndexRouteImport } from './routes/_layout/_shopLayout/shop/$categorySlug/index'
+import { Route as LayoutOrdersLayoutShopOrdersIndexRouteImport } from './routes/_layout/_ordersLayout/shop/orders/index'
+import { Route as LayoutShopLayoutShopCategorySlugSubcategorySlugRouteImport } from './routes/_layout/_shopLayout/shop/$categorySlug/$subcategorySlug'
+import { Route as LayoutOrdersLayoutShopOrdersOrderIdIndexRouteImport } from './routes/_layout/_ordersLayout/shop/orders/$orderId/index'
+import { Route as LayoutOrdersLayoutShopOrdersOrderIdReviewRouteImport } from './routes/_layout/_ordersLayout/shop/orders/$orderId/review'
+import { Route as LayoutOrdersLayoutShopOrdersOrderIdOrderItemIdReviewRouteImport } from './routes/_layout/_ordersLayout/shop/orders/$orderId/$orderItemId.review'
 
-import { Route as rootRoute } from './routes/__root'
-import { Route as SignupImport } from './routes/signup'
-import { Route as LoginImport } from './routes/login'
-import { Route as LayoutImport } from './routes/_layout'
-import { Route as IndexImport } from './routes/index'
-import { Route as AuthVerifyImport } from './routes/auth.verify'
-import { Route as LayoutContactUsImport } from './routes/_layout/contact-us'
-import { Route as LayoutAccountImport } from './routes/_layout/account'
-import { Route as LayoutShopLayoutImport } from './routes/_layout/_shopLayout'
-import { Route as LayoutOrdersLayoutImport } from './routes/_layout/_ordersLayout'
-import { Route as ShopCheckoutIndexImport } from './routes/shop/checkout/index'
-import { Route as ShopBagIndexImport } from './routes/shop/bag.index'
-import { Route as LayoutRewardsIndexImport } from './routes/_layout/rewards.index'
-import { Route as ShopCheckoutPodConfirmationImport } from './routes/shop/checkout/pod-confirmation'
-import { Route as ShopCheckoutPendingImport } from './routes/shop/checkout/pending'
-import { Route as ShopCheckoutVerifyIndexImport } from './routes/shop/checkout/verify.index'
-import { Route as ShopCheckoutCompleteIndexImport } from './routes/shop/checkout/complete.index'
-import { Route as ShopCheckoutSessionIdSlugIndexImport } from './routes/shop/checkout/$sessionIdSlug/index'
-import { Route as LayoutShopSavedIndexImport } from './routes/_layout/shop.saved.index'
-import { Route as LayoutPoliciesTosIndexImport } from './routes/_layout/policies/tos.index'
-import { Route as LayoutPoliciesPrivacyIndexImport } from './routes/_layout/policies/privacy.index'
-import { Route as LayoutPoliciesDeliveryReturnsExchangesIndexImport } from './routes/_layout/policies/delivery-returns-exchanges.index'
-import { Route as ShopCheckoutSessionIdSlugIncompleteImport } from './routes/shop/checkout/$sessionIdSlug/incomplete'
-import { Route as ShopCheckoutSessionIdSlugCompleteImport } from './routes/shop/checkout/$sessionIdSlug/complete'
-import { Route as ShopCheckoutSessionIdSlugCanceledImport } from './routes/shop/checkout/$sessionIdSlug/canceled'
-import { Route as LayoutShopProductProductSlugImport } from './routes/_layout/shop.product.$productSlug'
-import { Route as LayoutShopLayoutShopCategorySlugIndexImport } from './routes/_layout/_shopLayout/shop/$categorySlug/index'
-import { Route as LayoutOrdersLayoutShopOrdersIndexImport } from './routes/_layout/_ordersLayout/shop/orders/index'
-import { Route as LayoutShopLayoutShopCategorySlugSubcategorySlugImport } from './routes/_layout/_shopLayout/shop/$categorySlug/$subcategorySlug'
-import { Route as LayoutOrdersLayoutShopOrdersOrderIdIndexImport } from './routes/_layout/_ordersLayout/shop/orders/$orderId/index'
-import { Route as LayoutOrdersLayoutShopOrdersOrderIdReviewImport } from './routes/_layout/_ordersLayout/shop/orders/$orderId/review'
-import { Route as LayoutOrdersLayoutShopOrdersOrderIdOrderItemIdReviewImport } from './routes/_layout/_ordersLayout/shop/orders/$orderId/$orderItemId.review'
-
-// Create/Update Routes
-
-const SignupRoute = SignupImport.update({
+const SignupRoute = SignupRouteImport.update({
   id: '/signup',
   path: '/signup',
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => rootRouteImport,
 } as any)
-
-const LoginRoute = LoginImport.update({
+const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => rootRouteImport,
 } as any)
-
-const LayoutRoute = LayoutImport.update({
+const LayoutRoute = LayoutRouteImport.update({
   id: '/_layout',
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => rootRouteImport,
 } as any)
-
-const IndexRoute = IndexImport.update({
+const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => rootRouteImport,
 } as any)
-
-const AuthVerifyRoute = AuthVerifyImport.update({
+const AuthVerifyRoute = AuthVerifyRouteImport.update({
   id: '/auth/verify',
   path: '/auth/verify',
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => rootRouteImport,
 } as any)
-
-const LayoutContactUsRoute = LayoutContactUsImport.update({
+const LayoutContactUsRoute = LayoutContactUsRouteImport.update({
   id: '/contact-us',
   path: '/contact-us',
   getParentRoute: () => LayoutRoute,
 } as any)
-
-const LayoutAccountRoute = LayoutAccountImport.update({
+const LayoutAccountRoute = LayoutAccountRouteImport.update({
   id: '/account',
   path: '/account',
   getParentRoute: () => LayoutRoute,
 } as any)
-
-const LayoutShopLayoutRoute = LayoutShopLayoutImport.update({
+const LayoutShopLayoutRoute = LayoutShopLayoutRouteImport.update({
   id: '/_shopLayout',
   getParentRoute: () => LayoutRoute,
 } as any)
-
-const LayoutOrdersLayoutRoute = LayoutOrdersLayoutImport.update({
+const LayoutOrdersLayoutRoute = LayoutOrdersLayoutRouteImport.update({
   id: '/_ordersLayout',
   getParentRoute: () => LayoutRoute,
 } as any)
-
-const ShopCheckoutIndexRoute = ShopCheckoutIndexImport.update({
+const ShopCheckoutIndexRoute = ShopCheckoutIndexRouteImport.update({
   id: '/shop/checkout/',
   path: '/shop/checkout/',
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => rootRouteImport,
 } as any)
-
-const ShopBagIndexRoute = ShopBagIndexImport.update({
+const ShopBagIndexRoute = ShopBagIndexRouteImport.update({
   id: '/shop/bag/',
   path: '/shop/bag/',
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => rootRouteImport,
 } as any)
-
-const LayoutRewardsIndexRoute = LayoutRewardsIndexImport.update({
+const LayoutRewardsIndexRoute = LayoutRewardsIndexRouteImport.update({
   id: '/rewards/',
   path: '/rewards/',
   getParentRoute: () => LayoutRoute,
 } as any)
-
 const ShopCheckoutPodConfirmationRoute =
-  ShopCheckoutPodConfirmationImport.update({
+  ShopCheckoutPodConfirmationRouteImport.update({
     id: '/shop/checkout/pod-confirmation',
     path: '/shop/checkout/pod-confirmation',
-    getParentRoute: () => rootRoute,
+    getParentRoute: () => rootRouteImport,
   } as any)
-
-const ShopCheckoutPendingRoute = ShopCheckoutPendingImport.update({
+const ShopCheckoutPendingRoute = ShopCheckoutPendingRouteImport.update({
   id: '/shop/checkout/pending',
   path: '/shop/checkout/pending',
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => rootRouteImport,
 } as any)
-
-const ShopCheckoutVerifyIndexRoute = ShopCheckoutVerifyIndexImport.update({
+const ShopCheckoutVerifyIndexRoute = ShopCheckoutVerifyIndexRouteImport.update({
   id: '/shop/checkout/verify/',
   path: '/shop/checkout/verify/',
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => rootRouteImport,
 } as any)
-
-const ShopCheckoutCompleteIndexRoute = ShopCheckoutCompleteIndexImport.update({
-  id: '/shop/checkout/complete/',
-  path: '/shop/checkout/complete/',
-  getParentRoute: () => rootRoute,
-} as any)
-
+const ShopCheckoutCompleteIndexRoute =
+  ShopCheckoutCompleteIndexRouteImport.update({
+    id: '/shop/checkout/complete/',
+    path: '/shop/checkout/complete/',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ShopCheckoutSessionIdSlugIndexRoute =
-  ShopCheckoutSessionIdSlugIndexImport.update({
+  ShopCheckoutSessionIdSlugIndexRouteImport.update({
     id: '/shop/checkout/$sessionIdSlug/',
     path: '/shop/checkout/$sessionIdSlug/',
-    getParentRoute: () => rootRoute,
+    getParentRoute: () => rootRouteImport,
   } as any)
-
-const LayoutShopSavedIndexRoute = LayoutShopSavedIndexImport.update({
+const LayoutShopSavedIndexRoute = LayoutShopSavedIndexRouteImport.update({
   id: '/shop/saved/',
   path: '/shop/saved/',
   getParentRoute: () => LayoutRoute,
 } as any)
-
-const LayoutPoliciesTosIndexRoute = LayoutPoliciesTosIndexImport.update({
+const LayoutPoliciesTosIndexRoute = LayoutPoliciesTosIndexRouteImport.update({
   id: '/policies/tos/',
   path: '/policies/tos/',
   getParentRoute: () => LayoutRoute,
 } as any)
-
-const LayoutPoliciesPrivacyIndexRoute = LayoutPoliciesPrivacyIndexImport.update(
-  {
+const LayoutPoliciesPrivacyIndexRoute =
+  LayoutPoliciesPrivacyIndexRouteImport.update({
     id: '/policies/privacy/',
     path: '/policies/privacy/',
     getParentRoute: () => LayoutRoute,
-  } as any,
-)
-
+  } as any)
 const LayoutPoliciesDeliveryReturnsExchangesIndexRoute =
-  LayoutPoliciesDeliveryReturnsExchangesIndexImport.update({
+  LayoutPoliciesDeliveryReturnsExchangesIndexRouteImport.update({
     id: '/policies/delivery-returns-exchanges/',
     path: '/policies/delivery-returns-exchanges/',
     getParentRoute: () => LayoutRoute,
   } as any)
-
 const ShopCheckoutSessionIdSlugIncompleteRoute =
-  ShopCheckoutSessionIdSlugIncompleteImport.update({
+  ShopCheckoutSessionIdSlugIncompleteRouteImport.update({
     id: '/shop/checkout/$sessionIdSlug/incomplete',
     path: '/shop/checkout/$sessionIdSlug/incomplete',
-    getParentRoute: () => rootRoute,
+    getParentRoute: () => rootRouteImport,
   } as any)
-
 const ShopCheckoutSessionIdSlugCompleteRoute =
-  ShopCheckoutSessionIdSlugCompleteImport.update({
+  ShopCheckoutSessionIdSlugCompleteRouteImport.update({
     id: '/shop/checkout/$sessionIdSlug/complete',
     path: '/shop/checkout/$sessionIdSlug/complete',
-    getParentRoute: () => rootRoute,
+    getParentRoute: () => rootRouteImport,
   } as any)
-
 const ShopCheckoutSessionIdSlugCanceledRoute =
-  ShopCheckoutSessionIdSlugCanceledImport.update({
+  ShopCheckoutSessionIdSlugCanceledRouteImport.update({
     id: '/shop/checkout/$sessionIdSlug/canceled',
     path: '/shop/checkout/$sessionIdSlug/canceled',
-    getParentRoute: () => rootRoute,
+    getParentRoute: () => rootRouteImport,
   } as any)
-
 const LayoutShopProductProductSlugRoute =
-  LayoutShopProductProductSlugImport.update({
+  LayoutShopProductProductSlugRouteImport.update({
     id: '/shop/product/$productSlug',
     path: '/shop/product/$productSlug',
     getParentRoute: () => LayoutRoute,
   } as any)
-
 const LayoutShopLayoutShopCategorySlugIndexRoute =
-  LayoutShopLayoutShopCategorySlugIndexImport.update({
+  LayoutShopLayoutShopCategorySlugIndexRouteImport.update({
     id: '/shop/$categorySlug/',
     path: '/shop/$categorySlug/',
     getParentRoute: () => LayoutShopLayoutRoute,
   } as any)
-
 const LayoutOrdersLayoutShopOrdersIndexRoute =
-  LayoutOrdersLayoutShopOrdersIndexImport.update({
+  LayoutOrdersLayoutShopOrdersIndexRouteImport.update({
     id: '/shop/orders/',
     path: '/shop/orders/',
     getParentRoute: () => LayoutOrdersLayoutRoute,
   } as any)
-
 const LayoutShopLayoutShopCategorySlugSubcategorySlugRoute =
-  LayoutShopLayoutShopCategorySlugSubcategorySlugImport.update({
+  LayoutShopLayoutShopCategorySlugSubcategorySlugRouteImport.update({
     id: '/shop/$categorySlug/$subcategorySlug',
     path: '/shop/$categorySlug/$subcategorySlug',
     getParentRoute: () => LayoutShopLayoutRoute,
   } as any)
-
 const LayoutOrdersLayoutShopOrdersOrderIdIndexRoute =
-  LayoutOrdersLayoutShopOrdersOrderIdIndexImport.update({
+  LayoutOrdersLayoutShopOrdersOrderIdIndexRouteImport.update({
     id: '/shop/orders/$orderId/',
     path: '/shop/orders/$orderId/',
     getParentRoute: () => LayoutOrdersLayoutRoute,
   } as any)
-
 const LayoutOrdersLayoutShopOrdersOrderIdReviewRoute =
-  LayoutOrdersLayoutShopOrdersOrderIdReviewImport.update({
+  LayoutOrdersLayoutShopOrdersOrderIdReviewRouteImport.update({
     id: '/shop/orders/$orderId/review',
     path: '/shop/orders/$orderId/review',
     getParentRoute: () => LayoutOrdersLayoutRoute,
   } as any)
-
 const LayoutOrdersLayoutShopOrdersOrderIdOrderItemIdReviewRoute =
-  LayoutOrdersLayoutShopOrdersOrderIdOrderItemIdReviewImport.update({
+  LayoutOrdersLayoutShopOrdersOrderIdOrderItemIdReviewRouteImport.update({
     id: '/shop/orders/$orderId/$orderItemId/review',
     path: '/shop/orders/$orderId/$orderItemId/review',
     getParentRoute: () => LayoutOrdersLayoutRoute,
   } as any)
 
-// Populate the FileRoutesByPath interface
+export interface FileRoutesByFullPath {
+  '/': typeof IndexRoute
+  '/login': typeof LoginRoute
+  '/signup': typeof SignupRoute
+  '/account': typeof LayoutAccountRoute
+  '/contact-us': typeof LayoutContactUsRoute
+  '/auth/verify': typeof AuthVerifyRoute
+  '/shop/checkout/pending': typeof ShopCheckoutPendingRoute
+  '/shop/checkout/pod-confirmation': typeof ShopCheckoutPodConfirmationRoute
+  '/rewards/': typeof LayoutRewardsIndexRoute
+  '/shop/bag/': typeof ShopBagIndexRoute
+  '/shop/checkout/': typeof ShopCheckoutIndexRoute
+  '/shop/product/$productSlug': typeof LayoutShopProductProductSlugRoute
+  '/shop/checkout/$sessionIdSlug/canceled': typeof ShopCheckoutSessionIdSlugCanceledRoute
+  '/shop/checkout/$sessionIdSlug/complete': typeof ShopCheckoutSessionIdSlugCompleteRoute
+  '/shop/checkout/$sessionIdSlug/incomplete': typeof ShopCheckoutSessionIdSlugIncompleteRoute
+  '/policies/delivery-returns-exchanges/': typeof LayoutPoliciesDeliveryReturnsExchangesIndexRoute
+  '/policies/privacy/': typeof LayoutPoliciesPrivacyIndexRoute
+  '/policies/tos/': typeof LayoutPoliciesTosIndexRoute
+  '/shop/saved/': typeof LayoutShopSavedIndexRoute
+  '/shop/checkout/$sessionIdSlug/': typeof ShopCheckoutSessionIdSlugIndexRoute
+  '/shop/checkout/complete/': typeof ShopCheckoutCompleteIndexRoute
+  '/shop/checkout/verify/': typeof ShopCheckoutVerifyIndexRoute
+  '/shop/$categorySlug/$subcategorySlug': typeof LayoutShopLayoutShopCategorySlugSubcategorySlugRoute
+  '/shop/orders/': typeof LayoutOrdersLayoutShopOrdersIndexRoute
+  '/shop/$categorySlug/': typeof LayoutShopLayoutShopCategorySlugIndexRoute
+  '/shop/orders/$orderId/review': typeof LayoutOrdersLayoutShopOrdersOrderIdReviewRoute
+  '/shop/orders/$orderId/': typeof LayoutOrdersLayoutShopOrdersOrderIdIndexRoute
+  '/shop/orders/$orderId/$orderItemId/review': typeof LayoutOrdersLayoutShopOrdersOrderIdOrderItemIdReviewRoute
+}
+export interface FileRoutesByTo {
+  '/': typeof IndexRoute
+  '/login': typeof LoginRoute
+  '/signup': typeof SignupRoute
+  '/account': typeof LayoutAccountRoute
+  '/contact-us': typeof LayoutContactUsRoute
+  '/auth/verify': typeof AuthVerifyRoute
+  '/shop/checkout/pending': typeof ShopCheckoutPendingRoute
+  '/shop/checkout/pod-confirmation': typeof ShopCheckoutPodConfirmationRoute
+  '/rewards': typeof LayoutRewardsIndexRoute
+  '/shop/bag': typeof ShopBagIndexRoute
+  '/shop/checkout': typeof ShopCheckoutIndexRoute
+  '/shop/product/$productSlug': typeof LayoutShopProductProductSlugRoute
+  '/shop/checkout/$sessionIdSlug/canceled': typeof ShopCheckoutSessionIdSlugCanceledRoute
+  '/shop/checkout/$sessionIdSlug/complete': typeof ShopCheckoutSessionIdSlugCompleteRoute
+  '/shop/checkout/$sessionIdSlug/incomplete': typeof ShopCheckoutSessionIdSlugIncompleteRoute
+  '/policies/delivery-returns-exchanges': typeof LayoutPoliciesDeliveryReturnsExchangesIndexRoute
+  '/policies/privacy': typeof LayoutPoliciesPrivacyIndexRoute
+  '/policies/tos': typeof LayoutPoliciesTosIndexRoute
+  '/shop/saved': typeof LayoutShopSavedIndexRoute
+  '/shop/checkout/$sessionIdSlug': typeof ShopCheckoutSessionIdSlugIndexRoute
+  '/shop/checkout/complete': typeof ShopCheckoutCompleteIndexRoute
+  '/shop/checkout/verify': typeof ShopCheckoutVerifyIndexRoute
+  '/shop/$categorySlug/$subcategorySlug': typeof LayoutShopLayoutShopCategorySlugSubcategorySlugRoute
+  '/shop/orders': typeof LayoutOrdersLayoutShopOrdersIndexRoute
+  '/shop/$categorySlug': typeof LayoutShopLayoutShopCategorySlugIndexRoute
+  '/shop/orders/$orderId/review': typeof LayoutOrdersLayoutShopOrdersOrderIdReviewRoute
+  '/shop/orders/$orderId': typeof LayoutOrdersLayoutShopOrdersOrderIdIndexRoute
+  '/shop/orders/$orderId/$orderItemId/review': typeof LayoutOrdersLayoutShopOrdersOrderIdOrderItemIdReviewRoute
+}
+export interface FileRoutesById {
+  __root__: typeof rootRouteImport
+  '/': typeof IndexRoute
+  '/_layout': typeof LayoutRouteWithChildren
+  '/login': typeof LoginRoute
+  '/signup': typeof SignupRoute
+  '/_layout/_ordersLayout': typeof LayoutOrdersLayoutRouteWithChildren
+  '/_layout/_shopLayout': typeof LayoutShopLayoutRouteWithChildren
+  '/_layout/account': typeof LayoutAccountRoute
+  '/_layout/contact-us': typeof LayoutContactUsRoute
+  '/auth/verify': typeof AuthVerifyRoute
+  '/shop/checkout/pending': typeof ShopCheckoutPendingRoute
+  '/shop/checkout/pod-confirmation': typeof ShopCheckoutPodConfirmationRoute
+  '/_layout/rewards/': typeof LayoutRewardsIndexRoute
+  '/shop/bag/': typeof ShopBagIndexRoute
+  '/shop/checkout/': typeof ShopCheckoutIndexRoute
+  '/_layout/shop/product/$productSlug': typeof LayoutShopProductProductSlugRoute
+  '/shop/checkout/$sessionIdSlug/canceled': typeof ShopCheckoutSessionIdSlugCanceledRoute
+  '/shop/checkout/$sessionIdSlug/complete': typeof ShopCheckoutSessionIdSlugCompleteRoute
+  '/shop/checkout/$sessionIdSlug/incomplete': typeof ShopCheckoutSessionIdSlugIncompleteRoute
+  '/_layout/policies/delivery-returns-exchanges/': typeof LayoutPoliciesDeliveryReturnsExchangesIndexRoute
+  '/_layout/policies/privacy/': typeof LayoutPoliciesPrivacyIndexRoute
+  '/_layout/policies/tos/': typeof LayoutPoliciesTosIndexRoute
+  '/_layout/shop/saved/': typeof LayoutShopSavedIndexRoute
+  '/shop/checkout/$sessionIdSlug/': typeof ShopCheckoutSessionIdSlugIndexRoute
+  '/shop/checkout/complete/': typeof ShopCheckoutCompleteIndexRoute
+  '/shop/checkout/verify/': typeof ShopCheckoutVerifyIndexRoute
+  '/_layout/_shopLayout/shop/$categorySlug/$subcategorySlug': typeof LayoutShopLayoutShopCategorySlugSubcategorySlugRoute
+  '/_layout/_ordersLayout/shop/orders/': typeof LayoutOrdersLayoutShopOrdersIndexRoute
+  '/_layout/_shopLayout/shop/$categorySlug/': typeof LayoutShopLayoutShopCategorySlugIndexRoute
+  '/_layout/_ordersLayout/shop/orders/$orderId/review': typeof LayoutOrdersLayoutShopOrdersOrderIdReviewRoute
+  '/_layout/_ordersLayout/shop/orders/$orderId/': typeof LayoutOrdersLayoutShopOrdersOrderIdIndexRoute
+  '/_layout/_ordersLayout/shop/orders/$orderId/$orderItemId/review': typeof LayoutOrdersLayoutShopOrdersOrderIdOrderItemIdReviewRoute
+}
+export interface FileRouteTypes {
+  fileRoutesByFullPath: FileRoutesByFullPath
+  fullPaths:
+    | '/'
+    | '/login'
+    | '/signup'
+    | '/account'
+    | '/contact-us'
+    | '/auth/verify'
+    | '/shop/checkout/pending'
+    | '/shop/checkout/pod-confirmation'
+    | '/rewards/'
+    | '/shop/bag/'
+    | '/shop/checkout/'
+    | '/shop/product/$productSlug'
+    | '/shop/checkout/$sessionIdSlug/canceled'
+    | '/shop/checkout/$sessionIdSlug/complete'
+    | '/shop/checkout/$sessionIdSlug/incomplete'
+    | '/policies/delivery-returns-exchanges/'
+    | '/policies/privacy/'
+    | '/policies/tos/'
+    | '/shop/saved/'
+    | '/shop/checkout/$sessionIdSlug/'
+    | '/shop/checkout/complete/'
+    | '/shop/checkout/verify/'
+    | '/shop/$categorySlug/$subcategorySlug'
+    | '/shop/orders/'
+    | '/shop/$categorySlug/'
+    | '/shop/orders/$orderId/review'
+    | '/shop/orders/$orderId/'
+    | '/shop/orders/$orderId/$orderItemId/review'
+  fileRoutesByTo: FileRoutesByTo
+  to:
+    | '/'
+    | '/login'
+    | '/signup'
+    | '/account'
+    | '/contact-us'
+    | '/auth/verify'
+    | '/shop/checkout/pending'
+    | '/shop/checkout/pod-confirmation'
+    | '/rewards'
+    | '/shop/bag'
+    | '/shop/checkout'
+    | '/shop/product/$productSlug'
+    | '/shop/checkout/$sessionIdSlug/canceled'
+    | '/shop/checkout/$sessionIdSlug/complete'
+    | '/shop/checkout/$sessionIdSlug/incomplete'
+    | '/policies/delivery-returns-exchanges'
+    | '/policies/privacy'
+    | '/policies/tos'
+    | '/shop/saved'
+    | '/shop/checkout/$sessionIdSlug'
+    | '/shop/checkout/complete'
+    | '/shop/checkout/verify'
+    | '/shop/$categorySlug/$subcategorySlug'
+    | '/shop/orders'
+    | '/shop/$categorySlug'
+    | '/shop/orders/$orderId/review'
+    | '/shop/orders/$orderId'
+    | '/shop/orders/$orderId/$orderItemId/review'
+  id:
+    | '__root__'
+    | '/'
+    | '/_layout'
+    | '/login'
+    | '/signup'
+    | '/_layout/_ordersLayout'
+    | '/_layout/_shopLayout'
+    | '/_layout/account'
+    | '/_layout/contact-us'
+    | '/auth/verify'
+    | '/shop/checkout/pending'
+    | '/shop/checkout/pod-confirmation'
+    | '/_layout/rewards/'
+    | '/shop/bag/'
+    | '/shop/checkout/'
+    | '/_layout/shop/product/$productSlug'
+    | '/shop/checkout/$sessionIdSlug/canceled'
+    | '/shop/checkout/$sessionIdSlug/complete'
+    | '/shop/checkout/$sessionIdSlug/incomplete'
+    | '/_layout/policies/delivery-returns-exchanges/'
+    | '/_layout/policies/privacy/'
+    | '/_layout/policies/tos/'
+    | '/_layout/shop/saved/'
+    | '/shop/checkout/$sessionIdSlug/'
+    | '/shop/checkout/complete/'
+    | '/shop/checkout/verify/'
+    | '/_layout/_shopLayout/shop/$categorySlug/$subcategorySlug'
+    | '/_layout/_ordersLayout/shop/orders/'
+    | '/_layout/_shopLayout/shop/$categorySlug/'
+    | '/_layout/_ordersLayout/shop/orders/$orderId/review'
+    | '/_layout/_ordersLayout/shop/orders/$orderId/'
+    | '/_layout/_ordersLayout/shop/orders/$orderId/$orderItemId/review'
+  fileRoutesById: FileRoutesById
+}
+export interface RootRouteChildren {
+  IndexRoute: typeof IndexRoute
+  LayoutRoute: typeof LayoutRouteWithChildren
+  LoginRoute: typeof LoginRoute
+  SignupRoute: typeof SignupRoute
+  AuthVerifyRoute: typeof AuthVerifyRoute
+  ShopCheckoutPendingRoute: typeof ShopCheckoutPendingRoute
+  ShopCheckoutPodConfirmationRoute: typeof ShopCheckoutPodConfirmationRoute
+  ShopBagIndexRoute: typeof ShopBagIndexRoute
+  ShopCheckoutIndexRoute: typeof ShopCheckoutIndexRoute
+  ShopCheckoutSessionIdSlugCanceledRoute: typeof ShopCheckoutSessionIdSlugCanceledRoute
+  ShopCheckoutSessionIdSlugCompleteRoute: typeof ShopCheckoutSessionIdSlugCompleteRoute
+  ShopCheckoutSessionIdSlugIncompleteRoute: typeof ShopCheckoutSessionIdSlugIncompleteRoute
+  ShopCheckoutSessionIdSlugIndexRoute: typeof ShopCheckoutSessionIdSlugIndexRoute
+  ShopCheckoutCompleteIndexRoute: typeof ShopCheckoutCompleteIndexRoute
+  ShopCheckoutVerifyIndexRoute: typeof ShopCheckoutVerifyIndexRoute
+}
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexImport
-      parentRoute: typeof rootRoute
-    }
-    '/_layout': {
-      id: '/_layout'
-      path: ''
-      fullPath: ''
-      preLoaderRoute: typeof LayoutImport
-      parentRoute: typeof rootRoute
+    '/signup': {
+      id: '/signup'
+      path: '/signup'
+      fullPath: '/signup'
+      preLoaderRoute: typeof SignupRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/login': {
       id: '/login'
       path: '/login'
       fullPath: '/login'
-      preLoaderRoute: typeof LoginImport
-      parentRoute: typeof rootRoute
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/signup': {
-      id: '/signup'
-      path: '/signup'
-      fullPath: '/signup'
-      preLoaderRoute: typeof SignupImport
-      parentRoute: typeof rootRoute
-    }
-    '/_layout/_ordersLayout': {
-      id: '/_layout/_ordersLayout'
+    '/_layout': {
+      id: '/_layout'
       path: ''
-      fullPath: ''
-      preLoaderRoute: typeof LayoutOrdersLayoutImport
-      parentRoute: typeof LayoutImport
+      fullPath: '/'
+      preLoaderRoute: typeof LayoutRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/_layout/_shopLayout': {
-      id: '/_layout/_shopLayout'
-      path: ''
-      fullPath: ''
-      preLoaderRoute: typeof LayoutShopLayoutImport
-      parentRoute: typeof LayoutImport
-    }
-    '/_layout/account': {
-      id: '/_layout/account'
-      path: '/account'
-      fullPath: '/account'
-      preLoaderRoute: typeof LayoutAccountImport
-      parentRoute: typeof LayoutImport
-    }
-    '/_layout/contact-us': {
-      id: '/_layout/contact-us'
-      path: '/contact-us'
-      fullPath: '/contact-us'
-      preLoaderRoute: typeof LayoutContactUsImport
-      parentRoute: typeof LayoutImport
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/auth/verify': {
       id: '/auth/verify'
       path: '/auth/verify'
       fullPath: '/auth/verify'
-      preLoaderRoute: typeof AuthVerifyImport
-      parentRoute: typeof rootRoute
+      preLoaderRoute: typeof AuthVerifyRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/shop/checkout/pending': {
-      id: '/shop/checkout/pending'
-      path: '/shop/checkout/pending'
-      fullPath: '/shop/checkout/pending'
-      preLoaderRoute: typeof ShopCheckoutPendingImport
-      parentRoute: typeof rootRoute
+    '/_layout/contact-us': {
+      id: '/_layout/contact-us'
+      path: '/contact-us'
+      fullPath: '/contact-us'
+      preLoaderRoute: typeof LayoutContactUsRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/account': {
+      id: '/_layout/account'
+      path: '/account'
+      fullPath: '/account'
+      preLoaderRoute: typeof LayoutAccountRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/_shopLayout': {
+      id: '/_layout/_shopLayout'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof LayoutShopLayoutRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/_ordersLayout': {
+      id: '/_layout/_ordersLayout'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof LayoutOrdersLayoutRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/shop/checkout/': {
+      id: '/shop/checkout/'
+      path: '/shop/checkout'
+      fullPath: '/shop/checkout/'
+      preLoaderRoute: typeof ShopCheckoutIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/shop/bag/': {
+      id: '/shop/bag/'
+      path: '/shop/bag'
+      fullPath: '/shop/bag/'
+      preLoaderRoute: typeof ShopBagIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_layout/rewards/': {
+      id: '/_layout/rewards/'
+      path: '/rewards'
+      fullPath: '/rewards/'
+      preLoaderRoute: typeof LayoutRewardsIndexRouteImport
+      parentRoute: typeof LayoutRoute
     }
     '/shop/checkout/pod-confirmation': {
       id: '/shop/checkout/pod-confirmation'
       path: '/shop/checkout/pod-confirmation'
       fullPath: '/shop/checkout/pod-confirmation'
-      preLoaderRoute: typeof ShopCheckoutPodConfirmationImport
-      parentRoute: typeof rootRoute
+      preLoaderRoute: typeof ShopCheckoutPodConfirmationRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/_layout/rewards/': {
-      id: '/_layout/rewards/'
-      path: '/rewards'
-      fullPath: '/rewards'
-      preLoaderRoute: typeof LayoutRewardsIndexImport
-      parentRoute: typeof LayoutImport
+    '/shop/checkout/pending': {
+      id: '/shop/checkout/pending'
+      path: '/shop/checkout/pending'
+      fullPath: '/shop/checkout/pending'
+      preLoaderRoute: typeof ShopCheckoutPendingRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/shop/bag/': {
-      id: '/shop/bag/'
-      path: '/shop/bag'
-      fullPath: '/shop/bag'
-      preLoaderRoute: typeof ShopBagIndexImport
-      parentRoute: typeof rootRoute
+    '/shop/checkout/verify/': {
+      id: '/shop/checkout/verify/'
+      path: '/shop/checkout/verify'
+      fullPath: '/shop/checkout/verify/'
+      preLoaderRoute: typeof ShopCheckoutVerifyIndexRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/shop/checkout/': {
-      id: '/shop/checkout/'
-      path: '/shop/checkout'
-      fullPath: '/shop/checkout'
-      preLoaderRoute: typeof ShopCheckoutIndexImport
-      parentRoute: typeof rootRoute
+    '/shop/checkout/complete/': {
+      id: '/shop/checkout/complete/'
+      path: '/shop/checkout/complete'
+      fullPath: '/shop/checkout/complete/'
+      preLoaderRoute: typeof ShopCheckoutCompleteIndexRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/_layout/shop/product/$productSlug': {
-      id: '/_layout/shop/product/$productSlug'
-      path: '/shop/product/$productSlug'
-      fullPath: '/shop/product/$productSlug'
-      preLoaderRoute: typeof LayoutShopProductProductSlugImport
-      parentRoute: typeof LayoutImport
+    '/shop/checkout/$sessionIdSlug/': {
+      id: '/shop/checkout/$sessionIdSlug/'
+      path: '/shop/checkout/$sessionIdSlug'
+      fullPath: '/shop/checkout/$sessionIdSlug/'
+      preLoaderRoute: typeof ShopCheckoutSessionIdSlugIndexRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/shop/checkout/$sessionIdSlug/canceled': {
-      id: '/shop/checkout/$sessionIdSlug/canceled'
-      path: '/shop/checkout/$sessionIdSlug/canceled'
-      fullPath: '/shop/checkout/$sessionIdSlug/canceled'
-      preLoaderRoute: typeof ShopCheckoutSessionIdSlugCanceledImport
-      parentRoute: typeof rootRoute
+    '/_layout/shop/saved/': {
+      id: '/_layout/shop/saved/'
+      path: '/shop/saved'
+      fullPath: '/shop/saved/'
+      preLoaderRoute: typeof LayoutShopSavedIndexRouteImport
+      parentRoute: typeof LayoutRoute
     }
-    '/shop/checkout/$sessionIdSlug/complete': {
-      id: '/shop/checkout/$sessionIdSlug/complete'
-      path: '/shop/checkout/$sessionIdSlug/complete'
-      fullPath: '/shop/checkout/$sessionIdSlug/complete'
-      preLoaderRoute: typeof ShopCheckoutSessionIdSlugCompleteImport
-      parentRoute: typeof rootRoute
+    '/_layout/policies/tos/': {
+      id: '/_layout/policies/tos/'
+      path: '/policies/tos'
+      fullPath: '/policies/tos/'
+      preLoaderRoute: typeof LayoutPoliciesTosIndexRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/policies/privacy/': {
+      id: '/_layout/policies/privacy/'
+      path: '/policies/privacy'
+      fullPath: '/policies/privacy/'
+      preLoaderRoute: typeof LayoutPoliciesPrivacyIndexRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/policies/delivery-returns-exchanges/': {
+      id: '/_layout/policies/delivery-returns-exchanges/'
+      path: '/policies/delivery-returns-exchanges'
+      fullPath: '/policies/delivery-returns-exchanges/'
+      preLoaderRoute: typeof LayoutPoliciesDeliveryReturnsExchangesIndexRouteImport
+      parentRoute: typeof LayoutRoute
     }
     '/shop/checkout/$sessionIdSlug/incomplete': {
       id: '/shop/checkout/$sessionIdSlug/incomplete'
       path: '/shop/checkout/$sessionIdSlug/incomplete'
       fullPath: '/shop/checkout/$sessionIdSlug/incomplete'
-      preLoaderRoute: typeof ShopCheckoutSessionIdSlugIncompleteImport
-      parentRoute: typeof rootRoute
+      preLoaderRoute: typeof ShopCheckoutSessionIdSlugIncompleteRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/_layout/policies/delivery-returns-exchanges/': {
-      id: '/_layout/policies/delivery-returns-exchanges/'
-      path: '/policies/delivery-returns-exchanges'
-      fullPath: '/policies/delivery-returns-exchanges'
-      preLoaderRoute: typeof LayoutPoliciesDeliveryReturnsExchangesIndexImport
-      parentRoute: typeof LayoutImport
+    '/shop/checkout/$sessionIdSlug/complete': {
+      id: '/shop/checkout/$sessionIdSlug/complete'
+      path: '/shop/checkout/$sessionIdSlug/complete'
+      fullPath: '/shop/checkout/$sessionIdSlug/complete'
+      preLoaderRoute: typeof ShopCheckoutSessionIdSlugCompleteRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/_layout/policies/privacy/': {
-      id: '/_layout/policies/privacy/'
-      path: '/policies/privacy'
-      fullPath: '/policies/privacy'
-      preLoaderRoute: typeof LayoutPoliciesPrivacyIndexImport
-      parentRoute: typeof LayoutImport
+    '/shop/checkout/$sessionIdSlug/canceled': {
+      id: '/shop/checkout/$sessionIdSlug/canceled'
+      path: '/shop/checkout/$sessionIdSlug/canceled'
+      fullPath: '/shop/checkout/$sessionIdSlug/canceled'
+      preLoaderRoute: typeof ShopCheckoutSessionIdSlugCanceledRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/_layout/policies/tos/': {
-      id: '/_layout/policies/tos/'
-      path: '/policies/tos'
-      fullPath: '/policies/tos'
-      preLoaderRoute: typeof LayoutPoliciesTosIndexImport
-      parentRoute: typeof LayoutImport
+    '/_layout/shop/product/$productSlug': {
+      id: '/_layout/shop/product/$productSlug'
+      path: '/shop/product/$productSlug'
+      fullPath: '/shop/product/$productSlug'
+      preLoaderRoute: typeof LayoutShopProductProductSlugRouteImport
+      parentRoute: typeof LayoutRoute
     }
-    '/_layout/shop/saved/': {
-      id: '/_layout/shop/saved/'
-      path: '/shop/saved'
-      fullPath: '/shop/saved'
-      preLoaderRoute: typeof LayoutShopSavedIndexImport
-      parentRoute: typeof LayoutImport
+    '/_layout/_shopLayout/shop/$categorySlug/': {
+      id: '/_layout/_shopLayout/shop/$categorySlug/'
+      path: '/shop/$categorySlug'
+      fullPath: '/shop/$categorySlug/'
+      preLoaderRoute: typeof LayoutShopLayoutShopCategorySlugIndexRouteImport
+      parentRoute: typeof LayoutShopLayoutRoute
     }
-    '/shop/checkout/$sessionIdSlug/': {
-      id: '/shop/checkout/$sessionIdSlug/'
-      path: '/shop/checkout/$sessionIdSlug'
-      fullPath: '/shop/checkout/$sessionIdSlug'
-      preLoaderRoute: typeof ShopCheckoutSessionIdSlugIndexImport
-      parentRoute: typeof rootRoute
-    }
-    '/shop/checkout/complete/': {
-      id: '/shop/checkout/complete/'
-      path: '/shop/checkout/complete'
-      fullPath: '/shop/checkout/complete'
-      preLoaderRoute: typeof ShopCheckoutCompleteIndexImport
-      parentRoute: typeof rootRoute
-    }
-    '/shop/checkout/verify/': {
-      id: '/shop/checkout/verify/'
-      path: '/shop/checkout/verify'
-      fullPath: '/shop/checkout/verify'
-      preLoaderRoute: typeof ShopCheckoutVerifyIndexImport
-      parentRoute: typeof rootRoute
+    '/_layout/_ordersLayout/shop/orders/': {
+      id: '/_layout/_ordersLayout/shop/orders/'
+      path: '/shop/orders'
+      fullPath: '/shop/orders/'
+      preLoaderRoute: typeof LayoutOrdersLayoutShopOrdersIndexRouteImport
+      parentRoute: typeof LayoutOrdersLayoutRoute
     }
     '/_layout/_shopLayout/shop/$categorySlug/$subcategorySlug': {
       id: '/_layout/_shopLayout/shop/$categorySlug/$subcategorySlug'
       path: '/shop/$categorySlug/$subcategorySlug'
       fullPath: '/shop/$categorySlug/$subcategorySlug'
-      preLoaderRoute: typeof LayoutShopLayoutShopCategorySlugSubcategorySlugImport
-      parentRoute: typeof LayoutShopLayoutImport
+      preLoaderRoute: typeof LayoutShopLayoutShopCategorySlugSubcategorySlugRouteImport
+      parentRoute: typeof LayoutShopLayoutRoute
     }
-    '/_layout/_ordersLayout/shop/orders/': {
-      id: '/_layout/_ordersLayout/shop/orders/'
-      path: '/shop/orders'
-      fullPath: '/shop/orders'
-      preLoaderRoute: typeof LayoutOrdersLayoutShopOrdersIndexImport
-      parentRoute: typeof LayoutOrdersLayoutImport
-    }
-    '/_layout/_shopLayout/shop/$categorySlug/': {
-      id: '/_layout/_shopLayout/shop/$categorySlug/'
-      path: '/shop/$categorySlug'
-      fullPath: '/shop/$categorySlug'
-      preLoaderRoute: typeof LayoutShopLayoutShopCategorySlugIndexImport
-      parentRoute: typeof LayoutShopLayoutImport
+    '/_layout/_ordersLayout/shop/orders/$orderId/': {
+      id: '/_layout/_ordersLayout/shop/orders/$orderId/'
+      path: '/shop/orders/$orderId'
+      fullPath: '/shop/orders/$orderId/'
+      preLoaderRoute: typeof LayoutOrdersLayoutShopOrdersOrderIdIndexRouteImport
+      parentRoute: typeof LayoutOrdersLayoutRoute
     }
     '/_layout/_ordersLayout/shop/orders/$orderId/review': {
       id: '/_layout/_ordersLayout/shop/orders/$orderId/review'
       path: '/shop/orders/$orderId/review'
       fullPath: '/shop/orders/$orderId/review'
-      preLoaderRoute: typeof LayoutOrdersLayoutShopOrdersOrderIdReviewImport
-      parentRoute: typeof LayoutOrdersLayoutImport
-    }
-    '/_layout/_ordersLayout/shop/orders/$orderId/': {
-      id: '/_layout/_ordersLayout/shop/orders/$orderId/'
-      path: '/shop/orders/$orderId'
-      fullPath: '/shop/orders/$orderId'
-      preLoaderRoute: typeof LayoutOrdersLayoutShopOrdersOrderIdIndexImport
-      parentRoute: typeof LayoutOrdersLayoutImport
+      preLoaderRoute: typeof LayoutOrdersLayoutShopOrdersOrderIdReviewRouteImport
+      parentRoute: typeof LayoutOrdersLayoutRoute
     }
     '/_layout/_ordersLayout/shop/orders/$orderId/$orderItemId/review': {
       id: '/_layout/_ordersLayout/shop/orders/$orderId/$orderItemId/review'
       path: '/shop/orders/$orderId/$orderItemId/review'
       fullPath: '/shop/orders/$orderId/$orderItemId/review'
-      preLoaderRoute: typeof LayoutOrdersLayoutShopOrdersOrderIdOrderItemIdReviewImport
-      parentRoute: typeof LayoutOrdersLayoutImport
+      preLoaderRoute: typeof LayoutOrdersLayoutShopOrdersOrderIdOrderItemIdReviewRouteImport
+      parentRoute: typeof LayoutOrdersLayoutRoute
     }
   }
 }
-
-// Create and export the route tree
 
 interface LayoutOrdersLayoutRouteChildren {
   LayoutOrdersLayoutShopOrdersIndexRoute: typeof LayoutOrdersLayoutShopOrdersIndexRoute
@@ -535,222 +705,6 @@ const LayoutRouteChildren: LayoutRouteChildren = {
 const LayoutRouteWithChildren =
   LayoutRoute._addFileChildren(LayoutRouteChildren)
 
-export interface FileRoutesByFullPath {
-  '/': typeof IndexRoute
-  '': typeof LayoutShopLayoutRouteWithChildren
-  '/login': typeof LoginRoute
-  '/signup': typeof SignupRoute
-  '/account': typeof LayoutAccountRoute
-  '/contact-us': typeof LayoutContactUsRoute
-  '/auth/verify': typeof AuthVerifyRoute
-  '/shop/checkout/pending': typeof ShopCheckoutPendingRoute
-  '/shop/checkout/pod-confirmation': typeof ShopCheckoutPodConfirmationRoute
-  '/rewards': typeof LayoutRewardsIndexRoute
-  '/shop/bag': typeof ShopBagIndexRoute
-  '/shop/checkout': typeof ShopCheckoutIndexRoute
-  '/shop/product/$productSlug': typeof LayoutShopProductProductSlugRoute
-  '/shop/checkout/$sessionIdSlug/canceled': typeof ShopCheckoutSessionIdSlugCanceledRoute
-  '/shop/checkout/$sessionIdSlug/complete': typeof ShopCheckoutSessionIdSlugCompleteRoute
-  '/shop/checkout/$sessionIdSlug/incomplete': typeof ShopCheckoutSessionIdSlugIncompleteRoute
-  '/policies/delivery-returns-exchanges': typeof LayoutPoliciesDeliveryReturnsExchangesIndexRoute
-  '/policies/privacy': typeof LayoutPoliciesPrivacyIndexRoute
-  '/policies/tos': typeof LayoutPoliciesTosIndexRoute
-  '/shop/saved': typeof LayoutShopSavedIndexRoute
-  '/shop/checkout/$sessionIdSlug': typeof ShopCheckoutSessionIdSlugIndexRoute
-  '/shop/checkout/complete': typeof ShopCheckoutCompleteIndexRoute
-  '/shop/checkout/verify': typeof ShopCheckoutVerifyIndexRoute
-  '/shop/$categorySlug/$subcategorySlug': typeof LayoutShopLayoutShopCategorySlugSubcategorySlugRoute
-  '/shop/orders': typeof LayoutOrdersLayoutShopOrdersIndexRoute
-  '/shop/$categorySlug': typeof LayoutShopLayoutShopCategorySlugIndexRoute
-  '/shop/orders/$orderId/review': typeof LayoutOrdersLayoutShopOrdersOrderIdReviewRoute
-  '/shop/orders/$orderId': typeof LayoutOrdersLayoutShopOrdersOrderIdIndexRoute
-  '/shop/orders/$orderId/$orderItemId/review': typeof LayoutOrdersLayoutShopOrdersOrderIdOrderItemIdReviewRoute
-}
-
-export interface FileRoutesByTo {
-  '/': typeof IndexRoute
-  '': typeof LayoutShopLayoutRouteWithChildren
-  '/login': typeof LoginRoute
-  '/signup': typeof SignupRoute
-  '/account': typeof LayoutAccountRoute
-  '/contact-us': typeof LayoutContactUsRoute
-  '/auth/verify': typeof AuthVerifyRoute
-  '/shop/checkout/pending': typeof ShopCheckoutPendingRoute
-  '/shop/checkout/pod-confirmation': typeof ShopCheckoutPodConfirmationRoute
-  '/rewards': typeof LayoutRewardsIndexRoute
-  '/shop/bag': typeof ShopBagIndexRoute
-  '/shop/checkout': typeof ShopCheckoutIndexRoute
-  '/shop/product/$productSlug': typeof LayoutShopProductProductSlugRoute
-  '/shop/checkout/$sessionIdSlug/canceled': typeof ShopCheckoutSessionIdSlugCanceledRoute
-  '/shop/checkout/$sessionIdSlug/complete': typeof ShopCheckoutSessionIdSlugCompleteRoute
-  '/shop/checkout/$sessionIdSlug/incomplete': typeof ShopCheckoutSessionIdSlugIncompleteRoute
-  '/policies/delivery-returns-exchanges': typeof LayoutPoliciesDeliveryReturnsExchangesIndexRoute
-  '/policies/privacy': typeof LayoutPoliciesPrivacyIndexRoute
-  '/policies/tos': typeof LayoutPoliciesTosIndexRoute
-  '/shop/saved': typeof LayoutShopSavedIndexRoute
-  '/shop/checkout/$sessionIdSlug': typeof ShopCheckoutSessionIdSlugIndexRoute
-  '/shop/checkout/complete': typeof ShopCheckoutCompleteIndexRoute
-  '/shop/checkout/verify': typeof ShopCheckoutVerifyIndexRoute
-  '/shop/$categorySlug/$subcategorySlug': typeof LayoutShopLayoutShopCategorySlugSubcategorySlugRoute
-  '/shop/orders': typeof LayoutOrdersLayoutShopOrdersIndexRoute
-  '/shop/$categorySlug': typeof LayoutShopLayoutShopCategorySlugIndexRoute
-  '/shop/orders/$orderId/review': typeof LayoutOrdersLayoutShopOrdersOrderIdReviewRoute
-  '/shop/orders/$orderId': typeof LayoutOrdersLayoutShopOrdersOrderIdIndexRoute
-  '/shop/orders/$orderId/$orderItemId/review': typeof LayoutOrdersLayoutShopOrdersOrderIdOrderItemIdReviewRoute
-}
-
-export interface FileRoutesById {
-  __root__: typeof rootRoute
-  '/': typeof IndexRoute
-  '/_layout': typeof LayoutRouteWithChildren
-  '/login': typeof LoginRoute
-  '/signup': typeof SignupRoute
-  '/_layout/_ordersLayout': typeof LayoutOrdersLayoutRouteWithChildren
-  '/_layout/_shopLayout': typeof LayoutShopLayoutRouteWithChildren
-  '/_layout/account': typeof LayoutAccountRoute
-  '/_layout/contact-us': typeof LayoutContactUsRoute
-  '/auth/verify': typeof AuthVerifyRoute
-  '/shop/checkout/pending': typeof ShopCheckoutPendingRoute
-  '/shop/checkout/pod-confirmation': typeof ShopCheckoutPodConfirmationRoute
-  '/_layout/rewards/': typeof LayoutRewardsIndexRoute
-  '/shop/bag/': typeof ShopBagIndexRoute
-  '/shop/checkout/': typeof ShopCheckoutIndexRoute
-  '/_layout/shop/product/$productSlug': typeof LayoutShopProductProductSlugRoute
-  '/shop/checkout/$sessionIdSlug/canceled': typeof ShopCheckoutSessionIdSlugCanceledRoute
-  '/shop/checkout/$sessionIdSlug/complete': typeof ShopCheckoutSessionIdSlugCompleteRoute
-  '/shop/checkout/$sessionIdSlug/incomplete': typeof ShopCheckoutSessionIdSlugIncompleteRoute
-  '/_layout/policies/delivery-returns-exchanges/': typeof LayoutPoliciesDeliveryReturnsExchangesIndexRoute
-  '/_layout/policies/privacy/': typeof LayoutPoliciesPrivacyIndexRoute
-  '/_layout/policies/tos/': typeof LayoutPoliciesTosIndexRoute
-  '/_layout/shop/saved/': typeof LayoutShopSavedIndexRoute
-  '/shop/checkout/$sessionIdSlug/': typeof ShopCheckoutSessionIdSlugIndexRoute
-  '/shop/checkout/complete/': typeof ShopCheckoutCompleteIndexRoute
-  '/shop/checkout/verify/': typeof ShopCheckoutVerifyIndexRoute
-  '/_layout/_shopLayout/shop/$categorySlug/$subcategorySlug': typeof LayoutShopLayoutShopCategorySlugSubcategorySlugRoute
-  '/_layout/_ordersLayout/shop/orders/': typeof LayoutOrdersLayoutShopOrdersIndexRoute
-  '/_layout/_shopLayout/shop/$categorySlug/': typeof LayoutShopLayoutShopCategorySlugIndexRoute
-  '/_layout/_ordersLayout/shop/orders/$orderId/review': typeof LayoutOrdersLayoutShopOrdersOrderIdReviewRoute
-  '/_layout/_ordersLayout/shop/orders/$orderId/': typeof LayoutOrdersLayoutShopOrdersOrderIdIndexRoute
-  '/_layout/_ordersLayout/shop/orders/$orderId/$orderItemId/review': typeof LayoutOrdersLayoutShopOrdersOrderIdOrderItemIdReviewRoute
-}
-
-export interface FileRouteTypes {
-  fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths:
-    | '/'
-    | ''
-    | '/login'
-    | '/signup'
-    | '/account'
-    | '/contact-us'
-    | '/auth/verify'
-    | '/shop/checkout/pending'
-    | '/shop/checkout/pod-confirmation'
-    | '/rewards'
-    | '/shop/bag'
-    | '/shop/checkout'
-    | '/shop/product/$productSlug'
-    | '/shop/checkout/$sessionIdSlug/canceled'
-    | '/shop/checkout/$sessionIdSlug/complete'
-    | '/shop/checkout/$sessionIdSlug/incomplete'
-    | '/policies/delivery-returns-exchanges'
-    | '/policies/privacy'
-    | '/policies/tos'
-    | '/shop/saved'
-    | '/shop/checkout/$sessionIdSlug'
-    | '/shop/checkout/complete'
-    | '/shop/checkout/verify'
-    | '/shop/$categorySlug/$subcategorySlug'
-    | '/shop/orders'
-    | '/shop/$categorySlug'
-    | '/shop/orders/$orderId/review'
-    | '/shop/orders/$orderId'
-    | '/shop/orders/$orderId/$orderItemId/review'
-  fileRoutesByTo: FileRoutesByTo
-  to:
-    | '/'
-    | ''
-    | '/login'
-    | '/signup'
-    | '/account'
-    | '/contact-us'
-    | '/auth/verify'
-    | '/shop/checkout/pending'
-    | '/shop/checkout/pod-confirmation'
-    | '/rewards'
-    | '/shop/bag'
-    | '/shop/checkout'
-    | '/shop/product/$productSlug'
-    | '/shop/checkout/$sessionIdSlug/canceled'
-    | '/shop/checkout/$sessionIdSlug/complete'
-    | '/shop/checkout/$sessionIdSlug/incomplete'
-    | '/policies/delivery-returns-exchanges'
-    | '/policies/privacy'
-    | '/policies/tos'
-    | '/shop/saved'
-    | '/shop/checkout/$sessionIdSlug'
-    | '/shop/checkout/complete'
-    | '/shop/checkout/verify'
-    | '/shop/$categorySlug/$subcategorySlug'
-    | '/shop/orders'
-    | '/shop/$categorySlug'
-    | '/shop/orders/$orderId/review'
-    | '/shop/orders/$orderId'
-    | '/shop/orders/$orderId/$orderItemId/review'
-  id:
-    | '__root__'
-    | '/'
-    | '/_layout'
-    | '/login'
-    | '/signup'
-    | '/_layout/_ordersLayout'
-    | '/_layout/_shopLayout'
-    | '/_layout/account'
-    | '/_layout/contact-us'
-    | '/auth/verify'
-    | '/shop/checkout/pending'
-    | '/shop/checkout/pod-confirmation'
-    | '/_layout/rewards/'
-    | '/shop/bag/'
-    | '/shop/checkout/'
-    | '/_layout/shop/product/$productSlug'
-    | '/shop/checkout/$sessionIdSlug/canceled'
-    | '/shop/checkout/$sessionIdSlug/complete'
-    | '/shop/checkout/$sessionIdSlug/incomplete'
-    | '/_layout/policies/delivery-returns-exchanges/'
-    | '/_layout/policies/privacy/'
-    | '/_layout/policies/tos/'
-    | '/_layout/shop/saved/'
-    | '/shop/checkout/$sessionIdSlug/'
-    | '/shop/checkout/complete/'
-    | '/shop/checkout/verify/'
-    | '/_layout/_shopLayout/shop/$categorySlug/$subcategorySlug'
-    | '/_layout/_ordersLayout/shop/orders/'
-    | '/_layout/_shopLayout/shop/$categorySlug/'
-    | '/_layout/_ordersLayout/shop/orders/$orderId/review'
-    | '/_layout/_ordersLayout/shop/orders/$orderId/'
-    | '/_layout/_ordersLayout/shop/orders/$orderId/$orderItemId/review'
-  fileRoutesById: FileRoutesById
-}
-
-export interface RootRouteChildren {
-  IndexRoute: typeof IndexRoute
-  LayoutRoute: typeof LayoutRouteWithChildren
-  LoginRoute: typeof LoginRoute
-  SignupRoute: typeof SignupRoute
-  AuthVerifyRoute: typeof AuthVerifyRoute
-  ShopCheckoutPendingRoute: typeof ShopCheckoutPendingRoute
-  ShopCheckoutPodConfirmationRoute: typeof ShopCheckoutPodConfirmationRoute
-  ShopBagIndexRoute: typeof ShopBagIndexRoute
-  ShopCheckoutIndexRoute: typeof ShopCheckoutIndexRoute
-  ShopCheckoutSessionIdSlugCanceledRoute: typeof ShopCheckoutSessionIdSlugCanceledRoute
-  ShopCheckoutSessionIdSlugCompleteRoute: typeof ShopCheckoutSessionIdSlugCompleteRoute
-  ShopCheckoutSessionIdSlugIncompleteRoute: typeof ShopCheckoutSessionIdSlugIncompleteRoute
-  ShopCheckoutSessionIdSlugIndexRoute: typeof ShopCheckoutSessionIdSlugIndexRoute
-  ShopCheckoutCompleteIndexRoute: typeof ShopCheckoutCompleteIndexRoute
-  ShopCheckoutVerifyIndexRoute: typeof ShopCheckoutVerifyIndexRoute
-}
-
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   LayoutRoute: LayoutRouteWithChildren,
@@ -771,165 +725,6 @@ const rootRouteChildren: RootRouteChildren = {
   ShopCheckoutCompleteIndexRoute: ShopCheckoutCompleteIndexRoute,
   ShopCheckoutVerifyIndexRoute: ShopCheckoutVerifyIndexRoute,
 }
-
-export const routeTree = rootRoute
+export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-/* ROUTE_MANIFEST_START
-{
-  "routes": {
-    "__root__": {
-      "filePath": "__root.tsx",
-      "children": [
-        "/",
-        "/_layout",
-        "/login",
-        "/signup",
-        "/auth/verify",
-        "/shop/checkout/pending",
-        "/shop/checkout/pod-confirmation",
-        "/shop/bag/",
-        "/shop/checkout/",
-        "/shop/checkout/$sessionIdSlug/canceled",
-        "/shop/checkout/$sessionIdSlug/complete",
-        "/shop/checkout/$sessionIdSlug/incomplete",
-        "/shop/checkout/$sessionIdSlug/",
-        "/shop/checkout/complete/",
-        "/shop/checkout/verify/"
-      ]
-    },
-    "/": {
-      "filePath": "index.tsx"
-    },
-    "/_layout": {
-      "filePath": "_layout.tsx",
-      "children": [
-        "/_layout/_ordersLayout",
-        "/_layout/_shopLayout",
-        "/_layout/account",
-        "/_layout/contact-us",
-        "/_layout/rewards/",
-        "/_layout/shop/product/$productSlug",
-        "/_layout/policies/delivery-returns-exchanges/",
-        "/_layout/policies/privacy/",
-        "/_layout/policies/tos/",
-        "/_layout/shop/saved/"
-      ]
-    },
-    "/login": {
-      "filePath": "login.tsx"
-    },
-    "/signup": {
-      "filePath": "signup.tsx"
-    },
-    "/_layout/_ordersLayout": {
-      "filePath": "_layout/_ordersLayout.tsx",
-      "parent": "/_layout",
-      "children": [
-        "/_layout/_ordersLayout/shop/orders/",
-        "/_layout/_ordersLayout/shop/orders/$orderId/review",
-        "/_layout/_ordersLayout/shop/orders/$orderId/",
-        "/_layout/_ordersLayout/shop/orders/$orderId/$orderItemId/review"
-      ]
-    },
-    "/_layout/_shopLayout": {
-      "filePath": "_layout/_shopLayout.tsx",
-      "parent": "/_layout",
-      "children": [
-        "/_layout/_shopLayout/shop/$categorySlug/$subcategorySlug",
-        "/_layout/_shopLayout/shop/$categorySlug/"
-      ]
-    },
-    "/_layout/account": {
-      "filePath": "_layout/account.tsx",
-      "parent": "/_layout"
-    },
-    "/_layout/contact-us": {
-      "filePath": "_layout/contact-us.tsx",
-      "parent": "/_layout"
-    },
-    "/auth/verify": {
-      "filePath": "auth.verify.tsx"
-    },
-    "/shop/checkout/pending": {
-      "filePath": "shop/checkout/pending.tsx"
-    },
-    "/shop/checkout/pod-confirmation": {
-      "filePath": "shop/checkout/pod-confirmation.tsx"
-    },
-    "/_layout/rewards/": {
-      "filePath": "_layout/rewards.index.tsx",
-      "parent": "/_layout"
-    },
-    "/shop/bag/": {
-      "filePath": "shop/bag.index.tsx"
-    },
-    "/shop/checkout/": {
-      "filePath": "shop/checkout/index.tsx"
-    },
-    "/_layout/shop/product/$productSlug": {
-      "filePath": "_layout/shop.product.$productSlug.tsx",
-      "parent": "/_layout"
-    },
-    "/shop/checkout/$sessionIdSlug/canceled": {
-      "filePath": "shop/checkout/$sessionIdSlug/canceled.tsx"
-    },
-    "/shop/checkout/$sessionIdSlug/complete": {
-      "filePath": "shop/checkout/$sessionIdSlug/complete.tsx"
-    },
-    "/shop/checkout/$sessionIdSlug/incomplete": {
-      "filePath": "shop/checkout/$sessionIdSlug/incomplete.tsx"
-    },
-    "/_layout/policies/delivery-returns-exchanges/": {
-      "filePath": "_layout/policies/delivery-returns-exchanges.index.tsx",
-      "parent": "/_layout"
-    },
-    "/_layout/policies/privacy/": {
-      "filePath": "_layout/policies/privacy.index.tsx",
-      "parent": "/_layout"
-    },
-    "/_layout/policies/tos/": {
-      "filePath": "_layout/policies/tos.index.tsx",
-      "parent": "/_layout"
-    },
-    "/_layout/shop/saved/": {
-      "filePath": "_layout/shop.saved.index.tsx",
-      "parent": "/_layout"
-    },
-    "/shop/checkout/$sessionIdSlug/": {
-      "filePath": "shop/checkout/$sessionIdSlug/index.tsx"
-    },
-    "/shop/checkout/complete/": {
-      "filePath": "shop/checkout/complete.index.tsx"
-    },
-    "/shop/checkout/verify/": {
-      "filePath": "shop/checkout/verify.index.tsx"
-    },
-    "/_layout/_shopLayout/shop/$categorySlug/$subcategorySlug": {
-      "filePath": "_layout/_shopLayout/shop/$categorySlug/$subcategorySlug.tsx",
-      "parent": "/_layout/_shopLayout"
-    },
-    "/_layout/_ordersLayout/shop/orders/": {
-      "filePath": "_layout/_ordersLayout/shop/orders/index.tsx",
-      "parent": "/_layout/_ordersLayout"
-    },
-    "/_layout/_shopLayout/shop/$categorySlug/": {
-      "filePath": "_layout/_shopLayout/shop/$categorySlug/index.tsx",
-      "parent": "/_layout/_shopLayout"
-    },
-    "/_layout/_ordersLayout/shop/orders/$orderId/review": {
-      "filePath": "_layout/_ordersLayout/shop/orders/$orderId/review.tsx",
-      "parent": "/_layout/_ordersLayout"
-    },
-    "/_layout/_ordersLayout/shop/orders/$orderId/": {
-      "filePath": "_layout/_ordersLayout/shop/orders/$orderId/index.tsx",
-      "parent": "/_layout/_ordersLayout"
-    },
-    "/_layout/_ordersLayout/shop/orders/$orderId/$orderItemId/review": {
-      "filePath": "_layout/_ordersLayout/shop/orders/$orderId/$orderItemId.review.tsx",
-      "parent": "/_layout/_ordersLayout"
-    }
-  }
-}
-ROUTE_MANIFEST_END */
