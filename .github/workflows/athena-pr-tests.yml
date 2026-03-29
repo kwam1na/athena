@@ -1,4 +1,4 @@
-name: Storefront Webapp Tests
+name: Athena PR Tests
 
 on:
   pull_request:
