@@ -19,7 +19,7 @@ import {
   createSessionResultValidator,
 } from "./helpers/resultTypes";
 import { calculateSessionExpiration } from "./helpers/sessionExpiration";
-import { createTransactionFromSession } from "./pos";
+import { createTransactionFromSessionHandler } from "./pos";
 
 // Get sessions for a store (with filtering)
 export const getStoreSessions = query({
@@ -451,7 +451,7 @@ export const completeSession = mutation({
       total: args.total,
     });
 
-    const { transactionNumber } = await createTransactionFromSession(ctx, {
+    const { transactionNumber } = await createTransactionFromSessionHandler(ctx, {
       sessionId: args.sessionId,
       payments: args.payments,
       notes: args.notes,
