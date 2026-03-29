@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Receipt } from "lucide-react";
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
 import View from "../../View";
@@ -7,10 +7,15 @@ import { LoadingButton } from "../../ui/loading-button";
 import { Switch } from "../../ui/switch";
 import { Label } from "../../ui/label";
 import { useStoreConfigUpdate } from "../hooks/useStoreConfigUpdate";
+import { getStoreConfigV2 } from "~/src/lib/storeConfig";
 
 export const TaxView = () => {
   const { activeStore } = useGetActiveStore();
   const { updateConfig, isUpdating } = useStoreConfigUpdate();
+  const storeConfig = useMemo(
+    () => getStoreConfigV2(activeStore),
+    [activeStore?.config],
+  );
 
   const [taxRate, setTaxRate] = useState(0);
   const [taxName, setTaxName] = useState("");
@@ -27,9 +32,10 @@ export const TaxView = () => {
 
     await updateConfig({
       storeId: activeStore?._id!,
-      config: {
-        ...activeStore?.config,
-        tax: taxConfig,
+      patch: {
+        commerce: {
+          tax: taxConfig,
+        },
       },
       successMessage: "Tax settings updated",
       errorMessage: "An error occurred while updating tax settings",
@@ -38,12 +44,12 @@ export const TaxView = () => {
 
   useEffect(() => {
     // Sync state with store data when `activeStore` changes
-    const taxConfig = activeStore?.config?.tax;
-    setEnableTax(taxConfig?.enabled || false);
-    setTaxRate(taxConfig?.rate || 0);
+    const taxConfig = storeConfig.commerce.tax;
+    setEnableTax(taxConfig?.enabled ?? false);
+    setTaxRate(taxConfig?.rate ?? 0);
     setTaxName(taxConfig?.name || "");
-    setIncludeTaxInPrice(taxConfig?.includedInPrice || false);
-  }, [activeStore]);
+    setIncludeTaxInPrice(taxConfig?.includedInPrice ?? false);
+  }, [storeConfig]);
 
   return (
     <View

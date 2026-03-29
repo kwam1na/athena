@@ -1,27 +1,30 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
 import { TvMinimalPlay, Image } from "lucide-react";
 import { LandingPageReelVersion } from "./LandingPageReelVersion";
 import { HeroHeaderImageUploader } from "./HeroHeaderImageUploader";
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
-import { Id } from "~/convex/_generated/dataModel";
 import { ToggleGroup, ToggleGroupItem } from "../ui/toggle-group";
 import { Switch } from "../ui/switch";
-import { Label } from "../ui/label";
 import { useMutation } from "convex/react";
 import { api } from "~/convex/_generated/api";
 import { toast } from "sonner";
 import { ReelUploader } from "./ReelUploader";
+import { getStoreConfigV2 } from "~/src/lib/storeConfig";
 
 export const HeroSectionTabs: React.FC = () => {
   const { activeStore } = useGetActiveStore();
+  const storeConfig = useMemo(
+    () => getStoreConfigV2(activeStore),
+    [activeStore?.config],
+  );
   const [heroHeaderImage, setHeroHeaderImage] = useState<string | undefined>(
-    activeStore?.config?.homeHero?.headerImage,
+    storeConfig.media.homeHero.headerImage,
   );
 
   const [heroDisplayType, setHeroDisplayType] = useState<
     "reel" | "image" | undefined
-  >(activeStore?.config?.homeHero?.displayType as "reel" | "image");
+  >(storeConfig.media.homeHero.displayType as "reel" | "image");
 
   const [contentOptions, setContentOptions] = useState<{
     showOverlay: boolean;
@@ -31,25 +34,25 @@ export const HeroSectionTabs: React.FC = () => {
     showText: false,
   });
 
-  const updateConfig = useMutation(api.inventory.stores.updateConfig);
+  const patchConfig = useMutation(api.inventory.stores.patchConfigV2);
 
   // Update local state when store config changes
   useEffect(() => {
-    const next = activeStore?.config?.homeHero?.headerImage;
+    const next = storeConfig.media.homeHero.headerImage;
     if (next) setHeroHeaderImage(next);
-  }, [activeStore?.config?.homeHero]);
+  }, [storeConfig.media.homeHero.headerImage]);
 
   useEffect(() => {
-    const next: "reel" | "image" = activeStore?.config?.homeHero?.displayType;
+    const next: "reel" | "image" = storeConfig.media.homeHero.displayType;
     if (next) setHeroDisplayType(next);
-  }, [activeStore?.config?.homeHero]);
+  }, [storeConfig.media.homeHero.displayType]);
 
   useEffect(() => {
     setContentOptions({
-      showOverlay: Boolean(activeStore?.config?.homeHero?.showOverlay),
-      showText: Boolean(activeStore?.config?.homeHero?.showText),
+      showOverlay: Boolean(storeConfig.media.homeHero.showOverlay),
+      showText: Boolean(storeConfig.media.homeHero.showText),
     });
-  }, [activeStore?.config?.homeHero]);
+  }, [storeConfig.media.homeHero.showOverlay, storeConfig.media.homeHero.showText]);
 
   const handleImageUpdate = (newImageUrl: string) => {
     setHeroHeaderImage(newImageUrl);
@@ -69,15 +72,15 @@ export const HeroSectionTabs: React.FC = () => {
     setHeroDisplayType(newType);
 
     try {
-      await updateConfig({
+      await patchConfig({
         id: activeStore._id,
-        config: {
-          ...activeStore.config,
-          homeHero: {
-            ...activeStore.config?.homeHero,
-            ...contentOptions,
-            headerImage: heroHeaderImage,
-            displayType: newType,
+        patch: {
+          media: {
+            homeHero: {
+              ...contentOptions,
+              headerImage: heroHeaderImage ?? null,
+              displayType: newType,
+            },
           },
         },
       });
@@ -88,7 +91,7 @@ export const HeroSectionTabs: React.FC = () => {
       console.error("Failed to update hero display type:", error);
       toast.error("Failed to update hero display type");
       // Revert on error
-      setHeroDisplayType(activeStore.config?.homeHero?.displayType || "reel");
+      setHeroDisplayType(storeConfig.media.homeHero.displayType || "reel");
     }
   };
 
@@ -101,20 +104,20 @@ export const HeroSectionTabs: React.FC = () => {
     };
 
     try {
-      const config = {
+      const patch = {
         id: activeStore._id,
-        config: {
-          ...activeStore.config,
-          homeHero: {
-            ...activeStore.config?.homeHero,
-            displayType: heroDisplayType,
-            headerImage: heroHeaderImage,
-            ...newContentOptions,
+        patch: {
+          media: {
+            homeHero: {
+              displayType: heroDisplayType || "reel",
+              headerImage: heroHeaderImage ?? null,
+              ...newContentOptions,
+            },
           },
         },
       } as const;
 
-      await updateConfig(config);
+      await patchConfig(patch);
       setContentOptions(newContentOptions);
       toast.success(`Hero overlay ${checked ? "enabled" : "disabled"}`);
     } catch (error) {
@@ -123,7 +126,7 @@ export const HeroSectionTabs: React.FC = () => {
       // Revert on error
       setContentOptions({
         ...contentOptions,
-        showOverlay: activeStore.config?.homeHero?.showOverlay !== false,
+        showOverlay: storeConfig.media.homeHero.showOverlay !== false,
       });
     }
   };
@@ -137,19 +140,19 @@ export const HeroSectionTabs: React.FC = () => {
     };
 
     try {
-      const config = {
+      const patch = {
         id: activeStore._id,
-        config: {
-          ...activeStore.config,
-          homeHero: {
-            ...activeStore.config?.homeHero,
-            displayType: heroDisplayType,
-            headerImage: heroHeaderImage,
-            ...newContentOptions,
+        patch: {
+          media: {
+            homeHero: {
+              displayType: heroDisplayType || "reel",
+              headerImage: heroHeaderImage ?? null,
+              ...newContentOptions,
+            },
           },
         },
       } as const;
-      await updateConfig(config);
+      await patchConfig(patch);
       setContentOptions(newContentOptions);
       toast.success(`Hero text ${checked ? "enabled" : "disabled"}`);
     } catch (error) {
@@ -158,7 +161,7 @@ export const HeroSectionTabs: React.FC = () => {
       // Revert on error
       setContentOptions({
         ...newContentOptions,
-        showText: activeStore.config?.homeHero?.showText !== false,
+        showText: storeConfig.media.homeHero.showText !== false,
       });
     }
   };

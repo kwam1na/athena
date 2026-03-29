@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { StoreIcon, Truck } from "lucide-react";
 import { toast } from "sonner";
 import { useMutation } from "convex/react";
@@ -10,9 +10,14 @@ import { Switch } from "../../ui/switch";
 import { Label } from "../../ui/label";
 import { Textarea } from "../../ui/textarea";
 import { Button } from "../../ui/button";
+import { getStoreConfigV2 } from "~/src/lib/storeConfig";
 
 export const FulfillmentView = () => {
   const { activeStore } = useGetActiveStore();
+  const storeConfig = useMemo(
+    () => getStoreConfigV2(activeStore),
+    [activeStore?.config],
+  );
 
   const [isUpdatingConfig, setIsUpdatingConfig] = useState(false);
   const [enableStorePickup, setEnableStorePickup] = useState(true);
@@ -33,23 +38,21 @@ export const FulfillmentView = () => {
   const [deliveryHasUnsavedChanges, setDeliveryHasUnsavedChanges] =
     useState(false);
 
-  const updateConfig = useMutation(api.inventory.stores.updateConfig);
+  const patchConfig = useMutation(api.inventory.stores.patchConfigV2);
 
   const saveEnableStorePickupChanges = async (toggled: boolean) => {
     setIsUpdatingConfig(true);
     setEnableStorePickup(toggled);
 
-    const updates = {
-      ...activeStore?.config?.fulfillment,
-      enableStorePickup: toggled,
-    };
-
     try {
-      await updateConfig({
+      await patchConfig({
         id: activeStore?._id!,
-        config: {
-          ...activeStore?.config,
-          fulfillment: updates,
+        patch: {
+          commerce: {
+            fulfillment: {
+              enableStorePickup: toggled,
+            },
+          },
         },
       });
       const message = toggled
@@ -73,17 +76,15 @@ export const FulfillmentView = () => {
     setIsUpdatingConfig(true);
     setEnableDelivery(toggled);
 
-    const updates = {
-      ...activeStore?.config?.fulfillment,
-      enableDelivery: toggled,
-    };
-
     try {
-      await updateConfig({
+      await patchConfig({
         id: activeStore?._id!,
-        config: {
-          ...activeStore?.config,
-          fulfillment: updates,
+        patch: {
+          commerce: {
+            fulfillment: {
+              enableDelivery: toggled,
+            },
+          },
         },
       });
       const message = toggled
@@ -103,17 +104,17 @@ export const FulfillmentView = () => {
     setIsUpdatingConfig(false);
   };
 
-  const savePickupRestriction = async (updates: any) => {
+  const savePickupRestriction = async (updates: Record<string, any>) => {
     setIsUpdatingConfig(true);
 
     try {
-      await updateConfig({
+      await patchConfig({
         id: activeStore?._id!,
-        config: {
-          ...activeStore?.config,
-          fulfillment: {
-            ...activeStore?.config?.fulfillment,
-            pickupRestriction: updates,
+        patch: {
+          commerce: {
+            fulfillment: {
+              pickupRestriction: updates,
+            },
           },
         },
       });
@@ -128,17 +129,17 @@ export const FulfillmentView = () => {
     setIsUpdatingConfig(false);
   };
 
-  const saveDeliveryRestriction = async (updates: any) => {
+  const saveDeliveryRestriction = async (updates: Record<string, any>) => {
     setIsUpdatingConfig(true);
 
     try {
-      await updateConfig({
+      await patchConfig({
         id: activeStore?._id!,
-        config: {
-          ...activeStore?.config,
-          fulfillment: {
-            ...activeStore?.config?.fulfillment,
-            deliveryRestriction: updates,
+        patch: {
+          commerce: {
+            fulfillment: {
+              deliveryRestriction: updates,
+            },
           },
         },
       });
@@ -165,8 +166,8 @@ export const FulfillmentView = () => {
         isActive: false,
         message: "",
         reason: "",
-        startTime: undefined,
-        endTime: undefined,
+        startTime: null,
+        endTime: null,
       });
     } else {
       // If turning on pickup restriction, turn off delivery restriction
@@ -179,8 +180,8 @@ export const FulfillmentView = () => {
           isActive: false,
           message: "",
           reason: "",
-          startTime: undefined,
-          endTime: undefined,
+          startTime: null,
+          endTime: null,
         });
       }
 
@@ -204,8 +205,8 @@ export const FulfillmentView = () => {
         isActive: false,
         message: "",
         reason: "",
-        startTime: undefined,
-        endTime: undefined,
+        startTime: null,
+        endTime: null,
       });
     } else {
       // If turning on delivery restriction, turn off pickup restriction
@@ -218,8 +219,8 @@ export const FulfillmentView = () => {
           isActive: false,
           message: "",
           reason: "",
-          startTime: undefined,
-          endTime: undefined,
+          startTime: null,
+          endTime: null,
         });
       }
 
@@ -252,26 +253,25 @@ export const FulfillmentView = () => {
   useEffect(() => {
     // Default to true if not set (for backward compatibility)
     setEnableStorePickup(
-      activeStore?.config?.fulfillment?.enableStorePickup ?? true
+      storeConfig.commerce.fulfillment?.enableStorePickup ?? true
     );
 
-    setEnableDelivery(activeStore?.config?.fulfillment?.enableDelivery ?? true);
+    setEnableDelivery(storeConfig.commerce.fulfillment?.enableDelivery ?? true);
 
     // Load restriction states
-    const pickupRestriction =
-      activeStore?.config?.fulfillment?.pickupRestriction;
+    const pickupRestriction = storeConfig.commerce.fulfillment?.pickupRestriction;
     setPickupRestrictionActive(pickupRestriction?.isActive || false);
     setPickupRestrictionMessage(pickupRestriction?.message || "");
     setPickupRestrictionReason(pickupRestriction?.reason || "");
     setPickupHasUnsavedChanges(false);
 
     const deliveryRestriction =
-      activeStore?.config?.fulfillment?.deliveryRestriction;
+      storeConfig.commerce.fulfillment?.deliveryRestriction;
     setDeliveryRestrictionActive(deliveryRestriction?.isActive || false);
     setDeliveryRestrictionMessage(deliveryRestriction?.message || "");
     setDeliveryRestrictionReason(deliveryRestriction?.reason || "");
     setDeliveryHasUnsavedChanges(false);
-  }, [activeStore?.config?.fulfillment]);
+  }, [storeConfig]);
 
   return (
     <View

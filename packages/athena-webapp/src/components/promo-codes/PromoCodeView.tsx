@@ -22,10 +22,15 @@ import PromoCodeHeader from "./PromoCodeHeader";
 import PromoCodeForm from "./PromoCodeForm";
 import PromoCodePreview from "./PromoCodePreview";
 import PromoCodeAnalytics from "./analytics/PromoCodeAnalytics";
+import { getStoreConfigV2 } from "~/src/lib/storeConfig";
 
 function PromoCodeView() {
   const products = useGetProducts();
   const { activeStore } = useGetActiveStore();
+  const storeConfig = useMemo(
+    () => getStoreConfigV2(activeStore),
+    [activeStore?.config],
+  );
   const [discountType, setDiscountType] = useState<DiscountType>("amount");
   const [promoCodeSpan, setPromoCodeSpan] =
     useState<PromoCodeSpan>("entire-order");
@@ -61,7 +66,7 @@ function PromoCodeView() {
 
   const addPromoCode = useMutation(api.inventory.promoCode.create);
   const updatePromoCode = useMutation(api.inventory.promoCode.update);
-  const updateStoreConfig = useMutation(api.inventory.stores.updateConfig);
+  const patchStoreConfig = useMutation(api.inventory.stores.patchConfigV2);
 
   const { promoCodeSlug } = useParams({ strict: false });
 
@@ -93,7 +98,7 @@ function PromoCodeView() {
 
       // Check if this promo code is set as homepage discount code
       if (
-        activeStore?.config?.homepageDiscountCodeModalPromoCode?.promoCodeId ===
+        storeConfig.promotions.homepageDiscountCodeModalPromoCode?.promoCodeId ===
         activePromoCode._id
       ) {
         setIsHomepageDiscountCode(true);
@@ -101,13 +106,13 @@ function PromoCodeView() {
 
       // Check if this promo code is set as leave a review discount code
       if (
-        activeStore?.config?.leaveAReviewDiscountCodeModalPromoCode
+        storeConfig.promotions.leaveAReviewDiscountCodeModalPromoCode
           ?.promoCodeId === activePromoCode._id
       ) {
         setIsLeaveAReviewDiscountCode(true);
       }
     }
-  }, [activePromoCode, activeStore]);
+  }, [activePromoCode, storeConfig]);
 
   // Set selected products when promo code product SKUs are loaded
   useEffect(() => {
@@ -172,15 +177,16 @@ function PromoCodeView() {
 
       // If set as homepage discount code, update store config
       if (isHomepageDiscountCode && newPromoCode.promoCode) {
-        await updateStoreConfig({
+        await patchStoreConfig({
           id: activeStore._id,
-          config: {
-            ...activeStore.config,
-            homepageDiscountCodeModalPromoCode: {
-              promoCodeId: newPromoCode.promoCode._id,
-              value: newPromoCode.promoCode.discountValue,
-              displayText: newPromoCode.promoCode.displayText,
-              discountType: newPromoCode.promoCode.discountType,
+          patch: {
+            promotions: {
+              homepageDiscountCodeModalPromoCode: {
+                promoCodeId: newPromoCode.promoCode._id,
+                value: newPromoCode.promoCode.discountValue,
+                displayText: newPromoCode.promoCode.displayText,
+                discountType: newPromoCode.promoCode.discountType,
+              },
             },
           },
         });
@@ -239,32 +245,35 @@ function PromoCodeView() {
       // Update store config for homepage discount code if needed
       if (activeStore && promoCodeSlug) {
         const currentHomepagePromoCodeId =
-          activeStore.config?.homepageDiscountCodeModalPromoCode;
+          storeConfig.promotions.homepageDiscountCodeModalPromoCode?.promoCodeId;
         const isCurrentlyHomepageCode =
           currentHomepagePromoCodeId === promoCodeSlug;
 
         if (isHomepageDiscountCode) {
           // Add this promo code as homepage discount code
-          await updateStoreConfig({
+          await patchStoreConfig({
             id: activeStore._id,
-            config: {
-              ...activeStore.config,
-              homepageDiscountCodeModalPromoCode: {
-                promoCodeId: promoCodeSlug,
-                value: parseFloat(discount!),
-                displayText: displayText,
-                discountType: discountType,
+            patch: {
+              promotions: {
+                homepageDiscountCodeModalPromoCode: {
+                  promoCodeId: promoCodeSlug,
+                  value: parseFloat(discount!),
+                  displayText: displayText,
+                  discountType: discountType,
+                },
               },
             },
           });
           toast.success("Updated homepage discount code");
         } else if (!isHomepageDiscountCode && isCurrentlyHomepageCode) {
           // Remove this promo code as homepage discount code
-          const { homepageDiscountCodeModalPromoCode, ...restConfig } =
-            activeStore.config || {};
-          await updateStoreConfig({
+          await patchStoreConfig({
             id: activeStore._id,
-            config: restConfig,
+            patch: {
+              promotions: {
+                homepageDiscountCodeModalPromoCode: null,
+              },
+            },
           });
           toast.success("Removed as homepage discount code");
         }
@@ -293,29 +302,38 @@ function PromoCodeView() {
     try {
       setIsUpdatingStoreConfig(true);
 
+      const promoPayload = {
+        promoCodeId: promoCodeSlug,
+        value: activePromoCode?.discountValue ?? parseFloat(discount || "0"),
+        displayText:
+          activePromoCode?.displayText ||
+          (discountType === "amount"
+            ? formatter.format(parseFloat(discount || "0"))
+            : `${discount || 0}%`),
+        discountType: activePromoCode?.discountType ?? discountType,
+      };
+
       if (checked) {
         // Set this promo code as homepage discount code
-        await updateStoreConfig({
+        await patchStoreConfig({
           id: activeStore._id,
-          config: {
-            ...activeStore.config,
-            leaveAReviewDiscountCodeModalPromoCode: undefined,
-            homepageDiscountCodeModalPromoCode: {
-              promoCodeId: promoCodeSlug,
-              value: activePromoCode?.discountValue,
-              displayText: activePromoCode?.displayText,
-              discountType: activePromoCode?.discountType,
+          patch: {
+            promotions: {
+              leaveAReviewDiscountCodeModalPromoCode: null,
+              homepageDiscountCodeModalPromoCode: promoPayload,
             },
           },
         });
         toast.success("Set as homepage discount code");
       } else {
         // Remove this promo code as homepage discount code
-        const { homepageDiscountCodeModalPromoCode, ...restConfig } =
-          activeStore.config || {};
-        await updateStoreConfig({
+        await patchStoreConfig({
           id: activeStore._id,
-          config: restConfig,
+          patch: {
+            promotions: {
+              homepageDiscountCodeModalPromoCode: null,
+            },
+          },
         });
         toast.success("Removed as homepage discount code");
       }
@@ -336,29 +354,38 @@ function PromoCodeView() {
     try {
       setIsUpdatingStoreConfig(true);
 
+      const promoPayload = {
+        promoCodeId: promoCodeSlug,
+        value: activePromoCode?.discountValue ?? parseFloat(discount || "0"),
+        displayText:
+          activePromoCode?.displayText ||
+          (discountType === "amount"
+            ? formatter.format(parseFloat(discount || "0"))
+            : `${discount || 0}%`),
+        discountType: activePromoCode?.discountType ?? discountType,
+      };
+
       if (checked) {
         // Set this promo code as leave a review discount code
-        await updateStoreConfig({
+        await patchStoreConfig({
           id: activeStore._id,
-          config: {
-            ...activeStore.config,
-            homepageDiscountCodeModalPromoCode: undefined,
-            leaveAReviewDiscountCodeModalPromoCode: {
-              promoCodeId: promoCodeSlug,
-              value: activePromoCode?.discountValue,
-              displayText: activePromoCode?.displayText,
-              discountType: activePromoCode?.discountType,
+          patch: {
+            promotions: {
+              homepageDiscountCodeModalPromoCode: null,
+              leaveAReviewDiscountCodeModalPromoCode: promoPayload,
             },
           },
         });
         toast.success("Set as leave a review discount code");
       } else {
         // Remove this promo code as leave a review discount code
-        const { leaveAReviewDiscountCodeModalPromoCode, ...restConfig } =
-          activeStore.config || {};
-        await updateStoreConfig({
+        await patchStoreConfig({
           id: activeStore._id,
-          config: restConfig,
+          patch: {
+            promotions: {
+              leaveAReviewDiscountCodeModalPromoCode: null,
+            },
+          },
         });
         toast.success("Removed as leave a review discount code");
       }

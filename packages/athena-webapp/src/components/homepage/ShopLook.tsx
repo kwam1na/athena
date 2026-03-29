@@ -5,7 +5,7 @@ import {
   DropResult,
 } from "@hello-pangea/dnd";
 import { useMutation, useQuery } from "convex/react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { api } from "~/convex/_generated/api";
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
 import { capitalizeWords, currencyFormatter } from "~/src/lib/utils";
@@ -19,11 +19,16 @@ import { getOrigin } from "~/src/lib/navigationUtils";
 
 import { ShopLookImageUploader } from "./ShopLookImageUploader";
 import { toast } from "sonner";
+import { getStoreConfigV2 } from "~/src/lib/storeConfig";
 
 export const ShopLookSection = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
 
   const { activeStore } = useGetActiveStore();
+  const storeConfig = useMemo(
+    () => getStoreConfigV2(activeStore),
+    [activeStore?.config],
+  );
 
   const [shopTheLookImage, setShopTheLookImage] = useState<
     string | undefined
@@ -50,14 +55,14 @@ export const ShopLookSection = () => {
   }, [featuredItemsQuery, featuredItems]);
 
   useEffect(() => {
-    if (activeStore?.config?.shopTheLookImage) {
-      setShopTheLookImage(activeStore?.config?.shopTheLookImage);
+    if (storeConfig.media.images.shopTheLookImage) {
+      setShopTheLookImage(storeConfig.media.images.shopTheLookImage);
     }
-  }, [activeStore?.config?.shopTheLookImage]);
+  }, [storeConfig.media.images.shopTheLookImage]);
 
   const removeHighlightedItem = useMutation(api.inventory.featuredItem.remove);
   const updateRanks = useMutation(api.inventory.featuredItem.updateRanks);
-  const updateConfig = useMutation(api.inventory.stores.updateConfig);
+  const patchConfig = useMutation(api.inventory.stores.patchConfigV2);
 
   const handleHighlightedItem = async (featuredItem: any) => {
     removeHighlightedItem({
@@ -85,11 +90,14 @@ export const ShopLookSection = () => {
   const handleImageUpdate = async (newImageUrl: string) => {
     console.log("newImageUrl", newImageUrl);
     try {
-      await updateConfig({
+      await patchConfig({
         id: activeStore?._id!,
-        config: {
-          ...activeStore?.config,
-          shopTheLookImage: newImageUrl,
+        patch: {
+          media: {
+            images: {
+              shopTheLookImage: newImageUrl,
+            },
+          },
         },
       });
       setShopTheLookImage(newImageUrl);
@@ -130,7 +138,7 @@ export const ShopLookSection = () => {
       />
       <div className="py-4 space-y-8">
         <ShopLookImageUploader
-          currentImageUrl={activeStore?.config?.shopTheLookImage}
+          currentImageUrl={storeConfig.media.images.shopTheLookImage}
           onImageUpdate={handleImageUpdate}
           disabled={!activeStore}
         />

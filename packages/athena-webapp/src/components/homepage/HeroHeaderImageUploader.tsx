@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from "react";
+import React, { useRef, useState, useEffect, useMemo } from "react";
 import { Button } from "../ui/button";
 import { LoadingButton } from "../ui/loading-button";
 import { Image, PencilIcon, ArrowUp, RotateCcw } from "lucide-react";
@@ -9,6 +9,7 @@ import { ImageFile } from "../ui/image-uploader";
 import { useAction, useMutation } from "convex/react";
 import { api } from "~/convex/_generated/api";
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
+import { getStoreConfigV2 } from "~/src/lib/storeConfig";
 
 interface HeroHeaderImageUploaderProps {
   currentImageUrl?: string;
@@ -33,8 +34,12 @@ export const HeroHeaderImageUploader: React.FC<
 
   // Hooks
   const { activeStore } = useGetActiveStore();
+  const storeConfig = useMemo(
+    () => getStoreConfigV2(activeStore),
+    [activeStore?.config],
+  );
   const uploadStoreAssets = useAction(api.inventory.stores.uploadImageAssets);
-  const updateConfig = useMutation(api.inventory.stores.updateConfig);
+  const patchConfig = useMutation(api.inventory.stores.patchConfigV2);
 
   // Derived state
   const displayImage =
@@ -128,13 +133,14 @@ export const HeroHeaderImageUploader: React.FC<
       const newImageUrl = await uploadImage(selectedFile);
 
       // Update store config (nest under config.homeHero)
-      await updateConfig({
+      await patchConfig({
         id: activeStore._id,
-        config: {
-          ...activeStore.config,
-          homeHero: {
-            ...activeStore.config?.homeHero,
-            headerImage: newImageUrl,
+        patch: {
+          media: {
+            homeHero: {
+              ...storeConfig.media.homeHero,
+              headerImage: newImageUrl,
+            },
           },
         },
       });

@@ -6,7 +6,10 @@ import { Id } from "~/convex/_generated/dataModel";
 
 interface UpdateConfigOptions {
   storeId: Id<"store">;
-  config: any;
+  patch?: Record<string, any>;
+  // Backward-compatible alias while callsites migrate to patch payloads.
+  config?: Record<string, any>;
+  mirrorLegacy?: boolean;
   successMessage?: string;
   errorMessage?: string;
   onSuccess?: () => void;
@@ -15,11 +18,13 @@ interface UpdateConfigOptions {
 
 export const useStoreConfigUpdate = () => {
   const [isUpdating, setIsUpdating] = useState(false);
-  const updateConfigMutation = useMutation(api.inventory.stores.updateConfig);
+  const patchConfigMutation = useMutation(api.inventory.stores.patchConfigV2);
 
   const updateConfig = async ({
     storeId,
+    patch,
     config,
+    mirrorLegacy,
     successMessage = "Configuration updated",
     errorMessage = "An error occurred while updating configuration",
     onSuccess,
@@ -28,9 +33,16 @@ export const useStoreConfigUpdate = () => {
     setIsUpdating(true);
 
     try {
-      await updateConfigMutation({
+      const nextPatch = patch ?? config;
+
+      if (!nextPatch) {
+        throw new Error("A config patch payload is required");
+      }
+
+      await patchConfigMutation({
         id: storeId,
-        config,
+        patch: nextPatch,
+        mirrorLegacy,
       });
       toast.success(successMessage, { position: "top-right" });
       onSuccess?.();

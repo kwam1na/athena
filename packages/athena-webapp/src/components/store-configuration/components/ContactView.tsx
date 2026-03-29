@@ -1,19 +1,24 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
 import View from "../../View";
 import { Input } from "../../ui/input";
 import { LoadingButton } from "../../ui/loading-button";
 import { useStoreConfigUpdate } from "../hooks/useStoreConfigUpdate";
+import { getStoreConfigV2 } from "~/src/lib/storeConfig";
 
 export const ContactView = () => {
   const { activeStore } = useGetActiveStore();
   const { updateConfig, isUpdating } = useStoreConfigUpdate();
+  const storeConfig = useMemo(
+    () => getStoreConfigV2(activeStore),
+    [activeStore?.config],
+  );
 
   const [enteredPhoneNumber, setEnteredPhoneNumber] = useState(
-    activeStore?.config?.contactInfo?.phoneNumber || ""
+    storeConfig.contact.phoneNumber || ""
   );
   const [enteredLocation, setEnteredLocation] = useState(
-    activeStore?.config?.contactInfo?.location || ""
+    storeConfig.contact.location || ""
   );
 
   const handleUpdateContactInfo = async () => {
@@ -24,9 +29,8 @@ export const ContactView = () => {
 
     await updateConfig({
       storeId: activeStore?._id!,
-      config: {
-        ...activeStore?.config,
-        contactInfo: updates,
+      patch: {
+        contact: updates,
       },
       successMessage: "Contact information updated",
       errorMessage: "An error occurred while updating contact information",
@@ -35,9 +39,9 @@ export const ContactView = () => {
 
   useEffect(() => {
     // Sync state with store data when `activeStore` changes
-    setEnteredPhoneNumber(activeStore?.config?.contactInfo?.phoneNumber || "");
-    setEnteredLocation(activeStore?.config?.contactInfo?.location || "");
-  }, [activeStore]);
+    setEnteredPhoneNumber(storeConfig.contact.phoneNumber || "");
+    setEnteredLocation(storeConfig.contact.location || "");
+  }, [storeConfig]);
 
   return (
     <View

@@ -1,5 +1,5 @@
 import { useMutation } from "convex/react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { toast } from "sonner";
 import { api } from "~/convex/_generated/api";
 import { Input } from "../ui/input";
@@ -9,6 +9,7 @@ import { Id } from "~/convex/_generated/dataModel";
 import View from "../View";
 import { DateTimePicker } from "../ui/date-time-picker";
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
+import { getStoreConfigV2 } from "~/src/lib/storeConfig";
 
 interface MaintenanceMessageEditorProps {
   storeId: Id<"store">;
@@ -18,7 +19,11 @@ export function MaintenanceMessageEditor({
   storeId,
 }: MaintenanceMessageEditorProps) {
   const { activeStore } = useGetActiveStore();
-  const updateConfig = useMutation(api.inventory.stores.updateConfig);
+  const storeConfig = useMemo(
+    () => getStoreConfigV2(activeStore),
+    [activeStore?.config],
+  );
+  const patchConfig = useMutation(api.inventory.stores.patchConfigV2);
 
   const [heading, setHeading] = useState("");
   const [message, setMessage] = useState("");
@@ -31,8 +36,8 @@ export function MaintenanceMessageEditor({
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
-    if (activeStore?.config?.maintenance) {
-      const maintenance = activeStore.config.maintenance;
+    if (storeConfig.operations.maintenance) {
+      const maintenance = storeConfig.operations.maintenance;
       setHeading(maintenance.heading || "");
       setMessage(maintenance.message || "");
       setCountdownEndsAt(maintenance.countdownEndsAt);
@@ -42,19 +47,20 @@ export function MaintenanceMessageEditor({
           : undefined
       );
     }
-  }, [activeStore?.config?.maintenance]);
+  }, [storeConfig]);
 
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      await updateConfig({
+      await patchConfig({
         id: storeId,
-        config: {
-          ...activeStore?.config,
-          maintenance: {
-            heading: heading.trim() || undefined,
-            message: message.trim() || undefined,
-            countdownEndsAt,
+        patch: {
+          operations: {
+            maintenance: {
+              heading: heading.trim() || null,
+              message: message.trim() || null,
+              countdownEndsAt: countdownEndsAt ?? null,
+            },
           },
         },
       });
