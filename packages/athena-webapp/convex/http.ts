@@ -46,7 +46,7 @@ app.use(
     },
     allowMethods: ["OPTIONS", "GET", "POST", "PUT", "PATCH", "DELETE"],
     credentials: true,
-  })
+  }),
 );
 
 app.route("/upsells", upsellRoutes);
@@ -98,7 +98,7 @@ app.route("/user-offers", userOffersRoutes);
 app.get("/.well-known/openid-configuration", async (c) => {
   const [httpAction] = http.lookup(
     "/.well-known/openid-configuration",
-    "GET"
+    "GET",
   ) as any;
   return httpAction(c.env, c.req);
 });
@@ -116,7 +116,7 @@ app.get("/api/auth/signin/*", async (c) => {
 app.on(["GET", "POST"], "/api/auth/callback/*", async (c) => {
   const [httpAction] = http.lookup(
     "/api/auth/callback/foo",
-    c.req.method as any
+    c.req.method as any,
   ) as any;
   return httpAction(c.env, c.req);
 });
