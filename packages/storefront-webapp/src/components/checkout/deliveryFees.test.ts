@@ -107,7 +107,7 @@ describe("calculateDeliveryFee", () => {
     });
   });
 
-  it("uses hardcoded Ghana fees regardless of deliveryFees config", () => {
+  it("uses configured Ghana fees when provided", () => {
     const result = calculateDeliveryFee({
       deliveryMethod: "delivery",
       country: "GH",
@@ -117,8 +117,23 @@ describe("calculateDeliveryFee", () => {
     });
 
     expect(result).toEqual({
-      deliveryFee: 30,
+      deliveryFee: 50,
       deliveryOption: "within-accra",
+    });
+  });
+
+  it("uses configured other-regions Ghana fee when provided", () => {
+    const result = calculateDeliveryFee({
+      deliveryMethod: "delivery",
+      country: "GH",
+      region: "AS",
+      waiveDeliveryFees: null,
+      deliveryFees: { withinAccra: 50, otherRegions: 100, international: 800 },
+    });
+
+    expect(result).toEqual({
+      deliveryFee: 100,
+      deliveryOption: "outside-accra",
     });
   });
 

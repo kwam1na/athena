@@ -54,12 +54,16 @@ export function calculateDeliveryFee({
 
   if (isGhana) {
     deliveryOption = isGreaterAccra ? "within-accra" : "outside-accra";
+    const withinAccraFee =
+      deliveryFees?.withinAccra ?? DEFAULT_WITHIN_ACCRA_FEE;
+    const otherRegionsFee =
+      deliveryFees?.otherRegions ?? DEFAULT_OTHER_REGIONS_FEE;
     baseFee = isGreaterAccra
-      ? DEFAULT_WITHIN_ACCRA_FEE
-      : DEFAULT_OTHER_REGIONS_FEE;
+      ? withinAccraFee
+      : otherRegionsFee;
   } else {
     deliveryOption = "intl";
-    baseFee = deliveryFees?.international || DEFAULT_INTERNATIONAL_FEE;
+    baseFee = deliveryFees?.international ?? DEFAULT_INTERNATIONAL_FEE;
   }
 
   const shouldWaive = isGhana
