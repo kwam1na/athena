@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { action, mutation, query } from "../_generated/server";
-import { deleteFileInS3, uploadFileToS3 } from "../aws/aws";
+import { deleteFileInR2, uploadFileToR2 } from "../cloudflare/r2";
 import { getProductName } from "../utils";
 
 export const generateUploadUrl = mutation(async (ctx) => {
@@ -114,7 +114,7 @@ export const uploadImages = action({
   },
   handler: async (_, args) => {
     const uploadPromises = args.images.map(async (imgBuffer) => {
-      return uploadFileToS3(
+      return uploadFileToR2(
         imgBuffer,
         `stores/${args.storeId}/products/${args.productId}/${crypto.randomUUID()}.webp`
       );
@@ -133,7 +133,7 @@ export const deleteImages = action({
   },
   handler: async (_, args) => {
     const deletePromises = args.imageUrls.map(async (url) => {
-      return deleteFileInS3(url);
+      return deleteFileInR2(url);
     });
 
     await Promise.all(deletePromises);
@@ -146,15 +146,15 @@ export const nukeProblematicImages = mutation({
   args: {},
   handler: async (ctx) => {
     const productSkus = await ctx.db.query("productSku").collect();
-    const bucket = process.env.AWS_BUCKET;
+    const publicUrl = process.env.R2_PUBLIC_URL;
 
-    if (!bucket) throw new Error("Missing AWS_BUCKET env var");
+    if (!publicUrl) throw new Error("Missing R2_PUBLIC_URL env var");
 
     const updates = productSkus.flatMap((sku) => {
       if (!Array.isArray(sku.images)) return [];
 
       const validImages = sku.images.filter(
-        (img) => typeof img === "string" && img.includes(bucket)
+        (img) => typeof img === "string" && img.includes(publicUrl)
       );
 
       if (validImages.length === sku.images.length) return [];
