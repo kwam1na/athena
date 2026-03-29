@@ -14,6 +14,8 @@ const ContactUs = () => {
   const { store } = useStoreContext();
   const storeConfig = getStoreConfigV2(store);
 
+  console.log("storeconfig", storeConfig);
+
   if (!store) return <div className="h-screen" />;
 
   return (

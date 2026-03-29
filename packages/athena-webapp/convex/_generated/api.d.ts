@@ -11,7 +11,6 @@
 import type * as app from "../app.js";
 import type * as auth from "../auth.js";
 import type * as cache_index from "../cache/index.js";
-import type * as cloudflare_migrateUrls from "../cloudflare/migrateUrls.js";
 import type * as cloudflare_r2 from "../cloudflare/r2.js";
 import type * as cloudflare_stream from "../cloudflare/stream.js";
 import type * as constants_countries from "../constants/countries.js";
@@ -184,7 +183,6 @@ declare const fullApi: ApiFromModules<{
   app: typeof app;
   auth: typeof auth;
   "cache/index": typeof cache_index;
-  "cloudflare/migrateUrls": typeof cloudflare_migrateUrls;
   "cloudflare/r2": typeof cloudflare_r2;
   "cloudflare/stream": typeof cloudflare_stream;
   "constants/countries": typeof constants_countries;
