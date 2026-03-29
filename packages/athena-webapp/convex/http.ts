@@ -44,7 +44,7 @@ app.use(
     allowHeaders: ["Content-Type", "Authorization", "x-athena-actor-token"],
     allowMethods: ["OPTIONS", "GET", "POST", "PUT", "DELETE"],
     credentials: true,
-  })
+  }),
 );
 
 app.route("/webhooks/paystack", paystackRoutes);
@@ -84,7 +84,7 @@ app.route(
 app.get("/.well-known/openid-configuration", async (c) => {
   const [httpAction] = http.lookup(
     "/.well-known/openid-configuration",
-    "GET"
+    "GET",
   ) as any;
   return httpAction(c.env, c.req);
 });
@@ -102,7 +102,7 @@ app.get("/api/auth/signin/*", async (c) => {
 app.on(["GET", "POST"], "/api/auth/callback/*", async (c) => {
   const [httpAction] = http.lookup(
     "/api/auth/callback/foo",
-    c.req.method as any
+    c.req.method as any,
   ) as any;
   return httpAction(c.env, c.req);
 });

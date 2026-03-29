@@ -6,6 +6,9 @@ import {
   DeleteObjectsCommand,
 } from "@aws-sdk/client-s3";
 
+const BUCKET = process.env.R2_BUCKET!;
+const PUBLIC_URL = process.env.R2_PUBLIC_URL!; // https://images.wigclub.store
+
 const r2 = new S3Client({
   region: "auto",
   endpoint: `https://${process.env.CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com`,
@@ -14,9 +17,6 @@ const r2 = new S3Client({
     secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
   },
 });
-
-const BUCKET = process.env.R2_BUCKET!;
-const PUBLIC_URL = process.env.R2_PUBLIC_URL!; // https://images.wigclub.store
 
 export const uploadFileToR2 = async (file: any, key: string) => {
   try {
@@ -30,11 +30,16 @@ export const uploadFileToR2 = async (file: any, key: string) => {
     return `${PUBLIC_URL}/${key}`;
   } catch (error) {
     // handled
+    console.log(
+      `https://${process.env.CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+    );
+    console.error(error);
   }
 };
 
 export const deleteFileInR2 = async (path: string) => {
-  const OLD_S3_PREFIX = "https://athena-amzn-bucket.s3.eu-west-1.amazonaws.com/";
+  const OLD_S3_PREFIX =
+    "https://athena-amzn-bucket.s3.eu-west-1.amazonaws.com/";
   let key = path.split(`${PUBLIC_URL}/`)[1];
   // Fallback: handle legacy S3 URLs during transition period
   if (!key) key = path.split(OLD_S3_PREFIX)[1];
