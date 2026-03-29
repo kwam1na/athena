@@ -6,7 +6,7 @@ import {
 } from "../_generated/server";
 import { v } from "convex/values";
 import { storeSchema } from "../schemas/inventory";
-import { listItemsInS3Directory, uploadFileToS3 } from "../aws/aws";
+import { listItemsInR2Directory, uploadFileToR2 } from "../cloudflare/r2";
 import { api } from "../_generated/api";
 import { Doc } from "../_generated/dataModel";
 
@@ -23,7 +23,7 @@ export const getAll = query({
       .collect();
 
     // // const reelVersions = await ctx.
-    // const reelVersions = await listItemsInS3Directory({
+    // const reelVersions = await listItemsInR2Directory({
     //   directory: `stores/${args.organizationId}/assets/hero`,
     //   firstLevelOnly: true,
     // });
@@ -46,7 +46,7 @@ export const getAllByOrganization = action({
 
     const reelVersions = await Promise.all(
       stores.map((store) => {
-        return listItemsInS3Directory({
+        return listItemsInR2Directory({
           directory: `stores/${store._id}/assets/hero`,
           firstLevelOnly: true,
         });
@@ -272,7 +272,7 @@ export const uploadImageAssets = action({
   },
   handler: async (ctx, args) => {
     const uploadPromises = args.images.map(async (imgBuffer) => {
-      return uploadFileToS3(
+      return uploadFileToR2(
         imgBuffer,
         `stores/${args.storeId}/assets/${crypto.randomUUID()}.webp`
       );
@@ -303,7 +303,7 @@ export const updateLandingPageReel = action({
     config: v.record(v.string(), v.any()),
   },
   handler: async (ctx, args) => {
-    const versions = await listItemsInS3Directory({
+    const versions = await listItemsInR2Directory({
       directory: `stores/${args.storeId}/assets/hero`,
       firstLevelOnly: true,
     });
@@ -333,7 +333,7 @@ export const getReelVersions = action({
     storeId: v.id(entity),
   },
   handler: async (ctx, args) => {
-    const versions = await listItemsInS3Directory({
+    const versions = await listItemsInR2Directory({
       directory: `stores/${args.storeId}/assets/hero`,
       firstLevelOnly: true,
     });

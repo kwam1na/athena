@@ -4,7 +4,7 @@ import { productSchema, productSkuSchema } from "../schemas/inventory";
 import { ProductSku } from "../../types";
 import { Id } from "../_generated/dataModel";
 import { api } from "../_generated/api";
-import { deleteDirectoryInS3 } from "../aws/aws";
+import { deleteDirectoryInR2 } from "../cloudflare/r2";
 
 const entity = "product";
 
@@ -749,7 +749,7 @@ export const clear = action({
       await ctx.runMutation(api.inventory.products.remove, {
         id: args.id,
       }),
-      await deleteDirectoryInS3(`stores/${args.storeId}/products/${args.id}`),
+      await deleteDirectoryInR2(`stores/${args.storeId}/products/${args.id}`),
     ]);
 
     await ctx.runAction(api.inventory.productUtil.invalidateProductCache, {
