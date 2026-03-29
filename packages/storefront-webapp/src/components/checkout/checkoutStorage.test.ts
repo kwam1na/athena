@@ -21,7 +21,7 @@ describe("loadCheckoutState", () => {
   it("merges saved state with initial state", () => {
     sessionStorage.setItem(
       SESSION_STORAGE_KEY,
-      JSON.stringify({ deliveryMethod: "delivery" })
+      JSON.stringify({ deliveryMethod: "delivery" }),
     );
 
     const result = loadCheckoutState(initialState as any);
