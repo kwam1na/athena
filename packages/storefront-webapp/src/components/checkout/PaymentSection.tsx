@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { webOrderSchema } from "./CheckoutProvider";
+import { webOrderSchema } from "./schemas/webOrderSchema";
 import { useCheckout } from "@/hooks/useCheckout";
 import { CheckedState } from "@radix-ui/react-checkbox";
 import { Separator } from "../ui/separator";
@@ -228,8 +228,6 @@ export const PaymentSection = ({ form }: CheckoutFormSectionProps) => {
 
   const didAcceptTerms = didAcceptStoreTerms && didAcceptCommsTerms;
 
-  const showPayment = true;
-
   const showProceedSection = true;
 
   return (
@@ -239,25 +237,6 @@ export const PaymentSection = ({ form }: CheckoutFormSectionProps) => {
       className="w-full flex flex-col space-y-12"
     >
       <div className="space-y-12">
-        {/* <motion.div
-          initial={{ opacity: 0 }}
-          animate={{
-            opacity: 1,
-            y: 0,
-            transition: { duration: 0.3, ease: "easeOut" },
-          }}
-          exit={{
-            opacity: 0,
-            transition: { duration: 0.3, ease: "easeOut" },
-          }}
-          className="flex items-center"
-        >
-          <p>Payment</p>
-        </motion.div> */}
-
-        {/* {showPayment && <BillingDetailsForm />} */}
-        {/* {showPayment && <BillingDetailsSection form={form} />} */}
-
         {showProceedSection && (
           <motion.div
             initial={{ opacity: 0 }}

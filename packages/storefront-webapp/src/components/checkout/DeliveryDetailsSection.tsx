@@ -674,35 +674,6 @@ const USAddressFields = ({ form }: CheckoutFormSectionProps) => {
   const { checkoutState, updateState } = useCheckout();
   return (
     <>
-      {/* <div className="w-full">
-        <FormField
-          control={form.control}
-          name="deliveryDetails.state"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel className="text-muted-foreground text-xs">
-                State
-              </FormLabel>
-              <FormControl>
-                <Input
-                  {...field}
-                  onChange={(e) => {
-                    updateState({
-                      deliveryDetails: {
-                        ...checkoutState.deliveryDetails,
-                        state: e.target.value,
-                      } as Address,
-                    });
-                    field.onChange(e);
-                  }}
-                />
-              </FormControl>
-              <FormMessage className="text-xs" />
-            </FormItem>
-          )}
-        />
-      </div> */}
-
       <StateFields form={form} />
 
       <div className="w-full">

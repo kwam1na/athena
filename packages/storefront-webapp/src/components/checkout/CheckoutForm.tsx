@@ -36,13 +36,6 @@ export const CheckoutForm = () => {
       neighborhood: "",
       landmark: "",
     },
-    // billingDetails: checkoutState.billingDetails || {
-    //   address: "",
-    //   city: "",
-    //   state: "",
-    //   country: "",
-    //   zip: "",
-    // },
   };
 
   const form = useForm({
@@ -68,13 +61,6 @@ export const CheckoutForm = () => {
         neighborhood: "",
         landmark: "",
       },
-      // billingDetails: {
-      //   address: "",
-      //   city: "",
-      //   state: "",
-      //   country: "",
-      //   zip: "",
-      // },
     },
   });
 
