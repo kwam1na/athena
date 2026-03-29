@@ -160,6 +160,7 @@ checkoutRoutes.post("/:checkoutSessionId", async (c) => {
 
         return c.json(res);
       } catch (e) {
+        console.error("error completing checkout session in api route", e);
         return c.json({ success: false, message: (e as Error).message }, 400);
       }
     }
@@ -197,7 +198,7 @@ checkoutRoutes.post("/:checkoutSessionId", async (c) => {
       }
 
       const podOrder = await c.env.runAction(
-        (api.storeFront.payment as any).createPODOrder,
+        api.storeFront.payment.createPODOrder,
         {
           customerEmail,
           amount,
@@ -231,7 +232,7 @@ checkoutRoutes.post("/:checkoutSessionId", async (c) => {
           id: checkoutSessionId as Id<"checkoutSession">,
           placedOrderId,
           hasCompletedCheckoutSession,
-        } as any
+        }
       );
 
       return c.json(res);

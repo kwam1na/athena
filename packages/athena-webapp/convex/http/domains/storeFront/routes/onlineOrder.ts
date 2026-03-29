@@ -52,6 +52,7 @@ onlineOrderRoutes.post("/owner", async (c) => {
     });
     return c.json(b);
   } catch (e) {
+    console.error(e);
     return c.json({ error: "Internal server error" }, 400);
   }
 });

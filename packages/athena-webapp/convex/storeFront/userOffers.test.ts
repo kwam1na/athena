@@ -10,10 +10,6 @@ function wrapDefinition<T extends { handler: (...args: any[]) => any }>(
     definition
   );
 }
-function h(fn: any): (...args: any[]) => any {
-  return fn.handler;
-}
-
 
 async function loadModule() {
   vi.resetModules();
@@ -95,7 +91,7 @@ describe("userOffers", () => {
       }),
     };
 
-    const result = await h(getEligibility)({ db } as never, {
+    const result = await getEligibility.handler({ db } as never, {
       storeFrontUserId: "guest_1",
       storeId: "store_1",
     });
@@ -171,7 +167,7 @@ describe("userOffers", () => {
       }),
     };
 
-    const result = await h(getEligibility)({ db } as never, {
+    const result = await getEligibility.handler({ db } as never, {
       storeFrontUserId: "guest_1",
       storeId: "store_1",
     });
@@ -224,7 +220,7 @@ describe("userOffers", () => {
       }),
     };
 
-    const result = await h(getEligibility)({ db } as never, {
+    const result = await getEligibility.handler({ db } as never, {
       storeFrontUserId: "guest_1",
       storeId: "store_1",
     });
@@ -297,7 +293,7 @@ describe("userOffers", () => {
       }),
     };
 
-    const result = await h(getEligibility)({ db } as never, {
+    const result = await getEligibility.handler({ db } as never, {
       storeFrontUserId: "guest_1",
       storeId: "store_1",
     });

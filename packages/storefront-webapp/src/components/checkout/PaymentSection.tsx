@@ -83,8 +83,18 @@ export const PaymentSection = ({ form }: CheckoutFormSectionProps) => {
             );
           }
         } else {
+          console.error("POD checkout failed:", podResult.reason);
           setErrorMessage("Failed to create payment on delivery order");
         }
+        // Log any failures in non-critical operations
+        results.slice(1).forEach((result, index) => {
+          if (result.status === "rejected") {
+            console.error(
+              `Non-critical operation ${index + 1} failed:`,
+              result.reason
+            );
+          }
+        });
       } else {
         // Original online payment flow - run all operations with allSettled
         const results = await Promise.allSettled([
@@ -118,10 +128,21 @@ export const PaymentSection = ({ form }: CheckoutFormSectionProps) => {
             throw new Error("No authorization URL received");
           }
         } else {
+          console.error("Payment processing failed:", paymentResult.reason);
           setErrorMessage("Failed to finalize payment");
         }
+        // Log any failures in non-critical operations
+        results.slice(1).forEach((result, index) => {
+          if (result.status === "rejected") {
+            console.error(
+              `Non-critical operation ${index + 1} failed:`,
+              result.reason
+            );
+          }
+        });
       }
     } catch (error) {
+      console.error("Payment error:", error);
       setErrorFinalizingPayment(true);
     } finally {
       setIsProceedingToPayment(false);

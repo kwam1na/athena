@@ -21,6 +21,7 @@ export const PaymentMethodSection = () => {
   }, []);
 
   const handlePaymentMethodChange = (method: PaymentMethodType) => {
+    console.log("PaymentMethodSection - Changing payment method to:", method);
     updateState({
       paymentMethod: method,
       podPaymentMethod:

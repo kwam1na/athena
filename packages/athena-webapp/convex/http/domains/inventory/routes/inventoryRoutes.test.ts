@@ -141,7 +141,7 @@ describe("inventory HTTP routes", () => {
     const productRoutes = await loadProductsRoute();
     const env = {
       runAction: vi.fn().mockResolvedValue([{ _id: "product_1" }]),
-    };
+    } as never;
 
     const response = await productRoutes.request(
       "http://localhost/stores/store_1/products?color=color_1,color_2&length=12,16&category=wigs&subcategory=lace-front",
@@ -151,7 +151,7 @@ describe("inventory HTTP routes", () => {
           cookie: "store_id=store_1; organization_id=org_1",
         },
       },
-      env as never
+      env
     );
 
     expect(env.runAction).toHaveBeenCalledWith(

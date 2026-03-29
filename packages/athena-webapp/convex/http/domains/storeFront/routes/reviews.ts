@@ -95,6 +95,7 @@ reviewRoutes.post("/", async (c) => {
 
     return c.json(review);
   } catch (error) {
+    console.error("Failed to create review:", error);
     return c.json({ error: "Failed to create review" }, 500);
   }
 });
@@ -116,6 +117,7 @@ reviewRoutes.get("/order-item/:orderItemId/exists", async (c) => {
 
     return c.json({ exists });
   } catch (error) {
+    console.error("Failed to check if review exists:", error);
     return c.json({ error: "Failed to check if review exists" }, 500);
   }
 });
@@ -143,6 +145,7 @@ reviewRoutes.get("/order-item/:orderItemId/user-exists", async (c) => {
 
     return c.json({ exists });
   } catch (error) {
+    console.error("Failed to check if user has reviewed:", error);
     return c.json({ error: "Failed to check if user has reviewed" }, 500);
   }
 });
@@ -165,6 +168,7 @@ reviewRoutes.get("/order-item/:orderItemId", async (c) => {
 
     return c.json(review);
   } catch (error) {
+    console.error("Failed to fetch review:", error);
     return c.json({ error: "Failed to fetch review" }, 500);
   }
 });
@@ -185,6 +189,7 @@ reviewRoutes.patch("/:id", async (c) => {
 
     return c.json(review);
   } catch (error) {
+    console.error("Failed to update review:", error);
     return c.json({ error: "Failed to update review" }, 500);
   }
 });
@@ -203,6 +208,7 @@ reviewRoutes.delete("/:id", async (c) => {
 
     return c.json({ success: true });
   } catch (error) {
+    console.error("Failed to delete review:", error);
     return c.json({ error: "Failed to delete review" }, 500);
   }
 });
@@ -224,6 +230,7 @@ reviewRoutes.get("/product-sku/:productSkuId", async (c) => {
 
     return c.json(reviews);
   } catch (error) {
+    console.error("Failed to fetch reviews:", error);
     return c.json({ error: "Failed to fetch reviews" }, 500);
   }
 });
@@ -246,6 +253,7 @@ reviewRoutes.get("/user", async (c) => {
 
     return c.json(reviews);
   } catch (error) {
+    console.error("Failed to fetch user reviews:", error);
     return c.json({ error: "Failed to fetch user reviews" }, 500);
   }
 });
@@ -273,6 +281,7 @@ reviewRoutes.get("/user/product-sku/:productSkuId", async (c) => {
 
     return c.json(reviews);
   } catch (error) {
+    console.error("Failed to fetch user reviews for product:", error);
     return c.json({ error: "Failed to fetch user reviews for product" }, 500);
   }
 });
@@ -294,6 +303,7 @@ reviewRoutes.get("/product/:productId", async (c) => {
 
     return c.json(reviews);
   } catch (error) {
+    console.error("Failed to fetch reviews:", error);
     return c.json({ error: "Failed to fetch reviews" }, 500);
   }
 });
@@ -311,10 +321,11 @@ reviewRoutes.post("/:reviewId/helpful", async (c) => {
     }
     const result = await c.env.runMutation(api.storeFront.reviews.markHelpful, {
       reviewId: reviewId as Id<"review">,
-      userId: userId as Id<"storeFrontUser"> | Id<"guest">,
+      userId,
     });
     return c.json(result);
   } catch (error) {
+    console.error("Failed to mark review as helpful:", error);
     return c.json({ error: "Failed to mark review as helpful" }, 500);
   }
 });

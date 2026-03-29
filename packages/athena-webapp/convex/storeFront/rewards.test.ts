@@ -10,10 +10,6 @@ function wrapDefinition<T extends { handler: (...args: any[]) => any }>(
     definition
   );
 }
-function h(fn: any): (...args: any[]) => any {
-  return fn.handler;
-}
-
 
 function createDbHarness({
   queryQueues = {},
@@ -120,18 +116,18 @@ describe("storeFront rewards", () => {
       },
     });
 
-    const points = await h(mod.getUserPoints)({ db } as never, {
+    const points = await mod.getUserPoints.handler({ db } as never, {
       storeFrontUserId: "user_1",
       storeId: "store_1",
     });
     expect(points).toBe(250);
 
-    const tiers = await h(mod.getTiers)({ db } as never, {
+    const tiers = await mod.getTiers.handler({ db } as never, {
       storeId: "store_1",
     });
     expect(tiers).toEqual({ _id: "tier_1", name: "Silver" });
 
-    const history = await h(mod.getPointHistory)({ db } as never, {
+    const history = await mod.getPointHistory.handler({ db } as never, {
       storeFrontUserId: "user_1",
     });
     expect(history).toEqual({ _id: "rt_1", points: 50 });
@@ -145,7 +141,7 @@ describe("storeFront rewards", () => {
       },
     });
 
-    const points = await h(getUserPoints)({ db } as never, {
+    const points = await getUserPoints.handler({ db } as never, {
       storeFrontUserId: "user_1",
       storeId: "store_1",
     });
@@ -156,7 +152,7 @@ describe("storeFront rewards", () => {
     const { awardOrderPoints } = await loadModule();
 
     const missingOrderHarness = createDbHarness();
-    const missingOrderResult = await h(awardOrderPoints)(
+    const missingOrderResult = await awardOrderPoints.handler(
       { db: missingOrderHarness.db } as never,
       {
         orderId: "order_missing",
@@ -177,7 +173,7 @@ describe("storeFront rewards", () => {
         },
       },
     });
-    const guestOrderResult = await h(awardOrderPoints)(
+    const guestOrderResult = await awardOrderPoints.handler(
       { db: guestOrderHarness.db } as never,
       {
         orderId: "order_guest",
@@ -202,7 +198,7 @@ describe("storeFront rewards", () => {
         "storeFrontUser:first": [null],
       },
     });
-    const missingUserResult = await h(awardOrderPoints)(
+    const missingUserResult = await awardOrderPoints.handler(
       { db: missingUserHarness.db } as never,
       {
         orderId: "order_user",
@@ -240,7 +236,7 @@ describe("storeFront rewards", () => {
         })),
       };
     });
-    const queryErrorResult = await h(awardOrderPoints)(
+    const queryErrorResult = await awardOrderPoints.handler(
       { db: queryErrorHarness.db } as never,
       {
         orderId: "order_user_2",
@@ -267,7 +263,7 @@ describe("storeFront rewards", () => {
       },
     });
 
-    const awardResult = await h(awardOrderPoints)(
+    const awardResult = await awardOrderPoints.handler(
       { db: awardHarness.db } as never,
       {
         orderId: "order_ok",
@@ -303,7 +299,7 @@ describe("storeFront rewards", () => {
       },
     });
 
-    const createPointsResult = await h(awardOrderPoints)(
+    const createPointsResult = await awardOrderPoints.handler(
       { db: createPointsHarness.db } as never,
       {
         orderId: "order_new_points",
@@ -328,7 +324,7 @@ describe("storeFront rewards", () => {
         "rewardPoints:first": [null],
       },
     });
-    const noPoints = await h(redeemPoints)({ db: noPointsHarness.db } as never, {
+    const noPoints = await redeemPoints.handler({ db: noPointsHarness.db } as never, {
       storeFrontUserId: "user_1",
       storeId: "store_1",
       rewardTierId: "tier_1",
@@ -340,7 +336,7 @@ describe("storeFront rewards", () => {
         "rewardPoints:first": [{ _id: "rp_1", points: 100 }],
       },
     });
-    const noTier = await h(redeemPoints)({ db: noTierHarness.db } as never, {
+    const noTier = await redeemPoints.handler({ db: noTierHarness.db } as never, {
       storeFrontUserId: "user_1",
       storeId: "store_1",
       rewardTierId: "tier_missing",
@@ -361,7 +357,7 @@ describe("storeFront rewards", () => {
         },
       },
     });
-    const notEnough = await h(redeemPoints)(
+    const notEnough = await redeemPoints.handler(
       { db: notEnoughHarness.db } as never,
       {
         storeFrontUserId: "user_1",
@@ -386,7 +382,7 @@ describe("storeFront rewards", () => {
       },
     });
 
-    const success = await h(redeemPoints)({ db: successHarness.db } as never, {
+    const success = await redeemPoints.handler({ db: successHarness.db } as never, {
       storeFrontUserId: "user_1",
       storeId: "store_1",
       rewardTierId: "tier_3",
@@ -410,7 +406,7 @@ describe("storeFront rewards", () => {
     const { createRewardTier } = await loadModule();
     const { db } = createDbHarness();
 
-    const result = await h(createRewardTier)({ db } as never, {
+    const result = await createRewardTier.handler({ db } as never, {
       storeId: "store_1",
       name: "Platinum",
       pointsRequired: 500,
@@ -452,7 +448,7 @@ describe("storeFront rewards", () => {
       },
     });
 
-    const result = await h(getPastEligibleOrders)({ db } as never, {
+    const result = await getPastEligibleOrders.handler({ db } as never, {
       storeFrontUserId: "user_1",
       email: "guest@example.com",
     });
@@ -475,7 +471,7 @@ describe("storeFront rewards", () => {
     const { awardPointsForPastOrder } = await loadModule();
 
     const missingHarness = createDbHarness();
-    const missing = await h(awardPointsForPastOrder)(
+    const missing = await awardPointsForPastOrder.handler(
       { db: missingHarness.db } as never,
       { storeFrontUserId: "user_1", orderId: "missing" }
     );
@@ -494,7 +490,7 @@ describe("storeFront rewards", () => {
         "rewardTransactions:first": [{ _id: "txn_dup" }],
       },
     });
-    const duplicate = await h(awardPointsForPastOrder)(
+    const duplicate = await awardPointsForPastOrder.handler(
       { db: duplicateHarness.db } as never,
       { storeFrontUserId: "user_1", orderId: "order_dup" }
     );
@@ -517,7 +513,7 @@ describe("storeFront rewards", () => {
         "rewardPoints:first": [{ _id: "rp_5", points: 40 }],
       },
     });
-    const updated = await h(awardPointsForPastOrder)(
+    const updated = await awardPointsForPastOrder.handler(
       { db: updateHarness.db } as never,
       { storeFrontUserId: "user_1", orderId: "order_update" }
     );
@@ -541,7 +537,7 @@ describe("storeFront rewards", () => {
         "rewardPoints:first": [null],
       },
     });
-    const created = await h(awardPointsForPastOrder)(
+    const created = await awardPointsForPastOrder.handler(
       { db: createHarness.db } as never,
       { storeFrontUserId: "user_1", orderId: "order_create" }
     );
@@ -564,7 +560,7 @@ describe("storeFront rewards", () => {
         "rewardTransactions:first": [{ _id: "txn_1", points: 70 }],
       },
     });
-    const withTxn = await h(getOrderPoints)(
+    const withTxn = await getOrderPoints.handler(
       { db: withTxnHarness.db } as never,
       { orderId: "order_1" }
     );
@@ -578,7 +574,7 @@ describe("storeFront rewards", () => {
         "rewardTransactions:first": [null],
       },
     });
-    const missingOrder = await h(getOrderPoints)(
+    const missingOrder = await getOrderPoints.handler(
       { db: missingOrderHarness.db } as never,
       { orderId: "missing_order" }
     );
@@ -598,13 +594,13 @@ describe("storeFront rewards", () => {
       },
     });
 
-    const verified = await h(getOrderPoints)(
+    const verified = await getOrderPoints.handler(
       { db: fallbackHarness.db } as never,
       { orderId: "order_verified" }
     );
     expect(verified).toEqual({ points: 120 });
 
-    const unverified = await h(getOrderPoints)(
+    const unverified = await getOrderPoints.handler(
       { db: fallbackHarness.db } as never,
       { orderId: "order_unverified" }
     );
@@ -615,7 +611,7 @@ describe("storeFront rewards", () => {
     const { awardPointsForGuestOrders } = await loadModule();
 
     const missingGuestHarness = createDbHarness();
-    const missingGuest = await h(awardPointsForGuestOrders)(
+    const missingGuest = await awardPointsForGuestOrders.handler(
       { db: missingGuestHarness.db, runQuery: vi.fn() } as never,
       { storeFrontUserId: "user_1", guestId: "guest_missing" }
     );
@@ -629,7 +625,7 @@ describe("storeFront rewards", () => {
         guest_1: { _id: "guest_1", email: "guest@example.com" },
       },
     });
-    const noOrders = await h(awardPointsForGuestOrders)(
+    const noOrders = await awardPointsForGuestOrders.handler(
       {
         db: noOrdersHarness.db,
         runQuery: vi.fn().mockResolvedValue([]),
@@ -655,7 +651,7 @@ describe("storeFront rewards", () => {
       },
     });
 
-    const success = await h(awardPointsForGuestOrders)(
+    const success = await awardPointsForGuestOrders.handler(
       {
         db: successHarness.db,
         runQuery: vi.fn().mockResolvedValue([

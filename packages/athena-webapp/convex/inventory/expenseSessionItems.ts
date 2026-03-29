@@ -170,6 +170,7 @@ export const addOrUpdateExpenseItem = mutation({
 
       return expenseItemSuccess(itemId, expiresAt);
     } catch (err) {
+      console.error("Error in addOrUpdateExpenseItem:", err);
       return error(
         err instanceof Error
           ? err.message

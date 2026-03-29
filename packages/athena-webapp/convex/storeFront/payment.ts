@@ -66,12 +66,14 @@ export const createTransaction = action({
           }
         );
       } catch (error) {
-        // handled
+        console.error("Failed to update checkout session", error);
       }
+
+      console.log(`finalizing payment for session: ${args.checkoutSessionId}`);
 
       return res.data;
     } else {
-      // handled
+      console.error("Failed to create transaction", response);
     }
   },
 });
@@ -81,7 +83,7 @@ export const verifyPayment = action({
     storeFrontUserId: v.union(v.id("storeFrontUser"), v.id("guest")),
     externalReference: v.string(),
   },
-  handler: async (ctx, args): Promise<{ verified?: boolean; message?: string }> => {
+  handler: async (ctx, args) => {
     const response = await fetch(
       `https://api.paystack.co/transaction/verify/${args.externalReference}`,
       {
@@ -106,11 +108,13 @@ export const verifyPayment = action({
       const order: OnlineOrder | null = await ctx.runQuery(
         api.storeFront.onlineOrder.get,
         {
-          identifier: args.externalReference,
+          externalReference: args.externalReference,
         }
       );
 
       const amount = session?.amount || order?.amount;
+
+      // console.log("session", session);
 
       const isVerified = Boolean(
         res.data.status == "success" && res.data.amount == amount
@@ -144,20 +148,20 @@ export const verifyPayment = action({
 
             const orderPickupLocation = store?.config?.contactInfo?.location;
 
-            const deliveryAddress = getAddressString(order.deliveryDetails as any);
+            const deliveryAddress = getAddressString(order.deliveryDetails);
 
             const pickupDetails =
               order.deliveryMethod == "pickup"
                 ? orderPickupLocation
                 : deliveryAddress;
 
-            const items: { text: string; image: string; price: string; quantity: string; length?: string; color: string }[] = (order.items ?? []).map((item: any) => ({
+            const items = order.items?.map((item: any) => ({
               text: item.productName,
               image: item.productImage,
               price: formatter.format(item.price),
               quantity: item.quantity,
               color: item.colorName,
-              length: item.length ? `${item.length} inches` : undefined,
+              length: item.length && `${item.length} inches`,
             }));
 
             // send confirmation email
@@ -172,14 +176,16 @@ export const verifyPayment = action({
               items,
               pickup_type: order.deliveryMethod,
               pickup_details: pickupDetails,
-              customer_name: (order.customerDetails as any)?.firstName || "",
             });
 
             if (emailResponse.ok) {
+              console.log(
+                `sent order confirmation for order #${order?.orderNumber} to ${order.customerDetails?.email}`
+              );
               update.didSendConfirmationEmail = true;
             }
           } catch (e) {
-            // handled
+            console.error("Failed to send order confirmation email", e);
           }
         }
 
@@ -188,9 +194,20 @@ export const verifyPayment = action({
           update,
         });
 
+        console.log(
+          `verified payment for session. [session: ${session?._id}, order: ${order?._id}, customer: ${args.storeFrontUserId}, externalReference: ${args.externalReference}]`
+        );
+      }
+
+      if (!isVerified) {
+        console.error(
+          `unable to verify payment. [session: ${session?._id}, order: ${order?._id}, customer: ${args.storeFrontUserId}, externalReference: ${args.externalReference}]`
+        );
       }
 
       return { verified: isVerified };
+    } else {
+      console.error("Failed to create transaction", response);
     }
 
     return {
@@ -230,12 +247,15 @@ export const refundPayment = action({
         },
       });
 
+      console.log('updated order status to "refund-submitted"');
+
       if (args.returnItemsToStock) {
         await ctx.runMutation(api.storeFront.onlineOrder.returnItemsToStock, {
           externalTransactionId: args.externalTransactionId,
           onlineOrderItemIds: args.onlineOrderItemIds,
         });
 
+        console.log("returned items to stock");
         return { success: true, message: res.message };
       }
 
@@ -244,8 +264,12 @@ export const refundPayment = action({
           orderItemIds: args.onlineOrderItemIds,
           updates: { isRefunded: true },
         });
+
+        console.log("updated order items to refunded");
       }
       return { success: true, message: res.message };
+    } else {
+      console.error("Failed to refund payment", response);
     }
 
     return { success: false, message: res.message };

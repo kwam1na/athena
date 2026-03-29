@@ -3,26 +3,18 @@ import { HonoWithConvex } from "convex-helpers/server/hono";
 import { ActionCtx } from "../../../../_generated/server";
 import { api } from "../../../../_generated/api";
 import { Id } from "../../../../_generated/dataModel";
-import { getCookie, deleteCookie, setCookie } from "hono/cookie";
+import { getCookie, setCookie } from "hono/cookie";
 import { getStoreDataFromRequest } from "../../../utils";
-import { getActorClaims } from "./actorAuth";
 
 const guestRoutes: HonoWithConvex<ActionCtx> = new Hono();
 
 // Get all bags
 guestRoutes.get("/", async (c) => {
-  let guestId = getCookie(c, "guest_id");
-
-  if (!guestId) {
-    const claims = await getActorClaims(c);
-    if (claims?.actorType === "guest") {
-      guestId = claims.actorId;
-    }
-  }
+  const guestId = getCookie(c, "guest_id");
 
   const marker = c.req.query("marker");
 
-  const { storeId, organizationId } = await getStoreDataFromRequest(c);
+  const { storeId, organizationId } = getStoreDataFromRequest(c);
 
   if (!guestId) {
     return c.json({ error: "Guest id missing" }, 404);
@@ -69,13 +61,9 @@ guestRoutes.get("/", async (c) => {
 });
 
 guestRoutes.put("/", async (c) => {
-  let guestId = getCookie(c, "guest_id");
-
+  const guestId = getCookie(c, "guest_id");
   if (!guestId) {
-    const claims = await getActorClaims(c);
-    if (claims?.actorType === "guest") {
-      guestId = claims.actorId;
-    }
+    return c.json({ error: "Guest id missing" }, 404);
   }
 
   const { email, firstName, lastName, phoneNumber } = await c.req.json();

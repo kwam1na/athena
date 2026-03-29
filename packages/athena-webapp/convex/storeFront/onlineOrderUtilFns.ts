@@ -107,6 +107,10 @@ export async function handleOrderStatusUpdate({
   newStatus: string;
   store: Store;
 }): Promise<EmailResult | undefined> {
+  console.info(
+    `handling order status update: ${newStatus} for order #${order.orderNumber}`
+  );
+
   const formatter = currencyFormatter(store.currency || "USD");
   const { firstName, email } = order.customerDetails;
 
@@ -116,6 +120,7 @@ export async function handleOrderStatusUpdate({
     statusMessaging,
     pickupDetails,
   }: EmailConfig): Promise<boolean> {
+    console.info(`sending ${type} email for order #${order.orderNumber}`);
 
     const items = formatOrderItems(
       order.items || [],
@@ -150,9 +155,17 @@ export async function handleOrderStatusUpdate({
     });
 
     if (emailResponse.ok) {
+      console.info(
+        `successfully sent ${type} email for order #${order.orderNumber} to ${email}`
+      );
       return true;
     }
 
+    console.log(
+      `failed to send ${type} email for order #${order.orderNumber} to ${email}`
+    );
+    const emailResponseBody = await emailResponse.json();
+    console.log("Email error details:", emailResponseBody);
     return false;
   }
 
@@ -174,7 +187,7 @@ export async function handleOrderStatusUpdate({
         return { didSendConfirmationEmail: true };
       }
     } catch (error) {
-      // handled
+      console.log("Failed to send order confirmation email:", error);
     }
     return undefined;
   }
@@ -195,7 +208,7 @@ export async function handleOrderStatusUpdate({
           return { didSendReadyEmail: true };
         }
       } catch (error) {
-        // handled
+        console.log("Failed to send order ready email:", error);
       }
       return undefined;
     }
@@ -214,7 +227,7 @@ export async function handleOrderStatusUpdate({
           return { didSendReadyEmail: true };
         }
       } catch (error) {
-        // handled
+        console.log("Failed to send order ready email:", error);
       }
       return undefined;
     }
@@ -241,7 +254,7 @@ export async function handleOrderStatusUpdate({
         return { didSendCompletedEmail: true };
       }
     } catch (error) {
-      // handled
+      console.log("Failed to send completed email:", error);
     }
     return undefined;
   }
@@ -261,7 +274,7 @@ export async function handleOrderStatusUpdate({
         return { didSendCancelledEmail: true };
       }
     } catch (error) {
-      // handled
+      console.log("Failed to send cancelled email:", error);
     }
     return undefined;
   }
@@ -287,6 +300,7 @@ export const sendOrderUpdateEmail = action({
     });
 
     if (!order) {
+      console.log("Order not found in send order update email handler");
       return {
         success: false,
         message: "Order not found",
@@ -299,11 +313,16 @@ export const sendOrderUpdateEmail = action({
     });
 
     if (!store) {
+      console.log("Store not found in send order update email handler");
       return {
         success: false,
         message: "Store not found",
       };
     }
+
+    console.info(
+      `sending order update: ${args.newStatus} email for order #${order.orderNumber}`
+    );
 
     // Handle order status update
     const emailResult = await handleOrderStatusUpdate({

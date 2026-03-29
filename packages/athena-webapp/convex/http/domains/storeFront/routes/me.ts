@@ -4,19 +4,11 @@ import { ActionCtx } from "../../../../_generated/server";
 import { api } from "../../../../_generated/api";
 import { Id } from "../../../../_generated/dataModel";
 import { getCookie } from "hono/cookie";
-import { getActorClaims } from "./actorAuth";
 
 const meRoutes: HonoWithConvex<ActionCtx> = new Hono();
 
 meRoutes.get("/", async (c) => {
-  let userId = getCookie(c, "user_id");
-
-  if (!userId) {
-    const claims = await getActorClaims(c);
-    if (claims?.actorType === "user") {
-      userId = claims.actorId;
-    }
-  }
+  const userId = getCookie(c, "user_id");
 
   if (!userId) {
     return c.json(null, 200);
@@ -34,14 +26,7 @@ meRoutes.get("/", async (c) => {
 });
 
 meRoutes.put("/", async (c) => {
-  let userId = getCookie(c, "user_id");
-
-  if (!userId) {
-    const claims = await getActorClaims(c);
-    if (claims?.actorType === "user") {
-      userId = claims.actorId;
-    }
-  }
+  const userId = getCookie(c, "user_id");
 
   if (!userId) {
     return c.json({ error: "User id missing" }, 404);

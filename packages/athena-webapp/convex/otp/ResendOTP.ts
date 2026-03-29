@@ -17,6 +17,7 @@ export const ResendOTP = Email({
     token,
     expires,
   }) {
+    console.log(provider.apiKey);
     const resend = new ResendAPI("re_ExacZJiD_BpHB6Yyc8vcnZvk7LVJYWRBr");
     const { error } = await resend.emails.send({
       from: AUTH_EMAIL ?? "athena <onboarding@resend.dev>",

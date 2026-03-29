@@ -37,10 +37,8 @@ import type * as http_domains_inventory_routes_organizations from "../http/domai
 import type * as http_domains_inventory_routes_products from "../http/domains/inventory/routes/products.js";
 import type * as http_domains_inventory_routes_stores from "../http/domains/inventory/routes/stores.js";
 import type * as http_domains_inventory_routes_subcategories from "../http/domains/inventory/routes/subcategories.js";
-import type * as http_domains_storeFront_routes_actorAuth from "../http/domains/storeFront/routes/actorAuth.js";
 import type * as http_domains_storeFront_routes_bag from "../http/domains/storeFront/routes/bag.js";
 import type * as http_domains_storeFront_routes_checkout from "../http/domains/storeFront/routes/checkout.js";
-import type * as http_domains_storeFront_routes_e2e from "../http/domains/storeFront/routes/e2e.js";
 import type * as http_domains_storeFront_routes_guest from "../http/domains/storeFront/routes/guest.js";
 import type * as http_domains_storeFront_routes_index from "../http/domains/storeFront/routes/index.js";
 import type * as http_domains_storeFront_routes_me from "../http/domains/storeFront/routes/me.js";
@@ -155,7 +153,6 @@ import type * as storeFront_auth from "../storeFront/auth.js";
 import type * as storeFront_bag from "../storeFront/bag.js";
 import type * as storeFront_bagItem from "../storeFront/bagItem.js";
 import type * as storeFront_checkoutSession from "../storeFront/checkoutSession.js";
-import type * as storeFront_customer from "../storeFront/customer.js";
 import type * as storeFront_customerBehaviorTimeline from "../storeFront/customerBehaviorTimeline.js";
 import type * as storeFront_guest from "../storeFront/guest.js";
 import type * as storeFront_helpers_paymentHelpers from "../storeFront/helpers/paymentHelpers.js";
@@ -212,10 +209,8 @@ declare const fullApi: ApiFromModules<{
   "http/domains/inventory/routes/products": typeof http_domains_inventory_routes_products;
   "http/domains/inventory/routes/stores": typeof http_domains_inventory_routes_stores;
   "http/domains/inventory/routes/subcategories": typeof http_domains_inventory_routes_subcategories;
-  "http/domains/storeFront/routes/actorAuth": typeof http_domains_storeFront_routes_actorAuth;
   "http/domains/storeFront/routes/bag": typeof http_domains_storeFront_routes_bag;
   "http/domains/storeFront/routes/checkout": typeof http_domains_storeFront_routes_checkout;
-  "http/domains/storeFront/routes/e2e": typeof http_domains_storeFront_routes_e2e;
   "http/domains/storeFront/routes/guest": typeof http_domains_storeFront_routes_guest;
   "http/domains/storeFront/routes/index": typeof http_domains_storeFront_routes_index;
   "http/domains/storeFront/routes/me": typeof http_domains_storeFront_routes_me;
@@ -330,7 +325,6 @@ declare const fullApi: ApiFromModules<{
   "storeFront/bag": typeof storeFront_bag;
   "storeFront/bagItem": typeof storeFront_bagItem;
   "storeFront/checkoutSession": typeof storeFront_checkoutSession;
-  "storeFront/customer": typeof storeFront_customer;
   "storeFront/customerBehaviorTimeline": typeof storeFront_customerBehaviorTimeline;
   "storeFront/guest": typeof storeFront_guest;
   "storeFront/helpers/paymentHelpers": typeof storeFront_helpers_paymentHelpers;

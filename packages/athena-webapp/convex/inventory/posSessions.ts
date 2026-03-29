@@ -274,6 +274,9 @@ export const updateSession = mutation({
     if (!validation.success) {
       // For completed/void sessions, return current state without update
       const currentSession = await ctx.db.get(sessionId);
+      console.warn(
+        `Attempted to update ${currentSession?.status} session ${sessionId}. Ignoring update.`
+      );
       return {
         sessionId,
         expiresAt: currentSession?.expiresAt || now,
@@ -682,8 +685,13 @@ export const releasePosSessionItems = internalMutation({
     ];
 
     if (expiredSessions.length === 0) {
+      console.log("[POS] No expired sessions found");
       return { releasedCount: 0, sessionIds: [] };
     }
+
+    console.log(
+      `[POS] Found ${expiredSessions.length} expired sessions to process`
+    );
 
     const releasedSessionIds: string[] = [];
 
@@ -712,6 +720,9 @@ export const releasePosSessionItems = internalMutation({
         );
 
         await releaseInventoryHoldsBatch(ctx.db, releaseItems);
+        console.log(
+          `[POS] Released inventory holds for ${releaseItems.length} SKUs`
+        );
 
         // Keep items for record-keeping - don't delete them
         // Items remain associated with expired session for audit trail
@@ -724,11 +735,18 @@ export const releasePosSessionItems = internalMutation({
         });
 
         releasedSessionIds.push(session._id);
+        console.log(
+          `[POS] Released inventory holds for session ${session.sessionNumber}`
+        );
       } catch (error) {
+        console.error(`[POS] Error releasing session ${session._id}:`, error);
         // Continue processing other sessions even if one fails
       }
     }
 
+    console.log(
+      `[POS] Successfully released ${releasedSessionIds.length} sessions`
+    );
     return {
       releasedCount: releasedSessionIds.length,
       sessionIds: releasedSessionIds,

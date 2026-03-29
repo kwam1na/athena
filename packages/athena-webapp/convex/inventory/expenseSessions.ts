@@ -271,6 +271,9 @@ export const updateExpenseSession = mutation({
     );
     if (!validation.success) {
       const currentSession = await ctx.db.get(sessionId);
+      console.warn(
+        `Attempted to update ${currentSession?.status} expense session ${sessionId}. Ignoring update.`
+      );
       return {
         sessionId,
         expiresAt: currentSession?.expiresAt || now,
@@ -674,8 +677,13 @@ export const releaseExpenseSessionItems = internalMutation({
     const expiredSessions = [...expiredActiveSessions, ...expiredVoidSessions];
 
     if (expiredSessions.length === 0) {
+      console.log("[Expense] No expired sessions found");
       return { releasedCount: 0, sessionIds: [] };
     }
+
+    console.log(
+      `[Expense] Found ${expiredSessions.length} expired sessions to process`
+    );
 
     const releasedSessionIds: string[] = [];
 
@@ -704,6 +712,9 @@ export const releaseExpenseSessionItems = internalMutation({
         );
 
         await releaseInventoryHoldsBatch(ctx.db, releaseItems);
+        console.log(
+          `[Expense] Released inventory holds for ${releaseItems.length} SKUs`
+        );
 
         // Mark session as expired
         await ctx.db.patch(session._id, {
@@ -712,10 +723,21 @@ export const releaseExpenseSessionItems = internalMutation({
         });
 
         releasedSessionIds.push(session._id);
+        console.log(
+          `[Expense] Released inventory holds for session ${session.sessionNumber}`
+        );
       } catch (error) {
+        console.error(
+          `[Expense] Error releasing session ${session._id}:`,
+          error
+        );
         // Continue processing other sessions even if one fails
       }
     }
+
+    console.log(
+      `[Expense] Successfully released ${releasedSessionIds.length} sessions`
+    );
     return {
       releasedCount: releasedSessionIds.length,
       sessionIds: releasedSessionIds,

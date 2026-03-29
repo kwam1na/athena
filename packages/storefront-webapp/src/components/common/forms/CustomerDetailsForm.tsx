@@ -80,7 +80,7 @@ export const CustomerDetailsForm = ({
       await onSubmitClick(data);
       onCancelClick();
     } catch (e) {
-      // handled
+      console.error(e);
     } finally {
       setIsSubmitting(false);
     }

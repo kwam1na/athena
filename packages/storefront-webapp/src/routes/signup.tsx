@@ -114,7 +114,9 @@ const Signup = () => {
         });
       }
     },
-    onError: () => {},
+    onError: (error) => {
+      console.log("error", error);
+    },
   });
 
   if (!store) return <div className="h-screen" />;

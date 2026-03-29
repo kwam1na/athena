@@ -160,7 +160,11 @@ export const nukeProblematicImages = mutation({
       if (validImages.length === sku.images.length) return [];
 
       return [
-        ctx.db.patch(sku._id, { images: validImages }),
+        ctx.db.patch(sku._id, { images: validImages }).then(() => {
+          console.log(
+            `✅ SKU ${sku._id}: removed ${sku.images.length - validImages.length} invalid images`
+          );
+        }),
       ];
     });
 
@@ -176,7 +180,9 @@ export const makeAllProductsVisible = mutation({
     const productSkus = await ctx.db.query("product").collect();
 
     const updates = productSkus.map(async (sku) => {
-      return ctx.db.patch(sku._id, { isVisible: true });
+      return ctx.db.patch(sku._id, { isVisible: true }).then(() => {
+        console.log(`✅ SKU ${sku._id}: set isVisible to true`);
+      });
     });
 
     await Promise.allSettled(updates);

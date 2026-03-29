@@ -3,35 +3,36 @@ import { HonoWithConvex } from "convex-helpers/server/hono";
 import { ActionCtx } from "../../../../_generated/server";
 import { api } from "../../../../_generated/api";
 import { Id } from "../../../../_generated/dataModel";
-import { SignJWT } from "jose";
-import { STOREFRONT_ACTOR_SIGNING_KEY } from "../../../../env";
-import { enforceActorStoreAccess, getActorClaims } from "./actorAuth";
-
-const encoder = new TextEncoder();
 
 const e2eRoutes: HonoWithConvex<ActionCtx> = new Hono();
 
-e2eRoutes.post("/checkout/bootstrap", async (c) => {
-  const authError = await enforceActorStoreAccess(c);
-  if (authError) {
-    return authError;
-  }
+type BootstrapItem = {
+  productSlug: string;
+  quantity: number;
+  sku?: string;
+};
 
+function createMarker() {
+  return `e2e-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+e2eRoutes.post("/checkout/bootstrap", async (c) => {
   const organizationId = c.req.param("organizationId");
   const storeId = c.req.param("storeId");
-
   if (!organizationId || !storeId) {
     return c.json({ error: "Invalid route context." }, 400);
   }
-
   const body = await c.req.json();
-  const { marker, items } = body;
+  const marker =
+    typeof body.marker === "string" && body.marker.trim().length > 0
+      ? body.marker.trim()
+      : createMarker();
+  const items = Array.isArray(body.items) ? (body.items as BootstrapItem[]) : [];
 
-  if (!Array.isArray(items) || items.length === 0) {
+  if (items.length === 0) {
     return c.json({ error: "At least one item is required." }, 400);
   }
 
-  // Get or create guest
   let guest = await c.env.runQuery(api.storeFront.guest.getByMarker, {
     marker,
   });
@@ -39,7 +40,7 @@ e2eRoutes.post("/checkout/bootstrap", async (c) => {
   if (!guest) {
     guest = await c.env.runMutation(api.storeFront.guest.create, {
       marker,
-      creationOrigin: "storefront",
+      creationOrigin: "e2e",
       storeId: storeId as Id<"store">,
       organizationId: organizationId as Id<"organization">,
     });
@@ -49,45 +50,25 @@ e2eRoutes.post("/checkout/bootstrap", async (c) => {
     return c.json({ error: "Unable to create guest actor." }, 500);
   }
 
-  const guestId = guest._id as Id<"guest">;
-
-  // Get or create bag
   let bag = await c.env.runQuery(api.storeFront.bag.getByUserId, {
-    storeFrontUserId: guestId,
+    storeFrontUserId: guest._id,
   });
 
   if (!bag) {
     bag = await c.env.runMutation(api.storeFront.bag.create, {
-      storeFrontUserId: guestId,
+      storeFrontUserId: guest._id,
       storeId: storeId as Id<"store">,
-    }) as any;
+    });
   }
 
-  if (!bag) {
-    return c.json({ error: "Unable to create bag." }, 500);
-  }
+  await c.env.runMutation(api.storeFront.bag.clearBag, {
+    id: bag._id as Id<"bag">,
+  });
 
-  const bagId = bag._id as Id<"bag">;
-
-  // Clear bag for a clean E2E state
-  await c.env.runMutation(api.storeFront.bag.clearBag, { id: bagId });
-
-  // Process each item
-  type ProductEntry = {
-    price: number;
-    productId: Id<"product">;
-    productSku: string;
-    productSkuId: Id<"productSku">;
-    quantity: number;
-  };
-
-  const products: ProductEntry[] = [];
-  let totalAmount = 0;
+  const resolvedItems = [];
 
   for (const item of items) {
-    const { productSlug, quantity, sku: skuHint } = item;
-
-    if (!productSlug || !quantity) {
+    if (!item?.productSlug || !item?.quantity || item.quantity < 1) {
       return c.json(
         { error: "Each item must include productSlug and quantity." },
         400
@@ -95,115 +76,100 @@ e2eRoutes.post("/checkout/bootstrap", async (c) => {
     }
 
     const product = await c.env.runQuery(api.inventory.products.getByIdOrSlug, {
-      identifier: productSlug,
+      identifier: item.productSlug,
       storeId: storeId as Id<"store">,
-      filters: { isVisible: false },
+      filters: { isVisible: true },
     });
 
     if (!product) {
       return c.json(
-        { error: `Product not found for slug '${productSlug}'.` },
+        { error: `Product not found for slug '${item.productSlug}'.` },
         404
       );
     }
 
-    type Sku = {
-      _id: Id<"productSku">;
-      sku: string;
-      price: number;
-      quantityAvailable: number;
-    };
+    const selectedSku =
+      (item.sku
+        ? product.skus.find((candidate: any) => candidate.sku === item.sku)
+        : undefined) ||
+      product.skus.find(
+        (candidate: any) =>
+          typeof candidate.price === "number" &&
+          candidate.price > 0 &&
+          candidate.quantityAvailable >= item.quantity
+      ) ||
+      product.skus.find(
+        (candidate: any) =>
+          typeof candidate.price === "number" && candidate.price > 0
+      );
 
-    const skus: Sku[] = (product.skus ?? []) as any;
-    const purchasableSku = skuHint
-      ? skus.find(
-          (s: Sku) => s.sku === skuHint && s.price > 0 && s.quantityAvailable > 0
-        )
-      : skus.find((s: Sku) => s.price > 0 && s.quantityAvailable > 0);
-
-    if (!purchasableSku) {
+    if (!selectedSku) {
       return c.json(
         {
-          error: skuHint
-            ? `No purchasable SKU found for '${productSlug}' (${skuHint}).`
-            : `No purchasable SKU found for '${productSlug}'.`,
+          error: `No purchasable SKU found for '${item.productSlug}'${item.sku ? ` (${item.sku})` : ""}.`,
         },
         404
       );
     }
 
+    const resolvedItem = {
+      productId: product._id as Id<"product">,
+      productSkuId: selectedSku._id as Id<"productSku">,
+      productSku: selectedSku.sku as string,
+      quantity: item.quantity,
+      price: selectedSku.price as number,
+    };
+
+    resolvedItems.push(resolvedItem);
+
     await c.env.runMutation(api.storeFront.bagItem.addItemToBag, {
-      productId: product._id as Id<"product">,
-      quantity,
-      storeFrontUserId: guestId,
-      bagId,
-      productSkuId: purchasableSku._id,
-      productSku: purchasableSku.sku,
+      bagId: bag._id as Id<"bag">,
+      productId: resolvedItem.productId,
+      productSkuId: resolvedItem.productSkuId,
+      productSku: resolvedItem.productSku,
+      quantity: resolvedItem.quantity,
+      storeFrontUserId: guest._id,
     });
-
-    products.push({
-      price: purchasableSku.price,
-      productId: product._id as Id<"product">,
-      productSku: purchasableSku.sku,
-      productSkuId: purchasableSku._id,
-      quantity,
-    });
-
-    totalAmount += purchasableSku.price * quantity;
   }
 
-  const checkoutResult = await c.env.runMutation(
+  const subtotal = resolvedItems.reduce(
+    (sum, item) => sum + item.price * item.quantity,
+    0
+  );
+
+  const checkoutSession = await c.env.runMutation(
     api.storeFront.checkoutSession.create,
     {
       storeId: storeId as Id<"store">,
-      storeFrontUserId: guestId,
-      products,
-      bagId,
-      amount: totalAmount * 100,
+      storeFrontUserId: guest._id,
+      bagId: bag._id as Id<"bag">,
+      amount: subtotal * 100,
+      products: resolvedItems,
     }
   );
 
-  if (!checkoutResult.success) {
+  if (!checkoutSession?.success || !checkoutSession.session) {
     return c.json(
       {
-        error: (checkoutResult as any).message ?? "Unable to create checkout session.",
-        unavailableProducts: (checkoutResult as any).unavailableProducts ?? [],
+        error:
+          checkoutSession?.message || "Unable to create checkout session.",
+        unavailableProducts: checkoutSession?.unavailableProducts || [],
       },
       400
     );
   }
 
-  if (!STOREFRONT_ACTOR_SIGNING_KEY) {
-    return c.json({ error: "Actor signing key is not configured." }, 500);
-  }
-
-  const requestingActor = await getActorClaims(c);
-
-  const actorToken = await new SignJWT({
-    storeId,
-    organizationId,
-    actorType: "guest",
-  })
-    .setProtectedHeader({ alg: "HS256" })
-    .setSubject(guestId)
-    .setIssuedAt()
-    .sign(encoder.encode(STOREFRONT_ACTOR_SIGNING_KEY));
-
-  const actor = {
-    actorId: guestId,
-    actorType: "guest" as const,
-    organizationId,
-    requestedBy: requestingActor?.actorId,
-    storeId,
-  };
-
   return c.json({
-    actor,
-    actorToken,
-    bagId,
+    actor: {
+      actorId: guest._id,
+      actorType: "guest",
+      organizationId,
+      storeId,
+    },
+    bagId: bag._id,
     checkoutPath: "/shop/checkout",
-    checkoutSession: (checkoutResult as any).session,
-    checkoutSessionId: (checkoutResult as any).session._id,
+    checkoutSession: checkoutSession.session,
+    checkoutSessionId: checkoutSession.session._id,
     marker,
   });
 });

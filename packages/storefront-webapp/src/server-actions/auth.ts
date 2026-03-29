@@ -30,6 +30,7 @@ import { getCookie, setCookie } from "vinxi/http";
 
 export const fetchUser = createServerFn({ method: "POST" }).handler(
   async ({ data }) => {
+    console.log(data);
   }
 );
 
@@ -103,10 +104,12 @@ export const fetchUser = createServerFn({ method: "POST" }).handler(
 
 export const logoutFn = createServerFn({ method: "POST" }).handler(
   async ({ data }) => {
+    console.log(data);
   }
 );
 
 export const loginFn = createServerFn({ method: "POST" }).handler(
   async ({ data }) => {
+    console.log(data);
   }
 );

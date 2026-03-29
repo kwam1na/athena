@@ -77,13 +77,25 @@ export const create = mutation({
       )
       .collect();
 
+    console.log(
+      `[FirstReviewOffer] User ${createdByStoreFrontUserId} has ${allUserReviews.length} review(s)`
+    );
+
     if (allUserReviews.length === 1) {
+      console.log(
+        `[FirstReviewOffer] This is the user's first review, checking for offer eligibility`
+      );
+
       // This is the user's first review
       const store = await ctx.db.get(storeId);
       const promoCodeConfig =
         store?.config?.leaveAReviewDiscountCodeModalPromoCode;
 
       if (promoCodeConfig?.promoCodeId) {
+        console.log(
+          `[FirstReviewOffer] Store has leave-a-review promo code configured: ${promoCodeConfig.promoCodeId}`
+        );
+
         // Validate the promo code
         const promoCode = await ctx.db.get(
           promoCodeConfig.promoCodeId as Id<"promoCode">
@@ -95,11 +107,19 @@ export const create = mutation({
           const isValidDate =
             now >= promoCode.validFrom && now <= promoCode.validTo;
 
+          console.log(
+            `[FirstReviewOffer] Promo code validation - Active: ${isActive}, Valid date: ${isValidDate} (code: ${promoCode.code})`
+          );
+
           if (isActive && isValidDate) {
             // Get user email (works for both storeFrontUser and guest)
             const user = await ctx.db.get(createdByStoreFrontUserId);
 
             if (user?.email) {
+              console.log(
+                `[FirstReviewOffer] User has email: ${user.email}, checking for duplicate offers`
+              );
+
               // Check for duplicate offer
               const existingOffer = await ctx.db
                 .query("offer")
@@ -110,6 +130,10 @@ export const create = mutation({
                 .first();
 
               if (!existingOffer) {
+                console.log(
+                  `[FirstReviewOffer] No duplicate offer found, creating offer for user ${createdByStoreFrontUserId}`
+                );
+
                 // Create the offer
                 await ctx.runMutation(api.storeFront.offers.create, {
                   email: user.email,
@@ -117,11 +141,39 @@ export const create = mutation({
                   storeFrontUserId: createdByStoreFrontUserId,
                   storeId: storeId,
                 });
+
+                console.log(
+                  `[FirstReviewOffer] Successfully created offer for user ${createdByStoreFrontUserId} with promo code ${promoCode.code}`
+                );
+              } else {
+                console.log(
+                  `[FirstReviewOffer] Skipping offer creation - user already has an offer for this promo code`
+                );
               }
+            } else {
+              console.log(
+                `[FirstReviewOffer] Skipping offer creation - user has no email address`
+              );
             }
+          } else {
+            console.log(
+              `[FirstReviewOffer] Skipping offer creation - promo code is not active or outside valid date range`
+            );
           }
+        } else {
+          console.log(
+            `[FirstReviewOffer] Skipping offer creation - promo code not found in database`
+          );
         }
+      } else {
+        console.log(
+          `[FirstReviewOffer] Skipping offer creation - no leave-a-review promo code configured for store`
+        );
       }
+    } else {
+      console.log(
+        `[FirstReviewOffer] Skipping offer creation - not the user's first review`
+      );
     }
 
     return review;

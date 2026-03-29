@@ -15,10 +15,6 @@ function wrapDefinition<T extends { handler: (...args: any[]) => any }>(
     definition
   );
 }
-function h(fn: any): (...args: any[]) => any {
-  return fn.handler;
-}
-
 
 async function loadModule() {
   vi.resetModules();
@@ -51,7 +47,7 @@ describe("paystackActions", () => {
       data: [{ id: "txn_1" }],
     });
 
-    const result = await h(getAllTransactions)({} as never, {
+    const result = await getAllTransactions.handler({} as never, {
       perPage: 25,
       page: 2,
       status: "success",
@@ -99,7 +95,7 @@ describe("paystackActions", () => {
     const { getAllTransactions } = await loadModule();
     listTransactions.mockRejectedValue(new Error("Paystack unavailable"));
 
-    const result = await h(getAllTransactions)({} as never, {});
+    const result = await getAllTransactions.handler({} as never, {});
 
     expect(result).toEqual({
       success: false,
@@ -111,7 +107,7 @@ describe("paystackActions", () => {
     const { getAllTransactions } = await loadModule();
     listTransactions.mockRejectedValue("network down");
 
-    const result = await h(getAllTransactions)({} as never, {});
+    const result = await getAllTransactions.handler({} as never, {});
 
     expect(result).toEqual({
       success: false,
@@ -125,7 +121,7 @@ describe("paystackActions", () => {
       data: { reference: "ref_123", status: "success" },
     });
 
-    const result = await h(checkTransactionStatus)({} as never, {
+    const result = await checkTransactionStatus.handler({} as never, {
       reference: "ref_123",
     });
 
@@ -141,7 +137,7 @@ describe("paystackActions", () => {
     const { checkTransactionStatus } = await loadModule();
     verifyTransaction.mockRejectedValue(new Error("Invalid reference"));
 
-    const result = await h(checkTransactionStatus)({} as never, {
+    const result = await checkTransactionStatus.handler({} as never, {
       reference: "bad_ref",
     });
 
@@ -155,7 +151,7 @@ describe("paystackActions", () => {
     const { checkTransactionStatus } = await loadModule();
     verifyTransaction.mockRejectedValue({ status: 500 });
 
-    const result = await h(checkTransactionStatus)({} as never, {
+    const result = await checkTransactionStatus.handler({} as never, {
       reference: "bad_ref",
     });
 
@@ -171,7 +167,7 @@ describe("paystackActions", () => {
       data: [{ id: "txn_2" }],
     });
 
-    const result = await h(findOrderTransactions)({} as never, {
+    const result = await findOrderTransactions.handler({} as never, {
       customerEmail: "ada@example.com",
       orderCreatedAt: 1741996800000,
       timeBuffer: 60000,
@@ -193,7 +189,7 @@ describe("paystackActions", () => {
     const { findOrderTransactions } = await loadModule();
     listTransactions.mockRejectedValue("unknown failure");
 
-    const result = await h(findOrderTransactions)({} as never, {
+    const result = await findOrderTransactions.handler({} as never, {
       customerEmail: "ada@example.com",
       orderCreatedAt: 1741996800000,
     });
@@ -208,7 +204,7 @@ describe("paystackActions", () => {
     const { findOrderTransactions } = await loadModule();
     listTransactions.mockRejectedValue(new Error("lookup timeout"));
 
-    const result = await h(findOrderTransactions)({} as never, {
+    const result = await findOrderTransactions.handler({} as never, {
       customerEmail: "ada@example.com",
       orderCreatedAt: 1741996800000,
     });
