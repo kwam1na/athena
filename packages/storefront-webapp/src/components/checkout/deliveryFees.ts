@@ -31,9 +31,9 @@ type CalculateDeliveryFeeResult = {
   deliveryOption: DeliveryOption | null;
 };
 
-const DEFAULT_WITHIN_ACCRA_FEE = 30;
-const DEFAULT_OTHER_REGIONS_FEE = 70;
-const DEFAULT_INTERNATIONAL_FEE = 800;
+export const DEFAULT_WITHIN_ACCRA_FEE = 30;
+export const DEFAULT_OTHER_REGIONS_FEE = 70;
+export const DEFAULT_INTERNATIONAL_FEE = 800;
 
 export function calculateDeliveryFee({
   deliveryMethod,

@@ -5,6 +5,12 @@ import { Address } from "../types";
 import { useStoreContext } from "@/contexts/StoreContext";
 import { isFeeWaived } from "@/lib/feeUtils";
 import { getStoreConfigV2 } from "@/lib/storeConfig";
+import {
+  calculateDeliveryFee,
+  DEFAULT_INTERNATIONAL_FEE,
+  DEFAULT_OTHER_REGIONS_FEE,
+  DEFAULT_WITHIN_ACCRA_FEE,
+} from "../deliveryFees";
 
 export function StoreSelector() {
   const { updateState, updateActionsState, checkoutState } = useCheckout();
@@ -46,7 +52,9 @@ export function DeliveryOptionsSelector() {
 
   const { deliveryFees, waiveDeliveryFees } = storeConfig.commerce;
 
-  const { international, withinAccra, otherRegions } = deliveryFees || {};
+  const international = deliveryFees?.international || DEFAULT_INTERNATIONAL_FEE;
+  const withinAccra = DEFAULT_WITHIN_ACCRA_FEE;
+  const otherRegions = DEFAULT_OTHER_REGIONS_FEE;
 
   // Replace the waived fee checks with the shared utility function
   const shouldWaiveWithinAccraFee = isFeeWaived(
@@ -67,19 +75,31 @@ export function DeliveryOptionsSelector() {
     const base = { pickupLocation: null };
 
     if (value == "intl") {
+      const { deliveryFee } = calculateDeliveryFee({
+        deliveryMethod: "delivery",
+        country: checkoutState.deliveryDetails?.country || "",
+        region: null,
+        waiveDeliveryFees,
+        deliveryFees,
+      });
+
       updateState({
         ...base,
-        deliveryFee: shouldWaiveIntlFee
-          ? 0
-          : deliveryFees?.international || 800,
+        deliveryFee,
         deliveryOption: "intl",
       });
     } else if (value == "within-accra") {
+      const { deliveryFee } = calculateDeliveryFee({
+        deliveryMethod: "delivery",
+        country: "GH",
+        region: "GA",
+        waiveDeliveryFees,
+        deliveryFees,
+      });
+
       updateState({
         ...base,
-        deliveryFee: shouldWaiveWithinAccraFee
-          ? 0
-          : deliveryFees?.withinAccra || 30,
+        deliveryFee,
         deliveryOption: "within-accra",
         deliveryDetails: {
           ...checkoutState.deliveryDetails,
@@ -87,11 +107,17 @@ export function DeliveryOptionsSelector() {
         } as Address,
       });
     } else {
+      const { deliveryFee } = calculateDeliveryFee({
+        deliveryMethod: "delivery",
+        country: "GH",
+        region: null,
+        waiveDeliveryFees,
+        deliveryFees,
+      });
+
       updateState({
         ...base,
-        deliveryFee: shouldWaiveOtherRegionsFee
-          ? 0
-          : deliveryFees?.otherRegions || 70,
+        deliveryFee,
         deliveryOption: "outside-accra",
         deliveryDetails: {
           ...checkoutState.deliveryDetails,
@@ -123,10 +149,16 @@ export function DeliveryOptionsSelector() {
       } else if (currentCountry !== "GH" && currentCountry) {
         // Always force update for non-Ghana (international) destinations
         // to ensure the fee waiving settings are applied correctly
+        const { deliveryFee } = calculateDeliveryFee({
+          deliveryMethod: "delivery",
+          country: currentCountry,
+          region: null,
+          waiveDeliveryFees,
+          deliveryFees,
+        });
+
         updateState({
-          deliveryFee: shouldWaiveIntlFee
-            ? 0
-            : deliveryFees?.international || 800,
+          deliveryFee,
           deliveryOption: "intl",
         });
       }
@@ -144,11 +176,17 @@ export function DeliveryOptionsSelector() {
       checkoutState.deliveryOption == "outside-accra" &&
       checkoutState.deliveryDetails?.region == "GA"
     ) {
+      const { deliveryFee } = calculateDeliveryFee({
+        deliveryMethod: "delivery",
+        country: "GH",
+        region: "GA",
+        waiveDeliveryFees,
+        deliveryFees,
+      });
+
       updateState({
         deliveryOption: "within-accra",
-        deliveryFee: shouldWaiveWithinAccraFee
-          ? 0
-          : deliveryFees?.withinAccra || 30,
+        deliveryFee,
       });
     }
   }, [checkoutState.deliveryDetails?.region]);
@@ -169,7 +207,7 @@ export function DeliveryOptionsSelector() {
               {shouldWaiveWithinAccraFee && (
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <p className="text-start line-through">
-                    {formatter.format(withinAccra || 30)}
+                    {formatter.format(withinAccra)}
                   </p>
                   <p className="text-start">Free</p>
                 </div>
@@ -177,7 +215,7 @@ export function DeliveryOptionsSelector() {
 
               {!shouldWaiveWithinAccraFee && (
                 <p className="text-muted-foreground">
-                  {formatter.format(withinAccra || 30)}
+                  {formatter.format(withinAccra)}
                 </p>
               )}
             </div>
@@ -191,7 +229,7 @@ export function DeliveryOptionsSelector() {
               {shouldWaiveOtherRegionsFee && (
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <p className="text-start line-through">
-                    {formatter.format(otherRegions || 70)}
+                    {formatter.format(otherRegions)}
                   </p>
                   <p className="text-start">Free</p>
                 </div>
@@ -199,7 +237,7 @@ export function DeliveryOptionsSelector() {
 
               {!shouldWaiveOtherRegionsFee && (
                 <p className="text-muted-foreground">
-                  {formatter.format(otherRegions || 70)}
+                  {formatter.format(otherRegions)}
                 </p>
               )}
             </div>
@@ -217,7 +255,7 @@ export function DeliveryOptionsSelector() {
               {shouldWaiveIntlFee && (
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <p className="text-start line-through">
-                    {formatter.format(international || 800)}
+                    {formatter.format(international)}
                   </p>
                   <p className="text-start">Free</p>
                 </div>
@@ -225,7 +263,7 @@ export function DeliveryOptionsSelector() {
 
               {!shouldWaiveIntlFee && (
                 <p className="text-muted-foreground">
-                  {formatter.format(international || 800)}
+                  {formatter.format(international)}
                 </p>
               )}
             </div>

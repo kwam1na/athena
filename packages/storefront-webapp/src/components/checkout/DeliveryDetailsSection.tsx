@@ -24,8 +24,8 @@ import { Textarea } from "../ui/textarea";
 import { Button } from "../ui/button";
 import { US_STATES } from "@/lib/states";
 import { useStoreContext } from "@/contexts/StoreContext";
-import { isFeeWaived } from "@/lib/feeUtils";
 import { getStoreConfigV2 } from "@/lib/storeConfig";
+import { calculateDeliveryFee } from "./deliveryFees";
 
 export const CountryFields = ({ form }: CheckoutFormSectionProps) => {
   const { checkoutState, updateState } = useCheckout();
@@ -120,6 +120,29 @@ const RegionFields = ({ form }: CheckoutFormSectionProps) => {
   const storeConfig = getStoreConfigV2(store);
   const { waiveDeliveryFees, deliveryFees } = storeConfig.commerce;
 
+  const applyRegionChange = (region: string) => {
+    const { deliveryFee, deliveryOption } = calculateDeliveryFee({
+      deliveryMethod: "delivery",
+      country: "GH",
+      region,
+      waiveDeliveryFees,
+      deliveryFees,
+    });
+
+    updateState({
+      deliveryDetails: {
+        ...checkoutState.deliveryDetails,
+        region,
+        neighborhood:
+          deliveryOption == "within-accra"
+            ? checkoutState?.deliveryDetails?.neighborhood
+            : "",
+      } as Address,
+      deliveryFee,
+      deliveryOption,
+    });
+  };
+
   return (
     <>
       <div className="flex items-center">
@@ -138,39 +161,7 @@ const RegionFields = ({ form }: CheckoutFormSectionProps) => {
                     value={field.value}
                     onChange={(e) => {
                       const region = e.target.value;
-                      const deliveryOption =
-                        region == "GA" ? "within-accra" : "outside-accra";
-
-                      // Handle both old boolean format and new object format for backward compatibility
-                      const shouldWaiveRegionFee =
-                        typeof waiveDeliveryFees === "boolean"
-                          ? waiveDeliveryFees
-                          : region == "GA"
-                            ? waiveDeliveryFees?.withinAccra ||
-                              waiveDeliveryFees?.all ||
-                              false
-                            : waiveDeliveryFees?.otherRegions ||
-                              waiveDeliveryFees?.all ||
-                              false;
-
-                      const deliveryFee = shouldWaiveRegionFee
-                        ? 0
-                        : region == "GA"
-                          ? deliveryFees?.withinAccra || 30
-                          : deliveryFees?.otherRegions || 70;
-
-                      updateState({
-                        deliveryDetails: {
-                          ...checkoutState.deliveryDetails,
-                          region,
-                          neighborhood:
-                            deliveryOption == "within-accra"
-                              ? checkoutState?.deliveryDetails?.neighborhood
-                              : "",
-                        } as Address,
-                        deliveryFee,
-                        deliveryOption,
-                      });
+                      applyRegionChange(region);
                       field.onChange(region);
                     }}
                   >
@@ -201,39 +192,7 @@ const RegionFields = ({ form }: CheckoutFormSectionProps) => {
                 </FormLabel>
                 <Select
                   onValueChange={(region) => {
-                    const deliveryOption =
-                      region == "GA" ? "within-accra" : "outside-accra";
-
-                    // Handle both old boolean format and new object format for backward compatibility
-                    const shouldWaiveRegionFee =
-                      typeof waiveDeliveryFees === "boolean"
-                        ? waiveDeliveryFees
-                        : region == "GA"
-                          ? waiveDeliveryFees?.withinAccra ||
-                            waiveDeliveryFees?.all ||
-                            false
-                          : waiveDeliveryFees?.otherRegions ||
-                            waiveDeliveryFees?.all ||
-                            false;
-
-                    const deliveryFee = shouldWaiveRegionFee
-                      ? 0
-                      : region == "GA"
-                        ? deliveryFees?.withinAccra || 30
-                        : deliveryFees?.otherRegions || 70;
-
-                    updateState({
-                      deliveryDetails: {
-                        ...checkoutState.deliveryDetails,
-                        region,
-                        neighborhood:
-                          deliveryOption == "within-accra"
-                            ? checkoutState?.deliveryDetails?.neighborhood
-                            : "",
-                      } as Address,
-                      deliveryFee,
-                      deliveryOption,
-                    });
+                    applyRegionChange(region);
                     field.onChange(region);
                   }}
                   value={field.value}
@@ -756,8 +715,6 @@ export const DeliveryDetailsSection = ({ form }: CheckoutFormSectionProps) => {
   const [isEnteringNewNeighborhood, setIsEnteringNewNeighborhood] =
     useState(false);
 
-  const shouldWaiveIntlFee = isFeeWaived(waiveDeliveryFees, "intl");
-
   useEffect(() => {
     // effect to clear state and the form when the country changes
 
@@ -798,22 +755,22 @@ export const DeliveryDetailsSection = ({ form }: CheckoutFormSectionProps) => {
 
       // clear the state for delivery and billing details
       updateState({
+        ...calculateDeliveryFee({
+          deliveryMethod: "delivery",
+          country,
+          region: country === "GH" ? "GA" : null,
+          waiveDeliveryFees,
+          deliveryFees,
+        }),
         deliveryDetails: { country } as Address,
         billingDetails: null,
         paymentMethod: "online_payment",
         podPaymentMethod: null,
-        deliveryOption: country === "GH" ? "within-accra" : "intl",
-        deliveryFee:
-          country === "GH"
-            ? deliveryFees?.withinAccra || 30
-            : shouldWaiveIntlFee
-              ? 0
-              : deliveryFees?.international || 800,
       });
     }
 
     previousCountryRef.current = country;
-  }, [country, shouldWaiveIntlFee]);
+  }, [country, deliveryFees, waiveDeliveryFees]);
 
   useEffect(() => {
     if (
