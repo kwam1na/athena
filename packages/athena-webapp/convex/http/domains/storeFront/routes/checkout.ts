@@ -7,6 +7,7 @@ import {
   getStorefrontUserFromRequest,
 } from "../../../utils";
 import { Id } from "../../../../_generated/dataModel";
+import { isStoreCheckoutDisabled } from "../../../../inventory/storeConfigV2";
 
 const checkoutRoutes: HonoWithConvex<ActionCtx> = new Hono();
 
@@ -94,10 +95,7 @@ checkoutRoutes.post("/:checkoutSessionId", async (c) => {
 
       const { config } = store || {};
 
-      if (
-        config?.availability?.inMaintenanceMode ||
-        config?.visibility?.inReadOnlyMode
-      ) {
+      if (isStoreCheckoutDisabled(config)) {
         return c.json({
           success: false,
           message: "Store checkout is currently not available",
@@ -216,10 +214,7 @@ checkoutRoutes.post("/:checkoutSessionId", async (c) => {
 
       const { config } = store || {};
 
-      if (
-        config?.availability?.inMaintenanceMode ||
-        config?.visibility?.inReadOnlyMode
-      ) {
+      if (isStoreCheckoutDisabled(config)) {
         return c.json({
           success: false,
           message: "Store checkout is currently not available",
