@@ -1,6 +1,7 @@
 import { action } from "../_generated/server";
 import { v } from "convex/values";
 import { api } from "../_generated/api";
+import { normalizeStoreConfig } from "../inventory/storeConfigV2";
 
 const CLOUDFLARE_API_BASE = "https://api.cloudflare.com/client/v4";
 
@@ -148,7 +149,8 @@ export const addStreamReelVersion = action({
       throw new Error("Store not found");
     }
 
-    const existingReels: any[] = store.config?.streamReels || [];
+    const normalizedConfig = normalizeStoreConfig(store.config);
+    const existingReels: any[] = normalizedConfig.media.reels.streamReels || [];
 
     // Auto-increment version
     const maxVersion: number = existingReels.reduce(
@@ -166,11 +168,14 @@ export const addStreamReelVersion = action({
       createdAt: Date.now(),
     };
 
-    await ctx.runMutation(api.inventory.stores.updateConfig, {
+    await ctx.runMutation(api.inventory.stores.patchConfigV2, {
       id: args.storeId,
-      config: {
-        ...store.config,
-        streamReels: [...existingReels, newReel],
+      patch: {
+        media: {
+          reels: {
+            streamReels: [...existingReels, newReel],
+          },
+        },
       },
     });
 
@@ -195,7 +200,8 @@ export const deleteStreamReelVersion = action({
       throw new Error("Store not found");
     }
 
-    const existingReels: any[] = store.config?.streamReels || [];
+    const normalizedConfig = normalizeStoreConfig(store.config);
+    const existingReels: any[] = normalizedConfig.media.reels.streamReels || [];
     const reelToDelete = existingReels.find(
       (r: { version: number }) => r.version === args.version,
     );
@@ -224,18 +230,21 @@ export const deleteStreamReelVersion = action({
     );
 
     // If the deleted version was active, clear it
-    const updatedConfig: Record<string, any> = {
-      ...store.config,
-      streamReels: updatedReels,
+    const patch: Record<string, any> = {
+      media: {
+        reels: {
+          streamReels: updatedReels,
+        },
+      },
     };
-    if (store.config?.activeStreamReel === args.version) {
-      delete updatedConfig.activeStreamReel;
-      delete updatedConfig.activeStreamReelHlsUrl;
+    if (normalizedConfig.media.reels.activeVersion === args.version) {
+      patch.media.reels.activeVersion = null;
+      patch.media.reels.activeHlsUrl = null;
     }
 
-    await ctx.runMutation(api.inventory.stores.updateConfig, {
+    await ctx.runMutation(api.inventory.stores.patchConfigV2, {
       id: args.storeId,
-      config: updatedConfig,
+      patch,
     });
 
     return { success: true };
@@ -260,7 +269,8 @@ export const setActiveStreamReel = action({
       throw new Error("Store not found");
     }
 
-    const existingReels: any[] = store.config?.streamReels || [];
+    const normalizedConfig = normalizeStoreConfig(store.config);
+    const existingReels: any[] = normalizedConfig.media.reels.streamReels || [];
     const reel = existingReels.find(
       (r: { version: number }) => r.version === args.version,
     );
@@ -269,12 +279,15 @@ export const setActiveStreamReel = action({
       throw new Error("Reel version not found");
     }
 
-    await ctx.runMutation(api.inventory.stores.updateConfig, {
+    await ctx.runMutation(api.inventory.stores.patchConfigV2, {
       id: args.storeId,
-      config: {
-        ...store.config,
-        activeStreamReel: args.version,
-        activeStreamReelHlsUrl: args.hlsUrl,
+      patch: {
+        media: {
+          reels: {
+            activeVersion: args.version,
+            activeHlsUrl: args.hlsUrl,
+          },
+        },
       },
     });
 

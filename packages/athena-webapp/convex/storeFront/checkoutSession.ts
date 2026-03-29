@@ -12,6 +12,7 @@ import {
 } from "../_generated/server";
 import { v } from "convex/values";
 import { orderDetailsSchema } from "../schemas/storeFront";
+import { isStoreCheckoutDisabled } from "../inventory/storeConfigV2";
 
 const entity = "checkoutSession";
 
@@ -63,10 +64,7 @@ export const create = mutation({
 
     const { config } = store || {};
 
-    if (
-      config?.availability?.inMaintenanceMode ||
-      config?.visibility?.inReadOnlyMode
-    ) {
+    if (isStoreCheckoutDisabled(config)) {
       return {
         success: false,
         message: "Store checkout is currrently not available",

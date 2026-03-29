@@ -9,8 +9,32 @@ import { storeSchema } from "../schemas/inventory";
 import { listItemsInR2Directory, uploadFileToR2 } from "../cloudflare/r2";
 import { api } from "../_generated/api";
 import { Doc } from "../_generated/dataModel";
+import {
+  getUnknownStoreConfigRootKeys,
+  isLegacyRootKey,
+  mirrorLegacyKeys,
+  normalizeStoreConfig,
+  patchV2Config,
+  removeLegacyRootKeysFromConfig,
+  toV2Config,
+} from "./storeConfigV2";
 
 const entity = "store";
+const CONFIG_MIGRATION_PAGE_SIZE = 50;
+
+const toV2OnlyConfig = (existingConfig: unknown) => {
+  const normalized = toV2Config(existingConfig);
+  const withoutLegacy = removeLegacyRootKeysFromConfig(existingConfig);
+
+  return {
+    ...withoutLegacy,
+    operations: normalized.operations,
+    commerce: normalized.commerce,
+    media: normalized.media,
+    promotions: normalized.promotions,
+    contact: normalized.contact,
+  };
+};
 
 export const getAll = query({
   args: {
@@ -181,9 +205,159 @@ export const updateConfig = mutation({
     config: v.record(v.string(), v.any()),
   },
   handler: async (ctx, args) => {
-    await ctx.db.patch(args.id, { config: args.config });
+    const normalized = toV2Config(args.config);
+    const config = mirrorLegacyKeys(normalized, args.config);
+
+    await ctx.db.patch(args.id, { config });
 
     return await ctx.db.get(args.id);
+  },
+});
+
+export const patchConfigV2 = mutation({
+  args: {
+    id: v.id(entity),
+    patch: v.record(v.string(), v.any()),
+    mirrorLegacy: v.optional(v.boolean()),
+  },
+  handler: async (ctx, args) => {
+    const store = await ctx.db.get(args.id);
+    if (!store) {
+      throw new Error("Store not found");
+    }
+
+    const nextV2Config = patchV2Config(store.config, args.patch);
+    const shouldMirrorLegacy = args.mirrorLegacy !== false;
+    const config = shouldMirrorLegacy
+      ? mirrorLegacyKeys(nextV2Config, store.config)
+      : toV2OnlyConfig(store.config ? { ...store.config, ...nextV2Config } : nextV2Config);
+
+    await ctx.db.patch(args.id, { config });
+
+    return await ctx.db.get(args.id);
+  },
+});
+
+export const preflightConfigKeys = query({
+  args: {},
+  handler: async (ctx) => {
+    const stores = await ctx.db.query(entity).collect();
+
+    const keyCounts: Record<string, number> = {};
+    const unknownKeyCounts: Record<string, number> = {};
+    const storesWithUnknownKeys: Array<{
+      storeId: string;
+      storeName: string;
+      unknownKeys: string[];
+    }> = [];
+
+    let storesWithConfig = 0;
+
+    for (const store of stores) {
+      if (!store.config || typeof store.config !== "object") {
+        continue;
+      }
+
+      storesWithConfig += 1;
+
+      for (const key of Object.keys(store.config)) {
+        keyCounts[key] = (keyCounts[key] || 0) + 1;
+      }
+
+      const unknownKeys = getUnknownStoreConfigRootKeys(store.config);
+      if (unknownKeys.length > 0) {
+        storesWithUnknownKeys.push({
+          storeId: store._id,
+          storeName: store.name,
+          unknownKeys,
+        });
+
+        for (const key of unknownKeys) {
+          unknownKeyCounts[key] = (unknownKeyCounts[key] || 0) + 1;
+        }
+      }
+    }
+
+    return {
+      totalStores: stores.length,
+      storesWithConfig,
+      keyCounts,
+      unknownKeyCounts,
+      storesWithUnknownKeys,
+    };
+  },
+});
+
+export const migrateConfigToV2Page = mutation({
+  args: {
+    cursor: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const page = await ctx.db.query(entity).paginate({
+      numItems: CONFIG_MIGRATION_PAGE_SIZE,
+      cursor: args.cursor ?? null,
+    });
+
+    let migratedCount = 0;
+
+    for (const store of page.page) {
+      const currentConfig = store.config || {};
+      const nextConfig = mirrorLegacyKeys(toV2Config(currentConfig), currentConfig);
+
+      if (JSON.stringify(currentConfig) === JSON.stringify(nextConfig)) {
+        continue;
+      }
+
+      await ctx.db.patch(store._id, { config: nextConfig });
+      migratedCount += 1;
+    }
+
+    return {
+      success: true,
+      processedCount: page.page.length,
+      migratedCount,
+      isDone: page.isDone,
+      cursor: page.continueCursor,
+    };
+  },
+});
+
+export const cleanupLegacyConfigKeysPage = mutation({
+  args: {
+    cursor: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const page = await ctx.db.query(entity).paginate({
+      numItems: CONFIG_MIGRATION_PAGE_SIZE,
+      cursor: args.cursor ?? null,
+    });
+
+    let cleanedCount = 0;
+    let removedLegacyKeyCount = 0;
+
+    for (const store of page.page) {
+      const currentConfig = store.config || {};
+      const currentKeys = Object.keys(currentConfig);
+      const legacyKeys = currentKeys.filter((key) => isLegacyRootKey(key));
+      const nextConfig = toV2OnlyConfig(currentConfig);
+
+      if (JSON.stringify(currentConfig) === JSON.stringify(nextConfig)) {
+        continue;
+      }
+
+      await ctx.db.patch(store._id, { config: nextConfig });
+      cleanedCount += 1;
+      removedLegacyKeyCount += legacyKeys.length;
+    }
+
+    return {
+      success: true,
+      processedCount: page.page.length,
+      cleanedCount,
+      removedLegacyKeyCount,
+      isDone: page.isDone,
+      cursor: page.continueCursor,
+    };
   },
 });
 
@@ -215,8 +389,10 @@ export const calculateTax = query({
   }),
   handler: async (ctx, args) => {
     const store = await ctx.db.get(args.storeId);
+    const normalizedConfig = normalizeStoreConfig(store?.config);
+    const taxConfig = normalizedConfig.commerce.tax;
 
-    if (!store || !store.config?.tax?.enabled) {
+    if (!store || !taxConfig?.enabled) {
       return {
         taxAmount: 0,
         totalWithTax: args.amount,
@@ -225,7 +401,6 @@ export const calculateTax = query({
       };
     }
 
-    const taxConfig = store.config.tax;
     const taxRate = taxConfig.rate || 0;
     const taxName = taxConfig.name || "Tax";
 
@@ -350,7 +525,8 @@ export const clearExpiredRestrictions = internalMutation({
     const stores = await ctx.db.query(entity).collect();
 
     for (const store of stores) {
-      const fulfillment = store.config?.fulfillment;
+      const normalizedConfig = normalizeStoreConfig(store.config);
+      const fulfillment = normalizedConfig.commerce.fulfillment;
       if (!fulfillment) continue;
 
       let needsUpdate = false;
@@ -381,8 +557,15 @@ export const clearExpiredRestrictions = internalMutation({
       }
 
       if (needsUpdate) {
+        const nextConfig = mirrorLegacyKeys(
+          patchV2Config(store.config, {
+            commerce: { fulfillment: updates },
+          }),
+          store.config,
+        );
+
         await ctx.db.patch(store._id, {
-          config: { ...store.config, fulfillment: updates },
+          config: nextConfig,
         });
       }
     }
