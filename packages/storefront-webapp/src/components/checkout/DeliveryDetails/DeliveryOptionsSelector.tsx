@@ -45,8 +45,9 @@ export function DeliveryOptionsSelector() {
   const storeConfig = getStoreConfigV2(store);
 
   const { deliveryFees, waiveDeliveryFees } = storeConfig.commerce;
-
-  const { international, withinAccra, otherRegions } = deliveryFees || {};
+  const withinAccraFee = deliveryFees?.withinAccra ?? 30;
+  const otherRegionsFee = deliveryFees?.otherRegions ?? 70;
+  const internationalFee = deliveryFees?.international ?? 800;
 
   // Replace the waived fee checks with the shared utility function
   const shouldWaiveWithinAccraFee = isFeeWaived(
@@ -69,17 +70,13 @@ export function DeliveryOptionsSelector() {
     if (value == "intl") {
       updateState({
         ...base,
-        deliveryFee: shouldWaiveIntlFee
-          ? 0
-          : deliveryFees?.international || 800,
+        deliveryFee: shouldWaiveIntlFee ? 0 : internationalFee,
         deliveryOption: "intl",
       });
     } else if (value == "within-accra") {
       updateState({
         ...base,
-        deliveryFee: shouldWaiveWithinAccraFee
-          ? 0
-          : deliveryFees?.withinAccra || 30,
+        deliveryFee: shouldWaiveWithinAccraFee ? 0 : withinAccraFee,
         deliveryOption: "within-accra",
         deliveryDetails: {
           ...checkoutState.deliveryDetails,
@@ -89,9 +86,7 @@ export function DeliveryOptionsSelector() {
     } else {
       updateState({
         ...base,
-        deliveryFee: shouldWaiveOtherRegionsFee
-          ? 0
-          : deliveryFees?.otherRegions || 70,
+        deliveryFee: shouldWaiveOtherRegionsFee ? 0 : otherRegionsFee,
         deliveryOption: "outside-accra",
         deliveryDetails: {
           ...checkoutState.deliveryDetails,
@@ -124,9 +119,7 @@ export function DeliveryOptionsSelector() {
         // Always force update for non-Ghana (international) destinations
         // to ensure the fee waiving settings are applied correctly
         updateState({
-          deliveryFee: shouldWaiveIntlFee
-            ? 0
-            : deliveryFees?.international || 800,
+          deliveryFee: shouldWaiveIntlFee ? 0 : internationalFee,
           deliveryOption: "intl",
         });
       }
@@ -135,7 +128,7 @@ export function DeliveryOptionsSelector() {
     checkoutState.deliveryDetails,
     updateState,
     shouldWaiveIntlFee,
-    deliveryFees,
+    internationalFee,
   ]);
 
   useEffect(() => {
@@ -146,9 +139,7 @@ export function DeliveryOptionsSelector() {
     ) {
       updateState({
         deliveryOption: "within-accra",
-        deliveryFee: shouldWaiveWithinAccraFee
-          ? 0
-          : deliveryFees?.withinAccra || 30,
+        deliveryFee: shouldWaiveWithinAccraFee ? 0 : withinAccraFee,
       });
     }
   }, [checkoutState.deliveryDetails?.region]);
@@ -169,7 +160,7 @@ export function DeliveryOptionsSelector() {
               {shouldWaiveWithinAccraFee && (
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <p className="text-start line-through">
-                    {formatter.format(withinAccra || 30)}
+                    {formatter.format(withinAccraFee)}
                   </p>
                   <p className="text-start">Free</p>
                 </div>
@@ -177,7 +168,7 @@ export function DeliveryOptionsSelector() {
 
               {!shouldWaiveWithinAccraFee && (
                 <p className="text-muted-foreground">
-                  {formatter.format(withinAccra || 30)}
+                  {formatter.format(withinAccraFee)}
                 </p>
               )}
             </div>
@@ -191,7 +182,7 @@ export function DeliveryOptionsSelector() {
               {shouldWaiveOtherRegionsFee && (
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <p className="text-start line-through">
-                    {formatter.format(otherRegions || 70)}
+                    {formatter.format(otherRegionsFee)}
                   </p>
                   <p className="text-start">Free</p>
                 </div>
@@ -199,7 +190,7 @@ export function DeliveryOptionsSelector() {
 
               {!shouldWaiveOtherRegionsFee && (
                 <p className="text-muted-foreground">
-                  {formatter.format(otherRegions || 70)}
+                  {formatter.format(otherRegionsFee)}
                 </p>
               )}
             </div>
@@ -217,7 +208,7 @@ export function DeliveryOptionsSelector() {
               {shouldWaiveIntlFee && (
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <p className="text-start line-through">
-                    {formatter.format(international || 800)}
+                    {formatter.format(internationalFee)}
                   </p>
                   <p className="text-start">Free</p>
                 </div>
@@ -225,7 +216,7 @@ export function DeliveryOptionsSelector() {
 
               {!shouldWaiveIntlFee && (
                 <p className="text-muted-foreground">
-                  {formatter.format(international || 800)}
+                  {formatter.format(internationalFee)}
                 </p>
               )}
             </div>
