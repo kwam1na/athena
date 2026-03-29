@@ -3,15 +3,8 @@ import { HonoWithConvex } from "convex-helpers/server/hono";
 import { ActionCtx } from "../../../../_generated/server";
 import { api } from "../../../../_generated/api";
 import { Id } from "../../../../_generated/dataModel";
-import { SignJWT } from "jose";
-import {
-  enforceActorStoreAccess,
-  getActorClaims,
-} from "./actorAuth";
-import { STOREFRONT_ACTOR_SIGNING_KEY } from "../../../../env";
 
 const e2eRoutes: HonoWithConvex<ActionCtx> = new Hono();
-const encoder = new TextEncoder();
 
 type BootstrapItem = {
   productSlug: string;
@@ -23,44 +16,12 @@ function createMarker() {
   return `e2e-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-async function createActorToken({
-  actorId,
-  actorType,
-  organizationId,
-  storeId,
-}: {
-  actorId: string;
-  actorType: "guest" | "user";
-  organizationId: string;
-  storeId: string;
-}) {
-  if (!STOREFRONT_ACTOR_SIGNING_KEY) {
-    throw new Error("Storefront actor signing key is not configured.");
-  }
-
-  return await new SignJWT({
-    actorType,
-    organizationId,
-    storeId,
-  })
-    .setProtectedHeader({ alg: "HS256" })
-    .setSubject(actorId)
-    .setIssuedAt()
-    .sign(encoder.encode(STOREFRONT_ACTOR_SIGNING_KEY));
-}
-
 e2eRoutes.post("/checkout/bootstrap", async (c) => {
-  const authResponse = await enforceActorStoreAccess(c);
-  if (authResponse) {
-    return authResponse;
-  }
-
   const organizationId = c.req.param("organizationId");
   const storeId = c.req.param("storeId");
   if (!organizationId || !storeId) {
     return c.json({ error: "Invalid route context." }, 400);
   }
-  const claims = await getActorClaims(c);
   const body = await c.req.json();
   const marker =
     typeof body.marker === "string" && body.marker.trim().length > 0
@@ -198,22 +159,13 @@ e2eRoutes.post("/checkout/bootstrap", async (c) => {
     );
   }
 
-  const actorToken = await createActorToken({
-    actorId: guest._id,
-    actorType: "guest",
-    organizationId,
-    storeId,
-  });
-
   return c.json({
     actor: {
       actorId: guest._id,
       actorType: "guest",
       organizationId,
       storeId,
-      requestedBy: claims?.actorId,
     },
-    actorToken,
     bagId: bag._id,
     checkoutPath: "/shop/checkout",
     checkoutSession: checkoutSession.session,

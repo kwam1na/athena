@@ -45,8 +45,6 @@ productRoutes.get("/colors", async (c) => {
     return c.json({ error: "Store id missing" }, 404);
   }
 
-  console.log("hit colors...");
-
   return c.json({});
 });
 

@@ -7,7 +7,7 @@ import {
   getStorefrontUserFromRequest,
 } from "../../../utils";
 import { Id } from "../../../../_generated/dataModel";
-import { deleteCookie, getCookie, setCookie } from "hono/cookie";
+import { deleteCookie, setCookie } from "hono/cookie";
 
 const authRoutes: HonoWithConvex<ActionCtx> = new Hono();
 
@@ -75,12 +75,6 @@ authRoutes.post("/logout", async (c) => {
     sameSite: "None",
     maxAge: 0, // Expires immediately
   });
-
-  console.log("deleted cookie");
-
-  const co = getCookie(c, "user_id");
-
-  console.log("cookie: ", co);
 
   return c.json({ success: true });
 });

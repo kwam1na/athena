@@ -3,31 +3,26 @@ import { HonoWithConvex } from "convex-helpers/server/hono";
 import { ActionCtx } from "../../../../_generated/server";
 import { api } from "../../../../_generated/api";
 import { Id } from "../../../../_generated/dataModel";
-import { getCookie, deleteCookie, setCookie } from "hono/cookie";
+import { getCookie, setCookie } from "hono/cookie";
 import { getStoreDataFromRequest } from "../../../utils";
-import { getActorClaims } from "./actorAuth";
 
 const guestRoutes: HonoWithConvex<ActionCtx> = new Hono();
 
 // Get all bags
 guestRoutes.get("/", async (c) => {
   const guestId = getCookie(c, "guest_id");
-  const claims = await getActorClaims(c);
 
   const marker = c.req.query("marker");
 
-  const { storeId, organizationId } = await getStoreDataFromRequest(c);
+  const { storeId, organizationId } = getStoreDataFromRequest(c);
 
-  const actorGuestId =
-    claims?.actorType === "guest" ? (claims.actorId as Id<"guest">) : undefined;
-
-  if (!guestId && !actorGuestId) {
+  if (!guestId) {
     return c.json({ error: "Guest id missing" }, 404);
   }
 
   try {
     const guest = await c.env.runQuery(api.storeFront.guest.getById, {
-      id: (guestId || actorGuestId) as Id<"guest">,
+      id: guestId as Id<"guest">,
     });
 
     return c.json(guest);
@@ -67,14 +62,14 @@ guestRoutes.get("/", async (c) => {
 
 guestRoutes.put("/", async (c) => {
   const guestId = getCookie(c, "guest_id");
-  const claims = await getActorClaims(c);
-  const actorGuestId =
-    claims?.actorType === "guest" ? (claims.actorId as Id<"guest">) : undefined;
+  if (!guestId) {
+    return c.json({ error: "Guest id missing" }, 404);
+  }
 
   const { email, firstName, lastName, phoneNumber } = await c.req.json();
 
   const guest = await c.env.runMutation(api.storeFront.guest.update, {
-    id: (guestId || actorGuestId) as Id<"guest">,
+    id: guestId as Id<"guest">,
     email,
     firstName,
     lastName,
