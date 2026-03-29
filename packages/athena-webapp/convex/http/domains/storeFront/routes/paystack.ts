@@ -123,7 +123,7 @@ paystackRoutes.post("/", async (c) => {
       externalReference: refundReference,
     });
 
-    const alreadyProcessed = order?.refunds?.some((refund: { id: string }) => refund.id === refundId);
+    const alreadyProcessed = order?.refunds?.some((refund) => refund.id === refundId);
 
     if (alreadyProcessed) {
       return c.json({ success: true, deduplicated: true });

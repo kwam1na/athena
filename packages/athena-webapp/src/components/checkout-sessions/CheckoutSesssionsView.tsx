@@ -22,7 +22,7 @@ export function CheckoutSesssionsView() {
   const { activeStore } = useGetActiveStore();
 
   const activeCheckoutSessions = useQuery(
-    (api.storeFront.checkoutSession as any).getActiveCheckoutSessionsForStore,
+    api.storeFront.checkoutSession.getActiveCheckoutSessionsForStore,
     activeStore?._id ? { storeId: activeStore._id } : "skip"
   );
 

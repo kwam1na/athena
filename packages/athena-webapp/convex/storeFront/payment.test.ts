@@ -6,10 +6,6 @@ const { sendOrderEmail } = vi.hoisted(() => ({
   sendOrderEmail: vi.fn(),
 }));
 
-function h(fn: any): (...args: any[]) => any {
-  return fn.handler;
-}
-
 async function loadModule({
   paystackKey = "secret",
   siteUrl = "https://shop.example.com",
@@ -119,7 +115,7 @@ describe("payment actions", () => {
       }),
     } as Response);
 
-    const result = await h(createTransaction)(ctx as never, {
+    const result = await createTransaction.handler(ctx as never, {
       checkoutSessionId: "session_123",
       customerEmail: "ada@example.com",
       amount: 12500,
@@ -211,7 +207,7 @@ describe("payment actions", () => {
       }),
     } as Response);
 
-    const result = await h(verifyPayment)(ctx as never, {
+    const result = await verifyPayment.handler(ctx as never, {
       storeFrontUserId: "guest_123",
       externalReference: "ref_123",
     });
@@ -263,7 +259,7 @@ describe("payment actions", () => {
       }),
     } as Response);
 
-    const result = await h(refundPayment)(ctx as never, {
+    const result = await refundPayment.handler(ctx as never, {
       externalTransactionId: "txn_123",
       amount: 5000,
       returnItemsToStock: false,

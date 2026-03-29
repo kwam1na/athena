@@ -8,10 +8,6 @@ function wrapDefinition<T extends { handler: (...args: any[]) => any }>(definiti
     definition
   );
 }
-function h(fn: any): (...args: any[]) => any {
-  return fn.handler;
-}
-
 
 async function loadSavedBagModule() {
   vi.resetModules();
@@ -93,7 +89,7 @@ describe("savedBag backend flows", () => {
     const { create } = await loadSavedBagModule();
     const { db } = createDbHarness();
 
-    const result = await h(create)({ db } as never, {
+    const result = await create.handler({ db } as never, {
       storeId: "store_1",
       storeFrontUserId: "guest_1",
     });
@@ -148,7 +144,7 @@ describe("savedBag backend flows", () => {
       },
     });
 
-    const result = await h(getById)({ db } as never, { id: "savedBag_1" });
+    const result = await getById.handler({ db } as never, { id: "savedBag_1" });
 
     expect(result).toEqual({
       _id: "savedBag_1",
@@ -199,7 +195,7 @@ describe("savedBag backend flows", () => {
       },
     });
 
-    const result = await h(updateOwner)({ db } as never, {
+    const result = await updateOwner.handler({ db } as never, {
       currentOwner: "guest_1",
       newOwner: "user_1",
     });
@@ -230,7 +226,7 @@ describe("savedBag backend flows", () => {
       },
     });
 
-    await h(addItemToBag)({ db } as never, {
+    await addItemToBag.handler({ db } as never, {
       savedBagId: "savedBag_1",
       productId: "product_1",
       productSkuId: "sku_1",

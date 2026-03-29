@@ -43,6 +43,7 @@ export const getAllTransactions = action({
         message: "Transactions fetched successfully",
       };
     } catch (error) {
+      console.error("Error fetching transactions:", error);
       return {
         success: false,
         message:
@@ -71,6 +72,7 @@ export const checkTransactionStatus = action({
         message: "Transaction verification successful",
       };
     } catch (error) {
+      console.error("Error verifying transaction:", error);
       return {
         success: false,
         message:
@@ -107,6 +109,7 @@ export const findOrderTransactions = action({
         message: "Order transactions fetched successfully",
       };
     } catch (error) {
+      console.error("Error fetching order transactions:", error);
       return {
         success: false,
         message:

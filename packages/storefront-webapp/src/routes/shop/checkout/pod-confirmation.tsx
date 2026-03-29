@@ -210,7 +210,7 @@ const PODConfirmationContent = () => {
 
         queryClient.invalidateQueries({ queryKey: bagQueries.activeBagKey() });
       } catch (error) {
-        // handled
+        console.error("Failed to complete POD checkout session:", error);
       }
     };
 

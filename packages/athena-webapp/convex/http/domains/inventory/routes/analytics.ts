@@ -30,7 +30,7 @@ analyticsRoutes.post("/", async (c) => {
 
   const res = await c.env.runMutation(api.storeFront.analytics.create, {
     storeId: storeId,
-    storeFrontUserId: userId as Id<"storeFrontUser"> | Id<"guest">,
+    storeFrontUserId: userId,
     origin,
     action,
     data,
@@ -58,6 +58,7 @@ analyticsRoutes.post("/update-owner", async (c) => {
 
     return c.json({ success: true });
   } catch (error) {
+    console.error("Error updating analytics owner:", error);
     return c.json(
       { error: "Failed to update analytics owner", details: String(error) },
       500

@@ -40,6 +40,7 @@ userOffersRoutes.get("/", async (c) => {
 
     return c.json(eligibility);
   } catch (error) {
+    console.error("Error checking user offers eligibility:", error);
     return c.json({ error: "Failed to check offers eligibility" }, 500);
   }
 });

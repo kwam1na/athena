@@ -87,9 +87,9 @@ describe("handleOrderStatusUpdate", () => {
     sendOrderEmail.mockResolvedValue({ ok: true });
 
     const result = await handleOrderStatusUpdate({
-      order: createOrder() as any,
+      order: createOrder(),
       newStatus: "open",
-      store: createStore() as any,
+      store: createStore(),
     });
 
     expect(sendOrderEmail).toHaveBeenCalledWith(
@@ -109,9 +109,9 @@ describe("handleOrderStatusUpdate", () => {
     sendOrderEmail.mockResolvedValue({ ok: true });
 
     const result = await handleOrderStatusUpdate({
-      order: createOrder({ deliveryMethod: "delivery" }) as any,
+      order: createOrder({ deliveryMethod: "delivery" }),
       newStatus: "out-for-delivery",
-      store: createStore() as any,
+      store: createStore(),
     });
 
     expect(sendOrderEmail).toHaveBeenCalledWith(
@@ -129,9 +129,9 @@ describe("handleOrderStatusUpdate", () => {
     sendOrderEmail.mockResolvedValue({ ok: true });
 
     const result = await handleOrderStatusUpdate({
-      order: createOrder({ deliveryMethod: "delivery" }) as any,
+      order: createOrder({ deliveryMethod: "delivery" }),
       newStatus: "delivered",
-      store: createStore() as any,
+      store: createStore(),
     });
 
     expect(sendOrderEmail).toHaveBeenCalledWith(
@@ -146,9 +146,9 @@ describe("handleOrderStatusUpdate", () => {
 
   it("does not send a ready email when one was already sent", async () => {
     const result = await handleOrderStatusUpdate({
-      order: createOrder({ didSendReadyEmail: true }) as any,
+      order: createOrder({ didSendReadyEmail: true }),
       newStatus: "ready-for-pickup",
-      store: createStore() as any,
+      store: createStore(),
     });
 
     expect(sendOrderEmail).not.toHaveBeenCalled();

@@ -164,7 +164,7 @@ export const DeliveryDetailsForm = ({
       await onSubmitClick(data);
       onCancelClick();
     } catch (e) {
-      // handled
+      console.error(e);
     } finally {
       setIsSubmitting(false);
     }

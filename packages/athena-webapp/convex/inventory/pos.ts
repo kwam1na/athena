@@ -164,6 +164,8 @@ export const lookupByBarcode = query({
       return null;
     }
 
+    console.log("requesting lookup by barcode", args.barcode);
+
     // Find SKU by barcode field using index
     let sku = await ctx.db
       .query("productSku")
@@ -171,6 +173,8 @@ export const lookupByBarcode = query({
         q.eq("storeId", args.storeId).eq("barcode", args.barcode)
       )
       .first();
+
+    console.log("sku", sku);
 
     // Fallback: search by sku field if barcode field is not populated
     if (!sku) {

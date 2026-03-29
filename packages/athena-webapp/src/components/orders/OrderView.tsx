@@ -426,7 +426,13 @@ const VerifyPaymentAlert = () => {
       const res = await verifyPayment({
         storeFrontUserId: order.storeFrontUserId,
         externalReference: order.externalReference!,
-      } as any);
+        signedInAthenaUser: user
+          ? {
+              id: user._id,
+              email: user.email,
+            }
+          : undefined,
+      });
 
       if (!res.verified) {
         toast("Unable to verify payment", {

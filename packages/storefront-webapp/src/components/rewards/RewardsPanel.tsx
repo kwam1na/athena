@@ -52,6 +52,7 @@ export function RewardsPanel() {
       }
     } catch (error) {
       toast.error("Error redeeming points");
+      console.error(error);
     } finally {
       setIsRedeeming(false);
     }

@@ -174,6 +174,7 @@ export const addOrUpdateItem = mutation({
 
       return itemSuccess(itemId, expiresAt);
     } catch (err) {
+      console.error("Error in addOrUpdateItem:", err);
       return error(
         err instanceof Error
           ? err.message

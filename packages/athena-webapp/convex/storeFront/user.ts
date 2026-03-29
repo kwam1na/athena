@@ -247,10 +247,16 @@ export const getLastViewedProduct = query({
         );
 
         if (availableSku) {
+          console.log(
+            `Found available upsell product for user ${args.id}: ${availableSku.sku}`
+          );
           return availableSku;
         }
       }
 
+      console.log(
+        `No available products found in recent views for user ${args.id}`
+      );
       return null;
     }
 
@@ -298,11 +304,15 @@ export const getLastViewedProduct = query({
         );
 
         if (availableSku) {
+          console.log(
+            `Found available upsell product for user ${args.id}: ${availableSku.sku}`
+          );
           return availableSku;
         }
       }
     }
 
+    console.log(`No available products found for user ${args.id}`);
     return null;
   },
 });
@@ -373,6 +383,9 @@ export const getLastViewedProducts = query({
         if (availableSku) {
           availableProducts.push(availableSku);
           addedSkus.add(analytic.data.productSku);
+          console.log(
+            `Found available product ${availableProducts.length}/${args.limit} for user ${args.id}: ${availableSku.sku}`
+          );
         }
       }
     }
@@ -413,11 +426,17 @@ export const getLastViewedProducts = query({
           if (availableSku) {
             availableProducts.push(availableSku);
             addedSkus.add(analytic.data.productSku);
+            console.log(
+              `Found available product ${availableProducts.length}/${args.limit} for user ${args.id}: ${availableSku.sku}`
+            );
           }
         }
       }
     }
 
+    console.log(
+      `Found ${availableProducts.length} available products for user ${args.id}`
+    );
     return availableProducts;
   },
 });

@@ -10,10 +10,6 @@ function wrapDefinition<T extends { handler: (...args: any[]) => any }>(
     definition
   );
 }
-function h(fn: any): (...args: any[]) => any {
-  return fn.handler;
-}
-
 
 function createDbHarness({
   queryQueues = {},
@@ -115,13 +111,13 @@ describe("storeFront user", () => {
       },
     });
 
-    const all = await h(mod.getAll)({ db } as never, {});
+    const all = await mod.getAll.handler({ db } as never, {});
     expect(all).toEqual([{ _id: "user_1", email: "ada@example.com" }]);
 
-    const byId = await h(mod.getById)({ db } as never, { id: "user_1" });
+    const byId = await mod.getById.handler({ db } as never, { id: "user_1" });
     expect(byId).toEqual({ _id: "user_1", email: "ada@example.com" });
 
-    const updated = await h(mod.update)({ db } as never, {
+    const updated = await mod.update.handler({ db } as never, {
       id: "user_1",
       email: "new@example.com",
       firstName: "Ada",
@@ -141,7 +137,7 @@ describe("storeFront user", () => {
     });
     expect(updated).toEqual(recordMap.get("user_1"));
 
-    const byIdentifier = await h(mod.getByIdentifier)(
+    const byIdentifier = await mod.getByIdentifier.handler(
       { db } as never,
       { id: "user_1" }
     );
@@ -154,8 +150,8 @@ describe("storeFront user", () => {
     db.get.mockRejectedValueOnce(new Error("bad id"));
     db.get.mockRejectedValueOnce(new Error("bad identifier"));
 
-    const byId = await h(mod.getById)({ db } as never, { id: "bad" });
-    const byIdentifier = await h(mod.getByIdentifier)(
+    const byId = await mod.getById.handler({ db } as never, { id: "bad" });
+    const byIdentifier = await mod.getByIdentifier.handler(
       { db } as never,
       { id: "bad" }
     );
@@ -173,7 +169,7 @@ describe("storeFront user", () => {
       },
     });
 
-    const emptyResult = await h(mod.findLinkedAccounts)(
+    const emptyResult = await mod.findLinkedAccounts.handler(
       { db: emptyHarness.db } as never,
       { userId: "user_1" }
     );
@@ -189,7 +185,7 @@ describe("storeFront user", () => {
       },
     });
 
-    const linkedResult = await h(mod.findLinkedAccounts)(
+    const linkedResult = await mod.findLinkedAccounts.handler(
       { db: linkedHarness.db } as never,
       { userId: "user_2" }
     );
@@ -222,7 +218,7 @@ describe("storeFront user", () => {
       .mockRejectedValueOnce(new Error("not storefront user"))
       .mockRejectedValueOnce(new Error("not guest either"));
 
-    const result = await h(getAllUserActivity)({ db } as never, {
+    const result = await getAllUserActivity.handler({ db } as never, {
       id: "user_1",
     });
 
@@ -292,7 +288,7 @@ describe("storeFront user", () => {
         }),
     };
 
-    const result = await h(getLastViewedProduct)(ctx as never, {
+    const result = await getLastViewedProduct.handler(ctx as never, {
       id: "user_1",
       category: "Hair",
       minAgeHours: 1,
@@ -328,7 +324,7 @@ describe("storeFront user", () => {
       runQuery: vi.fn().mockResolvedValue({ skus: [] }),
     };
 
-    const result = await h(getLastViewedProduct)(ctx as never, {
+    const result = await getLastViewedProduct.handler(ctx as never, {
       id: "user_1",
     });
 
@@ -368,7 +364,7 @@ describe("storeFront user", () => {
         }),
     };
 
-    const result = await h(getLastViewedProduct)(ctx as never, {
+    const result = await getLastViewedProduct.handler(ctx as never, {
       id: "user_1",
       category: "Hair",
     });
@@ -467,7 +463,7 @@ describe("storeFront user", () => {
       }),
     };
 
-    const result = await h(getLastViewedProducts)(ctx as never, {
+    const result = await getLastViewedProducts.handler(ctx as never, {
       id: "user_1",
       category: "Hair",
       limit: 3,
@@ -488,7 +484,7 @@ describe("storeFront user", () => {
       },
     });
 
-    const result = await h(getLastViewedProducts)(
+    const result = await getLastViewedProducts.handler(
       { db, runQuery: vi.fn().mockResolvedValue({ skus: [] }) } as never,
       {
         id: "user_1",
@@ -583,12 +579,12 @@ describe("storeFront user", () => {
       },
     });
 
-    const order = await h(mod.getOnlineOrderById)({ db } as never, {
+    const order = await mod.getOnlineOrderById.handler({ db } as never, {
       id: "order_1",
     });
     expect(order).toEqual({ _id: "order_1", amount: 10000 });
 
-    const recent = await h(mod.getMostRecentActivity)({ db } as never, {
+    const recent = await mod.getMostRecentActivity.handler({ db } as never, {
       id: "user_1",
     });
     expect(recent).toEqual({ _id: "analytic_latest", action: "checkout" });

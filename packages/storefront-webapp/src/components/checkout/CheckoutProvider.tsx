@@ -1,4 +1,5 @@
 import React, { createContext, useEffect, useState } from "react";
+import { z, ZodError } from "zod";
 import { useGetActiveCheckoutSession } from "@/hooks/useGetActiveCheckoutSession";
 import {
   CheckoutExpired,
@@ -7,26 +8,314 @@ import {
 import { useShoppingBag } from "@/hooks/useShoppingBag";
 import { useStoreContext } from "@/contexts/StoreContext";
 import { SESSION_STORAGE_KEY } from "@/lib/constants";
+import { customerDetailsSchema } from "./schemas/customerDetailsSchema";
+import { baseDeliveryDetailsSchema } from "./schemas/deliveryDetailsSchema";
 import { CheckoutUnavailable } from "../states/checkout unavailable/CheckoutUnavailable";
 import { useNavigationBarContext } from "@/contexts/NavigationBarProvider";
-import { isAnyFeeWaived } from "@/lib/feeUtils";
+import { isFeeWaived, isAnyFeeWaived } from "@/lib/feeUtils";
 import { useOnlineOrderQueries } from "@/lib/queries/onlineOrder";
 import { useQuery } from "@tanstack/react-query";
 import {
+  DeliveryOption,
   CheckoutState,
   CheckoutActions,
   CheckoutContextType,
 } from "./types";
-import { deriveCheckoutState } from "./deriveCheckoutState";
-import { useCheckoutPersistence } from "./hooks/useCheckoutPersistence";
-import {
-  computeFulfillmentAvailability,
-  useFulfillmentAvailability,
-} from "./hooks/useFulfillmentAvailability";
-import { useUserDataPrefill } from "./hooks/useUserDataPrefill";
-import { useDiscountSync } from "./hooks/useDiscountSync";
 
-export { webOrderSchema } from "./schemas/webOrderSchema";
+export const webOrderSchema = z
+  .object({
+    // billingDetails: baseBillingDetailsSchema,
+    customerDetails: customerDetailsSchema,
+    deliveryMethod: z
+      .enum(["pickup", "delivery"])
+      .refine((value) => !!value, { message: "Delivery method is required" }),
+    deliveryOption: z
+      .enum(["within-accra", "outside-accra", "intl"])
+      .refine((value) => !!value, { message: "Delivery option is required" })
+      .nullable(),
+    deliveryFee: z.number().nullable(),
+    pickupLocation: z.string().min(1).nullable(),
+    deliveryDetails: baseDeliveryDetailsSchema.optional().nullable(),
+    deliveryInstructions: z.string().optional(),
+    discount: z.record(z.string(), z.any()).nullable(),
+  })
+  .superRefine((data, ctx) => {
+    const { deliveryFee, deliveryMethod, deliveryDetails, pickupLocation } =
+      data;
+
+    if (deliveryMethod == "delivery") {
+      // if (!billingDetails) {
+      //   ctx.addIssue({
+      //     code: z.ZodIssueCode.custom,
+      //     path: ["billingDetails"],
+      //     message: "Billing details are required",
+      //   });
+      // }
+
+      // const {
+      //   address: billingAddress,
+      //   billingAddressSameAsDelivery,
+      //   city: billingCity,
+      //   state: billingState,
+      //   zip: billingZip,
+      //   country: billingCountry,
+      // } = billingDetails || {};
+
+      // const isUSBillingAddress = billingCountry == "US";
+
+      // if (!billingAddressSameAsDelivery) {
+      //   if (!billingAddress) {
+      //     ctx.addIssue({
+      //       code: z.ZodIssueCode.custom,
+      //       path: ["billingDetails", "address"],
+      //       message: "Address is required",
+      //     });
+      //   }
+
+      //   if (billingAddress?.trim().length == 0) {
+      //     ctx.addIssue({
+      //       code: z.ZodIssueCode.custom,
+      //       path: ["billingDetails", "address"],
+      //       message: "Address cannot be empty or whitespace",
+      //     });
+      //   }
+
+      //   if (!billingCity) {
+      //     ctx.addIssue({
+      //       code: z.ZodIssueCode.custom,
+      //       path: ["billingDetails", "city"],
+      //       message: "City is required",
+      //     });
+      //   }
+
+      //   if (billingCity?.trim().length == 0) {
+      //     ctx.addIssue({
+      //       code: z.ZodIssueCode.custom,
+      //       path: ["billingDetails", "city"],
+      //       message: "City cannot be empty or whitespace",
+      //     });
+      //   }
+
+      //   if (!billingCountry) {
+      //     ctx.addIssue({
+      //       code: z.ZodIssueCode.custom,
+      //       path: ["billingDetails", "country"],
+      //       message: "Country is required",
+      //     });
+      //   }
+      // }
+
+      // if (billingCountry?.trim().length == 0) {
+      //   ctx.addIssue({
+      //     code: z.ZodIssueCode.custom,
+      //     path: ["billingDetails", "country"],
+      //     message: "Country cannot be empty or whitespace",
+      //   });
+      // }
+
+      // if (isUSBillingAddress) {
+      //   if (!billingState) {
+      //     ctx.addIssue({
+      //       code: z.ZodIssueCode.custom,
+      //       path: ["billingDetails", "state"],
+      //       message: "State is required",
+      //     });
+
+      //     if (billingState?.trim().length == 0) {
+      //       ctx.addIssue({
+      //         code: z.ZodIssueCode.custom,
+      //         path: ["billingDetails", "state"],
+      //         message: "State cannot be empty or whitespace",
+      //       });
+      //     }
+      //   }
+
+      //   if (!billingZip) {
+      //     ctx.addIssue({
+      //       code: z.ZodIssueCode.custom,
+      //       path: ["billingDetails", "zip"],
+      //       message: "Zip is required",
+      //     });
+      //   }
+
+      //   if (billingZip?.trim().length == 0) {
+      //     ctx.addIssue({
+      //       code: z.ZodIssueCode.custom,
+      //       path: ["billingDetails", "zip"],
+      //       message: "Zip code cannot be empty or whitespace",
+      //     });
+      //   }
+
+      //   if (billingZip && !/^\d{5}$/.test(billingZip)) {
+      //     ctx.addIssue({
+      //       code: z.ZodIssueCode.custom,
+      //       path: ["billingDetails", "zip"],
+      //       message: "Zip code must be a 5-digit number",
+      //     });
+      //   }
+      // }
+
+      if (deliveryFee == null) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["deliveryFee"],
+          message: "Delivery fee is required",
+        });
+      }
+
+      if (!deliveryDetails) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["deliveryDetails"],
+          message: "Delivery details are required",
+        });
+      }
+
+      const {
+        address,
+        city,
+        street,
+        neighborhood,
+        state,
+        zip,
+        region,
+        country,
+      } = deliveryDetails || {};
+
+      const isGhanaAddress = country == "GH";
+
+      const isUSAddress = country == "US";
+
+      // validate the address fields for US and ROW orders
+      if (!isGhanaAddress) {
+        if (!address) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["deliveryDetails", "address"],
+            message: "Address is required",
+          });
+        }
+
+        if (address?.trim().length == 0) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["deliveryDetails", "address"],
+            message: "Address cannot be empty or whitespace",
+          });
+        }
+
+        if (!city) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["deliveryDetails", "city"],
+            message: "City is required",
+          });
+        }
+
+        if (city?.trim().length == 0) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["deliveryDetails", "city"],
+            message: "City cannot be empty or whitespace",
+          });
+        }
+      }
+
+      if (!country) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["deliveryDetails", "country"],
+          message: "Country is required",
+        });
+      }
+
+      if (isUSAddress) {
+        if (!state) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["deliveryDetails", "state"],
+            message: "State is required",
+          });
+        }
+
+        if (!zip) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["deliveryDetails", "zip"],
+            message: "Zip is required",
+          });
+        }
+
+        if (zip?.trim().length == 0) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["deliveryDetails", "zip"],
+            message: "Zip code cannot be empty or whitespace",
+          });
+        }
+
+        if (zip && !/^\d{5}$/.test(zip)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["deliveryDetails", "zip"],
+            message: "Zip code must be a 5-digit number",
+          });
+        }
+      }
+
+      if (isGhanaAddress) {
+        if (!region) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["deliveryDetails", "region"],
+            message: "Region is required",
+          });
+        }
+
+        if (!street) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["deliveryDetails", "street"],
+            message: "Street is required",
+          });
+        }
+
+        // if (!houseNumber) {
+        //   ctx.addIssue({
+        //     code: z.ZodIssueCode.custom,
+        //     path: ["deliveryDetails", "houseNumber"],
+        //     message: "Apt/House number is required",
+        //   });
+        // }
+
+        if (!neighborhood) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["deliveryDetails", "neighborhood"],
+            message: "Neighborhood is required",
+          });
+        }
+      }
+    }
+
+    if (deliveryMethod == "pickup") {
+      if (!pickupLocation) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["pickupLocation"],
+          message: "Pickup location is required",
+        });
+      }
+
+      if (pickupLocation?.trim().length == 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["pickupLocation"],
+          message: "Pickup location cannot be empty or whitespace",
+        });
+      }
+    }
+  });
 
 const initialActionsState: CheckoutActions = {
   isEditingCustomerDetails: false,
@@ -89,6 +378,7 @@ export const CheckoutProvider = ({
         return {
           ...initialState,
           ...parsed,
+          // Ensure new fields have defaults
           paymentMethod: parsed.paymentMethod || "online_payment",
           podPaymentMethod: parsed.podPaymentMethod || null,
         };
@@ -103,29 +393,199 @@ export const CheckoutProvider = ({
     useState<CheckoutActions>(initialActionsState);
 
   const { bag } = useShoppingBag();
+
   const { user, store } = useStoreContext();
+
   const { setNavBarLayout, setAppLocation } = useNavigationBarContext();
 
-  const { waiveDeliveryFees } = store?.config || {};
-  const deliveryFees = store?.config?.deliveryFees;
+  const { waiveDeliveryFees, fulfillment } = store?.config || {};
+  // Default to true if not set (for backward compatibility)
+  const isPickupEnabled = fulfillment?.enableStorePickup ?? true;
+  const isDeliveryEnabled = fulfillment?.enableDelivery ?? true;
 
-  // Compute availability before updateState so the guard can reference these values
-  const { pickupAvailable, deliveryAvailable } =
-    computeFulfillmentAvailability(store);
+  // Helper function to check if restriction is within time window
+  const isWithinRestrictionTime = (restriction: any): boolean => {
+    if (!restriction?.isActive) return false;
+
+    const now = Date.now();
+    const { startTime, endTime } = restriction;
+
+    // If no times set, restriction is always active
+    if (!startTime && !endTime) return true;
+
+    // Check if within time window
+    if (startTime && now < startTime) return false;
+    if (endTime && now > endTime) return false;
+
+    return true;
+  };
+
+  // Check for temporary restrictions
+  const pickupRestriction = fulfillment?.pickupRestriction;
+  const deliveryRestriction = fulfillment?.deliveryRestriction;
+
+  const isPickupRestricted =
+    pickupRestriction?.isActive && isWithinRestrictionTime(pickupRestriction);
+  const isDeliveryRestricted =
+    deliveryRestriction?.isActive &&
+    isWithinRestrictionTime(deliveryRestriction);
+
+  const pickupAvailable = isPickupEnabled && !isPickupRestricted;
+  const deliveryAvailable = isDeliveryEnabled && !isDeliveryRestricted;
 
   useEffect(() => {
     setNavBarLayout("fixed");
     setAppLocation("checkout");
   }, []);
 
+  // Auto-switch to delivery if pickup is disabled/restricted and currently selected
+  useEffect(() => {
+    if (!pickupAvailable && checkoutState.deliveryMethod === "pickup") {
+      if (deliveryAvailable) {
+        updateState({
+          deliveryMethod: "delivery",
+          deliveryOption: null,
+          deliveryFee: null,
+          pickupLocation: null,
+        });
+      }
+    }
+  }, [pickupAvailable, deliveryAvailable]);
+
+  // Auto-switch to pickup if delivery is disabled/restricted and currently selected
+  useEffect(() => {
+    if (!deliveryAvailable && checkoutState.deliveryMethod === "delivery") {
+      if (pickupAvailable) {
+        updateState({
+          deliveryMethod: "pickup",
+          deliveryOption: null,
+          deliveryFee: 0,
+          paymentMethod: "online_payment",
+          pickupLocation: "wigclub-hair-studio",
+          podPaymentMethod: null,
+        });
+      }
+    }
+  }, [pickupAvailable, deliveryAvailable]);
+
+  useEffect(() => {
+    if (bag?.items?.length && bag?.items?.length > 0) {
+      sessionStorage.setItem(
+        SESSION_STORAGE_KEY,
+        JSON.stringify({ ...checkoutState, discount: null, bag })
+      );
+    }
+  }, [checkoutState, bag]);
+
+  useEffect(() => {
+    if (bag?.items?.length && bag?.items?.length > 0) {
+      setCheckoutState((prev) => ({
+        ...prev,
+        discount: null,
+        bag,
+      }));
+    }
+  }, [bag]);
+
+  useEffect(() => {
+    if (user) {
+      const { shippingAddress, billingAddress } = user;
+
+      if (!shippingAddress || !billingAddress) return;
+
+      const { address, city, zip, state, country, region } =
+        shippingAddress || {};
+
+      const {
+        address: billingAddr,
+        city: billingCity,
+        zip: billingZip,
+        state: billingState,
+        country: billingCountry,
+        region: billingRegion,
+      } = billingAddress || {};
+
+      const { email, firstName, lastName, phoneNumber } = user;
+
+      const isGhanaAddress = country == "GH";
+
+      const isGreaterAccraAddress = region == "GA";
+
+      let deliveryOption: DeliveryOption = "intl";
+      const shouldWaiveIntlFee = isFeeWaived(waiveDeliveryFees, "intl");
+      let deliveryFee = shouldWaiveIntlFee
+        ? 0
+        : store?.config?.deliveryFees?.international || 800;
+
+      if (isGhanaAddress) {
+        deliveryOption = isGreaterAccraAddress
+          ? "within-accra"
+          : "outside-accra";
+
+        const shouldWaiveRegionFee =
+          typeof waiveDeliveryFees === "boolean"
+            ? waiveDeliveryFees
+            : isGreaterAccraAddress
+              ? waiveDeliveryFees?.withinAccra ||
+                waiveDeliveryFees?.all ||
+                false
+              : waiveDeliveryFees?.otherRegions ||
+                waiveDeliveryFees?.all ||
+                false;
+
+        deliveryFee = shouldWaiveRegionFee
+          ? 0
+          : isGreaterAccraAddress
+            ? 30
+            : 70;
+      }
+
+      updateState({
+        customerDetails: {
+          email,
+          firstName: firstName || "",
+          lastName: lastName || "",
+          phoneNumber: phoneNumber || "",
+        },
+        deliveryMethod: shippingAddress ? "delivery" : null,
+        deliveryOption,
+        deliveryFee,
+        deliveryDetails: {
+          address,
+          city,
+          zip,
+          state,
+          country,
+          region,
+        },
+        billingDetails: {
+          address: billingAddr,
+          city: billingCity,
+          zip: billingZip,
+          state: billingState,
+          country: billingCountry,
+          region: billingRegion,
+        },
+      });
+    }
+  }, [user]);
+
   const updateState = (updates: Partial<CheckoutState>) => {
     const anyFeeWaived = isAnyFeeWaived(waiveDeliveryFees);
 
+    // Prevent setting deliveryMethod to pickup when it's unavailable
     if (!pickupAvailable && updates.deliveryMethod === "pickup") {
+      console.warn(
+        "Store pickup is currently unavailable. Cannot set delivery method to pickup."
+      );
       return;
     }
 
+    // Prevent setting deliveryMethod to delivery when it's unavailable
     if (!deliveryAvailable && updates.deliveryMethod === "delivery") {
+      console.warn(
+        "Delivery is currently unavailable. Cannot set delivery method to delivery."
+      );
       return;
     }
 
@@ -137,40 +597,113 @@ export const CheckoutProvider = ({
       updates.deliveryFee = 0;
     }
 
-    setCheckoutState((prev) =>
-      deriveCheckoutState(prev, updates, { waiveDeliveryFees, deliveryFees })
-    );
+    setCheckoutState((prev) => {
+      const newUpdates = { ...prev, ...updates };
+
+      const isDeliveryOrder = newUpdates.deliveryMethod == "delivery";
+      const isPickupOrder = newUpdates.deliveryMethod == "pickup";
+
+      const isGhanaOrder =
+        isPickupOrder ||
+        (isDeliveryOrder && newUpdates.deliveryDetails?.country == "GH");
+
+      // Always set international delivery for non-Ghana countries
+      if (
+        isDeliveryOrder &&
+        newUpdates.deliveryDetails?.country &&
+        newUpdates.deliveryDetails.country !== "GH" &&
+        newUpdates.deliveryOption !== "intl"
+      ) {
+        const shouldWaiveIntlFee = isFeeWaived(waiveDeliveryFees, "intl");
+
+        newUpdates.deliveryOption = "intl";
+        newUpdates.deliveryFee = shouldWaiveIntlFee
+          ? 0
+          : store?.config?.deliveryFees?.international || 800;
+      }
+
+      const isUSOrder =
+        isDeliveryOrder && newUpdates.deliveryDetails?.country == "US";
+
+      const isROWOrder = isDeliveryOrder && !isUSOrder && !isGhanaOrder;
+
+      const didSelectPickupLocation = Boolean(
+        isPickupOrder && newUpdates.pickupLocation
+      );
+
+      const didProvideAllUSAddressFields = Boolean(
+        newUpdates.deliveryDetails?.address &&
+          newUpdates.deliveryDetails?.city &&
+          newUpdates.deliveryDetails?.state &&
+          newUpdates.deliveryDetails?.zip
+      );
+
+      const didProvideAllRestOfWorldFields = Boolean(
+        newUpdates.deliveryDetails?.address && newUpdates.deliveryDetails?.city
+      );
+
+      const didProvideAllGhanaAddressFields = Boolean(
+        newUpdates.deliveryDetails?.street && newUpdates.deliveryDetails?.region
+      );
+
+      const didEnterDeliveryDetails =
+        (isUSOrder
+          ? didProvideAllUSAddressFields
+          : isGhanaOrder && isDeliveryOrder
+            ? didProvideAllGhanaAddressFields
+            : didProvideAllRestOfWorldFields) &&
+        Boolean(newUpdates.deliveryOption);
+
+      const didProvideAllUSBillingAddressFields = Boolean(
+        newUpdates.billingDetails?.address &&
+          newUpdates.billingDetails?.city &&
+          newUpdates.billingDetails?.state &&
+          newUpdates.billingDetails?.zip
+      );
+
+      const didProvideAllRestOfWorldBillingFields = Boolean(
+        newUpdates.billingDetails?.address && newUpdates.billingDetails?.city
+      );
+
+      const didProvideAllGhanaBillingAddressFields = Boolean(
+        newUpdates.billingDetails?.address && newUpdates.billingDetails?.city
+      );
+
+      const isGhanaBillingAddrss = newUpdates.billingDetails?.country == "GH";
+      const isUSBillingAddrss = newUpdates.billingDetails?.country == "US";
+
+      const didEnterBillingDetails = isGhanaBillingAddrss
+        ? didProvideAllGhanaBillingAddressFields
+        : isUSBillingAddrss
+          ? didProvideAllUSBillingAddressFields
+          : didProvideAllRestOfWorldBillingFields;
+
+      return {
+        ...newUpdates,
+        didEnterDeliveryDetails,
+        didEnterBillingDetails,
+        didSelectPickupLocation,
+        isGhanaOrder,
+        isUSOrder,
+        isROWOrder,
+        isPickupOrder,
+        isDeliveryOrder,
+      };
+    });
   };
-
-  useFulfillmentAvailability(
-    pickupAvailable,
-    deliveryAvailable,
-    checkoutState,
-    updateState
-  );
-
-  useCheckoutPersistence(checkoutState, bag, setCheckoutState);
-  useUserDataPrefill(user, store, updateState);
-
-  const { data, isLoading, refetch } = useGetActiveCheckoutSession();
-  useDiscountSync(data, checkoutState, actionsState, updateState);
-
-  const onlineOrderQueries = useOnlineOrderQueries();
-  const { data: onlineOrder } = useQuery(
-    onlineOrderQueries.detail(data?.placedOrderId || "")
-  );
 
   const updateActionsState = (actions: Partial<CheckoutActions>) => {
     setActionsState((prev) => ({ ...prev, ...actions }));
   };
 
   const canPlaceOrder = async () => {
-    const { data: sessionData } = await refetch();
+    const { data } = await refetch();
 
-    if (sessionData == null) {
+    if (data == null) {
       return false;
     }
 
+    // Ensure deliveryFee is set to 0 when waiveDeliveryFees is true and delivery method is 'delivery'
     if (
       waiveDeliveryFees &&
       checkoutState.deliveryMethod === "delivery" &&
@@ -180,15 +713,52 @@ export const CheckoutProvider = ({
     }
 
     try {
-      const { webOrderSchema } = await import("./schemas/webOrderSchema");
+      // Parse the state using the schema
       webOrderSchema.parse(checkoutState);
       updateState({ failedFinalValidation: false });
+
       return true;
-    } catch {
+    } catch (e) {
+      console.log((e as ZodError).flatten());
       updateState({ failedFinalValidation: true });
       return false;
     }
   };
+
+  const { data, isLoading, refetch } = useGetActiveCheckoutSession();
+
+  const onlineOrderQueries = useOnlineOrderQueries();
+  const { data: onlineOrder } = useQuery(
+    onlineOrderQueries.detail(data?.placedOrderId || "")
+  );
+
+  // Sync discount from session to checkout state
+  useEffect(() => {
+    if (actionsState.isApplyingDiscount) {
+      return;
+    }
+
+    const discount = data?.discount || (data as any)?.session?.discount;
+    if (discount && !checkoutState.discount) {
+      updateState({
+        discount: {
+          id: discount.promoCodeId || discount._id || discount.id,
+          code: discount.code,
+          value: discount.value ?? discount.discountValue,
+          type: discount.type ?? discount.discountType,
+          span: discount.span,
+          productSkus: discount.productSkus,
+          totalDiscount: discount.totalDiscount,
+          isMultipleUses: discount.isMultipleUses,
+          autoApply: discount.autoApply,
+        },
+      });
+    } else if (!discount && checkoutState.discount?.autoApply === true) {
+      updateState({
+        discount: null,
+      });
+    }
+  }, [data, checkoutState.discount, actionsState.isApplyingDiscount]);
 
   const { config } = store || {};
 

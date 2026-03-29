@@ -38,6 +38,7 @@ export const listTransactions = async (params: {
 
   if (!response.ok) {
     const errorData = await response.json();
+    console.error("Failed to list transactions", errorData);
     throw new Error(
       `Failed to list transactions: ${errorData.message || "Unknown error"}`
     );
@@ -119,6 +120,7 @@ export const verifyTransaction = async (reference: string) => {
 
   if (!response.ok) {
     const errorData = await response.json();
+    console.error("Failed to verify transaction", errorData);
     throw new Error(
       `Failed to verify transaction: ${errorData.message || "Unknown error"}`
     );

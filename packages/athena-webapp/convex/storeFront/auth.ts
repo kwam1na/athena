@@ -156,7 +156,7 @@ export const sendVerificationCodeViaProvider = action({
     lastName: v.optional(v.string()),
     storeId: v.id("store"),
   },
-  handler: async (ctx, args): Promise<{ success: boolean; message: string; data?: { email: string } }> => {
+  handler: async (ctx, args) => {
     const [data, store] = await Promise.all([
       ctx.runMutation(api.storeFront.auth.requestVerificationCode, {
         email: args.email,
