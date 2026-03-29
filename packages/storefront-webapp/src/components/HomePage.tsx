@@ -28,6 +28,7 @@ import { getRelativeTime } from "@/lib/utils";
 import { ProductActionBar } from "./ProductActionBar";
 import { useShoppingBag } from "@/hooks/useShoppingBag";
 import { LeaveAReviewModal } from "./ui/modals/LeaveAReviewModal";
+import { getStoreConfigV2 } from "@/lib/storeConfig";
 
 const origin = "homepage";
 
@@ -37,6 +38,7 @@ export default function HomePage() {
   const footerRef = useRef<HTMLDivElement>(null);
 
   const { store } = useStoreContext();
+  const storeConfig = getStoreConfigV2(store);
 
   // console.log("store", store);
 
@@ -151,7 +153,7 @@ export default function HomePage() {
       action: "clicked_on_discount_code_trigger",
       origin: "homepage",
       data: {
-        promoCodeId: store?.config?.homepageDiscountCodeModalPromoCode,
+        promoCodeId: storeConfig.promotions.homepageDiscountCodeModalPromoCode,
       },
     });
   };
@@ -163,7 +165,7 @@ export default function HomePage() {
       action: "clicked_on_leave_review_trigger",
       origin: "homepage",
       data: {
-        promoCodeId: store?.config?.leaveAReviewDiscountCodeModalPromoCode,
+        promoCodeId: storeConfig.promotions.leaveAReviewDiscountCodeModalPromoCode,
       },
     });
   };
@@ -230,7 +232,7 @@ export default function HomePage() {
 
       {/* Floating leave a review button */}
       {!hasCompletedLeaveReviewModalFlow &&
-        store?.config?.leaveAReviewDiscountCodeModalPromoCode &&
+        storeConfig.promotions.leaveAReviewDiscountCodeModalPromoCode &&
         canShowModal && (
           <motion.button
             initial={{ opacity: 0 }}
@@ -248,7 +250,7 @@ export default function HomePage() {
         isOpen={isLeaveReviewModalOpen && canShowModal}
         onClose={handleCloseLeaveReviewModal}
         onSuccess={handleSuccessLeaveReviewModal}
-        promoCode={store?.config?.leaveAReviewDiscountCodeModalPromoCode}
+        promoCode={storeConfig.promotions.leaveAReviewDiscountCodeModalPromoCode}
       />
 
       <div className="min-h-screen overflow-x-hidden">

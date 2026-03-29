@@ -26,11 +26,13 @@ import { accraNeighborhoods } from "@/lib/ghana";
 import { Plus } from "lucide-react";
 import { CheckoutFormSectionProps } from "./CustomerInfoSection";
 import { useStoreContext } from "@/contexts/StoreContext";
+import { getStoreConfigV2 } from "@/lib/storeConfig";
 
 export const DeliveryDetailsForm = ({ form }: CheckoutFormSectionProps) => {
   const { checkoutState, updateState } = useCheckout();
   const { store } = useStoreContext();
-  const { waiveDeliveryFees, deliveryFees } = store?.config || {};
+  const storeConfig = getStoreConfigV2(store);
+  const { waiveDeliveryFees, deliveryFees } = storeConfig.commerce;
 
   // const onSubmit = (data: z.infer<typeof deliveryDetailsSchema>) => {
   //   console.log("on submit in delivery details ->", data);

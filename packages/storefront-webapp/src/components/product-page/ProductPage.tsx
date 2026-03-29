@@ -18,6 +18,8 @@ import { AboutProduct } from "./AboutProduct";
 import { useProductDiscount } from "@/hooks/useProductDiscount";
 import { DiscountBadge } from "./DiscountBadge";
 import { useStoreContext } from "@/contexts/StoreContext";
+import { getStoreFallbackImageUrl } from "@/lib/storeConfig";
+import placeholder from "@/assets/placeholder.png";
 
 // Main Product Page Component
 export default function ProductPage() {
@@ -46,6 +48,7 @@ export default function ProductPage() {
   const pageRef = useRef<HTMLDivElement | null>(null);
 
   const { store } = useStoreContext();
+  const fallbackImageUrl = getStoreFallbackImageUrl(store, placeholder) || placeholder;
 
   useTrackAction({
     action: "viewed_product",
@@ -85,7 +88,7 @@ export default function ProductPage() {
 
   const images = selectedSku.images.length
     ? selectedSku.images
-    : [store?.config?.ui?.fallbackImageUrl];
+    : [fallbackImageUrl];
 
   return (
     <AnimatePresence>

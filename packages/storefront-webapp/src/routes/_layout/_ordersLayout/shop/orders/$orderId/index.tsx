@@ -42,6 +42,7 @@ import { Button } from "@/components/ui/button";
 import { GuestRewardsPrompt } from "@/components/rewards/GuestRewardsPrompt";
 import { useUserQueries } from "@/lib/queries/user";
 import { OrderPointsDisplay } from "@/components/rewards/OrderPointsDisplay";
+import { getStoreFallbackImageUrl } from "@/lib/storeConfig";
 
 export const Route = createFileRoute(
   "/_layout/_ordersLayout/shop/orders/$orderId/"
@@ -198,13 +199,14 @@ const OrderItem = ({
     : "Free";
 
   const { store } = useStoreContext();
+  const fallbackImageUrl = getStoreFallbackImageUrl(store);
 
   return (
     <div className="flex gap-8 text-sm">
       <ImageWithFallback
         src={
           item.productImage ||
-          store?.config?.ui?.fallbackImageUrl ||
+          fallbackImageUrl ||
           placeholder
         }
         alt={"product image"}

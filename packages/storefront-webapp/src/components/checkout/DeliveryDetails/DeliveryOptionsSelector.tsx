@@ -4,6 +4,7 @@ import { useCheckout } from "@/hooks/useCheckout";
 import { Address } from "../types";
 import { useStoreContext } from "@/contexts/StoreContext";
 import { isFeeWaived } from "@/lib/feeUtils";
+import { getStoreConfigV2 } from "@/lib/storeConfig";
 
 export function StoreSelector() {
   const { updateState, updateActionsState, checkoutState } = useCheckout();
@@ -41,8 +42,9 @@ export function DeliveryOptionsSelector() {
   const { checkoutState, updateState } = useCheckout();
 
   const { store, formatter } = useStoreContext();
+  const storeConfig = getStoreConfigV2(store);
 
-  const { deliveryFees, waiveDeliveryFees } = store?.config || {};
+  const { deliveryFees, waiveDeliveryFees } = storeConfig.commerce;
 
   const { international, withinAccra, otherRegions } = deliveryFees || {};
 

@@ -4,6 +4,7 @@ import { capitalizeWords } from "@/lib/utils";
 import { FadeIn } from "@/components/common/FadeIn";
 import { WIGLUB_HAIR_STUDIO_LOCATION_URL } from "@/lib/constants";
 import ImageWithFallback from "@/components/ui/image-with-fallback";
+import { getStoreConfigV2 } from "@/lib/storeConfig";
 
 export const Route = createFileRoute("/_layout/contact-us")({
   component: () => <ContactUs />,
@@ -11,6 +12,7 @@ export const Route = createFileRoute("/_layout/contact-us")({
 
 const ContactUs = () => {
   const { store } = useStoreContext();
+  const storeConfig = getStoreConfigV2(store);
 
   if (!store) return <div className="h-screen" />;
 
@@ -29,7 +31,7 @@ const ContactUs = () => {
 
         <ImageWithFallback
           className="w-150 h-150 object-cover"
-          src={store.config?.showroomImage}
+          src={storeConfig.media.images.showroomImage}
           alt="showroom"
         />
 
@@ -38,13 +40,13 @@ const ContactUs = () => {
             <p className="font-medium">Address</p>
 
             <div className="space-y-2">
-              <p>{store.config?.contactInfo?.location}</p>
+              <p>{storeConfig.contact.location}</p>
               <div>
                 <a
-                  href={`tel:${store.config?.contactInfo?.phoneNumber}`}
+                  href={`tel:${storeConfig.contact.phoneNumber}`}
                   className="hover:underline font-medium"
                 >
-                  {store.config?.contactInfo?.phoneNumber}
+                  {storeConfig.contact.phoneNumber}
                 </a>
               </div>
             </div>

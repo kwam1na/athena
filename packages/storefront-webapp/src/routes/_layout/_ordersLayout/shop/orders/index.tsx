@@ -13,6 +13,7 @@ import { OnlineOrder } from "@athena/webapp";
 import { FadeIn } from "@/components/common/FadeIn";
 import { Badge } from "@/components/ui/badge";
 import { Banknote, Smartphone, Clock, CircleCheck } from "lucide-react";
+import { getStoreFallbackImageUrl } from "@/lib/storeConfig";
 
 export const Route = createFileRoute("/_layout/_ordersLayout/shop/orders/")({
   component: () => <Purchases />,
@@ -46,6 +47,7 @@ const OrderItem = ({
     order.podPaymentMethod || order.paymentMethod?.podPaymentMethod || "cash";
 
   const { store } = useStoreContext();
+  const fallbackImageUrl = getStoreFallbackImageUrl(store);
 
   return (
     <div className="space-y-8 text-sm">
@@ -113,7 +115,7 @@ const OrderItem = ({
             <ImageWithFallback
               src={
                 item.productImage ||
-                store?.config?.ui?.fallbackImageUrl ||
+                fallbackImageUrl ||
                 placeholder
               }
               alt={"product image"}
@@ -135,7 +137,7 @@ const OrderItem = ({
               <ImageWithFallback
                 src={
                   item.productImage ||
-                  store?.config?.ui?.fallbackImageUrl ||
+                  fallbackImageUrl ||
                   placeholder
                 }
                 alt={"product image"}

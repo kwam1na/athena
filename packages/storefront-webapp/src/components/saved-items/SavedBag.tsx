@@ -13,10 +13,12 @@ import { FadeIn } from "../common/FadeIn";
 import ImageWithFallback from "../ui/image-with-fallback";
 import { postAnalytics } from "@/api/analytics";
 import { useTrackEvent } from "@/hooks/useTrackEvent";
+import { getStoreFallbackImageUrl } from "@/lib/storeConfig";
 
 export default function SavedBag() {
   const [bagAction, setBagAction] = useState<ShoppingBagAction>("idle");
   const { formatter, isNavbarShowing, store } = useStoreContext();
+  const fallbackImageUrl = getStoreFallbackImageUrl(store);
   const {
     savedBag,
     deleteItemFromSavedBag,
@@ -101,7 +103,7 @@ export default function SavedBag() {
                       <ImageWithFallback
                         src={
                           (item as any).productImage ||
-                          store?.config?.ui?.fallbackImageUrl ||
+                          fallbackImageUrl ||
                           placeholder
                         }
                         alt={(item as any).productName || "product image"}

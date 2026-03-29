@@ -12,12 +12,14 @@ import { useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { redeemPromoCode } from "@/api/promoCodes";
+import { getStoreConfigV2 } from "@/lib/storeConfig";
 
 export default function OrderSummary() {
   const { formatter, store } = useStoreContext();
   const { bagSubtotal } = useShoppingBag();
   const { checkoutState, activeSession, updateState } = useCheckout();
-  const { waiveDeliveryFees } = store?.config || {};
+  const storeConfig = getStoreConfigV2(store);
+  const { waiveDeliveryFees } = storeConfig.commerce;
 
   const [invalidMessage, setInvalidMessage] = useState("");
   const [code, setCode] = useState("");

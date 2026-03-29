@@ -5,6 +5,7 @@ import { ArrowRight } from "lucide-react";
 import { Button } from "../ui/button";
 import { HomeHero } from "./HomeHero";
 import { useStoreContext } from "@/contexts/StoreContext";
+import { getStoreConfigV2 } from "@/lib/storeConfig";
 
 interface HomeHeroSectionProps {
   shopLookProduct: any;
@@ -24,6 +25,7 @@ export function HomeHeroSection({
   const homeHeroRef = useRef<HTMLDivElement>(null);
   const shopTheLookRef = useRef<HTMLImageElement>(null);
   const { store } = useStoreContext();
+  const storeConfig = getStoreConfigV2(store);
 
   return (
     <div ref={homeHeroRef}>
@@ -42,7 +44,7 @@ export function HomeHeroSection({
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.6, delay: 0.8 }}
-            src={store?.config?.shopTheLookImage}
+            src={storeConfig.media.images.shopTheLookImage}
             className="w-full lg:w-[50%] h-screen object-cover"
           />
         </Link>

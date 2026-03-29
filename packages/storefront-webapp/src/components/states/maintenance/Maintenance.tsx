@@ -1,9 +1,11 @@
 import { useStoreContext } from "@/contexts/StoreContext";
 import { useCountdown } from "@/components/common/hooks";
+import { getStoreConfigV2 } from "@/lib/storeConfig";
 
 export const MaintenanceMode = () => {
   const { store } = useStoreContext();
-  const maintenanceConfig = store?.config?.maintenance;
+  const storeConfig = getStoreConfigV2(store);
+  const maintenanceConfig = storeConfig.operations.maintenance;
 
   const { timeLeft } = useCountdown(maintenanceConfig?.countdownEndsAt);
 

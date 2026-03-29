@@ -4,6 +4,7 @@ import { GhostButton } from "@/components/ui/ghost-button";
 import { Truck } from "lucide-react";
 import { StoreIcon } from "lucide-react";
 import { isFeeWaived } from "@/lib/feeUtils";
+import { getStoreConfigV2 } from "@/lib/storeConfig";
 
 // Helper function to check if restriction is within time window
 function isWithinRestrictionTime(restriction: any): boolean {
@@ -25,7 +26,8 @@ function isWithinRestrictionTime(restriction: any): boolean {
 export const PickupOptions = () => {
   const { checkoutState, updateState } = useCheckout();
   const { formatter, store } = useStoreContext();
-  const { waiveDeliveryFees, fulfillment } = store?.config || {};
+  const storeConfig = getStoreConfigV2(store);
+  const { waiveDeliveryFees, fulfillment } = storeConfig.commerce;
 
   const isPickup = checkoutState.deliveryMethod === "pickup";
   const isDelivery = checkoutState.deliveryMethod === "delivery";

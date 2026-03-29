@@ -4,6 +4,7 @@ import { Link, useParams } from "@tanstack/react-router";
 import { Skeleton } from "./ui/skeleton";
 import { ProductCard, ProductSkuCard } from "./ProductCard";
 import { useGetProductFilters } from "@/hooks/useGetProductFilters";
+import { getStoreFallbackImageUrl } from "@/lib/storeConfig";
 
 function ProductCardLoadingSkeleton() {
   return (
@@ -27,6 +28,7 @@ export default function ProductsPage({
   productSkus?: ProductSku[];
 }) {
   const { formatter, store } = useStoreContext();
+  const fallbackImageUrl = getStoreFallbackImageUrl(store);
 
   const { filtersCount } = useGetProductFilters();
 
@@ -103,7 +105,7 @@ export default function ProductsPage({
             className="block mb-4"
           >
             <ProductSkuCard
-              fallbackImageUrl={store?.config?.ui?.fallbackImageUrl}
+              fallbackImageUrl={fallbackImageUrl}
               sku={sku}
               currencyFormatter={formatter}
             />
@@ -123,7 +125,7 @@ export default function ProductsPage({
             className="block mb-4"
           >
             <ProductCard
-              fallbackImageUrl={store?.config?.ui?.fallbackImageUrl}
+              fallbackImageUrl={fallbackImageUrl}
               product={product}
               currencyFormatter={formatter}
             />

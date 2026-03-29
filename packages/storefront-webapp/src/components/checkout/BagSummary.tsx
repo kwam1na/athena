@@ -20,6 +20,7 @@ import { usePromoCodesQueries } from "@/lib/queries/promoCode";
 import { isFeeWaived } from "@/lib/feeUtils";
 import { Badge } from "../ui/badge";
 import { useDiscountCodeAlert } from "@/hooks/useDiscountCodeAlert";
+import { getStoreConfigV2, getStoreFallbackImageUrl } from "@/lib/storeConfig";
 
 function SummaryItem({
   item,
@@ -58,6 +59,7 @@ function SummaryItem({
     (discount.span === "selected-products" || totalItemsInBag === 1);
 
   const hasDiscount = shouldShowDiscount;
+  const fallbackImageUrl = getStoreFallbackImageUrl(store);
 
   return (
     <div className="flex items-center justify-between">
@@ -66,7 +68,7 @@ function SummaryItem({
           <img
             src={
               item.productImage ||
-              store?.config?.ui?.fallbackImageUrl ||
+              fallbackImageUrl ||
               placeholder
             }
             alt={item.productName || "product image"}
@@ -141,7 +143,8 @@ function BagSummary() {
   const { userId, guestId } = useAuth();
   const [code, setCode] = useState("");
   const [invalidMessage, setInvalidMessage] = useState("");
-  const { waiveDeliveryFees } = store?.config || {};
+  const storeConfig = getStoreConfigV2(store);
+  const { waiveDeliveryFees } = storeConfig.commerce;
 
   const queryClient = useQueryClient();
 
