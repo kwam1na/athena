@@ -1,4 +1,4 @@
-import { query, mutation } from "../_generated/server";
+import { query, mutation, MutationCtx } from "../_generated/server";
 import { v } from "convex/values";
 import type { Id } from "../_generated/dataModel";
 import { capitalizeWords, generateTransactionNumber } from "../utils";
@@ -810,19 +810,14 @@ export const voidTransaction = mutation({
 });
 
 // Create transaction from session (used by session completion)
-export const createTransactionFromSession = mutation({
+export async function createTransactionFromSessionHandler(
+  ctx: MutationCtx,
   args: {
-    sessionId: v.id("posSession"),
-    payments: v.array(
-      v.object({
-        method: v.string(), // "cash", "card", "mobile_money"
-        amount: v.number(),
-        timestamp: v.number(),
-      })
-    ),
-    notes: v.optional(v.string()),
-  },
-  handler: async (ctx, args) => {
+    sessionId: Id<"posSession">;
+    payments: { method: string; amount: number; timestamp: number }[];
+    notes?: string;
+  }
+) {
     const session = await ctx.db.get(args.sessionId);
     if (!session) {
       throw new Error("Session not found");
@@ -989,7 +984,21 @@ export const createTransactionFromSession = mutation({
       transactionNumber,
       transactionItems: transactionItems.filter((item) => item !== null),
     };
+}
+
+export const createTransactionFromSession = mutation({
+  args: {
+    sessionId: v.id("posSession"),
+    payments: v.array(
+      v.object({
+        method: v.string(),
+        amount: v.number(),
+        timestamp: v.number(),
+      })
+    ),
+    notes: v.optional(v.string()),
   },
+  handler: async (ctx, args) => createTransactionFromSessionHandler(ctx, args),
 });
 
 // Debug query to check recent transactions and their customer links

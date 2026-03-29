@@ -1,4 +1,4 @@
-import { query, mutation } from "../_generated/server";
+import { query, mutation, MutationCtx } from "../_generated/server";
 import { v } from "convex/values";
 import { Id } from "../_generated/dataModel";
 
@@ -236,10 +236,81 @@ export const remove = mutation({
   },
 });
 
+export async function authenticateHandler(
+  ctx: MutationCtx,
+  args: {
+    username: string;
+    pin: string;
+    storeId: Id<"store">;
+    terminalId: Id<"posTerminal">;
+  }
+) {
+  console.log("Authenticating cashier", args);
+  // Validate required fields
+  if (!args.username.trim()) {
+    return {
+      success: false as const,
+      error: "Username is required",
+    };
+  }
+
+  if (!args.pin) {
+    return {
+      success: false as const,
+      error: "PIN is required",
+    };
+  }
+
+  // Find cashier by username and storeId using the index
+  const cashiers = await ctx.db
+    .query(entity)
+    .withIndex("by_store_and_username", (q) =>
+      q.eq("storeId", args.storeId).eq("username", args.username.trim())
+    )
+    .collect();
+
+  if (cashiers.length === 0) {
+    return {
+      success: false as const,
+      error: "Invalid username or PIN",
+    };
+  }
+
+  const cashier = cashiers[0];
+
+  // Verify the cashier is active
+  if (!cashier.active) {
+    return {
+      success: false as const,
+      error: "This cashier account is inactive",
+    };
+  }
+
+  // Compare the hashed PIN with stored PIN
+  // Both PINs are hashed, so we do a direct comparison
+  if (cashier.pin !== args.pin) {
+    return {
+      success: false as const,
+      error: "Invalid username or PIN",
+    };
+  }
+
+  // Return cashier data without PIN
+  return {
+    success: true as const,
+    cashier: {
+      _id: cashier._id,
+      firstName: cashier.firstName,
+      lastName: cashier.lastName,
+      username: cashier.username,
+    },
+  };
+}
+
 export const authenticate = mutation({
   args: {
     username: v.string(),
-    pin: v.string(), // Hashed PIN from client
+    pin: v.string(),
     storeId: v.id("store"),
     terminalId: v.id("posTerminal"),
   },
@@ -255,68 +326,7 @@ export const authenticate = mutation({
       })
     ),
   }),
-  handler: async (ctx, args) => {
-    console.log("Authenticating cashier", args);
-    // Validate required fields
-    if (!args.username.trim()) {
-      return {
-        success: false,
-        error: "Username is required",
-      };
-    }
-
-    if (!args.pin) {
-      return {
-        success: false,
-        error: "PIN is required",
-      };
-    }
-
-    // Find cashier by username and storeId using the index
-    const cashiers = await ctx.db
-      .query(entity)
-      .withIndex("by_store_and_username", (q) =>
-        q.eq("storeId", args.storeId).eq("username", args.username.trim())
-      )
-      .collect();
-
-    if (cashiers.length === 0) {
-      return {
-        success: false,
-        error: "Invalid username or PIN",
-      };
-    }
-
-    const cashier = cashiers[0];
-
-    // Verify the cashier is active
-    if (!cashier.active) {
-      return {
-        success: false,
-        error: "This cashier account is inactive",
-      };
-    }
-
-    // Compare the hashed PIN with stored PIN
-    // Both PINs are hashed, so we do a direct comparison
-    if (cashier.pin !== args.pin) {
-      return {
-        success: false,
-        error: "Invalid username or PIN",
-      };
-    }
-
-    // Return cashier data without PIN
-    return {
-      success: true,
-      cashier: {
-        _id: cashier._id,
-        firstName: cashier.firstName,
-        lastName: cashier.lastName,
-        username: cashier.username,
-      },
-    };
-  },
+  handler: async (ctx, args) => authenticateHandler(ctx, args),
 });
 
 export const checkUsernameAvailable = query({
@@ -358,7 +368,7 @@ export const signIn = mutation({
     ),
   }),
   handler: async (ctx, args) => {
-    const result = await authenticate(ctx, args);
+    const result = await authenticateHandler(ctx, args);
 
     if (!result.success) {
       return result;
