@@ -11,4 +11,3 @@ export * from "./reviews";
 export { rewardsRoutes } from "./rewards";
 export * from "./offers";
 export * from "./userOffers";
-export * from "./e2e";
