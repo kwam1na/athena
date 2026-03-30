@@ -53,6 +53,9 @@ export interface EffectiveConfig {
   };
   codex: {
     command: string;
+    clientName: string;
+    clientVersion: string;
+    clientCapabilities: Record<string, unknown>;
     approvalPolicy?: unknown;
     threadSandbox?: unknown;
     turnSandboxPolicy?: unknown;

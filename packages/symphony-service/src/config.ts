@@ -51,6 +51,13 @@ export function resolveEffectiveConfig(config: WorkflowConfigMap): EffectiveConf
     },
     codex: {
       command: asString(codex.command)?.trim() || "codex app-server",
+      clientName: resolveConfigString(codex.client_name) || process.env.SYMPHONY_CLIENT_NAME || "symphony",
+      clientVersion:
+        resolveConfigString(codex.client_version) ||
+        process.env.SYMPHONY_CLIENT_VERSION ||
+        process.env.npm_package_version ||
+        "unknown",
+      clientCapabilities: asObject(codex.client_capabilities),
       approvalPolicy: codex.approval_policy,
       threadSandbox: codex.thread_sandbox,
       turnSandboxPolicy: codex.turn_sandbox_policy,
@@ -93,6 +100,10 @@ function resolveEnvReference(value: string | null): string {
   }
 
   return value;
+}
+
+function resolveConfigString(value: unknown): string {
+  return resolveEnvReference(asString(value));
 }
 
 function normalizeStateLimits(value: unknown): Record<string, number> {
