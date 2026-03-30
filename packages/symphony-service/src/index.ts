@@ -12,3 +12,4 @@ export * from "./types";
 export * from "./validate";
 export * from "./workspace";
 export * from "./workflow";
+export * from "./worker";
