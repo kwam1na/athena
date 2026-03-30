@@ -123,6 +123,7 @@ describe("runIssueAttempt", () => {
       issue({ id: "1", identifier: "ATH-1", state: "Done" }),
     ]);
 
+    const logs: Array<{ message: string; details?: Record<string, unknown> }> = [];
     const result = await runIssueAttempt({
       issue: issue({ id: "1", identifier: "ATH-1", state: "Todo" }),
       attempt: 1,
@@ -136,6 +137,7 @@ describe("runIssueAttempt", () => {
       }),
       tracker,
       createCodexClient: () => codex as unknown as CodexAppServerClient,
+      onLog: (entry) => logs.push(entry),
     });
 
     expect(result.exit).toBe("normal");
@@ -145,6 +147,8 @@ describe("runIssueAttempt", () => {
     expect(codex.stops.length).toBe(1);
     expect((await readFile(join(result.workspacePath, "before.txt"), "utf8")).trim()).toBe("before");
     expect((await readFile(join(result.workspacePath, "after.txt"), "utf8")).trim()).toBe("after");
+    expect(logs.some((entry) => entry.details?.issue_id === "1" && entry.details?.issue_identifier === "ATH-1")).toBe(true);
+    expect(logs.some((entry) => entry.details?.session_id === "thread-1-turn-1")).toBe(true);
   });
 
   it("fails fast when before_run hook fails", async () => {
@@ -171,6 +175,7 @@ describe("runIssueAttempt", () => {
 
   it("runs after_run hook even when turn fails", async () => {
     const root = await mkdtemp(join(tmpdir(), "symphony-worker-turn-fail-"));
+    const logs: Array<{ message: string; details?: Record<string, unknown> }> = [];
 
     await expect(
       runIssueAttempt({
@@ -187,6 +192,7 @@ describe("runIssueAttempt", () => {
           issue({ id: "3", identifier: "ATH-3", state: "Todo" }),
         ]),
         createCodexClient: () => new FakeCodex("failed") as unknown as CodexAppServerClient,
+        onLog: (entry) => logs.push(entry),
       }),
     ).rejects.toMatchObject({
       code: "worker_turn_failed",
@@ -194,5 +200,8 @@ describe("runIssueAttempt", () => {
 
     const workspacePath = join(root, "ATH-3");
     expect((await readFile(join(workspacePath, "after.txt"), "utf8")).trim()).toBe("after");
+    expect(logs.some((entry) => entry.message.includes("action=turn outcome=failed"))).toBe(true);
+    expect(logs.some((entry) => entry.details?.issue_id === "3" && entry.details?.issue_identifier === "ATH-3")).toBe(true);
+    expect(logs.some((entry) => entry.details?.session_id === "thread-1-turn-1")).toBe(true);
   });
 });

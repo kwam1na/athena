@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { FSWatcher } from "node:fs";
 import type { WorkflowDocument } from "../src/types";
 import type { TrackerClient } from "../src/issue";
-import { createSymphonyService } from "../src/service";
+import { createSymphonyService, formatServiceLogLine } from "../src/service";
 
 class FakeTracker implements TrackerClient {
   async fetchCandidateIssues() {
@@ -159,7 +159,7 @@ describe("createSymphonyService", () => {
 
     await service.reloadWorkflow();
     expect(service.getSnapshot().pollIntervalMs).toBe(2500);
-    expect(warnings.some((msg) => msg.includes("reload failed"))).toBe(true);
+    expect(warnings.some((msg) => msg.includes("action=config_reload outcome=failed"))).toBe(true);
 
     await service.stop();
   });
@@ -222,5 +222,25 @@ describe("createSymphonyService", () => {
 
     await service.stop();
     vi.useRealTimers();
+  });
+});
+
+describe("formatServiceLogLine", () => {
+  it("renders stable key=value output including details", () => {
+    const line = formatServiceLogLine({
+      level: "info",
+      message: "action=dispatch outcome=completed",
+      details: {
+        issue_identifier: "ATH-1",
+        issue_id: "abc",
+        session_id: "thread-1-turn-2",
+      },
+    });
+
+    expect(line).toContain("level=info");
+    expect(line).toContain("action=dispatch outcome=completed");
+    expect(line).toContain("issue_id=abc");
+    expect(line).toContain("issue_identifier=ATH-1");
+    expect(line).toContain("session_id=thread-1-turn-2");
   });
 });
