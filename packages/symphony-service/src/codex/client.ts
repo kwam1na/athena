@@ -24,6 +24,9 @@ export type TurnOutcome = "completed" | "failed" | "cancelled" | "turn_timeout" 
 
 export interface CodexAppServerConfig {
   command: string;
+  clientName?: string;
+  clientVersion?: string;
+  clientCapabilities?: Record<string, unknown>;
   approvalPolicy?: unknown;
   threadSandbox?: unknown;
   turnSandboxPolicy?: unknown;
@@ -207,7 +210,13 @@ export class CodexAppServerClient {
   }
 
   private async initializeProtocol(): Promise<void> {
-    await this.sendRequest(createInitializeRequest(this.allocateRequestId()));
+    await this.sendRequest(
+      createInitializeRequest(this.allocateRequestId(), {
+        clientName: this.config.clientName,
+        clientVersion: this.config.clientVersion,
+        capabilities: this.config.clientCapabilities,
+      }),
+    );
     this.sendNotification(createInitializedNotification());
   }
 

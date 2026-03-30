@@ -15,6 +15,10 @@ describe("resolveEffectiveConfig", () => {
     expect(config.polling.intervalMs).toBe(30000);
     expect(config.workspace.root).toContain("symphony_workspaces");
     expect(config.codex.command).toBe("codex app-server");
+    expect(config.codex.clientName).toBe("symphony");
+    expect(typeof config.codex.clientVersion).toBe("string");
+    expect(config.codex.clientVersion.length).toBeGreaterThan(0);
+    expect(config.codex.clientCapabilities).toEqual({});
     expect(config.agent.maxConcurrentAgents).toBe(10);
   });
 
@@ -47,6 +51,22 @@ describe("resolveEffectiveConfig", () => {
       todo: 2,
       "in progress": 4,
     });
+  });
+
+  it("supports codex client metadata overrides", () => {
+    const config = resolveEffectiveConfig({
+      codex: {
+        client_name: "athena-symphony",
+        client_version: "2.4.6",
+        client_capabilities: {
+          tools: true,
+        },
+      },
+    });
+
+    expect(config.codex.clientName).toBe("athena-symphony");
+    expect(config.codex.clientVersion).toBe("2.4.6");
+    expect(config.codex.clientCapabilities).toEqual({ tools: true });
   });
 });
 

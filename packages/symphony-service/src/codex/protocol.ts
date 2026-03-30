@@ -8,16 +8,26 @@ export interface JsonRpcMessage {
 
 export type TurnTerminalState = "completed" | "failed" | "cancelled";
 
-export function createInitializeRequest(id: number): JsonRpcMessage {
+export interface InitializeRequestOptions {
+  clientName?: string;
+  clientVersion?: string;
+  capabilities?: Record<string, unknown>;
+}
+
+export function createInitializeRequest(id: number, options?: InitializeRequestOptions): JsonRpcMessage {
+  const clientName = options?.clientName?.trim() || "symphony";
+  const clientVersion =
+    options?.clientVersion?.trim() || process.env.SYMPHONY_CLIENT_VERSION || process.env.npm_package_version || "unknown";
+
   return {
     id,
     method: "initialize",
     params: {
       clientInfo: {
-        name: "symphony",
-        version: "0.1.0",
+        name: clientName,
+        version: clientVersion,
       },
-      capabilities: {},
+      capabilities: options?.capabilities ?? {},
     },
   };
 }

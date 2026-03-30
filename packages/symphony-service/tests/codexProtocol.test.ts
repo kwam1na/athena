@@ -20,6 +20,30 @@ describe("codex protocol builders", () => {
     expect(msg).toMatchObject({ id: 1, method: "initialize" });
   });
 
+  it("supports configurable client identity", () => {
+    const msg = createInitializeRequest(2, {
+      clientName: "athena-symphony",
+      clientVersion: "1.2.3",
+      capabilities: {
+        tools: true,
+      },
+    });
+
+    expect(msg).toMatchObject({
+      id: 2,
+      method: "initialize",
+      params: {
+        clientInfo: {
+          name: "athena-symphony",
+          version: "1.2.3",
+        },
+        capabilities: {
+          tools: true,
+        },
+      },
+    });
+  });
+
   it("builds thread/start and turn/start requests", () => {
     const thread = createThreadStartRequest(2, {
       cwd: "/tmp/workspace",

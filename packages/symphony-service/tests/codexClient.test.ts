@@ -69,4 +69,52 @@ for await (const line of rl) {
     expect(session.threadId).toBe("thread-abc");
     client.stop();
   });
+
+  it("uses configurable initialize client metadata", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "symphony-codex-mock-meta-"));
+    const serverPath = join(dir, "mock-app-server-meta.mjs");
+
+    await writeFile(
+      serverPath,
+      `
+import readline from "node:readline";
+const rl = readline.createInterface({ input: process.stdin });
+for await (const line of rl) {
+  const msg = JSON.parse(line);
+  if (msg.method === "initialize") {
+    const clientInfo = msg.params?.clientInfo ?? {};
+    const capabilities = msg.params?.capabilities ?? {};
+    if (clientInfo.name !== "athena-symphony" || clientInfo.version !== "9.9.9" || capabilities.tools !== true) {
+      console.log(JSON.stringify({ id: msg.id, error: { message: "bad client metadata" } }));
+      continue;
+    }
+
+    console.log(JSON.stringify({ id: msg.id, result: { protocolVersion: "test" } }));
+    continue;
+  }
+
+  if (msg.method === "thread/start") {
+    console.log(JSON.stringify({ id: msg.id, result: { thread: { id: "thread-meta" } } }));
+    continue;
+  }
+}
+`,
+      "utf8",
+    );
+
+    const client = new CodexAppServerClient({
+      command: `node ${serverPath}`,
+      clientName: "athena-symphony",
+      clientVersion: "9.9.9",
+      clientCapabilities: {
+        tools: true,
+      },
+      readTimeoutMs: 1000,
+      turnTimeoutMs: 1000,
+    });
+
+    const session = await client.startSession({ cwd: process.cwd() });
+    expect(session.threadId).toBe("thread-meta");
+    client.stop();
+  });
 });
