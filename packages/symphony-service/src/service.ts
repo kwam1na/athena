@@ -56,6 +56,11 @@ interface IssueLifecycleMetrics {
   continuationRuns: number;
 }
 
+interface InFlightGuardrailStop {
+  reason: "attempt_input_budget_exceeded_inflight";
+  observedInputTokens: number;
+}
+
 interface ServiceDependencies {
   loadWorkflowFile: (path: string) => Promise<WorkflowDocument>;
   watchWorkflowFile: (path: string, onReloadRequested: () => void) => FSWatcher;
@@ -216,6 +221,7 @@ export function createSymphonyService(options: CreateSymphonyServiceOptions): Sy
   const completionSignals = new Map<string, RuntimeSnapshotCompletedRow>();
   const issueEventBuffers = new Map<string, IssueEventBuffer>();
   const issueLifecycleMetrics = new Map<string, IssueLifecycleMetrics>();
+  const inFlightGuardrailStops = new Map<string, InFlightGuardrailStop>();
   const workerTasks = new Set<Promise<void>>();
   const guardrailNotifiedIssueIds = new Set<string>();
   let completedInputTokens = 0;
@@ -419,6 +425,65 @@ export function createSymphonyService(options: CreateSymphonyServiceOptions): Sy
 
     worker.stop();
     activeWorkers.delete(issueId);
+    inFlightGuardrailStops.delete(issueId);
+  }
+
+  function stopRunningIssueWorker(issueId: string): void {
+    const worker = activeWorkers.get(issueId);
+    if (!worker) {
+      return;
+    }
+
+    worker.stop();
+  }
+
+  function maybeTriggerInFlightAttemptGuardrail(issueId: string): void {
+    if (!config) {
+      return;
+    }
+
+    const worker = activeWorkers.get(issueId);
+    if (!worker) {
+      return;
+    }
+
+    if (worker.usage.inputTokens < config.agent.maxInputTokensPerAttempt) {
+      return;
+    }
+
+    if (inFlightGuardrailStops.has(issueId)) {
+      stopRunningIssueWorker(issueId);
+      return;
+    }
+
+    inFlightGuardrailStops.set(issueId, {
+      reason: "attempt_input_budget_exceeded_inflight",
+      observedInputTokens: worker.usage.inputTokens,
+    });
+
+    appendIssueEvent(issueId, worker.identifier, {
+      source: "service",
+      kind: "attempt_guardrail_blocked",
+      message: `In-flight attempt guardrail triggered (input_tokens=${worker.usage.inputTokens}, limit=${config.agent.maxInputTokensPerAttempt})`,
+      session_id: worker.sessionId,
+      turn_count: worker.turnCount,
+      retry_attempt: worker.retryAttempt,
+    });
+
+    emitLog({
+      level: "warn",
+      message: "action=worker outcome=guardrail_stop reason=attempt_input_budget_exceeded_inflight",
+      details: {
+        issue_id: worker.issueId,
+        issue_identifier: worker.identifier,
+        session_id: worker.sessionId ?? undefined,
+        turn_count: worker.turnCount,
+        input_tokens: worker.usage.inputTokens,
+        max_input_tokens_per_attempt: config.agent.maxInputTokensPerAttempt,
+      },
+    });
+
+    stopRunningIssueWorker(issueId);
   }
 
   function appendIssueEvent(
@@ -491,6 +556,7 @@ export function createSymphonyService(options: CreateSymphonyServiceOptions): Sy
 
   function clearIssueLifecycle(issueId: string): void {
     issueLifecycleMetrics.delete(issueId);
+    inFlightGuardrailStops.delete(issueId);
   }
 
   function evaluateGuardrails(issue: NormalizedIssue): string[] {
@@ -743,6 +809,7 @@ export function createSymphonyService(options: CreateSymphonyServiceOptions): Sy
     }
 
     guardrailNotifiedIssueIds.delete(input.issue.id);
+    inFlightGuardrailStops.delete(input.issue.id);
     getOrCreateIssueLifecycle(input.issue.id, input.issue.identifier);
     completionSignals.delete(input.issue.id);
     await moveIssueToInProgress(runtimeTracker, input.issue);
@@ -784,6 +851,7 @@ export function createSymphonyService(options: CreateSymphonyServiceOptions): Sy
     });
     worker.stop = () => codexClient.stop();
     activeWorkers.set(input.issue.id, worker);
+    maybeTriggerInFlightAttemptGuardrail(input.issue.id);
 
     const task = deps
       .runIssueAttempt({
@@ -803,6 +871,7 @@ export function createSymphonyService(options: CreateSymphonyServiceOptions): Sy
         },
       })
       .then(async (result) => {
+        inFlightGuardrailStops.delete(result.issue.id);
         const lifecycle = getOrCreateIssueLifecycle(result.issue.id, result.issue.identifier);
         lifecycle.lifecycleInputTokens += worker.usage.inputTokens;
 
@@ -930,6 +999,70 @@ export function createSymphonyService(options: CreateSymphonyServiceOptions): Sy
       .catch(async (error) => {
         const lifecycle = getOrCreateIssueLifecycle(input.issue.id, input.issue.identifier);
         lifecycle.lifecycleInputTokens += worker.usage.inputTokens;
+        const inFlightStop = inFlightGuardrailStops.get(input.issue.id);
+
+        if (inFlightStop) {
+          inFlightGuardrailStops.delete(input.issue.id);
+
+          const guardrailReasons: string[] = [
+            `attempt input token budget exceeded (${inFlightStop.observedInputTokens}/${runtimeConfig.agent.maxInputTokensPerAttempt} this attempt)`,
+          ];
+          if (lifecycle.lifecycleInputTokens >= runtimeConfig.agent.maxIssueInputTokens) {
+            guardrailReasons.push(
+              `lifecycle input token budget exceeded (${lifecycle.lifecycleInputTokens}/${runtimeConfig.agent.maxIssueInputTokens})`,
+            );
+          }
+
+          const retry = onWorkerExit(state, {
+            issueId: input.issue.id,
+            nowMs: deps.nowMs(),
+            reason: "normal",
+            maxRetryBackoffMs: runtimeConfig.agent.maxRetryBackoffMs,
+            allowContinuation: false,
+          });
+
+          if (!retry) {
+            state.claimed.delete(input.issue.id);
+          }
+
+          appendIssueEvent(input.issue.id, input.issue.identifier, {
+            source: "service",
+            kind: "attempt_guardrail_blocked",
+            message: "In-flight attempt guardrail blocked continuation (attempt_input_budget_exceeded)",
+            session_id: worker.sessionId,
+            turn_count: worker.turnCount,
+            retry_attempt: worker.retryAttempt,
+          });
+
+          appendIssueEvent(input.issue.id, input.issue.identifier, {
+            source: "service",
+            kind: "continuation_guardrail_blocked",
+            message: `Continuation blocked by guardrails: ${guardrailReasons.join(" | ")}`,
+            session_id: worker.sessionId,
+            turn_count: worker.turnCount,
+            retry_attempt: worker.retryAttempt,
+          });
+
+          await moveIssueToState(runtimeTracker, input.issue, runtimeConfig.tracker.handoffState);
+          await publishContinuationGuardrailComment(runtimeTracker, input.issue, {
+            reasons: guardrailReasons,
+            turnCount: worker.turnCount,
+            retryAttempt: worker.retryAttempt,
+            lifecycleInputTokens: lifecycle.lifecycleInputTokens,
+            maxIssueInputTokens: runtimeConfig.agent.maxIssueInputTokens,
+            continuationRuns: lifecycle.continuationRuns,
+            maxContinuationRunsPerIssue: runtimeConfig.agent.maxContinuationRunsPerIssue,
+            maxInputTokensPerAttempt: runtimeConfig.agent.maxInputTokensPerAttempt,
+          });
+
+          await publishRunComment(runtimeTracker, input.issue, {
+            kind: "completed",
+            attempt: input.attempt,
+          });
+
+          clearIssueLifecycle(input.issue.id);
+          return;
+        }
 
         const retry = onWorkerExit(state, {
           issueId: input.issue.id,
@@ -1231,6 +1364,8 @@ export function createSymphonyService(options: CreateSymphonyServiceOptions): Sy
       worker.latestRateLimits = event.rate_limits;
       latestRateLimits = event.rate_limits;
     }
+
+    maybeTriggerInFlightAttemptGuardrail(issueId);
 
     appendIssueEvent(issueId, worker.identifier, {
       timestamp: event.timestamp,
