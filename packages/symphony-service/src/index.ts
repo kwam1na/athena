@@ -4,6 +4,7 @@ export * from "./issue";
 export * from "./orchestrator";
 export * from "./retry";
 export * from "./scheduler";
+export * from "./startup";
 export * from "./template";
 export * from "./tracker/linear";
 export * from "./types";
