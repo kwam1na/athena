@@ -8,4 +8,5 @@ export * from "./template";
 export * from "./tracker/linear";
 export * from "./types";
 export * from "./validate";
+export * from "./workspace";
 export * from "./workflow";
