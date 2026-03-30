@@ -66,6 +66,8 @@ describe("runCliEntry", () => {
         throw new Error("startup failed");
       },
       onSignal: () => {},
+      onUncaughtException: () => {},
+      onUnhandledRejection: () => {},
       writeStderr: (line) => stderr.push(line),
       exit: (code) => exits.push(code),
     });
@@ -85,6 +87,8 @@ describe("runCliEntry", () => {
       onSignal: (signal, handler) => {
         signals[signal] = handler;
       },
+      onUncaughtException: () => {},
+      onUnhandledRejection: () => {},
       writeStderr: () => {},
       exit: (code) => exits.push(code),
     });
@@ -114,6 +118,8 @@ describe("runCliEntry", () => {
       onSignal: (signal, handler) => {
         signals[signal] = handler;
       },
+      onUncaughtException: () => {},
+      onUnhandledRejection: () => {},
       writeStderr: (line) => stderr.push(line),
       exit: (code) => exits.push(code),
     });
@@ -124,5 +130,65 @@ describe("runCliEntry", () => {
 
     expect(stderr.some((line) => line.includes("shutdown failed"))).toBe(true);
     expect(exits).toEqual([0]);
+  });
+
+  it("stops service and exits nonzero on uncaught exception", async () => {
+    const exits: number[] = [];
+    const stderr: string[] = [];
+    let uncaughtHandler: ((error: unknown) => void) | null = null;
+    const stop = vi.fn(async () => {});
+
+    await runCliEntry([], {
+      cwd: () => "/repo",
+      createService: () => makeService({ stop }),
+      onSignal: () => {},
+      onUncaughtException: (handler) => {
+        uncaughtHandler = handler;
+      },
+      onUnhandledRejection: () => {},
+      writeStderr: (line) => stderr.push(line),
+      exit: (code) => exits.push(code),
+    });
+
+    if (!uncaughtHandler) {
+      throw new Error("uncaught exception handler was not registered");
+    }
+    (uncaughtHandler as (error: unknown) => void)(new Error("boom"));
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(stop).toHaveBeenCalledTimes(1);
+    expect(stderr.some((line) => line.includes("fatal host error"))).toBe(true);
+    expect(exits).toEqual([1]);
+  });
+
+  it("stops service and exits nonzero on unhandled rejection", async () => {
+    const exits: number[] = [];
+    const stderr: string[] = [];
+    let rejectionHandler: ((reason: unknown) => void) | null = null;
+    const stop = vi.fn(async () => {});
+
+    await runCliEntry([], {
+      cwd: () => "/repo",
+      createService: () => makeService({ stop }),
+      onSignal: () => {},
+      onUncaughtException: () => {},
+      onUnhandledRejection: (handler) => {
+        rejectionHandler = handler;
+      },
+      writeStderr: (line) => stderr.push(line),
+      exit: (code) => exits.push(code),
+    });
+
+    if (!rejectionHandler) {
+      throw new Error("unhandled rejection handler was not registered");
+    }
+    (rejectionHandler as (reason: unknown) => void)(new Error("rejected"));
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(stop).toHaveBeenCalledTimes(1);
+    expect(stderr.some((line) => line.includes("fatal host error"))).toBe(true);
+    expect(exits).toEqual([1]);
   });
 });
