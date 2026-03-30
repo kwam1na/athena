@@ -256,51 +256,51 @@ function toIssueResponse(
   service: SymphonyService,
   issueIdentifier: string,
 ): Record<string, unknown> | null {
-  const runtime = service.getRuntimeSnapshot();
-  const running = runtime.running.find((row) => row.issue_identifier === issueIdentifier);
-  const retry = runtime.retrying.find((row) => row.issue_identifier === issueIdentifier);
-  const completed = runtime.completed.find((row) => row.issue_identifier === issueIdentifier);
-
-  if (!running && !retry && !completed) {
+  const issue = service.getRuntimeIssueSnapshot(issueIdentifier);
+  if (!issue) {
     return null;
   }
 
   return {
-    issue_identifier: issueIdentifier,
-    issue_id: running?.issue_id ?? retry?.issue_id ?? completed?.issue_id ?? "",
-    status: running ? "running" : retry ? "retrying" : "completed",
-    running: running
+    issue_identifier: issue.issue_identifier,
+    issue_id: issue.issue_id,
+    status: issue.status,
+    running: issue.running
       ? {
-          state: running.state,
-          session_id: running.session_id,
-          turn_count: running.turn_count,
-          retry_attempt: running.retry_attempt,
-          started_at: toIso(running.started_at_ms),
-          last_event_at: toIsoNullable(running.last_codex_timestamp_ms),
+          state: issue.running.state,
+          session_id: issue.running.session_id,
+          turn_count: issue.running.turn_count,
+          retry_attempt: issue.running.retry_attempt,
+          started_at: toIso(issue.running.started_at_ms),
+          last_event_at: toIsoNullable(issue.running.last_codex_timestamp_ms),
           tokens: {
-            input_tokens: running.codex_input_tokens,
-            output_tokens: running.codex_output_tokens,
-            total_tokens: running.codex_total_tokens,
+            input_tokens: issue.running.codex_input_tokens,
+            output_tokens: issue.running.codex_output_tokens,
+            total_tokens: issue.running.codex_total_tokens,
           },
         }
       : null,
-    retry: retry
+    retry: issue.retry
       ? {
-          attempt: retry.attempt,
-          due_at: toIso(retry.due_at_ms),
-          error: retry.error,
+          attempt: issue.retry.attempt,
+          due_at: toIso(issue.retry.due_at_ms),
+          error: issue.retry.error,
         }
       : null,
-    completed: completed
+    completed: issue.completed
       ? {
-          state: completed.state,
-          attempt: completed.attempt,
-          observed_at: toIso(completed.observed_at_ms),
-          done: completed.done,
+          state: issue.completed.state,
+          attempt: issue.completed.attempt,
+          observed_at: toIso(issue.completed.observed_at_ms),
+          done: issue.completed.done,
         }
       : null,
-    codex_totals: runtime.codex_totals,
-    rate_limits: runtime.rate_limits,
+    codex_totals: issue.codex_totals,
+    rate_limits: issue.rate_limits,
+    events: issue.events,
+    events_count: issue.events_count,
+    events_limit: issue.events_limit,
+    events_truncated: issue.events_truncated,
   };
 }
 
@@ -355,6 +355,20 @@ function renderDashboardHtml(state: StateApiResponse): string {
     button[disabled] {
       opacity: 0.5;
       cursor: not-allowed;
+    }
+    .issue-link {
+      border: none;
+      background: transparent;
+      color: #8dd3ff;
+      padding: 0;
+      border-radius: 0;
+      text-decoration: underline;
+      text-decoration-style: dotted;
+    }
+    .issue-link[data-selected="true"] {
+      color: #9bffb2;
+      text-decoration-style: solid;
+      font-weight: 700;
     }
     .card {
       border: 1px solid #263241;
@@ -411,6 +425,11 @@ function renderDashboardHtml(state: StateApiResponse): string {
     }
     a:hover {
       text-decoration: underline;
+    }
+    .activity-meta {
+      margin-bottom: 8px;
+      color: #a9bfd8;
+      font-size: 12px;
     }
     @media (max-width: 860px) {
       .stats {
@@ -498,6 +517,28 @@ function renderDashboardHtml(state: StateApiResponse): string {
     </div>
 
     <div class="card">
+      <h2>Issue Activity</h2>
+      <div id="activity-meta" class="activity-meta">Select a running or retrying issue to inspect timeline events.</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Seq</th>
+            <th>Timestamp</th>
+            <th>Source</th>
+            <th>Kind</th>
+            <th>Message</th>
+            <th>Session</th>
+            <th>Turn</th>
+            <th>Retry</th>
+            <th>Tokens</th>
+          </tr>
+        </thead>
+        <tbody id="activity-body"></tbody>
+      </table>
+      <div id="activity-empty" class="empty">No issue selected.</div>
+    </div>
+
+    <div class="card">
       <h2>Rate Limits</h2>
       <pre id="rate-limits"></pre>
       <div class="muted">API endpoints: <code>/api/v1/state</code>, <code>/api/v1/refresh</code></div>
@@ -507,6 +548,12 @@ function renderDashboardHtml(state: StateApiResponse): string {
     const initialState = ${initialStateJson};
     const refreshBtn = document.getElementById("refresh-btn");
     const refreshStatus = document.getElementById("refresh-status");
+    const runningBody = document.getElementById("running-body");
+    const retryingBody = document.getElementById("retrying-body");
+    const activityBody = document.getElementById("activity-body");
+    const activityMeta = document.getElementById("activity-meta");
+    const activityEmpty = document.getElementById("activity-empty");
+    let selectedIssueIdentifier = null;
 
     function esc(value) {
       return String(value)
@@ -529,6 +576,24 @@ function renderDashboardHtml(state: StateApiResponse): string {
       return value.toLocaleString();
     }
 
+    function renderIssueCell(issueIdentifier) {
+      const selected = selectedIssueIdentifier === issueIdentifier ? ' data-selected="true"' : "";
+      return \`<button type="button" class="issue-link" data-issue-id="\${esc(issueIdentifier)}"\${selected}>\${esc(issueIdentifier)}</button>\`;
+    }
+
+    function formatTokensFromUsage(usage) {
+      if (!usage || typeof usage !== "object") {
+        return "—";
+      }
+      const total = typeof usage.total_tokens === "number" ? usage.total_tokens : null;
+      const input = typeof usage.input_tokens === "number" ? usage.input_tokens : null;
+      const output = typeof usage.output_tokens === "number" ? usage.output_tokens : null;
+      if (total === null && input === null && output === null) {
+        return "—";
+      }
+      return \`\${formatNumber(total ?? (input ?? 0) + (output ?? 0))} (in:\${formatNumber(input ?? 0)} out:\${formatNumber(output ?? 0)})\`;
+    }
+
     function renderRows(state) {
       document.getElementById("generated-at").textContent = state.generated_at || "";
       document.getElementById("count-running").textContent = formatNumber(state.counts?.running ?? 0);
@@ -543,10 +608,9 @@ function renderDashboardHtml(state: StateApiResponse): string {
       const retrying = Array.isArray(state.retrying) ? state.retrying : [];
       const completed = Array.isArray(state.completed) ? state.completed : [];
 
-      const runningBody = document.getElementById("running-body");
       runningBody.innerHTML = running
         .map((row) => \`<tr>
-          <td><a href="/api/v1/\${encodeURIComponent(row.issue_identifier)}">\${esc(row.issue_identifier)}</a></td>
+          <td>\${renderIssueCell(row.issue_identifier)}</td>
           <td>\${esc(row.state)}</td>
           <td>\${formatNumber(row.turn_count)}</td>
           <td>\${formatNumber(row.retry_attempt)}</td>
@@ -558,10 +622,9 @@ function renderDashboardHtml(state: StateApiResponse): string {
         .join("");
       document.getElementById("running-empty").style.display = running.length > 0 ? "none" : "block";
 
-      const retryingBody = document.getElementById("retrying-body");
       retryingBody.innerHTML = retrying
         .map((row) => \`<tr>
-          <td><a href="/api/v1/\${encodeURIComponent(row.issue_identifier)}">\${esc(row.issue_identifier)}</a></td>
+          <td>\${renderIssueCell(row.issue_identifier)}</td>
           <td>\${formatNumber(row.attempt)}</td>
           <td>\${formatDate(row.due_at)}</td>
           <td>\${esc(row.error)}</td>
@@ -585,12 +648,76 @@ function renderDashboardHtml(state: StateApiResponse): string {
       document.getElementById("rate-limits").textContent = rateLimits;
     }
 
+    function renderIssueActivity(issueResponse) {
+      if (!selectedIssueIdentifier) {
+        activityBody.innerHTML = "";
+        activityEmpty.textContent = "No issue selected.";
+        activityEmpty.style.display = "block";
+        activityMeta.textContent = "Select a running or retrying issue to inspect timeline events.";
+        return;
+      }
+
+      if (!issueResponse) {
+        activityBody.innerHTML = "";
+        activityEmpty.textContent = \`Issue \${selectedIssueIdentifier} is no longer visible in runtime state.\`;
+        activityEmpty.style.display = "block";
+        activityMeta.textContent = "Issue detail unavailable.";
+        return;
+      }
+
+      const events = Array.isArray(issueResponse.events) ? [...issueResponse.events].sort((a, b) => b.seq - a.seq) : [];
+      const running = issueResponse.running;
+      const retry = issueResponse.retry;
+      const statusLabel = issueResponse.status || "unknown";
+      const turns = running ? running.turn_count : "—";
+      const retryAttempt = running ? running.retry_attempt : (retry ? retry.attempt : "—");
+      activityMeta.textContent = \`Issue \${selectedIssueIdentifier} | status: \${statusLabel} | turns: \${turns} | retry: \${retryAttempt} | events: \${formatNumber(issueResponse.events_count ?? events.length)} / \${formatNumber(issueResponse.events_limit ?? 0)}\${issueResponse.events_truncated ? " (truncated)" : ""}\`;
+
+      activityBody.innerHTML = events
+        .map((event) => \`<tr>
+          <td>\${formatNumber(event.seq)}</td>
+          <td>\${formatDate(event.timestamp)}</td>
+          <td>\${esc(event.source ?? "—")}</td>
+          <td>\${esc(event.kind ?? "—")}</td>
+          <td>\${esc(event.message ?? "—")}</td>
+          <td>\${esc(event.session_id ?? "—")}</td>
+          <td>\${event.turn_count == null ? "—" : formatNumber(event.turn_count)}</td>
+          <td>\${event.retry_attempt == null ? "—" : formatNumber(event.retry_attempt)}</td>
+          <td>\${formatTokensFromUsage(event.usage)}</td>
+        </tr>\`)
+        .join("");
+
+      activityEmpty.textContent = "No events yet.";
+      activityEmpty.style.display = events.length > 0 ? "none" : "block";
+    }
+
     async function fetchState() {
       const response = await fetch("/api/v1/state");
       if (!response.ok) {
         throw new Error(\`state request failed: \${response.status}\`);
       }
       return await response.json();
+    }
+
+    async function fetchIssue(issueIdentifier) {
+      const response = await fetch(\`/api/v1/\${encodeURIComponent(issueIdentifier)}\`);
+      if (response.status === 404) {
+        return null;
+      }
+      if (!response.ok) {
+        throw new Error(\`issue request failed: \${response.status}\`);
+      }
+      return await response.json();
+    }
+
+    async function refreshSelectedIssue() {
+      if (!selectedIssueIdentifier) {
+        renderIssueActivity(null);
+        return;
+      }
+
+      const issueResponse = await fetchIssue(selectedIssueIdentifier);
+      renderIssueActivity(issueResponse);
     }
 
     async function refreshNow() {
@@ -603,6 +730,7 @@ function renderDashboardHtml(state: StateApiResponse): string {
         }
         const state = await fetchState();
         renderRows(state);
+        await refreshSelectedIssue();
         refreshStatus.textContent = "updated";
       } catch (error) {
         refreshStatus.textContent = String(error instanceof Error ? error.message : error);
@@ -615,16 +743,33 @@ function renderDashboardHtml(state: StateApiResponse): string {
       try {
         const state = await fetchState();
         renderRows(state);
+        await refreshSelectedIssue();
       } catch (error) {
         refreshStatus.textContent = String(error instanceof Error ? error.message : error);
       }
     }
+
+    document.addEventListener("click", (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement) || !target.classList.contains("issue-link")) {
+        return;
+      }
+
+      const nextIssueIdentifier = target.getAttribute("data-issue-id");
+      if (!nextIssueIdentifier) {
+        return;
+      }
+
+      selectedIssueIdentifier = nextIssueIdentifier;
+      void pollState();
+    });
 
     refreshBtn.addEventListener("click", () => {
       void refreshNow();
     });
 
     renderRows(initialState);
+    renderIssueActivity(null);
     setInterval(() => {
       void pollState();
     }, 2000);

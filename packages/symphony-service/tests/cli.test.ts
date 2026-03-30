@@ -32,6 +32,9 @@ function makeService(overrides?: Partial<SymphonyService>): SymphonyService {
         rate_limits: null,
       };
     },
+    getRuntimeIssueSnapshot() {
+      return null;
+    },
     ...overrides,
   };
 }

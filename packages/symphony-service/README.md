@@ -29,9 +29,22 @@ When enabled (`--port` or `server.port` in `WORKFLOW.md`), the service exposes:
 - `GET /api/v1/state`
 - `GET /api/v1/<issue_identifier>`
 - `POST /api/v1/refresh`
+ 
+`/api/v1/state` includes `completed` delivery signals (issue, final state, attempt, observed timestamp), and
+`GET /api/v1/<issue_identifier>` can return `status: "completed"` when a done signal is present in runtime state.
 
-`/api/v1/state` now includes `completed` delivery signals (issue, final state, attempt, observed timestamp), and
-`/api/v1/<issue_identifier>` can return `status: "completed"` when a done signal is present in runtime state.
+`GET /api/v1/<issue_identifier>` now includes bounded in-memory timeline visibility fields for active issues:
+
+- `events` (structured lifecycle + codex activity records)
+- `events_count`
+- `events_limit` (currently `200`)
+- `events_truncated` (true when older events were dropped)
+
+Dashboard behavior:
+
+- Click any running/retrying issue to open the inline **Issue Activity** panel.
+- Timeline updates on the existing 2-second polling cadence.
+- Timelines are in-memory only and reset when the Symphony process restarts.
 
 ## Commands
 

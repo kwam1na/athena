@@ -67,8 +67,137 @@ function makeService(overrides?: Partial<SymphonyService>): SymphonyService {
         },
       };
     },
+    getRuntimeIssueSnapshot(issueIdentifier: string) {
+      if (issueIdentifier === "ATH-101") {
+        return {
+          issue_identifier: "ATH-101",
+          issue_id: "issue-2",
+          status: "retrying",
+          running: null,
+          retry: {
+            issue_id: "issue-2",
+            issue_identifier: "ATH-101",
+            attempt: 2,
+            due_at_ms: 1_700_000_010_000,
+            error: "no available orchestrator slots",
+          },
+          codex_totals: {
+            input_tokens: 30,
+            output_tokens: 12,
+            total_tokens: 42,
+            seconds_running: 180,
+          },
+          rate_limits: {
+            rpm: {
+              remaining: 900,
+            },
+          },
+          events: [],
+          events_count: 0,
+          events_limit: 200,
+          events_truncated: false,
+        };
+      }
+
+      if (issueIdentifier === "ATH-102") {
+        return {
+          issue_identifier: "ATH-102",
+          issue_id: "issue-3",
+          status: "completed",
+          running: null,
+          retry: null,
+          completed: {
+            issue_id: "issue-3",
+            issue_identifier: "ATH-102",
+            state: "Human Review",
+            attempt: 1,
+            observed_at_ms: 1_700_000_020_000,
+            done: true,
+          },
+          codex_totals: {
+            input_tokens: 30,
+            output_tokens: 12,
+            total_tokens: 42,
+            seconds_running: 180,
+          },
+          rate_limits: {
+            rpm: {
+              remaining: 900,
+            },
+          },
+          events: [],
+          events_count: 0,
+          events_limit: 200,
+          events_truncated: false,
+        };
+      }
+
+      if (issueIdentifier !== "ATH-100") {
+        return null;
+      }
+
+      return {
+        issue_identifier: "ATH-100",
+        issue_id: "issue-1",
+        status: "running",
+        running: {
+          state: "In Progress",
+          session_id: "thread-1-turn-1",
+          turn_count: 3,
+          retry_attempt: 1,
+          started_at_ms: 1_700_000_000_000,
+          last_codex_timestamp_ms: 1_700_000_000_500,
+          codex_input_tokens: 10,
+          codex_output_tokens: 4,
+          codex_total_tokens: 14,
+        },
+        retry: null,
+        completed: null,
+        codex_totals: {
+          input_tokens: 30,
+          output_tokens: 12,
+          total_tokens: 42,
+          seconds_running: 180,
+        },
+        rate_limits: {
+          rpm: {
+            remaining: 900,
+          },
+        },
+        events: [
+          {
+            seq: 1,
+            timestamp: "2026-03-30T00:00:00.000Z",
+            source: "service",
+            kind: "dispatch_started",
+            message: "Dispatch started for ATH-100",
+            session_id: null,
+            turn_count: 0,
+            retry_attempt: 1,
+          },
+          {
+            seq: 2,
+            timestamp: "2026-03-30T00:00:01.000Z",
+            source: "codex",
+            kind: "codex_notification",
+            message: "Codex notification received",
+            session_id: "thread-1-turn-1",
+            turn_count: 0,
+            retry_attempt: 1,
+            usage: {
+              input_tokens: 10,
+              output_tokens: 4,
+              total_tokens: 14,
+            },
+          },
+        ],
+        events_count: 2,
+        events_limit: 200,
+        events_truncated: false,
+      };
+    },
     ...overrides,
-  };
+  } as SymphonyService;
 }
 
 describe("status server", () => {
@@ -83,6 +212,7 @@ describe("status server", () => {
       expect(rootResponse.status).toBe(200);
       const rootBody = await rootResponse.text();
       expect(rootBody).toContain("Symphony Runtime Status");
+      expect(rootBody).toContain("Issue Activity");
 
       const stateResponse = await fetch(`http://${statusServer.host}:${statusServer.port}/api/v1/state`);
       expect(stateResponse.status).toBe(200);
@@ -112,6 +242,11 @@ describe("status server", () => {
       const runningBody = (await runningResponse.json()) as Record<string, any>;
       expect(runningBody.status).toBe("running");
       expect(runningBody.issue_id).toBe("issue-1");
+      expect(runningBody.events_count).toBe(2);
+      expect(runningBody.events_limit).toBe(200);
+      expect(runningBody.events_truncated).toBe(false);
+      expect(runningBody.events[0].kind).toBe("dispatch_started");
+      expect(runningBody.events[1].kind).toBe("codex_notification");
 
       const retryResponse = await fetch(`http://${statusServer.host}:${statusServer.port}/api/v1/ATH-101`);
       expect(retryResponse.status).toBe(200);
