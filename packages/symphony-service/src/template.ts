@@ -8,7 +8,7 @@ const liquid = new Liquid({
 });
 
 export async function renderPromptTemplate(template: string, input: PromptTemplateInput): Promise<string> {
-  let parsed: unknown;
+  let parsed: ReturnType<Liquid["parse"]>;
   try {
     parsed = liquid.parse(template);
   } catch (error) {

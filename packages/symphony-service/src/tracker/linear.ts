@@ -195,15 +195,15 @@ export class LinearTrackerClient implements TrackerClient {
     let after: string | null = null;
 
     while (true) {
-      const response = await this.graphqlRequest<IssueConnection>(query, {
+      const response: IssueConnection = await this.graphqlRequest<IssueConnection>(query, {
         ...baseVariables,
         after,
         first: this.pageSize,
       });
 
-      const connection = response.issues;
+      const connection: IssueConnection["issues"] = response.issues;
       const nodes = connection?.nodes;
-      const pageInfo = connection?.pageInfo;
+      const pageInfo: NonNullable<IssueConnection["issues"]>["pageInfo"] = connection?.pageInfo;
 
       if (!Array.isArray(nodes) || !pageInfo) {
         throw new SymphonyError("linear_unknown_payload", "Linear response missing issues connection fields");
@@ -213,7 +213,7 @@ export class LinearTrackerClient implements TrackerClient {
       all.push(...normalized);
 
       const hasNextPage = Boolean(pageInfo.hasNextPage);
-      const endCursor = pageInfo.endCursor ?? null;
+      const endCursor: string | null = pageInfo.endCursor ?? null;
 
       if (!hasNextPage) {
         return all;
