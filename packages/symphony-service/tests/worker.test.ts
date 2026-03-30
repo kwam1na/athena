@@ -73,15 +73,17 @@ class FakeCodex {
 }
 
 function config(root: string, overrides?: Partial<EffectiveConfig>): EffectiveConfig {
+  const trackerOverrides = overrides?.tracker;
+
   return {
     tracker: {
-      kind: "linear",
-      endpoint: "https://api.linear.app/graphql",
-      apiKey: "key",
-      projectSlug: "ATH",
-      activeStates: ["Todo", "In Progress"],
-      terminalStates: ["Done", "Closed"],
-      ...overrides?.tracker,
+      kind: trackerOverrides?.kind ?? "linear",
+      endpoint: trackerOverrides?.endpoint ?? "https://api.linear.app/graphql",
+      apiKey: trackerOverrides?.apiKey ?? "key",
+      projectSlug: trackerOverrides?.projectSlug ?? "ATH",
+      handoffState: trackerOverrides?.handoffState ?? "Human Review",
+      activeStates: trackerOverrides?.activeStates ?? ["Todo", "In Progress"],
+      terminalStates: trackerOverrides?.terminalStates ?? ["Done", "Closed"],
     },
     polling: {
       intervalMs: 30_000,

@@ -20,6 +20,7 @@ export function resolveEffectiveConfig(config: WorkflowConfigMap): EffectiveConf
 
   const trackerApiKey = resolveEnvReference(asString(tracker.api_key));
   const trackerProjectSlug = asString(tracker.project_slug);
+  const trackerHandoffState = asString(tracker.handoff_state)?.trim() || "Human Review";
 
   return {
     tracker: {
@@ -27,6 +28,7 @@ export function resolveEffectiveConfig(config: WorkflowConfigMap): EffectiveConf
       endpoint: trackerEndpoint,
       apiKey: trackerApiKey || undefined,
       projectSlug: trackerProjectSlug || undefined,
+      handoffState: trackerHandoffState,
       activeStates: asStringArray(tracker.active_states) ?? defaultActiveStates,
       terminalStates: asStringArray(tracker.terminal_states) ?? defaultTerminalStates,
     },

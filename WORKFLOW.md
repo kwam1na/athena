@@ -3,6 +3,7 @@ tracker:
   kind: linear
   api_key: $LINEAR_API_KEY
   project_slug: 22769268c360
+  handoff_state: Human Review
 polling:
   interval_ms: 30000
 workspace:
@@ -65,3 +66,5 @@ Execution requirements:
 - Follow red-green where practical.
 - Use branch names with codex/ prefix.
 - PR body must include sections: Summary, Why, Validation.
+- When implementation is complete, move the issue to the handoff state (`Human Review`) or `Done` if handoff is unavailable.
+- Add a completion update that includes: PR link, package scope, validation commands/results, and any unresolved risks.

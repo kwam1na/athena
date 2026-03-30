@@ -103,9 +103,19 @@ export interface RuntimeSnapshotRetryRow {
   error: string;
 }
 
+export interface RuntimeSnapshotCompletedRow {
+  issue_id: string;
+  issue_identifier: string;
+  state: string;
+  attempt: number;
+  observed_at_ms: number;
+  done: boolean;
+}
+
 export interface RuntimeSnapshot {
   running: RuntimeSnapshotRunningRow[];
   retrying: RuntimeSnapshotRetryRow[];
+  completed: RuntimeSnapshotCompletedRow[];
   codex_totals: {
     input_tokens: number;
     output_tokens: number;
@@ -154,6 +164,7 @@ export function createSymphonyService(options: CreateSymphonyServiceOptions): Sy
   let started = false;
 
   const activeWorkers = new Map<string, ActiveWorker>();
+  const completionSignals = new Map<string, RuntimeSnapshotCompletedRow>();
   const workerTasks = new Set<Promise<void>>();
   const guardrailNotifiedIssueIds = new Set<string>();
   let completedInputTokens = 0;
@@ -437,6 +448,52 @@ export function createSymphonyService(options: CreateSymphonyServiceOptions): Sy
     });
   }
 
+  async function publishCompletionSignalComment(
+    trackerClient: TrackerClient,
+    issue: NormalizedIssue,
+    input: {
+      attempt: number;
+      finalState: string;
+      observedAtIso: string;
+    },
+  ): Promise<void> {
+    if (!trackerClient.createIssueComment) {
+      return;
+    }
+
+    const body = [
+      "Symphony emitted a delivery complete signal for this issue.",
+      "",
+      "## Completion Signal",
+      `- done: true`,
+      `- final_state: ${input.finalState}`,
+      `- attempt: ${input.attempt}`,
+      `- observed_at: ${input.observedAtIso}`,
+      "",
+      "Operator verification:",
+      "- Confirm PR body includes Summary, Why, and Validation.",
+      "- Confirm required package-scoped validation passed.",
+    ].join("\n");
+
+    await safeTrackerWrite("delivery_complete_signal", issue, async () => {
+      await trackerClient.createIssueComment?.({
+        issueId: issue.id,
+        body,
+      });
+    });
+  }
+
+  function recordCompletionSignal(issue: NormalizedIssue, attempt: number, observedAtMs: number): void {
+    completionSignals.set(issue.id, {
+      issue_id: issue.id,
+      issue_identifier: issue.identifier,
+      state: issue.state,
+      attempt,
+      observed_at_ms: observedAtMs,
+      done: true,
+    });
+  }
+
   async function safeTrackerWrite(kind: string, issue: NormalizedIssue, writer: () => Promise<void>): Promise<void> {
     try {
       await writer();
@@ -478,6 +535,7 @@ export function createSymphonyService(options: CreateSymphonyServiceOptions): Sy
     }
 
     guardrailNotifiedIssueIds.delete(input.issue.id);
+    completionSignals.delete(input.issue.id);
     await moveIssueToInProgress(runtimeTracker, input.issue);
     await publishRunComment(runtimeTracker, input.issue, {
       kind: "started",
@@ -526,7 +584,7 @@ export function createSymphonyService(options: CreateSymphonyServiceOptions): Sy
           });
         },
       })
-      .then(async () => {
+      .then(async (result) => {
         onWorkerExit(state, {
           issueId: input.issue.id,
           nowMs: deps.nowMs(),
@@ -534,10 +592,20 @@ export function createSymphonyService(options: CreateSymphonyServiceOptions): Sy
           maxRetryBackoffMs: runtimeConfig.agent.maxRetryBackoffMs,
         });
 
-        await publishRunComment(runtimeTracker, input.issue, {
+        await publishRunComment(runtimeTracker, result.issue, {
           kind: "completed",
           attempt: input.attempt,
         });
+
+        if (isDoneSignalState(result.issue.state, runtimeConfig)) {
+          const observedAtMs = deps.nowMs();
+          recordCompletionSignal(result.issue, input.attempt, observedAtMs);
+          await publishCompletionSignalComment(runtimeTracker, result.issue, {
+            attempt: input.attempt,
+            finalState: result.issue.state,
+            observedAtIso: new Date(observedAtMs).toISOString(),
+          });
+        }
       })
       .catch(async (error) => {
         onWorkerExit(state, {
@@ -672,6 +740,10 @@ export function createSymphonyService(options: CreateSymphonyServiceOptions): Sy
       }))
       .sort((a, b) => a.due_at_ms - b.due_at_ms);
 
+    const completed: RuntimeSnapshotCompletedRow[] = Array.from(completionSignals.values()).sort(
+      (a, b) => b.observed_at_ms - a.observed_at_ms,
+    );
+
     let activeInputTokens = 0;
     let activeOutputTokens = 0;
     let activeTotalTokens = 0;
@@ -687,6 +759,7 @@ export function createSymphonyService(options: CreateSymphonyServiceOptions): Sy
     return {
       running,
       retrying,
+      completed,
       codex_totals: {
         input_tokens: completedInputTokens + activeInputTokens,
         output_tokens: completedOutputTokens + activeOutputTokens,
@@ -872,6 +945,19 @@ function hasRecognizedPackageLabel(labels: string[]): boolean {
   }
 
   return false;
+}
+
+function isDoneSignalState(stateName: string, config: EffectiveConfig): boolean {
+  const normalized = stateName.trim().toLowerCase();
+  if (!normalized) {
+    return false;
+  }
+
+  if (normalized === config.tracker.handoffState.trim().toLowerCase()) {
+    return true;
+  }
+
+  return config.tracker.terminalStates.some((state) => state.trim().toLowerCase() === normalized);
 }
 
 function buildRunCommentBody(input: { kind: "started" | "completed" | "failed"; attempt: number; error?: string }): string {

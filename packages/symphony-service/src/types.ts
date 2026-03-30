@@ -29,6 +29,7 @@ export interface EffectiveConfig {
     endpoint: string;
     apiKey?: string;
     projectSlug?: string;
+    handoffState: string;
     activeStates: string[];
     terminalStates: string[];
   };

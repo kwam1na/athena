@@ -22,6 +22,7 @@ function makeService(overrides?: Partial<SymphonyService>): SymphonyService {
       return {
         running: [],
         retrying: [],
+        completed: [],
         codex_totals: {
           input_tokens: 0,
           output_tokens: 0,

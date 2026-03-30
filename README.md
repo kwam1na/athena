@@ -33,3 +33,5 @@ bun run symphony:watch
 ```
 
 See the detailed runbook in [docs/symphony-athena-packages.md](./docs/symphony-athena-packages.md).
+
+Symphony runtime status includes running/retrying plus delivery-complete issue signals via the status dashboard/API.

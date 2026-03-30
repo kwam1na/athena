@@ -20,6 +20,7 @@ describe("resolveEffectiveConfig", () => {
     expect(config.codex.clientVersion.length).toBeGreaterThan(0);
     expect(config.codex.clientCapabilities).toEqual({});
     expect(config.agent.maxConcurrentAgents).toBe(10);
+    expect(config.tracker.handoffState).toBe("Human Review");
   });
 
   it("resolves tracker api key from env indirection", () => {
@@ -67,6 +68,16 @@ describe("resolveEffectiveConfig", () => {
     expect(config.codex.clientName).toBe("athena-symphony");
     expect(config.codex.clientVersion).toBe("2.4.6");
     expect(config.codex.clientCapabilities).toEqual({ tools: true });
+  });
+
+  it("supports tracker handoff state override", () => {
+    const config = resolveEffectiveConfig({
+      tracker: {
+        handoff_state: "Ready for Review",
+      },
+    });
+
+    expect(config.tracker.handoffState).toBe("Ready for Review");
   });
 });
 
