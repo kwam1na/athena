@@ -229,6 +229,75 @@ for await (const line of rl) {
     }
   });
 
+  it("sends decision field for command execution approval requests", async () => {
+    const serverPath = await writeMockServer(
+      "command-exec-approval",
+      `
+import readline from "node:readline";
+
+let approvalHandled = false;
+const rl = readline.createInterface({ input: process.stdin });
+for await (const line of rl) {
+  const msg = JSON.parse(line);
+
+  if (msg.method === "initialize") {
+    console.log(JSON.stringify({ id: msg.id, result: { protocolVersion: "test" } }));
+    continue;
+  }
+
+  if (msg.method === "thread/start") {
+    console.log(JSON.stringify({ id: msg.id, result: { thread: { id: "thread-cmd" } } }));
+    continue;
+  }
+
+  if (msg.method === "turn/start") {
+    console.log(JSON.stringify({ id: msg.id, result: { turnId: "turn-cmd-1" } }));
+    console.log(JSON.stringify({ id: "approval-cmd-1", method: "item/commandExecution/requestApproval", params: { command: "echo hi" } }));
+    continue;
+  }
+
+  if (msg.id === "approval-cmd-1") {
+    if (!msg.result || msg.result.decision !== "approved" || msg.result.approved !== true) {
+      process.exitCode = 1;
+      break;
+    }
+    approvalHandled = true;
+  }
+
+  if (approvalHandled) {
+    console.log(JSON.stringify({
+      method: "turn/completed",
+      params: {
+        usage: { input_tokens: 3, output_tokens: 2, total_tokens: 5 },
+      }
+    }));
+  }
+}
+`,
+    );
+
+    const client = new CodexAppServerClient({
+      command: `node ${serverPath}`,
+      readTimeoutMs: 1000,
+      turnTimeoutMs: 1000,
+    });
+
+    try {
+      const session = await client.startSession({ cwd: process.cwd() });
+      const turn = await client.runTurn({
+        threadId: session.threadId,
+        cwd: process.cwd(),
+        title: "ATH-8",
+        prompt: "run",
+      });
+
+      expect(turn.outcome).toBe("completed");
+      expect(turn.usage).toEqual({ input_tokens: 3, output_tokens: 2, total_tokens: 5 });
+    } finally {
+      client.stop();
+    }
+  });
+
   it("uses configurable initialize client metadata", async () => {
     const serverPath = await writeMockServer(
       "metadata",

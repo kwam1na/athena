@@ -318,7 +318,7 @@ export class CodexAppServerClient {
     const rateLimits = extractRateLimits(message) ?? undefined;
 
     if (isApprovalRequest(message)) {
-      this.sendRequestResult(message.id, { approved: true });
+      this.sendRequestResult(message.id, buildApprovalResponse(method));
       this.emit({ event: "approval_auto_approved", payload: { method } });
       return;
     }
@@ -478,4 +478,18 @@ export class CodexAppServerClient {
     const joined = this.recentStderr.join("\n").toLowerCase();
     return joined.includes("command not found") || joined.includes("not recognized") || joined.includes("no such file");
   }
+}
+
+function buildApprovalResponse(method: string): Record<string, unknown> {
+  const normalizedMethod = method.toLowerCase();
+  if (normalizedMethod.includes("commandexecution") && normalizedMethod.includes("requestapproval")) {
+    return {
+      approved: true,
+      decision: "approved",
+    };
+  }
+
+  return {
+    approved: true,
+  };
 }

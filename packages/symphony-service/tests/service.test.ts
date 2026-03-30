@@ -937,6 +937,113 @@ describe("createSymphonyService", () => {
     await service.stop();
   });
 
+  it("moves issue to handoff and blocks retry when in-flight attempt input budget is exceeded", async () => {
+    const comments: string[] = [];
+    const transitioned: string[] = [];
+    let releaseWorker: (() => void) | null = null;
+    let stopCalled = false;
+    let stopRequested = false;
+    const candidates = [
+      issue({
+        id: "inflight-guardrail-1",
+        identifier: "ATH-902",
+        state: "Todo",
+        labels: ["pkg:symphony-service"],
+        description: "Harden runtime behavior with clear acceptance criteria and validation details.",
+        team_id: "team-1",
+      }),
+    ];
+
+    const service = createSymphonyService({
+      workflowPath: "/tmp/WORKFLOW.md",
+      deps: {
+        loadWorkflowFile: async () => workflow(1000),
+        createTracker: () => ({
+          async fetchCandidateIssues() {
+            return candidates.splice(0, candidates.length);
+          },
+          async fetchIssuesByStates() {
+            return [];
+          },
+          async fetchIssueStatesByIds() {
+            return [];
+          },
+          async createIssueComment(input) {
+            comments.push(input.body);
+          },
+          async updateIssueStateByName(input) {
+            transitioned.push(`${input.issue.identifier}:${input.stateName}`);
+            return true;
+          },
+        }),
+        createCodexClient: (_config, onEvent) => {
+          onEvent?.({
+            event: "notification",
+            timestamp: new Date().toISOString(),
+            session_id: "thread-902-turn-1",
+            usage: {
+              input_tokens: 175_000,
+              output_tokens: 22,
+              total_tokens: 175_022,
+            },
+          });
+
+          return {
+            async startSession() {
+              return { threadId: "thread-902" };
+            },
+            async runTurn() {
+              return { turnId: "turn-1", sessionId: "thread-902-turn-1", outcome: "completed" as const };
+            },
+            stop() {
+              stopCalled = true;
+              stopRequested = true;
+              releaseWorker?.();
+            },
+          };
+        },
+        cleanupTerminalIssueWorkspaces: async () => ({ removed: 0, failed: 0, warnings: [] }),
+        processDueRetries: async () => ({
+          processedIssueIds: [],
+          dispatchedIssueIds: [],
+          requeuedIssueIds: [],
+          releasedIssueIds: [],
+        }),
+        setIntervalFn: () => 1 as unknown as ReturnType<typeof setInterval>,
+        clearIntervalFn: () => {},
+        runIssueAttempt: async () => {
+          if (stopRequested) {
+            throw new Error("codex turn ended with non-completed outcome: port_exit");
+          }
+
+          await new Promise<void>((resolve) => {
+            releaseWorker = resolve;
+          });
+
+          throw new Error("codex turn ended with non-completed outcome: port_exit");
+        },
+      },
+    });
+
+    await service.start();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    await service.runTickOnce();
+    for (let index = 0; index < 20 && !transitioned.includes("ATH-902:Human Review"); index += 1) {
+      await Promise.resolve();
+    }
+
+    const snapshot = service.getRuntimeSnapshot();
+    expect(stopCalled).toBe(true);
+    expect(snapshot.retrying).toHaveLength(0);
+    expect(transitioned).toEqual(["ATH-902:In Progress", "ATH-902:Human Review"]);
+    expect(comments.some((entry) => entry.includes("paused automatic continuation"))).toBe(true);
+    expect(comments.some((entry) => entry.includes("attempt input token budget exceeded"))).toBe(true);
+
+    await service.stop();
+  });
+
   it("blocks issues that fail intake guardrails and comments once", async () => {
     const comments: string[] = [];
     const runIssueAttempt = vi.fn(async (input: any) => ({
