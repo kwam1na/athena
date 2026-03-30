@@ -303,6 +303,50 @@ describe("createSymphonyService", () => {
       ),
     ).toBe(true);
   });
+
+  it("continues running when configured log sink throws", async () => {
+    const stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    let logCalls = 0;
+
+    const service = createSymphonyService({
+      workflowPath: "/tmp/WORKFLOW.md",
+      deps: {
+        loadWorkflowFile: async () => workflow(1000),
+        createTracker: () => new FakeTracker(),
+        cleanupTerminalIssueWorkspaces: async () => ({ removed: 0, failed: 0, warnings: [] }),
+        processDueRetries: async () => ({
+          processedIssueIds: [],
+          dispatchedIssueIds: [],
+          requeuedIssueIds: [],
+          releasedIssueIds: [],
+        }),
+        runOrchestratorTick: async () => ({
+          skippedDispatch: false,
+          selectedIssueIds: [],
+          dispatchedIssueIds: [],
+          dispatchErrors: [],
+          reconcileActions: [],
+          stalledIssueIds: [],
+        }),
+        onLog: () => {
+          logCalls += 1;
+          throw new Error("sink broke");
+        },
+      },
+    });
+
+    await service.start();
+    await service.stop();
+
+    expect(logCalls).toBeGreaterThan(0);
+    expect(
+      stderrSpy.mock.calls.some(
+        (call) => String(call[0]).includes("action=log_sink outcome=failed"),
+      ),
+    ).toBe(true);
+
+    stderrSpy.mockRestore();
+  });
 });
 
 describe("formatServiceLogLine", () => {
