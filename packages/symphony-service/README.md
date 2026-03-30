@@ -36,4 +36,5 @@ bun run --filter '@athena/symphony-service' start
 bun run --filter '@athena/symphony-service' start --watch
 bun run --filter '@athena/symphony-service' start --port 3000
 bun run --filter '@athena/symphony-service' test
+bun run --filter '@athena/symphony-service' test:integration:real WORKFLOW.md --linear=true --codex=false
 ```

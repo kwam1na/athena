@@ -37,3 +37,10 @@ Spec reference: https://github.com/openai/symphony/blob/main/SPEC.md
 | Workflow-configurable observability settings | Not implemented | Future improvement |
 | First-class tracker write APIs in orchestrator | Not implemented | Current boundary keeps writes in agent tools |
 | Pluggable tracker adapters beyond Linear | Not implemented | Future improvement |
+
+## Real Integration Profile (`SPEC` §18.3)
+
+| Item | Status | Notes |
+| --- | --- | --- |
+| Real integration smoke can be executed in CI with credentials and optional Codex tooling | Implemented | GitHub Actions workflow: `.github/workflows/athena-symphony-real-integration.yml` |
+| Real integration smoke command is available from package scripts | Implemented | `bun run --filter '@athena/symphony-service' test:integration:real` |
