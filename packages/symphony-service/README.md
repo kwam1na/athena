@@ -16,6 +16,7 @@ Spec-aligned Symphony service foundation for Athena.
 - CLI-hosted service loop with optional workflow watch/reload
 - Optional HTTP status server (`--port` or `server.port`) with dashboard + JSON APIs
 - Hook-driven git worktree provisioning for issue workspaces (`after_create`, `before_run`, `before_remove`)
+- Runtime burn guardrails for in-attempt and continuation loops
 
 ## Specification tracking
 
@@ -73,6 +74,22 @@ If labels are missing, scope is inferred from issue text and touched files, and 
 - Symphony records a delivery-complete signal when a run exits with issue state equal to handoff state
   or any terminal state.
 - On signal, Symphony writes a structured tracker comment so operators can quickly verify delivery status.
+
+## Runtime Guardrails
+
+Symphony enforces bounded execution to prevent token-burn loops:
+
+- In-attempt guardrails:
+  - `agent.max_turns` (default: `12`)
+  - `agent.max_input_tokens_per_attempt` (default: `150000`)
+  - no-progress cutoff (3 consecutive turns with unchanged `git status --porcelain`)
+- Continuation guardrails:
+  - `agent.max_issue_input_tokens` (default: `300000`)
+  - `agent.max_continuation_runs_per_issue` (default: `2`)
+  - `agent.continuation_retry_delay_ms` (default: `30000`)
+
+When guardrails trip, Symphony stops continuation, writes a tracker comment with counters/thresholds, and moves
+the issue to the configured handoff state (`tracker.handoff_state`, default `Human Review`).
 
 ## Workspace Hook Notes
 

@@ -213,6 +213,7 @@ for await (const line of rl) {
       });
 
       expect(turn.outcome).toBe("completed");
+      expect(turn.usage).toEqual({ input_tokens: 7, output_tokens: 4, total_tokens: 11 });
       expect(events).toContainEqual(expect.objectContaining({ event: "approval_auto_approved" }));
       expect(events).toContainEqual(expect.objectContaining({ event: "unsupported_tool_call" }));
       expect(events).toContainEqual(expect.objectContaining({ event: "other_message", message: "mock server stderr line" }));

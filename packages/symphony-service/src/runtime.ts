@@ -340,5 +340,6 @@ function requeueRetryEntry(
     maxRetryBackoffMs: input.config.agent.maxRetryBackoffMs,
     mode: options.mode,
     error: options.error,
+    continuationDelayMs: input.config.agent.continuationRetryDelayMs,
   });
 }

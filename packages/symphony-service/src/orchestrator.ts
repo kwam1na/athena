@@ -33,6 +33,7 @@ export interface RetryScheduleInput {
   maxRetryBackoffMs: number;
   mode: "continuation" | "failure";
   error: string;
+  continuationDelayMs?: number;
 }
 
 export interface ReconcileAction {
@@ -142,7 +143,7 @@ export function selectDispatchCandidates(input: {
 export function scheduleRetry(state: OrchestratorState, input: RetryScheduleInput): RetryEntry {
   const delayMs =
     input.mode === "continuation"
-      ? calculateContinuationDelay()
+      ? calculateContinuationDelay(input.continuationDelayMs ?? 1_000)
       : calculateFailureRetryDelay(input.attempt, input.maxRetryBackoffMs);
 
   const entry: RetryEntry = {
@@ -165,6 +166,9 @@ export function onWorkerExit(
     reason: "normal" | "failure";
     maxRetryBackoffMs: number;
     error?: string;
+    allowContinuation?: boolean;
+    continuationDelayMs?: number;
+    continuationAttempt?: number;
   },
 ): RetryEntry | null {
   const running = state.running.get(input.issueId);
@@ -176,14 +180,20 @@ export function onWorkerExit(
 
   if (input.reason === "normal") {
     state.completed.add(input.issueId);
+
+    if (input.allowContinuation === false) {
+      return null;
+    }
+
     return scheduleRetry(state, {
       issueId: input.issueId,
       identifier: running.issue.identifier,
-      attempt: 1,
+      attempt: input.continuationAttempt ?? Math.max(running.retryAttempt + 1, 1),
       nowMs: input.nowMs,
       maxRetryBackoffMs: input.maxRetryBackoffMs,
       mode: "continuation",
       error: "continuation_retry",
+      continuationDelayMs: input.continuationDelayMs,
     });
   }
 

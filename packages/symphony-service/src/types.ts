@@ -50,6 +50,10 @@ export interface EffectiveConfig {
     maxConcurrentAgents: number;
     maxRetryBackoffMs: number;
     maxTurns: number;
+    maxInputTokensPerAttempt: number;
+    maxIssueInputTokens: number;
+    maxContinuationRunsPerIssue: number;
+    continuationRetryDelayMs: number;
     maxConcurrentAgentsByState: Record<string, number>;
   };
   codex: {

@@ -88,7 +88,7 @@ describe("dispatch selection", () => {
 });
 
 describe("retry scheduling", () => {
-  it("schedules continuation retry after normal worker exit", () => {
+  it("schedules continuation retry after normal worker exit using incremented attempt", () => {
     const state = createOrchestratorState();
     markIssueRunning(state, issue({ id: "a", identifier: "ATH-1" }), 0, 3);
 
@@ -97,11 +97,33 @@ describe("retry scheduling", () => {
       nowMs: 2000,
       reason: "normal",
       maxRetryBackoffMs: 300000,
+      allowContinuation: true,
+      continuationDelayMs: 30000,
+      continuationAttempt: 4,
     });
 
-    expect(retry?.attempt).toBe(1);
-    expect(retry?.dueAtMs).toBe(3000);
+    expect(retry?.attempt).toBe(4);
+    expect(retry?.dueAtMs).toBe(32000);
     expect(state.completed.has("a")).toBe(true);
+  });
+
+  it("does not schedule continuation retry when continuation is disallowed", () => {
+    const state = createOrchestratorState();
+    markIssueRunning(state, issue({ id: "c", identifier: "ATH-30" }), 0, 2);
+
+    const retry = onWorkerExit(state, {
+      issueId: "c",
+      nowMs: 4000,
+      reason: "normal",
+      maxRetryBackoffMs: 300000,
+      allowContinuation: false,
+      continuationDelayMs: 30000,
+      continuationAttempt: 3,
+    });
+
+    expect(retry).toBeNull();
+    expect(state.retryAttempts.has("c")).toBe(false);
+    expect(state.completed.has("c")).toBe(true);
   });
 
   it("schedules exponential backoff retry after failure", () => {

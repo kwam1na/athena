@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import { calculateContinuationDelay, calculateFailureRetryDelay } from "../src/retry";
 
 describe("retry delays", () => {
-  it("uses 1s continuation delay", () => {
-    expect(calculateContinuationDelay()).toBe(1000);
+  it("uses configurable continuation delay", () => {
+    expect(calculateContinuationDelay(30000)).toBe(30000);
   });
 
   it("uses exponential backoff with cap", () => {

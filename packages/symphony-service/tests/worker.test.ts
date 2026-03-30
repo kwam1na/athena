@@ -43,9 +43,11 @@ class FakeCodex {
   readonly startedCwds: string[] = [];
   readonly prompts: string[] = [];
   readonly stops: number[] = [];
+  private turnCount = 0;
 
   constructor(
     private readonly runTurnOutcome: "completed" | "failed" | "cancelled" | "turn_timeout" | "port_exit" | "turn_input_required" = "completed",
+    private readonly inputTokensPerTurn = 0,
   ) {}
 
   async startSession(input: { cwd: string }): Promise<{ threadId: string }> {
@@ -58,12 +60,26 @@ class FakeCodex {
     cwd: string;
     title: string;
     prompt: string;
-  }): Promise<{ turnId: string; sessionId: string; outcome: "completed" | "failed" | "cancelled" | "turn_timeout" | "port_exit" | "turn_input_required" }> {
+  }): Promise<{
+    turnId: string;
+    sessionId: string;
+    outcome: "completed" | "failed" | "cancelled" | "turn_timeout" | "port_exit" | "turn_input_required";
+    usage?: { input_tokens: number; output_tokens: number; total_tokens: number };
+  }> {
     this.prompts.push(input.prompt);
+    this.turnCount += 1;
     return {
-      turnId: "turn-1",
-      sessionId: "thread-1-turn-1",
+      turnId: `turn-${this.turnCount}`,
+      sessionId: `thread-1-turn-${this.turnCount}`,
       outcome: this.runTurnOutcome,
+      usage:
+        this.inputTokensPerTurn > 0
+          ? {
+              input_tokens: this.inputTokensPerTurn,
+              output_tokens: 1,
+              total_tokens: this.inputTokensPerTurn + 1,
+            }
+          : undefined,
     };
   }
 
@@ -101,6 +117,10 @@ function config(root: string, overrides?: Partial<EffectiveConfig>): EffectiveCo
       maxConcurrentAgents: 2,
       maxRetryBackoffMs: 300_000,
       maxTurns: 3,
+      maxInputTokensPerAttempt: 150_000,
+      maxIssueInputTokens: 300_000,
+      maxContinuationRunsPerIssue: 2,
+      continuationRetryDelayMs: 30_000,
       maxConcurrentAgentsByState: {},
       ...overrides?.agent,
     },
@@ -205,5 +225,71 @@ describe("runIssueAttempt", () => {
     expect(logs.some((entry) => entry.message.includes("action=turn outcome=failed"))).toBe(true);
     expect(logs.some((entry) => entry.details?.issue_id === "3" && entry.details?.issue_identifier === "ATH-3")).toBe(true);
     expect(logs.some((entry) => entry.details?.session_id === "thread-1-turn-1")).toBe(true);
+  });
+
+  it("stops attempt when per-attempt input token budget is exceeded", async () => {
+    const root = await mkdtemp(join(tmpdir(), "symphony-worker-token-guardrail-"));
+    const logs: Array<{ message: string; details?: Record<string, unknown> }> = [];
+
+    const result = await runIssueAttempt({
+      issue: issue({ id: "4", identifier: "ATH-4", state: "Todo" }),
+      attempt: 1,
+      workflowTemplate: "Issue {{ issue.identifier }}",
+      config: config(root, {
+        agent: {
+          maxTurns: 10,
+          maxInputTokensPerAttempt: 100,
+          maxIssueInputTokens: 300_000,
+          maxContinuationRunsPerIssue: 2,
+          continuationRetryDelayMs: 30_000,
+          maxConcurrentAgents: 2,
+          maxRetryBackoffMs: 300_000,
+          maxConcurrentAgentsByState: {},
+        },
+      }),
+      tracker: new FakeTracker([issue({ id: "4", identifier: "ATH-4", state: "Todo" })]),
+      createCodexClient: () => new FakeCodex("completed", 75) as unknown as CodexAppServerClient,
+      onLog: (entry) => logs.push(entry),
+    });
+
+    expect(result.exit).toBe("guardrail_stop");
+    expect(result.guardrail_reason).toBe("attempt_input_budget_exceeded");
+    expect(result.turnCount).toBe(2);
+    expect(logs.some((entry) => entry.message.includes("guardrail_stop"))).toBe(true);
+  });
+
+  it("stops attempt after no-progress window is exceeded", async () => {
+    const root = await mkdtemp(join(tmpdir(), "symphony-worker-no-progress-"));
+    const logs: Array<{ message: string; details?: Record<string, unknown> }> = [];
+
+    const result = await runIssueAttempt({
+      issue: issue({ id: "5", identifier: "ATH-5", state: "Todo" }),
+      attempt: 1,
+      workflowTemplate: "Issue {{ issue.identifier }}",
+      config: config(root, {
+        hooks: {
+          timeoutMs: 2000,
+          afterCreate: "git init -q",
+        },
+        agent: {
+          maxTurns: 12,
+          maxInputTokensPerAttempt: 150_000,
+          maxIssueInputTokens: 300_000,
+          maxContinuationRunsPerIssue: 2,
+          continuationRetryDelayMs: 30_000,
+          maxConcurrentAgents: 2,
+          maxRetryBackoffMs: 300_000,
+          maxConcurrentAgentsByState: {},
+        },
+      }),
+      tracker: new FakeTracker([issue({ id: "5", identifier: "ATH-5", state: "Todo" })]),
+      createCodexClient: () => new FakeCodex("completed", 10) as unknown as CodexAppServerClient,
+      onLog: (entry) => logs.push(entry),
+    });
+
+    expect(result.exit).toBe("guardrail_stop");
+    expect(result.guardrail_reason).toBe("no_progress_window_exceeded");
+    expect(result.turnCount).toBe(3);
+    expect(logs.some((entry) => entry.message.includes("no_progress_window_exceeded"))).toBe(true);
   });
 });
