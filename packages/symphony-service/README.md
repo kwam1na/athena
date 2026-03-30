@@ -15,6 +15,7 @@ Spec-aligned Symphony service foundation for Athena.
 - Startup terminal workspace cleanup
 - CLI-hosted service loop with optional workflow watch/reload
 - Optional HTTP status server (`--port` or `server.port`) with dashboard + JSON APIs
+- Hook-driven git worktree provisioning for issue workspaces (`after_create`, `before_run`, `before_remove`)
 
 ## Specification tracking
 
@@ -38,3 +39,26 @@ bun run --filter '@athena/symphony-service' start --port 3000
 bun run --filter '@athena/symphony-service' test
 bun run --filter '@athena/symphony-service' test:integration:real WORKFLOW.md --linear=true --codex=false
 ```
+
+## Athena Package Routing Contract
+
+Package routing is driven by Linear labels and configured in the root `WORKFLOW.md` prompt:
+
+- `pkg:athena-webapp` -> `packages/athena-webapp`
+- `pkg:storefront-webapp` -> `packages/storefront-webapp`
+- `pkg:symphony-service` -> `packages/symphony-service`
+- `pkg:valkey-proxy-server` -> `packages/valkey-proxy-server`
+
+If labels are missing, scope is inferred from issue text and touched files, and must be documented in PR summary.
+
+## Workspace Hook Notes
+
+Root `WORKFLOW.md` uses:
+
+- `hooks.after_create: bash /Users/kwamina/athena/scripts/symphony/after-create.sh`
+- `hooks.before_run: bash /Users/kwamina/athena/scripts/symphony/before-run.sh`
+- `hooks.before_remove: bash /Users/kwamina/athena/scripts/symphony/before-remove.sh`
+
+These hooks require:
+
+- `ATHENA_REPO_ROOT` set to the athena repository root.
