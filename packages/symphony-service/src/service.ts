@@ -69,6 +69,21 @@ export interface SymphonyService {
   getSnapshot(): SymphonyServiceSnapshot;
 }
 
+export function formatServiceLogLine(entry: ServiceLogEntry): string {
+  const parts = [`level=${entry.level}`, entry.message];
+
+  if (entry.details) {
+    const detailEntries = Object.entries(entry.details).filter(([, value]) => value !== undefined);
+    detailEntries.sort(([a], [b]) => a.localeCompare(b));
+
+    for (const [key, value] of detailEntries) {
+      parts.push(`${key}=${formatLogValue(value)}`);
+    }
+  }
+
+  return parts.join(" ");
+}
+
 export function createSymphonyService(options: CreateSymphonyServiceOptions): SymphonyService {
   const deps = resolveDependencies(options.deps);
 
@@ -130,7 +145,10 @@ export function createSymphonyService(options: CreateSymphonyServiceOptions): Sy
 
       deps.onLog({
         level: "info",
-        message: `watching ${workflow.path}`,
+        message: "action=watch outcome=started",
+        details: {
+          workflow_path: workflow.path,
+        },
       });
     }
   }
@@ -274,6 +292,13 @@ export function createSymphonyService(options: CreateSymphonyServiceOptions): Sy
         config: runtimeConfig,
         tracker: runtimeTracker,
         createCodexClient: () => codexClient,
+        onLog: (entry) => {
+          deps.onLog({
+            level: entry.message.includes("outcome=failed") ? "warn" : "info",
+            message: entry.message,
+            details: entry.details,
+          });
+        },
       })
       .then(() => {
         onWorkerExit(state, {
@@ -313,7 +338,12 @@ export function createSymphonyService(options: CreateSymphonyServiceOptions): Sy
 
       deps.onLog({
         level: "info",
-        message: `config valid: tracker=${config.tracker.kind} project=${config.tracker.projectSlug} poll=${config.polling.intervalMs}ms`,
+        message: "action=config_validate outcome=completed",
+        details: {
+          tracker_kind: config.tracker.kind,
+          project_slug: config.tracker.projectSlug,
+          poll_interval_ms: config.polling.intervalMs,
+        },
       });
 
       if (options.printEffectiveConfig) {
@@ -331,7 +361,10 @@ export function createSymphonyService(options: CreateSymphonyServiceOptions): Sy
 
       deps.onLog({
         level: "warn",
-        message: `reload failed (keeping last-known-good): ${toErrorMessage(error)}`,
+        message: "action=config_reload outcome=failed reason=reload_failed",
+        details: {
+          error: toErrorMessage(error),
+        },
       });
       return false;
     }
@@ -351,7 +384,10 @@ export function createSymphonyService(options: CreateSymphonyServiceOptions): Sy
       void runTickOnce().catch((error) => {
         deps.onLog({
           level: "warn",
-          message: `tick failed: ${toErrorMessage(error)}`,
+          message: "action=tick outcome=failed",
+          details: {
+            error: toErrorMessage(error),
+          },
         });
       });
     }, config.polling.intervalMs);
@@ -416,7 +452,7 @@ function resolveDependencies(overrides: Partial<ServiceDependencies> | undefined
     setTimeoutFn: setTimeout,
     clearTimeoutFn: clearTimeout,
     onLog: (entry) => {
-      const line = `[symphony] ${entry.message}\n`;
+      const line = `[symphony] ${formatServiceLogLine(entry)}\n`;
       if (entry.level === "warn" || entry.level === "error") {
         process.stderr.write(line);
       } else {
@@ -425,4 +461,20 @@ function resolveDependencies(overrides: Partial<ServiceDependencies> | undefined
     },
     ...overrides,
   };
+}
+
+function formatLogValue(value: unknown): string {
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+
+  if (typeof value === "string") {
+    if (/^[A-Za-z0-9._:/-]+$/.test(value)) {
+      return value;
+    }
+
+    return JSON.stringify(value);
+  }
+
+  return JSON.stringify(value);
 }

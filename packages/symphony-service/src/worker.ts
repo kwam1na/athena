@@ -23,6 +23,7 @@ export interface RunIssueAttemptInput {
   config: EffectiveConfig;
   tracker: TrackerClient;
   createCodexClient: () => WorkerCodexClient;
+  onLog?: (entry: { message: string; details?: Record<string, unknown> }) => void;
 }
 
 export interface RunIssueAttemptResult {
@@ -41,6 +42,7 @@ export async function runIssueAttempt(input: RunIssueAttemptInput): Promise<RunI
   let shouldStopClient = true;
   let turnCount = 0;
   let currentIssue = input.issue;
+  let sessionId: string | null = null;
 
   try {
     const session = await codex.startSession({
@@ -60,22 +62,49 @@ export async function runIssueAttempt(input: RunIssueAttemptInput): Promise<RunI
         prompt,
       });
       turnCount += 1;
+      sessionId = turn.sessionId;
+
+      const baseDetails = {
+        issue_id: currentIssue.id,
+        issue_identifier: currentIssue.identifier,
+        session_id: turn.sessionId,
+        turn_id: turn.turnId,
+      };
 
       if (turn.outcome !== "completed") {
+        input.onLog?.({
+          message: `action=turn outcome=failed reason=${turn.outcome}`,
+          details: baseDetails,
+        });
+
         throw new SymphonyError("worker_turn_failed", `codex turn ended with non-completed outcome: ${turn.outcome}`, {
           details: {
-            issue_id: currentIssue.id,
-            issue_identifier: currentIssue.identifier,
+            ...baseDetails,
             outcome: turn.outcome,
           },
         });
       }
+
+      input.onLog?.({
+        message: "action=turn outcome=completed",
+        details: baseDetails,
+      });
 
       const refreshed = await input.tracker.fetchIssueStatesByIds([currentIssue.id]);
       if (Array.isArray(refreshed) && refreshed[0]) {
         currentIssue = refreshed[0];
       }
     }
+
+    input.onLog?.({
+      message: "action=worker outcome=completed",
+      details: {
+        issue_id: currentIssue.id,
+        issue_identifier: currentIssue.identifier,
+        session_id: sessionId ?? undefined,
+        turn_count: turnCount,
+      },
+    });
 
     return {
       exit: "normal",
@@ -84,6 +113,15 @@ export async function runIssueAttempt(input: RunIssueAttemptInput): Promise<RunI
       issue: currentIssue,
     };
   } catch (error) {
+    input.onLog?.({
+      message: `action=worker outcome=failed reason=${error instanceof SymphonyError ? error.code : "worker_attempt_failed"}`,
+      details: {
+        issue_id: currentIssue.id,
+        issue_identifier: currentIssue.identifier,
+        session_id: sessionId ?? undefined,
+      },
+    });
+
     if (error instanceof SymphonyError) {
       throw error;
     }
@@ -101,6 +139,17 @@ export async function runIssueAttempt(input: RunIssueAttemptInput): Promise<RunI
     }
 
     await runAfterRunHook(workspaceConfig, workspace.path);
+
+    if (sessionId) {
+      input.onLog?.({
+        message: "action=session outcome=stopped",
+        details: {
+          issue_id: currentIssue.id,
+          issue_identifier: currentIssue.identifier,
+          session_id: sessionId,
+        },
+      });
+    }
   }
 }
 

@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import type { FSWatcher } from "node:fs";
 import type { WorkflowDocument } from "../src/types";
-import type { TrackerClient } from "../src/issue";
-import { createSymphonyService } from "../src/service";
+import type { NormalizedIssue, TrackerClient } from "../src/issue";
+import { createSymphonyService, formatServiceLogLine } from "../src/service";
 
 class FakeTracker implements TrackerClient {
   async fetchCandidateIssues() {
@@ -16,6 +16,20 @@ class FakeTracker implements TrackerClient {
   async fetchIssueStatesByIds() {
     return [];
   }
+}
+
+function issue(partial: Partial<NormalizedIssue>): NormalizedIssue {
+  return {
+    id: partial.id ?? "1",
+    identifier: partial.identifier ?? "ATH-1",
+    title: partial.title ?? "Issue",
+    state: partial.state ?? "Todo",
+    priority: partial.priority ?? 1,
+    created_at: partial.created_at ?? "2026-01-01T00:00:00.000Z",
+    updated_at: partial.updated_at ?? "2026-01-01T00:00:00.000Z",
+    labels: partial.labels ?? [],
+    blocked_by: partial.blocked_by ?? [],
+  };
 }
 
 function workflow(pollMs: number): WorkflowDocument {
@@ -159,7 +173,7 @@ describe("createSymphonyService", () => {
 
     await service.reloadWorkflow();
     expect(service.getSnapshot().pollIntervalMs).toBe(2500);
-    expect(warnings.some((msg) => msg.includes("reload failed"))).toBe(true);
+    expect(warnings.some((msg) => msg.includes("action=config_reload outcome=failed"))).toBe(true);
 
     await service.stop();
   });
@@ -222,5 +236,91 @@ describe("createSymphonyService", () => {
 
     await service.stop();
     vi.useRealTimers();
+  });
+
+  it("forwards worker lifecycle logs with issue and session context", async () => {
+    const logs: Array<{ level: string; message: string; details?: Record<string, unknown> }> = [];
+
+    const service = createSymphonyService({
+      workflowPath: "/tmp/WORKFLOW.md",
+      deps: {
+        loadWorkflowFile: async () => workflow(1000),
+        createTracker: () => new FakeTracker(),
+        cleanupTerminalIssueWorkspaces: async () => ({ removed: 0, failed: 0, warnings: [] }),
+        processDueRetries: async () => ({
+          processedIssueIds: [],
+          dispatchedIssueIds: [],
+          requeuedIssueIds: [],
+          releasedIssueIds: [],
+        }),
+        runOrchestratorTick: async ({ dispatchIssue }) => {
+          await dispatchIssue({
+            issue: issue({ id: "iss-1", identifier: "ATH-200", state: "Todo" }),
+            attempt: 1,
+          });
+          return {
+            skippedDispatch: false,
+            selectedIssueIds: ["iss-1"],
+            dispatchedIssueIds: ["iss-1"],
+            dispatchErrors: [],
+            reconcileActions: [],
+            stalledIssueIds: [],
+          };
+        },
+        runIssueAttempt: async (input) => {
+          input.onLog?.({
+            message: "action=turn outcome=completed",
+            details: {
+              issue_id: input.issue.id,
+              issue_identifier: input.issue.identifier,
+              session_id: "thread-xyz-turn-1",
+            },
+          });
+
+          return {
+            exit: "normal",
+            turnCount: 1,
+            workspacePath: "/tmp/fake",
+            issue: input.issue,
+          };
+        },
+        onLog: (entry) => {
+          logs.push(entry as { level: string; message: string; details?: Record<string, unknown> });
+        },
+      },
+    });
+
+    await service.start();
+    await service.stop();
+
+    expect(
+      logs.some(
+        (entry) =>
+          entry.message.includes("action=turn outcome=completed") &&
+          entry.details?.issue_id === "iss-1" &&
+          entry.details?.issue_identifier === "ATH-200" &&
+          entry.details?.session_id === "thread-xyz-turn-1",
+      ),
+    ).toBe(true);
+  });
+});
+
+describe("formatServiceLogLine", () => {
+  it("renders stable key=value output including details", () => {
+    const line = formatServiceLogLine({
+      level: "info",
+      message: "action=dispatch outcome=completed",
+      details: {
+        issue_identifier: "ATH-1",
+        issue_id: "abc",
+        session_id: "thread-1-turn-2",
+      },
+    });
+
+    expect(line).toContain("level=info");
+    expect(line).toContain("action=dispatch outcome=completed");
+    expect(line).toContain("issue_id=abc");
+    expect(line).toContain("issue_identifier=ATH-1");
+    expect(line).toContain("session_id=thread-1-turn-2");
   });
 });
