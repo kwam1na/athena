@@ -236,7 +236,10 @@ describe("LinearTrackerClient", () => {
     expect(changed).toBe(true);
     expect(calls).toHaveLength(2);
     expect(calls[0]?.body?.query).toContain("workflowStates");
+    expect(calls[0]?.body?.query).toContain("$teamId: ID!");
     expect(calls[1]?.body?.query).toContain("issueUpdate");
+    expect(calls[1]?.body?.query).toContain("$issueId: String!");
+    expect(calls[1]?.body?.query).toContain("$stateId: String");
   });
 
   it("skips issue state update when team id is missing", async () => {

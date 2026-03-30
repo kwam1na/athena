@@ -81,7 +81,7 @@ ${ISSUE_NODE_FIELDS}
 `;
 
 const FIND_WORKFLOW_STATE_ID_QUERY = `
-query FindWorkflowStateId($teamId: String!, $stateName: String!) {
+query FindWorkflowStateId($teamId: ID!, $stateName: String!) {
   workflowStates(
     filter: {
       team: { id: { eq: $teamId } }
@@ -98,7 +98,7 @@ query FindWorkflowStateId($teamId: String!, $stateName: String!) {
 `;
 
 const UPDATE_ISSUE_STATE_MUTATION = `
-mutation UpdateIssueState($issueId: String!, $stateId: String!) {
+mutation UpdateIssueState($issueId: String!, $stateId: String) {
   issueUpdate(id: $issueId, input: { stateId: $stateId }) {
     success
   }
