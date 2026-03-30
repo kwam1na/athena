@@ -42,16 +42,27 @@ describe("parseCliArgs", () => {
       workflowPath: "/repo/WORKFLOW.md",
       watch: false,
       printEffectiveConfig: false,
+      port: undefined,
     });
   });
 
   it("parses watch, print-effective-config, and explicit workflow path", () => {
-    const parsed = parseCliArgs(["./ops/WORKFLOW.md", "--watch", "--print-effective-config"], "/repo");
+    const parsed = parseCliArgs(["./ops/WORKFLOW.md", "--watch", "--print-effective-config", "--port=3131"], "/repo");
     expect(parsed).toEqual({
       workflowPath: "/repo/ops/WORKFLOW.md",
       watch: true,
       printEffectiveConfig: true,
+      port: 3131,
     });
+  });
+
+  it("parses --port value from next arg", () => {
+    const parsed = parseCliArgs(["--port", "8080"], "/repo");
+    expect(parsed.port).toBe(8080);
+  });
+
+  it("throws for invalid --port", () => {
+    expect(() => parseCliArgs(["--port", "foo"], "/repo")).toThrowError("invalid --port value");
   });
 });
 
@@ -68,7 +79,10 @@ describe("runCliEntry", () => {
       onSignal: () => {},
       onUncaughtException: () => {},
       onUnhandledRejection: () => {},
+      resolveWorkflowServerPort: async () => undefined,
+      startStatusServer: async () => ({ host: "127.0.0.1", port: 0, stop: async () => {} }),
       writeStderr: (line) => stderr.push(line),
+      writeStdout: () => {},
       exit: (code) => exits.push(code),
     });
 
@@ -80,6 +94,7 @@ describe("runCliEntry", () => {
     const exits: number[] = [];
     const signals: Partial<Record<"SIGINT" | "SIGTERM", () => void>> = {};
     const stop = vi.fn(async () => {});
+    const statusStop = vi.fn(async () => {});
 
     await runCliEntry([], {
       cwd: () => "/repo",
@@ -89,23 +104,28 @@ describe("runCliEntry", () => {
       },
       onUncaughtException: () => {},
       onUnhandledRejection: () => {},
+      resolveWorkflowServerPort: async () => 4030,
+      startStatusServer: async () => ({ host: "127.0.0.1", port: 4030, stop: statusStop }),
       writeStderr: () => {},
+      writeStdout: () => {},
       exit: (code) => exits.push(code),
     });
 
     expect(stop).not.toHaveBeenCalled();
     signals.SIGINT?.();
-    await Promise.resolve();
-    await Promise.resolve();
+    await vi.waitFor(() => {
+      expect(exits).toEqual([0]);
+    });
 
     expect(stop).toHaveBeenCalledTimes(1);
-    expect(exits).toEqual([0]);
+    expect(statusStop).toHaveBeenCalledTimes(1);
   });
 
   it("still exits zero when shutdown fails", async () => {
     const exits: number[] = [];
     const stderr: string[] = [];
     const signals: Partial<Record<"SIGINT" | "SIGTERM", () => void>> = {};
+    const statusStop = vi.fn(async () => {});
 
     await runCliEntry([], {
       cwd: () => "/repo",
@@ -120,16 +140,20 @@ describe("runCliEntry", () => {
       },
       onUncaughtException: () => {},
       onUnhandledRejection: () => {},
+      resolveWorkflowServerPort: async () => 0,
+      startStatusServer: async () => ({ host: "127.0.0.1", port: 3301, stop: statusStop }),
       writeStderr: (line) => stderr.push(line),
+      writeStdout: () => {},
       exit: (code) => exits.push(code),
     });
 
     signals.SIGTERM?.();
-    await Promise.resolve();
-    await Promise.resolve();
+    await vi.waitFor(() => {
+      expect(exits).toEqual([0]);
+    });
 
     expect(stderr.some((line) => line.includes("shutdown failed"))).toBe(true);
-    expect(exits).toEqual([0]);
+    expect(statusStop).toHaveBeenCalledTimes(1);
   });
 
   it("stops service and exits nonzero on uncaught exception", async () => {
@@ -146,7 +170,10 @@ describe("runCliEntry", () => {
         uncaughtHandler = handler;
       },
       onUnhandledRejection: () => {},
+      resolveWorkflowServerPort: async () => undefined,
+      startStatusServer: async () => ({ host: "127.0.0.1", port: 0, stop: async () => {} }),
       writeStderr: (line) => stderr.push(line),
+      writeStdout: () => {},
       exit: (code) => exits.push(code),
     });
 
@@ -176,7 +203,10 @@ describe("runCliEntry", () => {
       onUnhandledRejection: (handler) => {
         rejectionHandler = handler;
       },
+      resolveWorkflowServerPort: async () => undefined,
+      startStatusServer: async () => ({ host: "127.0.0.1", port: 0, stop: async () => {} }),
       writeStderr: (line) => stderr.push(line),
+      writeStdout: () => {},
       exit: (code) => exits.push(code),
     });
 
@@ -189,6 +219,77 @@ describe("runCliEntry", () => {
 
     expect(stop).toHaveBeenCalledTimes(1);
     expect(stderr.some((line) => line.includes("fatal host error"))).toBe(true);
+    expect(exits).toEqual([1]);
+  });
+
+  it("starts status server when --port is provided", async () => {
+    const startedPorts: number[] = [];
+    const stdout: string[] = [];
+
+    await runCliEntry(["--port", "4321"], {
+      cwd: () => "/repo",
+      createService: () => makeService(),
+      onSignal: () => {},
+      onUncaughtException: () => {},
+      onUnhandledRejection: () => {},
+      resolveWorkflowServerPort: async () => 7000,
+      startStatusServer: async ({ port }) => {
+        startedPorts.push(port);
+        return { host: "127.0.0.1", port, stop: async () => {} };
+      },
+      writeStderr: () => {},
+      writeStdout: (line) => stdout.push(line),
+      exit: () => {},
+    });
+
+    expect(startedPorts).toEqual([4321]);
+    expect(stdout.some((line) => line.includes("4321"))).toBe(true);
+  });
+
+  it("uses workflow server port when --port is not provided", async () => {
+    const startedPorts: number[] = [];
+
+    await runCliEntry([], {
+      cwd: () => "/repo",
+      createService: () => makeService(),
+      onSignal: () => {},
+      onUncaughtException: () => {},
+      onUnhandledRejection: () => {},
+      resolveWorkflowServerPort: async () => 5050,
+      startStatusServer: async ({ port }) => {
+        startedPorts.push(port);
+        return { host: "127.0.0.1", port, stop: async () => {} };
+      },
+      writeStderr: () => {},
+      writeStdout: () => {},
+      exit: () => {},
+    });
+
+    expect(startedPorts).toEqual([5050]);
+  });
+
+  it("stops service and exits nonzero when status server startup fails", async () => {
+    const exits: number[] = [];
+    const stderr: string[] = [];
+    const stop = vi.fn(async () => {});
+
+    await runCliEntry(["--port", "4200"], {
+      cwd: () => "/repo",
+      createService: () => makeService({ stop }),
+      onSignal: () => {},
+      onUncaughtException: () => {},
+      onUnhandledRejection: () => {},
+      resolveWorkflowServerPort: async () => undefined,
+      startStatusServer: async () => {
+        throw new Error("port in use");
+      },
+      writeStderr: (line) => stderr.push(line),
+      writeStdout: () => {},
+      exit: (code) => exits.push(code),
+    });
+
+    expect(stop).toHaveBeenCalledTimes(1);
+    expect(stderr.some((line) => line.includes("startup failed"))).toBe(true);
     expect(exits).toEqual([1]);
   });
 });
