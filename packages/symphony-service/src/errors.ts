@@ -16,6 +16,8 @@ export type SymphonyErrorCode =
   | "invalid_workspace_path"
   | "hook_failed"
   | "hook_timeout"
+  | "worker_turn_failed"
+  | "worker_attempt_failed"
   | "linear_api_request"
   | "linear_api_status"
   | "linear_graphql_errors"
