@@ -25,7 +25,7 @@ Spec reference: https://github.com/openai/symphony/blob/main/SPEC.md
 | Reconciliation that stops runs on terminal/non-active tracker states | Implemented | `src/orchestrator.ts`, `src/runtime.ts`, `src/service.ts` | `tests/orchestrator.test.ts`, `tests/runtime.test.ts`, `tests/service.test.ts` |
 | Workspace cleanup for terminal issues (startup sweep + active transition) | Implemented | `src/startup.ts`, `src/service.ts` | `tests/startup.test.ts`, `tests/service.test.ts` |
 | Structured logs including issue and session context fields | Implemented | `src/service.ts`, `src/worker.ts` | `tests/service.test.ts` |
-| Operator-visible observability (structured logs; optional snapshot/status surface) | Implemented | `src/service.ts` (`getRuntimeSnapshot`), `src/cli.ts` | `tests/service.test.ts`, `tests/cli.test.ts` |
+| Operator-visible observability (structured logs; optional snapshot/status surface) | Implemented | `src/service.ts` (`getRuntimeSnapshot`, `getRuntimeIssueSnapshot`), `src/httpServer.ts`, `src/cli.ts` | `tests/service.test.ts`, `tests/httpServer.test.ts`, `tests/cli.test.ts` |
 
 ## Extension Conformance (`SPEC` §18.2)
 

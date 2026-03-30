@@ -461,6 +461,202 @@ describe("createSymphonyService", () => {
     await service.stop();
   });
 
+  it("exposes per-issue runtime snapshot with structured timeline events", async () => {
+    let nowMs = 50_000;
+    let releaseWorker: (() => void) | null = null;
+    const candidates = [issue({ id: "timeline-1", identifier: "ATH-550", state: "In Progress" })];
+
+    const service = createSymphonyService({
+      workflowPath: "/tmp/WORKFLOW.md",
+      deps: {
+        nowMs: () => nowMs,
+        loadWorkflowFile: async () => workflow(1000),
+        createTracker: () => ({
+          async fetchCandidateIssues() {
+            return candidates.splice(0, candidates.length);
+          },
+          async fetchIssuesByStates() {
+            return [];
+          },
+          async fetchIssueStatesByIds() {
+            return [];
+          },
+        }),
+        cleanupTerminalIssueWorkspaces: async () => ({ removed: 0, failed: 0, warnings: [] }),
+        processDueRetries: async () => ({
+          processedIssueIds: [],
+          dispatchedIssueIds: [],
+          requeuedIssueIds: [],
+          releasedIssueIds: [],
+        }),
+        setIntervalFn: () => {
+          return 1 as unknown as ReturnType<typeof setInterval>;
+        },
+        clearIntervalFn: () => {
+          return;
+        },
+        createCodexClient: (_config, onEvent) => {
+          onEvent?.({
+            event: "notification",
+            timestamp: new Date(nowMs).toISOString(),
+            session_id: "thread-550-turn-1",
+            usage: {
+              input_tokens: 22,
+              output_tokens: 8,
+              total_tokens: 30,
+            },
+            rate_limits: {
+              remaining: 5,
+            },
+          });
+
+          return {
+            async startSession() {
+              return { threadId: "thread-550" };
+            },
+            async runTurn() {
+              return { turnId: "turn-1", sessionId: "thread-550-turn-1", outcome: "completed" as const };
+            },
+            stop() {
+              releaseWorker?.();
+            },
+          };
+        },
+        runIssueAttempt: async (input) => {
+          input.onLog?.({
+            message: "action=turn outcome=completed",
+            details: {
+              issue_id: input.issue.id,
+              issue_identifier: input.issue.identifier,
+              session_id: "thread-550-turn-1",
+            },
+          });
+
+          await new Promise<void>((resolve) => {
+            releaseWorker = resolve;
+          });
+
+          return {
+            exit: "normal" as const,
+            turnCount: 1,
+            workspacePath: "/tmp/fake",
+            issue: input.issue,
+          };
+        },
+      },
+    });
+
+    await service.start();
+
+    const issueSnapshot = (service as any).getRuntimeIssueSnapshot("ATH-550");
+    expect(issueSnapshot).not.toBeNull();
+    expect(issueSnapshot.status).toBe("running");
+    expect(issueSnapshot.events_count).toBeGreaterThan(0);
+    expect(issueSnapshot.events_limit).toBe(200);
+    expect(issueSnapshot.events_truncated).toBe(false);
+
+    const seqs = issueSnapshot.events.map((event: { seq: number }) => event.seq);
+    expect(seqs).toEqual([...seqs].sort((a, b) => a - b));
+    expect(issueSnapshot.events.some((event: { kind: string }) => event.kind === "dispatch_started")).toBe(true);
+    expect(issueSnapshot.events.some((event: { kind: string }) => event.kind === "worker_log")).toBe(true);
+    expect(issueSnapshot.events.some((event: { kind: string }) => event.kind === "codex_notification")).toBe(true);
+    expect(
+      issueSnapshot.events.some(
+        (event: { kind: string; usage?: { total_tokens: number } }) =>
+          event.kind === "codex_notification" && event.usage?.total_tokens === 30,
+      ),
+    ).toBe(true);
+
+    await service.stop();
+  });
+
+  it("caps per-issue timeline event history with truncation metadata", async () => {
+    const candidates = [issue({ id: "timeline-cap-1", identifier: "ATH-551", state: "In Progress" })];
+
+    const service = createSymphonyService({
+      workflowPath: "/tmp/WORKFLOW.md",
+      deps: {
+        loadWorkflowFile: async () => workflow(1000),
+        createTracker: () => ({
+          async fetchCandidateIssues() {
+            return candidates.splice(0, candidates.length);
+          },
+          async fetchIssuesByStates() {
+            return [];
+          },
+          async fetchIssueStatesByIds() {
+            return [];
+          },
+        }),
+        cleanupTerminalIssueWorkspaces: async () => ({ removed: 0, failed: 0, warnings: [] }),
+        processDueRetries: async () => ({
+          processedIssueIds: [],
+          dispatchedIssueIds: [],
+          requeuedIssueIds: [],
+          releasedIssueIds: [],
+        }),
+        setIntervalFn: () => {
+          return 1 as unknown as ReturnType<typeof setInterval>;
+        },
+        clearIntervalFn: () => {
+          return;
+        },
+        createCodexClient: (_config, onEvent) => {
+          for (let i = 0; i < 260; i += 1) {
+            onEvent?.({
+              event: "notification",
+              timestamp: new Date(60_000 + i).toISOString(),
+              session_id: "thread-551-turn-1",
+              usage: {
+                total_tokens: i + 1,
+              },
+            });
+          }
+
+          return {
+            async startSession() {
+              return { threadId: "thread-551" };
+            },
+            async runTurn() {
+              return { turnId: "turn-1", sessionId: "thread-551-turn-1", outcome: "completed" as const };
+            },
+            stop() {},
+          };
+        },
+        runIssueAttempt: async (input) => {
+          input.onLog?.({
+            message: "action=turn outcome=completed",
+            details: {
+              issue_id: input.issue.id,
+              issue_identifier: input.issue.identifier,
+              session_id: "thread-551-turn-1",
+            },
+          });
+
+          return {
+            exit: "normal" as const,
+            turnCount: 1,
+            workspacePath: "/tmp/fake",
+            issue: input.issue,
+          };
+        },
+      },
+    });
+
+    await service.start();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const issueSnapshot = (service as any).getRuntimeIssueSnapshot("ATH-551");
+    expect(issueSnapshot).not.toBeNull();
+    expect(issueSnapshot.events_count).toBe(200);
+    expect(issueSnapshot.events_limit).toBe(200);
+    expect(issueSnapshot.events_truncated).toBe(true);
+    expect(issueSnapshot.events[0].seq).toBeGreaterThan(1);
+
+    await service.stop();
+  });
+
   it("includes retry queue rows in runtime snapshot after worker failure", async () => {
     let nowMs = 10_000;
     const candidates = [issue({ id: "retry-1", identifier: "ATH-401", state: "Todo" })];

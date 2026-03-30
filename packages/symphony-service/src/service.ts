@@ -22,6 +22,7 @@ const REQUIRED_PACKAGE_LABELS = new Set([
 ]);
 const REQUIRED_PACKAGE_SUFFIXES = new Set(Array.from(REQUIRED_PACKAGE_LABELS).map((label) => label.replace(/^pkg:/, "")));
 const MIN_DESCRIPTION_LENGTH = 24;
+const ISSUE_EVENT_LIMIT = 200;
 type IntervalHandle = ReturnType<typeof setInterval>;
 type TimeoutHandle = ReturnType<typeof setTimeout>;
 
@@ -112,6 +113,46 @@ export interface RuntimeSnapshotCompletedRow {
   done: boolean;
 }
 
+export interface RuntimeIssueEventUsage {
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
+}
+
+export interface RuntimeIssueEvent {
+  seq: number;
+  timestamp: string;
+  source: "service" | "worker" | "codex";
+  kind: string;
+  message: string;
+  session_id: string | null;
+  turn_count: number | null;
+  retry_attempt: number | null;
+  usage?: RuntimeIssueEventUsage;
+  rate_limits?: Record<string, unknown>;
+}
+
+interface IssueEventBuffer {
+  events: RuntimeIssueEvent[];
+  nextSeq: number;
+  dropped: number;
+}
+
+export interface RuntimeIssueSnapshot {
+  issue_identifier: string;
+  issue_id: string;
+  status: "running" | "retrying" | "completed";
+  running: RuntimeSnapshotRunningRow | null;
+  retry: RuntimeSnapshotRetryRow | null;
+  completed: RuntimeSnapshotCompletedRow | null;
+  codex_totals: RuntimeSnapshot["codex_totals"];
+  rate_limits: RuntimeSnapshot["rate_limits"];
+  events: RuntimeIssueEvent[];
+  events_count: number;
+  events_limit: number;
+  events_truncated: boolean;
+}
+
 export interface RuntimeSnapshot {
   running: RuntimeSnapshotRunningRow[];
   retrying: RuntimeSnapshotRetryRow[];
@@ -132,6 +173,7 @@ export interface SymphonyService {
   runTickOnce(): Promise<void>;
   getSnapshot(): SymphonyServiceSnapshot;
   getRuntimeSnapshot(): RuntimeSnapshot;
+  getRuntimeIssueSnapshot(issueIdentifier: string): RuntimeIssueSnapshot | null;
 }
 
 export function formatServiceLogLine(entry: ServiceLogEntry): string {
@@ -165,6 +207,7 @@ export function createSymphonyService(options: CreateSymphonyServiceOptions): Sy
 
   const activeWorkers = new Map<string, ActiveWorker>();
   const completionSignals = new Map<string, RuntimeSnapshotCompletedRow>();
+  const issueEventBuffers = new Map<string, IssueEventBuffer>();
   const workerTasks = new Set<Promise<void>>();
   const guardrailNotifiedIssueIds = new Set<string>();
   let completedInputTokens = 0;
@@ -326,6 +369,15 @@ export function createSymphonyService(options: CreateSymphonyServiceOptions): Sy
       return;
     }
 
+    appendIssueEvent(action.issueId, action.identifier, {
+      source: "service",
+      kind: "reconcile_terminated",
+      message: `Reconcile terminated run (${action.action})`,
+      session_id: activeWorkers.get(action.issueId)?.sessionId ?? null,
+      turn_count: activeWorkers.get(action.issueId)?.turnCount ?? null,
+      retry_attempt: activeWorkers.get(action.issueId)?.retryAttempt ?? null,
+    });
+
     terminateRunningIssue(action.issueId);
 
     state.running.delete(action.issueId);
@@ -358,6 +410,57 @@ export function createSymphonyService(options: CreateSymphonyServiceOptions): Sy
 
     worker.stop();
     activeWorkers.delete(issueId);
+  }
+
+  function appendIssueEvent(
+    issueId: string,
+    issueIdentifier: string,
+    input: Omit<RuntimeIssueEvent, "seq" | "timestamp"> & { timestamp?: string },
+  ): void {
+    let buffer = issueEventBuffers.get(issueId);
+    if (!buffer) {
+      buffer = {
+        events: [],
+        nextSeq: 1,
+        dropped: 0,
+      };
+      issueEventBuffers.set(issueId, buffer);
+    }
+
+    const event: RuntimeIssueEvent = {
+      seq: buffer.nextSeq,
+      timestamp: input.timestamp ?? new Date().toISOString(),
+      source: input.source,
+      kind: input.kind,
+      message: input.message || `${input.source}:${input.kind}`,
+      session_id: input.session_id ?? null,
+      turn_count: input.turn_count ?? null,
+      retry_attempt: input.retry_attempt ?? null,
+      usage: input.usage,
+      rate_limits: input.rate_limits,
+    };
+    buffer.events.push(event);
+    buffer.nextSeq += 1;
+
+    if (buffer.events.length > ISSUE_EVENT_LIMIT) {
+      buffer.events.splice(0, buffer.events.length - ISSUE_EVENT_LIMIT);
+      buffer.dropped += 1;
+    }
+  }
+
+  function getIssueEvents(issueId: string): { events: RuntimeIssueEvent[]; dropped: number } {
+    const buffer = issueEventBuffers.get(issueId);
+    if (!buffer) {
+      return {
+        events: [],
+        dropped: 0,
+      };
+    }
+
+    return {
+      events: buffer.events.map((event) => ({ ...event })),
+      dropped: buffer.dropped,
+    };
   }
 
   function evaluateGuardrails(issue: NormalizedIssue): string[] {
@@ -523,9 +626,28 @@ export function createSymphonyService(options: CreateSymphonyServiceOptions): Sy
     const runtimeConfig = config;
     const runtimeTracker = tracker;
     const runtimeWorkflow = workflow;
+
+    appendIssueEvent(input.issue.id, input.issue.identifier, {
+      source: "service",
+      kind: "dispatch_started",
+      message: `Dispatch started for ${input.issue.identifier}`,
+      session_id: null,
+      turn_count: 0,
+      retry_attempt: input.attempt,
+    });
+
     const guardrailProblems = evaluateGuardrails(input.issue);
 
     if (guardrailProblems.length > 0) {
+      appendIssueEvent(input.issue.id, input.issue.identifier, {
+        source: "service",
+        kind: "guardrail_blocked",
+        message: `Dispatch blocked by guardrails: ${guardrailProblems.join(" | ")}`,
+        session_id: null,
+        turn_count: 0,
+        retry_attempt: input.attempt,
+      });
+
       if (!guardrailNotifiedIssueIds.has(input.issue.id)) {
         await publishGuardrailComment(runtimeTracker, input.issue, guardrailProblems);
         guardrailNotifiedIssueIds.add(input.issue.id);
@@ -540,6 +662,15 @@ export function createSymphonyService(options: CreateSymphonyServiceOptions): Sy
     await publishRunComment(runtimeTracker, input.issue, {
       kind: "started",
       attempt: input.attempt,
+    });
+
+    appendIssueEvent(input.issue.id, input.issue.identifier, {
+      source: "service",
+      kind: "run_started",
+      message: `Run started (attempt ${input.attempt})`,
+      session_id: null,
+      turn_count: 0,
+      retry_attempt: input.attempt,
     });
 
     const startedAtMs = deps.nowMs();
@@ -585,12 +716,32 @@ export function createSymphonyService(options: CreateSymphonyServiceOptions): Sy
         },
       })
       .then(async (result) => {
-        onWorkerExit(state, {
+        const retry = onWorkerExit(state, {
           issueId: input.issue.id,
           nowMs: deps.nowMs(),
           reason: "normal",
           maxRetryBackoffMs: runtimeConfig.agent.maxRetryBackoffMs,
         });
+
+        appendIssueEvent(result.issue.id, result.issue.identifier, {
+          source: "service",
+          kind: "run_completed",
+          message: `Run completed (attempt ${input.attempt})`,
+          session_id: worker.sessionId,
+          turn_count: worker.turnCount,
+          retry_attempt: worker.retryAttempt,
+        });
+
+        if (retry) {
+          appendIssueEvent(result.issue.id, result.issue.identifier, {
+            source: "service",
+            kind: "retry_scheduled",
+            message: `Retry scheduled for ${new Date(retry.dueAtMs).toISOString()} (${retry.error})`,
+            session_id: worker.sessionId,
+            turn_count: worker.turnCount,
+            retry_attempt: retry.attempt,
+          });
+        }
 
         await publishRunComment(runtimeTracker, result.issue, {
           kind: "completed",
@@ -605,16 +756,45 @@ export function createSymphonyService(options: CreateSymphonyServiceOptions): Sy
             finalState: result.issue.state,
             observedAtIso: new Date(observedAtMs).toISOString(),
           });
+
+          appendIssueEvent(result.issue.id, result.issue.identifier, {
+            source: "service",
+            kind: "done_signal_emitted",
+            message: `Done signal emitted for state ${result.issue.state}`,
+            session_id: worker.sessionId,
+            turn_count: worker.turnCount,
+            retry_attempt: worker.retryAttempt,
+          });
         }
       })
       .catch(async (error) => {
-        onWorkerExit(state, {
+        const retry = onWorkerExit(state, {
           issueId: input.issue.id,
           nowMs: deps.nowMs(),
           reason: "failure",
           maxRetryBackoffMs: runtimeConfig.agent.maxRetryBackoffMs,
           error: toErrorMessage(error),
         });
+
+        appendIssueEvent(input.issue.id, input.issue.identifier, {
+          source: "service",
+          kind: "run_failed",
+          message: `Run failed: ${toErrorMessage(error)}`,
+          session_id: worker.sessionId,
+          turn_count: worker.turnCount,
+          retry_attempt: worker.retryAttempt,
+        });
+
+        if (retry) {
+          appendIssueEvent(input.issue.id, input.issue.identifier, {
+            source: "service",
+            kind: "retry_scheduled",
+            message: `Retry scheduled for ${new Date(retry.dueAtMs).toISOString()} (${retry.error})`,
+            session_id: worker.sessionId,
+            turn_count: worker.turnCount,
+            retry_attempt: retry.attempt,
+          });
+        }
 
         await publishRunComment(runtimeTracker, input.issue, {
           kind: "failed",
@@ -770,6 +950,39 @@ export function createSymphonyService(options: CreateSymphonyServiceOptions): Sy
     };
   }
 
+  function getRuntimeIssueSnapshot(issueIdentifier: string): RuntimeIssueSnapshot | null {
+    const runtime = getRuntimeSnapshot();
+    const running = runtime.running.find((row) => row.issue_identifier === issueIdentifier) ?? null;
+    const retry = runtime.retrying.find((row) => row.issue_identifier === issueIdentifier) ?? null;
+    const completed = runtime.completed.find((row) => row.issue_identifier === issueIdentifier) ?? null;
+
+    if (!running && !retry && !completed) {
+      return null;
+    }
+
+    const issueId = running?.issue_id ?? retry?.issue_id ?? completed?.issue_id;
+    if (!issueId) {
+      return null;
+    }
+
+    const { events, dropped } = getIssueEvents(issueId);
+
+    return {
+      issue_identifier: issueIdentifier,
+      issue_id: issueId,
+      status: running ? "running" : retry ? "retrying" : "completed",
+      running,
+      retry,
+      completed,
+      codex_totals: runtime.codex_totals,
+      rate_limits: runtime.rate_limits,
+      events,
+      events_count: events.length,
+      events_limit: ISSUE_EVENT_LIMIT,
+      events_truncated: dropped > 0,
+    };
+  }
+
   function onWorkerLifecycleLog(
     issueId: string,
     entry: {
@@ -803,6 +1016,15 @@ export function createSymphonyService(options: CreateSymphonyServiceOptions): Sy
         state.running.set(issueId, runningEntry);
       }
     }
+
+    appendIssueEvent(issueId, worker.identifier, {
+      source: "worker",
+      kind: "worker_log",
+      message: entry.message,
+      session_id: worker.sessionId,
+      turn_count: worker.turnCount,
+      retry_attempt: worker.retryAttempt,
+    });
   }
 
   function onWorkerCodexEvent(issueId: string, event: CodexRuntimeEvent): void {
@@ -846,6 +1068,18 @@ export function createSymphonyService(options: CreateSymphonyServiceOptions): Sy
       worker.latestRateLimits = event.rate_limits;
       latestRateLimits = event.rate_limits;
     }
+
+    appendIssueEvent(issueId, worker.identifier, {
+      timestamp: event.timestamp,
+      source: "codex",
+      kind: normalizeCodexEventKind(event.event),
+      message: formatCodexEventMessage(event),
+      session_id: worker.sessionId,
+      turn_count: worker.turnCount,
+      retry_attempt: worker.retryAttempt,
+      usage: normalizeUsage(event.usage),
+      rate_limits: normalizeRateLimits(event.rate_limits),
+    });
   }
 
   function finalizeWorkerMetrics(issueId: string): void {
@@ -873,6 +1107,7 @@ export function createSymphonyService(options: CreateSymphonyServiceOptions): Sy
     runTickOnce,
     getSnapshot,
     getRuntimeSnapshot,
+    getRuntimeIssueSnapshot,
   };
 }
 
@@ -986,6 +1221,60 @@ function buildRunCommentBody(input: { kind: "started" | "completed" | "failed"; 
     `Error: ${input.error ?? "unknown failure"}`,
     `Timestamp: ${timestamp}`,
   ].join("\n");
+}
+
+function normalizeCodexEventKind(eventName: CodexRuntimeEvent["event"]): string {
+  return `codex_${eventName}`;
+}
+
+function formatCodexEventMessage(event: CodexRuntimeEvent): string {
+  const method = extractCodexMethod(event.payload);
+  if (method) {
+    return `${event.event}: ${method}`;
+  }
+
+  if (event.message) {
+    return event.message;
+  }
+
+  return `codex event: ${event.event}`;
+}
+
+function extractCodexMethod(payload: unknown): string | null {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return null;
+  }
+
+  const method = (payload as { method?: unknown }).method;
+  return typeof method === "string" && method.trim().length > 0 ? method : null;
+}
+
+function normalizeUsage(usage: Record<string, number> | undefined): RuntimeIssueEventUsage | undefined {
+  if (!usage) {
+    return undefined;
+  }
+
+  const inputTokens = asNumber(usage.input_tokens ?? usage.inputTokens);
+  const outputTokens = asNumber(usage.output_tokens ?? usage.outputTokens);
+  const totalTokens = asNumber(usage.total_tokens ?? usage.totalTokens);
+
+  if (inputTokens === null && outputTokens === null && totalTokens === null) {
+    return undefined;
+  }
+
+  return {
+    input_tokens: inputTokens ?? 0,
+    output_tokens: outputTokens ?? 0,
+    total_tokens: totalTokens ?? (inputTokens ?? 0) + (outputTokens ?? 0),
+  };
+}
+
+function normalizeRateLimits(rateLimits: Record<string, unknown> | undefined): Record<string, unknown> | undefined {
+  if (!rateLimits || typeof rateLimits !== "object") {
+    return undefined;
+  }
+
+  return rateLimits;
 }
 
 function formatLogValue(value: unknown): string {
