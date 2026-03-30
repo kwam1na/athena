@@ -126,6 +126,10 @@ export async function runOrchestratorTick(input: RunOrchestratorTickInput): Prom
         error: message,
       });
 
+      if (isGuardrailBlockedError(error)) {
+        continue;
+      }
+
       scheduleRetry(input.state, {
         issueId: issue.id,
         identifier: issue.identifier,
@@ -146,6 +150,14 @@ export async function runOrchestratorTick(input: RunOrchestratorTickInput): Prom
     reconcileActions,
     stalledIssueIds,
   };
+}
+
+function isGuardrailBlockedError(error: unknown): boolean {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+
+  return (error as { code?: unknown }).code === "guardrail_blocked";
 }
 
 async function reconcileRunningIssues(input: RunOrchestratorTickInput): Promise<ReconcileAction[]> {

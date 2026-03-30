@@ -1,8 +1,8 @@
 import type { FSWatcher } from "node:fs";
 import { resolveEffectiveConfig } from "./config";
 import { CodexAppServerClient, type CodexRuntimeEvent } from "./codex/client";
-import { toErrorMessage } from "./errors";
-import type { TrackerClient } from "./issue";
+import { SymphonyError, toErrorMessage } from "./errors";
+import type { NormalizedIssue, TrackerClient } from "./issue";
 import { createOrchestratorState, onWorkerExit, type ReconcileAction } from "./orchestrator";
 import { processDueRetries, runOrchestratorTick, type DispatchInput } from "./runtime";
 import { cleanupTerminalIssueWorkspaces } from "./startup";
@@ -14,6 +14,14 @@ import { loadWorkflowFile, watchWorkflowFile } from "./workflow";
 import { runIssueAttempt, type WorkerCodexClient } from "./worker";
 
 const RELOAD_DEBOUNCE_MS = 100;
+const REQUIRED_PACKAGE_LABELS = new Set([
+  "pkg:athena-webapp",
+  "pkg:storefront-webapp",
+  "pkg:symphony-service",
+  "pkg:valkey-proxy-server",
+]);
+const REQUIRED_PACKAGE_SUFFIXES = new Set(Array.from(REQUIRED_PACKAGE_LABELS).map((label) => label.replace(/^pkg:/, "")));
+const MIN_DESCRIPTION_LENGTH = 24;
 type IntervalHandle = ReturnType<typeof setInterval>;
 type TimeoutHandle = ReturnType<typeof setTimeout>;
 
@@ -147,6 +155,7 @@ export function createSymphonyService(options: CreateSymphonyServiceOptions): Sy
 
   const activeWorkers = new Map<string, ActiveWorker>();
   const workerTasks = new Set<Promise<void>>();
+  const guardrailNotifiedIssueIds = new Set<string>();
   let completedInputTokens = 0;
   let completedOutputTokens = 0;
   let completedTotalTokens = 0;
@@ -340,6 +349,111 @@ export function createSymphonyService(options: CreateSymphonyServiceOptions): Sy
     activeWorkers.delete(issueId);
   }
 
+  function evaluateGuardrails(issue: NormalizedIssue): string[] {
+    const problems: string[] = [];
+
+    if (!hasRecognizedPackageLabel(issue.labels)) {
+      problems.push(
+        "Missing package routing label. Add one of: pkg:athena-webapp, pkg:storefront-webapp, pkg:symphony-service, pkg:valkey-proxy-server.",
+      );
+    }
+
+    const trimmedDescription = (issue.description ?? "").trim();
+    if (trimmedDescription.length < MIN_DESCRIPTION_LENGTH) {
+      problems.push(
+        `Issue description is too short (${trimmedDescription.length} chars). Add concrete scope and acceptance criteria.`,
+      );
+    }
+
+    return problems;
+  }
+
+  async function publishGuardrailComment(trackerClient: TrackerClient, issue: NormalizedIssue, reasons: string[]): Promise<void> {
+    if (!trackerClient.createIssueComment) {
+      return;
+    }
+
+    const reasonLines = reasons.map((reason) => `- ${reason}`).join("\n");
+    const body = [
+      "Symphony paused automatic execution for this issue because intake guardrails are not met.",
+      "",
+      reasonLines,
+      "",
+      "After updating the issue details, trigger a refresh to resume scheduling.",
+    ].join("\n");
+
+    await safeTrackerWrite("guardrail_comment", issue, async () => {
+      await trackerClient.createIssueComment?.({
+        issueId: issue.id,
+        body,
+      });
+    });
+  }
+
+  async function moveIssueToInProgress(trackerClient: TrackerClient, issue: NormalizedIssue): Promise<void> {
+    if (!trackerClient.updateIssueStateByName) {
+      return;
+    }
+
+    await safeTrackerWrite("state_transition", issue, async () => {
+      const changed = await trackerClient.updateIssueStateByName?.({
+        issue,
+        stateName: "In Progress",
+      });
+
+      if (changed) {
+        emitLog({
+          level: "info",
+          message: "action=tracker_write outcome=completed kind=state_transition",
+          details: {
+            issue_id: issue.id,
+            issue_identifier: issue.identifier,
+            next_state: "In Progress",
+          },
+        });
+      }
+    });
+  }
+
+  async function publishRunComment(
+    trackerClient: TrackerClient,
+    issue: NormalizedIssue,
+    input: {
+      kind: "started" | "completed" | "failed";
+      attempt: number;
+      error?: string;
+    },
+  ): Promise<void> {
+    if (!trackerClient.createIssueComment) {
+      return;
+    }
+
+    const body = buildRunCommentBody(input);
+    await safeTrackerWrite(`run_${input.kind}`, issue, async () => {
+      await trackerClient.createIssueComment?.({
+        issueId: issue.id,
+        body,
+      });
+    });
+  }
+
+  async function safeTrackerWrite(kind: string, issue: NormalizedIssue, writer: () => Promise<void>): Promise<void> {
+    try {
+      await writer();
+    } catch (error) {
+      emitLog({
+        level: "warn",
+        message: "action=tracker_write outcome=failed",
+        details: {
+          kind,
+          issue_id: issue.id,
+          issue_identifier: issue.identifier,
+          error: toErrorMessage(error),
+        },
+      });
+    }
+  }
+
   async function dispatchIssue(input: DispatchInput): Promise<void> {
     if (!config || !tracker || !workflow) {
       throw new Error("service runtime is not initialized");
@@ -352,6 +466,23 @@ export function createSymphonyService(options: CreateSymphonyServiceOptions): Sy
     const runtimeConfig = config;
     const runtimeTracker = tracker;
     const runtimeWorkflow = workflow;
+    const guardrailProblems = evaluateGuardrails(input.issue);
+
+    if (guardrailProblems.length > 0) {
+      if (!guardrailNotifiedIssueIds.has(input.issue.id)) {
+        await publishGuardrailComment(runtimeTracker, input.issue, guardrailProblems);
+        guardrailNotifiedIssueIds.add(input.issue.id);
+      }
+
+      throw new SymphonyError("guardrail_blocked", `issue failed intake guardrails: ${guardrailProblems.join(" | ")}`);
+    }
+
+    guardrailNotifiedIssueIds.delete(input.issue.id);
+    await moveIssueToInProgress(runtimeTracker, input.issue);
+    await publishRunComment(runtimeTracker, input.issue, {
+      kind: "started",
+      attempt: input.attempt,
+    });
 
     const startedAtMs = deps.nowMs();
     const worker: ActiveWorker = {
@@ -395,20 +526,31 @@ export function createSymphonyService(options: CreateSymphonyServiceOptions): Sy
           });
         },
       })
-      .then(() => {
+      .then(async () => {
         onWorkerExit(state, {
           issueId: input.issue.id,
           nowMs: deps.nowMs(),
           reason: "normal",
           maxRetryBackoffMs: runtimeConfig.agent.maxRetryBackoffMs,
         });
+
+        await publishRunComment(runtimeTracker, input.issue, {
+          kind: "completed",
+          attempt: input.attempt,
+        });
       })
-      .catch((error) => {
+      .catch(async (error) => {
         onWorkerExit(state, {
           issueId: input.issue.id,
           nowMs: deps.nowMs(),
           reason: "failure",
           maxRetryBackoffMs: runtimeConfig.agent.maxRetryBackoffMs,
+          error: toErrorMessage(error),
+        });
+
+        await publishRunComment(runtimeTracker, input.issue, {
+          kind: "failed",
+          attempt: input.attempt,
           error: toErrorMessage(error),
         });
       })
@@ -711,6 +853,53 @@ function resolveDependencies(overrides: Partial<ServiceDependencies> | undefined
     },
     ...overrides,
   };
+}
+
+function hasRecognizedPackageLabel(labels: string[]): boolean {
+  for (const label of labels) {
+    const normalized = label.trim().toLowerCase();
+    if (!normalized) {
+      continue;
+    }
+
+    if (REQUIRED_PACKAGE_LABELS.has(normalized)) {
+      return true;
+    }
+
+    if (REQUIRED_PACKAGE_SUFFIXES.has(normalized)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function buildRunCommentBody(input: { kind: "started" | "completed" | "failed"; attempt: number; error?: string }): string {
+  const timestamp = new Date().toISOString();
+  const attemptText = `attempt ${input.attempt}`;
+
+  if (input.kind === "started") {
+    return [
+      `Symphony started work on this issue (${attemptText}).`,
+      "",
+      `Timestamp: ${timestamp}`,
+    ].join("\n");
+  }
+
+  if (input.kind === "completed") {
+    return [
+      `Symphony finished a run for this issue (${attemptText}).`,
+      "",
+      `Timestamp: ${timestamp}`,
+    ].join("\n");
+  }
+
+  return [
+    `Symphony run failed for this issue (${attemptText}).`,
+    "",
+    `Error: ${input.error ?? "unknown failure"}`,
+    `Timestamp: ${timestamp}`,
+  ].join("\n");
 }
 
 function formatLogValue(value: unknown): string {

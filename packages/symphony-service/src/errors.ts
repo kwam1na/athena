@@ -22,7 +22,8 @@ export type SymphonyErrorCode =
   | "linear_api_status"
   | "linear_graphql_errors"
   | "linear_unknown_payload"
-  | "linear_missing_end_cursor";
+  | "linear_missing_end_cursor"
+  | "guardrail_blocked";
 
 export class SymphonyError extends Error {
   readonly code: SymphonyErrorCode;

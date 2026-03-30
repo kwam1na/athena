@@ -23,11 +23,14 @@ function issue(partial: Partial<NormalizedIssue>): NormalizedIssue {
     id: partial.id ?? "1",
     identifier: partial.identifier ?? "ATH-1",
     title: partial.title ?? "Issue",
+    description:
+      partial.description ?? "Implement the requested change with clear acceptance criteria and validation details.",
     state: partial.state ?? "Todo",
+    team_id: partial.team_id,
     priority: partial.priority ?? 1,
     created_at: partial.created_at ?? "2026-01-01T00:00:00.000Z",
     updated_at: partial.updated_at ?? "2026-01-01T00:00:00.000Z",
-    labels: partial.labels ?? [],
+    labels: partial.labels ?? ["pkg:symphony-service"],
     blocked_by: partial.blocked_by ?? [],
   };
 }
@@ -510,6 +513,130 @@ describe("createSymphonyService", () => {
       error: "boom",
     });
     expect(snapshot.retrying[0]!.due_at_ms).toBe(nowMs + 10_000);
+
+    await service.stop();
+  });
+
+  it("writes back tracker comments and moves issue to In Progress on dispatch", async () => {
+    const comments: string[] = [];
+    const transitioned: string[] = [];
+    const candidates = [
+      issue({
+        id: "writeback-1",
+        identifier: "ATH-777",
+        state: "Todo",
+        labels: ["pkg:storefront-webapp"],
+        description: "Implement product search with clear acceptance criteria and validation steps.",
+        team_id: "team-1",
+      }),
+    ];
+
+    const service = createSymphonyService({
+      workflowPath: "/tmp/WORKFLOW.md",
+      deps: {
+        loadWorkflowFile: async () => workflow(1000),
+        createTracker: () => ({
+          async fetchCandidateIssues() {
+            return candidates.splice(0, candidates.length);
+          },
+          async fetchIssuesByStates() {
+            return [];
+          },
+          async fetchIssueStatesByIds() {
+            return [];
+          },
+          async createIssueComment(input) {
+            comments.push(input.body);
+          },
+          async updateIssueStateByName(input) {
+            transitioned.push(`${input.issue.identifier}:${input.stateName}`);
+            return true;
+          },
+        }),
+        cleanupTerminalIssueWorkspaces: async () => ({ removed: 0, failed: 0, warnings: [] }),
+        processDueRetries: async () => ({
+          processedIssueIds: [],
+          dispatchedIssueIds: [],
+          requeuedIssueIds: [],
+          releasedIssueIds: [],
+        }),
+        setIntervalFn: () => 1 as unknown as ReturnType<typeof setInterval>,
+        clearIntervalFn: () => {},
+        runIssueAttempt: async (input) => ({
+          exit: "normal" as const,
+          turnCount: 1,
+          workspacePath: "/tmp/fake",
+          issue: input.issue,
+        }),
+      },
+    });
+
+    await service.start();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(transitioned).toEqual(["ATH-777:In Progress"]);
+    expect(comments.some((entry) => entry.includes("started work"))).toBe(true);
+    expect(comments.some((entry) => entry.includes("finished a run"))).toBe(true);
+
+    await service.stop();
+  });
+
+  it("blocks issues that fail intake guardrails and comments once", async () => {
+    const comments: string[] = [];
+    const runIssueAttempt = vi.fn(async (input: any) => ({
+      exit: "normal" as const,
+      turnCount: 0,
+      workspacePath: "/tmp/fake",
+      issue: input.issue,
+    }));
+
+    const candidateIssue = issue({
+      id: "guardrail-1",
+      identifier: "ATH-778",
+      state: "Todo",
+      labels: [],
+      description: "short",
+    });
+
+    const service = createSymphonyService({
+      workflowPath: "/tmp/WORKFLOW.md",
+      deps: {
+        loadWorkflowFile: async () => workflow(1000),
+        createTracker: () => ({
+          async fetchCandidateIssues() {
+            return [candidateIssue];
+          },
+          async fetchIssuesByStates() {
+            return [];
+          },
+          async fetchIssueStatesByIds() {
+            return [];
+          },
+          async createIssueComment(input) {
+            comments.push(input.body);
+          },
+        }),
+        cleanupTerminalIssueWorkspaces: async () => ({ removed: 0, failed: 0, warnings: [] }),
+        processDueRetries: async () => ({
+          processedIssueIds: [],
+          dispatchedIssueIds: [],
+          requeuedIssueIds: [],
+          releasedIssueIds: [],
+        }),
+        setIntervalFn: () => 1 as unknown as ReturnType<typeof setInterval>,
+        clearIntervalFn: () => {},
+        runIssueAttempt: runIssueAttempt as any,
+      },
+    });
+
+    await service.start();
+    await service.runTickOnce();
+
+    expect(runIssueAttempt).not.toHaveBeenCalled();
+    expect(comments).toHaveLength(1);
+    expect(comments[0]).toContain("guardrails");
+    expect(service.getRuntimeSnapshot().retrying).toHaveLength(0);
 
     await service.stop();
   });

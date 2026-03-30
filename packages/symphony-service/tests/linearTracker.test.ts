@@ -171,4 +171,94 @@ describe("LinearTrackerClient", () => {
       expect((error as SymphonyError).code).toBe("linear_unknown_payload");
     }
   });
+
+  it("creates issue comments through commentCreate mutation", async () => {
+    const { fetchMock, calls } = makeFetch([
+      {
+        data: {
+          commentCreate: {
+            success: true,
+          },
+        },
+      },
+    ]);
+
+    const client = clientWith(fetchMock);
+    await client.createIssueComment?.({
+      issueId: "issue-1",
+      body: "hello",
+    });
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.body?.query).toContain("commentCreate");
+    expect(calls[0]?.body?.variables).toMatchObject({
+      issueId: "issue-1",
+      body: "hello",
+    });
+  });
+
+  it("updates issue state by name when team id is present", async () => {
+    const { fetchMock, calls } = makeFetch([
+      {
+        data: {
+          workflowStates: {
+            nodes: [{ id: "state-in-progress", name: "In Progress" }],
+          },
+        },
+      },
+      {
+        data: {
+          issueUpdate: {
+            success: true,
+          },
+        },
+      },
+    ]);
+
+    const client = clientWith(fetchMock);
+    const changed = await client.updateIssueStateByName?.({
+      issue: {
+        id: "issue-2",
+        identifier: "ATH-2",
+        title: "state move",
+        description: "desc",
+        state: "Todo",
+        team_id: "team-1",
+        priority: 1,
+        created_at: "2026-01-01T00:00:00.000Z",
+        updated_at: "2026-01-01T00:00:00.000Z",
+        labels: [],
+        blocked_by: [],
+      },
+      stateName: "In Progress",
+    });
+
+    expect(changed).toBe(true);
+    expect(calls).toHaveLength(2);
+    expect(calls[0]?.body?.query).toContain("workflowStates");
+    expect(calls[1]?.body?.query).toContain("issueUpdate");
+  });
+
+  it("skips issue state update when team id is missing", async () => {
+    const { fetchMock, calls } = makeFetch([]);
+    const client = clientWith(fetchMock);
+
+    const changed = await client.updateIssueStateByName?.({
+      issue: {
+        id: "issue-3",
+        identifier: "ATH-3",
+        title: "no team",
+        state: "Todo",
+        priority: 1,
+        created_at: "2026-01-01T00:00:00.000Z",
+        updated_at: "2026-01-01T00:00:00.000Z",
+        labels: [],
+        blocked_by: [],
+      },
+      stateName: "In Progress",
+    });
+
+    expect(changed).toBe(false);
+    expect(calls).toHaveLength(0);
+  });
 });
