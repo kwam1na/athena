@@ -31,7 +31,7 @@ Spec reference: https://github.com/openai/symphony/blob/main/SPEC.md
 
 | Extension | Status | Notes |
 | --- | --- | --- |
-| Optional HTTP server/status surface (`SPEC` §13.7) | In progress | Planned next checkpoint |
+| Optional HTTP server/status surface (`SPEC` §13.7) | Implemented | `src/httpServer.ts`, `src/cli.ts`, `tests/httpServer.test.ts`, `tests/cli.test.ts` |
 | Optional `linear_graphql` client-side tool extension | Not implemented | Out of current scope |
 | Persistent retry/session state across restarts | Not implemented | Future improvement |
 | Workflow-configurable observability settings | Not implemented | Future improvement |

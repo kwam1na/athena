@@ -14,16 +14,27 @@ Spec-aligned Symphony service foundation for Athena.
 - Worker attempt execution loop (workspace, hooks, prompt, Codex turns)
 - Startup terminal workspace cleanup
 - CLI-hosted service loop with optional workflow watch/reload
+- Optional HTTP status server (`--port` or `server.port`) with dashboard + JSON APIs
 
 ## Specification tracking
 
 - Conformance matrix: [`CONFORMANCE.md`](./CONFORMANCE.md)
+
+## Status server (optional extension)
+
+When enabled (`--port` or `server.port` in `WORKFLOW.md`), the service exposes:
+
+- `GET /` dashboard
+- `GET /api/v1/state`
+- `GET /api/v1/<issue_identifier>`
+- `POST /api/v1/refresh`
 
 ## Commands
 
 ```bash
 bun run --filter '@athena/symphony-service' start
 bun run --filter '@athena/symphony-service' start --watch
+bun run --filter '@athena/symphony-service' start --port 3000
 bun run --filter '@athena/symphony-service' test
 bun run --filter '@athena/symphony-service' test:integration:real WORKFLOW.md --linear=true --codex=false
 ```
