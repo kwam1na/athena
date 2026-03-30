@@ -1,6 +1,6 @@
 import type { FSWatcher } from "node:fs";
 import { resolveEffectiveConfig } from "./config";
-import { CodexAppServerClient } from "./codex/client";
+import { CodexAppServerClient, type CodexRuntimeEvent } from "./codex/client";
 import { toErrorMessage } from "./errors";
 import type { TrackerClient } from "./issue";
 import { createOrchestratorState, onWorkerExit, type ReconcileAction } from "./orchestrator";
@@ -24,7 +24,19 @@ export interface ServiceLogEntry {
 }
 
 interface ActiveWorker {
+  issueId: string;
   identifier: string;
+  startedAtMs: number;
+  retryAttempt: number;
+  sessionId: string | null;
+  turnCount: number;
+  usage: {
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+  };
+  lastCodexTimestampMs: number | null;
+  latestRateLimits: Record<string, unknown> | null;
   stop: () => void;
 }
 
@@ -34,7 +46,7 @@ interface ServiceDependencies {
   resolveEffectiveConfig: (config: WorkflowDocument["config"]) => EffectiveConfig;
   validateDispatchPreflight: (config: EffectiveConfig) => void;
   createTracker: (config: EffectiveConfig) => TrackerClient;
-  createCodexClient: (config: EffectiveConfig) => WorkerCodexClient;
+  createCodexClient: (config: EffectiveConfig, onEvent?: (event: CodexRuntimeEvent) => void) => WorkerCodexClient;
   runIssueAttempt: typeof runIssueAttempt;
   processDueRetries: typeof processDueRetries;
   runOrchestratorTick: typeof runOrchestratorTick;
@@ -61,12 +73,47 @@ export interface SymphonyServiceSnapshot {
   retryCount: number;
 }
 
+export interface RuntimeSnapshotRunningRow {
+  issue_id: string;
+  issue_identifier: string;
+  state: string;
+  session_id: string | null;
+  turn_count: number;
+  retry_attempt: number;
+  started_at_ms: number;
+  last_codex_timestamp_ms: number | null;
+  codex_input_tokens: number;
+  codex_output_tokens: number;
+  codex_total_tokens: number;
+}
+
+export interface RuntimeSnapshotRetryRow {
+  issue_id: string;
+  issue_identifier: string;
+  attempt: number;
+  due_at_ms: number;
+  error: string;
+}
+
+export interface RuntimeSnapshot {
+  running: RuntimeSnapshotRunningRow[];
+  retrying: RuntimeSnapshotRetryRow[];
+  codex_totals: {
+    input_tokens: number;
+    output_tokens: number;
+    total_tokens: number;
+    seconds_running: number;
+  };
+  rate_limits: Record<string, unknown> | null;
+}
+
 export interface SymphonyService {
   start(): Promise<void>;
   stop(): Promise<void>;
   reloadWorkflow(): Promise<boolean>;
   runTickOnce(): Promise<void>;
   getSnapshot(): SymphonyServiceSnapshot;
+  getRuntimeSnapshot(): RuntimeSnapshot;
 }
 
 export function formatServiceLogLine(entry: ServiceLogEntry): string {
@@ -100,6 +147,11 @@ export function createSymphonyService(options: CreateSymphonyServiceOptions): Sy
 
   const activeWorkers = new Map<string, ActiveWorker>();
   const workerTasks = new Set<Promise<void>>();
+  let completedInputTokens = 0;
+  let completedOutputTokens = 0;
+  let completedTotalTokens = 0;
+  let completedSecondsRunning = 0;
+  let latestRateLimits: Record<string, unknown> | null = null;
 
   function emitLog(entry: ServiceLogEntry): void {
     try {
@@ -301,11 +353,30 @@ export function createSymphonyService(options: CreateSymphonyServiceOptions): Sy
     const runtimeTracker = tracker;
     const runtimeWorkflow = workflow;
 
-    const codexClient = deps.createCodexClient(runtimeConfig);
-    activeWorkers.set(input.issue.id, {
+    const startedAtMs = deps.nowMs();
+    const worker: ActiveWorker = {
+      issueId: input.issue.id,
       identifier: input.issue.identifier,
-      stop: () => codexClient.stop(),
+      startedAtMs,
+      retryAttempt: input.attempt,
+      sessionId: null,
+      turnCount: 0,
+      usage: {
+        inputTokens: 0,
+        outputTokens: 0,
+        totalTokens: 0,
+      },
+      lastCodexTimestampMs: null,
+      latestRateLimits: null,
+      stop: () => {},
+    };
+    activeWorkers.set(input.issue.id, worker);
+
+    const codexClient = deps.createCodexClient(runtimeConfig, (event) => {
+      onWorkerCodexEvent(input.issue.id, event);
     });
+    worker.stop = () => codexClient.stop();
+    activeWorkers.set(input.issue.id, worker);
 
     const task = deps
       .runIssueAttempt({
@@ -316,6 +387,7 @@ export function createSymphonyService(options: CreateSymphonyServiceOptions): Sy
         tracker: runtimeTracker,
         createCodexClient: () => codexClient,
         onLog: (entry) => {
+          onWorkerLifecycleLog(input.issue.id, entry);
           emitLog({
             level: entry.message.includes("outcome=failed") ? "warn" : "info",
             message: entry.message,
@@ -341,7 +413,7 @@ export function createSymphonyService(options: CreateSymphonyServiceOptions): Sy
         });
       })
       .finally(() => {
-        activeWorkers.delete(input.issue.id);
+        finalizeWorkerMetrics(input.issue.id);
         workerTasks.delete(task);
       });
 
@@ -425,12 +497,167 @@ export function createSymphonyService(options: CreateSymphonyServiceOptions): Sy
     };
   }
 
+  function getRuntimeSnapshot(): RuntimeSnapshot {
+    const nowMs = deps.nowMs();
+    const running: RuntimeSnapshotRunningRow[] = [];
+
+    for (const [issueId, runningEntry] of state.running.entries()) {
+      const worker = activeWorkers.get(issueId);
+      running.push({
+        issue_id: runningEntry.issue.id,
+        issue_identifier: runningEntry.issue.identifier,
+        state: runningEntry.issue.state,
+        session_id: worker?.sessionId ?? null,
+        turn_count: worker?.turnCount ?? runningEntry.turnCount,
+        retry_attempt: worker?.retryAttempt ?? runningEntry.retryAttempt,
+        started_at_ms: runningEntry.startedAtMs,
+        last_codex_timestamp_ms: worker?.lastCodexTimestampMs ?? runningEntry.lastCodexTimestampMs ?? null,
+        codex_input_tokens: worker?.usage.inputTokens ?? 0,
+        codex_output_tokens: worker?.usage.outputTokens ?? 0,
+        codex_total_tokens: worker?.usage.totalTokens ?? 0,
+      });
+    }
+
+    running.sort((a, b) => a.issue_identifier.localeCompare(b.issue_identifier));
+
+    const retrying: RuntimeSnapshotRetryRow[] = Array.from(state.retryAttempts.values())
+      .map((entry) => ({
+        issue_id: entry.issueId,
+        issue_identifier: entry.identifier,
+        attempt: entry.attempt,
+        due_at_ms: entry.dueAtMs,
+        error: entry.error,
+      }))
+      .sort((a, b) => a.due_at_ms - b.due_at_ms);
+
+    let activeInputTokens = 0;
+    let activeOutputTokens = 0;
+    let activeTotalTokens = 0;
+    let activeSecondsRunning = 0;
+
+    for (const worker of activeWorkers.values()) {
+      activeInputTokens += worker.usage.inputTokens;
+      activeOutputTokens += worker.usage.outputTokens;
+      activeTotalTokens += worker.usage.totalTokens;
+      activeSecondsRunning += Math.max(nowMs - worker.startedAtMs, 0) / 1000;
+    }
+
+    return {
+      running,
+      retrying,
+      codex_totals: {
+        input_tokens: completedInputTokens + activeInputTokens,
+        output_tokens: completedOutputTokens + activeOutputTokens,
+        total_tokens: completedTotalTokens + activeTotalTokens,
+        seconds_running: completedSecondsRunning + activeSecondsRunning,
+      },
+      rate_limits: latestRateLimits,
+    };
+  }
+
+  function onWorkerLifecycleLog(
+    issueId: string,
+    entry: {
+      message: string;
+      details?: Record<string, unknown>;
+    },
+  ): void {
+    const worker = activeWorkers.get(issueId);
+    if (!worker) {
+      return;
+    }
+
+    const nowMs = deps.nowMs();
+    worker.lastCodexTimestampMs = nowMs;
+
+    const runningEntry = state.running.get(issueId);
+    if (runningEntry) {
+      runningEntry.lastCodexTimestampMs = nowMs;
+      state.running.set(issueId, runningEntry);
+    }
+
+    const sessionId = asString(entry.details?.session_id);
+    if (sessionId) {
+      worker.sessionId = sessionId;
+    }
+
+    if (entry.message.includes("action=turn outcome=completed")) {
+      worker.turnCount += 1;
+      if (runningEntry) {
+        runningEntry.turnCount = worker.turnCount;
+        state.running.set(issueId, runningEntry);
+      }
+    }
+  }
+
+  function onWorkerCodexEvent(issueId: string, event: CodexRuntimeEvent): void {
+    const worker = activeWorkers.get(issueId);
+    if (!worker) {
+      return;
+    }
+
+    const parsedTimestampMs = Date.parse(event.timestamp);
+    const timestampMs = Number.isFinite(parsedTimestampMs) ? parsedTimestampMs : deps.nowMs();
+    worker.lastCodexTimestampMs = timestampMs;
+
+    const runningEntry = state.running.get(issueId);
+    if (runningEntry) {
+      runningEntry.lastCodexTimestampMs = timestampMs;
+      state.running.set(issueId, runningEntry);
+    }
+
+    if (event.session_id) {
+      worker.sessionId = event.session_id;
+    }
+
+    const usage = event.usage ?? null;
+    if (usage) {
+      const nextInput = asNumber(usage.input_tokens ?? usage.inputTokens);
+      const nextOutput = asNumber(usage.output_tokens ?? usage.outputTokens);
+      const nextTotal = asNumber(usage.total_tokens ?? usage.totalTokens);
+
+      if (nextInput !== null) {
+        worker.usage.inputTokens = nextInput;
+      }
+      if (nextOutput !== null) {
+        worker.usage.outputTokens = nextOutput;
+      }
+      if (nextTotal !== null) {
+        worker.usage.totalTokens = nextTotal;
+      }
+    }
+
+    if (event.rate_limits && typeof event.rate_limits === "object") {
+      worker.latestRateLimits = event.rate_limits;
+      latestRateLimits = event.rate_limits;
+    }
+  }
+
+  function finalizeWorkerMetrics(issueId: string): void {
+    const worker = activeWorkers.get(issueId);
+    if (!worker) {
+      return;
+    }
+
+    completedInputTokens += worker.usage.inputTokens;
+    completedOutputTokens += worker.usage.outputTokens;
+    completedTotalTokens += worker.usage.totalTokens;
+    completedSecondsRunning += Math.max(deps.nowMs() - worker.startedAtMs, 0) / 1000;
+
+    if (worker.latestRateLimits) {
+      latestRateLimits = worker.latestRateLimits;
+    }
+
+    activeWorkers.delete(issueId);
+  }
+
   return {
     start,
     stop,
     reloadWorkflow,
     runTickOnce,
     getSnapshot,
+    getRuntimeSnapshot,
   };
 }
 
@@ -452,7 +679,7 @@ function resolveDependencies(overrides: Partial<ServiceDependencies> | undefined
         activeStates: config.tracker.activeStates,
       });
     },
-    createCodexClient: (config) => {
+    createCodexClient: (config, onEvent) => {
       return new CodexAppServerClient({
         command: config.codex.command,
         clientName: config.codex.clientName,
@@ -463,7 +690,7 @@ function resolveDependencies(overrides: Partial<ServiceDependencies> | undefined
         turnSandboxPolicy: config.codex.turnSandboxPolicy,
         readTimeoutMs: config.codex.readTimeoutMs,
         turnTimeoutMs: config.codex.turnTimeoutMs,
-      });
+      }, onEvent);
     },
     runIssueAttempt,
     processDueRetries,
@@ -500,4 +727,16 @@ function formatLogValue(value: unknown): string {
   }
 
   return JSON.stringify(value);
+}
+
+function asString(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+function asNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  return null;
 }
