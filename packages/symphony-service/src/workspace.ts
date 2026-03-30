@@ -221,10 +221,25 @@ async function pathExists(path: string): Promise<boolean> {
     await stat(path);
     return true;
   } catch (error) {
-    if (toErrorMessage(error).toLowerCase().includes("enoent")) {
+    if (isMissingPathError(error)) {
       return false;
     }
 
     throw error;
   }
+}
+
+function isMissingPathError(error: unknown): boolean {
+  if (error && typeof error === "object") {
+    const maybeNodeError = error as { code?: unknown; errno?: unknown; message?: unknown };
+    if (maybeNodeError.code === "ENOENT") {
+      return true;
+    }
+    if (maybeNodeError.errno === -2) {
+      return true;
+    }
+  }
+
+  const message = toErrorMessage(error).toLowerCase();
+  return message.includes("enoent") || message.includes("no such file or directory");
 }

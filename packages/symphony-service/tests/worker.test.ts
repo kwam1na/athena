@@ -227,6 +227,28 @@ describe("runIssueAttempt", () => {
     expect(logs.some((entry) => entry.details?.session_id === "thread-1-turn-1")).toBe(true);
   });
 
+  it("treats port_exit as clean completion when the issue already transitioned out of active states", async () => {
+    const root = await mkdtemp(join(tmpdir(), "symphony-worker-port-exit-terminal-"));
+    const logs: Array<{ message: string; details?: Record<string, unknown> }> = [];
+
+    const result = await runIssueAttempt({
+      issue: issue({ id: "9", identifier: "ATH-9", state: "Todo" }),
+      attempt: 1,
+      workflowTemplate: "Issue {{ issue.identifier }}",
+      config: config(root),
+      tracker: new FakeTracker([
+        issue({ id: "9", identifier: "ATH-9", state: "Done" }),
+      ]),
+      createCodexClient: () => new FakeCodex("port_exit") as unknown as CodexAppServerClient,
+      onLog: (entry) => logs.push(entry),
+    });
+
+    expect(result.exit).toBe("normal");
+    expect(result.issue.state).toBe("Done");
+    expect(result.turnCount).toBe(1);
+    expect(logs.some((entry) => entry.message.includes("action=turn outcome=terminal_after_non_completed"))).toBe(true);
+  });
+
   it("stops attempt when per-attempt input token budget is exceeded", async () => {
     const root = await mkdtemp(join(tmpdir(), "symphony-worker-token-guardrail-"));
     const logs: Array<{ message: string; details?: Record<string, unknown> }> = [];
