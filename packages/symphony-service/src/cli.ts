@@ -13,6 +13,8 @@ interface CliDependencies {
   cwd: () => string;
   createService: (options: CreateSymphonyServiceOptions) => SymphonyService;
   onSignal: (signal: "SIGINT" | "SIGTERM", handler: () => void) => void;
+  onUncaughtException: (handler: (error: unknown) => void) => void;
+  onUnhandledRejection: (handler: (reason: unknown) => void) => void;
   writeStderr: (line: string) => void;
   exit: (code: number) => void;
 }
@@ -22,6 +24,12 @@ const defaultCliDependencies: CliDependencies = {
   createService: (options) => createSymphonyService(options),
   onSignal: (signal, handler) => {
     process.on(signal, handler);
+  },
+  onUncaughtException: (handler) => {
+    process.on("uncaughtException", handler);
+  },
+  onUnhandledRejection: (handler) => {
+    process.on("unhandledRejection", handler);
   },
   writeStderr: (line) => {
     process.stderr.write(line);
@@ -72,19 +80,32 @@ export async function runCli(
 
   await service.start();
 
-  const stop = () => {
+  let shuttingDown = false;
+
+  const stop = (exitCode: number, error?: unknown) => {
+    if (shuttingDown) {
+      return;
+    }
+    shuttingDown = true;
+
+    if (error !== undefined) {
+      dependencies.writeStderr(`[symphony] fatal host error: ${toErrorMessage(error)}\n`);
+    }
+
     void service
       .stop()
       .catch((error) => {
         dependencies.writeStderr(`[symphony] shutdown failed: ${toErrorMessage(error)}\n`);
       })
       .finally(() => {
-        dependencies.exit(0);
+        dependencies.exit(exitCode);
       });
   };
 
-  dependencies.onSignal("SIGINT", stop);
-  dependencies.onSignal("SIGTERM", stop);
+  dependencies.onSignal("SIGINT", () => stop(0));
+  dependencies.onSignal("SIGTERM", () => stop(0));
+  dependencies.onUncaughtException((error) => stop(1, error));
+  dependencies.onUnhandledRejection((reason) => stop(1, reason));
 }
 
 export async function runCliEntry(
