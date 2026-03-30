@@ -1,6 +1,7 @@
 export * from "./config";
 export * from "./errors";
 export * from "./issue";
+export * from "./orchestrator";
 export * from "./retry";
 export * from "./scheduler";
 export * from "./template";
