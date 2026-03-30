@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { mkdir, rm, stat } from "node:fs/promises";
-import { resolve, sep } from "node:path";
+import { join, resolve, sep } from "node:path";
 import { SymphonyError, toErrorMessage } from "./errors";
 
 export interface WorkspaceHooksConfig {
@@ -33,7 +33,8 @@ export async function ensureWorkspaceForIssue(
   await mkdir(location.path, { recursive: true });
 
   const createdNow = !existed;
-  if (createdNow && config.hooks.afterCreate?.trim()) {
+  const missingGitMetadata = !(await pathExists(join(location.path, ".git")));
+  if ((createdNow || missingGitMetadata) && config.hooks.afterCreate?.trim()) {
     await runRequiredHook(config, location.path, "after_create", config.hooks.afterCreate);
   }
 

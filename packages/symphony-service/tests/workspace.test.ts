@@ -51,7 +51,7 @@ describe("workspace lifecycle", () => {
     const root = await mkdtemp(join(tmpdir(), "symphony-workspace-hook-"));
     const marker = join(root, "marker.txt");
 
-    const hook = `echo created > ${JSON.stringify(marker)}`;
+    const hook = `echo created > ${JSON.stringify(marker)} && touch .git`;
     await ensureWorkspaceForIssue(
       {
         root,
@@ -78,6 +78,28 @@ describe("workspace lifecycle", () => {
 
     const current = await readFile(marker, "utf8");
     expect(current.trim()).toBe("mutated");
+  });
+
+  it("rehydrates existing non-git workspaces by rerunning after_create", async () => {
+    const root = await mkdtemp(join(tmpdir(), "symphony-workspace-rehydrate-"));
+    const marker = join(root, "rehydrated.txt");
+    const workspace = resolve(root, "ATH-106");
+    await mkdir(workspace, { recursive: true });
+
+    const result = await ensureWorkspaceForIssue(
+      {
+        root,
+        hooks: {
+          timeoutMs: 2000,
+          afterCreate: `echo rehydrated > ${JSON.stringify(marker)}`,
+        },
+      },
+      "ATH-106",
+    );
+
+    expect(result.createdNow).toBe(false);
+    const current = await readFile(marker, "utf8");
+    expect(current.trim()).toBe("rehydrated");
   });
 
   it("treats after_create failure as fatal", async () => {
