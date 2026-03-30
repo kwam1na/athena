@@ -165,6 +165,31 @@ describe("runOrchestratorTick", () => {
     expect(state.running.has("todo-1")).toBe(false);
   });
 
+  it("does not schedule retry when dispatch is blocked by guardrail", async () => {
+    const state = createOrchestratorState();
+
+    const result = await runOrchestratorTick({
+      state,
+      tracker: new FakeTracker([issue({ id: "todo-guardrail", identifier: "ATH-99", state: "Todo" })]),
+      config: config(),
+      nowMs: 500,
+      dispatchIssue: async () => {
+        const error = new Error("guardrail");
+        (error as Error & { code?: string }).code = "guardrail_blocked";
+        throw error;
+      },
+    });
+
+    expect(result.dispatchErrors).toEqual([
+      {
+        issueId: "todo-guardrail",
+        error: "guardrail",
+      },
+    ]);
+    expect(state.retryAttempts.size).toBe(0);
+    expect(state.running.size).toBe(0);
+  });
+
   it("queues failure retry for stalled running issues", async () => {
     const state = createOrchestratorState();
     markIssueRunning(

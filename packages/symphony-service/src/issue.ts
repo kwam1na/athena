@@ -8,7 +8,9 @@ export interface NormalizedIssue {
   id: string;
   identifier: string;
   title: string;
+  description?: string;
   state: string;
+  team_id?: string;
   priority: number | null;
   created_at: string;
   updated_at: string;
@@ -20,4 +22,6 @@ export interface TrackerClient {
   fetchCandidateIssues(): Promise<NormalizedIssue[]>;
   fetchIssuesByStates(stateNames: string[]): Promise<NormalizedIssue[]>;
   fetchIssueStatesByIds(issueIds: string[]): Promise<NormalizedIssue[]>;
+  createIssueComment?(input: { issueId: string; body: string }): Promise<void>;
+  updateIssueStateByName?(input: { issue: NormalizedIssue; stateName: string }): Promise<boolean>;
 }

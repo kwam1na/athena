@@ -1,23 +1,15 @@
 import { SymphonyError } from "../errors";
 import type { NormalizedIssue, TrackerClient } from "../issue";
 
-const CANDIDATE_QUERY = `
-query FetchCandidateIssues($projectSlug: String!, $activeStates: [String!], $after: String, $first: Int!) {
-  issues(
-    filter: {
-      project: { slugId: { eq: $projectSlug } }
-      state: { name: { in: $activeStates } }
-    }
-    first: $first
-    after: $after
-  ) {
-    nodes {
+const ISSUE_NODE_FIELDS = `
       id
       identifier
       title
+      description
       priority
       createdAt
       updatedAt
+      team { id }
       state { name }
       labels { nodes { name } }
       relations {
@@ -30,6 +22,20 @@ query FetchCandidateIssues($projectSlug: String!, $activeStates: [String!], $aft
           }
         }
       }
+`;
+
+const CANDIDATE_QUERY = `
+query FetchCandidateIssues($projectSlug: String!, $activeStates: [String!], $after: String, $first: Int!) {
+  issues(
+    filter: {
+      project: { slugId: { eq: $projectSlug } }
+      state: { name: { in: $activeStates } }
+    }
+    first: $first
+    after: $after
+  ) {
+    nodes {
+${ISSUE_NODE_FIELDS}
     }
     pageInfo {
       hasNextPage
@@ -50,24 +56,7 @@ query FetchIssuesByStates($projectSlug: String!, $states: [String!], $after: Str
     after: $after
   ) {
     nodes {
-      id
-      identifier
-      title
-      priority
-      createdAt
-      updatedAt
-      state { name }
-      labels { nodes { name } }
-      relations {
-        nodes {
-          type
-          relatedIssue {
-            id
-            identifier
-            state { name }
-          }
-        }
-      }
+${ISSUE_NODE_FIELDS}
     }
     pageInfo {
       hasNextPage
@@ -81,29 +70,45 @@ const BY_IDS_QUERY = `
 query FetchIssueStatesByIds($issueIds: [ID!]!) {
   issues(filter: { id: { in: $issueIds } }, first: 250) {
     nodes {
-      id
-      identifier
-      title
-      priority
-      createdAt
-      updatedAt
-      state { name }
-      labels { nodes { name } }
-      relations {
-        nodes {
-          type
-          relatedIssue {
-            id
-            identifier
-            state { name }
-          }
-        }
-      }
+${ISSUE_NODE_FIELDS}
     }
     pageInfo {
       hasNextPage
       endCursor
     }
+  }
+}
+`;
+
+const FIND_WORKFLOW_STATE_ID_QUERY = `
+query FindWorkflowStateId($teamId: String!, $stateName: String!) {
+  workflowStates(
+    filter: {
+      team: { id: { eq: $teamId } }
+      name: { eq: $stateName }
+    }
+    first: 1
+  ) {
+    nodes {
+      id
+      name
+    }
+  }
+}
+`;
+
+const UPDATE_ISSUE_STATE_MUTATION = `
+mutation UpdateIssueState($issueId: String!, $stateId: String!) {
+  issueUpdate(id: $issueId, input: { stateId: $stateId }) {
+    success
+  }
+}
+`;
+
+const CREATE_COMMENT_MUTATION = `
+mutation CreateIssueComment($issueId: String!, $body: String!) {
+  commentCreate(input: { issueId: $issueId, body: $body }) {
+    success
   }
 }
 `;
@@ -133,6 +138,24 @@ interface IssueConnection {
   };
 }
 
+interface WorkflowStateConnection {
+  workflowStates?: {
+    nodes?: unknown[];
+  };
+}
+
+interface IssueUpdatePayload {
+  issueUpdate?: {
+    success?: boolean;
+  };
+}
+
+interface CommentCreatePayload {
+  commentCreate?: {
+    success?: boolean;
+  };
+}
+
 export class LinearTrackerClient implements TrackerClient {
   private readonly endpoint: string;
   private readonly apiKey: string;
@@ -141,6 +164,7 @@ export class LinearTrackerClient implements TrackerClient {
   private readonly timeoutMs: number;
   private readonly pageSize: number;
   private readonly fetchImpl: typeof fetch;
+  private readonly stateNameIdCache = new Map<string, string>();
 
   constructor(options: LinearClientOptions) {
     this.endpoint = options.endpoint;
@@ -187,6 +211,40 @@ export class LinearTrackerClient implements TrackerClient {
     return nodes.map(normalizeIssue).filter((issue): issue is NormalizedIssue => issue !== null);
   }
 
+  async createIssueComment(input: { issueId: string; body: string }): Promise<void> {
+    const response = await this.graphqlRequest<CommentCreatePayload>(CREATE_COMMENT_MUTATION, {
+      issueId: input.issueId,
+      body: input.body,
+    });
+
+    if (!response.commentCreate?.success) {
+      throw new SymphonyError("linear_unknown_payload", "Linear commentCreate returned unsuccessful response");
+    }
+  }
+
+  async updateIssueStateByName(input: { issue: NormalizedIssue; stateName: string }): Promise<boolean> {
+    const teamId = (input.issue.team_id ?? "").trim();
+    if (!teamId) {
+      return false;
+    }
+
+    if (input.issue.state.trim().toLowerCase() === input.stateName.trim().toLowerCase()) {
+      return false;
+    }
+
+    const stateId = await this.resolveWorkflowStateIdByName(teamId, input.stateName);
+    if (!stateId) {
+      return false;
+    }
+
+    const response = await this.graphqlRequest<IssueUpdatePayload>(UPDATE_ISSUE_STATE_MUTATION, {
+      issueId: input.issue.id,
+      stateId,
+    });
+
+    return Boolean(response.issueUpdate?.success);
+  }
+
   private async fetchPaginatedIssues(
     query: string,
     baseVariables: Record<string, unknown>,
@@ -225,6 +283,32 @@ export class LinearTrackerClient implements TrackerClient {
 
       after = endCursor;
     }
+  }
+
+  private async resolveWorkflowStateIdByName(teamId: string, stateName: string): Promise<string | null> {
+    const cacheKey = `${teamId}:${stateName.toLowerCase()}`;
+    const cached = this.stateNameIdCache.get(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    const response = await this.graphqlRequest<WorkflowStateConnection>(FIND_WORKFLOW_STATE_ID_QUERY, {
+      teamId,
+      stateName,
+    });
+
+    const firstNode = response.workflowStates?.nodes?.[0];
+    if (!firstNode || typeof firstNode !== "object") {
+      return null;
+    }
+
+    const id = asString((firstNode as { id?: unknown }).id);
+    if (!id) {
+      return null;
+    }
+
+    this.stateNameIdCache.set(cacheKey, id);
+    return id;
   }
 
   private async graphqlRequest<T>(query: string, variables: Record<string, unknown>): Promise<T> {
@@ -282,7 +366,9 @@ function normalizeIssue(raw: unknown): NormalizedIssue | null {
   const id = asString(node.id);
   const identifier = asString(node.identifier);
   const title = asString(node.title);
+  const description = asString(node.description);
   const state = asString((node.state as { name?: unknown } | undefined)?.name);
+  const teamId = asString((node.team as { id?: unknown } | undefined)?.id);
 
   if (!id || !identifier || !title || !state) {
     return null;
@@ -292,7 +378,9 @@ function normalizeIssue(raw: unknown): NormalizedIssue | null {
     id,
     identifier,
     title,
+    description,
     state,
+    team_id: teamId || undefined,
     priority: normalizePriority(node.priority),
     created_at: normalizeIso(node.createdAt),
     updated_at: normalizeIso(node.updatedAt),
