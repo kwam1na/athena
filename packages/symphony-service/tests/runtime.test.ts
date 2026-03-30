@@ -44,6 +44,7 @@ function config(partial?: Partial<EffectiveConfig>): EffectiveConfig {
       endpoint: partial?.tracker?.endpoint ?? "https://api.linear.app/graphql",
       apiKey: partial?.tracker?.apiKey ?? "key",
       projectSlug: partial?.tracker?.projectSlug ?? "ATH",
+      handoffState: partial?.tracker?.handoffState ?? "Human Review",
       activeStates: partial?.tracker?.activeStates ?? ["Todo", "In Progress"],
       terminalStates: partial?.tracker?.terminalStates ?? ["Done", "Closed"],
     },

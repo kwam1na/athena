@@ -456,6 +456,7 @@ describe("createSymphonyService", () => {
     expect(snapshot.codex_totals.total_tokens).toBe(17);
     expect(snapshot.codex_totals.seconds_running).toBe(5);
     expect(snapshot.rate_limits).toEqual({ remaining: 9 });
+    expect(snapshot.completed).toEqual([]);
 
     await service.stop();
   });
@@ -513,6 +514,7 @@ describe("createSymphonyService", () => {
       error: "boom",
     });
     expect(snapshot.retrying[0]!.due_at_ms).toBe(nowMs + 10_000);
+    expect(snapshot.completed).toEqual([]);
 
     await service.stop();
   });
@@ -578,6 +580,96 @@ describe("createSymphonyService", () => {
     expect(transitioned).toEqual(["ATH-777:In Progress"]);
     expect(comments.some((entry) => entry.includes("started work"))).toBe(true);
     expect(comments.some((entry) => entry.includes("finished a run"))).toBe(true);
+    expect(comments.some((entry) => entry.includes("delivery complete signal"))).toBe(false);
+
+    await service.stop();
+  });
+
+  it("records completion signal and emits delivery comment when issue reaches handoff state", async () => {
+    const comments: string[] = [];
+    const candidates = [
+      issue({
+        id: "handoff-1",
+        identifier: "ATH-900",
+        state: "Todo",
+        labels: ["pkg:symphony-service"],
+        description: "Implement orchestration with clear acceptance criteria and validation steps.",
+        team_id: "team-1",
+      }),
+    ];
+
+    const service = createSymphonyService({
+      workflowPath: "/tmp/WORKFLOW.md",
+      deps: {
+        loadWorkflowFile: async () => ({
+          path: "/tmp/WORKFLOW.md",
+          config: {
+            tracker: {
+              kind: "linear",
+              api_key: "key",
+              project_slug: "ATH",
+              handoff_state: "Human Review",
+            },
+            polling: {
+              interval_ms: 1000,
+            },
+            codex: {
+              command: "codex app-server",
+            },
+          },
+          promptTemplate: "Issue {{ issue.identifier }}",
+        }),
+        createTracker: () => ({
+          async fetchCandidateIssues() {
+            return candidates.splice(0, candidates.length);
+          },
+          async fetchIssuesByStates() {
+            return [];
+          },
+          async fetchIssueStatesByIds() {
+            return [];
+          },
+          async createIssueComment(input) {
+            comments.push(input.body);
+          },
+          async updateIssueStateByName() {
+            return true;
+          },
+        }),
+        cleanupTerminalIssueWorkspaces: async () => ({ removed: 0, failed: 0, warnings: [] }),
+        processDueRetries: async () => ({
+          processedIssueIds: [],
+          dispatchedIssueIds: [],
+          requeuedIssueIds: [],
+          releasedIssueIds: [],
+        }),
+        setIntervalFn: () => 1 as unknown as ReturnType<typeof setInterval>,
+        clearIntervalFn: () => {},
+        runIssueAttempt: async (input) => ({
+          exit: "normal" as const,
+          turnCount: 2,
+          workspacePath: "/tmp/fake",
+          issue: {
+            ...input.issue,
+            state: "Human Review",
+          },
+        }),
+      },
+    });
+
+    await service.start();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const snapshot = service.getRuntimeSnapshot();
+    expect(snapshot.completed).toHaveLength(1);
+    expect(snapshot.completed[0]).toMatchObject({
+      issue_id: "handoff-1",
+      issue_identifier: "ATH-900",
+      state: "Human Review",
+      done: true,
+    });
+    expect(comments.some((entry) => entry.includes("delivery complete signal"))).toBe(true);
 
     await service.stop();
   });

@@ -49,6 +49,15 @@ Validation is package-scoped by label and defined in root `WORKFLOW.md`.
 - Symphony: `@athena/symphony-service` tests + TypeScript check.
 - Valkey proxy: connection test when env prerequisites are present; fallback to `node --check` with explicit skip reason when unavailable.
 
+## Done Signal and Operator Readiness
+
+- Configure `tracker.handoff_state` in `WORKFLOW.md` (default: `Human Review`).
+- Symphony records a delivery-complete signal when issue state is handoff or terminal.
+- Operator-facing checks:
+  - Dashboard/API: `GET /api/v1/state` shows `completed` entries.
+  - Per-issue API: `GET /api/v1/<issue_identifier>` may return `status: "completed"`.
+  - Tracker comment includes completion details and operator checklist.
+
 ## Hook Behavior Overview
 
 Hooks configured in `WORKFLOW.md`:

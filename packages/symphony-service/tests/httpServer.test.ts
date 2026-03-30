@@ -44,6 +44,16 @@ function makeService(overrides?: Partial<SymphonyService>): SymphonyService {
             error: "no available orchestrator slots",
           },
         ],
+        completed: [
+          {
+            issue_id: "issue-3",
+            issue_identifier: "ATH-102",
+            state: "Human Review",
+            attempt: 1,
+            observed_at_ms: 1_700_000_020_000,
+            done: true,
+          },
+        ],
         codex_totals: {
           input_tokens: 30,
           output_tokens: 12,
@@ -80,9 +90,11 @@ describe("status server", () => {
       expect(stateBody.counts).toEqual({
         running: 1,
         retrying: 1,
+        completed: 1,
       });
       expect(stateBody.running[0].issue_identifier).toBe("ATH-100");
       expect(stateBody.retrying[0].issue_identifier).toBe("ATH-101");
+      expect(stateBody.completed[0].issue_identifier).toBe("ATH-102");
     } finally {
       await statusServer.stop();
     }
@@ -111,6 +123,12 @@ describe("status server", () => {
       expect(missingResponse.status).toBe(404);
       const missingBody = (await missingResponse.json()) as Record<string, any>;
       expect(missingBody.error.code).toBe("issue_not_found");
+
+      const completedResponse = await fetch(`http://${statusServer.host}:${statusServer.port}/api/v1/ATH-102`);
+      expect(completedResponse.status).toBe(200);
+      const completedBody = (await completedResponse.json()) as Record<string, any>;
+      expect(completedBody.status).toBe("completed");
+      expect(completedBody.completed.state).toBe("Human Review");
     } finally {
       await statusServer.stop();
     }

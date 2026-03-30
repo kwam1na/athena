@@ -25,6 +25,7 @@ interface StateApiResponse {
   counts: {
     running: number;
     retrying: number;
+    completed: number;
   };
   running: Array<{
     issue_id: string;
@@ -47,6 +48,14 @@ interface StateApiResponse {
     attempt: number;
     due_at: string;
     error: string;
+  }>;
+  completed: Array<{
+    issue_id: string;
+    issue_identifier: string;
+    state: string;
+    attempt: number;
+    observed_at: string;
+    done: boolean;
   }>;
   codex_totals: {
     input_tokens: number;
@@ -206,6 +215,7 @@ function toStateResponse(service: SymphonyService): StateApiResponse {
     counts: {
       running: runtime.running.length,
       retrying: runtime.retrying.length,
+      completed: runtime.completed.length,
     },
     running: runtime.running.map((row) => ({
       issue_id: row.issue_id,
@@ -229,6 +239,14 @@ function toStateResponse(service: SymphonyService): StateApiResponse {
       due_at: toIso(row.due_at_ms),
       error: row.error,
     })),
+    completed: runtime.completed.map((row) => ({
+      issue_id: row.issue_id,
+      issue_identifier: row.issue_identifier,
+      state: row.state,
+      attempt: row.attempt,
+      observed_at: toIso(row.observed_at_ms),
+      done: row.done,
+    })),
     codex_totals: runtime.codex_totals,
     rate_limits: runtime.rate_limits,
   };
@@ -241,15 +259,16 @@ function toIssueResponse(
   const runtime = service.getRuntimeSnapshot();
   const running = runtime.running.find((row) => row.issue_identifier === issueIdentifier);
   const retry = runtime.retrying.find((row) => row.issue_identifier === issueIdentifier);
+  const completed = runtime.completed.find((row) => row.issue_identifier === issueIdentifier);
 
-  if (!running && !retry) {
+  if (!running && !retry && !completed) {
     return null;
   }
 
   return {
     issue_identifier: issueIdentifier,
-    issue_id: running?.issue_id ?? retry?.issue_id ?? "",
-    status: running ? "running" : "retrying",
+    issue_id: running?.issue_id ?? retry?.issue_id ?? completed?.issue_id ?? "",
+    status: running ? "running" : retry ? "retrying" : "completed",
     running: running
       ? {
           state: running.state,
@@ -270,6 +289,14 @@ function toIssueResponse(
           attempt: retry.attempt,
           due_at: toIso(retry.due_at_ms),
           error: retry.error,
+        }
+      : null,
+    completed: completed
+      ? {
+          state: completed.state,
+          attempt: completed.attempt,
+          observed_at: toIso(completed.observed_at_ms),
+          done: completed.done,
         }
       : null,
     codex_totals: runtime.codex_totals,
@@ -409,6 +436,7 @@ function renderDashboardHtml(state: StateApiResponse): string {
     <div class="stats">
       <div>Running: <code id="count-running"></code></div>
       <div>Retrying: <code id="count-retrying"></code></div>
+      <div>Completed: <code id="count-completed"></code></div>
       <div>Total tokens: <code id="total-tokens"></code></div>
       <div>Input tokens: <code id="input-tokens"></code></div>
       <div>Output tokens: <code id="output-tokens"></code></div>
@@ -453,6 +481,23 @@ function renderDashboardHtml(state: StateApiResponse): string {
     </div>
 
     <div class="card">
+      <h2>Completed Signals</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Issue</th>
+            <th>State</th>
+            <th>Attempt</th>
+            <th>Observed at</th>
+            <th>Done</th>
+          </tr>
+        </thead>
+        <tbody id="completed-body"></tbody>
+      </table>
+      <div id="completed-empty" class="empty" style="display:none;">No completed signals yet.</div>
+    </div>
+
+    <div class="card">
       <h2>Rate Limits</h2>
       <pre id="rate-limits"></pre>
       <div class="muted">API endpoints: <code>/api/v1/state</code>, <code>/api/v1/refresh</code></div>
@@ -488,6 +533,7 @@ function renderDashboardHtml(state: StateApiResponse): string {
       document.getElementById("generated-at").textContent = state.generated_at || "";
       document.getElementById("count-running").textContent = formatNumber(state.counts?.running ?? 0);
       document.getElementById("count-retrying").textContent = formatNumber(state.counts?.retrying ?? 0);
+      document.getElementById("count-completed").textContent = formatNumber(state.counts?.completed ?? 0);
       document.getElementById("total-tokens").textContent = formatNumber(state.codex_totals?.total_tokens ?? 0);
       document.getElementById("input-tokens").textContent = formatNumber(state.codex_totals?.input_tokens ?? 0);
       document.getElementById("output-tokens").textContent = formatNumber(state.codex_totals?.output_tokens ?? 0);
@@ -495,6 +541,7 @@ function renderDashboardHtml(state: StateApiResponse): string {
 
       const running = Array.isArray(state.running) ? state.running : [];
       const retrying = Array.isArray(state.retrying) ? state.retrying : [];
+      const completed = Array.isArray(state.completed) ? state.completed : [];
 
       const runningBody = document.getElementById("running-body");
       runningBody.innerHTML = running
@@ -521,6 +568,18 @@ function renderDashboardHtml(state: StateApiResponse): string {
         </tr>\`)
         .join("");
       document.getElementById("retrying-empty").style.display = retrying.length > 0 ? "none" : "block";
+
+      const completedBody = document.getElementById("completed-body");
+      completedBody.innerHTML = completed
+        .map((row) => \`<tr>
+          <td><a href="/api/v1/\${encodeURIComponent(row.issue_identifier)}">\${esc(row.issue_identifier)}</a></td>
+          <td>\${esc(row.state)}</td>
+          <td>\${formatNumber(row.attempt)}</td>
+          <td>\${formatDate(row.observed_at)}</td>
+          <td>\${esc(String(row.done))}</td>
+        </tr>\`)
+        .join("");
+      document.getElementById("completed-empty").style.display = completed.length > 0 ? "none" : "block";
 
       const rateLimits = state.rate_limits == null ? "null" : JSON.stringify(state.rate_limits, null, 2);
       document.getElementById("rate-limits").textContent = rateLimits;

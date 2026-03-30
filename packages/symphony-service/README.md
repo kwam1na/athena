@@ -30,6 +30,9 @@ When enabled (`--port` or `server.port` in `WORKFLOW.md`), the service exposes:
 - `GET /api/v1/<issue_identifier>`
 - `POST /api/v1/refresh`
 
+`/api/v1/state` now includes `completed` delivery signals (issue, final state, attempt, observed timestamp), and
+`/api/v1/<issue_identifier>` can return `status: "completed"` when a done signal is present in runtime state.
+
 ## Commands
 
 ```bash
@@ -50,6 +53,13 @@ Package routing is driven by Linear labels and configured in the root `WORKFLOW.
 - `pkg:valkey-proxy-server` -> `packages/valkey-proxy-server`
 
 If labels are missing, scope is inferred from issue text and touched files, and must be documented in PR summary.
+
+## Done Signal Contract
+
+- Configure tracker handoff state via `tracker.handoff_state` in `WORKFLOW.md` (default: `Human Review`).
+- Symphony records a delivery-complete signal when a run exits with issue state equal to handoff state
+  or any terminal state.
+- On signal, Symphony writes a structured tracker comment so operators can quickly verify delivery status.
 
 ## Workspace Hook Notes
 
