@@ -344,6 +344,20 @@ function renderDashboardHtml(state: StateApiResponse): string {
       align-items: center;
       gap: 8px;
     }
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .section-header h2 {
+      margin-bottom: 0;
+    }
+    .inline-btn {
+      padding: 4px 8px;
+      font-size: 12px;
+    }
     button {
       border: 1px solid #305075;
       background: #12233a;
@@ -459,7 +473,7 @@ function renderDashboardHtml(state: StateApiResponse): string {
       <div>Total tokens: <code id="total-tokens"></code></div>
       <div>Input tokens: <code id="input-tokens"></code></div>
       <div>Output tokens: <code id="output-tokens"></code></div>
-      <div>Runtime seconds: <code id="runtime-seconds"></code></div>
+      <div>Runtime: <code id="runtime-seconds"></code></div>
     </div>
   </div>
   <div class="split">
@@ -517,7 +531,10 @@ function renderDashboardHtml(state: StateApiResponse): string {
     </div>
 
     <div class="card">
-      <h2>Issue Activity</h2>
+      <div class="section-header">
+        <h2>Issue Activity</h2>
+        <button id="activity-collapse-btn" class="inline-btn" type="button" disabled>Collapse</button>
+      </div>
       <div id="activity-meta" class="activity-meta">Select a running or retrying issue to inspect timeline events.</div>
       <table>
         <thead>
@@ -553,7 +570,9 @@ function renderDashboardHtml(state: StateApiResponse): string {
     const activityBody = document.getElementById("activity-body");
     const activityMeta = document.getElementById("activity-meta");
     const activityEmpty = document.getElementById("activity-empty");
+    const activityCollapseBtn = document.getElementById("activity-collapse-btn");
     let selectedIssueIdentifier = null;
+    let latestState = initialState;
 
     function esc(value) {
       return String(value)
@@ -576,6 +595,27 @@ function renderDashboardHtml(state: StateApiResponse): string {
       return value.toLocaleString();
     }
 
+    function formatRuntimeSeconds(value) {
+      if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
+        return "0s";
+      }
+
+      const totalSeconds = Math.max(0, value);
+      const hours = Math.floor(totalSeconds / 3600);
+      const minutes = Math.floor((totalSeconds % 3600) / 60);
+      const seconds = Math.floor(totalSeconds % 60);
+
+      if (hours > 0) {
+        return \`\${hours}h \${minutes}m \${seconds}s\`;
+      }
+
+      if (minutes > 0) {
+        return \`\${minutes}m \${seconds}s\`;
+      }
+
+      return \`\${totalSeconds.toFixed(2)}s\`;
+    }
+
     function renderIssueCell(issueIdentifier) {
       const selected = selectedIssueIdentifier === issueIdentifier ? ' data-selected="true"' : "";
       return \`<button type="button" class="issue-link" data-issue-id="\${esc(issueIdentifier)}"\${selected}>\${esc(issueIdentifier)}</button>\`;
@@ -595,6 +635,7 @@ function renderDashboardHtml(state: StateApiResponse): string {
     }
 
     function renderRows(state) {
+      latestState = state;
       document.getElementById("generated-at").textContent = state.generated_at || "";
       document.getElementById("count-running").textContent = formatNumber(state.counts?.running ?? 0);
       document.getElementById("count-retrying").textContent = formatNumber(state.counts?.retrying ?? 0);
@@ -602,7 +643,7 @@ function renderDashboardHtml(state: StateApiResponse): string {
       document.getElementById("total-tokens").textContent = formatNumber(state.codex_totals?.total_tokens ?? 0);
       document.getElementById("input-tokens").textContent = formatNumber(state.codex_totals?.input_tokens ?? 0);
       document.getElementById("output-tokens").textContent = formatNumber(state.codex_totals?.output_tokens ?? 0);
-      document.getElementById("runtime-seconds").textContent = Number(state.codex_totals?.seconds_running ?? 0).toFixed(2);
+      document.getElementById("runtime-seconds").textContent = formatRuntimeSeconds(Number(state.codex_totals?.seconds_running ?? 0));
 
       const running = Array.isArray(state.running) ? state.running : [];
       const retrying = Array.isArray(state.retrying) ? state.retrying : [];
@@ -654,6 +695,7 @@ function renderDashboardHtml(state: StateApiResponse): string {
         activityEmpty.textContent = "No issue selected.";
         activityEmpty.style.display = "block";
         activityMeta.textContent = "Select a running or retrying issue to inspect timeline events.";
+        activityCollapseBtn.disabled = true;
         return;
       }
 
@@ -662,6 +704,7 @@ function renderDashboardHtml(state: StateApiResponse): string {
         activityEmpty.textContent = \`Issue \${selectedIssueIdentifier} is no longer visible in runtime state.\`;
         activityEmpty.style.display = "block";
         activityMeta.textContent = "Issue detail unavailable.";
+        activityCollapseBtn.disabled = false;
         return;
       }
 
@@ -689,6 +732,7 @@ function renderDashboardHtml(state: StateApiResponse): string {
 
       activityEmpty.textContent = "No events yet.";
       activityEmpty.style.display = events.length > 0 ? "none" : "block";
+      activityCollapseBtn.disabled = false;
     }
 
     async function fetchState() {
@@ -760,8 +804,25 @@ function renderDashboardHtml(state: StateApiResponse): string {
         return;
       }
 
+      if (selectedIssueIdentifier === nextIssueIdentifier) {
+        selectedIssueIdentifier = null;
+        renderRows(latestState);
+        renderIssueActivity(null);
+        return;
+      }
+
       selectedIssueIdentifier = nextIssueIdentifier;
       void pollState();
+    });
+
+    activityCollapseBtn.addEventListener("click", () => {
+      if (!selectedIssueIdentifier) {
+        return;
+      }
+
+      selectedIssueIdentifier = null;
+      renderRows(latestState);
+      renderIssueActivity(null);
     });
 
     refreshBtn.addEventListener("click", () => {
