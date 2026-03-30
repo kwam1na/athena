@@ -347,6 +347,172 @@ describe("createSymphonyService", () => {
 
     stderrSpy.mockRestore();
   });
+
+  it("exposes runtime snapshot for running sessions with codex totals and rate limits", async () => {
+    let nowMs = 1_000;
+    let releaseWorker: (() => void) | null = null;
+    const candidates = [issue({ id: "run-1", identifier: "ATH-301", state: "In Progress" })];
+
+    const service = createSymphonyService({
+      workflowPath: "/tmp/WORKFLOW.md",
+      deps: {
+        nowMs: () => nowMs,
+        loadWorkflowFile: async () => workflow(1000),
+        createTracker: () => ({
+          async fetchCandidateIssues() {
+            return candidates.splice(0, candidates.length);
+          },
+          async fetchIssuesByStates() {
+            return [];
+          },
+          async fetchIssueStatesByIds() {
+            return [];
+          },
+        }),
+        cleanupTerminalIssueWorkspaces: async () => ({ removed: 0, failed: 0, warnings: [] }),
+        processDueRetries: async () => ({
+          processedIssueIds: [],
+          dispatchedIssueIds: [],
+          requeuedIssueIds: [],
+          releasedIssueIds: [],
+        }),
+        setIntervalFn: () => {
+          return 1 as unknown as ReturnType<typeof setInterval>;
+        },
+        clearIntervalFn: () => {
+          return;
+        },
+        createCodexClient: (_config, onEvent) => {
+          onEvent?.({
+            event: "notification",
+            timestamp: new Date(nowMs).toISOString(),
+            session_id: "thread-301-turn-1",
+            usage: {
+              input_tokens: 12,
+              output_tokens: 5,
+              total_tokens: 17,
+            },
+            rate_limits: {
+              remaining: 9,
+            },
+          });
+
+          return {
+            async startSession() {
+              return { threadId: "thread-301" };
+            },
+            async runTurn() {
+              return { turnId: "turn-1", sessionId: "thread-301-turn-1", outcome: "completed" as const };
+            },
+            stop() {
+              releaseWorker?.();
+            },
+          };
+        },
+        runIssueAttempt: async (input) => {
+          input.onLog?.({
+            message: "action=turn outcome=completed",
+            details: {
+              issue_id: input.issue.id,
+              issue_identifier: input.issue.identifier,
+              session_id: "thread-301-turn-1",
+            },
+          });
+
+          await new Promise<void>((resolve) => {
+            releaseWorker = resolve;
+          });
+
+          return {
+            exit: "normal" as const,
+            turnCount: 1,
+            workspacePath: "/tmp/fake",
+            issue: input.issue,
+          };
+        },
+      },
+    });
+
+    await service.start();
+    nowMs = 6_000;
+
+    const snapshot = service.getRuntimeSnapshot();
+    expect(snapshot.running).toHaveLength(1);
+    expect(snapshot.running[0]).toMatchObject({
+      issue_id: "run-1",
+      issue_identifier: "ATH-301",
+      session_id: "thread-301-turn-1",
+      turn_count: 1,
+      retry_attempt: 1,
+      codex_input_tokens: 12,
+      codex_output_tokens: 5,
+      codex_total_tokens: 17,
+    });
+    expect(snapshot.codex_totals.input_tokens).toBe(12);
+    expect(snapshot.codex_totals.output_tokens).toBe(5);
+    expect(snapshot.codex_totals.total_tokens).toBe(17);
+    expect(snapshot.codex_totals.seconds_running).toBe(5);
+    expect(snapshot.rate_limits).toEqual({ remaining: 9 });
+
+    await service.stop();
+  });
+
+  it("includes retry queue rows in runtime snapshot after worker failure", async () => {
+    let nowMs = 10_000;
+    const candidates = [issue({ id: "retry-1", identifier: "ATH-401", state: "Todo" })];
+
+    const service = createSymphonyService({
+      workflowPath: "/tmp/WORKFLOW.md",
+      deps: {
+        nowMs: () => nowMs,
+        loadWorkflowFile: async () => workflow(1000),
+        createTracker: () => ({
+          async fetchCandidateIssues() {
+            return candidates.splice(0, candidates.length);
+          },
+          async fetchIssuesByStates() {
+            return [];
+          },
+          async fetchIssueStatesByIds() {
+            return [];
+          },
+        }),
+        cleanupTerminalIssueWorkspaces: async () => ({ removed: 0, failed: 0, warnings: [] }),
+        processDueRetries: async () => ({
+          processedIssueIds: [],
+          dispatchedIssueIds: [],
+          requeuedIssueIds: [],
+          releasedIssueIds: [],
+        }),
+        setIntervalFn: () => {
+          return 1 as unknown as ReturnType<typeof setInterval>;
+        },
+        clearIntervalFn: () => {
+          return;
+        },
+        runIssueAttempt: async () => {
+          throw new Error("boom");
+        },
+      },
+    });
+
+    await service.start();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const snapshot = service.getRuntimeSnapshot();
+    expect(snapshot.running).toHaveLength(0);
+    expect(snapshot.retrying).toHaveLength(1);
+    expect(snapshot.retrying[0]).toMatchObject({
+      issue_id: "retry-1",
+      issue_identifier: "ATH-401",
+      attempt: 1,
+      error: "boom",
+    });
+    expect(snapshot.retrying[0]!.due_at_ms).toBe(nowMs + 10_000);
+
+    await service.stop();
+  });
 });
 
 describe("formatServiceLogLine", () => {
