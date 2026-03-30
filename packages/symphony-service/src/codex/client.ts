@@ -75,6 +75,8 @@ export class CodexAppServerClient {
   private nextRequestId = 1;
   private initialized = false;
   private pendingTurn: PendingTurn | null = null;
+  private queuedTurnOutcome: TurnOutcome | null = null;
+  private readonly recentStderr: string[] = [];
 
   constructor(
     private readonly config: CodexAppServerConfig,
@@ -174,19 +176,16 @@ export class CodexAppServerClient {
       proc.stderr.on("data", (chunk: Buffer | string) => {
         const message = chunk.toString().trim();
         if (message) {
+          this.recordStderr(message);
           this.emit({ event: "other_message", message });
         }
       });
 
       proc.on("exit", (code, signal) => {
         const exitMessage = `codex app-server exited (code=${String(code)} signal=${String(signal)})`;
-        this.rejectAllPending(new SymphonyError("port_exit", exitMessage));
+        this.rejectAllPending(this.mapExitError(code, signal, exitMessage));
 
-        if (this.pendingTurn) {
-          this.pendingTurn.resolve("port_exit");
-          clearTimeout(this.pendingTurn.timer);
-          this.pendingTurn = null;
-        }
+        this.resolveTurnOutcome("port_exit");
 
         this.emit({ event: "turn_ended_with_error", message: exitMessage });
         this.teardown();
@@ -315,6 +314,8 @@ export class CodexAppServerClient {
 
   private handleIncomingMessage(message: JsonRpcMessage): void {
     const method = getMethodName(message);
+    const usage = extractUsage(message) ?? undefined;
+    const rateLimits = extractRateLimits(message) ?? undefined;
 
     if (isApprovalRequest(message)) {
       this.sendRequestResult(message.id, { approved: true });
@@ -329,26 +330,26 @@ export class CodexAppServerClient {
     }
 
     if (isUserInputRequired(message)) {
-      this.emit({ event: "turn_input_required", payload: { method } });
+      this.emit({ event: "turn_input_required", payload: { method }, usage, rate_limits: rateLimits });
       this.resolveTurnOutcome("turn_input_required");
       return;
     }
 
     const terminal = getTurnTerminalState(method);
     if (terminal === "completed") {
-      this.emit({ event: "turn_completed", payload: { method } });
+      this.emit({ event: "turn_completed", payload: { method }, usage, rate_limits: rateLimits });
       this.resolveTurnOutcome("completed");
       return;
     }
 
     if (terminal === "failed") {
-      this.emit({ event: "turn_failed", payload: { method } });
+      this.emit({ event: "turn_failed", payload: { method }, usage, rate_limits: rateLimits });
       this.resolveTurnOutcome("failed");
       return;
     }
 
     if (terminal === "cancelled") {
-      this.emit({ event: "turn_cancelled", payload: { method } });
+      this.emit({ event: "turn_cancelled", payload: { method }, usage, rate_limits: rateLimits });
       this.resolveTurnOutcome("cancelled");
       return;
     }
@@ -356,8 +357,8 @@ export class CodexAppServerClient {
     this.emit({
       event: "notification",
       payload: message,
-      usage: extractUsage(message) ?? undefined,
-      rate_limits: extractRateLimits(message) ?? undefined,
+      usage,
+      rate_limits: rateLimits,
     });
   }
 
@@ -379,6 +380,12 @@ export class CodexAppServerClient {
       throw new SymphonyError("response_error", "a turn is already in progress");
     }
 
+    if (this.queuedTurnOutcome) {
+      const queued = this.queuedTurnOutcome;
+      this.queuedTurnOutcome = null;
+      return Promise.resolve(queued);
+    }
+
     return new Promise<TurnOutcome>((resolve) => {
       const timer = setTimeout(() => {
         this.pendingTurn = null;
@@ -391,6 +398,7 @@ export class CodexAppServerClient {
 
   private resolveTurnOutcome(outcome: TurnOutcome): void {
     if (!this.pendingTurn) {
+      this.queuedTurnOutcome = outcome;
       return;
     }
 
@@ -411,6 +419,7 @@ export class CodexAppServerClient {
   private teardown(): void {
     this.process = null;
     this.initialized = false;
+    this.queuedTurnOutcome = null;
 
     if (this.stdoutLineReader) {
       this.stdoutLineReader.removeAllListeners();
@@ -438,5 +447,35 @@ export class CodexAppServerClient {
     if (absolute !== cwd) {
       throw new SymphonyError("invalid_workspace_cwd", `workspace cwd must be absolute: ${cwd}`);
     }
+  }
+
+  private recordStderr(message: string): void {
+    this.recentStderr.push(message);
+    if (this.recentStderr.length > 6) {
+      this.recentStderr.shift();
+    }
+  }
+
+  private mapExitError(code: number | null, signal: NodeJS.Signals | null, fallback: string): SymphonyError {
+    if (!this.initialized && this.looksLikeCommandNotFound(code)) {
+      return new SymphonyError("codex_not_found", `failed to launch codex command: ${this.config.command}`, {
+        details: {
+          exit_code: code,
+          signal: signal ?? undefined,
+          stderr: this.recentStderr[this.recentStderr.length - 1],
+        },
+      });
+    }
+
+    return new SymphonyError("port_exit", fallback);
+  }
+
+  private looksLikeCommandNotFound(code: number | null): boolean {
+    if (code !== 127) {
+      return false;
+    }
+
+    const joined = this.recentStderr.join("\n").toLowerCase();
+    return joined.includes("command not found") || joined.includes("not recognized") || joined.includes("no such file");
   }
 }
