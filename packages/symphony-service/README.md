@@ -15,6 +15,10 @@ Spec-aligned Symphony service foundation for Athena.
 - Startup terminal workspace cleanup
 - CLI-hosted service loop with optional workflow watch/reload
 
+## Specification tracking
+
+- Conformance matrix: [`CONFORMANCE.md`](./CONFORMANCE.md)
+
 ## Commands
 
 ```bash
