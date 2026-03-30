@@ -8,8 +8,99 @@ import {
 } from "../../../utils";
 import { Id } from "../../../../_generated/dataModel";
 import { isStoreCheckoutDisabled } from "../../../../inventory/storeConfigV2";
+import { z } from "zod";
+import {
+  buildCanonicalCheckoutProducts,
+  hasValidPositiveQuantity,
+  isAmountTampered,
+  isAuthorizedResourceOwner,
+} from "./security";
 
 const checkoutRoutes: HonoWithConvex<ActionCtx> = new Hono();
+
+const createCheckoutSchema = z
+  .object({
+    bagId: z.string().min(1),
+  })
+  .passthrough();
+
+const checkoutActionSchema = z
+  .object({
+    customerEmail: z.string().email().optional(),
+    amount: z.number().finite().optional(),
+    hasCompletedCheckoutSession: z.boolean().optional(),
+    action: z.enum([
+      "finalize-payment",
+      "complete-checkout",
+      "place-order",
+      "create-pod-order",
+      "cancel-order",
+      "update-order",
+    ]),
+    orderDetails: z.unknown().optional(),
+    placedOrderId: z.string().optional(),
+  })
+  .passthrough();
+
+const checkoutOrderDetailsSchema = z
+  .object({
+    billingDetails: z.record(z.string(), z.any()).nullable(),
+    customerDetails: z
+      .object({
+        email: z.string().email(),
+        firstName: z.string().min(1),
+        lastName: z.string().min(1),
+        phoneNumber: z.string().min(1),
+      })
+      .optional(),
+    deliveryDetails: z.union([z.record(z.string(), z.any()), z.string(), z.null()]),
+    deliveryFee: z.number().nullable(),
+    deliveryMethod: z.string().min(1),
+    deliveryOption: z.string().nullable(),
+    deliveryInstructions: z.string().optional(),
+    pickupLocation: z.string().nullable(),
+    discount: z.any().nullable().optional(),
+    paymentMethod: z
+      .union([z.literal("online_payment"), z.literal("payment_on_delivery")])
+      .optional(),
+    podPaymentMethod: z
+      .union([z.literal("cash"), z.literal("mobile_money")])
+      .optional(),
+  })
+  .passthrough();
+
+type CanonicalBagItem = {
+  productId: string;
+  productSku: string;
+  productSkuId: string;
+  quantity: number;
+  price: number;
+};
+
+const hasValidCanonicalBagItem = (item: any): item is CanonicalBagItem => {
+  return (
+    typeof item?.productId === "string" &&
+    typeof item?.productSkuId === "string" &&
+    typeof item?.productSku === "string" &&
+    Number.isFinite(item?.price) &&
+    item.price > 0 &&
+    hasValidPositiveQuantity(item?.quantity)
+  );
+};
+
+const hasValidSessionItems = (items: any[] | undefined): boolean => {
+  if (!items || items.length === 0) {
+    return false;
+  }
+
+  return items.every(
+    (item) =>
+      hasValidPositiveQuantity(item.quantity) &&
+      typeof item.price === "number" &&
+      Number.isFinite(item.price) &&
+      item.price > 0
+  );
+};
 
 checkoutRoutes.post("/", async (c) => {
   const { storeId } = getStoreDataFromRequest(c);
@@ -23,19 +114,55 @@ checkoutRoutes.post("/", async (c) => {
     return c.json({ error: "Store id missing" }, 404);
   }
 
-  const { products, bagId, amount } = await c.req.json();
+  const parsedPayload = createCheckoutSchema.safeParse(await c.req.json());
+
+  if (!parsedPayload.success) {
+    return c.json({ error: "Invalid checkout payload" }, 400);
+  }
 
   try {
-    const session = await c.env.runMutation(
-      api.storeFront.checkoutSession.create,
-      {
-        storeId: storeId as Id<"store">,
-        storeFrontUserId: userId as Id<"storeFrontUser"> | Id<"guest">,
-        products,
-        bagId,
-        amount,
-      }
-    );
+    const bag = await c.env.runQuery(api.storeFront.bag.getById, {
+      id: parsedPayload.data.bagId as Id<"bag">,
+    });
+
+    if (!bag) {
+      return c.json({ error: "Bag not found" }, 404);
+    }
+
+    if (!isAuthorizedResourceOwner(bag.storeFrontUserId, userId)) {
+      return c.json({ error: "Forbidden" }, 403);
+    }
+
+    if (bag.storeId !== storeId) {
+      return c.json({ error: "Forbidden" }, 403);
+    }
+
+    if (!Array.isArray(bag.items) || bag.items.length === 0) {
+      return c.json({ error: "Bag has no checkoutable items" }, 422);
+    }
+
+    if (!bag.items.every(hasValidCanonicalBagItem)) {
+      return c.json(
+        { error: "Invalid bag item data: quantity and price must be valid" },
+        422
+      );
+    }
+
+    const canonicalCheckout = buildCanonicalCheckoutProducts(bag.items);
+
+    const session = await c.env.runMutation(api.storeFront.checkoutSession.create, {
+      storeId: storeId as Id<"store">,
+      storeFrontUserId: userId as Id<"storeFrontUser"> | Id<"guest">,
+      products: canonicalCheckout.products.map((product) => ({
+        productId: product.productId as Id<"product">,
+        productSkuId: product.productSkuId as Id<"productSku">,
+        productSku: product.productSku,
+        quantity: product.quantity,
+        price: product.price,
+      })),
+      bagId: parsedPayload.data.bagId as Id<"bag">,
+      amount: canonicalCheckout.amount,
+    });
 
     return c.json(session);
   } catch (e) {
@@ -57,6 +184,12 @@ checkoutRoutes.post("/:checkoutSessionId", async (c) => {
     return c.json({ error: "Store or organization id missing" }, 404);
   }
 
+  const parsedBody = checkoutActionSchema.safeParse(await c.req.json());
+
+  if (!parsedBody.success) {
+    return c.json({ error: "Invalid checkout action payload" }, 400);
+  }
+
   const {
     customerEmail,
     amount,
@@ -64,30 +197,46 @@ checkoutRoutes.post("/:checkoutSessionId", async (c) => {
     action,
     orderDetails,
     placedOrderId,
-  } = await c.req.json();
+  } = parsedBody.data;
+
+  const session = await c.env.runQuery(api.storeFront.checkoutSession.getById, {
+    sessionId: checkoutSessionId as Id<"checkoutSession">,
+  });
+
+  if (!session) {
+    return c.json({ error: "Checkout session not found" }, 404);
+  }
+
+  if (!isAuthorizedResourceOwner(session.storeFrontUserId, userId)) {
+    return c.json({ error: "Forbidden" }, 403);
+  }
 
   try {
     if (action == "finalize-payment") {
-      // Log entry point for payment finalization
-      console.log(
-        `[CHECKOUT-START] Finalize payment request received | Session: ${checkoutSessionId} | Email: ${customerEmail} | Amount: ${amount} | Delivery method: ${orderDetails?.deliveryMethod} | Delivery fee: ${orderDetails?.deliveryFee} | POD method: ${orderDetails?.podPaymentMethod || "N/A"}`
-      );
-      console.log(
-        `[CHECKOUT-START] Order details:`,
-        JSON.stringify(
-          {
-            customerDetails: orderDetails?.customerDetails,
-            deliveryDetails: orderDetails?.deliveryDetails,
-            deliveryOption: orderDetails?.deliveryOption,
-            pickupLocation: orderDetails?.pickupLocation,
-            discount: orderDetails?.discount,
-          },
-          null,
-          2
-        )
-      );
+      if (!hasValidSessionItems(session.items)) {
+        return c.json(
+          { error: "Invalid checkout session item data: quantity must be positive" },
+          422
+        );
+      }
 
-      // check that the store is still active
+      const parsedOrderDetails = checkoutOrderDetailsSchema.safeParse(orderDetails);
+
+      if (!parsedOrderDetails.success) {
+        return c.json({ error: "Invalid order details payload" }, 400);
+      }
+
+      if (
+        parsedOrderDetails.data.deliveryFee !== null &&
+        parsedOrderDetails.data.deliveryFee < 0
+      ) {
+        return c.json({ error: "Delivery fee must be zero or positive" }, 422);
+      }
+
+      if (isAmountTampered(session.amount, amount)) {
+        return c.json({ error: "Amount mismatch detected" }, 422);
+      }
+
       const store = await c.env.runQuery(api.inventory.stores.getByIdOrSlug, {
         identifier: storeId,
         organizationId: organizationId as Id<"organization">,
@@ -102,18 +251,7 @@ checkoutRoutes.post("/:checkoutSessionId", async (c) => {
         });
       }
 
-      // check that the session is not already completed
-      const session = await c.env.runQuery(
-        api.storeFront.checkoutSession.getById,
-        {
-          sessionId: checkoutSessionId as Id<"checkoutSession">,
-        }
-      );
-
-      if (session?.hasCompletedPayment) {
-        console.log(
-          `[CHECKOUT-FAILURE] Session already completed | Session: ${checkoutSessionId}`
-        );
+      if (session?.hasCompletedPayment || session.placedOrderId) {
         return c.json({
           success: false,
           message:
@@ -122,26 +260,17 @@ checkoutRoutes.post("/:checkoutSessionId", async (c) => {
         });
       }
 
-      const payment = await c.env.runAction(
-        api.storeFront.payment.createTransaction,
-        {
-          customerEmail,
-          amount,
-          checkoutSessionId: checkoutSessionId as Id<"checkoutSession">,
-          orderDetails: {
-            ...orderDetails,
-            billingDetails: null,
-            deliveryDetails: orderDetails.deliveryDetails ?? null,
-          },
-        }
-      );
-
-      // Log successful payment response
-      const hasAuthUrl = "authorization_url" in payment;
-      const isSuccess = "success" in payment && payment.success;
-      console.log(
-        `[CHECKOUT-${hasAuthUrl || isSuccess ? "SUCCESS" : "FAILURE"}] Payment action completed | Session: ${checkoutSessionId} | Has Auth URL: ${hasAuthUrl}`
-      );
+      const payment = await c.env.runAction(api.storeFront.payment.createTransaction, {
+        customerEmail: customerEmail || "",
+        amount: session.amount,
+        checkoutSessionId: checkoutSessionId as Id<"checkoutSession">,
+        orderDetails: {
+          ...parsedOrderDetails.data,
+          billingDetails: null,
+          deliveryDetails: (parsedOrderDetails.data.deliveryDetails ?? null) as any,
+          discount: session.discount ?? null,
+        },
+      });
 
       return c.json(payment);
     }
@@ -173,14 +302,22 @@ checkoutRoutes.post("/:checkoutSessionId", async (c) => {
           }
         }
 
+        const parsedOrderDetails = checkoutOrderDetailsSchema.safeParse(orderDetailsToUse);
+
+        if (!parsedOrderDetails.success) {
+          return c.json({ error: "Invalid order details payload" }, 400);
+        }
+
         const res = await c.env.runMutation(
           internal.storeFront.checkoutSession.updateCheckoutSession,
           {
             id: checkoutSessionId as Id<"checkoutSession">,
             hasCompletedCheckoutSession: true,
             orderDetails: {
+              ...parsedOrderDetails.data,
               billingDetails: null,
-              ...orderDetailsToUse,
+              deliveryDetails: (parsedOrderDetails.data.deliveryDetails ?? null) as any,
+              discount: session.discount ?? null,
             },
           }
         );
@@ -206,7 +343,30 @@ checkoutRoutes.post("/:checkoutSessionId", async (c) => {
     }
 
     if (action == "create-pod-order") {
-      // check that the store is still active
+      if (!hasValidSessionItems(session.items)) {
+        return c.json(
+          { error: "Invalid checkout session item data: quantity must be positive" },
+          422
+        );
+      }
+
+      const parsedOrderDetails = checkoutOrderDetailsSchema.safeParse(orderDetails);
+
+      if (!parsedOrderDetails.success) {
+        return c.json({ error: "Invalid order details payload" }, 400);
+      }
+
+      if (
+        parsedOrderDetails.data.deliveryFee !== null &&
+        parsedOrderDetails.data.deliveryFee < 0
+      ) {
+        return c.json({ error: "Delivery fee must be zero or positive" }, 422);
+      }
+
+      if (isAmountTampered(session.amount, amount)) {
+        return c.json({ error: "Amount mismatch detected" }, 422);
+      }
+
       const store = await c.env.runQuery(api.inventory.stores.getByIdOrSlug, {
         identifier: storeId,
         organizationId: organizationId as Id<"organization">,
@@ -221,30 +381,36 @@ checkoutRoutes.post("/:checkoutSessionId", async (c) => {
         });
       }
 
-      const podOrder = await c.env.runAction(
-        api.storeFront.payment.createPODOrder,
-        {
-          customerEmail,
-          amount,
-          checkoutSessionId: checkoutSessionId as Id<"checkoutSession">,
-          orderDetails: {
-            ...orderDetails,
-            billingDetails: null,
-            deliveryDetails: orderDetails.deliveryDetails ?? null,
+      if (session?.hasCompletedPayment || session.placedOrderId) {
+        return c.json(
+          {
+            success: false,
+            message: "This checkout session has already been completed.",
+            code: "SESSION_ALREADY_FINALIZED",
           },
-        }
-      );
+          422
+        );
+      }
+
+      const podOrder = await c.env.runAction(api.storeFront.payment.createPODOrder, {
+        customerEmail: customerEmail || "",
+        amount: session.amount,
+        checkoutSessionId: checkoutSessionId as Id<"checkoutSession">,
+        orderDetails: {
+          ...parsedOrderDetails.data,
+          billingDetails: null,
+          deliveryDetails: (parsedOrderDetails.data.deliveryDetails ?? null) as any,
+          discount: session.discount ?? null,
+        },
+      });
 
       return c.json(podOrder);
     }
 
     if (action == "cancel-order") {
-      const res = await c.env.runAction(
-        api.storeFront.checkoutSession.cancelOrder,
-        {
-          id: checkoutSessionId as Id<"checkoutSession">,
-        }
-      );
+      const res = await c.env.runAction(api.storeFront.checkoutSession.cancelOrder, {
+        id: checkoutSessionId as Id<"checkoutSession">,
+      });
 
       return c.json(res);
     }
@@ -262,7 +428,7 @@ checkoutRoutes.post("/:checkoutSessionId", async (c) => {
       return c.json(res);
     }
 
-    return c.json({});
+    return c.json({ error: "Unsupported checkout action" }, 400);
   } catch (e) {
     console.log(
       `[CHECKOUT-FAILURE] Error in checkout endpoint | Session: ${checkoutSessionId} | Action: ${action} | Error: ${(e as Error).message}`
@@ -279,12 +445,9 @@ checkoutRoutes.get("/active", async (c) => {
   }
 
   try {
-    const session = await c.env.runQuery(
-      api.storeFront.checkoutSession.getActiveCheckoutSession,
-      {
-        storeFrontUserId: userId as Id<"storeFrontUser"> | Id<"guest">,
-      }
-    );
+    const session = await c.env.runQuery(api.storeFront.checkoutSession.getActiveCheckoutSession, {
+      storeFrontUserId: userId as Id<"storeFrontUser"> | Id<"guest">,
+    });
 
     return c.json(session);
   } catch (e) {
@@ -299,20 +462,32 @@ checkoutRoutes.get("/pending", async (c) => {
     return c.json({ error: "Customer id missing" }, 404);
   }
 
-  const session = await c.env.runQuery(
-    api.storeFront.checkoutSession.getPendingCheckoutSessions,
-    { storeFrontUserId: userId as Id<"storeFrontUser"> | Id<"guest"> }
-  );
+  const session = await c.env.runQuery(api.storeFront.checkoutSession.getPendingCheckoutSessions, {
+    storeFrontUserId: userId as Id<"storeFrontUser"> | Id<"guest">,
+  });
 
   return c.json(session);
 });
 
 checkoutRoutes.get("/:sessionId", async (c) => {
   const { sessionId } = c.req.param();
+  const userId = getStorefrontUserFromRequest(c);
+
+  if (!userId) {
+    return c.json({ error: "Customer id missing" }, 404);
+  }
 
   const session = await c.env.runQuery(api.storeFront.checkoutSession.getById, {
     sessionId: sessionId as Id<"checkoutSession">,
   });
+
+  if (!session) {
+    return c.json({ error: "Checkout session not found" }, 404);
+  }
+
+  if (!isAuthorizedResourceOwner(session.storeFrontUserId, userId)) {
+    return c.json({ error: "Forbidden" }, 403);
+  }
 
   return c.json(session);
 });
