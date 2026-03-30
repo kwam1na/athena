@@ -86,6 +86,28 @@ export async function runIssueAttempt(input: RunIssueAttemptInput): Promise<RunI
           details: baseDetails,
         });
 
+        const refreshed = await input.tracker.fetchIssueStatesByIds([currentIssue.id]);
+        if (Array.isArray(refreshed) && refreshed[0]) {
+          currentIssue = refreshed[0];
+          const stillActive = input.config.tracker.activeStates.includes(currentIssue.state);
+          if (!stillActive) {
+            input.onLog?.({
+              message: `action=turn outcome=terminal_after_non_completed reason=${turn.outcome}`,
+              details: {
+                ...baseDetails,
+                refreshed_state: currentIssue.state,
+              },
+            });
+
+            return {
+              exit: "normal",
+              turnCount,
+              workspacePath: workspace.path,
+              issue: currentIssue,
+            };
+          }
+        }
+
         throw new SymphonyError("worker_turn_failed", `codex turn ended with non-completed outcome: ${turn.outcome}`, {
           details: {
             ...baseDetails,
