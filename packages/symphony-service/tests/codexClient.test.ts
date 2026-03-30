@@ -22,7 +22,7 @@ describe("CodexAppServerClient", () => {
 
   it("maps missing codex command to codex_not_found", async () => {
     const client = new CodexAppServerClient({
-      command: "__missing_codex_binary_for_test__ app-server",
+      command: "bash -lc \"echo command not found >&2; exit 127\"",
       readTimeoutMs: TEST_READ_TIMEOUT_MS,
       turnTimeoutMs: TEST_TURN_TIMEOUT_MS,
     });
