@@ -870,6 +870,73 @@ describe("createSymphonyService", () => {
     await service.stop();
   });
 
+  it("moves issue to handoff and blocks continuation when attempt guardrail stops run", async () => {
+    const comments: string[] = [];
+    const transitioned: string[] = [];
+    const candidates = [
+      issue({
+        id: "guardrail-stop-1",
+        identifier: "ATH-901",
+        state: "Todo",
+        labels: ["pkg:symphony-service"],
+        description: "Implement guardrails with clear acceptance criteria and validation details.",
+        team_id: "team-1",
+      }),
+    ];
+
+    const service = createSymphonyService({
+      workflowPath: "/tmp/WORKFLOW.md",
+      deps: {
+        loadWorkflowFile: async () => workflow(1000),
+        createTracker: () => ({
+          async fetchCandidateIssues() {
+            return candidates.splice(0, candidates.length);
+          },
+          async fetchIssuesByStates() {
+            return [];
+          },
+          async fetchIssueStatesByIds() {
+            return [];
+          },
+          async createIssueComment(input) {
+            comments.push(input.body);
+          },
+          async updateIssueStateByName(input) {
+            transitioned.push(`${input.issue.identifier}:${input.stateName}`);
+            return true;
+          },
+        }),
+        cleanupTerminalIssueWorkspaces: async () => ({ removed: 0, failed: 0, warnings: [] }),
+        processDueRetries: async () => ({
+          processedIssueIds: [],
+          dispatchedIssueIds: [],
+          requeuedIssueIds: [],
+          releasedIssueIds: [],
+        }),
+        setIntervalFn: () => 1 as unknown as ReturnType<typeof setInterval>,
+        clearIntervalFn: () => {},
+        runIssueAttempt: async (input) => ({
+          exit: "guardrail_stop" as const,
+          guardrail_reason: "attempt_input_budget_exceeded" as const,
+          turnCount: 3,
+          workspacePath: "/tmp/fake",
+          issue: input.issue,
+        }),
+      },
+    });
+
+    await service.start();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const snapshot = service.getRuntimeSnapshot();
+    expect(snapshot.retrying).toHaveLength(0);
+    expect(transitioned).toEqual(["ATH-901:In Progress", "ATH-901:Human Review"]);
+    expect(comments.some((entry) => entry.includes("guardrail"))).toBe(true);
+
+    await service.stop();
+  });
+
   it("blocks issues that fail intake guardrails and comments once", async () => {
     const comments: string[] = [];
     const runIssueAttempt = vi.fn(async (input: any) => ({

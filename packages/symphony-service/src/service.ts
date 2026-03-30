@@ -49,6 +49,13 @@ interface ActiveWorker {
   stop: () => void;
 }
 
+interface IssueLifecycleMetrics {
+  issueId: string;
+  issueIdentifier: string;
+  lifecycleInputTokens: number;
+  continuationRuns: number;
+}
+
 interface ServiceDependencies {
   loadWorkflowFile: (path: string) => Promise<WorkflowDocument>;
   watchWorkflowFile: (path: string, onReloadRequested: () => void) => FSWatcher;
@@ -208,6 +215,7 @@ export function createSymphonyService(options: CreateSymphonyServiceOptions): Sy
   const activeWorkers = new Map<string, ActiveWorker>();
   const completionSignals = new Map<string, RuntimeSnapshotCompletedRow>();
   const issueEventBuffers = new Map<string, IssueEventBuffer>();
+  const issueLifecycleMetrics = new Map<string, IssueLifecycleMetrics>();
   const workerTasks = new Set<Promise<void>>();
   const guardrailNotifiedIssueIds = new Set<string>();
   let completedInputTokens = 0;
@@ -383,6 +391,7 @@ export function createSymphonyService(options: CreateSymphonyServiceOptions): Sy
     state.running.delete(action.issueId);
     state.claimed.delete(action.issueId);
     state.retryAttempts.delete(action.issueId);
+    clearIssueLifecycle(action.issueId);
 
     if (action.action === "terminate_cleanup" && config) {
       const workspace = resolveWorkspaceLocation(config.workspace.root, action.identifier);
@@ -463,6 +472,27 @@ export function createSymphonyService(options: CreateSymphonyServiceOptions): Sy
     };
   }
 
+  function getOrCreateIssueLifecycle(issueId: string, issueIdentifier: string): IssueLifecycleMetrics {
+    const existing = issueLifecycleMetrics.get(issueId);
+    if (existing) {
+      existing.issueIdentifier = issueIdentifier;
+      return existing;
+    }
+
+    const created: IssueLifecycleMetrics = {
+      issueId,
+      issueIdentifier,
+      lifecycleInputTokens: 0,
+      continuationRuns: 0,
+    };
+    issueLifecycleMetrics.set(issueId, created);
+    return created;
+  }
+
+  function clearIssueLifecycle(issueId: string): void {
+    issueLifecycleMetrics.delete(issueId);
+  }
+
   function evaluateGuardrails(issue: NormalizedIssue): string[] {
     const problems: string[] = [];
 
@@ -504,7 +534,11 @@ export function createSymphonyService(options: CreateSymphonyServiceOptions): Sy
     });
   }
 
-  async function moveIssueToInProgress(trackerClient: TrackerClient, issue: NormalizedIssue): Promise<void> {
+  async function moveIssueToState(
+    trackerClient: TrackerClient,
+    issue: NormalizedIssue,
+    stateName: string,
+  ): Promise<void> {
     if (!trackerClient.updateIssueStateByName) {
       return;
     }
@@ -512,7 +546,7 @@ export function createSymphonyService(options: CreateSymphonyServiceOptions): Sy
     await safeTrackerWrite("state_transition", issue, async () => {
       const changed = await trackerClient.updateIssueStateByName?.({
         issue,
-        stateName: "In Progress",
+        stateName,
       });
 
       if (changed) {
@@ -522,11 +556,15 @@ export function createSymphonyService(options: CreateSymphonyServiceOptions): Sy
           details: {
             issue_id: issue.id,
             issue_identifier: issue.identifier,
-            next_state: "In Progress",
+            next_state: stateName,
           },
         });
       }
     });
+  }
+
+  async function moveIssueToInProgress(trackerClient: TrackerClient, issue: NormalizedIssue): Promise<void> {
+    await moveIssueToState(trackerClient, issue, "In Progress");
   }
 
   async function publishRunComment(
@@ -579,6 +617,54 @@ export function createSymphonyService(options: CreateSymphonyServiceOptions): Sy
     ].join("\n");
 
     await safeTrackerWrite("delivery_complete_signal", issue, async () => {
+      await trackerClient.createIssueComment?.({
+        issueId: issue.id,
+        body,
+      });
+    });
+  }
+
+  async function publishContinuationGuardrailComment(
+    trackerClient: TrackerClient,
+    issue: NormalizedIssue,
+    input: {
+      reasons: string[];
+      turnCount: number;
+      retryAttempt: number;
+      lifecycleInputTokens: number;
+      maxIssueInputTokens: number;
+      continuationRuns: number;
+      maxContinuationRunsPerIssue: number;
+      maxInputTokensPerAttempt: number;
+    },
+  ): Promise<void> {
+    if (!trackerClient.createIssueComment) {
+      return;
+    }
+
+    const reasonLines = input.reasons.map((reason) => `- ${reason}`).join("\n");
+    const body = [
+      "Symphony paused automatic continuation for this issue after hitting runtime guardrails.",
+      "",
+      "## Guardrail Stop",
+      reasonLines,
+      "",
+      "## Runtime Counters",
+      `- turn_count: ${input.turnCount}`,
+      `- retry_attempt: ${input.retryAttempt}`,
+      `- lifecycle_input_tokens: ${input.lifecycleInputTokens}`,
+      `- continuation_runs: ${input.continuationRuns}`,
+      "",
+      "## Thresholds",
+      `- agent.max_input_tokens_per_attempt: ${input.maxInputTokensPerAttempt}`,
+      `- agent.max_issue_input_tokens: ${input.maxIssueInputTokens}`,
+      `- agent.max_continuation_runs_per_issue: ${input.maxContinuationRunsPerIssue}`,
+      "",
+      `Issue moved to ${config?.tracker.handoffState ?? "Human Review"} for operator handoff.`,
+      "Operator next step: refine scope/instructions and move issue back to an active state to resume.",
+    ].join("\n");
+
+    await safeTrackerWrite("continuation_guardrail_stop", issue, async () => {
       await trackerClient.createIssueComment?.({
         issueId: issue.id,
         body,
@@ -657,6 +743,7 @@ export function createSymphonyService(options: CreateSymphonyServiceOptions): Sy
     }
 
     guardrailNotifiedIssueIds.delete(input.issue.id);
+    getOrCreateIssueLifecycle(input.issue.id, input.issue.identifier);
     completionSignals.delete(input.issue.id);
     await moveIssueToInProgress(runtimeTracker, input.issue);
     await publishRunComment(runtimeTracker, input.issue, {
@@ -716,12 +803,47 @@ export function createSymphonyService(options: CreateSymphonyServiceOptions): Sy
         },
       })
       .then(async (result) => {
+        const lifecycle = getOrCreateIssueLifecycle(result.issue.id, result.issue.identifier);
+        lifecycle.lifecycleInputTokens += worker.usage.inputTokens;
+
+        const doneSignalState = isDoneSignalState(result.issue.state, runtimeConfig);
+        const guardrailReasons: string[] = [];
+        if (result.exit === "guardrail_stop") {
+          if (result.guardrail_reason === "attempt_input_budget_exceeded") {
+            guardrailReasons.push(
+              `attempt input token budget exceeded (${worker.usage.inputTokens}/${runtimeConfig.agent.maxInputTokensPerAttempt} this attempt)`,
+            );
+          } else if (result.guardrail_reason === "no_progress_window_exceeded") {
+            guardrailReasons.push("no-progress window exceeded (3 consecutive turns without workspace diff change)");
+          }
+        }
+
+        if (!doneSignalState && lifecycle.continuationRuns >= runtimeConfig.agent.maxContinuationRunsPerIssue) {
+          guardrailReasons.push(
+            `continuation run cap reached (${lifecycle.continuationRuns}/${runtimeConfig.agent.maxContinuationRunsPerIssue})`,
+          );
+        }
+
+        if (!doneSignalState && lifecycle.lifecycleInputTokens >= runtimeConfig.agent.maxIssueInputTokens) {
+          guardrailReasons.push(
+            `lifecycle input token budget exceeded (${lifecycle.lifecycleInputTokens}/${runtimeConfig.agent.maxIssueInputTokens})`,
+          );
+        }
+
+        const allowContinuation = !doneSignalState && guardrailReasons.length === 0;
         const retry = onWorkerExit(state, {
           issueId: input.issue.id,
           nowMs: deps.nowMs(),
           reason: "normal",
           maxRetryBackoffMs: runtimeConfig.agent.maxRetryBackoffMs,
+          allowContinuation,
+          continuationDelayMs: runtimeConfig.agent.continuationRetryDelayMs,
+          continuationAttempt: Math.max(worker.retryAttempt + 1, 1),
         });
+
+        if (!retry) {
+          state.claimed.delete(input.issue.id);
+        }
 
         appendIssueEvent(result.issue.id, result.issue.identifier, {
           source: "service",
@@ -732,15 +854,52 @@ export function createSymphonyService(options: CreateSymphonyServiceOptions): Sy
           retry_attempt: worker.retryAttempt,
         });
 
-        if (retry) {
+        if (result.exit === "guardrail_stop") {
           appendIssueEvent(result.issue.id, result.issue.identifier, {
             source: "service",
-            kind: "retry_scheduled",
+            kind: "attempt_guardrail_blocked",
+            message: `Attempt guardrail blocked continuation (${result.guardrail_reason ?? "unknown"})`,
+            session_id: worker.sessionId,
+            turn_count: worker.turnCount,
+            retry_attempt: worker.retryAttempt,
+          });
+        }
+
+        if (retry) {
+          if (retry.error === "continuation_retry") {
+            lifecycle.continuationRuns += 1;
+          }
+
+          appendIssueEvent(result.issue.id, result.issue.identifier, {
+            source: "service",
+            kind: retry.error === "continuation_retry" ? "continuation_scheduled" : "retry_scheduled",
             message: `Retry scheduled for ${new Date(retry.dueAtMs).toISOString()} (${retry.error})`,
             session_id: worker.sessionId,
             turn_count: worker.turnCount,
             retry_attempt: retry.attempt,
           });
+        } else if (!doneSignalState && guardrailReasons.length > 0) {
+          appendIssueEvent(result.issue.id, result.issue.identifier, {
+            source: "service",
+            kind: "continuation_guardrail_blocked",
+            message: `Continuation blocked by guardrails: ${guardrailReasons.join(" | ")}`,
+            session_id: worker.sessionId,
+            turn_count: worker.turnCount,
+            retry_attempt: worker.retryAttempt,
+          });
+
+          await moveIssueToState(runtimeTracker, result.issue, runtimeConfig.tracker.handoffState);
+          await publishContinuationGuardrailComment(runtimeTracker, result.issue, {
+            reasons: guardrailReasons,
+            turnCount: worker.turnCount,
+            retryAttempt: worker.retryAttempt,
+            lifecycleInputTokens: lifecycle.lifecycleInputTokens,
+            maxIssueInputTokens: runtimeConfig.agent.maxIssueInputTokens,
+            continuationRuns: lifecycle.continuationRuns,
+            maxContinuationRunsPerIssue: runtimeConfig.agent.maxContinuationRunsPerIssue,
+            maxInputTokensPerAttempt: runtimeConfig.agent.maxInputTokensPerAttempt,
+          });
+          clearIssueLifecycle(result.issue.id);
         }
 
         await publishRunComment(runtimeTracker, result.issue, {
@@ -765,9 +924,13 @@ export function createSymphonyService(options: CreateSymphonyServiceOptions): Sy
             turn_count: worker.turnCount,
             retry_attempt: worker.retryAttempt,
           });
+          clearIssueLifecycle(result.issue.id);
         }
       })
       .catch(async (error) => {
+        const lifecycle = getOrCreateIssueLifecycle(input.issue.id, input.issue.identifier);
+        lifecycle.lifecycleInputTokens += worker.usage.inputTokens;
+
         const retry = onWorkerExit(state, {
           issueId: input.issue.id,
           nowMs: deps.nowMs(),

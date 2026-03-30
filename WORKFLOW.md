@@ -15,6 +15,11 @@ hooks:
   timeout_ms: 120000
 agent:
   max_concurrent_agents: 2
+  max_turns: 12
+  max_input_tokens_per_attempt: 150000
+  max_issue_input_tokens: 300000
+  max_continuation_runs_per_issue: 2
+  continuation_retry_delay_ms: 30000
   max_retry_backoff_ms: 300000
 codex:
   command: /Applications/Codex.app/Contents/Resources/codex app-server

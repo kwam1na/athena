@@ -64,7 +64,11 @@ function config(partial?: Partial<EffectiveConfig>): EffectiveConfig {
     agent: {
       maxConcurrentAgents: partial?.agent?.maxConcurrentAgents ?? 2,
       maxRetryBackoffMs: partial?.agent?.maxRetryBackoffMs ?? 300_000,
-      maxTurns: partial?.agent?.maxTurns ?? 20,
+      maxTurns: partial?.agent?.maxTurns ?? 12,
+      maxInputTokensPerAttempt: partial?.agent?.maxInputTokensPerAttempt ?? 150_000,
+      maxIssueInputTokens: partial?.agent?.maxIssueInputTokens ?? 300_000,
+      maxContinuationRunsPerIssue: partial?.agent?.maxContinuationRunsPerIssue ?? 2,
+      continuationRetryDelayMs: partial?.agent?.continuationRetryDelayMs ?? 30_000,
       maxConcurrentAgentsByState: partial?.agent?.maxConcurrentAgentsByState ?? {},
     },
     codex: {
@@ -313,7 +317,11 @@ describe("processDueRetries", () => {
         agent: {
           maxConcurrentAgents: 1,
           maxRetryBackoffMs: 300_000,
-          maxTurns: 20,
+          maxTurns: 12,
+          maxInputTokensPerAttempt: 150_000,
+          maxIssueInputTokens: 300_000,
+          maxContinuationRunsPerIssue: 2,
+          continuationRetryDelayMs: 30_000,
           maxConcurrentAgentsByState: {},
         },
       }),

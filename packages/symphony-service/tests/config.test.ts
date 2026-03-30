@@ -20,6 +20,11 @@ describe("resolveEffectiveConfig", () => {
     expect(config.codex.clientVersion.length).toBeGreaterThan(0);
     expect(config.codex.clientCapabilities).toEqual({});
     expect(config.agent.maxConcurrentAgents).toBe(10);
+    expect(config.agent.maxTurns).toBe(12);
+    expect(config.agent.maxInputTokensPerAttempt).toBe(150000);
+    expect(config.agent.maxIssueInputTokens).toBe(300000);
+    expect(config.agent.maxContinuationRunsPerIssue).toBe(2);
+    expect(config.agent.continuationRetryDelayMs).toBe(30000);
     expect(config.tracker.handoffState).toBe("Human Review");
   });
 

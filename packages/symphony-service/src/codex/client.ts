@@ -64,7 +64,7 @@ interface PendingRequest {
 }
 
 interface PendingTurn {
-  resolve: (outcome: TurnOutcome) => void;
+  resolve: (result: { outcome: TurnOutcome; usage?: Record<string, number> }) => void;
   timer: ReturnType<typeof setTimeout>;
 }
 
@@ -75,7 +75,7 @@ export class CodexAppServerClient {
   private nextRequestId = 1;
   private initialized = false;
   private pendingTurn: PendingTurn | null = null;
-  private queuedTurnOutcome: TurnOutcome | null = null;
+  private queuedTurnResult: { outcome: TurnOutcome; usage?: Record<string, number> } | null = null;
   private readonly recentStderr: string[] = [];
 
   constructor(
@@ -115,7 +115,7 @@ export class CodexAppServerClient {
     cwd: string;
     title: string;
     prompt: string;
-  }): Promise<{ turnId: string; sessionId: string; outcome: TurnOutcome }> {
+  }): Promise<{ turnId: string; sessionId: string; outcome: TurnOutcome; usage?: Record<string, number> }> {
     this.assertAbsoluteCwd(input.cwd);
 
     if (!this.process) {
@@ -143,8 +143,8 @@ export class CodexAppServerClient {
     const sessionId = `${input.threadId}-${turnId}`;
     this.emit({ event: "session_started", session_id: sessionId });
 
-    const outcome = await this.waitForTurnOutcome();
-    return { turnId, sessionId, outcome };
+    const result = await this.waitForTurnOutcome();
+    return { turnId, sessionId, outcome: result.outcome, usage: result.usage };
   }
 
   stop(): void {
@@ -331,26 +331,26 @@ export class CodexAppServerClient {
 
     if (isUserInputRequired(message)) {
       this.emit({ event: "turn_input_required", payload: { method }, usage, rate_limits: rateLimits });
-      this.resolveTurnOutcome("turn_input_required");
+      this.resolveTurnOutcome("turn_input_required", usage ?? undefined);
       return;
     }
 
     const terminal = getTurnTerminalState(method);
     if (terminal === "completed") {
       this.emit({ event: "turn_completed", payload: { method }, usage, rate_limits: rateLimits });
-      this.resolveTurnOutcome("completed");
+      this.resolveTurnOutcome("completed", usage ?? undefined);
       return;
     }
 
     if (terminal === "failed") {
       this.emit({ event: "turn_failed", payload: { method }, usage, rate_limits: rateLimits });
-      this.resolveTurnOutcome("failed");
+      this.resolveTurnOutcome("failed", usage ?? undefined);
       return;
     }
 
     if (terminal === "cancelled") {
       this.emit({ event: "turn_cancelled", payload: { method }, usage, rate_limits: rateLimits });
-      this.resolveTurnOutcome("cancelled");
+      this.resolveTurnOutcome("cancelled", usage ?? undefined);
       return;
     }
 
@@ -375,37 +375,37 @@ export class CodexAppServerClient {
     proc.stdin.write(`${JSON.stringify({ id, result })}\n`);
   }
 
-  private waitForTurnOutcome(): Promise<TurnOutcome> {
+  private waitForTurnOutcome(): Promise<{ outcome: TurnOutcome; usage?: Record<string, number> }> {
     if (this.pendingTurn) {
       throw new SymphonyError("response_error", "a turn is already in progress");
     }
 
-    if (this.queuedTurnOutcome) {
-      const queued = this.queuedTurnOutcome;
-      this.queuedTurnOutcome = null;
+    if (this.queuedTurnResult) {
+      const queued = this.queuedTurnResult;
+      this.queuedTurnResult = null;
       return Promise.resolve(queued);
     }
 
-    return new Promise<TurnOutcome>((resolve) => {
+    return new Promise<{ outcome: TurnOutcome; usage?: Record<string, number> }>((resolve) => {
       const timer = setTimeout(() => {
         this.pendingTurn = null;
-        resolve("turn_timeout");
+        resolve({ outcome: "turn_timeout" });
       }, this.config.turnTimeoutMs);
 
       this.pendingTurn = { resolve, timer };
     });
   }
 
-  private resolveTurnOutcome(outcome: TurnOutcome): void {
+  private resolveTurnOutcome(outcome: TurnOutcome, usage?: Record<string, number>): void {
     if (!this.pendingTurn) {
-      this.queuedTurnOutcome = outcome;
+      this.queuedTurnResult = { outcome, usage };
       return;
     }
 
     const pending = this.pendingTurn;
     this.pendingTurn = null;
     clearTimeout(pending.timer);
-    pending.resolve(outcome);
+    pending.resolve({ outcome, usage });
   }
 
   private rejectAllPending(error: Error): void {
@@ -419,7 +419,7 @@ export class CodexAppServerClient {
   private teardown(): void {
     this.process = null;
     this.initialized = false;
-    this.queuedTurnOutcome = null;
+    this.queuedTurnResult = null;
 
     if (this.stdoutLineReader) {
       this.stdoutLineReader.removeAllListeners();

@@ -4,6 +4,7 @@ export function calculateFailureRetryDelay(attempt: number, maxRetryBackoffMs: n
   return Math.min(rawDelay, maxRetryBackoffMs);
 }
 
-export function calculateContinuationDelay(): number {
-  return 1_000;
+export function calculateContinuationDelay(continuationDelayMs: number): number {
+  const normalizedDelay = Math.max(1, Math.trunc(continuationDelayMs));
+  return normalizedDelay;
 }

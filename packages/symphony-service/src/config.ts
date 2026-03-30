@@ -48,7 +48,11 @@ export function resolveEffectiveConfig(config: WorkflowConfigMap): EffectiveConf
     agent: {
       maxConcurrentAgents: asPositiveInt(agent.max_concurrent_agents, 10),
       maxRetryBackoffMs: asPositiveInt(agent.max_retry_backoff_ms, 300_000),
-      maxTurns: asPositiveInt(agent.max_turns, 20),
+      maxTurns: asPositiveInt(agent.max_turns, 12),
+      maxInputTokensPerAttempt: asPositiveInt(agent.max_input_tokens_per_attempt, 150_000),
+      maxIssueInputTokens: asPositiveInt(agent.max_issue_input_tokens, 300_000),
+      maxContinuationRunsPerIssue: asPositiveInt(agent.max_continuation_runs_per_issue, 2),
+      continuationRetryDelayMs: asPositiveInt(agent.continuation_retry_delay_ms, 30_000),
       maxConcurrentAgentsByState: normalizeStateLimits(agent.max_concurrent_agents_by_state),
     },
     codex: {

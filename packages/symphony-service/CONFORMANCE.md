@@ -20,8 +20,9 @@ Spec reference: https://github.com/openai/symphony/blob/main/SPEC.md
 | Coding-agent app-server subprocess client with JSON line protocol | Implemented | `src/codex/client.ts`, `src/codex/protocol.ts` | `tests/codexClient.test.ts`, `tests/codexProtocol.test.ts` |
 | Codex launch command config (`codex.command`, default `codex app-server`) | Implemented | `src/config.ts`, `src/service.ts` | `tests/config.test.ts`, `tests/service.test.ts` |
 | Strict prompt rendering with `issue` and `attempt` variables | Implemented | `src/template.ts`, `src/worker.ts` | `tests/template.test.ts`, `tests/worker.test.ts` |
-| Exponential retry queue with continuation retries after normal exit | Implemented | `src/retry.ts`, `src/orchestrator.ts`, `src/runtime.ts` | `tests/retry.test.ts`, `tests/orchestrator.test.ts`, `tests/runtime.test.ts` |
+| Exponential retry queue with bounded continuation retries after normal exit | Implemented | `src/retry.ts`, `src/orchestrator.ts`, `src/runtime.ts`, `src/service.ts`, `src/worker.ts` | `tests/retry.test.ts`, `tests/orchestrator.test.ts`, `tests/runtime.test.ts`, `tests/service.test.ts`, `tests/worker.test.ts` |
 | Configurable retry backoff cap (`agent.max_retry_backoff_ms`) | Implemented | `src/config.ts`, `src/orchestrator.ts`, `src/runtime.ts` | `tests/config.test.ts`, `tests/orchestrator.test.ts` |
+| Runtime token/turn/no-progress guardrails to prevent runaway burn | Implemented | `src/config.ts`, `src/worker.ts`, `src/service.ts` | `tests/config.test.ts`, `tests/worker.test.ts`, `tests/service.test.ts` |
 | Reconciliation that stops runs on terminal/non-active tracker states | Implemented | `src/orchestrator.ts`, `src/runtime.ts`, `src/service.ts` | `tests/orchestrator.test.ts`, `tests/runtime.test.ts`, `tests/service.test.ts` |
 | Workspace cleanup for terminal issues (startup sweep + active transition) | Implemented | `src/startup.ts`, `src/service.ts` | `tests/startup.test.ts`, `tests/service.test.ts` |
 | Structured logs including issue and session context fields | Implemented | `src/service.ts`, `src/worker.ts` | `tests/service.test.ts` |
