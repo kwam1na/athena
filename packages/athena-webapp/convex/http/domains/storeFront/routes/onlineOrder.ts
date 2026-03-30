@@ -4,6 +4,7 @@ import { ActionCtx } from "../../../../_generated/server";
 import { api } from "../../../../_generated/api";
 import { Id } from "../../../../_generated/dataModel";
 import { getStorefrontUserFromRequest } from "../../../utils";
+import { isAuthorizedResourceOwner } from "./security";
 
 const onlineOrderRoutes: HonoWithConvex<ActionCtx> = new Hono();
 
@@ -23,20 +24,23 @@ onlineOrderRoutes.get("/", async (c) => {
 
 onlineOrderRoutes.get("/:orderId", async (c) => {
   const { orderId } = c.req.param();
+  const userId = getStorefrontUserFromRequest(c);
 
-  // const userId = getStorefrontUserFromRequest(c);
-
-  // if (!userId) {
-  //   return c.json({ error: "User id missing" }, 404);
-  // }
+  if (!userId) {
+    return c.json({ error: "User id missing" }, 404);
+  }
 
   const order = await c.env.runQuery(api.storeFront.onlineOrder.get, {
     identifier: orderId as Id<"onlineOrder">,
   });
 
-  // if (order?.storeFrontUserId !== userId) {
-  //   return c.json({ error: "Unauthorized" }, 401);
-  // }
+  if (!order) {
+    return c.json({ error: "Order not found" }, 404);
+  }
+
+  if (!isAuthorizedResourceOwner(order.storeFrontUserId, userId)) {
+    return c.json({ error: "Forbidden" }, 403);
+  }
 
   return c.json(order);
 });

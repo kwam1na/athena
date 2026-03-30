@@ -67,7 +67,7 @@ export const createTransaction = action({
       }
 
       // Extract and calculate order amount
-      const discount = session.discount || args.orderDetails.discount;
+      const discount = session.discount;
       const items = (session.items || [])
         .filter(
           (item) =>
@@ -83,7 +83,7 @@ export const createTransaction = action({
 
       // Log calculation inputs
       console.log(
-        `[CHECKOUT-CALCULATION] Amount calculation inputs | Session: ${args.checkoutSessionId} | Items count: ${items.length} | Subtotal: ${args.amount * 100} | Delivery fee: ${(args.orderDetails.deliveryFee || 0) * 100} | Has discount: ${!!discount}`
+        `[CHECKOUT-CALCULATION] Amount calculation inputs | Session: ${args.checkoutSessionId} | Items count: ${items.length} | Subtotal: ${session.amount * 100} | Delivery fee: ${(args.orderDetails.deliveryFee || 0) * 100} | Has discount: ${!!discount}`
       );
       console.log(
         `[CHECKOUT-CALCULATION] Items breakdown:`,
@@ -107,7 +107,7 @@ export const createTransaction = action({
         items,
         discount,
         deliveryFee: (args.orderDetails.deliveryFee || 0) * 100,
-        subtotal: args.amount * 100,
+        subtotal: session.amount * 100,
       });
 
       // Log calculation result
@@ -128,8 +128,8 @@ export const createTransaction = action({
         metadata: {
           cancel_action: `${appUrl}/shop/checkout?origin=paystack`,
           checkout_session_id: args.checkoutSessionId,
-          checkout_session_amount: args.amount.toString(),
-          order_details: args.orderDetails,
+          checkout_session_amount: session.amount.toString(),
+          order_details: { ...args.orderDetails, discount: session.discount ?? null },
           amount_to_charge: amountToCharge.toString(),
         },
       });
@@ -147,7 +147,7 @@ export const createTransaction = action({
             id: args.checkoutSessionId,
             isFinalizingPayment: true,
             externalReference: response.data.reference,
-            orderDetails: args.orderDetails,
+            orderDetails: { ...args.orderDetails, discount: session.discount ?? null },
           }
         );
       } catch (error) {
@@ -192,6 +192,17 @@ export const createPODOrder = action({
     console.log(`Creating POD order for session: ${args.checkoutSessionId}`);
 
     try {
+      const session = await ctx.runQuery(api.storeFront.checkoutSession.getById, {
+        sessionId: args.checkoutSessionId,
+      });
+
+      if (!session) {
+        return {
+          success: false,
+          message: "Session not found",
+        };
+      }
+
       // Generate POD reference
       const podReference = generatePODReference(args.checkoutSessionId);
 
@@ -213,6 +224,7 @@ export const createPODOrder = action({
           orderDetails: {
             ...args.orderDetails,
             paymentMethod: "payment_on_delivery",
+            discount: session.discount ?? null,
           },
           paymentMethod,
         }
@@ -240,7 +252,7 @@ export const createPODOrder = action({
           items: order.items || [],
           discount: order.discount || 0,
           deliveryFee: (args.orderDetails.deliveryFee || 0) * 100,
-          subtotal: args.amount * 100,
+          subtotal: session.amount * 100,
         });
 
         // Send confirmation and admin notification emails
