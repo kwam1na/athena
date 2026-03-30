@@ -5,6 +5,7 @@ export * from "./orchestrator";
 export * from "./retry";
 export * from "./runtime";
 export * from "./scheduler";
+export * from "./service";
 export * from "./startup";
 export * from "./template";
 export * from "./tracker/linear";
