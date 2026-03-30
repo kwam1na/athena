@@ -101,6 +101,29 @@ export function createSymphonyService(options: CreateSymphonyServiceOptions): Sy
   const activeWorkers = new Map<string, ActiveWorker>();
   const workerTasks = new Set<Promise<void>>();
 
+  function emitLog(entry: ServiceLogEntry): void {
+    try {
+      deps.onLog(entry);
+      return;
+    } catch (error) {
+      const fallback: ServiceLogEntry = {
+        level: "warn",
+        message: "action=log_sink outcome=failed",
+        details: {
+          sink_error: toErrorMessage(error),
+          original_level: entry.level,
+          original_message: entry.message,
+        },
+      };
+
+      try {
+        process.stderr.write(`[symphony] ${formatServiceLogLine(fallback)}\n`);
+      } catch {
+        // Last-resort logging path failed; continue orchestration without throwing.
+      }
+    }
+  }
+
   async function start(): Promise<void> {
     if (started) {
       return;
@@ -126,7 +149,7 @@ export function createSymphonyService(options: CreateSymphonyServiceOptions): Sy
           timeoutMs: config.hooks.timeoutMs,
         },
       },
-      onLog: deps.onLog,
+      onLog: emitLog,
     });
 
     await runTickOnce();
@@ -143,7 +166,7 @@ export function createSymphonyService(options: CreateSymphonyServiceOptions): Sy
         }, RELOAD_DEBOUNCE_MS);
       });
 
-      deps.onLog({
+      emitLog({
         level: "info",
         message: "action=watch outcome=started",
         details: {
@@ -293,7 +316,7 @@ export function createSymphonyService(options: CreateSymphonyServiceOptions): Sy
         tracker: runtimeTracker,
         createCodexClient: () => codexClient,
         onLog: (entry) => {
-          deps.onLog({
+          emitLog({
             level: entry.message.includes("outcome=failed") ? "warn" : "info",
             message: entry.message,
             details: entry.details,
@@ -336,7 +359,7 @@ export function createSymphonyService(options: CreateSymphonyServiceOptions): Sy
       config = nextConfig;
       tracker = nextTracker;
 
-      deps.onLog({
+      emitLog({
         level: "info",
         message: "action=config_validate outcome=completed",
         details: {
@@ -347,7 +370,7 @@ export function createSymphonyService(options: CreateSymphonyServiceOptions): Sy
       });
 
       if (options.printEffectiveConfig) {
-        deps.onLog({
+        emitLog({
           level: "info",
           message: JSON.stringify(config, null, 2),
         });
@@ -359,7 +382,7 @@ export function createSymphonyService(options: CreateSymphonyServiceOptions): Sy
         throw error;
       }
 
-      deps.onLog({
+      emitLog({
         level: "warn",
         message: "action=config_reload outcome=failed reason=reload_failed",
         details: {
@@ -382,7 +405,7 @@ export function createSymphonyService(options: CreateSymphonyServiceOptions): Sy
 
     pollTimer = deps.setIntervalFn(() => {
       void runTickOnce().catch((error) => {
-        deps.onLog({
+        emitLog({
           level: "warn",
           message: "action=tick outcome=failed",
           details: {
