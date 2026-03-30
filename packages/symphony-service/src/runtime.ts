@@ -4,6 +4,7 @@ import {
   getStalledIssueIds,
   markIssueRunning,
   onWorkerExit,
+  type RetryEntry,
   reconcileRunningIssueStates,
   selectDispatchCandidates,
   type OrchestratorState,
@@ -37,6 +38,21 @@ export interface RunOrchestratorTickResult {
   reconcileActions: ReconcileAction[];
   stalledIssueIds: string[];
   preflightError?: string;
+}
+
+export interface ProcessDueRetriesInput {
+  state: OrchestratorState;
+  tracker: TrackerClient;
+  config: EffectiveConfig;
+  nowMs: number;
+  dispatchIssue: (input: DispatchInput) => Promise<void>;
+}
+
+export interface ProcessDueRetriesResult {
+  processedIssueIds: string[];
+  dispatchedIssueIds: string[];
+  requeuedIssueIds: string[];
+  releasedIssueIds: string[];
 }
 
 export async function runOrchestratorTick(input: RunOrchestratorTickInput): Promise<RunOrchestratorTickResult> {
@@ -171,4 +187,146 @@ function nextRetryAttempt(retryAttempt: number | null): number {
   }
 
   return 1;
+}
+
+export async function processDueRetries(input: ProcessDueRetriesInput): Promise<ProcessDueRetriesResult> {
+  const dueEntries = Array.from(input.state.retryAttempts.values())
+    .filter((entry) => entry.dueAtMs <= input.nowMs)
+    .sort((a, b) => a.dueAtMs - b.dueAtMs);
+
+  if (dueEntries.length === 0) {
+    return {
+      processedIssueIds: [],
+      dispatchedIssueIds: [],
+      requeuedIssueIds: [],
+      releasedIssueIds: [],
+    };
+  }
+
+  const processedIssueIds: string[] = [];
+  const dispatchedIssueIds: string[] = [];
+  const requeuedIssueIds: string[] = [];
+  const releasedIssueIds: string[] = [];
+
+  for (const entry of dueEntries) {
+    input.state.retryAttempts.delete(entry.issueId);
+    processedIssueIds.push(entry.issueId);
+  }
+
+  let candidates: NormalizedIssue[];
+  try {
+    candidates = await input.tracker.fetchCandidateIssues();
+  } catch (error) {
+    const message = `retry poll failed: ${toErrorMessage(error)}`;
+    for (const entry of dueEntries) {
+      requeueRetryEntry(input, entry, {
+        attempt: entry.attempt + 1,
+        mode: "failure",
+        error: message,
+      });
+      requeuedIssueIds.push(entry.issueId);
+    }
+
+    return {
+      processedIssueIds,
+      dispatchedIssueIds,
+      requeuedIssueIds,
+      releasedIssueIds,
+    };
+  }
+
+  const activeStates = new Set(input.config.tracker.activeStates);
+  const terminalStates = new Set(input.config.tracker.terminalStates);
+  const candidatesById = new Map(candidates.map((issue) => [issue.id, issue]));
+
+  for (const entry of dueEntries) {
+    const issue = candidatesById.get(entry.issueId);
+    if (!issue) {
+      input.state.claimed.delete(entry.issueId);
+      releasedIssueIds.push(entry.issueId);
+      continue;
+    }
+
+    if (!activeStates.has(issue.state) || terminalStates.has(issue.state)) {
+      input.state.claimed.delete(entry.issueId);
+      releasedIssueIds.push(entry.issueId);
+      continue;
+    }
+
+    if (!canDispatchRetryIssue(issue, input.state, input.config)) {
+      requeueRetryEntry(input, entry, {
+        attempt: entry.attempt,
+        mode: "continuation",
+        error: "no available orchestrator slots",
+      });
+      requeuedIssueIds.push(entry.issueId);
+      continue;
+    }
+
+    try {
+      await input.dispatchIssue({
+        issue,
+        attempt: normalizeDispatchAttempt(entry.attempt),
+      });
+
+      markIssueRunning(input.state, issue, input.nowMs, entry.attempt);
+      dispatchedIssueIds.push(entry.issueId);
+    } catch (error) {
+      requeueRetryEntry(input, entry, {
+        attempt: entry.attempt + 1,
+        mode: "failure",
+        error: toErrorMessage(error),
+      });
+      requeuedIssueIds.push(entry.issueId);
+    }
+  }
+
+  return {
+    processedIssueIds,
+    dispatchedIssueIds,
+    requeuedIssueIds,
+    releasedIssueIds,
+  };
+}
+
+function canDispatchRetryIssue(issue: NormalizedIssue, state: OrchestratorState, config: EffectiveConfig): boolean {
+  const tempState: OrchestratorState = {
+    claimed: new Set(state.claimed),
+    running: state.running,
+    retryAttempts: state.retryAttempts,
+    completed: state.completed,
+  };
+
+  tempState.claimed.delete(issue.id);
+
+  const selected = selectDispatchCandidates({
+    candidates: [issue],
+    state: tempState,
+    activeStates: config.tracker.activeStates,
+    terminalStates: config.tracker.terminalStates,
+    maxConcurrentAgents: config.agent.maxConcurrentAgents,
+    maxConcurrentAgentsByState: config.agent.maxConcurrentAgentsByState,
+  });
+
+  return selected.length > 0;
+}
+
+function requeueRetryEntry(
+  input: ProcessDueRetriesInput,
+  entry: RetryEntry,
+  options: {
+    attempt: number;
+    mode: "continuation" | "failure";
+    error: string;
+  },
+): void {
+  scheduleRetry(input.state, {
+    issueId: entry.issueId,
+    identifier: entry.identifier,
+    attempt: options.attempt,
+    nowMs: input.nowMs,
+    maxRetryBackoffMs: input.config.agent.maxRetryBackoffMs,
+    mode: options.mode,
+    error: options.error,
+  });
 }

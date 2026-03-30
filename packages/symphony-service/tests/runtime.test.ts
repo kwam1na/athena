@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { EffectiveConfig } from "../src/types";
 import type { NormalizedIssue, TrackerClient } from "../src/issue";
-import { createOrchestratorState, markIssueRunning } from "../src/orchestrator";
-import { runOrchestratorTick } from "../src/runtime";
+import { createOrchestratorState, markIssueRunning, scheduleRetry } from "../src/orchestrator";
+import { processDueRetries, runOrchestratorTick } from "../src/runtime";
 
 function issue(partial: Partial<NormalizedIssue>): NormalizedIssue {
   return {
@@ -205,5 +205,98 @@ describe("runOrchestratorTick", () => {
     expect(state.running.has("running-stalled")).toBe(false);
     expect(state.retryAttempts.get("running-stalled")?.attempt).toBe(1);
     expect(state.retryAttempts.get("running-stalled")?.error).toBe("stall_timeout");
+  });
+});
+
+describe("processDueRetries", () => {
+  it("dispatches due retry when issue is found and slot is available", async () => {
+    const state = createOrchestratorState();
+
+    scheduleRetry(state, {
+      issueId: "todo-1",
+      identifier: "ATH-1",
+      attempt: 2,
+      nowMs: 0,
+      maxRetryBackoffMs: 300_000,
+      mode: "continuation",
+      error: "retry",
+    });
+
+    const dispatched: string[] = [];
+
+    const result = await processDueRetries({
+      state,
+      tracker: new FakeTracker([issue({ id: "todo-1", identifier: "ATH-1", state: "Todo" })]),
+      config: config(),
+      nowMs: 1000,
+      dispatchIssue: async (input) => {
+        dispatched.push(`${input.issue.id}:${input.attempt}`);
+      },
+    });
+
+    expect(result.processedIssueIds).toEqual(["todo-1"]);
+    expect(result.dispatchedIssueIds).toEqual(["todo-1"]);
+    expect(dispatched).toEqual(["todo-1:2"]);
+    expect(state.running.has("todo-1")).toBe(true);
+    expect(state.retryAttempts.has("todo-1")).toBe(false);
+  });
+
+  it("releases claim when due retry issue is no longer active", async () => {
+    const state = createOrchestratorState();
+    state.claimed.add("todo-2");
+    scheduleRetry(state, {
+      issueId: "todo-2",
+      identifier: "ATH-2",
+      attempt: 1,
+      nowMs: 0,
+      maxRetryBackoffMs: 300_000,
+      mode: "continuation",
+      error: "retry",
+    });
+
+    const result = await processDueRetries({
+      state,
+      tracker: new FakeTracker([]),
+      config: config(),
+      nowMs: 1000,
+      dispatchIssue: async () => {},
+    });
+
+    expect(result.releasedIssueIds).toEqual(["todo-2"]);
+    expect(state.claimed.has("todo-2")).toBe(false);
+    expect(state.retryAttempts.has("todo-2")).toBe(false);
+  });
+
+  it("requeues due retry when no slots are available", async () => {
+    const state = createOrchestratorState();
+    markIssueRunning(state, issue({ id: "running", state: "In Progress" }), 0, null);
+    scheduleRetry(state, {
+      issueId: "todo-3",
+      identifier: "ATH-3",
+      attempt: 1,
+      nowMs: 0,
+      maxRetryBackoffMs: 300_000,
+      mode: "continuation",
+      error: "retry",
+    });
+
+    const result = await processDueRetries({
+      state,
+      tracker: new FakeTracker([issue({ id: "todo-3", identifier: "ATH-3", state: "Todo" })]),
+      config: config({
+        agent: {
+          maxConcurrentAgents: 1,
+          maxRetryBackoffMs: 300_000,
+          maxTurns: 20,
+          maxConcurrentAgentsByState: {},
+        },
+      }),
+      nowMs: 1000,
+      dispatchIssue: async () => {},
+    });
+
+    expect(result.requeuedIssueIds).toEqual(["todo-3"]);
+    expect(state.retryAttempts.get("todo-3")?.attempt).toBe(1);
+    expect(state.retryAttempts.get("todo-3")?.error).toBe("no available orchestrator slots");
   });
 });
