@@ -183,12 +183,26 @@ export function isUserInputRequired(message: JsonRpcMessage): boolean {
 
 export function extractUsage(message: JsonRpcMessage): Record<string, number> | null {
   const params = asObject(message.params);
+  const tokenUsage = asObject(params?.tokenUsage);
+  const msg = asObject(params?.msg);
+  const msgInfo = asObject(msg?.info);
 
-  const absoluteUsage =
-    asObject(params?.total_token_usage) ||
-    asObject(params?.token_usage) ||
-    asObject(params?.tokenUsage) ||
-    asObject(params?.usage);
+  const absoluteUsage = firstObject(
+    params?.total_token_usage,
+    params?.token_usage,
+    tokenUsage?.total,
+    params?.tokenUsage,
+    params?.usage,
+    msgInfo?.total_token_usage,
+    msgInfo?.token_usage,
+    asObject(msgInfo?.tokenUsage)?.total,
+    msgInfo?.tokenUsage,
+    msg?.total_token_usage,
+    msg?.token_usage,
+    asObject(msg?.tokenUsage)?.total,
+    msg?.tokenUsage,
+    msg?.usage,
+  );
 
   if (!absoluteUsage) {
     return null;
@@ -218,7 +232,9 @@ export function extractUsage(message: JsonRpcMessage): Record<string, number> | 
 
 export function extractRateLimits(message: JsonRpcMessage): Record<string, unknown> | null {
   const params = asObject(message.params);
-  const limits = asObject(params?.rate_limits) || asObject(params?.rateLimits);
+  const msg = asObject(params?.msg);
+  const msgInfo = asObject(msg?.info);
+  const limits = firstObject(params?.rate_limits, params?.rateLimits, msg?.rate_limits, msg?.rateLimits, msgInfo?.rate_limits, msgInfo?.rateLimits);
   return limits || null;
 }
 
@@ -233,6 +249,17 @@ function asObject(value: unknown): Record<string, unknown> | null {
   }
 
   return value as Record<string, unknown>;
+}
+
+function firstObject(...candidates: unknown[]): Record<string, unknown> | null {
+  for (const candidate of candidates) {
+    const obj = asObject(candidate);
+    if (obj) {
+      return obj;
+    }
+  }
+
+  return null;
 }
 
 function asString(value: unknown): string {

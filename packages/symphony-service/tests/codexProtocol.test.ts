@@ -104,4 +104,68 @@ describe("codex protocol parsing", () => {
 
     expect(extractRateLimits({ params: { rate_limits: { remaining: 10 } } })).toEqual({ remaining: 10 });
   });
+
+  it("extracts usage from thread/tokenUsage/updated total payload", () => {
+    expect(
+      extractUsage({
+        method: "thread/tokenUsage/updated",
+        params: {
+          tokenUsage: {
+            total: {
+              inputTokens: 12419,
+              outputTokens: 313,
+              totalTokens: 12732,
+            },
+            last: {
+              inputTokens: 12419,
+              outputTokens: 313,
+              totalTokens: 12732,
+            },
+          },
+        },
+      }),
+    ).toEqual({
+      input_tokens: 12419,
+      output_tokens: 313,
+      total_tokens: 12732,
+    });
+  });
+
+  it("extracts usage and rate limits from codex/event/token_count msg payload", () => {
+    expect(
+      extractUsage({
+        method: "codex/event/token_count",
+        params: {
+          msg: {
+            info: {
+              total_token_usage: {
+                input_tokens: 11,
+                output_tokens: 5,
+                total_tokens: 16,
+              },
+            },
+          },
+        },
+      }),
+    ).toEqual({
+      input_tokens: 11,
+      output_tokens: 5,
+      total_tokens: 16,
+    });
+
+    expect(
+      extractRateLimits({
+        method: "codex/event/token_count",
+        params: {
+          msg: {
+            rate_limits: {
+              remaining: 999,
+            },
+          },
+        },
+      }),
+    ).toEqual({
+      remaining: 999,
+    });
+  });
 });
