@@ -8,7 +8,12 @@ Spec-aligned Symphony service foundation for Athena.
 - Config resolution with defaults and env indirection
 - Dispatch preflight validation (`tracker` + `codex` required fields)
 - Strict prompt rendering (`strictVariables` + `strictFilters`)
-- Startup CLI with optional workflow watch/reload
+- Workspace manager with safety checks and hook execution semantics
+- Codex app-server protocol + client integration
+- Runtime tick orchestration (reconciliation, dispatch, retry handling)
+- Worker attempt execution loop (workspace, hooks, prompt, Codex turns)
+- Startup terminal workspace cleanup
+- CLI-hosted service loop with optional workflow watch/reload
 
 ## Commands
 
