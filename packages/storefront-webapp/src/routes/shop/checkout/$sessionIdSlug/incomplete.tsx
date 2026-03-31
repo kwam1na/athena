@@ -98,7 +98,7 @@ function CheckoutIncompleteView() {
                   <div className="flex items-center gap-1">
                     <p className="font-light">Delivery</p>
                     <p className="font-medium">
-                      {formatter.format(onlineOrder?.deliveryFee || 0 / 100)}
+                      {formatter.format((onlineOrder?.deliveryFee || 0) / 100)}
                     </p>
                   </div>
 
