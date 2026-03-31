@@ -29,7 +29,7 @@ function CheckoutIncompleteView() {
   const { amountCharged, amountPaid } = getOrderAmount({
     items: onlineOrder?.items || ([] as any),
     discount: onlineOrder?.discount as Discount | null,
-    deliveryFee: (onlineOrder?.deliveryFee || 0) * 100,
+    deliveryFee: onlineOrder?.deliveryFee || 0, // already pesewas
     subtotal: onlineOrder?.amount || 0,
     isInCents: true,
   });

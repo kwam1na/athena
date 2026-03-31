@@ -52,7 +52,7 @@ const PODPaymentDetails = ({ session }: { session: any }) => {
   const { amountCharged } = getOrderAmount({
     items,
     discount,
-    deliveryFee: (session?.deliveryFee || 0) * 100,
+    deliveryFee: session?.deliveryFee || 0, // already pesewas
     subtotal: session?.amount || 0,
     isInCents: true,
   });
@@ -60,7 +60,7 @@ const PODPaymentDetails = ({ session }: { session: any }) => {
   const discountValue = getDiscountValue(items, discount);
 
   const originalAmount =
-    (session?.amount || 0) + (session?.deliveryFee || 0) * 100;
+    (session?.amount || 0) + (session?.deliveryFee || 0); // both pesewas
 
   const hasDiscount = discount && discountValue > 0;
 
