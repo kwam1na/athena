@@ -135,7 +135,7 @@ export async function sendPODOrderEmails(params: {
       type: "confirmation",
       customerEmail: params.order.customerDetails.email,
       delivery_fee: params.order.deliveryFee
-        ? formatter.format(params.order.deliveryFee)
+        ? formatter.format(params.order.deliveryFee / 100)
         : undefined,
       discount: params.order.discount
         ? formatter.format(discountValue / 100)
@@ -267,7 +267,7 @@ export async function sendPaymentVerificationEmails(params: {
       );
 
       const amountMinusDeliveryFee =
-        params.orderAmount - (params.order.deliveryFee || 0) * 100;
+        params.orderAmount - (params.order.deliveryFee || 0);
 
       const amountWithDiscount = amountMinusDeliveryFee + discountValue;
 
@@ -275,7 +275,7 @@ export async function sendPaymentVerificationEmails(params: {
         type: "confirmation",
         customerEmail: params.order.customerDetails.email,
         delivery_fee: params.order.deliveryFee
-          ? formatter.format(params.order.deliveryFee)
+          ? formatter.format(params.order.deliveryFee / 100)
           : undefined,
         discount: discountValue
           ? formatter.format(discountValue / 100)

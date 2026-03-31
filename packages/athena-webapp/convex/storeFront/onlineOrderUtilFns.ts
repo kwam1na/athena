@@ -130,7 +130,7 @@ export async function handleOrderStatusUpdate({
 
     const discountValue = getDiscountValue(order.items || [], order.discount);
 
-    const deliveryFee = (order.deliveryFee || 0) * 100;
+    const deliveryFee = order.deliveryFee || 0;
     const amountPaid = order.amount - discountValue + deliveryFee;
 
     const emailResponse = await sendOrderEmail({
