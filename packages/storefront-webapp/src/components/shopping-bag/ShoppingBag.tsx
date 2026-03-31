@@ -449,7 +449,7 @@ export default function ShoppingBag() {
       const res = await obtainCheckoutSession({
         bagItems,
         bagId: bag?._id as string,
-        bagSubtotal: bagSubtotal * 100, // Use original bag subtotal without discounts
+        bagSubtotal: bagSubtotal, // GHS — backend recalculates canonical amount from bag items
       });
 
       if (res.session) {
