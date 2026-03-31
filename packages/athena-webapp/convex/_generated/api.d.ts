@@ -47,6 +47,7 @@ import type * as http_domains_storeFront_routes_paystack from "../http/domains/s
 import type * as http_domains_storeFront_routes_reviews from "../http/domains/storeFront/routes/reviews.js";
 import type * as http_domains_storeFront_routes_rewards from "../http/domains/storeFront/routes/rewards.js";
 import type * as http_domains_storeFront_routes_savedBag from "../http/domains/storeFront/routes/savedBag.js";
+import type * as http_domains_storeFront_routes_security from "../http/domains/storeFront/routes/security.js";
 import type * as http_domains_storeFront_routes_storefront from "../http/domains/storeFront/routes/storefront.js";
 import type * as http_domains_storeFront_routes_upsells from "../http/domains/storeFront/routes/upsells.js";
 import type * as http_domains_storeFront_routes_user from "../http/domains/storeFront/routes/user.js";
@@ -87,6 +88,7 @@ import type * as inventory_storeConfigV2 from "../inventory/storeConfigV2.js";
 import type * as inventory_stores from "../inventory/stores.js";
 import type * as inventory_subcategories from "../inventory/subcategories.js";
 import type * as inventory_utils from "../inventory/utils.js";
+import type * as lib_currency from "../lib/currency.js";
 import type * as llm_callLlmProvider from "../llm/callLlmProvider.js";
 import type * as llm_providers_anthropic from "../llm/providers/anthropic.js";
 import type * as llm_providers_openai from "../llm/providers/openai.js";
@@ -94,6 +96,7 @@ import type * as llm_storeInsights from "../llm/storeInsights.js";
 import type * as llm_userInsights from "../llm/userInsights.js";
 import type * as llm_utils_analyticsUtils from "../llm/utils/analyticsUtils.js";
 import type * as mailersend_index from "../mailersend/index.js";
+import type * as migrations_migrateAmountsToPesewas from "../migrations/migrateAmountsToPesewas.js";
 import type * as otp_ResendOTP from "../otp/ResendOTP.js";
 import type * as otp_VerificationCodeEmail from "../otp/VerificationCodeEmail.js";
 import type * as paystack_index from "../paystack/index.js";
@@ -219,6 +222,7 @@ declare const fullApi: ApiFromModules<{
   "http/domains/storeFront/routes/reviews": typeof http_domains_storeFront_routes_reviews;
   "http/domains/storeFront/routes/rewards": typeof http_domains_storeFront_routes_rewards;
   "http/domains/storeFront/routes/savedBag": typeof http_domains_storeFront_routes_savedBag;
+  "http/domains/storeFront/routes/security": typeof http_domains_storeFront_routes_security;
   "http/domains/storeFront/routes/storefront": typeof http_domains_storeFront_routes_storefront;
   "http/domains/storeFront/routes/upsells": typeof http_domains_storeFront_routes_upsells;
   "http/domains/storeFront/routes/user": typeof http_domains_storeFront_routes_user;
@@ -259,6 +263,7 @@ declare const fullApi: ApiFromModules<{
   "inventory/stores": typeof inventory_stores;
   "inventory/subcategories": typeof inventory_subcategories;
   "inventory/utils": typeof inventory_utils;
+  "lib/currency": typeof lib_currency;
   "llm/callLlmProvider": typeof llm_callLlmProvider;
   "llm/providers/anthropic": typeof llm_providers_anthropic;
   "llm/providers/openai": typeof llm_providers_openai;
@@ -266,6 +271,7 @@ declare const fullApi: ApiFromModules<{
   "llm/userInsights": typeof llm_userInsights;
   "llm/utils/analyticsUtils": typeof llm_utils_analyticsUtils;
   "mailersend/index": typeof mailersend_index;
+  "migrations/migrateAmountsToPesewas": typeof migrations_migrateAmountsToPesewas;
   "otp/ResendOTP": typeof otp_ResendOTP;
   "otp/VerificationCodeEmail": typeof otp_VerificationCodeEmail;
   "paystack/index": typeof paystack_index;

@@ -120,7 +120,10 @@ export async function updateCheckoutSession({
       amount,
       externalReference,
       hasCompletedCheckoutSession,
-      orderDetails,
+      orderDetails: {
+        ...orderDetails,
+        billingDetails: null,
+      },
       placedOrderId,
     }),
     headers: {

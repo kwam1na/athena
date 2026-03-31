@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from "crypto";
+// import { createHmac, timingSafeEqual } from "crypto";
 import { toPesewas } from "../../../../lib/currency";
 
 type BagCheckoutItem = {
@@ -31,7 +31,7 @@ export function hasValidPositiveQuantity(value: number): boolean {
 
 export function isAuthorizedResourceOwner(
   resourceOwnerId: string | null | undefined,
-  requestUserId: string | null | undefined
+  requestUserId: string | null | undefined,
 ): boolean {
   if (!resourceOwnerId || !requestUserId) {
     return false;
@@ -54,7 +54,7 @@ export function buildCanonicalCheckoutProducts(items: BagCheckoutItem[]): {
 
   const rawAmountGHS = products.reduce(
     (total, item) => total + item.price * item.quantity,
-    0
+    0,
   );
 
   return {
@@ -65,7 +65,7 @@ export function buildCanonicalCheckoutProducts(items: BagCheckoutItem[]): {
 
 export function isAmountTampered(
   expectedAmount: number,
-  providedAmount: number | undefined | null
+  providedAmount: number | undefined | null,
 ): boolean {
   if (providedAmount === undefined || providedAmount === null) {
     return false;
@@ -75,7 +75,7 @@ export function isAmountTampered(
 }
 
 export function isDuplicateChargeSuccess(
-  input: DuplicateChargeSuccessInput
+  input: DuplicateChargeSuccessInput,
 ): boolean {
   if (input.hasCompletedPayment || Boolean(input.placedOrderId)) {
     return true;
@@ -96,34 +96,34 @@ export function isDuplicateChargeSuccess(
   return false;
 }
 
-export function isValidPaystackSignature(
-  payload: string,
-  secret: string
-): { computedSignature: string };
-export function isValidPaystackSignature(
-  payload: string,
-  secret: string,
-  signature: string
-): boolean;
-export function isValidPaystackSignature(
-  payload: string,
-  secret: string,
-  signature?: string
-): { computedSignature: string } | boolean {
-  const computedSignature = createHmac("sha512", secret)
-    .update(payload)
-    .digest("hex");
+// export function isValidPaystackSignature(
+//   payload: string,
+//   secret: string
+// ): { computedSignature: string };
+// export function isValidPaystackSignature(
+//   payload: string,
+//   secret: string,
+//   signature: string
+// ): boolean;
+// export function isValidPaystackSignature(
+//   payload: string,
+//   secret: string,
+//   signature?: string
+// ): { computedSignature: string } | boolean {
+//   const computedSignature = createHmac("sha512", secret)
+//     .update(payload)
+//     .digest("hex");
 
-  if (signature === undefined) {
-    return { computedSignature };
-  }
+//   if (signature === undefined) {
+//     return { computedSignature };
+//   }
 
-  if (computedSignature.length !== signature.length) {
-    return false;
-  }
+//   if (computedSignature.length !== signature.length) {
+//     return false;
+//   }
 
-  return timingSafeEqual(
-    Buffer.from(computedSignature, "utf8"),
-    Buffer.from(signature, "utf8")
-  );
-}
+//   return timingSafeEqual(
+//     Buffer.from(computedSignature, "utf8"),
+//     Buffer.from(signature, "utf8")
+//   );
+// }

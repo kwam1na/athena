@@ -54,7 +54,11 @@ const checkoutOrderDetailsSchema = z
         phoneNumber: z.string().min(1),
       })
       .optional(),
-    deliveryDetails: z.union([z.record(z.string(), z.any()), z.string(), z.null()]),
+    deliveryDetails: z.union([
+      z.record(z.string(), z.any()),
+      z.string(),
+      z.null(),
+    ]),
     deliveryFee: z.number().nullable(),
     deliveryMethod: z.string().min(1),
     deliveryOption: z.string().nullable(),
@@ -99,7 +103,7 @@ const hasValidSessionItems = (items: any[] | undefined): boolean => {
       hasValidPositiveQuantity(item.quantity) &&
       typeof item.price === "number" &&
       Number.isFinite(item.price) &&
-      item.price > 0
+      item.price > 0,
   );
 };
 
@@ -145,25 +149,28 @@ checkoutRoutes.post("/", async (c) => {
     if (!bag.items.every(hasValidCanonicalBagItem)) {
       return c.json(
         { error: "Invalid bag item data: quantity and price must be valid" },
-        422
+        422,
       );
     }
 
     const canonicalCheckout = buildCanonicalCheckoutProducts(bag.items);
 
-    const session = await c.env.runMutation(api.storeFront.checkoutSession.create, {
-      storeId: storeId as Id<"store">,
-      storeFrontUserId: userId as Id<"storeFrontUser"> | Id<"guest">,
-      products: canonicalCheckout.products.map((product) => ({
-        productId: product.productId as Id<"product">,
-        productSkuId: product.productSkuId as Id<"productSku">,
-        productSku: product.productSku,
-        quantity: product.quantity,
-        price: product.price,
-      })),
-      bagId: parsedPayload.data.bagId as Id<"bag">,
-      amount: canonicalCheckout.amount,
-    });
+    const session = await c.env.runMutation(
+      api.storeFront.checkoutSession.create,
+      {
+        storeId: storeId as Id<"store">,
+        storeFrontUserId: userId as Id<"storeFrontUser"> | Id<"guest">,
+        products: canonicalCheckout.products.map((product) => ({
+          productId: product.productId as Id<"product">,
+          productSkuId: product.productSkuId as Id<"productSku">,
+          productSku: product.productSku,
+          quantity: product.quantity,
+          price: product.price,
+        })),
+        bagId: parsedPayload.data.bagId as Id<"bag">,
+        amount: canonicalCheckout.amount,
+      },
+    );
 
     return c.json(session);
   } catch (e) {
@@ -216,12 +223,16 @@ checkoutRoutes.post("/:checkoutSessionId", async (c) => {
     if (action == "finalize-payment") {
       if (!hasValidSessionItems(session.items)) {
         return c.json(
-          { error: "Invalid checkout session item data: quantity must be positive" },
-          422
+          {
+            error:
+              "Invalid checkout session item data: quantity must be positive",
+          },
+          422,
         );
       }
 
-      const parsedOrderDetails = checkoutOrderDetailsSchema.safeParse(orderDetails);
+      const parsedOrderDetails =
+        checkoutOrderDetailsSchema.safeParse(orderDetails);
 
       if (!parsedOrderDetails.success) {
         return c.json({ error: "Invalid order details payload" }, 400);
@@ -261,17 +272,21 @@ checkoutRoutes.post("/:checkoutSessionId", async (c) => {
         });
       }
 
-      const payment = await c.env.runAction(api.storeFront.payment.createTransaction, {
-        customerEmail: customerEmail || "",
-        amount: session.amount,
-        checkoutSessionId: checkoutSessionId as Id<"checkoutSession">,
-        orderDetails: {
-          ...parsedOrderDetails.data,
-          billingDetails: null,
-          deliveryDetails: (parsedOrderDetails.data.deliveryDetails ?? null) as any,
-          discount: session.discount ?? null,
+      const payment = await c.env.runAction(
+        api.storeFront.payment.createTransaction,
+        {
+          customerEmail: customerEmail || "",
+          amount: session.amount,
+          checkoutSessionId: checkoutSessionId as Id<"checkoutSession">,
+          orderDetails: {
+            ...parsedOrderDetails.data,
+            billingDetails: null,
+            deliveryDetails: (parsedOrderDetails.data.deliveryDetails ??
+              null) as any,
+            discount: session.discount ?? null,
+          },
         },
-      });
+      );
 
       return c.json(payment);
     }
@@ -285,7 +300,7 @@ checkoutRoutes.post("/:checkoutSessionId", async (c) => {
             api.storeFront.onlineOrder.getByCheckoutSessionId,
             {
               checkoutSessionId: checkoutSessionId as Id<"checkoutSession">,
-            }
+            },
           );
 
           if (order) {
@@ -303,7 +318,8 @@ checkoutRoutes.post("/:checkoutSessionId", async (c) => {
           }
         }
 
-        const parsedOrderDetails = checkoutOrderDetailsSchema.safeParse(orderDetailsToUse);
+        const parsedOrderDetails =
+          checkoutOrderDetailsSchema.safeParse(orderDetailsToUse);
 
         if (!parsedOrderDetails.success) {
           return c.json({ error: "Invalid order details payload" }, 400);
@@ -317,10 +333,11 @@ checkoutRoutes.post("/:checkoutSessionId", async (c) => {
             orderDetails: {
               ...parsedOrderDetails.data,
               billingDetails: null,
-              deliveryDetails: (parsedOrderDetails.data.deliveryDetails ?? null) as any,
+              deliveryDetails: (parsedOrderDetails.data.deliveryDetails ??
+                null) as any,
               discount: session.discount ?? null,
             },
-          }
+          },
         );
 
         return c.json(res);
@@ -337,7 +354,7 @@ checkoutRoutes.post("/:checkoutSessionId", async (c) => {
           id: checkoutSessionId as Id<"checkoutSession">,
           hasCompletedCheckoutSession,
           action,
-        }
+        },
       );
 
       return c.json(res);
@@ -346,12 +363,16 @@ checkoutRoutes.post("/:checkoutSessionId", async (c) => {
     if (action == "create-pod-order") {
       if (!hasValidSessionItems(session.items)) {
         return c.json(
-          { error: "Invalid checkout session item data: quantity must be positive" },
-          422
+          {
+            error:
+              "Invalid checkout session item data: quantity must be positive",
+          },
+          422,
         );
       }
 
-      const parsedOrderDetails = checkoutOrderDetailsSchema.safeParse(orderDetails);
+      const parsedOrderDetails =
+        checkoutOrderDetailsSchema.safeParse(orderDetails);
 
       if (!parsedOrderDetails.success) {
         return c.json({ error: "Invalid order details payload" }, 400);
@@ -389,29 +410,36 @@ checkoutRoutes.post("/:checkoutSessionId", async (c) => {
             message: "This checkout session has already been completed.",
             code: "SESSION_ALREADY_FINALIZED",
           },
-          422
+          422,
         );
       }
 
-      const podOrder = await c.env.runAction(api.storeFront.payment.createPODOrder, {
-        customerEmail: customerEmail || "",
-        amount: session.amount,
-        checkoutSessionId: checkoutSessionId as Id<"checkoutSession">,
-        orderDetails: {
-          ...parsedOrderDetails.data,
-          billingDetails: null,
-          deliveryDetails: (parsedOrderDetails.data.deliveryDetails ?? null) as any,
-          discount: session.discount ?? null,
+      const podOrder = await c.env.runAction(
+        api.storeFront.payment.createPODOrder,
+        {
+          customerEmail: customerEmail || "",
+          amount: session.amount,
+          checkoutSessionId: checkoutSessionId as Id<"checkoutSession">,
+          orderDetails: {
+            ...parsedOrderDetails.data,
+            billingDetails: null,
+            deliveryDetails: (parsedOrderDetails.data.deliveryDetails ??
+              null) as any,
+            discount: session.discount ?? null,
+          },
         },
-      });
+      );
 
       return c.json(podOrder);
     }
 
     if (action == "cancel-order") {
-      const res = await c.env.runAction(api.storeFront.checkoutSession.cancelOrder, {
-        id: checkoutSessionId as Id<"checkoutSession">,
-      });
+      const res = await c.env.runAction(
+        api.storeFront.checkoutSession.cancelOrder,
+        {
+          id: checkoutSessionId as Id<"checkoutSession">,
+        },
+      );
 
       return c.json(res);
     }
@@ -423,7 +451,7 @@ checkoutRoutes.post("/:checkoutSessionId", async (c) => {
           id: checkoutSessionId as Id<"checkoutSession">,
           placedOrderId,
           hasCompletedCheckoutSession,
-        }
+        },
       );
 
       return c.json(res);
@@ -432,7 +460,7 @@ checkoutRoutes.post("/:checkoutSessionId", async (c) => {
     return c.json({ error: "Unsupported checkout action" }, 400);
   } catch (e) {
     console.log(
-      `[CHECKOUT-FAILURE] Error in checkout endpoint | Session: ${checkoutSessionId} | Action: ${action} | Error: ${(e as Error).message}`
+      `[CHECKOUT-FAILURE] Error in checkout endpoint | Session: ${checkoutSessionId} | Action: ${action} | Error: ${(e as Error).message}`,
     );
     return c.json({ error: (e as Error).message }, 400);
   }
@@ -446,9 +474,12 @@ checkoutRoutes.get("/active", async (c) => {
   }
 
   try {
-    const session = await c.env.runQuery(api.storeFront.checkoutSession.getActiveCheckoutSession, {
-      storeFrontUserId: userId as Id<"storeFrontUser"> | Id<"guest">,
-    });
+    const session = await c.env.runQuery(
+      api.storeFront.checkoutSession.getActiveCheckoutSession,
+      {
+        storeFrontUserId: userId as Id<"storeFrontUser"> | Id<"guest">,
+      },
+    );
 
     return c.json(session);
   } catch (e) {
@@ -463,9 +494,12 @@ checkoutRoutes.get("/pending", async (c) => {
     return c.json({ error: "Customer id missing" }, 404);
   }
 
-  const session = await c.env.runQuery(api.storeFront.checkoutSession.getPendingCheckoutSessions, {
-    storeFrontUserId: userId as Id<"storeFrontUser"> | Id<"guest">,
-  });
+  const session = await c.env.runQuery(
+    api.storeFront.checkoutSession.getPendingCheckoutSessions,
+    {
+      storeFrontUserId: userId as Id<"storeFrontUser"> | Id<"guest">,
+    },
+  );
 
   return c.json(session);
 });
