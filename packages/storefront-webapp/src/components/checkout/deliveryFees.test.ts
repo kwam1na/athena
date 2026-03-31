@@ -27,7 +27,7 @@ describe("calculateDeliveryFee", () => {
     });
 
     expect(result).toEqual({
-      deliveryFee: 30,
+      deliveryFee: 3000,
       deliveryOption: "within-accra",
     });
   });
@@ -42,7 +42,7 @@ describe("calculateDeliveryFee", () => {
     });
 
     expect(result).toEqual({
-      deliveryFee: 70,
+      deliveryFee: 7000,
       deliveryOption: "outside-accra",
     });
   });
@@ -57,7 +57,7 @@ describe("calculateDeliveryFee", () => {
     });
 
     expect(result).toEqual({
-      deliveryFee: 800,
+      deliveryFee: 80000,
       deliveryOption: "intl",
     });
   });
@@ -117,7 +117,7 @@ describe("calculateDeliveryFee", () => {
     });
 
     expect(result).toEqual({
-      deliveryFee: 50,
+      deliveryFee: 5000,
       deliveryOption: "within-accra",
     });
   });
@@ -132,7 +132,7 @@ describe("calculateDeliveryFee", () => {
     });
 
     expect(result).toEqual({
-      deliveryFee: 100,
+      deliveryFee: 10000,
       deliveryOption: "outside-accra",
     });
   });
@@ -147,7 +147,7 @@ describe("calculateDeliveryFee", () => {
     });
 
     expect(result).toEqual({
-      deliveryFee: 30,
+      deliveryFee: 3000,
       deliveryOption: "within-accra",
     });
   });
@@ -162,7 +162,7 @@ describe("calculateDeliveryFee", () => {
     });
 
     expect(result).toEqual({
-      deliveryFee: 800,
+      deliveryFee: 80000,
       deliveryOption: "intl",
     });
   });

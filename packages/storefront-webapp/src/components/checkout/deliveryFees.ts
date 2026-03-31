@@ -1,4 +1,5 @@
 import { isFeeWaived } from "@/lib/feeUtils";
+import { toPesewas } from "@/lib/currency";
 import { DeliveryMethod, DeliveryOption } from "./types";
 
 type DeliveryFeeConfig = {
@@ -75,7 +76,7 @@ export function calculateDeliveryFee({
     : isFeeWaived(waiveDeliveryFees, "intl");
 
   return {
-    deliveryFee: shouldWaive ? 0 : baseFee,
+    deliveryFee: shouldWaive ? 0 : toPesewas(baseFee),
     deliveryOption,
   };
 }

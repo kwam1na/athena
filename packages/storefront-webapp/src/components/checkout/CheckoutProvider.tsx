@@ -10,6 +10,7 @@ import { useStoreContext } from "@/contexts/StoreContext";
 import { CheckoutUnavailable } from "../states/checkout unavailable/CheckoutUnavailable";
 import { useNavigationBarContext } from "@/contexts/NavigationBarProvider";
 import { isFeeWaived, isAnyFeeWaived } from "@/lib/feeUtils";
+import { toPesewas } from "@/lib/currency";
 import { useOnlineOrderQueries } from "@/lib/queries/onlineOrder";
 import { useQuery } from "@tanstack/react-query";
 import { CheckoutState, CheckoutActions, CheckoutContextType } from "./types";
@@ -274,7 +275,7 @@ export const CheckoutProvider = ({
         newUpdates.deliveryOption = "intl";
         newUpdates.deliveryFee = shouldWaiveIntlFee
           ? 0
-          : deliveryFees?.international || 800;
+          : toPesewas(deliveryFees?.international || 800);
       }
 
       return deriveCheckoutState(newUpdates);
