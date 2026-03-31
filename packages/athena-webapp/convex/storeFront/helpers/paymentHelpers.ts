@@ -48,7 +48,7 @@ export function calculateOrderAmount(params: {
 
 /**
  * Calculate reward points for an order
- * Points are calculated as 10 points per dollar (amount / 1000)
+ * 1 point per GH₵10 spent (pesewas amount / 1000)
  */
 export function calculateRewardPoints(amount: number): number {
   const pointsToAward = amount / PAYMENT_CONSTANTS.POINTS_DIVISOR;
