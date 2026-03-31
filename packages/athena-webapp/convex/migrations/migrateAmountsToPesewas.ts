@@ -36,7 +36,9 @@ export const migrateOnlineOrders = internalMutation({
       migrated++;
     }
 
-    console.log(`Migrated ${migrated} orders, skipped ${skipped} (post-deployment)`);
+    console.log(
+      `Migrated ${migrated} orders, skipped ${skipped} (post-deployment)`,
+    );
     return { migrated, skipped, total: orders.length };
   },
 });
@@ -66,7 +68,9 @@ export const migrateCheckoutSessions = internalMutation({
       migrated++;
     }
 
-    console.log(`Migrated ${migrated} sessions, skipped ${skipped} (post-deployment)`);
+    console.log(
+      `Migrated ${migrated} sessions, skipped ${skipped} (post-deployment)`,
+    );
     return { migrated, skipped, total: sessions.length };
   },
 });
