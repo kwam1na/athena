@@ -5,6 +5,7 @@ import { currencyFormatter, formatDate, getAddressString } from "../utils";
 import { formatOrderItems } from "../storeFront/onlineOrderUtilFns";
 import { Id } from "../_generated/dataModel";
 import { getDiscountValue } from "../inventory/utils";
+import { toDisplayAmount } from "../lib/currency";
 
 type OrderDetails = {
   _id: Id<"onlineOrder">;
@@ -106,7 +107,7 @@ export async function sendPODOrderEmails(params: {
     deliveryMethod: params.order.deliveryMethod,
     isPaymentOnDelivery: true,
     podPaymentMethod: params.podPaymentMethod,
-    amount: formatter.format(params.amount / 100),
+    amount: formatter.format(toDisplayAmount(params.amount)),
   });
 
   const deliveryAddress = buildPickupDetails({
@@ -135,17 +136,17 @@ export async function sendPODOrderEmails(params: {
       type: "confirmation",
       customerEmail: params.order.customerDetails.email,
       delivery_fee: params.order.deliveryFee
-        ? formatter.format(params.order.deliveryFee)
+        ? formatter.format(toDisplayAmount(params.order.deliveryFee))
         : undefined,
       discount: params.order.discount
-        ? formatter.format(discountValue / 100)
+        ? formatter.format(toDisplayAmount(discountValue))
         : undefined,
       store_name: PAYMENT_CONSTANTS.STORE_NAME,
       order_number: params.order.orderNumber,
       order_date: formatDate(params.order._creationTime),
       order_status_messaging: orderStatusMessaging,
-      total: formatter.format(params.amount / 100),
-      subtotal: formatter.format(params.amount / 100),
+      total: formatter.format(toDisplayAmount(params.amount)),
+      subtotal: formatter.format(toDisplayAmount(params.amount)),
       items,
       pickup_type: params.order.deliveryMethod,
       pickup_details: deliveryAddress,
@@ -173,7 +174,7 @@ export async function sendPODOrderEmails(params: {
         params.podPaymentMethod === "mobile_money" ? "Mobile Money" : "Cash";
       const adminEmailResponse = await sendNewOrderEmail({
         store_name: PAYMENT_CONSTANTS.STORE_NAME,
-        order_amount: formatter.format(params.amount / 100),
+        order_amount: formatter.format(toDisplayAmount(params.amount)),
         order_status: `Payment on Delivery (${paymentMethodDisplay})`,
         order_date: formatDate(params.order._creationTime),
         customer_name: `${params.order.customerDetails.firstName} ${params.order.customerDetails.lastName}`,
@@ -220,7 +221,7 @@ export async function sendPaymentVerificationEmails(params: {
     try {
       const emailResponse = await sendNewOrderEmail({
         store_name: PAYMENT_CONSTANTS.STORE_NAME,
-        order_amount: formatter.format(params.orderAmount / 100),
+        order_amount: formatter.format(toDisplayAmount(params.orderAmount)),
         order_status: "Paid",
         order_date: formatDate(params.order._creationTime),
         customer_name: `${params.order.customerDetails.firstName} ${params.order.customerDetails.lastName}`,
@@ -267,7 +268,7 @@ export async function sendPaymentVerificationEmails(params: {
       );
 
       const amountMinusDeliveryFee =
-        params.orderAmount - (params.order.deliveryFee || 0) * 100;
+        params.orderAmount - (params.order.deliveryFee || 0);
 
       const amountWithDiscount = amountMinusDeliveryFee + discountValue;
 
@@ -275,17 +276,17 @@ export async function sendPaymentVerificationEmails(params: {
         type: "confirmation",
         customerEmail: params.order.customerDetails.email,
         delivery_fee: params.order.deliveryFee
-          ? formatter.format(params.order.deliveryFee)
+          ? formatter.format(toDisplayAmount(params.order.deliveryFee))
           : undefined,
         discount: discountValue
-          ? formatter.format(discountValue / 100)
+          ? formatter.format(toDisplayAmount(discountValue))
           : undefined,
         store_name: PAYMENT_CONSTANTS.STORE_NAME,
         order_number: params.order.orderNumber,
         order_date: formatDate(params.order._creationTime),
         order_status_messaging: orderStatusMessaging,
-        total: formatter.format(params.orderAmount / 100),
-        subtotal: formatter.format(amountWithDiscount / 100),
+        total: formatter.format(toDisplayAmount(params.orderAmount)),
+        subtotal: formatter.format(toDisplayAmount(amountWithDiscount)),
         items,
         pickup_type: params.order.deliveryMethod,
         pickup_details: pickupDetails,

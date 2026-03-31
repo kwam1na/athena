@@ -106,14 +106,11 @@ export const getDiscountValue = (order: any, isInCents?: boolean): number => {
 };
 
 export const getAmountPaidForOrder = (order: any) => {
-  const discountValue = getDiscountValue(order) * 100;
+  const discountValue = getDiscountValue(order, true); // returns pesewas
 
-  const discount =
-    order.discount && order.discount?.type === "percentage"
-      ? discountValue
-      : discountValue * 100;
+  const discount = discountValue; // getDiscountValue always returns pesewas
 
-  const orderAmount = order.amount + (order.deliveryFee || 0) * 100;
+  const orderAmount = order.amount + (order.deliveryFee || 0); // both pesewas
 
   return orderAmount - discount;
 };

@@ -250,7 +250,7 @@ export const getPastEligibleOrders = query({
           status: order.status,
           orderNumber: order.orderNumber,
           hasVerifiedPayment: order.hasVerifiedPayment,
-          potentialPoints: Math.floor(order.amount / 10), // 1 point per dollar
+          potentialPoints: Math.floor(order.amount / 1000), // 1 point per GH₵10 (pesewas / 1000)
         });
       }
     }
@@ -280,8 +280,8 @@ export const awardPointsForPastOrder = mutation({
       return { success: false, error: "Points already awarded for this order" };
     }
 
-    // Calculate points (1 point per dollar spent, rounded down)
-    const pointsToAward = Math.floor(order.amount / 10);
+    // Calculate points (1 point per GH₵10 spent, rounded down)
+    const pointsToAward = Math.floor(order.amount / 1000);
 
     // Record the transaction
     await ctx.db.insert("rewardTransactions", {
@@ -349,8 +349,8 @@ export const getOrderPoints = query({
       return { points: 0 };
     }
 
-    // Calculate potential points (1 point per dollar spent, rounded down)
-    const potentialPoints = Math.floor(order.amount / 10);
+    // Calculate potential points (1 point per GH₵10 spent, rounded down)
+    const potentialPoints = Math.floor(order.amount / 1000);
 
     return {
       points: order.hasVerifiedPayment ? potentialPoints : 0,

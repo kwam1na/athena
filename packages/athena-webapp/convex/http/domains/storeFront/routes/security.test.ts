@@ -44,7 +44,20 @@ describe("security helpers", () => {
           price: 100,
         },
       ]);
-      expect(result.amount).toBe(150);
+      expect(result.amount).toBe(15000); // 150 GHS = 15000 pesewas
+    });
+
+    it("returns amount in pesewas and handles decimal GHS prices", () => {
+      const result = buildCanonicalCheckoutProducts([
+        {
+          productId: "product-1",
+          productSku: "sku-a",
+          productSkuId: "sku-id-a",
+          quantity: 1,
+          price: 29.99,
+        },
+      ]);
+      expect(result.amount).toBe(2999);
     });
   });
 

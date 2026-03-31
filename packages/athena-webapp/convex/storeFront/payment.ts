@@ -83,7 +83,7 @@ export const createTransaction = action({
 
       // Log calculation inputs
       console.log(
-        `[CHECKOUT-CALCULATION] Amount calculation inputs | Session: ${args.checkoutSessionId} | Items count: ${items.length} | Subtotal: ${session.amount * 100} | Delivery fee: ${(args.orderDetails.deliveryFee || 0) * 100} | Has discount: ${!!discount}`
+        `[CHECKOUT-CALCULATION] Amount calculation inputs | Session: ${args.checkoutSessionId} | Items count: ${items.length} | Subtotal: ${session.amount} | Delivery fee: ${args.orderDetails.deliveryFee || 0} | Has discount: ${!!discount}`
       );
       console.log(
         `[CHECKOUT-CALCULATION] Items breakdown:`,
@@ -106,8 +106,8 @@ export const createTransaction = action({
       const amountToCharge = calculateOrderAmount({
         items,
         discount,
-        deliveryFee: (args.orderDetails.deliveryFee || 0) * 100,
-        subtotal: session.amount * 100,
+        deliveryFee: args.orderDetails.deliveryFee || 0,  // already pesewas
+        subtotal: session.amount,  // already pesewas
       });
 
       // Log calculation result
@@ -251,8 +251,8 @@ export const createPODOrder = action({
         const amountToCharge = calculateOrderAmount({
           items: order.items || [],
           discount: order.discount || 0,
-          deliveryFee: (args.orderDetails.deliveryFee || 0) * 100,
-          subtotal: session.amount * 100,
+          deliveryFee: args.orderDetails.deliveryFee || 0,  // already pesewas
+          subtotal: session.amount,  // already pesewas
         });
 
         // Send confirmation and admin notification emails
@@ -358,8 +358,8 @@ export const verifyPayment = action({
       const orderAmountLessDiscounts = calculateOrderAmount({
         items,
         discount,
-        deliveryFee: (order?.deliveryFee || session?.deliveryFee || 0) * 100,
-        subtotal,
+        deliveryFee: order?.deliveryFee || session?.deliveryFee || 0,  // already pesewas
+        subtotal,  // already pesewas (from session.amount or order.amount)
       });
 
       const discountValue = getOrderDiscountValue(items, discount);

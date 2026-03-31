@@ -26,6 +26,7 @@ import { US_STATES } from "@/lib/states";
 import { useStoreContext } from "@/contexts/StoreContext";
 import { isFeeWaived } from "@/lib/feeUtils";
 import { getStoreConfigV2 } from "@/lib/storeConfig";
+import { toPesewas } from "@/lib/currency";
 
 export const CountryFields = ({ form }: CheckoutFormSectionProps) => {
   const { checkoutState, updateState } = useCheckout();
@@ -155,9 +156,11 @@ const RegionFields = ({ form }: CheckoutFormSectionProps) => {
 
                       const deliveryFee = shouldWaiveRegionFee
                         ? 0
-                        : region == "GA"
-                          ? deliveryFees?.withinAccra || 30
-                          : deliveryFees?.otherRegions || 70;
+                        : toPesewas(
+                            region == "GA"
+                              ? deliveryFees?.withinAccra || 30
+                              : deliveryFees?.otherRegions || 70
+                          );
 
                       updateState({
                         deliveryDetails: {
@@ -218,9 +221,11 @@ const RegionFields = ({ form }: CheckoutFormSectionProps) => {
 
                     const deliveryFee = shouldWaiveRegionFee
                       ? 0
-                      : region == "GA"
-                        ? deliveryFees?.withinAccra || 30
-                        : deliveryFees?.otherRegions || 70;
+                      : toPesewas(
+                          region == "GA"
+                            ? deliveryFees?.withinAccra || 30
+                            : deliveryFees?.otherRegions || 70
+                        );
 
                     updateState({
                       deliveryDetails: {
@@ -805,10 +810,10 @@ export const DeliveryDetailsSection = ({ form }: CheckoutFormSectionProps) => {
         deliveryOption: country === "GH" ? "within-accra" : "intl",
         deliveryFee:
           country === "GH"
-            ? deliveryFees?.withinAccra || 30
+            ? toPesewas(deliveryFees?.withinAccra || 30)
             : shouldWaiveIntlFee
               ? 0
-              : deliveryFees?.international || 800,
+              : toPesewas(deliveryFees?.international || 800),
       });
     }
 

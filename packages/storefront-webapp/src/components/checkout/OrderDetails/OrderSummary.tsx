@@ -6,6 +6,7 @@ import { getDiscountValue } from "../utils";
 import { BagSummaryItems } from "../BagSummary";
 import { Tag } from "lucide-react";
 import { isFeeWaived } from "@/lib/feeUtils";
+import { toDisplayAmount } from "@/lib/currency";
 import { Badge } from "@/components/ui/badge";
 import InputWithEndButton from "@/components/ui/input-with-end-button";
 import { useState } from "react";
@@ -80,7 +81,7 @@ export default function OrderSummary() {
 
   const discountValue = getDiscountValue(bagItems, checkoutState.discount);
 
-  const total = (checkoutState.deliveryFee ?? 0) + bagSubtotal - discountValue;
+  const total = toDisplayAmount(checkoutState.deliveryFee ?? 0) + bagSubtotal - discountValue;
 
   const discountText =
     checkoutState.discount?.type === "percentage"
@@ -159,7 +160,7 @@ export default function OrderSummary() {
               <p className="text-sm">
                 {isFeeWaivedForCurrentOption
                   ? "Free"
-                  : formatter.format(checkoutState.deliveryFee || 0)}
+                  : formatter.format(toDisplayAmount(checkoutState.deliveryFee || 0))}
               </p>
             </div>
           )}

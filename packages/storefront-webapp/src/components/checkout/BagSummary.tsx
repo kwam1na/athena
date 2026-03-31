@@ -18,6 +18,7 @@ import { useEffect, useState } from "react";
 import { getDiscountValue } from "./utils";
 import { usePromoCodesQueries } from "@/lib/queries/promoCode";
 import { isFeeWaived } from "@/lib/feeUtils";
+import { toDisplayAmount } from "@/lib/currency";
 import { Badge } from "../ui/badge";
 import { useDiscountCodeAlert } from "@/hooks/useDiscountCodeAlert";
 import { getStoreConfigV2, getStoreFallbackImageUrl } from "@/lib/storeConfig";
@@ -156,7 +157,7 @@ function BagSummary() {
     })) || [];
 
   const discountValue = getDiscountValue(bagItems, checkoutState.discount);
-  const total = (checkoutState.deliveryFee ?? 0) + bagSubtotal - discountValue;
+  const total = toDisplayAmount(checkoutState.deliveryFee ?? 0) + bagSubtotal - discountValue;
 
   const discountText =
     checkoutState.discount?.type === "percentage"
@@ -340,7 +341,7 @@ function BagSummary() {
               <p className="text-sm">
                 {isFeeWaivedForCurrentOption
                   ? "Free"
-                  : formatter.format(checkoutState.deliveryFee || 0)}
+                  : formatter.format(toDisplayAmount(checkoutState.deliveryFee || 0))}
               </p>
             </div>
           )}

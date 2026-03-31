@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from "crypto";
+import { toPesewas } from "../../../../lib/currency";
 
 type BagCheckoutItem = {
   productId: string;
@@ -41,7 +42,7 @@ export function isAuthorizedResourceOwner(
 
 export function buildCanonicalCheckoutProducts(items: BagCheckoutItem[]): {
   products: CanonicalCheckoutProduct[];
-  amount: number;
+  amount: number; // in pesewas
 } {
   const products = items.map((item) => ({
     productId: item.productId,
@@ -51,14 +52,14 @@ export function buildCanonicalCheckoutProducts(items: BagCheckoutItem[]): {
     price: item.price,
   }));
 
-  const rawAmount = products.reduce(
+  const rawAmountGHS = products.reduce(
     (total, item) => total + item.price * item.quantity,
     0
   );
 
   return {
     products,
-    amount: Math.round(rawAmount * 100) / 100,
+    amount: toPesewas(rawAmountGHS),
   };
 }
 

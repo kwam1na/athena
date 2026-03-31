@@ -107,7 +107,7 @@ paystackRoutes.post("/", async (c) => {
         // Calculate order amounts
         const items = order.items || [];
         const discount = order.discount;
-        const deliveryFee = (order.deliveryFee || 0) * 100;
+        const deliveryFee = order.deliveryFee || 0; // already pesewas
         const subtotal = order.amount || 0;
 
         const orderAmount = calculateOrderAmount({

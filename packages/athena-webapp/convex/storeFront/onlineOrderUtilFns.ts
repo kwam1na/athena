@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { Address, OnlineOrder, Store } from "../../types";
 import { action } from "../_generated/server";
 import { OrderEmailType, sendOrderEmail } from "../mailersend";
+import { toDisplayAmount } from "../lib/currency";
 import {
   capitalizeWords,
   currencyFormatter,
@@ -130,7 +131,7 @@ export async function handleOrderStatusUpdate({
 
     const discountValue = getDiscountValue(order.items || [], order.discount);
 
-    const deliveryFee = (order.deliveryFee || 0) * 100;
+    const deliveryFee = order.deliveryFee || 0;
     const amountPaid = order.amount - discountValue + deliveryFee;
 
     const emailResponse = await sendOrderEmail({
@@ -139,14 +140,14 @@ export async function handleOrderStatusUpdate({
       store_name: "Wigclub",
       order_number: order.orderNumber,
       delivery_fee: deliveryFee
-        ? formatter.format(deliveryFee / 100)
+        ? formatter.format(toDisplayAmount(deliveryFee))
         : undefined,
       order_date: formatDate(order._creationTime),
       order_status_messaging: statusMessaging,
-      total: formatter.format(amountPaid / 100),
-      subtotal: formatter.format(order.amount / 100),
+      total: formatter.format(toDisplayAmount(amountPaid)),
+      subtotal: formatter.format(toDisplayAmount(order.amount)),
       discount: discountValue
-        ? formatter.format(discountValue / 100)
+        ? formatter.format(toDisplayAmount(discountValue))
         : undefined,
       items,
       pickup_type: order.deliveryMethod,

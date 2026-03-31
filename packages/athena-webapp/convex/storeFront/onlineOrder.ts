@@ -888,7 +888,7 @@ export const getOrderMetrics = query({
       totalDiscounts += discountValue;
 
       // Net revenue = subtotal + delivery fees - discounts
-      const deliveryFee = (order.deliveryFee || 0) * 100; // Convert to cents
+      const deliveryFee = order.deliveryFee || 0; // already pesewas
       netRevenue += subtotal + deliveryFee - discountValue;
     });
 
