@@ -21,6 +21,7 @@ import { redeemPromoCode } from "@/api/promoCodes";
 import { useAuth } from "@/hooks/useAuth";
 import { usePromoCodesQueries } from "@/lib/queries/promoCode";
 import { isFeeWaived } from "@/lib/feeUtils";
+import { toDisplayAmount } from "@/lib/currency";
 import { Badge } from "../ui/badge";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
@@ -48,7 +49,7 @@ export default function MobileBagSummary() {
 
   const discountValue = getDiscountValue(bagItems, checkoutState.discount);
 
-  const total = (checkoutState.deliveryFee ?? 0) + bagSubtotal - discountValue;
+  const total = toDisplayAmount(checkoutState.deliveryFee ?? 0) + bagSubtotal - discountValue;
 
   const discountText =
     checkoutState.discount?.type === "percentage"
@@ -231,7 +232,7 @@ export default function MobileBagSummary() {
                     <p className="text-sm">
                       {isFeeWaivedForCurrentOption
                         ? "Free"
-                        : formatter.format(checkoutState.deliveryFee || 0)}
+                        : formatter.format(toDisplayAmount(checkoutState.deliveryFee || 0))}
                     </p>
                   </div>
                 )}
