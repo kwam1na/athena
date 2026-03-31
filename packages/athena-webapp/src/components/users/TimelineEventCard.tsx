@@ -188,7 +188,7 @@ export function TimelineEventList({
 
         return acc;
       },
-      {} as Record<string, EnrichedTimelineEvent[]>
+      {} as Record<string, EnrichedTimelineEvent[]>,
     );
 
     const sortedDays = Object.entries(groupedEvents)
@@ -202,7 +202,7 @@ export function TimelineEventList({
 
     return (
       <div className="space-y-4">
-        <Card className="border border-gray-200 rounded-lg">
+        <div className="">
           <div
             ref={containerRef}
             className="space-y-6 max-h-[800px] overflow-y-auto p-4 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent"
@@ -210,7 +210,7 @@ export function TimelineEventList({
             {sortedDays.map(([day, dayEvents]) => (
               <div key={day} className="space-y-3">
                 {/* Day Header */}
-                <div className="sticky top-2 z-10">
+                <div className="sticky top-0 z-10">
                   <div className="flex justify-center">
                     <div className="inline-flex px-3 py-1 rounded-full bg-white shadow-sm ring-1 ring-gray-200">
                       <span className="text-sm font-medium text-gray-600">
@@ -255,7 +255,7 @@ export function TimelineEventList({
               </Button>
             </div>
           )}
-        </Card>
+        </div>
       </div>
     );
   }
