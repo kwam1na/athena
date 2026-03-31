@@ -176,3 +176,4 @@ dist
 
 # Local Claude/Codex worktree tracking metadata
 packages/.claude/worktrees/
+docs/superpowers/plans/
