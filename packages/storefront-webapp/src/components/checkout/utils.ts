@@ -121,10 +121,10 @@ export const getPotentialPoints = (order: OnlineOrder) => {
   const { amountCharged } = getOrderAmount({
     items: order.items || [],
     discount: order?.discount as any,
-    deliveryFee: (order?.deliveryFee || 0) * 100,
-    subtotal: order.amount,
+    deliveryFee: order?.deliveryFee || 0, // already pesewas
+    subtotal: order.amount, // already pesewas
     isInCents: true,
   });
 
-  return Math.floor(amountCharged / 10);
+  return Math.floor(amountCharged / 1000); // 1 point per GH₵10
 };

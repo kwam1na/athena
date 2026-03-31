@@ -104,7 +104,7 @@ export function getAmountRefunded(order: OnlineOrder): number {
  * This includes the subtotal (order.amount) + delivery fee
  */
 export function getNetAmount(order: OnlineOrder): number {
-  const deliveryFee = order.deliveryFee ? order.deliveryFee * 100 : 0;
+  const deliveryFee = order.deliveryFee || 0; // already pesewas
   const totalPaid = order.amount + deliveryFee;
   return totalPaid - getAmountRefunded(order);
 }
@@ -157,8 +157,7 @@ export function calculateRefundAmount(
         order.deliveryFee &&
         !order.didRefundDeliveryFee
       ) {
-        // deliveryFee is in GHS, convert to cents
-        total += order.deliveryFee * 100;
+        total += order.deliveryFee; // already pesewas
       }
 
       return Math.min(total, netAmount);
