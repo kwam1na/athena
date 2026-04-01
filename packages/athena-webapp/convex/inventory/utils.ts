@@ -26,7 +26,7 @@ type Discount = {
  */
 export const getDiscountValue = (
   items: OrderItem[],
-  discount?: Discount | null
+  discount?: Discount | null,
 ): number => {
   if (!discount) return 0;
 
@@ -44,7 +44,7 @@ export const getDiscountValue = (
   if (discount.span === "entire-order" || !discount.span) {
     const subtotal = items.reduce(
       (sum, item) => sum + item.price * item.quantity,
-      0
+      0,
     ); // subtotal is in GHS
 
     if (type === "percentage") {
@@ -80,7 +80,7 @@ export const getDiscountValue = (
  */
 export const getProductDiscountValue = (
   price: number,
-  discount?: Discount | null
+  discount?: Discount | null,
 ): number => {
   if (!discount) return 0;
 
@@ -137,10 +137,10 @@ export const formatDeliveryAddress = (address: Address) => {
 
   if (isGHOrder) {
     const region = ghanaRegions.find((r) => r.code == address.region)?.name;
-    const neighborhood = accraNeighborhoods.find(
-      (n) => n.value == address?.neighborhood
-    )?.label;
-    addressLine = `${address?.houseNumber || ""} ${address?.street}, ${neighborhood}, ${region}`;
+    const neighborhood =
+      accraNeighborhoods.find((n) => n.value == address?.neighborhood)?.label ||
+      address?.neighborhood;
+    addressLine = `${address?.houseNumber || ""} ${address?.street || ""}, ${neighborhood}, ${region}`;
   }
 
   return {
