@@ -1,5 +1,7 @@
 import { useStoreContext } from "@/contexts/StoreContext";
 import { useCheckout } from "@/hooks/useCheckout";
+import { useShoppingBag } from "@/hooks/useShoppingBag";
+import { toPesewas } from "@/lib/currency";
 import { GhostButton } from "@/components/ui/ghost-button";
 import { Truck } from "lucide-react";
 import { StoreIcon } from "lucide-react";
@@ -28,6 +30,8 @@ export const PickupOptions = () => {
   const { formatter, store } = useStoreContext();
   const storeConfig = getStoreConfigV2(store);
   const { waiveDeliveryFees, fulfillment } = storeConfig.commerce;
+  const { bagSubtotal } = useShoppingBag();
+  const subtotalInPesewas = toPesewas(bagSubtotal);
 
   const isPickup = checkoutState.deliveryMethod === "pickup";
   const isDelivery = checkoutState.deliveryMethod === "delivery";
@@ -55,7 +59,8 @@ export const PickupOptions = () => {
   // Use the shared utility function to determine if the fee should be waived
   const isFeeWaivedForCurrentOption = isFeeWaived(
     waiveDeliveryFees,
-    checkoutState.deliveryOption
+    checkoutState.deliveryOption,
+    subtotalInPesewas
   );
 
   return (
