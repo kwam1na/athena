@@ -5,6 +5,8 @@ import { Address } from "../types";
 import { useStoreContext } from "@/contexts/StoreContext";
 import { isFeeWaived } from "@/lib/feeUtils";
 import { getStoreConfigV2 } from "@/lib/storeConfig";
+import { useShoppingBag } from "@/hooks/useShoppingBag";
+import { toPesewas } from "@/lib/currency";
 
 export function StoreSelector() {
   const { updateState, updateActionsState, checkoutState } = useCheckout();
@@ -45,6 +47,8 @@ export function DeliveryOptionsSelector() {
   const storeConfig = getStoreConfigV2(store);
 
   const { deliveryFees, waiveDeliveryFees } = storeConfig.commerce;
+  const { bagSubtotal } = useShoppingBag();
+  const subtotalInPesewas = toPesewas(bagSubtotal);
   const withinAccraFee = deliveryFees?.withinAccra ?? 30;
   const otherRegionsFee = deliveryFees?.otherRegions ?? 70;
   const internationalFee = deliveryFees?.international ?? 800;
@@ -52,13 +56,15 @@ export function DeliveryOptionsSelector() {
   // Replace the waived fee checks with the shared utility function
   const shouldWaiveWithinAccraFee = isFeeWaived(
     waiveDeliveryFees,
-    "within-accra"
+    "within-accra",
+    subtotalInPesewas
   );
   const shouldWaiveOtherRegionsFee = isFeeWaived(
     waiveDeliveryFees,
-    "outside-accra"
+    "outside-accra",
+    subtotalInPesewas
   );
-  const shouldWaiveIntlFee = isFeeWaived(waiveDeliveryFees, "intl");
+  const shouldWaiveIntlFee = isFeeWaived(waiveDeliveryFees, "intl", subtotalInPesewas);
 
   const previousCountryRef = useRef(
     checkoutState.deliveryDetails?.country || undefined
