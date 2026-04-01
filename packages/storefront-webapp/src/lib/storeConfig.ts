@@ -42,6 +42,7 @@ export type StoreConfigV2View = {
       withinAccra?: number;
       otherRegions?: number;
       international?: number;
+      minimumOrderAmount?: number;
     };
     waiveDeliveryFees: WaiveDeliveryFees;
     fulfillment: {
@@ -117,7 +118,9 @@ const asNumber = (value: unknown): number | undefined =>
 const asBoolean = (value: unknown): boolean | undefined =>
   typeof value === "boolean" ? value : undefined;
 
-const firstDefined = <T>(...values: Array<T | undefined | null>): T | undefined => {
+const firstDefined = <T>(
+  ...values: Array<T | undefined | null>
+): T | undefined => {
   for (const value of values) {
     if (value !== undefined && value !== null) {
       return value;
@@ -135,9 +138,7 @@ const asOptionalArray = <T>(
     return undefined;
   }
 
-  return value
-    .map(map)
-    .filter((item): item is T => item !== undefined);
+  return value.map(map).filter((item): item is T => item !== undefined);
 };
 
 const cleanUndefined = <T extends Record<string, any>>(value: T): T => {
@@ -205,7 +206,9 @@ const getRawConfig = (input: StoreConfigInput): Record<string, any> => {
   return asRecord(input);
 };
 
-export const getStoreConfigV2 = (input: StoreConfigInput): StoreConfigV2View => {
+export const getStoreConfigV2 = (
+  input: StoreConfigInput,
+): StoreConfigV2View => {
   const config = getRawConfig(input);
 
   const operations = asRecord(config.operations);
@@ -239,6 +242,7 @@ export const getStoreConfigV2 = (input: StoreConfigInput): StoreConfigV2View => 
       otherRegions: asBoolean(asRecord(value).otherRegions),
       international: asBoolean(asRecord(value).international),
       all: asBoolean(asRecord(value).all),
+      minimumOrderAmount: asNumber(asRecord(value).minimumOrderAmount),
     });
   })();
 
@@ -308,37 +312,60 @@ export const getStoreConfigV2 = (input: StoreConfigInput): StoreConfigV2View => 
         ),
         pickupRestriction: cleanUndefined({
           isActive: firstDefined(
-            asBoolean(asRecord(asRecord(commerce.fulfillment).pickupRestriction).isActive),
+            asBoolean(
+              asRecord(asRecord(commerce.fulfillment).pickupRestriction)
+                .isActive,
+            ),
             asBoolean(asRecord(legacyFulfillment.pickupRestriction).isActive),
           ),
           message: firstDefined(
-            asString(asRecord(asRecord(commerce.fulfillment).pickupRestriction).message),
+            asString(
+              asRecord(asRecord(commerce.fulfillment).pickupRestriction)
+                .message,
+            ),
             asString(asRecord(legacyFulfillment.pickupRestriction).message),
           ),
           reason: firstDefined(
-            asString(asRecord(asRecord(commerce.fulfillment).pickupRestriction).reason),
+            asString(
+              asRecord(asRecord(commerce.fulfillment).pickupRestriction).reason,
+            ),
             asString(asRecord(legacyFulfillment.pickupRestriction).reason),
           ),
           endTime: firstDefined(
-            asNumber(asRecord(asRecord(commerce.fulfillment).pickupRestriction).endTime),
+            asNumber(
+              asRecord(asRecord(commerce.fulfillment).pickupRestriction)
+                .endTime,
+            ),
             asNumber(asRecord(legacyFulfillment.pickupRestriction).endTime),
           ),
         }),
         deliveryRestriction: cleanUndefined({
           isActive: firstDefined(
-            asBoolean(asRecord(asRecord(commerce.fulfillment).deliveryRestriction).isActive),
+            asBoolean(
+              asRecord(asRecord(commerce.fulfillment).deliveryRestriction)
+                .isActive,
+            ),
             asBoolean(asRecord(legacyFulfillment.deliveryRestriction).isActive),
           ),
           message: firstDefined(
-            asString(asRecord(asRecord(commerce.fulfillment).deliveryRestriction).message),
+            asString(
+              asRecord(asRecord(commerce.fulfillment).deliveryRestriction)
+                .message,
+            ),
             asString(asRecord(legacyFulfillment.deliveryRestriction).message),
           ),
           reason: firstDefined(
-            asString(asRecord(asRecord(commerce.fulfillment).deliveryRestriction).reason),
+            asString(
+              asRecord(asRecord(commerce.fulfillment).deliveryRestriction)
+                .reason,
+            ),
             asString(asRecord(legacyFulfillment.deliveryRestriction).reason),
           ),
           endTime: firstDefined(
-            asNumber(asRecord(asRecord(commerce.fulfillment).deliveryRestriction).endTime),
+            asNumber(
+              asRecord(asRecord(commerce.fulfillment).deliveryRestriction)
+                .endTime,
+            ),
             asNumber(asRecord(legacyFulfillment.deliveryRestriction).endTime),
           ),
         }),

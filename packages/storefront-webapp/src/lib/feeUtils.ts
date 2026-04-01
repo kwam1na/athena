@@ -19,7 +19,7 @@ type WaiveDeliveryFeesConfig =
 // existing callers that don't pass subtotal still get unconditional waivers.
 const meetsThreshold = (
   minimumOrderAmount: number | undefined,
-  subtotal: number | undefined
+  subtotal: number | undefined,
 ): boolean => {
   if (!minimumOrderAmount || minimumOrderAmount <= 0) return true;
   if (subtotal === undefined) return true;
@@ -37,7 +37,7 @@ const meetsThreshold = (
 export const isFeeWaived = (
   waiveDeliveryFees: WaiveDeliveryFeesConfig,
   deliveryOption: DeliveryOption | null,
-  subtotal?: number
+  subtotal?: number,
 ): boolean => {
   // Handle boolean waiveDeliveryFees (legacy format)
   if (typeof waiveDeliveryFees === "boolean") {
@@ -82,7 +82,7 @@ export const isFeeWaived = (
  */
 export const isAnyFeeWaived = (
   waiveDeliveryFees: WaiveDeliveryFeesConfig,
-  subtotal?: number
+  subtotal?: number,
 ): boolean => {
   // Handle boolean waiveDeliveryFees (legacy format)
   if (typeof waiveDeliveryFees === "boolean") {
@@ -114,7 +114,7 @@ export const isAnyFeeWaived = (
  */
 export const hasWaiverConfigured = (
   waiveDeliveryFees: WaiveDeliveryFeesConfig,
-  deliveryOption: DeliveryOption | null
+  deliveryOption: DeliveryOption | null,
 ): boolean => {
   // Handle boolean waiveDeliveryFees (legacy format)
   if (typeof waiveDeliveryFees === "boolean") {
@@ -159,7 +159,7 @@ export const hasWaiverConfigured = (
 export const getRemainingForFreeDelivery = (
   waiveDeliveryFees: WaiveDeliveryFeesConfig,
   deliveryOption: DeliveryOption | null,
-  subtotal: number
+  subtotal: number,
 ): number | null => {
   // Boolean true means always free — no threshold possible
   if (typeof waiveDeliveryFees === "boolean") {
