@@ -138,6 +138,7 @@ const normalizeWaiveDeliveryFees = (
     international: asBoolean(record.international),
     otherRegions: asBoolean(record.otherRegions),
     withinAccra: asBoolean(record.withinAccra),
+    minimumOrderAmount: asNumber(record.minimumOrderAmount),
   };
 };
 
