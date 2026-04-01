@@ -28,6 +28,9 @@ export const FeesView = () => {
   const [waiveWithinAccraFee, setWaiveWithinAccraFee] = useState(false);
   const [waiveOtherRegionsFee, setWaiveOtherRegionsFee] = useState(false);
   const [waiveIntlFee, setWaiveIntlFee] = useState(false);
+  const [minimumOrderAmount, setMinimumOrderAmount] = useState<
+    number | undefined
+  >(undefined);
 
   const handleUpdateFees = async () => {
     const updates = {
@@ -43,6 +46,7 @@ export const FeesView = () => {
       international: waiveIntlFee,
       // Keep a global flag for backward compatibility
       all: waiveWithinAccraFee && waiveOtherRegionsFee && waiveIntlFee,
+      minimumOrderAmount: minimumOrderAmount || undefined,
     };
 
     await updateConfig({
@@ -75,22 +79,28 @@ export const FeesView = () => {
       setWaiveWithinAccraFee(waiveConfig);
       setWaiveOtherRegionsFee(waiveConfig);
       setWaiveIntlFee(waiveConfig);
+      setMinimumOrderAmount(undefined);
     } else if (waiveConfig && typeof waiveConfig === "object") {
       // New format - object with properties
       setWaiveWithinAccraFee(waiveConfig.withinAccra || false);
       setWaiveOtherRegionsFee(waiveConfig.otherRegions || false);
       setWaiveIntlFee(waiveConfig.international || false);
+      setMinimumOrderAmount(waiveConfig.minimumOrderAmount || undefined);
     } else {
       // Default all to false
       setWaiveWithinAccraFee(false);
       setWaiveOtherRegionsFee(false);
       setWaiveIntlFee(false);
+      setMinimumOrderAmount(undefined);
     }
   }, [storeConfig]);
 
   // Function to check if all fees are being waived
   const areAllFeesWaived =
     waiveWithinAccraFee && waiveOtherRegionsFee && waiveIntlFee;
+
+  const isAnyWaiverActive =
+    waiveWithinAccraFee || waiveOtherRegionsFee || waiveIntlFee;
 
   // Function to toggle all fees at once
   const handleToggleAllFees = (checked: boolean) => {
@@ -210,6 +220,31 @@ export const FeesView = () => {
           </p>
         )}
       </div>
+
+      {isAnyWaiverActive && (
+        <div className="container mx-auto py-4 space-y-2">
+          <Label
+            className="text-sm text-muted-foreground"
+            htmlFor="minimum-order-amount"
+          >
+            Minimum order amount for free delivery (
+            {activeStore?.currency.toUpperCase()})
+          </Label>
+          <Input
+            id="minimum-order-amount"
+            type="number"
+            placeholder="Leave empty for unconditional free delivery"
+            value={minimumOrderAmount || ""}
+            onChange={(e) => {
+              const val = parseInt(e.target.value);
+              setMinimumOrderAmount(isNaN(val) || val <= 0 ? undefined : val);
+            }}
+          />
+          <p className="text-xs text-muted-foreground">
+            Leave empty for unconditional free delivery
+          </p>
+        </div>
+      )}
 
       <div className="w-full flex pr-8">
         <LoadingButton
