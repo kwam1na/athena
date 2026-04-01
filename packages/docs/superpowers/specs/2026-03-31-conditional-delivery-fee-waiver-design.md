@@ -166,5 +166,5 @@ The value is saved alongside the existing waiver config in `handleUpdateFees()`.
 | `storefront-webapp/src/components/checkout/deliveryFees.test.ts` | New threshold test cases + regression tests for refactored Ghana logic |
 | `storefront-webapp/src/components/checkout/CheckoutProvider.tsx` | Pass subtotal to fee functions; fix auto-zero-fee in `updateState()` and `canPlaceOrder()` |
 | `storefront-webapp/src/components/checkout/DeliveryDetailsSection.tsx` | Replace 3 inline waiver locations with `calculateDeliveryFee()` calls, passing subtotal |
-| `storefront-webapp/src/components/checkout/OrderDetails/index.tsx` | Add "add more for free delivery" nudge |
+| `storefront-webapp/src/components/checkout/BagSummary.tsx` | Add "add more for free delivery" nudge + pass subtotal to `isFeeWaived` |
 | `athena-webapp/src/components/store-configuration/components/FeesView.tsx` | Add minimum amount input field |
