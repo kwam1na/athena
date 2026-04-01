@@ -27,6 +27,7 @@ import { useStoreContext } from "@/contexts/StoreContext";
 import { isFeeWaived } from "@/lib/feeUtils";
 import { getStoreConfigV2 } from "@/lib/storeConfig";
 import { toPesewas } from "@/lib/currency";
+import { useShoppingBag } from "@/hooks/useShoppingBag";
 
 export const CountryFields = ({ form }: CheckoutFormSectionProps) => {
   const { checkoutState, updateState } = useCheckout();
@@ -120,6 +121,8 @@ const RegionFields = ({ form }: CheckoutFormSectionProps) => {
   const { store } = useStoreContext();
   const storeConfig = getStoreConfigV2(store);
   const { waiveDeliveryFees, deliveryFees } = storeConfig.commerce;
+  const { bagSubtotal } = useShoppingBag();
+  const subtotalInPesewas = toPesewas(bagSubtotal);
 
   return (
     <>
@@ -142,24 +145,18 @@ const RegionFields = ({ form }: CheckoutFormSectionProps) => {
                       const deliveryOption =
                         region == "GA" ? "within-accra" : "outside-accra";
 
-                      // Handle both old boolean format and new object format for backward compatibility
-                      const shouldWaiveRegionFee =
-                        typeof waiveDeliveryFees === "boolean"
-                          ? waiveDeliveryFees
-                          : region == "GA"
-                            ? waiveDeliveryFees?.withinAccra ||
-                              waiveDeliveryFees?.all ||
-                              false
-                            : waiveDeliveryFees?.otherRegions ||
-                              waiveDeliveryFees?.all ||
-                              false;
+                      const shouldWaiveRegionFee = isFeeWaived(
+                        waiveDeliveryFees,
+                        deliveryOption,
+                        subtotalInPesewas
+                      );
 
                       const deliveryFee = shouldWaiveRegionFee
                         ? 0
                         : toPesewas(
                             region == "GA"
                               ? deliveryFees?.withinAccra || 30
-                              : deliveryFees?.otherRegions || 70
+                              : deliveryFees?.otherRegions || 70,
                           );
 
                       updateState({
@@ -207,24 +204,18 @@ const RegionFields = ({ form }: CheckoutFormSectionProps) => {
                     const deliveryOption =
                       region == "GA" ? "within-accra" : "outside-accra";
 
-                    // Handle both old boolean format and new object format for backward compatibility
-                    const shouldWaiveRegionFee =
-                      typeof waiveDeliveryFees === "boolean"
-                        ? waiveDeliveryFees
-                        : region == "GA"
-                          ? waiveDeliveryFees?.withinAccra ||
-                            waiveDeliveryFees?.all ||
-                            false
-                          : waiveDeliveryFees?.otherRegions ||
-                            waiveDeliveryFees?.all ||
-                            false;
+                    const shouldWaiveRegionFee = isFeeWaived(
+                      waiveDeliveryFees,
+                      deliveryOption,
+                      subtotalInPesewas
+                    );
 
                     const deliveryFee = shouldWaiveRegionFee
                       ? 0
                       : toPesewas(
                           region == "GA"
                             ? deliveryFees?.withinAccra || 30
-                            : deliveryFees?.otherRegions || 70
+                            : deliveryFees?.otherRegions || 70,
                         );
 
                     updateState({
@@ -753,7 +744,7 @@ export const DeliveryDetailsSection = ({ form }: CheckoutFormSectionProps) => {
   const { deliveryFees, waiveDeliveryFees } = storeConfig.commerce;
 
   const previousCountryRef = useRef(
-    checkoutState.deliveryDetails?.country || undefined
+    checkoutState.deliveryDetails?.country || undefined,
   );
 
   const previousRegionRef = useRef(checkoutState.deliveryDetails?.region);
@@ -761,7 +752,9 @@ export const DeliveryDetailsSection = ({ form }: CheckoutFormSectionProps) => {
   const [isEnteringNewNeighborhood, setIsEnteringNewNeighborhood] =
     useState(false);
 
-  const shouldWaiveIntlFee = isFeeWaived(waiveDeliveryFees, "intl");
+  const { bagSubtotal: dsBagSubtotal } = useShoppingBag();
+  const dsSubtotalInPesewas = toPesewas(dsBagSubtotal);
+  const shouldWaiveIntlFee = isFeeWaived(waiveDeliveryFees, "intl", dsSubtotalInPesewas);
 
   useEffect(() => {
     // effect to clear state and the form when the country changes
