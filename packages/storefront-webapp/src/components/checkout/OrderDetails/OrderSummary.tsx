@@ -5,8 +5,8 @@ import { useShoppingBag } from "@/hooks/useShoppingBag";
 import { getDiscountValue } from "../utils";
 import { BagSummaryItems } from "../BagSummary";
 import { Tag } from "lucide-react";
-import { isFeeWaived } from "@/lib/feeUtils";
-import { toDisplayAmount } from "@/lib/currency";
+import { isFeeWaived, getRemainingForFreeDelivery } from "@/lib/feeUtils";
+import { toDisplayAmount, toPesewas } from "@/lib/currency";
 import { Badge } from "@/components/ui/badge";
 import InputWithEndButton from "@/components/ui/input-with-end-button";
 import { useState } from "react";
@@ -18,6 +18,7 @@ import { getStoreConfigV2 } from "@/lib/storeConfig";
 export default function OrderSummary() {
   const { formatter, store } = useStoreContext();
   const { bagSubtotal } = useShoppingBag();
+  const subtotalInPesewas = toPesewas(bagSubtotal);
   const { checkoutState, activeSession, updateState } = useCheckout();
   const storeConfig = getStoreConfigV2(store);
   const { waiveDeliveryFees } = storeConfig.commerce;
@@ -69,7 +70,13 @@ export default function OrderSummary() {
   // Use the shared utility functions for fee waiving logic
   const isFeeWaivedForCurrentOption = isFeeWaived(
     waiveDeliveryFees,
-    checkoutState.deliveryOption
+    checkoutState.deliveryOption,
+    subtotalInPesewas
+  );
+  const remainingForFreeDelivery = getRemainingForFreeDelivery(
+    waiveDeliveryFees,
+    checkoutState.deliveryOption,
+    subtotalInPesewas
   );
 
   const bagItems =
@@ -163,6 +170,13 @@ export default function OrderSummary() {
                   : formatter.format(toDisplayAmount(checkoutState.deliveryFee || 0))}
               </p>
             </div>
+          )}
+
+        {remainingForFreeDelivery !== null &&
+          checkoutState.deliveryMethod === "delivery" && (
+            <p className="text-xs text-muted-foreground">
+              Add {formatter.format(toDisplayAmount(remainingForFreeDelivery))} more to get free delivery
+            </p>
           )}
 
         {Boolean(discountValue) && (
