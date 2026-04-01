@@ -50,7 +50,10 @@ export default function MobileBagSummary() {
 
   const discountValue = getDiscountValue(bagItems, checkoutState.discount);
 
-  const total = toDisplayAmount(checkoutState.deliveryFee ?? 0) + bagSubtotal - discountValue;
+  const total =
+    toDisplayAmount(checkoutState.deliveryFee ?? 0) +
+    bagSubtotal -
+    discountValue;
 
   const discountText =
     checkoutState.discount?.type === "percentage"
@@ -119,12 +122,7 @@ export default function MobileBagSummary() {
   const isFeeWaivedForCurrentOption = isFeeWaived(
     waiveDeliveryFees,
     checkoutState.deliveryOption,
-    subtotalInPesewas
-  );
-  const remainingForFreeDelivery = getRemainingForFreeDelivery(
-    waiveDeliveryFees,
-    checkoutState.deliveryOption,
-    subtotalInPesewas
+    subtotalInPesewas,
   );
 
   const discountSpan =
@@ -239,16 +237,13 @@ export default function MobileBagSummary() {
                     <p className="text-sm">
                       {isFeeWaivedForCurrentOption
                         ? "Free"
-                        : formatter.format(toDisplayAmount(checkoutState.deliveryFee || 0))}
+                        : formatter.format(
+                            toDisplayAmount(checkoutState.deliveryFee || 0),
+                          )}
                     </p>
                   </div>
                 )}
-              {remainingForFreeDelivery !== null &&
-                checkoutState.deliveryMethod === "delivery" && (
-                  <p className="text-xs text-muted-foreground">
-                    Add {formatter.format(toDisplayAmount(remainingForFreeDelivery))} more to get free delivery
-                  </p>
-                )}
+
               {Boolean(discountValue) && (
                 <div className="flex justify-between">
                   <p className="text-sm">Discount</p>

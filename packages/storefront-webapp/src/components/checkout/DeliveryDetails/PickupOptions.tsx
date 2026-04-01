@@ -5,7 +5,7 @@ import { toDisplayAmount, toPesewas } from "@/lib/currency";
 import { GhostButton } from "@/components/ui/ghost-button";
 import { Truck } from "lucide-react";
 import { StoreIcon } from "lucide-react";
-import { isFeeWaived } from "@/lib/feeUtils";
+import { getRemainingForFreeDelivery, isFeeWaived } from "@/lib/feeUtils";
 import { getStoreConfigV2 } from "@/lib/storeConfig";
 
 // Helper function to check if restriction is within time window
@@ -63,94 +63,109 @@ export const PickupOptions = () => {
     subtotalInPesewas,
   );
 
+  const remainingForFreeDelivery = getRemainingForFreeDelivery(
+    waiveDeliveryFees,
+    checkoutState.deliveryOption,
+    subtotalInPesewas,
+  );
+
   return (
-    <div className="flex items-center gap-4">
-      {showPickup && (
-        <GhostButton
-          type="button"
-          onClick={() => {
-            if (pickupAvailable) {
-              updateState({
-                deliveryMethod: "pickup",
-                deliveryOption: null,
-                deliveryFee: 0,
-                paymentMethod: "online_payment",
-                pickupLocation: "wigclub-hair-studio",
-                podPaymentMethod: null,
-              });
-            }
-          }}
-          disabled={!pickupAvailable}
-          selected={isPickup}
-          className={`h-[64px] ${!showDelivery ? "w-full" : "w-[50%]"}`}
-        >
-          <div className="w-full space-y-2">
-            <div className="flex items-center">
-              <StoreIcon className="w-4 h-4 mr-2" /> Store pickup
-            </div>
+    <div className="space-y-6">
+      <div className="flex items-center gap-4">
+        {showPickup && (
+          <GhostButton
+            type="button"
+            onClick={() => {
+              if (pickupAvailable) {
+                updateState({
+                  deliveryMethod: "pickup",
+                  deliveryOption: null,
+                  deliveryFee: 0,
+                  paymentMethod: "online_payment",
+                  pickupLocation: "wigclub-hair-studio",
+                  podPaymentMethod: null,
+                });
+              }
+            }}
+            disabled={!pickupAvailable}
+            selected={isPickup}
+            className={`h-[64px] ${!showDelivery ? "w-full" : "w-[50%]"}`}
+          >
+            <div className="w-full space-y-2">
+              <div className="flex items-center">
+                <StoreIcon className="w-4 h-4 mr-2" /> Store pickup
+              </div>
 
-            <p className="text-xs text-start w-full">
-              {pickupAvailable ? (
-                "Free"
-              ) : (
-                <span>
-                  {pickupRestriction?.message || "Temporarily unavailable"}
-                </span>
-              )}
-            </p>
-          </div>
-        </GhostButton>
-      )}
-
-      {showDelivery && (
-        <GhostButton
-          type="button"
-          onClick={() => {
-            if (deliveryAvailable) {
-              updateState({
-                deliveryMethod: "delivery",
-                deliveryFee: isFeeWaivedForCurrentOption ? 0 : null,
-                pickupLocation: null,
-              });
-            }
-          }}
-          disabled={!deliveryAvailable}
-          selected={isDelivery}
-          className={`h-[64px] ${!showPickup ? "w-full" : "w-[50%]"}`}
-        >
-          <div className="w-full space-y-2">
-            <div className="flex items-center">
-              <Truck className="w-4 h-4 mr-2" />
-              Delivery
-            </div>
-
-            {deliveryAvailable ? (
-              <>
-                {isFeeWaivedForCurrentOption && (
-                  <div className="flex items-center gap-2">
-                    <p className="text-xs text-startl">Free</p>
-                  </div>
-                )}
-
-                {Boolean(checkoutState.deliveryFee) &&
-                  !isFeeWaivedForCurrentOption && (
-                    <p className="text-xs text-[#EC4683] text-start w-full">
-                      {formatter.format(
-                        toDisplayAmount(checkoutState.deliveryFee || 0),
-                      )}
-                    </p>
-                  )}
-              </>
-            ) : (
               <p className="text-xs text-start w-full">
-                <span>
-                  {deliveryRestriction?.message || "Temporarily unavailable"}
-                </span>
+                {pickupAvailable ? (
+                  "Free"
+                ) : (
+                  <span>
+                    {pickupRestriction?.message || "Temporarily unavailable"}
+                  </span>
+                )}
               </p>
-            )}
-          </div>
-        </GhostButton>
-      )}
+            </div>
+          </GhostButton>
+        )}
+
+        {showDelivery && (
+          <GhostButton
+            type="button"
+            onClick={() => {
+              if (deliveryAvailable) {
+                updateState({
+                  deliveryMethod: "delivery",
+                  deliveryFee: isFeeWaivedForCurrentOption ? 0 : null,
+                  pickupLocation: null,
+                });
+              }
+            }}
+            disabled={!deliveryAvailable}
+            selected={isDelivery}
+            className={`h-[64px] ${!showPickup ? "w-full" : "w-[50%]"}`}
+          >
+            <div className="w-full space-y-2">
+              <div className="flex items-center">
+                <Truck className="w-4 h-4 mr-2" />
+                Delivery
+              </div>
+
+              {deliveryAvailable ? (
+                <>
+                  {isFeeWaivedForCurrentOption && (
+                    <div className="flex items-center gap-2">
+                      <p className="text-xs text-startl">Free</p>
+                    </div>
+                  )}
+
+                  {Boolean(checkoutState.deliveryFee) &&
+                    !isFeeWaivedForCurrentOption && (
+                      <p className="text-xs text-[#EC4683] text-start w-full">
+                        {formatter.format(
+                          toDisplayAmount(checkoutState.deliveryFee || 0),
+                        )}
+                      </p>
+                    )}
+                </>
+              ) : (
+                <p className="text-xs text-start w-full">
+                  <span>
+                    {deliveryRestriction?.message || "Temporarily unavailable"}
+                  </span>
+                </p>
+              )}
+            </div>
+          </GhostButton>
+        )}
+      </div>
+      {remainingForFreeDelivery !== null &&
+        checkoutState.deliveryMethod === "delivery" && (
+          <p className="text-xs text-accent2 font-medium">
+            Add {formatter.format(toDisplayAmount(remainingForFreeDelivery))}{" "}
+            more to get free delivery
+          </p>
+        )}
     </div>
   );
 };
