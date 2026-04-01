@@ -17,8 +17,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { useEffect, useState } from "react";
 import { getDiscountValue } from "./utils";
 import { usePromoCodesQueries } from "@/lib/queries/promoCode";
-import { isFeeWaived } from "@/lib/feeUtils";
-import { toDisplayAmount } from "@/lib/currency";
+import { isFeeWaived, getRemainingForFreeDelivery } from "@/lib/feeUtils";
+import { toDisplayAmount, toPesewas } from "@/lib/currency";
 import { Badge } from "../ui/badge";
 import { useDiscountCodeAlert } from "@/hooks/useDiscountCodeAlert";
 import { getStoreConfigV2, getStoreFallbackImageUrl } from "@/lib/storeConfig";
@@ -139,6 +139,7 @@ export function BagSummaryItems({
 function BagSummary() {
   const { formatter, store } = useStoreContext();
   const { bagSubtotal } = useShoppingBag();
+  const subtotalInPesewas = toPesewas(bagSubtotal);
   const { checkoutState, updateState, activeSession, updateActionsState } =
     useCheckout();
   const { userId, guestId } = useAuth();
@@ -237,7 +238,13 @@ function BagSummary() {
 
   const isFeeWaivedForCurrentOption = isFeeWaived(
     waiveDeliveryFees,
-    checkoutState.deliveryOption
+    checkoutState.deliveryOption,
+    subtotalInPesewas
+  );
+  const remainingForFreeDelivery = getRemainingForFreeDelivery(
+    waiveDeliveryFees,
+    checkoutState.deliveryOption,
+    subtotalInPesewas
   );
 
   return (
@@ -344,6 +351,12 @@ function BagSummary() {
                   : formatter.format(toDisplayAmount(checkoutState.deliveryFee || 0))}
               </p>
             </div>
+          )}
+        {remainingForFreeDelivery !== null &&
+          checkoutState.deliveryMethod === "delivery" && (
+            <p className="text-xs text-muted-foreground">
+              Add {formatter.format(toDisplayAmount(remainingForFreeDelivery))} more to get free delivery
+            </p>
           )}
         {Boolean(discountValue) && (
           <div className="flex justify-between">

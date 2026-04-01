@@ -80,7 +80,8 @@ export const CheckoutProvider = ({
   const [actionsState, setActionsState] =
     useState<CheckoutActions>(initialActionsState);
 
-  const { bag } = useShoppingBag();
+  const { bag, bagSubtotal } = useShoppingBag();
+  const subtotalInPesewas = toPesewas(bagSubtotal);
 
   const { user, store } = useStoreContext();
   const storeConfig = getStoreConfigV2(store);
@@ -199,6 +200,7 @@ export const CheckoutProvider = ({
         region: region || null,
         waiveDeliveryFees,
         deliveryFees,
+        subtotal: subtotalInPesewas,
       });
 
       updateState({
@@ -232,7 +234,7 @@ export const CheckoutProvider = ({
   }, [user]);
 
   const updateState = (updates: Partial<CheckoutState>) => {
-    const anyFeeWaived = isAnyFeeWaived(waiveDeliveryFees);
+    const anyFeeWaived = isAnyFeeWaived(waiveDeliveryFees, subtotalInPesewas);
 
     // Prevent setting deliveryMethod to pickup when it's unavailable
     if (!pickupAvailable && updates.deliveryMethod === "pickup") {
@@ -270,7 +272,7 @@ export const CheckoutProvider = ({
         newUpdates.deliveryDetails.country !== "GH" &&
         newUpdates.deliveryOption !== "intl"
       ) {
-        const shouldWaiveIntlFee = isFeeWaived(waiveDeliveryFees, "intl");
+        const shouldWaiveIntlFee = isFeeWaived(waiveDeliveryFees, "intl", subtotalInPesewas);
 
         newUpdates.deliveryOption = "intl";
         newUpdates.deliveryFee = shouldWaiveIntlFee

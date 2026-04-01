@@ -19,7 +19,7 @@ export type BagItem = {
 export const getDiscountValue = (
   items: BagItem[],
   discount?: Discount | null,
-  isInCents?: boolean
+  isInCents?: boolean,
 ): number => {
   if (!discount) return 0;
 
@@ -27,7 +27,7 @@ export const getDiscountValue = (
   if (discount.span === "entire-order") {
     const subtotal = items.reduce(
       (sum, item) => sum + item.price * item.quantity,
-      0
+      0,
     );
 
     if (discount.type === "percentage") {
@@ -105,10 +105,10 @@ export const formatDeliveryAddress = (address: Address) => {
 
   if (isGHOrder) {
     const region = GHANA_REGIONS.find((r) => r.code == address.region)?.name;
-    const neighborhood = accraNeighborhoods.find(
-      (n) => n.value == address?.neighborhood
-    )?.label;
-    addressLine = `${address?.houseNumber || ""} ${address?.street}, ${neighborhood}, ${region}`;
+    const neighborhood =
+      accraNeighborhoods.find((n) => n.value == address?.neighborhood)?.label ||
+      address?.neighborhood;
+    addressLine = `${address?.houseNumber || ""} ${address?.street || ""}, ${neighborhood}, ${region}`;
   }
 
   return {

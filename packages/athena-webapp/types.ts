@@ -134,6 +134,7 @@ export type StoreWaiveDeliveryFeesConfig =
       international?: boolean;
       otherRegions?: boolean;
       withinAccra?: boolean;
+      minimumOrderAmount?: number;
     };
 
 export type StoreTaxConfig = {

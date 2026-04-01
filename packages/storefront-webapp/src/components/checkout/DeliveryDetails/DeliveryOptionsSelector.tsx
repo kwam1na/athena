@@ -5,6 +5,8 @@ import { Address } from "../types";
 import { useStoreContext } from "@/contexts/StoreContext";
 import { isFeeWaived } from "@/lib/feeUtils";
 import { getStoreConfigV2 } from "@/lib/storeConfig";
+import { useShoppingBag } from "@/hooks/useShoppingBag";
+import { toDisplayAmount, toPesewas } from "@/lib/currency";
 
 export function StoreSelector() {
   const { updateState, updateActionsState, checkoutState } = useCheckout();
@@ -45,23 +47,31 @@ export function DeliveryOptionsSelector() {
   const storeConfig = getStoreConfigV2(store);
 
   const { deliveryFees, waiveDeliveryFees } = storeConfig.commerce;
-  const withinAccraFee = deliveryFees?.withinAccra ?? 30;
-  const otherRegionsFee = deliveryFees?.otherRegions ?? 70;
-  const internationalFee = deliveryFees?.international ?? 800;
+  const { bagSubtotal } = useShoppingBag();
+  const subtotalInPesewas = toPesewas(bagSubtotal);
+  const withinAccraFee = toPesewas(deliveryFees?.withinAccra ?? 30);
+  const otherRegionsFee = toPesewas(deliveryFees?.otherRegions ?? 70);
+  const internationalFee = toPesewas(deliveryFees?.international ?? 800);
 
   // Replace the waived fee checks with the shared utility function
   const shouldWaiveWithinAccraFee = isFeeWaived(
     waiveDeliveryFees,
-    "within-accra"
+    "within-accra",
+    subtotalInPesewas,
   );
   const shouldWaiveOtherRegionsFee = isFeeWaived(
     waiveDeliveryFees,
-    "outside-accra"
+    "outside-accra",
+    subtotalInPesewas,
   );
-  const shouldWaiveIntlFee = isFeeWaived(waiveDeliveryFees, "intl");
+  const shouldWaiveIntlFee = isFeeWaived(
+    waiveDeliveryFees,
+    "intl",
+    subtotalInPesewas,
+  );
 
   const previousCountryRef = useRef(
-    checkoutState.deliveryDetails?.country || undefined
+    checkoutState.deliveryDetails?.country || undefined,
   );
 
   const handleChange = (value: string) => {
@@ -160,7 +170,7 @@ export function DeliveryOptionsSelector() {
               {shouldWaiveWithinAccraFee && (
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <p className="text-start line-through">
-                    {formatter.format(withinAccraFee)}
+                    {formatter.format(toDisplayAmount(withinAccraFee))}
                   </p>
                   <p className="text-start">Free</p>
                 </div>
@@ -168,7 +178,7 @@ export function DeliveryOptionsSelector() {
 
               {!shouldWaiveWithinAccraFee && (
                 <p className="text-muted-foreground">
-                  {formatter.format(withinAccraFee)}
+                  {formatter.format(toDisplayAmount(withinAccraFee))}
                 </p>
               )}
             </div>
@@ -182,7 +192,7 @@ export function DeliveryOptionsSelector() {
               {shouldWaiveOtherRegionsFee && (
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <p className="text-start line-through">
-                    {formatter.format(otherRegionsFee)}
+                    {formatter.format(toDisplayAmount(otherRegionsFee))}
                   </p>
                   <p className="text-start">Free</p>
                 </div>
@@ -190,7 +200,7 @@ export function DeliveryOptionsSelector() {
 
               {!shouldWaiveOtherRegionsFee && (
                 <p className="text-muted-foreground">
-                  {formatter.format(otherRegionsFee)}
+                  {formatter.format(toDisplayAmount(otherRegionsFee))}
                 </p>
               )}
             </div>
@@ -208,7 +218,7 @@ export function DeliveryOptionsSelector() {
               {shouldWaiveIntlFee && (
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <p className="text-start line-through">
-                    {formatter.format(internationalFee)}
+                    {formatter.format(toDisplayAmount(internationalFee))}
                   </p>
                   <p className="text-start">Free</p>
                 </div>
@@ -216,7 +226,7 @@ export function DeliveryOptionsSelector() {
 
               {!shouldWaiveIntlFee && (
                 <p className="text-muted-foreground">
-                  {formatter.format(internationalFee)}
+                  {formatter.format(toDisplayAmount(internationalFee))}
                 </p>
               )}
             </div>

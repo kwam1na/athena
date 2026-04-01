@@ -20,8 +20,8 @@ import { getDiscountValue } from "./utils";
 import { redeemPromoCode } from "@/api/promoCodes";
 import { useAuth } from "@/hooks/useAuth";
 import { usePromoCodesQueries } from "@/lib/queries/promoCode";
-import { isFeeWaived } from "@/lib/feeUtils";
-import { toDisplayAmount } from "@/lib/currency";
+import { isFeeWaived, getRemainingForFreeDelivery } from "@/lib/feeUtils";
+import { toDisplayAmount, toPesewas } from "@/lib/currency";
 import { Badge } from "../ui/badge";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
@@ -31,6 +31,7 @@ import { getStoreConfigV2 } from "@/lib/storeConfig";
 export default function MobileBagSummary() {
   const { formatter, store } = useStoreContext();
   const { bagSubtotal } = useShoppingBag();
+  const subtotalInPesewas = toPesewas(bagSubtotal);
   const { checkoutState, updateState, activeSession } = useCheckout();
   const [invalidMessage, setInvalidMessage] = useState("");
   const [code, setCode] = useState("");
@@ -117,7 +118,13 @@ export default function MobileBagSummary() {
   // Use the shared utility function to determine if fee should be waived
   const isFeeWaivedForCurrentOption = isFeeWaived(
     waiveDeliveryFees,
-    checkoutState.deliveryOption
+    checkoutState.deliveryOption,
+    subtotalInPesewas
+  );
+  const remainingForFreeDelivery = getRemainingForFreeDelivery(
+    waiveDeliveryFees,
+    checkoutState.deliveryOption,
+    subtotalInPesewas
   );
 
   const discountSpan =
@@ -235,6 +242,12 @@ export default function MobileBagSummary() {
                         : formatter.format(toDisplayAmount(checkoutState.deliveryFee || 0))}
                     </p>
                   </div>
+                )}
+              {remainingForFreeDelivery !== null &&
+                checkoutState.deliveryMethod === "delivery" && (
+                  <p className="text-xs text-muted-foreground">
+                    Add {formatter.format(toDisplayAmount(remainingForFreeDelivery))} more to get free delivery
+                  </p>
                 )}
               {Boolean(discountValue) && (
                 <div className="flex justify-between">

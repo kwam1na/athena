@@ -181,4 +181,64 @@ describe("calculateDeliveryFee", () => {
       deliveryOption: null,
     });
   });
+
+  it("waives fee when waiver is ON and subtotal meets threshold", () => {
+    const result = calculateDeliveryFee({
+      deliveryMethod: "delivery",
+      country: "GH",
+      region: "GA",
+      waiveDeliveryFees: { withinAccra: true, minimumOrderAmount: 100 },
+      deliveryFees: { withinAccra: 30, otherRegions: 70, international: 800 },
+      subtotal: 10000,
+    });
+    expect(result).toEqual({ deliveryFee: 0, deliveryOption: "within-accra" });
+  });
+
+  it("charges fee when waiver is ON but subtotal below threshold", () => {
+    const result = calculateDeliveryFee({
+      deliveryMethod: "delivery",
+      country: "GH",
+      region: "GA",
+      waiveDeliveryFees: { withinAccra: true, minimumOrderAmount: 100 },
+      deliveryFees: { withinAccra: 30, otherRegions: 70, international: 800 },
+      subtotal: 5000,
+    });
+    expect(result).toEqual({ deliveryFee: 3000, deliveryOption: "within-accra" });
+  });
+
+  it("waives fee when waiver is ON and no threshold set (backward compat)", () => {
+    const result = calculateDeliveryFee({
+      deliveryMethod: "delivery",
+      country: "GH",
+      region: "GA",
+      waiveDeliveryFees: { withinAccra: true },
+      deliveryFees: { withinAccra: 30, otherRegions: 70, international: 800 },
+      subtotal: 100,
+    });
+    expect(result).toEqual({ deliveryFee: 0, deliveryOption: "within-accra" });
+  });
+
+  it("waives international fee when threshold is met", () => {
+    const result = calculateDeliveryFee({
+      deliveryMethod: "delivery",
+      country: "US",
+      region: null,
+      waiveDeliveryFees: { international: true, minimumOrderAmount: 200 },
+      deliveryFees: { withinAccra: 30, otherRegions: 70, international: 800 },
+      subtotal: 25000,
+    });
+    expect(result).toEqual({ deliveryFee: 0, deliveryOption: "intl" });
+  });
+
+  it("charges international fee when threshold is not met", () => {
+    const result = calculateDeliveryFee({
+      deliveryMethod: "delivery",
+      country: "US",
+      region: null,
+      waiveDeliveryFees: { international: true, minimumOrderAmount: 200 },
+      deliveryFees: { withinAccra: 30, otherRegions: 70, international: 800 },
+      subtotal: 10000,
+    });
+    expect(result).toEqual({ deliveryFee: 80000, deliveryOption: "intl" });
+  });
 });
