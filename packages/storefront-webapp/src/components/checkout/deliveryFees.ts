@@ -15,6 +15,7 @@ type WaiveDeliveryFees =
       otherRegions?: boolean;
       international?: boolean;
       all?: boolean;
+      minimumOrderAmount?: number;
     }
   | null
   | undefined;
@@ -25,6 +26,7 @@ type CalculateDeliveryFeeInput = {
   region: string | null;
   waiveDeliveryFees: WaiveDeliveryFees;
   deliveryFees: DeliveryFeeConfig;
+  subtotal?: number; // in pesewas
 };
 
 type CalculateDeliveryFeeResult = {
@@ -42,6 +44,7 @@ export function calculateDeliveryFee({
   region,
   waiveDeliveryFees,
   deliveryFees,
+  subtotal,
 }: CalculateDeliveryFeeInput): CalculateDeliveryFeeResult {
   if (deliveryMethod === "pickup") {
     return { deliveryFee: 0, deliveryOption: null };
@@ -67,13 +70,7 @@ export function calculateDeliveryFee({
     baseFee = deliveryFees?.international ?? DEFAULT_INTERNATIONAL_FEE;
   }
 
-  const shouldWaive = isGhana
-    ? typeof waiveDeliveryFees === "boolean"
-      ? waiveDeliveryFees
-      : isGreaterAccra
-        ? waiveDeliveryFees?.withinAccra || waiveDeliveryFees?.all || false
-        : waiveDeliveryFees?.otherRegions || waiveDeliveryFees?.all || false
-    : isFeeWaived(waiveDeliveryFees, "intl");
+  const shouldWaive = isFeeWaived(waiveDeliveryFees, deliveryOption, subtotal);
 
   return {
     deliveryFee: shouldWaive ? 0 : toPesewas(baseFee),
