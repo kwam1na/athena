@@ -15,7 +15,6 @@ import {
   isAmountTampered,
   isAuthorizedResourceOwner,
 } from "./security";
-import { toPesewas } from "../../../../lib/currency";
 
 const checkoutRoutes: HonoWithConvex<ActionCtx> = new Hono();
 
@@ -245,7 +244,7 @@ checkoutRoutes.post("/:checkoutSessionId", async (c) => {
         return c.json({ error: "Delivery fee must be zero or positive" }, 422);
       }
 
-      if (isAmountTampered(session.amount, amount !== undefined ? toPesewas(amount) : undefined)) {
+      if (isAmountTampered(session.amount, amount)) {
         return c.json({ error: "Amount mismatch detected" }, 422);
       }
 
@@ -385,7 +384,7 @@ checkoutRoutes.post("/:checkoutSessionId", async (c) => {
         return c.json({ error: "Delivery fee must be zero or positive" }, 422);
       }
 
-      if (isAmountTampered(session.amount, amount !== undefined ? toPesewas(amount) : undefined)) {
+      if (isAmountTampered(session.amount, amount)) {
         return c.json({ error: "Amount mismatch detected" }, 422);
       }
 

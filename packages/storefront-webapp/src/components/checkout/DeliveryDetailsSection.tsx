@@ -26,7 +26,6 @@ import { US_STATES } from "@/lib/states";
 import { useStoreContext } from "@/contexts/StoreContext";
 import { isFeeWaived } from "@/lib/feeUtils";
 import { getStoreConfigV2 } from "@/lib/storeConfig";
-import { toPesewas } from "@/lib/currency";
 import { useShoppingBag } from "@/hooks/useShoppingBag";
 
 export const CountryFields = ({ form }: CheckoutFormSectionProps) => {
@@ -122,7 +121,7 @@ const RegionFields = ({ form }: CheckoutFormSectionProps) => {
   const storeConfig = getStoreConfigV2(store);
   const { waiveDeliveryFees, deliveryFees } = storeConfig.commerce;
   const { bagSubtotal } = useShoppingBag();
-  const subtotalInPesewas = toPesewas(bagSubtotal);
+  const subtotalInPesewas = bagSubtotal;
 
   return (
     <>
@@ -153,11 +152,9 @@ const RegionFields = ({ form }: CheckoutFormSectionProps) => {
 
                       const deliveryFee = shouldWaiveRegionFee
                         ? 0
-                        : toPesewas(
-                            region == "GA"
-                              ? deliveryFees?.withinAccra || 30
-                              : deliveryFees?.otherRegions || 70,
-                          );
+                        : region == "GA"
+                              ? deliveryFees?.withinAccra || 3000
+                              : deliveryFees?.otherRegions || 7000;
 
                       updateState({
                         deliveryDetails: {
@@ -212,11 +209,9 @@ const RegionFields = ({ form }: CheckoutFormSectionProps) => {
 
                     const deliveryFee = shouldWaiveRegionFee
                       ? 0
-                      : toPesewas(
-                          region == "GA"
-                            ? deliveryFees?.withinAccra || 30
-                            : deliveryFees?.otherRegions || 70,
-                        );
+                      : region == "GA"
+                            ? deliveryFees?.withinAccra || 3000
+                            : deliveryFees?.otherRegions || 7000;
 
                     updateState({
                       deliveryDetails: {
@@ -753,7 +748,7 @@ export const DeliveryDetailsSection = ({ form }: CheckoutFormSectionProps) => {
     useState(false);
 
   const { bagSubtotal: dsBagSubtotal } = useShoppingBag();
-  const dsSubtotalInPesewas = toPesewas(dsBagSubtotal);
+  const dsSubtotalInPesewas = dsBagSubtotal;
   const shouldWaiveIntlFee = isFeeWaived(waiveDeliveryFees, "intl", dsSubtotalInPesewas);
 
   useEffect(() => {
@@ -803,10 +798,10 @@ export const DeliveryDetailsSection = ({ form }: CheckoutFormSectionProps) => {
         deliveryOption: country === "GH" ? "within-accra" : "intl",
         deliveryFee:
           country === "GH"
-            ? toPesewas(deliveryFees?.withinAccra || 30)
+            ? deliveryFees?.withinAccra || 3000
             : shouldWaiveIntlFee
               ? 0
-              : toPesewas(deliveryFees?.international || 800),
+              : deliveryFees?.international || 80000,
       });
     }
 

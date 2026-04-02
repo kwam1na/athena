@@ -7,6 +7,7 @@ import { Switch } from "../../ui/switch";
 import { Label } from "../../ui/label";
 import { useStoreConfigUpdate } from "../hooks/useStoreConfigUpdate";
 import { getStoreConfigV2 } from "~/src/lib/storeConfig";
+import { toPesewas, toDisplayAmount } from "~/convex/lib/currency";
 
 export const FeesView = () => {
   const { activeStore } = useGetActiveStore();
@@ -34,19 +35,17 @@ export const FeesView = () => {
 
   const handleUpdateFees = async () => {
     const updates = {
-      withinAccra: enteredWithinAccraFee,
-      otherRegions: enteredOtherRegionsFee,
-      international: enteredIntlFee,
+      withinAccra: enteredWithinAccraFee ? toPesewas(enteredWithinAccraFee) : undefined,
+      otherRegions: enteredOtherRegionsFee ? toPesewas(enteredOtherRegionsFee) : undefined,
+      international: enteredIntlFee ? toPesewas(enteredIntlFee) : undefined,
     };
 
-    // Create a new waiveDeliveryFees object with granular control
     const waiveDeliveryFeesConfig = {
       withinAccra: waiveWithinAccraFee,
       otherRegions: waiveOtherRegionsFee,
       international: waiveIntlFee,
-      // Keep a global flag for backward compatibility
       all: waiveWithinAccraFee && waiveOtherRegionsFee && waiveIntlFee,
-      minimumOrderAmount: minimumOrderAmount || undefined,
+      minimumOrderAmount: minimumOrderAmount ? toPesewas(minimumOrderAmount) : undefined,
     };
 
     await updateConfig({
@@ -64,30 +63,29 @@ export const FeesView = () => {
 
   useEffect(() => {
     // Sync state with store data when `activeStore` changes
+    // Convert from pesewas (stored) to GHS (displayed in form)
+    const fees = storeConfig.commerce.deliveryFees;
     setEnteredWithinAccraFee(
-      storeConfig.commerce.deliveryFees?.withinAccra || undefined
+      fees?.withinAccra ? toDisplayAmount(fees.withinAccra) : undefined
     );
     setEnteredOtherRegionsFee(
-      storeConfig.commerce.deliveryFees?.otherRegions || undefined
+      fees?.otherRegions ? toDisplayAmount(fees.otherRegions) : undefined
     );
-    setEnteredIntlFee(storeConfig.commerce.deliveryFees?.international || 0);
+    setEnteredIntlFee(
+      fees?.international ? toDisplayAmount(fees.international) : 0
+    );
 
-    // Handle both old boolean format and new object format for backward compatibility
     const waiveConfig = storeConfig.commerce.waiveDeliveryFees;
-    if (typeof waiveConfig === "boolean") {
-      // Old format - single boolean
-      setWaiveWithinAccraFee(waiveConfig);
-      setWaiveOtherRegionsFee(waiveConfig);
-      setWaiveIntlFee(waiveConfig);
-      setMinimumOrderAmount(undefined);
-    } else if (waiveConfig && typeof waiveConfig === "object") {
-      // New format - object with properties
+    if (waiveConfig && typeof waiveConfig === "object") {
       setWaiveWithinAccraFee(waiveConfig.withinAccra || false);
       setWaiveOtherRegionsFee(waiveConfig.otherRegions || false);
       setWaiveIntlFee(waiveConfig.international || false);
-      setMinimumOrderAmount(waiveConfig.minimumOrderAmount || undefined);
+      setMinimumOrderAmount(
+        waiveConfig.minimumOrderAmount
+          ? toDisplayAmount(waiveConfig.minimumOrderAmount)
+          : undefined
+      );
     } else {
-      // Default all to false
       setWaiveWithinAccraFee(false);
       setWaiveOtherRegionsFee(false);
       setWaiveIntlFee(false);

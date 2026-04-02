@@ -13,6 +13,7 @@ import useGetActiveProduct from "@/hooks/useGetActiveProduct";
 import { Product, ProductSku } from "~/types";
 import { productSchema } from "../lib/schemas/product";
 import { toast } from "sonner";
+import { toDisplayAmount } from "~/convex/lib/currency";
 import { useParams } from "@tanstack/react-router";
 
 interface ProductContextType {
@@ -180,9 +181,9 @@ export function ProductProvider({ children }: { children: ReactNode }) {
     barcodePersistedInDb: !!sku.barcode,
     stock: sku.inventoryCount,
     quantityAvailable: sku.quantityAvailable,
-    cost: sku.unitCost,
-    price: sku.price,
-    netPrice: sku.netPrice,
+    cost: sku.unitCost ? toDisplayAmount(sku.unitCost) : undefined,
+    price: toDisplayAmount(sku.price),
+    netPrice: sku.netPrice ? toDisplayAmount(sku.netPrice) : undefined,
     size: sku.size || undefined,
     color: sku.color || undefined,
     colorName: sku.colorName || undefined,

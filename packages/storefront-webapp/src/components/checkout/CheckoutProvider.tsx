@@ -10,7 +10,7 @@ import { useStoreContext } from "@/contexts/StoreContext";
 import { CheckoutUnavailable } from "../states/checkout unavailable/CheckoutUnavailable";
 import { useNavigationBarContext } from "@/contexts/NavigationBarProvider";
 import { isFeeWaived, isAnyFeeWaived } from "@/lib/feeUtils";
-import { toPesewas } from "@/lib/currency";
+
 import { useOnlineOrderQueries } from "@/lib/queries/onlineOrder";
 import { useQuery } from "@tanstack/react-query";
 import { CheckoutState, CheckoutActions, CheckoutContextType } from "./types";
@@ -74,14 +74,14 @@ export const CheckoutProvider = ({
   children: React.ReactNode;
 }) => {
   const [checkoutState, setCheckoutState] = useState<CheckoutState>(() =>
-    loadCheckoutState(initialState)
+    loadCheckoutState(initialState),
   );
 
   const [actionsState, setActionsState] =
     useState<CheckoutActions>(initialActionsState);
 
   const { bag, bagSubtotal } = useShoppingBag();
-  const subtotalInPesewas = toPesewas(bagSubtotal);
+  const subtotalInPesewas = bagSubtotal;
 
   const { user, store } = useStoreContext();
   const storeConfig = getStoreConfigV2(store);
@@ -174,6 +174,29 @@ export const CheckoutProvider = ({
     }
   }, [bag]);
 
+  const areFeesWaived = isAnyFeeWaived(waiveDeliveryFees, subtotalInPesewas);
+
+  // If the delivery fee is 0 and the fees are not waived, recalculate the delivery fee
+  useEffect(() => {
+    if (
+      checkoutState.deliveryMethod === "delivery" &&
+      checkoutState.deliveryFee === 0 &&
+      !areFeesWaived
+    ) {
+      let deliveryFee = deliveryFees.withinAccra;
+
+      if (checkoutState.deliveryOption === "outside-accra") {
+        deliveryFee = deliveryFees.otherRegions;
+      } else if (checkoutState.deliveryOption === "intl") {
+        deliveryFee = deliveryFees.international;
+      } else {
+        deliveryFee = deliveryFees.withinAccra;
+      }
+
+      updateState({ deliveryFee });
+    }
+  }, [checkoutState, deliveryFees, areFeesWaived]);
+
   useEffect(() => {
     if (user) {
       const { shippingAddress, billingAddress } = user;
@@ -239,7 +262,7 @@ export const CheckoutProvider = ({
     // Prevent setting deliveryMethod to pickup when it's unavailable
     if (!pickupAvailable && updates.deliveryMethod === "pickup") {
       console.warn(
-        "Store pickup is currently unavailable. Cannot set delivery method to pickup."
+        "Store pickup is currently unavailable. Cannot set delivery method to pickup.",
       );
       return;
     }
@@ -247,7 +270,7 @@ export const CheckoutProvider = ({
     // Prevent setting deliveryMethod to delivery when it's unavailable
     if (!deliveryAvailable && updates.deliveryMethod === "delivery") {
       console.warn(
-        "Delivery is currently unavailable. Cannot set delivery method to delivery."
+        "Delivery is currently unavailable. Cannot set delivery method to delivery.",
       );
       return;
     }
@@ -272,12 +295,16 @@ export const CheckoutProvider = ({
         newUpdates.deliveryDetails.country !== "GH" &&
         newUpdates.deliveryOption !== "intl"
       ) {
-        const shouldWaiveIntlFee = isFeeWaived(waiveDeliveryFees, "intl", subtotalInPesewas);
+        const shouldWaiveIntlFee = isFeeWaived(
+          waiveDeliveryFees,
+          "intl",
+          subtotalInPesewas,
+        );
 
         newUpdates.deliveryOption = "intl";
         newUpdates.deliveryFee = shouldWaiveIntlFee
           ? 0
-          : toPesewas(deliveryFees?.international || 800);
+          : deliveryFees?.international || 80000;
       }
 
       return deriveCheckoutState(newUpdates);
@@ -321,7 +348,7 @@ export const CheckoutProvider = ({
 
   const onlineOrderQueries = useOnlineOrderQueries();
   const { data: onlineOrder } = useQuery(
-    onlineOrderQueries.detail(data?.placedOrderId || "")
+    onlineOrderQueries.detail(data?.placedOrderId || ""),
   );
 
   // Sync discount from session to checkout state

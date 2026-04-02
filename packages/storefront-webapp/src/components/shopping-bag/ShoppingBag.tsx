@@ -49,6 +49,7 @@ import { useProductDiscount } from "@/hooks/useProductDiscount";
 import { DiscountBadge } from "../product-page/DiscountBadge";
 import { useInventoryStatus } from "@/hooks/useInventoryStatus";
 import { getStoreConfigV2 } from "@/lib/storeConfig";
+import { toDisplayAmount } from "@/lib/currency";
 
 const PendingItem = ({ session, count }: { session: any; count: number }) => {
   return (
@@ -146,10 +147,10 @@ const BagItemWithDiscount = ({
   if (item.price && item.price > 0) {
     if (showDiscount) {
       priceLabel = formatter.format(
-        discountInfo.discountedPrice * item.quantity
+        toDisplayAmount(discountInfo.discountedPrice * item.quantity)
       );
     } else {
-      priceLabel = formatter.format(item.price * item.quantity);
+      priceLabel = formatter.format(toDisplayAmount(item.price * item.quantity));
     }
   } else if (discountInfo.hasDiscount && discountInfo.discountedPrice === 0) {
     priceLabel = "Free";
@@ -236,7 +237,7 @@ const BagItemWithDiscount = ({
                   className="flex items-center gap-2"
                 >
                   <p className="text-xs text-muted-foreground line-through">
-                    {formatter.format(item.price * item.quantity)}
+                    {formatter.format(toDisplayAmount(item.price * item.quantity))}
                   </p>
                   <p className="text-xs font-medium text-accent2">
                     {priceLabel}
@@ -245,7 +246,7 @@ const BagItemWithDiscount = ({
               ) : priceLabel === "Free" ? (
                 <div className="flex items-center gap-2 text-xs">
                   <p className="text-muted-foreground line-through">
-                    {formatter.format((item.price || 0) * item.quantity)}
+                    {formatter.format(toDisplayAmount((item.price || 0) * item.quantity))}
                   </p>
                   <p className="text-xs font-medium text-accent2">Free</p>
                 </div>
@@ -449,7 +450,7 @@ export default function ShoppingBag() {
       const res = await obtainCheckoutSession({
         bagItems,
         bagId: bag?._id as string,
-        bagSubtotal: bagSubtotal, // GHS — backend recalculates canonical amount from bag items
+        bagSubtotal: bagSubtotal, // pesewas — backend recalculates canonical amount from bag items
       });
 
       if (res.session) {
@@ -667,7 +668,7 @@ export default function ShoppingBag() {
                   <div className="space-y-2">
                     <div className="flex gap-4 md:gap-8 text-md font-medium text-accent2">
                       <p>TOTAL</p>
-                      <p>{formatter.format(total)}</p>
+                      <p>{formatter.format(toDisplayAmount(total))}</p>
                     </div>
 
                     <p className="text-xs text-gray-500">

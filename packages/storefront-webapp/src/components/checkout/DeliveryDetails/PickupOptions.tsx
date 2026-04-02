@@ -142,9 +142,7 @@ export const PickupOptions = () => {
                   {Boolean(checkoutState.deliveryFee) &&
                     !isFeeWaivedForCurrentOption && (
                       <p className="text-xs text-[#EC4683] text-start w-full">
-                        {formatter.format(
-                          toDisplayAmount(checkoutState.deliveryFee || 0),
-                        )}
+                        {formatter.format(checkoutState.deliveryFee || 0)}
                       </p>
                     )}
                 </>
