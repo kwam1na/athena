@@ -4,6 +4,7 @@ import {
   useProductDiscount,
   useProductDiscounts,
 } from "@/hooks/useProductDiscount";
+import { toDisplayAmount } from "@/lib/currency";
 
 export function ProductCard({
   product,
@@ -17,19 +18,19 @@ export function ProductCard({
   if (!product) return null;
 
   const uniqueColors = Array.from(
-    new Set(product.skus.map((sku) => sku.color))
+    new Set(product.skus.map((sku) => sku.color)),
   ).length;
 
   const isSoldOut = product.skus.every((sku) => sku.quantityAvailable === 0);
 
   const isSellingFast = product.skus.some(
-    (sku) => sku.quantityAvailable > 0 && sku.quantityAvailable <= 2
+    (sku) => sku.quantityAvailable > 0 && sku.quantityAvailable <= 2,
   );
 
   // Check all SKUs for discounts - returns discount info and ID of discounted SKU
   const { hasDiscount, discountedPrice, originalPrice, discountedSkuId } =
     useProductDiscounts(
-      product.skus.map((sku) => ({ _id: sku._id, price: sku.price }))
+      product.skus.map((sku) => ({ _id: sku._id, price: sku.price })),
     );
 
   // Find the SKU to display (the one with discount, or the first one)
@@ -69,21 +70,23 @@ export function ProductCard({
         <div className="flex gap-2">
           {!hasDiscount && (
             <p className="text-sm">
-              {currencyFormatter.format(displayedSku.price)}
+              {currencyFormatter.format(toDisplayAmount(displayedSku.price))}
             </p>
           )}
           {hasDiscount && !isFree && (
             <div className="flex items-center gap-2 text-sm">
               <p className="line-through text-muted-foreground">
-                {currencyFormatter.format(originalPrice)}
+                {currencyFormatter.format(toDisplayAmount(originalPrice))}
               </p>
-              <p>{currencyFormatter.format(discountedPrice)}</p>
+              <p>
+                {currencyFormatter.format(toDisplayAmount(discountedPrice))}
+              </p>
             </div>
           )}
           {isFree && (
             <div className="flex items-center gap-2 text-sm">
               <p className="line-through text-muted-foreground">
-                {currencyFormatter.format(originalPrice)}
+                {currencyFormatter.format(toDisplayAmount(originalPrice))}
               </p>
               <p>Free</p>
             </div>
@@ -110,7 +113,7 @@ export function ProductSkuCard({
 
   const { hasDiscount, discountedPrice, originalPrice } = useProductDiscount(
     sku._id,
-    sku.price
+    sku.price,
   );
 
   const isFree = hasDiscount && discountedPrice === 0;
@@ -141,20 +144,22 @@ export function ProductSkuCard({
           {sku?.productName && capitalizeWords(sku?.productName)}
         </p>
         {!hasDiscount && (
-          <p className="text-xs">{currencyFormatter.format(sku.price)}</p>
+          <p className="text-xs">
+            {currencyFormatter.format(toDisplayAmount(sku.price))}
+          </p>
         )}
         {hasDiscount && !isFree && (
           <div className="flex items-center gap-2 text-xs">
             <p className="line-through text-muted-foreground">
-              {currencyFormatter.format(originalPrice)}
+              {currencyFormatter.format(toDisplayAmount(originalPrice))}
             </p>
-            <p>{currencyFormatter.format(discountedPrice)}</p>
+            <p>{currencyFormatter.format(toDisplayAmount(discountedPrice))}</p>
           </div>
         )}
         {isFree && (
           <div className="flex items-center gap-2 text-xs">
             <p className="line-through text-muted-foreground">
-              {currencyFormatter.format(originalPrice)}
+              {currencyFormatter.format(toDisplayAmount(originalPrice))}
             </p>
             <p>Free</p>
           </div>
