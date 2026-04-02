@@ -13,7 +13,7 @@ import {
   Save,
 } from "lucide-react";
 import { LoadingButton } from "../ui/loading-button";
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { convertImagesToWebp, getUploadImagesData } from "@/lib/imageUtils";
 import { AlertModal } from "../ui/modals/alert-modal";
 import ProductPage from "./ProductPage";
@@ -370,6 +370,32 @@ function ProductViewContent() {
     if (activeProduct?._id || productId) await modifyProduct();
     else await saveProduct();
   };
+
+  const onSubmitRef = useRef(onSubmit);
+  onSubmitRef.current = onSubmit;
+
+  useEffect(() => {
+    const INTERACTIVE_TAGS = new Set(["INPUT", "TEXTAREA", "SELECT"]);
+
+    function handleKeyDown(e: KeyboardEvent) {
+      const el = document.activeElement;
+      if (
+        el &&
+        (INTERACTIVE_TAGS.has(el.tagName) ||
+          (el as HTMLElement).isContentEditable)
+      ) {
+        return;
+      }
+
+      if (e.key === "s") {
+        e.preventDefault();
+        onSubmitRef.current();
+      }
+    }
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   // const retryDeletingImages = async () => {
   //   setIsDeletingImages(true);
