@@ -13,6 +13,9 @@ import { AlertTriangle, ArrowLeftIcon } from "lucide-react";
 import { ToggleGroup, ToggleGroupItem } from "../ui/toggle-group";
 import { useNavigateBack } from "~/src/hooks/use-navigate-back";
 import { Button } from "../ui/button";
+import { useAction } from "convex/react";
+import { api } from "~/convex/_generated/api";
+import { toast } from "sonner";
 
 const ProductActionsToggleGroup = ({
   outOfStockProductsCount,
@@ -53,10 +56,25 @@ const Navigation = ({
 }) => {
   const navigateBack = useNavigateBack();
   const { o } = useSearch({ strict: false });
+  const clearAllCache = useAction(api.inventory.productUtil.clearAllCache);
+  const [isClearCacheMutationPending, setIsClearCacheMutationPending] =
+    useState(false);
+
+  const handleClearCache = async () => {
+    setIsClearCacheMutationPending(true);
+    try {
+      await clearAllCache();
+      toast.success("Cache cleared");
+    } catch (error) {
+      toast.error("Failed to clear cache");
+    } finally {
+      setIsClearCacheMutationPending(false);
+    }
+  };
 
   return (
     <div className="container mx-auto flex gap-2">
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-8">
         <div className="flex items-center gap-2">
           {o && (
             <Button variant="ghost" onClick={navigateBack}>
@@ -73,6 +91,14 @@ const Navigation = ({
             setSelectedProductActions={setSelectedProductActions}
           />
         )}
+
+        <Button
+          variant="ghost"
+          onClick={handleClearCache}
+          disabled={isClearCacheMutationPending}
+        >
+          Clear Cache
+        </Button>
       </div>
     </div>
   );
@@ -93,7 +119,7 @@ function Body() {
   >([]);
 
   const outOfStockProducts = products?.filter(
-    (product) => product.inventoryCount === 0
+    (product) => product.inventoryCount === 0,
   );
 
   const filteredProducts = useMemo(() => {

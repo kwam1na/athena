@@ -20,7 +20,6 @@ productRoutes.get("/", async (c) => {
   const lengths = params.length?.[0]?.split(",").map((l) => parseInt(l));
   const categories = params.category?.[0]?.split(",").map((s) => s);
   const subcategories = params.subcategory?.[0]?.split(",").map((s) => s);
-  const tags = params.tags?.[0]?.split(",").map((s) => s);
   const isVisible = params.isVisible?.[0] === "true";
 
   const products = await c.env.runAction(
@@ -32,7 +31,7 @@ productRoutes.get("/", async (c) => {
       category: categories,
       subcategory: subcategories,
       isVisible: isVisible,
-    }
+    },
   );
 
   return c.json({ products });
@@ -44,8 +43,6 @@ productRoutes.get("/colors", async (c) => {
   if (!storeId) {
     return c.json({ error: "Store id missing" }, 404);
   }
-
-  console.log("hit colors...");
 
   return c.json({});
 });

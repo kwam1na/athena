@@ -35,7 +35,7 @@ export default function Products() {
 
       // Check if any SKU matches
       return product.skus.some((sku) =>
-        sku.sku?.toLowerCase().includes(searchLower)
+        sku.sku?.toLowerCase().includes(searchLower),
       );
     });
   }, [allProducts, searchValue]);
