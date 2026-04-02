@@ -62,7 +62,6 @@ export const PaymentDetails = ({ session }: { session?: CheckoutSession }) => {
     discount: discount as any,
     deliveryFee: session.deliveryFee || 0, // already pesewas
     subtotal: session.amount,
-    isInCents: true,
   });
 
   const originalAmount = session.amount + (session.deliveryFee || 0);
