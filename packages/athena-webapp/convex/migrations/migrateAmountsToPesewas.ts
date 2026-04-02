@@ -151,7 +151,7 @@ export const migrateProductSkuPrices = internalMutation({
       }
 
       // Safety check: skip if price looks like it's already in pesewas
-      if (sku.price > 100000) {
+      if (sku.price < 10_000) {
         skipped++;
         continue;
       }
@@ -170,9 +170,7 @@ export const migrateProductSkuPrices = internalMutation({
       migrated++;
     }
 
-    console.log(
-      `Migrated ${migrated} SKU prices, skipped ${skipped}`,
-    );
+    console.log(`Migrated ${migrated} SKU prices, skipped ${skipped}`);
     return { migrated, skipped, total: skus.length };
   },
 });

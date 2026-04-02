@@ -71,9 +71,9 @@ const Navigation = ({
   return (
     <div className="container mx-auto flex gap-2">
       <div className="flex items-center gap-2">
-        <p className="text-xl font-medium capitalize">
+        {/* <p className="text-xl font-medium capitalize">
           {slugToWords(categorySlug ?? "Products")}
-        </p>
+        </p> */}
 
         {outOfStockProductsCount > 0 && (
           <ProductActionsToggleGroup
@@ -83,13 +83,13 @@ const Navigation = ({
           />
         )}
 
-        {/* <Button
+        <Button
           variant="outline"
           onClick={handleClearCache}
           disabled={isClearCacheMutationPending}
         >
           Clear Cache
-        </Button> */}
+        </Button>
       </div>
     </div>
   );
@@ -111,7 +111,7 @@ function Body() {
   const hasProducts = products && products.length > 0;
 
   const outOfStockProducts = products?.filter(
-    (product) => product.inventoryCount === 0
+    (product) => product.inventoryCount === 0,
   );
 
   const filteredProducts = useMemo(() => {
