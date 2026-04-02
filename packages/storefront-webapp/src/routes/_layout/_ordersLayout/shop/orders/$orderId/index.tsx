@@ -179,12 +179,12 @@ const OrderSummary = ({ order }: { order: any }) => {
           </div>
         )}
 
-        {!order.discount && (
+        {/* {!order.discount && (
           <OrderPointsDisplay
             orderId={order._id}
             hasVerifiedPayment={order.hasVerifiedPayment}
           />
-        )}
+        )} */}
       </div>
 
       <p>{getPaymentText()}</p>
@@ -202,7 +202,7 @@ const OrderItem = ({
   isReviewable: boolean;
 }) => {
   const priceLabel = item.price
-    ? formatter.format(item.price * item.quantity)
+    ? formatter.format(toDisplayAmount(item.price * item.quantity))
     : "Free";
 
   const { store } = useStoreContext();

@@ -85,7 +85,9 @@ function SummaryItem({
                 {formatter.format(toDisplayAmount(item.price * item.quantity))}
               </p>
               <p className="text-xs text-accent2">
-                {formatter.format(toDisplayAmount(discountedPrice * item.quantity))}
+                {formatter.format(
+                  toDisplayAmount(discountedPrice * item.quantity),
+                )}
               </p>
             </div>
           )}
@@ -329,7 +331,9 @@ function BagSummary() {
       <div className="px-8 space-y-8 pt-4 mt-4">
         <div className="flex justify-between">
           <p className="text-sm">Subtotal</p>
-          <p className="text-sm">{formatter.format(toDisplayAmount(bagSubtotal))}</p>
+          <p className="text-sm">
+            {formatter.format(toDisplayAmount(bagSubtotal))}
+          </p>
         </div>
         {checkoutState.deliveryMethod === "delivery" &&
           checkoutState.deliveryFee !== null &&
@@ -339,7 +343,9 @@ function BagSummary() {
               <p className="text-sm">
                 {isFeeWaivedForCurrentOption
                   ? "Free"
-                  : formatter.format(toDisplayAmount(checkoutState.deliveryFee || 0))}
+                  : formatter.format(
+                      toDisplayAmount(checkoutState.deliveryFee || 0),
+                    )}
               </p>
             </div>
           )}
@@ -347,7 +353,9 @@ function BagSummary() {
         {Boolean(discountValue) && (
           <div className="flex justify-between">
             <p className="text-sm">Discounts</p>
-            <p className="text-sm">- {formatter.format(toDisplayAmount(discountValue))}</p>
+            <p className="text-sm">
+              - {formatter.format(toDisplayAmount(discountValue))}
+            </p>
           </div>
         )}
         <div className="flex justify-between font-medium">

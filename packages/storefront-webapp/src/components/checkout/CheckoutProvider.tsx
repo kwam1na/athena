@@ -176,6 +176,12 @@ export const CheckoutProvider = ({
 
   const areFeesWaived = isAnyFeeWaived(waiveDeliveryFees, subtotalInPesewas);
 
+  const isFeeWaivedForCurrentOption = isFeeWaived(
+    waiveDeliveryFees,
+    checkoutState.deliveryOption,
+    subtotalInPesewas,
+  );
+
   // If the delivery fee is 0 and the fees are not waived, recalculate the delivery fee
   useEffect(() => {
     if (
@@ -194,8 +200,14 @@ export const CheckoutProvider = ({
       }
 
       updateState({ deliveryFee });
+    } else if (
+      checkoutState.deliveryMethod === "delivery" &&
+      isFeeWaivedForCurrentOption &&
+      checkoutState.deliveryFee != 0
+    ) {
+      updateState({ deliveryFee: 0 });
     }
-  }, [checkoutState, deliveryFees, areFeesWaived]);
+  }, [checkoutState, deliveryFees, areFeesWaived, isFeeWaivedForCurrentOption]);
 
   useEffect(() => {
     if (user) {
