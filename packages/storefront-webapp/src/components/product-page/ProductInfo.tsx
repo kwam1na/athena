@@ -6,6 +6,7 @@ import { EyeIcon } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useGetProductReviewsQuery } from "@/hooks/useGetProductReviews";
 import { ReviewSummary } from "./ReviewSummary";
+import { toDisplayAmount } from "@/lib/currency";
 
 interface ProductInfoProps {
   selectedSku: ProductSku;
@@ -28,7 +29,7 @@ interface ProductInfoProps {
 function ViewCount({ productId }: { productId: string }) {
   const productQueries = useProductQueries();
   const { data: viewCount, isLoading } = useQuery(
-    productQueries.viewCount({ productId: productId || "" })
+    productQueries.viewCount({ productId: productId || "" }),
   );
 
   if (!productId) return null;
@@ -101,17 +102,17 @@ export function ProductInfo({
 
         {!hasDiscount && (
           <p className="text-md md:text-2xl">
-            {formatter.format(selectedSku.price)}
+            {formatter.format(toDisplayAmount(selectedSku.price))}
           </p>
         )}
 
         {hasDiscount && !isFree && (
           <div className="flex items-center gap-3">
             <p className="text-md md:text-2xl line-through text-muted-foreground">
-              {formatter.format(originalPrice)}
+              {formatter.format(toDisplayAmount(originalPrice))}
             </p>
             <p className="text-md md:text-2xl text-accent2">
-              {formatter.format(discountedPrice)}
+              {formatter.format(toDisplayAmount(discountedPrice))}
             </p>
           </div>
         )}
@@ -119,7 +120,7 @@ export function ProductInfo({
         {isFree && (
           <div className="flex items-center gap-3">
             <p className="text-md md:text-2xl line-through text-muted-foreground">
-              {formatter.format(originalPrice)}
+              {formatter.format(toDisplayAmount(originalPrice))}
             </p>
             <p className="text-md md:text-2xl">Free</p>
           </div>
