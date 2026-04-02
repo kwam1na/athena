@@ -31,7 +31,6 @@ export const PickupOptions = () => {
   const storeConfig = getStoreConfigV2(store);
   const { waiveDeliveryFees, fulfillment } = storeConfig.commerce;
   const { bagSubtotal } = useShoppingBag();
-  const subtotalInPesewas = toPesewas(bagSubtotal);
 
   const isPickup = checkoutState.deliveryMethod === "pickup";
   const isDelivery = checkoutState.deliveryMethod === "delivery";
@@ -60,13 +59,13 @@ export const PickupOptions = () => {
   const isFeeWaivedForCurrentOption = isFeeWaived(
     waiveDeliveryFees,
     checkoutState.deliveryOption,
-    subtotalInPesewas,
+    bagSubtotal,
   );
 
   const remainingForFreeDelivery = getRemainingForFreeDelivery(
     waiveDeliveryFees,
     checkoutState.deliveryOption,
-    subtotalInPesewas,
+    bagSubtotal,
   );
 
   return (
@@ -142,7 +141,9 @@ export const PickupOptions = () => {
                   {Boolean(checkoutState.deliveryFee) &&
                     !isFeeWaivedForCurrentOption && (
                       <p className="text-xs text-[#EC4683] text-start w-full">
-                        {formatter.format(checkoutState.deliveryFee || 0)}
+                        {formatter.format(
+                          toDisplayAmount(checkoutState.deliveryFee || 0),
+                        )}
                       </p>
                     )}
                 </>
