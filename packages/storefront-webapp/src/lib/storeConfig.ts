@@ -7,14 +7,13 @@ type StoreConfigInput =
   | null
   | undefined;
 
-type WaiveDeliveryFees =
-  | boolean
-  | {
-      withinAccra?: boolean;
-      otherRegions?: boolean;
-      international?: boolean;
-      all?: boolean;
-    };
+type WaiveDeliveryFees = {
+  withinAccra?: boolean;
+  otherRegions?: boolean;
+  international?: boolean;
+  all?: boolean;
+  minimumOrderAmount?: number;
+};
 
 type PromoCodeConfig = {
   promoCodeId: string;
@@ -233,16 +232,14 @@ export const getStoreConfigV2 = (
 
   const waiveDeliveryFees: WaiveDeliveryFees = (() => {
     const value = firstDefined(commerce.waiveDeliveryFees, legacyWaiveFees);
-    if (typeof value === "boolean") {
-      return value;
-    }
+    const record = asRecord(value);
 
     return cleanUndefined({
-      withinAccra: asBoolean(asRecord(value).withinAccra),
-      otherRegions: asBoolean(asRecord(value).otherRegions),
-      international: asBoolean(asRecord(value).international),
-      all: asBoolean(asRecord(value).all),
-      minimumOrderAmount: asNumber(asRecord(value).minimumOrderAmount),
+      withinAccra: asBoolean(record.withinAccra),
+      otherRegions: asBoolean(record.otherRegions),
+      international: asBoolean(record.international),
+      all: asBoolean(record.all),
+      minimumOrderAmount: asNumber(record.minimumOrderAmount),
     });
   })();
 

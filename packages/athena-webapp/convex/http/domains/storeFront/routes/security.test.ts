@@ -17,14 +17,14 @@ describe("security helpers", () => {
           productSku: "sku-a",
           productSkuId: "sku-id-a",
           quantity: 2,
-          price: 25,
+          price: 2500, // 25 GHS in pesewas
         },
         {
           productId: "product-2",
           productSku: "sku-b",
           productSkuId: "sku-id-b",
           quantity: 1,
-          price: 100,
+          price: 10000, // 100 GHS in pesewas
         },
       ]);
 
@@ -34,27 +34,27 @@ describe("security helpers", () => {
           productSku: "sku-a",
           productSkuId: "sku-id-a",
           quantity: 2,
-          price: 25,
+          price: 2500,
         },
         {
           productId: "product-2",
           productSku: "sku-b",
           productSkuId: "sku-id-b",
           quantity: 1,
-          price: 100,
+          price: 10000,
         },
       ]);
-      expect(result.amount).toBe(15000); // 150 GHS = 15000 pesewas
+      expect(result.amount).toBe(15000); // (2500*2) + (10000*1) = 15000 pesewas
     });
 
-    it("returns amount in pesewas and handles decimal GHS prices", () => {
+    it("returns amount in pesewas (prices already stored as pesewas)", () => {
       const result = buildCanonicalCheckoutProducts([
         {
           productId: "product-1",
           productSku: "sku-a",
           productSkuId: "sku-id-a",
           quantity: 1,
-          price: 29.99,
+          price: 2999, // 29.99 GHS in pesewas
         },
       ]);
       expect(result.amount).toBe(2999);

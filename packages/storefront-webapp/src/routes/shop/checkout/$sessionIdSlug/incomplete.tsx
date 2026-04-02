@@ -31,7 +31,6 @@ function CheckoutIncompleteView() {
     discount: onlineOrder?.discount as Discount | null,
     deliveryFee: onlineOrder?.deliveryFee || 0, // already pesewas
     subtotal: onlineOrder?.amount || 0,
-    isInCents: true,
   });
 
   const { addressLine } = formatDeliveryAddress(
