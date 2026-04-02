@@ -23,6 +23,7 @@ import {
   TableRow,
 } from "../../ui/table";
 import { DataTablePagination } from "./data-table-pagination";
+import { useLogItems } from "./log-items-provider";
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
@@ -36,6 +37,7 @@ export function LogItemsDataTable<TData, TValue>({
   pageIndex = 0,
   data,
 }: DataTableProps<TData, TValue>) {
+  const { loadMore } = useLogItems();
   const [rowSelection, setRowSelection] = React.useState({});
   const [columnVisibility, setColumnVisibility] =
     React.useState<VisibilityState>({});
@@ -124,7 +126,7 @@ export function LogItemsDataTable<TData, TValue>({
           </TableBody>
         </Table>
       </div>
-      <DataTablePagination table={table} />
+      <DataTablePagination table={table} onLoadMore={loadMore} />
     </div>
   );
 }
