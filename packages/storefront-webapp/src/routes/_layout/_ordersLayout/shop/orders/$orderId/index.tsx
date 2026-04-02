@@ -43,9 +43,10 @@ import { GuestRewardsPrompt } from "@/components/rewards/GuestRewardsPrompt";
 import { useUserQueries } from "@/lib/queries/user";
 import { OrderPointsDisplay } from "@/components/rewards/OrderPointsDisplay";
 import { getStoreFallbackImageUrl } from "@/lib/storeConfig";
+import { toDisplayAmount } from "@/lib/currency";
 
 export const Route = createFileRoute(
-  "/_layout/_ordersLayout/shop/orders/$orderId/"
+  "/_layout/_ordersLayout/shop/orders/$orderId/",
 )({
   component: () => <OrderDetail />,
 });
@@ -77,7 +78,7 @@ export function OrderNavigation() {
 const OrderSummary = ({ order }: { order: any }) => {
   const { formatter } = useStoreContext();
 
-  const subtotal = order.amount / 100;
+  const subtotal = order.amount;
 
   const items =
     order.items?.map((item: any) => ({
@@ -93,7 +94,7 @@ const OrderSummary = ({ order }: { order: any }) => {
   // const subtotal = s - discountValue;
   const itemsCount = order.items.reduce(
     (total: number, item: any) => total + item.quantity,
-    0
+    0,
   );
   const isSingleItemOrder = itemsCount == 1;
 
@@ -142,13 +143,17 @@ const OrderSummary = ({ order }: { order: any }) => {
         {Boolean(order?.deliveryFee) && (
           <div className="grid grid-cols-2">
             <p className="text-sm">Delivery</p>
-            <p className="text-sm">{formatter.format(order?.deliveryFee)}</p>
+            <p className="text-sm">
+              {formatter.format(toDisplayAmount(order?.deliveryFee))}
+            </p>
           </div>
         )}
 
         <div className="grid grid-cols-2">
           <p className="text-sm">Subtotal</p>
-          <p className="text-sm">{formatter.format(subtotal)}</p>
+          <p className="text-sm">
+            {formatter.format(toDisplayAmount(subtotal))}
+          </p>
         </div>
 
         {Boolean(discountValue) && (
@@ -160,7 +165,9 @@ const OrderSummary = ({ order }: { order: any }) => {
 
         <div className="grid grid-cols-2">
           <p className="text-sm">Total</p>
-          <p className="text-sm font-medium">{formatter.format(total)}</p>
+          <p className="text-sm font-medium">
+            {formatter.format(toDisplayAmount(total))}
+          </p>
         </div>
 
         {Boolean(discountValue) && (
@@ -204,11 +211,7 @@ const OrderItem = ({
   return (
     <div className="flex gap-8 text-sm">
       <ImageWithFallback
-        src={
-          item.productImage ||
-          fallbackImageUrl ||
-          placeholder
-        }
+        src={item.productImage || fallbackImageUrl || placeholder}
         alt={"product image"}
         className="w-40 h-40 aspect-square object-cover rounded-sm"
       />
@@ -412,7 +415,7 @@ const OrderDetail = () => {
   const onlineOrderQueries = useOnlineOrderQueries();
 
   const { data, isLoading } = useQuery(
-    onlineOrderQueries.detail(orderId || "")
+    onlineOrderQueries.detail(orderId || ""),
   );
 
   if (isLoading) return <div className="h-screen"></div>;
@@ -509,7 +512,7 @@ const OrderDetail = () => {
   };
 
   const isReviewable = ["delivered", "picked-up", "refunded"].includes(
-    data.status
+    data.status,
   );
 
   return (

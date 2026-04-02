@@ -21,7 +21,7 @@ import { redeemPromoCode } from "@/api/promoCodes";
 import { useAuth } from "@/hooks/useAuth";
 import { usePromoCodesQueries } from "@/lib/queries/promoCode";
 import { isFeeWaived, getRemainingForFreeDelivery } from "@/lib/feeUtils";
-import { toDisplayAmount, toPesewas } from "@/lib/currency";
+import { toDisplayAmount } from "@/lib/currency";
 import { Badge } from "../ui/badge";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
@@ -31,7 +31,7 @@ import { getStoreConfigV2 } from "@/lib/storeConfig";
 export default function MobileBagSummary() {
   const { formatter, store } = useStoreContext();
   const { bagSubtotal } = useShoppingBag();
-  const subtotalInPesewas = toPesewas(bagSubtotal);
+  const subtotalInPesewas = bagSubtotal;
   const { checkoutState, updateState, activeSession } = useCheckout();
   const [invalidMessage, setInvalidMessage] = useState("");
   const [code, setCode] = useState("");
@@ -50,15 +50,12 @@ export default function MobileBagSummary() {
 
   const discountValue = getDiscountValue(bagItems, checkoutState.discount);
 
-  const total =
-    toDisplayAmount(checkoutState.deliveryFee ?? 0) +
-    bagSubtotal -
-    discountValue;
+  const total = (checkoutState.deliveryFee ?? 0) + bagSubtotal - discountValue;
 
   const discountText =
     checkoutState.discount?.type === "percentage"
       ? `${checkoutState.discount.value}%`
-      : `${formatter.format(discountValue)}`;
+      : `${formatter.format(toDisplayAmount(discountValue))}`;
 
   const redeemPromoCodeMutation = useMutation({
     mutationFn: redeemPromoCode,
@@ -137,7 +134,7 @@ export default function MobileBagSummary() {
           <AccordionTrigger className="flex w-full">
             <div className="flex items-center justify-between w-full pr-4">
               <p className="text-sm">Order summary</p>
-              <p className="text-sm font-medium">{formatter.format(total)}</p>
+              <p className="text-sm font-medium">{formatter.format(toDisplayAmount(total))}</p>
             </div>
           </AccordionTrigger>
 
@@ -227,7 +224,7 @@ export default function MobileBagSummary() {
             <div className="space-y-8 pt-4 mt-4">
               <div className="flex justify-between">
                 <p className="text-sm">Subtotal</p>
-                <p className="text-sm">{formatter.format(bagSubtotal)}</p>
+                <p className="text-sm">{formatter.format(toDisplayAmount(bagSubtotal))}</p>
               </div>
               {checkoutState.deliveryMethod === "delivery" &&
                 checkoutState.deliveryFee !== null &&
@@ -247,12 +244,12 @@ export default function MobileBagSummary() {
               {Boolean(discountValue) && (
                 <div className="flex justify-between">
                   <p className="text-sm">Discount</p>
-                  <p className="text-sm">- {formatter.format(discountValue)}</p>
+                  <p className="text-sm">- {formatter.format(toDisplayAmount(discountValue))}</p>
                 </div>
               )}
               <div className="flex justify-between font-medium">
                 <p className="text-lg">Total</p>
-                <p className="text-lg">{formatter.format(total)}</p>
+                <p className="text-lg">{formatter.format(toDisplayAmount(total))}</p>
               </div>
             </div>
           </AccordionContent>

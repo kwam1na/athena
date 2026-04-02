@@ -7,10 +7,12 @@ import {
 } from "./utils";
 import { Discount } from "./types";
 
+// All prices are in pesewas (base unit)
 const sampleItems: BagItem[] = [
-  { productSkuId: "sku-1", quantity: 2, price: 50 },
-  { productSkuId: "sku-2", quantity: 1, price: 100 },
+  { productSkuId: "sku-1", quantity: 2, price: 5000 },
+  { productSkuId: "sku-2", quantity: 1, price: 10000 },
 ];
+// subtotal = 2*5000 + 1*10000 = 20000 pesewas
 
 describe("getDiscountValue", () => {
   it("returns 0 when no discount is provided", () => {
@@ -29,48 +31,23 @@ describe("getDiscountValue", () => {
         isMultipleUses: false,
       };
 
-      expect(getDiscountValue(sampleItems, discount)).toBe(20);
-    });
-
-    it("applies isInCents multiplier for percentage discounts", () => {
-      const discount: Discount = {
-        id: "d1",
-        code: "SAVE10",
-        type: "percentage",
-        value: 10,
-        span: "entire-order",
-        isMultipleUses: false,
-      };
-
-      expect(getDiscountValue(sampleItems, discount, true)).toBe(2000);
+      // 10% of 20000 = 2000 pesewas
+      expect(getDiscountValue(sampleItems, discount)).toBe(2000);
     });
   });
 
   describe("entire-order amount discounts", () => {
-    it("applies fixed amount discount directly", () => {
+    it("applies fixed amount discount directly (in pesewas)", () => {
       const discount: Discount = {
         id: "d2",
         code: "FLAT25",
         type: "amount",
-        value: 25,
+        value: 2500, // 25 GHS in pesewas
         span: "entire-order",
         isMultipleUses: false,
       };
 
-      expect(getDiscountValue(sampleItems, discount)).toBe(25);
-    });
-
-    it("applies isInCents multiplier for amount discounts", () => {
-      const discount: Discount = {
-        id: "d2",
-        code: "FLAT25",
-        type: "amount",
-        value: 25,
-        span: "entire-order",
-        isMultipleUses: false,
-      };
-
-      expect(getDiscountValue(sampleItems, discount, true)).toBe(2500);
+      expect(getDiscountValue(sampleItems, discount)).toBe(2500);
     });
   });
 
@@ -86,7 +63,8 @@ describe("getDiscountValue", () => {
         productSkus: ["sku-1"],
       };
 
-      expect(getDiscountValue(sampleItems, discount)).toBe(50);
+      // sku-1: 2 * 5000 = 10000, 50% = 5000 pesewas
+      expect(getDiscountValue(sampleItems, discount)).toBe(5000);
     });
   });
 
@@ -96,13 +74,14 @@ describe("getDiscountValue", () => {
         id: "d4",
         code: "BIGDISCOUNT",
         type: "amount",
-        value: 500,
+        value: 50000, // 500 GHS in pesewas — exceeds eligible subtotal
         span: "selected-products",
         isMultipleUses: false,
         productSkus: ["sku-1"],
       };
 
-      expect(getDiscountValue(sampleItems, discount)).toBe(100);
+      // sku-1 subtotal = 10000, capped at 10000
+      expect(getDiscountValue(sampleItems, discount)).toBe(10000);
     });
 
     it("applies full amount when less than eligible subtotal", () => {
@@ -110,13 +89,13 @@ describe("getDiscountValue", () => {
         id: "d5",
         code: "SMALL",
         type: "amount",
-        value: 10,
+        value: 1000, // 10 GHS in pesewas
         span: "selected-products",
         isMultipleUses: false,
         productSkus: ["sku-1"],
       };
 
-      expect(getDiscountValue(sampleItems, discount)).toBe(10);
+      expect(getDiscountValue(sampleItems, discount)).toBe(1000);
     });
   });
 
@@ -140,11 +119,11 @@ describe("getOrderAmount", () => {
       items: sampleItems,
       discount: null,
       deliveryFee: null,
-      subtotal: 200,
+      subtotal: 20000,
     });
 
-    expect(result.amountCharged).toBe(200);
-    expect(result.amountPaid).toBe(200);
+    expect(result.amountCharged).toBe(20000);
+    expect(result.amountPaid).toBe(20000);
     expect(result.discountValue).toBe(0);
   });
 
@@ -152,12 +131,12 @@ describe("getOrderAmount", () => {
     const result = getOrderAmount({
       items: sampleItems,
       discount: null,
-      deliveryFee: 30,
-      subtotal: 200,
+      deliveryFee: 3000, // 30 GHS in pesewas
+      subtotal: 20000,
     });
 
-    expect(result.amountCharged).toBe(230);
-    expect(result.amountPaid).toBe(200);
+    expect(result.amountCharged).toBe(23000);
+    expect(result.amountPaid).toBe(20000);
   });
 
   it("subtracts discount from both amountCharged and amountPaid", () => {
@@ -173,13 +152,14 @@ describe("getOrderAmount", () => {
     const result = getOrderAmount({
       items: sampleItems,
       discount,
-      deliveryFee: 30,
-      subtotal: 200,
+      deliveryFee: 3000,
+      subtotal: 20000,
     });
 
-    expect(result.discountValue).toBe(20);
-    expect(result.amountCharged).toBe(210);
-    expect(result.amountPaid).toBe(180);
+    // 10% of 20000 = 2000 discount
+    expect(result.discountValue).toBe(2000);
+    expect(result.amountCharged).toBe(21000); // 20000 - 2000 + 3000
+    expect(result.amountPaid).toBe(18000); // 20000 - 2000
   });
 });
 

@@ -1,5 +1,4 @@
 import { isFeeWaived } from "@/lib/feeUtils";
-import { toPesewas } from "@/lib/currency";
 import { DeliveryMethod, DeliveryOption } from "./types";
 
 type DeliveryFeeConfig = {
@@ -9,7 +8,6 @@ type DeliveryFeeConfig = {
 } | null;
 
 type WaiveDeliveryFees =
-  | boolean
   | {
       withinAccra?: boolean;
       otherRegions?: boolean;
@@ -30,13 +28,14 @@ type CalculateDeliveryFeeInput = {
 };
 
 type CalculateDeliveryFeeResult = {
-  deliveryFee: number;
+  deliveryFee: number; // in pesewas
   deliveryOption: DeliveryOption | null;
 };
 
-const DEFAULT_WITHIN_ACCRA_FEE = 30;
-const DEFAULT_OTHER_REGIONS_FEE = 70;
-const DEFAULT_INTERNATIONAL_FEE = 800;
+// Default fees in pesewas
+const DEFAULT_WITHIN_ACCRA_FEE = 3000;
+const DEFAULT_OTHER_REGIONS_FEE = 7000;
+const DEFAULT_INTERNATIONAL_FEE = 80000;
 
 export function calculateDeliveryFee({
   deliveryMethod,
@@ -73,7 +72,7 @@ export function calculateDeliveryFee({
   const shouldWaive = isFeeWaived(waiveDeliveryFees, deliveryOption, subtotal);
 
   return {
-    deliveryFee: shouldWaive ? 0 : toPesewas(baseFee),
+    deliveryFee: shouldWaive ? 0 : baseFee,
     deliveryOption,
   };
 }

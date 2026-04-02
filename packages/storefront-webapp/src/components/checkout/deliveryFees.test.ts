@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 import { calculateDeliveryFee } from "./deliveryFees";
 
 describe("calculateDeliveryFee", () => {
+  // All fee config values are now in pesewas (base unit)
+  const fees = { withinAccra: 3000, otherRegions: 7000, international: 80000 };
+
   it("returns 0 for pickup orders", () => {
     const result = calculateDeliveryFee({
       deliveryMethod: "pickup",
@@ -23,7 +26,7 @@ describe("calculateDeliveryFee", () => {
       country: "GH",
       region: "GA",
       waiveDeliveryFees: null,
-      deliveryFees: { withinAccra: 30, otherRegions: 70, international: 800 },
+      deliveryFees: fees,
     });
 
     expect(result).toEqual({
@@ -38,7 +41,7 @@ describe("calculateDeliveryFee", () => {
       country: "GH",
       region: "AS",
       waiveDeliveryFees: null,
-      deliveryFees: { withinAccra: 30, otherRegions: 70, international: 800 },
+      deliveryFees: fees,
     });
 
     expect(result).toEqual({
@@ -53,7 +56,7 @@ describe("calculateDeliveryFee", () => {
       country: "US",
       region: null,
       waiveDeliveryFees: null,
-      deliveryFees: { withinAccra: 30, otherRegions: 70, international: 800 },
+      deliveryFees: fees,
     });
 
     expect(result).toEqual({
@@ -68,7 +71,7 @@ describe("calculateDeliveryFee", () => {
       country: "GH",
       region: "GA",
       waiveDeliveryFees: { all: true },
-      deliveryFees: { withinAccra: 30, otherRegions: 70, international: 800 },
+      deliveryFees: fees,
     });
 
     expect(result).toEqual({
@@ -83,27 +86,12 @@ describe("calculateDeliveryFee", () => {
       country: "GH",
       region: "GA",
       waiveDeliveryFees: { withinAccra: true },
-      deliveryFees: { withinAccra: 30, otherRegions: 70, international: 800 },
+      deliveryFees: fees,
     });
 
     expect(result).toEqual({
       deliveryFee: 0,
       deliveryOption: "within-accra",
-    });
-  });
-
-  it("uses legacy boolean waiveDeliveryFees format", () => {
-    const result = calculateDeliveryFee({
-      deliveryMethod: "delivery",
-      country: "US",
-      region: null,
-      waiveDeliveryFees: true,
-      deliveryFees: { withinAccra: 30, otherRegions: 70, international: 800 },
-    });
-
-    expect(result).toEqual({
-      deliveryFee: 0,
-      deliveryOption: "intl",
     });
   });
 
@@ -113,7 +101,7 @@ describe("calculateDeliveryFee", () => {
       country: "GH",
       region: "GA",
       waiveDeliveryFees: null,
-      deliveryFees: { withinAccra: 50, otherRegions: 100, international: 800 },
+      deliveryFees: { withinAccra: 5000, otherRegions: 10000, international: 80000 },
     });
 
     expect(result).toEqual({
@@ -128,7 +116,7 @@ describe("calculateDeliveryFee", () => {
       country: "GH",
       region: "AS",
       waiveDeliveryFees: null,
-      deliveryFees: { withinAccra: 50, otherRegions: 100, international: 800 },
+      deliveryFees: { withinAccra: 5000, otherRegions: 10000, international: 80000 },
     });
 
     expect(result).toEqual({
@@ -187,8 +175,8 @@ describe("calculateDeliveryFee", () => {
       deliveryMethod: "delivery",
       country: "GH",
       region: "GA",
-      waiveDeliveryFees: { withinAccra: true, minimumOrderAmount: 100 },
-      deliveryFees: { withinAccra: 30, otherRegions: 70, international: 800 },
+      waiveDeliveryFees: { withinAccra: true, minimumOrderAmount: 10000 },
+      deliveryFees: fees,
       subtotal: 10000,
     });
     expect(result).toEqual({ deliveryFee: 0, deliveryOption: "within-accra" });
@@ -199,20 +187,20 @@ describe("calculateDeliveryFee", () => {
       deliveryMethod: "delivery",
       country: "GH",
       region: "GA",
-      waiveDeliveryFees: { withinAccra: true, minimumOrderAmount: 100 },
-      deliveryFees: { withinAccra: 30, otherRegions: 70, international: 800 },
+      waiveDeliveryFees: { withinAccra: true, minimumOrderAmount: 10000 },
+      deliveryFees: fees,
       subtotal: 5000,
     });
     expect(result).toEqual({ deliveryFee: 3000, deliveryOption: "within-accra" });
   });
 
-  it("waives fee when waiver is ON and no threshold set (backward compat)", () => {
+  it("waives fee when waiver is ON and no threshold set", () => {
     const result = calculateDeliveryFee({
       deliveryMethod: "delivery",
       country: "GH",
       region: "GA",
       waiveDeliveryFees: { withinAccra: true },
-      deliveryFees: { withinAccra: 30, otherRegions: 70, international: 800 },
+      deliveryFees: fees,
       subtotal: 100,
     });
     expect(result).toEqual({ deliveryFee: 0, deliveryOption: "within-accra" });
@@ -223,8 +211,8 @@ describe("calculateDeliveryFee", () => {
       deliveryMethod: "delivery",
       country: "US",
       region: null,
-      waiveDeliveryFees: { international: true, minimumOrderAmount: 200 },
-      deliveryFees: { withinAccra: 30, otherRegions: 70, international: 800 },
+      waiveDeliveryFees: { international: true, minimumOrderAmount: 20000 },
+      deliveryFees: fees,
       subtotal: 25000,
     });
     expect(result).toEqual({ deliveryFee: 0, deliveryOption: "intl" });
@@ -235,8 +223,8 @@ describe("calculateDeliveryFee", () => {
       deliveryMethod: "delivery",
       country: "US",
       region: null,
-      waiveDeliveryFees: { international: true, minimumOrderAmount: 200 },
-      deliveryFees: { withinAccra: 30, otherRegions: 70, international: 800 },
+      waiveDeliveryFees: { international: true, minimumOrderAmount: 20000 },
+      deliveryFees: fees,
       subtotal: 10000,
     });
     expect(result).toEqual({ deliveryFee: 80000, deliveryOption: "intl" });

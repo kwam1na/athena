@@ -2,28 +2,25 @@
 type DeliveryOption = "within-accra" | "outside-accra" | "intl";
 
 type WaiveDeliveryFeesConfig =
-  | boolean
   | {
       withinAccra?: boolean;
       otherRegions?: boolean;
       international?: boolean;
       all?: boolean;
-      minimumOrderAmount?: number;
+      minimumOrderAmount?: number; // in pesewas
     }
   | undefined
   | null;
 
 // Helper: check threshold. Returns true if waiver should proceed.
-// minimumOrderAmount is in store currency, subtotal is in pesewas.
-// When subtotal is undefined, returns true for backward compatibility —
-// existing callers that don't pass subtotal still get unconditional waivers.
+// Both minimumOrderAmount and subtotal are in pesewas.
 const meetsThreshold = (
   minimumOrderAmount: number | undefined,
   subtotal: number | undefined,
 ): boolean => {
   if (!minimumOrderAmount || minimumOrderAmount <= 0) return true;
   if (subtotal === undefined) return true;
-  return subtotal >= minimumOrderAmount * 100;
+  return subtotal >= minimumOrderAmount;
 };
 
 /**
@@ -39,12 +36,6 @@ export const isFeeWaived = (
   deliveryOption: DeliveryOption | null,
   subtotal?: number,
 ): boolean => {
-  // Handle boolean waiveDeliveryFees (legacy format)
-  if (typeof waiveDeliveryFees === "boolean") {
-    return waiveDeliveryFees;
-  }
-
-  // Handle undefined/null waiveDeliveryFees
   if (!waiveDeliveryFees || typeof waiveDeliveryFees !== "object") {
     return false;
   }
@@ -84,12 +75,6 @@ export const isAnyFeeWaived = (
   waiveDeliveryFees: WaiveDeliveryFeesConfig,
   subtotal?: number,
 ): boolean => {
-  // Handle boolean waiveDeliveryFees (legacy format)
-  if (typeof waiveDeliveryFees === "boolean") {
-    return waiveDeliveryFees;
-  }
-
-  // Handle undefined/null waiveDeliveryFees
   if (!waiveDeliveryFees || typeof waiveDeliveryFees !== "object") {
     return false;
   }
@@ -116,12 +101,6 @@ export const hasWaiverConfigured = (
   waiveDeliveryFees: WaiveDeliveryFeesConfig,
   deliveryOption: DeliveryOption | null,
 ): boolean => {
-  // Handle boolean waiveDeliveryFees (legacy format)
-  if (typeof waiveDeliveryFees === "boolean") {
-    return waiveDeliveryFees;
-  }
-
-  // Handle undefined/null waiveDeliveryFees
   if (!waiveDeliveryFees || typeof waiveDeliveryFees !== "object") {
     return false;
   }
@@ -161,12 +140,6 @@ export const getRemainingForFreeDelivery = (
   deliveryOption: DeliveryOption | null,
   subtotal: number,
 ): number | null => {
-  // Boolean true means always free — no threshold possible
-  if (typeof waiveDeliveryFees === "boolean") {
-    return null;
-  }
-
-  // No config, no delivery option
   if (!waiveDeliveryFees || typeof waiveDeliveryFees !== "object") {
     return null;
   }
@@ -183,12 +156,10 @@ export const getRemainingForFreeDelivery = (
     return null;
   }
 
-  const thresholdInPesewas = minimumOrderAmount * 100;
-
   // Already meets threshold
-  if (subtotal >= thresholdInPesewas) {
+  if (subtotal >= minimumOrderAmount) {
     return null;
   }
 
-  return thresholdInPesewas - subtotal;
+  return minimumOrderAmount - subtotal;
 };
