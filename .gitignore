@@ -178,3 +178,6 @@ dist
 packages/.claude/worktrees/
 docs/superpowers/plans/
 .dual-graph/
+
+packages/athena-webapp/stats.html
+packages/storefront-webapp/stats.html
