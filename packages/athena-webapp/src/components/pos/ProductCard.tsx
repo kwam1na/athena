@@ -2,6 +2,7 @@ import { Badge } from "@/components/ui/badge";
 import { Package } from "lucide-react";
 import { Product } from "./types";
 import { capitalizeWords } from "~/src/lib/utils";
+import { toDisplayAmount } from "~/convex/lib/currency";
 
 interface ProductCardProps {
   product: Product;
@@ -54,7 +55,7 @@ export function ProductCard({
           </h4>
           <div className="flex items-center gap-2 flex-shrink-0">
             <p className="text-lg font-medium px-4">
-              {formatter.format(product.price)}
+              {formatter.format(toDisplayAmount(product.price))}
             </p>
           </div>
         </div>

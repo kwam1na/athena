@@ -6,6 +6,7 @@ import { useStoreContext } from "@/contexts/StoreContext";
 import { Product } from "@athena/webapp";
 import { getProductName } from "@/lib/productUtils";
 import ImageWithFallback from "../ui/image-with-fallback";
+import { toDisplayAmount } from "@/lib/currency";
 
 interface FeaturedProductsSectionProps {
   featuredSectionSorted: any[] | undefined;
@@ -135,14 +136,14 @@ function FeaturedProduct({
   const lowestPriceSku = product.skus.reduce(
     (lowest: any, current: any) =>
       current.price < lowest.price ? current : lowest,
-    product.skus[0]
+    product.skus[0],
   );
 
   const hasMultipleSkus = product.skus.length > 1;
 
   const priceLabel = hasMultipleSkus
-    ? `Starting at ${formatter.format(lowestPriceSku.price)}`
-    : formatter.format(lowestPriceSku.price);
+    ? `Starting at ${formatter.format(toDisplayAmount(lowestPriceSku.price))}`
+    : formatter.format(toDisplayAmount(lowestPriceSku.price));
 
   return (
     <div className="w-full flex flex-col xl:flex-row items-center justify-center gap-8 xl:gap-16">
