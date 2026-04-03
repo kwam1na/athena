@@ -3,6 +3,7 @@ import useGetActiveStore from "~/src/hooks/useGetActiveStore";
 import { currencyFormatter } from "~/src/lib/utils";
 import { getAmountPaidForOrder, getDiscountValue } from "./utils";
 import { Tag } from "lucide-react";
+import { toDisplayAmount } from "~/convex/lib/currency";
 
 export const OrderSummary = () => {
   const { order } = useOnlineOrder();
@@ -47,13 +48,17 @@ export const OrderSummary = () => {
     <div className="space-y-4">
       <div className="flex justify-between">
         <p className="text-sm">Subtotal</p>
-        <p className="text-sm">{formatter.format(order.amount / 100)}</p>
+        <p className="text-sm">
+          {formatter.format(toDisplayAmount(order.amount))}
+        </p>
       </div>
 
       {Boolean(order.deliveryFee) && order.deliveryFee && (
         <div className="flex justify-between">
           <p className="text-sm">Delivery fees</p>
-          <p className="text-sm">{formatter.format(order.deliveryFee)}</p>
+          <p className="text-sm">
+            {formatter.format(toDisplayAmount(order.deliveryFee))}
+          </p>
         </div>
       )}
 
@@ -71,12 +76,14 @@ export const OrderSummary = () => {
               </div>
             </div>
 
-            <p className="text-sm">{formatter.format(discount / 100)}</p>
+            <p className="text-sm">
+              {formatter.format(toDisplayAmount(discount))}
+            </p>
           </div>
 
           <div className="flex text-sm justify-between font-medium">
             <strong>{amountPaidLabel}</strong>
-            <strong>{formatter.format(amountPaid / 100)}</strong>
+            <strong>{formatter.format(toDisplayAmount(amountPaid))}</strong>
           </div>
         </>
       )}
@@ -84,21 +91,21 @@ export const OrderSummary = () => {
       {!order.discount && (
         <div className="flex text-sm justify-between">
           <strong>{amountPaidLabel}</strong>
-          <strong>{formatter.format(amountPaid / 100)}</strong>
+          <strong>{formatter.format(toDisplayAmount(amountPaid))}</strong>
         </div>
       )}
 
       {Boolean(amountRefunded) && (
         <div className="flex text-sm justify-between">
           <strong>Refunded</strong>
-          <strong>{`- ${formatter.format(amountRefunded / 100)}`}</strong>
+          <strong>{`- ${formatter.format(toDisplayAmount(amountRefunded))}`}</strong>
         </div>
       )}
 
       {Boolean(amountRefunded) && Boolean(netAmount) && (
         <div className="flex text-sm justify-between">
           <strong>Net</strong>
-          <strong>{formatter.format(netAmount / 100)}</strong>
+          <strong>{formatter.format(toDisplayAmount(netAmount))}</strong>
         </div>
       )}
     </div>
