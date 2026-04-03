@@ -5,6 +5,7 @@ import {
   action,
   internalAction,
   internalMutation,
+  internalQuery,
   mutation,
   MutationCtx,
   query,
@@ -794,6 +795,26 @@ export const getPendingCheckoutSessions = query({
           q.eq(q.field("hasCompletedPayment"), true),
           q.eq(q.field("placedOrderId"), undefined),
           q.neq(q.field("isPaymentRefunded"), true)
+        )
+      )
+      .collect();
+  },
+});
+
+export const getUnverifiedPaidSessions = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    const fifteenMinutesAgo = Date.now() - 15 * 60 * 1000;
+
+    return await ctx.db
+      .query("checkoutSession")
+      .filter((q) =>
+        q.and(
+          q.eq(q.field("hasCompletedPayment"), true),
+          q.neq(q.field("hasVerifiedPayment"), true),
+          q.neq(q.field("placedOrderId"), undefined),
+          q.neq(q.field("externalReference"), undefined),
+          q.lt(q.field("_creationTime"), fifteenMinutesAgo)
         )
       )
       .collect();

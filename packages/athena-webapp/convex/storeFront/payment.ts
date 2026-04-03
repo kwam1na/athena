@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { action } from "../_generated/server";
+import { action, internalAction } from "../_generated/server";
 import { api, internal } from "../_generated/api";
 import { CheckoutSession, OnlineOrder } from "../../types";
 import { orderDetailsSchema } from "../schemas/storeFront";
@@ -545,6 +545,159 @@ export const refundPayment = action({
         message:
           error instanceof Error ? error.message : "Failed to refund payment",
       };
+    }
+  },
+});
+
+/**
+ * Auto-verify payments for orders where the user completed payment on Paystack
+ * but never returned to the app to trigger client-side verification.
+ * Runs as a cron job, using Paystack's verify API as source of truth.
+ */
+export const autoVerifyUnverifiedPayments = internalAction({
+  args: {},
+  handler: async (ctx) => {
+    const sessions = await ctx.runQuery(
+      internal.storeFront.checkoutSession.getUnverifiedPaidSessions,
+      {}
+    );
+
+    if (sessions.length === 0) return;
+
+    console.log(
+      `[AUTO-VERIFY] Found ${sessions.length} unverified payment(s) to process.`
+    );
+
+    for (const session of sessions) {
+      const reference = session.externalReference;
+      if (!reference) continue;
+
+      try {
+        const paystackResponse = await verifyTransaction(reference);
+
+        const order: OnlineOrder | null = await ctx.runQuery(
+          api.storeFront.onlineOrder.get,
+          { identifier: reference }
+        );
+
+        if (!order) {
+          console.warn(
+            `[AUTO-VERIFY] No order found for reference: ${reference}`
+          );
+          continue;
+        }
+
+        // Calculate expected amount (same logic as verifyPayment)
+        const subtotal = session.amount || order.amount || 0;
+        const discount = session.discount || order.discount;
+        const items = (order.items || [])
+          .filter(
+            (item) =>
+              item.productSkuId !== undefined &&
+              item.quantity !== undefined &&
+              item.price !== undefined
+          )
+          .map((item) => ({
+            productSkuId: item.productSkuId,
+            quantity: item.quantity,
+            price: item.price!,
+          }));
+
+        const orderAmountLessDiscounts = calculateOrderAmount({
+          items,
+          discount,
+          deliveryFee: order.deliveryFee || session.deliveryFee || 0,
+          subtotal,
+        });
+
+        const discountValue = getOrderDiscountValue(items, discount);
+
+        const isVerified = validatePaymentAmount({
+          paystackAmount: paystackResponse.data.amount,
+          orderAmount: orderAmountLessDiscounts,
+          paystackStatus: paystackResponse.data.status,
+        });
+
+        if (!isVerified) {
+          console.warn(
+            `[AUTO-VERIFY] Verification failed for reference: ${reference} | ` +
+              `Paystack status: ${paystackResponse.data.status} | ` +
+              `Paystack amount: ${paystackResponse.data.amount} | ` +
+              `Expected: ${orderAmountLessDiscounts}`
+          );
+          continue;
+        }
+
+        // Update checkout session
+        await ctx.runMutation(
+          internal.storeFront.checkoutSession.updateCheckoutSession,
+          { id: session._id, hasVerifiedPayment: true }
+        );
+
+        // Build order update
+        const update: Record<string, any> = {
+          hasVerifiedPayment: true,
+          autoVerifiedAt: Date.now(),
+          transitions: [
+            ...(order.transitions ?? []),
+            {
+              status: "payment_auto_verified",
+              date: Date.now(),
+            },
+          ],
+        };
+
+        // Send verification emails (guards against duplicates internally)
+        const store = await ctx.runQuery(api.inventory.stores.getById, {
+          id: order.storeId,
+        });
+
+        const emailResults = await sendPaymentVerificationEmails({
+          order,
+          store,
+          orderAmount: orderAmountLessDiscounts,
+          discountValue,
+          didSendNewOrderEmail: order.didSendNewOrderReceivedEmail || false,
+          didSendConfirmationEmail: order.didSendConfirmationEmail || false,
+        });
+
+        if (emailResults.confirmationSent) {
+          update.didSendConfirmationEmail = true;
+          update.orderReceivedEmailSentAt = Date.now();
+        }
+
+        if (emailResults.adminNotificationSent) {
+          update.didSendNewOrderReceivedEmail = true;
+        }
+
+        // Award loyalty points (idempotent — checks for existing reward by orderId)
+        const points = calculateRewardPoints(session.amount || 0);
+        const rewardResult = await ctx.runMutation(
+          internal.storeFront.rewards.awardOrderPoints,
+          { orderId: order._id, points }
+        );
+
+        if (rewardResult.success) {
+          console.log(
+            `[AUTO-VERIFY] Awarded ${points} points for order ${order._id}`
+          );
+        }
+
+        // Update order
+        await ctx.runMutation(api.storeFront.onlineOrder.update, {
+          externalReference: reference,
+          update,
+        });
+
+        console.log(
+          `[AUTO-VERIFY] Verified payment | Reference: ${reference} | Order: ${order._id}`
+        );
+      } catch (error) {
+        console.error(
+          `[AUTO-VERIFY] Error processing session ${session._id}:`,
+          error
+        );
+      }
     }
   },
 });
