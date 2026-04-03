@@ -1,19 +1,30 @@
-/* eslint-disable @convex-dev/no-collect-in-query -- Query refactors are tracked in V26-168, V26-169, and V26-170; this PR only hardens API boundaries. */
+/* eslint-disable @convex-dev/no-collect-in-query -- V26-168 converts the primary commerce access paths to indexed or bounded reads first; remaining legacy scans in this large module will be reduced in follow-up passes. */
 import { Doc } from "../_generated/dataModel";
 import {
   internalMutation,
   internalQuery,
   mutation,
+  QueryCtx,
   query,
 } from "../_generated/server";
 import { v } from "convex/values";
 
 const entity = "bag";
+const MAX_BAGS = 500;
+const MAX_BAG_ITEMS = 200;
+const MAX_BAG_ITEMS_PER_SKU = 500;
+
+async function listBagItems(ctx: QueryCtx, bagId: Doc<"bag">["_id"]) {
+  return await ctx.db
+    .query("bagItem")
+    .withIndex("by_bagId", (q) => q.eq("bagId", bagId))
+    .take(MAX_BAG_ITEMS);
+}
 
 export const getAll = query({
   args: {},
   handler: async (ctx) => {
-    return await ctx.db.query(entity).collect();
+    return await ctx.db.query(entity).take(MAX_BAGS);
   },
 });
 
@@ -46,10 +57,7 @@ export const getById = query({
 
     if (!bag) return null;
 
-    const items = await ctx.db
-      .query("bagItem")
-      .withIndex("by_bagId", (q) => q.eq("bagId", bag._id))
-      .collect();
+    const items = await listBagItems(ctx, bag._id);
 
     // For each item, retrieve the associated product and its SKUs
     const itemsWithProductDetails = await Promise.all(
@@ -103,10 +111,7 @@ export const getByIdInternal = internalQuery({
 
     if (!bag) return null;
 
-    const items = await ctx.db
-      .query("bagItem")
-      .withIndex("by_bagId", (q) => q.eq("bagId", bag._id))
-      .collect();
+    const items = await listBagItems(ctx, bag._id);
 
     const itemsWithProductDetails = await Promise.all(
       items.map(async (item) => {
@@ -156,15 +161,14 @@ export const getByUserId = query({
   handler: async (ctx, args) => {
     const bag = await ctx.db
       .query(entity)
-      .filter((q) => q.eq(q.field("storeFrontUserId"), args.storeFrontUserId))
+      .withIndex("by_storeFrontUserId", (q) =>
+        q.eq("storeFrontUserId", args.storeFrontUserId)
+      )
       .first();
 
     if (!bag) return null;
 
-    const items = await ctx.db
-      .query("bagItem")
-      .withIndex("by_bagId", (q) => q.eq("bagId", bag._id))
-      .collect();
+    const items = await listBagItems(ctx, bag._id);
 
     // For each item, retrieve the associated product and its SKUs
     const itemsWithProductDetails = await Promise.all(
@@ -194,7 +198,7 @@ export const getByUserId = query({
           .withIndex("by_productSkuId", (q) =>
             q.eq("productSkuId", item.productSkuId)
           )
-          .collect();
+          .take(MAX_BAG_ITEMS_PER_SKU);
 
         // Filter out items from the current user's bag and count unique bags
         const uniqueOtherBagIds = new Set(
@@ -236,8 +240,8 @@ export const deleteBag = mutation({
 
     const items = await ctx.db
       .query("bagItem")
-      .filter((q) => q.eq(q.field("bagId"), args.id))
-      .collect();
+      .withIndex("by_bagId", (q) => q.eq("bagId", args.id))
+      .take(MAX_BAG_ITEMS);
 
     await Promise.all(items.map((item) => ctx.db.delete("bagItem", item._id)));
 
@@ -252,8 +256,8 @@ export const clearBag = internalMutation({
   handler: async (ctx, args) => {
     const items = await ctx.db
       .query("bagItem")
-      .filter((q) => q.eq(q.field("bagId"), args.id))
-      .collect();
+      .withIndex("by_bagId", (q) => q.eq("bagId", args.id))
+      .take(MAX_BAG_ITEMS);
 
     await Promise.all(items.map((item) => ctx.db.delete("bagItem", item._id)));
 
@@ -269,12 +273,16 @@ export const updateOwner = internalMutation({
   handler: async (ctx, args) => {
     const bag = await ctx.db
       .query(entity)
-      .filter((q) => q.eq(q.field("storeFrontUserId"), args.currentOwner))
+      .withIndex("by_storeFrontUserId", (q) =>
+        q.eq("storeFrontUserId", args.currentOwner)
+      )
       .first();
 
     const newOwnerBag = await ctx.db
       .query(entity)
-      .filter((q) => q.eq(q.field("storeFrontUserId"), args.newOwner))
+      .withIndex("by_storeFrontUserId", (q) =>
+        q.eq("storeFrontUserId", args.newOwner)
+      )
       .first();
 
     console.log("updating bag owner.", args.currentOwner, args.newOwner);
@@ -288,14 +296,14 @@ export const updateOwner = internalMutation({
       // Get items from current bag
       const currentItems = await ctx.db
         .query("bagItem")
-        .filter((q) => q.eq(q.field("bagId"), bag._id))
-        .collect();
+        .withIndex("by_bagId", (q) => q.eq("bagId", bag._id))
+        .take(MAX_BAG_ITEMS);
 
       // Get items from new owner's bag
       const newOwnerItems = await ctx.db
         .query("bagItem")
-        .filter((q) => q.eq(q.field("bagId"), newOwnerBag._id))
-        .collect();
+        .withIndex("by_bagId", (q) => q.eq("bagId", newOwnerBag._id))
+        .take(MAX_BAG_ITEMS);
 
       // Process each item from current bag
       await Promise.all(
@@ -374,10 +382,10 @@ export const getPaginatedBags = query({
   handler: async (ctx, args) => {
     let query = ctx.db
       .query(entity)
-      .filter((q) => q.eq(q.field("storeId"), args.storeId));
+      .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId));
 
     // Get all bags first
-    let bags = await query.collect();
+    let bags = await query.take(MAX_BAGS);
 
     // Apply sorting if provided
     if (args.sorting && args.sorting.length > 0) {
@@ -408,7 +416,7 @@ export const getPaginatedBags = query({
         const items = await ctx.db
           .query("bagItem")
           .withIndex("by_bagId", (q) => q.eq("bagId", bag._id))
-          .collect();
+          .take(MAX_BAG_ITEMS);
 
         // For each item, retrieve the associated product and its SKUs
         const itemsWithProductDetails = await Promise.all(
