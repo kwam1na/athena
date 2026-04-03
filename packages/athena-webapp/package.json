@@ -7,6 +7,10 @@
     "build": "vite build && tsc --noEmit",
     "serve": "vite preview",
     "start": "vite",
+    "lint": "bash ./scripts/convex-lint-changed.sh",
+    "lint:convex": "eslint convex",
+    "lint:convex:changed": "bash ./scripts/convex-lint-changed.sh",
+    "audit:convex": "bash ./scripts/convex-audit.sh",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
@@ -14,6 +18,7 @@
     "email:dev": "email dev --dir convex/emails"
   },
   "devDependencies": {
+    "@convex-dev/eslint-plugin": "^1.2.2",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.3.0",
     "@testing-library/user-event": "^14.6.1",

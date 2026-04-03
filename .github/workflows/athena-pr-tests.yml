@@ -10,6 +10,33 @@ permissions:
   contents: read
 
 jobs:
+  test-athena-webapp:
+    name: Athena Webapp Validation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Audit Athena Convex baseline
+        run: bun run --filter '@athena/webapp' audit:convex
+
+      - name: Lint changed Athena Convex files
+        run: bun run --filter '@athena/webapp' lint:convex:changed
+
+      - name: Run Athena webapp tests
+        run: bun run --filter '@athena/webapp' test
+
   test-storefront-webapp:
     name: Storefront Webapp Test Suite
     runs-on: ubuntu-latest
