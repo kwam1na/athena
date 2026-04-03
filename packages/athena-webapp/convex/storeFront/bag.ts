@@ -1,8 +1,11 @@
-import { api } from "../_generated/api";
 import { Doc } from "../_generated/dataModel";
-import { mutation, query } from "../_generated/server";
+import {
+  internalMutation,
+  internalQuery,
+  mutation,
+  query,
+} from "../_generated/server";
 import { v } from "convex/values";
-import { getProductName } from "../utils";
 
 const entity = "bag";
 
@@ -12,7 +15,7 @@ export const getAll = query({
   },
 });
 
-export const create = mutation({
+export const create = internalMutation({
   args: {
     storeId: v.id("store"),
     storeFrontUserId: v.union(v.id("storeFrontUser"), v.id("guest")),
@@ -82,6 +85,61 @@ export const getById = query({
     );
 
     // Return the bag with the enriched items
+    return {
+      ...bag,
+      items: itemsWithProductDetails,
+    } as Doc<"bag">;
+  },
+});
+
+export const getByIdInternal = internalQuery({
+  args: {
+    id: v.id(entity),
+  },
+  handler: async (ctx, args) => {
+    const bag = await ctx.db.get(args.id);
+
+    if (!bag) return null;
+
+    const items = await ctx.db
+      .query("bagItem")
+      .withIndex("by_bagId", (q) => q.eq("bagId", bag._id))
+      .collect();
+
+    const itemsWithProductDetails = await Promise.all(
+      items.map(async (item) => {
+        const [sku, product] = await Promise.all([
+          ctx.db.get(item.productSkuId),
+          ctx.db.get(item.productId),
+        ]);
+
+        let colorName;
+
+        if (sku?.color) {
+          const color = await ctx.db.get(sku.color);
+          colorName = color?.name;
+        }
+
+        let category: string | undefined;
+
+        if (product) {
+          const productCategory = await ctx.db.get(product.categoryId);
+          category = productCategory?.name;
+        }
+
+        return {
+          ...item,
+          price: sku?.price,
+          length: sku?.length,
+          colorName,
+          productName: product?.name,
+          productCategory: category,
+          productImage: sku?.images?.[0],
+          productSlug: product?.slug,
+        } as Doc<"bagItem">;
+      })
+    );
+
     return {
       ...bag,
       items: itemsWithProductDetails,
@@ -185,7 +243,7 @@ export const deleteBag = mutation({
   },
 });
 
-export const clearBag = mutation({
+export const clearBag = internalMutation({
   args: {
     id: v.id(entity),
   },
@@ -201,7 +259,7 @@ export const clearBag = mutation({
   },
 });
 
-export const updateOwner = mutation({
+export const updateOwner = internalMutation({
   args: {
     currentOwner: v.id("guest"),
     newOwner: v.id("storeFrontUser"),

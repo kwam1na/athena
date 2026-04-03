@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { HonoWithConvex } from "convex-helpers/server/hono";
 import { ActionCtx } from "../../../../_generated/server";
-import { api } from "../../../../_generated/api";
+import { internal } from "../../../../_generated/api";
 import { getCookie } from "hono/cookie";
 import { Id } from "../../../../_generated/dataModel";
 import {
@@ -29,12 +29,12 @@ savedBagRoutes.get("/:bagId", async (c) => {
     }
 
     try {
-      const bag = await c.env.runQuery(api.storeFront.savedBag.getByUserId, {
+      const bag = await c.env.runQuery(internal.storeFront.savedBag.getByUserId, {
         storeFrontUserId: userId as Id<"storeFrontUser"> | Id<"guest">,
       });
 
       if (!bag) {
-        const b = await c.env.runMutation(api.storeFront.savedBag.create, {
+        const b = await c.env.runMutation(internal.storeFront.savedBag.create, {
           storeFrontUserId: userId as Id<"storeFrontUser"> | Id<"guest">,
           storeId: storeId as Id<"store">,
         });
@@ -58,7 +58,7 @@ savedBagRoutes.post("/:bagId/items", async (c) => {
 
   const userId = getStorefrontUserFromRequest(c);
 
-  const b = await c.env.runMutation(api.storeFront.savedBagItem.addItemToBag, {
+  const b = await c.env.runMutation(internal.storeFront.savedBagItem.addItemToBag, {
     productId: productId as Id<"product">,
     quantity,
     storeFrontUserId: userId as Id<"storeFrontUser"> | Id<"guest">,
@@ -75,7 +75,7 @@ savedBagRoutes.post("/:bagId/owner", async (c) => {
   try {
     const { currentOwnerId, newOwnerId } = await c.req.json();
 
-    const b = await c.env.runMutation(api.storeFront.savedBag.updateOwner, {
+    const b = await c.env.runMutation(internal.storeFront.savedBag.updateOwner, {
       currentOwner: currentOwnerId as Id<"guest">,
       newOwner: newOwnerId as Id<"storeFrontUser">,
     });
@@ -90,7 +90,7 @@ savedBagRoutes.post("/:bagId/owner", async (c) => {
 savedBagRoutes.delete("/:bagId/items/:itemId", async (c) => {
   const { itemId } = c.req.param();
 
-  await c.env.runMutation(api.storeFront.savedBagItem.deleteItemFromSavedBag, {
+  await c.env.runMutation(internal.storeFront.savedBagItem.deleteItemFromSavedBag, {
     itemId: itemId as Id<"savedBagItem">,
   });
 
@@ -103,7 +103,7 @@ savedBagRoutes.put("/:bagId/items/:itemId", async (c) => {
   const { quantity } = await c.req.json();
 
   const b = await c.env.runMutation(
-    api.storeFront.savedBagItem.updateItemInBag,
+    internal.storeFront.savedBagItem.updateItemInBag,
     {
       quantity,
       itemId: itemId as Id<"savedBagItem">,

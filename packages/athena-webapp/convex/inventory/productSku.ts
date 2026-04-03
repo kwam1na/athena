@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { action, mutation, query } from "../_generated/server";
+import { action, internalQuery, mutation, query } from "../_generated/server";
 import { deleteFileInR2, uploadFileToR2 } from "../cloudflare/r2";
 import { getProductName } from "../utils";
 
@@ -40,7 +40,7 @@ export const getById = query({
   },
 });
 
-export const retrieve = query({
+export const retrieve = internalQuery({
   args: { id: v.id("productSku") },
   handler: async (ctx, args) => {
     const s = await ctx.db.get(args.id);

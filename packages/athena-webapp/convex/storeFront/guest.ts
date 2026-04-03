@@ -1,4 +1,9 @@
-import { mutation, query } from "../_generated/server";
+import {
+  internalMutation,
+  internalQuery,
+  mutation,
+  query,
+} from "../_generated/server";
 import { v } from "convex/values";
 
 const entity = "guest";
@@ -9,7 +14,7 @@ export const getAll = query({
   },
 });
 
-export const getById = query({
+export const getById = internalQuery({
   args: {
     id: v.id(entity),
   },
@@ -18,7 +23,7 @@ export const getById = query({
   },
 });
 
-export const getByMarker = query({
+export const getByMarker = internalQuery({
   args: {
     marker: v.optional(v.string()),
   },
@@ -32,7 +37,7 @@ export const getByMarker = query({
   },
 });
 
-export const create = mutation({
+export const create = internalMutation({
   args: {
     marker: v.optional(v.string()),
     creationOrigin: v.optional(v.string()),
@@ -61,7 +66,7 @@ export const deleteGuest = mutation({
   },
 });
 
-export const update = mutation({
+export const update = internalMutation({
   args: {
     id: v.id(entity),
     email: v.optional(v.string()),

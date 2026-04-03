@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { HonoWithConvex } from "convex-helpers/server/hono";
 import { ActionCtx } from "../../../../_generated/server";
-import { api } from "../../../../_generated/api";
+import { api, internal } from "../../../../_generated/api";
 import { Id } from "../../../../_generated/dataModel";
 import {
   getStoreDataFromRequest,
@@ -36,7 +36,7 @@ storeRoutes.get("/promoCodeItems", async (c) => {
   }
 
   try {
-    const res = await c.env.runQuery(api.inventory.promoCode.getAllItems, {
+    const res = await c.env.runQuery(internal.inventory.promoCode.getAllItems, {
       storeId: storeId,
     });
 
@@ -55,7 +55,7 @@ storeRoutes.get("/redeemedPromoCodes", async (c) => {
 
   try {
     const res = await c.env.runQuery(
-      api.inventory.promoCode.getRedeemedPromoCodesForUser,
+      internal.inventory.promoCode.getRedeemedPromoCodesForUser,
       {
         storeFrontUserId: userId as Id<"storeFrontUser"> | Id<"guest">,
       }
@@ -77,7 +77,7 @@ storeRoutes.post("/promoCodes", async (c) => {
   const { code, checkoutSessionId } = await c.req.json();
 
   try {
-    const res = await c.env.runMutation(api.inventory.promoCode.redeem, {
+    const res = await c.env.runMutation(internal.inventory.promoCode.redeem, {
       code,
       storeFrontUserId: userId as Id<"storeFrontUser"> | Id<"guest">,
       checkoutSessionId: checkoutSessionId as Id<"checkoutSession">,
@@ -97,7 +97,7 @@ storeRoutes.get("/:storeId", async (c) => {
     return c.json({ error: "Organization id missing" }, 404);
   }
 
-  const store = await c.env.runQuery(api.inventory.stores.getByIdOrSlug, {
+  const store = await c.env.runQuery(internal.inventory.stores.getByIdOrSlug, {
     identifier: storeId,
     organizationId: organizationId as Id<"organization">,
   });

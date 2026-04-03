@@ -2,6 +2,8 @@ import {
   ActionCtx,
   internalAction,
   internalMutation,
+  internalQuery,
+  MutationCtx,
   mutation,
   query,
 } from "../_generated/server";
@@ -50,72 +52,81 @@ const isDuplicate = async (
   return !!existing;
 };
 
+const createArgs = {
+  email: v.string(),
+  promoCodeId: v.id("promoCode"),
+  storeFrontUserId: v.union(v.id("guest"), v.id("storeFrontUser")),
+  storeId: v.id("store"),
+  ipAddress: v.optional(v.string()),
+};
+
+const createOffer = async (
+  ctx: MutationCtx,
+  args: {
+    email: string;
+    promoCodeId: Id<"promoCode">;
+    storeFrontUserId: Id<"storeFrontUser"> | Id<"guest">;
+    storeId: Id<"store">;
+    ipAddress?: string;
+  }
+) => {
+  try {
+    emailSchema.parse(args.email);
+  } catch (error) {
+    return {
+      success: false,
+      message: "Invalid email address",
+    };
+  }
+
+  const isDuplicateSubmission = await isDuplicate(
+    ctx,
+    args.email,
+    args.storeFrontUserId
+  );
+
+  if (isDuplicateSubmission) {
+    return {
+      success: false,
+      message: "You've already requested this offer.",
+    };
+  }
+
+  const offerId = await ctx.db.insert(entity, {
+    email: args.email,
+    promoCodeId: args.promoCodeId,
+    storeFrontUserId: args.storeFrontUserId,
+    storeId: args.storeId,
+    status: "pending",
+    ipAddress: args.ipAddress,
+  });
+
+  await ctx.scheduler.runAfter(0, internal.storeFront.offers.sendOfferEmail, {
+    offerId,
+  });
+
+  await ctx.db.patch(args.storeFrontUserId, {
+    email: args.email,
+  });
+
+  return {
+    success: true,
+    message: "Offer requested successfully!",
+  };
+};
+
 // Create a new offer
 export const create = mutation({
-  args: {
-    email: v.string(),
-    promoCodeId: v.id("promoCode"),
-    storeFrontUserId: v.union(v.id("guest"), v.id("storeFrontUser")),
-    storeId: v.id("store"),
-    ipAddress: v.optional(v.string()),
-  },
+  args: createArgs,
   handler: async (ctx, args) => {
-    // Validate email
-    try {
-      emailSchema.parse(args.email);
-    } catch (error) {
-      return {
-        success: false,
-        message: "Invalid email address",
-      };
-    }
+    return await createOffer(ctx, args);
+  },
+});
 
-    // Check rate limiting
-    // const isLimited = await isRateLimited(ctx, args.ipAddress, args.email);
-    // if (isLimited) {
-    //   return {
-    //     success: false,
-    //     message: "Too many requests. Please try again later.",
-    //   };
-    // }
-
-    // Check for duplicates
-    const isDuplicateSubmission = await isDuplicate(
-      ctx,
-      args.email,
-      args.storeFrontUserId
-    );
-
-    if (isDuplicateSubmission) {
-      return {
-        success: false,
-        message: "You've already requested this offer.",
-      };
-    }
-
-    // Create the offer
-    const offerId = await ctx.db.insert(entity, {
-      email: args.email,
-      promoCodeId: args.promoCodeId,
-      storeFrontUserId: args.storeFrontUserId,
-      storeId: args.storeId,
-      status: "pending",
-      ipAddress: args.ipAddress,
-    });
-
-    // Schedule email sending
-    await ctx.scheduler.runAfter(0, internal.storeFront.offers.sendOfferEmail, {
-      offerId,
-    });
-
-    await ctx.db.patch(args.storeFrontUserId, {
-      email: args.email,
-    });
-
-    return {
-      success: true,
-      message: "Offer requested successfully!",
-    };
+export const createInternal = internalMutation({
+  args: createArgs,
+  handler: async (ctx, args) => {
+    return await createOffer(ctx, args);
   },
 });
 
@@ -130,7 +141,7 @@ export const sendOfferEmail = internalAction({
     );
 
     // Get the offer
-    const offer = await ctx.runQuery(api.storeFront.offers.getById, {
+    const offer = await ctx.runQuery(internal.storeFront.offers.getById, {
       id: args.offerId,
     });
 
@@ -149,9 +160,12 @@ export const sendOfferEmail = internalAction({
     );
 
     // Get the promo code
-    const promoCode = await ctx.runQuery(api.inventory.promoCode.getById, {
-      id: offer.promoCodeId,
-    });
+    const promoCode = await ctx.runQuery(
+      internal.inventory.promoCode.getByIdInternal,
+      {
+        id: offer.promoCodeId,
+      }
+    );
 
     if (!promoCode) {
       console.log(
@@ -251,7 +265,7 @@ export const sendOfferReminderEmail = internalAction({
   },
   handler: async (ctx, args) => {
     // Get the offer
-    const offer = await ctx.runQuery(api.storeFront.offers.getById, {
+    const offer = await ctx.runQuery(internal.storeFront.offers.getById, {
       id: args.offerId,
     });
 
@@ -263,9 +277,12 @@ export const sendOfferReminderEmail = internalAction({
     }
 
     // Get the promo code
-    const promoCode = await ctx.runQuery(api.inventory.promoCode.getById, {
-      id: offer.promoCodeId,
-    });
+    const promoCode = await ctx.runQuery(
+      internal.inventory.promoCode.getByIdInternal,
+      {
+        id: offer.promoCodeId,
+      }
+    );
 
     if (!promoCode) {
       await ctx.runMutation(internal.storeFront.offers.updateStatus, {
@@ -280,7 +297,7 @@ export const sendOfferReminderEmail = internalAction({
     }
 
     // Get the store
-    const store = await ctx.runQuery(api.inventory.stores.getById, {
+    const store = await ctx.runQuery(internal.inventory.stores.findById, {
       id: offer.storeId,
     });
 
@@ -293,10 +310,10 @@ export const sendOfferReminderEmail = internalAction({
 
     try {
       const [bestSellers, recentlyViewedHairProducts] = await Promise.all([
-        ctx.runQuery(api.inventory.bestSeller.getAll, {
+        ctx.runQuery(internal.inventory.bestSeller.getAllInternal, {
           storeId: offer.storeId,
         }),
-        ctx.runQuery(api.storeFront.user.getLastViewedProducts, {
+        ctx.runQuery(internal.storeFront.user.getLastViewedProductsInternal, {
           id: offer.storeFrontUserId,
           category: "Hair",
           limit: 2,
@@ -391,7 +408,7 @@ export const sendOfferReminderEmails = internalAction({
     storeId: v.id("store"),
   },
   handler: async (ctx, args) => {
-    const offers: any = await ctx.runQuery(api.storeFront.offers.getAll, {
+    const offers: any = await ctx.runQuery(internal.storeFront.offers.getAll, {
       storeId: args.storeId,
       status: "sent",
     });
@@ -471,7 +488,7 @@ export const updateStatus = internalMutation({
 });
 
 // Get an offer by ID
-export const getById = query({
+export const getById = internalQuery({
   args: {
     id: v.id(entity),
   },
@@ -611,7 +628,7 @@ export const getByStorefrontUserId = query({
   },
 });
 
-export const getAll = query({
+export const getAll = internalQuery({
   args: {
     storeId: v.id("store"),
     status: v.optional(
@@ -650,7 +667,7 @@ const getUpsellProducts = async ({
   offer: any;
   promoCode: any;
 }) => {
-  const store = await ctx.runQuery(api.inventory.stores.getById, {
+  const store = await ctx.runQuery(internal.inventory.stores.findById, {
     id: storeId,
   });
 
@@ -662,10 +679,10 @@ const getUpsellProducts = async ({
   }
 
   const [bestSellers, recentlyViewedHairProducts] = await Promise.all([
-    ctx.runQuery(api.inventory.bestSeller.getAll, {
+    ctx.runQuery(internal.inventory.bestSeller.getAllInternal, {
       storeId: offer.storeId,
     }),
-    ctx.runQuery(api.storeFront.user.getLastViewedProducts, {
+    ctx.runQuery(internal.storeFront.user.getLastViewedProductsInternal, {
       id: offer.storeFrontUserId,
       category: "Hair",
       limit: 2,

@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { HonoWithConvex } from "convex-helpers/server/hono";
 import { ActionCtx } from "../../../../_generated/server";
-import { api } from "../../../../_generated/api";
+import { internal } from "../../../../_generated/api";
 import { Id } from "../../../../_generated/dataModel";
 import { getCookie, deleteCookie, setCookie } from "hono/cookie";
 import { getStoreDataFromRequest } from "../../../utils";
@@ -21,19 +21,19 @@ guestRoutes.get("/", async (c) => {
   }
 
   try {
-    const guest = await c.env.runQuery(api.storeFront.guest.getById, {
+    const guest = await c.env.runQuery(internal.storeFront.guest.getById, {
       id: guestId as Id<"guest">,
     });
 
     return c.json(guest);
   } catch (e) {
     if ((e as Error).message.includes("ArgumentValidationError")) {
-      let guest = await c.env.runQuery(api.storeFront.guest.getByMarker, {
+      let guest = await c.env.runQuery(internal.storeFront.guest.getByMarker, {
         marker,
       });
 
       if (!guest) {
-        guest = await c.env.runMutation(api.storeFront.guest.create, {
+        guest = await c.env.runMutation(internal.storeFront.guest.create, {
           marker,
           creationOrigin: "storefront",
           storeId,
@@ -65,7 +65,7 @@ guestRoutes.put("/", async (c) => {
 
   const { email, firstName, lastName, phoneNumber } = await c.req.json();
 
-  const guest = await c.env.runMutation(api.storeFront.guest.update, {
+  const guest = await c.env.runMutation(internal.storeFront.guest.update, {
     id: guestId as Id<"guest">,
     email,
     firstName,
@@ -78,7 +78,7 @@ guestRoutes.put("/", async (c) => {
 
 // Create a new guest
 guestRoutes.post("/", async (c) => {
-  const guest = await c.env.runMutation(api.storeFront.guest.create, {});
+  const guest = await c.env.runMutation(internal.storeFront.guest.create, {});
 
   return c.json({ id: guest });
 });

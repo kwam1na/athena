@@ -192,9 +192,12 @@ export const createPODOrder = action({
     console.log(`Creating POD order for session: ${args.checkoutSessionId}`);
 
     try {
-      const session = await ctx.runQuery(api.storeFront.checkoutSession.getById, {
-        sessionId: args.checkoutSessionId,
-      });
+      const session = await ctx.runQuery(
+        internal.storeFront.checkoutSession.getByIdInternal,
+        {
+          sessionId: args.checkoutSessionId,
+        }
+      );
 
       if (!session) {
         return {
@@ -238,13 +241,13 @@ export const createPODOrder = action({
       });
 
       // Fetch the created order
-      const order = await ctx.runQuery(api.storeFront.onlineOrder.get, {
+      const order = await ctx.runQuery(internal.storeFront.onlineOrder.getInternal, {
         identifier: podReference,
       });
 
       if (order) {
         // Fetch store details
-        const store = await ctx.runQuery(api.inventory.stores.getById, {
+        const store = await ctx.runQuery(internal.inventory.stores.findById, {
           id: order.storeId,
         });
 
@@ -264,7 +267,7 @@ export const createPODOrder = action({
         });
 
         // Update order with email statuses
-        await ctx.runMutation(api.storeFront.onlineOrder.update, {
+        await ctx.runMutation(internal.storeFront.onlineOrder.updateInternal, {
           orderId: order._id,
           update: {
             didSendConfirmationEmail: emailResults.confirmationSent,
@@ -325,7 +328,7 @@ export const verifyPayment = action({
 
       // Fetch session and order
       const session: CheckoutSession | null = await ctx.runQuery(
-        api.storeFront.checkoutSession.getCheckoutSession,
+        internal.storeFront.checkoutSession.getCheckoutSession,
         {
           storeFrontUserId: args.storeFrontUserId,
           externalReference: args.externalReference,
@@ -420,7 +423,7 @@ export const verifyPayment = action({
 
       // Handle emails and rewards for the order
       if (order) {
-        const store = await ctx.runQuery(api.inventory.stores.getById, {
+        const store = await ctx.runQuery(internal.inventory.stores.findById, {
           id: order.storeId,
         });
 
@@ -461,7 +464,7 @@ export const verifyPayment = action({
       }
 
       // Update order with verification and email statuses
-      await ctx.runMutation(api.storeFront.onlineOrder.update, {
+      await ctx.runMutation(internal.storeFront.onlineOrder.updateInternal, {
         externalReference: args.externalReference,
         update,
       });
@@ -507,7 +510,7 @@ export const refundPayment = action({
       });
 
       // Update order status to refund-submitted
-      await ctx.runMutation(api.storeFront.onlineOrder.update, {
+      await ctx.runMutation(internal.storeFront.onlineOrder.updateInternal, {
         externalReference: refundResponse.data?.transaction?.reference,
         update: {
           status: "refund-submitted",
@@ -520,14 +523,14 @@ export const refundPayment = action({
 
       // Handle stock returns if requested
       if (args.returnItemsToStock && args.onlineOrderItemIds) {
-        await ctx.runMutation(api.storeFront.onlineOrder.returnItemsToStock, {
+        await ctx.runMutation(internal.storeFront.onlineOrder.returnItemsToStockInternal, {
           externalTransactionId: args.externalTransactionId,
           onlineOrderItemIds: args.onlineOrderItemIds,
         });
         console.log("Returned items to stock");
       } else if (args.onlineOrderItemIds) {
         // Mark items as refunded without returning to stock
-        await ctx.runMutation(api.storeFront.onlineOrder.updateOrderItems, {
+        await ctx.runMutation(internal.storeFront.onlineOrder.updateOrderItemsInternal, {
           orderItemIds: args.onlineOrderItemIds,
           updates: { isRefunded: true },
         });
@@ -648,7 +651,7 @@ export const autoVerifyUnverifiedPayments = internalAction({
         };
 
         // Send verification emails (guards against duplicates internally)
-        const store = await ctx.runQuery(api.inventory.stores.getById, {
+        const store = await ctx.runQuery(internal.inventory.stores.findById, {
           id: order.storeId,
         });
 
@@ -684,7 +687,7 @@ export const autoVerifyUnverifiedPayments = internalAction({
         }
 
         // Update order
-        await ctx.runMutation(api.storeFront.onlineOrder.update, {
+        await ctx.runMutation(internal.storeFront.onlineOrder.updateInternal, {
           externalReference: reference,
           update,
         });

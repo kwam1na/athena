@@ -1,11 +1,16 @@
 import { v } from "convex/values";
-import { internalMutation, mutation, query } from "../_generated/server";
+import {
+  internalMutation,
+  internalQuery,
+  mutation,
+  query,
+} from "../_generated/server";
 import { api, internal } from "../_generated/api";
 import { Id } from "../_generated/dataModel";
 
 const entity = "promoCode";
 
-export const redeem = mutation({
+export const redeem = internalMutation({
   args: {
     code: v.string(),
     checkoutSessionId: v.id("checkoutSession"),
@@ -315,7 +320,7 @@ export const getAll = query({
   },
 });
 
-export const getAllItems = query({
+export const getAllItems = internalQuery({
   args: { storeId: v.id("store") },
   handler: async (ctx, args): Promise<any> => {
     const items = await ctx.db
@@ -330,7 +335,7 @@ export const getAllItems = query({
 
     const skuData = await Promise.all(
       skus.map(async (sku) => {
-        return await ctx.runQuery(api.inventory.productSku.retrieve, {
+        return await ctx.runQuery(internal.inventory.productSku.retrieve, {
           id: sku,
         });
       })
@@ -367,6 +372,13 @@ export const getById = query({
     }),
     v.null()
   ),
+  handler: async (ctx, args) => {
+    return await ctx.db.get(args.id);
+  },
+});
+
+export const getByIdInternal = internalQuery({
+  args: { id: v.id(entity) },
   handler: async (ctx, args) => {
     return await ctx.db.get(args.id);
   },
@@ -573,7 +585,7 @@ export const updateQuantityClaimedForMiniStraightener = internalMutation({
   },
 });
 
-export const getRedeemedPromoCodesForUser = query({
+export const getRedeemedPromoCodesForUser = internalQuery({
   args: {
     storeFrontUserId: v.union(v.id("storeFrontUser"), v.id("guest")),
   },

@@ -1,9 +1,9 @@
-import { mutation } from "../_generated/server";
+import { internalMutation } from "../_generated/server";
 import { v } from "convex/values";
 
 const entity = "savedBagItem";
 
-export const addItemToBag = mutation({
+export const addItemToBag = internalMutation({
   args: {
     savedBagId: v.id("savedBag"),
     productId: v.id("product"),
@@ -36,7 +36,7 @@ export const addItemToBag = mutation({
   },
 });
 
-export const updateItemInBag = mutation({
+export const updateItemInBag = internalMutation({
   args: {
     itemId: v.id(entity),
     quantity: v.number(),
@@ -46,7 +46,7 @@ export const updateItemInBag = mutation({
   },
 });
 
-export const deleteItemFromSavedBag = mutation({
+export const deleteItemFromSavedBag = internalMutation({
   args: {
     itemId: v.id(entity),
   },

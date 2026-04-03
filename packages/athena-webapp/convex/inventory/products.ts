@@ -1,9 +1,15 @@
-import { action, mutation, query } from "../_generated/server";
+import {
+  action,
+  internalMutation,
+  internalQuery,
+  mutation,
+  query,
+} from "../_generated/server";
 import { v } from "convex/values";
 import { productSchema, productSkuSchema } from "../schemas/inventory";
 import { ProductSku } from "../../types";
 import { Id } from "../_generated/dataModel";
-import { api } from "../_generated/api";
+import { api, internal } from "../_generated/api";
 import { deleteDirectoryInR2 } from "../cloudflare/r2";
 
 const entity = "product";
@@ -274,6 +280,61 @@ export const getById = query({
   },
 });
 
+export const getByIdInternal = internalQuery({
+  args: {
+    id: v.id(entity),
+    storeId: v.id("store"),
+  },
+  handler: async (ctx, args) => {
+    const product = await ctx.db.get(args.id);
+
+    const skus = await ctx.db
+      .query("productSku")
+      .withIndex("by_productId", (q) => q.eq("productId", args.id))
+      .collect();
+
+    const colorIds = skus
+      .map((sku) => sku.color)
+      .filter((color): color is Id<"color"> => color !== undefined);
+
+    const colors = await Promise.all(
+      colorIds.map((colorId) => ctx.db.get(colorId))
+    );
+
+    const colorMap = colors.reduce(
+      (acc: Record<Id<"color">, string>, color) => {
+        if (color) {
+          acc[color._id] = color.name;
+        }
+        return acc;
+      },
+      {} as Record<Id<"color">, string>
+    );
+
+    let category: string | undefined;
+
+    if (product) {
+      const productCategory = await ctx.db.get(product.categoryId);
+      category = productCategory?.name;
+    }
+
+    const skusWithCategory = skus
+      .map((sku) => ({
+        ...sku,
+        productCategory: category,
+        productName: product?.name,
+        colorName: sku.color ? colorMap[sku.color] : null,
+      }))
+      .filter((sku) => sku.isVisible || sku.isVisible === undefined);
+
+    return {
+      ...product,
+      inventoryCount: calculateTotalInventoryCount(skus),
+      skus: skusWithCategory,
+    };
+  },
+});
+
 export const getBySlug = query({
   args: {
     slug: v.string(),
@@ -455,7 +516,7 @@ export const create = mutation({
     if (product) {
       await ctx.scheduler.runAfter(
         0,
-        api.inventory.productUtil.invalidateProductCache,
+        internal.inventory.productUtil.invalidateProductCache,
         {
           storeId: product?.storeId,
         }
@@ -720,7 +781,7 @@ export const update = mutation({
     if (product) {
       await ctx.scheduler.runAfter(
         0,
-        api.inventory.productUtil.invalidateProductCache,
+        internal.inventory.productUtil.invalidateProductCache,
         {
           storeId: product?.storeId,
         }
@@ -742,17 +803,28 @@ export const remove = mutation({
   },
 });
 
+export const removeInternal = internalMutation({
+  args: {
+    id: v.id(entity),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.delete(args.id);
+
+    return { message: "OK" };
+  },
+});
+
 export const clear = action({
   args: { id: v.id(entity), storeId: v.id("store") },
   handler: async (ctx, args) => {
     await Promise.all([
-      await ctx.runMutation(api.inventory.products.remove, {
+      await ctx.runMutation(internal.inventory.products.removeInternal, {
         id: args.id,
       }),
       await deleteDirectoryInR2(`stores/${args.storeId}/products/${args.id}`),
     ]);
 
-    await ctx.runAction(api.inventory.productUtil.invalidateProductCache, {
+    await ctx.runAction(internal.inventory.productUtil.invalidateProductCache, {
       storeId: args.storeId,
     });
   },
@@ -843,7 +915,7 @@ export const batchGet = query({
   handler: async (ctx, args) => {
     const res: any[] = await Promise.all(
       args.ids.map((id) =>
-        ctx.runQuery(api.inventory.products.getById, {
+        ctx.runQuery(internal.inventory.products.getByIdInternal, {
           id,
           storeId: args.storeId,
         })

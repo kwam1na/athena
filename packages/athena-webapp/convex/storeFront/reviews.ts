@@ -1,7 +1,7 @@
 import { mutation, query, action } from "../_generated/server";
 import { v } from "convex/values";
 import { Id } from "../_generated/dataModel";
-import { api } from "../_generated/api";
+import { api, internal } from "../_generated/api";
 import { sendFeedbackRequestEmail } from "../mailersend";
 import { getProductName } from "../utils";
 
@@ -135,7 +135,7 @@ export const create = mutation({
                 );
 
                 // Create the offer
-                await ctx.runMutation(api.storeFront.offers.create, {
+                await ctx.runMutation(internal.storeFront.offers.createInternal, {
                   email: user.email,
                   promoCodeId: promoCode._id,
                   storeFrontUserId: createdByStoreFrontUserId,
@@ -469,7 +469,7 @@ export const getByProductId = query({
     const reviewsWithExtras: any[] = await Promise.all(
       reviews.map(async (review) => {
         const productSku: any = review.productSkuId
-          ? await ctx.runQuery(api.inventory.productSku.getById, {
+          ? await ctx.runQuery(internal.inventory.productSku.retrieve, {
               id: review.productSkuId,
             })
           : null;
@@ -538,7 +538,7 @@ export const sendFeedbackRequest = action({
   },
   handler: async (ctx, args) => {
     // Get the order item
-    const orderItem = await ctx.runQuery(api.storeFront.onlineOrderItem.get, {
+    const orderItem = await ctx.runQuery(internal.storeFront.onlineOrderItem.get, {
       id: args.orderItemId,
     });
 
@@ -554,7 +554,7 @@ export const sendFeedbackRequest = action({
     }
 
     // Get product SKU details
-    const productSku = await ctx.runQuery(api.inventory.productSku.getById, {
+    const productSku = await ctx.runQuery(internal.inventory.productSku.retrieve, {
       id: args.productSkuId,
     });
 
@@ -578,7 +578,7 @@ export const sendFeedbackRequest = action({
     }
 
     // Mark the order item as having feedback requested
-    await ctx.runMutation(api.storeFront.onlineOrderItem.update, {
+    await ctx.runMutation(internal.storeFront.onlineOrderItem.updateInternal, {
       id: args.orderItemId,
       updates: {
         feedbackRequested: true,

@@ -1,7 +1,7 @@
-import { mutation, query } from "../_generated/server";
+import { internalMutation, internalQuery, query } from "../_generated/server";
 import { v } from "convex/values";
 import { addressSchema } from "../schemas/storeFront";
-import { api } from "../_generated/api";
+import { api, internal } from "../_generated/api";
 import { Id } from "../_generated/dataModel";
 
 const entity = "storeFrontUser";
@@ -12,7 +12,7 @@ export const getAll = query({
   },
 });
 
-export const getById = query({
+export const getById = internalQuery({
   args: {
     id: v.id(entity),
   },
@@ -25,7 +25,7 @@ export const getById = query({
   },
 });
 
-export const update = mutation({
+export const update = internalMutation({
   args: {
     id: v.id(entity),
     email: v.optional(v.string()),
@@ -174,6 +174,52 @@ export const getAllUserActivity = query({
   },
 });
 
+export const getAllUserActivityInternal = internalQuery({
+  args: {
+    id: v.union(v.id(entity), v.id("guest")),
+  },
+  handler: async (ctx, args) => {
+    const analytics = await ctx.db
+      .query("analytics")
+      .withIndex("by_storeFrontUserId", (q) =>
+        q.eq("storeFrontUserId", args.id)
+      )
+      .collect();
+
+    const userIds = new Set<string>();
+    analytics.forEach((analytic) => {
+      userIds.add(analytic.storeFrontUserId);
+    });
+
+    const userMap: Record<string, { email?: string }> = {};
+    const idArray = Array.from(userIds);
+
+    for (const id of idArray) {
+      try {
+        const user = await ctx.db.get(id as Id<"storeFrontUser">);
+        if (user) {
+          userMap[id] = { email: user.email };
+          continue;
+        }
+      } catch {}
+
+      try {
+        const guest = await ctx.db.get(id as Id<"guest">);
+        if (guest) {
+          userMap[id] = { email: guest.email };
+        }
+      } catch (e) {
+        console.error("User ID not found in any table:", id);
+      }
+    }
+
+    return analytics.map((analytic) => ({
+      ...analytic,
+      userData: userMap[analytic.storeFrontUserId] || {},
+    }));
+  },
+});
+
 export const getLastViewedProduct = query({
   args: {
     id: v.union(v.id(entity), v.id("guest")),
@@ -190,10 +236,13 @@ export const getLastViewedProduct = query({
       storeId: Id<"store">,
       skuToCheck: string
     ) => {
-      const product: any = await ctx.runQuery(api.inventory.products.getById, {
-        id: productId,
-        storeId,
-      });
+      const product: any = await ctx.runQuery(
+        internal.inventory.products.getByIdInternal,
+        {
+          id: productId,
+          storeId,
+        }
+      );
 
       return product?.skus?.find(
         (sku: any) =>
@@ -333,10 +382,13 @@ export const getLastViewedProducts = query({
       storeId: Id<"store">,
       skuToCheck: string
     ) => {
-      const product: any = await ctx.runQuery(api.inventory.products.getById, {
-        id: productId,
-        storeId,
-      });
+      const product: any = await ctx.runQuery(
+        internal.inventory.products.getByIdInternal,
+        {
+          id: productId,
+          storeId,
+        }
+      );
 
       return product?.skus?.find(
         (sku: any) =>
@@ -437,6 +489,75 @@ export const getLastViewedProducts = query({
     console.log(
       `Found ${availableProducts.length} available products for user ${args.id}`
     );
+    return availableProducts;
+  },
+});
+
+export const getLastViewedProductsInternal = internalQuery({
+  args: {
+    id: v.union(v.id(entity), v.id("guest")),
+    category: v.optional(v.string()),
+    limit: v.number(),
+  },
+  returns: v.array(v.any()),
+  handler: async (ctx, args) => {
+    const availableProducts: any[] = [];
+
+    const isSkuAvailable = async (
+      productId: Id<"product">,
+      storeId: Id<"store">,
+      skuToCheck: string
+    ) => {
+      const product: any = await ctx.runQuery(
+        internal.inventory.products.getByIdInternal,
+        {
+          id: productId,
+          storeId,
+        }
+      );
+
+      return product?.skus?.find(
+        (sku: any) =>
+          sku.sku === skuToCheck &&
+          (!args.category || sku.productCategory === args.category) &&
+          sku.quantityAvailable > 0
+      );
+    };
+
+    const analytics = await ctx.db
+      .query("analytics")
+      .withIndex("by_storeFrontUserId", (q) =>
+        q.eq("storeFrontUserId", args.id)
+      )
+      .filter((q) => q.eq(q.field("action"), "viewed_product"))
+      .order("desc")
+      .take(200);
+
+    if (analytics.length) {
+      const addedSkus = new Set<string>();
+
+      for (const analytic of analytics) {
+        if (availableProducts.length >= args.limit) {
+          break;
+        }
+
+        if (addedSkus.has(analytic.data.productSku)) {
+          continue;
+        }
+
+        const availableSku = await isSkuAvailable(
+          analytic.data.product,
+          analytic.storeId,
+          analytic.data.productSku
+        );
+
+        if (availableSku) {
+          availableProducts.push(availableSku);
+          addedSkus.add(analytic.data.productSku);
+        }
+      }
+    }
+
     return availableProducts;
   },
 });

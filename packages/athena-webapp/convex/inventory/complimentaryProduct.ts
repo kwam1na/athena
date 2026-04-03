@@ -1,5 +1,5 @@
 import { ComplimentaryProduct } from "../../types";
-import { api } from "../_generated/api";
+import { internal } from "../_generated/api";
 import { mutation, query } from "../_generated/server";
 import { v } from "convex/values";
 
@@ -127,7 +127,7 @@ export const getAllComplimentaryProducts = query({
 
     const productSkus: any[] = await Promise.all(
       products.map((product) =>
-        ctx.runQuery(api.inventory.productSku.getById, {
+        ctx.runQuery(internal.inventory.productSku.retrieve, {
           id: product.productSkuId,
         })
       )

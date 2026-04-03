@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { callLlmProvider } from "./callLlmProvider";
 import { action } from "../_generated/server";
-import { api } from "../_generated/api";
+import { internal } from "../_generated/api";
 import { Analytic } from "../../types";
 import {
   calculateDeviceDistribution,
@@ -16,7 +16,7 @@ export const getStoreInsightsFromLlm = action({
   handler: async (ctx, args) => {
     const provider = args.provider ?? "openai";
 
-    const analytics = await ctx.runQuery(api.storeFront.analytics.getAll, {
+    const analytics = await ctx.runQuery(internal.storeFront.analytics.getAllInternal, {
       storeId: args.storeId,
     });
 

@@ -1,11 +1,11 @@
 import { v } from "convex/values";
-import { action, mutation } from "../_generated/server";
+import { action, internalMutation, mutation } from "../_generated/server";
 import { sendVerificationCode } from "../mailersend";
-import { api } from "../_generated/api";
+import { internal } from "../_generated/api";
 
 const expirationTimeInMinutes = 10;
 
-export const requestVerificationCode = mutation({
+export const requestVerificationCode = internalMutation({
   args: {
     email: v.string(),
     firstName: v.optional(v.string()),
@@ -114,7 +114,7 @@ export const sendVerificationCodeViaProvider = action({
   },
   handler: async (ctx, args) => {
     const data: any = await ctx.runMutation(
-      api.inventory.auth.requestVerificationCode,
+      internal.inventory.auth.requestVerificationCode,
       {
         email: args.email,
         firstName: args.firstName,

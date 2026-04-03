@@ -1,10 +1,10 @@
-import { api } from "../_generated/api";
-import { mutation, query } from "../_generated/server";
+import { internal } from "../_generated/api";
+import { internalMutation, query } from "../_generated/server";
 import { v } from "convex/values";
 
 const entity = "bagItem";
 
-export const addItemToBag = mutation({
+export const addItemToBag = internalMutation({
   args: {
     bagId: v.id("bag"),
     productId: v.id("product"),
@@ -41,7 +41,7 @@ export const addItemToBag = mutation({
   },
 });
 
-export const updateItemInBag = mutation({
+export const updateItemInBag = internalMutation({
   args: {
     itemId: v.id(entity),
     quantity: v.number(),
@@ -51,7 +51,7 @@ export const updateItemInBag = mutation({
   },
 });
 
-export const deleteItemFromBag = mutation({
+export const deleteItemFromBag = internalMutation({
   args: {
     itemId: v.id(entity),
   },
@@ -77,7 +77,7 @@ export const getBagItemsForStore = query({
     // Get all the items for the bags
     const items: any[] = await Promise.all(
       bags.map(async (bag) => {
-        return await ctx.runQuery(api.storeFront.bag.getById, {
+        return await ctx.runQuery(internal.storeFront.bag.getByIdInternal, {
           id: bag._id,
         });
       })

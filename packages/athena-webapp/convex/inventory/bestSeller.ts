@@ -1,6 +1,6 @@
 import { v } from "convex/values";
-import { mutation, query } from "../_generated/server";
-import { api } from "../_generated/api";
+import { internalQuery, mutation, query } from "../_generated/server";
+import { internal } from "../_generated/api";
 
 const entity = "bestSeller";
 
@@ -69,7 +69,45 @@ export const getAll = query({
     const enrichedItems: any[] = await Promise.all(
       items.map(async (item: any) => {
         const productSku = await ctx.runQuery(
-          api.inventory.productSku.getById,
+          internal.inventory.productSku.retrieve,
+          {
+            id: item.productSkuId,
+          }
+        );
+
+        const sku =
+          args.isVisible !== undefined
+            ? args.isVisible === productSku?.isVisible
+              ? productSku
+              : undefined
+            : productSku;
+
+        return {
+          ...item,
+          productSku: sku,
+        };
+      })
+    );
+
+    return enrichedItems;
+  },
+});
+
+export const getAllInternal = internalQuery({
+  args: {
+    storeId: v.id("store"),
+    isVisible: v.optional(v.boolean()),
+  },
+  handler: async (ctx, args) => {
+    const items = await ctx.db
+      .query(entity)
+      .filter((q) => q.eq(q.field("storeId"), args.storeId))
+      .collect();
+
+    const enrichedItems: any[] = await Promise.all(
+      items.map(async (item: any) => {
+        const productSku = await ctx.runQuery(
+          internal.inventory.productSku.retrieve,
           {
             id: item.productSkuId,
           }

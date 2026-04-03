@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { mutation, query } from "../_generated/server";
+import { internalQuery, mutation, query } from "../_generated/server";
 import { Id } from "../_generated/dataModel";
 
 const entity = "analytics";
@@ -95,6 +95,44 @@ export const getAll = query({
       .order("desc")
       .take(250);
     // .collect();
+  },
+});
+
+export const getAllInternal = internalQuery({
+  args: {
+    storeId: v.id("store"),
+    action: v.optional(v.string()),
+    productId: v.optional(v.id("product")),
+  },
+  handler: async (ctx, args) => {
+    if (args.productId && args.action) {
+      return await ctx.db
+        .query(entity)
+        .withIndex("by_storeId_action_productId", (q) =>
+          q
+            .eq("storeId", args.storeId)
+            .eq("action", args.action!)
+            .eq("productId", args.productId)
+        )
+        .order("desc")
+        .collect();
+    }
+
+    if (args.action) {
+      return await ctx.db
+        .query(entity)
+        .withIndex("by_storeId_action", (q) =>
+          q.eq("storeId", args.storeId).eq("action", args.action!)
+        )
+        .order("desc")
+        .collect();
+    }
+
+    return await ctx.db
+      .query(entity)
+      .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
+      .order("desc")
+      .take(250);
   },
 });
 

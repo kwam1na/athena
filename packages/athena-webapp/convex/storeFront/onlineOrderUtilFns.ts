@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { Address, OnlineOrder, Store } from "../../types";
-import { action } from "../_generated/server";
+import { action, internalAction } from "../_generated/server";
 import { OrderEmailType, sendOrderEmail } from "../mailersend";
 import { toDisplayAmount } from "../lib/currency";
 import {
@@ -9,7 +9,7 @@ import {
   formatDate,
   getAddressString,
 } from "../utils";
-import { api } from "../_generated/api";
+import { api, internal } from "../_generated/api";
 import { getDiscountValue, getProductDiscountValue } from "../inventory/utils";
 
 // Order status constants
@@ -303,7 +303,7 @@ export const sendOrderUpdateEmail = action({
   }),
   handler: async (ctx, args): Promise<UpdateEmailResult> => {
     // Fetch order
-    const order = await ctx.runQuery(api.storeFront.onlineOrder.get, {
+    const order = await ctx.runQuery(internal.storeFront.onlineOrder.getInternal, {
       identifier: args.orderId,
     });
 
@@ -316,7 +316,7 @@ export const sendOrderUpdateEmail = action({
     }
 
     // Fetch store
-    const store = await ctx.runQuery(api.inventory.stores.findById, {
+    const store = await ctx.runQuery(internal.inventory.stores.findById, {
       id: order.storeId,
     });
 
@@ -355,7 +355,7 @@ export const sendOrderUpdateEmail = action({
     } = emailResult;
 
     if (didSendConfirmationEmail) {
-      await ctx.runMutation(api.storeFront.onlineOrder.update, {
+      await ctx.runMutation(internal.storeFront.onlineOrder.updateInternal, {
         orderId: order._id,
         update: {
           didSendConfirmationEmail,
@@ -366,7 +366,7 @@ export const sendOrderUpdateEmail = action({
     }
 
     if (didSendReadyEmail) {
-      await ctx.runMutation(api.storeFront.onlineOrder.update, {
+      await ctx.runMutation(internal.storeFront.onlineOrder.updateInternal, {
         orderId: order._id,
         update: {
           didSendReadyEmail,
@@ -377,7 +377,7 @@ export const sendOrderUpdateEmail = action({
     }
 
     if (didSendCompletedEmail) {
-      await ctx.runMutation(api.storeFront.onlineOrder.update, {
+      await ctx.runMutation(internal.storeFront.onlineOrder.updateInternal, {
         orderId: order._id,
         update: {
           didSendCompletedEmail,
@@ -388,7 +388,113 @@ export const sendOrderUpdateEmail = action({
     }
 
     if (didSendCancelledEmail) {
-      await ctx.runMutation(api.storeFront.onlineOrder.update, {
+      await ctx.runMutation(internal.storeFront.onlineOrder.updateInternal, {
+        orderId: order._id,
+        update: {
+          didSendCancelledEmail,
+          orderCancelledEmailSentAt: Date.now(),
+        },
+      });
+      return { success: true, message: "Cancelled email sent" };
+    }
+
+    return {
+      success: false,
+      message: "Email sending failed",
+    };
+  },
+});
+
+export const sendOrderUpdateEmailInternal = internalAction({
+  args: { orderId: v.id("onlineOrder"), newStatus: v.string() },
+  returns: v.object({
+    success: v.boolean(),
+    message: v.string(),
+  }),
+  handler: async (ctx, args): Promise<UpdateEmailResult> => {
+    const order = await ctx.runQuery(internal.storeFront.onlineOrder.getInternal, {
+      identifier: args.orderId,
+    });
+
+    if (!order) {
+      console.log("Order not found in send order update email handler");
+      return {
+        success: false,
+        message: "Order not found",
+      };
+    }
+
+    const store = await ctx.runQuery(internal.inventory.stores.findById, {
+      id: order.storeId,
+    });
+
+    if (!store) {
+      console.log("Store not found in send order update email handler");
+      return {
+        success: false,
+        message: "Store not found",
+      };
+    }
+
+    console.info(
+      `sending order update: ${args.newStatus} email for order #${order.orderNumber}`
+    );
+
+    const emailResult = await handleOrderStatusUpdate({
+      order,
+      newStatus: args.newStatus,
+      store,
+    });
+
+    if (!emailResult) {
+      return {
+        success: false,
+        message: "No email sent for this status",
+      };
+    }
+
+    const {
+      didSendConfirmationEmail,
+      didSendReadyEmail,
+      didSendCompletedEmail,
+      didSendCancelledEmail,
+    } = emailResult;
+
+    if (didSendConfirmationEmail) {
+      await ctx.runMutation(internal.storeFront.onlineOrder.updateInternal, {
+        orderId: order._id,
+        update: {
+          didSendConfirmationEmail,
+          orderReceivedEmailSentAt: Date.now(),
+        },
+      });
+      return { success: true, message: "Confirmation email sent" };
+    }
+
+    if (didSendReadyEmail) {
+      await ctx.runMutation(internal.storeFront.onlineOrder.updateInternal, {
+        orderId: order._id,
+        update: {
+          didSendReadyEmail,
+          orderReadyEmailSentAt: Date.now(),
+        },
+      });
+      return { success: true, message: "Ready email sent" };
+    }
+
+    if (didSendCompletedEmail) {
+      await ctx.runMutation(internal.storeFront.onlineOrder.updateInternal, {
+        orderId: order._id,
+        update: {
+          didSendCompletedEmail,
+          orderCompletedEmailSentAt: Date.now(),
+        },
+      });
+      return { success: true, message: "Completed email sent" };
+    }
+
+    if (didSendCancelledEmail) {
+      await ctx.runMutation(internal.storeFront.onlineOrder.updateInternal, {
         orderId: order._id,
         update: {
           didSendCancelledEmail,

@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { HonoWithConvex } from "convex-helpers/server/hono";
 import { ActionCtx } from "../../../../_generated/server";
-import { api } from "../../../../_generated/api";
+import { internal } from "../../../../_generated/api";
 import { Id } from "../../../../_generated/dataModel";
 import { get } from "../../../../storeFront/onlineOrder";
 import { getCookie } from "hono/cookie";
@@ -16,7 +16,7 @@ meRoutes.get("/", async (c) => {
   }
 
   try {
-    const user = await c.env.runQuery(api.storeFront.user.getById, {
+    const user = await c.env.runQuery(internal.storeFront.user.getById, {
       id: userId as Id<"storeFrontUser">,
     });
 
@@ -42,7 +42,7 @@ meRoutes.put("/", async (c) => {
     billingAddress,
   } = await c.req.json();
 
-  const user = await c.env.runMutation(api.storeFront.user.update, {
+  const user = await c.env.runMutation(internal.storeFront.user.update, {
     id: userId as Id<"storeFrontUser">,
     email,
     firstName,

@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { HonoWithConvex } from "convex-helpers/server/hono";
 import { ActionCtx } from "../../../../_generated/server";
-import { api } from "../../../../_generated/api";
+import { api, internal } from "../../../../_generated/api";
 import { Id } from "../../../../_generated/dataModel";
 import { getStoreDataFromRequest } from "../../../utils";
 
@@ -23,7 +23,7 @@ productRoutes.get("/", async (c) => {
   const isVisible = params.isVisible?.[0] === "true";
 
   const products = await c.env.runAction(
-    api.inventory.productUtil.getAllProducts,
+    internal.inventory.productUtil.getAllProducts,
     {
       storeId: storeId as Id<"store">,
       color: colors,

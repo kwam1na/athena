@@ -1,3 +1,28 @@
+# Athena Convex Conventions
+
+Public Convex functions are part of an externally callable API surface. In Athena,
+we only keep a function public when one of these is true:
+
+- the browser calls it directly through `useQuery`, `useMutation`, or `useAction`
+- it is intentionally exposed as an HTTP-facing boundary
+
+Everything else should be internal. That includes:
+
+- functions only called by other Convex functions
+- scheduler jobs and other backend orchestration
+- Hono routes when the route itself is the public boundary
+
+When a function needs both browser access and backend reuse, keep the public entry
+point thin and prefer an internal counterpart or shared helper for server-side
+callers. Inside Convex code, `ctx.runQuery` and `ctx.runMutation` should target
+`internal.*`, not `api.*`.
+
+Use these classifications when reviewing a function:
+
+- `client-facing`: called directly from the web app
+- `http-route-facing`: callable through a route, but not directly by the browser
+- `internal-only`: only used by Convex, schedulers, or other backend code
+
 # Welcome to your Convex functions directory!
 
 Write your Convex functions here.

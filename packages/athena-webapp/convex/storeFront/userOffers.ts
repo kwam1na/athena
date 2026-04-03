@@ -1,11 +1,11 @@
 import { v } from "convex/values";
-import { query, QueryCtx } from "../_generated/server";
+import { internalQuery, QueryCtx } from "../_generated/server";
 import { Doc, Id } from "../_generated/dataModel";
 
 /**
  * Determine if the user is eligible for offers
  */
-export const getEligibility = query({
+export const getEligibility = internalQuery({
   args: {
     storeFrontUserId: v.union(v.id("storeFrontUser"), v.id("guest")),
     storeId: v.id("store"),

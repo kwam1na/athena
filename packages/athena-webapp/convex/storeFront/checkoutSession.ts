@@ -241,7 +241,7 @@ export const create = mutation({
         `[NewSession] Attempting to redeem promo code: ${eligiblePromoCode}`
       );
       const redeemResult = await ctx.runMutation(
-        api.inventory.promoCode.redeem,
+        internal.inventory.promoCode.redeem,
         {
           code: eligiblePromoCode,
           checkoutSessionId: sessionId,
@@ -278,7 +278,7 @@ export const create = mutation({
   },
 });
 
-export const getAbandonedCheckoutSessions = query({
+export const getAbandonedCheckoutSessions = internalQuery({
   args: {},
   handler: async (ctx) => {
     const now = Date.now();
@@ -422,9 +422,12 @@ export const getActiveCheckoutSessionsForStore = query({
 export const cancelOrder = action({
   args: { id: v.id("checkoutSession") },
   handler: async (ctx, args) => {
-    const session = await ctx.runQuery(api.storeFront.checkoutSession.getById, {
-      sessionId: args.id,
-    });
+    const session = await ctx.runQuery(
+      internal.storeFront.checkoutSession.getByIdInternal,
+      {
+        sessionId: args.id,
+      }
+    );
 
     if (!session) {
       return { success: false, message: "Invalid session." };
@@ -451,7 +454,7 @@ export const cancelOrder = action({
           }
         ),
 
-        await ctx.runMutation(api.storeFront.onlineOrder.update, {
+        await ctx.runMutation(internal.storeFront.onlineOrder.updateInternal, {
           externalReference: session.externalReference,
           update: { status: "cancelled" },
         }),
@@ -507,7 +510,7 @@ export const clearAbandonedSessions = internalAction({
   args: {},
   handler: async (ctx) => {
     const sessions = await ctx.runQuery(
-      api.storeFront.checkoutSession.getAbandonedCheckoutSessions,
+      internal.storeFront.checkoutSession.getAbandonedCheckoutSessions,
       {}
     );
 
@@ -676,7 +679,7 @@ async function handlePlaceOrder(
   session: CheckoutSession
 ) {
   const placedOrder = session.externalReference
-    ? await ctx.runQuery(api.storeFront.onlineOrder.get, {
+    ? await ctx.runQuery(internal.storeFront.onlineOrder.getInternal, {
         identifier: session.externalReference,
       })
     : null;
@@ -715,7 +718,7 @@ async function handleOrderCreation(
   orderDetails: any
 ) {
   const placedOrder = session.externalReference
-    ? await ctx.runQuery(api.storeFront.onlineOrder.get, {
+    ? await ctx.runQuery(internal.storeFront.onlineOrder.getInternal, {
         identifier: session.externalReference,
       })
     : null;
@@ -735,7 +738,9 @@ async function handleOrderCreation(
 
   if (orderResponse.success) {
     console.log("Order created successfully. Clearing user bag.");
-    await ctx.runMutation(api.storeFront.bag.clearBag, { id: session.bagId });
+    await ctx.runMutation(internal.storeFront.bag.clearBag, {
+      id: session.bagId,
+    });
   }
 
   return orderResponse;
@@ -746,7 +751,7 @@ async function createOnlineOrder(
   sessionId: Id<"checkoutSession">,
   orderData: any
 ): Promise<any> {
-  const response = await ctx.runMutation(api.storeFront.onlineOrder.create, {
+  const response = await ctx.runMutation(internal.storeFront.onlineOrder.createInternal, {
     checkoutSessionId: sessionId,
     ...orderData,
   });
@@ -762,7 +767,7 @@ async function createOnlineOrder(
   return { success: true, orderId: response.orderId };
 }
 
-export const getCheckoutSession = query({
+export const getCheckoutSession = internalQuery({
   args: {
     storeFrontUserId: v.union(v.id("storeFrontUser"), v.id("guest")),
     externalReference: v.optional(v.string()),
@@ -841,6 +846,56 @@ export const getById = query({
 
         let category: string | undefined;
 
+        let colorName;
+
+        if (productSku?.color) {
+          const color = await ctx.db.get(productSku.color);
+          colorName = color?.name;
+        }
+
+        if (product) {
+          const productCategory = await ctx.db.get(product.categoryId);
+          category = productCategory?.name;
+        }
+
+        return {
+          ...item,
+          productCategory: category,
+          length: productSku?.length,
+          price: productSku?.price,
+          colorName,
+          productName: product?.name,
+          productImage: productSku?.images?.[0] ?? null,
+        };
+      })
+    );
+
+    return {
+      ...session,
+      items: sessionItemsWithImages,
+    };
+  },
+});
+
+export const getByIdInternal = internalQuery({
+  args: { sessionId: v.id("checkoutSession") },
+  handler: async (ctx, args) => {
+    const session = await ctx.db.get(args.sessionId);
+    if (!session) return null;
+
+    const sessionItems = await ctx.db
+      .query("checkoutSessionItem")
+      .filter((q) => q.eq(q.field("sesionId"), args.sessionId))
+      .collect();
+
+    const sessionItemsWithImages = await Promise.all(
+      sessionItems.map(async (item) => {
+        const [product, productSku] = await Promise.all([
+          ctx.db.get(item.productId),
+          ctx.db.get(item.productSkuId),
+        ]);
+
+        let category: string | undefined;
         let colorName;
 
         if (productSku?.color) {
@@ -1161,7 +1216,7 @@ async function handleExistingSession(
           `[HandleExisting] Re-applying existing discount due to item changes`
         );
         const redeemResult = await ctx.runMutation(
-          api.inventory.promoCode.redeem,
+          internal.inventory.promoCode.redeem,
           {
             code: existingSession.discount.code,
             checkoutSessionId: existingSession._id,
@@ -1204,7 +1259,7 @@ async function handleExistingSession(
         `[HandleExisting] Found best-value promo code: ${eligiblePromoCode}`
       );
       const redeemResult = await ctx.runMutation(
-        api.inventory.promoCode.redeem,
+        internal.inventory.promoCode.redeem,
         {
           code: eligiblePromoCode,
           checkoutSessionId: existingSession._id,

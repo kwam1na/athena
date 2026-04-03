@@ -1,6 +1,6 @@
 import { action } from "../_generated/server";
 import { v } from "convex/values";
-import { api } from "../_generated/api";
+import { internal } from "../_generated/api";
 import { normalizeStoreConfig } from "../inventory/storeConfigV2";
 
 const CLOUDFLARE_API_BASE = "https://api.cloudflare.com/client/v4";
@@ -141,7 +141,7 @@ export const addStreamReelVersion = action({
     thumbnailUrl: v.optional(v.string()),
   },
   handler: async (ctx, args): Promise<{ success: true; version: number }> => {
-    const store: any = await ctx.runQuery(api.inventory.stores.getById, {
+    const store: any = await ctx.runQuery(internal.inventory.stores.findById, {
       id: args.storeId,
     });
 
@@ -168,7 +168,7 @@ export const addStreamReelVersion = action({
       createdAt: Date.now(),
     };
 
-    await ctx.runMutation(api.inventory.stores.patchConfigV2, {
+    await ctx.runMutation(internal.inventory.stores.patchConfigV2Internal, {
       id: args.storeId,
       patch: {
         media: {
@@ -192,7 +192,7 @@ export const deleteStreamReelVersion = action({
     version: v.number(),
   },
   handler: async (ctx, args): Promise<{ success: true }> => {
-    const store: any = await ctx.runQuery(api.inventory.stores.getById, {
+    const store: any = await ctx.runQuery(internal.inventory.stores.findById, {
       id: args.storeId,
     });
 
@@ -242,7 +242,7 @@ export const deleteStreamReelVersion = action({
       patch.media.reels.activeHlsUrl = null;
     }
 
-    await ctx.runMutation(api.inventory.stores.patchConfigV2, {
+    await ctx.runMutation(internal.inventory.stores.patchConfigV2Internal, {
       id: args.storeId,
       patch,
     });
@@ -261,7 +261,7 @@ export const setActiveStreamReel = action({
     hlsUrl: v.string(),
   },
   handler: async (ctx, args): Promise<{ success: true }> => {
-    const store: any = await ctx.runQuery(api.inventory.stores.getById, {
+    const store: any = await ctx.runQuery(internal.inventory.stores.findById, {
       id: args.storeId,
     });
 
@@ -279,7 +279,7 @@ export const setActiveStreamReel = action({
       throw new Error("Reel version not found");
     }
 
-    await ctx.runMutation(api.inventory.stores.patchConfigV2, {
+    await ctx.runMutation(internal.inventory.stores.patchConfigV2Internal, {
       id: args.storeId,
       patch: {
         media: {

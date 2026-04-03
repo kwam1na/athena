@@ -1,5 +1,9 @@
-import { api } from "../_generated/api";
-import { mutation, query } from "../_generated/server";
+import {
+  internalMutation,
+  internalQuery,
+  mutation,
+  query,
+} from "../_generated/server";
 import { v } from "convex/values";
 
 const entity = "savedBag";
@@ -10,7 +14,7 @@ export const getAll = query({
   },
 });
 
-export const create = mutation({
+export const create = internalMutation({
   args: {
     storeId: v.id("store"),
     storeFrontUserId: v.union(v.id("storeFrontUser"), v.id("guest")),
@@ -86,7 +90,7 @@ export const getById = query({
   },
 });
 
-export const getByUserId = query({
+export const getByUserId = internalQuery({
   args: {
     storeFrontUserId: v.union(v.id("storeFrontUser"), v.id("guest")),
   },
@@ -164,7 +168,7 @@ export const deleteSavedBag = mutation({
   },
 });
 
-export const updateOwner = mutation({
+export const updateOwner = internalMutation({
   args: {
     currentOwner: v.id("guest"),
     newOwner: v.id("storeFrontUser"),

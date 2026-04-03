@@ -1,12 +1,12 @@
 import { v } from "convex/values";
-import { action, mutation } from "../_generated/server";
+import { action, internalMutation, mutation } from "../_generated/server";
 import { sendVerificationCode } from "../mailersend";
-import { api } from "../_generated/api";
+import { internal } from "../_generated/api";
 import { SignJWT } from "jose";
 
 const expirationTimeInMinutes = 10;
 
-export const requestVerificationCode = mutation({
+export const requestVerificationCode = internalMutation({
   args: {
     email: v.string(),
     firstName: v.optional(v.string()),
@@ -145,13 +145,13 @@ export const sendVerificationCodeViaProvider = action({
   },
   handler: async (ctx, args): Promise<any> => {
     const [data, store] = await Promise.all([
-      ctx.runMutation(api.storeFront.auth.requestVerificationCode, {
+      ctx.runMutation(internal.storeFront.auth.requestVerificationCode, {
         email: args.email,
         firstName: args.firstName,
         lastName: args.lastName,
         storeId: args.storeId,
       }),
-      ctx.runQuery(api.inventory.stores.findById, {
+      ctx.runQuery(internal.inventory.stores.findById, {
         id: args.storeId,
       }),
     ]);
