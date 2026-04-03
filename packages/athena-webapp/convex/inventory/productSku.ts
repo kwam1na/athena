@@ -1,29 +1,33 @@
+/* eslint-disable @convex-dev/no-collect-in-query -- Query refactors are tracked in V26-168, V26-169, and V26-170; this PR only hardens API boundaries. */
 import { v } from "convex/values";
 import { action, internalQuery, mutation, query } from "../_generated/server";
 import { deleteFileInR2, uploadFileToR2 } from "../cloudflare/r2";
 import { getProductName } from "../utils";
 
-export const generateUploadUrl = mutation(async (ctx) => {
+export const generateUploadUrl = mutation({
+  args: {},
+  handler: async (ctx) => {
   return await ctx.storage.generateUploadUrl();
+}
 });
 
 export const getById = query({
   args: { id: v.id("productSku") },
   handler: async (ctx, args) => {
-    const s = await ctx.db.get(args.id);
+    const s = await ctx.db.get("productSku", args.id);
     if (!s) return null;
 
     // Fetch related product
-    const product = await ctx.db.get(s.productId);
+    const product = await ctx.db.get("product", s.productId);
     // Fetch color (if present)
-    const color = s.color ? await ctx.db.get(s.color) : null;
+    const color = s.color ? await ctx.db.get("color", s.color) : null;
     // Fetch subcategory (from product)
     const subcategory = product?.subcategoryId
-      ? await ctx.db.get(product.subcategoryId)
+      ? await ctx.db.get("subcategory", product.subcategoryId)
       : null;
     // Fetch category (from product)
     const category = product?.categoryId
-      ? await ctx.db.get(product.categoryId)
+      ? await ctx.db.get("category", product.categoryId)
       : null;
 
     return {
@@ -43,16 +47,16 @@ export const getById = query({
 export const retrieve = internalQuery({
   args: { id: v.id("productSku") },
   handler: async (ctx, args) => {
-    const s = await ctx.db.get(args.id);
+    const s = await ctx.db.get("productSku", args.id);
     if (!s) return null;
 
-    const product = await ctx.db.get(s.productId);
-    const color = s.color ? await ctx.db.get(s.color) : null;
+    const product = await ctx.db.get("product", s.productId);
+    const color = s.color ? await ctx.db.get("color", s.color) : null;
     const subcategory = product?.subcategoryId
-      ? await ctx.db.get(product.subcategoryId)
+      ? await ctx.db.get("subcategory", product.subcategoryId)
       : null;
     const category = product?.categoryId
-      ? await ctx.db.get(product.categoryId)
+      ? await ctx.db.get("category", product.categoryId)
       : null;
 
     return {
@@ -81,7 +85,7 @@ export const getInventoryBySkuIds = query({
   handler: async (ctx, args) => {
     // Fetch all SKUs in parallel
     const skus = await Promise.all(
-      args.skuIds.map((skuId) => ctx.db.get(skuId))
+      args.skuIds.map((skuId) => ctx.db.get("productSku", skuId))
     );
 
     // Filter out nulls and return only inventory fields
@@ -99,7 +103,7 @@ export const update = mutation({
   args: { id: v.id("productSku"), update: v.record(v.string(), v.any()) },
   handler: async (ctx, args) => {
     if (args.update.images) {
-      await ctx.db.patch(args.id, {
+      await ctx.db.patch("productSku", args.id, {
         images: args.update.images,
       });
     }
@@ -160,7 +164,7 @@ export const nukeProblematicImages = mutation({
       if (validImages.length === sku.images.length) return [];
 
       return [
-        ctx.db.patch(sku._id, { images: validImages }).then(() => {
+        ctx.db.patch("productSku", sku._id, { images: validImages }).then(() => {
           console.log(
             `✅ SKU ${sku._id}: removed ${sku.images.length - validImages.length} invalid images`
           );
@@ -180,7 +184,7 @@ export const makeAllProductsVisible = mutation({
     const productSkus = await ctx.db.query("product").collect();
 
     const updates = productSkus.map(async (sku) => {
-      return ctx.db.patch(sku._id, { isVisible: true }).then(() => {
+      return ctx.db.patch("product", sku._id, { isVisible: true }).then(() => {
         console.log(`✅ SKU ${sku._id}: set isVisible to true`);
       });
     });

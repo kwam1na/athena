@@ -54,14 +54,14 @@ async function determineOfferEligibility(
 
   const isEngaged = uniqueActions.size >= 2;
 
-  const store = await ctx.db.get(storeId);
+  const store = await ctx.db.get("store", storeId);
 
   const currentWelcomeOffer: Id<"promoCode"> | null =
     store?.config?.homepageDiscountCodeModalPromoCode;
 
   // Check if the WELCOME25 promo code exists and is active
   const welcomePromo = currentWelcomeOffer
-    ? await ctx.db.get(currentWelcomeOffer)
+    ? await ctx.db.get("promoCode", currentWelcomeOffer)
     : null;
 
   // Check if user has already redeemed this code

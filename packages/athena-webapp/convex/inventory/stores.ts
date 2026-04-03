@@ -1,3 +1,4 @@
+/* eslint-disable @convex-dev/no-collect-in-query -- Query refactors are tracked in V26-168, V26-169, and V26-170; this PR only hardens API boundaries. */
 import {
   action,
   internalQuery,
@@ -121,7 +122,7 @@ export const getById = query({
     id: v.id(entity),
   },
   handler: async (ctx, args) => {
-    return await ctx.db.get(args.id);
+    return await ctx.db.get("store", args.id);
   },
 });
 
@@ -130,7 +131,7 @@ export const findById = internalQuery({
     id: v.id(entity),
   },
   handler: async (ctx, args) => {
-    const store = await ctx.db.get(args.id);
+    const store = await ctx.db.get("store", args.id);
 
     return store;
   },
@@ -185,7 +186,7 @@ export const create = mutation({
   handler: async (ctx, args) => {
     const id = await ctx.db.insert(entity, args);
 
-    return await ctx.db.get(id);
+    return await ctx.db.get("store", id);
   },
 });
 
@@ -195,9 +196,9 @@ export const update = mutation({
     name: v.string(),
   },
   handler: async (ctx, args) => {
-    await ctx.db.patch(args.id, { name: args.name });
+    await ctx.db.patch("store", args.id, { name: args.name });
 
-    return await ctx.db.get(args.id);
+    return await ctx.db.get("store", args.id);
   },
 });
 
@@ -206,7 +207,7 @@ export const remove = mutation({
     id: v.id(entity),
   },
   handler: async (ctx, args) => {
-    await ctx.db.delete(args.id);
+    await ctx.db.delete("store", args.id);
 
     return { message: "OK" };
   },
@@ -221,9 +222,9 @@ export const updateConfig = internalMutation({
     const normalized = toV2Config(args.config);
     const config = mirrorLegacyKeys(normalized, args.config);
 
-    await ctx.db.patch(args.id, { config });
+    await ctx.db.patch("store", args.id, { config });
 
-    return await ctx.db.get(args.id);
+    return await ctx.db.get("store", args.id);
   },
 });
 
@@ -234,7 +235,7 @@ export const patchConfigV2 = mutation({
     mirrorLegacy: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
-    const store = await ctx.db.get(args.id);
+    const store = await ctx.db.get("store", args.id);
     if (!store) {
       throw new Error("Store not found");
     }
@@ -245,9 +246,9 @@ export const patchConfigV2 = mutation({
       ? mirrorLegacyKeys(nextV2Config, store.config)
       : toV2OnlyConfig(store.config ? { ...store.config, ...nextV2Config } : nextV2Config);
 
-    await ctx.db.patch(args.id, { config });
+    await ctx.db.patch("store", args.id, { config });
 
-    return await ctx.db.get(args.id);
+    return await ctx.db.get("store", args.id);
   },
 });
 
@@ -257,7 +258,7 @@ export const patchConfigV2Internal = internalMutation({
     patch: v.record(v.string(), v.any()),
   },
   handler: async (ctx, args) => {
-    const store = await ctx.db.get(args.id);
+    const store = await ctx.db.get("store", args.id);
 
     if (!store) {
       throw new Error("Store not found");
@@ -265,9 +266,9 @@ export const patchConfigV2Internal = internalMutation({
 
     const nextConfig = patchV2Config(store.config, args.patch);
 
-    await ctx.db.patch(args.id, { config: nextConfig });
+    await ctx.db.patch("store", args.id, { config: nextConfig });
 
-    return await ctx.db.get(args.id);
+    return await ctx.db.get("store", args.id);
   },
 });
 
@@ -341,7 +342,7 @@ export const migrateConfigToV2Page = mutation({
         continue;
       }
 
-      await ctx.db.patch(store._id, { config: nextConfig });
+      await ctx.db.patch("store", store._id, { config: nextConfig });
       migratedCount += 1;
     }
 
@@ -378,7 +379,7 @@ export const cleanupLegacyConfigKeysPage = mutation({
         continue;
       }
 
-      await ctx.db.patch(store._id, { config: nextConfig });
+      await ctx.db.patch("store", store._id, { config: nextConfig });
       cleanedCount += 1;
       removedLegacyKeyCount += legacyKeys.length;
     }
@@ -421,7 +422,7 @@ export const calculateTax = query({
     taxName: v.string(),
   }),
   handler: async (ctx, args) => {
-    const store = await ctx.db.get(args.storeId);
+    const store = await ctx.db.get("store", args.storeId);
     const normalizedConfig = normalizeStoreConfig(store?.config);
     const taxConfig = normalizedConfig.commerce.tax;
 
@@ -597,7 +598,7 @@ export const clearExpiredRestrictions = internalMutation({
           store.config,
         );
 
-        await ctx.db.patch(store._id, {
+        await ctx.db.patch("store", store._id, {
           config: nextConfig,
         });
       }

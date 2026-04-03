@@ -29,7 +29,7 @@ export const requestVerificationCode = internalMutation({
       isUsed: false,
     });
 
-    return await ctx.db.get(id);
+    return await ctx.db.get("appVerificationCode", id);
   },
 });
 
@@ -71,7 +71,7 @@ export const verifyCode = mutation({
       };
     }
 
-    await ctx.db.patch(verificationCode._id, {
+    await ctx.db.patch("appVerificationCode", verificationCode._id, {
       isUsed: true,
     });
 
@@ -89,7 +89,7 @@ export const verifyCode = mutation({
         lastName: verificationCode.lastName,
       });
 
-      user = await ctx.db.get(id);
+      user = await ctx.db.get("athenaUser", id);
     }
 
     if (!user) {

@@ -1,3 +1,4 @@
+/* eslint-disable @convex-dev/no-collect-in-query -- Query refactors are tracked in V26-168, V26-169, and V26-170; this PR only hardens API boundaries. */
 import { CheckoutSession, CheckoutSessionItem, ProductSku } from "../../types";
 import { api, internal } from "../_generated/api";
 import { Id } from "../_generated/dataModel";
@@ -61,7 +62,7 @@ export const create = mutation({
     const expiresAt = now + sessionLimit;
 
     // check that the store is in active mode
-    const store = await ctx.db.get(args.storeId);
+    const store = await ctx.db.get("store", args.storeId);
 
     const { config } = store || {};
 
@@ -74,7 +75,7 @@ export const create = mutation({
 
     // Check for valid products
     const productExistenceChecks = await Promise.all(
-      args.products.map((p) => ctx.db.get(p.productId))
+      args.products.map((p) => ctx.db.get("product", p.productId))
     );
 
     const invalidProducts = args.products.filter(
@@ -265,7 +266,7 @@ export const create = mutation({
     }
 
     // Fetch updated session with discount applied
-    const updatedSession = await ctx.db.get(sessionId);
+    const updatedSession = await ctx.db.get("checkoutSession", sessionId);
 
     console.log("updatedSession", updatedSession);
     return {
@@ -357,9 +358,9 @@ export const releaseCheckoutItems = internalMutation({
       await Promise.all(
         Array.from(availabilityUpdates.entries()).map(
           async ([skuId, quantityToRelease]) => {
-            const productSku = await ctx.db.get(skuId);
+            const productSku = await ctx.db.get("productSku", skuId);
             if (productSku) {
-              await ctx.db.patch(skuId, {
+              await ctx.db.patch("productSku", skuId, {
                 quantityAvailable:
                   productSku.quantityAvailable + quantityToRelease,
               });
@@ -370,8 +371,8 @@ export const releaseCheckoutItems = internalMutation({
 
       // Delete session items and the expired session
       await Promise.all([
-        ...sessionItems.map((item) => ctx.db.delete(item._id)),
-        ctx.db.delete(session._id),
+        ...sessionItems.map((item) => ctx.db.delete("checkoutSessionItem", item._id)),
+        ctx.db.delete("checkoutSession", session._id),
       ]);
 
       console.log(`Released quantities for session: ${session._id}`);
@@ -495,7 +496,7 @@ export const completeCheckoutSessions = internalMutation({
     // set all sessions to completed
     await Promise.all(
       sessions.map((session) =>
-        ctx.db.patch(session._id, { hasCompletedCheckoutSession: true })
+        ctx.db.patch("checkoutSession", session._id, { hasCompletedCheckoutSession: true })
       )
     );
 
@@ -580,9 +581,9 @@ export const updateCheckoutSession = internalMutation({
   handler: async (ctx, args) => {
     try {
       const patchObject = createPatchObject(args);
-      await ctx.db.patch(args.id, patchObject);
+      await ctx.db.patch("checkoutSession", args.id, patchObject);
 
-      const session = await ctx.db.get(args.id);
+      const session = await ctx.db.get("checkoutSession", args.id);
 
       if (!session) {
         console.log(
@@ -622,7 +623,7 @@ export const updateCheckoutSession = internalMutation({
 export const clearDiscount = internalMutation({
   args: { id: v.id("checkoutSession") },
   handler: async (ctx, args) => {
-    await ctx.db.patch(args.id, { discount: null });
+    await ctx.db.patch("checkoutSession", args.id, { discount: null });
   },
 });
 
@@ -763,7 +764,7 @@ async function createOnlineOrder(
     return { success: false, message: "Failed to create online order." };
   }
 
-  await ctx.db.patch(sessionId, { placedOrderId: response.orderId });
+  await ctx.db.patch("checkoutSession", sessionId, { placedOrderId: response.orderId });
   return { success: true, orderId: response.orderId };
 }
 
@@ -829,7 +830,7 @@ export const getUnverifiedPaidSessions = internalQuery({
 export const getById = query({
   args: { sessionId: v.id("checkoutSession") },
   handler: async (ctx, args) => {
-    const session = await ctx.db.get(args.sessionId);
+    const session = await ctx.db.get("checkoutSession", args.sessionId);
     if (!session) return null;
 
     const sessionItems = await ctx.db
@@ -840,8 +841,8 @@ export const getById = query({
     const sessionItemsWithImages = await Promise.all(
       sessionItems.map(async (item) => {
         const [product, productSku] = await Promise.all([
-          ctx.db.get(item.productId),
-          ctx.db.get(item.productSkuId),
+          ctx.db.get("product", item.productId),
+          ctx.db.get("productSku", item.productSkuId),
         ]);
 
         let category: string | undefined;
@@ -849,12 +850,12 @@ export const getById = query({
         let colorName;
 
         if (productSku?.color) {
-          const color = await ctx.db.get(productSku.color);
+          const color = await ctx.db.get("color", productSku.color);
           colorName = color?.name;
         }
 
         if (product) {
-          const productCategory = await ctx.db.get(product.categoryId);
+          const productCategory = await ctx.db.get("category", product.categoryId);
           category = productCategory?.name;
         }
 
@@ -880,7 +881,7 @@ export const getById = query({
 export const getByIdInternal = internalQuery({
   args: { sessionId: v.id("checkoutSession") },
   handler: async (ctx, args) => {
-    const session = await ctx.db.get(args.sessionId);
+    const session = await ctx.db.get("checkoutSession", args.sessionId);
     if (!session) return null;
 
     const sessionItems = await ctx.db
@@ -891,20 +892,20 @@ export const getByIdInternal = internalQuery({
     const sessionItemsWithImages = await Promise.all(
       sessionItems.map(async (item) => {
         const [product, productSku] = await Promise.all([
-          ctx.db.get(item.productId),
-          ctx.db.get(item.productSkuId),
+          ctx.db.get("product", item.productId),
+          ctx.db.get("productSku", item.productSkuId),
         ]);
 
         let category: string | undefined;
         let colorName;
 
         if (productSku?.color) {
-          const color = await ctx.db.get(productSku.color);
+          const color = await ctx.db.get("color", productSku.color);
           colorName = color?.name;
         }
 
         if (product) {
-          const productCategory = await ctx.db.get(product.categoryId);
+          const productCategory = await ctx.db.get("category", product.categoryId);
           category = productCategory?.name;
         }
 
@@ -1061,8 +1062,8 @@ async function updateExistingSession(
   // Perform batch operations
   await Promise.all([
     ...itemsToInsert.map((item) => ctx.db.insert("checkoutSessionItem", item)),
-    ...itemsToUpdate.map(({ id, quantity }) => ctx.db.patch(id, { quantity })),
-    ...itemsToDelete.map((id) => ctx.db.delete(id)),
+    ...itemsToUpdate.map(({ id, quantity }) => ctx.db.patch("checkoutSessionItem", id, { quantity })),
+    ...itemsToDelete.map((id) => ctx.db.delete("checkoutSessionItem", id)),
     ...availabilityUpdates.map(({ id, change }) =>
       updateAvailability(ctx, id, change)
     ),
@@ -1109,7 +1110,7 @@ async function updateProductAvailability(
     products.map(({ productSkuId, quantity }) => {
       const sku = productSkus.find((p) => p._id === productSkuId);
       if (sku) {
-        return ctx.db.patch(productSkuId, {
+        return ctx.db.patch("productSku", productSkuId, {
           quantityAvailable: sku.quantityAvailable - quantity,
         });
       }
@@ -1122,9 +1123,9 @@ async function updateAvailability(
   productSkuId: Id<"productSku">,
   change: number
 ) {
-  const productSku = await ctx.db.get(productSkuId);
+  const productSku = await ctx.db.get("productSku", productSkuId);
   if (productSku) {
-    await ctx.db.patch(productSkuId, {
+    await ctx.db.patch("productSku", productSkuId, {
       quantityAvailable: productSku.quantityAvailable + change,
     });
   }
@@ -1155,7 +1156,7 @@ async function handleExistingSession(
   );
 
   // Update session expiry and amount
-  await ctx.db.patch(existingSession._id, {
+  await ctx.db.patch("checkoutSession", existingSession._id, {
     expiresAt: args.expiresAt,
     amount: args.amount,
   });
@@ -1282,7 +1283,7 @@ async function handleExistingSession(
   }
 
   // Fetch and return updated session
-  const updatedSession = await ctx.db.get(existingSession._id);
+  const updatedSession = await ctx.db.get("checkoutSession", existingSession._id);
   const updatedSessionItems = await ctx.db
     .query("checkoutSessionItem")
     .filter((q) => q.eq(q.field("sesionId"), existingSession._id))
@@ -1315,7 +1316,7 @@ async function validateExistingDiscount(
   );
 
   // Get the promo code
-  const promoCode = await ctx.db.get(promoCodeId);
+  const promoCode = await ctx.db.get("promoCode", promoCodeId);
   if (!promoCode || promoCode._id !== promoCodeId) {
     console.log(
       `[ValidateDiscount] Promo code not found for existing discount: ${discount.code}`

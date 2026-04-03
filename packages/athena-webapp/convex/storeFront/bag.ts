@@ -1,3 +1,4 @@
+/* eslint-disable @convex-dev/no-collect-in-query -- Query refactors are tracked in V26-168, V26-169, and V26-170; this PR only hardens API boundaries. */
 import { Doc } from "../_generated/dataModel";
 import {
   internalMutation,
@@ -10,6 +11,7 @@ import { v } from "convex/values";
 const entity = "bag";
 
 export const getAll = query({
+  args: {},
   handler: async (ctx) => {
     return await ctx.db.query(entity).collect();
   },
@@ -27,7 +29,7 @@ export const create = internalMutation({
       items: [],
     });
 
-    const bag = await ctx.db.get(id);
+    const bag = await ctx.db.get("bag", id);
     return {
       ...bag,
       items: [],
@@ -40,7 +42,7 @@ export const getById = query({
     id: v.id(entity),
   },
   handler: async (ctx, args) => {
-    const bag = await ctx.db.get(args.id);
+    const bag = await ctx.db.get("bag", args.id);
 
     if (!bag) return null;
 
@@ -53,21 +55,21 @@ export const getById = query({
     const itemsWithProductDetails = await Promise.all(
       items.map(async (item) => {
         const [sku, product] = await Promise.all([
-          ctx.db.get(item.productSkuId),
-          ctx.db.get(item.productId),
+          ctx.db.get("productSku", item.productSkuId),
+          ctx.db.get("product", item.productId),
         ]);
 
         let colorName;
 
         if (sku?.color) {
-          const color = await ctx.db.get(sku.color);
+          const color = await ctx.db.get("color", sku.color);
           colorName = color?.name;
         }
 
         let category: string | undefined;
 
         if (product) {
-          const productCategory = await ctx.db.get(product.categoryId);
+          const productCategory = await ctx.db.get("category", product.categoryId);
           category = productCategory?.name;
         }
 
@@ -97,7 +99,7 @@ export const getByIdInternal = internalQuery({
     id: v.id(entity),
   },
   handler: async (ctx, args) => {
-    const bag = await ctx.db.get(args.id);
+    const bag = await ctx.db.get("bag", args.id);
 
     if (!bag) return null;
 
@@ -109,21 +111,21 @@ export const getByIdInternal = internalQuery({
     const itemsWithProductDetails = await Promise.all(
       items.map(async (item) => {
         const [sku, product] = await Promise.all([
-          ctx.db.get(item.productSkuId),
-          ctx.db.get(item.productId),
+          ctx.db.get("productSku", item.productSkuId),
+          ctx.db.get("product", item.productId),
         ]);
 
         let colorName;
 
         if (sku?.color) {
-          const color = await ctx.db.get(sku.color);
+          const color = await ctx.db.get("color", sku.color);
           colorName = color?.name;
         }
 
         let category: string | undefined;
 
         if (product) {
-          const productCategory = await ctx.db.get(product.categoryId);
+          const productCategory = await ctx.db.get("category", product.categoryId);
           category = productCategory?.name;
         }
 
@@ -168,21 +170,21 @@ export const getByUserId = query({
     const itemsWithProductDetails = await Promise.all(
       items.map(async (item) => {
         const [sku, product] = await Promise.all([
-          ctx.db.get(item.productSkuId),
-          ctx.db.get(item.productId),
+          ctx.db.get("productSku", item.productSkuId),
+          ctx.db.get("product", item.productId),
         ]);
 
         let colorName;
 
         if (sku?.color) {
-          const color = await ctx.db.get(sku.color);
+          const color = await ctx.db.get("color", sku.color);
           colorName = color?.name;
         }
 
         let category: string | undefined;
 
         if (product) {
-          const productCategory = await ctx.db.get(product.categoryId);
+          const productCategory = await ctx.db.get("category", product.categoryId);
           category = productCategory?.name;
         }
 
@@ -230,14 +232,14 @@ export const deleteBag = mutation({
     id: v.id(entity),
   },
   handler: async (ctx, args) => {
-    await ctx.db.delete(args.id);
+    await ctx.db.delete("bag", args.id);
 
     const items = await ctx.db
       .query("bagItem")
       .filter((q) => q.eq(q.field("bagId"), args.id))
       .collect();
 
-    await Promise.all(items.map((item) => ctx.db.delete(item._id)));
+    await Promise.all(items.map((item) => ctx.db.delete("bagItem", item._id)));
 
     return { message: "Bag and its items deleted" };
   },
@@ -253,7 +255,7 @@ export const clearBag = internalMutation({
       .filter((q) => q.eq(q.field("bagId"), args.id))
       .collect();
 
-    await Promise.all(items.map((item) => ctx.db.delete(item._id)));
+    await Promise.all(items.map((item) => ctx.db.delete("bagItem", item._id)));
 
     return { message: "Items in bag cleared" };
   },
@@ -307,16 +309,16 @@ export const updateOwner = internalMutation({
 
           if (existingItem) {
             // Update quantity of existing item
-            await ctx.db.patch(existingItem._id, {
+            await ctx.db.patch("bagItem", existingItem._id, {
               quantity: existingItem.quantity + item.quantity,
               bagId: newOwnerBag._id,
               storeFrontUserId: args.newOwner,
             });
             // Delete the duplicate item
-            await ctx.db.delete(item._id);
+            await ctx.db.delete("bagItem", item._id);
           } else {
             // Move item to new owner's bag
-            await ctx.db.patch(item._id, {
+            await ctx.db.patch("bagItem", item._id, {
               bagId: newOwnerBag._id,
               storeFrontUserId: args.newOwner,
             });
@@ -328,11 +330,11 @@ export const updateOwner = internalMutation({
         `successfully updated bag owner from ${args.currentOwner} to ${args.newOwner}.`
       );
 
-      await ctx.db.delete(bag._id);
-      return await ctx.db.get(newOwnerBag._id);
+      await ctx.db.delete("bag", bag._id);
+      return await ctx.db.get("bag", newOwnerBag._id);
     } else {
       // If new owner doesn't have a bag, update the ownership of existing bag
-      await ctx.db.patch(bag._id, {
+      await ctx.db.patch("bag", bag._id, {
         storeFrontUserId: args.newOwner,
         updatedAt: Date.now(),
       });
@@ -340,7 +342,7 @@ export const updateOwner = internalMutation({
       console.log(
         `successfully updated bag owner from ${args.currentOwner} to ${args.newOwner}.`
       );
-      return await ctx.db.get(bag._id);
+      return await ctx.db.get("bag", bag._id);
     }
   },
 });
@@ -412,19 +414,19 @@ export const getPaginatedBags = query({
         const itemsWithProductDetails = await Promise.all(
           items.map(async (item) => {
             const [sku, product] = await Promise.all([
-              ctx.db.get(item.productSkuId),
-              ctx.db.get(item.productId),
+              ctx.db.get("productSku", item.productSkuId),
+              ctx.db.get("product", item.productId),
             ]);
 
             let colorName;
             if (sku?.color) {
-              const color = await ctx.db.get(sku.color);
+              const color = await ctx.db.get("color", sku.color);
               colorName = color?.name;
             }
 
             let category: string | undefined;
             if (product) {
-              const productCategory = await ctx.db.get(product.categoryId);
+              const productCategory = await ctx.db.get("category", product.categoryId);
               category = productCategory?.name;
             }
 

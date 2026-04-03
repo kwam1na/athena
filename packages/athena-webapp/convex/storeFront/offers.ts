@@ -1,3 +1,4 @@
+/* eslint-disable @convex-dev/no-collect-in-query -- Query refactors are tracked in V26-168, V26-169, and V26-170; this PR only hardens API boundaries. */
 import {
   ActionCtx,
   internalAction,
@@ -50,6 +51,27 @@ const isDuplicate = async (
   ]);
 
   return !!existing;
+};
+
+const updateStoreFrontActorEmail = async (
+  ctx: MutationCtx,
+  storeFrontUserId: Id<"storeFrontUser"> | Id<"guest">,
+  email: string
+) => {
+  const storeFrontUser = await ctx.db.get(
+    "storeFrontUser",
+    storeFrontUserId as Id<"storeFrontUser">
+  );
+
+  if (storeFrontUser) {
+    await ctx.db.patch("storeFrontUser", storeFrontUser._id, { email });
+    return;
+  }
+
+  const guest = await ctx.db.get("guest", storeFrontUserId as Id<"guest">);
+  if (guest) {
+    await ctx.db.patch("guest", guest._id, { email });
+  }
 };
 
 const createArgs = {
@@ -105,9 +127,7 @@ const createOffer = async (
     offerId,
   });
 
-  await ctx.db.patch(args.storeFrontUserId, {
-    email: args.email,
-  });
+  await updateStoreFrontActorEmail(ctx, args.storeFrontUserId, args.email);
 
   return {
     success: true,
@@ -477,13 +497,13 @@ export const updateStatus = internalMutation({
     }
 
     if (args.activity) {
-      const offer = await ctx.db.get(args.id);
+      const offer = await ctx.db.get("offer", args.id);
       if (offer) {
         update.activity = [...(offer.activity || []), args.activity];
       }
     }
 
-    await ctx.db.patch(args.id, update);
+    await ctx.db.patch("offer", args.id, update);
   },
 });
 
@@ -493,7 +513,7 @@ export const getById = internalQuery({
     id: v.id(entity),
   },
   handler: async (ctx, args) => {
-    return await ctx.db.get(args.id);
+    return await ctx.db.get("offer", args.id);
   },
 });
 
@@ -610,7 +630,7 @@ export const getByStorefrontUserId = query({
     const promoCodeIds = [...new Set(offers.map((offer) => offer.promoCodeId))];
     const promoCodes = await Promise.all(
       promoCodeIds.map(async (promoCodeId) => {
-        const promoCode = await ctx.db.get(promoCodeId);
+        const promoCode = await ctx.db.get("promoCode", promoCodeId);
         return { id: promoCodeId, data: promoCode };
       })
     );

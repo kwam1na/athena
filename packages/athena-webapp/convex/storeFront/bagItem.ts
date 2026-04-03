@@ -1,3 +1,4 @@
+/* eslint-disable @convex-dev/no-collect-in-query -- Query refactors are tracked in V26-168, V26-169, and V26-170; this PR only hardens API boundaries. */
 import { internal } from "../_generated/api";
 import { internalMutation, query } from "../_generated/server";
 import { v } from "convex/values";
@@ -28,10 +29,10 @@ export const addItemToBag = internalMutation({
       .first();
 
     // update the bag's updatedAt field
-    await ctx.db.patch(args.bagId, { updatedAt: Date.now() });
+    await ctx.db.patch("bag", args.bagId, { updatedAt: Date.now() });
 
     if (existing) {
-      return await ctx.db.patch(existing._id, {
+      return await ctx.db.patch("bagItem", existing._id, {
         quantity: existing.quantity + args.quantity,
         updatedAt: Date.now(),
       });
@@ -47,7 +48,7 @@ export const updateItemInBag = internalMutation({
     quantity: v.number(),
   },
   handler: async (ctx, args) => {
-    return await ctx.db.patch(args.itemId, { quantity: args.quantity });
+    return await ctx.db.patch("bagItem", args.itemId, { quantity: args.quantity });
   },
 });
 
@@ -56,7 +57,7 @@ export const deleteItemFromBag = internalMutation({
     itemId: v.id(entity),
   },
   handler: async (ctx, args) => {
-    await ctx.db.delete(args.itemId);
+    await ctx.db.delete("bagItem", args.itemId);
     return { message: "Item deleted from bag" };
   },
 });

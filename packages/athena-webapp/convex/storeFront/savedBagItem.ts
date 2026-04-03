@@ -27,7 +27,7 @@ export const addItemToBag = internalMutation({
       .first();
 
     if (existing) {
-      return await ctx.db.patch(existing._id, {
+      return await ctx.db.patch("savedBagItem", existing._id, {
         quantity: existing.quantity + args.quantity,
       });
     }
@@ -42,7 +42,7 @@ export const updateItemInBag = internalMutation({
     quantity: v.number(),
   },
   handler: async (ctx, args) => {
-    return await ctx.db.patch(args.itemId, { quantity: args.quantity });
+    return await ctx.db.patch("savedBagItem", args.itemId, { quantity: args.quantity });
   },
 });
 
@@ -51,7 +51,7 @@ export const deleteItemFromSavedBag = internalMutation({
     itemId: v.id(entity),
   },
   handler: async (ctx, args) => {
-    await ctx.db.delete(args.itemId);
+    await ctx.db.delete("savedBagItem", args.itemId);
     return { message: "Item deleted from saved bag" };
   },
 });

@@ -1,3 +1,4 @@
+/* eslint-disable @convex-dev/no-collect-in-query -- Query refactors are tracked in V26-168, V26-169, and V26-170; this PR only hardens API boundaries. */
 import { v } from "convex/values";
 import { internalQuery, mutation, query } from "../_generated/server";
 import { internal } from "../_generated/api";
@@ -31,7 +32,7 @@ export const create = mutation({
       storeId: args.storeId,
     });
 
-    return await ctx.db.get(id);
+    return await ctx.db.get("bestSeller", id);
   },
 });
 
@@ -40,7 +41,7 @@ export const remove = mutation({
     id: v.id(entity),
   },
   handler: async (ctx, args) => {
-    await ctx.db.delete(args.id);
+    await ctx.db.delete("bestSeller", args.id);
 
     return true;
   },
@@ -51,7 +52,7 @@ export const getById = query({
     id: v.id(entity),
   },
   handler: async (ctx, args) => {
-    return await ctx.db.get(args.id);
+    return await ctx.db.get("bestSeller", args.id);
   },
 });
 
@@ -138,7 +139,7 @@ export const updateRanks = mutation({
   handler: async (ctx, args) => {
     await Promise.all(
       args.ranks.map(async (item) => {
-        await ctx.db.patch(item.id, {
+        await ctx.db.patch("bestSeller", item.id, {
           rank: item.rank,
         });
       })

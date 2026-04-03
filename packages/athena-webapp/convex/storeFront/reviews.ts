@@ -1,4 +1,11 @@
-import { mutation, query, action } from "../_generated/server";
+/* eslint-disable @convex-dev/no-collect-in-query -- Query refactors are tracked in V26-168, V26-169, and V26-170; this PR only hardens API boundaries. */
+import {
+  mutation,
+  query,
+  action,
+  MutationCtx,
+  QueryCtx,
+} from "../_generated/server";
 import { v } from "convex/values";
 import { Id } from "../_generated/dataModel";
 import { api, internal } from "../_generated/api";
@@ -6,6 +13,28 @@ import { sendFeedbackRequestEmail } from "../mailersend";
 import { getProductName } from "../utils";
 
 const entity = "review" as const;
+
+async function getStoreFrontActorById(
+  ctx: MutationCtx | QueryCtx,
+  id: Id<"storeFrontUser"> | Id<"guest">
+) {
+  try {
+    const storeFrontUser = await ctx.db.get(
+      "storeFrontUser",
+      id as Id<"storeFrontUser">
+    );
+
+    if (storeFrontUser) {
+      return storeFrontUser;
+    }
+  } catch {}
+
+  try {
+    return await ctx.db.get("guest", id as Id<"guest">);
+  } catch {
+    return null;
+  }
+}
 
 type RatingDimension = {
   key: string;
@@ -87,7 +116,7 @@ export const create = mutation({
       );
 
       // This is the user's first review
-      const store = await ctx.db.get(storeId);
+      const store = await ctx.db.get("store", storeId);
       const promoCodeConfig =
         store?.config?.leaveAReviewDiscountCodeModalPromoCode;
 
@@ -98,7 +127,7 @@ export const create = mutation({
 
         // Validate the promo code
         const promoCode = await ctx.db.get(
-          promoCodeConfig.promoCodeId as Id<"promoCode">
+          "promoCode", promoCodeConfig.promoCodeId as Id<"promoCode">
         );
 
         if (promoCode) {
@@ -113,7 +142,10 @@ export const create = mutation({
 
           if (isActive && isValidDate) {
             // Get user email (works for both storeFrontUser and guest)
-            const user = await ctx.db.get(createdByStoreFrontUserId);
+            const user = await getStoreFrontActorById(
+              ctx,
+              createdByStoreFrontUserId
+            );
 
             if (user?.email) {
               console.log(
@@ -251,7 +283,7 @@ export const update = mutation({
   handler: async (ctx, args: UpdateReviewArgs) => {
     const { id, ...updates } = args;
 
-    const review = await ctx.db.patch(id, {
+    const review = await ctx.db.patch("review", id, {
       ...updates,
       updatedAt: new Date().getTime(),
     });
@@ -267,7 +299,7 @@ export const deleteReview = mutation({
   handler: async (ctx, args: { id: Id<"review"> }) => {
     const { id } = args;
 
-    await ctx.db.delete(id);
+    await ctx.db.delete("review", id);
   },
 });
 
@@ -347,7 +379,7 @@ export const getAllReviewsForStore = query({
     // Add product images to reviews
     const reviewsWithImages = await Promise.all(
       reviews.map(async (review) => {
-        const productSku = await ctx.db.get(review.productSkuId);
+        const productSku = await ctx.db.get("productSku", review.productSkuId);
         return {
           ...review,
           productImage: productSku?.images?.[0] ?? null,
@@ -370,7 +402,7 @@ export const approve = mutation({
   ) => {
     const { id, userId } = args;
 
-    const review = await ctx.db.patch(id, {
+    const review = await ctx.db.patch("review", id, {
       isApproved: true,
       approvedAt: new Date().getTime(),
       approvedByAthenaUserId: userId,
@@ -392,7 +424,7 @@ export const reject = mutation({
   ) => {
     const { id, userId } = args;
 
-    const review = await ctx.db.patch(id, {
+    const review = await ctx.db.patch("review", id, {
       isApproved: false,
       approvedAt: new Date().getTime(),
       approvedByAthenaUserId: userId,
@@ -414,7 +446,7 @@ export const publish = mutation({
   ) => {
     const { id, userId } = args;
 
-    const review = await ctx.db.patch(id, {
+    const review = await ctx.db.patch("review", id, {
       isPublished: true,
       publishedAt: new Date().getTime(),
       publishedByAthenaUserId: userId,
@@ -436,7 +468,7 @@ export const unpublish = mutation({
   ) => {
     const { id, userId } = args;
 
-    const review = await ctx.db.patch(id, {
+    const review = await ctx.db.patch("review", id, {
       isPublished: false,
       publishedAt: undefined,
       publishedByAthenaUserId: undefined,
@@ -474,7 +506,7 @@ export const getByProductId = query({
             })
           : null;
         const user = review.createdByStoreFrontUserId
-          ? await ctx.db.get(review.createdByStoreFrontUserId)
+          ? await getStoreFrontActorById(ctx, review.createdByStoreFrontUserId)
           : null;
         return {
           ...review,
@@ -496,7 +528,7 @@ export const markHelpful = mutation({
   },
   handler: async (ctx, args) => {
     const { reviewId, userId } = args;
-    const review = await ctx.db.get(reviewId);
+    const review = await ctx.db.get("review", reviewId);
     if (!review) throw new Error("Review not found");
 
     let helpfulUserIds: (Id<"storeFrontUser"> | Id<"guest">)[] =
@@ -514,7 +546,7 @@ export const markHelpful = mutation({
       newHelpfulCount = newHelpfulCount + 1;
     }
 
-    await ctx.db.patch(reviewId, {
+    await ctx.db.patch("review", reviewId, {
       helpfulCount: newHelpfulCount,
       helpfulUserIds,
     });

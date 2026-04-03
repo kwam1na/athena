@@ -1,3 +1,4 @@
+/* eslint-disable @convex-dev/no-collect-in-query -- Query refactors are tracked in V26-168, V26-169, and V26-170; this PR only hardens API boundaries. */
 import {
   internalMutation,
   internalQuery,
@@ -9,6 +10,7 @@ import { v } from "convex/values";
 const entity = "guest";
 
 export const getAll = query({
+  args: {},
   handler: async (ctx) => {
     return await ctx.db.query(entity).collect();
   },
@@ -19,7 +21,7 @@ export const getById = internalQuery({
     id: v.id(entity),
   },
   handler: async (ctx, args) => {
-    return await ctx.db.get(args.id);
+    return await ctx.db.get("guest", args.id);
   },
 });
 
@@ -52,7 +54,7 @@ export const create = internalMutation({
       organizationId: args.organizationId,
     });
 
-    return ctx.db.get(id);
+    return ctx.db.get("guest", id);
   },
 });
 
@@ -61,7 +63,7 @@ export const deleteGuest = mutation({
     id: v.id(entity),
   },
   handler: async (ctx, args) => {
-    await ctx.db.delete(args.id);
+    await ctx.db.delete("guest", args.id);
     return { message: "Guest deleted" };
   },
 });
@@ -88,8 +90,8 @@ export const update = internalMutation({
     if (args.phoneNumber) {
       updates.phoneNumber = args.phoneNumber;
     }
-    await ctx.db.patch(args.id, updates);
-    return await ctx.db.get(args.id);
+    await ctx.db.patch("guest", args.id, updates);
+    return await ctx.db.get("guest", args.id);
   },
 });
 

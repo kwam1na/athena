@@ -1,4 +1,10 @@
-import { internalMutation, internalQuery, query } from "../_generated/server";
+/* eslint-disable @convex-dev/no-collect-in-query -- Query refactors are tracked in V26-168, V26-169, and V26-170; this PR only hardens API boundaries. */
+import {
+  internalMutation,
+  internalQuery,
+  query,
+  QueryCtx,
+} from "../_generated/server";
 import { v } from "convex/values";
 import { addressSchema } from "../schemas/storeFront";
 import { api, internal } from "../_generated/api";
@@ -6,7 +12,30 @@ import { Id } from "../_generated/dataModel";
 
 const entity = "storeFrontUser";
 
+async function getStoreFrontActorById(
+  ctx: QueryCtx,
+  id: Id<"storeFrontUser"> | Id<"guest">
+) {
+  try {
+    const storeFrontUser = await ctx.db.get(
+      "storeFrontUser",
+      id as Id<"storeFrontUser">
+    );
+
+    if (storeFrontUser) {
+      return storeFrontUser;
+    }
+  } catch {}
+
+  try {
+    return await ctx.db.get("guest", id as Id<"guest">);
+  } catch {
+    return null;
+  }
+}
+
 export const getAll = query({
+  args: {},
   handler: async (ctx) => {
     return await ctx.db.query(entity).collect();
   },
@@ -18,7 +47,7 @@ export const getById = internalQuery({
   },
   handler: async (ctx, args) => {
     try {
-      return await ctx.db.get(args.id);
+      return await ctx.db.get("storeFrontUser", args.id);
     } catch (e) {
       return null;
     }
@@ -62,8 +91,8 @@ export const update = internalMutation({
       updates.shippingAddress = args.shippingAddress;
     }
 
-    await ctx.db.patch(args.id, updates);
-    return await ctx.db.get(args.id);
+    await ctx.db.patch("storeFrontUser", args.id, updates);
+    return await ctx.db.get("storeFrontUser", args.id);
   },
 });
 
@@ -72,11 +101,7 @@ export const getByIdentifier = query({
     id: v.union(v.id(entity), v.id("guest")),
   },
   handler: async (ctx, args) => {
-    try {
-      return await ctx.db.get(args.id);
-    } catch (e) {
-      return null;
-    }
+    return await getStoreFrontActorById(ctx, args.id);
   },
 });
 
@@ -86,7 +111,7 @@ export const findLinkedAccounts = query({
   },
   handler: async (ctx, args) => {
     // Get the user to find their email
-    const user = await ctx.db.get(args.userId);
+    const user = await getStoreFrontActorById(ctx, args.userId);
     if (!user || !user.email) {
       return { storeFrontUsers: [], guestUsers: [] };
     }
@@ -143,7 +168,7 @@ export const getAllUserActivity = query({
     for (const id of idArray) {
       try {
         // Try to get from storeFrontUser table
-        const user = await ctx.db.get(id as Id<"storeFrontUser">);
+        const user = await ctx.db.get("storeFrontUser", id as Id<"storeFrontUser">);
         if (user) {
           userMap[id] = { email: user.email };
           continue; // Found in storeFrontUser table, skip to next ID
@@ -154,7 +179,7 @@ export const getAllUserActivity = query({
 
       try {
         // Try to get from guest table
-        const guest = await ctx.db.get(id as Id<"guest">);
+        const guest = await ctx.db.get("guest", id as Id<"guest">);
         if (guest) {
           userMap[id] = { email: guest.email };
         }
@@ -196,7 +221,7 @@ export const getAllUserActivityInternal = internalQuery({
 
     for (const id of idArray) {
       try {
-        const user = await ctx.db.get(id as Id<"storeFrontUser">);
+        const user = await ctx.db.get("storeFrontUser", id as Id<"storeFrontUser">);
         if (user) {
           userMap[id] = { email: user.email };
           continue;
@@ -204,7 +229,7 @@ export const getAllUserActivityInternal = internalQuery({
       } catch {}
 
       try {
-        const guest = await ctx.db.get(id as Id<"guest">);
+        const guest = await ctx.db.get("guest", id as Id<"guest">);
         if (guest) {
           userMap[id] = { email: guest.email };
         }
@@ -567,7 +592,7 @@ export const getOnlineOrderById = query({
     id: v.id("onlineOrder"),
   },
   handler: async (ctx, args) => {
-    return await ctx.db.get(args.id);
+    return await ctx.db.get("onlineOrder", args.id);
   },
 });
 

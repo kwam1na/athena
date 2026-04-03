@@ -1,3 +1,4 @@
+/* eslint-disable @convex-dev/no-collect-in-query -- Query refactors are tracked in V26-168, V26-169, and V26-170; this PR only hardens API boundaries. */
 import { v } from "convex/values";
 import {
   internalMutation,
@@ -45,7 +46,7 @@ export const create = mutation({
   },
   handler: async (ctx, args) => {
     // get the session
-    const session = await ctx.db.get(args.checkoutSessionId);
+    const session = await ctx.db.get("checkoutSession", args.checkoutSessionId);
 
     console.log(`creating online order for session: ${session?._id}`);
 
@@ -108,7 +109,7 @@ export const create = mutation({
           .first();
 
         if (promoCodeItem) {
-          await ctx.db.patch(promoCodeItem._id, {
+          await ctx.db.patch("promoCodeItem", promoCodeItem._id, {
             quantityClaimed:
               (promoCodeItem.quantityClaimed ?? 0) + item.quantity,
           });
@@ -136,7 +137,7 @@ export const create = mutation({
         .first();
 
       if (offer) {
-        await ctx.db.patch(offer._id, { isRedeemed: true, status: "redeemed" });
+        await ctx.db.patch("offer", offer._id, { isRedeemed: true, status: "redeemed" });
       }
     }
 
@@ -170,7 +171,7 @@ export const createInternal = internalMutation({
     paymentMethod: v.optional(paymentMethodSchema),
   },
   handler: async (ctx, args) => {
-    const session = await ctx.db.get(args.checkoutSessionId);
+    const session = await ctx.db.get("checkoutSession", args.checkoutSessionId);
 
     console.log(`creating online order for session: ${session?._id}`);
 
@@ -231,7 +232,7 @@ export const createInternal = internalMutation({
           .first();
 
         if (promoCodeItem) {
-          await ctx.db.patch(promoCodeItem._id, {
+          await ctx.db.patch("promoCodeItem", promoCodeItem._id, {
             quantityClaimed:
               (promoCodeItem.quantityClaimed ?? 0) + item.quantity,
           });
@@ -257,7 +258,7 @@ export const createInternal = internalMutation({
         .first();
 
       if (offer) {
-        await ctx.db.patch(offer._id, { isRedeemed: true, status: "redeemed" });
+        await ctx.db.patch("offer", offer._id, { isRedeemed: true, status: "redeemed" });
       }
     }
 
@@ -277,7 +278,7 @@ export const createFromSession = internalMutation({
     paymentMethod: v.optional(paymentMethodSchema),
   },
   handler: async (ctx, args) => {
-    const session = await ctx.db.get(args.checkoutSessionId);
+    const session = await ctx.db.get("checkoutSession", args.checkoutSessionId);
 
     if (!session) {
       return {
@@ -338,7 +339,7 @@ export const createFromSession = internalMutation({
           .first();
 
         if (promoCodeItem) {
-          await ctx.db.patch(promoCodeItem._id, {
+          await ctx.db.patch("promoCodeItem", promoCodeItem._id, {
             quantityClaimed:
               (promoCodeItem.quantityClaimed ?? 0) + item.quantity,
           });
@@ -369,12 +370,12 @@ export const createFromSession = internalMutation({
         .first();
 
       if (offer) {
-        await ctx.db.patch(offer._id, { isRedeemed: true, status: "redeemed" });
+        await ctx.db.patch("offer", offer._id, { isRedeemed: true, status: "redeemed" });
       }
     }
 
     // update the session to reflect that the order has been created
-    await ctx.db.patch(args.checkoutSessionId, {
+    await ctx.db.patch("checkoutSession", args.checkoutSessionId, {
       placedOrderId: orderId,
     });
 
@@ -417,8 +418,8 @@ export const getAll = query({
         const itemsWithImages = await Promise.all(
           order.items.map(async (item) => {
             const [product, productSku] = await Promise.all([
-              ctx.db.get(item.productId),
-              ctx.db.get(item.productSkuId),
+              ctx.db.get("product", item.productId),
+              ctx.db.get("productSku", item.productSkuId),
             ]);
 
             return {
@@ -461,8 +462,8 @@ export const get = query({
     const itemsWithImages = await Promise.all(
       items.map(async (item) => {
         const [product, productSku] = await Promise.all([
-          ctx.db.get(item.productId),
-          ctx.db.get(item.productSkuId),
+          ctx.db.get("product", item.productId),
+          ctx.db.get("productSku", item.productSkuId),
         ]);
 
         let category: string | undefined;
@@ -470,12 +471,12 @@ export const get = query({
         let colorName;
 
         if (productSku?.color) {
-          const color = await ctx.db.get(productSku.color);
+          const color = await ctx.db.get("color", productSku.color);
           colorName = color?.name;
         }
 
         if (product) {
-          const productCategory = await ctx.db.get(product.categoryId);
+          const productCategory = await ctx.db.get("category", product.categoryId);
           category = productCategory?.name;
         }
 
@@ -532,20 +533,20 @@ export const getInternal = internalQuery({
     const itemsWithImages = await Promise.all(
       items.map(async (item) => {
         const [product, productSku] = await Promise.all([
-          ctx.db.get(item.productId),
-          ctx.db.get(item.productSkuId),
+          ctx.db.get("product", item.productId),
+          ctx.db.get("productSku", item.productSkuId),
         ]);
 
         let category: string | undefined;
         let colorName;
 
         if (productSku?.color) {
-          const color = await ctx.db.get(productSku.color);
+          const color = await ctx.db.get("color", productSku.color);
           colorName = color?.name;
         }
 
         if (product) {
-          const productCategory = await ctx.db.get(product.categoryId);
+          const productCategory = await ctx.db.get("category", product.categoryId);
           category = productCategory?.name;
         }
 
@@ -647,7 +648,7 @@ export const update = mutation({
   },
   handler: async (ctx, args) => {
     if (args.orderId) {
-      const order = await ctx.db.get(args.orderId);
+      const order = await ctx.db.get("onlineOrder", args.orderId);
       if (!order) return { success: false, message: "Order not found" };
 
       // Initialize base updates from args
@@ -720,7 +721,7 @@ export const update = mutation({
         );
       }
 
-      await ctx.db.patch(args.orderId, updates);
+      await ctx.db.patch("onlineOrder", args.orderId, updates);
       return { success: true, message: "Order updated" };
     }
 
@@ -778,9 +779,9 @@ export const update = mutation({
           );
         }
 
-        await ctx.db.patch(order._id, updates);
+        await ctx.db.patch("onlineOrder", order._id, updates);
       } else {
-        await ctx.db.patch(order._id, { ...rest, refunds });
+        await ctx.db.patch("onlineOrder", order._id, { ...rest, refunds });
       }
 
       return true;
@@ -803,7 +804,7 @@ export const updateInternal = internalMutation({
   },
   handler: async (ctx, args) => {
     if (args.orderId) {
-      const order = await ctx.db.get(args.orderId);
+      const order = await ctx.db.get("onlineOrder", args.orderId);
       if (!order) return { success: false, message: "Order not found" };
 
       let updates = { ...args.update };
@@ -870,7 +871,7 @@ export const updateInternal = internalMutation({
         );
       }
 
-      await ctx.db.patch(args.orderId, updates);
+      await ctx.db.patch("onlineOrder", args.orderId, updates);
       return { success: true, message: "Order updated" };
     }
 
@@ -926,9 +927,9 @@ export const updateInternal = internalMutation({
           );
         }
 
-        await ctx.db.patch(order._id, updates);
+        await ctx.db.patch("onlineOrder", order._id, updates);
       } else {
-        await ctx.db.patch(order._id, { ...rest, refunds });
+        await ctx.db.patch("onlineOrder", order._id, { ...rest, refunds });
       }
 
       return true;
@@ -955,14 +956,14 @@ export const returnItemsToStock = mutation({
       if (args.onlineOrderItemIds?.length) {
         await Promise.all(
           args.onlineOrderItemIds.map(async (itemId) => {
-            await ctx.db.patch(itemId, { isRefunded: true, isRestocked: true });
-            const onlineOrderItem = await ctx.db.get(itemId);
+            await ctx.db.patch("onlineOrderItem", itemId, { isRefunded: true, isRestocked: true });
+            const onlineOrderItem = await ctx.db.get("onlineOrderItem", itemId);
 
             if (onlineOrderItem) {
-              const productSku = await ctx.db.get(onlineOrderItem.productSkuId);
+              const productSku = await ctx.db.get("productSku", onlineOrderItem.productSkuId);
 
               if (productSku) {
-                await ctx.db.patch(onlineOrderItem.productSkuId, {
+                await ctx.db.patch("productSku", onlineOrderItem.productSkuId, {
                   quantityAvailable:
                     productSku.quantityAvailable + onlineOrderItem.quantity,
                   inventoryCount: onlineOrderItem.isReady
@@ -984,10 +985,10 @@ export const returnItemsToStock = mutation({
 
       await Promise.all(
         orderItems.map(async (item) => {
-          await ctx.db.patch(item._id, { isRefunded: true, isRestocked: true });
-          const productSku = await ctx.db.get(item.productSkuId);
+          await ctx.db.patch("onlineOrderItem", item._id, { isRefunded: true, isRestocked: true });
+          const productSku = await ctx.db.get("productSku", item.productSkuId);
           if (productSku) {
-            await ctx.db.patch(item.productSkuId, {
+            await ctx.db.patch("productSku", item.productSkuId, {
               quantityAvailable: productSku.quantityAvailable + item.quantity,
               inventoryCount: item.isReady
                 ? productSku.inventoryCount + item.quantity
@@ -1021,14 +1022,14 @@ export const returnItemsToStockInternal = internalMutation({
       if (args.onlineOrderItemIds?.length) {
         await Promise.all(
           args.onlineOrderItemIds.map(async (itemId) => {
-            await ctx.db.patch(itemId, { isRefunded: true, isRestocked: true });
-            const onlineOrderItem = await ctx.db.get(itemId);
+            await ctx.db.patch("onlineOrderItem", itemId, { isRefunded: true, isRestocked: true });
+            const onlineOrderItem = await ctx.db.get("onlineOrderItem", itemId);
 
             if (onlineOrderItem) {
-              const productSku = await ctx.db.get(onlineOrderItem.productSkuId);
+              const productSku = await ctx.db.get("productSku", onlineOrderItem.productSkuId);
 
               if (productSku) {
-                await ctx.db.patch(onlineOrderItem.productSkuId, {
+                await ctx.db.patch("productSku", onlineOrderItem.productSkuId, {
                   quantityAvailable:
                     productSku.quantityAvailable + onlineOrderItem.quantity,
                   inventoryCount: onlineOrderItem.isReady
@@ -1050,10 +1051,10 @@ export const returnItemsToStockInternal = internalMutation({
 
       await Promise.all(
         orderItems.map(async (item) => {
-          await ctx.db.patch(item._id, { isRefunded: true, isRestocked: true });
-          const productSku = await ctx.db.get(item.productSkuId);
+          await ctx.db.patch("onlineOrderItem", item._id, { isRefunded: true, isRestocked: true });
+          const productSku = await ctx.db.get("productSku", item.productSkuId);
           if (productSku) {
-            await ctx.db.patch(item.productSkuId, {
+            await ctx.db.patch("productSku", item.productSkuId, {
               quantityAvailable: productSku.quantityAvailable + item.quantity,
               inventoryCount: item.isReady
                 ? productSku.inventoryCount + item.quantity
@@ -1076,7 +1077,7 @@ export const updateOrderItems = mutation({
   handler: async (ctx, args) => {
     await Promise.all(
       args.orderItemIds.map(async (itemId) => {
-        await ctx.db.patch(itemId, args.updates);
+        await ctx.db.patch("onlineOrderItem", itemId, args.updates);
       })
     );
     return true;
@@ -1091,7 +1092,7 @@ export const updateOrderItemsInternal = internalMutation({
   handler: async (ctx, args) => {
     await Promise.all(
       args.orderItemIds.map(async (itemId) => {
-        await ctx.db.patch(itemId, args.updates);
+        await ctx.db.patch("onlineOrderItem", itemId, args.updates);
       })
     );
     return true;
@@ -1113,10 +1114,10 @@ export const returnAllItemsToStock = mutation({
           return true;
         }
 
-        await ctx.db.patch(item._id, { isRefunded: true, isRestocked: true });
-        const productSku = await ctx.db.get(item.productSkuId);
+        await ctx.db.patch("onlineOrderItem", item._id, { isRefunded: true, isRestocked: true });
+        const productSku = await ctx.db.get("productSku", item.productSkuId);
         if (productSku) {
-          await ctx.db.patch(item.productSkuId, {
+          await ctx.db.patch("productSku", item.productSkuId, {
             quantityAvailable: productSku.quantityAvailable + item.quantity,
             inventoryCount: item.isReady
               ? productSku.inventoryCount + item.quantity
@@ -1145,10 +1146,10 @@ export const returnAllItemsToStockInternal = internalMutation({
           return true;
         }
 
-        await ctx.db.patch(item._id, { isRefunded: true, isRestocked: true });
-        const productSku = await ctx.db.get(item.productSkuId);
+        await ctx.db.patch("onlineOrderItem", item._id, { isRefunded: true, isRestocked: true });
+        const productSku = await ctx.db.get("productSku", item.productSkuId);
         if (productSku) {
-          await ctx.db.patch(item.productSkuId, {
+          await ctx.db.patch("productSku", item.productSkuId, {
             quantityAvailable: productSku.quantityAvailable + item.quantity,
             inventoryCount: item.isReady
               ? productSku.inventoryCount + item.quantity
@@ -1205,7 +1206,7 @@ export const updateOwner = mutation({
     // Update all orders
     await Promise.all(
       orders.map(async (order) => {
-        await ctx.db.patch(order._id, {
+        await ctx.db.patch("onlineOrder", order._id, {
           storeFrontUserId: args.newOwner,
         });
 
@@ -1217,7 +1218,7 @@ export const updateOwner = mutation({
 
         await Promise.all(
           orderItems.map((item) =>
-            ctx.db.patch(item._id, {
+            ctx.db.patch("onlineOrderItem", item._id, {
               storeFrontUserId: args.newOwner,
             })
           )
@@ -1236,7 +1237,7 @@ export const isDuplicateOrder = query({
     id: v.id("onlineOrder"),
   },
   handler: async (ctx, args) => {
-    const order = await ctx.db.get(args.id);
+    const order = await ctx.db.get("onlineOrder", args.id);
     if (!order) {
       return false;
     }

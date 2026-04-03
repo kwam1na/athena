@@ -1,10 +1,37 @@
 import { v } from "convex/values";
-import { action, internalMutation, mutation } from "../_generated/server";
+import {
+  action,
+  internalMutation,
+  mutation,
+  MutationCtx,
+} from "../_generated/server";
+import { Id } from "../_generated/dataModel";
 import { sendVerificationCode } from "../mailersend";
 import { internal } from "../_generated/api";
 import { SignJWT } from "jose";
 
 const expirationTimeInMinutes = 10;
+
+async function getStoreFrontActorById(
+  ctx: MutationCtx,
+  userId: Id<"storeFrontUser"> | Id<"guest">
+) {
+  try {
+    const storeFrontUser = await ctx.db.get(
+      "storeFrontUser",
+      userId as Id<"storeFrontUser">
+    );
+    if (storeFrontUser) {
+      return storeFrontUser;
+    }
+  } catch {}
+
+  try {
+    return await ctx.db.get("guest", userId as Id<"guest">);
+  } catch {
+    return null;
+  }
+}
 
 export const requestVerificationCode = internalMutation({
   args: {
@@ -32,7 +59,7 @@ export const requestVerificationCode = internalMutation({
       isUsed: false,
     });
 
-    return await ctx.db.get(id);
+    return await ctx.db.get("storeFrontVerificationCode", id);
   },
 });
 
@@ -77,7 +104,7 @@ export const verifyCode = mutation({
       };
     }
 
-    await ctx.db.patch(verificationCode._id, {
+    await ctx.db.patch("storeFrontVerificationCode", verificationCode._id, {
       isUsed: true,
     });
 
@@ -88,7 +115,7 @@ export const verifyCode = mutation({
 
     if (!user) {
       // get the guest user
-      const guestUser = await ctx.db.get(args.userId);
+      const guestUser = await getStoreFrontActorById(ctx, args.userId);
 
       const id = await ctx.db.insert("storeFrontUser", {
         email: verificationCode.email,
@@ -98,7 +125,7 @@ export const verifyCode = mutation({
         lastName: verificationCode.lastName || guestUser?.lastName,
       });
 
-      user = await ctx.db.get(id);
+      user = await ctx.db.get("storeFrontUser", id);
     }
 
     if (!user) {
