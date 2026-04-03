@@ -1,8 +1,0 @@
-import { createFileRoute } from "@tanstack/react-router";
-import BulkOperationsPage from "~/src/components/bulk-operations/BulkOperationsPage";
-
-export const Route = createFileRoute(
-  "/_authed/$orgUrlSlug/store/$storeUrlSlug/bulk-operations/bulk-operations/"
-)({
-  component: BulkOperationsPage,
-});
