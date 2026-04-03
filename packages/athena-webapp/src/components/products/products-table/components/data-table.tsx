@@ -77,7 +77,7 @@ export function DataTable<TData, TValue>({
 
   return (
     <div className="space-y-4">
-      <AddProductCommand />
+      <AddProductCommand table={table} />
       {showToolbar && <DataTableToolbar table={table} />}
       {/* <div className="flex">
         <ProductSubcategoryToggleGroup />
