@@ -120,4 +120,5 @@ export const onlineOrderSchema = v.object({
       email: v.string(),
     })
   ),
+  autoVerifiedAt: v.optional(v.number()),
 });

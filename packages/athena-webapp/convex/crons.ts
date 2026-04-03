@@ -38,4 +38,11 @@ crons.interval(
   {}
 );
 
+crons.interval(
+  "auto-verify-payments",
+  { minutes: process.env.STAGE == "prod" ? 10 : 1440 },
+  internal.storeFront.payment.autoVerifyUnverifiedPayments,
+  {}
+);
+
 export default crons;
