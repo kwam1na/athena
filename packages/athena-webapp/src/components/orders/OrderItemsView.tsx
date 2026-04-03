@@ -31,6 +31,7 @@ import { CheckCircledIcon } from "@radix-ui/react-icons";
 import { useAuth } from "~/src/hooks/useAuth";
 import { Badge } from "../ui/badge";
 import { LowStockStatus, OutOfStockStatus } from "../product/ProductStock";
+import { toDisplayAmount } from "~/convex/lib/currency";
 
 function OrderItem({ item, order }: { item: any; order: any }) {
   const [isUpdatingOrderItem, setIsUpdatingOrderItem] = useState(false);
@@ -39,7 +40,7 @@ function OrderItem({ item, order }: { item: any; order: any }) {
 
   const updateOrderItem = useMutation(api.storeFront.onlineOrderItem.update);
   const returnItemToStock = useMutation(
-    api.storeFront.onlineOrder.returnItemsToStock
+    api.storeFront.onlineOrder.returnItemsToStock,
   );
   const requestFeedback = useAction(api.storeFront.reviews.sendFeedbackRequest);
 
@@ -130,7 +131,7 @@ function OrderItem({ item, order }: { item: any; order: any }) {
         })}
         search={{
           o: encodeURIComponent(
-            `${window.location.pathname}${window.location.search}`
+            `${window.location.pathname}${window.location.search}`,
           ),
           variant: item.productSku,
         }}
@@ -163,7 +164,7 @@ function OrderItem({ item, order }: { item: any; order: any }) {
           })}
           search={{
             o: encodeURIComponent(
-              `${window.location.pathname}${window.location.search}`
+              `${window.location.pathname}${window.location.search}`,
             ),
             variant: item.productSku,
           }}
@@ -288,7 +289,7 @@ export function OrderItemsView() {
   const [isUpdatingOrderItems, setIsUpdatingOrderItems] = useState(false);
 
   const restockAllItems = useMutation(
-    api.storeFront.onlineOrder.returnAllItemsToStock
+    api.storeFront.onlineOrder.returnAllItemsToStock,
   );
 
   const handleRestockAll = async () => {
@@ -313,7 +314,10 @@ export function OrderItemsView() {
   const itemsFormatted = order?.items?.map((item: any) => {
     return {
       ...item,
-      price: item.price == 0 ? "Free" : formatter.format(item.price),
+      price:
+        item.price == 0
+          ? "Free"
+          : formatter.format(toDisplayAmount(item.price)),
     };
   });
 
