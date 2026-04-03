@@ -181,3 +181,5 @@ docs/superpowers/plans/
 
 packages/athena-webapp/stats.html
 packages/storefront-webapp/stats.html
+
+.claude/worktrees
