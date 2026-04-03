@@ -60,11 +60,18 @@ export const formatOrderItems = (
     return {
       text: capitalizeWords(item.productName || ""),
       image: item.productImage || "",
-      price: originalPrice === 0 ? "Free" : formatter.format(originalPrice),
+      price:
+        originalPrice === 0
+          ? "Free"
+          : formatter.format(toDisplayAmount(originalPrice)),
       discountedPrice:
-        itemDiscount > 0 ? formatter.format(discountedPrice) : undefined,
+        itemDiscount > 0
+          ? formatter.format(toDisplayAmount(discountedPrice))
+          : undefined,
       savings:
-        totalItemSavings > 0 ? formatter.format(totalItemSavings) : undefined,
+        totalItemSavings > 0
+          ? formatter.format(toDisplayAmount(totalItemSavings))
+          : undefined,
       quantity: String(item.quantity || 0),
       color: item.colorName || "",
       length: item.length ? `${item.length} inches` : undefined,
