@@ -40,6 +40,7 @@ import {
   XCircle,
   ChevronDown,
   ShoppingCart,
+  Layers,
 } from "lucide-react";
 import { AppHeader } from "./Navbar";
 import { Link } from "@tanstack/react-router";
@@ -76,34 +77,34 @@ export function AppSidebar() {
 
   const orders = useQuery(
     api.storeFront.onlineOrder.getAllOnlineOrders,
-    activeStore?._id ? { storeId: activeStore._id } : "skip"
+    activeStore?._id ? { storeId: activeStore._id } : "skip",
   );
 
   const openOrders = orders?.filter((o: any) => o.status === "open")?.length;
 
   const readyOrders = orders?.filter((o: any) =>
-    o.status.includes("ready")
+    o.status.includes("ready"),
   )?.length;
 
   const outForDeliveryOrders = orders?.filter(
-    (o: any) => o.status === "out-for-delivery"
+    (o: any) => o.status === "out-for-delivery",
   )?.length;
 
   const completedOrders = orders?.filter((o: any) =>
-    ["delivered", "picked-up"].includes(o.status)
+    ["delivered", "picked-up"].includes(o.status),
   )?.length;
 
   const refundedOrders = orders?.filter(
-    (o: any) => o.status === "refunded"
+    (o: any) => o.status === "refunded",
   )?.length;
 
   const cancelledOrders = orders?.filter(
-    (o: any) => o.status === "cancelled"
+    (o: any) => o.status === "cancelled",
   )?.length;
 
   const unapprovedReviewsCount = useQuery(
     api.storeFront.reviews.getUnapprovedReviewsCount,
-    activeStore?._id ? { storeId: activeStore._id } : "skip"
+    activeStore?._id ? { storeId: activeStore._id } : "skip",
   );
 
   const { hasFullAdminAccess } = usePermissions();
@@ -455,6 +456,24 @@ export function AppSidebar() {
                     </SidebarMenuButton>
                   </SidebarMenuSubItem>
                 </SidebarMenuSub> */}
+              </SidebarMenuItem>
+
+              {/* Bulk operations section */}
+              <SidebarMenuItem>
+                <SidebarMenuButton disabled={!hasFullAdminAccess} asChild>
+                  <Link
+                    to="/$orgUrlSlug/store/$storeUrlSlug/bulk-operations"
+                    params={(p) => ({
+                      ...p,
+                      orgUrlSlug: activeOrganization?.slug,
+                      storeUrlSlug: activeStore?.slug,
+                    })}
+                    className="flex items-center"
+                  >
+                    <Layers className="w-4 h-4" />
+                    <p className="font-medium">Bulk Operations</p>
+                  </Link>
+                </SidebarMenuButton>
               </SidebarMenuItem>
 
               {/* Promo codes section */}

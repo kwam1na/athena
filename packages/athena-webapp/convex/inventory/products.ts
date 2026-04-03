@@ -792,6 +792,49 @@ export const removeAllProductsForStore = mutation({
   },
 });
 
+export const batchUpdateSkuPrices = mutation({
+  args: {
+    updates: v.array(
+      v.object({
+        id: v.id("productSku"),
+        price: v.number(),
+        netPrice: v.number(),
+      })
+    ),
+  },
+  handler: async (ctx, args) => {
+    if (args.updates.length === 0) {
+      return { success: true, updatedCount: 0 };
+    }
+
+    const results = await Promise.allSettled(
+      args.updates.map(async (update) => {
+        if (update.price < 0 || update.netPrice < 0) {
+          throw new Error(`Invalid price for SKU ${update.id}: prices must be non-negative`);
+        }
+        await ctx.db.patch(update.id, {
+          price: update.price,
+          netPrice: update.netPrice,
+        });
+      })
+    );
+
+    const failedCount = results.filter((r) => r.status === "rejected").length;
+
+    if (failedCount > 0) {
+      console.error(
+        `batchUpdateSkuPrices: ${failedCount} of ${args.updates.length} updates failed`
+      );
+    }
+
+    return {
+      success: failedCount === 0,
+      updatedCount: args.updates.length - failedCount,
+      failedCount,
+    };
+  },
+});
+
 export const batchGet = query({
   args: {
     ids: v.array(v.id(entity)),
