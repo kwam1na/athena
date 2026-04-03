@@ -32,6 +32,7 @@ import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugLogsIndexRouteImport } from '
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugDashboardIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/dashboard.index'
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugConfigurationIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/configuration.index'
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugCheckoutSessionsIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/checkout-sessions.index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugBulkOperationsIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/bulk-operations/index'
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugBagsIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/bags.index'
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugAssetsIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/assets.index'
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugUsersUserIdRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/users.$userId'
@@ -192,6 +193,12 @@ const AuthedOrgUrlSlugStoreStoreUrlSlugCheckoutSessionsIndexRoute =
   AuthedOrgUrlSlugStoreStoreUrlSlugCheckoutSessionsIndexRouteImport.update({
     id: '/$orgUrlSlug/store/$storeUrlSlug/checkout-sessions/',
     path: '/$orgUrlSlug/store/$storeUrlSlug/checkout-sessions/',
+    getParentRoute: () => AuthedRoute,
+  } as any)
+const AuthedOrgUrlSlugStoreStoreUrlSlugBulkOperationsIndexRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugBulkOperationsIndexRouteImport.update({
+    id: '/$orgUrlSlug/store/$storeUrlSlug/bulk-operations/',
+    path: '/$orgUrlSlug/store/$storeUrlSlug/bulk-operations/',
     getParentRoute: () => AuthedRoute,
   } as any)
 const AuthedOrgUrlSlugStoreStoreUrlSlugBagsIndexRoute =
@@ -401,6 +408,7 @@ export interface FileRoutesByFullPath {
   '/$orgUrlSlug/store/$storeUrlSlug/users/$userId': typeof AuthedOrgUrlSlugStoreStoreUrlSlugUsersUserIdRoute
   '/$orgUrlSlug/store/$storeUrlSlug/assets/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugAssetsIndexRoute
   '/$orgUrlSlug/store/$storeUrlSlug/bags/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugBagsIndexRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/bulk-operations/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugBulkOperationsIndexRoute
   '/$orgUrlSlug/store/$storeUrlSlug/checkout-sessions/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugCheckoutSessionsIndexRoute
   '/$orgUrlSlug/store/$storeUrlSlug/configuration/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugConfigurationIndexRoute
   '/$orgUrlSlug/store/$storeUrlSlug/dashboard/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugDashboardIndexRoute
@@ -454,6 +462,7 @@ export interface FileRoutesByTo {
   '/$orgUrlSlug/store/$storeUrlSlug/users/$userId': typeof AuthedOrgUrlSlugStoreStoreUrlSlugUsersUserIdRoute
   '/$orgUrlSlug/store/$storeUrlSlug/assets': typeof AuthedOrgUrlSlugStoreStoreUrlSlugAssetsIndexRoute
   '/$orgUrlSlug/store/$storeUrlSlug/bags': typeof AuthedOrgUrlSlugStoreStoreUrlSlugBagsIndexRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/bulk-operations': typeof AuthedOrgUrlSlugStoreStoreUrlSlugBulkOperationsIndexRoute
   '/$orgUrlSlug/store/$storeUrlSlug/checkout-sessions': typeof AuthedOrgUrlSlugStoreStoreUrlSlugCheckoutSessionsIndexRoute
   '/$orgUrlSlug/store/$storeUrlSlug/configuration': typeof AuthedOrgUrlSlugStoreStoreUrlSlugConfigurationIndexRoute
   '/$orgUrlSlug/store/$storeUrlSlug/dashboard': typeof AuthedOrgUrlSlugStoreStoreUrlSlugDashboardIndexRoute
@@ -510,6 +519,7 @@ export interface FileRoutesById {
   '/_authed/$orgUrlSlug/store/$storeUrlSlug/users/$userId': typeof AuthedOrgUrlSlugStoreStoreUrlSlugUsersUserIdRoute
   '/_authed/$orgUrlSlug/store/$storeUrlSlug/assets/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugAssetsIndexRoute
   '/_authed/$orgUrlSlug/store/$storeUrlSlug/bags/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugBagsIndexRoute
+  '/_authed/$orgUrlSlug/store/$storeUrlSlug/bulk-operations/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugBulkOperationsIndexRoute
   '/_authed/$orgUrlSlug/store/$storeUrlSlug/checkout-sessions/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugCheckoutSessionsIndexRoute
   '/_authed/$orgUrlSlug/store/$storeUrlSlug/configuration/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugConfigurationIndexRoute
   '/_authed/$orgUrlSlug/store/$storeUrlSlug/dashboard/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugDashboardIndexRoute
@@ -566,6 +576,7 @@ export interface FileRouteTypes {
     | '/$orgUrlSlug/store/$storeUrlSlug/users/$userId'
     | '/$orgUrlSlug/store/$storeUrlSlug/assets/'
     | '/$orgUrlSlug/store/$storeUrlSlug/bags/'
+    | '/$orgUrlSlug/store/$storeUrlSlug/bulk-operations/'
     | '/$orgUrlSlug/store/$storeUrlSlug/checkout-sessions/'
     | '/$orgUrlSlug/store/$storeUrlSlug/configuration/'
     | '/$orgUrlSlug/store/$storeUrlSlug/dashboard/'
@@ -619,6 +630,7 @@ export interface FileRouteTypes {
     | '/$orgUrlSlug/store/$storeUrlSlug/users/$userId'
     | '/$orgUrlSlug/store/$storeUrlSlug/assets'
     | '/$orgUrlSlug/store/$storeUrlSlug/bags'
+    | '/$orgUrlSlug/store/$storeUrlSlug/bulk-operations'
     | '/$orgUrlSlug/store/$storeUrlSlug/checkout-sessions'
     | '/$orgUrlSlug/store/$storeUrlSlug/configuration'
     | '/$orgUrlSlug/store/$storeUrlSlug/dashboard'
@@ -674,6 +686,7 @@ export interface FileRouteTypes {
     | '/_authed/$orgUrlSlug/store/$storeUrlSlug/users/$userId'
     | '/_authed/$orgUrlSlug/store/$storeUrlSlug/assets/'
     | '/_authed/$orgUrlSlug/store/$storeUrlSlug/bags/'
+    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/bulk-operations/'
     | '/_authed/$orgUrlSlug/store/$storeUrlSlug/checkout-sessions/'
     | '/_authed/$orgUrlSlug/store/$storeUrlSlug/configuration/'
     | '/_authed/$orgUrlSlug/store/$storeUrlSlug/dashboard/'
@@ -875,6 +888,13 @@ declare module '@tanstack/react-router' {
       path: '/$orgUrlSlug/store/$storeUrlSlug/checkout-sessions'
       fullPath: '/$orgUrlSlug/store/$storeUrlSlug/checkout-sessions/'
       preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugCheckoutSessionsIndexRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/bulk-operations/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/bulk-operations/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/bulk-operations'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/bulk-operations/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugBulkOperationsIndexRouteImport
       parentRoute: typeof AuthedRoute
     }
     '/_authed/$orgUrlSlug/store/$storeUrlSlug/bags/': {
@@ -1108,6 +1128,7 @@ interface AuthedRouteChildren {
   AuthedOrgUrlSlugStoreStoreUrlSlugUsersUserIdRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugUsersUserIdRoute
   AuthedOrgUrlSlugStoreStoreUrlSlugAssetsIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugAssetsIndexRoute
   AuthedOrgUrlSlugStoreStoreUrlSlugBagsIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugBagsIndexRoute
+  AuthedOrgUrlSlugStoreStoreUrlSlugBulkOperationsIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugBulkOperationsIndexRoute
   AuthedOrgUrlSlugStoreStoreUrlSlugCheckoutSessionsIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugCheckoutSessionsIndexRoute
   AuthedOrgUrlSlugStoreStoreUrlSlugConfigurationIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugConfigurationIndexRoute
   AuthedOrgUrlSlugStoreStoreUrlSlugDashboardIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugDashboardIndexRoute
@@ -1173,6 +1194,8 @@ const AuthedRouteChildren: AuthedRouteChildren = {
     AuthedOrgUrlSlugStoreStoreUrlSlugAssetsIndexRoute,
   AuthedOrgUrlSlugStoreStoreUrlSlugBagsIndexRoute:
     AuthedOrgUrlSlugStoreStoreUrlSlugBagsIndexRoute,
+  AuthedOrgUrlSlugStoreStoreUrlSlugBulkOperationsIndexRoute:
+    AuthedOrgUrlSlugStoreStoreUrlSlugBulkOperationsIndexRoute,
   AuthedOrgUrlSlugStoreStoreUrlSlugCheckoutSessionsIndexRoute:
     AuthedOrgUrlSlugStoreStoreUrlSlugCheckoutSessionsIndexRoute,
   AuthedOrgUrlSlugStoreStoreUrlSlugConfigurationIndexRoute:
