@@ -159,6 +159,7 @@ import type * as storeFront_checkoutSession from "../storeFront/checkoutSession.
 import type * as storeFront_customerBehaviorTimeline from "../storeFront/customerBehaviorTimeline.js";
 import type * as storeFront_guest from "../storeFront/guest.js";
 import type * as storeFront_helpers_bag from "../storeFront/helpers/bag.js";
+import type * as storeFront_helpers_onlineOrder from "../storeFront/helpers/onlineOrder.js";
 import type * as storeFront_helpers_orderUpdateEmails from "../storeFront/helpers/orderUpdateEmails.js";
 import type * as storeFront_helpers_paymentHelpers from "../storeFront/helpers/paymentHelpers.js";
 import type * as storeFront_offers from "../storeFront/offers.js";
@@ -171,6 +172,7 @@ import type * as storeFront_reviews from "../storeFront/reviews.js";
 import type * as storeFront_rewards from "../storeFront/rewards.js";
 import type * as storeFront_savedBag from "../storeFront/savedBag.js";
 import type * as storeFront_savedBagItem from "../storeFront/savedBagItem.js";
+import type * as storeFront_storefrontObservabilityReport from "../storeFront/storefrontObservabilityReport.js";
 import type * as storeFront_supportTicket from "../storeFront/supportTicket.js";
 import type * as storeFront_user from "../storeFront/user.js";
 import type * as storeFront_userOffers from "../storeFront/userOffers.js";
@@ -336,6 +338,7 @@ declare const fullApi: ApiFromModules<{
   "storeFront/customerBehaviorTimeline": typeof storeFront_customerBehaviorTimeline;
   "storeFront/guest": typeof storeFront_guest;
   "storeFront/helpers/bag": typeof storeFront_helpers_bag;
+  "storeFront/helpers/onlineOrder": typeof storeFront_helpers_onlineOrder;
   "storeFront/helpers/orderUpdateEmails": typeof storeFront_helpers_orderUpdateEmails;
   "storeFront/helpers/paymentHelpers": typeof storeFront_helpers_paymentHelpers;
   "storeFront/offers": typeof storeFront_offers;
@@ -348,6 +351,7 @@ declare const fullApi: ApiFromModules<{
   "storeFront/rewards": typeof storeFront_rewards;
   "storeFront/savedBag": typeof storeFront_savedBag;
   "storeFront/savedBagItem": typeof storeFront_savedBagItem;
+  "storeFront/storefrontObservabilityReport": typeof storeFront_storefrontObservabilityReport;
   "storeFront/supportTicket": typeof storeFront_supportTicket;
   "storeFront/user": typeof storeFront_user;
   "storeFront/userOffers": typeof storeFront_userOffers;

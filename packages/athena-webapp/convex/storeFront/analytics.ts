@@ -15,6 +15,16 @@ const MAX_REPORTING_ORDERS = 1000;
 const MAX_PRODUCT_SKUS_PER_PRODUCT = 50;
 const MAX_STOREFRONT_OBSERVABILITY_RESULTS = 2000;
 
+function extractPromoCodeId(
+  data: Record<string, any>
+): Id<"promoCode"> | undefined {
+  const promoCodeId = data.promoCodeId;
+
+  return typeof promoCodeId === "string"
+    ? (promoCodeId as Id<"promoCode">)
+    : undefined;
+}
+
 function getAnalyticsByStoreQuery(
   ctx: QueryCtx,
   storeId: Id<"store">,
@@ -155,6 +165,7 @@ export const create = mutation({
   handler: async (ctx, args) => {
     const id = await ctx.db.insert(entity, {
       ...args,
+      promoCodeId: extractPromoCodeId(args.data),
     });
 
     return await ctx.db.get("analytics", id);
@@ -356,8 +367,8 @@ export const getByPromoCodeId = query({
   handler: async (ctx, args) => {
     return await ctx.db
       .query(entity)
-      .withIndex("by_data_promoCodeId", (q) =>
-        q.eq("data.promoCodeId", args.promoCodeId)
+      .withIndex("by_promoCodeId", (q) =>
+        q.eq("promoCodeId", args.promoCodeId)
       )
       .order("desc")
       .take(MAX_PROMO_CODE_ANALYTICS_RESULTS);

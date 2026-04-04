@@ -8,4 +8,5 @@ export const analyticsSchema = v.object({
   action: v.string(),
   data: v.record(v.string(), v.any()),
   productId: v.optional(v.id("product")),
+  promoCodeId: v.optional(v.id("promoCode")),
 });

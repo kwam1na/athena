@@ -90,6 +90,11 @@ describe("commerce query indexing", () => {
         descriptor: "by_promoCodeId_storeFrontUserId",
         fields: ["promoCodeId", "storeFrontUserId"],
       },
+      {
+        table: "analytics",
+        descriptor: "by_promoCodeId",
+        fields: ["promoCodeId"],
+      },
     ].forEach(expectIndex);
   });
 
@@ -105,11 +110,13 @@ describe("commerce query indexing", () => {
   it("uses indexed lookups in the checkout-session and online-order modules", () => {
     const checkoutSessionSource = getSource("./checkoutSession.ts");
     const onlineOrderSource = getSource("./onlineOrder.ts");
+    const analyticsSource = getSource("./analytics.ts");
 
     expect(checkoutSessionSource).toContain('.withIndex("by_storeFrontUserId"');
     expect(checkoutSessionSource).toContain('.withIndex("by_sessionId"');
     expect(onlineOrderSource).toContain('.withIndex("by_checkoutSessionId"');
     expect(onlineOrderSource).toContain('.withIndex("by_storeFrontUserId"');
     expect(onlineOrderSource).toContain('.withIndex("by_orderId"');
+    expect(analyticsSource).toContain('.withIndex("by_promoCodeId"');
   });
 });
