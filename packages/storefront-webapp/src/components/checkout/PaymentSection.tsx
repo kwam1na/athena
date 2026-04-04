@@ -105,14 +105,12 @@ export const PaymentSection = ({ form }: CheckoutFormSectionProps) => {
       if (checkoutState.paymentMethod === "payment_on_delivery") {
         // Handle POD flow - run all operations with allSettled
         const results = await Promise.allSettled([
-          processPODCheckoutSession(
-            {
-              ...data,
-              deliveryDetails: data.deliveryDetails ?? null,
-              paymentMethod: checkoutState.paymentMethod,
-              podPaymentMethod: checkoutState.podPaymentMethod,
-            },
-          ),
+          processPODCheckoutSession({
+            ...data,
+            deliveryDetails: data.deliveryDetails ?? null,
+            paymentMethod: checkoutState.paymentMethod,
+            podPaymentMethod: checkoutState.podPaymentMethod,
+          }),
           track(
             createPaymentSubmissionStartedEvent({
               checkoutSessionId: activeSession._id,
@@ -133,7 +131,7 @@ export const PaymentSection = ({ form }: CheckoutFormSectionProps) => {
             setErrorMessage(
               typeof podResponse?.message === "string"
                 ? podResponse.message
-                : "Failed to create payment on delivery order"
+                : "Failed to create payment on delivery order",
             );
           }
         } else {
@@ -154,12 +152,10 @@ export const PaymentSection = ({ form }: CheckoutFormSectionProps) => {
       } else {
         // Original online payment flow - run all operations with allSettled
         const results = await Promise.allSettled([
-          processCheckoutSession(
-            {
-              ...data,
-              deliveryDetails: data.deliveryDetails ?? null,
-            },
-          ),
+          processCheckoutSession({
+            ...data,
+            deliveryDetails: data.deliveryDetails ?? null,
+          }),
           track(
             createPaymentSubmissionStartedEvent({
               checkoutSessionId: activeSession._id,
@@ -179,7 +175,7 @@ export const PaymentSection = ({ form }: CheckoutFormSectionProps) => {
             setErrorMessage(
               typeof paymentResponse?.message === "string"
                 ? paymentResponse.message
-                : "Failed to finalize payment"
+                : "Failed to finalize payment",
             );
           } else {
             throw new Error("No authorization URL received");
@@ -207,12 +203,7 @@ export const PaymentSection = ({ form }: CheckoutFormSectionProps) => {
           error,
         });
       }
-      setErrorMessage(
-        getCheckoutActionErrorMessage(
-          error,
-          checkoutAction,
-        ),
-      );
+      setErrorMessage(getCheckoutActionErrorMessage(error, checkoutAction));
     } finally {
       setIsProceedingToPayment(false);
     }
@@ -286,7 +277,7 @@ export const PaymentSection = ({ form }: CheckoutFormSectionProps) => {
 
   const handleAcceptedTerms = (
     option: "store-terms" | "comms-terms",
-    checked: CheckedState
+    checked: CheckedState,
   ) => {
     if (option == "store-terms") {
       setDidAcceptStoreTerms(checked as boolean);

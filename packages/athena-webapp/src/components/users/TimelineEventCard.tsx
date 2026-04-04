@@ -10,6 +10,10 @@ import {
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Card, CardContent } from "../ui/card";
+import { useGetCurrencyFormatter } from "~/src/hooks/useGetCurrencyFormatter";
+import { toDisplayAmount } from "~/convex/lib/currency";
+import { Link } from "@tanstack/react-router";
+import { getOrigin } from "~/src/lib/navigationUtils";
 
 interface TimelineEventCardProps {
   event: CustomerObservabilityTimelineEvent;
@@ -20,6 +24,8 @@ export function TimelineEventCard({ event }: TimelineEventCardProps) {
   const IconComponent = statusStyles.icon;
   const DeviceIcon = getDeviceIcon(event.device);
   const productLabel = event.productInfo?.name ?? event.productSku;
+
+  const formatter = useGetCurrencyFormatter();
 
   return (
     <Card
@@ -48,9 +54,9 @@ export function TimelineEventCard({ event }: TimelineEventCardProps) {
                   </Badge>
                 </div>
 
-                <h3 className="text-sm font-medium text-gray-900">
+                <h4 className="text-sm font-medium text-gray-900">
                   {formatObservabilityLabel(event.step)}
-                </h3>
+                </h4>
               </div>
 
               <span className="whitespace-nowrap text-xs text-gray-500">
@@ -59,39 +65,62 @@ export function TimelineEventCard({ event }: TimelineEventCardProps) {
             </div>
 
             {productLabel && (
-              <p className="mb-3 rounded-lg bg-muted/40 px-3 py-2 text-sm text-gray-700">
-                Product context: {productLabel}
-                {event.productSku && event.productInfo?.name
-                  ? ` (${event.productSku})`
-                  : ""}
+              <p className="flex gap-4 mb-3 rounded-lg bg-muted/40 px-3 py-2 text-sm text-gray-700">
+                <Link
+                  to="/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug"
+                  params={(prev) => ({
+                    ...prev,
+                    orgUrlSlug: prev.orgUrlSlug!,
+                    storeUrlSlug: prev.storeUrlSlug!,
+                    productSlug: event.productId!,
+                  })}
+                  search={{ variant: event.productSku!, o: getOrigin() }}
+                  className="flex items-center gap-4"
+                >
+                  <img
+                    src={event.productInfo?.images?.[0]}
+                    alt={event.productInfo?.name || "product image"}
+                    className="w-16 h-16 aspect-square object-cover rounded-lg"
+                  />
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium capitalize">
+                      {productLabel}
+                    </p>
+                    <p className="text-xs font-medium">
+                      {formatter.format(
+                        toDisplayAmount(event.productInfo?.price || 0),
+                      )}
+                    </p>
+                  </div>
+                </Link>
               </p>
             )}
 
-            <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500">
+            <div className="flex flex-col gap-2 text-xs text-gray-500">
               {DeviceIcon && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-muted/40 px-2 py-1">
+                <span className="inline-flex items-center gap-1 rounded-full px-2 py-1">
                   <DeviceIcon className="h-3 w-3" />
                   {event.device}
                 </span>
               )}
 
-              <span className="inline-flex items-center gap-1 rounded-full bg-muted/40 px-2 py-1">
+              {/* <span className="inline-flex items-center gap-1 rounded-full bg-muted/40 px-2 py-1">
                 Session {event.sessionId}
-              </span>
+              </span> */}
 
-              {event.route && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-muted/40 px-2 py-1">
+              {event.route && event.step == "category_browse" && (
+                <span className="inline-flex items-center gap-1 rounded-full px-2 py-1">
                   {event.route}
                 </span>
               )}
 
               {event.origin && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-muted/40 px-2 py-1">
+                <span className="inline-flex items-center gap-1 rounded-full px-2 py-1">
                   From {formatObservabilityLabel(event.origin)}
                 </span>
               )}
 
-              {event.checkoutSessionId && (
+              {/* {event.checkoutSessionId && (
                 <span className="inline-flex items-center gap-1 rounded-full bg-muted/40 px-2 py-1">
                   Checkout {event.checkoutSessionId}
                 </span>
@@ -101,7 +130,7 @@ export function TimelineEventCard({ event }: TimelineEventCardProps) {
                 <span className="inline-flex items-center gap-1 rounded-full bg-muted/40 px-2 py-1">
                   Order {event.orderId}
                 </span>
-              )}
+              )} */}
             </div>
 
             {(event.errorCategory || event.errorCode || event.errorMessage) && (

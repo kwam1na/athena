@@ -24,7 +24,7 @@ export const useBagQueries = () => {
         queryFn: () => getActiveBag(),
         retry: false,
         enabled: queryEnabled,
-        staleTime: DEFAULT_STALE_TIME,
+        staleTime: 0,
       }),
   };
 };

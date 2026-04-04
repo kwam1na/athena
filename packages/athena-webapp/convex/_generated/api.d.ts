@@ -157,6 +157,7 @@ import type * as storeFront_bag from "../storeFront/bag.js";
 import type * as storeFront_bagItem from "../storeFront/bagItem.js";
 import type * as storeFront_checkoutSession from "../storeFront/checkoutSession.js";
 import type * as storeFront_customerBehaviorTimeline from "../storeFront/customerBehaviorTimeline.js";
+import type * as storeFront_customerObservabilityTimelineData from "../storeFront/customerObservabilityTimelineData.js";
 import type * as storeFront_guest from "../storeFront/guest.js";
 import type * as storeFront_helpers_bag from "../storeFront/helpers/bag.js";
 import type * as storeFront_helpers_onlineOrder from "../storeFront/helpers/onlineOrder.js";
@@ -336,6 +337,7 @@ declare const fullApi: ApiFromModules<{
   "storeFront/bagItem": typeof storeFront_bagItem;
   "storeFront/checkoutSession": typeof storeFront_checkoutSession;
   "storeFront/customerBehaviorTimeline": typeof storeFront_customerBehaviorTimeline;
+  "storeFront/customerObservabilityTimelineData": typeof storeFront_customerObservabilityTimelineData;
   "storeFront/guest": typeof storeFront_guest;
   "storeFront/helpers/bag": typeof storeFront_helpers_bag;
   "storeFront/helpers/onlineOrder": typeof storeFront_helpers_onlineOrder;

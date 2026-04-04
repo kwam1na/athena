@@ -113,10 +113,13 @@ bagRoutes.put("/:bagId/items/:itemId", async (c) => {
   const { itemId } = c.req.param();
   const { quantity } = await c.req.json();
 
-  const b = await c.env.runMutation(internal.storeFront.bagItem.updateItemInBag, {
-    quantity,
-    itemId: itemId as Id<"bagItem">,
-  });
+  const b = await c.env.runMutation(
+    internal.storeFront.bagItem.updateItemInBag,
+    {
+      quantity,
+      itemId: itemId as Id<"bagItem">,
+    },
+  );
   return c.json(b);
 });
 
