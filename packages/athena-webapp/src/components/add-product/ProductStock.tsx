@@ -24,7 +24,6 @@ import {
   Barcode,
   Check,
   Eye,
-  EyeClosed,
   EyeOff,
   Image,
   Info,

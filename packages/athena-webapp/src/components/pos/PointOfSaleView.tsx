@@ -21,8 +21,7 @@ import {
   Settings,
   Receipt,
   Search,
-  ClockFading,
-  BanknoteArrowDown,
+  HandCoins,
 } from "lucide-react";
 import { useGetActiveOrganization } from "@/hooks/useGetOrganizations";
 import { getOrigin } from "~/src/lib/navigationUtils";
@@ -77,7 +76,7 @@ export default function PointOfSaleView() {
     {
       title: "Expense Products",
       description: "Track products expensed",
-      icon: BanknoteArrowDown,
+      icon: HandCoins,
       href: "/$orgUrlSlug/store/$storeUrlSlug/pos/expense" as const,
       color: "bg-rose-500",
       available: true,

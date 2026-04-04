@@ -6,8 +6,7 @@ import { productColumns } from "./products-table/components/productColumns";
 import {
   ArrowLeftIcon,
   CircleCheck,
-  CircleQuestionMark,
-  FileQuestionMark,
+  CircleHelp,
 } from "lucide-react";
 import { EmptyState } from "../states/empty/empty-state";
 import { Button } from "../ui/button";
@@ -63,7 +62,7 @@ export const UnresolvedProducts = () => {
   const hasSearchInput = searchValue.trim().length > 0;
 
   const EmptyStateIcon = hasSearchInput ? (
-    <CircleQuestionMark className="w-16 h-16 text-muted-foreground" />
+    <CircleHelp className="w-16 h-16 text-muted-foreground" />
   ) : (
     <CircleCheck className="w-16 h-16 text-muted-foreground" />
   );
