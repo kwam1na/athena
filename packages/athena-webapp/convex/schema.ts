@@ -63,6 +63,8 @@ const schema = defineSchema({
   analytics: defineTable(analyticsSchema)
     .index("by_storeId", ["storeId"])
     .index("by_storeFrontUserId", ["storeFrontUserId"])
+    .index("by_storeFrontUserId_storeId", ["storeFrontUserId", "storeId"])
+    .index("by_action_productId", ["action", "productId"])
     .index("by_storeId_action", ["storeId", "action"])
     .index("by_storeId_action_productId", ["storeId", "action", "productId"]),
   appVerificationCode: defineTable(appVerificationCodeSchema),
@@ -100,7 +102,9 @@ const schema = defineSchema({
     .index("by_collectionId", ["collectionId"]),
   customer: defineTable(customerSchema),
   featuredItem: defineTable(featuredItemSchema),
-  guest: defineTable(guestSchema).index("by_storeId", ["storeId"]),
+  guest: defineTable(guestSchema)
+    .index("by_storeId", ["storeId"])
+    .index("by_marker", ["marker"]),
   inviteCode: defineTable(inviteCodeSchema),
   onlineOrder: defineTable(onlineOrderSchema)
     .index("by_checkoutSessionId", ["checkoutSessionId"])
@@ -181,7 +185,16 @@ const schema = defineSchema({
     .index("by_slug", ["slug"])
     .index("by_categoryId_slug", ["categoryId", "slug"]),
   supportTicket: defineTable(supportTicketSchema),
-  review: defineTable(reviewSchema).index("by_orderItemId", ["orderItemId"]),
+  review: defineTable(reviewSchema)
+    .index("by_orderItemId", ["orderItemId"])
+    .index("by_createdByStoreFrontUserId", ["createdByStoreFrontUserId"])
+    .index("by_createdByStoreFrontUserId_productSkuId", [
+      "createdByStoreFrontUserId",
+      "productSkuId",
+    ])
+    .index("by_productSkuId", ["productSkuId"])
+    .index("by_storeId", ["storeId"])
+    .index("by_productId", ["productId"]),
   rewardPoints: defineTable(rewardPointsSchema).index("by_user_store", [
     "storeFrontUserId",
     "storeId",
@@ -193,8 +206,13 @@ const schema = defineSchema({
   offer: defineTable(offerSchema)
     .index("by_email", ["email"])
     .index("by_storeFrontUserId", ["storeFrontUserId"])
+    .index("by_storeFrontUserId_promoCodeId", [
+      "storeFrontUserId",
+      "promoCodeId",
+    ])
     .index("by_promoCodeId", ["promoCodeId"])
-    .index("by_storeId", ["storeId"]),
+    .index("by_storeId", ["storeId"])
+    .index("by_storeId_status", ["storeId", "status"]),
 });
 
 export default schema;

@@ -1,4 +1,3 @@
-/* eslint-disable @convex-dev/no-collect-in-query -- Query refactors are tracked in V26-168, V26-169, and V26-170; this PR only hardens API boundaries. */
 import {
   mutation,
   query,
@@ -13,6 +12,7 @@ import { sendFeedbackRequestEmail } from "../mailersend";
 import { getProductName } from "../utils";
 
 const entity = "review" as const;
+const MAX_REVIEWS = 500;
 
 async function getStoreFrontActorById(
   ctx: MutationCtx | QueryCtx,
@@ -101,10 +101,10 @@ export const create = mutation({
     // Check if this is the user's first review and send them an offer
     const allUserReviews = await ctx.db
       .query(entity)
-      .filter((q) =>
-        q.eq(q.field("createdByStoreFrontUserId"), createdByStoreFrontUserId)
+      .withIndex("by_createdByStoreFrontUserId", (q) =>
+        q.eq("createdByStoreFrontUserId", createdByStoreFrontUserId)
       )
-      .collect();
+      .take(2);
 
     console.log(
       `[FirstReviewOffer] User ${createdByStoreFrontUserId} has ${allUserReviews.length} review(s)`
@@ -155,10 +155,11 @@ export const create = mutation({
               // Check for duplicate offer
               const existingOffer = await ctx.db
                 .query("offer")
-                .withIndex("by_storeFrontUserId", (q) =>
-                  q.eq("storeFrontUserId", createdByStoreFrontUserId)
+                .withIndex("by_storeFrontUserId_promoCodeId", (q) =>
+                  q
+                    .eq("storeFrontUserId", createdByStoreFrontUserId)
+                    .eq("promoCodeId", promoCode._id)
                 )
-                .filter((q) => q.eq(q.field("promoCodeId"), promoCode._id))
                 .first();
 
               if (!existingOffer) {
@@ -221,7 +222,9 @@ export const getByOrderItem = query({
 
     const review = await ctx.db
       .query(entity)
-      .filter((q) => q.eq(q.field("orderItemId"), orderItemId))
+      .withIndex("by_orderItemId", (q) =>
+        q.eq("orderItemId", orderItemId as Id<"onlineOrderItem">)
+      )
       .first();
 
     return review;
@@ -312,8 +315,10 @@ export const getByProductSkuId = query({
 
     const reviews = await ctx.db
       .query(entity)
-      .filter((q) => q.eq(q.field("productSkuId"), productSkuId))
-      .collect();
+      .withIndex("by_productSkuId", (q) =>
+        q.eq("productSkuId", productSkuId as Id<"productSku">)
+      )
+      .take(MAX_REVIEWS);
 
     return reviews;
   },
@@ -331,8 +336,10 @@ export const getByUser = query({
 
     const reviews = await ctx.db
       .query(entity)
-      .filter((q) => q.eq(q.field("createdByStoreFrontUserId"), userId))
-      .collect();
+      .withIndex("by_createdByStoreFrontUserId", (q) =>
+        q.eq("createdByStoreFrontUserId", userId)
+      )
+      .take(MAX_REVIEWS);
 
     return reviews;
   },
@@ -351,13 +358,12 @@ export const getByUserAndProductSkuId = query({
 
     const reviews = await ctx.db
       .query(entity)
-      .filter((q) =>
-        q.and(
-          q.eq(q.field("createdByStoreFrontUserId"), userId),
-          q.eq(q.field("productSkuId"), productSkuId)
-        )
+      .withIndex("by_createdByStoreFrontUserId_productSkuId", (q) =>
+        q
+          .eq("createdByStoreFrontUserId", userId)
+          .eq("productSkuId", productSkuId as Id<"productSku">)
       )
-      .collect();
+      .take(MAX_REVIEWS);
 
     return reviews;
   },
@@ -372,9 +378,9 @@ export const getAllReviewsForStore = query({
 
     const reviews = await ctx.db
       .query(entity)
-      .filter((q) => q.eq(q.field("storeId"), storeId))
+      .withIndex("by_storeId", (q) => q.eq("storeId", storeId))
       .order("desc")
-      .collect();
+      .take(MAX_REVIEWS);
 
     // Add product images to reviews
     const reviewsWithImages = await Promise.all(
@@ -488,14 +494,14 @@ export const getByProductId = query({
 
     const reviews = await ctx.db
       .query(entity)
+      .withIndex("by_productId", (q) =>
+        q.eq("productId", productId as Id<"product">)
+      )
       .filter((q) =>
-        q.and(
-          q.eq(q.field("productId"), productId),
-          q.eq(q.field("isPublished"), true)
-        )
+        q.eq(q.field("isPublished"), true)
       )
       .order("desc")
-      .collect();
+      .take(MAX_REVIEWS);
 
     // Add productSku details and user details to reviews
     const reviewsWithExtras: any[] = await Promise.all(
@@ -632,16 +638,14 @@ export const getUnapprovedReviewsCount = query({
 
     const reviews = await ctx.db
       .query(entity)
+      .withIndex("by_storeId", (q) => q.eq("storeId", storeId))
       .filter((q) =>
-        q.and(
-          q.eq(q.field("storeId"), storeId),
-          q.or(
-            q.eq(q.field("isApproved"), false),
-            q.eq(q.field("isApproved"), undefined)
-          )
+        q.or(
+          q.eq(q.field("isApproved"), false),
+          q.eq(q.field("isApproved"), undefined)
         )
       )
-      .collect();
+      .take(MAX_REVIEWS);
 
     return reviews.length;
   },
