@@ -39,7 +39,7 @@ type AvailabilityUpdate = { id: Id<"productSku">; change: number };
 
 async function listSessionItems(
   ctx: QueryCtx | MutationCtx,
-  sessionId: Id<"checkoutSession">
+  sessionId: Id<"checkoutSession">,
 ) {
   return await ctx.db
     .query("checkoutSessionItem")
@@ -49,7 +49,7 @@ async function listSessionItems(
 
 const checkIfItemsHaveChanged = (
   products: Product[],
-  sessionItemsMap: Map<string, number>
+  sessionItemsMap: Map<string, number>,
 ) => {
   return products.some((product) => {
     const existingQuantity = sessionItemsMap.get(product.productSkuId);
@@ -70,7 +70,7 @@ export const create = mutation({
         productSkuId: v.id("productSku"),
         quantity: v.number(),
         price: v.number(),
-      })
+      }),
     ),
   },
   handler: async (ctx, args) => {
@@ -92,11 +92,11 @@ export const create = mutation({
 
     // Check for valid products
     const productExistenceChecks = await Promise.all(
-      args.products.map((p) => ctx.db.get("product", p.productId))
+      args.products.map((p) => ctx.db.get("product", p.productId)),
     );
 
     const invalidProducts = args.products.filter(
-      (_, index) => !productExistenceChecks[index]
+      (_, index) => !productExistenceChecks[index],
     );
 
     if (invalidProducts.length > 0) {
@@ -113,7 +113,7 @@ export const create = mutation({
 
     // Check if products are visible
     const invisibleProducts = productExistenceChecks.filter(
-      (product) => product && product.isVisible === false
+      (product) => product && product.isVisible === false,
     );
 
     if (invisibleProducts.length > 0) {
@@ -122,7 +122,7 @@ export const create = mutation({
         message: "Some items in your bag are no longer available",
         unavailableProducts: invisibleProducts.map((product) => {
           const correspondingProductData = args.products.find(
-            (p) => p.productId === product?._id
+            (p) => p.productId === product?._id,
           );
           return {
             productSkuId: correspondingProductData?.productSkuId,
@@ -138,7 +138,7 @@ export const create = mutation({
 
     // Check if product SKUs are visible
     const invisibleProductSkus = productSkus.filter(
-      (sku) => sku.isVisible === false
+      (sku) => sku.isVisible === false,
     );
 
     if (invisibleProductSkus.length > 0) {
@@ -158,7 +158,7 @@ export const create = mutation({
     // Check for existing session
     const existingSession = await retrieveActiveCheckoutSession(
       ctx,
-      args.storeFrontUserId
+      args.storeFrontUserId,
     );
 
     let sessionItemsMap = new Map<string, number>();
@@ -169,7 +169,7 @@ export const create = mutation({
 
       // Map existing session items by productSkuId and quantity
       sessionItemsMap = new Map(
-        sessionItems.map((item) => [item.productSkuId, item.quantity])
+        sessionItems.map((item) => [item.productSkuId, item.quantity]),
       );
     }
 
@@ -177,7 +177,7 @@ export const create = mutation({
     const unavailableProducts = checkAdjustedAvailability(
       args.products,
       productSkus,
-      sessionItemsMap
+      sessionItemsMap,
     );
 
     if (unavailableProducts.length > 0) {
@@ -199,7 +199,7 @@ export const create = mutation({
           expiresAt,
           storeId: args.storeId,
           storeFrontUserId: args.storeFrontUserId,
-        }
+        },
       );
     }
 
@@ -229,7 +229,7 @@ export const create = mutation({
       ctx,
       sessionId,
       args.storeFrontUserId,
-      args.products
+      args.products,
     );
 
     // Update availability counts
@@ -237,23 +237,23 @@ export const create = mutation({
 
     // Auto-apply best-value promo code
     console.log(
-      `[NewSession] Starting auto-apply process for session ${sessionId}`
+      `[NewSession] Starting auto-apply process for session ${sessionId}`,
     );
 
     const eligiblePromoCode = await findBestValuePromoCode(
       ctx,
       args.storeId,
       args.storeFrontUserId,
-      sessionId
+      sessionId,
     );
 
     console.log(
-      `[NewSession] Best-value promo code found: ${eligiblePromoCode}`
+      `[NewSession] Best-value promo code found: ${eligiblePromoCode}`,
     );
 
     if (eligiblePromoCode) {
       console.log(
-        `[NewSession] Attempting to redeem promo code: ${eligiblePromoCode}`
+        `[NewSession] Attempting to redeem promo code: ${eligiblePromoCode}`,
       );
       const redeemResult = await ctx.runMutation(
         internal.inventory.promoCode.redeem,
@@ -261,18 +261,18 @@ export const create = mutation({
           code: eligiblePromoCode,
           checkoutSessionId: sessionId,
           storeFrontUserId: args.storeFrontUserId,
-        }
+        },
       );
 
       console.log(`[NewSession] Redeem result:`, redeemResult);
 
       if (redeemResult.success) {
         console.log(
-          `[NewSession] Successfully applied promo code: ${eligiblePromoCode}`
+          `[NewSession] Successfully applied promo code: ${eligiblePromoCode}`,
         );
       } else {
         console.log(
-          `[NewSession] Failed to apply promo code: ${redeemResult.message}`
+          `[NewSession] Failed to apply promo code: ${redeemResult.message}`,
         );
       }
     } else {
@@ -305,8 +305,8 @@ export const getAbandonedCheckoutSessions = internalQuery({
         q.and(
           q.lt(q.field("expiresAt"), oneHourAgo),
           q.eq(q.field("isFinalizingPayment"), true),
-          q.eq(q.field("placedOrderId"), undefined)
-        )
+          q.eq(q.field("placedOrderId"), undefined),
+        ),
       )
       .collect();
   },
@@ -324,9 +324,9 @@ export const releaseCheckoutItems = internalMutation({
         .filter((q) =>
           q.or(
             ...args.externalReferences!.map((ref) =>
-              q.eq(q.field("externalReference"), ref)
-            )
-          )
+              q.eq(q.field("externalReference"), ref),
+            ),
+          ),
         )
         .collect();
     } else {
@@ -338,8 +338,8 @@ export const releaseCheckoutItems = internalMutation({
         .filter((q) =>
           q.and(
             q.lt(q.field("expiresAt"), now),
-            q.eq(q.field("isFinalizingPayment"), false)
-          )
+            q.eq(q.field("isFinalizingPayment"), false),
+          ),
         )
         .collect();
     }
@@ -364,7 +364,7 @@ export const releaseCheckoutItems = internalMutation({
         const currentQuantity = availabilityUpdates.get(item.productSkuId) || 0;
         availabilityUpdates.set(
           item.productSkuId,
-          currentQuantity + item.quantity
+          currentQuantity + item.quantity,
         );
       }
 
@@ -379,13 +379,15 @@ export const releaseCheckoutItems = internalMutation({
                   productSku.quantityAvailable + quantityToRelease,
               });
             }
-          }
-        )
+          },
+        ),
       );
 
       // Delete session items and the expired session
       await Promise.all([
-        ...sessionItems.map((item) => ctx.db.delete("checkoutSessionItem", item._id)),
+        ...sessionItems.map((item) =>
+          ctx.db.delete("checkoutSessionItem", item._id),
+        ),
         ctx.db.delete("checkoutSession", session._id),
       ]);
 
@@ -422,13 +424,13 @@ export const getActiveCheckoutSessionsForStore = query({
             q.eq(q.field("storeId"), args.storeId),
             q.or(
               q.gt(q.field("expiresAt"), now),
-              q.eq(q.field("isFinalizingPayment"), true)
-            )
+              q.eq(q.field("isFinalizingPayment"), true),
+            ),
           ),
-          q.eq(q.field("hasCompletedCheckoutSession"), false)
+          q.eq(q.field("hasCompletedCheckoutSession"), false),
           // q.eq(q.field("placedOrderId"), undefined)
           // q.eq(q.field("hasCompletedPayment"), false)
-        )
+        ),
       )
       .collect();
   },
@@ -441,7 +443,7 @@ export const cancelOrder = action({
       internal.storeFront.checkoutSession.getByIdInternal,
       {
         sessionId: args.id,
-      }
+      },
     );
 
     if (!session) {
@@ -466,7 +468,7 @@ export const cancelOrder = action({
             id: session._id,
             isFinalizingPayment: false,
             isPaymentRefunded: true,
-          }
+          },
         ),
 
         await ctx.runMutation(internal.storeFront.onlineOrder.updateInternal, {
@@ -497,8 +499,8 @@ export const completeCheckoutSessions = internalMutation({
           q.lt(q.field("expiresAt"), oneHourAgo),
           q.eq(q.field("isFinalizingPayment"), true),
           q.eq(q.field("hasCompletedPayment"), true),
-          q.eq(q.field("hasCompletedCheckoutSession"), false)
-        )
+          q.eq(q.field("hasCompletedCheckoutSession"), false),
+        ),
       )
       .collect();
 
@@ -510,13 +512,15 @@ export const completeCheckoutSessions = internalMutation({
     // set all sessions to completed
     await Promise.all(
       sessions.map((session) =>
-        ctx.db.patch("checkoutSession", session._id, { hasCompletedCheckoutSession: true })
-      )
+        ctx.db.patch("checkoutSession", session._id, {
+          hasCompletedCheckoutSession: true,
+        }),
+      ),
     );
 
     console.log(
       "Completed checkout sessions",
-      sessions.map((s) => s._id)
+      sessions.map((s) => s._id),
     );
   },
 });
@@ -526,7 +530,7 @@ export const clearAbandonedSessions = internalAction({
   handler: async (ctx) => {
     const sessions = await ctx.runQuery(
       internal.storeFront.checkoutSession.getAbandonedCheckoutSessions,
-      {}
+      {},
     );
 
     if (sessions.length === 0) {
@@ -542,22 +546,22 @@ export const clearAbandonedSessions = internalAction({
             headers: {
               Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
             },
-          }
+          },
         );
-      })
+      }),
     );
 
     const responses = await Promise.all(checks.map((check) => check.json()));
 
     const abandonededBags = responses
       .filter(
-        (r) => r.data.status === "abandoned" || r.data.status === "failed"
+        (r) => r.data.status === "abandoned" || r.data.status === "failed",
       )
       .map((r) => r.data.reference);
 
     await ctx.runMutation(
       internal.storeFront.checkoutSession.releaseCheckoutItems,
-      { externalReferences: abandonededBags }
+      { externalReferences: abandonededBags },
     );
   },
 });
@@ -584,12 +588,15 @@ export const updateCheckoutSession = internalMutation({
         bank: v.optional(v.string()),
         channel: v.optional(v.string()),
         type: v.optional(
-          v.union(v.literal("online_payment"), v.literal("payment_on_delivery"))
+          v.union(
+            v.literal("online_payment"),
+            v.literal("payment_on_delivery"),
+          ),
         ),
         podPaymentMethod: v.optional(
-          v.union(v.literal("cash"), v.literal("mobile_money"))
+          v.union(v.literal("cash"), v.literal("mobile_money")),
         ),
-      })
+      }),
     ),
   },
   handler: async (ctx, args) => {
@@ -602,7 +609,7 @@ export const updateCheckoutSession = internalMutation({
       if (!session) {
         console.log(
           "Session missing for id in updateCheckoutSession. Returning false.",
-          args.id
+          args.id,
         );
         return { success: false, message: "Invalid session." };
       }
@@ -622,7 +629,7 @@ export const updateCheckoutSession = internalMutation({
           ctx,
           args.id,
           session,
-          args.orderDetails
+          args.orderDetails,
         );
       }
 
@@ -691,7 +698,7 @@ function createPatchObject(args: any) {
 async function handlePlaceOrder(
   ctx: MutationCtx,
   sessionId: Id<"checkoutSession">,
-  session: CheckoutSession
+  session: CheckoutSession,
 ) {
   const placedOrder = session.externalReference
     ? await findOrderByExternalReference(ctx, session.externalReference)
@@ -728,7 +735,7 @@ async function handleOrderCreation(
   ctx: MutationCtx,
   sessionId: Id<"checkoutSession">,
   session: CheckoutSession,
-  orderDetails: any
+  orderDetails: any,
 ) {
   const placedOrder = session.externalReference
     ? await findOrderByExternalReference(ctx, session.externalReference)
@@ -758,7 +765,7 @@ async function handleOrderCreation(
 async function createOnlineOrder(
   ctx: MutationCtx,
   sessionId: Id<"checkoutSession">,
-  orderData: any
+  orderData: any,
 ): Promise<any> {
   const response = await createOrderFromCheckoutSession(ctx, {
     checkoutSessionId: sessionId,
@@ -768,7 +775,7 @@ async function createOnlineOrder(
 
   if (!response.success) {
     console.error(
-      `Failed to create online order for session: ${sessionId} with error: ${response.error}`
+      `Failed to create online order for session: ${sessionId} with error: ${response.error}`,
     );
     return { success: false, message: "Failed to create online order." };
   }
@@ -786,13 +793,13 @@ export const getCheckoutSession = internalQuery({
     return await ctx.db
       .query("checkoutSession")
       .withIndex("by_storeFrontUserId", (q) =>
-        q.eq("storeFrontUserId", args.storeFrontUserId)
+        q.eq("storeFrontUserId", args.storeFrontUserId),
       )
       .filter((q) =>
         q.or(
           q.eq(q.field("externalReference"), args.externalReference),
-          q.eq(q.field("_id"), args.sessionId)
-        )
+          q.eq(q.field("_id"), args.sessionId),
+        ),
       )
       .first();
   },
@@ -804,14 +811,14 @@ export const getPendingCheckoutSessions = query({
     return await ctx.db
       .query("checkoutSession")
       .withIndex("by_storeFrontUserId", (q) =>
-        q.eq("storeFrontUserId", args.storeFrontUserId)
+        q.eq("storeFrontUserId", args.storeFrontUserId),
       )
       .filter((q) =>
         q.and(
           q.eq(q.field("hasCompletedPayment"), true),
           q.eq(q.field("placedOrderId"), undefined),
-          q.neq(q.field("isPaymentRefunded"), true)
-        )
+          q.neq(q.field("isPaymentRefunded"), true),
+        ),
       )
       .take(MAX_CHECKOUT_SESSIONS);
   },
@@ -830,8 +837,8 @@ export const getUnverifiedPaidSessions = internalQuery({
           q.neq(q.field("hasVerifiedPayment"), true),
           q.neq(q.field("placedOrderId"), undefined),
           q.neq(q.field("externalReference"), undefined),
-          q.lt(q.field("_creationTime"), fifteenMinutesAgo)
-        )
+          q.lt(q.field("_creationTime"), fifteenMinutesAgo),
+        ),
       )
       .collect();
   },
@@ -862,7 +869,10 @@ export const getById = query({
         }
 
         if (product) {
-          const productCategory = await ctx.db.get("category", product.categoryId);
+          const productCategory = await ctx.db.get(
+            "category",
+            product.categoryId,
+          );
           category = productCategory?.name;
         }
 
@@ -875,7 +885,7 @@ export const getById = query({
           productName: product?.name,
           productImage: productSku?.images?.[0] ?? null,
         };
-      })
+      }),
     );
 
     return {
@@ -909,7 +919,10 @@ export const getByIdInternal = internalQuery({
         }
 
         if (product) {
-          const productCategory = await ctx.db.get("category", product.categoryId);
+          const productCategory = await ctx.db.get(
+            "category",
+            product.categoryId,
+          );
           category = productCategory?.name;
         }
 
@@ -922,7 +935,7 @@ export const getByIdInternal = internalQuery({
           productName: product?.name,
           productImage: productSku?.images?.[0] ?? null,
         };
-      })
+      }),
     );
 
     return {
@@ -936,7 +949,7 @@ export const getByIdInternal = internalQuery({
 
 async function retrieveActiveCheckoutSession(
   ctx: QueryCtx,
-  storeFrontUserId: Id<"storeFrontUser"> | Id<"guest">
+  storeFrontUserId: Id<"storeFrontUser"> | Id<"guest">,
 ) {
   const now = Date.now();
 
@@ -947,16 +960,16 @@ async function retrieveActiveCheckoutSession(
   return await ctx.db
     .query("checkoutSession")
     .withIndex("by_storeFrontUserId", (q) =>
-      q.eq("storeFrontUserId", storeFrontUserId)
+      q.eq("storeFrontUserId", storeFrontUserId),
     )
     .filter((q) =>
       q.and(
         q.or(
           q.gt(q.field("expiresAt"), now),
-          q.eq(q.field("isFinalizingPayment"), true)
+          q.eq(q.field("isFinalizingPayment"), true),
         ),
-        q.eq(q.field("hasCompletedCheckoutSession"), false)
-      )
+        q.eq(q.field("hasCompletedCheckoutSession"), false),
+      ),
     )
     .first();
 }
@@ -966,7 +979,7 @@ async function fetchProductSkus(ctx: QueryCtx, products: Product[]) {
   return ctx.db
     .query("productSku")
     .filter((q: any) =>
-      q.or(...productSkuIds.map((id) => q.eq(q.field("_id"), id)))
+      q.or(...productSkuIds.map((id) => q.eq(q.field("_id"), id))),
     )
     .collect();
 }
@@ -975,7 +988,7 @@ async function fetchProductSkus(ctx: QueryCtx, products: Product[]) {
 function checkAdjustedAvailability(
   products: Product[],
   productSkus: ProductSku[],
-  sessionItemsMap: Map<string, number>
+  sessionItemsMap: Map<string, number>,
 ) {
   const unavailable = [];
   for (const { productSkuId, productId, quantity } of products) {
@@ -994,7 +1007,7 @@ function checkAdjustedAvailability(
         requested: quantity,
         available: Math.min(
           (sku?.quantityAvailable ?? 0) + existingQuantity || 0,
-          sku?.inventoryCount || 0
+          sku?.inventoryCount || 0,
         ),
       });
     }
@@ -1006,7 +1019,7 @@ async function updateExistingSession(
   ctx: MutationCtx,
   session: any,
   storeFrontUserId: Id<"storeFrontUser"> | Id<"guest">,
-  products: Product[]
+  products: Product[],
 ) {
   const sessionItems: CheckoutSessionItem[] = await ctx.db
     .query("checkoutSessionItem")
@@ -1014,7 +1027,7 @@ async function updateExistingSession(
     .collect();
 
   const sessionItemsMap = new Map(
-    sessionItems.map((item: any) => [item.productSkuId, item])
+    sessionItems.map((item: any) => [item.productSkuId, item]),
   );
 
   const itemsToInsert: Omit<CheckoutSessionItem, "_id" | "_creationTime">[] =
@@ -1064,10 +1077,12 @@ async function updateExistingSession(
   // Perform batch operations
   await Promise.all([
     ...itemsToInsert.map((item) => ctx.db.insert("checkoutSessionItem", item)),
-    ...itemsToUpdate.map(({ id, quantity }) => ctx.db.patch("checkoutSessionItem", id, { quantity })),
+    ...itemsToUpdate.map(({ id, quantity }) =>
+      ctx.db.patch("checkoutSessionItem", id, { quantity }),
+    ),
     ...itemsToDelete.map((id) => ctx.db.delete("checkoutSessionItem", id)),
     ...availabilityUpdates.map(({ id, change }) =>
-      updateAvailability(ctx, id, change)
+      updateAvailability(ctx, id, change),
     ),
   ]);
 
@@ -1086,7 +1101,7 @@ async function createSessionItems(
   ctx: MutationCtx,
   sessionId: Id<"checkoutSession">,
   storeFrontUserId: Id<"storeFrontUser"> | Id<"guest">,
-  products: Product[]
+  products: Product[],
 ) {
   return Promise.all(
     products.map((product) =>
@@ -1098,15 +1113,15 @@ async function createSessionItems(
         productSkuId: product.productSkuId,
         quantity: product.quantity,
         storeFrontUserId: storeFrontUserId,
-      })
-    )
+      }),
+    ),
   );
 }
 
 async function updateProductAvailability(
   ctx: MutationCtx,
   products: Product[],
-  productSkus: any[]
+  productSkus: any[],
 ) {
   await Promise.all(
     products.map(({ productSkuId, quantity }) => {
@@ -1116,14 +1131,14 @@ async function updateProductAvailability(
           quantityAvailable: sku.quantityAvailable - quantity,
         });
       }
-    })
+    }),
   );
 }
 
 async function updateAvailability(
   ctx: any,
   productSkuId: Id<"productSku">,
-  change: number
+  change: number,
 ) {
   const productSku = await ctx.db.get("productSku", productSkuId);
   if (productSku) {
@@ -1151,10 +1166,10 @@ async function handleExistingSession(
     expiresAt: number;
     storeId: Id<"store">;
     storeFrontUserId: Id<"storeFrontUser"> | Id<"guest">;
-  }
+  },
 ) {
   console.log(
-    `[HandleExisting] Processing existing session: ${existingSession._id} | User: ${args.storeFrontUserId}`
+    `[HandleExisting] Processing existing session: ${existingSession._id} | User: ${args.storeFrontUserId}`,
   );
 
   // Update session expiry and amount
@@ -1174,7 +1189,7 @@ async function handleExistingSession(
       ctx,
       existingSession,
       args.storeFrontUserId,
-      args.products
+      args.products,
     );
 
     if (!updateResult.success) {
@@ -1191,7 +1206,7 @@ async function handleExistingSession(
 
   if (existingSession.discount) {
     console.log(
-      `[HandleExisting] Existing session has discount: ${existingSession.discount.code}`
+      `[HandleExisting] Existing session has discount: ${existingSession.discount.code}`,
     );
 
     // Validate existing discount against current session state
@@ -1199,7 +1214,7 @@ async function handleExistingSession(
       ctx,
       existingSession.discount,
       args.storeFrontUserId,
-      existingSession._id
+      existingSession._id,
     );
 
     if (!isDiscountValid) {
@@ -1210,13 +1225,13 @@ async function handleExistingSession(
       shouldFindNewPromo = true;
     } else {
       console.log(
-        `[HandleExisting] Existing discount is still valid: ${existingSession.discount.code}`
+        `[HandleExisting] Existing discount is still valid: ${existingSession.discount.code}`,
       );
 
       // If items changed, re-apply the discount to recalculate values
       if (itemsChanged) {
         console.log(
-          `[HandleExisting] Re-applying existing discount due to item changes`
+          `[HandleExisting] Re-applying existing discount due to item changes`,
         );
         const redeemResult = await ctx.runMutation(
           internal.inventory.promoCode.redeem,
@@ -1224,18 +1239,18 @@ async function handleExistingSession(
             code: existingSession.discount.code,
             checkoutSessionId: existingSession._id,
             storeFrontUserId: args.storeFrontUserId,
-          }
+          },
         );
 
         if (!redeemResult.success) {
           console.log(
-            `[HandleExisting] Failed to re-apply existing discount: ${redeemResult.message}`
+            `[HandleExisting] Failed to re-apply existing discount: ${redeemResult.message}`,
           );
           await ctx.runMutation(
             internal.storeFront.checkoutSession.clearDiscount,
             {
               id: existingSession._id,
-            }
+            },
           );
           shouldFindNewPromo = true;
         }
@@ -1254,12 +1269,12 @@ async function handleExistingSession(
       ctx,
       args.storeId,
       args.storeFrontUserId,
-      existingSession._id
+      existingSession._id,
     );
 
     if (eligiblePromoCode) {
       console.log(
-        `[HandleExisting] Found best-value promo code: ${eligiblePromoCode}`
+        `[HandleExisting] Found best-value promo code: ${eligiblePromoCode}`,
       );
       const redeemResult = await ctx.runMutation(
         internal.inventory.promoCode.redeem,
@@ -1267,16 +1282,16 @@ async function handleExistingSession(
           code: eligiblePromoCode,
           checkoutSessionId: existingSession._id,
           storeFrontUserId: args.storeFrontUserId,
-        }
+        },
       );
 
       if (redeemResult.success) {
         console.log(
-          `[HandleExisting] Successfully applied promo code: ${eligiblePromoCode}`
+          `[HandleExisting] Successfully applied promo code: ${eligiblePromoCode}`,
         );
       } else {
         console.log(
-          `[HandleExisting] Failed to apply promo code: ${redeemResult.message}`
+          `[HandleExisting] Failed to apply promo code: ${redeemResult.message}`,
         );
       }
     } else {
@@ -1285,7 +1300,10 @@ async function handleExistingSession(
   }
 
   // Fetch and return updated session
-  const updatedSession = await ctx.db.get("checkoutSession", existingSession._id);
+  const updatedSession = await ctx.db.get(
+    "checkoutSession",
+    existingSession._id,
+  );
   const updatedSessionItems = await listSessionItems(ctx, existingSession._id);
 
   console.log(`[HandleExisting] Successfully processed existing session`);
@@ -1302,7 +1320,7 @@ async function validateExistingDiscount(
   ctx: MutationCtx,
   discount: any,
   storeFrontUserId: Id<"storeFrontUser"> | Id<"guest">,
-  sessionId: Id<"checkoutSession">
+  sessionId: Id<"checkoutSession">,
 ): Promise<boolean> {
   const promoCodeId = discount.promoCodeId || discount._id || discount.id;
   if (!discount || !promoCodeId) {
@@ -1311,14 +1329,14 @@ async function validateExistingDiscount(
   }
 
   console.log(
-    `[ValidateDiscount] Validating existing discount: ${discount.code}`
+    `[ValidateDiscount] Validating existing discount: ${discount.code}`,
   );
 
   // Get the promo code
   const promoCode = await ctx.db.get("promoCode", promoCodeId);
   if (!promoCode || promoCode._id !== promoCodeId) {
     console.log(
-      `[ValidateDiscount] Promo code not found for existing discount: ${discount.code}`
+      `[ValidateDiscount] Promo code not found for existing discount: ${discount.code}`,
     );
     return false;
   }
@@ -1329,7 +1347,7 @@ async function validateExistingDiscount(
   // Check if still active
   if (!promoCodeDoc.active) {
     console.log(
-      `[ValidateDiscount] Promo code no longer active: ${discount.code}`
+      `[ValidateDiscount] Promo code no longer active: ${discount.code}`,
     );
     return false;
   }
@@ -1338,7 +1356,7 @@ async function validateExistingDiscount(
   const now = Date.now();
   if (now < promoCodeDoc.validFrom || now > promoCodeDoc.validTo) {
     console.log(
-      `[ValidateDiscount] Promo code outside valid date range: ${discount.code}`
+      `[ValidateDiscount] Promo code outside valid date range: ${discount.code}`,
     );
     return false;
   }
@@ -1349,14 +1367,14 @@ async function validateExistingDiscount(
     .filter((q) =>
       q.and(
         q.eq(q.field("promoCodeId"), promoCodeDoc._id),
-        q.eq(q.field("storeFrontUserId"), storeFrontUserId)
-      )
+        q.eq(q.field("storeFrontUserId"), storeFrontUserId),
+      ),
     )
     .first();
 
   if (redeemed) {
     console.log(
-      `[ValidateDiscount] Promo code already redeemed: ${discount.code}`
+      `[ValidateDiscount] Promo code already redeemed: ${discount.code}`,
     );
     return false;
   }
@@ -1369,14 +1387,14 @@ async function validateExistingDiscount(
         q.and(
           q.eq(q.field("promoCodeId"), promoCodeDoc._id),
           q.eq(q.field("storeFrontUserId"), storeFrontUserId),
-          q.eq(q.field("isRedeemed"), false)
-        )
+          q.eq(q.field("isRedeemed"), false),
+        ),
       )
       .first();
 
     if (!hasOffer) {
       console.log(
-        `[ValidateDiscount] User no longer has valid offer for exclusive code: ${discount.code}`
+        `[ValidateDiscount] User no longer has valid offer for exclusive code: ${discount.code}`,
       );
       return false;
     }
@@ -1403,20 +1421,20 @@ async function validateExistingDiscount(
     const foundItems = sessionItems.filter((sessionItem) =>
       expectedProducts.some(
         (expectedProduct) =>
-          expectedProduct.productSkuId === sessionItem.productSkuId
-      )
+          expectedProduct.productSkuId === sessionItem.productSkuId,
+      ),
     );
 
     if (foundItems.length === 0) {
       console.log(
-        `[ValidateDiscount] No eligible products in session for selected-products discount: ${discount.code}`
+        `[ValidateDiscount] No eligible products in session for selected-products discount: ${discount.code}`,
       );
       return false;
     }
   }
 
   console.log(
-    `[ValidateDiscount] Existing discount is still valid: ${discount.code}`
+    `[ValidateDiscount] Existing discount is still valid: ${discount.code}`,
   );
   return true;
 }
@@ -1427,7 +1445,7 @@ async function validateExistingDiscount(
 async function calculatePromoCodeValue(
   ctx: MutationCtx,
   promoCode: any,
-  sessionItems: any[]
+  sessionItems: any[],
 ): Promise<number> {
   if (promoCode.span === "selected-products") {
     const expectedProducts = await ctx.db
@@ -1438,8 +1456,8 @@ async function calculatePromoCodeValue(
     const foundItems = sessionItems.filter((sessionItem) =>
       expectedProducts.some(
         (expectedProduct) =>
-          expectedProduct.productSkuId === sessionItem.productSkuId
-      )
+          expectedProduct.productSkuId === sessionItem.productSkuId,
+      ),
     );
 
     if (foundItems.length === 0) {
@@ -1461,7 +1479,7 @@ async function calculatePromoCodeValue(
   if (promoCode.discountType === "percentage") {
     const subtotal = sessionItems.reduce(
       (sum, item) => sum + item.price * item.quantity,
-      0
+      0,
     );
     return subtotal * (promoCode.discountValue / 100);
   } else {
@@ -1476,11 +1494,11 @@ async function findBestValuePromoCode(
   ctx: MutationCtx,
   storeId: Id<"store">,
   storeFrontUserId: Id<"storeFrontUser"> | Id<"guest">,
-  sessionId: Id<"checkoutSession">
+  sessionId: Id<"checkoutSession">,
 ): Promise<string | null> {
   const now = Date.now();
   console.log(
-    `[BestValue] Starting search for best-value promo code for store ${storeId}, user ${storeFrontUserId}`
+    `[BestValue] Starting search for best-value promo code for store ${storeId}, user ${storeFrontUserId}`,
   );
 
   // Get session items for discount calculation
@@ -1503,13 +1521,13 @@ async function findBestValuePromoCode(
         q.eq(q.field("active"), true),
         q.eq(q.field("autoApply"), true),
         q.lte(q.field("validFrom"), now),
-        q.gte(q.field("validTo"), now)
-      )
+        q.gte(q.field("validTo"), now),
+      ),
     )
     .collect();
 
   console.log(
-    `[BestValue] Found ${promoCodes.length} active auto-apply promo codes for store`
+    `[BestValue] Found ${promoCodes.length} active auto-apply promo codes for store`,
   );
 
   if (promoCodes.length === 0) {
@@ -1527,8 +1545,8 @@ async function findBestValuePromoCode(
       .filter((q) =>
         q.and(
           q.eq(q.field("promoCodeId"), code._id),
-          q.eq(q.field("storeFrontUserId"), storeFrontUserId)
-        )
+          q.eq(q.field("storeFrontUserId"), storeFrontUserId),
+        ),
       )
       .first();
 
@@ -1545,14 +1563,14 @@ async function findBestValuePromoCode(
           q.and(
             q.eq(q.field("promoCodeId"), code._id),
             q.eq(q.field("storeFrontUserId"), storeFrontUserId),
-            q.eq(q.field("isRedeemed"), false)
-          )
+            q.eq(q.field("isRedeemed"), false),
+          ),
         )
         .first();
 
       if (!offer) {
         console.log(
-          `[BestValue] User has no offer for exclusive code: ${code.code}`
+          `[BestValue] User has no offer for exclusive code: ${code.code}`,
         );
         continue;
       }
@@ -1572,10 +1590,10 @@ async function findBestValuePromoCode(
     eligibleCodes.map(async (code) => {
       const value = await calculatePromoCodeValue(ctx, code, sessionItems);
       console.log(
-        `[BestValue] Code ${code.code} provides discount of ${value}`
+        `[BestValue] Code ${code.code} provides discount of ${value}`,
       );
       return { code: code.code, value };
-    })
+    }),
   );
 
   // Find the code with the highest discount value
@@ -1584,7 +1602,7 @@ async function findBestValuePromoCode(
   });
 
   console.log(
-    `[BestValue] Selected best-value code: ${bestCode.code} with discount of ${bestCode.value}`
+    `[BestValue] Selected best-value code: ${bestCode.code} with discount of ${bestCode.value}`,
   );
 
   return bestCode.value > 0 ? bestCode.code : null;

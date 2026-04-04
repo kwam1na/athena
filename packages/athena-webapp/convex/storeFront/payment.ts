@@ -47,7 +47,7 @@ export const createTransaction = action({
       authorization_url: v.string(),
       access_code: v.string(),
       reference: v.string(),
-    })
+    }),
   ),
   handler: async (ctx, args) => {
     try {
@@ -56,7 +56,7 @@ export const createTransaction = action({
         api.storeFront.checkoutSession.getById,
         {
           sessionId: args.checkoutSessionId,
-        }
+        },
       );
 
       if (!session) {
@@ -73,7 +73,7 @@ export const createTransaction = action({
           (item) =>
             item.productSkuId !== undefined &&
             item.quantity !== undefined &&
-            item.price !== undefined
+            item.price !== undefined,
         )
         .map((item) => ({
           productSkuId: item.productSkuId,
@@ -83,7 +83,7 @@ export const createTransaction = action({
 
       // Log calculation inputs
       console.log(
-        `[CHECKOUT-CALCULATION] Amount calculation inputs | Session: ${args.checkoutSessionId} | Items count: ${items.length} | Subtotal: ${session.amount} | Delivery fee: ${args.orderDetails.deliveryFee || 0} | Has discount: ${!!discount}`
+        `[CHECKOUT-CALCULATION] Amount calculation inputs | Session: ${args.checkoutSessionId} | Items count: ${items.length} | Subtotal: ${session.amount} | Delivery fee: ${args.orderDetails.deliveryFee || 0} | Has discount: ${!!discount}`,
       );
       console.log(
         `[CHECKOUT-CALCULATION] Items breakdown:`,
@@ -92,7 +92,7 @@ export const createTransaction = action({
           qty: item.quantity,
           price: item.price,
           total: item.price * item.quantity,
-        }))
+        })),
       );
       if (discount) {
         console.log(`[CHECKOUT-CALCULATION] Discount details:`, {
@@ -106,18 +106,18 @@ export const createTransaction = action({
       const amountToCharge = calculateOrderAmount({
         items,
         discount,
-        deliveryFee: args.orderDetails.deliveryFee || 0,  // already pesewas
-        subtotal: session.amount,  // already pesewas
+        deliveryFee: args.orderDetails.deliveryFee || 0, // already pesewas
+        subtotal: session.amount, // already pesewas
       });
 
       // Log calculation result
       console.log(
-        `[CHECKOUT-CALCULATION] Amount calculated | Session: ${args.checkoutSessionId} | Final amount to charge: ${amountToCharge} (${amountToCharge / 100} in currency)`
+        `[CHECKOUT-CALCULATION] Amount calculated | Session: ${args.checkoutSessionId} | Final amount to charge: ${amountToCharge} (${amountToCharge / 100} in currency)`,
       );
 
       // Log pre-Paystack details
       console.log(
-        `[CHECKOUT-PRE-PAYSTACK] Initiating Paystack transaction | Session: ${args.checkoutSessionId} | Email: ${args.customerEmail} | Amount to charge: ${amountToCharge} | Has discount: ${!!discount}`
+        `[CHECKOUT-PRE-PAYSTACK] Initiating Paystack transaction | Session: ${args.checkoutSessionId} | Email: ${args.customerEmail} | Amount to charge: ${amountToCharge} | Has discount: ${!!discount}`,
       );
 
       // Initialize transaction with Paystack
@@ -129,14 +129,17 @@ export const createTransaction = action({
           cancel_action: `${appUrl}/shop/checkout?origin=paystack`,
           checkout_session_id: args.checkoutSessionId,
           checkout_session_amount: session.amount.toString(),
-          order_details: { ...args.orderDetails, discount: session.discount ?? null },
+          order_details: {
+            ...args.orderDetails,
+            discount: session.discount ?? null,
+          },
           amount_to_charge: amountToCharge.toString(),
         },
       });
 
       // Log successful Paystack initialization
       console.log(
-        `[CHECKOUT-SUCCESS] Paystack transaction initialized | Session: ${args.checkoutSessionId} | Reference: ${response.data.reference} | Access code: ${response.data.access_code}`
+        `[CHECKOUT-SUCCESS] Paystack transaction initialized | Session: ${args.checkoutSessionId} | Reference: ${response.data.reference} | Access code: ${response.data.access_code}`,
       );
 
       // Update checkout session with transaction reference
@@ -147,13 +150,16 @@ export const createTransaction = action({
             id: args.checkoutSessionId,
             isFinalizingPayment: true,
             externalReference: response.data.reference,
-            orderDetails: { ...args.orderDetails, discount: session.discount ?? null },
-          }
+            orderDetails: {
+              ...args.orderDetails,
+              discount: session.discount ?? null,
+            },
+          },
         );
       } catch (error) {
         console.error(
           "Failed to update checkout session with transaction reference",
-          error
+          error,
         );
       }
 
@@ -163,7 +169,7 @@ export const createTransaction = action({
     } catch (error) {
       console.error(
         `[CHECKOUT-FAILURE] Failed to create transaction | Session: ${args.checkoutSessionId} | Error:`,
-        error
+        error,
       );
       return {
         success: false,
@@ -196,7 +202,7 @@ export const createPODOrder = action({
         internal.storeFront.checkoutSession.getByIdInternal,
         {
           sessionId: args.checkoutSessionId,
-        }
+        },
       );
 
       if (!session) {
@@ -230,7 +236,7 @@ export const createPODOrder = action({
             discount: session.discount ?? null,
           },
           paymentMethod,
-        }
+        },
       );
 
       // Create the order from the updated session
@@ -241,9 +247,12 @@ export const createPODOrder = action({
       });
 
       // Fetch the created order
-      const order = await ctx.runQuery(internal.storeFront.onlineOrder.getInternal, {
-        identifier: podReference,
-      });
+      const order = await ctx.runQuery(
+        internal.storeFront.onlineOrder.getInternal,
+        {
+          identifier: podReference,
+        },
+      );
 
       if (order) {
         // Fetch store details
@@ -254,8 +263,8 @@ export const createPODOrder = action({
         const amountToCharge = calculateOrderAmount({
           items: order.items || [],
           discount: order.discount || 0,
-          deliveryFee: args.orderDetails.deliveryFee || 0,  // already pesewas
-          subtotal: session.amount,  // already pesewas
+          deliveryFee: args.orderDetails.deliveryFee || 0, // already pesewas
+          subtotal: session.amount, // already pesewas
         });
 
         // Send confirmation and admin notification emails
@@ -277,7 +286,7 @@ export const createPODOrder = action({
       }
 
       console.log(
-        `Successfully created POD order with reference: ${podReference}`
+        `Successfully created POD order with reference: ${podReference}`,
       );
 
       return {
@@ -306,7 +315,7 @@ export const verifyPayment = action({
       v.object({
         id: v.id("athenaUser"),
         email: v.string(),
-      })
+      }),
     ),
   },
   returns: v.union(
@@ -315,11 +324,11 @@ export const verifyPayment = action({
     }),
     v.object({
       message: v.string(),
-    })
+    }),
   ),
   handler: async (ctx, args): Promise<PaymentVerificationResult> => {
     console.log(
-      `Verifying payment for session with reference: ${args.externalReference}`
+      `Verifying payment for session with reference: ${args.externalReference}`,
     );
 
     try {
@@ -332,14 +341,14 @@ export const verifyPayment = action({
         {
           storeFrontUserId: args.storeFrontUserId,
           externalReference: args.externalReference,
-        }
+        },
       );
 
       const order: OnlineOrder | null = await ctx.runQuery(
         api.storeFront.onlineOrder.get,
         {
           identifier: args.externalReference,
-        }
+        },
       );
 
       // Calculate expected order amount
@@ -350,7 +359,7 @@ export const verifyPayment = action({
           (item) =>
             item.productSkuId !== undefined &&
             item.quantity !== undefined &&
-            item.price !== undefined
+            item.price !== undefined,
         )
         .map((item) => ({
           productSkuId: item.productSkuId,
@@ -361,8 +370,8 @@ export const verifyPayment = action({
       const orderAmountLessDiscounts = calculateOrderAmount({
         items,
         discount,
-        deliveryFee: order?.deliveryFee || session?.deliveryFee || 0,  // already pesewas
-        subtotal,  // already pesewas (from session.amount or order.amount)
+        deliveryFee: order?.deliveryFee || session?.deliveryFee || 0, // already pesewas
+        subtotal, // already pesewas (from session.amount or order.amount)
       });
 
       const discountValue = getOrderDiscountValue(items, discount);
@@ -382,7 +391,7 @@ export const verifyPayment = action({
             {
               id: session._id,
               hasVerifiedPayment: true,
-            }
+            },
           );
         }
 
@@ -392,14 +401,14 @@ export const verifyPayment = action({
             `Order: ${order?._id || "N/A"} | ` +
             `Amount: ${orderAmountLessDiscounts / 100} | ` +
             `Customer: ${args.storeFrontUserId} | ` +
-            `Reference: ${args.externalReference}`
+            `Reference: ${args.externalReference}`,
         );
       } else {
         console.log(
-          `Unable to verify payment. [session: ${session?._id}, order: ${order?._id}, customer: ${args.storeFrontUserId}, reference: ${args.externalReference}]`
+          `Unable to verify payment. [session: ${session?._id}, order: ${order?._id}, customer: ${args.storeFrontUserId}, reference: ${args.externalReference}]`,
         );
         console.info(
-          `Status: ${paystackResponse.data.status}, Paystack amount: ${paystackResponse.data.amount}, Expected amount: ${orderAmountLessDiscounts}`
+          `Status: ${paystackResponse.data.status}, Paystack amount: ${paystackResponse.data.amount}, Expected amount: ${orderAmountLessDiscounts}`,
         );
       }
 
@@ -453,7 +462,7 @@ export const verifyPayment = action({
           {
             orderId: order._id,
             points,
-          }
+          },
         );
 
         if (rewardResult.success) {
@@ -494,7 +503,7 @@ export const refundPayment = action({
       v.object({
         id: v.id("athenaUser"),
         email: v.string(),
-      })
+      }),
     ),
   },
   returns: v.object({
@@ -523,17 +532,23 @@ export const refundPayment = action({
 
       // Handle stock returns if requested
       if (args.returnItemsToStock && args.onlineOrderItemIds) {
-        await ctx.runMutation(internal.storeFront.onlineOrder.returnItemsToStockInternal, {
-          externalTransactionId: args.externalTransactionId,
-          onlineOrderItemIds: args.onlineOrderItemIds,
-        });
+        await ctx.runMutation(
+          internal.storeFront.onlineOrder.returnItemsToStockInternal,
+          {
+            externalTransactionId: args.externalTransactionId,
+            onlineOrderItemIds: args.onlineOrderItemIds,
+          },
+        );
         console.log("Returned items to stock");
       } else if (args.onlineOrderItemIds) {
         // Mark items as refunded without returning to stock
-        await ctx.runMutation(internal.storeFront.onlineOrder.updateOrderItemsInternal, {
-          orderItemIds: args.onlineOrderItemIds,
-          updates: { isRefunded: true },
-        });
+        await ctx.runMutation(
+          internal.storeFront.onlineOrder.updateOrderItemsInternal,
+          {
+            orderItemIds: args.onlineOrderItemIds,
+            updates: { isRefunded: true },
+          },
+        );
         console.log("Updated order items to refunded");
       }
 
@@ -560,45 +575,36 @@ export const refundPayment = action({
 export const autoVerifyUnverifiedPayments = internalAction({
   args: {},
   handler: async (ctx) => {
-    const sessions = await ctx.runQuery(
-      internal.storeFront.checkoutSession.getUnverifiedPaidSessions,
-      {}
+    const orders = await ctx.runQuery(
+      internal.storeFront.onlineOrder.getUnverifiedPaidOrders,
+      {},
     );
 
-    if (sessions.length === 0) return;
+    if (orders.length === 0) {
+      console.log(`[AUTO-VERIFY] Found no unverified payment(s) to process.`);
+      return;
+    }
 
     console.log(
-      `[AUTO-VERIFY] Found ${sessions.length} unverified payment(s) to process.`
+      `[AUTO-VERIFY] Found ${orders.length} unverified payment(s) to process.`,
     );
 
-    for (const session of sessions) {
-      const reference = session.externalReference;
+    for (const order of orders) {
+      const reference = order.externalReference;
       if (!reference) continue;
 
       try {
         const paystackResponse = await verifyTransaction(reference);
 
-        const order: OnlineOrder | null = await ctx.runQuery(
-          api.storeFront.onlineOrder.get,
-          { identifier: reference }
-        );
-
-        if (!order) {
-          console.warn(
-            `[AUTO-VERIFY] No order found for reference: ${reference}`
-          );
-          continue;
-        }
-
         // Calculate expected amount (same logic as verifyPayment)
-        const subtotal = session.amount || order.amount || 0;
-        const discount = session.discount || order.discount;
+        const subtotal = order.amount || 0;
+        const discount = order.discount;
         const items = (order.items || [])
           .filter(
             (item) =>
               item.productSkuId !== undefined &&
               item.quantity !== undefined &&
-              item.price !== undefined
+              item.price !== undefined,
           )
           .map((item) => ({
             productSkuId: item.productSkuId,
@@ -609,7 +615,7 @@ export const autoVerifyUnverifiedPayments = internalAction({
         const orderAmountLessDiscounts = calculateOrderAmount({
           items,
           discount,
-          deliveryFee: order.deliveryFee || session.deliveryFee || 0,
+          deliveryFee: order.deliveryFee || 0,
           subtotal,
         });
 
@@ -626,7 +632,7 @@ export const autoVerifyUnverifiedPayments = internalAction({
             `[AUTO-VERIFY] Verification failed for reference: ${reference} | ` +
               `Paystack status: ${paystackResponse.data.status} | ` +
               `Paystack amount: ${paystackResponse.data.amount} | ` +
-              `Expected: ${orderAmountLessDiscounts}`
+              `Expected: ${orderAmountLessDiscounts}`,
           );
           continue;
         }
@@ -634,7 +640,7 @@ export const autoVerifyUnverifiedPayments = internalAction({
         // Update checkout session
         await ctx.runMutation(
           internal.storeFront.checkoutSession.updateCheckoutSession,
-          { id: session._id, hasVerifiedPayment: true }
+          { id: order.checkoutSessionId, hasVerifiedPayment: true },
         );
 
         // Build order update
@@ -674,15 +680,15 @@ export const autoVerifyUnverifiedPayments = internalAction({
         }
 
         // Award loyalty points (idempotent — checks for existing reward by orderId)
-        const points = calculateRewardPoints(session.amount || 0);
+        const points = calculateRewardPoints(order.amount || 0);
         const rewardResult = await ctx.runMutation(
           internal.storeFront.rewards.awardOrderPoints,
-          { orderId: order._id, points }
+          { orderId: order._id, points },
         );
 
         if (rewardResult.success) {
           console.log(
-            `[AUTO-VERIFY] Awarded ${points} points for order ${order._id}`
+            `[AUTO-VERIFY] Awarded ${points} points for order ${order._id}`,
           );
         }
 
@@ -693,12 +699,12 @@ export const autoVerifyUnverifiedPayments = internalAction({
         });
 
         console.log(
-          `[AUTO-VERIFY] Verified payment | Reference: ${reference} | Order: ${order._id}`
+          `[AUTO-VERIFY] Verified payment | Reference: ${reference} | Order: ${order._id}`,
         );
       } catch (error) {
         console.error(
-          `[AUTO-VERIFY] Error processing session ${session._id}:`,
-          error
+          `[AUTO-VERIFY] Error processing order ${order._id}:`,
+          error,
         );
       }
     }
