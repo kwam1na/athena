@@ -12,6 +12,7 @@ import {
   NavigationBarProvider,
   useNavigationBarContext,
 } from "@/contexts/NavigationBarProvider";
+import { StorefrontObservabilityProvider } from "@/contexts/StorefrontObservabilityProvider";
 import { getNavBarWrapperClass } from "@/components/navigation-bar/navBarStyles";
 
 const productsPageSchema = z.object({
@@ -61,14 +62,16 @@ function RootComponent() {
   return (
     <StoreProvider>
       <RootDocument>
-        <div className="flex flex-col bg-background">
-          <div className={navBarClassname}>
-            <NavigationBar />
+        <StorefrontObservabilityProvider>
+          <div className="flex flex-col bg-background">
+            <div className={navBarClassname}>
+              <NavigationBar />
+            </div>
+            <main className="flex-grow bg-background">
+              <Outlet />
+            </main>
           </div>
-          <main className="flex-grow bg-background">
-            <Outlet />
-          </main>
-        </div>
+        </StorefrontObservabilityProvider>
       </RootDocument>
     </StoreProvider>
   );
