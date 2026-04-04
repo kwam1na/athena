@@ -1,12 +1,16 @@
-import { Dispatch, SetStateAction, useRef } from "react";
+import { useEffect, useRef } from "react";
 import { X } from "lucide-react";
 import { usePromoCodesQueries } from "@/lib/queries/promoCode";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { AnimatedCard } from "../ui/AnimatedCard";
 import { Button } from "../ui/button";
-import { useTrackEvent } from "@/hooks/useTrackEvent";
-import { postAnalytics } from "@/api/analytics";
+import { useStorefrontObservability } from "@/hooks/useStorefrontObservability";
+import {
+  createPromoAlertViewedEvent,
+  createPromoAlertDismissedEvent,
+  createPromoAlertShopNowEvent,
+} from "@/lib/storefrontJourneyEvents";
 
 interface PromoAlertProps {
   isOpen: boolean;
@@ -56,49 +60,48 @@ export function PromoAlert({ isOpen, onClose }: PromoAlertProps) {
   const promoCodeQueries = usePromoCodesQueries();
   const { data: promoItems } = useQuery(promoCodeQueries.getAllItems());
   const promoItem = promoItems?.[0];
+  const { track } = useStorefrontObservability();
+  const hasTrackedView = useRef(false);
 
-  // Track when the alert is viewed
-  useTrackEvent({
-    action: "viewed_promo_alert",
-    data: {
-      promoCodeItemId: promoItem?._id,
-      productSku: promoItem?.productSku?.sku,
-      productImageUrl: promoItem?.productSku?.images[0],
-      product: promoItem?.productSku?.productId,
-    },
-    isReady: isOpen && !!promoItem && !!promoItem.productSku,
-  });
+  useEffect(() => {
+    if (isOpen && promoItem && promoItem.productSku && !hasTrackedView.current) {
+      hasTrackedView.current = true;
+      void track(
+        createPromoAlertViewedEvent({
+          promoCodeItemId: promoItem._id,
+          productSku: promoItem.productSku.sku,
+          productImageUrl: promoItem.productSku.images[0],
+          productId: promoItem.productSku.productId,
+        }),
+      );
+    }
+  }, [isOpen, promoItem, track]);
 
   const onPromoAlertClose = () => {
     onClose();
     if (promoItem && promoItem.productSku) {
-      postAnalytics({
-        action: "dismissed_promo_alert",
-        origin: "promo_alert",
-        data: {
+      void track(
+        createPromoAlertDismissedEvent({
           promoCodeItemId: promoItem._id,
           productSku: promoItem.productSku.sku,
           productImageUrl: promoItem.productSku.images[0],
-          product: promoItem.productSku.productId,
-        },
-      });
+          productId: promoItem.productSku.productId,
+        }),
+      );
     }
   };
 
-  // Track when the alert is actioned on
   const handleShopNow = () => {
     onClose();
     if (promoItem && promoItem.productSku) {
-      postAnalytics({
-        action: "clicked_shop_all_hair",
-        origin: "promo_alert",
-        data: {
+      void track(
+        createPromoAlertShopNowEvent({
           promoCodeItemId: promoItem._id,
           productSkuId: promoItem.productSku._id,
           quantity: promoItem.quantity,
           quantityClaimed: promoItem.quantityClaimed,
-        },
-      });
+        }),
+      );
     }
   };
 

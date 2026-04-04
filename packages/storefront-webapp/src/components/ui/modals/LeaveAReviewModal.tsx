@@ -11,8 +11,11 @@ import {
   defaultBackgroundImageUrl,
   getModalConfig,
 } from "./config/leaveReviewModalConfig";
-import { useTrackEvent } from "@/hooks/useTrackEvent";
-import { postAnalytics } from "@/api/analytics";
+import { useStorefrontObservability } from "@/hooks/useStorefrontObservability";
+import {
+  createLeaveReviewModalViewedEvent,
+  createLeaveReviewModalDismissedEvent,
+} from "@/lib/storefrontJourneyEvents";
 import { useOnlineOrderQueries } from "@/lib/queries/onlineOrder";
 import { useQuery } from "@tanstack/react-query";
 import { PromoCode } from "./types";
@@ -44,28 +47,32 @@ export const LeaveAReviewModal: React.FC<LeaveAReviewModalProps> = ({
   );
 
   const incentiveType = promoCode ? "discount" : "points";
+  const { track } = useStorefrontObservability();
 
-  useTrackEvent({
-    action: `viewed_LEAVE_A_REVIEW_(${incentiveType})_modal`,
-    isReady: isOpen && !hasReviewed,
-    data: {
-      incentiveType,
-      promoCodeId: promoCode?.promoCodeId,
-    },
-  });
+  const hasTrackedView = React.useRef(false);
+
+  React.useEffect(() => {
+    if (isOpen && !hasReviewed && !hasTrackedView.current) {
+      hasTrackedView.current = true;
+      void track(
+        createLeaveReviewModalViewedEvent({
+          incentiveType,
+          promoCodeId: promoCode?.promoCodeId,
+        }),
+      );
+    }
+  }, [isOpen, hasReviewed, incentiveType, promoCode?.promoCodeId, track]);
 
   const handleClose = async (logAnalytics = true) => {
     onClose();
 
-    // Log analytics if needed
     if (logAnalytics) {
-      await postAnalytics({
-        action: `dismissed_LEAVE_A_REVIEW_(${incentiveType})_modal`,
-        data: {
+      await track(
+        createLeaveReviewModalDismissedEvent({
           incentiveType,
           promoCodeId: promoCode?.promoCodeId,
-        },
-      });
+        }),
+      );
     }
   };
 
