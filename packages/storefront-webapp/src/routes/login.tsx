@@ -81,6 +81,8 @@ const Login = () => {
 
   const { origin, email } = useSearch({ strict: false });
   const hasTrackedLoginEntry = useRef(false);
+  const { store } = useStoreContext();
+  const { baseContext, track } = useStorefrontObservability();
 
   const isFromGuestRewards = origin === "guest-rewards";
 
@@ -105,9 +107,6 @@ const Login = () => {
       console.error("Failed to track login entry:", error);
     });
   }, [email, origin, track]);
-
-  const { store } = useStoreContext();
-  const { baseContext, track } = useStorefrontObservability();
 
   const navigate = useNavigate();
 

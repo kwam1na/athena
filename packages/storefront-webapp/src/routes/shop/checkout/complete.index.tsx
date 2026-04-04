@@ -24,7 +24,6 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowLeft } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useStorefrontObservability } from "@/hooks/useStorefrontObservability";
 import { emitStorefrontFailure } from "@/lib/storefrontFailureObservability";
 
 export const Route = createFileRoute("/shop/checkout/complete/")({
@@ -38,7 +37,6 @@ export const CheckoutComplete = () => {
   const { baseContext, track } = useStorefrontObservability();
   const queryClient = useQueryClient();
   const bagQueries = useBagQueries();
-  const { track } = useStorefrontObservability();
 
   const [hasOrderError, setHasOrderError] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
