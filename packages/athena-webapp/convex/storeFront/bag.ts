@@ -1,4 +1,3 @@
-/* eslint-disable @convex-dev/no-collect-in-query -- V26-168 converts the primary commerce access paths to indexed or bounded reads first; remaining legacy scans in this large module will be reduced in follow-up passes. */
 import { Doc } from "../_generated/dataModel";
 import {
   internalMutation,
