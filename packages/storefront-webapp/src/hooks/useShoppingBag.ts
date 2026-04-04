@@ -8,6 +8,7 @@ import {
   createCheckoutSession,
   updateCheckoutSession as updateCheckoutSessionAPI,
 } from "@/api/checkoutSession";
+import type { CheckoutOrderSubmission } from "@/components/checkout/schemas/webOrderSchema";
 import {
   addItemToSavedBag,
   removeItemFromSavedBag,
@@ -362,31 +363,16 @@ export const useShoppingBag = () => {
   };
 
   const obtainCheckoutSessionMutation = useMutation({
-    mutationFn: ({
-      bagId,
-      bagItems,
-      bagSubtotal,
-    }: {
-      bagId: string;
-      bagItems: {
-        quantity: number;
-        productSkuId: string;
-        productSku: string;
-        productId: string;
-      }[];
-      bagSubtotal: number;
-    }) =>
+    mutationFn: ({ bagId }: { bagId: string }) =>
       createCheckoutSession({
         bagId,
-        bagItems,
-        bagSubtotal,
       }),
     onError: () => {
       setOperationSuccessful(false);
     },
     onSuccess: (res) => {
       setOperationSuccessful(true);
-      if (res.unavailableProducts) {
+      if (isUnavailableProductList(res.unavailableProducts)) {
         setUnavailableProducts(res.unavailableProducts);
       } else {
         setUnavailableProducts([]);
@@ -399,22 +385,19 @@ export const useShoppingBag = () => {
       sessionId,
       isFinalizingPayment,
       customerEmail,
-      amount,
       orderDetails,
       action = "finalize-payment",
     }: {
       isFinalizingPayment?: boolean;
       sessionId: string;
       customerEmail: string;
-      amount: number;
-      orderDetails: any;
+      orderDetails: CheckoutOrderSubmission;
       action?: "finalize-payment" | "create-pod-order";
     }) =>
       updateCheckoutSessionAPI({
         isFinalizingPayment,
         sessionId,
         customerEmail,
-        amount,
         action,
         orderDetails,
       }),
@@ -432,23 +415,12 @@ export const useShoppingBag = () => {
 
   const obtainCheckoutSession = async ({
     bagId,
-    bagItems,
-    bagSubtotal,
   }: {
     bagId: string;
-    bagItems: {
-      quantity: number;
-      productSkuId: string;
-      productSku: string;
-      productId: string;
-    }[];
-    bagSubtotal: number;
   }) => {
     setOperationSuccessful(null);
     return await obtainCheckoutSessionMutation.mutateAsync({
       bagId,
-      bagItems,
-      bagSubtotal,
     });
   };
 
@@ -456,15 +428,13 @@ export const useShoppingBag = () => {
     isFinalizingPayment,
     sessionId,
     customerEmail,
-    amount,
     orderDetails,
     action = "finalize-payment",
   }: {
     isFinalizingPayment?: boolean;
     sessionId: string;
     customerEmail: string;
-    amount: number;
-    orderDetails: any;
+    orderDetails: CheckoutOrderSubmission;
     action?: "finalize-payment" | "create-pod-order";
   }) => {
     setOperationSuccessful(null);
@@ -473,7 +443,6 @@ export const useShoppingBag = () => {
       isFinalizingPayment,
       sessionId,
       customerEmail,
-      amount,
       orderDetails,
       action,
     });
@@ -504,4 +473,17 @@ export const useShoppingBag = () => {
     areProductsUnavailable,
     updateCheckoutSession,
   };
+};
+const isUnavailableProductList = (
+  value: unknown,
+): value is UnavailableProducts => {
+  return (
+    Array.isArray(value) &&
+    value.every(
+      (item) =>
+        typeof item?.productSkuId === "string" &&
+        typeof item?.requested === "number" &&
+        typeof item?.available === "number",
+    )
+  );
 };

@@ -1,11 +1,22 @@
 import { BagItem, ProductSku, SavedBagItem } from "@athena/webapp";
 import { capitalizeWords } from "./utils";
 
+type ProductNameInput =
+  | ProductSku
+  | BagItem
+  | SavedBagItem
+  | {
+      colorName?: string | null;
+      length?: number;
+      productCategory?: string;
+      productName?: string;
+    };
+
 /**
  * Gets the formatted product name from a product SKU
  */
 export function getProductName(
-  item: ProductSku | BagItem | SavedBagItem
+  item: ProductNameInput
 ): string {
   if (item.productCategory == "Hair") {
     if (!item.colorName) {

@@ -397,7 +397,12 @@ export const CheckoutProvider = ({
 
   if (isLoading || data === undefined) return null;
 
-  if (checkoutState.bag === null) {
+  const hasServerBackedCheckout =
+    Boolean(data?.placedOrderId) ||
+    Boolean(data?.hasCompletedPayment) ||
+    Boolean(data?.hasVerifiedPayment);
+
+  if (checkoutState.bag === null && !hasServerBackedCheckout) {
     return <NoCheckoutSession />;
   }
 

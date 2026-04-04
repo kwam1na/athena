@@ -433,24 +433,12 @@ export default function ShoppingBag() {
   });
 
   const handleOnCheckoutClick = async () => {
-    // send post
-    const bagItems =
-      bag?.items.map((item: any) => ({
-        productSkuId: item.productSkuId,
-        quantity: item.quantity,
-        productSku: item.productSku,
-        productId: item.productId,
-        price: item.price,
-      })) || [];
-
     setIsProcessingCheckoutRequest(true);
     setError(null);
 
     try {
       const res = await obtainCheckoutSession({
-        bagItems,
         bagId: bag?._id as string,
-        bagSubtotal: bagSubtotal, // pesewas — backend recalculates canonical amount from bag items
       });
 
       if (res.session) {
@@ -467,7 +455,11 @@ export default function ShoppingBag() {
           to: "/shop/checkout",
         });
       } else {
-        setError(res.message);
+        setError(
+          typeof res.message === "string"
+            ? res.message
+            : "Unable to start checkout right now.",
+        );
         setIsProcessingCheckoutRequest(false);
       }
     } catch (e) {

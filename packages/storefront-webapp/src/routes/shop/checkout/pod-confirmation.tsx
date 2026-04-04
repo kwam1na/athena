@@ -15,7 +15,6 @@ import { useAuth } from "@/hooks/useAuth";
 import { GuestRewardsPrompt } from "@/components/rewards/GuestRewardsPrompt";
 import {
   CheckoutProvider,
-  webOrderSchema,
 } from "@/components/checkout/CheckoutProvider";
 import { useCheckout } from "@/hooks/useCheckout";
 
@@ -30,22 +29,20 @@ export const Route = createFileRoute("/shop/checkout/pod-confirmation")({
 });
 
 // Payment details component specific to POD
-const PODPaymentDetails = ({ session }: { session: any }) => {
+const PODPaymentDetails = ({
+  items,
+  session,
+}: {
+  items: { productSkuId: string; quantity: number; price: number }[];
+  session: any;
+}) => {
   const { formatter } = useStoreContext();
-  const { checkoutState } = useCheckout();
 
   if (!session?.paymentMethod) {
     return null;
   }
 
   const podPaymentMethod = session.paymentMethod?.podPaymentMethod || "cash";
-
-  const items =
-    checkoutState.bag?.items?.map((item: any) => ({
-      productSkuId: item.productSkuId,
-      quantity: item.quantity,
-      price: item.price,
-    })) || [];
 
   const discount = session?.discount as any;
 
@@ -153,6 +150,15 @@ const PODPickupDetails = ({ session }: { session: any }) => {
 
 // Order details component for POD
 const PODOrderDetails = ({ session }: { session: any }) => {
+  const { onlineOrder } = useCheckout();
+
+  const items =
+    onlineOrder?.items?.map((item: any) => ({
+      productSkuId: item.productSkuId,
+      quantity: item.quantity,
+      price: item.price,
+    })) || [];
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -164,7 +170,7 @@ const PODOrderDetails = ({ session }: { session: any }) => {
       className="grid grid-cols-1 lg:grid-cols-2 w-full lg:w-[80%] gap-8"
     >
       <PODPickupDetails session={session} />
-      <PODPaymentDetails session={session} />
+      <PODPaymentDetails items={items} session={session} />
     </motion.div>
   );
 };
@@ -172,7 +178,7 @@ const PODOrderDetails = ({ session }: { session: any }) => {
 const PODConfirmationContent = () => {
   const { userId } = useAuth();
   const isGuest = userId === undefined;
-  const { checkoutState } = useCheckout();
+  const { onlineOrder } = useCheckout();
   const queryClient = useQueryClient();
   const bagQueries = useBagQueries();
 
@@ -187,15 +193,12 @@ const PODConfirmationContent = () => {
     const completePODCheckoutSession = async () => {
       if (!session?._id || session.hasCompletedCheckoutSession) return;
 
-      const { data } = webOrderSchema.safeParse(checkoutState);
-
       try {
         await Promise.all([
           updateCheckoutSession({
             action: "complete-checkout",
             sessionId: session._id,
             hasCompletedCheckoutSession: true,
-            orderDetails: data,
           }),
 
           postAnalytics({
@@ -217,7 +220,7 @@ const PODConfirmationContent = () => {
     if (session && session.placedOrderId) {
       completePODCheckoutSession();
     }
-  }, [session, checkoutState, queryClient, bagQueries]);
+  }, [session, queryClient, bagQueries]);
 
   if (isLoading || session === undefined) return null;
 
@@ -292,7 +295,7 @@ const PODConfirmationContent = () => {
           <p className="text-xs">Your order</p>
 
           <BagSummaryItems
-            items={checkoutState.bag.items}
+            items={onlineOrder?.items || []}
             discount={session.discount as Discount | null}
           />
         </motion.div>
