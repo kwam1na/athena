@@ -48,7 +48,8 @@ export default function ProductPage() {
   const pageRef = useRef<HTMLDivElement | null>(null);
 
   const { store } = useStoreContext();
-  const fallbackImageUrl = getStoreFallbackImageUrl(store, placeholder) || placeholder;
+  const fallbackImageUrl =
+    getStoreFallbackImageUrl(store, placeholder) || placeholder;
 
   useTrackAction({
     action: "viewed_product",
@@ -69,6 +70,10 @@ export default function ProductPage() {
       );
     }
   }, [addedItemSuccessfully, bagAction, selectedSku]);
+
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
 
   const showShippingPolicy = () => {
     sheetContent.current = <ShippingPolicy />;
