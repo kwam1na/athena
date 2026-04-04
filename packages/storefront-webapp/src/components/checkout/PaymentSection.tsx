@@ -16,15 +16,17 @@ import { Link } from "@tanstack/react-router";
 import { updateUser } from "@/api/storeFrontUser";
 import { useStoreContext } from "@/contexts/StoreContext";
 import { CheckoutFormSectionProps } from "./CustomerInfoSection";
-import { postAnalytics } from "@/api/analytics";
 import { updateGuest } from "@/api/guest";
 import OrderSummary from "./OrderDetails/OrderSummary";
 import { PaymentMethodSection } from "./PaymentMethodSection";
+import { useStorefrontObservability } from "@/hooks/useStorefrontObservability";
+import { createPaymentSubmissionStartedEvent } from "@/lib/storefrontJourneyEvents";
 
 export const PaymentSection = ({ form }: CheckoutFormSectionProps) => {
   const { activeSession, canPlaceOrder, checkoutState } = useCheckout();
 
   const { user } = useStoreContext();
+  const { track } = useStorefrontObservability();
 
   const { updateCheckoutSession } = useShoppingBag();
 
@@ -58,13 +60,13 @@ export const PaymentSection = ({ form }: CheckoutFormSectionProps) => {
               podPaymentMethod: checkoutState.podPaymentMethod,
             },
           ),
-          postAnalytics({
-            action: "finalized_payment_on_delivery_checkout",
-            data: {
+          track(
+            createPaymentSubmissionStartedEvent({
               checkoutSessionId: activeSession._id,
+              paymentMethod: checkoutState.paymentMethod,
               podPaymentMethod: checkoutState.podPaymentMethod,
-            },
-          }),
+            }),
+          ),
           user ? updateUserInformation() : updateUserInformation("guest"),
         ]);
         // Check the critical operation (order processing) result
@@ -103,12 +105,12 @@ export const PaymentSection = ({ form }: CheckoutFormSectionProps) => {
               deliveryDetails: data.deliveryDetails ?? null,
             },
           ),
-          postAnalytics({
-            action: "finalized_checkout",
-            data: {
+          track(
+            createPaymentSubmissionStartedEvent({
               checkoutSessionId: activeSession._id,
-            },
-          }),
+              paymentMethod: checkoutState.paymentMethod,
+            }),
+          ),
           user ? updateUserInformation() : updateUserInformation("guest"),
         ]);
 

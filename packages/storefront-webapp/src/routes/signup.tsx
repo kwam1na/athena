@@ -27,7 +27,12 @@ import {
 import { ArrowRight } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
+import { useStorefrontObservability } from "@/hooks/useStorefrontObservability";
+import {
+  createAuthEntryViewedEvent,
+  createAuthRequestStartedEvent,
+} from "@/lib/storefrontJourneyEvents";
 
 const nameRegex = /^[a-zA-Zà-öø-ÿÀ-ÖØ-ß\-'\.\s]+$/;
 
@@ -91,8 +96,10 @@ const Signup = () => {
   });
 
   const { origin, email } = useSearch({ strict: false });
+  const hasTrackedSignupEntry = useRef(false);
 
   const { store } = useStoreContext();
+  const { track } = useStorefrontObservability();
 
   const navigate = useNavigate();
 
@@ -101,6 +108,22 @@ const Signup = () => {
       form.setValue("email", email);
     }
   }, [origin, email]);
+
+  useEffect(() => {
+    if (hasTrackedSignupEntry.current) return;
+
+    hasTrackedSignupEntry.current = true;
+
+    void track(
+      createAuthEntryViewedEvent({
+        mode: "signup",
+        origin,
+        email,
+      }),
+    ).catch((error) => {
+      console.error("Failed to track signup entry:", error);
+    });
+  }, [email, origin, track]);
 
   const verifyMutation = useMutation({
     mutationFn: verifyUserAccount,
@@ -122,6 +145,16 @@ const Signup = () => {
   if (!store) return <div className="h-screen" />;
 
   const onSubmit = async (data: z.infer<typeof customerDetailsSchema>) => {
+    void track(
+      createAuthRequestStartedEvent({
+        mode: "signup",
+        origin,
+        email: data.email,
+      }),
+    ).catch((error) => {
+      console.error("Failed to track signup request:", error);
+    });
+
     verifyMutation.mutate({
       email: data.email,
       firstName: data.firstName,

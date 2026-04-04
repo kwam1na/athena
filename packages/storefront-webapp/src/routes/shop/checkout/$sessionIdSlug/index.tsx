@@ -16,7 +16,9 @@ import {
 } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
 import { AlertCircle } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useStorefrontObservability } from "@/hooks/useStorefrontObservability";
+import { createOrderReviewViewedEvent } from "@/lib/storefrontJourneyEvents";
 
 export const Route = createFileRoute("/shop/checkout/$sessionIdSlug/")({
   component: () => <CheckoutSession />,
@@ -28,6 +30,7 @@ const CheckoutSession = () => {
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [isCancelingOrder, setIsCancelingOrder] = useState(false);
   const [error, setError] = useState("");
+  const lastTrackedOrderReview = useRef<string | null>(null);
 
   const checkoutSessionQueries = useCheckoutSessionQueries();
 
@@ -42,6 +45,22 @@ const CheckoutSession = () => {
   );
 
   const queryClient = useQueryClient();
+  const { track } = useStorefrontObservability();
+
+  useEffect(() => {
+    if (!sessionData?._id) return;
+    if (lastTrackedOrderReview.current === sessionData._id) return;
+
+    lastTrackedOrderReview.current = sessionData._id;
+
+    void track(
+      createOrderReviewViewedEvent({
+        checkoutSessionId: sessionData._id,
+      }),
+    ).catch((error) => {
+      console.error("Failed to track order review view:", error);
+    });
+  }, [sessionData?._id, track]);
 
   const placeOrder = async () => {
     if (!sessionData || !sessionIdSlug) return;

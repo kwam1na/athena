@@ -28,12 +28,16 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { ArrowLeftIcon } from "@radix-ui/react-icons";
 import { useMutation } from "@tanstack/react-query";
 import { createFileRoute, Link, useSearch } from "@tanstack/react-router";
-import { useServerFn } from "@tanstack/start";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { set, z } from "zod";
 import { awardPointsForGuestOrders } from "@/api/rewards";
+import { useStorefrontObservability } from "@/hooks/useStorefrontObservability";
+import {
+  createAuthVerificationSucceededEvent,
+  createAuthVerificationViewedEvent,
+} from "@/lib/storefrontJourneyEvents";
 
 export const FormSchema = z.object({
   code: z.string().min(6, {
@@ -59,10 +63,12 @@ function InputOTPForm() {
   const [isVerifying, setIsVerifying] = useState(false);
   const [countdown, setCountdown] = useState<number>(WAIT_TIME); // 10 minutes in seconds
   const [showCountdown, setShowCountdown] = useState(true);
+  const hasTrackedVerificationView = useRef(false);
 
   const { email } = useSearch({ strict: false });
   const { store, userId } = useStoreContext();
   const { bag, savedBag } = useShoppingBag();
+  const { track } = useStorefrontObservability();
 
   const updateBagOwnerMutation = useMutation({
     mutationFn: updateBagOwner,
@@ -96,6 +102,20 @@ function InputOTPForm() {
       setShowCountdown(false);
     }
   }, [countdown, showCountdown]);
+
+  useEffect(() => {
+    if (hasTrackedVerificationView.current) return;
+
+    hasTrackedVerificationView.current = true;
+
+    void track(
+      createAuthVerificationViewedEvent({
+        email,
+      }),
+    ).catch((error) => {
+      console.error("Failed to track auth verification view:", error);
+    });
+  }, [email, track]);
 
   // Format countdown time
   const formatTime = (seconds: number) => {
@@ -155,6 +175,14 @@ function InputOTPForm() {
       }
 
       if (res.success) {
+        await track(
+          createAuthVerificationSucceededEvent({
+            email,
+          }),
+        ).catch((error) => {
+          console.error("Failed to track auth verification success:", error);
+        });
+
         await Promise.all([
           await updateBagOwnerMutation.mutateAsync({
             currentOwnerId: userId || "",
