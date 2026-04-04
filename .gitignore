@@ -182,5 +182,6 @@ docs/superpowers/specs/
 
 packages/athena-webapp/stats.html
 packages/storefront-webapp/stats.html
+packages/**/convex/_generated/
 
 .claude/worktrees
