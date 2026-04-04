@@ -7,7 +7,8 @@ import {
 } from "./animations/welcomeBackModalAnimations";
 import { getProductName } from "@/lib/utils";
 import { useShoppingBag } from "@/hooks/useShoppingBag";
-import { postAnalytics } from "@/api/analytics";
+import { useStorefrontObservability } from "@/hooks/useStorefrontObservability";
+import { createUpsellModalAddToBagEvent } from "@/lib/storefrontJourneyEvents";
 import { useNavigate } from "@tanstack/react-router";
 
 interface UpsellModalSuccessProps {
@@ -20,6 +21,7 @@ export const UpsellModalSuccess: React.FC<UpsellModalSuccessProps> = ({
   upsell,
 }) => {
   const { addProductToBag, bag } = useShoppingBag();
+  const { track } = useStorefrontObservability();
   const [isAddingToBag, setIsAddingToBag] = useState(false);
 
   const navigate = useNavigate();
@@ -31,22 +33,20 @@ export const UpsellModalSuccess: React.FC<UpsellModalSuccessProps> = ({
 
     if (!isItemInBag) {
       await Promise.allSettled([
-        await addProductToBag({
+        addProductToBag({
           productId: upsell.productId,
           productSkuId: upsell._id,
           productSku: upsell.sku,
           quantity: 1,
         }),
 
-        await postAnalytics({
-          action: "added_product_to_bag",
-          origin: "homepage_upsell_modal",
-          data: {
-            product: upsell.productId,
+        track(
+          createUpsellModalAddToBagEvent({
+            productId: upsell.productId,
             productSku: upsell.sku,
             productImageUrl: upsell.images[0],
-          },
-        }),
+          }),
+        ),
       ]);
     }
 

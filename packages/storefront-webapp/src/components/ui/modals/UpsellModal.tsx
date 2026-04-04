@@ -15,8 +15,12 @@ import {
   nextOrderConfigs,
   getModalConfig,
 } from "./config/welcomeBackModalConfig";
-import { useTrackEvent } from "@/hooks/useTrackEvent";
-import { postAnalytics } from "@/api/analytics";
+import { useStorefrontObservability } from "@/hooks/useStorefrontObservability";
+import {
+  createUpsellModalViewedEvent,
+  createUpsellModalDismissedEvent,
+  createUpsellModalSubmittedEvent,
+} from "@/lib/storefrontJourneyEvents";
 import { useOnlineOrderQueries } from "@/lib/queries/onlineOrder";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useUpsellsQueries } from "@/lib/queries/upsells";
@@ -53,6 +57,7 @@ export const UpsellModal: React.FC<UpsellModalProps> = ({ promoCode }) => {
     useState(false);
 
   const isNextOrder = onlineOrders && onlineOrders?.length > 1;
+  const { track } = useStorefrontObservability();
 
   useEffect(() => {
     // Don't add scroll listener until localStorage state is fully loaded
@@ -86,49 +91,51 @@ export const UpsellModal: React.FC<UpsellModalProps> = ({ promoCode }) => {
     isUpsellModalStateLoaded,
   ]);
 
-  useTrackEvent({
-    action: "viewed_upsell_product_modal",
-    isReady: isUpsellModalOpen,
-    data: {
-      isNextOrder,
-      promoCodeId: promoCode?.promoCodeId,
-      product: upsell?.productId,
-      productSku: upsell?.sku,
-      productImageUrl: upsell?.images[0],
-    },
-  });
+  const hasTrackedView = useRef(false);
+
+  useEffect(() => {
+    if (isUpsellModalOpen && !hasTrackedView.current) {
+      hasTrackedView.current = true;
+      void track(
+        createUpsellModalViewedEvent({
+          isNextOrder: !!isNextOrder,
+          promoCodeId: promoCode?.promoCodeId,
+          productId: upsell?.productId,
+          productSku: upsell?.sku,
+          productImageUrl: upsell?.images[0],
+        }),
+      );
+    }
+  }, [isUpsellModalOpen, isNextOrder, promoCode?.promoCodeId, upsell, track]);
 
   const handleClose = async (logAnalytics = true) => {
     handleCloseUpsellModal();
 
-    // Log analytics if needed
     if (logAnalytics) {
-      await postAnalytics({
-        action: "dismissed_upsell_product_modal",
-        data: {
-          isNextOrder,
+      await track(
+        createUpsellModalDismissedEvent({
+          isNextOrder: !!isNextOrder,
           promoCodeId: promoCode?.promoCodeId,
-          product: upsell?.productId,
+          productId: upsell?.productId,
           productSku: upsell?.sku,
           productImageUrl: upsell?.images[0],
-        },
-      });
+        }),
+      );
     }
   };
 
   const handleSuccess = async () => {
     completeUpsellModalFlow();
 
-    await postAnalytics({
-      action: "submitted_upsell_product_modal",
-      data: {
-        isNextOrder,
+    await track(
+      createUpsellModalSubmittedEvent({
+        isNextOrder: !!isNextOrder,
         promoCodeId: promoCode?.promoCodeId,
-        product: upsell?.productId,
+        productId: upsell?.productId,
         productSku: upsell?.sku,
         productImageUrl: upsell?.images[0],
-      },
-    });
+      }),
+    );
 
     setIsSuccess(true);
   };

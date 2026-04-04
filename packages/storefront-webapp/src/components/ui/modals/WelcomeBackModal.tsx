@@ -15,8 +15,12 @@ import {
   nextOrderConfigs,
   getModalConfig,
 } from "./config/welcomeBackModalConfig";
-import { useTrackEvent } from "@/hooks/useTrackEvent";
-import { postAnalytics } from "@/api/analytics";
+import { useStorefrontObservability } from "@/hooks/useStorefrontObservability";
+import {
+  createWelcomeBackModalViewedEvent,
+  createWelcomeBackModalDismissedEvent,
+  createWelcomeBackModalSubmittedEvent,
+} from "@/lib/storefrontJourneyEvents";
 import { useOnlineOrderQueries } from "@/lib/queries/onlineOrder";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { PromoCode } from "./types";
@@ -35,54 +39,52 @@ export const WelcomeBackModal: React.FC<WelcomeBackModalProps> = ({
   promoCode,
 }) => {
   const [isSuccess, setIsSuccess] = useState(false);
+  const { track } = useStorefrontObservability();
 
   const onlineOrderQueries = useOnlineOrderQueries();
   const { data: onlineOrders } = useQuery(onlineOrderQueries.list());
 
   const isNextOrder = onlineOrders && onlineOrders?.length > 1;
 
-  useTrackEvent({
-    action: "viewed_WELCOMEBACK25_modal",
-    isReady: isOpen,
-    data: {
-      isNextOrder,
-      promoCodeId: promoCode?.promoCodeId,
-    },
-  });
+  const hasTrackedView = React.useRef(false);
+
+  React.useEffect(() => {
+    if (isOpen && !hasTrackedView.current) {
+      hasTrackedView.current = true;
+      void track(
+        createWelcomeBackModalViewedEvent({
+          isNextOrder: !!isNextOrder,
+          promoCodeId: promoCode?.promoCodeId,
+        }),
+      );
+    }
+  }, [isOpen, isNextOrder, promoCode?.promoCodeId, track]);
 
   const handleClose = async (logAnalytics = true) => {
     onClose();
 
-    // Log analytics if needed
     if (logAnalytics) {
-      await postAnalytics({
-        action: "dismissed_WELCOMEBACK25_modal",
-        data: {
-          isNextOrder,
+      await track(
+        createWelcomeBackModalDismissedEvent({
+          isNextOrder: !!isNextOrder,
           promoCodeId: promoCode?.promoCodeId,
-        },
-      });
+        }),
+      );
     }
   };
 
   const handleSuccess = async () => {
     setIsSuccess(true);
-    // Call the onSuccess callback if provided
     if (onSuccess) {
       onSuccess();
     }
 
-    // await queryClient.invalidateQueries({
-    //   queryKey: ["userOffers", "redeemed"],
-    // });
-
-    await postAnalytics({
-      action: "submitted_WELCOMEBACK25_modal",
-      data: {
-        isNextOrder,
+    await track(
+      createWelcomeBackModalSubmittedEvent({
+        isNextOrder: !!isNextOrder,
         promoCodeId: promoCode?.promoCodeId,
-      },
-    });
+      }),
+    );
   };
 
   if (!promoCode || !isOpen) {
