@@ -42,4 +42,48 @@ describe("shared helper orchestration", () => {
       "ctx.runQuery(internal.storeFront.bag.getByIdInternal"
     );
   });
+
+  it("extracts shared checkout and order orchestration helpers instead of same-runtime internal order calls", () => {
+    const checkoutSession = readProjectFile(
+      "convex",
+      "storeFront",
+      "checkoutSession.ts"
+    );
+    const onlineOrder = readProjectFile(
+      "convex",
+      "storeFront",
+      "onlineOrder.ts"
+    );
+    const helper = readProjectFile(
+      "convex",
+      "storeFront",
+      "helpers",
+      "onlineOrder.ts"
+    );
+
+    expect(helper).toContain("export async function createOrderFromCheckoutSession");
+    expect(helper).toContain("export async function clearBagItems");
+    expect(helper).toContain("export async function findOrderByExternalReference");
+    expect(helper).toContain("export async function returnOrderItemsToStock");
+
+    expect(checkoutSession).toContain('from "./helpers/onlineOrder"');
+    expect(onlineOrder).toContain('from "./helpers/onlineOrder"');
+
+    expect(checkoutSession).not.toContain(
+      "ctx.runQuery(internal.storeFront.onlineOrder.getInternal"
+    );
+    expect(checkoutSession).not.toContain(
+      "ctx.runMutation(internal.storeFront.bag.clearBag"
+    );
+    expect(checkoutSession).not.toContain(
+      "ctx.runMutation(internal.storeFront.onlineOrder.createInternal"
+    );
+
+    expect(onlineOrder).not.toContain(
+      "ctx.runMutation(internal.storeFront.bag.clearBag"
+    );
+    expect(onlineOrder).not.toContain(
+      "ctx.runMutation(\n            internal.storeFront.onlineOrder.returnAllItemsToStockInternal"
+    );
+  });
 });

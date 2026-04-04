@@ -15,6 +15,11 @@ import {
 import { v } from "convex/values";
 import { orderDetailsSchema } from "../schemas/storeFront";
 import { isStoreCheckoutDisabled } from "../inventory/storeConfigV2";
+import {
+  clearBagItems,
+  createOrderFromCheckoutSession,
+  findOrderByExternalReference,
+} from "./helpers/onlineOrder";
 
 const entity = "checkoutSession";
 
@@ -689,9 +694,7 @@ async function handlePlaceOrder(
   session: CheckoutSession
 ) {
   const placedOrder = session.externalReference
-    ? await ctx.runQuery(internal.storeFront.onlineOrder.getInternal, {
-        identifier: session.externalReference,
-      })
+    ? await findOrderByExternalReference(ctx, session.externalReference)
     : null;
 
   if (session.placedOrderId || placedOrder) {
@@ -728,9 +731,7 @@ async function handleOrderCreation(
   orderDetails: any
 ) {
   const placedOrder = session.externalReference
-    ? await ctx.runQuery(internal.storeFront.onlineOrder.getInternal, {
-        identifier: session.externalReference,
-      })
+    ? await findOrderByExternalReference(ctx, session.externalReference)
     : null;
 
   if (session.placedOrderId || placedOrder) {
@@ -748,9 +749,7 @@ async function handleOrderCreation(
 
   if (orderResponse.success) {
     console.log("Order created successfully. Clearing user bag.");
-    await ctx.runMutation(internal.storeFront.bag.clearBag, {
-      id: session.bagId,
-    });
+    await clearBagItems(ctx, session.bagId);
   }
 
   return orderResponse;
@@ -761,9 +760,10 @@ async function createOnlineOrder(
   sessionId: Id<"checkoutSession">,
   orderData: any
 ): Promise<any> {
-  const response = await ctx.runMutation(internal.storeFront.onlineOrder.createInternal, {
+  const response = await createOrderFromCheckoutSession(ctx, {
     checkoutSessionId: sessionId,
     ...orderData,
+    patchSessionPlacedOrderId: true,
   });
 
   if (!response.success) {
@@ -773,7 +773,6 @@ async function createOnlineOrder(
     return { success: false, message: "Failed to create online order." };
   }
 
-  await ctx.db.patch("checkoutSession", sessionId, { placedOrderId: response.orderId });
   return { success: true, orderId: response.orderId };
 }
 
