@@ -3,7 +3,6 @@ import Footer from "./footer/Footer";
 import { useEffect, useRef, useState } from "react";
 import { useNavigationBarContext } from "@/contexts/NavigationBarProvider";
 import { useProductQueries } from "@/lib/queries/product";
-import { useTrackEvent } from "@/hooks/useTrackEvent";
 import { MARKER_KEY } from "@/lib/constants";
 import { ProductReminderBar } from "./ProductReminderBar";
 import { PromoAlert } from "./home/PromoAlert";
@@ -29,6 +28,8 @@ import { ProductActionBar } from "./ProductActionBar";
 import { useShoppingBag } from "@/hooks/useShoppingBag";
 import { LeaveAReviewModal } from "./ui/modals/LeaveAReviewModal";
 import { getStoreConfigV2 } from "@/lib/storeConfig";
+import { useStorefrontObservability } from "@/hooks/useStorefrontObservability";
+import { createLandingPageViewedEvent } from "@/lib/storefrontJourneyEvents";
 
 const origin = "homepage";
 
@@ -36,9 +37,11 @@ export default function HomePage() {
   const homeHeroRef = useRef<HTMLDivElement>(null);
   const bestSellersRef = useRef<HTMLDivElement>(null);
   const footerRef = useRef<HTMLDivElement>(null);
+  const hasTrackedLandingPageView = useRef(false);
 
   const { store } = useStoreContext();
   const storeConfig = getStoreConfigV2(store);
+  const { track } = useStorefrontObservability();
 
   // console.log("store", store);
 
@@ -95,8 +98,6 @@ export default function HomePage() {
     productQueries.featured()
   );
 
-  const s = useSearch({ strict: false });
-
   // Handle scroll events - now only runs after localStorage is loaded
   useEffect(() => {
     // Don't add scroll listener until localStorage state is fully loaded
@@ -141,10 +142,15 @@ export default function HomePage() {
     }
   }, []);
 
-  useTrackEvent({
-    action: "viewed_homepage",
-    origin: s.utm_source,
-  });
+  useEffect(() => {
+    if (hasTrackedLandingPageView.current) return;
+
+    hasTrackedLandingPageView.current = true;
+
+    void track(createLandingPageViewedEvent()).catch((error) => {
+      console.error("Failed to track landing page view:", error);
+    });
+  }, [track]);
 
   const handleClickOnDiscountCode = async () => {
     openDiscountModal();

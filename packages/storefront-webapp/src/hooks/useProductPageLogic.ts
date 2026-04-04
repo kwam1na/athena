@@ -9,10 +9,16 @@ import { useQuery } from "@tanstack/react-query";
 import { postAnalytics } from "@/api/analytics";
 import { isSoldOut, hasLowStock, sortSkusByLength } from "@/lib/productUtils";
 import { useProductDiscount } from "@/hooks/useProductDiscount";
+import { useStorefrontObservability } from "@/hooks/useStorefrontObservability";
+import {
+  createBagAddSucceededEvent,
+  createProductDetailViewedEvent,
+} from "@/lib/storefrontJourneyEvents";
 
 export function useProductPageLogic() {
   const { productSlug } = useParams({ strict: false });
   const { formatter } = useStoreContext();
+  const { track } = useStorefrontObservability();
   const {
     bag,
     deleteItemFromSavedBag,
@@ -35,6 +41,7 @@ export function useProductPageLogic() {
 
   const { variant } = useSearch({ strict: false });
   const [selectedSku, setSelectedSku] = useState<ProductSku | null>(null);
+  const lastTrackedProductView = useRef<string | null>(null);
 
   const isPromoCodeItemInBag = bag?.items?.find(
     (item: BagItem) => item.productSkuId === promoCodeItem?._id
@@ -72,6 +79,26 @@ export function useProductPageLogic() {
     return () => clearTimeout(t);
   }, [addedItemSuccessfully]);
 
+  useEffect(() => {
+    if (!product?._id) return;
+
+    const trackedSku = selectedSku?.sku ?? variant;
+    const trackKey = `${product._id}:${trackedSku ?? ""}`;
+
+    if (lastTrackedProductView.current === trackKey) return;
+
+    lastTrackedProductView.current = trackKey;
+
+    void track(
+      createProductDetailViewedEvent({
+        productId: product._id,
+        productSku: trackedSku,
+      }),
+    ).catch((error) => {
+      console.error("Failed to track product detail view:", error);
+    });
+  }, [product?._id, selectedSku?.sku, track, variant]);
+
   const bagItem = bag?.items?.find(
     (item: BagItem) => item.productSku === selectedSku?.sku
   );
@@ -86,15 +113,13 @@ export function useProductPageLogic() {
     if (bagItem) {
       await Promise.all([
         updateBag({ itemId: bagItem._id, quantity: bagItem.quantity + 1 }),
-        postAnalytics({
-          action: "updated_product_in_bag",
-          data: {
-            product: productSlug,
+        track(
+          createBagAddSucceededEvent({
+            productId: product?._id ?? productSlug,
             productSku: selectedSku?.sku,
-            productImageUrl: selectedSku?.images?.[0],
             quantity: bagItem.quantity + 1,
-          },
-        }),
+          }),
+        ),
       ]);
     } else {
       await Promise.all([
@@ -104,14 +129,13 @@ export function useProductPageLogic() {
           productSkuId: selectedSku?._id as string,
           productSku: selectedSku?.sku as string,
         }),
-        postAnalytics({
-          action: "added_product_to_bag",
-          data: {
-            product: productSlug,
+        track(
+          createBagAddSucceededEvent({
+            productId: product?._id ?? productSlug,
             productSku: selectedSku?.sku,
-            productImageUrl: selectedSku?.images?.[0],
-          },
-        }),
+            quantity: 1,
+          }),
+        ),
       ]);
     }
 

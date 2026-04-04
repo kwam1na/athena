@@ -23,17 +23,21 @@ import { LoadingButton } from "@/components/ui/loading-button";
 import { useStoreContext } from "@/contexts/StoreContext";
 import { useShoppingBag } from "@/hooks/useShoppingBag";
 import { LOGGED_IN_USER_ID_KEY } from "@/lib/constants";
-import { loginFn } from "@/server-actions/auth";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ArrowLeftIcon } from "@radix-ui/react-icons";
 import { useMutation } from "@tanstack/react-query";
 import { createFileRoute, Link, useSearch } from "@tanstack/react-router";
-import { useServerFn } from "@tanstack/start";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
-import { set, z } from "zod";
+import { z } from "zod";
 import { awardPointsForGuestOrders } from "@/api/rewards";
+import { useStorefrontObservability } from "@/hooks/useStorefrontObservability";
+import {
+  createAuthVerificationSucceededEvent,
+  createAuthVerificationViewedEvent,
+} from "@/lib/storefrontJourneyEvents";
+import { emitStorefrontFailure } from "@/lib/storefrontFailureObservability";
 
 export const FormSchema = z.object({
   code: z.string().min(6, {
@@ -59,10 +63,12 @@ function InputOTPForm() {
   const [isVerifying, setIsVerifying] = useState(false);
   const [countdown, setCountdown] = useState<number>(WAIT_TIME); // 10 minutes in seconds
   const [showCountdown, setShowCountdown] = useState(true);
+  const hasTrackedVerificationView = useRef(false);
 
   const { email } = useSearch({ strict: false });
   const { store, userId } = useStoreContext();
   const { bag, savedBag } = useShoppingBag();
+  const { baseContext, track } = useStorefrontObservability();
 
   const updateBagOwnerMutation = useMutation({
     mutationFn: updateBagOwner,
@@ -84,6 +90,34 @@ function InputOTPForm() {
     mutationFn: awardPointsForGuestOrders,
   });
 
+  const reportAuthFailure = ({
+    step,
+    error,
+    status = "failed",
+    fallbackCategory,
+    context,
+  }: {
+    step: "auth_verification" | "auth_verification_resend";
+    error: unknown;
+    status?: "failed" | "blocked";
+    fallbackCategory?: "validation" | "unknown";
+    context?: Record<string, unknown>;
+  }) => {
+    void emitStorefrontFailure({
+      route: baseContext.route,
+      journey: "auth",
+      step,
+      status,
+      error,
+      fallbackCategory,
+      context: {
+        email,
+        ...context,
+      },
+      track,
+    }).catch(() => undefined);
+  };
+
   // Initialize and handle countdown
   useEffect(() => {
     if (countdown > 0 && showCountdown) {
@@ -96,6 +130,20 @@ function InputOTPForm() {
       setShowCountdown(false);
     }
   }, [countdown, showCountdown]);
+
+  useEffect(() => {
+    if (hasTrackedVerificationView.current) return;
+
+    hasTrackedVerificationView.current = true;
+
+    void track(
+      createAuthVerificationViewedEvent({
+        email,
+      }),
+    ).catch((error) => {
+      console.error("Failed to track auth verification view:", error);
+    });
+  }, [email, track]);
 
   // Format countdown time
   const formatTime = (seconds: number) => {
@@ -118,6 +166,14 @@ function InputOTPForm() {
     onSuccess: (res) => {
       if (res.error) {
         setErrorMessage(res.message);
+        reportAuthFailure({
+          step: "auth_verification_resend",
+          status: "blocked",
+          error: {
+            message: res.message,
+          },
+          fallbackCategory: "validation",
+        });
       } else {
         setErrorMessage(null);
       }
@@ -130,8 +186,11 @@ function InputOTPForm() {
       }
     },
     onError: (error) => {
-      console.log("error", error);
       setErrorMessage(error.message);
+      reportAuthFailure({
+        step: "auth_verification_resend",
+        error,
+      });
     },
   });
 
@@ -150,11 +209,27 @@ function InputOTPForm() {
 
       if (res.error) {
         setErrorMessage(res.message);
+        reportAuthFailure({
+          step: "auth_verification",
+          status: "blocked",
+          error: {
+            message: res.message,
+          },
+          fallbackCategory: "validation",
+        });
       } else {
         setErrorMessage(null);
       }
 
       if (res.success) {
+        await track(
+          createAuthVerificationSucceededEvent({
+            email,
+          }),
+        ).catch((error) => {
+          console.error("Failed to track auth verification success:", error);
+        });
+
         await Promise.all([
           await updateBagOwnerMutation.mutateAsync({
             currentOwnerId: userId || "",
@@ -191,7 +266,10 @@ function InputOTPForm() {
         window.location.href = "/";
       }
     } catch (e) {
-      console.error(e);
+      reportAuthFailure({
+        step: "auth_verification",
+        error: e,
+      });
       setErrorMessage(
         (e as Error).message ??
           "There was an error verifying your account. Please try again."
@@ -204,6 +282,15 @@ function InputOTPForm() {
   const resendVerificationCode = async () => {
     if (!email) {
       setErrorMessage("Email is required to resend verification code");
+      reportAuthFailure({
+        step: "auth_verification_resend",
+        status: "blocked",
+        error: {
+          code: "missing_email",
+          message: "Email is required to resend verification code",
+        },
+        fallbackCategory: "validation",
+      });
       return;
     }
 

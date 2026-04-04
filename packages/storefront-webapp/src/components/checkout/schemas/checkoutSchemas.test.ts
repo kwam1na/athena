@@ -116,10 +116,11 @@ describe("checkoutFormSchema", () => {
   it("accepts a minimal pickup checkout payload", () => {
     expect(
       checkoutFormSchema.safeParse({
-        deliveryMethod: "pickup",
-        customerDetails: {
-          firstName: "Ada",
-          lastName: "Lovelace",
+      deliveryMethod: "pickup",
+      deliveryInstructions: "",
+      customerDetails: {
+        firstName: "Ada",
+        lastName: "Lovelace",
           email: "ada@example.com",
           phoneNumber: "5555551234",
         },
@@ -136,6 +137,7 @@ describe("checkoutFormSchema", () => {
   it("requires Ghana-specific delivery fields for delivery orders", () => {
     const result = checkoutFormSchema.safeParse({
       deliveryMethod: "delivery",
+      deliveryInstructions: "",
       customerDetails: {
         firstName: "Ada",
         lastName: "Lovelace",

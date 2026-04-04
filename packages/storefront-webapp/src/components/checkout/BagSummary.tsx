@@ -21,8 +21,9 @@ import { toDisplayAmount } from "@/lib/currency";
 import { Badge } from "../ui/badge";
 import { useDiscountCodeAlert } from "@/hooks/useDiscountCodeAlert";
 import { getStoreConfigV2, getStoreFallbackImageUrl } from "@/lib/storeConfig";
+import { ProductSku } from "@athena/webapp";
 
-type BagSummaryItem = {
+export type BagSummaryItem = {
   colorName?: string | null;
   length?: number;
   price: number;
@@ -34,6 +35,34 @@ type BagSummaryItem = {
   quantity: number;
   size?: string;
 };
+
+export function toBagSummaryItems(items: ProductSku[]): BagSummaryItem[] {
+  const summarizedItems = new Map<string, BagSummaryItem>();
+
+  items.forEach((item) => {
+    const existingItem = summarizedItems.get(item._id);
+
+    if (existingItem) {
+      existingItem.quantity += 1;
+      return;
+    }
+
+    summarizedItems.set(item._id, {
+      productSkuId: item._id,
+      quantity: 1,
+      price: item.price ?? 0,
+      productCategory: item.productCategory,
+      productImage: item.images?.[0],
+      productName: item.productName,
+      productSku: item.sku,
+      colorName: item.colorName,
+      size: item.size,
+      length: item.length,
+    });
+  });
+
+  return Array.from(summarizedItems.values());
+}
 
 function SummaryItem({
   item,

@@ -1,5 +1,8 @@
 import { updateCheckoutSession } from "@/api/checkoutSession";
-import { BagSummaryItems } from "@/components/checkout/BagSummary";
+import {
+  BagSummaryItems,
+  toBagSummaryItems,
+} from "@/components/checkout/BagSummary";
 import { Discount } from "@/components/checkout/types";
 import { OrderDetails } from "@/components/checkout/OrderDetails";
 import { FadeIn } from "@/components/common/FadeIn";
@@ -16,7 +19,12 @@ import {
 } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
 import { AlertCircle } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useStorefrontObservability } from "@/hooks/useStorefrontObservability";
+import { createOrderReviewViewedEvent } from "@/lib/storefrontJourneyEvents";
+
+const getErrorMessage = (value: unknown, fallback: string) =>
+  typeof value === "string" && value.length > 0 ? value : fallback;
 
 export const Route = createFileRoute("/shop/checkout/$sessionIdSlug/")({
   component: () => <CheckoutSession />,
@@ -28,6 +36,7 @@ const CheckoutSession = () => {
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [isCancelingOrder, setIsCancelingOrder] = useState(false);
   const [error, setError] = useState("");
+  const lastTrackedOrderReview = useRef<string | null>(null);
 
   const checkoutSessionQueries = useCheckoutSessionQueries();
 
@@ -42,6 +51,22 @@ const CheckoutSession = () => {
   );
 
   const queryClient = useQueryClient();
+  const { track } = useStorefrontObservability();
+
+  useEffect(() => {
+    if (!sessionData?._id) return;
+    if (lastTrackedOrderReview.current === sessionData._id) return;
+
+    lastTrackedOrderReview.current = sessionData._id;
+
+    void track(
+      createOrderReviewViewedEvent({
+        checkoutSessionId: sessionData._id,
+      }),
+    ).catch((error) => {
+      console.error("Failed to track order review view:", error);
+    });
+  }, [sessionData?._id, track]);
 
   const placeOrder = async () => {
     if (!sessionData || !sessionIdSlug) return;
@@ -82,7 +107,7 @@ const CheckoutSession = () => {
       }
 
       if (!res.success) {
-        setError(res.message || "Failed to place order");
+        setError(getErrorMessage(res.message, "Failed to place order"));
       }
 
       setIsPlacingOrder(false);
@@ -121,7 +146,7 @@ const CheckoutSession = () => {
           params: { sessionIdSlug },
         });
       } else {
-        setError(res.message);
+        setError(getErrorMessage(res.message, "Failed to cancel order"));
       }
 
       setIsCancelingOrder(false);
@@ -171,7 +196,7 @@ const CheckoutSession = () => {
 
           {sessionData?.items && (
             <BagSummaryItems
-              items={sessionData?.items}
+              items={toBagSummaryItems(sessionData.items)}
               discount={sessionData.discount as Discount | null}
             />
           )}

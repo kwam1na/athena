@@ -13,8 +13,10 @@ import {
   formatDeliveryAddress,
   getOrderAmount,
 } from "@/components/checkout/utils";
-import { useTrackEvent } from "@/hooks/useTrackEvent";
 import { CardTitle } from "@/components/ui/card";
+import { useStorefrontObservability } from "@/hooks/useStorefrontObservability";
+import { createCheckoutCompletionBlockedEvent } from "@/lib/storefrontJourneyEvents";
+import { useEffect, useRef } from "react";
 
 export const Route = createFileRoute(
   "/shop/checkout/$sessionIdSlug/incomplete"
@@ -25,6 +27,8 @@ export const Route = createFileRoute(
 function CheckoutIncompleteView() {
   const { onlineOrder } = useCheckout();
   const { formatter } = useStoreContext();
+  const { track } = useStorefrontObservability();
+  const hasTrackedIncompleteCheckout = useRef(false);
 
   const { amountCharged, amountPaid } = getOrderAmount({
     items: onlineOrder?.items || ([] as any),
@@ -37,13 +41,21 @@ function CheckoutIncompleteView() {
     onlineOrder?.deliveryDetails as Address
   );
 
-  useTrackEvent({
-    action: "viewed_checkout_incomplete_screen",
-    data: {
-      order_id: onlineOrder?._id,
-      checkout_session_id: onlineOrder?.checkoutSessionId,
-    },
-  });
+  useEffect(() => {
+    if (!onlineOrder || hasTrackedIncompleteCheckout.current) return;
+
+    hasTrackedIncompleteCheckout.current = true;
+
+    void track(
+      createCheckoutCompletionBlockedEvent({
+        checkoutSessionId: onlineOrder.checkoutSessionId,
+        orderId: onlineOrder._id,
+        deliveryMethod: onlineOrder.deliveryMethod,
+      }),
+    ).catch((error) => {
+      console.error("Failed to track incomplete checkout:", error);
+    });
+  }, [onlineOrder, track]);
 
   return (
     <AnimatePresence>

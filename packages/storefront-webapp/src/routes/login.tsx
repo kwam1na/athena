@@ -26,7 +26,13 @@ import {
 import { ArrowRight } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
+import { useStorefrontObservability } from "@/hooks/useStorefrontObservability";
+import {
+  createAuthEntryViewedEvent,
+  createAuthRequestStartedEvent,
+} from "@/lib/storefrontJourneyEvents";
+import { emitStorefrontFailure } from "@/lib/storefrontFailureObservability";
 
 export const customerDetailsSchema = z.object({
   email: z
@@ -38,25 +44,29 @@ export const customerDetailsSchema = z.object({
     ),
 });
 
-export const Route = createFileRoute("/login")({
-  beforeLoad: async () => {
-    const id = localStorage.getItem(LOGGED_IN_USER_ID_KEY);
+async function loginBeforeLoad(): Promise<void> {
+  const id = localStorage.getItem(LOGGED_IN_USER_ID_KEY);
 
-    const { storeId, organizationId } = getStoreDetails();
+  const { storeId, organizationId } = getStoreDetails();
+
+  if (id && storeId && organizationId) {
+    let user;
 
     try {
-      if (id && storeId && organizationId) {
-        const user = await getActiveUser();
-
-        if (user._id) {
-          return redirect({ to: "/account" });
-        }
-      }
-    } catch (e) {
+      user = await getActiveUser();
+    } catch (_error) {
       localStorage.removeItem(LOGGED_IN_USER_ID_KEY);
-      return redirect({ to: "/login" });
+      throw redirect({ to: "/login" });
     }
-  },
+
+    if (user._id) {
+      throw redirect({ to: "/account" });
+    }
+  }
+}
+
+export const Route = createFileRoute("/login")({
+  beforeLoad: loginBeforeLoad,
 
   component: () => <Login />,
 });
@@ -70,6 +80,9 @@ const Login = () => {
   });
 
   const { origin, email } = useSearch({ strict: false });
+  const hasTrackedLoginEntry = useRef(false);
+  const { store } = useStoreContext();
+  const { baseContext, track } = useStorefrontObservability();
 
   const isFromGuestRewards = origin === "guest-rewards";
 
@@ -79,7 +92,21 @@ const Login = () => {
     }
   }, [isFromGuestRewards, email]);
 
-  const { store } = useStoreContext();
+  useEffect(() => {
+    if (hasTrackedLoginEntry.current) return;
+
+    hasTrackedLoginEntry.current = true;
+
+    void track(
+      createAuthEntryViewedEvent({
+        mode: "login",
+        origin,
+        email,
+      }),
+    ).catch((error) => {
+      console.error("Failed to track login entry:", error);
+    });
+  }, [email, origin, track]);
 
   const navigate = useNavigate();
 
@@ -96,13 +123,32 @@ const Login = () => {
       }
     },
     onError: (error) => {
-      console.log("error", error);
+      void emitStorefrontFailure({
+        route: baseContext.route,
+        journey: "auth",
+        step: "auth_request",
+        error,
+        context: {
+          email: form.getValues("email"),
+        },
+        track,
+      }).catch(() => undefined);
     },
   });
 
   if (!store) return <div className="h-screen" />;
 
   const onSubmit = async (data: z.infer<typeof customerDetailsSchema>) => {
+    void track(
+      createAuthRequestStartedEvent({
+        mode: "login",
+        origin,
+        email: data.email,
+      }),
+    ).catch((error) => {
+      console.error("Failed to track login request:", error);
+    });
+
     verifyMutation.mutate({
       email: data.email,
     });

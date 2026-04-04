@@ -1,4 +1,3 @@
-import { postAnalytics } from "@/api/analytics";
 import { updateCheckoutSession } from "@/api/checkoutSession";
 import { BagSummaryItems } from "@/components/checkout/BagSummary";
 import { CheckoutProvider } from "@/components/checkout/CheckoutProvider";
@@ -18,11 +17,14 @@ import { useGetActiveCheckoutSession } from "@/hooks/useGetActiveCheckoutSession
 import { useShoppingBag } from "@/hooks/useShoppingBag";
 import { useBagQueries } from "@/lib/queries/bag";
 import { capitalizeFirstLetter } from "@/lib/utils";
+import { useStorefrontObservability } from "@/hooks/useStorefrontObservability";
+import { createCheckoutCompletionSucceededEvent } from "@/lib/storefrontJourneyEvents";
 import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowLeft } from "lucide-react";
 import { useEffect, useState } from "react";
+import { emitStorefrontFailure } from "@/lib/storefrontFailureObservability";
 
 export const Route = createFileRoute("/shop/checkout/complete/")({
   component: () => <CheckoutCompleteView />,
@@ -32,11 +34,28 @@ export const CheckoutComplete = () => {
   const { activeSession, onlineOrder } = useCheckout();
   const { bag } = useShoppingBag();
   const { userId } = useAuth();
+  const { baseContext, track } = useStorefrontObservability();
   const queryClient = useQueryClient();
   const bagQueries = useBagQueries();
 
   const [hasOrderError, setHasOrderError] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
+
+  const reportCheckoutFailure = (
+    error: unknown,
+    step: "checkout_completion" | "checkout_completion_retry",
+  ) => {
+    void emitStorefrontFailure({
+      route: baseContext.route,
+      journey: "checkout",
+      step,
+      error,
+      context: {
+        checkoutSessionId: activeSession._id,
+      },
+      track,
+    }).catch(() => undefined);
+  };
 
   const isGuest = userId === undefined;
 
@@ -56,17 +75,18 @@ export const CheckoutComplete = () => {
             sessionId: activeSession._id,
             hasCompletedCheckoutSession: true,
           }),
-          postAnalytics({
-            action: "completed_checkout",
-            data: {
+          track(
+            createCheckoutCompletionSucceededEvent({
               checkoutSessionId: activeSession._id,
-            },
-          }),
+              orderId: onlineOrder?._id,
+              deliveryMethod: activeSession.deliveryMethod,
+            }),
+          ),
         ]);
 
         queryClient.invalidateQueries({ queryKey: bagQueries.activeBagKey() });
       } catch (error) {
-        console.error("Failed to complete checkout:", error);
+        reportCheckoutFailure(error, "checkout_completion");
         setHasOrderError(true);
       }
     };
@@ -76,6 +96,9 @@ export const CheckoutComplete = () => {
     activeSession._id,
     activeSession.hasCompletedPayment,
     activeSession.hasVerifiedPayment,
+    activeSession.deliveryMethod,
+    onlineOrder?._id,
+    track,
   ]);
 
   const retryOrderCreation = async () => {
@@ -91,7 +114,7 @@ export const CheckoutComplete = () => {
 
       queryClient.invalidateQueries({ queryKey: bagQueries.activeBagKey() });
     } catch (error) {
-      console.error("Failed to retry order creation:", error);
+      reportCheckoutFailure(error, "checkout_completion_retry");
       setHasOrderError(true);
     } finally {
       setIsRetrying(false);

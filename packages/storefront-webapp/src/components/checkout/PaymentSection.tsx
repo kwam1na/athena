@@ -16,13 +16,17 @@ import { Link } from "@tanstack/react-router";
 import { updateUser } from "@/api/storeFrontUser";
 import { useStoreContext } from "@/contexts/StoreContext";
 import { CheckoutFormSectionProps } from "./CustomerInfoSection";
-import { postAnalytics } from "@/api/analytics";
 import { updateGuest } from "@/api/guest";
 import OrderSummary from "./OrderDetails/OrderSummary";
 import { PaymentMethodSection } from "./PaymentMethodSection";
+import { useStorefrontObservability } from "@/hooks/useStorefrontObservability";
+import { createPaymentSubmissionStartedEvent } from "@/lib/storefrontJourneyEvents";
+import { emitStorefrontFailure } from "@/lib/storefrontFailureObservability";
+import { CheckoutSessionError } from "@/api/checkoutSession";
 
 export const PaymentSection = ({ form }: CheckoutFormSectionProps) => {
   const { activeSession, canPlaceOrder, checkoutState } = useCheckout();
+  const { baseContext, track } = useStorefrontObservability();
 
   const { user } = useStoreContext();
 
@@ -33,15 +37,66 @@ export const PaymentSection = ({ form }: CheckoutFormSectionProps) => {
   const [didAcceptCommsTerms, setDidAcceptCommsTerms] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
+  const reportCheckoutFailure = ({
+    step,
+    error,
+    status = "failed",
+    context,
+    fallbackCategory,
+  }: {
+    step: "payment_submission" | "payment_post_processing";
+    error: unknown;
+    status?: "failed" | "blocked";
+    context?: Record<string, unknown>;
+    fallbackCategory?: "validation" | "unknown";
+  }) => {
+    void emitStorefrontFailure({
+      route: baseContext.route,
+      journey: "checkout",
+      step,
+      status,
+      error,
+      fallbackCategory,
+      context: {
+        checkoutSessionId: activeSession?._id,
+        paymentMethod: checkoutState.paymentMethod,
+        ...context,
+      },
+      track,
+    }).catch(() => undefined);
+  };
+
   const onSubmit = async () => {
     setErrorMessage("");
+    const checkoutAction =
+      checkoutState.paymentMethod === "payment_on_delivery"
+        ? "create-pod-order"
+        : "finalize-payment";
 
     try {
       const canProceedToPayment = await canPlaceOrder();
       const { data } = webOrderSchema.safeParse(checkoutState);
 
       if (!canProceedToPayment || !data || !activeSession._id) {
-        throw new Error("Invalid order state");
+        const blockedReason = !canProceedToPayment
+          ? "checkout_validation_failed"
+          : "missing_checkout_context";
+        const blockedMessage =
+          blockedReason === "checkout_validation_failed"
+            ? "We couldn't validate your checkout details. Please review your information and try again."
+            : "We couldn't finalize your payment. Please try again.";
+
+        reportCheckoutFailure({
+          step: "payment_submission",
+          status: "blocked",
+          error: {
+            code: blockedReason,
+            message: blockedMessage,
+          },
+          fallbackCategory: "validation",
+        });
+        setErrorMessage(blockedMessage);
+        return;
       }
 
       setIsProceedingToPayment(true);
@@ -58,13 +113,13 @@ export const PaymentSection = ({ form }: CheckoutFormSectionProps) => {
               podPaymentMethod: checkoutState.podPaymentMethod,
             },
           ),
-          postAnalytics({
-            action: "finalized_payment_on_delivery_checkout",
-            data: {
+          track(
+            createPaymentSubmissionStartedEvent({
               checkoutSessionId: activeSession._id,
+              paymentMethod: checkoutState.paymentMethod,
               podPaymentMethod: checkoutState.podPaymentMethod,
-            },
-          }),
+            }),
+          ),
           user ? updateUserInformation() : updateUserInformation("guest"),
         ]);
         // Check the critical operation (order processing) result
@@ -82,16 +137,18 @@ export const PaymentSection = ({ form }: CheckoutFormSectionProps) => {
             );
           }
         } else {
-          console.error("POD checkout failed:", podResult.reason);
           setErrorMessage("Failed to create payment on delivery order");
         }
-        // Log any failures in non-critical operations
+        const operations = ["analytics_submission", "customer_profile_update"];
         results.slice(1).forEach((result, index) => {
           if (result.status === "rejected") {
-            console.error(
-              `Non-critical operation ${index + 1} failed:`,
-              result.reason
-            );
+            reportCheckoutFailure({
+              step: "payment_post_processing",
+              error: result.reason,
+              context: {
+                operation: operations[index],
+              },
+            });
           }
         });
       } else {
@@ -103,12 +160,12 @@ export const PaymentSection = ({ form }: CheckoutFormSectionProps) => {
               deliveryDetails: data.deliveryDetails ?? null,
             },
           ),
-          postAnalytics({
-            action: "finalized_checkout",
-            data: {
+          track(
+            createPaymentSubmissionStartedEvent({
               checkoutSessionId: activeSession._id,
-            },
-          }),
+              paymentMethod: checkoutState.paymentMethod,
+            }),
+          ),
           user ? updateUserInformation() : updateUserInformation("guest"),
         ]);
 
@@ -128,27 +185,32 @@ export const PaymentSection = ({ form }: CheckoutFormSectionProps) => {
             throw new Error("No authorization URL received");
           }
         } else {
-          console.error("Payment processing failed:", paymentResult.reason);
           setErrorMessage("Failed to finalize payment");
         }
-        // Log any failures in non-critical operations
+        const operations = ["analytics_submission", "customer_profile_update"];
         results.slice(1).forEach((result, index) => {
           if (result.status === "rejected") {
-            console.error(
-              `Non-critical operation ${index + 1} failed:`,
-              result.reason
-            );
+            reportCheckoutFailure({
+              step: "payment_post_processing",
+              error: result.reason,
+              context: {
+                operation: operations[index],
+              },
+            });
           }
         });
       }
     } catch (error) {
-      console.error("Payment error:", error);
+      if (!(error instanceof CheckoutSessionError)) {
+        reportCheckoutFailure({
+          step: "payment_submission",
+          error,
+        });
+      }
       setErrorMessage(
         getCheckoutActionErrorMessage(
           error,
-          checkoutState.paymentMethod === "payment_on_delivery"
-            ? "create-pod-order"
-            : "finalize-payment",
+          checkoutAction,
         ),
       );
     } finally {

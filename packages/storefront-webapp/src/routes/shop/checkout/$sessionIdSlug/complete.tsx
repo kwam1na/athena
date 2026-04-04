@@ -1,4 +1,7 @@
-import { BagSummaryItems } from "@/components/checkout/BagSummary";
+import {
+  BagSummaryItems,
+  toBagSummaryItems,
+} from "@/components/checkout/BagSummary";
 import { Discount } from "@/components/checkout/types";
 import { OrderDetails } from "@/components/checkout/OrderDetails";
 import { FadeIn } from "@/components/common/FadeIn";
@@ -82,7 +85,7 @@ const CheckoutCompleteView = () => {
           <p className="text-xs">Your order</p>
 
           <BagSummaryItems
-            items={sessionData.items}
+            items={toBagSummaryItems(sessionData.items)}
             discount={sessionData.discount as Discount | null}
           />
         </motion.div>

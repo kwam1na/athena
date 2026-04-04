@@ -3,7 +3,7 @@ import { Icons } from "@/components/ui/icons";
 import { useStoreContext } from "@/contexts/StoreContext";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { useGetActiveCheckoutSession } from "@/hooks/useGetActiveCheckoutSession";
 import {
@@ -11,6 +11,8 @@ import {
   UnableToVerifyCheckoutPayment,
 } from "@/components/states/checkout-expired/CheckoutExpired";
 import { CheckoutProvider } from "@/components/checkout/CheckoutProvider";
+import { useStorefrontObservability } from "@/hooks/useStorefrontObservability";
+import { createPaymentVerificationStartedEvent } from "@/lib/storefrontJourneyEvents";
 
 export const Route = createFileRoute("/shop/checkout/verify/")({
   component: () => <VerifyCheckoutSessionPayment />,
@@ -18,6 +20,8 @@ export const Route = createFileRoute("/shop/checkout/verify/")({
 
 const Verify = () => {
   const navigate = useNavigate();
+  const { track } = useStorefrontObservability();
+  const lastTrackedVerification = useRef<string | null>(null);
 
   const { data: session, isLoading } = useGetActiveCheckoutSession();
 
@@ -33,6 +37,24 @@ const Verify = () => {
       }),
     enabled: Boolean(externalReference),
   });
+
+  useEffect(() => {
+    const verificationKey = `${session?._id ?? "unknown"}:${externalReference ?? ""}`;
+
+    if (!externalReference || lastTrackedVerification.current === verificationKey)
+      return;
+
+    lastTrackedVerification.current = verificationKey;
+
+    void track(
+      createPaymentVerificationStartedEvent({
+        checkoutSessionId: session?._id,
+        externalReference,
+      }),
+    ).catch((error) => {
+      console.error("Failed to track checkout payment verification:", error);
+    });
+  }, [externalReference, session?._id, track]);
 
   useEffect(() => {
     if (
