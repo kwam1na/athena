@@ -41,7 +41,10 @@ import ImageWithFallback from "../ui/image-with-fallback";
 import { useNavigationBarContext } from "@/contexts/NavigationBarProvider";
 import { useCheckoutSessionQueries } from "@/lib/queries/checkout";
 import { usePromoCodesQueries } from "@/lib/queries/promoCode";
-import { postAnalytics } from "@/api/analytics";
+import {
+  createBagMoveToSavedEvent,
+  createDiscountCodeTriggerEvent,
+} from "@/lib/storefrontJourneyEvents";
 import { useDiscountCodeAlert } from "@/hooks/useDiscountCodeAlert";
 import { WelcomeBackModal } from "../ui/modals/WelcomeBackModal";
 import { useProductDiscount } from "@/hooks/useProductDiscount";
@@ -499,13 +502,11 @@ export default function ShoppingBag() {
   const handleClickOnDiscountCode = async () => {
     openDiscountModal();
 
-    await postAnalytics({
-      action: "clicked_on_discount_code_trigger",
-      origin: "shopping_bag",
-      data: {
+    await track(
+      createDiscountCodeTriggerEvent({
         promoCodeId: storeConfig.promotions.homepageDiscountCodeModalPromoCode,
-      },
-    });
+      }),
+    );
   };
 
   const isSkuUnavailable = (skuId: string) => {
@@ -527,15 +528,13 @@ export default function ShoppingBag() {
     setBagAction("moving-to-saved-bag");
     await Promise.all([
       moveItemFromBagToSaved(item),
-      postAnalytics({
-        action: "added_product_to_saved",
-        origin: "shopping_bag",
-        data: {
-          product: item.productId,
+      track(
+        createBagMoveToSavedEvent({
+          productId: item.productId,
           productSku: item.productSku,
           productImageUrl: item.productImage,
-        },
-      }),
+        }),
+      ),
     ]);
   };
 

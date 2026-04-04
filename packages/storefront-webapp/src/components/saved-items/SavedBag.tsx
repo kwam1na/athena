@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ShoppingBasket, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useStoreContext } from "@/contexts/StoreContext";
@@ -11,8 +11,12 @@ import { AnimatePresence, easeInOut, motion } from "framer-motion";
 import { EmptyState } from "../states/empty/empty-state";
 import { FadeIn } from "../common/FadeIn";
 import ImageWithFallback from "../ui/image-with-fallback";
-import { postAnalytics } from "@/api/analytics";
-import { useTrackEvent } from "@/hooks/useTrackEvent";
+import { useStorefrontObservability } from "@/hooks/useStorefrontObservability";
+import {
+  createSavedBagViewedEvent,
+  createSavedBagMoveToBagEvent,
+  createSavedBagRemoveEvent,
+} from "@/lib/storefrontJourneyEvents";
 import { getStoreFallbackImageUrl } from "@/lib/storeConfig";
 
 export default function SavedBag() {
@@ -26,13 +30,18 @@ export default function SavedBag() {
     isUpdatingSavedBag,
     moveItemFromSavedToBag,
   } = useShoppingBag();
+  const { track } = useStorefrontObservability();
 
   const { origin } = useSearch({ strict: false });
 
-  useTrackEvent({
-    action: "viewed_saved_bag",
-    origin,
-  });
+  const hasTrackedView = useRef(false);
+
+  useEffect(() => {
+    if (!hasTrackedView.current) {
+      hasTrackedView.current = true;
+      void track(createSavedBagViewedEvent());
+    }
+  }, [track]);
 
   const isSavedEmpty = savedBag?.items?.length === 0;
 
@@ -149,15 +158,13 @@ export default function SavedBag() {
                             setBagAction("moving-to-bag");
                             await Promise.all([
                               moveItemFromSavedToBag(item),
-                              postAnalytics({
-                                action: "added_product_to_bag",
-                                origin: "saved_bag",
-                                data: {
-                                  product: item.productId,
+                              track(
+                                createSavedBagMoveToBagEvent({
+                                  productId: item.productId,
                                   productSku: item.productSku,
                                   productImageUrl: item.productImage,
-                                },
-                              }),
+                                }),
+                              ),
                             ]);
                           }}
                         >
@@ -172,14 +179,13 @@ export default function SavedBag() {
                             setBagAction("deleting-from-saved-bag");
                             await Promise.all([
                               deleteItemFromSavedBag(item._id),
-                              postAnalytics({
-                                action: "removed_product_from_saved",
-                                data: {
-                                  product: item.productId,
+                              track(
+                                createSavedBagRemoveEvent({
+                                  productId: item.productId,
                                   productSku: item.productSku,
                                   productImageUrl: item.productImage,
-                                },
-                              }),
+                                }),
+                              ),
                             ]);
                           }}
                         >
