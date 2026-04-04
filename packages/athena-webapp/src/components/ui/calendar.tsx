@@ -13,7 +13,7 @@ function Calendar({
   className,
   classNames,
   showOutsideDays = true,
-  captionLayout = "buttons",
+  captionLayout = "label",
   buttonVariant = "ghost",
   components,
   ...props
@@ -65,15 +65,29 @@ function Calendar({
         ...classNames,
       }}
       components={{
-        IconLeft: ({ className, ...iconProps }) => (
-          <ChevronLeftIcon className={cn("h-4 w-4", className)} {...iconProps} />
-        ),
-        IconRight: ({ className, ...iconProps }) => (
-          <ChevronRightIcon className={cn("h-4 w-4", className)} {...iconProps} />
-        ),
-        IconDropdown: ({ className, ...iconProps }) => (
-          <ChevronDownIcon className={cn("h-4 w-4", className)} {...iconProps} />
-        ),
+        Chevron: ({ className, orientation, ...iconProps }) => {
+          if (orientation === "left") {
+            return (
+              <ChevronLeftIcon
+                className={cn("h-4 w-4", className)}
+                {...iconProps}
+              />
+            );
+          }
+
+          if (orientation === "right") {
+            return (
+              <ChevronRightIcon
+                className={cn("h-4 w-4", className)}
+                {...iconProps}
+              />
+            );
+          }
+
+          return (
+            <ChevronDownIcon className={cn("h-4 w-4", className)} {...iconProps} />
+          );
+        },
         ...components,
       }}
       {...props}
