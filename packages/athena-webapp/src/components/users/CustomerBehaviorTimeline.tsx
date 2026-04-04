@@ -2,15 +2,11 @@ import { useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "~/convex/_generated/api";
 import { Id } from "~/convex/_generated/dataModel";
+import { ArrowDown, ArrowUp, Calendar } from "lucide-react";
 import { TimelineEventList } from "./TimelineEventCard";
-import {
-  enrichTimelineEvents,
-  getTimeRangeLabel,
-  type TimelineEvent,
-} from "~/src/lib/timelineUtils";
-import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
-import { Badge } from "../ui/badge";
+import { getTimeRangeLabel } from "~/src/lib/timelineUtils";
 import { Button } from "../ui/button";
+import { Card, CardContent } from "../ui/card";
 import {
   Select,
   SelectContent,
@@ -18,21 +14,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../ui/select";
-import { Separator } from "../ui/separator";
-import {
-  Activity,
-  ArrowDown,
-  ArrowUp,
-  Calendar,
-  Monitor,
-  Smartphone,
-  TrendingUp,
-  User,
-  Package,
-} from "lucide-react";
 import { Skeleton } from "../ui/skeleton";
-import { EngagementMetricsGrid } from "./behavioral-insights/EngagementMetrics";
-import { calculateEngagementMetrics } from "~/src/lib/behaviorUtils";
+import {
+  formatObservabilityLabel,
+  type CustomerObservabilityTimelineData,
+} from "~/src/lib/customerObservabilityTimeline";
 
 interface CustomerBehaviorTimelineProps {
   userId: Id<"storeFrontUser"> | Id<"guest">;
@@ -47,59 +33,29 @@ export function CustomerBehaviorTimeline({
   const [groupByDay, setGroupByDay] = useState(true);
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
 
-  // Fetch timeline data
-  const timeline = useQuery(
-    api.storeFront.customerBehaviorTimeline.getCustomerBehaviorTimeline,
+  const timelineData = useQuery(
+    api.storeFront.customerBehaviorTimeline.getCustomerObservabilityTimeline,
     {
       userId,
       timeRange,
       limit: 100,
-    }
+    },
   );
 
-  // Fetch summary statistics
-  const summary = useQuery(
-    api.storeFront.customerBehaviorTimeline.getCustomerBehaviorSummary,
-    {
-      userId,
-      timeRange,
-    }
-  );
-
-  const activities = useQuery(api.storeFront.user.getAllUserActivity, {
-    id: userId,
-  });
-
-  if (!timeline || !summary || !activities) {
+  if (!timelineData) {
     return <TimelineSkeleton />;
   }
 
-  const metrics = calculateEngagementMetrics(activities);
-
-  // Enrich timeline events with display information
-  const enrichedEvents = enrichTimelineEvents(timeline as TimelineEvent[]);
-
-  // Calculate category breakdown
-  const categoryBreakdown = enrichedEvents.reduce(
-    (acc, event) => {
-      acc[event.category] = (acc[event.category] || 0) + 1;
-      return acc;
-    },
-    {} as Record<string, number>
-  );
+  const { summary, events } = timelineData as CustomerObservabilityTimelineData;
 
   return (
     <div className="space-y-6">
-      {/* <EngagementMetricsGrid metrics={metrics} /> */}
-      {/* Header with filters */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-lg font-semibold text-gray-900">
-            Customer Activity Timeline
+            Customer Journey
           </h2>
-          <p className="text-sm text-gray-500">
-            {getTimeRangeLabel(timeRange)}
-          </p>
+          <p className="text-sm text-gray-500">{getTimeRangeLabel(timeRange)}</p>
         </div>
 
         <div className="flex items-center space-x-3">
@@ -124,76 +80,37 @@ export function CustomerBehaviorTimeline({
             onClick={() => setGroupByDay(!groupByDay)}
             className="flex items-center space-x-1"
           >
-            <Calendar className="w-4 h-4" />
+            <Calendar className="h-4 w-4" />
             <span>Group by day</span>
           </Button>
         </div>
       </div>
 
-      {/* Summary Statistics */}
-      {/* <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex flex-col h-full">
-              <p className="text-xs text-muted-foreground mb-4">
-                Total Activities
-              </p>
-              <p className="text-2xl font-bold">{summary.totalActions}</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex flex-col h-full">
-              <p className="text-xs text-muted-foreground mb-4">
-                Products Viewed
-              </p>
-              <p className="text-2xl font-bold">{summary.uniqueProducts}</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex flex-col h-full">
-              <p className="text-xs text-muted-foreground mb-4">Device Usage</p>
-              <div className="flex items-center space-x-6">
-                <div className="flex items-center space-x-2">
-                  <Monitor className="w-4 h-4 text-muted-foreground" />
-                  <p className="text-2xl font-bold">
-                    {summary.deviceBreakdown.desktop}
-                  </p>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Smartphone className="w-4 h-4 text-muted-foreground" />
-                  <p className="text-2xl font-bold">
-                    {summary.deviceBreakdown.mobile}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div> */}
-
-      {/* Activity Categories */}
-      {/* <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Activity Breakdown</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-wrap gap-2">
-            {Object.entries(categoryBreakdown).map(([category, count]) => (
-              <Badge key={category} variant="secondary" className="capitalize">
-                {category}: {count}
-              </Badge>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-
-      <Separator /> */}
+      <div className="grid gap-4 md:grid-cols-3">
+        <SummaryCard
+          label="Latest state"
+          value={
+            summary.latestEvent
+              ? `${formatObservabilityLabel(summary.latestEvent.journey)} / ${formatObservabilityLabel(summary.latestEvent.step)}`
+              : "No journey events"
+          }
+          meta={
+            summary.latestEvent
+              ? formatObservabilityLabel(summary.latestEvent.status)
+              : "Waiting for observability data"
+          }
+        />
+        <SummaryCard
+          label="Failure events"
+          value={String(summary.failureCount)}
+          meta="Failed and blocked steps"
+        />
+        <SummaryCard
+          label="Correlated sessions"
+          value={String(summary.uniqueSessions)}
+          meta={`${summary.totalEvents} observability events`}
+        />
+      </div>
 
       <div className="flex justify-end">
         <Button
@@ -205,38 +122,55 @@ export function CustomerBehaviorTimeline({
           className="flex items-center space-x-1"
         >
           {sortDirection === "desc" ? (
-            <ArrowDown className="w-4 h-4" />
+            <ArrowDown className="h-4 w-4" />
           ) : (
-            <ArrowUp className="w-4 h-4" />
+            <ArrowUp className="h-4 w-4" />
           )}
           <span>{sortDirection === "desc" ? "Newest" : "Oldest"}</span>
         </Button>
       </div>
 
-      {/* Timeline */}
-      {enrichedEvents.length > 0 ? (
+      {events.length > 0 ? (
         <TimelineEventList
-          events={enrichedEvents}
+          events={events}
           groupByDay={groupByDay}
           sortDirection={sortDirection}
         />
       ) : (
-        <p className="text-muted-foreground text-center text-sm pt-8">
-          No customer activity recorded for the selected time period.
+        <p className="pt-8 text-center text-sm text-muted-foreground">
+          No storefront observability events recorded for the selected time period.
         </p>
       )}
     </div>
   );
 }
 
-// Loading skeleton component
+function SummaryCard({
+  label,
+  value,
+  meta,
+}: {
+  label: string;
+  value: string;
+  meta: string;
+}) {
+  return (
+    <Card>
+      <CardContent className="p-4">
+        <p className="text-xs text-muted-foreground">{label}</p>
+        <p className="mt-2 text-base font-semibold">{value}</p>
+        <p className="mt-1 text-xs text-muted-foreground">{meta}</p>
+      </CardContent>
+    </Card>
+  );
+}
+
 function TimelineSkeleton() {
   return (
     <div className="space-y-6">
-      {/* Header skeleton */}
-      <div className="flex justify-between items-center">
+      <div className="flex items-center justify-between">
         <div>
-          <Skeleton className="h-6 w-48 mb-2" />
+          <Skeleton className="mb-2 h-6 w-48" />
           <Skeleton className="h-4 w-32" />
         </div>
         <div className="flex space-x-3">
@@ -245,51 +179,34 @@ function TimelineSkeleton() {
         </div>
       </div>
 
-      {/* Statistics skeleton */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <Card key={i}>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        {Array.from({ length: 3 }).map((_, index) => (
+          <Card key={index}>
             <CardContent className="p-4">
-              <div className="flex items-center space-x-2">
-                <Skeleton className="w-4 h-4" />
-                <div className="space-y-2">
-                  <Skeleton className="h-4 w-24" />
-                  <Skeleton className="h-6 w-16" />
-                </div>
-              </div>
+              <Skeleton className="h-4 w-20" />
+              <Skeleton className="mt-3 h-5 w-36" />
+              <Skeleton className="mt-2 h-4 w-24" />
             </CardContent>
           </Card>
         ))}
       </div>
 
-      {/* Activity breakdown skeleton */}
-      <Card>
-        <CardHeader>
-          <Skeleton className="h-5 w-32" />
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-wrap gap-2">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <Skeleton key={i} className="h-6 w-20" />
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Timeline skeleton */}
       <div className="space-y-4">
-        {Array.from({ length: 5 }).map((_, i) => (
-          <Card key={i}>
+        {Array.from({ length: 3 }).map((_, index) => (
+          <Card key={index}>
             <CardContent className="p-4">
-              <div className="flex items-start space-x-4">
-                <Skeleton className="w-10 h-10 rounded-full" />
-                <div className="flex-1 space-y-2">
-                  <div className="flex justify-between">
-                    <Skeleton className="h-4 w-32" />
-                    <Skeleton className="h-3 w-16" />
+              <div className="flex items-start gap-4">
+                <Skeleton className="h-10 w-10 rounded-full" />
+                <div className="flex-1 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex gap-2">
+                      <Skeleton className="h-6 w-20" />
+                      <Skeleton className="h-6 w-20" />
+                    </div>
+                    <Skeleton className="h-4 w-16" />
                   </div>
-                  <Skeleton className="h-4 w-48" />
-                  <Skeleton className="h-3 w-24" />
+                  <Skeleton className="h-4 w-40" />
+                  <Skeleton className="h-4 w-full" />
                 </div>
               </div>
             </CardContent>

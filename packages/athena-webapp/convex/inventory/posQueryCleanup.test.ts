@@ -1,19 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { spawnSync } from "node:child_process";
+import { ESLint } from "eslint";
 
 const projectRoot = process.cwd();
 const repoRoot = join(projectRoot, "..", "..");
 const readProjectFile = (...segments: string[]) =>
   readFileSync(join(projectRoot, ...segments), "utf8");
-const eslintBinary = join(
-  repoRoot,
-  "node_modules",
-  ".bin",
-  process.platform === "win32" ? "eslint.cmd" : "eslint"
-);
-
 describe("V26-173 POS query cleanup", () => {
   it("adds the composite transaction index needed for completed POS lookups", () => {
     const schemaSource = readProjectFile("convex", "schema.ts").replace(
@@ -54,7 +47,7 @@ describe("V26-173 POS query cleanup", () => {
     );
   });
 
-  it("passes Convex lint without a file-level waiver on pos.ts", () => {
+  it("passes Convex lint without a file-level waiver on pos.ts", async () => {
     const source = readProjectFile("convex", "inventory", "pos.ts");
 
     expect(source).not.toMatch(
@@ -64,11 +57,23 @@ describe("V26-173 POS query cleanup", () => {
       /^\/\* eslint-disable .*@convex-dev\/explicit-table-ids.*\*\/$/m
     );
 
-    const lintResult = spawnSync(eslintBinary, ["convex/inventory/pos.ts"], {
-      cwd: projectRoot,
-      encoding: "utf8",
-    });
+    const eslint = new ESLint({ cwd: projectRoot });
+    const lintResult = await eslint.lintFiles(["convex/inventory/pos.ts"]);
+    const errorCount = lintResult.reduce(
+      (sum, result) => sum + result.errorCount,
+      0
+    );
+    const warningCount = lintResult.reduce(
+      (sum, result) => sum + result.warningCount,
+      0
+    );
 
-    expect(lintResult.status, lintResult.stderr || lintResult.stdout).toBe(0);
+    expect(
+      { errorCount, warningCount, lintResult },
+      JSON.stringify(lintResult, null, 2)
+    ).toMatchObject({
+      errorCount: 0,
+      warningCount: 0,
+    });
   }, 15000);
 });
