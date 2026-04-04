@@ -1,10 +1,18 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { spawnSync } from "node:child_process";
 
 const projectRoot = process.cwd();
+const repoRoot = join(projectRoot, "..", "..");
 const readProjectFile = (...segments: string[]) =>
   readFileSync(join(projectRoot, ...segments), "utf8");
+const eslintBinary = join(
+  repoRoot,
+  "node_modules",
+  ".bin",
+  process.platform === "win32" ? "eslint.cmd" : "eslint"
+);
 
 describe("V26-173 POS query cleanup", () => {
   it("adds the composite transaction index needed for completed POS lookups", () => {
@@ -45,4 +53,22 @@ describe("V26-173 POS query cleanup", () => {
       '.withIndex("by_storeId", (q) => q.eq("storeId", args.storeId)) .filter((q) => q.and( q.eq(q.field("status"), "completed"), q.gte(q.field("completedAt"), startOfDay), q.lte(q.field("completedAt"), endOfDay) ) )'
     );
   });
+
+  it("passes Convex lint without a file-level waiver on pos.ts", () => {
+    const source = readProjectFile("convex", "inventory", "pos.ts");
+
+    expect(source).not.toMatch(
+      /^\/\* eslint-disable .*@convex-dev\/no-collect-in-query.*\*\/$/m
+    );
+    expect(source).not.toMatch(
+      /^\/\* eslint-disable .*@convex-dev\/explicit-table-ids.*\*\/$/m
+    );
+
+    const lintResult = spawnSync(eslintBinary, ["convex/inventory/pos.ts"], {
+      cwd: projectRoot,
+      encoding: "utf8",
+    });
+
+    expect(lintResult.status, lintResult.stderr || lintResult.stdout).toBe(0);
+  }, 15000);
 });

@@ -1,13 +1,112 @@
-/* eslint-disable @convex-dev/no-collect-in-query, @convex-dev/explicit-table-ids -- V26-173 narrows the remaining POS lookup hotspots and adds targeted transaction indexing; the broader legacy Convex lint cleanup in this large module remains follow-up work. */
-import { query, mutation, MutationCtx } from "../_generated/server";
+import { query, mutation, MutationCtx, QueryCtx } from "../_generated/server";
 import { v } from "convex/values";
 import type { Id } from "../_generated/dataModel";
 import { capitalizeWords, generateTransactionNumber } from "../utils";
 
 const CONVEX_PRODUCT_ID_PATTERN = /^[a-z0-9]{32}$/;
+const POS_SEARCH_PAGE_SIZE = 200;
+const POS_PRODUCT_LOOKUP_SKU_PAGE_SIZE = 100;
+const POS_TRANSACTION_ITEM_PAGE_SIZE = 200;
+const POS_SESSION_ITEM_PAGE_SIZE = 200;
+const POS_TODAY_SUMMARY_PAGE_SIZE = 100;
+
+type PosReadCtx = QueryCtx | MutationCtx;
 
 function isConvexProductId(value: string): value is Id<"product"> {
   return CONVEX_PRODUCT_ID_PATTERN.test(value);
+}
+
+async function collectAllPages<T>(
+  loadPage: (cursor: string | null) => Promise<{
+    page: T[];
+    continueCursor: string | null;
+    isDone: boolean;
+  }>
+) {
+  const results: T[] = [];
+  let cursor: string | null = null;
+
+  while (true) {
+    const page = await loadPage(cursor);
+    results.push(...page.page);
+
+    if (page.isDone) {
+      return results;
+    }
+
+    cursor = page.continueCursor;
+  }
+}
+
+async function listProductSkusByProductId(
+  ctx: QueryCtx,
+  productId: Id<"product">
+) {
+  return collectAllPages((cursor) =>
+    ctx.db
+      .query("productSku")
+      .withIndex("by_productId", (q) => q.eq("productId", productId))
+      .paginate({ cursor, numItems: POS_PRODUCT_LOOKUP_SKU_PAGE_SIZE })
+  );
+}
+
+async function listStoreProducts(ctx: QueryCtx, storeId: Id<"store">) {
+  return collectAllPages((cursor) =>
+    ctx.db
+      .query("product")
+      .withIndex("by_storeId", (q) => q.eq("storeId", storeId))
+      .paginate({ cursor, numItems: POS_SEARCH_PAGE_SIZE })
+  );
+}
+
+async function listStoreSkus(ctx: QueryCtx, storeId: Id<"store">) {
+  return collectAllPages((cursor) =>
+    ctx.db
+      .query("productSku")
+      .withIndex("by_storeId", (q) => q.eq("storeId", storeId))
+      .paginate({ cursor, numItems: POS_SEARCH_PAGE_SIZE })
+  );
+}
+
+async function listTransactionItems(
+  ctx: PosReadCtx,
+  transactionId: Id<"posTransaction">
+) {
+  return collectAllPages((cursor) =>
+    ctx.db
+      .query("posTransactionItem")
+      .withIndex("by_transactionId", (q) => q.eq("transactionId", transactionId))
+      .paginate({ cursor, numItems: POS_TRANSACTION_ITEM_PAGE_SIZE })
+  );
+}
+
+async function listSessionItems(ctx: MutationCtx, sessionId: Id<"posSession">) {
+  return collectAllPages((cursor) =>
+    ctx.db
+      .query("posSessionItem")
+      .withIndex("by_sessionId", (q) => q.eq("sessionId", sessionId))
+      .paginate({ cursor, numItems: POS_SESSION_ITEM_PAGE_SIZE })
+  );
+}
+
+async function listCompletedTransactionsForDay(
+  ctx: QueryCtx,
+  storeId: Id<"store">,
+  startOfDay: number,
+  endOfDay: number
+) {
+  return collectAllPages((cursor) =>
+    ctx.db
+      .query("posTransaction")
+      .withIndex("by_storeId_status_completedAt", (q) =>
+        q
+          .eq("storeId", storeId)
+          .eq("status", "completed")
+          .gte("completedAt", startOfDay)
+          .lte("completedAt", endOfDay)
+      )
+      .paginate({ cursor, numItems: POS_TODAY_SUMMARY_PAGE_SIZE })
+  );
 }
 
 export const searchProducts = query({
@@ -26,10 +125,7 @@ export const searchProducts = query({
       const product = await ctx.db.get("product", query as Id<"product">);
 
       if (product?.storeId === args.storeId) {
-        const productSkus = await ctx.db
-          .query("productSku")
-          .withIndex("by_productId", (q) => q.eq("productId", product._id))
-          .collect();
+        const productSkus = await listProductSkusByProductId(ctx, product._id);
 
         const results = await Promise.all(
           productSkus.map(async (sku) => {
@@ -77,15 +173,9 @@ export const searchProducts = query({
     // matching across product name, description, SKU, barcode, and product id.
     // Keep that behavior intact here while exact product-id and barcode paths
     // move onto direct indexed reads in V26-173.
-    const allProducts = await ctx.db
-      .query("product")
-      .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
-      .collect();
+    const allProducts = await listStoreProducts(ctx, args.storeId);
 
-    const allSkus = await ctx.db
-      .query("productSku")
-      .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
-      .collect();
+    const allSkus = await listStoreSkus(ctx, args.storeId);
 
     // Create a map of products by ID for easy lookup
     const productMap = new Map();
@@ -135,14 +225,14 @@ export const searchProducts = query({
           // Get category name
           let categoryName = "";
           if (product.categoryId) {
-            const category = await ctx.db.get(product.categoryId);
+            const category = await ctx.db.get("category", product.categoryId);
             categoryName = (category as any)?.name || "";
           }
 
           // Get color name if exists
           let colorName = "";
           if (sku.color) {
-            const color = await ctx.db.get(sku.color);
+            const color = await ctx.db.get("color", sku.color);
             colorName = color?.name || "";
           }
 
@@ -254,10 +344,7 @@ export const lookupByBarcode = query({
 
       if (product?.storeId === args.storeId) {
         // Get all SKUs for this product
-        const allSkus = await ctx.db
-          .query("productSku")
-          .withIndex("by_productId", (q) => q.eq("productId", product._id))
-          .collect();
+        const allSkus = await listProductSkusByProductId(ctx, product._id);
 
         // Get category name
         let categoryName = "";
@@ -307,21 +394,21 @@ export const lookupByBarcode = query({
     }
 
     // Get the product details
-    const product = await ctx.db.get(sku.productId);
+    const product = await ctx.db.get("product", sku.productId);
 
     if (!product) return null;
 
     // Get category name
     let categoryName = "";
     if (product.categoryId) {
-      const category = await ctx.db.get(product.categoryId);
+      const category = await ctx.db.get("category", product.categoryId);
       categoryName = category?.name || "";
     }
 
     // Get color name if exists
     let colorName = "";
     if (sku.color) {
-      const color = await ctx.db.get(sku.color);
+      const color = await ctx.db.get("color", sku.color);
       colorName = color?.name || "";
     }
 
@@ -352,7 +439,7 @@ export const updateInventory = mutation({
     quantityToSubtract: v.number(),
   },
   handler: async (ctx, args) => {
-    const sku = await ctx.db.get(args.skuId);
+    const sku = await ctx.db.get("productSku", args.skuId);
     if (!sku) {
       throw new Error("Product SKU not found");
     }
@@ -367,7 +454,7 @@ export const updateInventory = mutation({
       sku.inventoryCount - args.quantityToSubtract
     );
 
-    await ctx.db.patch(args.skuId, {
+    await ctx.db.patch("productSku", args.skuId, {
       quantityAvailable: newQuantity,
       inventoryCount: newInventoryCount,
     });
@@ -423,7 +510,7 @@ export const completeTransaction = mutation({
 
     // Then validate each unique SKU against its total required quantity
     for (const [skuId, totalQuantity] of skuQuantityMap) {
-      const sku = await ctx.db.get(skuId);
+      const sku = await ctx.db.get("productSku", skuId);
       if (!sku) {
         return {
           success: false,
@@ -505,9 +592,9 @@ export const completeTransaction = mutation({
 
     // Update customer statistics if customer is linked
     if (args.customerId) {
-      const customer = await ctx.db.get(args.customerId);
+      const customer = await ctx.db.get("posCustomer", args.customerId);
       if (customer) {
-        await ctx.db.patch(args.customerId, {
+        await ctx.db.patch("posCustomer", args.customerId, {
           totalSpent: (customer.totalSpent || 0) + args.total,
           transactionCount: (customer.transactionCount || 0) + 1,
           lastTransactionAt: Date.now(),
@@ -519,7 +606,7 @@ export const completeTransaction = mutation({
     const transactionItems = await Promise.all(
       args.items.map(async (item) => {
         // Get product details
-        const sku = await ctx.db.get(item.skuId);
+        const sku = await ctx.db.get("productSku", item.skuId);
         if (!sku) {
           return {
             success: false,
@@ -544,7 +631,7 @@ export const completeTransaction = mutation({
         });
 
         // Update inventory
-        await ctx.db.patch(item.skuId, {
+        await ctx.db.patch("productSku", item.skuId, {
           quantityAvailable: sku.quantityAvailable - item.quantity,
           inventoryCount: Math.max(0, sku.inventoryCount - item.quantity),
         });
@@ -567,15 +654,10 @@ export const getTransaction = query({
     transactionId: v.id("posTransaction"),
   },
   handler: async (ctx, args) => {
-    const transaction = await ctx.db.get(args.transactionId);
+    const transaction = await ctx.db.get("posTransaction", args.transactionId);
     if (!transaction) return null;
 
-    const items = await ctx.db
-      .query("posTransactionItem")
-      .withIndex("by_transactionId", (q) =>
-        q.eq("transactionId", args.transactionId)
-      )
-      .collect();
+    const items = await listTransactionItems(ctx, args.transactionId);
 
     return { ...transaction, items };
   },
@@ -629,7 +711,7 @@ export const getCompletedTransactions = query({
       transactions.map(async (transaction) => {
         let cashierName: string | null = null;
         if (transaction.cashierId) {
-          const cashier = await ctx.db.get(transaction.cashierId);
+          const cashier = await ctx.db.get("cashier", transaction.cashierId);
           if (cashier) {
             cashierName = [cashier.firstName, `${cashier.lastName.charAt(0)}.`]
               .filter(Boolean)
@@ -640,18 +722,16 @@ export const getCompletedTransactions = query({
 
         let customerName: string | null = null;
         if (transaction.customerId) {
-          const customer = await ctx.db.get(transaction.customerId);
+          const customer = await ctx.db.get(
+            "posCustomer",
+            transaction.customerId
+          );
           customerName = customer?.name ?? null;
         } else if (transaction.customerInfo?.name) {
           customerName = transaction.customerInfo.name;
         }
 
-        const items = await ctx.db
-          .query("posTransactionItem")
-          .withIndex("by_transactionId", (q) =>
-            q.eq("transactionId", transaction._id)
-          )
-          .collect();
+        const items = await listTransactionItems(ctx, transaction._id);
 
         const itemCount = items.reduce((acc, item) => acc + item.quantity, 0);
 
@@ -738,25 +818,20 @@ export const getTransactionById = query({
     })
   ),
   handler: async (ctx, args) => {
-    const transaction = await ctx.db.get(args.transactionId);
+    const transaction = await ctx.db.get("posTransaction", args.transactionId);
     if (!transaction) {
       return null;
     }
 
     const cashier = transaction.cashierId
-      ? await ctx.db.get(transaction.cashierId)
+      ? await ctx.db.get("cashier", transaction.cashierId)
       : null;
 
     const customer = transaction.customerId
-      ? await ctx.db.get(transaction.customerId)
+      ? await ctx.db.get("posCustomer", transaction.customerId)
       : null;
 
-    const items = await ctx.db
-      .query("posTransactionItem")
-      .withIndex("by_transactionId", (q) =>
-        q.eq("transactionId", transaction._id)
-      )
-      .collect();
+    const items = await listTransactionItems(ctx, transaction._id);
 
     return {
       _id: transaction._id,
@@ -819,7 +894,7 @@ export const voidTransaction = mutation({
     cashierId: v.optional(v.id("cashier")),
   },
   handler: async (ctx, args) => {
-    const transaction = await ctx.db.get(args.transactionId);
+    const transaction = await ctx.db.get("posTransaction", args.transactionId);
     if (!transaction) {
       return {
         success: false,
@@ -835,25 +910,20 @@ export const voidTransaction = mutation({
     }
 
     // Update transaction status
-    await ctx.db.patch(args.transactionId, {
+    await ctx.db.patch("posTransaction", args.transactionId, {
       status: "void",
       voidedAt: Date.now(),
       notes: args.reason,
     });
 
     // Restore inventory for all items
-    const items = await ctx.db
-      .query("posTransactionItem")
-      .withIndex("by_transactionId", (q) =>
-        q.eq("transactionId", args.transactionId)
-      )
-      .collect();
+    const items = await listTransactionItems(ctx, args.transactionId);
 
     await Promise.all(
       items.map(async (item) => {
-        const sku = await ctx.db.get(item.productSkuId);
+        const sku = await ctx.db.get("productSku", item.productSkuId);
         if (sku) {
-          await ctx.db.patch(item.productSkuId, {
+          await ctx.db.patch("productSku", item.productSkuId, {
             quantityAvailable: sku.quantityAvailable + item.quantity,
             inventoryCount: sku.inventoryCount + item.quantity,
           });
@@ -874,172 +944,169 @@ export async function createTransactionFromSessionHandler(
     notes?: string;
   }
 ) {
-    const session = await ctx.db.get(args.sessionId);
-    if (!session) {
-      throw new Error("Session not found");
+  const session = await ctx.db.get("posSession", args.sessionId);
+  if (!session) {
+    throw new Error("Session not found");
+  }
+
+  // Query all items for this session from posSessionItem table
+  const items = await listSessionItems(ctx, args.sessionId);
+
+  if (items.length === 0) {
+    throw new Error("Cannot complete session with no items");
+  }
+
+  // Note: Inventory is already held via quantityAvailable reduction
+  // We only need to deduct from inventoryCount (actual stock)
+
+  // Aggregate quantities by SKU to handle multiple items of the same product
+  const skuQuantityMap = new Map<Id<"productSku">, number>();
+  for (const item of items) {
+    const currentQuantity = skuQuantityMap.get(item.productSkuId) || 0;
+    skuQuantityMap.set(item.productSkuId, currentQuantity + item.quantity);
+  }
+
+  // Validate SKUs exist (holds should already be in place)
+  for (const [skuId, totalQuantity] of skuQuantityMap) {
+    const sku = await ctx.db.get("productSku", skuId);
+    if (!sku) {
+      throw new Error(`Product SKU ${skuId} not found`);
     }
 
-    // Query all items for this session from posSessionItem table
-    const items = await ctx.db
-      .query("posSessionItem")
-      .withIndex("by_sessionId", (q) => q.eq("sessionId", args.sessionId))
-      .collect();
-
-    if (items.length === 0) {
-      throw new Error("Cannot complete session with no items");
+    // Type guard to ensure we have a productSku
+    if (!("inventoryCount" in sku) || !("sku" in sku)) {
+      throw new Error(`Invalid product SKU data for ${skuId}`);
     }
 
-    // Note: Inventory is already held via quantityAvailable reduction
-    // We only need to deduct from inventoryCount (actual stock)
-
-    // Aggregate quantities by SKU to handle multiple items of the same product
-    const skuQuantityMap = new Map<Id<"productSku">, number>();
-    for (const item of items) {
-      const currentQuantity = skuQuantityMap.get(item.productSkuId) || 0;
-      skuQuantityMap.set(item.productSkuId, currentQuantity + item.quantity);
-    }
-
-    // Validate SKUs exist (holds should already be in place)
-    for (const [skuId, totalQuantity] of skuQuantityMap) {
-      const sku = await ctx.db.get(skuId);
-      if (!sku) {
-        throw new Error(`Product SKU ${skuId} not found`);
-      }
-
-      // Type guard to ensure we have a productSku
-      if (!("inventoryCount" in sku) || !("sku" in sku)) {
-        throw new Error(`Invalid product SKU data for ${skuId}`);
-      }
-
-      // Check inventoryCount (actual stock) is sufficient
-      if (sku.inventoryCount < totalQuantity) {
-        const item = items.find((item) => item.productSkuId === skuId);
-        const itemName = item?.productName || "Unknown Product";
-        throw new Error(
-          `Insufficient inventory for ${capitalizeWords(itemName)} (${sku.sku}). In Stock: ${sku.inventoryCount}, Needed: ${totalQuantity}`
-        );
-      }
-    }
-
-    // Validate payments
-    if (args.payments.length === 0) {
-      throw new Error("At least one payment is required");
-    }
-
-    // Calculate total paid from payments array
-    const totalPaid = args.payments.reduce(
-      (sum, payment) => sum + payment.amount,
-      0
-    );
-
-    // Generate transaction number using shared utility
-    const transactionNumber = generateTransactionNumber();
-
-    // Calculate totals from session data
-    const subtotal = session.subtotal || 0;
-    const tax = session.tax || 0;
-    const total = session.total || 0;
-
-    // Validate that total paid is sufficient
-    if (totalPaid < total) {
+    // Check inventoryCount (actual stock) is sufficient
+    if (sku.inventoryCount < totalQuantity) {
+      const item = items.find((item) => item.productSkuId === skuId);
+      const itemName = item?.productName || "Unknown Product";
       throw new Error(
-        `Insufficient payment. Total: ${total.toFixed(2)}, Paid: ${totalPaid.toFixed(2)}`
+        `Insufficient inventory for ${capitalizeWords(itemName)} (${sku.sku}). In Stock: ${sku.inventoryCount}, Needed: ${totalQuantity}`
       );
     }
+  }
 
-    // Calculate change given (only if total paid exceeds total due)
-    const changeGiven = totalPaid > total ? totalPaid - total : undefined;
+  // Validate payments
+  if (args.payments.length === 0) {
+    throw new Error("At least one payment is required");
+  }
 
-    // Get primary payment method for backward compatibility
-    const primaryPaymentMethod = args.payments[0]?.method || "cash";
+  // Calculate total paid from payments array
+  const totalPaid = args.payments.reduce(
+    (sum, payment) => sum + payment.amount,
+    0
+  );
 
-    // Create the POS transaction
-    const transactionId = await ctx.db.insert("posTransaction", {
-      transactionNumber,
-      storeId: session.storeId,
-      sessionId: args.sessionId, // Link to the session for audit trail
-      customerId: session.customerId,
-      cashierId: session.cashierId,
-      registerNumber: session.registerNumber,
-      subtotal,
-      tax,
-      total,
-      payments: args.payments,
-      totalPaid,
-      changeGiven,
-      paymentMethod: primaryPaymentMethod, // Backward compatibility
-      status: "completed",
-      completedAt: Date.now(),
-      customerInfo: session.customerInfo,
-      receiptPrinted: false,
-      notes: args.notes,
-    });
+  // Generate transaction number using shared utility
+  const transactionNumber = generateTransactionNumber();
 
-    // Update customer statistics if customer is linked
-    if (session.customerId) {
-      const customer = await ctx.db.get(session.customerId);
-      if (customer) {
-        await ctx.db.patch(session.customerId, {
-          totalSpent: (customer.totalSpent || 0) + total,
-          transactionCount: (customer.transactionCount || 0) + 1,
-          lastTransactionAt: Date.now(),
-        });
-      }
-    }
+  // Calculate totals from session data
+  const subtotal = session.subtotal || 0;
+  const tax = session.tax || 0;
+  const total = session.total || 0;
 
-    // Create transaction items and update inventory
-    const transactionItems = await Promise.all(
-      items.map(async (item) => {
-        // Get product details
-        const sku = await ctx.db.get(item.productSkuId);
-        if (!sku) {
-          throw new Error(
-            `SKU ${item.productSkuId} not found during transaction processing`
-          );
-        }
-
-        const image = item.image ?? sku.images?.[0];
-
-        // Create transaction item
-        const transactionItemId = await ctx.db.insert("posTransactionItem", {
-          transactionId,
-          productId: item.productId,
-          productSkuId: item.productSkuId,
-          productName: item.productName,
-          productSku: item.productSku ?? "",
-          barcode: item.barcode,
-          ...(image ? { image } : {}),
-          quantity: item.quantity,
-          unitPrice: item.price,
-          totalPrice: item.price * item.quantity,
-        });
-
-        // Update inventory
-        // Note: quantityAvailable was already reduced when item was added to session (hold)
-        // Now we need to:
-        // 1. Reduce inventoryCount (actual stock)
-        await ctx.db.patch(item.productSkuId, {
-          inventoryCount: Math.max(0, sku.inventoryCount - item.quantity),
-        });
-
-        return transactionItemId;
-      })
+  // Validate that total paid is sufficient
+  if (totalPaid < total) {
+    throw new Error(
+      `Insufficient payment. Total: ${total.toFixed(2)}, Paid: ${totalPaid.toFixed(2)}`
     );
+  }
 
-    // Note: We preserve posSessionItem records and session data for audit purposes
-    // They are NOT deleted after transaction completion
+  // Calculate change given (only if total paid exceeds total due)
+  const changeGiven = totalPaid > total ? totalPaid - total : undefined;
 
-    // Link the transaction back to the session for bidirectional audit trail
-    await ctx.db.patch(args.sessionId, {
-      transactionId,
-    });
+  // Get primary payment method for backward compatibility
+  const primaryPaymentMethod = args.payments[0]?.method || "cash";
 
-    return {
-      success: true,
-      transactionId,
-      transactionNumber,
-      transactionItems: transactionItems.filter((item) => item !== null),
-    };
+  // Create the POS transaction
+  const transactionId = await ctx.db.insert("posTransaction", {
+    transactionNumber,
+    storeId: session.storeId,
+    sessionId: args.sessionId, // Link to the session for audit trail
+    customerId: session.customerId,
+    cashierId: session.cashierId,
+    registerNumber: session.registerNumber,
+    subtotal,
+    tax,
+    total,
+    payments: args.payments,
+    totalPaid,
+    changeGiven,
+    paymentMethod: primaryPaymentMethod, // Backward compatibility
+    status: "completed",
+    completedAt: Date.now(),
+    customerInfo: session.customerInfo,
+    receiptPrinted: false,
+    notes: args.notes,
+  });
+
+  // Update customer statistics if customer is linked
+  if (session.customerId) {
+    const customer = await ctx.db.get("posCustomer", session.customerId);
+    if (customer) {
+      await ctx.db.patch("posCustomer", session.customerId, {
+        totalSpent: (customer.totalSpent || 0) + total,
+        transactionCount: (customer.transactionCount || 0) + 1,
+        lastTransactionAt: Date.now(),
+      });
+    }
+  }
+
+  // Create transaction items and update inventory
+  const transactionItems = await Promise.all(
+    items.map(async (item) => {
+      // Get product details
+      const sku = await ctx.db.get("productSku", item.productSkuId);
+      if (!sku) {
+        throw new Error(
+          `SKU ${item.productSkuId} not found during transaction processing`
+        );
+      }
+
+      const image = item.image ?? sku.images?.[0];
+
+      // Create transaction item
+      const transactionItemId = await ctx.db.insert("posTransactionItem", {
+        transactionId,
+        productId: item.productId,
+        productSkuId: item.productSkuId,
+        productName: item.productName,
+        productSku: item.productSku ?? "",
+        barcode: item.barcode,
+        ...(image ? { image } : {}),
+        quantity: item.quantity,
+        unitPrice: item.price,
+        totalPrice: item.price * item.quantity,
+      });
+
+      // Update inventory
+      // Note: quantityAvailable was already reduced when item was added to session (hold)
+      // Now we need to:
+      // 1. Reduce inventoryCount (actual stock)
+      await ctx.db.patch("productSku", item.productSkuId, {
+        inventoryCount: Math.max(0, sku.inventoryCount - item.quantity),
+      });
+
+      return transactionItemId;
+    })
+  );
+
+  // Note: We preserve posSessionItem records and session data for audit purposes
+  // They are NOT deleted after transaction completion
+
+  // Link the transaction back to the session for bidirectional audit trail
+  await ctx.db.patch("posSession", args.sessionId, {
+    transactionId,
+  });
+
+  return {
+    success: true,
+    transactionId,
+    transactionNumber,
+    transactionItems: transactionItems.filter((item) => item !== null),
+  };
 }
 
 export const createTransactionFromSession = mutation({
@@ -1094,7 +1161,10 @@ export const getRecentTransactionsWithCustomers = query({
       transactions.map(async (transaction) => {
         let customerName = null;
         if (transaction.customerId) {
-          const customer = await ctx.db.get(transaction.customerId);
+          const customer = await ctx.db.get(
+            "posCustomer",
+            transaction.customerId
+          );
           customerName = customer?.name || null;
         }
 
@@ -1141,16 +1211,12 @@ export const getTodaySummary = query({
     const endOfDay = startOfDay + 24 * 60 * 60 * 1000 - 1;
 
     // Get all completed transactions for today
-    const todayTransactions = await ctx.db
-      .query("posTransaction")
-      .withIndex("by_storeId_status_completedAt", (q) =>
-        q
-          .eq("storeId", args.storeId)
-          .eq("status", "completed")
-          .gte("completedAt", startOfDay)
-          .lte("completedAt", endOfDay)
-      )
-      .collect();
+    const todayTransactions = await listCompletedTransactionsForDay(
+      ctx,
+      args.storeId,
+      startOfDay,
+      endOfDay
+    );
 
     // Calculate metrics
     const totalTransactions = todayTransactions.length;
@@ -1162,12 +1228,7 @@ export const getTodaySummary = query({
     // Get total items sold by summing transaction items
     let totalItemsSold = 0;
     for (const transaction of todayTransactions) {
-      const transactionItems = await ctx.db
-        .query("posTransactionItem")
-        .withIndex("by_transactionId", (q) =>
-          q.eq("transactionId", transaction._id)
-        )
-        .collect();
+      const transactionItems = await listTransactionItems(ctx, transaction._id);
 
       totalItemsSold += transactionItems.reduce(
         (sum, item) => sum + item.quantity,
