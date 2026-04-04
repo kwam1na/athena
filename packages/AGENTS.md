@@ -7,6 +7,8 @@
 ## PR Preparation
 - Before opening or updating a PR, sync the working branch with the latest `origin/main` (merge or rebase).
 - Run PR-equivalent test checks after syncing with `origin/main`.
+- PR titles must use the format `[V26-123]: title`.
+- Every PR body must include a direct Linear link near the top for the ticket referenced in the title.
 
 ## PR Body Format
 - Every PR body must include these sections:
