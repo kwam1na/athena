@@ -7,7 +7,7 @@ tracker:
 polling:
   interval_ms: 30000
 workspace:
-  root: $HOME/.athena/symphony-workspaces
+  root: $ATHENA_REPO_ROOT/worktrees
 hooks:
   after_create: bash /Users/kwamina/athena/scripts/symphony/after-create.sh
   before_run: bash /Users/kwamina/athena/scripts/symphony/before-run.sh
