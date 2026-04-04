@@ -35,6 +35,7 @@ userOffersRoutes.get("/", async (c) => {
       {
         storeFrontUserId: userId as Id<"storeFrontUser"> | Id<"guest">,
         storeId: storeId as Id<"store">,
+        currentTimeMs: Date.now(),
       }
     );
 

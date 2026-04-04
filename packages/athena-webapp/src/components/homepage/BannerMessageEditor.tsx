@@ -5,7 +5,6 @@ import { api } from "~/convex/_generated/api";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { Switch } from "../ui/switch";
-import { LoadingButton } from "../ui/loading-button";
 import { Id } from "~/convex/_generated/dataModel";
 import View from "../View";
 import { Button } from "../ui/button";
@@ -53,6 +52,7 @@ export function BannerMessageEditor({ storeId }: BannerMessageEditorProps) {
         message: message.trim() || undefined,
         active: true,
         countdownEndsAt,
+        currentTimeMs: Date.now(),
       });
       toast.success("Banner message updated successfully");
     } catch (error) {
@@ -72,6 +72,7 @@ export function BannerMessageEditor({ storeId }: BannerMessageEditorProps) {
         message: undefined,
         active: false,
         countdownEndsAt: undefined,
+        currentTimeMs: Date.now(),
       });
       setHeading("");
       setMessage("");
@@ -96,6 +97,7 @@ export function BannerMessageEditor({ storeId }: BannerMessageEditorProps) {
         message: message.trim() || undefined,
         active: checked,
         countdownEndsAt,
+        currentTimeMs: Date.now(),
       });
       toast.success(
         checked ? "Banner message activated" : "Banner message deactivated",
