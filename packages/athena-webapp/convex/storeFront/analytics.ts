@@ -1,12 +1,106 @@
-/* eslint-disable @convex-dev/no-collect-in-query -- Query refactors are tracked in V26-168, V26-169, and V26-170; this PR only hardens API boundaries. */
 import { v } from "convex/values";
-import { internalQuery, mutation, query } from "../_generated/server";
-import { Id } from "../_generated/dataModel";
+import { internalQuery, mutation, query, QueryCtx } from "../_generated/server";
+import { Doc, Id } from "../_generated/dataModel";
 
 const entity = "analytics";
 const MAX_ANALYTICS_RESULTS = 500;
 const MAX_ANALYTICS_MUTATIONS = 1000;
 const MAX_PRODUCT_VIEW_RECORDS = 2000;
+const MAX_PROMO_CODE_ANALYTICS_RESULTS = 2000;
+const MAX_REPORTING_ORDERS = 1000;
+const MAX_PRODUCT_SKUS_PER_PRODUCT = 50;
+
+function getAnalyticsByStoreQuery(
+  ctx: QueryCtx,
+  storeId: Id<"store">,
+  startDate?: number,
+  endDate?: number
+) {
+  if (startDate !== undefined && endDate !== undefined) {
+    return ctx.db.query(entity).withIndex("by_storeId", (q) =>
+      q.eq("storeId", storeId)
+        .gte("_creationTime", startDate)
+        .lte("_creationTime", endDate)
+    );
+  }
+
+  if (startDate !== undefined) {
+    return ctx.db.query(entity).withIndex("by_storeId", (q) =>
+      q.eq("storeId", storeId).gte("_creationTime", startDate)
+    );
+  }
+
+  if (endDate !== undefined) {
+    return ctx.db.query(entity).withIndex("by_storeId", (q) =>
+      q.eq("storeId", storeId).lte("_creationTime", endDate)
+    );
+  }
+
+  return ctx.db
+    .query(entity)
+    .withIndex("by_storeId", (q) => q.eq("storeId", storeId));
+}
+
+function getCompletedOrdersQuery(
+  ctx: QueryCtx,
+  storeId: Id<"store">,
+  startDate?: number,
+  endDate?: number
+) {
+  if (startDate !== undefined && endDate !== undefined) {
+    return ctx.db.query("onlineOrder").withIndex("by_storeId_status", (q) =>
+      q.eq("storeId", storeId)
+        .eq("status", "completed")
+        .gte("_creationTime", startDate)
+        .lte("_creationTime", endDate)
+    );
+  }
+
+  if (startDate !== undefined) {
+    return ctx.db.query("onlineOrder").withIndex("by_storeId_status", (q) =>
+      q
+        .eq("storeId", storeId)
+        .eq("status", "completed")
+        .gte("_creationTime", startDate)
+    );
+  }
+
+  if (endDate !== undefined) {
+    return ctx.db.query("onlineOrder").withIndex("by_storeId_status", (q) =>
+      q
+        .eq("storeId", storeId)
+        .eq("status", "completed")
+        .lte("_creationTime", endDate)
+    );
+  }
+
+  return ctx.db.query("onlineOrder").withIndex("by_storeId_status", (q) =>
+    q.eq("storeId", storeId).eq("status", "completed")
+  );
+}
+
+async function getSkuMapForProducts(
+  ctx: QueryCtx,
+  productIds: Id<"product">[]
+): Promise<Map<string, Doc<"productSku">>> {
+  const skuMap = new Map<string, Doc<"productSku">>();
+  const uniqueProductIds = [...new Set(productIds)];
+
+  await Promise.all(
+    uniqueProductIds.map(async (productId) => {
+      const skus = await ctx.db
+        .query("productSku")
+        .withIndex("by_productId", (q) => q.eq("productId", productId))
+        .take(MAX_PRODUCT_SKUS_PER_PRODUCT);
+
+      skus.forEach((sku) => {
+        skuMap.set(`${sku.productId}-${sku.sku}`, sku);
+      });
+    })
+  );
+
+  return skuMap;
+}
 
 export const create = mutation({
   args: {
@@ -220,16 +314,13 @@ export const getByPromoCodeId = query({
     promoCodeId: v.id("promoCode"),
   },
   handler: async (ctx, args) => {
-    // Query the analytics table for records with promoCodeId in the data field
-    const analytics = await ctx.db
+    return await ctx.db
       .query(entity)
-      .filter(
-        (q) => q.eq(q.field("data.promoCodeId"), args.promoCodeId) // Filter by the action relevant to promo codes
+      .withIndex("by_data_promoCodeId", (q) =>
+        q.eq("data.promoCodeId", args.promoCodeId)
       )
       .order("desc")
-      .collect();
-
-    return analytics;
+      .take(MAX_PROMO_CODE_ANALYTICS_RESULTS);
   },
 });
 
@@ -284,23 +375,14 @@ export const getEnhancedAnalytics = query({
     endDate: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    let analyticsQuery = ctx.db
-      .query(entity)
-      .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
-      .order("desc");
-
-    // Apply date filtering if provided
-    if (args.startDate && args.endDate) {
-      analyticsQuery = analyticsQuery.filter((q) =>
-        q.and(
-          q.gte(q.field("_creationTime"), args.startDate!),
-          q.lte(q.field("_creationTime"), args.endDate!)
-        )
-      );
-    }
-
-    // Limit to prevent excessive reads - use take(500) instead of take(1000)
-    const analytics = await analyticsQuery.take(500);
+    const analytics = await getAnalyticsByStoreQuery(
+      ctx,
+      args.storeId,
+      args.startDate,
+      args.endDate
+    )
+      .order("desc")
+      .take(MAX_ANALYTICS_RESULTS);
 
     // Calculate enhanced metrics
     const uniqueVisitors = new Set(analytics.map((a) => a.storeFrontUserId))
@@ -387,26 +469,14 @@ export const getRevenueAnalytics = query({
     endDate: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    // Get all completed orders for revenue calculation
-    let ordersQuery = ctx.db
-      .query("onlineOrder")
-      .filter((q) =>
-        q.and(
-          q.eq(q.field("storeId"), args.storeId),
-          q.eq(q.field("status"), "completed")
-        )
-      );
-
-    if (args.startDate && args.endDate) {
-      ordersQuery = ordersQuery.filter((q) =>
-        q.and(
-          q.gte(q.field("_creationTime"), args.startDate!),
-          q.lte(q.field("_creationTime"), args.endDate!)
-        )
-      );
-    }
-
-    const orders = await ordersQuery.collect();
+    const orders = await getCompletedOrdersQuery(
+      ctx,
+      args.storeId,
+      args.startDate,
+      args.endDate
+    )
+      .order("desc")
+      .take(MAX_REPORTING_ORDERS);
 
     const totalRevenue = orders.reduce(
       (sum, order) => sum + (order.amount || 0),
@@ -442,21 +512,14 @@ export const getTopProducts = query({
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    let analyticsQuery = ctx.db
-      .query(entity)
-      .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId));
-
-    if (args.startDate && args.endDate) {
-      analyticsQuery = analyticsQuery.filter((q) =>
-        q.and(
-          q.gte(q.field("_creationTime"), args.startDate!),
-          q.lte(q.field("_creationTime"), args.endDate!)
-        )
-      );
-    }
-
-    // OPTIMIZATION: Limit records instead of using collect() to prevent full table scan
-    const analytics = await analyticsQuery.take(2000);
+    const analytics = await getAnalyticsByStoreQuery(
+      ctx,
+      args.storeId,
+      args.startDate,
+      args.endDate
+    )
+      .order("desc")
+      .take(MAX_PRODUCT_VIEW_RECORDS);
 
     // Count product views
     const productViews = analytics
@@ -491,22 +554,14 @@ export const getVisitorInsights = query({
     endDate: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    // Get current period analytics
-    let currentQuery = ctx.db
-      .query(entity)
-      .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId));
-
-    if (args.startDate && args.endDate) {
-      currentQuery = currentQuery.filter((q) =>
-        q.and(
-          q.gte(q.field("_creationTime"), args.startDate!),
-          q.lte(q.field("_creationTime"), args.endDate!)
-        )
-      );
-    }
-
-    // OPTIMIZATION: Limit records to prevent excessive database reads
-    const currentAnalytics = await currentQuery.take(5000);
+    const currentAnalytics = await getAnalyticsByStoreQuery(
+      ctx,
+      args.storeId,
+      args.startDate,
+      args.endDate
+    )
+      .order("desc")
+      .take(5000);
 
     // Calculate visitor patterns by hour
     const visitorsByHour = currentAnalytics.reduce(
@@ -534,9 +589,10 @@ export const getVisitorInsights = query({
         const previousActivity = await ctx.db
           .query(entity)
           .withIndex("by_storeFrontUserId", (q) =>
-            q.eq("storeFrontUserId", userId)
+            q
+              .eq("storeFrontUserId", userId)
+              .lt("_creationTime", args.startDate ?? 0)
           )
-          .filter((q) => q.lt(q.field("_creationTime"), args.startDate || 0))
           .first();
         return previousActivity ? 1 : 0;
       })
@@ -617,17 +673,14 @@ export const getStoreActivityTimeline = query({
     }
 
     // Get analytics data with time filtering
-    let analyticsQuery = ctx.db
-      .query(entity)
-      .withIndex("by_storeId", (q) => q.eq("storeId", storeId));
-
-    if (timeFilter) {
-      analyticsQuery = analyticsQuery.filter((q) =>
-        q.gte(q.field("_creationTime"), timeFilter)
-      );
-    }
-
-    const analytics = await analyticsQuery.order("desc").take(limit);
+    const analytics = await getAnalyticsByStoreQuery(
+      ctx,
+      storeId,
+      timeFilter,
+      undefined
+    )
+      .order("desc")
+      .take(limit);
 
     // OPTIMIZATION: Batch user and product data fetching to avoid N+1 queries
 
@@ -679,20 +732,7 @@ export const getStoreActivityTimeline = query({
       productMap.set(product!._id, product);
     });
 
-    // Batch fetch SKU data (simplified for performance)
-    const skuMap = new Map();
-    if (productIds.length > 0 && productIds.length < 50) {
-      // Only for reasonable numbers
-      const allSkus = await ctx.db.query("productSku").collect();
-      const relevantSkus = allSkus.filter((sku) =>
-        productIds.includes(sku.productId)
-      );
-
-      relevantSkus.forEach((sku) => {
-        const key = `${sku.productId}-${sku.sku}`;
-        skuMap.set(key, sku);
-      });
-    }
+    const skuMap = await getSkuMapForProducts(ctx, productIds);
 
     // Enrich analytics with cached data (optimized)
     const enrichedAnalytics = analytics.map((analytic) => {
@@ -736,23 +776,14 @@ export const getConsolidatedAnalytics = query({
   },
   handler: async (ctx, args) => {
     // OPTIMIZATION: Single query to get all analytics data needed for dashboard
-    let analyticsQuery = ctx.db
-      .query(entity)
-      .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
-      .order("desc");
-
-    // Apply date filtering if provided
-    if (args.startDate && args.endDate) {
-      analyticsQuery = analyticsQuery.filter((q) =>
-        q.and(
-          q.gte(q.field("_creationTime"), args.startDate!),
-          q.lte(q.field("_creationTime"), args.endDate!)
-        )
-      );
-    }
-
-    // Limit to prevent excessive reads
-    const analytics = await analyticsQuery.take(2000);
+    const analytics = await getAnalyticsByStoreQuery(
+      ctx,
+      args.storeId,
+      args.startDate,
+      args.endDate
+    )
+      .order("desc")
+      .take(MAX_PRODUCT_VIEW_RECORDS);
 
     // Calculate all metrics in a single pass
     const uniqueVisitors = new Set(analytics.map((a) => a.storeFrontUserId))
@@ -839,26 +870,14 @@ export const getConsolidatedAnalytics = query({
       ([, a], [, b]) => b - a
     )[0]?.[0];
 
-    // Get revenue data from orders (separate query but optimized)
-    let ordersQuery = ctx.db
-      .query("onlineOrder")
-      .filter((q) =>
-        q.and(
-          q.eq(q.field("storeId"), args.storeId),
-          q.eq(q.field("status"), "completed")
-        )
-      );
-
-    if (args.startDate && args.endDate) {
-      ordersQuery = ordersQuery.filter((q) =>
-        q.and(
-          q.gte(q.field("_creationTime"), args.startDate!),
-          q.lte(q.field("_creationTime"), args.endDate!)
-        )
-      );
-    }
-
-    const orders = await ordersQuery.take(1000); // Limit orders too
+    const orders = await getCompletedOrdersQuery(
+      ctx,
+      args.storeId,
+      args.startDate,
+      args.endDate
+    )
+      .order("desc")
+      .take(MAX_REPORTING_ORDERS);
 
     const totalRevenue = orders.reduce(
       (sum, order) => sum + (order.amount || 0),
