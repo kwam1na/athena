@@ -381,3 +381,431 @@ export function createAuthVerificationSucceededEvent({
     },
   });
 }
+
+// --- Auxiliary engagement events (V26-184) ---
+
+export function createRewardsAlertViewedEvent() {
+  return createJourneyEvent({
+    journey: "browse",
+    step: "rewards_alert",
+    status: "viewed",
+  });
+}
+
+export function createRewardsAlertDismissedEvent() {
+  return createJourneyEvent({
+    journey: "browse",
+    step: "rewards_alert",
+    status: "canceled",
+  });
+}
+
+export function createRewardsAlertShopNowEvent() {
+  return createJourneyEvent({
+    journey: "browse",
+    step: "rewards_alert",
+    status: "succeeded",
+  });
+}
+
+export function createPromoAlertViewedEvent({
+  promoCodeItemId,
+  productSku,
+  productImageUrl,
+  productId,
+}: {
+  promoCodeItemId?: string;
+  productSku?: string;
+  productImageUrl?: string;
+  productId?: string;
+}) {
+  return createJourneyEvent({
+    journey: "browse",
+    step: "promo_alert",
+    status: "viewed",
+    context: {
+      promoCodeItemId,
+      productSku,
+      productImageUrl,
+      productId,
+    },
+  });
+}
+
+export function createPromoAlertDismissedEvent({
+  promoCodeItemId,
+  productSku,
+  productImageUrl,
+  productId,
+}: {
+  promoCodeItemId?: string;
+  productSku?: string;
+  productImageUrl?: string;
+  productId?: string;
+}) {
+  return createJourneyEvent({
+    journey: "browse",
+    step: "promo_alert",
+    status: "canceled",
+    context: {
+      promoCodeItemId,
+      productSku,
+      productImageUrl,
+      productId,
+    },
+  });
+}
+
+export function createPromoAlertShopNowEvent({
+  promoCodeItemId,
+  productSkuId,
+  quantity,
+  quantityClaimed,
+}: {
+  promoCodeItemId?: string;
+  productSkuId?: string;
+  quantity?: number;
+  quantityClaimed?: number;
+}) {
+  return createJourneyEvent({
+    journey: "browse",
+    step: "promo_alert",
+    status: "succeeded",
+    context: {
+      promoCodeItemId,
+      productSkuId,
+      quantity,
+      quantityClaimed,
+    },
+  });
+}
+
+export function createWelcomeBackModalViewedEvent({
+  isNextOrder,
+  promoCodeId,
+}: {
+  isNextOrder?: boolean;
+  promoCodeId?: string;
+}) {
+  return createJourneyEvent({
+    journey: "browse",
+    step: "welcome_back_modal",
+    status: "viewed",
+    context: {
+      isNextOrder,
+      promoCodeId,
+    },
+  });
+}
+
+export function createWelcomeBackModalDismissedEvent({
+  isNextOrder,
+  promoCodeId,
+}: {
+  isNextOrder?: boolean;
+  promoCodeId?: string;
+}) {
+  return createJourneyEvent({
+    journey: "browse",
+    step: "welcome_back_modal",
+    status: "canceled",
+    context: {
+      isNextOrder,
+      promoCodeId,
+    },
+  });
+}
+
+export function createWelcomeBackModalSubmittedEvent({
+  isNextOrder,
+  promoCodeId,
+}: {
+  isNextOrder?: boolean;
+  promoCodeId?: string;
+}) {
+  return createJourneyEvent({
+    journey: "browse",
+    step: "welcome_back_modal",
+    status: "succeeded",
+    context: {
+      isNextOrder,
+      promoCodeId,
+    },
+  });
+}
+
+export function createLeaveReviewModalViewedEvent({
+  incentiveType,
+  promoCodeId,
+}: {
+  incentiveType?: string;
+  promoCodeId?: string;
+}) {
+  return createJourneyEvent({
+    journey: "browse",
+    step: "leave_review_modal",
+    status: "viewed",
+    context: {
+      incentiveType,
+      promoCodeId,
+    },
+  });
+}
+
+export function createLeaveReviewModalDismissedEvent({
+  incentiveType,
+  promoCodeId,
+}: {
+  incentiveType?: string;
+  promoCodeId?: string;
+}) {
+  return createJourneyEvent({
+    journey: "browse",
+    step: "leave_review_modal",
+    status: "canceled",
+    context: {
+      incentiveType,
+      promoCodeId,
+    },
+  });
+}
+
+export function createUpsellModalViewedEvent({
+  isNextOrder,
+  promoCodeId,
+  productId,
+  productSku,
+  productImageUrl,
+}: {
+  isNextOrder?: boolean;
+  promoCodeId?: string;
+  productId?: string;
+  productSku?: string;
+  productImageUrl?: string;
+}) {
+  return createJourneyEvent({
+    journey: "browse",
+    step: "upsell_modal",
+    status: "viewed",
+    context: {
+      isNextOrder,
+      promoCodeId,
+      productId,
+      productSku,
+      productImageUrl,
+    },
+  });
+}
+
+export function createUpsellModalDismissedEvent({
+  isNextOrder,
+  promoCodeId,
+  productId,
+  productSku,
+  productImageUrl,
+}: {
+  isNextOrder?: boolean;
+  promoCodeId?: string;
+  productId?: string;
+  productSku?: string;
+  productImageUrl?: string;
+}) {
+  return createJourneyEvent({
+    journey: "browse",
+    step: "upsell_modal",
+    status: "canceled",
+    context: {
+      isNextOrder,
+      promoCodeId,
+      productId,
+      productSku,
+      productImageUrl,
+    },
+  });
+}
+
+export function createUpsellModalSubmittedEvent({
+  isNextOrder,
+  promoCodeId,
+  productId,
+  productSku,
+  productImageUrl,
+}: {
+  isNextOrder?: boolean;
+  promoCodeId?: string;
+  productId?: string;
+  productSku?: string;
+  productImageUrl?: string;
+}) {
+  return createJourneyEvent({
+    journey: "browse",
+    step: "upsell_modal",
+    status: "succeeded",
+    context: {
+      isNextOrder,
+      promoCodeId,
+      productId,
+      productSku,
+      productImageUrl,
+    },
+  });
+}
+
+export function createUpsellModalAddToBagEvent({
+  productId,
+  productSku,
+  productImageUrl,
+}: {
+  productId?: string;
+  productSku?: string;
+  productImageUrl?: string;
+}) {
+  return createJourneyEvent({
+    journey: "bag",
+    step: "bag_add",
+    status: "succeeded",
+    context: {
+      productId,
+      productSku,
+      productImageUrl,
+      entryOrigin: "homepage_upsell_modal",
+    },
+  });
+}
+
+export function createSavedBagViewedEvent() {
+  return createJourneyEvent({
+    journey: "bag",
+    step: "saved_bag_view",
+    status: "viewed",
+  });
+}
+
+export function createSavedBagMoveToBagEvent({
+  productId,
+  productSku,
+  productImageUrl,
+}: {
+  productId?: string;
+  productSku?: string;
+  productImageUrl?: string;
+}) {
+  return createJourneyEvent({
+    journey: "bag",
+    step: "saved_bag_move_to_bag",
+    status: "succeeded",
+    context: {
+      productId,
+      productSku,
+      productImageUrl,
+    },
+  });
+}
+
+export function createSavedBagRemoveEvent({
+  productId,
+  productSku,
+  productImageUrl,
+}: {
+  productId?: string;
+  productSku?: string;
+  productImageUrl?: string;
+}) {
+  return createJourneyEvent({
+    journey: "bag",
+    step: "saved_bag_remove",
+    status: "succeeded",
+    context: {
+      productId,
+      productSku,
+      productImageUrl,
+    },
+  });
+}
+
+export function createBagMoveToSavedEvent({
+  productId,
+  productSku,
+  productImageUrl,
+}: {
+  productId?: string;
+  productSku?: string;
+  productImageUrl?: string;
+}) {
+  return createJourneyEvent({
+    journey: "bag",
+    step: "bag_move_to_saved",
+    status: "succeeded",
+    context: {
+      productId,
+      productSku,
+      productImageUrl,
+    },
+  });
+}
+
+export function createDiscountCodeTriggerEvent({
+  promoCodeId,
+}: {
+  promoCodeId?: string;
+}) {
+  return createJourneyEvent({
+    journey: "bag",
+    step: "discount_code_trigger",
+    status: "started",
+    context: {
+      promoCodeId,
+    },
+  });
+}
+
+export function createReviewEditorViewedEvent({
+  orderId,
+  orderItemId,
+  productId,
+  productImageUrl,
+}: {
+  orderId?: string;
+  orderItemId?: string;
+  productId?: string;
+  productImageUrl?: string;
+}) {
+  return createJourneyEvent({
+    journey: "product_discovery",
+    step: "review_editor",
+    status: "viewed",
+    context: {
+      orderId,
+      orderItemId,
+      productId,
+      productImageUrl,
+    },
+  });
+}
+
+export function createReviewSubmittedEvent({
+  orderId,
+  orderItemId,
+  productId,
+  productSkuId,
+  productImageUrl,
+}: {
+  orderId?: string;
+  orderItemId?: string;
+  productId?: string;
+  productSkuId?: string;
+  productImageUrl?: string;
+}) {
+  return createJourneyEvent({
+    journey: "product_discovery",
+    step: "review_submission",
+    status: "succeeded",
+    context: {
+      orderId,
+      orderItemId,
+      productId,
+      productSkuId,
+      productImageUrl,
+    },
+  });
+}
