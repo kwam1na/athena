@@ -5,7 +5,7 @@ import { useProduct } from "~/src/contexts/ProductContext";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import {
   ChartNoAxesColumn,
-  ClockFading,
+  ClockAlert,
   Eye,
   TrendingUp,
   Users,
@@ -80,7 +80,7 @@ export const AnalyticsInsights = () => {
         <Card className="space-y-4">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <p className="text-sm text-muted-foreground">Last Viewed</p>
-            <ClockFading className="h-4 w-4 text-muted-foreground" />
+            <ClockAlert className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="pt-2">

@@ -6,7 +6,7 @@ import {
   Smartphone,
   ShoppingCart,
   Calendar,
-  ClockFading,
+  ClockAlert,
 } from "lucide-react";
 import { EngagementMetrics } from "~/src/lib/behaviorUtils";
 import { getRelativeTime } from "~/src/lib/utils";
@@ -113,7 +113,7 @@ export function EngagementMetricsGrid({
       <MetricCard
         label="Last Activity"
         value={formatLastActivity(metrics.daysSinceLastActivity)}
-        icon={ClockFading}
+        icon={ClockAlert}
         description={`${metrics.daysSinceLastActivity === 0 ? getRelativeTime(metrics.lastActivityTimestamp) : `${metrics.weeklyActivities} this week`}`}
       />
 
