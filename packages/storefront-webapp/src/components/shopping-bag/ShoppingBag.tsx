@@ -504,7 +504,7 @@ export default function ShoppingBag() {
 
     await track(
       createDiscountCodeTriggerEvent({
-        promoCodeId: storeConfig.promotions.homepageDiscountCodeModalPromoCode,
+        promoCodeId: storeConfig.promotions.homepageDiscountCodeModalPromoCode?.promoCodeId,
       }),
     );
   };
