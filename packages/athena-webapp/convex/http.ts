@@ -27,14 +27,13 @@ import {
   offersRoutes,
   userOffersRoutes,
 } from "./http/domains/storeFront/routes";
-import { httpRouter } from "convex/server";
 import { guestRoutes } from "./http/domains/storeFront/routes/guest";
 import { colorRoutes } from "./http/domains/inventory/routes/colors";
 import { savedBagRoutes } from "./http/domains/storeFront/routes/savedBag";
 
 const app: HonoWithConvex<ActionCtx> = new Hono();
 
-const http = httpRouter();
+const http = new HttpRouterWithHono<ActionCtx>(app);
 
 auth.addHttpRoutes(http);
 
@@ -95,30 +94,4 @@ app.route("/offers", offersRoutes);
 
 app.route("/user-offers", userOffersRoutes);
 
-app.get("/.well-known/openid-configuration", async (c) => {
-  const [httpAction] = http.lookup(
-    "/.well-known/openid-configuration",
-    "GET",
-  ) as any;
-  return httpAction(c.env, c.req);
-});
-
-app.get("/.well-known/jwks.json", async (c) => {
-  const [httpAction] = http.lookup("/.well-known/jwks.json", "GET") as any;
-  return httpAction(c.env, c.req);
-});
-
-app.get("/api/auth/signin/*", async (c) => {
-  const [httpAction] = http.lookup("/api/auth/signin/foo", "GET") as any;
-  return httpAction(c.env, c.req);
-});
-
-app.on(["GET", "POST"], "/api/auth/callback/*", async (c) => {
-  const [httpAction] = http.lookup(
-    "/api/auth/callback/foo",
-    c.req.method as any,
-  ) as any;
-  return httpAction(c.env, c.req);
-});
-
-export default new HttpRouterWithHono(app);
+export default http;
