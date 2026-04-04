@@ -4,6 +4,9 @@ import { internalQuery, mutation, query } from "../_generated/server";
 import { Id } from "../_generated/dataModel";
 
 const entity = "analytics";
+const MAX_ANALYTICS_RESULTS = 500;
+const MAX_ANALYTICS_MUTATIONS = 1000;
+const MAX_PRODUCT_VIEW_RECORDS = 2000;
 
 export const create = mutation({
   args: {
@@ -36,7 +39,7 @@ export const updateOwner = mutation({
       .withIndex("by_storeFrontUserId", (q) =>
         q.eq("storeFrontUserId", args.guestId)
       )
-      .collect();
+      .take(MAX_ANALYTICS_MUTATIONS);
 
     // Update each record in parallel to associate with the authenticated user
     await Promise.all(
@@ -77,7 +80,7 @@ export const getAll = query({
             .eq("productId", args.productId)
         )
         .order("desc")
-        .collect();
+        .take(MAX_ANALYTICS_RESULTS);
     }
 
     if (args.action) {
@@ -87,7 +90,7 @@ export const getAll = query({
           q.eq("storeId", args.storeId).eq("action", args.action!)
         )
         .order("desc")
-        .collect();
+        .take(MAX_ANALYTICS_RESULTS);
     }
 
     return await ctx.db
@@ -116,7 +119,7 @@ export const getAllInternal = internalQuery({
             .eq("productId", args.productId)
         )
         .order("desc")
-        .collect();
+        .take(MAX_ANALYTICS_RESULTS);
     }
 
     if (args.action) {
@@ -126,7 +129,7 @@ export const getAllInternal = internalQuery({
           q.eq("storeId", args.storeId).eq("action", args.action!)
         )
         .order("desc")
-        .collect();
+        .take(MAX_ANALYTICS_RESULTS);
     }
 
     return await ctx.db
@@ -144,15 +147,20 @@ export const getAllPaginated = query({
     action: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const { page, continueCursor, isDone } = await ctx.db
-      .query(entity)
-      .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
-      .filter((q) => q.eq(q.field("action"), args.action))
-      .order("desc")
-      .paginate({
-        numItems: 10,
-        cursor: args.cursor,
-      });
+    const baseQuery = args.action
+      ? ctx.db
+          .query(entity)
+          .withIndex("by_storeId_action", (q) =>
+            q.eq("storeId", args.storeId).eq("action", args.action!)
+          )
+      : ctx.db
+          .query(entity)
+          .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId));
+
+    const { page, continueCursor, isDone } = await baseQuery.order("desc").paginate({
+      numItems: 10,
+      cursor: args.cursor,
+    });
 
     return {
       items: page,
@@ -174,30 +182,30 @@ export const get = query({
 export const getProductViewCount = query({
   args: {
     productId: v.id("product"),
+    currentDayStartMs: v.number(),
   },
   handler: async (ctx, args) => {
-    // Calculate the start of today (midnight)
-    const now = new Date();
-    const startOfDay = new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      now.getDate()
-    ).getTime();
-
-    // All-time views
-    const totalRecords = await ctx.db
-      .query(entity)
-      .filter((q) =>
-        q.and(
-          q.eq(q.field("action"), "viewed_product"),
-          q.eq(q.field("data.product"), args.productId)
+    const [viewedProductRecords, legacyViewProductRecords] = await Promise.all([
+      ctx.db
+        .query(entity)
+        .withIndex("by_action_productId", (q) =>
+          q.eq("action", "viewed_product").eq("productId", args.productId)
         )
-      )
-      .collect();
+        .take(MAX_PRODUCT_VIEW_RECORDS),
+      ctx.db
+        .query(entity)
+        .withIndex("by_action_productId", (q) =>
+          q.eq("action", "view_product").eq("productId", args.productId)
+        )
+        .take(MAX_PRODUCT_VIEW_RECORDS),
+    ]);
 
-    // Today's views
+    const totalRecords = [
+      ...viewedProductRecords,
+      ...legacyViewProductRecords,
+    ];
     const dailyRecords = totalRecords.filter(
-      (rec) => rec._creationTime >= startOfDay
+      (rec) => rec._creationTime >= args.currentDayStartMs
     );
 
     return {
@@ -235,14 +243,15 @@ export const clear = mutation({
     if (args.action) {
       const records = await ctx.db
         .query(entity)
-        .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
-        .filter((q) =>
-          q.and(
-            q.eq(q.field("storeFrontUserId"), args.storeFrontUserId),
-            q.eq(q.field("action"), args.action)
-          )
+        .withIndex("by_storeFrontUserId_storeId", (q) =>
+          q
+            .eq("storeFrontUserId", args.storeFrontUserId)
+            .eq("storeId", args.storeId)
         )
-        .collect();
+        .filter((q) =>
+          q.eq(q.field("action"), args.action)
+        )
+        .take(MAX_ANALYTICS_MUTATIONS);
 
       await Promise.all(records.map((record) => ctx.db.delete("analytics", record._id)));
 
@@ -252,10 +261,12 @@ export const clear = mutation({
     } else {
       const records = await ctx.db
         .query(entity)
-        .withIndex("by_storeFrontUserId", (q) =>
-          q.eq("storeFrontUserId", args.storeFrontUserId)
+        .withIndex("by_storeFrontUserId_storeId", (q) =>
+          q
+            .eq("storeFrontUserId", args.storeFrontUserId)
+            .eq("storeId", args.storeId)
         )
-        .collect();
+        .take(MAX_ANALYTICS_MUTATIONS);
 
       await Promise.all(records.map((record) => ctx.db.delete("analytics", record._id)));
 
@@ -557,6 +568,7 @@ export const getStoreActivityTimeline = query({
         v.literal("all")
       )
     ),
+    currentTimeMs: v.number(),
   },
   // returns: v.array(
   //   v.object({
@@ -587,7 +599,7 @@ export const getStoreActivityTimeline = query({
 
     // Calculate time filter
     let timeFilter: number | undefined;
-    const now = Date.now();
+    const now = args.currentTimeMs;
 
     switch (timeRange) {
       case "24h":

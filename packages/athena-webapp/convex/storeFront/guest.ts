@@ -1,4 +1,3 @@
-/* eslint-disable @convex-dev/no-collect-in-query -- Query refactors are tracked in V26-168, V26-169, and V26-170; this PR only hardens API boundaries. */
 import {
   internalMutation,
   internalQuery,
@@ -6,13 +5,16 @@ import {
   query,
 } from "../_generated/server";
 import { v } from "convex/values";
+import { Id } from "../_generated/dataModel";
 
 const entity = "guest";
+const MAX_GUESTS = 5000;
+const MAX_ANALYTICS_VISITORS = 2000;
 
 export const getAll = query({
   args: {},
   handler: async (ctx) => {
-    return await ctx.db.query(entity).collect();
+    return await ctx.db.query(entity).take(MAX_GUESTS);
   },
 });
 
@@ -32,7 +34,7 @@ export const getByMarker = internalQuery({
   handler: async (ctx, args) => {
     const guest = await ctx.db
       .query(entity)
-      .filter((q) => q.eq(q.field("marker"), args.marker))
+      .withIndex("by_marker", (q) => q.eq("marker", args.marker))
       .first();
 
     return guest;
@@ -98,25 +100,20 @@ export const update = internalMutation({
 export const getUniqueVisitorsForDay = query({
   args: {
     storeId: v.id("store"),
+    startTimeMs: v.number(),
+    endTimeMs: v.number(),
   },
   handler: async (ctx, args) => {
-    // Get UTC midnight today and tomorrow
-    const today = new Date();
-    today.setUTCHours(0, 0, 0, 0);
-
-    const tomorrow = new Date(today);
-    tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
-
     const uniqueVisitors = await ctx.db
       .query(entity)
       .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
       .filter((q) =>
         q.and(
-          q.gte(q.field("_creationTime"), today.getTime()),
-          q.lt(q.field("_creationTime"), tomorrow.getTime())
+          q.gte(q.field("_creationTime"), args.startTimeMs),
+          q.lt(q.field("_creationTime"), args.endTimeMs)
         )
       )
-      .collect();
+      .take(MAX_GUESTS);
 
     return uniqueVisitors.length;
   },
@@ -125,16 +122,14 @@ export const getUniqueVisitorsForDay = query({
 export const getUniqueVisitors = query({
   args: {
     storeId: v.id("store"),
+    startTimeMs: v.number(),
   },
   handler: async (ctx, args) => {
-    const today = new Date();
-    today.setUTCHours(0, 0, 0, 0);
-
     const uniqueVisitors = await ctx.db
       .query(entity)
       .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
-      .filter((q) => q.gte(q.field("_creationTime"), today.getTime()))
-      .collect();
+      .filter((q) => q.gte(q.field("_creationTime"), args.startTimeMs))
+      .take(MAX_GUESTS);
 
     return uniqueVisitors.length;
   },
@@ -143,30 +138,25 @@ export const getUniqueVisitors = query({
 export const getReturningVisitorsForDay = query({
   args: {
     storeId: v.id("store"),
+    startTimeMs: v.number(),
+    endTimeMs: v.number(),
   },
   returns: v.number(),
   handler: async (ctx, args) => {
-    // Get UTC midnight today and tomorrow
-    const today = new Date();
-    today.setUTCHours(0, 0, 0, 0);
-
-    const tomorrow = new Date(today);
-    tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
-
     // Get all visitors with analytics activity today
     const analyticsToday = await ctx.db
       .query("analytics")
       .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
       .filter((q) =>
         q.and(
-          q.gte(q.field("_creationTime"), today.getTime()),
-          q.lt(q.field("_creationTime"), tomorrow.getTime())
+          q.gte(q.field("_creationTime"), args.startTimeMs),
+          q.lt(q.field("_creationTime"), args.endTimeMs)
         )
       )
-      .collect();
+      .take(MAX_ANALYTICS_VISITORS);
 
     // Get unique visitor IDs from today's analytics
-    const visitorIdsToday = new Set<string>();
+    const visitorIdsToday = new Set<Id<"storeFrontUser"> | Id<"guest">>();
     for (const analytic of analyticsToday) {
       if (analytic.storeFrontUserId) {
         visitorIdsToday.add(analytic.storeFrontUserId);
@@ -178,13 +168,10 @@ export const getReturningVisitorsForDay = query({
     for (const visitorId of visitorIdsToday) {
       const previousActivity = await ctx.db
         .query("analytics")
-        .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
-        .filter((q) =>
-          q.and(
-            q.eq(q.field("storeFrontUserId"), visitorId),
-            q.lt(q.field("_creationTime"), today.getTime())
-          )
+        .withIndex("by_storeFrontUserId_storeId", (q) =>
+          q.eq("storeFrontUserId", visitorId).eq("storeId", args.storeId)
         )
+        .filter((q) => q.lt(q.field("_creationTime"), args.startTimeMs))
         .first();
 
       if (previousActivity) {

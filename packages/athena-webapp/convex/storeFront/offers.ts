@@ -1,4 +1,3 @@
-/* eslint-disable @convex-dev/no-collect-in-query -- Query refactors are tracked in V26-168, V26-169, and V26-170; this PR only hardens API boundaries. */
 import {
   ActionCtx,
   internalAction,
@@ -22,6 +21,7 @@ import { currencyFormatter, getProductName } from "../utils";
 import { getProductDiscountValue } from "../inventory/utils";
 
 const entity = "offer" as const;
+const MAX_OFFERS = 500;
 
 const heroImageUrl =
   "https://images.wigclub.store/stores/nn7byz68a3j4tfjvgdf9evpt3n78kk38/assets/a0171a4f-036a-4928-3387-8b578e4f297d.webp";
@@ -36,21 +36,24 @@ const emailSchema = z
 const isDuplicate = async (
   ctx: QueryCtx,
   email: string,
-  storeFrontUserId: Id<"storeFrontUser"> | Id<"guest">
+  storeFrontUserId: Id<"storeFrontUser"> | Id<"guest">,
+  promoCodeId: Id<"promoCode">
 ) => {
-  const [existing] = await Promise.all([
+  const [existingByEmail, existingByUser] = await Promise.all([
     ctx.db
       .query(entity)
-      .filter((q) =>
-        q.or(
-          q.eq(q.field("email"), email),
-          q.eq(q.field("storeFrontUserId"), storeFrontUserId)
-        )
+      .withIndex("by_email", (q) => q.eq("email", email))
+      .filter((q) => q.eq(q.field("promoCodeId"), promoCodeId))
+      .first(),
+    ctx.db
+      .query(entity)
+      .withIndex("by_storeFrontUserId_promoCodeId", (q) =>
+        q.eq("storeFrontUserId", storeFrontUserId).eq("promoCodeId", promoCodeId)
       )
       .first(),
   ]);
 
-  return !!existing;
+  return !!existingByEmail || !!existingByUser;
 };
 
 const updateStoreFrontActorEmail = async (
@@ -104,7 +107,8 @@ const createOffer = async (
   const isDuplicateSubmission = await isDuplicate(
     ctx,
     args.email,
-    args.storeFrontUserId
+    args.storeFrontUserId,
+    args.promoCodeId
   );
 
   if (isDuplicateSubmission) {
@@ -527,7 +531,7 @@ export const getByStoreId = query({
       .query(entity)
       .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
       .order("desc")
-      .collect();
+      .take(MAX_OFFERS);
   },
 });
 
@@ -541,7 +545,7 @@ export const getByPromoCodeId = query({
       .query(entity)
       .withIndex("by_promoCodeId", (q) => q.eq("promoCodeId", args.promoCodeId))
       .order("desc")
-      .collect();
+      .take(MAX_OFFERS);
   },
 });
 
@@ -555,7 +559,7 @@ export const getByEmail = query({
       .query(entity)
       .withIndex("by_email", (q) => q.eq("email", args.email))
       .order("desc")
-      .collect();
+      .take(MAX_OFFERS);
   },
 });
 
@@ -624,7 +628,7 @@ export const getByStorefrontUserId = query({
         q.eq("storeFrontUserId", args.storeFrontUserId)
       )
       .order("desc")
-      .collect();
+      .take(MAX_OFFERS);
 
     // Efficiently fetch promo codes for all offers
     const promoCodeIds = [...new Set(offers.map((offer) => offer.promoCodeId))];
@@ -662,17 +666,19 @@ export const getAll = internalQuery({
     ),
   },
   handler: async (ctx, args) => {
+    if (args.status) {
+      return await ctx.db
+        .query(entity)
+        .withIndex("by_storeId_status", (q) =>
+          q.eq("storeId", args.storeId).eq("status", args.status!)
+        )
+        .take(MAX_OFFERS);
+    }
+
     return await ctx.db
       .query(entity)
       .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
-      .filter((q) => {
-        if (args.status) {
-          return q.eq(q.field("status"), args.status);
-        } else {
-          return true;
-        }
-      })
-      .collect();
+      .take(MAX_OFFERS);
   },
 });
 

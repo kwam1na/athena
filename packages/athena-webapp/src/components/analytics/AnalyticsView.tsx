@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useQuery } from "convex/react";
 import View from "../View";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
@@ -13,10 +12,14 @@ import { Link } from "@tanstack/react-router";
 
 const StoreVisitors = () => {
   const { activeStore } = useGetActiveStore();
+  const startOfDay = new Date(new Date().setHours(0, 0, 0, 0)).getTime();
+  const endOfDay = startOfDay + 24 * 60 * 60 * 1000;
 
   const uniqueVisitorsToday = useQuery(
     api.storeFront.guest.getUniqueVisitorsForDay,
-    activeStore?._id ? { storeId: activeStore._id } : "skip"
+    activeStore?._id
+      ? { storeId: activeStore._id, startTimeMs: startOfDay, endTimeMs: endOfDay }
+      : "skip"
   );
 
   // if (!activeStore) return null;
@@ -79,7 +82,6 @@ const ActiveCheckoutSessions = () => {
 
 export default function AnalyticsView() {
   const { activeStore } = useGetActiveStore();
-  const [viewMode, setViewMode] = useState<"enhanced" | "classic">("classic");
 
   const analytics = useQuery(
     api.storeFront.analytics.getAll,

@@ -2,7 +2,6 @@ import { useQuery } from "convex/react";
 import { api } from "~/convex/_generated/api";
 import { Id } from "~/convex/_generated/dataModel";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
-import { Badge } from "../ui/badge";
 import { Skeleton } from "../ui/skeleton";
 import {
   Activity,
@@ -13,7 +12,6 @@ import {
   Monitor,
   Smartphone,
   User,
-  Clock,
   MousePointerClick,
 } from "lucide-react";
 import {
@@ -75,10 +73,12 @@ export function ActivityTimeline({
   storeId,
   timeRange = "24h",
 }: ActivityTimelineProps) {
+  const currentTimeMs = Date.now();
   const timeline = useQuery(api.storeFront.analytics.getStoreActivityTimeline, {
     storeId,
     timeRange,
     limit: 15,
+    currentTimeMs,
   });
 
   const formatter = useGetCurrencyFormatter();
@@ -128,7 +128,7 @@ export function ActivityTimeline({
                       ...params,
                       orgUrlSlug: params.orgUrlSlug!,
                       storeUrlSlug: params.storeUrlSlug!,
-                      productSlug: activity.data?.product!,
+                      productSlug: String(activity.data?.product ?? ""),
                     })}
                     search={{
                       o: getOrigin(),
