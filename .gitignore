@@ -184,3 +184,5 @@ packages/athena-webapp/stats.html
 packages/storefront-webapp/stats.html
 
 .claude/worktrees
+
+packages/athena-webapp/convex/_generated/
