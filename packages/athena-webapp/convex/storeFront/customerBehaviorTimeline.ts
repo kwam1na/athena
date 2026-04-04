@@ -44,14 +44,17 @@ async function getTimelineUserData(
   userId: Id<"storeFrontUser"> | Id<"guest">,
 ) {
   try {
-    const user = await ctx.db.get(userId as Id<"storeFrontUser">);
+    const user = await ctx.db.get(
+      "storeFrontUser",
+      userId as Id<"storeFrontUser">,
+    );
     if (user) {
       return { email: user.email };
     }
   } catch {}
 
   try {
-    const guest = await ctx.db.get(userId as Id<"guest">);
+    const guest = await ctx.db.get("guest", userId as Id<"guest">);
     if (guest) {
       return { email: guest.email };
     }
@@ -72,7 +75,7 @@ async function getProductInfoMaps(ctx: QueryCtx, analytics: Doc<"analytics">[]) 
   const products = await Promise.all(
     productIds.map(async (productId) => {
       try {
-        return await ctx.db.get(productId);
+        return await ctx.db.get("product", productId);
       } catch {
         return null;
       }
@@ -181,13 +184,16 @@ export const getCustomerBehaviorTimeline = query({
     // Get user data
     let userData: { email?: string } = {};
     try {
-      const user = await ctx.db.get(userId as Id<"storeFrontUser">);
+      const user = await ctx.db.get(
+        "storeFrontUser",
+        userId as Id<"storeFrontUser">,
+      );
       if (user) {
         userData = { email: user.email };
       }
     } catch (e) {
       try {
-        const guest = await ctx.db.get(userId as Id<"guest">);
+        const guest = await ctx.db.get("guest", userId as Id<"guest">);
         if (guest) {
           userData = { email: guest.email };
         }
@@ -209,7 +215,7 @@ export const getCustomerBehaviorTimeline = query({
     const products = await Promise.all(
       productIds.map(async (productId) => {
         try {
-          return await ctx.db.get(productId);
+          return await ctx.db.get("product", productId);
         } catch {
           return null;
         }
@@ -224,18 +230,19 @@ export const getCustomerBehaviorTimeline = query({
     // Batch fetch SKUs for products (avoiding complex filter that causes linter issues)
     const skuMap = new Map();
     if (productIds.length > 0) {
-      // Get all SKUs and filter in memory for now (can be optimized with proper indexes later)
-      const allSkus = await ctx.db.query("productSku").collect();
+      await Promise.all(
+        productIds.map(async (productId) => {
+          const skus = await ctx.db
+            .query("productSku")
+            .withIndex("by_productId", (q) => q.eq("productId", productId))
+            .take(MAX_PRODUCT_SKUS_PER_PRODUCT);
 
-      // Filter to only SKUs for our products
-      const relevantSkus = allSkus.filter((sku) =>
-        productIds.includes(sku.productId)
+          skus.forEach((sku) => {
+            const key = `${sku.productId}-${sku.sku}`;
+            skuMap.set(key, sku);
+          });
+        }),
       );
-
-      relevantSkus.forEach((sku) => {
-        const key = `${sku.productId}-${sku.sku}`;
-        skuMap.set(key, sku);
-      });
     }
 
     // Enrich analytics with product information (optimized)
