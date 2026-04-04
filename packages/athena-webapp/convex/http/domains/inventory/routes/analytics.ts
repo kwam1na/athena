@@ -76,6 +76,7 @@ analyticsRoutes.get("/product-view-count", async (c) => {
     api.storeFront.analytics.getProductViewCount,
     {
       productId: productId as Id<"product">,
+      currentDayStartMs: new Date(new Date().setHours(0, 0, 0, 0)).getTime(),
     }
   );
 

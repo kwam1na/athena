@@ -9,13 +9,15 @@ export const getEligibility = internalQuery({
   args: {
     storeFrontUserId: v.union(v.id("storeFrontUser"), v.id("guest")),
     storeId: v.id("store"),
+    currentTimeMs: v.number(),
   },
   handler: async (ctx, args) => {
     // Determine eligibility based on user activity
     const eligibility = await determineOfferEligibility(
       ctx,
       args.storeFrontUserId,
-      args.storeId
+      args.storeId,
+      args.currentTimeMs
     );
 
     return eligibility;
@@ -28,19 +30,22 @@ export const getEligibility = internalQuery({
 async function determineOfferEligibility(
   ctx: QueryCtx,
   userId: Id<"storeFrontUser"> | Id<"guest">,
-  storeId: Id<"store">
+  storeId: Id<"store">,
+  currentTimeMs: number
 ) {
   // Get user's recent activity
   const recentActivity = await ctx.db
     .query("analytics")
-    .withIndex("by_storeFrontUserId", (q) => q.eq("storeFrontUserId", userId))
+    .withIndex("by_storeFrontUserId_storeId", (q) =>
+      q.eq("storeFrontUserId", userId).eq("storeId", storeId)
+    )
     .take(100);
 
   // Check if the user is returning - look for activity more than a day old
   const ONE_DAY = 24 * 60 * 60 * 1000;
 
   const hasOlderActivity = recentActivity.some(
-    (activity) => Date.now() - activity._creationTime > ONE_DAY
+    (activity) => currentTimeMs - activity._creationTime > ONE_DAY
   );
 
   const hasViewedProduct = recentActivity.some(
@@ -68,11 +73,8 @@ async function determineOfferEligibility(
   const hasRedeemed = welcomePromo
     ? (await ctx.db
         .query("redeemedPromoCode")
-        .filter((q) =>
-          q.and(
-            q.eq(q.field("promoCodeId"), welcomePromo._id),
-            q.eq(q.field("storeFrontUserId"), userId)
-          )
+        .withIndex("by_promoCodeId_storeFrontUserId", (q) =>
+          q.eq("promoCodeId", welcomePromo._id).eq("storeFrontUserId", userId)
         )
         .first()) !== null
     : false;
