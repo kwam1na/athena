@@ -331,7 +331,7 @@ bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json
 bunx tsc --noEmit -p packages/storefront-webapp/tsconfig.json
 ```
 
-**Agent worktrees (Symphony):** When Symphony picks up a Linear issue it creates a git worktree under `.claude/worktrees/`. Agents work inside those isolated copies — not in the main checkout. Each worktree is on its own branch (`claude/<branch-name>`).
+**Agent worktrees (Symphony):** When Symphony picks up a Linear issue it creates a git worktree under `worktrees/` at the repository root. Agents work inside those isolated copies — not in the main checkout. Each worktree is on its own branch (`codex/<branch-name>`).
 
 ---
 
