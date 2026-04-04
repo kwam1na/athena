@@ -124,9 +124,13 @@ const schema = defineSchema({
   posTerminal: defineTable(posTerminalSchema)
     .index("by_storeId", ["storeId"])
     .index("by_storeId_and_fingerprintHash", ["storeId", "fingerprintHash"]),
-  posTransaction: defineTable(posTransactionSchema).index("by_storeId", [
-    "storeId",
-  ]),
+  posTransaction: defineTable(posTransactionSchema)
+    .index("by_storeId", ["storeId"])
+    .index("by_storeId_status_completedAt", [
+      "storeId",
+      "status",
+      "completedAt",
+    ]),
   posTransactionItem: defineTable(posTransactionItemSchema).index(
     "by_transactionId",
     ["transactionId"]

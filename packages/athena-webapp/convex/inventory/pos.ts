@@ -3,6 +3,12 @@ import { v } from "convex/values";
 import type { Id } from "../_generated/dataModel";
 import { capitalizeWords, generateTransactionNumber } from "../utils";
 
+const CONVEX_PRODUCT_ID_PATTERN = /^[a-z0-9]{32}$/;
+
+function isConvexProductId(value: string): value is Id<"product"> {
+  return CONVEX_PRODUCT_ID_PATTERN.test(value);
+}
+
 export const searchProducts = query({
   args: {
     storeId: v.id("store"),
@@ -15,13 +21,69 @@ export const searchProducts = query({
 
     const query = args.searchQuery.toLowerCase().trim();
 
-    // Get all products for the store
+    if (isConvexProductId(query)) {
+      const product = await ctx.db.get("product", query as Id<"product">);
+
+      if (product?.storeId === args.storeId) {
+        // eslint-disable-next-line @convex-dev/no-collect-in-query -- Exact product-id lookups only read SKUs for one matched product.
+        const productSkus = await ctx.db
+          .query("productSku")
+          .withIndex("by_productId", (q) => q.eq("productId", product._id))
+          .collect();
+
+        const results = await Promise.all(
+          productSkus.map(async (sku) => {
+            if (!sku.netPrice) return null;
+
+            let categoryName = "";
+            if (product.categoryId) {
+              const category = await ctx.db.get("category", product.categoryId);
+              categoryName = (category as any)?.name || "";
+            }
+
+            let colorName = "";
+            if (sku.color) {
+              const color = await ctx.db.get("color", sku.color);
+              colorName = color?.name || "";
+            }
+
+            return {
+              id: sku._id,
+              name: product.name,
+              sku: sku.sku || "",
+              barcode: sku.barcode || "",
+              price: sku.netPrice || sku.price,
+              category: categoryName,
+              description: product.description || "",
+              inStock: sku.quantityAvailable > 0,
+              quantityAvailable: sku.quantityAvailable,
+              image: sku.images?.[0] || null,
+              size: sku.size || "",
+              length: sku.length || null,
+              color: colorName,
+              productId: product._id,
+              skuId: sku._id,
+              areProcessingFeesAbsorbed:
+                product.areProcessingFeesAbsorbed || false,
+            };
+          })
+        );
+
+        return results.filter((result) => result !== null);
+      }
+    }
+
+    // Deliberate exception: free-text POS search still needs substring
+    // matching across product name, description, SKU, barcode, and product id.
+    // Keep that behavior intact here while exact product-id and barcode paths
+    // move onto direct indexed reads in V26-173.
+    // eslint-disable-next-line @convex-dev/no-collect-in-query -- Scoped exception: preserving current substring search behavior until a dedicated search-index migration lands.
     const allProducts = await ctx.db
       .query("product")
       .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
       .collect();
 
-    // Get all SKUs for the store
+    // eslint-disable-next-line @convex-dev/no-collect-in-query -- Scoped exception: preserving current substring search behavior until a dedicated search-index migration lands.
     const allSkus = await ctx.db
       .query("productSku")
       .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
@@ -188,14 +250,13 @@ export const lookupByBarcode = query({
 
     // Fallback: Search by product ID - return all SKUs for the product
     if (!sku) {
-      const product = await ctx.db
-        .query("product")
-        .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
-        .filter((q) => q.eq(q.field("_id"), args.barcode))
-        .first();
+      const product = isConvexProductId(args.barcode)
+        ? await ctx.db.get("product", args.barcode as Id<"product">)
+        : null;
 
-      if (product) {
+      if (product?.storeId === args.storeId) {
         // Get all SKUs for this product
+        // eslint-disable-next-line @convex-dev/no-collect-in-query -- Exact product-id lookups only read SKUs for one matched product.
         const allSkus = await ctx.db
           .query("productSku")
           .withIndex("by_productId", (q) => q.eq("productId", product._id))
@@ -204,7 +265,7 @@ export const lookupByBarcode = query({
         // Get category name
         let categoryName = "";
         if (product.categoryId) {
-          const category = await ctx.db.get(product.categoryId);
+          const category = await ctx.db.get("category", product.categoryId);
           categoryName = category?.name || "";
         }
 
@@ -214,7 +275,7 @@ export const lookupByBarcode = query({
             // Get color name if exists
             let colorName = "";
             if (sku.color) {
-              const color = await ctx.db.get(sku.color);
+              const color = await ctx.db.get("color", sku.color);
               colorName = color?.name || "";
             }
 
@@ -561,16 +622,14 @@ export const getCompletedTransactions = query({
 
     const transactions = await ctx.db
       .query("posTransaction")
-      .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
+      .withIndex("by_storeId_status_completedAt", (q) =>
+        q.eq("storeId", args.storeId).eq("status", "completed")
+      )
       .order("desc")
       .take(limit);
 
-    const completedTransactions = transactions.filter(
-      (transaction) => transaction.status === "completed"
-    );
-
     return Promise.all(
-      completedTransactions.map(async (transaction) => {
+      transactions.map(async (transaction) => {
         let cashierName: string | null = null;
         if (transaction.cashierId) {
           const cashier = await ctx.db.get(transaction.cashierId);
@@ -1087,13 +1146,12 @@ export const getTodaySummary = query({
     // Get all completed transactions for today
     const todayTransactions = await ctx.db
       .query("posTransaction")
-      .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
-      .filter((q) =>
-        q.and(
-          q.eq(q.field("status"), "completed"),
-          q.gte(q.field("completedAt"), startOfDay),
-          q.lte(q.field("completedAt"), endOfDay)
-        )
+      .withIndex("by_storeId_status_completedAt", (q) =>
+        q
+          .eq("storeId", args.storeId)
+          .eq("status", "completed")
+          .gte("completedAt", startOfDay)
+          .lte("completedAt", endOfDay)
       )
       .collect();
 
