@@ -1,6 +1,108 @@
-import { query } from "../_generated/server";
+import { query, QueryCtx } from "../_generated/server";
 import { v } from "convex/values";
-import { Id } from "../_generated/dataModel";
+import { Doc, Id } from "../_generated/dataModel";
+import {
+  buildCustomerObservabilityTimeline,
+  STOREFRONT_OBSERVABILITY_ACTION,
+} from "./customerObservabilityTimelineData";
+
+const MAX_PRODUCT_SKUS_PER_PRODUCT = 50;
+
+function getTimeFilterForRange(timeRange: "24h" | "7d" | "30d" | "all") {
+  const now = Date.now();
+
+  switch (timeRange) {
+    case "24h":
+      return now - 24 * 60 * 60 * 1000;
+    case "7d":
+      return now - 7 * 24 * 60 * 60 * 1000;
+    case "30d":
+      return now - 30 * 24 * 60 * 60 * 1000;
+    case "all":
+      return undefined;
+  }
+}
+
+function getCustomerAnalyticsQuery(
+  ctx: QueryCtx,
+  userId: Id<"storeFrontUser"> | Id<"guest">,
+  timeFilter?: number,
+) {
+  if (timeFilter !== undefined) {
+    return ctx.db.query("analytics").withIndex("by_storeFrontUserId", (q) =>
+      q.eq("storeFrontUserId", userId).gte("_creationTime", timeFilter),
+    );
+  }
+
+  return ctx.db
+    .query("analytics")
+    .withIndex("by_storeFrontUserId", (q) => q.eq("storeFrontUserId", userId));
+}
+
+async function getTimelineUserData(
+  ctx: QueryCtx,
+  userId: Id<"storeFrontUser"> | Id<"guest">,
+) {
+  try {
+    const user = await ctx.db.get(userId as Id<"storeFrontUser">);
+    if (user) {
+      return { email: user.email };
+    }
+  } catch {}
+
+  try {
+    const guest = await ctx.db.get(userId as Id<"guest">);
+    if (guest) {
+      return { email: guest.email };
+    }
+  } catch {}
+
+  return {};
+}
+
+async function getProductInfoMaps(ctx: QueryCtx, analytics: Doc<"analytics">[]) {
+  const productIds = [
+    ...new Set(
+      analytics
+        .map((analytic) => analytic.productId)
+        .filter((productId): productId is Id<"product"> => Boolean(productId)),
+    ),
+  ];
+
+  const products = await Promise.all(
+    productIds.map(async (productId) => {
+      try {
+        return await ctx.db.get(productId);
+      } catch {
+        return null;
+      }
+    }),
+  );
+
+  const productMap = new Map<Id<"product">, Doc<"product">>();
+  products.forEach((product) => {
+    if (product) {
+      productMap.set(product._id, product);
+    }
+  });
+
+  const skuMap = new Map<string, Doc<"productSku">>();
+
+  await Promise.all(
+    productIds.map(async (productId) => {
+      const skus = await ctx.db
+        .query("productSku")
+        .withIndex("by_productId", (q) => q.eq("productId", productId))
+        .take(MAX_PRODUCT_SKUS_PER_PRODUCT);
+
+      skus.forEach((sku) => {
+        skuMap.set(`${sku.productId}-${sku.sku}`, sku);
+      });
+    }),
+  );
+
+  return { productMap, skuMap };
+}
 
 export const getCustomerBehaviorTimeline = query({
   args: {
@@ -269,5 +371,115 @@ export const getCustomerBehaviorSummary = query({
       deviceBreakdown,
       lastActiveTime,
     };
+  },
+});
+
+export const getCustomerObservabilityTimeline = query({
+  args: {
+    userId: v.union(v.id("storeFrontUser"), v.id("guest")),
+    limit: v.optional(v.number()),
+    timeRange: v.optional(
+      v.union(
+        v.literal("24h"),
+        v.literal("7d"),
+        v.literal("30d"),
+        v.literal("all"),
+      ),
+    ),
+  },
+  returns: v.object({
+    summary: v.object({
+      totalEvents: v.number(),
+      uniqueSessions: v.number(),
+      failureCount: v.number(),
+      latestEvent: v.optional(
+        v.object({
+          journey: v.string(),
+          step: v.string(),
+          status: v.string(),
+          _creationTime: v.number(),
+        }),
+      ),
+    }),
+    events: v.array(
+      v.object({
+        _id: v.id("analytics"),
+        _creationTime: v.number(),
+        action: v.string(),
+        storeFrontUserId: v.union(v.id("storeFrontUser"), v.id("guest")),
+        storeId: v.id("store"),
+        origin: v.optional(v.string()),
+        device: v.optional(v.string()),
+        journey: v.string(),
+        step: v.string(),
+        status: v.string(),
+        sessionId: v.string(),
+        route: v.optional(v.string()),
+        errorCategory: v.optional(v.string()),
+        errorCode: v.optional(v.string()),
+        errorMessage: v.optional(v.string()),
+        productId: v.optional(v.id("product")),
+        productSku: v.optional(v.string()),
+        checkoutSessionId: v.optional(v.string()),
+        orderId: v.optional(v.string()),
+        userData: v.optional(
+          v.object({
+            email: v.optional(v.string()),
+          }),
+        ),
+        productInfo: v.optional(
+          v.object({
+            name: v.optional(v.string()),
+            images: v.optional(v.array(v.string())),
+            price: v.optional(v.number()),
+            currency: v.optional(v.string()),
+          }),
+        ),
+      }),
+    ),
+  }),
+  handler: async (ctx, args) => {
+    const { userId, limit = 100, timeRange = "30d" } = args;
+    const timeFilter = getTimeFilterForRange(timeRange);
+
+    const analytics = await getCustomerAnalyticsQuery(ctx, userId, timeFilter)
+      .order("desc")
+      .take(Math.max(limit * 5, 500));
+
+    const observabilityAnalytics = analytics
+      .filter((analytic) => analytic.action === STOREFRONT_OBSERVABILITY_ACTION)
+      .slice(0, limit);
+
+    const userData = await getTimelineUserData(ctx, userId);
+    const { productMap, skuMap } = await getProductInfoMaps(
+      ctx,
+      observabilityAnalytics,
+    );
+
+    const enrichedAnalytics = observabilityAnalytics.map((analytic) => {
+      let productInfo = undefined;
+
+      if (analytic.productId && analytic.data.productSku) {
+        const product = productMap.get(analytic.productId);
+        const sku = skuMap.get(`${analytic.productId}-${analytic.data.productSku}`);
+
+        if (product) {
+          productInfo = {
+            name: product.name,
+            images: sku?.images || [],
+            price: sku?.price,
+            currency: product.currency,
+          };
+        }
+      }
+
+      return {
+        ...analytic,
+        userData,
+        productInfo,
+      };
+    });
+
+    return buildCustomerObservabilityTimeline(enrichedAnalytics);
   },
 });
