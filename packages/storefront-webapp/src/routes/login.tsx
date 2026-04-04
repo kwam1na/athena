@@ -32,6 +32,7 @@ import {
   createAuthEntryViewedEvent,
   createAuthRequestStartedEvent,
 } from "@/lib/storefrontJourneyEvents";
+import { emitStorefrontFailure } from "@/lib/storefrontFailureObservability";
 
 export const customerDetailsSchema = z.object({
   email: z
@@ -43,25 +44,29 @@ export const customerDetailsSchema = z.object({
     ),
 });
 
-export const Route = createFileRoute("/login")({
-  beforeLoad: async (): Promise<void> => {
-    const id = localStorage.getItem(LOGGED_IN_USER_ID_KEY);
+async function loginBeforeLoad(): Promise<void> {
+  const id = localStorage.getItem(LOGGED_IN_USER_ID_KEY);
 
-    const { storeId, organizationId } = getStoreDetails();
+  const { storeId, organizationId } = getStoreDetails();
+
+  if (id && storeId && organizationId) {
+    let user;
 
     try {
-      if (id && storeId && organizationId) {
-        const user = await getActiveUser();
-
-        if (user._id) {
-          throw redirect({ to: "/account" });
-        }
-      }
-    } catch (e) {
+      user = await getActiveUser();
+    } catch (_error) {
       localStorage.removeItem(LOGGED_IN_USER_ID_KEY);
       throw redirect({ to: "/login" });
     }
-  },
+
+    if (user._id) {
+      throw redirect({ to: "/account" });
+    }
+  }
+}
+
+export const Route = createFileRoute("/login")({
+  beforeLoad: loginBeforeLoad,
 
   component: () => <Login />,
 });
@@ -78,7 +83,6 @@ const Login = () => {
   const hasTrackedLoginEntry = useRef(false);
 
   const isFromGuestRewards = origin === "guest-rewards";
-  const { track } = useStorefrontObservability();
 
   useEffect(() => {
     if (isFromGuestRewards && email) {
@@ -103,6 +107,7 @@ const Login = () => {
   }, [email, origin, track]);
 
   const { store } = useStoreContext();
+  const { baseContext, track } = useStorefrontObservability();
 
   const navigate = useNavigate();
 
@@ -119,7 +124,16 @@ const Login = () => {
       }
     },
     onError: (error) => {
-      console.log("error", error);
+      void emitStorefrontFailure({
+        route: baseContext.route,
+        journey: "auth",
+        step: "auth_request",
+        error,
+        context: {
+          email: form.getValues("email"),
+        },
+        track,
+      }).catch(() => undefined);
     },
   });
 

@@ -33,6 +33,7 @@ import {
   createAuthEntryViewedEvent,
   createAuthRequestStartedEvent,
 } from "@/lib/storefrontJourneyEvents";
+import { emitStorefrontFailure } from "@/lib/storefrontFailureObservability";
 
 const nameRegex = /^[a-zA-Zà-öø-ÿÀ-ÖØ-ß\-'\.\s]+$/;
 
@@ -62,25 +63,29 @@ export const customerDetailsSchema = z.object({
     ),
 });
 
-export const Route = createFileRoute("/signup")({
-  beforeLoad: async () => {
-    const id = localStorage.getItem(LOGGED_IN_USER_ID_KEY);
+async function signupBeforeLoad(): Promise<void> {
+  const id = localStorage.getItem(LOGGED_IN_USER_ID_KEY);
 
-    const { storeId, organizationId } = getStoreDetails();
+  const { storeId, organizationId } = getStoreDetails();
+
+  if (id && storeId && organizationId) {
+    let user;
 
     try {
-      if (id && storeId && organizationId) {
-        const user = await getActiveUser();
-
-        if (user._id) {
-          return redirect({ to: "/account" });
-        }
-      }
-    } catch (e) {
+      user = await getActiveUser();
+    } catch (_error) {
       localStorage.removeItem(LOGGED_IN_USER_ID_KEY);
-      return redirect({ to: "/login" });
+      throw redirect({ to: "/login" });
     }
-  },
+
+    if (user._id) {
+      throw redirect({ to: "/account" });
+    }
+  }
+}
+
+export const Route = createFileRoute("/signup")({
+  beforeLoad: signupBeforeLoad,
 
   component: () => <Signup />,
 });
@@ -99,7 +104,7 @@ const Signup = () => {
   const hasTrackedSignupEntry = useRef(false);
 
   const { store } = useStoreContext();
-  const { track } = useStorefrontObservability();
+  const { baseContext, track } = useStorefrontObservability();
 
   const navigate = useNavigate();
 
@@ -138,7 +143,16 @@ const Signup = () => {
       }
     },
     onError: (error) => {
-      console.log("error", error);
+      void emitStorefrontFailure({
+        route: baseContext.route,
+        journey: "auth",
+        step: "auth_request",
+        error,
+        context: {
+          email: form.getValues("email"),
+        },
+        track,
+      }).catch(() => undefined);
     },
   });
 

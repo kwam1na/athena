@@ -24,6 +24,8 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowLeft } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useStorefrontObservability } from "@/hooks/useStorefrontObservability";
+import { emitStorefrontFailure } from "@/lib/storefrontFailureObservability";
 
 export const Route = createFileRoute("/shop/checkout/complete/")({
   component: () => <CheckoutCompleteView />,
@@ -33,12 +35,29 @@ export const CheckoutComplete = () => {
   const { activeSession, onlineOrder } = useCheckout();
   const { bag } = useShoppingBag();
   const { userId } = useAuth();
+  const { baseContext, track } = useStorefrontObservability();
   const queryClient = useQueryClient();
   const bagQueries = useBagQueries();
   const { track } = useStorefrontObservability();
 
   const [hasOrderError, setHasOrderError] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
+
+  const reportCheckoutFailure = (
+    error: unknown,
+    step: "checkout_completion" | "checkout_completion_retry",
+  ) => {
+    void emitStorefrontFailure({
+      route: baseContext.route,
+      journey: "checkout",
+      step,
+      error,
+      context: {
+        checkoutSessionId: activeSession._id,
+      },
+      track,
+    }).catch(() => undefined);
+  };
 
   const isGuest = userId === undefined;
 
@@ -69,7 +88,7 @@ export const CheckoutComplete = () => {
 
         queryClient.invalidateQueries({ queryKey: bagQueries.activeBagKey() });
       } catch (error) {
-        console.error("Failed to complete checkout:", error);
+        reportCheckoutFailure(error, "checkout_completion");
         setHasOrderError(true);
       }
     };
@@ -97,7 +116,7 @@ export const CheckoutComplete = () => {
 
       queryClient.invalidateQueries({ queryKey: bagQueries.activeBagKey() });
     } catch (error) {
-      console.error("Failed to retry order creation:", error);
+      reportCheckoutFailure(error, "checkout_completion_retry");
       setHasOrderError(true);
     } finally {
       setIsRetrying(false);

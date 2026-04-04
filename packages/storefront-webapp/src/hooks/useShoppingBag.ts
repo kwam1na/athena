@@ -24,6 +24,8 @@ import {
 } from "@athena/webapp";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { useStorefrontObservability } from "@/hooks/useStorefrontObservability";
+import { emitStorefrontFailure } from "@/lib/storefrontFailureObservability";
 
 export type ShoppingBagAction =
   | "idle"
@@ -49,6 +51,7 @@ export type Discount = {
 
 export const useShoppingBag = () => {
   const queryClient = useQueryClient();
+  const { baseContext, track } = useStorefrontObservability();
 
   const [operationSuccessful, setOperationSuccessful] = useState<
     boolean | null
@@ -66,6 +69,33 @@ export const useShoppingBag = () => {
   const promoCodeQueries = usePromoCodesQueries();
 
   const { data: promoCodeItems } = useQuery(promoCodeQueries.getAllItems());
+
+  const reportFailure = ({
+    step,
+    error,
+    context,
+  }: {
+    step:
+      | "bag_item_addition"
+      | "bag_item_update"
+      | "bag_item_removal"
+      | "bag_clear"
+      | "checkout_session_creation"
+      | "payment_submission";
+    error: unknown;
+    context?: Record<string, unknown>;
+  }) => {
+    void emitStorefrontFailure({
+      route: baseContext.route,
+      journey: step.startsWith("checkout") || step === "payment_submission"
+        ? "checkout"
+        : "bag",
+      step,
+      error,
+      context,
+      track,
+    }).catch(() => undefined);
+  };
 
   const addNewSavedBagItemMutation = useMutation({
     mutationFn: ({
@@ -207,8 +237,13 @@ export const useShoppingBag = () => {
       setOperationSuccessful(true);
       queryClient.invalidateQueries({ queryKey: bagQueries.activeBagKey() });
     },
-    onError: () => {
+    onError: (error, variables) => {
       setOperationSuccessful(false);
+      reportFailure({
+        step: "bag_item_addition",
+        error,
+        context: variables,
+      });
     },
   });
 
@@ -223,8 +258,13 @@ export const useShoppingBag = () => {
       setOperationSuccessful(true);
       queryClient.invalidateQueries({ queryKey: bagQueries.activeBagKey() });
     },
-    onError: () => {
+    onError: (error, variables) => {
       setOperationSuccessful(false);
+      reportFailure({
+        step: "bag_item_update",
+        error,
+        context: variables,
+      });
     },
   });
 
@@ -237,8 +277,13 @@ export const useShoppingBag = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: bagQueries.activeBagKey() });
     },
-    onError: () => {
+    onError: (error, variables) => {
       setOperationSuccessful(false);
+      reportFailure({
+        step: "bag_item_removal",
+        error,
+        context: variables,
+      });
     },
   });
 
@@ -252,8 +297,15 @@ export const useShoppingBag = () => {
         queryKey: bagQueries.activeBagKey(),
       });
     },
-    onError: () => {
+    onError: (error) => {
       setOperationSuccessful(false);
+      reportFailure({
+        step: "bag_clear",
+        error,
+        context: {
+          bagId: bag?._id,
+        },
+      });
     },
   });
 
@@ -367,8 +419,13 @@ export const useShoppingBag = () => {
       createCheckoutSession({
         bagId,
       }),
-    onError: () => {
+    onError: (error, variables) => {
       setOperationSuccessful(false);
+      reportFailure({
+        step: "checkout_session_creation",
+        error,
+        context: variables,
+      });
     },
     onSuccess: (res) => {
       setOperationSuccessful(true);
@@ -401,8 +458,17 @@ export const useShoppingBag = () => {
         action,
         orderDetails,
       }),
-    onError: () => {
+    onError: (error, variables) => {
       setOperationSuccessful(false);
+      reportFailure({
+        step: "payment_submission",
+        error,
+        context: {
+          sessionId: variables.sessionId,
+          customerEmail: variables.customerEmail,
+          checkoutAction: variables.action,
+        },
+      });
     },
     onSuccess: () => {
       setOperationSuccessful(true);
