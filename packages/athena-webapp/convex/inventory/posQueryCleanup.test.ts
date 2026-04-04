@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { spawnSync } from "node:child_process";
 
 const projectRoot = process.cwd();
 const readProjectFile = (...segments: string[]) =>
@@ -44,5 +45,27 @@ describe("V26-173 POS query cleanup", () => {
     expect(source).not.toContain(
       '.withIndex("by_storeId", (q) => q.eq("storeId", args.storeId)) .filter((q) => q.and( q.eq(q.field("status"), "completed"), q.gte(q.field("completedAt"), startOfDay), q.lte(q.field("completedAt"), endOfDay) ) )'
     );
+  });
+
+  it("passes Convex lint without a file-level waiver on pos.ts", () => {
+    const source = readProjectFile("convex", "inventory", "pos.ts");
+
+    expect(source).not.toMatch(
+      /^\/\* eslint-disable .*@convex-dev\/no-collect-in-query.*\*\/$/m
+    );
+    expect(source).not.toMatch(
+      /^\/\* eslint-disable .*@convex-dev\/explicit-table-ids.*\*\/$/m
+    );
+
+    const lintResult = spawnSync(
+      "bunx",
+      ["eslint", "convex/inventory/pos.ts"],
+      {
+        cwd: projectRoot,
+        encoding: "utf8",
+      }
+    );
+
+    expect(lintResult.status, lintResult.stderr || lintResult.stdout).toBe(0);
   });
 });
