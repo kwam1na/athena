@@ -9,6 +9,7 @@ import { formatNumber } from "../../utils/formatNumber";
 import { Button } from "../ui/button";
 import AnalyticsCombinedUsers from "./AnalyticsCombinedUsers";
 import { Link } from "@tanstack/react-router";
+import StorefrontObservabilityPanel from "./StorefrontObservabilityPanel";
 
 const StoreVisitors = () => {
   const { activeStore } = useGetActiveStore();
@@ -136,6 +137,7 @@ export default function AnalyticsView() {
           </div>
         </div>
         <div className="space-y-16">
+          <StorefrontObservabilityPanel />
           <AnalyticsCombinedUsers items={items} />
           <div className="grid grid-cols-2 gap-16">
             <AnalyticsProducts items={items} />
