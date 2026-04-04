@@ -3,8 +3,11 @@ import { Link } from "@tanstack/react-router";
 import { X } from "lucide-react";
 import { AnimatedCard } from "../ui/AnimatedCard";
 import { Button } from "../ui/button";
-import { postAnalytics } from "@/api/analytics";
-import { useTrackEvent } from "@/hooks/useTrackEvent";
+import { useStorefrontObservability } from "@/hooks/useStorefrontObservability";
+import {
+  createRewardsAlertDismissedEvent,
+  createRewardsAlertShopNowEvent,
+} from "@/lib/storefrontJourneyEvents";
 
 interface RewardsAlertProps {
   isOpen: boolean;
@@ -12,24 +15,16 @@ interface RewardsAlertProps {
 }
 
 export function RewardsAlert({ isOpen, onClose }: RewardsAlertProps) {
+  const { track } = useStorefrontObservability();
+
   const onRewardsAlertClose = () => {
     onClose();
-
-    postAnalytics({
-      action: "dismissed_rewards_alert",
-      data: {},
-    });
+    void track(createRewardsAlertDismissedEvent());
   };
 
-  // Track when the alert is actioned on
   const handleShopNow = () => {
     onClose();
-
-    postAnalytics({
-      action: "clicked_shop_now",
-      origin: "rewards_alert",
-      data: {},
-    });
+    void track(createRewardsAlertShopNowEvent());
   };
 
   return (

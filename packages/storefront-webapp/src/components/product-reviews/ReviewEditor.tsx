@@ -1,7 +1,7 @@
 import { useStoreContext } from "@/contexts/StoreContext";
 import { useOnlineOrderQueries } from "@/lib/queries/onlineOrder";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams, Link } from "@tanstack/react-router";
 import NotFound from "../states/not-found/NotFound";
 import { FadeIn } from "../common/FadeIn";
@@ -24,8 +24,11 @@ import { SuccessMessage } from "./SuccessMessage";
 import { ErrorMessage } from "./ErrorMessage";
 import { ExistingReviewMessage } from "./ExistingReviewMessage";
 import { ArrowRight, CheckCircle } from "lucide-react";
-import { useTrackEvent } from "@/hooks/useTrackEvent";
-import { postAnalytics } from "@/api/analytics";
+import { useStorefrontObservability } from "@/hooks/useStorefrontObservability";
+import {
+  createReviewEditorViewedEvent,
+  createReviewSubmittedEvent,
+} from "@/lib/storefrontJourneyEvents";
 import { cn } from "@/lib/utils";
 
 const PublishedReviewMessage = ({ productId }: { productId: string }) => {
@@ -87,15 +90,22 @@ export const ReviewEditor = () => {
 
   const item: any = data?.items?.find((item: any) => item._id == orderItemId);
 
-  useTrackEvent({
-    action: "navigated_to_product_review_editor",
-    data: {
-      orderId: orderId || "",
-      orderItemId: orderItemId || "",
-      product: item?.productId,
-      productImageUrl: item?.productImage,
-    },
-  });
+  const { track } = useStorefrontObservability();
+  const hasTrackedView = useRef(false);
+
+  useEffect(() => {
+    if (!hasTrackedView.current && item) {
+      hasTrackedView.current = true;
+      void track(
+        createReviewEditorViewedEvent({
+          orderId: orderId || "",
+          orderItemId: orderItemId || "",
+          productId: item?.productId,
+          productImageUrl: item?.productImage,
+        }),
+      );
+    }
+  }, [item, orderId, orderItemId, track]);
 
   // Check if review already exists for this order item
   const { data: existingReview, isLoading: isLoadingReview } = useQuery({
@@ -168,7 +178,7 @@ export const ReviewEditor = () => {
       setIsSubmitting(true);
 
       await Promise.all([
-        await createReview({
+        createReview({
           orderId: orderId as any,
           orderNumber: orderData?.orderNumber,
           orderItemId: orderItemId as any,
@@ -179,16 +189,15 @@ export const ReviewEditor = () => {
           ratings,
         }),
 
-        await postAnalytics({
-          action: "submitted_a_product_review",
-          data: {
+        track(
+          createReviewSubmittedEvent({
             orderId: orderId || "",
             orderItemId: orderItemId || "",
             productId: item.productId,
             productSkuId: item.productSkuId,
             productImageUrl: item.productImage,
-          },
-        }),
+          }),
+        ),
       ]);
 
       // Invalidate all review queries
