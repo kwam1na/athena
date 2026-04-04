@@ -1,6 +1,11 @@
 import { v } from "convex/values";
-import { mutation, query, internalMutation } from "../_generated/server";
-import { api } from "../_generated/api";
+import {
+  mutation,
+  query,
+  internalMutation,
+  MutationCtx,
+  QueryCtx,
+} from "../_generated/server";
 import { Id } from "../_generated/dataModel";
 import {
   acquireInventoryHoldsBatch,
@@ -21,6 +26,96 @@ import {
 import { calculateSessionExpiration } from "./helpers/sessionExpiration";
 import { createTransactionFromSessionHandler } from "./pos";
 
+const MAX_SESSION_ITEMS = 200;
+const SESSION_QUERY_CANDIDATE_LIMIT = 200;
+const ACTIVE_SESSION_CANDIDATE_LIMIT = 100;
+const SESSION_CLEANUP_BATCH_SIZE = 100;
+
+function buildNextSessionNumber(
+  latestSessionNumber: string | undefined,
+  prefix: string
+) {
+  const lastSequence = latestSessionNumber
+    ? Number.parseInt(latestSessionNumber.split("-").at(-1) ?? "0", 10)
+    : 0;
+  const nextSequence = Number.isFinite(lastSequence) ? lastSequence + 1 : 1;
+  return `${prefix}-${String(nextSequence).padStart(3, "0")}`;
+}
+
+async function loadPosSessionItems(ctx: QueryCtx, sessionId: Id<"posSession">) {
+  const cartItemsRaw = await ctx.db
+    .query("posSessionItem")
+    .withIndex("by_sessionId", (q) => q.eq("sessionId", sessionId))
+    .take(MAX_SESSION_ITEMS);
+
+  return Promise.all(
+    cartItemsRaw.map(async (item) => {
+      const sku = await ctx.db.get("productSku", item.productSkuId);
+      let colorName: string | undefined;
+      if (sku?.color) {
+        const color = await ctx.db.get("color", sku.color);
+        colorName = color?.name;
+      }
+      return {
+        ...item,
+        color: colorName,
+      };
+    })
+  );
+}
+
+async function listPosSessionsByStatusBefore(
+  ctx: MutationCtx,
+  status: "active" | "void" | "held",
+  expiresBefore: number
+) {
+  const sessions = [];
+  let cursor: string | null = null;
+
+  while (true) {
+    const page = await ctx.db
+      .query("posSession")
+      .withIndex("by_status_and_expiresAt", (q) =>
+        q.eq("status", status).lt("expiresAt", expiresBefore)
+      )
+      .paginate({ cursor, numItems: SESSION_CLEANUP_BATCH_SIZE });
+
+    sessions.push(...page.page);
+    if (page.isDone) {
+      break;
+    }
+    cursor = page.continueCursor;
+  }
+
+  return sessions;
+}
+
+async function listPosSessionsForStoreStatus(
+  ctx: MutationCtx,
+  storeId: Id<"store">,
+  status: "completed" | "void" | "expired"
+) {
+  const sessions = [];
+  let cursor: string | null = null;
+
+  while (true) {
+    const page = await ctx.db
+      .query("posSession")
+      .withIndex("by_storeId_and_status", (q) =>
+        q.eq("storeId", storeId).eq("status", status)
+      )
+      .paginate({ cursor, numItems: SESSION_CLEANUP_BATCH_SIZE });
+
+    sessions.push(...page.page);
+    if (page.isDone) {
+      break;
+    }
+    cursor = page.continueCursor;
+  }
+
+  return sessions;
+}
+
 // Get sessions for a store (with filtering)
 export const getStoreSessions = query({
   args: {
@@ -32,62 +127,83 @@ export const getStoreSessions = query({
   },
   handler: async (ctx, args) => {
     const { storeId, status, limit = 50 } = args;
+    const boundedLimit = Math.min(limit, SESSION_QUERY_CANDIDATE_LIMIT);
 
-    let sessionsQuery = ctx.db
-      .query("posSession")
-      .withIndex("by_storeId", (q) => q.eq("storeId", storeId));
+    let sessionsQuery;
+    let indexedTerminalFilter = false;
+    let indexedCashierFilter = false;
 
-    if (status) {
+    if (status && args.terminalId) {
+      indexedTerminalFilter = true;
+      sessionsQuery = ctx.db
+        .query("posSession")
+        .withIndex("by_storeId_status_terminalId", (q) =>
+          q
+            .eq("storeId", storeId)
+            .eq("status", status)
+            .eq("terminalId", args.terminalId!)
+        );
+    } else if (status && args.cashierId) {
+      indexedCashierFilter = true;
+      sessionsQuery = ctx.db
+        .query("posSession")
+        .withIndex("by_storeId_status_cashierId", (q) =>
+          q
+            .eq("storeId", storeId)
+            .eq("status", status)
+            .eq("cashierId", args.cashierId!)
+        );
+    } else if (args.terminalId) {
+      indexedTerminalFilter = true;
+      sessionsQuery = ctx.db
+        .query("posSession")
+        .withIndex("by_storeId_terminalId", (q) =>
+          q.eq("storeId", storeId).eq("terminalId", args.terminalId!)
+        );
+    } else if (args.cashierId) {
+      indexedCashierFilter = true;
+      sessionsQuery = ctx.db
+        .query("posSession")
+        .withIndex("by_storeId_cashierId", (q) =>
+          q.eq("storeId", storeId).eq("cashierId", args.cashierId!)
+        );
+    } else if (status) {
       sessionsQuery = ctx.db
         .query("posSession")
         .withIndex("by_storeId_and_status", (q) =>
           q.eq("storeId", storeId).eq("status", status)
         );
+    } else {
+      sessionsQuery = ctx.db
+        .query("posSession")
+        .withIndex("by_storeId", (q) => q.eq("storeId", storeId));
     }
 
-    let sessions = await sessionsQuery.order("desc").take(limit);
+    let sessions = await sessionsQuery.order("desc").take(boundedLimit);
 
-    if (args.terminalId) {
+    if (args.terminalId && !indexedTerminalFilter) {
       sessions = sessions.filter(
         (session) => session.terminalId === args.terminalId
       );
     }
 
-    if (args.cashierId) {
+    if (args.cashierId && !indexedCashierFilter) {
       sessions = sessions.filter(
         (session) => session.cashierId === args.cashierId
       );
     }
+
+    sessions = sessions.slice(0, limit);
 
     // Enrich with customer info and cart items if available
     const enrichedSessions = await Promise.all(
       sessions.map(async (session) => {
         let customer = null;
         if (session.customerId) {
-          customer = await ctx.db.get(session.customerId);
+          customer = await ctx.db.get("posCustomer", session.customerId);
         }
 
-        // Get cart items from posSessionItem table and enrich with color from SKU
-        const cartItemsRaw = await ctx.db
-          .query("posSessionItem")
-          .withIndex("by_sessionId", (q) => q.eq("sessionId", session._id))
-          .collect();
-
-        const cartItems = await Promise.all(
-          cartItemsRaw.map(async (item) => {
-            // Fetch SKU to get color
-            const sku = await ctx.db.get(item.productSkuId);
-            let colorName: string | undefined;
-            if (sku?.color) {
-              const color = await ctx.db.get(sku.color);
-              colorName = color?.name;
-            }
-            return {
-              ...item,
-              color: colorName,
-            };
-          })
-        );
+        const cartItems = await loadPosSessionItems(ctx, session._id);
 
         return {
           ...session,
@@ -105,36 +221,16 @@ export const getStoreSessions = query({
 export const getSessionById = query({
   args: { sessionId: v.id("posSession") },
   handler: async (ctx, args) => {
-    const session = await ctx.db.get(args.sessionId);
+    const session = await ctx.db.get("posSession", args.sessionId);
     if (!session) return null;
 
     // Get customer info if linked
     let customer = null;
     if (session.customerId) {
-      customer = await ctx.db.get(session.customerId);
+      customer = await ctx.db.get("posCustomer", session.customerId);
     }
 
-    // Get cart items from posSessionItem table and enrich with color from SKU
-    const cartItemsRaw = await ctx.db
-      .query("posSessionItem")
-      .withIndex("by_sessionId", (q) => q.eq("sessionId", session._id))
-      .collect();
-
-    const cartItems = await Promise.all(
-      cartItemsRaw.map(async (item) => {
-        // Fetch SKU to get color
-        const sku = await ctx.db.get(item.productSkuId);
-        let colorName: string | undefined;
-        if (sku?.color) {
-          const color = await ctx.db.get(sku.color);
-          colorName = color?.name;
-        }
-        return {
-          ...item,
-          color: colorName,
-        };
-      })
-    );
+    const cartItems = await loadPosSessionItems(ctx, session._id);
 
     return {
       ...session,
@@ -157,27 +253,38 @@ export const createSession = mutation({
     const now = Date.now();
     const registerNumber = args.registerNumber || "1";
 
-    // Check for existing active session on this register and complete it
-    const existingActiveSessions = await ctx.db
+    const existingTerminalSessions = await ctx.db
       .query("posSession")
-      .withIndex("by_storeId_and_status", (q) =>
-        q.eq("storeId", args.storeId).eq("status", "active")
+      .withIndex("by_storeId_status_terminalId", (q) =>
+        q
+          .eq("storeId", args.storeId)
+          .eq("status", "active")
+          .eq("terminalId", args.terminalId)
       )
-      .collect();
+      .take(ACTIVE_SESSION_CANDIDATE_LIMIT);
 
-    // Filter out expired sessions (even if status is still "active")
-    // Only consider truly active (non-expired) sessions for auto-hold/completion
-    const nonExpiredActiveSessions = existingActiveSessions.filter(
+    const nonExpiredTerminalSessions = existingTerminalSessions.filter(
       (session) => !session.expiresAt || session.expiresAt >= now
     );
 
-    // Filter by terminal id and close any existing active session
-    const existingSession = nonExpiredActiveSessions.find(
-      (s) => s.terminalId === args.terminalId && s.cashierId === args.cashierId
+    const existingSession = nonExpiredTerminalSessions.find(
+      (session) => session.cashierId === args.cashierId
     );
 
-    const existingSessionOnDifferentTerminal = nonExpiredActiveSessions.find(
-      (s) => s.terminalId !== args.terminalId && s.cashierId === args.cashierId
+    const cashierSessions = args.cashierId
+      ? await ctx.db
+          .query("posSession")
+          .withIndex("by_cashierId_and_status", (q) =>
+            q.eq("cashierId", args.cashierId!).eq("status", "active")
+          )
+          .take(ACTIVE_SESSION_CANDIDATE_LIMIT)
+      : [];
+
+    const existingSessionOnDifferentTerminal = cashierSessions.find(
+      (session) =>
+        session.storeId === args.storeId &&
+        session.terminalId !== args.terminalId &&
+        (!session.expiresAt || session.expiresAt >= now)
     );
 
     if (existingSessionOnDifferentTerminal) {
@@ -194,11 +301,11 @@ export const createSession = mutation({
         .withIndex("by_sessionId", (q) =>
           q.eq("sessionId", existingSession._id)
         )
-        .collect();
+        .take(MAX_SESSION_ITEMS);
 
       // Auto-hold the existing session if it has items
       if (existingItems.length) {
-        await ctx.db.patch(existingSession._id, {
+        await ctx.db.patch("posSession", existingSession._id, {
           status: "held",
           heldAt: now,
           updatedAt: now,
@@ -215,13 +322,16 @@ export const createSession = mutation({
       };
     }
 
-    // Generate session number
-    const sessionCount = await ctx.db
+    const latestSession = await ctx.db
       .query("posSession")
       .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
-      .collect();
+      .order("desc")
+      .first();
 
-    const sessionNumber = `SES-${String(sessionCount.length + 1).padStart(3, "0")}`;
+    const sessionNumber = buildNextSessionNumber(
+      latestSession?.sessionNumber,
+      "SES"
+    );
 
     // Calculate session expiration time
     const expiresAt = calculateSessionExpiration(now);
@@ -273,7 +383,7 @@ export const updateSession = mutation({
     );
     if (!validation.success) {
       // For completed/void sessions, return current state without update
-      const currentSession = await ctx.db.get(sessionId);
+      const currentSession = await ctx.db.get("posSession", sessionId);
       console.warn(
         `Attempted to update ${currentSession?.status} session ${sessionId}. Ignoring update.`
       );
@@ -287,7 +397,7 @@ export const updateSession = mutation({
     const expiresAt = calculateSessionExpiration(now);
 
     // Update session with new data
-    await ctx.db.patch(sessionId, {
+    await ctx.db.patch("posSession", sessionId, {
       ...updates,
       updatedAt: now,
       expiresAt,
@@ -319,14 +429,14 @@ export const holdSession = mutation({
     }
 
     // Get current session to access expiresAt
-    const session = await ctx.db.get(args.sessionId);
+    const session = await ctx.db.get("posSession", args.sessionId);
     if (!session) {
       return error("Session not found");
     }
 
     // Keep inventory holds in place when suspending
     // DO NOT update expiresAt - let holds expire naturally if not resumed
-    await ctx.db.patch(args.sessionId, {
+    await ctx.db.patch("posSession", args.sessionId, {
       status: "held",
       heldAt: now,
       updatedAt: now,
@@ -349,7 +459,7 @@ export const resumeSession = mutation({
     const now = Date.now();
 
     // Get the session
-    const session = await ctx.db.get(args.sessionId);
+    const session = await ctx.db.get("posSession", args.sessionId);
     if (!session) {
       return error("Session not found");
     }
@@ -365,9 +475,10 @@ export const resumeSession = mutation({
     // Check that this cashier does not have an active session on a different terminal
     const cashierSessions = await ctx.db
       .query("posSession")
-      .withIndex("by_cashierId", (q) => q.eq("cashierId", args.cashierId))
-      .filter((q) => q.eq(q.field("status"), "active"))
-      .collect();
+      .withIndex("by_cashierId_and_status", (q) =>
+        q.eq("cashierId", args.cashierId).eq("status", "active")
+      )
+      .take(ACTIVE_SESSION_CANDIDATE_LIMIT);
 
     const activeSessionsOnOtherTerminals = cashierSessions.filter(
       (s) => s.expiresAt > now && s.terminalId !== args.terminalId
@@ -381,7 +492,7 @@ export const resumeSession = mutation({
     const expiresAt = calculateSessionExpiration(now);
 
     // Update session status to active
-    await ctx.db.patch(args.sessionId, {
+    await ctx.db.patch("posSession", args.sessionId, {
       status: "active",
       resumedAt: now,
       updatedAt: now,
@@ -423,7 +534,7 @@ export const completeSession = mutation({
     })
   ),
   handler: async (ctx, args) => {
-    const session = await ctx.db.get(args.sessionId);
+    const session = await ctx.db.get("posSession", args.sessionId);
     if (!session) {
       return error("Session not found");
     }
@@ -440,7 +551,7 @@ export const completeSession = mutation({
 
     // Mark session as completed and lock in final transaction totals
     // This ensures audit integrity by capturing exact values at completion time
-    await ctx.db.patch(args.sessionId, {
+    await ctx.db.patch("posSession", args.sessionId, {
       status: "completed",
       completedAt: now,
       updatedAt: now,
@@ -490,7 +601,7 @@ export const voidSession = mutation({
     const now = Date.now();
 
     // Get the session
-    const session = await ctx.db.get(args.sessionId);
+    const session = await ctx.db.get("posSession", args.sessionId);
     if (!session) {
       return error("Session not found");
     }
@@ -499,7 +610,7 @@ export const voidSession = mutation({
     const items = await ctx.db
       .query("posSessionItem")
       .withIndex("by_sessionId", (q) => q.eq("sessionId", args.sessionId))
-      .collect();
+      .take(MAX_SESSION_ITEMS);
 
     // Calculate total quantities held per SKU
     const heldQuantities = new Map<Id<"productSku">, number>();
@@ -522,7 +633,7 @@ export const voidSession = mutation({
     // Items remain associated with voided session for audit trail
 
     // Mark session as void
-    await ctx.db.patch(args.sessionId, {
+    await ctx.db.patch("posSession", args.sessionId, {
       status: "void",
       updatedAt: now,
       notes: args.voidReason,
@@ -550,7 +661,7 @@ export const releaseSessionInventoryHoldsAndDeleteItems = mutation({
   ),
   handler: async (ctx, args) => {
     // Get the session
-    const session = await ctx.db.get(args.sessionId);
+    const session = await ctx.db.get("posSession", args.sessionId);
     if (!session) {
       return error("Session not found");
     }
@@ -559,7 +670,7 @@ export const releaseSessionInventoryHoldsAndDeleteItems = mutation({
     const items = await ctx.db
       .query("posSessionItem")
       .withIndex("by_sessionId", (q) => q.eq("sessionId", args.sessionId))
-      .collect();
+      .take(MAX_SESSION_ITEMS);
 
     // Calculate total quantities held per SKU
     const heldQuantities = new Map<Id<"productSku">, number>();
@@ -580,7 +691,9 @@ export const releaseSessionInventoryHoldsAndDeleteItems = mutation({
 
     // Delete all items for this session
     const itemIds = items.map((item) => item._id);
-    await Promise.all(itemIds.map((itemId) => ctx.db.delete(itemId)));
+    await Promise.all(
+      itemIds.map((itemId) => ctx.db.delete("posSessionItem", itemId))
+    );
 
     return { success: true as const, data: { sessionId: args.sessionId } };
   },
@@ -596,13 +709,27 @@ export const getActiveSession = query({
   },
   handler: async (ctx, args) => {
     const now = Date.now();
-    let query = ctx.db
-      .query("posSession")
-      .withIndex("by_storeId_and_status", (q) =>
-        q.eq("storeId", args.storeId).eq("status", "active")
-      );
-
-    const activeSessions = await query.collect();
+    const activeSessions = args.cashierId
+      ? await ctx.db
+          .query("posSession")
+          .withIndex("by_storeId_status_cashierId", (q) =>
+            q
+              .eq("storeId", args.storeId)
+              .eq("status", "active")
+              .eq("cashierId", args.cashierId!)
+          )
+          .order("desc")
+          .take(ACTIVE_SESSION_CANDIDATE_LIMIT)
+      : await ctx.db
+          .query("posSession")
+          .withIndex("by_storeId_status_terminalId", (q) =>
+            q
+              .eq("storeId", args.storeId)
+              .eq("status", "active")
+              .eq("terminalId", args.terminalId)
+          )
+          .order("desc")
+          .take(ACTIVE_SESSION_CANDIDATE_LIMIT);
 
     // Filter out expired sessions (even if status is still "active")
     // This prevents returning sessions that expired but haven't been marked by cron yet
@@ -614,6 +741,9 @@ export const getActiveSession = query({
     let filteredSessions = nonExpiredSessions;
 
     if (args.cashierId) {
+      filteredSessions = filteredSessions.filter(
+        (s) => s.terminalId === args.terminalId
+      );
       filteredSessions = filteredSessions.filter(
         (s) => s.cashierId === args.cashierId
       );
@@ -635,14 +765,10 @@ export const getActiveSession = query({
     // Get customer info if linked
     let customer = null;
     if (activeSession.customerId) {
-      customer = await ctx.db.get(activeSession.customerId);
+      customer = await ctx.db.get("posCustomer", activeSession.customerId);
     }
 
-    // Get cart items from posSessionItem table
-    const cartItems = await ctx.db
-      .query("posSessionItem")
-      .withIndex("by_sessionId", (q) => q.eq("sessionId", activeSession._id))
-      .collect();
+    const cartItems = await loadPosSessionItems(ctx, activeSession._id);
 
     return {
       ...activeSession,
@@ -661,21 +787,9 @@ export const releasePosSessionItems = internalMutation({
     // Find all active and void sessions that have expired
     const [expiredActiveSessions, expiredVoidSessions, expiredHeldSessions] =
       await Promise.all([
-        ctx.db
-          .query("posSession")
-          .withIndex("by_status", (q) => q.eq("status", "active"))
-          .filter((q) => q.lt(q.field("expiresAt"), now))
-          .collect(),
-        ctx.db
-          .query("posSession")
-          .withIndex("by_status", (q) => q.eq("status", "void"))
-          .filter((q) => q.lt(q.field("expiresAt"), now))
-          .collect(),
-        ctx.db
-          .query("posSession")
-          .withIndex("by_status", (q) => q.eq("status", "held"))
-          .filter((q) => q.lt(q.field("expiresAt"), now))
-          .collect(),
+        listPosSessionsByStatusBefore(ctx, "active", now),
+        listPosSessionsByStatusBefore(ctx, "void", now),
+        listPosSessionsByStatusBefore(ctx, "held", now),
       ]);
 
     const expiredSessions = [
@@ -702,7 +816,7 @@ export const releasePosSessionItems = internalMutation({
         const items = await ctx.db
           .query("posSessionItem")
           .withIndex("by_sessionId", (q) => q.eq("sessionId", session._id))
-          .collect();
+          .take(MAX_SESSION_ITEMS);
 
         // Calculate total quantities held per SKU
         const heldQuantities = new Map<Id<"productSku">, number>();
@@ -728,7 +842,7 @@ export const releasePosSessionItems = internalMutation({
         // Items remain associated with expired session for audit trail
 
         // Mark session as expired
-        await ctx.db.patch(session._id, {
+        await ctx.db.patch("posSession", session._id, {
           status: "expired",
           updatedAt: now,
           notes: "Session expired - inventory holds released",
@@ -764,23 +878,24 @@ export const cleanupOldSessions = mutation({
     const cutoffTime =
       Date.now() - (args.olderThanDays || 30) * 24 * 60 * 60 * 1000;
 
-    const oldSessions = await ctx.db
-      .query("posSession")
-      .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
-      .filter((q) =>
-        q.and(
-          q.or(
-            q.eq(q.field("status"), "completed"),
-            q.eq(q.field("status"), "void"),
-            q.eq(q.field("status"), "expired")
-          ),
-          q.lt(q.field("updatedAt"), cutoffTime)
+    const oldSessions = (
+      await Promise.all(
+        ["completed", "void", "expired"].map((status) =>
+          listPosSessionsForStoreStatus(
+            ctx,
+            args.storeId,
+            status as "completed" | "void" | "expired"
+          )
         )
       )
-      .collect();
+    )
+      .flat()
+      .filter((session) => session.updatedAt < cutoffTime);
 
     // Delete old sessions
-    await Promise.all(oldSessions.map((session) => ctx.db.delete(session._id)));
+    await Promise.all(
+      oldSessions.map((session) => ctx.db.delete("posSession", session._id))
+    );
 
     return oldSessions.length;
   },
@@ -793,14 +908,28 @@ export const expireAllSessionsForCashier = mutation({
   },
   handler: async (ctx, args) => {
     const now = Date.now();
-    const sessions = await ctx.db
-      .query("posSession")
-      .withIndex("by_cashierId", (q) => q.eq("cashierId", args.cashierId))
-      .filter((q) => q.neq(q.field("terminalId"), args.terminalId))
-      .collect();
+    const [activeSessions, heldSessions] = await Promise.all([
+      ctx.db
+        .query("posSession")
+        .withIndex("by_cashierId_and_status", (q) =>
+          q.eq("cashierId", args.cashierId).eq("status", "active")
+        )
+        .take(ACTIVE_SESSION_CANDIDATE_LIMIT),
+      ctx.db
+        .query("posSession")
+        .withIndex("by_cashierId_and_status", (q) =>
+          q.eq("cashierId", args.cashierId).eq("status", "held")
+        )
+        .take(ACTIVE_SESSION_CANDIDATE_LIMIT),
+    ]);
+    const sessions = [...activeSessions, ...heldSessions];
 
     await Promise.all(
-      sessions.map((session) => ctx.db.patch(session._id, { expiresAt: now }))
+      sessions
+        .filter((session) => session.terminalId !== args.terminalId)
+        .map((session) =>
+          ctx.db.patch("posSession", session._id, { expiresAt: now })
+        )
     );
 
     return { success: true as const, data: { cashierId: args.cashierId } };
