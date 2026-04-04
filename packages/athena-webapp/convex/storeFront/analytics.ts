@@ -1,6 +1,10 @@
 import { v } from "convex/values";
 import { internalQuery, mutation, query, QueryCtx } from "../_generated/server";
 import { Doc, Id } from "../_generated/dataModel";
+import {
+  buildStorefrontObservabilityReport,
+  STOREFRONT_OBSERVABILITY_ACTION,
+} from "./storefrontObservabilityReport";
 
 const entity = "analytics";
 const MAX_ANALYTICS_RESULTS = 500;
@@ -9,6 +13,7 @@ const MAX_PRODUCT_VIEW_RECORDS = 2000;
 const MAX_PROMO_CODE_ANALYTICS_RESULTS = 2000;
 const MAX_REPORTING_ORDERS = 1000;
 const MAX_PRODUCT_SKUS_PER_PRODUCT = 50;
+const MAX_STOREFRONT_OBSERVABILITY_RESULTS = 2000;
 
 function getAnalyticsByStoreQuery(
   ctx: QueryCtx,
@@ -77,6 +82,41 @@ function getCompletedOrdersQuery(
   return ctx.db.query("onlineOrder").withIndex("by_storeId_status", (q) =>
     q.eq("storeId", storeId).eq("status", "completed")
   );
+}
+
+function getAnalyticsByStoreAndActionQuery(
+  ctx: QueryCtx,
+  storeId: Id<"store">,
+  action: string,
+  startDate?: number,
+  endDate?: number
+) {
+  if (startDate !== undefined && endDate !== undefined) {
+    return ctx.db.query(entity).withIndex("by_storeId_action", (q) =>
+      q.eq("storeId", storeId)
+        .eq("action", action)
+        .gte("_creationTime", startDate)
+        .lte("_creationTime", endDate)
+    );
+  }
+
+  if (startDate !== undefined) {
+    return ctx.db.query(entity).withIndex("by_storeId_action", (q) =>
+      q.eq("storeId", storeId).eq("action", action).gte("_creationTime", startDate)
+    );
+  }
+
+  if (endDate !== undefined) {
+    return ctx.db.query(entity).withIndex("by_storeId_action", (q) =>
+      q.eq("storeId", storeId).eq("action", action).lte("_creationTime", endDate)
+    );
+  }
+
+  return ctx.db
+    .query(entity)
+    .withIndex("by_storeId_action", (q) =>
+      q.eq("storeId", storeId).eq("action", action)
+    );
 }
 
 async function getSkuMapForProducts(
@@ -765,6 +805,27 @@ export const getStoreActivityTimeline = query({
     });
 
     return enrichedAnalytics;
+  },
+});
+
+export const getStorefrontObservabilityReport = query({
+  args: {
+    storeId: v.id("store"),
+    startDate: v.optional(v.number()),
+    endDate: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const analytics = await getAnalyticsByStoreAndActionQuery(
+      ctx,
+      args.storeId,
+      STOREFRONT_OBSERVABILITY_ACTION,
+      args.startDate,
+      args.endDate
+    )
+      .order("desc")
+      .take(MAX_STOREFRONT_OBSERVABILITY_RESULTS);
+
+    return buildStorefrontObservabilityReport(analytics);
   },
 });
 
