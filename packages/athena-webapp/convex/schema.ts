@@ -66,7 +66,8 @@ const schema = defineSchema({
     .index("by_storeFrontUserId_storeId", ["storeFrontUserId", "storeId"])
     .index("by_action_productId", ["action", "productId"])
     .index("by_storeId_action", ["storeId", "action"])
-    .index("by_storeId_action_productId", ["storeId", "action", "productId"]),
+    .index("by_storeId_action_productId", ["storeId", "action", "productId"])
+    .index("by_data_promoCodeId", ["data.promoCodeId"]),
   appVerificationCode: defineTable(appVerificationCodeSchema),
   athenaUser: defineTable(athenaUserSchema),
   bag: defineTable(bagSchema)
@@ -110,6 +111,7 @@ const schema = defineSchema({
     .index("by_checkoutSessionId", ["checkoutSessionId"])
     .index("by_storeFrontUserId", ["storeFrontUserId"])
     .index("by_storeId", ["storeId"])
+    .index("by_storeId_status", ["storeId", "status"])
     .index("by_externalReference", ["externalReference"]),
   onlineOrderItem: defineTable(onlineOrderItemSchema).index("by_orderId", [
     "orderId",
