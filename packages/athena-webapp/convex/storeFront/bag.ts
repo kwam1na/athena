@@ -3,22 +3,14 @@ import {
   internalMutation,
   internalQuery,
   mutation,
-  QueryCtx,
   query,
 } from "../_generated/server";
 import { v } from "convex/values";
+import { loadBagWithItems } from "./helpers/bag";
 
 const entity = "bag";
 const MAX_BAGS = 500;
 const MAX_BAG_ITEMS = 200;
-const MAX_BAG_ITEMS_PER_SKU = 500;
-
-async function listBagItems(ctx: QueryCtx, bagId: Doc<"bag">["_id"]) {
-  return await ctx.db
-    .query("bagItem")
-    .withIndex("by_bagId", (q) => q.eq("bagId", bagId))
-    .take(MAX_BAG_ITEMS);
-}
 
 export const getAll = query({
   args: {},
@@ -56,48 +48,7 @@ export const getById = query({
 
     if (!bag) return null;
 
-    const items = await listBagItems(ctx, bag._id);
-
-    // For each item, retrieve the associated product and its SKUs
-    const itemsWithProductDetails = await Promise.all(
-      items.map(async (item) => {
-        const [sku, product] = await Promise.all([
-          ctx.db.get("productSku", item.productSkuId),
-          ctx.db.get("product", item.productId),
-        ]);
-
-        let colorName;
-
-        if (sku?.color) {
-          const color = await ctx.db.get("color", sku.color);
-          colorName = color?.name;
-        }
-
-        let category: string | undefined;
-
-        if (product) {
-          const productCategory = await ctx.db.get("category", product.categoryId);
-          category = productCategory?.name;
-        }
-
-        return {
-          ...item,
-          price: sku?.price,
-          length: sku?.length,
-          colorName,
-          productName: product?.name,
-          productCategory: category,
-          productImage: sku?.images?.[0],
-          productSlug: product?.slug,
-        } as Doc<"bagItem">;
-      })
-    );
-
-    // Return the bag with the enriched items
-    return {
-      ...bag,
-      items: itemsWithProductDetails,
-    } as Doc<"bag">;
+    return (await loadBagWithItems(ctx, bag)) as Doc<"bag">;
   },
 });
 
@@ -110,46 +61,7 @@ export const getByIdInternal = internalQuery({
 
     if (!bag) return null;
 
-    const items = await listBagItems(ctx, bag._id);
-
-    const itemsWithProductDetails = await Promise.all(
-      items.map(async (item) => {
-        const [sku, product] = await Promise.all([
-          ctx.db.get("productSku", item.productSkuId),
-          ctx.db.get("product", item.productId),
-        ]);
-
-        let colorName;
-
-        if (sku?.color) {
-          const color = await ctx.db.get("color", sku.color);
-          colorName = color?.name;
-        }
-
-        let category: string | undefined;
-
-        if (product) {
-          const productCategory = await ctx.db.get("category", product.categoryId);
-          category = productCategory?.name;
-        }
-
-        return {
-          ...item,
-          price: sku?.price,
-          length: sku?.length,
-          colorName,
-          productName: product?.name,
-          productCategory: category,
-          productImage: sku?.images?.[0],
-          productSlug: product?.slug,
-        } as Doc<"bagItem">;
-      })
-    );
-
-    return {
-      ...bag,
-      items: itemsWithProductDetails,
-    } as Doc<"bag">;
+    return (await loadBagWithItems(ctx, bag)) as Doc<"bag">;
   },
 });
 
@@ -167,66 +79,9 @@ export const getByUserId = query({
 
     if (!bag) return null;
 
-    const items = await listBagItems(ctx, bag._id);
-
-    // For each item, retrieve the associated product and its SKUs
-    const itemsWithProductDetails = await Promise.all(
-      items.map(async (item) => {
-        const [sku, product] = await Promise.all([
-          ctx.db.get("productSku", item.productSkuId),
-          ctx.db.get("product", item.productId),
-        ]);
-
-        let colorName;
-
-        if (sku?.color) {
-          const color = await ctx.db.get("color", sku.color);
-          colorName = color?.name;
-        }
-
-        let category: string | undefined;
-
-        if (product) {
-          const productCategory = await ctx.db.get("category", product.categoryId);
-          category = productCategory?.name;
-        }
-
-        // Count how many other bags have this same product SKU
-        const otherBagItemsWithSameSku = await ctx.db
-          .query("bagItem")
-          .withIndex("by_productSkuId", (q) =>
-            q.eq("productSkuId", item.productSkuId)
-          )
-          .take(MAX_BAG_ITEMS_PER_SKU);
-
-        // Filter out items from the current user's bag and count unique bags
-        const uniqueOtherBagIds = new Set(
-          otherBagItemsWithSameSku
-            .filter((bagItem) => bagItem.bagId !== bag._id)
-            .map((bagItem) => bagItem.bagId)
-        );
-
-        const otherBagsWithSku = uniqueOtherBagIds.size;
-
-        return {
-          ...item,
-          price: sku?.price,
-          length: sku?.length,
-          colorName,
-          productName: product?.name,
-          productCategory: category,
-          productImage: sku?.images?.[0],
-          productSlug: product?.slug,
-          otherBagsWithSku,
-        };
-      })
-    );
-
-    // Return the bag with the enriched items
-    return {
-      ...bag,
-      items: itemsWithProductDetails,
-    };
+    return await loadBagWithItems(ctx, bag, {
+      includeOtherBagsWithSku: true,
+    });
   },
 });
 

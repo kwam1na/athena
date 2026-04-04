@@ -1,9 +1,9 @@
-/* eslint-disable @convex-dev/no-collect-in-query -- Query refactors are tracked in V26-168, V26-169, and V26-170; this PR only hardens API boundaries. */
-import { internal } from "../_generated/api";
 import { internalMutation, query } from "../_generated/server";
 import { v } from "convex/values";
+import { loadBagWithItems } from "./helpers/bag";
 
 const entity = "bagItem";
+const MAX_BAGS_FOR_STORE = 500;
 
 export const addItemToBag = internalMutation({
   args: {
@@ -73,15 +73,11 @@ export const getBagItemsForStore = query({
       .query("bag")
       .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
       .order("desc")
-      .collect();
+      .take(MAX_BAGS_FOR_STORE);
 
     // Get all the items for the bags
     const items: any[] = await Promise.all(
-      bags.map(async (bag) => {
-        return await ctx.runQuery(internal.storeFront.bag.getByIdInternal, {
-          id: bag._id,
-        });
-      })
+      bags.map(async (bag) => await loadBagWithItems(ctx, bag))
     );
 
     return items.filter((item) => item.items.length > 0);
