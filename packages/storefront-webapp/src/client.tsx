@@ -2,11 +2,13 @@
 import React from "react";
 import { hydrateRoot } from "react-dom/client";
 import { StartClient } from "@tanstack/start";
-import { PostHogProvider } from "posthog-js/react";
+import { createRouter } from "./router";
+
+const router = createRouter();
 
 hydrateRoot(
   document,
   <React.StrictMode>
-    <StartClient />
+    <StartClient router={router} />
   </React.StrictMode>
 );
