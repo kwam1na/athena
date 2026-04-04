@@ -67,7 +67,7 @@ const schema = defineSchema({
     .index("by_action_productId", ["action", "productId"])
     .index("by_storeId_action", ["storeId", "action"])
     .index("by_storeId_action_productId", ["storeId", "action", "productId"])
-    .index("by_data_promoCodeId", ["data.promoCodeId"]),
+    .index("by_promoCodeId", ["promoCodeId"]),
   appVerificationCode: defineTable(appVerificationCodeSchema),
   athenaUser: defineTable(athenaUserSchema),
   bag: defineTable(bagSchema)

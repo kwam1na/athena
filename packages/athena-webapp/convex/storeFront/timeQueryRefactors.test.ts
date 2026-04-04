@@ -72,15 +72,19 @@ describe("V26-169 time/query refactors", () => {
   it("covers the remaining V26-172 analytics and reporting query hotspots", () => {
     const schemaSource = readSource("convex/schema.ts");
     const analyticsSource = readSource("convex/storeFront/analytics.ts");
+    const analyticsSchemaSource = readSource("convex/schemas/storeFront/analytics.ts");
 
     expect(schemaSource).toContain(
-      '.index("by_data_promoCodeId", ["data.promoCodeId"])'
+      '.index("by_promoCodeId", ["promoCodeId"])'
+    );
+    expect(analyticsSchemaSource).toContain(
+      'promoCodeId: v.optional(v.id("promoCode"))'
     );
     expect(schemaSource).toMatch(
       /onlineOrder:\s*defineTable\(onlineOrderSchema\)[\s\S]*?\.index\("by_storeId_status", \["storeId", "status"\]\)/
     );
 
-    expect(analyticsSource).toContain('.withIndex("by_data_promoCodeId"');
+    expect(analyticsSource).toContain('.withIndex("by_promoCodeId"');
     expect(analyticsSource).toContain('.withIndex("by_storeId_status"');
     expect(analyticsSource).toContain('.withIndex("by_productId"');
     expect(analyticsSource).toContain('.gte("_creationTime"');
