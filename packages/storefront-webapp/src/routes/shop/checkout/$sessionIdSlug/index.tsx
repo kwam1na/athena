@@ -1,5 +1,8 @@
 import { updateCheckoutSession } from "@/api/checkoutSession";
-import { BagSummaryItems } from "@/components/checkout/BagSummary";
+import {
+  BagSummaryItems,
+  toBagSummaryItems,
+} from "@/components/checkout/BagSummary";
 import { Discount } from "@/components/checkout/types";
 import { OrderDetails } from "@/components/checkout/OrderDetails";
 import { FadeIn } from "@/components/common/FadeIn";
@@ -19,6 +22,9 @@ import { AlertCircle } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useStorefrontObservability } from "@/hooks/useStorefrontObservability";
 import { createOrderReviewViewedEvent } from "@/lib/storefrontJourneyEvents";
+
+const getErrorMessage = (value: unknown, fallback: string) =>
+  typeof value === "string" && value.length > 0 ? value : fallback;
 
 export const Route = createFileRoute("/shop/checkout/$sessionIdSlug/")({
   component: () => <CheckoutSession />,
@@ -101,7 +107,7 @@ const CheckoutSession = () => {
       }
 
       if (!res.success) {
-        setError(res.message || "Failed to place order");
+        setError(getErrorMessage(res.message, "Failed to place order"));
       }
 
       setIsPlacingOrder(false);
@@ -140,7 +146,7 @@ const CheckoutSession = () => {
           params: { sessionIdSlug },
         });
       } else {
-        setError(res.message);
+        setError(getErrorMessage(res.message, "Failed to cancel order"));
       }
 
       setIsCancelingOrder(false);
@@ -190,7 +196,7 @@ const CheckoutSession = () => {
 
           {sessionData?.items && (
             <BagSummaryItems
-              items={sessionData?.items}
+              items={toBagSummaryItems(sessionData.items)}
               discount={sessionData.discount as Discount | null}
             />
           )}

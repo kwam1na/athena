@@ -11,6 +11,8 @@ import { Sheet, SheetContent, SheetTitle } from "./ui/sheet";
 import { BagProduct } from "./product-page/ProductDetails";
 import { postAnalytics } from "@/api/analytics";
 import { useQueryClient } from "@tanstack/react-query";
+import { useStorefrontObservability } from "@/hooks/useStorefrontObservability";
+import { emitStorefrontFailure } from "@/lib/storefrontFailureObservability";
 
 interface ProductReminderBarProps {
   product: ProductSku;
@@ -39,6 +41,7 @@ export function ProductReminderBar({
   const sheetContent = useRef<React.ReactNode | null>(null);
 
   const queryClient = useQueryClient();
+  const { baseContext, track } = useStorefrontObservability();
 
   const showReminderBar = isVisible && !isInCooldown && shouldShow;
 
@@ -105,7 +108,22 @@ export function ProductReminderBar({
 
   const handleAddToBag = async () => {
     if (!product.productId || !product._id || !product.sku) {
-      console.error("Missing required product properties");
+      void emitStorefrontFailure({
+        route: baseContext.route,
+        journey: "browse",
+        step: "product_reminder_add_to_bag",
+        status: "blocked",
+        error: {
+          code: "missing_product_properties",
+          message: "Missing required product properties",
+        },
+        fallbackCategory: "validation",
+        context: {
+          productId: product.productId,
+          productSku: product.sku,
+        },
+        track,
+      }).catch(() => undefined);
       return;
     }
 
@@ -142,7 +160,17 @@ export function ProductReminderBar({
       setIsSheetOpen(true);
       onDismiss(); // Close the reminder bar after successful add
     } catch (error) {
-      console.error("Failed to add to bag:", error);
+      void emitStorefrontFailure({
+        route: baseContext.route,
+        journey: "browse",
+        step: "product_reminder_add_to_bag",
+        error,
+        context: {
+          productId: product.productId,
+          productSku: product.sku,
+        },
+        track,
+      }).catch(() => undefined);
     }
   };
 

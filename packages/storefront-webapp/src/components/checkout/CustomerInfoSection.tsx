@@ -16,19 +16,16 @@ import {
   CustomerDetails,
   DeliveryMethod,
 } from "./types";
+import { CheckoutFormData } from "./schemas/checkoutFormSchema";
+
+export type CheckoutFormApi = UseFormReturn<
+  CheckoutFormData,
+  any,
+  CheckoutFormData
+>;
 
 export interface CheckoutFormSectionProps {
-  form: UseFormReturn<
-    {
-      deliveryInstructions: string;
-      deliveryMethod: DeliveryMethod | null;
-      customerDetails: CustomerDetails;
-      deliveryDetails: Address;
-      // billingDetails: BillingAddress;
-    },
-    any,
-    undefined
-  >;
+  form: CheckoutFormApi;
 }
 
 export const CustomerInfoSection = ({ form }: CheckoutFormSectionProps) => {

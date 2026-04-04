@@ -14,22 +14,26 @@ import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 
-export const Route = createFileRoute("/_layout/account")({
-  beforeLoad: async () => {
-    const id = localStorage.getItem(LOGGED_IN_USER_ID_KEY);
+async function accountBeforeLoad(): Promise<void> {
+  const id = localStorage.getItem(LOGGED_IN_USER_ID_KEY);
 
-    if (!id) return redirect({ to: "/login" });
+  if (!id) {
+    throw redirect({ to: "/login" });
+  }
 
-    const { storeId, organizationId } = getStoreDetails();
+  const { storeId, organizationId } = getStoreDetails();
 
+  if (storeId && organizationId) {
     try {
-      if (storeId && organizationId) {
-        await getActiveUser();
-      }
-    } catch (e) {
-      return redirect({ to: "/login" });
+      await getActiveUser();
+    } catch (_error) {
+      throw redirect({ to: "/login" });
     }
-  },
+  }
+}
+
+export const Route = createFileRoute("/_layout/account")({
+  beforeLoad: accountBeforeLoad,
 
   component: () => <Account />,
 });

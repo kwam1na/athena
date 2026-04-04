@@ -6,6 +6,12 @@ import {
   useRouter,
 } from "@tanstack/react-router";
 import type { ErrorComponentProps } from "@tanstack/react-router";
+import { useEffect } from "react";
+import { emitStorefrontFailure } from "@/lib/storefrontFailureObservability";
+import {
+  createStorefrontObservabilityContext,
+  trackStorefrontEvent,
+} from "@/lib/storefrontObservability";
 
 export function DefaultCatchBoundary({ error }: ErrorComponentProps) {
   const router = useRouter();
@@ -14,7 +20,29 @@ export function DefaultCatchBoundary({ error }: ErrorComponentProps) {
     select: (state) => state.id === rootRouteId,
   });
 
-  console.error("DefaultCatchBoundary Error:", error);
+  useEffect(() => {
+    const route = window.location.pathname || "/";
+    const search = new URLSearchParams(window.location.search);
+    const baseContext = createStorefrontObservabilityContext({
+      pathname: route,
+      search: {
+        origin: search.get("origin") ?? undefined,
+        utm_source: search.get("utm_source") ?? undefined,
+      },
+      storage: window.sessionStorage,
+    });
+
+    void emitStorefrontFailure({
+      route,
+      step: "route_render",
+      error,
+      fallbackCategory: "client_render",
+      context: {
+        boundary: "default_catch_boundary",
+      },
+      track: (event) => trackStorefrontEvent({ event, baseContext }),
+    }).catch(() => undefined);
+  }, [error]);
 
   return (
     <div className="min-w-0 flex-1 p-4 flex flex-col items-center justify-center gap-6">

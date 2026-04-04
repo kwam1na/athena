@@ -4,7 +4,10 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useCheckout } from "@/hooks/useCheckout";
 import { CustomerInfoSection } from "./CustomerInfoSection";
-import { checkoutFormSchema } from "./schemas/checkoutFormSchema";
+import {
+  CheckoutFormData,
+  checkoutFormSchema,
+} from "./schemas/checkoutFormSchema";
 import { PickupOptions } from "./DeliveryDetails/PickupOptions";
 import { StoreSelector } from "./DeliveryDetails/DeliveryOptionsSelector";
 import { PaymentSection } from "./PaymentSection";
@@ -17,7 +20,7 @@ export const CheckoutForm = () => {
 
   const defaultValues = {
     deliveryInstructions: checkoutState.deliveryInstructions,
-    deliveryMethod: checkoutState.deliveryMethod,
+    deliveryMethod: checkoutState.deliveryMethod ?? "pickup",
     customerDetails: checkoutState.customerDetails || {
       firstName: "",
       lastName: "",
@@ -38,7 +41,7 @@ export const CheckoutForm = () => {
     },
   };
 
-  const form = useForm({
+  const form = useForm<CheckoutFormData, any, CheckoutFormData>({
     resolver: zodResolver(checkoutFormSchema),
     defaultValues: defaultValues || {
       deliveryMethod: null,
@@ -68,7 +71,7 @@ export const CheckoutForm = () => {
     ? "Orders typically arrive within 1-2 business days"
     : "Orders are typically ready for pickup within 1-2 business days";
 
-  const onSubmit = (data: any) => {};
+  const onSubmit = (_data: CheckoutFormData) => {};
 
   return (
     <Form {...form}>
