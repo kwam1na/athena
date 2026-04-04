@@ -12,9 +12,13 @@ import {
   customerDetailsSchema,
   paymentMethodSchema,
 } from "../schemas/storeFront";
-import { api, internal } from "../_generated/api";
+import { internal } from "../_generated/api";
 import { Doc, Id } from "../_generated/dataModel";
 import { getDiscountValue } from "../inventory/utils";
+import {
+  createOrderFromCheckoutSession,
+  returnOrderItemsToStock,
+} from "./helpers/onlineOrder";
 
 const entity = "onlineOrder";
 const MAX_ORDER_ITEMS = 200;
@@ -28,13 +32,6 @@ async function listOrderItems(
     .query("onlineOrderItem")
     .withIndex("by_orderId", (q) => q.eq("orderId", orderId))
     .take(MAX_ORDER_ITEMS);
-}
-
-function generateOrderNumber() {
-  const timestamp = Math.floor(Date.now() / 1000); // Get current timestamp in seconds
-  const baseOrderNumber = timestamp % 100000; // Reduce to 5 digits
-  const randomPadding = Math.floor(Math.random() * 10); // Add random digit if needed
-  return (baseOrderNumber * 10 + randomPadding).toString().padStart(5, "0"); // Ensure 7 digits
 }
 
 export const create = mutation({
@@ -58,26 +55,8 @@ export const create = mutation({
     paymentMethod: v.optional(paymentMethodSchema),
   },
   handler: async (ctx, args) => {
-    // get the session
-    const session = await ctx.db.get("checkoutSession", args.checkoutSessionId);
-
-    console.log(`creating online order for session: ${session?._id}`);
-
-    if (!session) {
-      return {
-        error: "Invalid session",
-        success: false,
-      };
-    }
-
-    const orderId = await ctx.db.insert(entity, {
-      storeFrontUserId: session?.storeFrontUserId,
-      storeId: session?.storeId,
+    return await createOrderFromCheckoutSession(ctx, {
       checkoutSessionId: args.checkoutSessionId,
-      externalReference: session?.externalReference,
-      externalTransactionId: session?.externalTransactionId?.toString(),
-      bagId: session?.bagId,
-      amount: session?.amount,
       billingDetails: args.billingDetails,
       customerDetails: args.customerDetails,
       deliveryDetails: args.deliveryDetails,
@@ -87,81 +66,8 @@ export const create = mutation({
       deliveryFee: args.deliveryFee,
       discount: args.discount,
       pickupLocation: args.pickupLocation,
-      hasVerifiedPayment: session.hasVerifiedPayment,
       paymentMethod: args.paymentMethod,
-      orderNumber: generateOrderNumber(),
-      status: "open",
     });
-
-    // get the session items using the session id to create the online order items
-    const items = await ctx.db
-      .query("checkoutSessionItem")
-      .withIndex("by_sessionId", (q) => q.eq("sesionId", args.checkoutSessionId))
-      .take(MAX_ORDER_ITEMS);
-
-    await Promise.all(
-      items.map((item) => {
-        return ctx.db.insert("onlineOrderItem", {
-          orderId,
-          productId: item.productId,
-          quantity: item.quantity,
-          productSku: item.productSku,
-          productSkuId: item.productSkuId,
-          storeFrontUserId: item.storeFrontUserId,
-          price: item.price,
-        });
-      })
-    );
-
-    // Check for items in both checkoutSessionItem and promoCodeItem tables
-    await Promise.all(
-      items.map(async (item) => {
-        const promoCodeItem = await ctx.db
-          .query("promoCodeItem")
-          .withIndex("by_productSkuId", (q) =>
-            q.eq("productSkuId", item.productSkuId)
-          )
-          .first();
-
-        if (promoCodeItem) {
-          await ctx.db.patch("promoCodeItem", promoCodeItem._id, {
-            quantityClaimed:
-              (promoCodeItem.quantityClaimed ?? 0) + item.quantity,
-          });
-        }
-      })
-    );
-
-    // update used promo code for this order
-    if (args.discount?.id) {
-      // if the promo code is not multiple uses, insert a redeemed promo code record
-      if (!args.discount.isMultipleUses)
-        await ctx.db.insert("redeemedPromoCode", {
-          promoCodeId: args.discount.id as Id<"promoCode">,
-          storeFrontUserId: session.storeFrontUserId,
-        });
-
-      const offer = await ctx.db
-        .query("offer")
-        .withIndex("by_storeFrontUserId", (q) =>
-          q.eq("storeFrontUserId", session.storeFrontUserId)
-        )
-        .filter((q) =>
-          q.eq(q.field("promoCodeId"), args.discount?.id as Id<"promoCode">)
-        )
-        .first();
-
-      if (offer) {
-        await ctx.db.patch("offer", offer._id, { isRedeemed: true, status: "redeemed" });
-      }
-    }
-
-    console.log("created online order for session.");
-
-    return {
-      success: true,
-      orderId,
-    };
   },
 });
 
@@ -186,25 +92,8 @@ export const createInternal = internalMutation({
     paymentMethod: v.optional(paymentMethodSchema),
   },
   handler: async (ctx, args) => {
-    const session = await ctx.db.get("checkoutSession", args.checkoutSessionId);
-
-    console.log(`creating online order for session: ${session?._id}`);
-
-    if (!session) {
-      return {
-        error: "Invalid session",
-        success: false,
-      };
-    }
-
-    const orderId = await ctx.db.insert(entity, {
-      storeFrontUserId: session?.storeFrontUserId,
-      storeId: session?.storeId,
+    return await createOrderFromCheckoutSession(ctx, {
       checkoutSessionId: args.checkoutSessionId,
-      externalReference: session?.externalReference,
-      externalTransactionId: session?.externalTransactionId?.toString(),
-      bagId: session?.bagId,
-      amount: session?.amount,
       billingDetails: args.billingDetails,
       customerDetails: args.customerDetails,
       deliveryDetails: args.deliveryDetails,
@@ -214,77 +103,8 @@ export const createInternal = internalMutation({
       deliveryFee: args.deliveryFee,
       discount: args.discount,
       pickupLocation: args.pickupLocation,
-      hasVerifiedPayment: session.hasVerifiedPayment,
       paymentMethod: args.paymentMethod,
-      orderNumber: generateOrderNumber(),
-      status: "open",
     });
-
-    const items = await ctx.db
-      .query("checkoutSessionItem")
-      .withIndex("by_sessionId", (q) => q.eq("sesionId", args.checkoutSessionId))
-      .take(MAX_ORDER_ITEMS);
-
-    await Promise.all(
-      items.map((item) => {
-        return ctx.db.insert("onlineOrderItem", {
-          orderId,
-          productId: item.productId,
-          quantity: item.quantity,
-          productSku: item.productSku,
-          productSkuId: item.productSkuId,
-          storeFrontUserId: item.storeFrontUserId,
-          price: item.price,
-        });
-      })
-    );
-
-    await Promise.all(
-      items.map(async (item) => {
-        const promoCodeItem = await ctx.db
-          .query("promoCodeItem")
-          .withIndex("by_productSkuId", (q) =>
-            q.eq("productSkuId", item.productSkuId)
-          )
-          .first();
-
-        if (promoCodeItem) {
-          await ctx.db.patch("promoCodeItem", promoCodeItem._id, {
-            quantityClaimed:
-              (promoCodeItem.quantityClaimed ?? 0) + item.quantity,
-          });
-        }
-      })
-    );
-
-    if (args.discount?.id) {
-      if (!args.discount.isMultipleUses)
-        await ctx.db.insert("redeemedPromoCode", {
-          promoCodeId: args.discount.id as Id<"promoCode">,
-          storeFrontUserId: session.storeFrontUserId,
-        });
-
-      const offer = await ctx.db
-        .query("offer")
-        .withIndex("by_storeFrontUserId", (q) =>
-          q.eq("storeFrontUserId", session.storeFrontUserId)
-        )
-        .filter((q) =>
-          q.eq(q.field("promoCodeId"), args.discount?.id as Id<"promoCode">)
-        )
-        .first();
-
-      if (offer) {
-        await ctx.db.patch("offer", offer._id, { isRedeemed: true, status: "redeemed" });
-      }
-    }
-
-    console.log("created online order for session.");
-
-    return {
-      success: true,
-      orderId,
-    };
   },
 });
 
@@ -295,122 +115,13 @@ export const createFromSession = internalMutation({
     paymentMethod: v.optional(paymentMethodSchema),
   },
   handler: async (ctx, args) => {
-    const session = await ctx.db.get("checkoutSession", args.checkoutSessionId);
-
-    if (!session) {
-      return {
-        success: false,
-        error: "Invalid session",
-      };
-    }
-
-    const orderId = await ctx.db.insert(entity, {
-      storeFrontUserId: session.storeFrontUserId,
-      storeId: session.storeId,
+    return await createOrderFromCheckoutSession(ctx, {
       checkoutSessionId: args.checkoutSessionId,
-      externalReference: session.externalReference,
       externalTransactionId: args.externalTransactionId,
-      bagId: session.bagId,
-      amount: session.amount,
-      billingDetails: session.billingDetails as any,
-      customerDetails: session.customerDetails as any,
-      deliveryDetails: session.deliveryDetails as any,
-      deliveryInstructions: session.deliveryInstructions,
-      deliveryMethod: session.deliveryMethod || "n/a",
-      deliveryOption: session.deliveryOption,
-      deliveryFee: session.deliveryFee,
-      discount: session.discount,
-      pickupLocation: session.pickupLocation,
-      hasVerifiedPayment: session.hasVerifiedPayment,
       paymentMethod: args.paymentMethod,
-      orderNumber: generateOrderNumber(),
-      status: "open",
+      patchSessionPlacedOrderId: true,
+      clearBag: true,
     });
-
-    // get the session items using the session id to create the online order items
-    const items = await ctx.db
-      .query("checkoutSessionItem")
-      .withIndex("by_sessionId", (q) => q.eq("sesionId", args.checkoutSessionId))
-      .take(MAX_ORDER_ITEMS);
-
-    await Promise.all(
-      items.map((item) => {
-        return ctx.db.insert("onlineOrderItem", {
-          orderId,
-          productId: item.productId,
-          quantity: item.quantity,
-          productSku: item.productSku,
-          productSkuId: item.productSkuId,
-          storeFrontUserId: item.storeFrontUserId,
-          price: item.price,
-        });
-      })
-    );
-
-    // Check for items in both checkoutSessionItem and promoCodeItem tables
-    await Promise.all(
-      items.map(async (item) => {
-        const promoCodeItem = await ctx.db
-          .query("promoCodeItem")
-          .withIndex("by_productSkuId", (q) =>
-            q.eq("productSkuId", item.productSkuId)
-          )
-          .first();
-
-        if (promoCodeItem) {
-          await ctx.db.patch("promoCodeItem", promoCodeItem._id, {
-            quantityClaimed:
-              (promoCodeItem.quantityClaimed ?? 0) + item.quantity,
-          });
-        }
-      })
-    );
-
-    // update used promo code for this order
-    if (session.discount?.id) {
-      // if the promo code is not multiple uses, insert a redeemed promo code record
-      if (!session.discount.isMultipleUses)
-        await ctx.db.insert("redeemedPromoCode", {
-          promoCodeId: session.discount.id as Id<"promoCode">,
-          storeFrontUserId: session.storeFrontUserId,
-        });
-
-      const offer = await ctx.db
-        .query("offer")
-        .withIndex("by_storeFrontUserId", (q) =>
-          q.eq("storeFrontUserId", session.storeFrontUserId)
-        )
-        .filter((q) =>
-          q.eq(
-            q.field("promoCodeId"),
-            session.discount?.id as Id<"promoCode">
-          )
-        )
-        .first();
-
-      if (offer) {
-        await ctx.db.patch("offer", offer._id, { isRedeemed: true, status: "redeemed" });
-      }
-    }
-
-    // update the session to reflect that the order has been created
-    await ctx.db.patch("checkoutSession", args.checkoutSessionId, {
-      placedOrderId: orderId,
-    });
-
-    console.log("created online order for session. clearing bag..");
-
-    // clear the bag for the sesion
-    await ctx.runMutation(internal.storeFront.bag.clearBag, {
-      id: session.bagId,
-    });
-
-    console.log("cleared bag for session.");
-
-    return {
-      success: true,
-      orderId,
-    };
   },
 });
 
@@ -707,12 +418,7 @@ export const update = mutation({
           args.update.status === "cancelled" &&
           args.returnItemsToStock !== false
         ) {
-          await ctx.runMutation(
-            internal.storeFront.onlineOrder.returnAllItemsToStockInternal,
-            {
-              orderId: order._id,
-            }
-          );
+          await returnOrderItemsToStock(ctx, order._id);
         }
       }
 
@@ -808,12 +514,7 @@ export const update = mutation({
           args.update.status === "cancelled" &&
           args.returnItemsToStock !== false
         ) {
-          await ctx.runMutation(
-            internal.storeFront.onlineOrder.returnAllItemsToStockInternal,
-            {
-              orderId: order._id,
-            }
-          );
+          await returnOrderItemsToStock(ctx, order._id);
         }
 
         await ctx.db.patch("onlineOrder", order._id, updates);
@@ -860,12 +561,7 @@ export const updateInternal = internalMutation({
           args.update.status === "cancelled" &&
           args.returnItemsToStock !== false
         ) {
-          await ctx.runMutation(
-            internal.storeFront.onlineOrder.returnAllItemsToStockInternal,
-            {
-              orderId: order._id,
-            }
-          );
+          await returnOrderItemsToStock(ctx, order._id);
         }
       }
 
@@ -956,12 +652,7 @@ export const updateInternal = internalMutation({
           args.update.status === "cancelled" &&
           args.returnItemsToStock !== false
         ) {
-          await ctx.runMutation(
-            internal.storeFront.onlineOrder.returnAllItemsToStockInternal,
-            {
-              orderId: order._id,
-            }
-          );
+          await returnOrderItemsToStock(ctx, order._id);
         }
 
         await ctx.db.patch("onlineOrder", order._id, updates);
@@ -1139,31 +830,7 @@ export const updateOrderItemsInternal = internalMutation({
 export const returnAllItemsToStock = mutation({
   args: { orderId: v.id("onlineOrder") },
   handler: async (ctx, args) => {
-    const orderItems = await ctx.db
-      .query("onlineOrderItem")
-      .filter((q) => q.eq(q.field("orderId"), args.orderId))
-      .collect();
-
-    await Promise.all(
-      orderItems.map(async (item) => {
-        if (item.isRestocked) {
-          console.log("item already restocked", item._id);
-          return true;
-        }
-
-        await ctx.db.patch("onlineOrderItem", item._id, { isRefunded: true, isRestocked: true });
-        const productSku = await ctx.db.get("productSku", item.productSkuId);
-        if (productSku) {
-          await ctx.db.patch("productSku", item.productSkuId, {
-            quantityAvailable: productSku.quantityAvailable + item.quantity,
-            inventoryCount: item.isReady
-              ? productSku.inventoryCount + item.quantity
-              : productSku.inventoryCount,
-          });
-        }
-      })
-    );
-
+    await returnOrderItemsToStock(ctx, args.orderId);
     return true;
   },
 });
@@ -1171,31 +838,7 @@ export const returnAllItemsToStock = mutation({
 export const returnAllItemsToStockInternal = internalMutation({
   args: { orderId: v.id("onlineOrder") },
   handler: async (ctx, args) => {
-    const orderItems = await ctx.db
-      .query("onlineOrderItem")
-      .filter((q) => q.eq(q.field("orderId"), args.orderId))
-      .collect();
-
-    await Promise.all(
-      orderItems.map(async (item) => {
-        if (item.isRestocked) {
-          console.log("item already restocked", item._id);
-          return true;
-        }
-
-        await ctx.db.patch("onlineOrderItem", item._id, { isRefunded: true, isRestocked: true });
-        const productSku = await ctx.db.get("productSku", item.productSkuId);
-        if (productSku) {
-          await ctx.db.patch("productSku", item.productSkuId, {
-            quantityAvailable: productSku.quantityAvailable + item.quantity,
-            inventoryCount: item.isReady
-              ? productSku.inventoryCount + item.quantity
-              : productSku.inventoryCount,
-          });
-        }
-      })
-    );
-
+    await returnOrderItemsToStock(ctx, args.orderId);
     return true;
   },
 });
