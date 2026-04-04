@@ -1,6 +1,11 @@
 import { v } from "convex/values";
-import { mutation, query, internalMutation } from "../_generated/server";
-import { api } from "../_generated/api";
+import {
+  mutation,
+  query,
+  internalMutation,
+  MutationCtx,
+  QueryCtx,
+} from "../_generated/server";
 import { Id } from "../_generated/dataModel";
 import {
   acquireInventoryHoldsBatch,
@@ -19,6 +24,70 @@ import {
 } from "./helpers/resultTypes";
 import { calculateExpenseSessionExpiration } from "./helpers/expenseSessionExpiration";
 import { internal } from "../_generated/api";
+
+const MAX_EXPENSE_SESSION_ITEMS = 200;
+const EXPENSE_SESSION_QUERY_CANDIDATE_LIMIT = 200;
+const ACTIVE_EXPENSE_SESSION_CANDIDATE_LIMIT = 100;
+const EXPENSE_SESSION_CLEANUP_BATCH_SIZE = 100;
+
+function buildNextExpenseSessionNumber(latestSessionNumber: string | undefined) {
+  const lastSequence = latestSessionNumber
+    ? Number.parseInt(latestSessionNumber.split("-").at(-1) ?? "0", 10)
+    : 0;
+  const nextSequence = Number.isFinite(lastSequence) ? lastSequence + 1 : 1;
+  return `EXP-${String(nextSequence).padStart(3, "0")}`;
+}
+
+async function loadExpenseSessionItems(
+  ctx: QueryCtx,
+  sessionId: Id<"expenseSession">
+) {
+  const cartItemsRaw = await ctx.db
+    .query("expenseSessionItem")
+    .withIndex("by_sessionId", (q) => q.eq("sessionId", sessionId))
+    .take(MAX_EXPENSE_SESSION_ITEMS);
+
+  return Promise.all(
+    cartItemsRaw.map(async (item) => {
+      const sku = await ctx.db.get("productSku", item.productSkuId);
+      let colorName: string | undefined;
+      if (sku?.color) {
+        const color = await ctx.db.get("color", sku.color);
+        colorName = color?.name;
+      }
+      return {
+        ...item,
+        color: colorName,
+      };
+    })
+  );
+}
+
+async function listExpenseSessionsByStatusBefore(
+  ctx: MutationCtx,
+  status: "active" | "void",
+  expiresBefore: number
+) {
+  const sessions = [];
+  let cursor: string | null = null;
+
+  while (true) {
+    const page = await ctx.db
+      .query("expenseSession")
+      .withIndex("by_status_and_expiresAt", (q) =>
+        q.eq("status", status).lt("expiresAt", expiresBefore)
+      )
+      .paginate({ cursor, numItems: EXPENSE_SESSION_CLEANUP_BATCH_SIZE });
+
+    sessions.push(...page.page);
+    if (page.isDone) {
+      break;
+    }
+    cursor = page.continueCursor;
+  }
+
+  return sessions;
+}
 
 // Get expense sessions for a store (with filtering)
 export const getStoreExpenseSessions = query({
@@ -51,57 +120,78 @@ export const getStoreExpenseSessions = query({
   ),
   handler: async (ctx, args) => {
     const { storeId, status, limit = 50 } = args;
+    const boundedLimit = Math.min(limit, EXPENSE_SESSION_QUERY_CANDIDATE_LIMIT);
 
-    let sessionsQuery = ctx.db
-      .query("expenseSession")
-      .withIndex("by_storeId", (q) => q.eq("storeId", storeId));
+    let sessionsQuery;
+    let indexedTerminalFilter = false;
+    let indexedCashierFilter = false;
 
-    if (status) {
+    if (status && args.terminalId) {
+      indexedTerminalFilter = true;
+      sessionsQuery = ctx.db
+        .query("expenseSession")
+        .withIndex("by_storeId_status_terminalId", (q) =>
+          q
+            .eq("storeId", storeId)
+            .eq("status", status)
+            .eq("terminalId", args.terminalId!)
+        );
+    } else if (status && args.cashierId) {
+      indexedCashierFilter = true;
+      sessionsQuery = ctx.db
+        .query("expenseSession")
+        .withIndex("by_storeId_status_cashierId", (q) =>
+          q
+            .eq("storeId", storeId)
+            .eq("status", status)
+            .eq("cashierId", args.cashierId!)
+        );
+    } else if (args.terminalId) {
+      indexedTerminalFilter = true;
+      sessionsQuery = ctx.db
+        .query("expenseSession")
+        .withIndex("by_storeId_terminalId", (q) =>
+          q.eq("storeId", storeId).eq("terminalId", args.terminalId!)
+        );
+    } else if (args.cashierId) {
+      indexedCashierFilter = true;
+      sessionsQuery = ctx.db
+        .query("expenseSession")
+        .withIndex("by_storeId_cashierId", (q) =>
+          q.eq("storeId", storeId).eq("cashierId", args.cashierId!)
+        );
+    } else if (status) {
       sessionsQuery = ctx.db
         .query("expenseSession")
         .withIndex("by_storeId_and_status", (q) =>
           q.eq("storeId", storeId).eq("status", status)
         );
+    } else {
+      sessionsQuery = ctx.db
+        .query("expenseSession")
+        .withIndex("by_storeId", (q) => q.eq("storeId", storeId));
     }
 
-    let sessions = await sessionsQuery.order("desc").take(limit);
+    let sessions = await sessionsQuery.order("desc").take(boundedLimit);
 
-    if (args.terminalId) {
+    if (args.terminalId && !indexedTerminalFilter) {
       sessions = sessions.filter(
         (session) => session.terminalId === args.terminalId
       );
     }
 
-    if (args.cashierId) {
+    if (args.cashierId && !indexedCashierFilter) {
       sessions = sessions.filter(
         (session) => session.cashierId === args.cashierId
       );
     }
 
+    sessions = sessions.slice(0, limit);
+
     // Enrich with cart items
     const enrichedSessions = await Promise.all(
       sessions.map(async (session) => {
-        // Get cart items from expenseSessionItem table and enrich with color from SKU
-        const cartItemsRaw = await ctx.db
-          .query("expenseSessionItem")
-          .withIndex("by_sessionId", (q) => q.eq("sessionId", session._id))
-          .collect();
-
-        const cartItems = await Promise.all(
-          cartItemsRaw.map(async (item) => {
-            // Fetch SKU to get color
-            const sku = await ctx.db.get(item.productSkuId);
-            let colorName: string | undefined;
-            if (sku?.color) {
-              const color = await ctx.db.get(sku.color);
-              colorName = color?.name;
-            }
-            return {
-              ...item,
-              color: colorName,
-            };
-          })
-        );
+        const cartItems = await loadExpenseSessionItems(ctx, session._id);
 
         return {
           ...session,
@@ -139,14 +229,10 @@ export const getExpenseSessionById = query({
     v.null()
   ),
   handler: async (ctx, args) => {
-    const session = await ctx.db.get(args.sessionId);
+    const session = await ctx.db.get("expenseSession", args.sessionId);
     if (!session) return null;
 
-    // Get cart items from expenseSessionItem table
-    const cartItems = await ctx.db
-      .query("expenseSessionItem")
-      .withIndex("by_sessionId", (q) => q.eq("sessionId", session._id))
-      .collect();
+    const cartItems = await loadExpenseSessionItems(ctx, session._id);
 
     return {
       ...session,
@@ -168,26 +254,36 @@ export const createExpenseSession = mutation({
     const now = Date.now();
     const registerNumber = args.registerNumber || "1";
 
-    // Check for existing active session on this register
-    const existingActiveSessions = await ctx.db
+    const existingTerminalSessions = await ctx.db
       .query("expenseSession")
-      .withIndex("by_storeId_and_status", (q) =>
-        q.eq("storeId", args.storeId).eq("status", "active")
+      .withIndex("by_storeId_status_terminalId", (q) =>
+        q
+          .eq("storeId", args.storeId)
+          .eq("status", "active")
+          .eq("terminalId", args.terminalId)
       )
-      .collect();
+      .take(ACTIVE_EXPENSE_SESSION_CANDIDATE_LIMIT);
 
-    // Filter out expired sessions
-    const nonExpiredActiveSessions = existingActiveSessions.filter(
+    const nonExpiredTerminalSessions = existingTerminalSessions.filter(
       (session) => !session.expiresAt || session.expiresAt >= now
     );
 
-    // Filter by terminal id and cashier
-    const existingSession = nonExpiredActiveSessions.find(
-      (s) => s.terminalId === args.terminalId && s.cashierId === args.cashierId
+    const existingSession = nonExpiredTerminalSessions.find(
+      (session) => session.cashierId === args.cashierId
     );
 
-    const existingSessionOnDifferentTerminal = nonExpiredActiveSessions.find(
-      (s) => s.terminalId !== args.terminalId && s.cashierId === args.cashierId
+    const cashierSessions = await ctx.db
+      .query("expenseSession")
+      .withIndex("by_cashierId_and_status", (q) =>
+        q.eq("cashierId", args.cashierId).eq("status", "active")
+      )
+      .take(ACTIVE_EXPENSE_SESSION_CANDIDATE_LIMIT);
+
+    const existingSessionOnDifferentTerminal = cashierSessions.find(
+      (session) =>
+        session.storeId === args.storeId &&
+        session.terminalId !== args.terminalId &&
+        (!session.expiresAt || session.expiresAt >= now)
     );
 
     if (existingSessionOnDifferentTerminal) {
@@ -204,11 +300,11 @@ export const createExpenseSession = mutation({
         .withIndex("by_sessionId", (q) =>
           q.eq("sessionId", existingSession._id)
         )
-        .collect();
+        .take(MAX_EXPENSE_SESSION_ITEMS);
 
       // Auto-hold the existing session if it has items
       if (existingItems.length) {
-        await ctx.db.patch(existingSession._id, {
+        await ctx.db.patch("expenseSession", existingSession._id, {
           status: "held",
           heldAt: now,
           updatedAt: now,
@@ -224,13 +320,15 @@ export const createExpenseSession = mutation({
       };
     }
 
-    // Generate session number
-    const sessionCount = await ctx.db
+    const latestSession = await ctx.db
       .query("expenseSession")
       .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
-      .collect();
+      .order("desc")
+      .first();
 
-    const sessionNumber = `EXP-${String(sessionCount.length + 1).padStart(3, "0")}`;
+    const sessionNumber = buildNextExpenseSessionNumber(
+      latestSession?.sessionNumber
+    );
 
     // Calculate session expiration time (5 minutes)
     const expiresAt = calculateExpenseSessionExpiration(now);
@@ -270,7 +368,7 @@ export const updateExpenseSession = mutation({
       args.cashierId
     );
     if (!validation.success) {
-      const currentSession = await ctx.db.get(sessionId);
+      const currentSession = await ctx.db.get("expenseSession", sessionId);
       console.warn(
         `Attempted to update ${currentSession?.status} expense session ${sessionId}. Ignoring update.`
       );
@@ -284,7 +382,7 @@ export const updateExpenseSession = mutation({
     const expiresAt = calculateExpenseSessionExpiration(now);
 
     // Update session with new data
-    await ctx.db.patch(sessionId, {
+    await ctx.db.patch("expenseSession", sessionId, {
       ...updates,
       updatedAt: now,
       expiresAt,
@@ -315,13 +413,13 @@ export const holdExpenseSession = mutation({
     }
 
     // Get current session to access expiresAt
-    const session = await ctx.db.get(args.sessionId);
+    const session = await ctx.db.get("expenseSession", args.sessionId);
     if (!session) {
       return error("Session not found");
     }
 
     // Keep inventory holds in place when suspending
-    await ctx.db.patch(args.sessionId, {
+    await ctx.db.patch("expenseSession", args.sessionId, {
       status: "held",
       heldAt: now,
       updatedAt: now,
@@ -343,7 +441,7 @@ export const resumeExpenseSession = mutation({
     const now = Date.now();
 
     // Get the session
-    const session = await ctx.db.get(args.sessionId);
+    const session = await ctx.db.get("expenseSession", args.sessionId);
     if (!session) {
       return error("Session not found");
     }
@@ -359,9 +457,10 @@ export const resumeExpenseSession = mutation({
     // Check that this cashier does not have an active session on a different terminal
     const cashierSessions = await ctx.db
       .query("expenseSession")
-      .withIndex("by_cashierId", (q) => q.eq("cashierId", args.cashierId))
-      .filter((q) => q.eq(q.field("status"), "active"))
-      .collect();
+      .withIndex("by_cashierId_and_status", (q) =>
+        q.eq("cashierId", args.cashierId).eq("status", "active")
+      )
+      .take(ACTIVE_EXPENSE_SESSION_CANDIDATE_LIMIT);
 
     const activeSessionsOnOtherTerminals = cashierSessions.filter(
       (s) => s.expiresAt > now && s.terminalId !== args.terminalId
@@ -375,7 +474,7 @@ export const resumeExpenseSession = mutation({
     const expiresAt = calculateExpenseSessionExpiration(now);
 
     // Update session status to active
-    await ctx.db.patch(args.sessionId, {
+    await ctx.db.patch("expenseSession", args.sessionId, {
       status: "active",
       resumedAt: now,
       updatedAt: now,
@@ -416,7 +515,7 @@ export const completeExpenseSession = mutation({
       }
     | { success: false; message: string }
   > => {
-    const session = await ctx.db.get(args.sessionId);
+    const session = await ctx.db.get("expenseSession", args.sessionId);
     if (!session) {
       return error("Session not found");
     }
@@ -432,7 +531,7 @@ export const completeExpenseSession = mutation({
     }
 
     // Mark session as completed
-    await ctx.db.patch(args.sessionId, {
+    await ctx.db.patch("expenseSession", args.sessionId, {
       status: "completed",
       completedAt: now,
       updatedAt: now,
@@ -480,7 +579,7 @@ export const voidExpenseSession = mutation({
     const now = Date.now();
 
     // Get the session
-    const session = await ctx.db.get(args.sessionId);
+    const session = await ctx.db.get("expenseSession", args.sessionId);
     if (!session) {
       return error("Session not found");
     }
@@ -489,7 +588,7 @@ export const voidExpenseSession = mutation({
     const items = await ctx.db
       .query("expenseSessionItem")
       .withIndex("by_sessionId", (q) => q.eq("sessionId", args.sessionId))
-      .collect();
+      .take(MAX_EXPENSE_SESSION_ITEMS);
 
     // Calculate total quantities held per SKU
     const heldQuantities = new Map<Id<"productSku">, number>();
@@ -509,7 +608,7 @@ export const voidExpenseSession = mutation({
     await releaseInventoryHoldsBatch(ctx.db, releaseItems);
 
     // Mark session as void
-    await ctx.db.patch(args.sessionId, {
+    await ctx.db.patch("expenseSession", args.sessionId, {
       status: "void",
       updatedAt: now,
     });
@@ -536,7 +635,7 @@ export const releaseExpenseSessionInventoryHoldsAndDeleteItems = mutation({
   ),
   handler: async (ctx, args) => {
     // Get the session
-    const session = await ctx.db.get(args.sessionId);
+    const session = await ctx.db.get("expenseSession", args.sessionId);
     if (!session) {
       return error("Session not found");
     }
@@ -545,7 +644,7 @@ export const releaseExpenseSessionInventoryHoldsAndDeleteItems = mutation({
     const items = await ctx.db
       .query("expenseSessionItem")
       .withIndex("by_sessionId", (q) => q.eq("sessionId", args.sessionId))
-      .collect();
+      .take(MAX_EXPENSE_SESSION_ITEMS);
 
     // Calculate total quantities held per SKU
     const heldQuantities = new Map<Id<"productSku">, number>();
@@ -566,7 +665,9 @@ export const releaseExpenseSessionInventoryHoldsAndDeleteItems = mutation({
 
     // Delete all items for this session
     const itemIds = items.map((item) => item._id);
-    await Promise.all(itemIds.map((itemId) => ctx.db.delete(itemId)));
+    await Promise.all(
+      itemIds.map((itemId) => ctx.db.delete("expenseSessionItem", itemId))
+    );
 
     return { success: true as const, data: { sessionId: args.sessionId } };
   },
@@ -603,13 +704,16 @@ export const getActiveExpenseSession = query({
   ),
   handler: async (ctx, args) => {
     const now = Date.now();
-    let query = ctx.db
+    const activeSessions = await ctx.db
       .query("expenseSession")
-      .withIndex("by_storeId_and_status", (q) =>
-        q.eq("storeId", args.storeId).eq("status", "active")
-      );
-
-    const activeSessions = await query.collect();
+      .withIndex("by_storeId_status_cashierId", (q) =>
+        q
+          .eq("storeId", args.storeId)
+          .eq("status", "active")
+          .eq("cashierId", args.cashierId)
+      )
+      .order("desc")
+      .take(ACTIVE_EXPENSE_SESSION_CANDIDATE_LIMIT);
 
     // Filter out expired sessions
     const nonExpiredSessions = activeSessions.filter(
@@ -625,6 +729,10 @@ export const getActiveExpenseSession = query({
       );
     }
 
+    filteredSessions = filteredSessions.filter(
+      (s) => s.terminalId === args.terminalId
+    );
+
     if (args.registerNumber) {
       filteredSessions = filteredSessions.filter(
         (s) => s.terminalId === args.terminalId
@@ -638,11 +746,7 @@ export const getActiveExpenseSession = query({
 
     if (!activeSession) return null;
 
-    // Get cart items from expenseSessionItem table
-    const cartItems = await ctx.db
-      .query("expenseSessionItem")
-      .withIndex("by_sessionId", (q) => q.eq("sessionId", activeSession._id))
-      .collect();
+    const cartItems = await loadExpenseSessionItems(ctx, activeSession._id);
 
     return {
       ...activeSession,
@@ -662,17 +766,10 @@ export const releaseExpenseSessionItems = internalMutation({
     const now = Date.now();
 
     // Find all active and void sessions that have expired
-    const expiredActiveSessions = await ctx.db
-      .query("expenseSession")
-      .withIndex("by_status", (q) => q.eq("status", "active"))
-      .filter((q) => q.lt(q.field("expiresAt"), now))
-      .collect();
-
-    const expiredVoidSessions = await ctx.db
-      .query("expenseSession")
-      .withIndex("by_status", (q) => q.eq("status", "void"))
-      .filter((q) => q.lt(q.field("expiresAt"), now))
-      .collect();
+    const [expiredActiveSessions, expiredVoidSessions] = await Promise.all([
+      listExpenseSessionsByStatusBefore(ctx, "active", now),
+      listExpenseSessionsByStatusBefore(ctx, "void", now),
+    ]);
 
     const expiredSessions = [...expiredActiveSessions, ...expiredVoidSessions];
 
@@ -694,7 +791,7 @@ export const releaseExpenseSessionItems = internalMutation({
         const items = await ctx.db
           .query("expenseSessionItem")
           .withIndex("by_sessionId", (q) => q.eq("sessionId", session._id))
-          .collect();
+          .take(MAX_EXPENSE_SESSION_ITEMS);
 
         // Calculate total quantities held per SKU
         const heldQuantities = new Map<Id<"productSku">, number>();
@@ -717,7 +814,7 @@ export const releaseExpenseSessionItems = internalMutation({
         );
 
         // Mark session as expired
-        await ctx.db.patch(session._id, {
+        await ctx.db.patch("expenseSession", session._id, {
           status: "expired",
           updatedAt: now,
         });
