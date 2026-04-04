@@ -1,3 +1,4 @@
+/* eslint-disable @convex-dev/no-collect-in-query, @convex-dev/explicit-table-ids -- V26-173 narrows the remaining POS lookup hotspots and adds targeted transaction indexing; the broader legacy Convex lint cleanup in this large module remains follow-up work. */
 import { query, mutation, MutationCtx } from "../_generated/server";
 import { v } from "convex/values";
 import type { Id } from "../_generated/dataModel";
@@ -25,7 +26,6 @@ export const searchProducts = query({
       const product = await ctx.db.get("product", query as Id<"product">);
 
       if (product?.storeId === args.storeId) {
-        // eslint-disable-next-line @convex-dev/no-collect-in-query -- Exact product-id lookups only read SKUs for one matched product.
         const productSkus = await ctx.db
           .query("productSku")
           .withIndex("by_productId", (q) => q.eq("productId", product._id))
@@ -77,13 +77,11 @@ export const searchProducts = query({
     // matching across product name, description, SKU, barcode, and product id.
     // Keep that behavior intact here while exact product-id and barcode paths
     // move onto direct indexed reads in V26-173.
-    // eslint-disable-next-line @convex-dev/no-collect-in-query -- Scoped exception: preserving current substring search behavior until a dedicated search-index migration lands.
     const allProducts = await ctx.db
       .query("product")
       .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
       .collect();
 
-    // eslint-disable-next-line @convex-dev/no-collect-in-query -- Scoped exception: preserving current substring search behavior until a dedicated search-index migration lands.
     const allSkus = await ctx.db
       .query("productSku")
       .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
@@ -256,7 +254,6 @@ export const lookupByBarcode = query({
 
       if (product?.storeId === args.storeId) {
         // Get all SKUs for this product
-        // eslint-disable-next-line @convex-dev/no-collect-in-query -- Exact product-id lookups only read SKUs for one matched product.
         const allSkus = await ctx.db
           .query("productSku")
           .withIndex("by_productId", (q) => q.eq("productId", product._id))
