@@ -67,7 +67,9 @@ const schema = defineSchema({
     .index("by_storeId_action_productId", ["storeId", "action", "productId"]),
   appVerificationCode: defineTable(appVerificationCodeSchema),
   athenaUser: defineTable(athenaUserSchema),
-  bag: defineTable(bagSchema).index("by_storeId", ["storeId"]),
+  bag: defineTable(bagSchema)
+    .index("by_storeId", ["storeId"])
+    .index("by_storeFrontUserId", ["storeFrontUserId"]),
   bagItem: defineTable(bagItemSchema)
     .index("by_bagId", ["bagId"])
     .index("by_productSkuId", ["productSkuId"]),
@@ -82,7 +84,9 @@ const schema = defineSchema({
     "storeId",
     "slug",
   ]),
-  checkoutSession: defineTable(checkoutSessionSchema),
+  checkoutSession: defineTable(checkoutSessionSchema)
+    .index("by_storeFrontUserId", ["storeFrontUserId"])
+    .index("by_storeId", ["storeId"]),
   checkoutSessionItem: defineTable(checkoutSessionItemSchema).index(
     "by_sessionId",
     ["sesionId"]
@@ -98,8 +102,14 @@ const schema = defineSchema({
   featuredItem: defineTable(featuredItemSchema),
   guest: defineTable(guestSchema).index("by_storeId", ["storeId"]),
   inviteCode: defineTable(inviteCodeSchema),
-  onlineOrder: defineTable(onlineOrderSchema),
-  onlineOrderItem: defineTable(onlineOrderItemSchema),
+  onlineOrder: defineTable(onlineOrderSchema)
+    .index("by_checkoutSessionId", ["checkoutSessionId"])
+    .index("by_storeFrontUserId", ["storeFrontUserId"])
+    .index("by_storeId", ["storeId"])
+    .index("by_externalReference", ["externalReference"]),
+  onlineOrderItem: defineTable(onlineOrderItemSchema).index("by_orderId", [
+    "orderId",
+  ]),
   organization: defineTable(organizationSchema),
   organizationMember: defineTable(organizationMemberSchema),
   posCustomer: defineTable(posCustomerSchema)
@@ -149,12 +159,19 @@ const schema = defineSchema({
     .index("by_storeId_barcode", ["storeId", "barcode"])
     .index("by_storeId_sku", ["storeId", "sku"]),
   promoCode: defineTable(promoCodeSchema),
-  promoCodeItem: defineTable(promoCodeItemSchema).index("by_promoCodeId", [
-    "promoCodeId",
+  promoCodeItem: defineTable(promoCodeItemSchema)
+    .index("by_promoCodeId", ["promoCodeId"])
+    .index("by_productSkuId", ["productSkuId"]),
+  redeemedPromoCode: defineTable(redeemedPromoCodeSchema).index(
+    "by_promoCodeId_storeFrontUserId",
+    ["promoCodeId", "storeFrontUserId"]
+  ),
+  savedBag: defineTable(savedBagSchema).index("by_storeFrontUserId", [
+    "storeFrontUserId",
   ]),
-  redeemedPromoCode: defineTable(redeemedPromoCodeSchema),
-  savedBag: defineTable(savedBagSchema),
-  savedBagItem: defineTable(savedBagItemSchema),
+  savedBagItem: defineTable(savedBagItemSchema).index("by_savedBagId", [
+    "savedBagId",
+  ]),
   store: defineTable(storeSchema),
   storeAsset: defineTable(storeAssetSchema),
   storeFrontSession: defineTable(storeFrontSessionSchema),

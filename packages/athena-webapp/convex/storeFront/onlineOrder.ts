@@ -1,9 +1,10 @@
-/* eslint-disable @convex-dev/no-collect-in-query -- Query refactors are tracked in V26-168, V26-169, and V26-170; this PR only hardens API boundaries. */
+/* eslint-disable @convex-dev/no-collect-in-query -- V26-168 converts the primary commerce access paths to indexed or bounded reads first; remaining legacy scans in this large module will be reduced in follow-up passes. */
 import { v } from "convex/values";
 import {
   internalMutation,
   internalQuery,
   mutation,
+  QueryCtx,
   query,
 } from "../_generated/server";
 import {
@@ -12,10 +13,22 @@ import {
   paymentMethodSchema,
 } from "../schemas/storeFront";
 import { api, internal } from "../_generated/api";
-import { Id } from "../_generated/dataModel";
+import { Doc, Id } from "../_generated/dataModel";
 import { getDiscountValue } from "../inventory/utils";
 
 const entity = "onlineOrder";
+const MAX_ORDER_ITEMS = 200;
+const MAX_ORDERS = 500;
+
+async function listOrderItems(
+  ctx: QueryCtx,
+  orderId: Id<"onlineOrder">
+): Promise<Doc<"onlineOrderItem">[]> {
+  return await ctx.db
+    .query("onlineOrderItem")
+    .withIndex("by_orderId", (q) => q.eq("orderId", orderId))
+    .take(MAX_ORDER_ITEMS);
+}
 
 function generateOrderNumber() {
   const timestamp = Math.floor(Date.now() / 1000); // Get current timestamp in seconds
@@ -83,8 +96,8 @@ export const create = mutation({
     // get the session items using the session id to create the online order items
     const items = await ctx.db
       .query("checkoutSessionItem")
-      .filter((q) => q.eq(q.field("sesionId"), args.checkoutSessionId))
-      .collect();
+      .withIndex("by_sessionId", (q) => q.eq("sesionId", args.checkoutSessionId))
+      .take(MAX_ORDER_ITEMS);
 
     await Promise.all(
       items.map((item) => {
@@ -105,7 +118,9 @@ export const create = mutation({
       items.map(async (item) => {
         const promoCodeItem = await ctx.db
           .query("promoCodeItem")
-          .filter((q) => q.eq(q.field("productSkuId"), item.productSkuId))
+          .withIndex("by_productSkuId", (q) =>
+            q.eq("productSkuId", item.productSkuId)
+          )
           .first();
 
         if (promoCodeItem) {
@@ -128,11 +143,11 @@ export const create = mutation({
 
       const offer = await ctx.db
         .query("offer")
+        .withIndex("by_storeFrontUserId", (q) =>
+          q.eq("storeFrontUserId", session.storeFrontUserId)
+        )
         .filter((q) =>
-          q.and(
-            q.eq(q.field("promoCodeId"), args.discount?.id as Id<"promoCode">),
-            q.eq(q.field("storeFrontUserId"), session.storeFrontUserId)
-          )
+          q.eq(q.field("promoCodeId"), args.discount?.id as Id<"promoCode">)
         )
         .first();
 
@@ -207,8 +222,8 @@ export const createInternal = internalMutation({
 
     const items = await ctx.db
       .query("checkoutSessionItem")
-      .filter((q) => q.eq(q.field("sesionId"), args.checkoutSessionId))
-      .collect();
+      .withIndex("by_sessionId", (q) => q.eq("sesionId", args.checkoutSessionId))
+      .take(MAX_ORDER_ITEMS);
 
     await Promise.all(
       items.map((item) => {
@@ -228,7 +243,9 @@ export const createInternal = internalMutation({
       items.map(async (item) => {
         const promoCodeItem = await ctx.db
           .query("promoCodeItem")
-          .filter((q) => q.eq(q.field("productSkuId"), item.productSkuId))
+          .withIndex("by_productSkuId", (q) =>
+            q.eq("productSkuId", item.productSkuId)
+          )
           .first();
 
         if (promoCodeItem) {
@@ -249,11 +266,11 @@ export const createInternal = internalMutation({
 
       const offer = await ctx.db
         .query("offer")
+        .withIndex("by_storeFrontUserId", (q) =>
+          q.eq("storeFrontUserId", session.storeFrontUserId)
+        )
         .filter((q) =>
-          q.and(
-            q.eq(q.field("promoCodeId"), args.discount?.id as Id<"promoCode">),
-            q.eq(q.field("storeFrontUserId"), session.storeFrontUserId)
-          )
+          q.eq(q.field("promoCodeId"), args.discount?.id as Id<"promoCode">)
         )
         .first();
 
@@ -313,8 +330,8 @@ export const createFromSession = internalMutation({
     // get the session items using the session id to create the online order items
     const items = await ctx.db
       .query("checkoutSessionItem")
-      .filter((q) => q.eq(q.field("sesionId"), args.checkoutSessionId))
-      .collect();
+      .withIndex("by_sessionId", (q) => q.eq("sesionId", args.checkoutSessionId))
+      .take(MAX_ORDER_ITEMS);
 
     await Promise.all(
       items.map((item) => {
@@ -335,7 +352,9 @@ export const createFromSession = internalMutation({
       items.map(async (item) => {
         const promoCodeItem = await ctx.db
           .query("promoCodeItem")
-          .filter((q) => q.eq(q.field("productSkuId"), item.productSkuId))
+          .withIndex("by_productSkuId", (q) =>
+            q.eq("productSkuId", item.productSkuId)
+          )
           .first();
 
         if (promoCodeItem) {
@@ -358,13 +377,13 @@ export const createFromSession = internalMutation({
 
       const offer = await ctx.db
         .query("offer")
+        .withIndex("by_storeFrontUserId", (q) =>
+          q.eq("storeFrontUserId", session.storeFrontUserId)
+        )
         .filter((q) =>
-          q.and(
-            q.eq(
-              q.field("promoCodeId"),
-              session.discount?.id as Id<"promoCode">
-            ),
-            q.eq(q.field("storeFrontUserId"), session.storeFrontUserId)
+          q.eq(
+            q.field("promoCodeId"),
+            session.discount?.id as Id<"promoCode">
           )
         )
         .first();
@@ -400,16 +419,15 @@ export const getAll = query({
   handler: async (ctx, args) => {
     const orders = await ctx.db
       .query(entity)
-      .filter((q) => q.eq(q.field("storeFrontUserId"), args.storeFrontUserId))
+      .withIndex("by_storeFrontUserId", (q) =>
+        q.eq("storeFrontUserId", args.storeFrontUserId)
+      )
       .order("desc")
-      .collect();
+      .take(MAX_ORDERS);
 
     const ordersWithItems = await Promise.all(
       orders.map(async (order) => {
-        const items = await ctx.db
-          .query("onlineOrderItem")
-          .filter((q) => q.eq(q.field("orderId"), order._id))
-          .collect();
+        const items = await listOrderItems(ctx, order._id);
         return { ...order, items };
       })
     );
@@ -441,23 +459,31 @@ export const get = query({
     identifier: v.union(v.id("onlineOrder"), v.string()),
   },
   handler: async (ctx, args) => {
-    const order = await ctx.db
-      .query(entity)
-      .filter((q) =>
-        q.or(
-          q.eq(q.field("_id"), args.identifier),
-          q.eq(q.field("externalReference"), args.identifier),
-          q.eq(q.field("checkoutSessionId"), args.identifier)
+    let order =
+      (await ctx.db.get("onlineOrder", args.identifier as Id<"onlineOrder">)) ??
+      null;
+
+    if (!order) {
+      order = await ctx.db
+        .query(entity)
+        .withIndex("by_externalReference", (q) =>
+          q.eq("externalReference", args.identifier as string)
         )
-      )
-      .first();
+        .first();
+    }
+
+    if (!order) {
+      order = await ctx.db
+        .query(entity)
+        .withIndex("by_checkoutSessionId", (q) =>
+          q.eq("checkoutSessionId", args.identifier as Id<"checkoutSession">)
+        )
+        .first();
+    }
 
     if (!order) return null;
 
-    const items = await ctx.db
-      .query("onlineOrderItem")
-      .filter((q) => q.eq(q.field("orderId"), order._id))
-      .collect();
+    const items = await listOrderItems(ctx, order._id);
 
     const itemsWithImages = await Promise.all(
       items.map(async (item) => {
@@ -512,23 +538,31 @@ export const getInternal = internalQuery({
     identifier: v.union(v.id("onlineOrder"), v.string()),
   },
   handler: async (ctx, args) => {
-    const order = await ctx.db
-      .query(entity)
-      .filter((q) =>
-        q.or(
-          q.eq(q.field("_id"), args.identifier),
-          q.eq(q.field("externalReference"), args.identifier),
-          q.eq(q.field("checkoutSessionId"), args.identifier)
+    let order =
+      (await ctx.db.get("onlineOrder", args.identifier as Id<"onlineOrder">)) ??
+      null;
+
+    if (!order) {
+      order = await ctx.db
+        .query(entity)
+        .withIndex("by_externalReference", (q) =>
+          q.eq("externalReference", args.identifier as string)
         )
-      )
-      .first();
+        .first();
+    }
+
+    if (!order) {
+      order = await ctx.db
+        .query(entity)
+        .withIndex("by_checkoutSessionId", (q) =>
+          q.eq("checkoutSessionId", args.identifier as Id<"checkoutSession">)
+        )
+        .first();
+    }
 
     if (!order) return null;
 
-    const items = await ctx.db
-      .query("onlineOrderItem")
-      .filter((q) => q.eq(q.field("orderId"), order._id))
-      .collect();
+    const items = await listOrderItems(ctx, order._id);
 
     const itemsWithImages = await Promise.all(
       items.map(async (item) => {
@@ -580,7 +614,9 @@ export const getByExternalReference = query({
   handler: async (ctx, args) => {
     return await ctx.db
       .query(entity)
-      .filter((q) => q.eq(q.field("externalReference"), args.externalReference))
+      .withIndex("by_externalReference", (q) =>
+        q.eq("externalReference", args.externalReference)
+      )
       .first();
   },
 });
@@ -590,7 +626,9 @@ export const getByCheckoutSessionId = query({
   handler: async (ctx, args) => {
     return await ctx.db
       .query(entity)
-      .filter((q) => q.eq(q.field("checkoutSessionId"), args.checkoutSessionId))
+      .withIndex("by_checkoutSessionId", (q) =>
+        q.eq("checkoutSessionId", args.checkoutSessionId)
+      )
       .first();
   },
 });
@@ -600,17 +638,14 @@ export const getAllOnlineOrders = query({
   handler: async (ctx, args) => {
     const orders = await ctx.db
       .query(entity)
-      .filter((q) => q.eq(q.field("storeId"), args.storeId))
+      .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
       .order("desc")
-      .collect();
+      .take(MAX_ORDERS);
 
     // Include items for net amount calculation
     const ordersWithItems = await Promise.all(
       orders.map(async (order) => {
-        const items = await ctx.db
-          .query("onlineOrderItem")
-          .filter((q) => q.eq(q.field("orderId"), order._id))
-          .collect();
+        const items = await listOrderItems(ctx, order._id);
 
         return { ...order, items };
       })
@@ -625,9 +660,11 @@ export const getAllOnlineOrdersByStoreFrontUserId = query({
   handler: async (ctx, args) => {
     const orders = await ctx.db
       .query(entity)
-      .filter((q) => q.eq(q.field("storeFrontUserId"), args.storeFrontUserId))
+      .withIndex("by_storeFrontUserId", (q) =>
+        q.eq("storeFrontUserId", args.storeFrontUserId)
+      )
       .order("desc")
-      .collect();
+      .take(MAX_ORDERS);
 
     return orders;
   },

@@ -1,4 +1,4 @@
-/* eslint-disable @convex-dev/no-collect-in-query -- Query refactors are tracked in V26-168, V26-169, and V26-170; this PR only hardens API boundaries. */
+/* eslint-disable @convex-dev/no-collect-in-query -- V26-168 adds the missing commerce indexes and refactors the main storefront session access paths first; remaining legacy scans in this large module will be reduced in follow-up passes. */
 import { CheckoutSession, CheckoutSessionItem, ProductSku } from "../../types";
 import { api, internal } from "../_generated/api";
 import { Id } from "../_generated/dataModel";
@@ -19,6 +19,8 @@ import { isStoreCheckoutDisabled } from "../inventory/storeConfigV2";
 const entity = "checkoutSession";
 
 const sessionLimitMinutes = 20;
+const MAX_CHECKOUT_SESSIONS = 500;
+const MAX_CHECKOUT_SESSION_ITEMS = 200;
 
 type Product = {
   productId: Id<"product">;
@@ -29,6 +31,16 @@ type Product = {
 };
 
 type AvailabilityUpdate = { id: Id<"productSku">; change: number };
+
+async function listSessionItems(
+  ctx: QueryCtx | MutationCtx,
+  sessionId: Id<"checkoutSession">
+) {
+  return await ctx.db
+    .query("checkoutSessionItem")
+    .withIndex("by_sessionId", (q) => q.eq("sesionId", sessionId))
+    .take(MAX_CHECKOUT_SESSION_ITEMS);
+}
 
 const checkIfItemsHaveChanged = (
   products: Product[],
@@ -148,10 +160,7 @@ export const create = mutation({
 
     if (existingSession && existingSession.placedOrderId === undefined) {
       // Fetch existing session items
-      const sessionItems = await ctx.db
-        .query("checkoutSessionItem")
-        .filter((q) => q.eq(q.field("sesionId"), existingSession._id))
-        .collect();
+      const sessionItems = await listSessionItems(ctx, existingSession._id);
 
       // Map existing session items by productSkuId and quantity
       sessionItemsMap = new Map(
@@ -777,13 +786,13 @@ export const getCheckoutSession = internalQuery({
   handler: async (ctx, args) => {
     return await ctx.db
       .query("checkoutSession")
+      .withIndex("by_storeFrontUserId", (q) =>
+        q.eq("storeFrontUserId", args.storeFrontUserId)
+      )
       .filter((q) =>
-        q.and(
-          q.eq(q.field("storeFrontUserId"), args.storeFrontUserId),
-          q.or(
-            q.eq(q.field("externalReference"), args.externalReference),
-            q.eq(q.field("_id"), args.sessionId)
-          )
+        q.or(
+          q.eq(q.field("externalReference"), args.externalReference),
+          q.eq(q.field("_id"), args.sessionId)
         )
       )
       .first();
@@ -795,15 +804,17 @@ export const getPendingCheckoutSessions = query({
   handler: async (ctx, args) => {
     return await ctx.db
       .query("checkoutSession")
+      .withIndex("by_storeFrontUserId", (q) =>
+        q.eq("storeFrontUserId", args.storeFrontUserId)
+      )
       .filter((q) =>
         q.and(
-          q.eq(q.field("storeFrontUserId"), args.storeFrontUserId),
           q.eq(q.field("hasCompletedPayment"), true),
           q.eq(q.field("placedOrderId"), undefined),
           q.neq(q.field("isPaymentRefunded"), true)
         )
       )
-      .collect();
+      .take(MAX_CHECKOUT_SESSIONS);
   },
 });
 
@@ -833,10 +844,7 @@ export const getById = query({
     const session = await ctx.db.get("checkoutSession", args.sessionId);
     if (!session) return null;
 
-    const sessionItems = await ctx.db
-      .query("checkoutSessionItem")
-      .filter((q) => q.eq(q.field("sesionId"), args.sessionId))
-      .collect();
+    const sessionItems = await listSessionItems(ctx, args.sessionId);
 
     const sessionItemsWithImages = await Promise.all(
       sessionItems.map(async (item) => {
@@ -884,10 +892,7 @@ export const getByIdInternal = internalQuery({
     const session = await ctx.db.get("checkoutSession", args.sessionId);
     if (!session) return null;
 
-    const sessionItems = await ctx.db
-      .query("checkoutSessionItem")
-      .filter((q) => q.eq(q.field("sesionId"), args.sessionId))
-      .collect();
+    const sessionItems = await listSessionItems(ctx, args.sessionId);
 
     const sessionItemsWithImages = await Promise.all(
       sessionItems.map(async (item) => {
@@ -942,18 +947,16 @@ async function retrieveActiveCheckoutSession(
   // it has not expired, or isFinalizingPayment is true, or has
   return await ctx.db
     .query("checkoutSession")
+    .withIndex("by_storeFrontUserId", (q) =>
+      q.eq("storeFrontUserId", storeFrontUserId)
+    )
     .filter((q) =>
       q.and(
-        q.and(
-          q.eq(q.field("storeFrontUserId"), storeFrontUserId),
-          q.or(
-            q.gt(q.field("expiresAt"), now),
-            q.eq(q.field("isFinalizingPayment"), true)
-          )
+        q.or(
+          q.gt(q.field("expiresAt"), now),
+          q.eq(q.field("isFinalizingPayment"), true)
         ),
         q.eq(q.field("hasCompletedCheckoutSession"), false)
-        // q.eq(q.field("placedOrderId"), undefined)
-        // q.eq(q.field("hasCompletedPayment"), false)
       )
     )
     .first();
@@ -1284,10 +1287,7 @@ async function handleExistingSession(
 
   // Fetch and return updated session
   const updatedSession = await ctx.db.get("checkoutSession", existingSession._id);
-  const updatedSessionItems = await ctx.db
-    .query("checkoutSessionItem")
-    .filter((q) => q.eq(q.field("sesionId"), existingSession._id))
-    .collect();
+  const updatedSessionItems = await listSessionItems(ctx, existingSession._id);
 
   console.log(`[HandleExisting] Successfully processed existing session`);
   return {

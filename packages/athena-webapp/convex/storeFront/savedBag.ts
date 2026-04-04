@@ -1,18 +1,30 @@
-/* eslint-disable @convex-dev/no-collect-in-query -- Query refactors are tracked in V26-168, V26-169, and V26-170; this PR only hardens API boundaries. */
 import {
   internalMutation,
   internalQuery,
   mutation,
+  QueryCtx,
   query,
 } from "../_generated/server";
 import { v } from "convex/values";
 
 const entity = "savedBag";
+const MAX_SAVED_BAGS = 500;
+const MAX_SAVED_BAG_ITEMS = 200;
+
+async function listSavedBagItems(
+  ctx: QueryCtx,
+  savedBagId: string
+) {
+  return await ctx.db
+    .query("savedBagItem")
+    .withIndex("by_savedBagId", (q) => q.eq("savedBagId", savedBagId as any))
+    .take(MAX_SAVED_BAG_ITEMS);
+}
 
 export const getAll = query({
   args: {},
   handler: async (ctx) => {
-    return await ctx.db.query(entity).collect();
+    return await ctx.db.query(entity).take(MAX_SAVED_BAGS);
   },
 });
 
@@ -44,10 +56,7 @@ export const getById = query({
     const bag = await ctx.db.get("savedBag", args.id);
     if (!bag) return null;
 
-    const items = await ctx.db
-      .query("savedBagItem")
-      .filter((q) => q.eq(q.field("savedBagId"), bag._id))
-      .collect();
+    const items = await listSavedBagItems(ctx, bag._id);
 
     // For each item, retrieve the associated product and its SKUs
     const itemsWithProductDetails = await Promise.all(
@@ -99,15 +108,14 @@ export const getByUserId = internalQuery({
   handler: async (ctx, args) => {
     const bag = await ctx.db
       .query(entity)
-      .filter((q) => q.eq(q.field("storeFrontUserId"), args.storeFrontUserId))
+      .withIndex("by_storeFrontUserId", (q) =>
+        q.eq("storeFrontUserId", args.storeFrontUserId)
+      )
       .first();
 
     if (!bag) return null;
 
-    const items = await ctx.db
-      .query("savedBagItem")
-      .filter((q) => q.eq(q.field("savedBagId"), bag._id))
-      .collect();
+    const items = await listSavedBagItems(ctx, bag._id);
 
     // For each item, retrieve the associated product and its SKUs
     const itemsWithProductDetails = await Promise.all(
@@ -161,8 +169,8 @@ export const deleteSavedBag = mutation({
 
     const items = await ctx.db
       .query("savedBagItem")
-      .filter((q) => q.eq(q.field("savedBagId"), args.id))
-      .collect();
+      .withIndex("by_savedBagId", (q) => q.eq("savedBagId", args.id))
+      .take(MAX_SAVED_BAG_ITEMS);
 
     await Promise.all(items.map((item) => ctx.db.delete("savedBagItem", item._id)));
 
@@ -178,12 +186,16 @@ export const updateOwner = internalMutation({
   handler: async (ctx, args) => {
     const savedBag = await ctx.db
       .query(entity)
-      .filter((q) => q.eq(q.field("storeFrontUserId"), args.currentOwner))
+      .withIndex("by_storeFrontUserId", (q) =>
+        q.eq("storeFrontUserId", args.currentOwner)
+      )
       .first();
 
     const newOwnerBag = await ctx.db
       .query(entity)
-      .filter((q) => q.eq(q.field("storeFrontUserId"), args.newOwner))
+      .withIndex("by_storeFrontUserId", (q) =>
+        q.eq("storeFrontUserId", args.newOwner)
+      )
       .first();
 
     if (!savedBag) {
@@ -194,14 +206,14 @@ export const updateOwner = internalMutation({
       // Get items from current bag
       const currentItems = await ctx.db
         .query("savedBagItem")
-        .filter((q) => q.eq(q.field("savedBagId"), savedBag._id))
-        .collect();
+        .withIndex("by_savedBagId", (q) => q.eq("savedBagId", savedBag._id))
+        .take(MAX_SAVED_BAG_ITEMS);
 
       // Get items from new owner's bag
       const newOwnerItems = await ctx.db
         .query("savedBagItem")
-        .filter((q) => q.eq(q.field("savedBagId"), newOwnerBag._id))
-        .collect();
+        .withIndex("by_savedBagId", (q) => q.eq("savedBagId", newOwnerBag._id))
+        .take(MAX_SAVED_BAG_ITEMS);
 
       // Process each item from current bag
       await Promise.all(
