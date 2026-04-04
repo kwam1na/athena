@@ -4,8 +4,15 @@ import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 
 const projectRoot = process.cwd();
+const repoRoot = join(projectRoot, "..", "..");
 const readProjectFile = (...segments: string[]) =>
   readFileSync(join(projectRoot, ...segments), "utf8");
+const eslintBinary = join(
+  repoRoot,
+  "node_modules",
+  ".bin",
+  process.platform === "win32" ? "eslint.cmd" : "eslint"
+);
 
 describe("V26-173 POS query cleanup", () => {
   it("adds the composite transaction index needed for completed POS lookups", () => {
@@ -57,15 +64,11 @@ describe("V26-173 POS query cleanup", () => {
       /^\/\* eslint-disable .*@convex-dev\/explicit-table-ids.*\*\/$/m
     );
 
-    const lintResult = spawnSync(
-      "bunx",
-      ["eslint", "convex/inventory/pos.ts"],
-      {
-        cwd: projectRoot,
-        encoding: "utf8",
-      }
-    );
+    const lintResult = spawnSync(eslintBinary, ["convex/inventory/pos.ts"], {
+      cwd: projectRoot,
+      encoding: "utf8",
+    });
 
     expect(lintResult.status, lintResult.stderr || lintResult.stdout).toBe(0);
-  });
+  }, 15000);
 });
