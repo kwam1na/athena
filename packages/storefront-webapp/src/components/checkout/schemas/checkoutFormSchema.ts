@@ -4,6 +4,7 @@ import { baseDeliveryDetailsSchema } from "./deliveryDetailsSchema";
 
 export const checkoutFormSchema = z
   .object({
+    deliveryInstructions: z.string(),
     deliveryMethod: z
       .enum(["pickup", "delivery"])
       .refine((value) => !!value, { message: "Delivery method is required" }),
