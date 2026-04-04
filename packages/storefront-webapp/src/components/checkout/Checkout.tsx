@@ -53,6 +53,8 @@ const MainComponent = () => {
       !activeSession.hasCompletedCheckoutSession &&
       origin === null;
 
+    console.log("active session", activeSession, isIncomplete);
+
     if (needsVerification) {
       navigate({
         to: `/shop/checkout/verify?reference=${activeSession.externalReference}`,

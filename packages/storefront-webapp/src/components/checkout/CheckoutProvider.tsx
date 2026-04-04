@@ -363,6 +363,8 @@ export const CheckoutProvider = ({
     onlineOrderQueries.detail(data?.placedOrderId || ""),
   );
 
+  console.log("online order", onlineOrder);
+
   // Sync discount from session to checkout state
   useEffect(() => {
     if (actionsState.isApplyingDiscount) {

@@ -26,7 +26,7 @@ const MAX_ORDERS = 500;
 
 async function listOrderItems(
   ctx: QueryCtx,
-  orderId: Id<"onlineOrder">
+  orderId: Id<"onlineOrder">,
 ): Promise<Doc<"onlineOrderItem">[]> {
   return await ctx.db
     .query("onlineOrderItem")
@@ -42,7 +42,7 @@ export const create = mutation({
         ...addressSchema.fields,
         billingAddressSameAsDelivery: v.optional(v.boolean()),
       }),
-      v.null()
+      v.null(),
     ),
     customerDetails: customerDetailsSchema,
     deliveryDetails: v.union(addressSchema, v.null(), v.string()),
@@ -79,7 +79,7 @@ export const createInternal = internalMutation({
         ...addressSchema.fields,
         billingAddressSameAsDelivery: v.optional(v.boolean()),
       }),
-      v.null()
+      v.null(),
     ),
     customerDetails: customerDetailsSchema,
     deliveryDetails: v.union(addressSchema, v.null(), v.string()),
@@ -131,7 +131,7 @@ export const getAll = query({
     const orders = await ctx.db
       .query(entity)
       .withIndex("by_storeFrontUserId", (q) =>
-        q.eq("storeFrontUserId", args.storeFrontUserId)
+        q.eq("storeFrontUserId", args.storeFrontUserId),
       )
       .order("desc")
       .take(MAX_ORDERS);
@@ -140,7 +140,7 @@ export const getAll = query({
       orders.map(async (order) => {
         const items = await listOrderItems(ctx, order._id);
         return { ...order, items };
-      })
+      }),
     );
     const ordersWithItemsAndImages = await Promise.all(
       ordersWithItems.map(async (order) => {
@@ -156,10 +156,10 @@ export const getAll = query({
               productName: product?.name,
               productImage: productSku?.images?.[0] ?? null,
             };
-          })
+          }),
         );
         return { ...order, items: itemsWithImages };
-      })
+      }),
     );
     return ordersWithItemsAndImages;
   },
@@ -170,15 +170,18 @@ export const get = query({
     identifier: v.union(v.id("onlineOrder"), v.string()),
   },
   handler: async (ctx, args) => {
-    let order =
-      (await ctx.db.get("onlineOrder", args.identifier as Id<"onlineOrder">)) ??
-      null;
+    let order: Doc<"onlineOrder"> | null = null;
 
-    if (!order) {
+    try {
+      order = await ctx.db.get(
+        "onlineOrder",
+        args.identifier as Id<"onlineOrder">,
+      );
+    } catch (e) {
       order = await ctx.db
         .query(entity)
         .withIndex("by_externalReference", (q) =>
-          q.eq("externalReference", args.identifier as string)
+          q.eq("externalReference", args.identifier as string),
         )
         .first();
     }
@@ -187,7 +190,7 @@ export const get = query({
       order = await ctx.db
         .query(entity)
         .withIndex("by_checkoutSessionId", (q) =>
-          q.eq("checkoutSessionId", args.identifier as Id<"checkoutSession">)
+          q.eq("checkoutSessionId", args.identifier as Id<"checkoutSession">),
         )
         .first();
     }
@@ -213,7 +216,10 @@ export const get = query({
         }
 
         if (product) {
-          const productCategory = await ctx.db.get("category", product.categoryId);
+          const productCategory = await ctx.db.get(
+            "category",
+            product.categoryId,
+          );
           category = productCategory?.name;
         }
 
@@ -237,7 +243,7 @@ export const get = query({
           isOutOfStock,
           isLowStock,
         };
-      })
+      }),
     );
 
     return { ...order, items: itemsWithImages };
@@ -257,7 +263,7 @@ export const getInternal = internalQuery({
       order = await ctx.db
         .query(entity)
         .withIndex("by_externalReference", (q) =>
-          q.eq("externalReference", args.identifier as string)
+          q.eq("externalReference", args.identifier as string),
         )
         .first();
     }
@@ -266,7 +272,7 @@ export const getInternal = internalQuery({
       order = await ctx.db
         .query(entity)
         .withIndex("by_checkoutSessionId", (q) =>
-          q.eq("checkoutSessionId", args.identifier as Id<"checkoutSession">)
+          q.eq("checkoutSessionId", args.identifier as Id<"checkoutSession">),
         )
         .first();
     }
@@ -291,7 +297,10 @@ export const getInternal = internalQuery({
         }
 
         if (product) {
-          const productCategory = await ctx.db.get("category", product.categoryId);
+          const productCategory = await ctx.db.get(
+            "category",
+            product.categoryId,
+          );
           category = productCategory?.name;
         }
 
@@ -313,7 +322,7 @@ export const getInternal = internalQuery({
           isOutOfStock,
           isLowStock,
         };
-      })
+      }),
     );
 
     return { ...order, items: itemsWithImages };
@@ -326,7 +335,7 @@ export const getByExternalReference = query({
     return await ctx.db
       .query(entity)
       .withIndex("by_externalReference", (q) =>
-        q.eq("externalReference", args.externalReference)
+        q.eq("externalReference", args.externalReference),
       )
       .first();
   },
@@ -338,7 +347,7 @@ export const getByCheckoutSessionId = query({
     return await ctx.db
       .query(entity)
       .withIndex("by_checkoutSessionId", (q) =>
-        q.eq("checkoutSessionId", args.checkoutSessionId)
+        q.eq("checkoutSessionId", args.checkoutSessionId),
       )
       .first();
   },
@@ -359,7 +368,7 @@ export const getAllOnlineOrders = query({
         const items = await listOrderItems(ctx, order._id);
 
         return { ...order, items };
-      })
+      }),
     );
 
     return ordersWithItems;
@@ -372,7 +381,7 @@ export const getAllOnlineOrdersByStoreFrontUserId = query({
     const orders = await ctx.db
       .query(entity)
       .withIndex("by_storeFrontUserId", (q) =>
-        q.eq("storeFrontUserId", args.storeFrontUserId)
+        q.eq("storeFrontUserId", args.storeFrontUserId),
       )
       .order("desc")
       .take(MAX_ORDERS);
@@ -391,7 +400,7 @@ export const update = mutation({
       v.object({
         id: v.id("athenaUser"),
         email: v.string(),
-      })
+      }),
     ),
   },
   handler: async (ctx, args) => {
@@ -460,7 +469,7 @@ export const update = mutation({
           {
             orderId: args.orderId,
             newStatus: args.update.status,
-          }
+          },
         );
       }
 
@@ -473,7 +482,7 @@ export const update = mutation({
       const order = await ctx.db
         .query(entity)
         .filter((q) =>
-          q.eq(q.field("externalReference"), args.externalReference)
+          q.eq(q.field("externalReference"), args.externalReference),
         )
         .first();
 
@@ -527,6 +536,23 @@ export const update = mutation({
   },
 });
 
+export const getUnverifiedPaidOrders = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    const fifteenMinutesAgo = Date.now() - 15 * 60 * 1000;
+
+    return await ctx.db
+      .query("onlineOrder")
+      .filter((q) =>
+        q.and(
+          q.neq(q.field("hasVerifiedPayment"), true),
+          q.lt(q.field("_creationTime"), fifteenMinutesAgo),
+        ),
+      )
+      .collect();
+  },
+});
+
 export const updateInternal = internalMutation({
   args: {
     orderId: v.optional(v.id("onlineOrder")),
@@ -537,7 +563,7 @@ export const updateInternal = internalMutation({
       v.object({
         id: v.id("athenaUser"),
         email: v.string(),
-      })
+      }),
     ),
   },
   handler: async (ctx, args) => {
@@ -600,7 +626,7 @@ export const updateInternal = internalMutation({
           {
             orderId: args.orderId,
             newStatus: args.update.status,
-          }
+          },
         );
       }
 
@@ -612,7 +638,7 @@ export const updateInternal = internalMutation({
       const order = await ctx.db
         .query(entity)
         .filter((q) =>
-          q.eq(q.field("externalReference"), args.externalReference)
+          q.eq(q.field("externalReference"), args.externalReference),
         )
         .first();
 
@@ -675,7 +701,7 @@ export const returnItemsToStock = mutation({
       const order = await ctx.db
         .query(entity)
         .filter((q) =>
-          q.eq(q.field("externalTransactionId"), args.externalTransactionId)
+          q.eq(q.field("externalTransactionId"), args.externalTransactionId),
         )
         .first();
 
@@ -684,11 +710,17 @@ export const returnItemsToStock = mutation({
       if (args.onlineOrderItemIds?.length) {
         await Promise.all(
           args.onlineOrderItemIds.map(async (itemId) => {
-            await ctx.db.patch("onlineOrderItem", itemId, { isRefunded: true, isRestocked: true });
+            await ctx.db.patch("onlineOrderItem", itemId, {
+              isRefunded: true,
+              isRestocked: true,
+            });
             const onlineOrderItem = await ctx.db.get("onlineOrderItem", itemId);
 
             if (onlineOrderItem) {
-              const productSku = await ctx.db.get("productSku", onlineOrderItem.productSkuId);
+              const productSku = await ctx.db.get(
+                "productSku",
+                onlineOrderItem.productSkuId,
+              );
 
               if (productSku) {
                 await ctx.db.patch("productSku", onlineOrderItem.productSkuId, {
@@ -700,7 +732,7 @@ export const returnItemsToStock = mutation({
                 });
               }
             }
-          })
+          }),
         );
 
         return true;
@@ -713,7 +745,10 @@ export const returnItemsToStock = mutation({
 
       await Promise.all(
         orderItems.map(async (item) => {
-          await ctx.db.patch("onlineOrderItem", item._id, { isRefunded: true, isRestocked: true });
+          await ctx.db.patch("onlineOrderItem", item._id, {
+            isRefunded: true,
+            isRestocked: true,
+          });
           const productSku = await ctx.db.get("productSku", item.productSkuId);
           if (productSku) {
             await ctx.db.patch("productSku", item.productSkuId, {
@@ -723,7 +758,7 @@ export const returnItemsToStock = mutation({
                 : productSku.inventoryCount,
             });
           }
-        })
+        }),
       );
 
       return true;
@@ -741,7 +776,7 @@ export const returnItemsToStockInternal = internalMutation({
       const order = await ctx.db
         .query(entity)
         .filter((q) =>
-          q.eq(q.field("externalTransactionId"), args.externalTransactionId)
+          q.eq(q.field("externalTransactionId"), args.externalTransactionId),
         )
         .first();
 
@@ -750,11 +785,17 @@ export const returnItemsToStockInternal = internalMutation({
       if (args.onlineOrderItemIds?.length) {
         await Promise.all(
           args.onlineOrderItemIds.map(async (itemId) => {
-            await ctx.db.patch("onlineOrderItem", itemId, { isRefunded: true, isRestocked: true });
+            await ctx.db.patch("onlineOrderItem", itemId, {
+              isRefunded: true,
+              isRestocked: true,
+            });
             const onlineOrderItem = await ctx.db.get("onlineOrderItem", itemId);
 
             if (onlineOrderItem) {
-              const productSku = await ctx.db.get("productSku", onlineOrderItem.productSkuId);
+              const productSku = await ctx.db.get(
+                "productSku",
+                onlineOrderItem.productSkuId,
+              );
 
               if (productSku) {
                 await ctx.db.patch("productSku", onlineOrderItem.productSkuId, {
@@ -766,7 +807,7 @@ export const returnItemsToStockInternal = internalMutation({
                 });
               }
             }
-          })
+          }),
         );
 
         return true;
@@ -779,7 +820,10 @@ export const returnItemsToStockInternal = internalMutation({
 
       await Promise.all(
         orderItems.map(async (item) => {
-          await ctx.db.patch("onlineOrderItem", item._id, { isRefunded: true, isRestocked: true });
+          await ctx.db.patch("onlineOrderItem", item._id, {
+            isRefunded: true,
+            isRestocked: true,
+          });
           const productSku = await ctx.db.get("productSku", item.productSkuId);
           if (productSku) {
             await ctx.db.patch("productSku", item.productSkuId, {
@@ -789,7 +833,7 @@ export const returnItemsToStockInternal = internalMutation({
                 : productSku.inventoryCount,
             });
           }
-        })
+        }),
       );
 
       return true;
@@ -806,7 +850,7 @@ export const updateOrderItems = mutation({
     await Promise.all(
       args.orderItemIds.map(async (itemId) => {
         await ctx.db.patch("onlineOrderItem", itemId, args.updates);
-      })
+      }),
     );
     return true;
   },
@@ -821,7 +865,7 @@ export const updateOrderItemsInternal = internalMutation({
     await Promise.all(
       args.orderItemIds.map(async (itemId) => {
         await ctx.db.patch("onlineOrderItem", itemId, args.updates);
-      })
+      }),
     );
     return true;
   },
@@ -880,7 +924,7 @@ export const updateOwner = mutation({
       .collect();
 
     console.info(
-      `updating owner for orders from ${args.currentOwner} to ${args.newOwner}`
+      `updating owner for orders from ${args.currentOwner} to ${args.newOwner}`,
     );
 
     // Update all orders
@@ -900,10 +944,10 @@ export const updateOwner = mutation({
           orderItems.map((item) =>
             ctx.db.patch("onlineOrderItem", item._id, {
               storeFrontUserId: args.newOwner,
-            })
-          )
+            }),
+          ),
         );
-      })
+      }),
     );
 
     console.info("successfully updated owner for orders");
@@ -925,7 +969,7 @@ export const isDuplicateOrder = query({
     const orders = await ctx.db
       .query(entity)
       .filter((q) =>
-        q.eq(q.field("externalReference"), order.externalReference)
+        q.eq(q.field("externalReference"), order.externalReference),
       )
       .collect();
 
@@ -940,7 +984,7 @@ export const getOrderMetrics = query({
       v.literal("day"),
       v.literal("week"),
       v.literal("month"),
-      v.literal("all")
+      v.literal("all"),
     ),
   },
   returns: v.object({
@@ -977,7 +1021,7 @@ export const getOrderMetrics = query({
     // Apply time filter if specified
     if (timeFilter !== undefined) {
       ordersQuery = ordersQuery.filter((q) =>
-        q.gte(q.field("_creationTime"), timeFilter!)
+        q.gte(q.field("_creationTime"), timeFilter!),
       );
     }
 
@@ -994,7 +1038,7 @@ export const getOrderMetrics = query({
     ];
 
     const filteredOrders = allOrders.filter((order) =>
-      allowedStatuses.includes(order.status)
+      allowedStatuses.includes(order.status),
     );
 
     // Get all order items for discount calculations
@@ -1005,7 +1049,7 @@ export const getOrderMetrics = query({
           .filter((q) => q.eq(q.field("orderId"), order._id))
           .collect();
         return { ...order, items };
-      })
+      }),
     );
 
     // Calculate metrics
