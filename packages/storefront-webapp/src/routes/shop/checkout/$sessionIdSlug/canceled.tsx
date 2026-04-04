@@ -10,6 +10,9 @@ import { useCheckoutSessionQueries } from "@/lib/queries/checkout";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useParams } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
+import { useEffect, useRef } from "react";
+import { useStorefrontObservability } from "@/hooks/useStorefrontObservability";
+import { createCheckoutCompletionCanceledEvent } from "@/lib/storefrontJourneyEvents";
 
 export const Route = createFileRoute("/shop/checkout/$sessionIdSlug/canceled")({
   component: () => <CheckoutCanceledView />,
@@ -17,6 +20,8 @@ export const Route = createFileRoute("/shop/checkout/$sessionIdSlug/canceled")({
 
 const CheckoutCanceledView = () => {
   const { sessionIdSlug } = useParams({ strict: false });
+  const { track } = useStorefrontObservability();
+  const hasTrackedCanceledCheckout = useRef(false);
 
   const checkoutSessionQueries = useCheckoutSessionQueries();
 
@@ -25,6 +30,23 @@ const CheckoutCanceledView = () => {
     isLoading,
     isRefetching,
   } = useQuery(checkoutSessionQueries.session(sessionIdSlug));
+
+  useEffect(() => {
+    if (!sessionData?.isPaymentRefunded || hasTrackedCanceledCheckout.current)
+      return;
+
+    hasTrackedCanceledCheckout.current = true;
+
+    void track(
+      createCheckoutCompletionCanceledEvent({
+        checkoutSessionId: sessionData._id,
+        orderId: sessionData.placedOrderId,
+        deliveryMethod: sessionData.deliveryMethod,
+      }),
+    ).catch((error) => {
+      console.error("Failed to track canceled checkout:", error);
+    });
+  }, [sessionData, track]);
 
   if ((!sessionData && isLoading) || isRefetching) return null;
 

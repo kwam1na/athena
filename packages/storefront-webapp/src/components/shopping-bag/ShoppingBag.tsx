@@ -42,7 +42,6 @@ import { useNavigationBarContext } from "@/contexts/NavigationBarProvider";
 import { useCheckoutSessionQueries } from "@/lib/queries/checkout";
 import { usePromoCodesQueries } from "@/lib/queries/promoCode";
 import { postAnalytics } from "@/api/analytics";
-import { useTrackEvent } from "@/hooks/useTrackEvent";
 import { useDiscountCodeAlert } from "@/hooks/useDiscountCodeAlert";
 import { WelcomeBackModal } from "../ui/modals/WelcomeBackModal";
 import { useProductDiscount } from "@/hooks/useProductDiscount";
@@ -50,6 +49,12 @@ import { DiscountBadge } from "../product-page/DiscountBadge";
 import { useInventoryStatus } from "@/hooks/useInventoryStatus";
 import { getStoreConfigV2 } from "@/lib/storeConfig";
 import { toDisplayAmount } from "@/lib/currency";
+import { useStorefrontObservability } from "@/hooks/useStorefrontObservability";
+import {
+  createBagRemoveSucceededEvent,
+  createBagViewedEvent,
+  createCheckoutStartEvent,
+} from "@/lib/storefrontJourneyEvents";
 
 const PendingItem = ({ session, count }: { session: any; count: number }) => {
   return (
@@ -346,8 +351,10 @@ export default function ShoppingBag() {
   const [bagAction, setBagAction] = useState<ShoppingBagAction>("idle");
   const [updateCounter, forceUpdate] = useReducer((x) => x + 1, 0);
   const itemTotalsRef = useRef<Map<string, number>>(new Map());
+  const hasTrackedBagView = useRef(false);
   const { formatter, userId, isNavbarShowing, store } = useStoreContext();
   const storeConfig = getStoreConfigV2(store);
+  const { track } = useStorefrontObservability();
 
   const { setNavBarLayout, setAppLocation } = useNavigationBarContext();
 
@@ -425,12 +432,20 @@ export default function ShoppingBag() {
     checkoutSessionQueries.pendingSessions()
   );
 
-  const { origin } = useSearch({ strict: false });
+  useEffect(() => {
+    if (hasTrackedBagView.current || bag === undefined) return;
 
-  useTrackEvent({
-    action: "viewed_shopping_bag",
-    origin,
-  });
+    hasTrackedBagView.current = true;
+
+    void track(
+      createBagViewedEvent({
+        bagId: bag?._id,
+        itemCount: bag?.items?.length ?? 0,
+      }),
+    ).catch((error) => {
+      console.error("Failed to track bag view:", error);
+    });
+  }, [bag, track]);
 
   const handleOnCheckoutClick = async () => {
     setIsProcessingCheckoutRequest(true);
@@ -442,14 +457,27 @@ export default function ShoppingBag() {
       });
 
       if (res.session) {
+        const checkoutSessionId =
+          typeof res.session === "object" &&
+          res.session !== null &&
+          "_id" in res.session &&
+          typeof res.session._id === "string"
+            ? res.session._id
+            : undefined;
+
         queryClient.setQueryData(["active-checkout-session", userId], {
           session: res.session,
         });
 
-        await postAnalytics({
-          action: "initiated_checkout",
-          data: {},
-        }).catch((error) => console.error("Failed to post analytics:", error));
+        await track(
+          createCheckoutStartEvent({
+            bagId: bag?._id,
+            itemCount: bag?.items?.length ?? 0,
+            checkoutSessionId,
+          }),
+        ).catch((error) => {
+          console.error("Failed to track checkout start:", error);
+        });
 
         navigate({
           to: "/shop/checkout",
@@ -516,14 +544,13 @@ export default function ShoppingBag() {
     const item = bag?.items.find((i: BagItem) => i._id === itemId);
     await Promise.all([
       deleteItemFromBag(itemId),
-      postAnalytics({
-        action: "removed_product_from_bag",
-        data: {
-          product: item?.productId,
+      track(
+        createBagRemoveSucceededEvent({
+          productId: item?.productId,
           productSku: item?.productSku,
-          productImageUrl: item?.productImage,
-        },
-      }),
+          quantity: item?.quantity,
+        }),
+      ),
     ]);
   };
 

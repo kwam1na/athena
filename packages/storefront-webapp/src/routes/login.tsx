@@ -26,7 +26,12 @@ import {
 import { ArrowRight } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
+import { useStorefrontObservability } from "@/hooks/useStorefrontObservability";
+import {
+  createAuthEntryViewedEvent,
+  createAuthRequestStartedEvent,
+} from "@/lib/storefrontJourneyEvents";
 
 export const customerDetailsSchema = z.object({
   email: z
@@ -39,7 +44,7 @@ export const customerDetailsSchema = z.object({
 });
 
 export const Route = createFileRoute("/login")({
-  beforeLoad: async () => {
+  beforeLoad: async (): Promise<void> => {
     const id = localStorage.getItem(LOGGED_IN_USER_ID_KEY);
 
     const { storeId, organizationId } = getStoreDetails();
@@ -49,12 +54,12 @@ export const Route = createFileRoute("/login")({
         const user = await getActiveUser();
 
         if (user._id) {
-          return redirect({ to: "/account" });
+          throw redirect({ to: "/account" });
         }
       }
     } catch (e) {
       localStorage.removeItem(LOGGED_IN_USER_ID_KEY);
-      return redirect({ to: "/login" });
+      throw redirect({ to: "/login" });
     }
   },
 
@@ -70,14 +75,32 @@ const Login = () => {
   });
 
   const { origin, email } = useSearch({ strict: false });
+  const hasTrackedLoginEntry = useRef(false);
 
   const isFromGuestRewards = origin === "guest-rewards";
+  const { track } = useStorefrontObservability();
 
   useEffect(() => {
     if (isFromGuestRewards && email) {
       form.setValue("email", email);
     }
   }, [isFromGuestRewards, email]);
+
+  useEffect(() => {
+    if (hasTrackedLoginEntry.current) return;
+
+    hasTrackedLoginEntry.current = true;
+
+    void track(
+      createAuthEntryViewedEvent({
+        mode: "login",
+        origin,
+        email,
+      }),
+    ).catch((error) => {
+      console.error("Failed to track login entry:", error);
+    });
+  }, [email, origin, track]);
 
   const { store } = useStoreContext();
 
@@ -103,6 +126,16 @@ const Login = () => {
   if (!store) return <div className="h-screen" />;
 
   const onSubmit = async (data: z.infer<typeof customerDetailsSchema>) => {
+    void track(
+      createAuthRequestStartedEvent({
+        mode: "login",
+        origin,
+        email: data.email,
+      }),
+    ).catch((error) => {
+      console.error("Failed to track login request:", error);
+    });
+
     verifyMutation.mutate({
       email: data.email,
     });

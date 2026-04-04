@@ -1,4 +1,3 @@
-import { postAnalytics } from "@/api/analytics";
 import { updateCheckoutSession } from "@/api/checkoutSession";
 import { BagSummaryItems } from "@/components/checkout/BagSummary";
 import { CheckoutProvider } from "@/components/checkout/CheckoutProvider";
@@ -18,6 +17,8 @@ import { useGetActiveCheckoutSession } from "@/hooks/useGetActiveCheckoutSession
 import { useShoppingBag } from "@/hooks/useShoppingBag";
 import { useBagQueries } from "@/lib/queries/bag";
 import { capitalizeFirstLetter } from "@/lib/utils";
+import { useStorefrontObservability } from "@/hooks/useStorefrontObservability";
+import { createCheckoutCompletionSucceededEvent } from "@/lib/storefrontJourneyEvents";
 import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
@@ -34,6 +35,7 @@ export const CheckoutComplete = () => {
   const { userId } = useAuth();
   const queryClient = useQueryClient();
   const bagQueries = useBagQueries();
+  const { track } = useStorefrontObservability();
 
   const [hasOrderError, setHasOrderError] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
@@ -56,12 +58,13 @@ export const CheckoutComplete = () => {
             sessionId: activeSession._id,
             hasCompletedCheckoutSession: true,
           }),
-          postAnalytics({
-            action: "completed_checkout",
-            data: {
+          track(
+            createCheckoutCompletionSucceededEvent({
               checkoutSessionId: activeSession._id,
-            },
-          }),
+              orderId: onlineOrder?._id,
+              deliveryMethod: activeSession.deliveryMethod,
+            }),
+          ),
         ]);
 
         queryClient.invalidateQueries({ queryKey: bagQueries.activeBagKey() });
@@ -76,6 +79,9 @@ export const CheckoutComplete = () => {
     activeSession._id,
     activeSession.hasCompletedPayment,
     activeSession.hasVerifiedPayment,
+    activeSession.deliveryMethod,
+    onlineOrder?._id,
+    track,
   ]);
 
   const retryOrderCreation = async () => {

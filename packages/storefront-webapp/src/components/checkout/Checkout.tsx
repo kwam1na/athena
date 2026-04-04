@@ -2,7 +2,7 @@ import { CheckoutProvider } from "./CheckoutProvider";
 import { useCheckout } from "@/hooks/useCheckout";
 import { AnimatePresence, motion } from "framer-motion";
 import BagSummary from "./BagSummary";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import MobileBagSummary from "./MobileBagSummary";
 import { CheckoutForm } from "./CheckoutForm";
 import { TrustSignals } from "../communication/TrustSignals";
@@ -12,10 +12,29 @@ import { getStoreConfigV2 } from "@/lib/storeConfig";
 import { useStoreContext } from "@/contexts/StoreContext";
 import { toDisplayAmount, toPesewas } from "@/lib/currency";
 import { useShoppingBag } from "@/hooks/useShoppingBag";
+import { useStorefrontObservability } from "@/hooks/useStorefrontObservability";
+import { createCheckoutDetailsViewedEvent } from "@/lib/storefrontJourneyEvents";
 
 const MainComponent = () => {
-  const { activeSession, checkoutState } = useCheckout();
+  const { activeSession } = useCheckout();
   const navigate = useNavigate();
+  const { track } = useStorefrontObservability();
+  const lastTrackedCheckoutSession = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!activeSession?._id) return;
+    if (lastTrackedCheckoutSession.current === activeSession._id) return;
+
+    lastTrackedCheckoutSession.current = activeSession._id;
+
+    void track(
+      createCheckoutDetailsViewedEvent({
+        checkoutSessionId: activeSession._id,
+      }),
+    ).catch((error) => {
+      console.error("Failed to track checkout details view:", error);
+    });
+  }, [activeSession?._id, track]);
 
   useEffect(() => {
     const origin = new URLSearchParams(window.location.search).get("origin");
