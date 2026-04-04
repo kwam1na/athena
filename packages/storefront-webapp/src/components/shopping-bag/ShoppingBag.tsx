@@ -146,7 +146,7 @@ const BagItemWithDiscount = ({
   }, [item._id, itemTotal, onUpdateItemTotal]);
 
   const unavailableSku = unavailableProducts.find(
-    (p) => p.productSkuId == item.productSkuId
+    (p) => p.productSkuId == item.productSkuId,
   );
 
   let priceLabel = "Product unavailable";
@@ -155,10 +155,12 @@ const BagItemWithDiscount = ({
   if (item.price && item.price > 0) {
     if (showDiscount) {
       priceLabel = formatter.format(
-        toDisplayAmount(discountInfo.discountedPrice * item.quantity)
+        toDisplayAmount(discountInfo.discountedPrice * item.quantity),
       );
     } else {
-      priceLabel = formatter.format(toDisplayAmount(item.price * item.quantity));
+      priceLabel = formatter.format(
+        toDisplayAmount(item.price * item.quantity),
+      );
     }
   } else if (discountInfo.hasDiscount && discountInfo.discountedPrice === 0) {
     priceLabel = "Free";
@@ -171,7 +173,7 @@ const BagItemWithDiscount = ({
     inventoryStatus.quantityAvailable <= 3;
 
   const showHighDemandMessage = Boolean(
-    item.otherBagsWithSku && item.otherBagsWithSku >= 3
+    item.otherBagsWithSku && item.otherBagsWithSku >= 3,
   );
 
   return (
@@ -245,7 +247,9 @@ const BagItemWithDiscount = ({
                   className="flex items-center gap-2"
                 >
                   <p className="text-xs text-muted-foreground line-through">
-                    {formatter.format(toDisplayAmount(item.price * item.quantity))}
+                    {formatter.format(
+                      toDisplayAmount(item.price * item.quantity),
+                    )}
                   </p>
                   <p className="text-xs font-medium text-accent2">
                     {priceLabel}
@@ -254,7 +258,9 @@ const BagItemWithDiscount = ({
               ) : priceLabel === "Free" ? (
                 <div className="flex items-center gap-2 text-xs">
                   <p className="text-muted-foreground line-through">
-                    {formatter.format(toDisplayAmount((item.price || 0) * item.quantity))}
+                    {formatter.format(
+                      toDisplayAmount((item.price || 0) * item.quantity),
+                    )}
                   </p>
                   <p className="text-xs font-medium text-accent2">Free</p>
                 </div>
@@ -381,7 +387,7 @@ export default function ShoppingBag() {
   // Extract all productSkuIds from bag items
   const productSkuIds = useMemo(
     () => bag?.items?.map((item: BagItem) => item.productSkuId) || [],
-    [bag?.items]
+    [bag?.items],
   );
 
   // Fetch inventory status for all bag items
@@ -425,14 +431,14 @@ export default function ShoppingBag() {
 
     // Calculate total from current item totals
     const totalWithDiscounts = Array.from(
-      itemTotalsRef.current.values()
+      itemTotalsRef.current.values(),
     ).reduce((sum, itemTotal) => sum + itemTotal, 0);
 
     return totalWithDiscounts > 0 ? totalWithDiscounts : bagSubtotal;
   }, [bag?.items, bagSubtotal, updateCounter]);
 
   const { data: pendingSessions } = useQuery(
-    checkoutSessionQueries.pendingSessions()
+    checkoutSessionQueries.pendingSessions(),
   );
 
   useEffect(() => {
@@ -504,7 +510,9 @@ export default function ShoppingBag() {
 
     await track(
       createDiscountCodeTriggerEvent({
-        promoCodeId: storeConfig.promotions.homepageDiscountCodeModalPromoCode?.promoCodeId,
+        promoCodeId:
+          storeConfig.promotions.homepageDiscountCodeModalPromoCode
+            ?.promoCodeId,
       }),
     );
   };
@@ -514,7 +522,7 @@ export default function ShoppingBag() {
   };
 
   const hasPendingOrders = Boolean(
-    pendingSessions && pendingSessions.length > 0
+    pendingSessions && pendingSessions.length > 0,
   );
 
   const potentialRewards = Math.floor(total * 10);

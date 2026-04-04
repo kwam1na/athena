@@ -7,11 +7,6 @@ import MobileBagSummary from "./MobileBagSummary";
 import { CheckoutForm } from "./CheckoutForm";
 import { TrustSignals } from "../communication/TrustSignals";
 import { useNavigate } from "@tanstack/react-router";
-import { getRemainingForFreeDelivery } from "@/lib/feeUtils";
-import { getStoreConfigV2 } from "@/lib/storeConfig";
-import { useStoreContext } from "@/contexts/StoreContext";
-import { toDisplayAmount, toPesewas } from "@/lib/currency";
-import { useShoppingBag } from "@/hooks/useShoppingBag";
 import { useStorefrontObservability } from "@/hooks/useStorefrontObservability";
 import { createCheckoutDetailsViewedEvent } from "@/lib/storefrontJourneyEvents";
 

@@ -87,9 +87,10 @@ export const useShoppingBag = () => {
   }) => {
     void emitStorefrontFailure({
       route: baseContext.route,
-      journey: step.startsWith("checkout") || step === "payment_submission"
-        ? "checkout"
-        : "bag",
+      journey:
+        step.startsWith("checkout") || step === "payment_submission"
+          ? "checkout"
+          : "bag",
       step,
       error,
       context,
@@ -206,7 +207,7 @@ export const useShoppingBag = () => {
   const savedBagCount =
     savedBag?.items?.reduce(
       (total: number, item: BagItem) => total + item.quantity,
-      0
+      0,
     ) || 0;
 
   const isUpdatingSavedBag =
@@ -359,7 +360,7 @@ export const useShoppingBag = () => {
 
     const lastItem = remainingItems[0];
     const isLastItemDiscounted = promoCodeItems?.some(
-      (sku: PromoCodeItem) => sku.productSku?._id === lastItem.productSkuId
+      (sku: PromoCodeItem) => sku.productSku?._id === lastItem.productSkuId,
     );
 
     if (isLastItemDiscounted) {
@@ -378,13 +379,13 @@ export const useShoppingBag = () => {
   const bagCount =
     bag?.items?.reduce(
       (total: number, item: BagItem) => total + item.quantity,
-      0
+      0,
     ) || 0;
 
   const bagSubtotal =
     bag?.items?.reduce(
       (sum: number, item: BagItem) => sum + (item.price || 0) * item.quantity,
-      0
+      0,
     ) || 0;
 
   const isUpdatingBag =
@@ -476,14 +477,10 @@ export const useShoppingBag = () => {
   });
 
   const areProductsUnavailable = unavailableProducts.some(
-    (p) => p.available == 0
+    (p) => p.available == 0,
   );
 
-  const obtainCheckoutSession = async ({
-    bagId,
-  }: {
-    bagId: string;
-  }) => {
+  const obtainCheckoutSession = async ({ bagId }: { bagId: string }) => {
     setOperationSuccessful(null);
     return await obtainCheckoutSessionMutation.mutateAsync({
       bagId,
