@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { HonoWithConvex } from "convex-helpers/server/hono";
 import { ActionCtx } from "../../../../_generated/server";
-import { api } from "../../../../_generated/api";
+import { internal } from "../../../../_generated/api";
 import { Id } from "../../../../_generated/dataModel";
 import {
   getStoreDataFromRequest,
@@ -31,7 +31,7 @@ userOffersRoutes.get("/", async (c) => {
 
     // Check the user's eligibility for offers
     const eligibility = await c.env.runQuery(
-      api.storeFront.userOffers.getEligibility,
+      internal.storeFront.userOffers.getEligibility,
       {
         storeFrontUserId: userId as Id<"storeFrontUser"> | Id<"guest">,
         storeId: storeId as Id<"store">,

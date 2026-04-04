@@ -1,5 +1,6 @@
+/* eslint-disable @convex-dev/no-collect-in-query -- Query refactors are tracked in V26-168, V26-169, and V26-170; this PR only hardens API boundaries. */
 import { v } from "convex/values";
-import { mutation, query } from "../_generated/server";
+import { internalQuery, mutation, query } from "../_generated/server";
 import { Id } from "../_generated/dataModel";
 
 const entity = "analytics";
@@ -19,7 +20,7 @@ export const create = mutation({
       ...args,
     });
 
-    return await ctx.db.get(id);
+    return await ctx.db.get("analytics", id);
   },
 });
 
@@ -40,7 +41,7 @@ export const updateOwner = mutation({
     // Update each record in parallel to associate with the authenticated user
     await Promise.all(
       records.map((record) =>
-        ctx.db.patch(record._id, {
+        ctx.db.patch("analytics", record._id, {
           storeFrontUserId: args.userId,
         })
       )
@@ -98,6 +99,44 @@ export const getAll = query({
   },
 });
 
+export const getAllInternal = internalQuery({
+  args: {
+    storeId: v.id("store"),
+    action: v.optional(v.string()),
+    productId: v.optional(v.id("product")),
+  },
+  handler: async (ctx, args) => {
+    if (args.productId && args.action) {
+      return await ctx.db
+        .query(entity)
+        .withIndex("by_storeId_action_productId", (q) =>
+          q
+            .eq("storeId", args.storeId)
+            .eq("action", args.action!)
+            .eq("productId", args.productId)
+        )
+        .order("desc")
+        .collect();
+    }
+
+    if (args.action) {
+      return await ctx.db
+        .query(entity)
+        .withIndex("by_storeId_action", (q) =>
+          q.eq("storeId", args.storeId).eq("action", args.action!)
+        )
+        .order("desc")
+        .collect();
+    }
+
+    return await ctx.db
+      .query(entity)
+      .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
+      .order("desc")
+      .take(250);
+  },
+});
+
 export const getAllPaginated = query({
   args: {
     storeId: v.id("store"),
@@ -128,7 +167,7 @@ export const get = query({
     id: v.id("analytics"),
   },
   handler: async (ctx, args) => {
-    return await ctx.db.get(args.id);
+    return await ctx.db.get("analytics", args.id);
   },
 });
 
@@ -205,7 +244,7 @@ export const clear = mutation({
         )
         .collect();
 
-      await Promise.all(records.map((record) => ctx.db.delete(record._id)));
+      await Promise.all(records.map((record) => ctx.db.delete("analytics", record._id)));
 
       return {
         deleted: records.length,
@@ -218,7 +257,7 @@ export const clear = mutation({
         )
         .collect();
 
-      await Promise.all(records.map((record) => ctx.db.delete(record._id)));
+      await Promise.all(records.map((record) => ctx.db.delete("analytics", record._id)));
 
       return {
         deleted: records.length,
@@ -587,13 +626,13 @@ export const getStoreActivityTimeline = query({
     await Promise.all(
       userIds.map(async (userId) => {
         try {
-          const user = await ctx.db.get(userId as Id<"storeFrontUser">);
+          const user = await ctx.db.get("storeFrontUser", userId as Id<"storeFrontUser">);
           if (user && "email" in user) {
             userData.set(userId, { email: user.email });
           }
         } catch (e) {
           try {
-            const guest = await ctx.db.get(userId as Id<"guest">);
+            const guest = await ctx.db.get("guest", userId as Id<"guest">);
             if (guest && "email" in guest) {
               userData.set(userId, { email: guest.email });
             }
@@ -616,7 +655,7 @@ export const getStoreActivityTimeline = query({
     const products = await Promise.all(
       productIds.map(async (productId) => {
         try {
-          return await ctx.db.get(productId);
+          return await ctx.db.get("product", productId);
         } catch {
           return null;
         }

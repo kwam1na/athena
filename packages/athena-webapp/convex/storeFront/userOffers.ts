@@ -1,11 +1,11 @@
 import { v } from "convex/values";
-import { query, QueryCtx } from "../_generated/server";
+import { internalQuery, QueryCtx } from "../_generated/server";
 import { Doc, Id } from "../_generated/dataModel";
 
 /**
  * Determine if the user is eligible for offers
  */
-export const getEligibility = query({
+export const getEligibility = internalQuery({
   args: {
     storeFrontUserId: v.union(v.id("storeFrontUser"), v.id("guest")),
     storeId: v.id("store"),
@@ -54,14 +54,14 @@ async function determineOfferEligibility(
 
   const isEngaged = uniqueActions.size >= 2;
 
-  const store = await ctx.db.get(storeId);
+  const store = await ctx.db.get("store", storeId);
 
   const currentWelcomeOffer: Id<"promoCode"> | null =
     store?.config?.homepageDiscountCodeModalPromoCode;
 
   // Check if the WELCOME25 promo code exists and is active
   const welcomePromo = currentWelcomeOffer
-    ? await ctx.db.get(currentWelcomeOffer)
+    ? await ctx.db.get("promoCode", currentWelcomeOffer)
     : null;
 
   // Check if user has already redeemed this code

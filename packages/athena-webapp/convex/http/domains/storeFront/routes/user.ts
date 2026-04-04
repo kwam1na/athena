@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { HonoWithConvex } from "convex-helpers/server/hono";
 import { ActionCtx } from "../../../../_generated/server";
-import { api } from "../../../../_generated/api";
+import { internal } from "../../../../_generated/api";
 import { Id } from "../../../../_generated/dataModel";
 import { getCookie } from "hono/cookie";
 import { getStorefrontUserFromRequest } from "../../../utils";
@@ -19,7 +19,7 @@ userRoutes.get("/:userId", async (c) => {
     }
 
     try {
-      const user = await c.env.runQuery(api.storeFront.user.getById, {
+      const user = await c.env.runQuery(internal.storeFront.user.getById, {
         id: userId as Id<"storeFrontUser">,
       });
 
@@ -30,7 +30,7 @@ userRoutes.get("/:userId", async (c) => {
   }
 
   try {
-    const user = await c.env.runQuery(api.storeFront.user.getById, {
+    const user = await c.env.runQuery(internal.storeFront.user.getById, {
       id: userId as Id<"storeFrontUser">,
     });
 
@@ -61,7 +61,7 @@ userRoutes.put("/:userId", async (c) => {
       return c.json(null, 200);
     }
 
-    const user = await c.env.runMutation(api.storeFront.user.update, {
+    const user = await c.env.runMutation(internal.storeFront.user.update, {
       id: userId as Id<"storeFrontUser">,
       email,
       firstName,
@@ -74,7 +74,7 @@ userRoutes.put("/:userId", async (c) => {
     return c.json(user);
   }
 
-  const user = await c.env.runMutation(api.storeFront.user.update, {
+  const user = await c.env.runMutation(internal.storeFront.user.update, {
     id: userId as Id<"storeFrontUser">,
     email,
     firstName,

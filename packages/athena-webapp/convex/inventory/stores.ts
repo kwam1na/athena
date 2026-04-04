@@ -1,5 +1,7 @@
+/* eslint-disable @convex-dev/no-collect-in-query -- Query refactors are tracked in V26-168, V26-169, and V26-170; this PR only hardens API boundaries. */
 import {
   action,
+  internalQuery,
   internalMutation,
   mutation,
   query,
@@ -7,7 +9,7 @@ import {
 import { v } from "convex/values";
 import { storeSchema } from "../schemas/inventory";
 import { listItemsInR2Directory, uploadFileToR2 } from "../cloudflare/r2";
-import { api } from "../_generated/api";
+import { api, internal } from "../_generated/api";
 import { Doc } from "../_generated/dataModel";
 import {
   getUnknownStoreConfigRootKeys,
@@ -56,13 +58,25 @@ export const getAll = query({
   },
 });
 
+export const getAllInternal = internalQuery({
+  args: {
+    organizationId: v.id("organization"),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query(entity)
+      .filter((q) => q.eq(q.field("organizationId"), args.organizationId))
+      .collect();
+  },
+});
+
 export const getAllByOrganization = action({
   args: {
     organizationId: v.id("organization"),
   },
   handler: async (ctx, args) => {
     const stores: Doc<"store">[] = await ctx.runQuery(
-      api.inventory.stores.getAll,
+      internal.inventory.stores.getAllInternal,
       {
         organizationId: args.organizationId,
       }
@@ -108,22 +122,22 @@ export const getById = query({
     id: v.id(entity),
   },
   handler: async (ctx, args) => {
-    return await ctx.db.get(args.id);
+    return await ctx.db.get("store", args.id);
   },
 });
 
-export const findById = query({
+export const findById = internalQuery({
   args: {
     id: v.id(entity),
   },
   handler: async (ctx, args) => {
-    const store = await ctx.db.get(args.id);
+    const store = await ctx.db.get("store", args.id);
 
     return store;
   },
 });
 
-export const findByName = query({
+export const findByName = internalQuery({
   args: {
     name: v.string(),
   },
@@ -137,7 +151,7 @@ export const findByName = query({
   },
 });
 
-export const getByIdOrSlug = query({
+export const getByIdOrSlug = internalQuery({
   args: {
     identifier: v.union(v.id(entity), v.string()),
     organizationId: v.id("organization"),
@@ -172,7 +186,7 @@ export const create = mutation({
   handler: async (ctx, args) => {
     const id = await ctx.db.insert(entity, args);
 
-    return await ctx.db.get(id);
+    return await ctx.db.get("store", id);
   },
 });
 
@@ -182,9 +196,9 @@ export const update = mutation({
     name: v.string(),
   },
   handler: async (ctx, args) => {
-    await ctx.db.patch(args.id, { name: args.name });
+    await ctx.db.patch("store", args.id, { name: args.name });
 
-    return await ctx.db.get(args.id);
+    return await ctx.db.get("store", args.id);
   },
 });
 
@@ -193,13 +207,13 @@ export const remove = mutation({
     id: v.id(entity),
   },
   handler: async (ctx, args) => {
-    await ctx.db.delete(args.id);
+    await ctx.db.delete("store", args.id);
 
     return { message: "OK" };
   },
 });
 
-export const updateConfig = mutation({
+export const updateConfig = internalMutation({
   args: {
     id: v.id(entity),
     config: v.record(v.string(), v.any()),
@@ -208,9 +222,9 @@ export const updateConfig = mutation({
     const normalized = toV2Config(args.config);
     const config = mirrorLegacyKeys(normalized, args.config);
 
-    await ctx.db.patch(args.id, { config });
+    await ctx.db.patch("store", args.id, { config });
 
-    return await ctx.db.get(args.id);
+    return await ctx.db.get("store", args.id);
   },
 });
 
@@ -221,7 +235,7 @@ export const patchConfigV2 = mutation({
     mirrorLegacy: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
-    const store = await ctx.db.get(args.id);
+    const store = await ctx.db.get("store", args.id);
     if (!store) {
       throw new Error("Store not found");
     }
@@ -232,9 +246,29 @@ export const patchConfigV2 = mutation({
       ? mirrorLegacyKeys(nextV2Config, store.config)
       : toV2OnlyConfig(store.config ? { ...store.config, ...nextV2Config } : nextV2Config);
 
-    await ctx.db.patch(args.id, { config });
+    await ctx.db.patch("store", args.id, { config });
 
-    return await ctx.db.get(args.id);
+    return await ctx.db.get("store", args.id);
+  },
+});
+
+export const patchConfigV2Internal = internalMutation({
+  args: {
+    id: v.id(entity),
+    patch: v.record(v.string(), v.any()),
+  },
+  handler: async (ctx, args) => {
+    const store = await ctx.db.get("store", args.id);
+
+    if (!store) {
+      throw new Error("Store not found");
+    }
+
+    const nextConfig = patchV2Config(store.config, args.patch);
+
+    await ctx.db.patch("store", args.id, { config: nextConfig });
+
+    return await ctx.db.get("store", args.id);
   },
 });
 
@@ -308,7 +342,7 @@ export const migrateConfigToV2Page = mutation({
         continue;
       }
 
-      await ctx.db.patch(store._id, { config: nextConfig });
+      await ctx.db.patch("store", store._id, { config: nextConfig });
       migratedCount += 1;
     }
 
@@ -345,7 +379,7 @@ export const cleanupLegacyConfigKeysPage = mutation({
         continue;
       }
 
-      await ctx.db.patch(store._id, { config: nextConfig });
+      await ctx.db.patch("store", store._id, { config: nextConfig });
       cleanedCount += 1;
       removedLegacyKeyCount += legacyKeys.length;
     }
@@ -361,7 +395,7 @@ export const cleanupLegacyConfigKeysPage = mutation({
   },
 });
 
-export const createImageAsset = mutation({
+export const createImageAsset = internalMutation({
   args: {
     storeId: v.id(entity),
     url: v.string(),
@@ -388,7 +422,7 @@ export const calculateTax = query({
     taxName: v.string(),
   }),
   handler: async (ctx, args) => {
-    const store = await ctx.db.get(args.storeId);
+    const store = await ctx.db.get("store", args.storeId);
     const normalizedConfig = normalizeStoreConfig(store?.config);
     const taxConfig = normalizedConfig.commerce.tax;
 
@@ -458,7 +492,7 @@ export const uploadImageAssets = action({
 
     await Promise.all(
       images.map((url) =>
-        ctx.runMutation(api.inventory.stores.createImageAsset, {
+        ctx.runMutation(internal.inventory.stores.createImageAsset, {
           storeId: args.storeId,
           url,
         })
@@ -494,7 +528,7 @@ export const updateLandingPageReel = action({
       };
     }
 
-    await ctx.runMutation(api.inventory.stores.updateConfig, {
+    await ctx.runMutation(internal.inventory.stores.updateConfig, {
       id: args.storeId,
       config: args.config,
     });
@@ -564,7 +598,7 @@ export const clearExpiredRestrictions = internalMutation({
           store.config,
         );
 
-        await ctx.db.patch(store._id, {
+        await ctx.db.patch("store", store._id, {
           config: nextConfig,
         });
       }

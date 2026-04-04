@@ -1,5 +1,6 @@
+/* eslint-disable @convex-dev/no-collect-in-query -- Query refactors are tracked in V26-168, V26-169, and V26-170; this PR only hardens API boundaries. */
 import { ComplimentaryProduct } from "../../types";
-import { api } from "../_generated/api";
+import { internal } from "../_generated/api";
 import { mutation, query } from "../_generated/server";
 import { v } from "convex/values";
 
@@ -81,7 +82,7 @@ export const toggleComplimentaryProductActive = mutation({
     isActive: v.boolean(),
   },
   handler: async (ctx, args) => {
-    return await ctx.db.patch(args.complimentaryProductId, {
+    return await ctx.db.patch("complimentaryProduct", args.complimentaryProductId, {
       isActive: args.isActive,
     });
   },
@@ -94,7 +95,7 @@ export const toggleCollectionActive = mutation({
     isActive: v.boolean(),
   },
   handler: async (ctx, args) => {
-    return await ctx.db.patch(args.collectionId, {
+    return await ctx.db.patch("complimentaryProductsCollection", args.collectionId, {
       isActive: args.isActive,
     });
   },
@@ -127,7 +128,7 @@ export const getAllComplimentaryProducts = query({
 
     const productSkus: any[] = await Promise.all(
       products.map((product) =>
-        ctx.runQuery(api.inventory.productSku.getById, {
+        ctx.runQuery(internal.inventory.productSku.retrieve, {
           id: product.productSkuId,
         })
       )

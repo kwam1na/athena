@@ -1,9 +1,16 @@
-import { action, mutation, query } from "../_generated/server";
+/* eslint-disable @convex-dev/no-collect-in-query -- Query refactors are tracked in V26-168, V26-169, and V26-170; this PR only hardens API boundaries. */
+import {
+  action,
+  internalMutation,
+  internalQuery,
+  mutation,
+  query,
+} from "../_generated/server";
 import { v } from "convex/values";
 import { productSchema, productSkuSchema } from "../schemas/inventory";
 import { ProductSku } from "../../types";
 import { Id } from "../_generated/dataModel";
-import { api } from "../_generated/api";
+import { api, internal } from "../_generated/api";
 import { deleteDirectoryInR2 } from "../cloudflare/r2";
 
 const entity = "product";
@@ -225,7 +232,7 @@ export const getById = query({
     storeId: v.id("store"),
   },
   handler: async (ctx, args) => {
-    const product = await ctx.db.get(args.id);
+    const product = await ctx.db.get("product", args.id);
 
     const skus = await ctx.db
       .query("productSku")
@@ -237,7 +244,7 @@ export const getById = query({
       .filter((color): color is Id<"color"> => color !== undefined);
 
     const colors = await Promise.all(
-      colorIds.map((colorId) => ctx.db.get(colorId))
+      colorIds.map((colorId) => ctx.db.get("color", colorId))
     );
 
     const colorMap = colors.reduce(
@@ -253,7 +260,62 @@ export const getById = query({
     let category: string | undefined;
 
     if (product) {
-      const productCategory = await ctx.db.get(product.categoryId);
+      const productCategory = await ctx.db.get("category", product.categoryId);
+      category = productCategory?.name;
+    }
+
+    const skusWithCategory = skus
+      .map((sku) => ({
+        ...sku,
+        productCategory: category,
+        productName: product?.name,
+        colorName: sku.color ? colorMap[sku.color] : null,
+      }))
+      .filter((sku) => sku.isVisible || sku.isVisible === undefined);
+
+    return {
+      ...product,
+      inventoryCount: calculateTotalInventoryCount(skus),
+      skus: skusWithCategory,
+    };
+  },
+});
+
+export const getByIdInternal = internalQuery({
+  args: {
+    id: v.id(entity),
+    storeId: v.id("store"),
+  },
+  handler: async (ctx, args) => {
+    const product = await ctx.db.get("product", args.id);
+
+    const skus = await ctx.db
+      .query("productSku")
+      .withIndex("by_productId", (q) => q.eq("productId", args.id))
+      .collect();
+
+    const colorIds = skus
+      .map((sku) => sku.color)
+      .filter((color): color is Id<"color"> => color !== undefined);
+
+    const colors = await Promise.all(
+      colorIds.map((colorId) => ctx.db.get("color", colorId))
+    );
+
+    const colorMap = colors.reduce(
+      (acc: Record<Id<"color">, string>, color) => {
+        if (color) {
+          acc[color._id] = color.name;
+        }
+        return acc;
+      },
+      {} as Record<Id<"color">, string>
+    );
+
+    let category: string | undefined;
+
+    if (product) {
+      const productCategory = await ctx.db.get("category", product.categoryId);
       category = productCategory?.name;
     }
 
@@ -304,7 +366,7 @@ export const getBySlug = query({
       .filter((color): color is Id<"color"> => color !== undefined);
 
     const colors = await Promise.all(
-      colorIds.map((colorId) => ctx.db.get(colorId))
+      colorIds.map((colorId) => ctx.db.get("color", colorId))
     );
 
     const colorMap = colors.reduce(
@@ -320,7 +382,7 @@ export const getBySlug = query({
     let category: string | undefined;
 
     if (product) {
-      const productCategory = await ctx.db.get(product.categoryId);
+      const productCategory = await ctx.db.get("category", product.categoryId);
       category = productCategory?.name;
     }
 
@@ -382,7 +444,7 @@ export const getByIdOrSlug = query({
       .filter((color): color is Id<"color"> => color !== undefined);
 
     const colors = await Promise.all(
-      colorIds.map((colorId) => ctx.db.get(colorId))
+      colorIds.map((colorId) => ctx.db.get("color", colorId))
     );
 
     const colorMap = colors.reduce(
@@ -402,8 +464,8 @@ export const getByIdOrSlug = query({
 
     if (product) {
       const [productCategory, productSubcategory] = await Promise.all([
-        await ctx.db.get(product.categoryId),
-        ctx.db.get(product.subcategoryId),
+        await ctx.db.get("category", product.categoryId),
+        ctx.db.get("subcategory", product.subcategoryId),
       ]);
 
       category = productCategory?.name;
@@ -450,12 +512,12 @@ export const create = mutation({
   handler: async (ctx, args) => {
     const id = await ctx.db.insert(entity, args);
 
-    const product = await ctx.db.get(id);
+    const product = await ctx.db.get("product", id);
 
     if (product) {
       await ctx.scheduler.runAfter(
         0,
-        api.inventory.productUtil.invalidateProductCache,
+        internal.inventory.productUtil.invalidateProductCache,
         {
           storeId: product?.storeId,
         }
@@ -528,9 +590,9 @@ export const createSku = mutation({
       });
 
     // Update the temporary SKU with the generated or provided SKU
-    await ctx.db.patch(tempSkuId, { sku });
+    await ctx.db.patch("productSku", tempSkuId, { sku });
 
-    return await ctx.db.get(tempSkuId);
+    return await ctx.db.get("productSku", tempSkuId);
   },
 });
 
@@ -567,7 +629,7 @@ export const generateUniqueBarcode = mutation({
 
       if (!existing) {
         // Update the SKU with the barcode
-        await ctx.db.patch(args.skuId, { barcode, barcodeAutoGenerated: true });
+        await ctx.db.patch("productSku", args.skuId, { barcode, barcodeAutoGenerated: true });
         return { success: true, barcode };
       }
 
@@ -592,12 +654,12 @@ export const getProductSku = query({
     id: v.id("productSku"),
   },
   handler: async (ctx, args) => {
-    const productSku = await ctx.db.get(args.id);
+    const productSku = await ctx.db.get("productSku", args.id);
 
     let colorName;
 
     if (productSku?.color) {
-      const color = await ctx.db.get(productSku.color);
+      const color = await ctx.db.get("color", productSku.color);
       colorName = color?.name;
     }
 
@@ -629,7 +691,7 @@ export const updateSku = mutation({
   },
   handler: async (ctx, args) => {
     // Get current SKU data for validation
-    const currentSku = await ctx.db.get(args.id);
+    const currentSku = await ctx.db.get("productSku", args.id);
     if (!currentSku) throw new Error("SKU not found");
 
     // Determine final values for validation
@@ -676,9 +738,9 @@ export const updateSku = mutation({
       )
     );
 
-    await ctx.db.patch(args.id, patch);
+    await ctx.db.patch("productSku", args.id, patch);
 
-    return await ctx.db.get(args.id);
+    return await ctx.db.get("productSku", args.id);
   },
 });
 
@@ -709,18 +771,18 @@ export const update = mutation({
         .collect();
 
       await Promise.all(
-        allSkus.map((sku) => ctx.db.patch(sku._id, { productName: args.name }))
+        allSkus.map((sku) => ctx.db.patch("productSku", sku._id, { productName: args.name }))
       );
     }
 
-    await ctx.db.patch(args.id, { ...rest });
+    await ctx.db.patch("product", args.id, { ...rest });
 
-    const product = await ctx.db.get(args.id);
+    const product = await ctx.db.get("product", args.id);
 
     if (product) {
       await ctx.scheduler.runAfter(
         0,
-        api.inventory.productUtil.invalidateProductCache,
+        internal.inventory.productUtil.invalidateProductCache,
         {
           storeId: product?.storeId,
         }
@@ -736,7 +798,18 @@ export const remove = mutation({
     id: v.id(entity),
   },
   handler: async (ctx, args) => {
-    await ctx.db.delete(args.id);
+    await ctx.db.delete("product", args.id);
+
+    return { message: "OK" };
+  },
+});
+
+export const removeInternal = internalMutation({
+  args: {
+    id: v.id(entity),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.delete("product", args.id);
 
     return { message: "OK" };
   },
@@ -746,13 +819,13 @@ export const clear = action({
   args: { id: v.id(entity), storeId: v.id("store") },
   handler: async (ctx, args) => {
     await Promise.all([
-      await ctx.runMutation(api.inventory.products.remove, {
+      await ctx.runMutation(internal.inventory.products.removeInternal, {
         id: args.id,
       }),
       await deleteDirectoryInR2(`stores/${args.storeId}/products/${args.id}`),
     ]);
 
-    await ctx.runAction(api.inventory.productUtil.invalidateProductCache, {
+    await ctx.runAction(internal.inventory.productUtil.invalidateProductCache, {
       storeId: args.storeId,
     });
   },
@@ -763,7 +836,7 @@ export const removeSku = mutation({
     id: v.id("productSku"),
   },
   handler: async (ctx, args) => {
-    await ctx.db.delete(args.id);
+    await ctx.db.delete("productSku", args.id);
 
     return { message: "OK" };
   },
@@ -785,10 +858,10 @@ export const removeAllProductsForStore = mutation({
       .collect();
 
     // Delete all SKUs using Promise.all
-    await Promise.all(skus.map((sku) => ctx.db.delete(sku._id)));
+    await Promise.all(skus.map((sku) => ctx.db.delete("productSku", sku._id)));
 
     // Delete all products using Promise.all
-    await Promise.all(products.map((product) => ctx.db.delete(product._id)));
+    await Promise.all(products.map((product) => ctx.db.delete("product", product._id)));
   },
 });
 
@@ -812,7 +885,7 @@ export const batchUpdateSkuPrices = mutation({
         if (update.price < 0 || update.netPrice < 0) {
           throw new Error(`Invalid price for SKU ${update.id}: prices must be non-negative`);
         }
-        await ctx.db.patch(update.id, {
+        await ctx.db.patch("productSku", update.id, {
           price: update.price,
           netPrice: update.netPrice,
         });
@@ -843,7 +916,7 @@ export const batchGet = query({
   handler: async (ctx, args) => {
     const res: any[] = await Promise.all(
       args.ids.map((id) =>
-        ctx.runQuery(api.inventory.products.getById, {
+        ctx.runQuery(internal.inventory.products.getByIdInternal, {
           id,
           storeId: args.storeId,
         })

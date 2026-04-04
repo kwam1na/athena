@@ -248,7 +248,7 @@ checkoutRoutes.post("/:checkoutSessionId", async (c) => {
         return c.json({ error: "Amount mismatch detected" }, 422);
       }
 
-      const store = await c.env.runQuery(api.inventory.stores.getByIdOrSlug, {
+      const store = await c.env.runQuery(internal.inventory.stores.getByIdOrSlug, {
         identifier: storeId,
         organizationId: organizationId as Id<"organization">,
       });
@@ -388,7 +388,7 @@ checkoutRoutes.post("/:checkoutSessionId", async (c) => {
         return c.json({ error: "Amount mismatch detected" }, 422);
       }
 
-      const store = await c.env.runQuery(api.inventory.stores.getByIdOrSlug, {
+      const store = await c.env.runQuery(internal.inventory.stores.getByIdOrSlug, {
         identifier: storeId,
         organizationId: organizationId as Id<"organization">,
       });

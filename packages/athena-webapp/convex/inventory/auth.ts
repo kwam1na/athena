@@ -1,11 +1,11 @@
 import { v } from "convex/values";
-import { action, mutation } from "../_generated/server";
+import { action, internalMutation, mutation } from "../_generated/server";
 import { sendVerificationCode } from "../mailersend";
-import { api } from "../_generated/api";
+import { internal } from "../_generated/api";
 
 const expirationTimeInMinutes = 10;
 
-export const requestVerificationCode = mutation({
+export const requestVerificationCode = internalMutation({
   args: {
     email: v.string(),
     firstName: v.optional(v.string()),
@@ -29,7 +29,7 @@ export const requestVerificationCode = mutation({
       isUsed: false,
     });
 
-    return await ctx.db.get(id);
+    return await ctx.db.get("appVerificationCode", id);
   },
 });
 
@@ -71,7 +71,7 @@ export const verifyCode = mutation({
       };
     }
 
-    await ctx.db.patch(verificationCode._id, {
+    await ctx.db.patch("appVerificationCode", verificationCode._id, {
       isUsed: true,
     });
 
@@ -89,7 +89,7 @@ export const verifyCode = mutation({
         lastName: verificationCode.lastName,
       });
 
-      user = await ctx.db.get(id);
+      user = await ctx.db.get("athenaUser", id);
     }
 
     if (!user) {
@@ -114,7 +114,7 @@ export const sendVerificationCodeViaProvider = action({
   },
   handler: async (ctx, args) => {
     const data: any = await ctx.runMutation(
-      api.inventory.auth.requestVerificationCode,
+      internal.inventory.auth.requestVerificationCode,
       {
         email: args.email,
         firstName: args.firstName,

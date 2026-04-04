@@ -1,6 +1,7 @@
+/* eslint-disable @convex-dev/no-collect-in-query -- Query refactors are tracked in V26-168, V26-169, and V26-170; this PR only hardens API boundaries. */
 import { v } from "convex/values";
-import { mutation, query } from "../_generated/server";
-import { api } from "../_generated/api";
+import { internalQuery, mutation, query } from "../_generated/server";
+import { internal } from "../_generated/api";
 
 const entity = "bestSeller";
 
@@ -31,7 +32,7 @@ export const create = mutation({
       storeId: args.storeId,
     });
 
-    return await ctx.db.get(id);
+    return await ctx.db.get("bestSeller", id);
   },
 });
 
@@ -40,7 +41,7 @@ export const remove = mutation({
     id: v.id(entity),
   },
   handler: async (ctx, args) => {
-    await ctx.db.delete(args.id);
+    await ctx.db.delete("bestSeller", args.id);
 
     return true;
   },
@@ -51,7 +52,7 @@ export const getById = query({
     id: v.id(entity),
   },
   handler: async (ctx, args) => {
-    return await ctx.db.get(args.id);
+    return await ctx.db.get("bestSeller", args.id);
   },
 });
 
@@ -69,7 +70,45 @@ export const getAll = query({
     const enrichedItems: any[] = await Promise.all(
       items.map(async (item: any) => {
         const productSku = await ctx.runQuery(
-          api.inventory.productSku.getById,
+          internal.inventory.productSku.retrieve,
+          {
+            id: item.productSkuId,
+          }
+        );
+
+        const sku =
+          args.isVisible !== undefined
+            ? args.isVisible === productSku?.isVisible
+              ? productSku
+              : undefined
+            : productSku;
+
+        return {
+          ...item,
+          productSku: sku,
+        };
+      })
+    );
+
+    return enrichedItems;
+  },
+});
+
+export const getAllInternal = internalQuery({
+  args: {
+    storeId: v.id("store"),
+    isVisible: v.optional(v.boolean()),
+  },
+  handler: async (ctx, args) => {
+    const items = await ctx.db
+      .query(entity)
+      .filter((q) => q.eq(q.field("storeId"), args.storeId))
+      .collect();
+
+    const enrichedItems: any[] = await Promise.all(
+      items.map(async (item: any) => {
+        const productSku = await ctx.runQuery(
+          internal.inventory.productSku.retrieve,
           {
             id: item.productSkuId,
           }
@@ -100,7 +139,7 @@ export const updateRanks = mutation({
   handler: async (ctx, args) => {
     await Promise.all(
       args.ranks.map(async (item) => {
-        await ctx.db.patch(item.id, {
+        await ctx.db.patch("bestSeller", item.id, {
           rank: item.rank,
         });
       })

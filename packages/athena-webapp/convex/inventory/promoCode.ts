@@ -1,11 +1,17 @@
+/* eslint-disable @convex-dev/no-collect-in-query -- Query refactors are tracked in V26-168, V26-169, and V26-170; this PR only hardens API boundaries. */
 import { v } from "convex/values";
-import { internalMutation, mutation, query } from "../_generated/server";
+import {
+  internalMutation,
+  internalQuery,
+  mutation,
+  query,
+} from "../_generated/server";
 import { api, internal } from "../_generated/api";
 import { Id } from "../_generated/dataModel";
 
 const entity = "promoCode";
 
-export const redeem = mutation({
+export const redeem = internalMutation({
   args: {
     code: v.string(),
     checkoutSessionId: v.id("checkoutSession"),
@@ -105,7 +111,7 @@ export const redeem = mutation({
       );
     }
 
-    const checkoutSession = await ctx.db.get(args.checkoutSessionId);
+    const checkoutSession = await ctx.db.get("checkoutSession", args.checkoutSessionId);
 
     if (!checkoutSession) {
       console.log(
@@ -287,7 +293,7 @@ export const create = mutation({
       active: true,
     });
 
-    const promoCode = await ctx.db.get(id);
+    const promoCode = await ctx.db.get("promoCode", id);
 
     if (args.productSkus) {
       await Promise.all(
@@ -315,7 +321,7 @@ export const getAll = query({
   },
 });
 
-export const getAllItems = query({
+export const getAllItems = internalQuery({
   args: { storeId: v.id("store") },
   handler: async (ctx, args): Promise<any> => {
     const items = await ctx.db
@@ -330,7 +336,7 @@ export const getAllItems = query({
 
     const skuData = await Promise.all(
       skus.map(async (sku) => {
-        return await ctx.runQuery(api.inventory.productSku.retrieve, {
+        return await ctx.runQuery(internal.inventory.productSku.retrieve, {
           id: sku,
         });
       })
@@ -368,7 +374,14 @@ export const getById = query({
     v.null()
   ),
   handler: async (ctx, args) => {
-    return await ctx.db.get(args.id);
+    return await ctx.db.get("promoCode", args.id);
+  },
+});
+
+export const getByIdInternal = internalQuery({
+  args: { id: v.id(entity) },
+  handler: async (ctx, args) => {
+    return await ctx.db.get("promoCode", args.id);
   },
 });
 
@@ -408,7 +421,7 @@ export const getPromoCodeItems = query({
 
     // Fetch all productSku documents
     const productSkus = await Promise.all(
-      productSkuIds.map((id) => ctx.db.get(id))
+      productSkuIds.map((id) => ctx.db.get("productSku", id))
     );
 
     // Filter out any null values (in case some IDs don't exist)
@@ -440,7 +453,7 @@ export const getPromoCodeItemsLightweight = query({
     // Fetch only essential fields from productSku documents
     const productSkus = await Promise.all(
       productSkuIds.map(async (id) => {
-        const sku = await ctx.db.get(id);
+        const sku = await ctx.db.get("productSku", id);
         if (!sku) return null;
 
         return {
@@ -468,10 +481,10 @@ export const remove = mutation({
       .collect();
 
     await Promise.all(
-      promoCodeItems.map((promoCodeItem) => ctx.db.delete(promoCodeItem._id))
+      promoCodeItems.map((promoCodeItem) => ctx.db.delete("promoCodeItem", promoCodeItem._id))
     );
 
-    await ctx.db.delete(args.id);
+    await ctx.db.delete("promoCode", args.id);
 
     return { success: true };
   },
@@ -501,12 +514,12 @@ export const update = mutation({
   },
   returns: v.object({ success: v.boolean() }),
   handler: async (ctx, args) => {
-    const promoCode = await ctx.db.get(args.id);
+    const promoCode = await ctx.db.get("promoCode", args.id);
     if (!promoCode) {
       throw new Error("Promo code not found");
     }
 
-    await ctx.db.patch(args.id, {
+    await ctx.db.patch("promoCode", args.id, {
       code: args.code,
       active: args.active,
       autoApply: args.autoApply,
@@ -528,7 +541,7 @@ export const update = mutation({
       .filter((q) => q.eq(q.field("promoCodeId"), args.id))
       .collect();
 
-    await Promise.all(existingItems.map((item) => ctx.db.delete(item._id)));
+    await Promise.all(existingItems.map((item) => ctx.db.delete("promoCodeItem", item._id)));
 
     // Add new promo code items if span is "selected-products"
     if (args.span === "selected-products" && args.productSkus) {
@@ -564,7 +577,7 @@ export const updateQuantityClaimedForMiniStraightener = internalMutation({
       return { success: false, message: "Promo code item quantity claimed" };
     }
 
-    await ctx.db.patch(promoCodeItem._id, {
+    await ctx.db.patch("promoCodeItem", promoCodeItem._id, {
       quantityClaimed:
         (promoCodeItem?.quantityClaimed ?? 0) + Math.floor(Math.random() * 2),
     });
@@ -573,7 +586,7 @@ export const updateQuantityClaimedForMiniStraightener = internalMutation({
   },
 });
 
-export const getRedeemedPromoCodesForUser = query({
+export const getRedeemedPromoCodesForUser = internalQuery({
   args: {
     storeFrontUserId: v.union(v.id("storeFrontUser"), v.id("guest")),
   },

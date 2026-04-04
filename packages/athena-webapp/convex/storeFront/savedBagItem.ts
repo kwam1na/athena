@@ -1,9 +1,9 @@
-import { mutation } from "../_generated/server";
+import { internalMutation } from "../_generated/server";
 import { v } from "convex/values";
 
 const entity = "savedBagItem";
 
-export const addItemToBag = mutation({
+export const addItemToBag = internalMutation({
   args: {
     savedBagId: v.id("savedBag"),
     productId: v.id("product"),
@@ -27,7 +27,7 @@ export const addItemToBag = mutation({
       .first();
 
     if (existing) {
-      return await ctx.db.patch(existing._id, {
+      return await ctx.db.patch("savedBagItem", existing._id, {
         quantity: existing.quantity + args.quantity,
       });
     }
@@ -36,22 +36,22 @@ export const addItemToBag = mutation({
   },
 });
 
-export const updateItemInBag = mutation({
+export const updateItemInBag = internalMutation({
   args: {
     itemId: v.id(entity),
     quantity: v.number(),
   },
   handler: async (ctx, args) => {
-    return await ctx.db.patch(args.itemId, { quantity: args.quantity });
+    return await ctx.db.patch("savedBagItem", args.itemId, { quantity: args.quantity });
   },
 });
 
-export const deleteItemFromSavedBag = mutation({
+export const deleteItemFromSavedBag = internalMutation({
   args: {
     itemId: v.id(entity),
   },
   handler: async (ctx, args) => {
-    await ctx.db.delete(args.itemId);
+    await ctx.db.delete("savedBagItem", args.itemId);
     return { message: "Item deleted from saved bag" };
   },
 });

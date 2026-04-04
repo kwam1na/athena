@@ -1,11 +1,11 @@
 "use node";
 
 import { v } from "convex/values";
-import { action } from "../_generated/server";
+import { action, internalAction } from "../_generated/server";
 import { api } from "../_generated/api";
 import { ValkeyClient } from "../cache";
 
-export const getAllProducts = action({
+export const getAllProducts = internalAction({
   args: {
     storeId: v.id("store"),
     color: v.optional(v.array(v.id("color"))),
@@ -56,7 +56,7 @@ export const getAllProducts = action({
   },
 });
 
-export const invalidateProductCache = action({
+export const invalidateProductCache = internalAction({
   args: {
     storeId: v.id("store"),
   },

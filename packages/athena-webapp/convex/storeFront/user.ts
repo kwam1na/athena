@@ -1,31 +1,60 @@
-import { mutation, query } from "../_generated/server";
+/* eslint-disable @convex-dev/no-collect-in-query -- Query refactors are tracked in V26-168, V26-169, and V26-170; this PR only hardens API boundaries. */
+import {
+  internalMutation,
+  internalQuery,
+  query,
+  QueryCtx,
+} from "../_generated/server";
 import { v } from "convex/values";
 import { addressSchema } from "../schemas/storeFront";
-import { api } from "../_generated/api";
+import { api, internal } from "../_generated/api";
 import { Id } from "../_generated/dataModel";
 
 const entity = "storeFrontUser";
 
+async function getStoreFrontActorById(
+  ctx: QueryCtx,
+  id: Id<"storeFrontUser"> | Id<"guest">
+) {
+  try {
+    const storeFrontUser = await ctx.db.get(
+      "storeFrontUser",
+      id as Id<"storeFrontUser">
+    );
+
+    if (storeFrontUser) {
+      return storeFrontUser;
+    }
+  } catch {}
+
+  try {
+    return await ctx.db.get("guest", id as Id<"guest">);
+  } catch {
+    return null;
+  }
+}
+
 export const getAll = query({
+  args: {},
   handler: async (ctx) => {
     return await ctx.db.query(entity).collect();
   },
 });
 
-export const getById = query({
+export const getById = internalQuery({
   args: {
     id: v.id(entity),
   },
   handler: async (ctx, args) => {
     try {
-      return await ctx.db.get(args.id);
+      return await ctx.db.get("storeFrontUser", args.id);
     } catch (e) {
       return null;
     }
   },
 });
 
-export const update = mutation({
+export const update = internalMutation({
   args: {
     id: v.id(entity),
     email: v.optional(v.string()),
@@ -62,8 +91,8 @@ export const update = mutation({
       updates.shippingAddress = args.shippingAddress;
     }
 
-    await ctx.db.patch(args.id, updates);
-    return await ctx.db.get(args.id);
+    await ctx.db.patch("storeFrontUser", args.id, updates);
+    return await ctx.db.get("storeFrontUser", args.id);
   },
 });
 
@@ -72,11 +101,7 @@ export const getByIdentifier = query({
     id: v.union(v.id(entity), v.id("guest")),
   },
   handler: async (ctx, args) => {
-    try {
-      return await ctx.db.get(args.id);
-    } catch (e) {
-      return null;
-    }
+    return await getStoreFrontActorById(ctx, args.id);
   },
 });
 
@@ -86,7 +111,7 @@ export const findLinkedAccounts = query({
   },
   handler: async (ctx, args) => {
     // Get the user to find their email
-    const user = await ctx.db.get(args.userId);
+    const user = await getStoreFrontActorById(ctx, args.userId);
     if (!user || !user.email) {
       return { storeFrontUsers: [], guestUsers: [] };
     }
@@ -143,7 +168,7 @@ export const getAllUserActivity = query({
     for (const id of idArray) {
       try {
         // Try to get from storeFrontUser table
-        const user = await ctx.db.get(id as Id<"storeFrontUser">);
+        const user = await ctx.db.get("storeFrontUser", id as Id<"storeFrontUser">);
         if (user) {
           userMap[id] = { email: user.email };
           continue; // Found in storeFrontUser table, skip to next ID
@@ -154,7 +179,7 @@ export const getAllUserActivity = query({
 
       try {
         // Try to get from guest table
-        const guest = await ctx.db.get(id as Id<"guest">);
+        const guest = await ctx.db.get("guest", id as Id<"guest">);
         if (guest) {
           userMap[id] = { email: guest.email };
         }
@@ -174,6 +199,52 @@ export const getAllUserActivity = query({
   },
 });
 
+export const getAllUserActivityInternal = internalQuery({
+  args: {
+    id: v.union(v.id(entity), v.id("guest")),
+  },
+  handler: async (ctx, args) => {
+    const analytics = await ctx.db
+      .query("analytics")
+      .withIndex("by_storeFrontUserId", (q) =>
+        q.eq("storeFrontUserId", args.id)
+      )
+      .collect();
+
+    const userIds = new Set<string>();
+    analytics.forEach((analytic) => {
+      userIds.add(analytic.storeFrontUserId);
+    });
+
+    const userMap: Record<string, { email?: string }> = {};
+    const idArray = Array.from(userIds);
+
+    for (const id of idArray) {
+      try {
+        const user = await ctx.db.get("storeFrontUser", id as Id<"storeFrontUser">);
+        if (user) {
+          userMap[id] = { email: user.email };
+          continue;
+        }
+      } catch {}
+
+      try {
+        const guest = await ctx.db.get("guest", id as Id<"guest">);
+        if (guest) {
+          userMap[id] = { email: guest.email };
+        }
+      } catch (e) {
+        console.error("User ID not found in any table:", id);
+      }
+    }
+
+    return analytics.map((analytic) => ({
+      ...analytic,
+      userData: userMap[analytic.storeFrontUserId] || {},
+    }));
+  },
+});
+
 export const getLastViewedProduct = query({
   args: {
     id: v.union(v.id(entity), v.id("guest")),
@@ -190,10 +261,13 @@ export const getLastViewedProduct = query({
       storeId: Id<"store">,
       skuToCheck: string
     ) => {
-      const product: any = await ctx.runQuery(api.inventory.products.getById, {
-        id: productId,
-        storeId,
-      });
+      const product: any = await ctx.runQuery(
+        internal.inventory.products.getByIdInternal,
+        {
+          id: productId,
+          storeId,
+        }
+      );
 
       return product?.skus?.find(
         (sku: any) =>
@@ -333,10 +407,13 @@ export const getLastViewedProducts = query({
       storeId: Id<"store">,
       skuToCheck: string
     ) => {
-      const product: any = await ctx.runQuery(api.inventory.products.getById, {
-        id: productId,
-        storeId,
-      });
+      const product: any = await ctx.runQuery(
+        internal.inventory.products.getByIdInternal,
+        {
+          id: productId,
+          storeId,
+        }
+      );
 
       return product?.skus?.find(
         (sku: any) =>
@@ -441,12 +518,81 @@ export const getLastViewedProducts = query({
   },
 });
 
+export const getLastViewedProductsInternal = internalQuery({
+  args: {
+    id: v.union(v.id(entity), v.id("guest")),
+    category: v.optional(v.string()),
+    limit: v.number(),
+  },
+  returns: v.array(v.any()),
+  handler: async (ctx, args) => {
+    const availableProducts: any[] = [];
+
+    const isSkuAvailable = async (
+      productId: Id<"product">,
+      storeId: Id<"store">,
+      skuToCheck: string
+    ) => {
+      const product: any = await ctx.runQuery(
+        internal.inventory.products.getByIdInternal,
+        {
+          id: productId,
+          storeId,
+        }
+      );
+
+      return product?.skus?.find(
+        (sku: any) =>
+          sku.sku === skuToCheck &&
+          (!args.category || sku.productCategory === args.category) &&
+          sku.quantityAvailable > 0
+      );
+    };
+
+    const analytics = await ctx.db
+      .query("analytics")
+      .withIndex("by_storeFrontUserId", (q) =>
+        q.eq("storeFrontUserId", args.id)
+      )
+      .filter((q) => q.eq(q.field("action"), "viewed_product"))
+      .order("desc")
+      .take(200);
+
+    if (analytics.length) {
+      const addedSkus = new Set<string>();
+
+      for (const analytic of analytics) {
+        if (availableProducts.length >= args.limit) {
+          break;
+        }
+
+        if (addedSkus.has(analytic.data.productSku)) {
+          continue;
+        }
+
+        const availableSku = await isSkuAvailable(
+          analytic.data.product,
+          analytic.storeId,
+          analytic.data.productSku
+        );
+
+        if (availableSku) {
+          availableProducts.push(availableSku);
+          addedSkus.add(analytic.data.productSku);
+        }
+      }
+    }
+
+    return availableProducts;
+  },
+});
+
 export const getOnlineOrderById = query({
   args: {
     id: v.id("onlineOrder"),
   },
   handler: async (ctx, args) => {
-    return await ctx.db.get(args.id);
+    return await ctx.db.get("onlineOrder", args.id);
   },
 });
 
