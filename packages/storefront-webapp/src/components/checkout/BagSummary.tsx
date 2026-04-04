@@ -1,7 +1,6 @@
 import { useStoreContext } from "@/contexts/StoreContext";
 import { useShoppingBag } from "@/hooks/useShoppingBag";
 import { getProductName } from "@/lib/productUtils";
-import { ProductSku } from "@athena/webapp";
 import { Discount } from "./types";
 import { useCheckout } from "@/hooks/useCheckout";
 import { Link } from "@tanstack/react-router";
@@ -23,13 +22,26 @@ import { Badge } from "../ui/badge";
 import { useDiscountCodeAlert } from "@/hooks/useDiscountCodeAlert";
 import { getStoreConfigV2, getStoreFallbackImageUrl } from "@/lib/storeConfig";
 
+type BagSummaryItem = {
+  colorName?: string | null;
+  length?: number;
+  price: number;
+  productCategory?: string;
+  productImage?: string;
+  productName?: string;
+  productSku?: string;
+  productSkuId: string;
+  quantity: number;
+  size?: string;
+};
+
 function SummaryItem({
   item,
   formatter,
   discount,
   totalItemsInBag,
 }: {
-  item: any;
+  item: BagSummaryItem;
   formatter: Intl.NumberFormat;
   discount?: Discount | null;
   totalItemsInBag: number;
@@ -110,7 +122,7 @@ export function BagSummaryItems({
   items,
   discount,
 }: {
-  items: ProductSku[];
+  items: BagSummaryItem[];
   discount?: Discount | null;
 }) {
   const { formatter } = useStoreContext();
@@ -121,7 +133,7 @@ export function BagSummaryItems({
 
   return (
     <div className="space-y-12 w-full">
-      {items?.map((item: ProductSku, index: number) => (
+      {items?.map((item, index: number) => (
         <SummaryItem
           formatter={formatter}
           item={item}

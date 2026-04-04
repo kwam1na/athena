@@ -174,3 +174,10 @@ export const webOrderSchema = z
       }
     }
   });
+
+export type CheckoutOrderDetails = z.infer<typeof webOrderSchema>;
+
+export type CheckoutOrderSubmission = CheckoutOrderDetails & {
+  paymentMethod?: "online_payment" | "payment_on_delivery";
+  podPaymentMethod?: "cash" | "mobile_money" | null;
+};

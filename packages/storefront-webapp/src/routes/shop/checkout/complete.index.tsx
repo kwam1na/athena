@@ -23,14 +23,13 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowLeft } from "lucide-react";
 import { useEffect, useState } from "react";
-import { webOrderSchema } from "@/components/checkout/CheckoutProvider";
 
 export const Route = createFileRoute("/shop/checkout/complete/")({
   component: () => <CheckoutCompleteView />,
 });
 
 export const CheckoutComplete = () => {
-  const { checkoutState, activeSession, onlineOrder } = useCheckout();
+  const { activeSession, onlineOrder } = useCheckout();
   const { bag } = useShoppingBag();
   const { userId } = useAuth();
   const queryClient = useQueryClient();
@@ -50,15 +49,12 @@ export const CheckoutComplete = () => {
         return;
       }
 
-      const { data } = webOrderSchema.safeParse(checkoutState);
-
       try {
         await Promise.allSettled([
           updateCheckoutSession({
             action: "complete-checkout",
             sessionId: activeSession._id,
             hasCompletedCheckoutSession: true,
-            orderDetails: data,
           }),
           postAnalytics({
             action: "completed_checkout",
@@ -83,7 +79,6 @@ export const CheckoutComplete = () => {
   ]);
 
   const retryOrderCreation = async () => {
-    const { data } = webOrderSchema.safeParse(checkoutState);
     setIsRetrying(true);
     setHasOrderError(false);
 
@@ -92,7 +87,6 @@ export const CheckoutComplete = () => {
         action: "complete-checkout",
         sessionId: activeSession._id,
         hasCompletedCheckoutSession: true,
-        orderDetails: data,
       });
 
       queryClient.invalidateQueries({ queryKey: bagQueries.activeBagKey() });
@@ -147,7 +141,7 @@ export const CheckoutComplete = () => {
     );
   }
 
-  const bagItems = onlineOrder?.items || checkoutState.bag.items;
+  const bagItems = onlineOrder?.items ?? [];
   const hasBagItems = (bag?.items?.length ?? 0) > 0;
 
   const deliveryMessage =

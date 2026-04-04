@@ -1,5 +1,9 @@
 import { useState } from "react";
-import { webOrderSchema } from "./schemas/webOrderSchema";
+import { getCheckoutActionErrorMessage } from "@/api/checkoutSession";
+import {
+  CheckoutOrderSubmission,
+  webOrderSchema,
+} from "./schemas/webOrderSchema";
 import { useCheckout } from "@/hooks/useCheckout";
 import { CheckedState } from "@radix-ui/react-checkbox";
 import { Separator } from "../ui/separator";
@@ -22,24 +26,19 @@ export const PaymentSection = ({ form }: CheckoutFormSectionProps) => {
 
   const { user } = useStoreContext();
 
-  const { bagSubtotal, updateCheckoutSession } = useShoppingBag();
+  const { updateCheckoutSession } = useShoppingBag();
 
   const [isProceedingToPayment, setIsProceedingToPayment] = useState(false);
   const [didAcceptStoreTerms, setDidAcceptStoreTerms] = useState(false);
   const [didAcceptCommsTerms, setDidAcceptCommsTerms] = useState(false);
-  const [errorFinalizingPayment, setErrorFinalizingPayment] = useState(false);
-
   const [errorMessage, setErrorMessage] = useState("");
 
   const onSubmit = async () => {
-    setErrorFinalizingPayment(false);
     setErrorMessage("");
 
     try {
       const canProceedToPayment = await canPlaceOrder();
       const { data } = webOrderSchema.safeParse(checkoutState);
-
-      const total = bagSubtotal;
 
       if (!canProceedToPayment || !data || !activeSession._id) {
         throw new Error("Invalid order state");
@@ -58,7 +57,6 @@ export const PaymentSection = ({ form }: CheckoutFormSectionProps) => {
               paymentMethod: checkoutState.paymentMethod,
               podPaymentMethod: checkoutState.podPaymentMethod,
             },
-            total
           ),
           postAnalytics({
             action: "finalized_payment_on_delivery_checkout",
@@ -73,13 +71,14 @@ export const PaymentSection = ({ form }: CheckoutFormSectionProps) => {
         const podResult = results[0];
         if (podResult.status === "fulfilled") {
           const podResponse = podResult.value;
-          if (podResponse?.success) {
+          if (podResponse?.success === true) {
             // Redirect to POD confirmation page
             window.open("/shop/checkout/pod-confirmation", "_self");
           } else {
             setErrorMessage(
-              podResponse?.message ||
-                "Failed to create payment on delivery order"
+              typeof podResponse?.message === "string"
+                ? podResponse.message
+                : "Failed to create payment on delivery order"
             );
           }
         } else {
@@ -103,7 +102,6 @@ export const PaymentSection = ({ form }: CheckoutFormSectionProps) => {
               ...data,
               deliveryDetails: data.deliveryDetails ?? null,
             },
-            total
           ),
           postAnalytics({
             action: "finalized_checkout",
@@ -118,11 +116,13 @@ export const PaymentSection = ({ form }: CheckoutFormSectionProps) => {
         const paymentResult = results[0];
         if (paymentResult.status === "fulfilled") {
           const paymentResponse = paymentResult.value;
-          if (paymentResponse?.authorization_url) {
+          if (typeof paymentResponse?.authorization_url === "string") {
             window.open(paymentResponse.authorization_url, "_self");
-          } else if (!paymentResponse?.success) {
+          } else if (paymentResponse?.success !== true) {
             setErrorMessage(
-              paymentResponse?.message || "Failed to finalize payment"
+              typeof paymentResponse?.message === "string"
+                ? paymentResponse.message
+                : "Failed to finalize payment"
             );
           } else {
             throw new Error("No authorization URL received");
@@ -143,28 +143,35 @@ export const PaymentSection = ({ form }: CheckoutFormSectionProps) => {
       }
     } catch (error) {
       console.error("Payment error:", error);
-      setErrorFinalizingPayment(true);
+      setErrorMessage(
+        getCheckoutActionErrorMessage(
+          error,
+          checkoutState.paymentMethod === "payment_on_delivery"
+            ? "create-pod-order"
+            : "finalize-payment",
+        ),
+      );
     } finally {
       setIsProceedingToPayment(false);
     }
   };
 
-  const processCheckoutSession = async (orderData: any, total: number) => {
+  const processCheckoutSession = async (orderData: CheckoutOrderSubmission) => {
     return await updateCheckoutSession({
       action: "finalize-payment",
       sessionId: activeSession._id,
       customerEmail: checkoutState.customerDetails?.email || "",
-      amount: total,
       orderDetails: orderData,
     });
   };
 
-  const processPODCheckoutSession = async (orderData: any, total: number) => {
+  const processPODCheckoutSession = async (
+    orderData: CheckoutOrderSubmission,
+  ) => {
     return await updateCheckoutSession({
       action: "create-pod-order",
       sessionId: activeSession._id,
       customerEmail: checkoutState.customerDetails?.email || "",
-      amount: total,
       orderDetails: orderData,
     });
   };
@@ -304,20 +311,6 @@ export const PaymentSection = ({ form }: CheckoutFormSectionProps) => {
           className="text-sm text-red-600 font-medium"
         >
           Please provide all the required information
-        </motion.p>
-      )}
-
-      {errorFinalizingPayment && (
-        <motion.p
-          initial={{ opacity: 0, y: -2 }}
-          animate={{
-            opacity: 1,
-            y: 0,
-            transition: { duration: 0.3, ease: "easeInOut" },
-          }}
-          className="text-sm text-red-600 font-medium"
-        >
-          There was an error finalizing your payment. Please try again.
         </motion.p>
       )}
 
