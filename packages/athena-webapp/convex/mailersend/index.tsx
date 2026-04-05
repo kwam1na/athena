@@ -131,6 +131,22 @@ export const sendNewOrderEmail = async (params: {
   order_date: string;
   customer_name: string;
   order_id: string;
+  order_number: string;
+  items: Array<{
+    text: string;
+    image: string;
+    price: string;
+    discountedPrice?: string;
+    savings?: string;
+    quantity: string;
+    color: string;
+    length?: string;
+  }>;
+  delivery_method: string;
+  delivery_details: string;
+  delivery_fee?: string;
+  discount?: string;
+  subtotal: string;
 }) => {
   const appUrl =
     process.env.STAGE == "prod"
@@ -148,6 +164,13 @@ export const sendNewOrderEmail = async (params: {
       customer_name={params.customer_name}
       order_id={params.order_id}
       appUrl={orderUrl}
+      order_number={params.order_number}
+      items={params.items}
+      delivery_method={params.delivery_method}
+      delivery_details={params.delivery_details}
+      delivery_fee={params.delivery_fee}
+      discount={params.discount}
+      subtotal={params.subtotal}
     />
   );
 
