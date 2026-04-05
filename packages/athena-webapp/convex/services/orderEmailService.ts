@@ -179,6 +179,17 @@ export async function sendPODOrderEmails(params: {
         order_date: formatDate(params.order._creationTime),
         customer_name: `${params.order.customerDetails.firstName} ${params.order.customerDetails.lastName}`,
         order_id: params.order._id,
+        order_number: params.order.orderNumber,
+        items,
+        delivery_method: params.order.deliveryMethod,
+        delivery_details: deliveryAddress,
+        delivery_fee: params.order.deliveryFee
+          ? formatter.format(toDisplayAmount(params.order.deliveryFee))
+          : undefined,
+        discount: params.order.discount
+          ? formatter.format(toDisplayAmount(discountValue))
+          : undefined,
+        subtotal: formatter.format(toDisplayAmount(params.amount)),
       });
 
       if (adminEmailResponse.ok) {
@@ -213,6 +224,28 @@ export async function sendPaymentVerificationEmails(params: {
   let confirmationSent = false;
   let adminNotificationSent = false;
 
+  const pickupDetails = buildPickupDetails({
+    deliveryMethod: params.order.deliveryMethod,
+    deliveryDetails: params.order.deliveryDetails,
+    storeLocation: params.store?.config?.contactInfo?.location,
+  });
+
+  const items = formatOrderItems(
+    params.order.items || [],
+    params.store?.currency || "GHS",
+    params.order.discount
+  );
+
+  const discountValue = getDiscountValue(
+    params.order.items || [],
+    params.order.discount
+  );
+
+  const amountMinusDeliveryFee =
+    params.orderAmount - (params.order.deliveryFee || 0);
+
+  const amountWithDiscount = amountMinusDeliveryFee + discountValue;
+
   // Send admin notification if not sent and not a test account
   if (
     !params.didSendNewOrderEmail &&
@@ -226,6 +259,17 @@ export async function sendPaymentVerificationEmails(params: {
         order_date: formatDate(params.order._creationTime),
         customer_name: `${params.order.customerDetails.firstName} ${params.order.customerDetails.lastName}`,
         order_id: params.order._id,
+        order_number: params.order.orderNumber,
+        items,
+        delivery_method: params.order.deliveryMethod,
+        delivery_details: pickupDetails,
+        delivery_fee: params.order.deliveryFee
+          ? formatter.format(toDisplayAmount(params.order.deliveryFee))
+          : undefined,
+        discount: discountValue
+          ? formatter.format(toDisplayAmount(discountValue))
+          : undefined,
+        subtotal: formatter.format(toDisplayAmount(amountWithDiscount)),
       });
 
       if (emailResponse.ok) {
@@ -249,28 +293,6 @@ export async function sendPaymentVerificationEmails(params: {
       const orderStatusMessaging = buildOrderStatusMessage({
         deliveryMethod: params.order.deliveryMethod,
       });
-
-      const pickupDetails = buildPickupDetails({
-        deliveryMethod: params.order.deliveryMethod,
-        deliveryDetails: params.order.deliveryDetails,
-        storeLocation: params.store?.config?.contactInfo?.location,
-      });
-
-      const items = formatOrderItems(
-        params.order.items || [],
-        params.store?.currency || "GHS",
-        params.order.discount
-      );
-
-      const discountValue = getDiscountValue(
-        params.order.items || [],
-        params.order.discount
-      );
-
-      const amountMinusDeliveryFee =
-        params.orderAmount - (params.order.deliveryFee || 0);
-
-      const amountWithDiscount = amountMinusDeliveryFee + discountValue;
 
       const emailResponse = await sendOrderEmail({
         type: "confirmation",
