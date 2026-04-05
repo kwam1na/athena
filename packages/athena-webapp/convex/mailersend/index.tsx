@@ -6,6 +6,7 @@ import NewOrderAdmin from "../emails/NewOrderAdmin";
 import FeedbackRequest from "../emails/FeedbackRequest";
 import DiscountCode from "../emails/DiscountCode";
 import DiscountReminder from "../emails/DiscountReminder";
+import { ADMIN_EMAILS } from "../services/constants";
 
 const MAILERSEND_API_URL = "https://api.mailersend.com/v1/email";
 
@@ -25,7 +26,7 @@ export const sendVerificationCode = async (params: {
       verificationCode={params.verificationCode}
       storeName={storeName}
       validTime={params.validTime}
-    />
+    />,
   );
 
   const message = {
@@ -96,7 +97,7 @@ export const sendOrderEmail = async (params: {
       pickup_type={params.pickup_type}
       pickup_details={params.pickup_details}
       customer_name={params.customer_name}
-    />
+    />,
   );
 
   const message = {
@@ -171,7 +172,7 @@ export const sendNewOrderEmail = async (params: {
       delivery_fee={params.delivery_fee}
       discount={params.discount}
       subtotal={params.subtotal}
-    />
+    />,
   );
 
   const message = {
@@ -179,16 +180,7 @@ export const sendNewOrderEmail = async (params: {
       email: "orders@wigclub.store",
       name: capitalizeWords(params.store_name),
     },
-    to: [
-      {
-        email: "essuahmensahmaud@gmail.com",
-        name: "Admin",
-      },
-      {
-        email: "kwamina.0x00@gmail.com",
-        name: "Admin",
-      },
-    ],
+    to: ADMIN_EMAILS,
     subject: "🎉 New Order Received!",
     html,
   };
@@ -217,7 +209,7 @@ export const sendFeedbackRequestEmail = async (params: {
       product_name={params.product_name}
       product_image_url={params.product_image_url}
       review_url={params.review_url}
-    />
+    />,
   );
 
   const message = {
@@ -280,7 +272,7 @@ export const sendDiscountCodeEmail = async (params: {
       bestSellers={params.bestSellers}
       recentlyViewed={params.recentlyViewed}
       shopUrl={shopUrl}
-    />
+    />,
   );
 
   const message = {
@@ -339,7 +331,7 @@ export const sendDiscountReminderEmail = async (params: {
       bestSellers={params.bestSellers}
       recentlyViewed={params.recentlyViewed}
       shopUrl={shopUrl}
-    />
+    />,
   );
 
   const message = {

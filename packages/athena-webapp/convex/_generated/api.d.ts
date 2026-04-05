@@ -149,6 +149,7 @@ import type * as schemas_storeFront_storeFrontUser from "../schemas/storeFront/s
 import type * as schemas_storeFront_storeFrontVerificationCode from "../schemas/storeFront/storeFrontVerificationCode.js";
 import type * as schemas_storeFront_supportTicket from "../schemas/storeFront/supportTicket.js";
 import type * as sendgrid_index from "../sendgrid/index.js";
+import type * as services_constants from "../services/constants.js";
 import type * as services_orderEmailService from "../services/orderEmailService.js";
 import type * as services_paystackService from "../services/paystackService.js";
 import type * as storeFront_analytics from "../storeFront/analytics.js";
@@ -329,6 +330,7 @@ declare const fullApi: ApiFromModules<{
   "schemas/storeFront/storeFrontVerificationCode": typeof schemas_storeFront_storeFrontVerificationCode;
   "schemas/storeFront/supportTicket": typeof schemas_storeFront_supportTicket;
   "sendgrid/index": typeof sendgrid_index;
+  "services/constants": typeof services_constants;
   "services/orderEmailService": typeof services_orderEmailService;
   "services/paystackService": typeof services_paystackService;
   "storeFront/analytics": typeof storeFront_analytics;

@@ -27,5 +27,3 @@ export const PAYMENT_CONSTANTS = {
   POINTS_PER_DOLLAR: 10,
   POINTS_DIVISOR: 1000, // Amount is in cents, so divide by 1000 to get dollars then multiply by 10
 } as const;
-
-export const TEST_ACCOUNTS = ["kwamina.0x00@gmail.com", "kwami.nuh@gmail.com"];
