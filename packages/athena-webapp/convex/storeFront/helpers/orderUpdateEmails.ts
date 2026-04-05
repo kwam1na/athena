@@ -10,7 +10,10 @@ import {
   getAddressString,
 } from "../../utils";
 import { internal } from "../../_generated/api";
-import { getDiscountValue, getProductDiscountValue } from "../../inventory/utils";
+import {
+  getDiscountValue,
+  getProductDiscountValue,
+} from "../../inventory/utils";
 
 const ORDER_STATUS = {
   OPEN: "open",
@@ -69,7 +72,7 @@ export const formatOrderItems = (
     productSkuId?: string;
   }>,
   storeCurrency: string,
-  discount?: any
+  discount?: any,
 ) => {
   const formatter = currencyFormatter(storeCurrency);
 
@@ -106,7 +109,7 @@ export const formatOrderItems = (
           ? formatter.format(toDisplayAmount(totalItemSavings))
           : undefined,
       quantity: String(item.quantity || 0),
-      color: item.colorName || "",
+      color: capitalizeWords(item.colorName || ""),
       length: item.length ? `${item.length} inches` : undefined,
     };
   });
@@ -122,7 +125,7 @@ async function handleOrderStatusUpdate({
   store: Store;
 }): Promise<EmailResult | undefined> {
   console.info(
-    `handling order status update: ${newStatus} for order #${order.orderNumber}`
+    `handling order status update: ${newStatus} for order #${order.orderNumber}`,
   );
 
   const formatter = currencyFormatter(store.currency || "USD");
@@ -138,7 +141,7 @@ async function handleOrderStatusUpdate({
     const items = formatOrderItems(
       order.items || [],
       store.currency,
-      order.discount
+      order.discount,
     );
 
     const discountValue = getDiscountValue(order.items || [], order.discount);
@@ -168,13 +171,13 @@ async function handleOrderStatusUpdate({
 
     if (emailResponse.ok) {
       console.info(
-        `successfully sent ${type} email for order #${order.orderNumber} to ${email}`
+        `successfully sent ${type} email for order #${order.orderNumber} to ${email}`,
       );
       return true;
     }
 
     console.log(
-      `failed to send ${type} email for order #${order.orderNumber} to ${email}`
+      `failed to send ${type} email for order #${order.orderNumber} to ${email}`,
     );
     const emailResponseBody = await emailResponse.json();
     console.log("Email error details:", emailResponseBody);
@@ -287,11 +290,14 @@ async function handleOrderStatusUpdate({
 
 export async function processOrderUpdateEmail(
   ctx: ActionCtx,
-  args: { orderId: string; newStatus: string }
+  args: { orderId: string; newStatus: string },
 ): Promise<UpdateEmailResult> {
-  const order = await ctx.runQuery(internal.storeFront.onlineOrder.getInternal, {
-    identifier: args.orderId,
-  });
+  const order = await ctx.runQuery(
+    internal.storeFront.onlineOrder.getInternal,
+    {
+      identifier: args.orderId,
+    },
+  );
 
   if (!order) {
     console.log("Order not found in send order update email handler");
@@ -314,7 +320,7 @@ export async function processOrderUpdateEmail(
   }
 
   console.info(
-    `sending order update: ${args.newStatus} email for order #${order.orderNumber}`
+    `sending order update: ${args.newStatus} email for order #${order.orderNumber}`,
   );
 
   const emailResult = await handleOrderStatusUpdate({

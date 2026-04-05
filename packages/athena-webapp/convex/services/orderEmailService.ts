@@ -1,4 +1,4 @@
-import { PAYMENT_CONSTANTS, TEST_ACCOUNTS } from "../constants/payment";
+import { PAYMENT_CONSTANTS } from "../constants/payment";
 import { sendNewOrderEmail, sendOrderEmail } from "../mailersend";
 import { Address } from "../../types";
 import { currencyFormatter, formatDate, getAddressString } from "../utils";
@@ -6,6 +6,7 @@ import { formatOrderItems } from "../storeFront/onlineOrderUtilFns";
 import { Id } from "../_generated/dataModel";
 import { getDiscountValue } from "../inventory/utils";
 import { toDisplayAmount } from "../lib/currency";
+import { TEST_EMAIL_ACCOUNTS } from "./constants";
 
 type OrderDetails = {
   _id: Id<"onlineOrder">;
@@ -39,7 +40,7 @@ type StoreDetails = {
  * Check if customer email is a test account
  */
 export function shouldSendToAdmins(customerEmail: string): boolean {
-  return !TEST_ACCOUNTS.includes(customerEmail);
+  return !TEST_EMAIL_ACCOUNTS.includes(customerEmail);
 }
 
 /**
@@ -119,12 +120,12 @@ export async function sendPODOrderEmails(params: {
   const items = formatOrderItems(
     params.order.items || [],
     params.store?.currency || "GHS",
-    params.order.discount
+    params.order.discount,
   );
 
   const discountValue = getDiscountValue(
     params.order.items || [],
-    params.order.discount
+    params.order.discount,
   );
 
   let confirmationSent = false;
@@ -155,12 +156,12 @@ export async function sendPODOrderEmails(params: {
 
     if (emailResponse.ok) {
       console.log(
-        `Sent POD order confirmation for order #${params.order.orderNumber} to ${params.order.customerDetails.email}`
+        `Sent POD order confirmation for order #${params.order.orderNumber} to ${params.order.customerDetails.email}`,
       );
       confirmationSent = true;
     } else {
       console.info(
-        `Failed to send POD order confirmation email for order #${params.order.orderNumber} to ${params.order.customerDetails.email}`
+        `Failed to send POD order confirmation email for order #${params.order.orderNumber} to ${params.order.customerDetails.email}`,
       );
     }
   } catch (error) {
@@ -194,7 +195,7 @@ export async function sendPODOrderEmails(params: {
 
       if (adminEmailResponse.ok) {
         console.log(
-          `Sent POD new order notification for order #${params.order.orderNumber} to admins`
+          `Sent POD new order notification for order #${params.order.orderNumber} to admins`,
         );
         adminNotificationSent = true;
       }
@@ -233,12 +234,12 @@ export async function sendPaymentVerificationEmails(params: {
   const items = formatOrderItems(
     params.order.items || [],
     params.store?.currency || "GHS",
-    params.order.discount
+    params.order.discount,
   );
 
   const discountValue = getDiscountValue(
     params.order.items || [],
-    params.order.discount
+    params.order.discount,
   );
 
   const amountMinusDeliveryFee =
@@ -274,12 +275,12 @@ export async function sendPaymentVerificationEmails(params: {
 
       if (emailResponse.ok) {
         console.log(
-          `Sent new order received email for order #${params.order.orderNumber} to admins`
+          `Sent new order received email for order #${params.order.orderNumber} to admins`,
         );
         adminNotificationSent = true;
       } else {
         console.error(
-          `Failed to send new order received email for order #${params.order.orderNumber}`
+          `Failed to send new order received email for order #${params.order.orderNumber}`,
         );
       }
     } catch (error) {
@@ -317,7 +318,7 @@ export async function sendPaymentVerificationEmails(params: {
 
       if (emailResponse.ok) {
         console.log(
-          `Sent order confirmation for order #${params.order.orderNumber} to ${params.order.customerDetails.email}`
+          `Sent order confirmation for order #${params.order.orderNumber} to ${params.order.customerDetails.email}`,
         );
         confirmationSent = true;
       }
