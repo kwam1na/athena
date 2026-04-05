@@ -174,13 +174,13 @@ export const UserView = () => {
               )}
             </div>
 
-            <div className="space-y-8">
+            {/* <div className="space-y-8">
               <div className="flex items-center gap-2">
                 <Brain className="w-4 h-4 text-muted-foreground" />
                 <p className="text-sm font-medium">Behavioral Insights</p>
               </div>
               <UserBehaviorInsights userId={user._id} />
-            </div>
+            </div> */}
 
             {checkoutSession && (
               <UserCheckoutSession checkoutSession={checkoutSession} />

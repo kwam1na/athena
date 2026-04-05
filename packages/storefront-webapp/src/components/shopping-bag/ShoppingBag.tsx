@@ -266,11 +266,28 @@ const BagItemWithDiscount = ({
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {item.productCategory !== "Hair" && item.colorName && (
-                    <p className="text-xs font-medium">
-                      {capitalizeWords(item.colorName)}
-                    </p>
-                  )}
+                  {item.productCategory !== "Hair" &&
+                    (item.colorName || item.size) && (
+                      <div className="flex gap-2">
+                        {item.productCategory !== "Hair" && item.colorName && (
+                          <p className="text-xs font-medium">
+                            {capitalizeWords(item.colorName)}
+                          </p>
+                        )}
+
+                        {item.productCategory !== "Hair" &&
+                          item.colorName &&
+                          item.size && (
+                            <p className="text-xs text-muted-foreground">|</p>
+                          )}
+
+                        {item.productCategory !== "Hair" && item.size && (
+                          <p className="text-xs font-medium">
+                            {capitalizeWords(item.size)}
+                          </p>
+                        )}
+                      </div>
+                    )}
                   <p className="text-xs text-muted-foreground">{priceLabel}</p>
                 </div>
               )}

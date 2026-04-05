@@ -16,8 +16,8 @@ export function ProductAttribute({
       product.skus
         .map((sku: any) => sku.colorName)
         .filter((color: any): color is string => color != null)
-        .sort((a: string, b: string) => a.localeCompare(b))
-    )
+        .sort((a: string, b: string) => a.localeCompare(b)),
+    ),
   );
 
   const lengths: number[] = Array.from(
@@ -26,16 +26,16 @@ export function ProductAttribute({
         .filter((sk: any) => sk.colorName == selectedSku.colorName)
         .map((sku: any) => parseInt(sku.length))
         .filter((length: any) => !isNaN(length))
-        .sort((a: number, b: number) => a - b)
-    )
+        .sort((a: number, b: number) => a - b),
+    ),
   );
 
   const allSizes = Array.from(
     new Set(
       product.skus
         .map((sku: any) => sku.size)
-        .filter((size: any) => size != null && size !== "")
-    )
+        .filter((size: any) => size != null && size !== ""),
+    ),
   );
 
   // Separate numeric and string sizes
@@ -58,28 +58,33 @@ export function ProductAttribute({
   // Combine: numeric sizes first, then string sizes
   const sizes: Array<number | string> = [...numericSizes, ...stringSizes];
 
+  const findSize = (sku: any, value: string) => {
+    return sku.size == value || (sku.size.split(" ") as string[])[0] == value;
+  };
+
   const handleClick = (
     attribute: "color" | "length" | "size",
-    value: string
+    value: string,
   ) => {
     let variant;
 
     if (attribute == "color") {
       variant =
         product.skus.find(
-          (sk: any) => sk.colorName == value && sk.length == selectedSku.length
+          (sk: any) => sk.colorName == value && sk.length == selectedSku.length,
         ) || product.skus.find((sk: any) => sk.colorName == value);
     } else if (attribute == "length") {
       variant =
         product.skus.find(
           (sk: any) =>
-            sk.length == value && sk.colorName == selectedSku.colorName
+            sk.length == value && sk.colorName == selectedSku.colorName,
         ) || product.skus.find((sk: any) => sk.length == value);
     } else {
       variant =
         product.skus.find(
-          (sk: any) => sk.size == value && sk.colorName == selectedSku.colorName
-        ) || product.skus.find((sk: any) => sk.size == value);
+          (sk: any) =>
+            sk.size == value && sk.colorName == selectedSku.colorName,
+        ) || product.skus.find((sk: any) => findSize(sk, value));
     }
 
     variant && setSelectedSku(variant);
@@ -145,7 +150,7 @@ export function ProductAttribute({
                 <Button
                   variant={"ghost"}
                   key={index}
-                  className={`${selectedSku?.size == sizeStr ? "border text-[#EC4683] border-[#EC4683] shadow-md" : "border border-background-muted"} hover:shadow-md hover:border-[#EC4683]`}
+                  className={`${findSize(selectedSku, sizeStr) ? "border text-[#EC4683] border-[#EC4683] shadow-md" : "border border-background-muted"} hover:shadow-md hover:border-[#EC4683]`}
                   onClick={() => handleClick("size", sizeStr)}
                 >
                   {displayText}

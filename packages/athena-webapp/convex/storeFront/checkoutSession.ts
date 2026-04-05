@@ -969,6 +969,7 @@ async function retrieveActiveCheckoutSession(
           q.eq(q.field("isFinalizingPayment"), true),
         ),
         q.eq(q.field("hasCompletedCheckoutSession"), false),
+        q.eq(q.field("hasVerifiedPayment"), false),
       ),
     )
     .first();

@@ -14,7 +14,7 @@ async function listBagItems(ctx: QueryCtx, bagId: Doc<"bag">["_id"]) {
 export async function loadBagWithItems(
   ctx: QueryCtx,
   bag: Doc<"bag">,
-  options: { includeOtherBagsWithSku?: boolean } = {}
+  options: { includeOtherBagsWithSku?: boolean } = {},
 ) {
   const items = await listBagItems(ctx, bag._id);
 
@@ -35,7 +35,10 @@ export async function loadBagWithItems(
       let category: string | undefined;
 
       if (product) {
-        const productCategory = await ctx.db.get("category", product.categoryId);
+        const productCategory = await ctx.db.get(
+          "category",
+          product.categoryId,
+        );
         category = productCategory?.name;
       }
 
@@ -45,14 +48,14 @@ export async function loadBagWithItems(
         const otherBagItemsWithSameSku = await ctx.db
           .query("bagItem")
           .withIndex("by_productSkuId", (q) =>
-            q.eq("productSkuId", item.productSkuId)
+            q.eq("productSkuId", item.productSkuId),
           )
           .take(MAX_BAG_ITEMS_PER_SKU);
 
         const uniqueOtherBagIds = new Set(
           otherBagItemsWithSameSku
             .filter((bagItem) => bagItem.bagId !== bag._id)
-            .map((bagItem) => bagItem.bagId)
+            .map((bagItem) => bagItem.bagId),
         );
 
         otherBagsWithSku = uniqueOtherBagIds.size;
@@ -62,6 +65,7 @@ export async function loadBagWithItems(
         ...item,
         price: sku?.price,
         length: sku?.length,
+        size: sku?.size,
         colorName,
         productName: product?.name,
         productCategory: category,
@@ -69,7 +73,7 @@ export async function loadBagWithItems(
         productSlug: product?.slug,
         ...(typeof otherBagsWithSku === "number" ? { otherBagsWithSku } : {}),
       };
-    })
+    }),
   );
 
   return {
