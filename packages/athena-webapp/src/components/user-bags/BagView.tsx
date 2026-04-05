@@ -15,6 +15,7 @@ import {
 import { getOrigin } from "~/src/lib/navigationUtils";
 import { FadeIn } from "../common/FadeIn";
 import { SimplePageHeader } from "../common/PageHeader";
+import { toDisplayAmount } from "~/convex/lib/currency";
 
 export const BagItemView = ({
   item,
@@ -61,7 +62,9 @@ export const BagItemView = ({
           <p className="text-sm text-muted-foreground">
             {item.price === 0
               ? "Free"
-              : formatter.format((item.price || 0) * item.quantity)}
+              : formatter.format(
+                  toDisplayAmount((item.price || 0) * item.quantity),
+                )}
           </p>
         </div>
       </div>
@@ -82,7 +85,7 @@ export const BagDetails = ({
 
   const bagTotal = bag?.items?.reduce(
     (acc: any, item: any) => acc + item.price * item.quantity,
-    0
+    0,
   );
 
   const formatter = currencyFormatter(activeStore.currency);
@@ -123,7 +126,9 @@ export const BagDetails = ({
                 <>
                   <div className="flex items-center gap-2">
                     <p className="text-sm text-muted-foreground">Total</p>
-                    <p className="text-sm">{formatter.format(bagTotal)}</p>
+                    <p className="text-sm">
+                      {formatter.format(toDisplayAmount(bagTotal))}
+                    </p>
                   </div>
 
                   <p className="text-xs text-muted-foreground">·</p>
@@ -176,7 +181,7 @@ export const BagView = () => {
 
   const bag = useQuery(
     api.storeFront.bag.getById,
-    bagId ? { id: bagId as Id<"bag"> } : "skip"
+    bagId ? { id: bagId as Id<"bag"> } : "skip",
   );
 
   if (!bag) return null;

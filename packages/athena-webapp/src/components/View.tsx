@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import React from "react";
+import React, { useEffect } from "react";
 
 export default function View({
   children,
@@ -14,6 +14,10 @@ export default function View({
   hideHeaderBottomBorder?: boolean;
   hideBorder?: boolean;
 }) {
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
+
   return (
     <section className={cn("container mx-auto", className)}>
       <div
