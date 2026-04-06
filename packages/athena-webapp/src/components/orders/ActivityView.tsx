@@ -3,7 +3,7 @@ import { useOnlineOrder } from "~/src/contexts/OnlineOrderContext";
 import {
   currencyFormatter,
   getRelativeTime,
-  slugToWords,
+  snakeCaseToWords,
 } from "~/src/lib/utils";
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
 import { Circle } from "lucide-react";
@@ -60,7 +60,7 @@ function isCreatedAction(activity: Activity): activity is CreatedAction {
   );
 }
 function isFeedbackRequestAction(
-  activity: Activity
+  activity: Activity,
 ): activity is FeedbackRequestAction {
   return activity.type === ActivityType.FeedbackRequest;
 }
@@ -111,7 +111,7 @@ function ActivityItem({
               {activity.status !== "payment_collected" &&
                 activity.status !== "payment_verified" && (
                   <p className="text-sm font-medium">
-                    {slugToWords(activity.status)}
+                    {snakeCaseToWords(activity.status)}
                   </p>
                 )}
             </div>

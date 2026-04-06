@@ -692,11 +692,25 @@ export const autoVerifyUnverifiedPayments = internalAction({
           );
         }
 
-        // Update order
-        await ctx.runMutation(internal.storeFront.onlineOrder.updateInternal, {
-          externalReference: reference,
-          update,
-        });
+        await Promise.all([
+          // Update order
+          await ctx.runMutation(
+            internal.storeFront.onlineOrder.updateInternal,
+            {
+              externalReference: reference,
+              update,
+            },
+          ),
+
+          // Update checkout session for the order
+          await ctx.runMutation(
+            internal.storeFront.checkoutSession.updateCheckoutSession,
+            {
+              id: order.checkoutSessionId,
+              hasCompletedCheckoutSession: true,
+            },
+          ),
+        ]);
 
         console.log(
           `[AUTO-VERIFY] Verified payment | Reference: ${reference} | Order: ${order._id}`,

@@ -123,7 +123,7 @@ export function OrderDetailsView() {
   const formatter = currencyFormatter(activeStore?.currency || "GHS");
 
   const listTransactions = useAction(
-    api.storeFront.paystackActions.getAllTransactions
+    api.storeFront.paystackActions.getAllTransactions,
   );
 
   const updateOrder = useMutation(api.storeFront.onlineOrder.update);
@@ -144,7 +144,7 @@ export function OrderDetailsView() {
           .filter(
             (transaction: any) =>
               transaction.metadata.checkout_session_id ==
-              order?.checkoutSessionId
+              order?.checkoutSessionId,
           )
           .map((transaction: any) => {
             return {
@@ -156,7 +156,7 @@ export function OrderDetailsView() {
               reference: transaction.reference,
               formattedAmount: formatter.format(transaction.amount / 100),
             };
-          })
+          }),
       );
     };
 
@@ -167,7 +167,7 @@ export function OrderDetailsView() {
 
   const isDuplicateQuery = useQuery(
     api.storeFront.onlineOrder.isDuplicateOrder,
-    order?._id ? { id: order._id } : "skip"
+    order?._id ? { id: order._id } : "skip",
   );
 
   const handleMarkAsVerified = async () => {
@@ -282,9 +282,14 @@ export function OrderDetailsView() {
                     >
                       <p className="text-xs">Not verified</p>
                     </Badge>
-                    <Button variant="link" onClick={handleMarkAsVerified}>
+                    {!order.autoVerifiedAt && (
+                      <p className="text-xs text-muted-foreground italic">
+                        Auto-verification hasn't been attempted yet
+                      </p>
+                    )}
+                    {/* <Button variant="link" onClick={handleMarkAsVerified}>
                       Mark as verified
-                    </Button>
+                    </Button> */}
                   </div>
                 )}
               </div>
