@@ -539,14 +539,14 @@ export const update = mutation({
 export const getUnverifiedPaidOrders = internalQuery({
   args: {},
   handler: async (ctx) => {
-    const fifteenMinutesAgo = Date.now() - 15 * 60 * 1000;
+    const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
 
     return await ctx.db
       .query("onlineOrder")
       .filter((q) =>
         q.and(
           q.neq(q.field("hasVerifiedPayment"), true),
-          q.lt(q.field("_creationTime"), fifteenMinutesAgo),
+          q.lt(q.field("_creationTime"), fiveMinutesAgo),
         ),
       )
       .collect();

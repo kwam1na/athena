@@ -48,7 +48,7 @@ export const UserActivity = () => {
 
   const analytics = useQuery(
     api.storeFront.user.getAllUserActivity,
-    userId ? { id: userId as Id<"storeFrontUser"> } : "skip"
+    userId ? { id: userId as Id<"storeFrontUser"> } : "skip",
   );
 
   if (!analytics || !userId) return null;
@@ -64,13 +64,12 @@ export const UserActivity = () => {
         value={viewMode}
         onValueChange={(value) => setViewMode(value as "timeline" | "table")}
       >
-        <div className="flex items-center justify-between">
+        {/* <div className="flex items-center justify-between">
           <TabsList className="grid w-[200px] grid-cols-2">
             <TabsTrigger
               value="timeline"
               className="flex items-center space-x-2"
             >
-              {/* <Timeline className="w-4 h-4" /> */}
               <span>Timeline</span>
             </TabsTrigger>
             <TabsTrigger value="table" className="flex items-center space-x-2">
@@ -78,7 +77,7 @@ export const UserActivity = () => {
               <span>Table</span>
             </TabsTrigger>
           </TabsList>
-        </div>
+        </div> */}
 
         <TabsContent value="timeline" className="mt-6">
           <CustomerBehaviorTimeline

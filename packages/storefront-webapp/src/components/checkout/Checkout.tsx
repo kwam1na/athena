@@ -1,5 +1,4 @@
 import { CheckoutProvider } from "./CheckoutProvider";
-import { useCheckout } from "@/hooks/useCheckout";
 import { AnimatePresence, motion } from "framer-motion";
 import BagSummary from "./BagSummary";
 import { useEffect, useRef } from "react";
@@ -9,9 +8,10 @@ import { TrustSignals } from "../communication/TrustSignals";
 import { useNavigate } from "@tanstack/react-router";
 import { useStorefrontObservability } from "@/hooks/useStorefrontObservability";
 import { createCheckoutDetailsViewedEvent } from "@/lib/storefrontJourneyEvents";
+import { useGetActiveCheckoutSession } from "@/hooks/useGetActiveCheckoutSession";
 
 const MainComponent = () => {
-  const { activeSession } = useCheckout();
+  const { data: activeSession } = useGetActiveCheckoutSession();
   const navigate = useNavigate();
   const { track } = useStorefrontObservability();
   const lastTrackedCheckoutSession = useRef<string | null>(null);

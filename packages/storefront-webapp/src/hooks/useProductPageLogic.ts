@@ -44,14 +44,14 @@ export function useProductPageLogic() {
   const lastTrackedProductView = useRef<string | null>(null);
 
   const isPromoCodeItemInBag = bag?.items?.find(
-    (item: BagItem) => item.productSkuId === promoCodeItem?._id
+    (item: BagItem) => item.productSkuId === promoCodeItem?._id,
   );
 
   // Initialize selected SKU
   useEffect(() => {
     if (product && variant) {
       const selectedSku = product?.skus?.find(
-        (sku: ProductSku) => sku.sku === variant
+        (sku: ProductSku) => sku.sku === variant,
       );
       selectedSku && setSelectedSku(selectedSku);
     } else if (product && !selectedSku) {
@@ -100,11 +100,11 @@ export function useProductPageLogic() {
   }, [product?._id, selectedSku?.sku, track, variant]);
 
   const bagItem = bag?.items?.find(
-    (item: BagItem) => item.productSku === selectedSku?.sku
+    (item: BagItem) => item.productSku === selectedSku?.sku,
   );
 
   const savedBagItem = savedBag?.items?.find(
-    (item: SavedBagItem) => item.productSku === selectedSku?.sku
+    (item: SavedBagItem) => item.productSku === selectedSku?.sku,
   );
 
   const handleUpdateBag = async () => {
@@ -206,7 +206,7 @@ export function useProductPageLogic() {
   // Get discount info for selected SKU
   const productDiscount = useProductDiscount(
     selectedSku?._id,
-    selectedSku?.price
+    selectedSku?.price,
   );
 
   return {
