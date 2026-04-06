@@ -97,7 +97,7 @@ export function RefundOptions() {
   const itemsTotal =
     order?.items?.reduce(
       (acc, item: any) => acc + item.price * item.quantity,
-      0
+      0,
     ) || 0;
 
   const alertTitle =
@@ -488,7 +488,7 @@ export const OrderView = () => {
     <OnlineOrderProvider>
       <View header={<Header />}>
         <div className="container mx-auto h-full w-full p-8 space-y-12">
-          <Alerts />
+          {/* <Alerts /> */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             <div className="space-y-8">
               <div className="grid grid-cols-1 gap-8">
