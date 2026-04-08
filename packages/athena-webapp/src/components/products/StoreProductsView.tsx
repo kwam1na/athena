@@ -51,7 +51,6 @@ const Navigation = ({
   selectedProductActions: string[];
   setSelectedProductActions: (actions: string[]) => void;
 }) => {
-  const { categorySlug } = useSearch({ strict: false });
   const clearAllCache = useAction(api.inventory.productUtil.clearAllCache);
   const [isClearCacheMutationPending, setIsClearCacheMutationPending] =
     useState(false);

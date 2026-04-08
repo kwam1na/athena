@@ -6,7 +6,7 @@ import { formatOrderItems } from "../storeFront/onlineOrderUtilFns";
 import { Id } from "../_generated/dataModel";
 import { getDiscountValue } from "../inventory/utils";
 import { toDisplayAmount } from "../lib/currency";
-import { TEST_EMAIL_ACCOUNTS } from "./constants";
+import { TEST_EMAIL_ACCOUNTS } from "../constants/email";
 
 type OrderDetails = {
   _id: Id<"onlineOrder">;
@@ -138,7 +138,9 @@ export async function sendPODOrderEmails(params: {
       customerEmail: params.order.customerDetails.email,
       delivery_fee: params.order.deliveryFee
         ? formatter.format(toDisplayAmount(params.order.deliveryFee))
-        : undefined,
+        : params.order.deliveryMethod.toLowerCase() == "delivery"
+          ? "Free"
+          : undefined,
       discount: params.order.discount
         ? formatter.format(toDisplayAmount(discountValue))
         : undefined,
@@ -186,7 +188,9 @@ export async function sendPODOrderEmails(params: {
         delivery_details: deliveryAddress,
         delivery_fee: params.order.deliveryFee
           ? formatter.format(toDisplayAmount(params.order.deliveryFee))
-          : undefined,
+          : params.order.deliveryMethod.toLowerCase() == "delivery"
+            ? "Free"
+            : undefined,
         discount: params.order.discount
           ? formatter.format(toDisplayAmount(discountValue))
           : undefined,
@@ -266,7 +270,7 @@ export async function sendPaymentVerificationEmails(params: {
         delivery_details: pickupDetails,
         delivery_fee: params.order.deliveryFee
           ? formatter.format(toDisplayAmount(params.order.deliveryFee))
-          : undefined,
+          : "Free",
         discount: discountValue
           ? formatter.format(toDisplayAmount(discountValue))
           : undefined,
@@ -300,7 +304,9 @@ export async function sendPaymentVerificationEmails(params: {
         customerEmail: params.order.customerDetails.email,
         delivery_fee: params.order.deliveryFee
           ? formatter.format(toDisplayAmount(params.order.deliveryFee))
-          : undefined,
+          : params.order.deliveryMethod.toLowerCase() == "delivery"
+            ? "Free"
+            : undefined,
         discount: discountValue
           ? formatter.format(toDisplayAmount(discountValue))
           : undefined,

@@ -5,6 +5,7 @@ import { FadeIn } from "@/components/common/FadeIn";
 import { WIGLUB_HAIR_STUDIO_LOCATION_URL } from "@/lib/constants";
 import ImageWithFallback from "@/components/ui/image-with-fallback";
 import { getStoreConfigV2 } from "@/lib/storeConfig";
+import { useScrollToTop } from "@/hooks/useScrollToTop";
 
 export const Route = createFileRoute("/_layout/contact-us")({
   component: () => <ContactUs />,
@@ -14,7 +15,7 @@ const ContactUs = () => {
   const { store } = useStoreContext();
   const storeConfig = getStoreConfigV2(store);
 
-  console.log("storeconfig", storeConfig);
+  useScrollToTop();
 
   if (!store) return <div className="h-screen" />;
 

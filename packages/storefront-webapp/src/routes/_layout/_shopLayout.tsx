@@ -94,8 +94,6 @@ function LayoutComponent() {
   // TODO: combine this into useNavigationBarContext
   const { hideNavbar, showNavbar } = useStoreContext();
 
-  const { setNavBarLayout } = useNavigationBarContext();
-
   const searchParams = useGetShopSearchParams();
 
   const navigate = useNavigate();

@@ -1,4 +1,5 @@
 import { FadeIn } from "@/components/common/FadeIn";
+import { useScrollToTop } from "@/hooks/useScrollToTop";
 import { createFileRoute } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/_layout/policies/privacy/")({
@@ -6,6 +7,8 @@ export const Route = createFileRoute("/_layout/policies/privacy/")({
 });
 
 const PrivacyPolicy = () => {
+  useScrollToTop();
+
   return (
     <FadeIn className="container mx-auto max-w-[1024px] pb-56 py-8 px-6 xl:px-0">
       <div className="space-y-8">

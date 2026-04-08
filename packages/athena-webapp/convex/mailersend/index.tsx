@@ -6,7 +6,7 @@ import NewOrderAdmin from "../emails/NewOrderAdmin";
 import FeedbackRequest from "../emails/FeedbackRequest";
 import DiscountCode from "../emails/DiscountCode";
 import DiscountReminder from "../emails/DiscountReminder";
-import { ADMIN_EMAILS } from "../services/constants";
+import { ADMIN_EMAILS } from "../constants/email";
 
 const MAILERSEND_API_URL = "https://api.mailersend.com/v1/email";
 
@@ -181,7 +181,7 @@ export const sendNewOrderEmail = async (params: {
       name: capitalizeWords(params.store_name),
     },
     to: ADMIN_EMAILS,
-    subject: "🎉 New Order Received!",
+    subject: `🎉 ${params.order_amount} order received`,
     html,
   };
 
