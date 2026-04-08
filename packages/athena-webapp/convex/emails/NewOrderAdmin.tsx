@@ -60,12 +60,9 @@ export default function NewOrderAdmin({
   return (
     <Html>
       <Head />
-      <Preview>🎉 New Order Received from {customer_name}</Preview>
+      <Preview>New order from {customer_name}</Preview>
       <Body style={main}>
         <Container style={container}>
-          <Text style={heading}>New Order Alert! 🛍️</Text>
-          <Text style={paragraph}>A new order has been placed!</Text>
-
           <Section style={detailsBox}>
             <Text style={detailsHeading}>Order #{order_number}</Text>
             <Text style={detailText}>

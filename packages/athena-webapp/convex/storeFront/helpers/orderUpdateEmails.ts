@@ -155,7 +155,9 @@ async function handleOrderStatusUpdate({
       order_number: order.orderNumber,
       delivery_fee: deliveryFee
         ? formatter.format(toDisplayAmount(deliveryFee))
-        : undefined,
+        : order.deliveryMethod.toLowerCase() == "delivery"
+          ? "Free"
+          : undefined,
       order_date: formatDate(order._creationTime),
       order_status_messaging: statusMessaging,
       total: formatter.format(toDisplayAmount(amountPaid)),

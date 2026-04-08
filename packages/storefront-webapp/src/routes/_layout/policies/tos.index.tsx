@@ -1,4 +1,5 @@
 import { FadeIn } from "@/components/common/FadeIn";
+import { useScrollToTop } from "@/hooks/useScrollToTop";
 import { createFileRoute, Link } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/_layout/policies/tos/")({
@@ -29,6 +30,8 @@ const TosSection = ({
 };
 
 const TOS = () => {
+  useScrollToTop();
+
   const tosSections: TosSectionProps[] = [
     {
       sectionNumber: 1,

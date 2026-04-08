@@ -328,7 +328,7 @@ export default function NavigationBar() {
               }}
               className={cn(
                 "w-full bg-white bg-opacity-20 backdrop-blur-md z-10",
-                navBarLayout == "sticky" && "h-screen"
+                navBarLayout == "sticky" && "h-screen",
               )}
               onMouseEnter={() => setActiveMenu(null)}
             />

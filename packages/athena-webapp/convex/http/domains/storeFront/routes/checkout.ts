@@ -106,6 +106,16 @@ const hasValidSessionItems = (items: any[] | undefined): boolean => {
   );
 };
 
+const hasAllVisibileSessionItems = (items: any[] | undefined): boolean => {
+  if (!items || items.length === 0) {
+    return false;
+  }
+
+  console.log(items);
+
+  return items.every((item) => item.isVisible);
+};
+
 checkoutRoutes.post("/", async (c) => {
   const { storeId } = getStoreDataFromRequest(c);
   const userId = getStorefrontUserFromRequest(c);
@@ -220,6 +230,13 @@ checkoutRoutes.post("/:checkoutSessionId", async (c) => {
 
   try {
     if (action == "finalize-payment") {
+      if (!hasAllVisibileSessionItems(session.items)) {
+        return c.json({
+          success: false,
+          message: "Some items in your bag are no longer available",
+        });
+      }
+
       if (!hasValidSessionItems(session.items)) {
         return c.json(
           {

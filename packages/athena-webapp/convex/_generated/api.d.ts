@@ -14,6 +14,7 @@ import type * as cache_index from "../cache/index.js";
 import type * as cloudflare_r2 from "../cloudflare/r2.js";
 import type * as cloudflare_stream from "../cloudflare/stream.js";
 import type * as constants_countries from "../constants/countries.js";
+import type * as constants_email from "../constants/email.js";
 import type * as constants_ghana from "../constants/ghana.js";
 import type * as constants_payment from "../constants/payment.js";
 import type * as crons from "../crons.js";
@@ -149,7 +150,6 @@ import type * as schemas_storeFront_storeFrontUser from "../schemas/storeFront/s
 import type * as schemas_storeFront_storeFrontVerificationCode from "../schemas/storeFront/storeFrontVerificationCode.js";
 import type * as schemas_storeFront_supportTicket from "../schemas/storeFront/supportTicket.js";
 import type * as sendgrid_index from "../sendgrid/index.js";
-import type * as services_constants from "../services/constants.js";
 import type * as services_orderEmailService from "../services/orderEmailService.js";
 import type * as services_paystackService from "../services/paystackService.js";
 import type * as storeFront_analytics from "../storeFront/analytics.js";
@@ -195,6 +195,7 @@ declare const fullApi: ApiFromModules<{
   "cloudflare/r2": typeof cloudflare_r2;
   "cloudflare/stream": typeof cloudflare_stream;
   "constants/countries": typeof constants_countries;
+  "constants/email": typeof constants_email;
   "constants/ghana": typeof constants_ghana;
   "constants/payment": typeof constants_payment;
   crons: typeof crons;
@@ -330,7 +331,6 @@ declare const fullApi: ApiFromModules<{
   "schemas/storeFront/storeFrontVerificationCode": typeof schemas_storeFront_storeFrontVerificationCode;
   "schemas/storeFront/supportTicket": typeof schemas_storeFront_supportTicket;
   "sendgrid/index": typeof sendgrid_index;
-  "services/constants": typeof services_constants;
   "services/orderEmailService": typeof services_orderEmailService;
   "services/paystackService": typeof services_paystackService;
   "storeFront/analytics": typeof storeFront_analytics;

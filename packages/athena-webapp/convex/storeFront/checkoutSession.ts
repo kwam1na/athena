@@ -879,6 +879,7 @@ export const getById = query({
         return {
           ...item,
           productCategory: category,
+          isVisible: product?.isVisible,
           length: productSku?.length,
           price: productSku?.price,
           colorName,
@@ -969,7 +970,7 @@ async function retrieveActiveCheckoutSession(
           q.eq(q.field("isFinalizingPayment"), true),
         ),
         q.eq(q.field("hasCompletedCheckoutSession"), false),
-        q.eq(q.field("hasVerifiedPayment"), false),
+        // q.eq(q.field("hasVerifiedPayment"), false),
       ),
     )
     .first();

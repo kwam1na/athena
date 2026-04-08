@@ -5,6 +5,7 @@ import { Skeleton } from "./ui/skeleton";
 import { ProductCard, ProductSkuCard } from "./ProductCard";
 import { useGetProductFilters } from "@/hooks/useGetProductFilters";
 import { getStoreFallbackImageUrl } from "@/lib/storeConfig";
+import { useEffect } from "react";
 
 function ProductCardLoadingSkeleton() {
   return (
@@ -27,6 +28,10 @@ export default function ProductsPage({
   products?: Product[];
   productSkus?: ProductSku[];
 }) {
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [products?.length]);
+
   const { formatter, store } = useStoreContext();
   const fallbackImageUrl = getStoreFallbackImageUrl(store);
 

@@ -48,11 +48,13 @@ const Navigation = ({
   outOfStockProductsCount,
   selectedProductActions,
   setSelectedProductActions,
+  hasProducts,
 }: {
   categorySlug: string;
   outOfStockProductsCount: number;
   selectedProductActions: string[];
   setSelectedProductActions: (actions: string[]) => void;
+  hasProducts: boolean;
 }) => {
   const navigateBack = useNavigateBack();
   const { o } = useSearch({ strict: false });
@@ -92,13 +94,15 @@ const Navigation = ({
           />
         )}
 
-        <Button
-          variant="ghost"
-          onClick={handleClearCache}
-          disabled={isClearCacheMutationPending}
-        >
-          Clear Cache
-        </Button>
+        {hasProducts && (
+          <Button
+            variant="ghost"
+            onClick={handleClearCache}
+            disabled={isClearCacheMutationPending}
+          >
+            Clear Cache
+          </Button>
+        )}
       </div>
     </div>
   );
@@ -142,6 +146,7 @@ function Body() {
             outOfStockProductsCount={outOfStockProducts?.length || 0}
             selectedProductActions={selectedProductActions}
             setSelectedProductActions={setSelectedProductActions}
+            hasProducts={filteredProducts.length != 0}
           />
         )
       }

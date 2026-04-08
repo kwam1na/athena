@@ -16,7 +16,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "../ui/button";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import CategorySubcategoryManager, {
   CategoryManageOption,
 } from "./CategorySubcategoryManager";
@@ -24,32 +24,46 @@ import { Plus } from "lucide-react";
 import { Skeleton } from "../ui/skeleton";
 import { useProduct } from "@/contexts/ProductContext";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
-import { useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "~/convex/_generated/api";
 import { Id } from "~/convex/_generated/dataModel";
 import { Input } from "../ui/input";
 import { getProductName } from "~/src/lib/productUtils";
 import { FadeIn } from "../common/FadeIn";
+import { Switch } from "../ui/switch";
+import { useSearch } from "@tanstack/react-router";
 
 function ProductCategorization({
   setInitialSelectedOption,
 }: {
   setInitialSelectedOption: (option: CategoryManageOption) => void;
 }) {
-  const { showLoaderForProduct, isLoading, productData, updateProductData } =
-    useProduct();
+  const { showLoaderForProduct, productData, updateProductData } = useProduct();
 
   const { activeStore } = useGetActiveStore();
 
   const categoriesData = useQuery(
     api.inventory.categories.getAll,
-    activeStore ? { storeId: activeStore._id } : "skip"
+    activeStore ? { storeId: activeStore._id } : "skip",
   );
 
   const subcategoriesData = useQuery(
     api.inventory.subcategories.getAll,
-    activeStore ? { storeId: activeStore._id } : "skip"
+    activeStore ? { storeId: activeStore._id } : "skip",
   );
+
+  const { categorySlug } = useSearch({ strict: false });
+
+  const categoryInSearch = categoriesData?.find((c) => c.slug === categorySlug);
+
+  useEffect(() => {
+    if (categoryInSearch) {
+      updateProductData({
+        categoryId: categoryInSearch._id,
+        categoryName: categoryInSearch.name,
+      });
+    }
+  }, [categoryInSearch]);
 
   const categories =
     categoriesData
@@ -67,7 +81,7 @@ function ProductCategorization({
         categoryId: subcategory.categoryId,
       }))
       .filter(
-        (subcategory) => subcategory.categoryId === productData.categoryId
+        (subcategory) => subcategory.categoryId === productData.categoryId,
       )
       .sort((a, b) => a.name.localeCompare(b.name)) || [];
 
@@ -95,7 +109,7 @@ function ProductCategorization({
                 updateProductData({
                   categoryId: value as Id<"category">,
                   categoryName: categories.find(
-                    (category) => category.id === value
+                    (category) => category.id === value,
                   )?.name,
                 });
               }}
@@ -224,8 +238,16 @@ export function ProductCategorizationView() {
     activeProductVariant,
   } = useProduct();
 
-  // console.log(productData);
-  // console.log(activeProductVariant);
+  const updateProduct = useMutation(api.inventory.products.update);
+
+  const handleProductVisibility = async (checked: boolean) => {
+    if (!productData._id) return;
+
+    await updateProduct({
+      id: productData._id,
+      isVisible: checked,
+    });
+  };
 
   return (
     <View
@@ -259,9 +281,7 @@ export function ProductCategorizationView() {
 
         {!showLoaderForProduct && productData.name && (
           <FadeIn className="flex items-center gap-1 py-2">
-            <p className="text-sm text-muted-foreground">
-              Displays on storefront as
-            </p>
+            <p className="text-sm text-muted-foreground">Displays as</p>
             <b className="text-sm">
               {getProductName({
                 productCategory: productData.categoryName,
@@ -273,6 +293,19 @@ export function ProductCategorizationView() {
           </FadeIn>
         )}
       </div>
+
+      {productData._id && (
+        <div className="flex items-center gap-4 px-4 pt-4">
+          <div>
+            <Label htmlFor="fees-toggle">Visible on store</Label>
+          </div>
+          <Switch
+            id="fees-toggle"
+            checked={productData.isVisible}
+            onCheckedChange={handleProductVisibility}
+          />
+        </div>
+      )}
 
       <ProductCategorization
         setInitialSelectedOption={setInitialSelectedOption}

@@ -95,6 +95,7 @@ export function DataTableToolbar<TData>({
             })}
             search={{
               o: getOrigin(),
+              categorySlug,
             }}
             className="pr-2"
           >

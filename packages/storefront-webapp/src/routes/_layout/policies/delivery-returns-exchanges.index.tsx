@@ -1,16 +1,19 @@
 import { FadeIn } from "@/components/common/FadeIn";
 import { useStoreContext } from "@/contexts/StoreContext";
+import { useScrollToTop } from "@/hooks/useScrollToTop";
 import { capitalizeFirstLetter, capitalizeWords } from "@/lib/utils";
 import { createFileRoute } from "@tanstack/react-router";
 
 export const Route = createFileRoute(
-  "/_layout/policies/delivery-returns-exchanges/"
+  "/_layout/policies/delivery-returns-exchanges/",
 )({
   component: () => <OnlineOrderPolicy />,
 });
 
 const OnlineOrderPolicy = () => {
   const { store } = useStoreContext();
+
+  useScrollToTop();
 
   if (!store) return <div className="h-screen" />;
 

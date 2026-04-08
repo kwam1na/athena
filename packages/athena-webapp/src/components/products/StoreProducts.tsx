@@ -41,6 +41,7 @@ export default function StoreProducts({ products }: { products: Product[] }) {
                   })}
                   search={{
                     o: getOrigin(),
+                    categorySlug,
                   }}
                 >
                   <Button variant={"outline"}>

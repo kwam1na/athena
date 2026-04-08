@@ -505,7 +505,7 @@ function ProductViewContent() {
                   <TrashIcon className="w-3.5 h-3.5" />
                 </LoadingButton>
 
-                <div className="flex items-center gap-2">
+                {/* <div className="flex items-center gap-2">
                   <LoadingButton
                     isLoading={isUpdatingProductVisibility}
                     variant={"outline"}
@@ -531,7 +531,7 @@ function ProductViewContent() {
                       </div>
                     )}
                   </LoadingButton>
-                </div>
+                </div> */}
 
                 <LoadingButton
                   isLoading={isDeleteMutationPending}

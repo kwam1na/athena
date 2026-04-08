@@ -3,6 +3,7 @@ import { useOnlineOrder } from "~/src/contexts/OnlineOrderContext";
 import {
   currencyFormatter,
   getRelativeTime,
+  slugToWords,
   snakeCaseToWords,
 } from "~/src/lib/utils";
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
@@ -111,7 +112,7 @@ function ActivityItem({
               {activity.status !== "payment_collected" &&
                 activity.status !== "payment_verified" && (
                   <p className="text-sm font-medium">
-                    {snakeCaseToWords(activity.status)}
+                    {snakeCaseToWords(slugToWords(activity.status))}
                   </p>
                 )}
             </div>
