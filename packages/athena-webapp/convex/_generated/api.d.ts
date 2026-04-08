@@ -37,6 +37,8 @@ import type * as http_domains_inventory_routes_organizations from "../http/domai
 import type * as http_domains_inventory_routes_products from "../http/domains/inventory/routes/products.js";
 import type * as http_domains_inventory_routes_stores from "../http/domains/inventory/routes/stores.js";
 import type * as http_domains_inventory_routes_subcategories from "../http/domains/inventory/routes/subcategories.js";
+import type * as http_domains_payments_routes_index from "../http/domains/payments/routes/index.js";
+import type * as http_domains_payments_routes_mtnMomo from "../http/domains/payments/routes/mtnMomo.js";
 import type * as http_domains_storeFront_routes_bag from "../http/domains/storeFront/routes/bag.js";
 import type * as http_domains_storeFront_routes_checkout from "../http/domains/storeFront/routes/checkout.js";
 import type * as http_domains_storeFront_routes_guest from "../http/domains/storeFront/routes/guest.js";
@@ -98,6 +100,11 @@ import type * as llm_userInsights from "../llm/userInsights.js";
 import type * as llm_utils_analyticsUtils from "../llm/utils/analyticsUtils.js";
 import type * as mailersend_index from "../mailersend/index.js";
 import type * as migrations_migrateAmountsToPesewas from "../migrations/migrateAmountsToPesewas.js";
+import type * as mtn_client from "../mtn/client.js";
+import type * as mtn_collections from "../mtn/collections.js";
+import type * as mtn_config from "../mtn/config.js";
+import type * as mtn_normalize from "../mtn/normalize.js";
+import type * as mtn_types from "../mtn/types.js";
 import type * as otp_ResendOTP from "../otp/ResendOTP.js";
 import type * as otp_VerificationCodeEmail from "../otp/VerificationCodeEmail.js";
 import type * as paystack_index from "../paystack/index.js";
@@ -119,6 +126,7 @@ import type * as schemas_inventory_promoCode from "../schemas/inventory/promoCod
 import type * as schemas_inventory_redeemedPromoCode from "../schemas/inventory/redeemedPromoCode.js";
 import type * as schemas_inventory_store from "../schemas/inventory/store.js";
 import type * as schemas_inventory_subcategory from "../schemas/inventory/subcategory.js";
+import type * as schemas_payments_mtnCollections from "../schemas/payments/mtnCollections.js";
 import type * as schemas_pos_customer from "../schemas/pos/customer.js";
 import type * as schemas_pos_expenseSession from "../schemas/pos/expenseSession.js";
 import type * as schemas_pos_expenseSessionItem from "../schemas/pos/expenseSessionItem.js";
@@ -218,6 +226,8 @@ declare const fullApi: ApiFromModules<{
   "http/domains/inventory/routes/products": typeof http_domains_inventory_routes_products;
   "http/domains/inventory/routes/stores": typeof http_domains_inventory_routes_stores;
   "http/domains/inventory/routes/subcategories": typeof http_domains_inventory_routes_subcategories;
+  "http/domains/payments/routes/index": typeof http_domains_payments_routes_index;
+  "http/domains/payments/routes/mtnMomo": typeof http_domains_payments_routes_mtnMomo;
   "http/domains/storeFront/routes/bag": typeof http_domains_storeFront_routes_bag;
   "http/domains/storeFront/routes/checkout": typeof http_domains_storeFront_routes_checkout;
   "http/domains/storeFront/routes/guest": typeof http_domains_storeFront_routes_guest;
@@ -279,6 +289,11 @@ declare const fullApi: ApiFromModules<{
   "llm/utils/analyticsUtils": typeof llm_utils_analyticsUtils;
   "mailersend/index": typeof mailersend_index;
   "migrations/migrateAmountsToPesewas": typeof migrations_migrateAmountsToPesewas;
+  "mtn/client": typeof mtn_client;
+  "mtn/collections": typeof mtn_collections;
+  "mtn/config": typeof mtn_config;
+  "mtn/normalize": typeof mtn_normalize;
+  "mtn/types": typeof mtn_types;
   "otp/ResendOTP": typeof otp_ResendOTP;
   "otp/VerificationCodeEmail": typeof otp_VerificationCodeEmail;
   "paystack/index": typeof paystack_index;
@@ -300,6 +315,7 @@ declare const fullApi: ApiFromModules<{
   "schemas/inventory/redeemedPromoCode": typeof schemas_inventory_redeemedPromoCode;
   "schemas/inventory/store": typeof schemas_inventory_store;
   "schemas/inventory/subcategory": typeof schemas_inventory_subcategory;
+  "schemas/payments/mtnCollections": typeof schemas_payments_mtnCollections;
   "schemas/pos/customer": typeof schemas_pos_customer;
   "schemas/pos/expenseSession": typeof schemas_pos_expenseSession;
   "schemas/pos/expenseSessionItem": typeof schemas_pos_expenseSessionItem;

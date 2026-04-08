@@ -30,6 +30,7 @@ import {
 import { guestRoutes } from "./http/domains/storeFront/routes/guest";
 import { colorRoutes } from "./http/domains/inventory/routes/colors";
 import { savedBagRoutes } from "./http/domains/storeFront/routes/savedBag";
+import { mtnMomoRoutes } from "./http/domains/payments/routes";
 
 const app: HonoWithConvex<ActionCtx> = new Hono();
 
@@ -55,6 +56,7 @@ app.route("/stores", storeRoutes);
 app.route("/storefront", storefrontRoutes);
 
 app.route("/webhooks/paystack", paystackRoutes);
+app.route("/webhooks/mtn-momo", mtnMomoRoutes);
 
 app.route("/analytics", analyticsRoutes);
 
