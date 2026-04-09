@@ -186,3 +186,4 @@ packages/storefront-webapp/stats.html
 packages/**/convex/_generated/
 
 .claude/worktrees
+.dual-graph-context/
