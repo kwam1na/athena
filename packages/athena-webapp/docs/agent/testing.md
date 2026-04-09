@@ -6,6 +6,7 @@ Escalate validation based on the surface you touched:
 
 - Convex HTTP composition or auth-route changes: run targeted tests like [convex/http/routerComposition.test.ts](../../convex/http/routerComposition.test.ts) and [convex/http/domains/storeFront/routes/security.test.ts](../../convex/http/domains/storeFront/routes/security.test.ts).
 - Inventory query or POS behavior changes: spot-check existing guards such as [convex/inventory/posQueryCleanup.test.ts](../../convex/inventory/posQueryCleanup.test.ts) and [src/tests/pos/usePrint.test.ts](../../src/tests/pos/usePrint.test.ts).
+- Authenticated admin/store route-boundary changes: run `bun run --filter '@athena/webapp' lint:architecture` to catch lower-layer imports that reach back into `_authed` route or shell entrypoints.
 - Any change under `convex/`: run `bun run --filter '@athena/webapp' audit:convex` and `bun run --filter '@athena/webapp' lint:convex:changed` before PR handoff.
 - Route, typing, or build-pipeline changes: run `bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json` or `bun run --filter '@athena/webapp' build`.
 
