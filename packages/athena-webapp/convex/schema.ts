@@ -57,6 +57,10 @@ import {
   expenseTransactionItemSchema,
 } from "./schemas/pos";
 import { posSessionSchema } from "./schemas/pos/posSession";
+import {
+  mtnCollectionsTokenSchema,
+  mtnCollectionTransactionSchema,
+} from "./schemas/payments/mtnCollections";
 
 const schema = defineSchema({
   ...authTables,
@@ -116,6 +120,10 @@ const schema = defineSchema({
   onlineOrderItem: defineTable(onlineOrderItemSchema).index("by_orderId", [
     "orderId",
   ]),
+  mtnCollectionsToken: defineTable(mtnCollectionsTokenSchema).index("by_storeId", ["storeId"]),
+  mtnCollectionTransaction: defineTable(mtnCollectionTransactionSchema)
+    .index("by_providerReference", ["providerReference"])
+    .index("by_storeId_requestedAt", ["storeId", "requestedAt"]),
   organization: defineTable(organizationSchema),
   organizationMember: defineTable(organizationMemberSchema),
   posCustomer: defineTable(posCustomerSchema)

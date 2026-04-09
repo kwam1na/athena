@@ -33,6 +33,9 @@ MERGE_BASE="$(git -C "$REPO_ROOT" merge-base HEAD "$BASE_REF")"
 changed_files=()
 
 while IFS= read -r file; do
+  if [[ "$file" == packages/athena-webapp/convex/_generated/* ]]; then
+    continue
+  fi
   changed_files+=("${file#packages/athena-webapp/}")
 done < <(
   git -C "$REPO_ROOT" diff --name-only --diff-filter=ACMR "$MERGE_BASE"...HEAD -- packages/athena-webapp/convex \
