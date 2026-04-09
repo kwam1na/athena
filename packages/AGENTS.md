@@ -1,4 +1,10 @@
-# Athena Packages Agent Rules
+# Athena Packages Agent Router
+
+- For `packages/athena-webapp`, start with [athena-webapp/AGENTS.md](./athena-webapp/AGENTS.md).
+- For `packages/storefront-webapp`, start with [storefront-webapp/AGENTS.md](./storefront-webapp/AGENTS.md).
+- If a task spans both apps, read both harnesses first, keep docs in sync with code, and finish with `bun run harness:check`.
+
+## Shared Repo Rules
 
 ## Git Branching
 - After each merged checkpoint, start the next task from a new branch created from the latest `main`.
