@@ -194,6 +194,11 @@ describe("storeConfigV2 helpers", () => {
         location: "2 Jungle Avenue, East Legon, Accra, Ghana",
         phoneNumber: "+233249771887",
       },
+      payments: {
+        mtnMomo: {
+          receivingAccounts: [],
+        },
+      },
     });
   });
 
@@ -209,6 +214,7 @@ describe("storeConfigV2 helpers", () => {
     expect(mirrored.media).toEqual(v2Config.media);
     expect(mirrored.promotions).toEqual(v2Config.promotions);
     expect(mirrored.contact).toEqual(v2Config.contact);
+    expect(mirrored.payments).toEqual(v2Config.payments);
 
     expect(mirrored.activeStreamReel).toBe(2);
     expect(mirrored.activeStreamReelHlsUrl).toBe(
@@ -255,5 +261,58 @@ describe("storeConfigV2 helpers", () => {
     expect(isStoreCheckoutDisabled(legacyMaintenanceConfig)).toBe(true);
     expect(isStoreCheckoutDisabled(v2ReadOnlyConfig)).toBe(true);
     expect(isStoreCheckoutDisabled(activeConfig)).toBe(false);
+  });
+
+  it("normalizes MTN MoMo receiving accounts during grouped config patches", () => {
+    const patched = patchV2Config({}, {
+      payments: {
+        mtnMomo: {
+          receivingAccounts: [
+            {
+              label: "Main account",
+              walletNumber: "233000111222",
+              businessName: "Flagship Retail",
+              market: "Ghana",
+              businessContact: "ops@flagship.example",
+              isPrimary: true,
+              status: "submitted",
+            },
+            {
+              label: "Backup account",
+              walletNumber: "256000333444",
+              businessName: "Flagship Retail Uganda",
+              market: "Uganda",
+              businessContact: "finance@flagship.example",
+              isPrimary: true,
+              status: "invalid-status",
+              statusNote: "Waiting on review",
+            },
+            {},
+          ],
+        },
+      },
+    });
+
+    expect(patched.payments.mtnMomo.receivingAccounts).toEqual([
+      {
+        label: "Main account",
+        walletNumber: "233000111222",
+        businessName: "Flagship Retail",
+        market: "Ghana",
+        businessContact: "ops@flagship.example",
+        isPrimary: true,
+        status: "submitted",
+      },
+      {
+        label: "Backup account",
+        walletNumber: "256000333444",
+        businessName: "Flagship Retail Uganda",
+        market: "Uganda",
+        businessContact: "finance@flagship.example",
+        isPrimary: false,
+        status: "not_configured",
+        statusNote: "Waiting on review",
+      },
+    ]);
   });
 });

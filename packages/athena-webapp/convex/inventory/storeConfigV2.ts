@@ -1,7 +1,10 @@
 import {
   StoreConfigV2,
+  StoreMtnMomoReceivingAccount,
+  StoreMtnMomoSetupStatus,
   StoreWaiveDeliveryFeesConfig,
   StorePromotionConfig,
+  STORE_MTN_MOMO_SETUP_STATUSES,
 } from "../../types";
 
 const LEGACY_ROOT_KEYS = [
@@ -36,6 +39,7 @@ const V2_ROOT_KEYS = [
   "media",
   "promotions",
   "contact",
+  "payments",
 ] as const;
 
 const LEGACY_ROOT_KEY_SET = new Set<string>(LEGACY_ROOT_KEYS);
@@ -65,6 +69,10 @@ const asString = (value: unknown): string | undefined => {
 const asBoolean = (value: unknown): boolean | undefined => {
   return typeof value === "boolean" ? value : undefined;
 };
+
+const MTN_MOMO_SETUP_STATUS_SET = new Set<StoreMtnMomoSetupStatus>(
+  STORE_MTN_MOMO_SETUP_STATUSES,
+);
 
 const asArray = <T>(
   value: unknown,
@@ -154,6 +162,72 @@ const cleanUndefined = <T extends Record<string, any>>(value: T): T => {
   return next;
 };
 
+const asMtnMomoSetupStatus = (
+  value: unknown,
+): StoreMtnMomoSetupStatus | undefined => {
+  if (
+    typeof value === "string" &&
+    MTN_MOMO_SETUP_STATUS_SET.has(value as StoreMtnMomoSetupStatus)
+  ) {
+    return value as StoreMtnMomoSetupStatus;
+  }
+
+  return undefined;
+};
+
+const hasMtnMomoReceivingAccountDetails = (
+  account: StoreMtnMomoReceivingAccount,
+): boolean => {
+  return Boolean(
+    account.label ||
+      account.walletNumber ||
+      account.businessName ||
+      account.market ||
+      account.businessContact ||
+      account.statusNote,
+  );
+};
+
+const mapMtnMomoReceivingAccount = (
+  value: unknown,
+): StoreMtnMomoReceivingAccount | undefined => {
+  if (!isPlainObject(value)) {
+    return undefined;
+  }
+
+  const nextAccount = cleanUndefined({
+    label: asString(value.label),
+    walletNumber: asString(value.walletNumber),
+    businessName: asString(value.businessName),
+    market: asString(value.market),
+    businessContact: asString(value.businessContact),
+    isPrimary: asBoolean(value.isPrimary),
+    status: asMtnMomoSetupStatus(value.status) ?? "not_configured",
+    statusNote: asString(value.statusNote),
+  });
+
+  return hasMtnMomoReceivingAccountDetails(nextAccount) || nextAccount.isPrimary
+    ? nextAccount
+    : undefined;
+};
+
+const normalizeMtnMomoReceivingAccounts = (
+  value: unknown,
+): StoreMtnMomoReceivingAccount[] => {
+  const accounts = asOptionalArray(value, mapMtnMomoReceivingAccount) ?? [];
+  let hasPrimaryAccount = false;
+
+  return accounts.map((account) => {
+    const isPrimary = account.isPrimary === true && !hasPrimaryAccount;
+    hasPrimaryAccount = hasPrimaryAccount || isPrimary;
+
+    return {
+      ...account,
+      isPrimary,
+    };
+  });
+};
+
 export const toV2Config = (config: unknown): StoreConfigV2 => {
   const root = asRecord(config);
 
@@ -174,6 +248,8 @@ export const toV2Config = (config: unknown): StoreConfigV2 => {
 
   const promotions = asRecord(root.promotions);
   const contact = asRecord(root.contact);
+  const payments = asRecord(root.payments);
+  const paymentsMtnMomo = asRecord(payments.mtnMomo);
 
   const legacyAvailability = asRecord(root.availability);
   const legacyVisibility = asRecord(root.visibility);
@@ -385,6 +461,13 @@ export const toV2Config = (config: unknown): StoreConfigV2 => {
         asString(legacyContactInfo.phoneNumber),
       ),
     }),
+    payments: {
+      mtnMomo: {
+        receivingAccounts: normalizeMtnMomoReceivingAccounts(
+          paymentsMtnMomo.receivingAccounts,
+        ),
+      },
+    },
   };
 };
 
@@ -447,6 +530,7 @@ export const mirrorLegacyKeys = (
     media: v2Config.media,
     promotions: v2Config.promotions,
     contact: v2Config.contact,
+    payments: v2Config.payments,
   };
 
   nextConfig.availability = v2Config.operations.availability;
