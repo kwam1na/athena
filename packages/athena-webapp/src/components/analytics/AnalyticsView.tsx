@@ -138,10 +138,9 @@ export default function AnalyticsView() {
         </div>
         <div className="space-y-16">
           <StorefrontObservabilityPanel />
+          <div className="grid grid-cols-2 gap-12">
           <AnalyticsCombinedUsers items={items} />
-          <div className="grid grid-cols-2 gap-16">
             <AnalyticsProducts items={items} />
-            <AnalyticsItems items={items} />
           </div>
         </div>
       </FadeIn>

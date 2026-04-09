@@ -18,6 +18,7 @@ import {
   createSavedBagRemoveEvent,
 } from "@/lib/storefrontJourneyEvents";
 import { getStoreFallbackImageUrl } from "@/lib/storeConfig";
+import { toDisplayAmount } from "@/lib/currency";
 
 export default function SavedBag() {
   const [bagAction, setBagAction] = useState<ShoppingBagAction>("idle");
@@ -127,7 +128,7 @@ export default function SavedBag() {
                         </h2>
                         <p className="text-xs text-muted-foreground">
                           {item.price
-                            ? formatter.format(item.price * item.quantity)
+                            ? formatter.format(toDisplayAmount(item.price * item.quantity))
                             : "Product unavailable"}
                         </p>
                         <select
