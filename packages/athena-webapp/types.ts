@@ -217,12 +217,41 @@ export type StoreContactConfig = {
   phoneNumber?: string;
 };
 
+export const STORE_MTN_MOMO_SETUP_STATUSES = [
+  "not_configured",
+  "submitted",
+  "under_review",
+  "connected",
+  "needs_attention",
+] as const;
+
+export type StoreMtnMomoSetupStatus =
+  (typeof STORE_MTN_MOMO_SETUP_STATUSES)[number];
+
+export type StoreMtnMomoReceivingAccount = {
+  label?: string;
+  walletNumber?: string;
+  businessName?: string;
+  market?: string;
+  businessContact?: string;
+  isPrimary?: boolean;
+  status: StoreMtnMomoSetupStatus;
+  statusNote?: string;
+};
+
+export type StorePaymentsConfig = {
+  mtnMomo: {
+    receivingAccounts: StoreMtnMomoReceivingAccount[];
+  };
+};
+
 export type StoreConfigV2 = {
   operations: StoreOperationsConfig;
   commerce: StoreCommerceConfig;
   media: StoreMediaConfig;
   promotions: StorePromotionsConfig;
   contact: StoreContactConfig;
+  payments: StorePaymentsConfig;
 };
 
 // POS System Types

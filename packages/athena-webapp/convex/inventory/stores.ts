@@ -35,6 +35,7 @@ const toV2OnlyConfig = (existingConfig: unknown) => {
     media: normalized.media,
     promotions: normalized.promotions,
     contact: normalized.contact,
+    payments: normalized.payments,
   };
 };
 
