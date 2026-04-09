@@ -2,7 +2,8 @@
   "name": "athena",
   "private": true,
   "scripts": {
-    "pr:athena": "bun run --filter '@athena/webapp' audit:convex && bun run --filter '@athena/webapp' lint:convex:changed && bun run --filter '@athena/webapp' test && bun run --filter '@athena/storefront-webapp' test && bun run --filter '@athena/symphony-service' test",
+    "harness:check": "bun scripts/harness-check.ts",
+    "pr:athena": "bun run --filter '@athena/webapp' audit:convex && bun run --filter '@athena/webapp' lint:convex:changed && bun run --filter '@athena/webapp' test && bun run --filter '@athena/storefront-webapp' test && bun run harness:check",
     "symphony": "bun run --filter '@athena/symphony-service' start ../../WORKFLOW.md",
     "symphony:watch": "bun run --filter '@athena/symphony-service' start ../../WORKFLOW.md --watch",
     "test:symphony": "bun run --filter '@athena/symphony-service' test",

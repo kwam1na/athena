@@ -1,0 +1,7 @@
+# Athena Webapp Architecture
+
+The app is a TanStack Router browser client in [src/main.tsx](../../src/main.tsx). The generated route tree in [src/routeTree.gen.ts](../../src/routeTree.gen.ts) fans into public/login routes plus the authenticated shell rooted at [src/routes/_authed.tsx](../../src/routes/_authed.tsx). Most user-facing work starts by figuring out whether the change belongs in route composition, a feature component under `src/components`, or a data hook under `src/hooks`.
+
+Backend and integration boundaries sit in Convex. The top-level HTTP entrypoint [convex/http.ts](../../convex/http.ts) mounts Hono routes for inventory, storefront, guest, checkout, rewards, and payment webhooks. Inventory-facing route composition is grouped in [convex/http/domains/inventory/routes/index.ts](../../convex/http/domains/inventory/routes/index.ts), while storefront-facing HTTP surfaces are grouped in [convex/http/domains/storeFront/routes/index.ts](../../convex/http/domains/storeFront/routes/index.ts). Shared persistence shape lives in [convex/schema.ts](../../convex/schema.ts).
+
+When you need to move logic across the browser/server boundary, prefer the Convex guidance in [convex/README.md](../../convex/README.md): keep public functions thin, treat Hono routes as explicit public boundaries, and push reusable server logic behind internal helpers instead of duplicating fetch-time behavior in React code.
