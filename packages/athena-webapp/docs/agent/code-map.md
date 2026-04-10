@@ -1,5 +1,8 @@
 # Athena Webapp Code Map
 
+- [Route index](./route-index.md)
+- [Key folder index](./key-folder-index.md)
+
 - App bootstrap and routing: [src/main.tsx](../../src/main.tsx), [src/routes/index.tsx](../../src/routes/index.tsx), [src/routes/_authed.tsx](../../src/routes/_authed.tsx), [src/routeTree.gen.ts](../../src/routeTree.gen.ts)
 - Auth and shared frontend state: [src/hooks/useAuth.ts](../../src/hooks/useAuth.ts), [src/components/providers/currency-provider.tsx](../../src/components/providers/currency-provider.tsx)
 - Inventory backend surfaces: [convex/inventory/stores.ts](../../convex/inventory/stores.ts), [convex/http/domains/inventory/routes/stores.ts](../../convex/http/domains/inventory/routes/stores.ts), [convex/http/domains/inventory/routes/analytics.ts](../../convex/http/domains/inventory/routes/analytics.ts)

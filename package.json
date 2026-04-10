@@ -5,6 +5,7 @@
     "architecture:check": "bun scripts/architecture-boundary-check.ts",
     "harness:audit": "bun scripts/harness-audit.ts",
     "harness:check": "bun scripts/harness-check.ts",
+    "harness:generate": "bun scripts/harness-generate.ts",
     "harness:review": "bun scripts/harness-review.ts",
     "pr:athena": "bun run --filter '@athena/webapp' audit:convex && bun run --filter '@athena/webapp' lint:convex:changed && bun run architecture:check && bun run --filter '@athena/webapp' test && bun run --filter '@athena/storefront-webapp' test && bun run harness:check",
     "symphony": "bun run --filter '@athena/symphony-service' start ../../WORKFLOW.md",
