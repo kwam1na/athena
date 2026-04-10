@@ -1,11 +1,17 @@
 # Storefront Webapp Testing
 
-Run `bun run harness:review` from the repo root when you need the docs-first touched-file review pass. It always runs `bun run harness:check` first, then uses the machine-readable [validation map](./validation-map.json) to decide whether `@athena/storefront-webapp` baseline validations should run.
+Use the repo-root harness commands together:
+
+- `bun run harness:check` validates the docs themselves: required files, links, path references, and documented test commands.
+- `bun run harness:review` is the touched-file pass. It always runs `bun run harness:check` first, then uses the machine-readable [validation map](./validation-map.json) to decide whether `@athena/storefront-webapp` baseline validations should run for the files you changed.
+- `bun run harness:audit` is the full-app pass. It scans the current `storefront-webapp` surface even when nothing is touched and fails on stale harness docs, stale validation-map paths, or live surfaces that the validation map does not cover yet.
 
 - [Test index](./test-index.md)
 - [Validation guide](./validation-guide.md)
 
 If `bun run harness:review` reports a coverage gap, the touched `packages/storefront-webapp` file is not represented in the validation map yet. Update the map and this testing guide together before handoff so the harness stays honest.
+
+If `bun run harness:audit` reports a coverage gap, a live `src/` or `tests/` surface exists without a corresponding validation-map entry. Add or tighten the affected surface mapping before handoff so future agents can trust the repo-wide scan.
 
 Start with the package suite in [vitest.config.ts](../../vitest.config.ts): `bun run --filter '@athena/storefront-webapp' test`. It is the default regression pass for API wrappers, route helpers, checkout state, and shared utility logic.
 

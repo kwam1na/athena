@@ -19,10 +19,17 @@ type ValidationRule = {
   scripts: string[];
 };
 
+type ValidationSurface = {
+  name: string;
+  pathPrefixes: string[];
+  scripts: string[];
+};
+
 type ValidationMap = {
   workspace: string;
   packageDir: string;
   rules: ValidationRule[];
+  surfaces?: ValidationSurface[];
 };
 
 type LoadedReviewTarget = {
@@ -72,6 +79,19 @@ async function readJsonFile<T>(filePath: string) {
   return JSON.parse(await readFile(filePath, "utf8")) as T;
 }
 
+function toValidationRules(validationMap: ValidationMap) {
+  if (validationMap.surfaces && validationMap.surfaces.length > 0) {
+    return validationMap.surfaces.flatMap((surface) =>
+      surface.pathPrefixes.map((pathPrefix) => ({
+        pathPrefix,
+        scripts: surface.scripts,
+      }))
+    );
+  }
+
+  return validationMap.rules;
+}
+
 async function loadReviewTarget(
   rootDir: string,
   testingDocPath: string,
@@ -115,7 +135,9 @@ async function loadReviewTarget(
     );
   }
 
-  for (const rule of validationMap.rules) {
+  const validationRules = toValidationRules(validationMap);
+
+  for (const rule of validationRules) {
     if (!(await fileExists(path.join(rootDir, rule.pathPrefix)))) {
       throw new Error(
         `Stale harness review config: ${validationMapPath} references missing path prefix "${rule.pathPrefix}".`
@@ -135,7 +157,7 @@ async function loadReviewTarget(
     packageDir: normalizeRepoPath(validationMap.packageDir),
     validationMapPath,
     workspace: validationMap.workspace,
-    rules: validationMap.rules.map((rule) => ({
+    rules: validationRules.map((rule) => ({
       pathPrefix: normalizeRepoPath(rule.pathPrefix),
       scripts: rule.scripts,
     })),
