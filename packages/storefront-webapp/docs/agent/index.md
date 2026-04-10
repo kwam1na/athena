@@ -3,8 +3,14 @@
 - [Architecture](./architecture.md)
 - [Testing](./testing.md)
 - [Code map](./code-map.md)
+- [Route index](./route-index.md)
+- [Test index](./test-index.md)
+- [Key folder index](./key-folder-index.md)
+- [Validation guide](./validation-guide.md)
 
 Use this harness when the task touches the TanStack Start runtime in [src/client.tsx](../../src/client.tsx) and [src/ssr.tsx](../../src/ssr.tsx), top-level layout composition in [src/routes/__root.tsx](../../src/routes/__root.tsx), or the browser-to-backend request layer in [src/api/storefront.ts](../../src/api/storefront.ts).
+
+The generated indexes above are the quickest way to confirm the current route tree, test layout, and key folders before you drill into specific modules.
 
 Key boundaries to keep in mind:
 

@@ -4,11 +4,24 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { validateHarnessDocs } from "./harness-check";
+import { writeGeneratedHarnessDocs } from "./harness-generate";
 
 const REQUIRED_INDEX_LINKS = [
   "./architecture.md",
   "./testing.md",
   "./code-map.md",
+  "./route-index.md",
+  "./test-index.md",
+  "./key-folder-index.md",
+  "./validation-guide.md",
+];
+const REQUIRED_TESTING_LINKS = [
+  "./test-index.md",
+  "./validation-guide.md",
+];
+const REQUIRED_CODE_MAP_LINKS = [
+  "./route-index.md",
+  "./key-folder-index.md",
 ];
 
 const tempRoots: string[] = [];
@@ -44,10 +57,14 @@ async function createFixtureRepo() {
         ? {
             test: "vitest run",
             "audit:convex": "bash ./scripts/convex-audit.sh",
+            "lint:convex:changed": "bash ./scripts/convex-lint-changed.sh",
+            "lint:architecture": "bun ../../scripts/architecture-boundary-check.ts athena-webapp",
+            build: "vite build && tsc --noEmit",
           }
         : {
             test: "vitest run",
             "test:e2e": "playwright test",
+            "lint:architecture": "bun ../../scripts/architecture-boundary-check.ts storefront-webapp",
           };
 
     await write(
@@ -86,37 +103,60 @@ async function createFixtureRepo() {
     );
     await write(
       `packages/${appName}/docs/agent/testing.md`,
-      appName === "athena-webapp"
-        ? [
-            "# Testing",
-            "",
-            "The main test surfaces are `src/**/*.test.{ts,tsx}` and `convex/**/*.test.{ts,tsx}`.",
-            "Run `bun run --filter '@athena/webapp' test` for the default regression pass.",
-            "If you touch Convex code, also run `bun run --filter '@athena/webapp' audit:convex`.",
-            "See [vitest config](../../vitest.config.ts).",
-          ].join("\n")
-        : [
-            "# Testing",
-            "",
-            "The main test surfaces are `src/**/*.test.{ts,tsx}` and `tests/e2e`.",
-            "Run `bun run --filter '@athena/storefront-webapp' test` for the default regression pass.",
-            "Run `bun run --filter '@athena/storefront-webapp' test:e2e` for browser journeys configured in [playwright.config.ts](../../playwright.config.ts).",
-          ].join("\n"),
+      [
+        appName === "athena-webapp" ? "# Athena Webapp Testing" : "# Storefront Webapp Testing",
+        "",
+        ...REQUIRED_TESTING_LINKS.map((link) => `- [${link}](${link})`),
+        "",
+        ...(appName === "athena-webapp"
+          ? [
+              "The main test surfaces are `src/**/*.test.{ts,tsx}` and `convex/**/*.test.{ts,tsx}`.",
+              "Run `bun run --filter '@athena/webapp' test` for the default regression pass.",
+              "If you touch Convex code, also run `bun run --filter '@athena/webapp' audit:convex`.",
+              "See [vitest config](../../vitest.config.ts).",
+            ]
+          : [
+              "The main test surfaces are `src/**/*.test.{ts,tsx}` and `tests/e2e`.",
+              "Run `bun run --filter '@athena/storefront-webapp' test` for the default regression pass.",
+              "Run `bun run --filter '@athena/storefront-webapp' test:e2e` for browser journeys configured in [playwright.config.ts](../../playwright.config.ts).",
+            ]),
+      ].join("\n"),
       rootDir
     );
     await write(
       `packages/${appName}/docs/agent/code-map.md`,
-      appName === "athena-webapp"
-        ? "# Code map\n\nStart from [architecture](./architecture.md) and inspect `src/main.tsx`.\n"
-        : "# Code map\n\nStart from [architecture](./architecture.md) and inspect `src/client.tsx`.\n",
+      [
+        appName === "athena-webapp" ? "# Athena Webapp Code Map" : "# Storefront Webapp Code Map",
+        "",
+        ...REQUIRED_CODE_MAP_LINKS.map((link) => `- [${link}](${link})`),
+        "",
+        appName === "athena-webapp"
+          ? "Start from [architecture](./architecture.md) and inspect `src/main.tsx`."
+          : "Start from [architecture](./architecture.md) and inspect `src/client.tsx`.",
+        "",
+      ].join("\n"),
       rootDir
     );
 
     if (appName === "athena-webapp") {
       await write("packages/athena-webapp/vitest.config.ts", "export default {};\n", rootDir);
       await write("packages/athena-webapp/src/main.tsx", "export {};\n", rootDir);
+      await write(
+        "packages/athena-webapp/src/routes/_authed/dashboard.index.tsx",
+        "export {};\n",
+        rootDir
+      );
+      await write(
+        "packages/athena-webapp/src/components/providers/currency-provider.tsx",
+        "export {};\n",
+        rootDir
+      );
+      await write("packages/athena-webapp/src/hooks/useAuth.ts", "export {};\n", rootDir);
+      await write("packages/athena-webapp/src/lib/utils.ts", "export {};\n", rootDir);
+      await write("packages/athena-webapp/src/contexts/AuthContext.tsx", "export {};\n", rootDir);
       await write("packages/athena-webapp/src/example.test.tsx", "export {};\n", rootDir);
       await write("packages/athena-webapp/convex/example.test.ts", "export {};\n", rootDir);
+      await write("packages/athena-webapp/convex/http.ts", "export {};\n", rootDir);
     } else {
       await write(
         "packages/storefront-webapp/playwright.config.ts",
@@ -124,10 +164,34 @@ async function createFixtureRepo() {
         rootDir
       );
       await write("packages/storefront-webapp/src/client.tsx", "export {};\n", rootDir);
+      await write(
+        "packages/storefront-webapp/src/routes/shop/checkout/index.tsx",
+        "export {};\n",
+        rootDir
+      );
+      await write(
+        "packages/storefront-webapp/src/components/checkout/CheckoutProvider.tsx",
+        "export {};\n",
+        rootDir
+      );
+      await write(
+        "packages/storefront-webapp/src/hooks/useShoppingBag.ts",
+        "export {};\n",
+        rootDir
+      );
+      await write("packages/storefront-webapp/src/lib/storeConfig.ts", "export {};\n", rootDir);
+      await write(
+        "packages/storefront-webapp/src/contexts/StoreContext.tsx",
+        "export {};\n",
+        rootDir
+      );
+      await write("packages/storefront-webapp/src/api/storefront.ts", "export {};\n", rootDir);
       await write("packages/storefront-webapp/src/example.test.tsx", "export {};\n", rootDir);
       await write("packages/storefront-webapp/tests/e2e/smoke.spec.ts", "export {};\n", rootDir);
     }
   }
+
+  await writeGeneratedHarnessDocs(rootDir);
 
   return rootDir;
 }
@@ -154,6 +218,17 @@ describe("validateHarnessDocs", () => {
     );
   });
 
+  it("reports missing required generated harness files", async () => {
+    const rootDir = await createFixtureRepo();
+    await rm(
+      path.join(rootDir, "packages/athena-webapp/docs/agent/route-index.md")
+    );
+
+    await expect(validateHarnessDocs(rootDir)).resolves.toContain(
+      "Missing required harness file: packages/athena-webapp/docs/agent/route-index.md"
+    );
+  });
+
   it("reports broken relative markdown links in harness docs", async () => {
     const rootDir = await createFixtureRepo();
     await write(
@@ -176,12 +251,57 @@ describe("validateHarnessDocs", () => {
         "",
         "- [architecture](./architecture.md)",
         "- [code-map](./code-map.md)",
+        "- [route-index](./route-index.md)",
+        "- [test-index](./test-index.md)",
+        "- [key-folder-index](./key-folder-index.md)",
+        "- [validation-guide](./validation-guide.md)",
       ].join("\n"),
       rootDir
     );
 
     await expect(validateHarnessDocs(rootDir)).resolves.toContain(
       "Missing required index link in packages/storefront-webapp/docs/agent/index.md: ./testing.md"
+    );
+  });
+
+  it("reports missing required generated links from testing docs", async () => {
+    const rootDir = await createFixtureRepo();
+    await write(
+      "packages/athena-webapp/docs/agent/testing.md",
+      [
+        "# Athena Webapp Testing",
+        "",
+        "- [test-index](./test-index.md)",
+        "",
+        "The main test surfaces are `src/**/*.test.{ts,tsx}` and `convex/**/*.test.{ts,tsx}`.",
+        "Run `bun run --filter '@athena/webapp' test` for the default regression pass.",
+        "If you touch Convex code, also run `bun run --filter '@athena/webapp' audit:convex`.",
+        "See [vitest config](../../vitest.config.ts).",
+      ].join("\n"),
+      rootDir
+    );
+
+    await expect(validateHarnessDocs(rootDir)).resolves.toContain(
+      "Missing required testing link in packages/athena-webapp/docs/agent/testing.md: ./validation-guide.md"
+    );
+  });
+
+  it("reports missing required generated links from code-map docs", async () => {
+    const rootDir = await createFixtureRepo();
+    await write(
+      "packages/storefront-webapp/docs/agent/code-map.md",
+      [
+        "# Storefront Webapp Code Map",
+        "",
+        "- [route-index](./route-index.md)",
+        "",
+        "Start from [architecture](./architecture.md) and inspect `src/client.tsx`.",
+      ].join("\n"),
+      rootDir
+    );
+
+    await expect(validateHarnessDocs(rootDir)).resolves.toContain(
+      "Missing required code-map link in packages/storefront-webapp/docs/agent/code-map.md: ./key-folder-index.md"
     );
   });
 
@@ -228,6 +348,9 @@ describe("validateHarnessDocs", () => {
       [
         "# Testing",
         "",
+        "- [test-index](./test-index.md)",
+        "- [validation-guide](./validation-guide.md)",
+        "",
         "The main test surfaces are `src/**/*.test.{ts,tsx}`.",
         "Run `bun run --filter '@athena/storefront-webapp' test` for the default regression pass.",
         "Run `bun run --filter '@athena/storefront-webapp' test:e2e` for browser journeys.",
@@ -237,6 +360,19 @@ describe("validateHarnessDocs", () => {
 
     await expect(validateHarnessDocs(rootDir)).resolves.toContain(
       "Missing documented test surface in packages/storefront-webapp/docs/agent/testing.md: tests/e2e"
+    );
+  });
+
+  it("reports stale generated route indexes when route files change", async () => {
+    const rootDir = await createFixtureRepo();
+    await write(
+      "packages/storefront-webapp/src/routes/shop/checkout/complete.tsx",
+      "export {};\n",
+      rootDir
+    );
+
+    await expect(validateHarnessDocs(rootDir)).resolves.toContain(
+      "Stale generated harness doc: packages/storefront-webapp/docs/agent/route-index.md"
     );
   });
 });
