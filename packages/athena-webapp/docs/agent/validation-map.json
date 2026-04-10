@@ -1,0 +1,10 @@
+{
+  "workspace": "@athena/webapp",
+  "packageDir": "packages/athena-webapp",
+  "rules": [
+    {
+      "pathPrefix": "packages/athena-webapp/",
+      "scripts": ["audit:convex", "lint:convex:changed", "test"]
+    }
+  ]
+}

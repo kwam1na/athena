@@ -2,7 +2,7 @@
 
 - For `packages/athena-webapp`, start with [athena-webapp/AGENTS.md](./athena-webapp/AGENTS.md).
 - For `packages/storefront-webapp`, start with [storefront-webapp/AGENTS.md](./storefront-webapp/AGENTS.md).
-- If a task spans both apps, read both harnesses first, keep docs in sync with code, and finish with `bun run harness:check`.
+- If a task spans both apps, read both harnesses first, keep docs in sync with code, and finish with `bun run harness:review`.
 
 ## Shared Repo Rules
 

@@ -1,0 +1,10 @@
+{
+  "workspace": "@athena/storefront-webapp",
+  "packageDir": "packages/storefront-webapp",
+  "rules": [
+    {
+      "pathPrefix": "packages/storefront-webapp/",
+      "scripts": ["test"]
+    }
+  ]
+}
