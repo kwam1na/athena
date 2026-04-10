@@ -1,4 +1,4 @@
-import { access, readFile } from "node:fs/promises";
+import { access, readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 
 const APP_NAMES = ["athena-webapp", "storefront-webapp"] as const;
@@ -15,6 +15,16 @@ const REQUIRED_INDEX_LINKS = [
   "./code-map.md",
 ] as const;
 const MARKDOWN_LINK_PATTERN = /\[[^\]]+\]\(([^)]+)\)/g;
+const INLINE_CODE_PATTERN = /`([^`\n]+)`/g;
+const PLAYWRIGHT_TEST_DIR_PATTERN =
+  /testDir\s*:\s*["'`](.+?)["'`]/;
+
+type HarnessAppConfig = {
+  appName: (typeof APP_NAMES)[number];
+  packageName: string;
+  packageDir: string;
+  scripts: Record<string, string>;
+};
 
 function stripLinkDecorations(linkTarget: string) {
   return linkTarget.split("#", 1)[0]?.split("?", 1)[0] ?? "";
@@ -66,9 +76,282 @@ async function collectMarkdownLinkErrors(rootDir: string, filePath: string) {
   };
 }
 
+function extractInlineCode(contents: string) {
+  return [...contents.matchAll(INLINE_CODE_PATTERN)]
+    .map((match) => match[1]?.trim() ?? "")
+    .filter(Boolean);
+}
+
+function normalizePathReference(reference: string) {
+  const trimmedReference = stripLinkDecorations(
+    reference.trim().replace(/[),.;:]+$/, "")
+  );
+  const firstDynamicIndex = trimmedReference.search(/[*{[]/);
+  const staticReference =
+    firstDynamicIndex === -1
+      ? trimmedReference
+      : trimmedReference.slice(0, firstDynamicIndex);
+
+  return staticReference.replace(/\/+$/, "");
+}
+
+function isLikelyPathReference(reference: string) {
+  if (!reference || /\s/.test(reference) || /^[@a-z-]+:/i.test(reference)) {
+    return false;
+  }
+
+  const normalizedReference = normalizePathReference(reference);
+
+  if (!normalizedReference) {
+    return false;
+  }
+
+  return (
+    normalizedReference.startsWith("./") ||
+    normalizedReference.startsWith("../") ||
+    normalizedReference.startsWith("packages/") ||
+    normalizedReference.startsWith("src/") ||
+    normalizedReference.startsWith("convex/") ||
+    normalizedReference.startsWith("tests/") ||
+    normalizedReference === "src" ||
+    normalizedReference === "convex" ||
+    normalizedReference === "tests" ||
+    /\.(?:[cm]?[jt]sx?|md|json)$/.test(normalizedReference)
+  );
+}
+
+function resolvePathReference(
+  rootDir: string,
+  filePath: string,
+  packageDir: string,
+  reference: string
+) {
+  const normalizedReference = normalizePathReference(reference);
+
+  if (!normalizedReference) {
+    return null;
+  }
+
+  if (normalizedReference.startsWith("packages/")) {
+    return path.join(rootDir, normalizedReference);
+  }
+
+  if (
+    normalizedReference.startsWith("./") ||
+    normalizedReference.startsWith("../")
+  ) {
+    return path.resolve(rootDir, path.dirname(filePath), normalizedReference);
+  }
+
+  return path.join(rootDir, packageDir, normalizedReference);
+}
+
+async function collectReferencedPathErrors(
+  rootDir: string,
+  filePath: string,
+  packageDir: string,
+  contents: string
+) {
+  const errors: string[] = [];
+  const seenReferences = new Set<string>();
+
+  for (const reference of extractInlineCode(contents)) {
+    if (!isLikelyPathReference(reference)) {
+      continue;
+    }
+
+    const normalizedReference = normalizePathReference(reference);
+    if (!normalizedReference || seenReferences.has(normalizedReference)) {
+      continue;
+    }
+
+    seenReferences.add(normalizedReference);
+    const resolvedPath = resolvePathReference(
+      rootDir,
+      filePath,
+      packageDir,
+      reference
+    );
+
+    if (resolvedPath && !(await fileExists(resolvedPath))) {
+      errors.push(`Missing referenced path in ${filePath}: ${normalizedReference}`);
+    }
+  }
+
+  return errors;
+}
+
+async function readPackageConfig(rootDir: string, appName: (typeof APP_NAMES)[number]) {
+  const packageDir = path.posix.join("packages", appName);
+  const packageJsonPath = path.join(rootDir, packageDir, "package.json");
+
+  if (!(await fileExists(packageJsonPath))) {
+    return null;
+  }
+
+  const parsedPackage = JSON.parse(await readFile(packageJsonPath, "utf8")) as {
+    name?: string;
+    scripts?: Record<string, string>;
+  };
+
+  if (!parsedPackage.name) {
+    return null;
+  }
+
+  return {
+    appName,
+    packageDir,
+    packageName: parsedPackage.name,
+    scripts: parsedPackage.scripts ?? {},
+  } satisfies HarnessAppConfig;
+}
+
+function extractTestScriptFromCommand(
+  command: string,
+  packageName: string
+) {
+  const bunFilterMatch = command.match(
+    /^bun run --filter ["']([^"']+)["'] ([^\s`]+)$/
+  );
+  if (bunFilterMatch) {
+    return bunFilterMatch[1] === packageName &&
+      bunFilterMatch[2]?.startsWith("test")
+      ? bunFilterMatch[2]
+      : null;
+  }
+
+  const bunRunMatch = command.match(/^bun run ([^\s`]+)$/);
+  if (bunRunMatch) {
+    return bunRunMatch[1]?.startsWith("test") ? bunRunMatch[1] : null;
+  }
+
+  const npmRunMatch = command.match(/^(?:npm|pnpm) run ([^\s`]+)$/);
+  if (npmRunMatch) {
+    return npmRunMatch[1]?.startsWith("test") ? npmRunMatch[1] : null;
+  }
+
+  const yarnMatch = command.match(/^yarn ([^\s`]+)$/);
+  if (yarnMatch) {
+    return yarnMatch[1]?.startsWith("test") ? yarnMatch[1] : null;
+  }
+
+  return null;
+}
+
+async function walkFiles(dirPath: string): Promise<string[]> {
+  if (!(await fileExists(dirPath))) {
+    return [];
+  }
+
+  const entries = await readdir(dirPath, { withFileTypes: true });
+  const files = await Promise.all(
+    entries.map(async (entry) => {
+      const entryPath = path.join(dirPath, entry.name);
+      if (entry.isDirectory()) {
+        return walkFiles(entryPath);
+      }
+
+      return [entryPath];
+    })
+  );
+
+  return files.flat();
+}
+
+async function collectTestSurfaceRoots(
+  rootDir: string,
+  packageConfig: HarnessAppConfig
+) {
+  const packageRoot = path.join(rootDir, packageConfig.packageDir);
+  const allFiles = await walkFiles(packageRoot);
+  const surfaces = new Set<string>();
+
+  for (const filePath of allFiles) {
+    const repoRelativePath = path.relative(packageRoot, filePath);
+    if (
+      repoRelativePath.startsWith("node_modules") ||
+      repoRelativePath.startsWith("dist") ||
+      repoRelativePath.startsWith("coverage")
+    ) {
+      continue;
+    }
+
+    if (!/\.(?:test|spec)\.[cm]?[jt]sx?$/.test(repoRelativePath)) {
+      continue;
+    }
+
+    const normalizedPath = repoRelativePath.split(path.sep).join("/");
+    surfaces.add(normalizedPath.split("/", 1)[0] ?? normalizedPath);
+  }
+
+  const playwrightConfigPath = path.join(packageRoot, "playwright.config.ts");
+  if (
+    packageConfig.scripts["test:e2e"] &&
+    (await fileExists(playwrightConfigPath))
+  ) {
+    const playwrightConfig = await readFile(playwrightConfigPath, "utf8");
+    const testDirMatch = playwrightConfig.match(PLAYWRIGHT_TEST_DIR_PATTERN);
+    const testDir = testDirMatch?.[1]?.replace(/^\.\//, "").replace(/\/+$/, "");
+    if (testDir) {
+      surfaces.add(testDir);
+    }
+  }
+
+  return [...surfaces].sort();
+}
+
+async function collectTestingDocErrors(
+  rootDir: string,
+  filePath: string,
+  packageConfig: HarnessAppConfig,
+  contents: string
+) {
+  const errors: string[] = [];
+  const documentedTestScripts = new Set<string>();
+
+  for (const inlineCode of extractInlineCode(contents)) {
+    const documentedScript = extractTestScriptFromCommand(
+      inlineCode,
+      packageConfig.packageName
+    );
+    if (!documentedScript) {
+      continue;
+    }
+
+    documentedTestScripts.add(documentedScript);
+    if (!packageConfig.scripts[documentedScript]) {
+      errors.push(`Invalid documented test command in ${filePath}: ${inlineCode}`);
+    }
+  }
+
+  const requiredScripts = new Set(["test"]);
+  if (packageConfig.scripts["test:e2e"]) {
+    requiredScripts.add("test:e2e");
+  }
+
+  for (const requiredScript of requiredScripts) {
+    if (!documentedTestScripts.has(requiredScript)) {
+      errors.push(`Missing documented test command in ${filePath}: ${requiredScript}`);
+    }
+  }
+
+  const requiredSurfaces = await collectTestSurfaceRoots(rootDir, packageConfig);
+  for (const surface of requiredSurfaces) {
+    if (!contents.includes(surface)) {
+      errors.push(`Missing documented test surface in ${filePath}: ${surface}`);
+    }
+  }
+
+  return errors;
+}
+
 export async function validateHarnessDocs(rootDir: string) {
   const errors: string[] = [];
   const markdownFiles = ["packages/AGENTS.md"];
+  const packageConfigs = new Map<
+    (typeof APP_NAMES)[number],
+    HarnessAppConfig
+  >();
 
   if (!(await fileExists(path.join(rootDir, "packages/AGENTS.md")))) {
     errors.push("Missing required harness file: packages/AGENTS.md");
@@ -76,6 +359,11 @@ export async function validateHarnessDocs(rootDir: string) {
   }
 
   for (const appName of APP_NAMES) {
+    const packageConfig = await readPackageConfig(rootDir, appName);
+    if (packageConfig) {
+      packageConfigs.set(appName, packageConfig);
+    }
+
     for (const relativeFile of REQUIRED_APP_FILES) {
       const repoRelativePath = path.posix.join("packages", appName, relativeFile);
       if (!(await fileExists(path.join(rootDir, repoRelativePath)))) {
@@ -101,6 +389,39 @@ export async function validateHarnessDocs(rootDir: string) {
     errors.push(...linkErrors);
 
     if (!markdownFile.endsWith("/docs/agent/index.md")) {
+      const appName = APP_NAMES.find((candidate) =>
+        markdownFile.startsWith(`packages/${candidate}/`)
+      );
+      const packageConfig = appName ? packageConfigs.get(appName) : null;
+
+      if (
+        packageConfig &&
+        (markdownFile.endsWith("/docs/agent/code-map.md") ||
+          markdownFile.endsWith("/docs/agent/testing.md"))
+      ) {
+        errors.push(
+          ...(
+            await collectReferencedPathErrors(
+              rootDir,
+              markdownFile,
+              packageConfig.packageDir,
+              contents
+            )
+          )
+        );
+      }
+
+      if (packageConfig && markdownFile.endsWith("/docs/agent/testing.md")) {
+        errors.push(
+          ...(await collectTestingDocErrors(
+            rootDir,
+            markdownFile,
+            packageConfig,
+            contents
+          ))
+        );
+      }
+
       continue;
     }
 
