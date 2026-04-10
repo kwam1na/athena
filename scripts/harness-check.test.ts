@@ -35,6 +35,27 @@ async function createFixtureRepo() {
   );
 
   for (const appName of ["athena-webapp", "storefront-webapp"]) {
+    const packageName =
+      appName === "athena-webapp"
+        ? "@athena/webapp"
+        : "@athena/storefront-webapp";
+    const scripts =
+      appName === "athena-webapp"
+        ? {
+            test: "vitest run",
+            "audit:convex": "bash ./scripts/convex-audit.sh",
+          }
+        : {
+            test: "vitest run",
+            "test:e2e": "playwright test",
+          };
+
+    await write(
+      `packages/${appName}/package.json`,
+      JSON.stringify({ name: packageName, scripts }, null, 2),
+      rootDir
+    );
+
     await write(
       `packages/${appName}/AGENTS.md`,
       [
@@ -65,14 +86,47 @@ async function createFixtureRepo() {
     );
     await write(
       `packages/${appName}/docs/agent/testing.md`,
-      "# Testing\n\nUse the package test command.\n",
+      appName === "athena-webapp"
+        ? [
+            "# Testing",
+            "",
+            "The main test surfaces are `src/**/*.test.{ts,tsx}` and `convex/**/*.test.{ts,tsx}`.",
+            "Run `bun run --filter '@athena/webapp' test` for the default regression pass.",
+            "If you touch Convex code, also run `bun run --filter '@athena/webapp' audit:convex`.",
+            "See [vitest config](../../vitest.config.ts).",
+          ].join("\n")
+        : [
+            "# Testing",
+            "",
+            "The main test surfaces are `src/**/*.test.{ts,tsx}` and `tests/e2e`.",
+            "Run `bun run --filter '@athena/storefront-webapp' test` for the default regression pass.",
+            "Run `bun run --filter '@athena/storefront-webapp' test:e2e` for browser journeys configured in [playwright.config.ts](../../playwright.config.ts).",
+          ].join("\n"),
       rootDir
     );
     await write(
       `packages/${appName}/docs/agent/code-map.md`,
-      "# Code map\n\nStart from [architecture](./architecture.md).\n",
+      appName === "athena-webapp"
+        ? "# Code map\n\nStart from [architecture](./architecture.md) and inspect `src/main.tsx`.\n"
+        : "# Code map\n\nStart from [architecture](./architecture.md) and inspect `src/client.tsx`.\n",
       rootDir
     );
+
+    if (appName === "athena-webapp") {
+      await write("packages/athena-webapp/vitest.config.ts", "export default {};\n", rootDir);
+      await write("packages/athena-webapp/src/main.tsx", "export {};\n", rootDir);
+      await write("packages/athena-webapp/src/example.test.tsx", "export {};\n", rootDir);
+      await write("packages/athena-webapp/convex/example.test.ts", "export {};\n", rootDir);
+    } else {
+      await write(
+        "packages/storefront-webapp/playwright.config.ts",
+        'export default { testDir: "./tests/e2e" };\n',
+        rootDir
+      );
+      await write("packages/storefront-webapp/src/client.tsx", "export {};\n", rootDir);
+      await write("packages/storefront-webapp/src/example.test.tsx", "export {};\n", rootDir);
+      await write("packages/storefront-webapp/tests/e2e/smoke.spec.ts", "export {};\n", rootDir);
+    }
   }
 
   return rootDir;
@@ -128,6 +182,61 @@ describe("validateHarnessDocs", () => {
 
     await expect(validateHarnessDocs(rootDir)).resolves.toContain(
       "Missing required index link in packages/storefront-webapp/docs/agent/index.md: ./testing.md"
+    );
+  });
+
+  it("reports stale inline path references in code-map docs", async () => {
+    const rootDir = await createFixtureRepo();
+    await write(
+      "packages/athena-webapp/docs/agent/code-map.md",
+      [
+        "# Athena Webapp Code Map",
+        "",
+        "Start from `src/missing-entry.tsx`.",
+      ].join("\n"),
+      rootDir
+    );
+
+    await expect(validateHarnessDocs(rootDir)).resolves.toContain(
+      "Missing referenced path in packages/athena-webapp/docs/agent/code-map.md: src/missing-entry.tsx"
+    );
+  });
+
+  it("reports invalid documented test commands", async () => {
+    const rootDir = await createFixtureRepo();
+    await write(
+      "packages/athena-webapp/docs/agent/testing.md",
+      [
+        "# Testing",
+        "",
+        "The main test surfaces are `src/**/*.test.{ts,tsx}` and `convex/**/*.test.{ts,tsx}`.",
+        "Run `bun run --filter '@athena/webapp' test` for the default regression pass.",
+        "Run `bun run --filter '@athena/webapp' test:foo` for the imaginary suite.",
+      ].join("\n"),
+      rootDir
+    );
+
+    await expect(validateHarnessDocs(rootDir)).resolves.toContain(
+      "Invalid documented test command in packages/athena-webapp/docs/agent/testing.md: bun run --filter '@athena/webapp' test:foo"
+    );
+  });
+
+  it("reports missing live test surfaces from testing docs", async () => {
+    const rootDir = await createFixtureRepo();
+    await write(
+      "packages/storefront-webapp/docs/agent/testing.md",
+      [
+        "# Testing",
+        "",
+        "The main test surfaces are `src/**/*.test.{ts,tsx}`.",
+        "Run `bun run --filter '@athena/storefront-webapp' test` for the default regression pass.",
+        "Run `bun run --filter '@athena/storefront-webapp' test:e2e` for browser journeys.",
+      ].join("\n"),
+      rootDir
+    );
+
+    await expect(validateHarnessDocs(rootDir)).resolves.toContain(
+      "Missing documented test surface in packages/storefront-webapp/docs/agent/testing.md: tests/e2e"
     );
   });
 });
