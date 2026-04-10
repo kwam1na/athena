@@ -4,6 +4,7 @@ import globals from 'globals'
 import reactHooks from 'eslint-plugin-react-hooks'
 import reactRefresh from 'eslint-plugin-react-refresh'
 import tseslint from 'typescript-eslint'
+import { createAthenaArchitectureBoundaryConfig } from '../../scripts/eslint/architecture-boundaries.mjs'
 
 export default tseslint.config(
   {
@@ -54,4 +55,5 @@ export default tseslint.config(
       '@typescript-eslint/no-floating-promises': 'error',
     },
   },
+  ...createAthenaArchitectureBoundaryConfig(),
 )

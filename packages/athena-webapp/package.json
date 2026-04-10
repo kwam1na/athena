@@ -7,6 +7,7 @@
     "build": "vite build && tsc --noEmit",
     "serve": "vite preview",
     "start": "vite",
+    "lint:architecture": "bun ../../scripts/architecture-boundary-check.ts athena-webapp",
     "lint": "bash ./scripts/convex-lint-changed.sh",
     "lint:convex": "eslint convex",
     "lint:convex:changed": "bash ./scripts/convex-lint-changed.sh",
