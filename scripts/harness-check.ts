@@ -1,6 +1,8 @@
 import { access, readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 
+import { generateHarnessDocs, GENERATED_HARNESS_DOCS } from "./harness-generate";
+
 const APP_NAMES = ["athena-webapp", "storefront-webapp"] as const;
 const REQUIRED_APP_FILES = [
   "AGENTS.md",
@@ -8,11 +10,24 @@ const REQUIRED_APP_FILES = [
   "docs/agent/architecture.md",
   "docs/agent/testing.md",
   "docs/agent/code-map.md",
+  ...GENERATED_HARNESS_DOCS,
 ] as const;
 const REQUIRED_INDEX_LINKS = [
   "./architecture.md",
   "./testing.md",
   "./code-map.md",
+  "./route-index.md",
+  "./test-index.md",
+  "./key-folder-index.md",
+  "./validation-guide.md",
+] as const;
+const REQUIRED_TESTING_LINKS = [
+  "./test-index.md",
+  "./validation-guide.md",
+] as const;
+const REQUIRED_CODE_MAP_LINKS = [
+  "./route-index.md",
+  "./key-folder-index.md",
 ] as const;
 const MARKDOWN_LINK_PATTERN = /\[[^\]]+\]\(([^)]+)\)/g;
 const INLINE_CODE_PATTERN = /`([^`\n]+)`/g;
@@ -352,6 +367,7 @@ export async function validateHarnessDocs(rootDir: string) {
     (typeof APP_NAMES)[number],
     HarnessAppConfig
   >();
+  const generatedDocs = await generateHarnessDocs(rootDir);
 
   if (!(await fileExists(path.join(rootDir, "packages/AGENTS.md")))) {
     errors.push("Missing required harness file: packages/AGENTS.md");
@@ -393,6 +409,11 @@ export async function validateHarnessDocs(rootDir: string) {
         markdownFile.startsWith(`packages/${candidate}/`)
       );
       const packageConfig = appName ? packageConfigs.get(appName) : null;
+      const linkTargets = new Set(
+        [...contents.matchAll(MARKDOWN_LINK_PATTERN)]
+          .map((match) => stripLinkDecorations(match[1]?.trim() ?? ""))
+          .filter(Boolean)
+      );
 
       if (
         packageConfig &&
@@ -412,6 +433,13 @@ export async function validateHarnessDocs(rootDir: string) {
       }
 
       if (packageConfig && markdownFile.endsWith("/docs/agent/testing.md")) {
+        for (const requiredLink of REQUIRED_TESTING_LINKS) {
+          if (!linkTargets.has(requiredLink)) {
+            errors.push(
+              `Missing required testing link in ${markdownFile}: ${requiredLink}`
+            );
+          }
+        }
         errors.push(
           ...(await collectTestingDocErrors(
             rootDir,
@@ -420,6 +448,16 @@ export async function validateHarnessDocs(rootDir: string) {
             contents
           ))
         );
+      }
+
+      if (packageConfig && markdownFile.endsWith("/docs/agent/code-map.md")) {
+        for (const requiredLink of REQUIRED_CODE_MAP_LINKS) {
+          if (!linkTargets.has(requiredLink)) {
+            errors.push(
+              `Missing required code-map link in ${markdownFile}: ${requiredLink}`
+            );
+          }
+        }
       }
 
       continue;
@@ -437,6 +475,18 @@ export async function validateHarnessDocs(rootDir: string) {
           `Missing required index link in ${markdownFile}: ${requiredLink}`
         );
       }
+    }
+  }
+
+  for (const [generatedPath, expectedContents] of generatedDocs) {
+    const absolutePath = path.join(rootDir, generatedPath);
+    if (!(await fileExists(absolutePath))) {
+      continue;
+    }
+
+    const currentContents = await readFile(absolutePath, "utf8");
+    if (currentContents !== expectedContents) {
+      errors.push(`Stale generated harness doc: ${generatedPath}`);
     }
   }
 

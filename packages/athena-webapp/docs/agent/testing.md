@@ -2,6 +2,9 @@
 
 Run `bun run harness:review` from the repo root when you need the docs-first touched-file review pass. It always runs `bun run harness:check` first, then uses the machine-readable [validation map](./validation-map.json) to decide whether `@athena/webapp` baseline validations should run.
 
+- [Test index](./test-index.md)
+- [Validation guide](./validation-guide.md)
+
 If `bun run harness:review` reports a coverage gap, the touched `packages/athena-webapp` file is not represented in the validation map yet. Update the map and this testing guide together before handoff so the harness stays honest.
 
 Start with the package suite in [vitest.config.ts](../../vitest.config.ts): `bun run --filter '@athena/webapp' test`. It covers both `src/**/*.test.{ts,tsx}` and `convex/**/*.test.{ts,tsx}`, so it is the default regression pass for mixed UI and backend changes.
