@@ -1,0 +1,355 @@
+import { access, readdir, readFile } from "node:fs/promises";
+import path from "node:path";
+
+import { validateHarnessDocs } from "./harness-check";
+
+const AUDIT_TARGETS = [
+  {
+    appName: "athena-webapp",
+    auditedRoots: ["src", "convex"],
+    testingDocPath: "packages/athena-webapp/docs/agent/testing.md",
+    validationMapPath: "packages/athena-webapp/docs/agent/validation-map.json",
+  },
+  {
+    appName: "storefront-webapp",
+    auditedRoots: ["src", "tests"],
+    testingDocPath: "packages/storefront-webapp/docs/agent/testing.md",
+    validationMapPath: "packages/storefront-webapp/docs/agent/validation-map.json",
+  },
+] as const;
+
+type ValidationRule = {
+  pathPrefix: string;
+  scripts: string[];
+};
+
+type ValidationSurface = {
+  name: string;
+  pathPrefixes: string[];
+  scripts: string[];
+};
+
+type ValidationMap = {
+  workspace: string;
+  packageDir: string;
+  rules?: ValidationRule[];
+  surfaces?: ValidationSurface[];
+};
+
+type LoadedAuditTarget = {
+  appName: (typeof AUDIT_TARGETS)[number]["appName"];
+  auditedRoots: readonly string[];
+  packageDir: string;
+  packageScripts: Record<string, string>;
+  surfaces: ValidationSurface[];
+  testingDocContents: string;
+};
+
+function normalizeRepoPath(repoPath: string) {
+  return repoPath.replaceAll("\\", "/");
+}
+
+function matchesPathPrefix(filePath: string, pathPrefix: string) {
+  const normalizedFilePath = normalizeRepoPath(filePath);
+  const normalizedPathPrefix = normalizeRepoPath(pathPrefix);
+
+  if (normalizedPathPrefix.endsWith("/")) {
+    return normalizedFilePath.startsWith(normalizedPathPrefix);
+  }
+
+  return (
+    normalizedFilePath === normalizedPathPrefix ||
+    normalizedFilePath.startsWith(`${normalizedPathPrefix}/`)
+  );
+}
+
+async function fileExists(filePath: string) {
+  try {
+    await access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function readJsonFile<T>(filePath: string) {
+  return JSON.parse(await readFile(filePath, "utf8")) as T;
+}
+
+function toValidationSurfaces(validationMap: ValidationMap) {
+  if (validationMap.surfaces && validationMap.surfaces.length > 0) {
+    return validationMap.surfaces;
+  }
+
+  return (validationMap.rules ?? []).map((rule, index) => ({
+    name: `rule-${index + 1}`,
+    pathPrefixes: [rule.pathPrefix],
+    scripts: rule.scripts,
+  }));
+}
+
+function addGroupedError(
+  groupedErrors: Map<string, string[]>,
+  group: string,
+  error: string
+) {
+  const existingErrors = groupedErrors.get(group);
+  if (existingErrors) {
+    existingErrors.push(error);
+    return;
+  }
+
+  groupedErrors.set(group, [error]);
+}
+
+function inferGroupFromError(error: string) {
+  const match = error.match(/packages\/([^/]+)\//);
+  return match?.[1] ?? "repo";
+}
+
+function shouldSkipSurfaceEntry(entryName: string) {
+  return (
+    entryName === "_generated" ||
+    entryName === "README.md" ||
+    entryName === "coverage" ||
+    entryName === "dist" ||
+    entryName === "node_modules"
+  );
+}
+
+async function collectLiveSurfaceEntries(
+  rootDir: string,
+  packageDir: string,
+  auditedRoots: readonly string[]
+) {
+  const liveEntries = new Set<string>();
+
+  for (const auditedRoot of auditedRoots) {
+    const absoluteRoot = path.join(rootDir, packageDir, auditedRoot);
+    if (!(await fileExists(absoluteRoot))) {
+      continue;
+    }
+
+    const entries = await readdir(absoluteRoot, { withFileTypes: true });
+    for (const entry of entries) {
+      if (shouldSkipSurfaceEntry(entry.name)) {
+        continue;
+      }
+
+      const repoPath = normalizeRepoPath(
+        path.posix.join(packageDir, auditedRoot, entry.name)
+      );
+      liveEntries.add(entry.isDirectory() ? `${repoPath}/` : repoPath);
+    }
+  }
+
+  return [...liveEntries].sort();
+}
+
+async function loadAuditTarget(
+  rootDir: string,
+  target: (typeof AUDIT_TARGETS)[number]
+) {
+  const groupedErrors = new Map<string, string[]>();
+  const absoluteValidationMapPath = path.join(rootDir, target.validationMapPath);
+  const absoluteTestingDocPath = path.join(rootDir, target.testingDocPath);
+
+  if (!(await fileExists(absoluteValidationMapPath))) {
+    addGroupedError(
+      groupedErrors,
+      target.appName,
+      `Missing validation map: ${target.validationMapPath}`
+    );
+    return {
+      groupedErrors,
+      loadedTarget: null,
+    };
+  }
+
+  if (!(await fileExists(absoluteTestingDocPath))) {
+    addGroupedError(
+      groupedErrors,
+      target.appName,
+      `Missing testing guide: ${target.testingDocPath}`
+    );
+    return {
+      groupedErrors,
+      loadedTarget: null,
+    };
+  }
+
+  const testingDocContents = await readFile(absoluteTestingDocPath, "utf8");
+  for (const requiredSnippet of [
+    "`bun run harness:check`",
+    "`bun run harness:review`",
+    "`bun run harness:audit`",
+    "(./validation-map.json)",
+  ]) {
+    if (!testingDocContents.includes(requiredSnippet)) {
+      addGroupedError(
+        groupedErrors,
+        target.appName,
+        `Stale harness audit docs: ${target.testingDocPath} must mention ${requiredSnippet}.`
+      );
+    }
+  }
+
+  const validationMap = await readJsonFile<ValidationMap>(absoluteValidationMapPath);
+  const packageJsonPath = path.join(rootDir, validationMap.packageDir, "package.json");
+
+  if (!(await fileExists(packageJsonPath))) {
+    addGroupedError(
+      groupedErrors,
+      target.appName,
+      `Stale validation map: ${target.validationMapPath} references missing package surface "${validationMap.packageDir}".`
+    );
+    return {
+      groupedErrors,
+      loadedTarget: null,
+    };
+  }
+
+  const packageJson = await readJsonFile<{
+    name?: string;
+    scripts?: Record<string, string>;
+  }>(packageJsonPath);
+
+  if (packageJson.name !== validationMap.workspace) {
+    addGroupedError(
+      groupedErrors,
+      target.appName,
+      `Stale validation map: ${target.validationMapPath} expected workspace "${validationMap.workspace}" at ${validationMap.packageDir}.`
+    );
+  }
+
+  const surfaces = toValidationSurfaces(validationMap);
+  if (surfaces.length === 0) {
+    addGroupedError(
+      groupedErrors,
+      target.appName,
+      `Missing validation surfaces in ${target.validationMapPath}.`
+    );
+  }
+
+  for (const surface of surfaces) {
+    if (surface.pathPrefixes.length === 0) {
+      addGroupedError(
+        groupedErrors,
+        target.appName,
+        `Empty validation surface "${surface.name}" in ${target.validationMapPath}.`
+      );
+    }
+
+    for (const pathPrefix of surface.pathPrefixes) {
+      if (!(await fileExists(path.join(rootDir, pathPrefix)))) {
+        addGroupedError(
+          groupedErrors,
+          target.appName,
+          `Stale validation surface: ${pathPrefix}`
+        );
+      }
+    }
+
+    for (const script of surface.scripts) {
+      if (!packageJson.scripts?.[script]) {
+        addGroupedError(
+          groupedErrors,
+          target.appName,
+          `Stale validation surface: ${target.validationMapPath} references missing script "${validationMap.workspace}:${script}".`
+        );
+      }
+    }
+  }
+
+  return {
+    groupedErrors,
+    loadedTarget: {
+      appName: target.appName,
+      auditedRoots: target.auditedRoots,
+      packageDir: validationMap.packageDir,
+      packageScripts: packageJson.scripts ?? {},
+      surfaces,
+      testingDocContents,
+    } satisfies LoadedAuditTarget,
+  };
+}
+
+function formatGroupedErrors(groupedErrors: Map<string, string[]>) {
+  const lines = ["Harness audit failed."];
+
+  for (const [group, errors] of [...groupedErrors.entries()].sort(([left], [right]) =>
+    left.localeCompare(right)
+  )) {
+    lines.push(`[${group}]`);
+    for (const error of [...errors].sort()) {
+      lines.push(`- ${error}`);
+    }
+  }
+
+  return lines.join("\n");
+}
+
+export async function runHarnessAudit(rootDir: string) {
+  const groupedErrors = new Map<string, string[]>();
+
+  for (const error of await validateHarnessDocs(rootDir)) {
+    addGroupedError(groupedErrors, inferGroupFromError(error), error);
+  }
+
+  const loadedTargets: LoadedAuditTarget[] = [];
+  for (const target of AUDIT_TARGETS) {
+    const { groupedErrors: targetErrors, loadedTarget } = await loadAuditTarget(
+      rootDir,
+      target
+    );
+
+    for (const [group, errors] of targetErrors) {
+      for (const error of errors) {
+        addGroupedError(groupedErrors, group, error);
+      }
+    }
+
+    if (loadedTarget) {
+      loadedTargets.push(loadedTarget);
+    }
+  }
+
+  for (const target of loadedTargets) {
+    const liveSurfaceEntries = await collectLiveSurfaceEntries(
+      rootDir,
+      target.packageDir,
+      target.auditedRoots
+    );
+    const coveredPrefixes = target.surfaces.flatMap((surface) => surface.pathPrefixes);
+
+    for (const liveSurfaceEntry of liveSurfaceEntries) {
+      if (
+        !coveredPrefixes.some((pathPrefix) =>
+          matchesPathPrefix(liveSurfaceEntry, pathPrefix)
+        )
+      ) {
+        addGroupedError(
+          groupedErrors,
+          target.appName,
+          `Uncovered live surface: ${liveSurfaceEntry}`
+        );
+      }
+    }
+
+    if (!target.testingDocContents.includes(target.appName)) {
+      // no-op placeholder to keep testing doc contents loaded for future audits
+    }
+  }
+
+  if (groupedErrors.size > 0) {
+    throw new Error(formatGroupedErrors(groupedErrors));
+  }
+
+  console.log(
+    `Harness audit passed for ${AUDIT_TARGETS.map((target) => target.appName).join(", ")}.`
+  );
+}
+
+if (import.meta.main) {
+  await runHarnessAudit(process.cwd());
+}

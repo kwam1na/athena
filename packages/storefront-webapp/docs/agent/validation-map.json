@@ -1,10 +1,46 @@
 {
   "workspace": "@athena/storefront-webapp",
   "packageDir": "packages/storefront-webapp",
-  "rules": [
+  "surfaces": [
     {
-      "pathPrefix": "packages/storefront-webapp/",
+      "name": "runtime-routes",
+      "pathPrefixes": [
+        "packages/storefront-webapp/src/assets/",
+        "packages/storefront-webapp/src/client.tsx",
+        "packages/storefront-webapp/src/config.ts",
+        "packages/storefront-webapp/src/index.css",
+        "packages/storefront-webapp/src/main.tsx",
+        "packages/storefront-webapp/src/routeTree.gen.ts",
+        "packages/storefront-webapp/src/router.tsx",
+        "packages/storefront-webapp/src/routes/",
+        "packages/storefront-webapp/src/ssr.tsx"
+      ],
       "scripts": ["test"]
+    },
+    {
+      "name": "shared-app",
+      "pathPrefixes": [
+        "packages/storefront-webapp/src/api/",
+        "packages/storefront-webapp/src/components/",
+        "packages/storefront-webapp/src/contexts/",
+        "packages/storefront-webapp/src/hooks/",
+        "packages/storefront-webapp/src/lib/",
+        "packages/storefront-webapp/src/utils/"
+      ],
+      "scripts": ["test"]
+    },
+    {
+      "name": "browser-tests",
+      "pathPrefixes": ["packages/storefront-webapp/tests/e2e/"],
+      "scripts": ["test", "test:e2e"]
+    },
+    {
+      "name": "harness-docs",
+      "pathPrefixes": [
+        "packages/storefront-webapp/AGENTS.md",
+        "packages/storefront-webapp/docs/agent/"
+      ],
+      "scripts": []
     }
   ]
 }
