@@ -36,23 +36,23 @@ function AuthedComponent() {
 }
 
 export default function Layout() {
-  const [defaultOpen, setDefaultOpen] = useState<boolean | null>(null);
+  const [defaultOpen, setDefaultOpen] = useState<boolean | null>(true);
 
-  useEffect(() => {
-    // Read the sidebar state from cookies
-    const cookies = document.cookie.split(";");
-    const sidebarCookie = cookies.find((cookie) =>
-      cookie.trim().startsWith("sidebar:state=")
-    );
+  // useEffect(() => {
+  //   // Read the sidebar state from cookies
+  //   const cookies = document.cookie.split(";");
+  //   const sidebarCookie = cookies.find((cookie) =>
+  //     cookie.trim().startsWith("sidebar:state=")
+  //   );
 
-    if (sidebarCookie) {
-      const sidebarState = sidebarCookie.split("=")[1];
-      setDefaultOpen(sidebarState === "true");
-    } else {
-      // If no cookie exists, default to true (expanded)
-      setDefaultOpen(true);
-    }
-  }, []);
+  //   if (sidebarCookie) {
+  //     const sidebarState = sidebarCookie.split("=")[1];
+  //     setDefaultOpen(sidebarState === "true");
+  //   } else {
+  //     // If no cookie exists, default to true (expanded)
+  //     setDefaultOpen(true);
+  //   }
+  // }, []);
 
   // Don't render until we've read the cookie
   if (defaultOpen === null) {
