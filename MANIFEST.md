@@ -6,13 +6,12 @@ A reference document for agents and contributors. Describes what the system is, 
 
 ## System Overview
 
-Athena is a multi-tenant retail platform for **wigclub.store**. It consists of two customer-facing and internal apps backed by a shared Convex serverless backend, an AI agent orchestrator (Symphony), and a local cache proxy (Valkey).
+Athena is a multi-tenant retail platform for **wigclub.store**. It consists of two customer-facing and internal apps backed by a shared Convex serverless backend and a local cache proxy (Valkey).
 
 | Package | Name | Purpose |
 |---------|------|---------|
 | `packages/athena-webapp` | `@athena/webapp` | Admin dashboard — inventory, orders, POS, analytics |
 | `packages/storefront-webapp` | `@athena/storefront-webapp` | Customer storefront — shop, cart, checkout, rewards |
-| `packages/symphony-service` | `@athena/symphony-service` | Agent orchestrator — Linear issues → git worktrees → Claude agents |
 | `packages/valkey-proxy-server` | — | HTTP bridge to local Valkey cache on the DigitalOcean droplet |
 
 ---
@@ -27,11 +26,9 @@ athena/
 ├── packages/
 │   ├── athena-webapp/        # Admin app + Convex backend
 │   ├── storefront-webapp/    # Customer storefront
-│   ├── symphony-service/     # Agent orchestrator
 │   ├── valkey-proxy-server/  # Cache proxy
 │   └── docs/
 ├── CLAUDE.md                 # Dual-graph context policy (read this first)
-├── WORKFLOW.md               # Symphony orchestration config
 ├── MANIFEST.md               # This file
 ├── CONTEXT.md                # Session context (updated at session end)
 ├── deploy-athena.sh          # Deploy to DigitalOcean via scp + symlink swap
@@ -257,19 +254,6 @@ Key files: `src/components/checkout/Checkout.tsx`, `src/api/checkoutSession.ts`,
 
 ---
 
-## Symphony Service (`packages/symphony-service`)
-
-AI agent orchestrator that automates issue-scoped development.
-
-- Watches Linear issues labelled `pkg:athena-webapp`, `pkg:storefront-webapp`, etc.
-- Creates a git worktree per issue, spawns Claude agents to implement the feature
-- Runs validation (tests + TypeScript) then updates the issue and opens a PR
-- Config: **`WORKFLOW.md`** at the repo root
-- Limits: max 2 concurrent agents, 12 turns, 150K input tokens per run
-- Key files: `src/cli.ts`, `src/service.ts`, `src/runtime.ts`, `src/orchestrator.ts`
-
----
-
 ## Valkey Proxy (`packages/valkey-proxy-server`)
 
 HTTP bridge to the local Valkey instance on the DigitalOcean droplet.
@@ -298,7 +282,7 @@ HTTP bridge to the local Valkey instance on the DigitalOcean droplet.
 | **Paystack** | Payment processing (Ghana/Africa). Inline JS in storefront; webhook at `/webhooks/paystack` |
 | **Stripe** | Payment processing (international) |
 | **Resend** | Transactional email (OTP codes, order confirmations) |
-| **Linear** | Issue tracking; Symphony polls for `pkg:*` labels to assign work to agents |
+| **Linear** | Issue tracking |
 | **PostHog** | Product analytics in storefront (installed, currently disabled in `main.tsx`) |
 | **OpenAI / Anthropic** | LLM-powered store and user insights (via `convex/llm/`) |
 
@@ -331,8 +315,6 @@ bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json
 bunx tsc --noEmit -p packages/storefront-webapp/tsconfig.json
 ```
 
-**Agent worktrees (Symphony):** When Symphony picks up a Linear issue it creates a git worktree under `worktrees/` at the repository root. Agents work inside those isolated copies — not in the main checkout. Each worktree is on its own branch (`codex/<branch-name>`).
-
 ---
 
 ## Key Files for Agent Orientation
@@ -340,10 +322,9 @@ bunx tsc --noEmit -p packages/storefront-webapp/tsconfig.json
 Start here when beginning a new session:
 
 1. `CLAUDE.md` — dual-graph context policy (mandatory, read first)
-2. `WORKFLOW.md` — Symphony config and validation matrix
-3. `packages/AGENTS.md` — git branching rules (`codex/` prefix) and PR format
-4. `packages/athena-webapp/convex/schema.ts` — source of truth for the data model
-5. `packages/athena-webapp/convex/http.ts` — all HTTP routes
-6. `packages/athena-webapp/src/routes/_authed.tsx` — admin auth guard
-7. `packages/storefront-webapp/src/contexts/StoreContext.tsx` — multi-tenant root state
-8. `packages/storefront-webapp/src/components/checkout/Checkout.tsx` — checkout flow
+2. `packages/AGENTS.md` — git branching rules (`codex/` prefix) and PR format
+3. `packages/athena-webapp/convex/schema.ts` — source of truth for the data model
+4. `packages/athena-webapp/convex/http.ts` — all HTTP routes
+5. `packages/athena-webapp/src/routes/_authed.tsx` — admin auth guard
+6. `packages/storefront-webapp/src/contexts/StoreContext.tsx` — multi-tenant root state
+7. `packages/storefront-webapp/src/components/checkout/Checkout.tsx` — checkout flow
