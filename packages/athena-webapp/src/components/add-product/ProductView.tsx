@@ -420,7 +420,7 @@ function ProductViewContent() {
 
     const header = productSlug
       ? `Edit ${capitalizeWords(activeProduct?.name || "")}`
-      : "Add New Product";
+      : "Add Product";
 
     const ctaIcon = !productSlug ? (
       <PlusIcon className="w-3.5 h-3.5" />
