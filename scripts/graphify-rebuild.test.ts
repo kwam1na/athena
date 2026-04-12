@@ -61,6 +61,7 @@ describe("runGraphifyRebuild", () => {
           stderr: new ReadableStream(),
         };
       },
+      writeGraphifyWikiPages: async () => {},
     });
 
     expect(commands).toEqual([
@@ -80,6 +81,7 @@ describe("runGraphifyRebuild", () => {
           stderr: new ReadableStream(),
         };
       },
+      writeGraphifyWikiPages: async () => {},
     });
 
     expect(commands).toEqual([["python3", "-c", GRAPHIFY_REBUILD_SNIPPET]]);
@@ -99,9 +101,29 @@ describe("runGraphifyRebuild", () => {
           stderr: new ReadableStream(),
         };
       },
+      writeGraphifyWikiPages: async () => {},
     });
 
     expect(commands).toEqual([["python3", "-c", GRAPHIFY_REBUILD_SNIPPET]]);
+  });
+
+  it("writes graphify wiki pages after a successful rebuild", async () => {
+    const rootDir = await createFixtureRoot();
+    const writes: string[] = [];
+
+    await runGraphifyRebuild(rootDir, {
+      spawn() {
+        return {
+          exited: Promise.resolve(0),
+          stderr: new ReadableStream(),
+        };
+      },
+      writeGraphifyWikiPages: async (receivedRootDir) => {
+        writes.push(receivedRootDir);
+      },
+    });
+
+    expect(writes).toEqual([rootDir]);
   });
 
   it("surfaces stderr when the graphify rebuild command fails", async () => {

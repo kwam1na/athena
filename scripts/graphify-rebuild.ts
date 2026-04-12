@@ -1,6 +1,8 @@
 import { access, readFile } from "node:fs/promises";
 import path from "node:path";
 
+import { writeGraphifyWikiPages } from "./graphify-wiki";
+
 export const GRAPHIFY_REBUILD_SNIPPET =
   [
     "import os",
@@ -73,6 +75,7 @@ type SpawnedProcess = {
 
 type GraphifyRebuildOptions = {
   spawn?: (command: string[], options: { cwd: string }) => SpawnedProcess;
+  writeGraphifyWikiPages?: (rootDir: string) => Promise<void>;
 };
 
 async function fileExists(filePath: string) {
@@ -127,6 +130,7 @@ export async function runGraphifyRebuild(
   const exitCode = await subprocess.exited;
 
   if (exitCode === 0) {
+    await (options.writeGraphifyWikiPages ?? writeGraphifyWikiPages)(rootDir);
     return;
   }
 
