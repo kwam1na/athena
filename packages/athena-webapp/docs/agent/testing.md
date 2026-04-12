@@ -5,6 +5,7 @@ Use the repo-root harness commands together:
 - `bun run harness:check` validates the docs themselves: required files, links, path references, and documented test commands.
 - `bun run harness:review` is the touched-file pass. It always runs `bun run harness:check` first, then uses the machine-readable [validation map](./validation-map.json) to decide whether `@athena/webapp` baseline validations should run for the files you changed.
 - `bun run harness:audit` is the full-app pass. It scans the current `athena-webapp` surface even when nothing is touched and fails on stale harness docs, stale validation-map paths, or live surfaces that the validation map does not cover yet.
+- `bun run harness:behavior --scenario <name>` runs shared runtime behavior scenarios that boot app processes, wait for readiness, drive browser interactions, assert runtime signals, and clean up automatically.
 
 - [Test index](./test-index.md)
 - [Validation guide](./validation-guide.md)
@@ -12,6 +13,10 @@ Use the repo-root harness commands together:
 If `bun run harness:review` reports a coverage gap, the touched `packages/athena-webapp` file is not represented in the validation map yet. Update the map and this testing guide together before handoff so the harness stays honest.
 
 If `bun run harness:audit` reports a coverage gap, a live `src/` or `convex/` surface exists without a corresponding validation-map entry. Add or tighten the affected surface mapping before handoff so future agents can trust the repo-wide scan.
+
+Use `bun run harness:behavior --list` to inspect available runtime scenarios. The
+repo ships with `sample-runtime-smoke` as a shared contract example; follow-on
+Athena and Storefront journey scenarios should build on the same runner.
 
 Start with the package suite in [vitest.config.ts](../../vitest.config.ts): `bun run --filter '@athena/webapp' test`. It covers both `src/**/*.test.{ts,tsx}` and `convex/**/*.test.{ts,tsx}`, so it is the default regression pass for mixed UI and backend changes.
 

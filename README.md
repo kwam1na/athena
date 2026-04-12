@@ -10,11 +10,16 @@ Key repo-level commands:
 - `bun run harness:check`
 - `bun run harness:audit`
 - `bun run harness:review`
+- `bun run harness:behavior --scenario <name>`
 - `bun run architecture:check`
 - `bun run pre-push:review`
 - `bun run pr:athena`
 
 `bun run harness:test` is the canonical harness implementation gate for harness scripts, graphify tooling, and pre-push review wiring.
+
+List runtime behavior scenarios with `bun run harness:behavior --list`. The bundled
+`sample-runtime-smoke` scenario boots a local fixture app, drives a browser click,
+captures runtime signals, and tears down automatically.
 
 ## Graphify
 
