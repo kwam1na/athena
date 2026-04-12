@@ -14,6 +14,24 @@ const ATHENA_RUNTIME_PORT = Number.parseInt(
 const ATHENA_BOOTSTRAP_USER_ID = "athena-harness-user";
 const ATHENA_EXPECTED_STORE_NAME = "athena-harness-store";
 const ATHENA_EXPECTED_INVENTORY_SKU_COUNT = "7";
+const STOREFRONT_RUNTIME_API_PORT = Number.parseInt(
+  process.env.HARNESS_BEHAVIOR_STOREFRONT_API_PORT ?? "4313",
+  10
+);
+const STOREFRONT_RUNTIME_APP_PORT = Number.parseInt(
+  process.env.HARNESS_BEHAVIOR_STOREFRONT_APP_PORT ?? "4314",
+  10
+);
+
+const STOREFRONT_CHECKOUT_BOOTSTRAP_PATH = "/shop/checkout";
+const STOREFRONT_CHECKOUT_VALIDATION_BLOCKER_PATH =
+  "/shop/checkout/not-a-real-session";
+const STOREFRONT_CHECKOUT_RECOVERY_PATH = "/shop/checkout?origin=paystack";
+
+type StorefrontBehaviorMode =
+  | "checkout-bootstrap"
+  | "validation-blocker"
+  | "verification-recovery";
 
 type SampleScenarioBrowserResult = {
   signalStatus: string;
@@ -37,6 +55,10 @@ type AthenaConvexFailureBrowserResult = {
   storefrontStatusLine: string;
   consoleMessages: string[];
 };
+type StorefrontScenarioBrowserResult = {
+  observedText: string;
+  consoleMessages: string[];
+};
 
 function createAthenaRuntimeProcess(): HarnessBehaviorProcessDefinition {
   return {
@@ -53,6 +75,47 @@ function createAthenaRuntimeProcess(): HarnessBehaviorProcessDefinition {
 function buildAthenaRuntimeUrl(pathname: string) {
   return `http://127.0.0.1:${ATHENA_RUNTIME_PORT}${pathname}`;
 }
+
+function createStorefrontRuntimeProcesses(mode: StorefrontBehaviorMode) {
+  return [
+    {
+      id: "storefront-api",
+      command: "bun scripts/harness-behavior-fixtures/storefront-runtime-api.ts",
+      env: {
+        HARNESS_STOREFRONT_API_PORT: String(STOREFRONT_RUNTIME_API_PORT),
+        HARNESS_STOREFRONT_BEHAVIOR_MODE: mode,
+      },
+      readyPattern: `STOREFRONT_RUNTIME_API_READY:${STOREFRONT_RUNTIME_API_PORT}`,
+      readyTimeoutMs: 20_000,
+    },
+    {
+      id: "storefront-webapp",
+      command: `bun run --filter '@athena/storefront-webapp' dev --host 127.0.0.1 --port ${STOREFRONT_RUNTIME_APP_PORT}`,
+      env: {
+        VITE_API_URL: `http://127.0.0.1:${STOREFRONT_RUNTIME_API_PORT}`,
+      },
+    },
+  ] satisfies HarnessBehaviorScenario["processes"];
+}
+
+const STOREFRONT_RUNTIME_READINESS_CHECKS: HarnessBehaviorScenario["readiness"] = [
+  {
+    kind: "http",
+    name: "storefront-runtime-api-health",
+    url: `http://127.0.0.1:${STOREFRONT_RUNTIME_API_PORT}/health`,
+    expectedStatus: 200,
+    timeoutMs: 20_000,
+    intervalMs: 250,
+  },
+  {
+    kind: "http",
+    name: "storefront-runtime-app-shell",
+    url: `http://127.0.0.1:${STOREFRONT_RUNTIME_APP_PORT}/`,
+    expectedStatus: 200,
+    timeoutMs: 120_000,
+    intervalMs: 500,
+  },
+];
 
 export const SAMPLE_RUNTIME_SMOKE_SCENARIO: HarnessBehaviorScenario<SampleScenarioBrowserResult> =
   {
@@ -424,9 +487,172 @@ export const ATHENA_CONVEX_FAILURE_VISIBILITY_SCENARIO: HarnessBehaviorScenario<
     },
   };
 
+export const STOREFRONT_CHECKOUT_BOOTSTRAP_SCENARIO: HarnessBehaviorScenario<StorefrontScenarioBrowserResult> =
+  {
+    name: "storefront-checkout-bootstrap",
+    description:
+      "Boots the storefront app and mock runtime API, verifies checkout bootstrap UI renders, and asserts checkout bootstrap runtime signals.",
+    processes: createStorefrontRuntimeProcesses("checkout-bootstrap"),
+    readiness: STOREFRONT_RUNTIME_READINESS_CHECKS,
+    browser: async ({ runPlaywrightFlow }) => {
+      const flowResult = await runPlaywrightFlow({
+        url: `http://127.0.0.1:${STOREFRONT_RUNTIME_APP_PORT}${STOREFRONT_CHECKOUT_BOOTSTRAP_PATH}`,
+        steps: async ({ page }) => {
+          await page.waitForSelector("text=Checkout", {
+            timeout: 30_000,
+          });
+
+          const observedText =
+            (await page.textContent("text=Checkout"))?.trim() ?? "";
+          return { observedText };
+        },
+      });
+
+      return {
+        observedText: flowResult.stepResult.observedText,
+        consoleMessages: flowResult.consoleMessages,
+      };
+    },
+    runtimeSignals: [
+      {
+        name: "storefront-checkout-bootstrap-loaded",
+        processId: "storefront-api",
+        source: "stdout",
+        pattern: "RUNTIME_SIGNAL:storefront-checkout-bootstrap-loaded",
+        minMatches: 1,
+      },
+    ],
+    assert: async ({ browserResult, runtimeSignals }) => {
+      if (browserResult.observedText !== "Checkout") {
+        throw new Error(
+          `Expected storefront checkout heading "Checkout", received "${browserResult.observedText}".`
+        );
+      }
+
+      const bootstrapSignal = runtimeSignals["storefront-checkout-bootstrap-loaded"];
+      if (!bootstrapSignal || bootstrapSignal.matchCount < 1) {
+        throw new Error(
+          "Expected storefront bootstrap runtime signal to appear in fixture API logs."
+        );
+      }
+    },
+  };
+
+export const STOREFRONT_CHECKOUT_VALIDATION_BLOCKER_SCENARIO: HarnessBehaviorScenario<StorefrontScenarioBrowserResult> =
+  {
+    name: "storefront-checkout-validation-blocker",
+    description:
+      "Boots storefront runtime and asserts invalid checkout-session routing surfaces the validation blocker UI and runtime signal.",
+    processes: createStorefrontRuntimeProcesses("validation-blocker"),
+    readiness: STOREFRONT_RUNTIME_READINESS_CHECKS,
+    browser: async ({ runPlaywrightFlow }) => {
+      const flowResult = await runPlaywrightFlow({
+        url: `http://127.0.0.1:${STOREFRONT_RUNTIME_APP_PORT}${STOREFRONT_CHECKOUT_VALIDATION_BLOCKER_PATH}`,
+        steps: async ({ page }) => {
+          await page.waitForSelector("text=This checkout session does not exist", {
+            timeout: 30_000,
+          });
+
+          const observedText =
+            (await page.textContent("text=This checkout session does not exist"))?.trim() ??
+            "";
+          return { observedText };
+        },
+      });
+
+      return {
+        observedText: flowResult.stepResult.observedText,
+        consoleMessages: flowResult.consoleMessages,
+      };
+    },
+    runtimeSignals: [
+      {
+        name: "storefront-checkout-session-missing",
+        processId: "storefront-api",
+        source: "stdout",
+        pattern: "RUNTIME_SIGNAL:storefront-checkout-session-missing",
+        minMatches: 1,
+      },
+    ],
+    assert: async ({ browserResult, runtimeSignals }) => {
+      if (
+        !browserResult.observedText.includes("This checkout session does not exist")
+      ) {
+        throw new Error(
+          `Expected validation blocker copy for invalid checkout session, received "${browserResult.observedText}".`
+        );
+      }
+
+      const blockerSignal = runtimeSignals["storefront-checkout-session-missing"];
+      if (!blockerSignal || blockerSignal.matchCount < 1) {
+        throw new Error(
+          "Expected storefront checkout-session-missing signal in fixture API logs."
+        );
+      }
+    },
+  };
+
+export const STOREFRONT_CHECKOUT_VERIFICATION_RECOVERY_SCENARIO: HarnessBehaviorScenario<StorefrontScenarioBrowserResult> =
+  {
+    name: "storefront-checkout-verification-recovery",
+    description:
+      "Exercises storefront paystack-origin redirect and verification recovery to the checkout complete view with runtime signal assertions.",
+    processes: createStorefrontRuntimeProcesses("verification-recovery"),
+    readiness: STOREFRONT_RUNTIME_READINESS_CHECKS,
+    browser: async ({ runPlaywrightFlow }) => {
+      const flowResult = await runPlaywrightFlow({
+        url: `http://127.0.0.1:${STOREFRONT_RUNTIME_APP_PORT}${STOREFRONT_CHECKOUT_RECOVERY_PATH}`,
+        steps: async ({ page }) => {
+          await page.waitForSelector("text=Get excited, Ada!", {
+            timeout: 40_000,
+          });
+          await page.waitForSelector("text=View order", {
+            timeout: 10_000,
+          });
+
+          const observedText =
+            (await page.textContent("text=Get excited, Ada!"))?.trim() ?? "";
+          return { observedText };
+        },
+      });
+
+      return {
+        observedText: flowResult.stepResult.observedText,
+        consoleMessages: flowResult.consoleMessages,
+      };
+    },
+    runtimeSignals: [
+      {
+        name: "storefront-payment-verification-requested",
+        processId: "storefront-api",
+        source: "stdout",
+        pattern: "RUNTIME_SIGNAL:storefront-payment-verification-requested",
+        minMatches: 1,
+      },
+    ],
+    assert: async ({ browserResult, runtimeSignals }) => {
+      if (!browserResult.observedText.includes("Get excited, Ada!")) {
+        throw new Error(
+          `Expected storefront verification recovery to reach checkout complete UI, received "${browserResult.observedText}".`
+        );
+      }
+
+      const verificationSignal =
+        runtimeSignals["storefront-payment-verification-requested"];
+      if (!verificationSignal || verificationSignal.matchCount < 1) {
+        throw new Error(
+          "Expected storefront payment verification runtime signal in fixture API logs."
+        );
+      }
+    },
+  };
+
 export const HARNESS_BEHAVIOR_SCENARIOS: HarnessBehaviorScenario[] = [
   SAMPLE_RUNTIME_SMOKE_SCENARIO,
   ATHENA_ADMIN_SHELL_BOOT_SCENARIO,
   ATHENA_CONVEX_COMPOSITION_SCENARIO,
   ATHENA_CONVEX_FAILURE_VISIBILITY_SCENARIO,
+  STOREFRONT_CHECKOUT_BOOTSTRAP_SCENARIO,
+  STOREFRONT_CHECKOUT_VALIDATION_BLOCKER_SCENARIO,
+  STOREFRONT_CHECKOUT_VERIFICATION_RECOVERY_SCENARIO,
 ];

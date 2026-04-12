@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   HarnessBehaviorPhaseError,
   parseHarnessBehaviorArgs,
+  resolveHarnessBehaviorShell,
   runHarnessBehaviorScenario,
 } from "./harness-behavior";
 
@@ -311,5 +312,31 @@ describe("parseHarnessBehaviorArgs", () => {
         "--record-video=maybe",
       ])
     ).toThrow("Invalid value for --record-video");
+  });
+});
+
+describe("resolveHarnessBehaviorShell", () => {
+  it("prefers HARNESS_BEHAVIOR_SHELL when available", () => {
+    const shellPath = resolveHarnessBehaviorShell({
+      env: {
+        HARNESS_BEHAVIOR_SHELL: "/custom/shell",
+        SHELL: "/env/shell",
+      },
+      fileExists: (filePath) => filePath === "/custom/shell",
+    });
+
+    expect(shellPath).toBe("/custom/shell");
+  });
+
+  it("falls back to a known shell path when preferred shells are missing", () => {
+    const shellPath = resolveHarnessBehaviorShell({
+      env: {
+        HARNESS_BEHAVIOR_SHELL: "/missing/custom",
+        SHELL: "/missing/env",
+      },
+      fileExists: (filePath) => filePath === "/bin/bash",
+    });
+
+    expect(shellPath).toBe("/bin/bash");
   });
 });

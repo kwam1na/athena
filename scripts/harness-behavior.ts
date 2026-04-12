@@ -1,5 +1,6 @@
 import path from "node:path";
 import { spawn as spawnChildProcess } from "node:child_process";
+import { existsSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 
 import { HARNESS_BEHAVIOR_SCENARIOS } from "./harness-behavior-scenarios";
@@ -477,6 +478,9 @@ function spawnCommand(
   cwd: string,
   envOverrides: Record<string, string> | undefined
 ) {
+  const shellPath = resolveHarnessBehaviorShell({
+    env: process.env,
+  });
   const runtime = (globalThis as { Bun?: typeof Bun }).Bun;
   const mergedEnv = {
     ...process.env,
@@ -484,7 +488,7 @@ function spawnCommand(
   };
 
   if (runtime) {
-    const bunSubprocess = runtime.spawn(["/bin/zsh", "-lc", command], {
+    const bunSubprocess = runtime.spawn([shellPath, "-lc", command], {
       cwd,
       env: mergedEnv,
       stdout: "pipe",
@@ -502,7 +506,7 @@ function spawnCommand(
     };
   }
 
-  const nodeSubprocess = spawnChildProcess("/bin/zsh", ["-lc", command], {
+  const nodeSubprocess = spawnChildProcess(shellPath, ["-lc", command], {
     cwd,
     env: mergedEnv,
     stdio: ["ignore", "pipe", "pipe"],
@@ -521,6 +525,33 @@ function spawnCommand(
       });
     }),
   };
+}
+
+export function resolveHarnessBehaviorShell(options: {
+  env?: NodeJS.ProcessEnv;
+  fileExists?: (filePath: string) => boolean;
+} = {}) {
+  const env = options.env ?? process.env;
+  const fileExists = options.fileExists ?? existsSync;
+  const candidates = [
+    env.HARNESS_BEHAVIOR_SHELL,
+    env.SHELL,
+    "/bin/zsh",
+    "/bin/bash",
+    "/bin/sh",
+  ];
+
+  for (const candidate of candidates) {
+    if (!candidate) {
+      continue;
+    }
+
+    if (fileExists(candidate)) {
+      return candidate;
+    }
+  }
+
+  return "/bin/sh";
 }
 
 async function runHttpReadinessCheck(
