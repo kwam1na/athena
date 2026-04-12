@@ -1306,11 +1306,13 @@ export async function runHarnessInferentialReview(
 
 type ParsedCliArgs = {
   baseRef: string;
+  persistHistory: boolean;
   help: boolean;
 };
 
-function parseCliArgs(argv: string[]): ParsedCliArgs {
+export function parseHarnessInferentialReviewArgs(argv: string[]): ParsedCliArgs {
   let baseRef = DEFAULT_BASE_REF;
+  let persistHistory = false;
 
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -1322,8 +1324,14 @@ function parseCliArgs(argv: string[]): ParsedCliArgs {
     if (arg === "--help" || arg === "-h") {
       return {
         baseRef,
+        persistHistory,
         help: true,
       };
+    }
+
+    if (arg === "--persist-history") {
+      persistHistory = true;
+      continue;
     }
 
     if (arg === "--base") {
@@ -1356,22 +1364,24 @@ function parseCliArgs(argv: string[]): ParsedCliArgs {
 
   return {
     baseRef,
+    persistHistory,
     help: false,
   };
 }
 
 if (import.meta.main) {
   try {
-    const parsed = parseCliArgs(Bun.argv.slice(2));
+    const parsed = parseHarnessInferentialReviewArgs(Bun.argv.slice(2));
     if (parsed.help) {
       console.log(
-        "Usage: bun run harness:inferential-review [--base <ref>]"
+        "Usage: bun run harness:inferential-review [--base <ref>] [--persist-history]"
       );
       process.exit(0);
     }
 
     const result = await runHarnessInferentialReview(process.cwd(), {
       baseRef: parsed.baseRef,
+      persistHistory: parsed.persistHistory,
     });
     console.log(result.humanReport);
     console.log(`Machine output: ${result.machineOutputPath}`);

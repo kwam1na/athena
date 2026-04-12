@@ -3,7 +3,10 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { runHarnessInferentialReview } from "./harness-inferential-review";
+import {
+  parseHarnessInferentialReviewArgs,
+  runHarnessInferentialReview,
+} from "./harness-inferential-review";
 
 const tempRoots: string[] = [];
 
@@ -367,6 +370,18 @@ describe("runHarnessInferentialReview", () => {
     expect(historySnapshot.shadow).toMatchObject({
       providerName: "semantic-shadow-stub",
       status: "pass",
+    });
+  });
+});
+
+describe("parseHarnessInferentialReviewArgs", () => {
+  it("accepts --persist-history", () => {
+    expect(
+      parseHarnessInferentialReviewArgs(["--base", "origin/main", "--persist-history"])
+    ).toMatchObject({
+      baseRef: "origin/main",
+      persistHistory: true,
+      help: false,
     });
   });
 });

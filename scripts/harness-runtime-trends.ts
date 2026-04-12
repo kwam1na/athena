@@ -107,6 +107,11 @@ type HarnessRuntimeTrendRunResult = {
   outputPath: string;
 };
 
+type ParsedHarnessRuntimeTrendsArgs = {
+  persistHistory: boolean;
+  help: boolean;
+};
+
 function toHistoryFileStamp(generatedAt: string) {
   return generatedAt.replaceAll(":", "-").replaceAll(".", "-");
 }
@@ -501,8 +506,49 @@ export async function runHarnessRuntimeTrends(
   };
 }
 
+export function parseHarnessRuntimeTrendsArgs(
+  argv: string[]
+): ParsedHarnessRuntimeTrendsArgs {
+  let persistHistory = false;
+
+  for (const arg of argv) {
+    if (!arg) {
+      continue;
+    }
+
+    if (arg === "--help" || arg === "-h") {
+      return {
+        persistHistory,
+        help: true,
+      };
+    }
+
+    if (arg === "--persist-history") {
+      persistHistory = true;
+      continue;
+    }
+
+    throw new Error(
+      `Unknown argument: ${arg}. Usage: bun run harness:runtime-trends [--persist-history]`
+    );
+  }
+
+  return {
+    persistHistory,
+    help: false,
+  };
+}
+
 if (import.meta.main) {
+  const parsed = parseHarnessRuntimeTrendsArgs(Bun.argv.slice(2));
+  if (parsed.help) {
+    console.log("Usage: bun run harness:runtime-trends [--persist-history]");
+    process.exit(0);
+  }
+
   const input = await new Response(Bun.stdin).text();
-  const result = await runHarnessRuntimeTrends(process.cwd(), input);
+  const result = await runHarnessRuntimeTrends(process.cwd(), input, {
+    persistHistory: parsed.persistHistory,
+  });
   console.log(JSON.stringify(result.output, null, 2));
 }

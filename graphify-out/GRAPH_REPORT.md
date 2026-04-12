@@ -5,7 +5,7 @@
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 2787 nodes · 2333 edges · 1113 communities detected
+- 2788 nodes · 2334 edges · 1113 communities detected
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS
 - Token cost: 0 input · 0 output
 
@@ -1212,15 +1212,15 @@ Nodes (13): compareSnapshots(), fileExists(), formatArtifactList(), formatDetail
 
 ### Community 15 - "Community 15"
 Cohesion: 0.21
-Nodes (14): CheckoutSessionError, createCheckoutSession(), defaultCheckoutActionMessage(), getActiveCheckoutSession(), getBaseUrl(), getCheckoutActionErrorMessage(), getCheckoutErrorMessageFromPayload(), getCheckoutSession() (+6 more)
+Nodes (14): buildNumericTrendStats(), buildRegressionWarnings(), buildRuntimeTrendOutput(), buildScenarioTrend(), collectHarnessRuntimeTrends(), formatMs(), formatPercent(), parseHarnessBehaviorReportLines() (+6 more)
 
 ### Community 16 - "Community 16"
-Cohesion: 0.2
-Nodes (9): collectCommandsForChangedFiles(), fileExists(), hasAnyHarnessDocs(), loadReviewTarget(), loadReviewTargets(), matchesPathPrefix(), normalizeBehaviorScenarioName(), normalizeRepoPath() (+1 more)
+Cohesion: 0.21
+Nodes (14): CheckoutSessionError, createCheckoutSession(), defaultCheckoutActionMessage(), getActiveCheckoutSession(), getBaseUrl(), getCheckoutActionErrorMessage(), getCheckoutErrorMessageFromPayload(), getCheckoutSession() (+6 more)
 
 ### Community 17 - "Community 17"
-Cohesion: 0.23
-Nodes (14): buildNumericTrendStats(), buildRegressionWarnings(), buildRuntimeTrendOutput(), buildScenarioTrend(), collectHarnessRuntimeTrends(), formatMs(), formatPercent(), parseHarnessBehaviorReportLines() (+6 more)
+Cohesion: 0.2
+Nodes (9): collectCommandsForChangedFiles(), fileExists(), hasAnyHarnessDocs(), loadReviewTarget(), loadReviewTargets(), matchesPathPrefix(), normalizeBehaviorScenarioName(), normalizeRepoPath() (+1 more)
 
 ### Community 18 - "Community 18"
 Cohesion: 0.13
@@ -1275,20 +1275,20 @@ Cohesion: 0.36
 Nodes (8): collectAllPages(), createTransactionFromSessionHandler(), listCompletedTransactionsForDay(), listProductSkusByProductId(), listSessionItems(), listStoreProducts(), listStoreSkus(), listTransactionItems()
 
 ### Community 31 - "Community 31"
+Cohesion: 0.31
+Nodes (5): formatDeliveryAddress(), getAmountPaidForOrder(), getDiscountValue(), getOrderAmount(), getPotentialPoints()
+
+### Community 32 - "Community 32"
 Cohesion: 0.29
 Nodes (6): handleFileSelect(), handleRevert(), handleUpload(), resetEditState(), uploadImage(), validateFile()
 
-### Community 32 - "Community 32"
+### Community 33 - "Community 33"
 Cohesion: 0.2
 Nodes (0):
 
-### Community 33 - "Community 33"
+### Community 34 - "Community 34"
 Cohesion: 0.38
 Nodes (9): awardPointsForGuestOrders(), awardPointsForPastOrder(), getBaseUrl(), getEligiblePastOrders(), getOrderRewardPoints(), getPointHistory(), getRewardTiers(), getUserPoints() (+1 more)
-
-### Community 34 - "Community 34"
-Cohesion: 0.31
-Nodes (5): formatDeliveryAddress(), getAmountPaidForOrder(), getDiscountValue(), getOrderAmount(), getPotentialPoints()
 
 ### Community 35 - "Community 35"
 Cohesion: 0.28
@@ -1363,16 +1363,16 @@ Cohesion: 0.29
 Nodes (0):
 
 ### Community 53 - "Community 53"
-Cohesion: 0.33
-Nodes (2): getProductName(), sortProduct()
-
-### Community 54 - "Community 54"
 Cohesion: 0.52
 Nodes (6): addItemToSavedBag(), getActiveSavedBag(), getBaseUrl(), removeItemFromSavedBag(), updateSavedBagItem(), updateSavedBagOwner()
 
-### Community 55 - "Community 55"
+### Community 54 - "Community 54"
 Cohesion: 0.29
 Nodes (0):
+
+### Community 55 - "Community 55"
+Cohesion: 0.33
+Nodes (2): getProductName(), sortProduct()
 
 ### Community 56 - "Community 56"
 Cohesion: 0.52
@@ -1427,16 +1427,16 @@ Cohesion: 0.33
 Nodes (0):
 
 ### Community 69 - "Community 69"
-Cohesion: 0.33
-Nodes (0):
+Cohesion: 0.47
+Nodes (3): onDrop(), removeImage(), unmarkForDeletion()
 
 ### Community 70 - "Community 70"
-Cohesion: 0.4
-Nodes (2): useBulkOperations(), validateOperationValue()
-
-### Community 71 - "Community 71"
 Cohesion: 0.33
 Nodes (0):
+
+### Community 71 - "Community 71"
+Cohesion: 0.4
+Nodes (2): useBulkOperations(), validateOperationValue()
 
 ### Community 72 - "Community 72"
 Cohesion: 0.33
@@ -1451,28 +1451,28 @@ Cohesion: 0.33
 Nodes (0):
 
 ### Community 75 - "Community 75"
-Cohesion: 0.4
-Nodes (2): onSubmit(), saveStoreChanges()
+Cohesion: 0.33
+Nodes (0):
 
 ### Community 76 - "Community 76"
 Cohesion: 0.4
 Nodes (2): onSubmit(), saveStoreChanges()
 
 ### Community 77 - "Community 77"
-Cohesion: 0.47
-Nodes (3): getBaseUrl(), getPromoCodes(), redeemPromoCode()
+Cohesion: 0.4
+Nodes (2): onSubmit(), saveStoreChanges()
 
 ### Community 78 - "Community 78"
-Cohesion: 0.33
-Nodes (0):
+Cohesion: 0.47
+Nodes (3): getBaseUrl(), getPromoCodes(), redeemPromoCode()
 
 ### Community 79 - "Community 79"
 Cohesion: 0.33
 Nodes (0):
 
 ### Community 80 - "Community 80"
-Cohesion: 0.47
-Nodes (3): onDrop(), removeImage(), unmarkForDeletion()
+Cohesion: 0.33
+Nodes (0):
 
 ### Community 81 - "Community 81"
 Cohesion: 0.53

@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import {
   collectHarnessRuntimeTrends,
+  parseHarnessRuntimeTrendsArgs,
   parseHarnessBehaviorReportLines,
   runHarnessRuntimeTrends,
 } from "./harness-runtime-trends";
@@ -310,5 +311,14 @@ describe("collectHarnessRuntimeTrends", () => {
 
     expect(latest.summary.reportCount).toBe(1);
     expect(historySnapshot.summary.reportCount).toBe(1);
+  });
+});
+
+describe("parseHarnessRuntimeTrendsArgs", () => {
+  it("accepts --persist-history", () => {
+    expect(parseHarnessRuntimeTrendsArgs(["--persist-history"])).toMatchObject({
+      persistHistory: true,
+      help: false,
+    });
   });
 });
