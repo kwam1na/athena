@@ -48,8 +48,36 @@ jobs:
       - name: Inferential harness review
         run: bun run harness:inferential-review
 
+      - name: Generate harness scorecard
+        run: bun run harness:scorecard
+
       - name: Check graphify freshness
         run: bun run graphify:check
+
+  harness-janitor-report:
+    name: Harness Janitor Report
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Install Graphify runtime
+        run: python3 -m pip install graphifyy
+
+      - name: Run harness janitor (report mode)
+        run: bun run harness:janitor
 
   harness-implementation-tests:
     name: Harness Implementation Tests
