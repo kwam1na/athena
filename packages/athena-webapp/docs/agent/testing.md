@@ -21,9 +21,14 @@ If `bun run harness:audit` reports a coverage gap, a live `src/` or `convex/` su
 If `bun run harness:inferential-review` reports findings, treat them as blocking: the command exits non-zero and includes remediation guidance for each actionable issue. If it reports a provider/runtime error, resolve the error and rerun before handoff.
 
 Use `bun run harness:behavior --list` to inspect available runtime scenarios.
-Current shared scenarios include `sample-runtime-smoke`,
-`athena-admin-shell-boot`, `athena-convex-storefront-composition`, and
-`athena-convex-storefront-failure-visibility`.
+Current shared scenarios include:
+- `sample-runtime-smoke` (shared contract smoke check)
+- `athena-admin-shell-boot`
+- `athena-convex-storefront-composition`
+- `athena-convex-storefront-failure-visibility`
+- `storefront-checkout-bootstrap`
+- `storefront-checkout-validation-blocker`
+- `storefront-checkout-verification-recovery`
 
 Start with the package suite in [vitest.config.ts](../../vitest.config.ts): `bun run --filter '@athena/webapp' test`. It covers both `src/**/*.test.{ts,tsx}` and `convex/**/*.test.{ts,tsx}`, so it is the default regression pass for mixed UI and backend changes.
 

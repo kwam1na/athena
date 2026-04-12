@@ -11,12 +11,23 @@ import {
   type HarnessAppName,
   type HarnessAppRegistryEntry,
 } from "./harness-app-registry";
+import { HARNESS_BEHAVIOR_SCENARIOS } from "./harness-behavior-scenarios";
 import { generateHarnessDocs } from "./harness-generate";
 
 const MARKDOWN_LINK_PATTERN = /\[[^\]]+\]\(([^)]+)\)/g;
 const INLINE_CODE_PATTERN = /`([^`\n]+)`/g;
 const PLAYWRIGHT_TEST_DIR_PATTERN =
   /testDir\s*:\s*["'`](.+?)["'`]/;
+const RUNTIME_SCENARIO_INLINE_CODE_PATTERN = /`([a-z0-9]+(?:-[a-z0-9]+)+)`/g;
+const RUNTIME_SCENARIO_SECTION_MARKERS = [
+  "Current shared scenarios include",
+  "Bundled scenarios include",
+] as const;
+const RUNTIME_SCENARIO_DOCS = [
+  "README.md",
+  "packages/athena-webapp/docs/agent/testing.md",
+  "packages/storefront-webapp/docs/agent/testing.md",
+] as const;
 
 type HarnessAppConfig = {
   appName: HarnessAppName;
@@ -44,6 +55,105 @@ async function fileExists(filePath: string) {
   } catch {
     return false;
   }
+}
+
+function sortUniqueEntries(entries: string[]) {
+  return [...new Set(entries.filter(Boolean))].sort((left, right) =>
+    left.localeCompare(right)
+  );
+}
+
+function formatScenarioList(scenarios: string[]) {
+  return scenarios.map((scenarioName) => `\`${scenarioName}\``).join(", ");
+}
+
+function isRuntimeScenarioName(value: string) {
+  return (
+    value === "sample-runtime-smoke" ||
+    value.startsWith("athena-") ||
+    value.startsWith("storefront-")
+  );
+}
+
+function extractRuntimeScenarioSection(contents: string) {
+  const lines = contents.split(/\r?\n/);
+  const markerIndex = lines.findIndex((line) =>
+    RUNTIME_SCENARIO_SECTION_MARKERS.some((marker) => line.includes(marker))
+  );
+
+  if (markerIndex === -1) {
+    return null;
+  }
+
+  const sectionLines: string[] = [];
+  for (let index = markerIndex; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (index > markerIndex && /^##\s+/.test(line.trim())) {
+      break;
+    }
+    sectionLines.push(line);
+  }
+
+  return sectionLines.join("\n");
+}
+
+async function collectRuntimeScenarioDocSyncErrors(rootDir: string) {
+  const errors: string[] = [];
+  const expectedScenarios = sortUniqueEntries(
+    HARNESS_BEHAVIOR_SCENARIOS.map((scenario) => scenario.name)
+  );
+
+  for (const repoRelativePath of RUNTIME_SCENARIO_DOCS) {
+    const absolutePath = path.join(rootDir, repoRelativePath);
+    if (!(await fileExists(absolutePath))) {
+      errors.push(`Missing runtime behavior scenario doc: ${repoRelativePath}`);
+      continue;
+    }
+
+    const contents = await readFile(absolutePath, "utf8");
+    const runtimeSection = extractRuntimeScenarioSection(contents);
+    if (!runtimeSection) {
+      errors.push(
+        `Missing runtime behavior scenario list in ${repoRelativePath}. Include a section with "Current shared scenarios include" or "Bundled scenarios include".`
+      );
+      continue;
+    }
+
+    const documentedScenarios = sortUniqueEntries(
+      [...runtimeSection.matchAll(RUNTIME_SCENARIO_INLINE_CODE_PATTERN)]
+        .map((match) => match[1]?.trim() ?? "")
+        .filter((scenarioName) => isRuntimeScenarioName(scenarioName))
+    );
+
+    const missingScenarios = expectedScenarios.filter(
+      (scenarioName) => !documentedScenarios.includes(scenarioName)
+    );
+    const unexpectedScenarios = documentedScenarios.filter(
+      (scenarioName) => !expectedScenarios.includes(scenarioName)
+    );
+
+    if (missingScenarios.length === 0 && unexpectedScenarios.length === 0) {
+      continue;
+    }
+
+    const mismatchSegments: string[] = [];
+    if (missingScenarios.length > 0) {
+      mismatchSegments.push(`missing ${formatScenarioList(missingScenarios)}`);
+    }
+    if (unexpectedScenarios.length > 0) {
+      mismatchSegments.push(
+        `unexpected ${formatScenarioList(unexpectedScenarios)}`
+      );
+    }
+
+    errors.push(
+      `Runtime behavior scenario docs drift in ${repoRelativePath}: ${mismatchSegments.join(
+        "; "
+      )}. Run \`bun run harness:behavior --list\` and sync this list to scripts/harness-behavior-scenarios.ts.`
+    );
+  }
+
+  return errors;
 }
 
 async function collectMarkdownLinkErrors(rootDir: string, filePath: string) {
@@ -531,6 +641,8 @@ export async function validateHarnessDocs(rootDir: string) {
       errors.push(`Stale generated harness doc: ${generatedPath}`);
     }
   }
+
+  errors.push(...(await collectRuntimeScenarioDocSyncErrors(rootDir)));
 
   return errors;
 }

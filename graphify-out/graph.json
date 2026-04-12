@@ -3481,7 +3481,7 @@
       "source_file": "packages/athena-webapp/convex/utils.ts",
       "source_location": "L1",
       "id": "packages_athena_webapp_convex_utils_ts",
-      "community": 7
+      "community": 8
     },
     {
       "label": "toSlug()",
@@ -3489,7 +3489,7 @@
       "source_file": "packages/athena-webapp/src/lib/utils.ts",
       "source_location": "L37",
       "id": "utils_toslug",
-      "community": 7
+      "community": 8
     },
     {
       "label": "getAddressString()",
@@ -3497,7 +3497,7 @@
       "source_file": "packages/athena-webapp/convex/utils.ts",
       "source_location": "L14",
       "id": "utils_getaddressstring",
-      "community": 7
+      "community": 8
     },
     {
       "label": "capitalizeWords()",
@@ -3505,7 +3505,7 @@
       "source_file": "packages/storefront-webapp/src/lib/utils.ts",
       "source_location": "L23",
       "id": "utils_capitalizewords",
-      "community": 7
+      "community": 8
     },
     {
       "label": "currencyFormatter()",
@@ -3513,7 +3513,7 @@
       "source_file": "packages/storefront-webapp/src/lib/utils.ts",
       "source_location": "L35",
       "id": "utils_currencyformatter",
-      "community": 7
+      "community": 8
     },
     {
       "label": "formatDate()",
@@ -3521,7 +3521,7 @@
       "source_file": "packages/storefront-webapp/src/lib/utils.ts",
       "source_location": "L44",
       "id": "utils_formatdate",
-      "community": 7
+      "community": 8
     },
     {
       "label": "getProductName()",
@@ -3529,7 +3529,7 @@
       "source_file": "packages/athena-webapp/convex/utils.ts",
       "source_location": "L64",
       "id": "utils_getproductname",
-      "community": 7
+      "community": 8
     },
     {
       "label": "generateTransactionNumber()",
@@ -3537,7 +3537,7 @@
       "source_file": "packages/athena-webapp/convex/utils.ts",
       "source_location": "L77",
       "id": "utils_generatetransactionnumber",
-      "community": 7
+      "community": 8
     },
     {
       "label": "eslint.config.js",
@@ -4089,7 +4089,7 @@
       "source_file": "packages/athena-webapp/src/components/add-product/ProductStock.tsx",
       "source_location": "L1",
       "id": "packages_athena_webapp_src_components_add_product_productstock_tsx",
-      "community": 6
+      "community": 7
     },
     {
       "label": "restock()",
@@ -4097,7 +4097,7 @@
       "source_file": "packages/athena-webapp/src/components/add-product/ProductStock.tsx",
       "source_location": "L107",
       "id": "productstock_restock",
-      "community": 6
+      "community": 7
     },
     {
       "label": "isSkuReserved()",
@@ -4105,7 +4105,7 @@
       "source_file": "packages/athena-webapp/src/components/add-product/ProductStock.tsx",
       "source_location": "L174",
       "id": "productstock_isskureserved",
-      "community": 6
+      "community": 7
     },
     {
       "label": "getReservationType()",
@@ -4113,7 +4113,7 @@
       "source_file": "packages/athena-webapp/src/components/add-product/ProductStock.tsx",
       "source_location": "L178",
       "id": "productstock_getreservationtype",
-      "community": 6
+      "community": 7
     },
     {
       "label": "handleGenerateBarcode()",
@@ -4121,7 +4121,7 @@
       "source_file": "packages/athena-webapp/src/components/add-product/ProductStock.tsx",
       "source_location": "L239",
       "id": "productstock_handlegeneratebarcode",
-      "community": 6
+      "community": 7
     },
     {
       "label": "handleSaveBarcode()",
@@ -4129,7 +4129,7 @@
       "source_file": "packages/athena-webapp/src/components/add-product/ProductStock.tsx",
       "source_location": "L285",
       "id": "productstock_handlesavebarcode",
-      "community": 6
+      "community": 7
     },
     {
       "label": "handleViewBarcode()",
@@ -4137,7 +4137,7 @@
       "source_file": "packages/athena-webapp/src/components/add-product/ProductStock.tsx",
       "source_location": "L300",
       "id": "productstock_handleviewbarcode",
-      "community": 6
+      "community": 7
     },
     {
       "label": "handleClearBarcodeClick()",
@@ -4145,7 +4145,7 @@
       "source_file": "packages/athena-webapp/src/components/add-product/ProductStock.tsx",
       "source_location": "L308",
       "id": "productstock_handleclearbarcodeclick",
-      "community": 6
+      "community": 7
     },
     {
       "label": "handleClearBarcodeConfirm()",
@@ -4153,7 +4153,7 @@
       "source_file": "packages/athena-webapp/src/components/add-product/ProductStock.tsx",
       "source_location": "L313",
       "id": "productstock_handleclearbarcodeconfirm",
-      "community": 6
+      "community": 7
     },
     {
       "label": "handleClearBarcodeCancel()",
@@ -4161,7 +4161,7 @@
       "source_file": "packages/athena-webapp/src/components/add-product/ProductStock.tsx",
       "source_location": "L379",
       "id": "productstock_handleclearbarcodecancel",
-      "community": 6
+      "community": 7
     },
     {
       "label": "handleChange()",
@@ -4169,7 +4169,7 @@
       "source_file": "packages/athena-webapp/src/components/add-product/ProductStock.tsx",
       "source_location": "L384",
       "id": "productstock_handlechange",
-      "community": 6
+      "community": 7
     },
     {
       "label": "addRow()",
@@ -4177,7 +4177,7 @@
       "source_file": "packages/athena-webapp/src/components/add-product/ProductStock.tsx",
       "source_location": "L430",
       "id": "productstock_addrow",
-      "community": 6
+      "community": 7
     },
     {
       "label": "handleDeleteAction()",
@@ -4185,7 +4185,7 @@
       "source_file": "packages/athena-webapp/src/components/add-product/ProductStock.tsx",
       "source_location": "L445",
       "id": "productstock_handledeleteaction",
-      "community": 6
+      "community": 7
     },
     {
       "label": "setOutOfStock()",
@@ -4193,7 +4193,7 @@
       "source_file": "packages/athena-webapp/src/components/add-product/ProductStock.tsx",
       "source_location": "L462",
       "id": "productstock_setoutofstock",
-      "community": 6
+      "community": 7
     },
     {
       "label": "setVisibility()",
@@ -4201,7 +4201,7 @@
       "source_file": "packages/athena-webapp/src/components/add-product/ProductStock.tsx",
       "source_location": "L472",
       "id": "productstock_setvisibility",
-      "community": 6
+      "community": 7
     },
     {
       "label": "isLastActiveVariant()",
@@ -4209,7 +4209,7 @@
       "source_file": "packages/athena-webapp/src/components/add-product/ProductStock.tsx",
       "source_location": "L486",
       "id": "productstock_islastactivevariant",
-      "community": 6
+      "community": 7
     },
     {
       "label": "isLastVisibleVariant()",
@@ -4217,7 +4217,7 @@
       "source_file": "packages/athena-webapp/src/components/add-product/ProductStock.tsx",
       "source_location": "L492",
       "id": "productstock_islastvisiblevariant",
-      "community": 6
+      "community": 7
     },
     {
       "label": "shouldDisable()",
@@ -4225,7 +4225,7 @@
       "source_file": "packages/athena-webapp/src/components/add-product/ProductStock.tsx",
       "source_location": "L498",
       "id": "productstock_shoulddisable",
-      "community": 6
+      "community": 7
     },
     {
       "label": "hasQuantityError()",
@@ -4233,7 +4233,7 @@
       "source_file": "packages/athena-webapp/src/components/add-product/ProductStock.tsx",
       "source_location": "L506",
       "id": "productstock_hasquantityerror",
-      "community": 6
+      "community": 7
     },
     {
       "label": "hasPriceError()",
@@ -4241,7 +4241,7 @@
       "source_file": "packages/athena-webapp/src/components/add-product/ProductStock.tsx",
       "source_location": "L514",
       "id": "productstock_haspriceerror",
-      "community": 6
+      "community": 7
     },
     {
       "label": "ProductView.tsx",
@@ -5377,7 +5377,7 @@
       "source_file": "packages/athena-webapp/src/components/assets/index.tsx",
       "source_location": "L1",
       "id": "packages_athena_webapp_src_components_assets_index_tsx",
-      "community": 88
+      "community": 94
     },
     {
       "label": "Header()",
@@ -5385,7 +5385,7 @@
       "source_file": "packages/athena-webapp/src/components/organization-members/index.tsx",
       "source_location": "L42",
       "id": "index_header",
-      "community": 88
+      "community": 94
     },
     {
       "label": "FeesView()",
@@ -5393,7 +5393,7 @@
       "source_file": "packages/athena-webapp/src/components/assets/index.tsx",
       "source_location": "L29",
       "id": "index_feesview",
-      "community": 88
+      "community": 94
     },
     {
       "label": "Auth.tsx",
@@ -5825,7 +5825,7 @@
       "source_file": "packages/athena-webapp/src/components/dashboard/Dashboard.tsx",
       "source_location": "L1",
       "id": "packages_athena_webapp_src_components_dashboard_dashboard_tsx",
-      "community": 89
+      "community": 88
     },
     {
       "label": "getPeriodRange()",
@@ -5833,7 +5833,7 @@
       "source_file": "packages/athena-webapp/src/components/dashboard/Dashboard.tsx",
       "source_location": "L20",
       "id": "dashboard_getperiodrange",
-      "community": 89
+      "community": 88
     },
     {
       "label": "LoadingSection()",
@@ -5841,7 +5841,7 @@
       "source_file": "packages/athena-webapp/src/components/dashboard/Dashboard.tsx",
       "source_location": "L50",
       "id": "dashboard_loadingsection",
-      "community": 89
+      "community": 88
     },
     {
       "label": "renderSalesSection()",
@@ -5849,7 +5849,7 @@
       "source_file": "packages/athena-webapp/src/components/dashboard/Dashboard.tsx",
       "source_location": "L322",
       "id": "dashboard_rendersalessection",
-      "community": 89
+      "community": 88
     },
     {
       "label": "renderProductsSection()",
@@ -5857,7 +5857,7 @@
       "source_file": "packages/athena-webapp/src/components/dashboard/Dashboard.tsx",
       "source_location": "L342",
       "id": "dashboard_renderproductssection",
-      "community": 89
+      "community": 88
     },
     {
       "label": "MetricCard.tsx",
@@ -6161,7 +6161,7 @@
       "source_file": "packages/athena-webapp/src/components/homepage/HeroSectionTabs.tsx",
       "source_location": "L1",
       "id": "packages_athena_webapp_src_components_homepage_herosectiontabs_tsx",
-      "community": 90
+      "community": 89
     },
     {
       "label": "handleImageUpdate()",
@@ -6169,7 +6169,7 @@
       "source_file": "packages/athena-webapp/src/components/homepage/HeroSectionTabs.tsx",
       "source_location": "L57",
       "id": "herosectiontabs_handleimageupdate",
-      "community": 90
+      "community": 89
     },
     {
       "label": "handleDisplayTypeChange()",
@@ -6177,7 +6177,7 @@
       "source_file": "packages/athena-webapp/src/components/homepage/HeroSectionTabs.tsx",
       "source_location": "L61",
       "id": "herosectiontabs_handledisplaytypechange",
-      "community": 90
+      "community": 89
     },
     {
       "label": "handleOverlayToggle()",
@@ -6185,7 +6185,7 @@
       "source_file": "packages/athena-webapp/src/components/homepage/HeroSectionTabs.tsx",
       "source_location": "L98",
       "id": "herosectiontabs_handleoverlaytoggle",
-      "community": 90
+      "community": 89
     },
     {
       "label": "handleTextToggle()",
@@ -6193,7 +6193,7 @@
       "source_file": "packages/athena-webapp/src/components/homepage/HeroSectionTabs.tsx",
       "source_location": "L134",
       "id": "herosectiontabs_handletexttoggle",
-      "community": 90
+      "community": 89
     },
     {
       "label": "Home.tsx",
@@ -6265,7 +6265,7 @@
       "source_file": "packages/athena-webapp/src/components/homepage/ReelUploader.tsx",
       "source_location": "L1",
       "id": "packages_athena_webapp_src_components_homepage_reeluploader_tsx",
-      "community": 91
+      "community": 90
     },
     {
       "label": "formatFileSize()",
@@ -6273,7 +6273,7 @@
       "source_file": "packages/athena-webapp/src/components/homepage/ReelUploader.tsx",
       "source_location": "L38",
       "id": "reeluploader_formatfilesize",
-      "community": 91
+      "community": 90
     },
     {
       "label": "validateFile()",
@@ -6281,7 +6281,7 @@
       "source_file": "packages/athena-webapp/src/components/homepage/ReelUploader.tsx",
       "source_location": "L43",
       "id": "reeluploader_validatefile",
-      "community": 91
+      "community": 90
     },
     {
       "label": "handleFileSelect()",
@@ -6289,7 +6289,7 @@
       "source_file": "packages/athena-webapp/src/components/homepage/ReelUploader.tsx",
       "source_location": "L64",
       "id": "reeluploader_handlefileselect",
-      "community": 91
+      "community": 90
     },
     {
       "label": "handleUpload()",
@@ -6297,7 +6297,7 @@
       "source_file": "packages/athena-webapp/src/components/homepage/ReelUploader.tsx",
       "source_location": "L135",
       "id": "reeluploader_handleupload",
-      "community": 91
+      "community": 90
     },
     {
       "label": "ShopLook.tsx",
@@ -6401,7 +6401,7 @@
       "source_file": "packages/athena-webapp/src/components/orders/ActivityView.tsx",
       "source_location": "L1",
       "id": "packages_athena_webapp_src_components_orders_activityview_tsx",
-      "community": 92
+      "community": 91
     },
     {
       "label": "isRefundAction()",
@@ -6409,7 +6409,7 @@
       "source_file": "packages/athena-webapp/src/components/orders/ActivityView.tsx",
       "source_location": "L50",
       "id": "activityview_isrefundaction",
-      "community": 92
+      "community": 91
     },
     {
       "label": "isTransitionAction()",
@@ -6417,7 +6417,7 @@
       "source_file": "packages/athena-webapp/src/components/orders/ActivityView.tsx",
       "source_location": "L53",
       "id": "activityview_istransitionaction",
-      "community": 92
+      "community": 91
     },
     {
       "label": "isCreatedAction()",
@@ -6425,7 +6425,7 @@
       "source_file": "packages/athena-webapp/src/components/orders/ActivityView.tsx",
       "source_location": "L58",
       "id": "activityview_iscreatedaction",
-      "community": 92
+      "community": 91
     },
     {
       "label": "isFeedbackRequestAction()",
@@ -6433,7 +6433,7 @@
       "source_file": "packages/athena-webapp/src/components/orders/ActivityView.tsx",
       "source_location": "L63",
       "id": "activityview_isfeedbackrequestaction",
-      "community": 92
+      "community": 91
     },
     {
       "label": "CustomerDetailsView.tsx",
@@ -6473,7 +6473,7 @@
       "source_file": "packages/athena-webapp/src/components/orders/OrderDetailsView.tsx",
       "source_location": "L1",
       "id": "packages_athena_webapp_src_components_orders_orderdetailsview_tsx",
-      "community": 93
+      "community": 92
     },
     {
       "label": "VerifiedBadge()",
@@ -6481,7 +6481,7 @@
       "source_file": "packages/athena-webapp/src/components/orders/OrderDetailsView.tsx",
       "source_location": "L41",
       "id": "orderdetailsview_verifiedbadge",
-      "community": 93
+      "community": 92
     },
     {
       "label": "fetchTransactions()",
@@ -6489,7 +6489,7 @@
       "source_file": "packages/athena-webapp/src/components/orders/OrderDetailsView.tsx",
       "source_location": "L136",
       "id": "orderdetailsview_fetchtransactions",
-      "community": 93
+      "community": 92
     },
     {
       "label": "handleMarkAsVerified()",
@@ -6497,7 +6497,7 @@
       "source_file": "packages/athena-webapp/src/components/orders/OrderDetailsView.tsx",
       "source_location": "L173",
       "id": "orderdetailsview_handlemarkasverified",
-      "community": 93
+      "community": 92
     },
     {
       "label": "handleMarkPaymentCollected()",
@@ -6505,7 +6505,7 @@
       "source_file": "packages/athena-webapp/src/components/orders/OrderDetailsView.tsx",
       "source_location": "L187",
       "id": "orderdetailsview_handlemarkpaymentcollected",
-      "community": 93
+      "community": 92
     },
     {
       "label": "OrderItemsView.tsx",
@@ -6513,7 +6513,7 @@
       "source_file": "packages/athena-webapp/src/components/orders/OrderItemsView.tsx",
       "source_location": "L1",
       "id": "packages_athena_webapp_src_components_orders_orderitemsview_tsx",
-      "community": 94
+      "community": 93
     },
     {
       "label": "handleUpdateOrderItem()",
@@ -6521,7 +6521,7 @@
       "source_file": "packages/athena-webapp/src/components/orders/OrderItemsView.tsx",
       "source_location": "L47",
       "id": "orderitemsview_handleupdateorderitem",
-      "community": 94
+      "community": 93
     },
     {
       "label": "handleReturnItemToStock()",
@@ -6529,7 +6529,7 @@
       "source_file": "packages/athena-webapp/src/components/orders/OrderItemsView.tsx",
       "source_location": "L61",
       "id": "orderitemsview_handlereturnitemtostock",
-      "community": 94
+      "community": 93
     },
     {
       "label": "handleRequestFeedback()",
@@ -6537,7 +6537,7 @@
       "source_file": "packages/athena-webapp/src/components/orders/OrderItemsView.tsx",
       "source_location": "L77",
       "id": "orderitemsview_handlerequestfeedback",
-      "community": 94
+      "community": 93
     },
     {
       "label": "handleRestockAll()",
@@ -6545,7 +6545,7 @@
       "source_file": "packages/athena-webapp/src/components/orders/OrderItemsView.tsx",
       "source_location": "L295",
       "id": "orderitemsview_handlerestockall",
-      "community": 94
+      "community": 93
     },
     {
       "label": "OrderMetricsPanel.tsx",
@@ -6881,7 +6881,7 @@
       "source_file": "packages/athena-webapp/src/components/organization-members/index.tsx",
       "source_location": "L1",
       "id": "packages_athena_webapp_src_components_organization_members_index_tsx",
-      "community": 88
+      "community": 94
     },
     {
       "label": "onSubmit()",
@@ -6889,7 +6889,7 @@
       "source_file": "packages/athena-webapp/src/components/organization-members/index.tsx",
       "source_location": "L105",
       "id": "index_onsubmit",
-      "community": 88
+      "community": 94
     },
     {
       "label": "constants.ts",
@@ -12233,7 +12233,7 @@
       "source_file": "packages/athena-webapp/src/lib/productUtils.ts",
       "source_location": "L1",
       "id": "packages_athena_webapp_src_lib_productutils_ts",
-      "community": 48
+      "community": 50
     },
     {
       "label": "getProductName()",
@@ -12241,7 +12241,7 @@
       "source_file": "packages/storefront-webapp/src/lib/productUtils.ts",
       "source_location": "L18",
       "id": "productutils_getproductname",
-      "community": 48
+      "community": 50
     },
     {
       "label": "sortProduct()",
@@ -12249,7 +12249,7 @@
       "source_file": "packages/storefront-webapp/src/lib/productUtils.ts",
       "source_location": "L66",
       "id": "productutils_sortproduct",
-      "community": 48
+      "community": 50
     },
     {
       "label": "category.ts",
@@ -12321,7 +12321,7 @@
       "source_file": "packages/athena-webapp/src/lib/storeConfig.ts",
       "source_location": "L1",
       "id": "packages_athena_webapp_src_lib_storeconfig_ts",
-      "community": 5
+      "community": 6
     },
     {
       "label": "asRecord()",
@@ -12329,7 +12329,7 @@
       "source_file": "packages/storefront-webapp/src/lib/storeConfig.ts",
       "source_location": "L103",
       "id": "storeconfig_asrecord",
-      "community": 5
+      "community": 6
     },
     {
       "label": "asString()",
@@ -12337,7 +12337,7 @@
       "source_file": "packages/storefront-webapp/src/lib/storeConfig.ts",
       "source_location": "L111",
       "id": "storeconfig_asstring",
-      "community": 5
+      "community": 6
     },
     {
       "label": "asNumber()",
@@ -12345,7 +12345,7 @@
       "source_file": "packages/storefront-webapp/src/lib/storeConfig.ts",
       "source_location": "L114",
       "id": "storeconfig_asnumber",
-      "community": 5
+      "community": 6
     },
     {
       "label": "asBoolean()",
@@ -12353,7 +12353,7 @@
       "source_file": "packages/storefront-webapp/src/lib/storeConfig.ts",
       "source_location": "L117",
       "id": "storeconfig_asboolean",
-      "community": 5
+      "community": 6
     },
     {
       "label": "asOptionalArray()",
@@ -12361,7 +12361,7 @@
       "source_file": "packages/storefront-webapp/src/lib/storeConfig.ts",
       "source_location": "L132",
       "id": "storeconfig_asoptionalarray",
-      "community": 5
+      "community": 6
     },
     {
       "label": "firstDefined()",
@@ -12369,7 +12369,7 @@
       "source_file": "packages/storefront-webapp/src/lib/storeConfig.ts",
       "source_location": "L120",
       "id": "storeconfig_firstdefined",
-      "community": 5
+      "community": 6
     },
     {
       "label": "cleanUndefined()",
@@ -12377,7 +12377,7 @@
       "source_file": "packages/storefront-webapp/src/lib/storeConfig.ts",
       "source_location": "L143",
       "id": "storeconfig_cleanundefined",
-      "community": 5
+      "community": 6
     },
     {
       "label": "asMtnMomoSetupStatus()",
@@ -12385,7 +12385,7 @@
       "source_file": "packages/athena-webapp/src/lib/storeConfig.ts",
       "source_location": "L80",
       "id": "storeconfig_asmtnmomosetupstatus",
-      "community": 5
+      "community": 6
     },
     {
       "label": "hasMtnMomoReceivingAccountDetails()",
@@ -12393,7 +12393,7 @@
       "source_file": "packages/athena-webapp/src/lib/storeConfig.ts",
       "source_location": "L93",
       "id": "storeconfig_hasmtnmomoreceivingaccountdetails",
-      "community": 5
+      "community": 6
     },
     {
       "label": "mapMtnMomoReceivingAccount()",
@@ -12401,7 +12401,7 @@
       "source_file": "packages/athena-webapp/src/lib/storeConfig.ts",
       "source_location": "L106",
       "id": "storeconfig_mapmtnmomoreceivingaccount",
-      "community": 5
+      "community": 6
     },
     {
       "label": "normalizeMtnMomoReceivingAccounts()",
@@ -12409,7 +12409,7 @@
       "source_file": "packages/athena-webapp/src/lib/storeConfig.ts",
       "source_location": "L126",
       "id": "storeconfig_normalizemtnmomoreceivingaccounts",
-      "community": 5
+      "community": 6
     },
     {
       "label": "getRawConfig()",
@@ -12417,7 +12417,7 @@
       "source_file": "packages/storefront-webapp/src/lib/storeConfig.ts",
       "source_location": "L196",
       "id": "storeconfig_getrawconfig",
-      "community": 5
+      "community": 6
     },
     {
       "label": "mapStreamReel()",
@@ -12425,7 +12425,7 @@
       "source_file": "packages/storefront-webapp/src/lib/storeConfig.ts",
       "source_location": "L155",
       "id": "storeconfig_mapstreamreel",
-      "community": 5
+      "community": 6
     },
     {
       "label": "mapPromotion()",
@@ -12433,7 +12433,7 @@
       "source_file": "packages/athena-webapp/src/lib/storeConfig.ts",
       "source_location": "L172",
       "id": "storeconfig_mappromotion",
-      "community": 5
+      "community": 6
     },
     {
       "label": "normalizeWaiveDeliveryFees()",
@@ -12441,7 +12441,7 @@
       "source_file": "packages/athena-webapp/src/lib/storeConfig.ts",
       "source_location": "L177",
       "id": "storeconfig_normalizewaivedeliveryfees",
-      "community": 5
+      "community": 6
     },
     {
       "label": "getStoreConfigV2()",
@@ -12449,7 +12449,7 @@
       "source_file": "packages/storefront-webapp/src/lib/storeConfig.ts",
       "source_location": "L208",
       "id": "storeconfig_getstoreconfigv2",
-      "community": 5
+      "community": 6
     },
     {
       "label": "timelineUtils.ts",
@@ -12505,7 +12505,7 @@
       "source_file": "packages/athena-webapp/src/lib/utils.ts",
       "source_location": "L1",
       "id": "packages_athena_webapp_src_lib_utils_ts",
-      "community": 7
+      "community": 8
     },
     {
       "label": "cn()",
@@ -12513,7 +12513,7 @@
       "source_file": "packages/storefront-webapp/src/lib/utils.ts",
       "source_location": "L9",
       "id": "utils_cn",
-      "community": 7
+      "community": 8
     },
     {
       "label": "getErrorForField()",
@@ -12521,7 +12521,7 @@
       "source_file": "packages/storefront-webapp/src/lib/utils.ts",
       "source_location": "L14",
       "id": "utils_geterrorforfield",
-      "community": 7
+      "community": 8
     },
     {
       "label": "capitalizeFirstLetter()",
@@ -12529,7 +12529,7 @@
       "source_file": "packages/storefront-webapp/src/lib/utils.ts",
       "source_location": "L18",
       "id": "utils_capitalizefirstletter",
-      "community": 7
+      "community": 8
     },
     {
       "label": "slugToWords()",
@@ -12537,7 +12537,7 @@
       "source_file": "packages/storefront-webapp/src/lib/utils.ts",
       "source_location": "L31",
       "id": "utils_slugtowords",
-      "community": 7
+      "community": 8
     },
     {
       "label": "snakeCaseToWords()",
@@ -12545,7 +12545,7 @@
       "source_file": "packages/athena-webapp/src/lib/utils.ts",
       "source_location": "L50",
       "id": "utils_snakecasetowords",
-      "community": 7
+      "community": 8
     },
     {
       "label": "getRelativeTime()",
@@ -12553,7 +12553,7 @@
       "source_file": "packages/storefront-webapp/src/lib/utils.ts",
       "source_location": "L67",
       "id": "utils_getrelativetime",
-      "community": 7
+      "community": 8
     },
     {
       "label": "getTimeRemaining()",
@@ -12561,7 +12561,7 @@
       "source_file": "packages/athena-webapp/src/lib/utils.ts",
       "source_location": "L71",
       "id": "utils_gettimeremaining",
-      "community": 7
+      "community": 8
     },
     {
       "label": "formatUserId()",
@@ -12569,7 +12569,7 @@
       "source_file": "packages/athena-webapp/src/lib/utils.ts",
       "source_location": "L91",
       "id": "utils_formatuserid",
-      "community": 7
+      "community": 8
     },
     {
       "label": "main.tsx",
@@ -14329,7 +14329,7 @@
       "source_file": "packages/storefront-webapp/src/api/savedBag.ts",
       "source_location": "L1",
       "id": "packages_storefront_webapp_src_api_savedbag_ts",
-      "community": 49
+      "community": 48
     },
     {
       "label": "getBaseUrl()",
@@ -14337,7 +14337,7 @@
       "source_file": "packages/storefront-webapp/src/api/savedBag.ts",
       "source_location": "L8",
       "id": "savedbag_getbaseurl",
-      "community": 49
+      "community": 48
     },
     {
       "label": "getActiveSavedBag()",
@@ -14345,7 +14345,7 @@
       "source_file": "packages/storefront-webapp/src/api/savedBag.ts",
       "source_location": "L10",
       "id": "savedbag_getactivesavedbag",
-      "community": 49
+      "community": 48
     },
     {
       "label": "addItemToSavedBag()",
@@ -14353,7 +14353,7 @@
       "source_file": "packages/storefront-webapp/src/api/savedBag.ts",
       "source_location": "L25",
       "id": "savedbag_additemtosavedbag",
-      "community": 49
+      "community": 48
     },
     {
       "label": "updateSavedBagItem()",
@@ -14361,7 +14361,7 @@
       "source_file": "packages/storefront-webapp/src/api/savedBag.ts",
       "source_location": "L61",
       "id": "savedbag_updatesavedbagitem",
-      "community": 49
+      "community": 48
     },
     {
       "label": "removeItemFromSavedBag()",
@@ -14369,7 +14369,7 @@
       "source_file": "packages/storefront-webapp/src/api/savedBag.ts",
       "source_location": "L91",
       "id": "savedbag_removeitemfromsavedbag",
-      "community": 49
+      "community": 48
     },
     {
       "label": "updateSavedBagOwner()",
@@ -14377,7 +14377,7 @@
       "source_file": "packages/storefront-webapp/src/api/savedBag.ts",
       "source_location": "L109",
       "id": "savedbag_updatesavedbagowner",
-      "community": 49
+      "community": 48
     },
     {
       "label": "storeFrontUser.ts",
@@ -16233,7 +16233,7 @@
       "source_file": "packages/storefront-webapp/src/components/shopping-bag/ShoppingBag.tsx",
       "source_location": "L1",
       "id": "packages_storefront_webapp_src_components_shopping_bag_shoppingbag_tsx",
-      "community": 50
+      "community": 49
     },
     {
       "label": "PendingItem()",
@@ -16241,7 +16241,7 @@
       "source_file": "packages/storefront-webapp/src/components/shopping-bag/ShoppingBag.tsx",
       "source_location": "L62",
       "id": "shoppingbag_pendingitem",
-      "community": 50
+      "community": 49
     },
     {
       "label": "handleOnCheckoutClick()",
@@ -16249,7 +16249,7 @@
       "source_file": "packages/storefront-webapp/src/components/shopping-bag/ShoppingBag.tsx",
       "source_location": "L476",
       "id": "shoppingbag_handleoncheckoutclick",
-      "community": 50
+      "community": 49
     },
     {
       "label": "handleClickOnDiscountCode()",
@@ -16257,7 +16257,7 @@
       "source_file": "packages/storefront-webapp/src/components/shopping-bag/ShoppingBag.tsx",
       "source_location": "L525",
       "id": "shoppingbag_handleclickondiscountcode",
-      "community": 50
+      "community": 49
     },
     {
       "label": "isSkuUnavailable()",
@@ -16265,7 +16265,7 @@
       "source_file": "packages/storefront-webapp/src/components/shopping-bag/ShoppingBag.tsx",
       "source_location": "L537",
       "id": "shoppingbag_isskuunavailable",
-      "community": 50
+      "community": 49
     },
     {
       "label": "handleMoveToSaved()",
@@ -16273,7 +16273,7 @@
       "source_file": "packages/storefront-webapp/src/components/shopping-bag/ShoppingBag.tsx",
       "source_location": "L552",
       "id": "shoppingbag_handlemovetosaved",
-      "community": 50
+      "community": 49
     },
     {
       "label": "handleDeleteItem()",
@@ -16281,7 +16281,7 @@
       "source_file": "packages/storefront-webapp/src/components/shopping-bag/ShoppingBag.tsx",
       "source_location": "L566",
       "id": "shoppingbag_handledeleteitem",
-      "community": 50
+      "community": 49
     },
     {
       "label": "CheckoutUnavailable.tsx",
@@ -17721,7 +17721,7 @@
       "source_file": "packages/storefront-webapp/src/lib/productUtils.ts",
       "source_location": "L1",
       "id": "packages_storefront_webapp_src_lib_productutils_ts",
-      "community": 48
+      "community": 50
     },
     {
       "label": "isSoldOut()",
@@ -17729,7 +17729,7 @@
       "source_file": "packages/storefront-webapp/src/lib/productUtils.ts",
       "source_location": "L45",
       "id": "productutils_issoldout",
-      "community": 48
+      "community": 50
     },
     {
       "label": "hasLowStock()",
@@ -17737,7 +17737,7 @@
       "source_file": "packages/storefront-webapp/src/lib/productUtils.ts",
       "source_location": "L52",
       "id": "productutils_haslowstock",
-      "community": 48
+      "community": 50
     },
     {
       "label": "sortSkusByLength()",
@@ -17745,7 +17745,7 @@
       "source_file": "packages/storefront-webapp/src/lib/productUtils.ts",
       "source_location": "L62",
       "id": "productutils_sortskusbylength",
-      "community": 48
+      "community": 50
     },
     {
       "label": "bag.ts",
@@ -18041,7 +18041,7 @@
       "source_file": "packages/storefront-webapp/src/lib/storeConfig.ts",
       "source_location": "L1",
       "id": "packages_storefront_webapp_src_lib_storeconfig_ts",
-      "community": 5
+      "community": 6
     },
     {
       "label": "mapPromo()",
@@ -18049,7 +18049,7 @@
       "source_file": "packages/storefront-webapp/src/lib/storeConfig.ts",
       "source_location": "L172",
       "id": "storeconfig_mappromo",
-      "community": 5
+      "community": 6
     },
     {
       "label": "isStoreReadOnlyMode()",
@@ -18057,7 +18057,7 @@
       "source_file": "packages/storefront-webapp/src/lib/storeConfig.ts",
       "source_location": "L461",
       "id": "storeconfig_isstorereadonlymode",
-      "community": 5
+      "community": 6
     },
     {
       "label": "isStoreMaintenanceMode()",
@@ -18065,7 +18065,7 @@
       "source_file": "packages/storefront-webapp/src/lib/storeConfig.ts",
       "source_location": "L465",
       "id": "storeconfig_isstoremaintenancemode",
-      "community": 5
+      "community": 6
     },
     {
       "label": "getStoreFallbackImageUrl()",
@@ -18073,7 +18073,7 @@
       "source_file": "packages/storefront-webapp/src/lib/storeConfig.ts",
       "source_location": "L479",
       "id": "storeconfig_getstorefallbackimageurl",
-      "community": 5
+      "community": 6
     },
     {
       "label": "storefrontFailureObservability.test.ts",
@@ -18569,7 +18569,7 @@
       "source_file": "packages/storefront-webapp/src/lib/utils.ts",
       "source_location": "L1",
       "id": "packages_storefront_webapp_src_lib_utils_ts",
-      "community": 7
+      "community": 8
     },
     {
       "label": "getStoreDetails()",
@@ -18577,7 +18577,7 @@
       "source_file": "packages/storefront-webapp/src/lib/utils.ts",
       "source_location": "L53",
       "id": "utils_getstoredetails",
-      "community": 7
+      "community": 8
     },
     {
       "label": "enableQuery()",
@@ -18585,7 +18585,7 @@
       "source_file": "packages/storefront-webapp/src/lib/utils.ts",
       "source_location": "L60",
       "id": "utils_enablequery",
-      "community": 7
+      "community": 8
     },
     {
       "label": "email.ts",
@@ -20041,151 +20041,191 @@
       "source_file": "scripts/harness-check.ts",
       "source_location": "L1",
       "id": "scripts_harness_check_ts",
-      "community": 9
+      "community": 4
     },
     {
       "label": "stripLinkDecorations()",
       "file_type": "code",
       "source_file": "scripts/harness-check.ts",
-      "source_location": "L28",
+      "source_location": "L39",
       "id": "harness_check_striplinkdecorations",
-      "community": 9
+      "community": 4
     },
     {
       "label": "isRelativeLink()",
       "file_type": "code",
       "source_file": "scripts/harness-check.ts",
-      "source_location": "L32",
+      "source_location": "L43",
       "id": "harness_check_isrelativelink",
-      "community": 9
+      "community": 4
     },
     {
       "label": "fileExists()",
       "file_type": "code",
       "source_file": "scripts/harness-check.ts",
-      "source_location": "L40",
+      "source_location": "L51",
       "id": "harness_check_fileexists",
-      "community": 9
+      "community": 4
+    },
+    {
+      "label": "sortUniqueEntries()",
+      "file_type": "code",
+      "source_file": "scripts/harness-check.ts",
+      "source_location": "L60",
+      "id": "harness_check_sortuniqueentries",
+      "community": 4
+    },
+    {
+      "label": "formatScenarioList()",
+      "file_type": "code",
+      "source_file": "scripts/harness-check.ts",
+      "source_location": "L66",
+      "id": "harness_check_formatscenariolist",
+      "community": 4
+    },
+    {
+      "label": "isRuntimeScenarioName()",
+      "file_type": "code",
+      "source_file": "scripts/harness-check.ts",
+      "source_location": "L70",
+      "id": "harness_check_isruntimescenarioname",
+      "community": 4
+    },
+    {
+      "label": "extractRuntimeScenarioSection()",
+      "file_type": "code",
+      "source_file": "scripts/harness-check.ts",
+      "source_location": "L78",
+      "id": "harness_check_extractruntimescenariosection",
+      "community": 4
+    },
+    {
+      "label": "collectRuntimeScenarioDocSyncErrors()",
+      "file_type": "code",
+      "source_file": "scripts/harness-check.ts",
+      "source_location": "L100",
+      "id": "harness_check_collectruntimescenariodocsyncerrors",
+      "community": 4
     },
     {
       "label": "collectMarkdownLinkErrors()",
       "file_type": "code",
       "source_file": "scripts/harness-check.ts",
-      "source_location": "L49",
+      "source_location": "L159",
       "id": "harness_check_collectmarkdownlinkerrors",
-      "community": 9
+      "community": 4
     },
     {
       "label": "extractInlineCode()",
       "file_type": "code",
       "source_file": "scripts/harness-check.ts",
-      "source_location": "L78",
+      "source_location": "L188",
       "id": "harness_check_extractinlinecode",
-      "community": 9
+      "community": 4
     },
     {
       "label": "normalizePathReference()",
       "file_type": "code",
       "source_file": "scripts/harness-check.ts",
-      "source_location": "L84",
+      "source_location": "L194",
       "id": "harness_check_normalizepathreference",
-      "community": 9
+      "community": 4
     },
     {
       "label": "isLikelyPathReference()",
       "file_type": "code",
       "source_file": "scripts/harness-check.ts",
-      "source_location": "L97",
+      "source_location": "L207",
       "id": "harness_check_islikelypathreference",
-      "community": 9
+      "community": 4
     },
     {
       "label": "resolvePathReference()",
       "file_type": "code",
       "source_file": "scripts/harness-check.ts",
-      "source_location": "L122",
+      "source_location": "L232",
       "id": "harness_check_resolvepathreference",
-      "community": 9
+      "community": 4
     },
     {
       "label": "collectReferencedPathErrors()",
       "file_type": "code",
       "source_file": "scripts/harness-check.ts",
-      "source_location": "L148",
+      "source_location": "L258",
       "id": "harness_check_collectreferencedpatherrors",
-      "community": 9
+      "community": 4
     },
     {
       "label": "readPackageConfig()",
       "file_type": "code",
       "source_file": "scripts/harness-check.ts",
-      "source_location": "L183",
+      "source_location": "L293",
       "id": "harness_check_readpackageconfig",
-      "community": 9
+      "community": 4
     },
     {
       "label": "listWorkspacePackageDirs()",
       "file_type": "code",
       "source_file": "scripts/harness-check.ts",
-      "source_location": "L211",
+      "source_location": "L321",
       "id": "harness_check_listworkspacepackagedirs",
-      "community": 9
+      "community": 4
     },
     {
       "label": "collectHarnessOnboardingErrors()",
       "file_type": "code",
       "source_file": "scripts/harness-check.ts",
-      "source_location": "L234",
+      "source_location": "L344",
       "id": "harness_check_collectharnessonboardingerrors",
-      "community": 9
+      "community": 4
     },
     {
       "label": "extractTestScriptFromCommand()",
       "file_type": "code",
       "source_file": "scripts/harness-check.ts",
-      "source_location": "L265",
+      "source_location": "L375",
       "id": "harness_check_extracttestscriptfromcommand",
-      "community": 9
+      "community": 4
     },
     {
       "label": "walkFiles()",
       "file_type": "code",
       "source_file": "scripts/harness-check.ts",
-      "source_location": "L297",
+      "source_location": "L407",
       "id": "harness_check_walkfiles",
-      "community": 9
+      "community": 4
     },
     {
       "label": "collectTestSurfaceRoots()",
       "file_type": "code",
       "source_file": "scripts/harness-check.ts",
-      "source_location": "L317",
+      "source_location": "L427",
       "id": "harness_check_collecttestsurfaceroots",
-      "community": 9
+      "community": 4
     },
     {
       "label": "collectTestingDocErrors()",
       "file_type": "code",
       "source_file": "scripts/harness-check.ts",
-      "source_location": "L359",
+      "source_location": "L469",
       "id": "harness_check_collecttestingdocerrors",
-      "community": 9
+      "community": 4
     },
     {
       "label": "validateHarnessDocs()",
       "file_type": "code",
       "source_file": "scripts/harness-check.ts",
-      "source_location": "L404",
+      "source_location": "L514",
       "id": "harness_check_validateharnessdocs",
-      "community": 9
+      "community": 4
     },
     {
       "label": "runHarnessCheck()",
       "file_type": "code",
       "source_file": "scripts/harness-check.ts",
-      "source_location": "L538",
+      "source_location": "L650",
       "id": "harness_check_runharnesscheck",
-      "community": 9
+      "community": 4
     },
     {
       "label": "harness-generate.test.ts",
@@ -20457,7 +20497,7 @@
       "source_file": "scripts/harness-inferential-review.ts",
       "source_location": "L1",
       "id": "scripts_harness_inferential_review_ts",
-      "community": 8
+      "community": 9
     },
     {
       "label": "normalizeRepoPath()",
@@ -20465,7 +20505,7 @@
       "source_file": "scripts/harness-inferential-review.ts",
       "source_location": "L72",
       "id": "harness_inferential_review_normalizerepopath",
-      "community": 8
+      "community": 9
     },
     {
       "label": "sortUnique()",
@@ -20473,7 +20513,7 @@
       "source_file": "scripts/harness-inferential-review.ts",
       "source_location": "L76",
       "id": "harness_inferential_review_sortunique",
-      "community": 8
+      "community": 9
     },
     {
       "label": "fileExists()",
@@ -20481,7 +20521,7 @@
       "source_file": "scripts/harness-inferential-review.ts",
       "source_location": "L82",
       "id": "harness_inferential_review_fileexists",
-      "community": 8
+      "community": 9
     },
     {
       "label": "readUtf8OrNull()",
@@ -20489,7 +20529,7 @@
       "source_file": "scripts/harness-inferential-review.ts",
       "source_location": "L91",
       "id": "harness_inferential_review_readutf8ornull",
-      "community": 8
+      "community": 9
     },
     {
       "label": "runCommand()",
@@ -20497,7 +20537,7 @@
       "source_file": "scripts/harness-inferential-review.ts",
       "source_location": "L105",
       "id": "harness_inferential_review_runcommand",
-      "community": 8
+      "community": 9
     },
     {
       "label": "getChangedFilesForInferentialReview()",
@@ -20505,7 +20545,7 @@
       "source_file": "scripts/harness-inferential-review.ts",
       "source_location": "L132",
       "id": "harness_inferential_review_getchangedfilesforinferentialreview",
-      "community": 8
+      "community": 9
     },
     {
       "label": "isHarnessCriticalFile()",
@@ -20513,7 +20553,7 @@
       "source_file": "scripts/harness-inferential-review.ts",
       "source_location": "L196",
       "id": "harness_inferential_review_isharnesscriticalfile",
-      "community": 8
+      "community": 9
     },
     {
       "label": "buildFinding()",
@@ -20521,7 +20561,7 @@
       "source_file": "scripts/harness-inferential-review.ts",
       "source_location": "L221",
       "id": "harness_inferential_review_buildfinding",
-      "community": 8
+      "community": 9
     },
     {
       "label": "includesCaseInsensitive()",
@@ -20529,7 +20569,7 @@
       "source_file": "scripts/harness-inferential-review.ts",
       "source_location": "L239",
       "id": "harness_inferential_review_includescaseinsensitive",
-      "community": 8
+      "community": 9
     },
     {
       "label": "runDeterministicInferentialProvider()",
@@ -20537,7 +20577,7 @@
       "source_file": "scripts/harness-inferential-review.ts",
       "source_location": "L243",
       "id": "harness_inferential_review_rundeterministicinferentialprovider",
-      "community": 8
+      "community": 9
     },
     {
       "label": "sortFindings()",
@@ -20545,7 +20585,7 @@
       "source_file": "scripts/harness-inferential-review.ts",
       "source_location": "L395",
       "id": "harness_inferential_review_sortfindings",
-      "community": 8
+      "community": 9
     },
     {
       "label": "formatStatusLabel()",
@@ -20553,7 +20593,7 @@
       "source_file": "scripts/harness-inferential-review.ts",
       "source_location": "L414",
       "id": "harness_inferential_review_formatstatuslabel",
-      "community": 8
+      "community": 9
     },
     {
       "label": "buildHumanReport()",
@@ -20561,7 +20601,7 @@
       "source_file": "scripts/harness-inferential-review.ts",
       "source_location": "L427",
       "id": "harness_inferential_review_buildhumanreport",
-      "community": 8
+      "community": 9
     },
     {
       "label": "writeMachineOutput()",
@@ -20569,7 +20609,7 @@
       "source_file": "scripts/harness-inferential-review.ts",
       "source_location": "L470",
       "id": "harness_inferential_review_writemachineoutput",
-      "community": 8
+      "community": 9
     },
     {
       "label": "createOutput()",
@@ -20577,7 +20617,7 @@
       "source_file": "scripts/harness-inferential-review.ts",
       "source_location": "L480",
       "id": "harness_inferential_review_createoutput",
-      "community": 8
+      "community": 9
     },
     {
       "label": "createProviderFailure()",
@@ -20585,7 +20625,7 @@
       "source_file": "scripts/harness-inferential-review.ts",
       "source_location": "L505",
       "id": "harness_inferential_review_createproviderfailure",
-      "community": 8
+      "community": 9
     },
     {
       "label": "createRuntimeFailure()",
@@ -20593,7 +20633,7 @@
       "source_file": "scripts/harness-inferential-review.ts",
       "source_location": "L532",
       "id": "harness_inferential_review_createruntimefailure",
-      "community": 8
+      "community": 9
     },
     {
       "label": "runHarnessInferentialReview()",
@@ -20601,7 +20641,7 @@
       "source_file": "scripts/harness-inferential-review.ts",
       "source_location": "L559",
       "id": "harness_inferential_review_runharnessinferentialreview",
-      "community": 8
+      "community": 9
     },
     {
       "label": "parseCliArgs()",
@@ -20609,7 +20649,7 @@
       "source_file": "scripts/harness-inferential-review.ts",
       "source_location": "L699",
       "id": "harness_inferential_review_parsecliargs",
-      "community": 8
+      "community": 9
     },
     {
       "label": "harness-review.test.ts",
@@ -20801,183 +20841,191 @@
       "source_file": "scripts/harness-self-review.ts",
       "source_location": "L1",
       "id": "scripts_harness_self_review_ts",
-      "community": 4
+      "community": 5
     },
     {
       "label": "normalizeRepoPath()",
       "file_type": "code",
       "source_file": "scripts/harness-self-review.ts",
-      "source_location": "L92",
+      "source_location": "L97",
       "id": "harness_self_review_normalizerepopath",
-      "community": 4
+      "community": 5
     },
     {
       "label": "sortUniquePaths()",
       "file_type": "code",
       "source_file": "scripts/harness-self-review.ts",
-      "source_location": "L96",
+      "source_location": "L101",
       "id": "harness_self_review_sortuniquepaths",
-      "community": 4
+      "community": 5
     },
     {
       "label": "matchesPathPrefix()",
       "file_type": "code",
       "source_file": "scripts/harness-self-review.ts",
-      "source_location": "L102",
+      "source_location": "L107",
       "id": "harness_self_review_matchespathprefix",
-      "community": 4
+      "community": 5
     },
     {
       "label": "normalizeValidationCommand()",
       "file_type": "code",
       "source_file": "scripts/harness-self-review.ts",
-      "source_location": "L116",
+      "source_location": "L121",
       "id": "harness_self_review_normalizevalidationcommand",
-      "community": 4
+      "community": 5
     },
     {
       "label": "normalizeBehaviorScenarioName()",
       "file_type": "code",
       "source_file": "scripts/harness-self-review.ts",
-      "source_location": "L124",
+      "source_location": "L129",
       "id": "harness_self_review_normalizebehaviorscenarioname",
-      "community": 4
+      "community": 5
     },
     {
       "label": "formatValidationCommand()",
       "file_type": "code",
       "source_file": "scripts/harness-self-review.ts",
-      "source_location": "L128",
+      "source_location": "L133",
       "id": "harness_self_review_formatvalidationcommand",
-      "community": 4
+      "community": 5
     },
     {
       "label": "quoteCode()",
       "file_type": "code",
       "source_file": "scripts/harness-self-review.ts",
-      "source_location": "L136",
+      "source_location": "L141",
       "id": "harness_self_review_quotecode",
-      "community": 4
+      "community": 5
     },
     {
       "label": "fileExists()",
       "file_type": "code",
       "source_file": "scripts/harness-self-review.ts",
-      "source_location": "L140",
+      "source_location": "L145",
       "id": "harness_self_review_fileexists",
-      "community": 4
+      "community": 5
     },
     {
       "label": "readJsonFile()",
       "file_type": "code",
       "source_file": "scripts/harness-self-review.ts",
-      "source_location": "L149",
+      "source_location": "L154",
       "id": "harness_self_review_readjsonfile",
-      "community": 4
+      "community": 5
     },
     {
       "label": "runCommand()",
       "file_type": "code",
       "source_file": "scripts/harness-self-review.ts",
-      "source_location": "L153",
+      "source_location": "L158",
       "id": "harness_self_review_runcommand",
-      "community": 4
+      "community": 5
     },
     {
       "label": "getChangedFilesFromGit()",
       "file_type": "code",
       "source_file": "scripts/harness-self-review.ts",
-      "source_location": "L173",
+      "source_location": "L178",
       "id": "harness_self_review_getchangedfilesfromgit",
-      "community": 4
+      "community": 5
     },
     {
       "label": "parseRuntimeScenarios()",
       "file_type": "code",
       "source_file": "scripts/harness-self-review.ts",
-      "source_location": "L237",
+      "source_location": "L242",
       "id": "harness_self_review_parseruntimescenarios",
-      "community": 4
+      "community": 5
     },
     {
       "label": "loadSelfReviewTarget()",
       "file_type": "code",
       "source_file": "scripts/harness-self-review.ts",
-      "source_location": "L243",
+      "source_location": "L248",
       "id": "harness_self_review_loadselfreviewtarget",
-      "community": 4
+      "community": 5
     },
     {
       "label": "loadSelfReviewTargets()",
       "file_type": "code",
       "source_file": "scripts/harness-self-review.ts",
-      "source_location": "L375",
+      "source_location": "L380",
       "id": "harness_self_review_loadselfreviewtargets",
-      "community": 4
+      "community": 5
     },
     {
       "label": "collectCoverage()",
       "file_type": "code",
       "source_file": "scripts/harness-self-review.ts",
-      "source_location": "L394",
+      "source_location": "L399",
       "id": "harness_self_review_collectcoverage",
-      "community": 4
+      "community": 5
     },
     {
       "label": "isLikelyCodeOrConfig()",
       "file_type": "code",
       "source_file": "scripts/harness-self-review.ts",
-      "source_location": "L472",
+      "source_location": "L477",
       "id": "harness_self_review_islikelycodeorconfig",
-      "community": 4
+      "community": 5
+    },
+    {
+      "label": "isWorktreeMetadataPath()",
+      "file_type": "code",
+      "source_file": "scripts/harness-self-review.ts",
+      "source_location": "L498",
+      "id": "harness_self_review_isworktreemetadatapath",
+      "community": 5
     },
     {
       "label": "evaluateGraphifyFreshness()",
       "file_type": "code",
       "source_file": "scripts/harness-self-review.ts",
-      "source_location": "L493",
+      "source_location": "L507",
       "id": "harness_self_review_evaluategraphifyfreshness",
-      "community": 4
+      "community": 5
     },
     {
       "label": "runQuietHarnessCheck()",
       "file_type": "code",
       "source_file": "scripts/harness-self-review.ts",
-      "source_location": "L557",
+      "source_location": "L573",
       "id": "harness_self_review_runquietharnesscheck",
-      "community": 4
+      "community": 5
     },
     {
       "label": "appendListSection()",
       "file_type": "code",
       "source_file": "scripts/harness-self-review.ts",
-      "source_location": "L566",
+      "source_location": "L582",
       "id": "harness_self_review_appendlistsection",
-      "community": 4
+      "community": 5
     },
     {
       "label": "buildMarkdownBundle()",
       "file_type": "code",
       "source_file": "scripts/harness-self-review.ts",
-      "source_location": "L585",
+      "source_location": "L601",
       "id": "harness_self_review_buildmarkdownbundle",
-      "community": 4
+      "community": 5
     },
     {
       "label": "parseCliArguments()",
       "file_type": "code",
       "source_file": "scripts/harness-self-review.ts",
-      "source_location": "L742",
+      "source_location": "L758",
       "id": "harness_self_review_parsecliarguments",
-      "community": 4
+      "community": 5
     },
     {
       "label": "runHarnessSelfReview()",
       "file_type": "code",
       "source_file": "scripts/harness-self-review.ts",
-      "source_location": "L791",
+      "source_location": "L807",
       "id": "harness_self_review_runharnessselfreview",
-      "community": 4
+      "community": 5
     },
     {
       "label": "pre-push-review.test.ts",
@@ -42889,7 +42937,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-check.ts",
-      "source_location": "L28",
+      "source_location": "L39",
       "weight": 1.0,
       "_src": "scripts_harness_check_ts",
       "_tgt": "harness_check_striplinkdecorations",
@@ -42901,7 +42949,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-check.ts",
-      "source_location": "L32",
+      "source_location": "L43",
       "weight": 1.0,
       "_src": "scripts_harness_check_ts",
       "_tgt": "harness_check_isrelativelink",
@@ -42913,7 +42961,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-check.ts",
-      "source_location": "L40",
+      "source_location": "L51",
       "weight": 1.0,
       "_src": "scripts_harness_check_ts",
       "_tgt": "harness_check_fileexists",
@@ -42925,7 +42973,67 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-check.ts",
-      "source_location": "L49",
+      "source_location": "L60",
+      "weight": 1.0,
+      "_src": "scripts_harness_check_ts",
+      "_tgt": "harness_check_sortuniqueentries",
+      "source": "scripts_harness_check_ts",
+      "target": "harness_check_sortuniqueentries",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/harness-check.ts",
+      "source_location": "L66",
+      "weight": 1.0,
+      "_src": "scripts_harness_check_ts",
+      "_tgt": "harness_check_formatscenariolist",
+      "source": "scripts_harness_check_ts",
+      "target": "harness_check_formatscenariolist",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/harness-check.ts",
+      "source_location": "L70",
+      "weight": 1.0,
+      "_src": "scripts_harness_check_ts",
+      "_tgt": "harness_check_isruntimescenarioname",
+      "source": "scripts_harness_check_ts",
+      "target": "harness_check_isruntimescenarioname",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/harness-check.ts",
+      "source_location": "L78",
+      "weight": 1.0,
+      "_src": "scripts_harness_check_ts",
+      "_tgt": "harness_check_extractruntimescenariosection",
+      "source": "scripts_harness_check_ts",
+      "target": "harness_check_extractruntimescenariosection",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/harness-check.ts",
+      "source_location": "L100",
+      "weight": 1.0,
+      "_src": "scripts_harness_check_ts",
+      "_tgt": "harness_check_collectruntimescenariodocsyncerrors",
+      "source": "scripts_harness_check_ts",
+      "target": "harness_check_collectruntimescenariodocsyncerrors",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/harness-check.ts",
+      "source_location": "L159",
       "weight": 1.0,
       "_src": "scripts_harness_check_ts",
       "_tgt": "harness_check_collectmarkdownlinkerrors",
@@ -42937,7 +43045,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-check.ts",
-      "source_location": "L78",
+      "source_location": "L188",
       "weight": 1.0,
       "_src": "scripts_harness_check_ts",
       "_tgt": "harness_check_extractinlinecode",
@@ -42949,7 +43057,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-check.ts",
-      "source_location": "L84",
+      "source_location": "L194",
       "weight": 1.0,
       "_src": "scripts_harness_check_ts",
       "_tgt": "harness_check_normalizepathreference",
@@ -42961,7 +43069,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-check.ts",
-      "source_location": "L97",
+      "source_location": "L207",
       "weight": 1.0,
       "_src": "scripts_harness_check_ts",
       "_tgt": "harness_check_islikelypathreference",
@@ -42973,7 +43081,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-check.ts",
-      "source_location": "L122",
+      "source_location": "L232",
       "weight": 1.0,
       "_src": "scripts_harness_check_ts",
       "_tgt": "harness_check_resolvepathreference",
@@ -42985,7 +43093,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-check.ts",
-      "source_location": "L148",
+      "source_location": "L258",
       "weight": 1.0,
       "_src": "scripts_harness_check_ts",
       "_tgt": "harness_check_collectreferencedpatherrors",
@@ -42997,7 +43105,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-check.ts",
-      "source_location": "L183",
+      "source_location": "L293",
       "weight": 1.0,
       "_src": "scripts_harness_check_ts",
       "_tgt": "harness_check_readpackageconfig",
@@ -43009,7 +43117,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-check.ts",
-      "source_location": "L211",
+      "source_location": "L321",
       "weight": 1.0,
       "_src": "scripts_harness_check_ts",
       "_tgt": "harness_check_listworkspacepackagedirs",
@@ -43021,7 +43129,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-check.ts",
-      "source_location": "L234",
+      "source_location": "L344",
       "weight": 1.0,
       "_src": "scripts_harness_check_ts",
       "_tgt": "harness_check_collectharnessonboardingerrors",
@@ -43033,7 +43141,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-check.ts",
-      "source_location": "L265",
+      "source_location": "L375",
       "weight": 1.0,
       "_src": "scripts_harness_check_ts",
       "_tgt": "harness_check_extracttestscriptfromcommand",
@@ -43045,7 +43153,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-check.ts",
-      "source_location": "L297",
+      "source_location": "L407",
       "weight": 1.0,
       "_src": "scripts_harness_check_ts",
       "_tgt": "harness_check_walkfiles",
@@ -43057,7 +43165,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-check.ts",
-      "source_location": "L317",
+      "source_location": "L427",
       "weight": 1.0,
       "_src": "scripts_harness_check_ts",
       "_tgt": "harness_check_collecttestsurfaceroots",
@@ -43069,7 +43177,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-check.ts",
-      "source_location": "L359",
+      "source_location": "L469",
       "weight": 1.0,
       "_src": "scripts_harness_check_ts",
       "_tgt": "harness_check_collecttestingdocerrors",
@@ -43081,7 +43189,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-check.ts",
-      "source_location": "L404",
+      "source_location": "L514",
       "weight": 1.0,
       "_src": "scripts_harness_check_ts",
       "_tgt": "harness_check_validateharnessdocs",
@@ -43093,7 +43201,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-check.ts",
-      "source_location": "L538",
+      "source_location": "L650",
       "weight": 1.0,
       "_src": "scripts_harness_check_ts",
       "_tgt": "harness_check_runharnesscheck",
@@ -43105,7 +43213,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-check.ts",
-      "source_location": "L55",
+      "source_location": "L165",
       "weight": 1.0,
       "_src": "harness_check_collectmarkdownlinkerrors",
       "_tgt": "harness_check_striplinkdecorations",
@@ -43117,7 +43225,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-check.ts",
-      "source_location": "L85",
+      "source_location": "L195",
       "weight": 1.0,
       "_src": "harness_check_normalizepathreference",
       "_tgt": "harness_check_striplinkdecorations",
@@ -43129,7 +43237,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-check.ts",
-      "source_location": "L57",
+      "source_location": "L167",
       "weight": 1.0,
       "_src": "harness_check_collectmarkdownlinkerrors",
       "_tgt": "harness_check_isrelativelink",
@@ -43141,7 +43249,19 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-check.ts",
-      "source_location": "L67",
+      "source_location": "L108",
+      "weight": 1.0,
+      "_src": "harness_check_collectruntimescenariodocsyncerrors",
+      "_tgt": "harness_check_fileexists",
+      "source": "harness_check_fileexists",
+      "target": "harness_check_collectruntimescenariodocsyncerrors",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/harness-check.ts",
+      "source_location": "L177",
       "weight": 1.0,
       "_src": "harness_check_collectmarkdownlinkerrors",
       "_tgt": "harness_check_fileexists",
@@ -43153,7 +43273,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-check.ts",
-      "source_location": "L175",
+      "source_location": "L285",
       "weight": 1.0,
       "_src": "harness_check_collectreferencedpatherrors",
       "_tgt": "harness_check_fileexists",
@@ -43165,7 +43285,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-check.ts",
-      "source_location": "L190",
+      "source_location": "L300",
       "weight": 1.0,
       "_src": "harness_check_readpackageconfig",
       "_tgt": "harness_check_fileexists",
@@ -43177,7 +43297,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-check.ts",
-      "source_location": "L213",
+      "source_location": "L323",
       "weight": 1.0,
       "_src": "harness_check_listworkspacepackagedirs",
       "_tgt": "harness_check_fileexists",
@@ -43189,7 +43309,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-check.ts",
-      "source_location": "L254",
+      "source_location": "L364",
       "weight": 1.0,
       "_src": "harness_check_collectharnessonboardingerrors",
       "_tgt": "harness_check_fileexists",
@@ -43201,7 +43321,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-check.ts",
-      "source_location": "L298",
+      "source_location": "L408",
       "weight": 1.0,
       "_src": "harness_check_walkfiles",
       "_tgt": "harness_check_fileexists",
@@ -43213,7 +43333,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-check.ts",
-      "source_location": "L346",
+      "source_location": "L456",
       "weight": 1.0,
       "_src": "harness_check_collecttestsurfaceroots",
       "_tgt": "harness_check_fileexists",
@@ -43225,7 +43345,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-check.ts",
-      "source_location": "L410",
+      "source_location": "L520",
       "weight": 1.0,
       "_src": "harness_check_validateharnessdocs",
       "_tgt": "harness_check_fileexists",
@@ -43237,7 +43357,55 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-check.ts",
-      "source_location": "L443",
+      "source_location": "L102",
+      "weight": 1.0,
+      "_src": "harness_check_collectruntimescenariodocsyncerrors",
+      "_tgt": "harness_check_sortuniqueentries",
+      "source": "harness_check_sortuniqueentries",
+      "target": "harness_check_collectruntimescenariodocsyncerrors",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/harness-check.ts",
+      "source_location": "L141",
+      "weight": 1.0,
+      "_src": "harness_check_collectruntimescenariodocsyncerrors",
+      "_tgt": "harness_check_formatscenariolist",
+      "source": "harness_check_formatscenariolist",
+      "target": "harness_check_collectruntimescenariodocsyncerrors",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/harness-check.ts",
+      "source_location": "L114",
+      "weight": 1.0,
+      "_src": "harness_check_collectruntimescenariodocsyncerrors",
+      "_tgt": "harness_check_extractruntimescenariosection",
+      "source": "harness_check_extractruntimescenariosection",
+      "target": "harness_check_collectruntimescenariodocsyncerrors",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/harness-check.ts",
+      "source_location": "L645",
+      "weight": 1.0,
+      "_src": "harness_check_validateharnessdocs",
+      "_tgt": "harness_check_collectruntimescenariodocsyncerrors",
+      "source": "harness_check_collectruntimescenariodocsyncerrors",
+      "target": "harness_check_validateharnessdocs",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/harness-check.ts",
+      "source_location": "L553",
       "weight": 1.0,
       "_src": "harness_check_validateharnessdocs",
       "_tgt": "harness_check_collectmarkdownlinkerrors",
@@ -43249,7 +43417,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-check.ts",
-      "source_location": "L157",
+      "source_location": "L267",
       "weight": 1.0,
       "_src": "harness_check_collectreferencedpatherrors",
       "_tgt": "harness_check_extractinlinecode",
@@ -43261,7 +43429,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-check.ts",
-      "source_location": "L368",
+      "source_location": "L478",
       "weight": 1.0,
       "_src": "harness_check_collecttestingdocerrors",
       "_tgt": "harness_check_extractinlinecode",
@@ -43273,7 +43441,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-check.ts",
-      "source_location": "L102",
+      "source_location": "L212",
       "weight": 1.0,
       "_src": "harness_check_islikelypathreference",
       "_tgt": "harness_check_normalizepathreference",
@@ -43285,7 +43453,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-check.ts",
-      "source_location": "L128",
+      "source_location": "L238",
       "weight": 1.0,
       "_src": "harness_check_resolvepathreference",
       "_tgt": "harness_check_normalizepathreference",
@@ -43297,7 +43465,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-check.ts",
-      "source_location": "L162",
+      "source_location": "L272",
       "weight": 1.0,
       "_src": "harness_check_collectreferencedpatherrors",
       "_tgt": "harness_check_normalizepathreference",
@@ -43309,7 +43477,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-check.ts",
-      "source_location": "L158",
+      "source_location": "L268",
       "weight": 1.0,
       "_src": "harness_check_collectreferencedpatherrors",
       "_tgt": "harness_check_islikelypathreference",
@@ -43321,7 +43489,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-check.ts",
-      "source_location": "L168",
+      "source_location": "L278",
       "weight": 1.0,
       "_src": "harness_check_collectreferencedpatherrors",
       "_tgt": "harness_check_resolvepathreference",
@@ -43333,7 +43501,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-check.ts",
-      "source_location": "L467",
+      "source_location": "L577",
       "weight": 1.0,
       "_src": "harness_check_validateharnessdocs",
       "_tgt": "harness_check_collectreferencedpatherrors",
@@ -43345,7 +43513,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-check.ts",
-      "source_location": "L416",
+      "source_location": "L526",
       "weight": 1.0,
       "_src": "harness_check_validateharnessdocs",
       "_tgt": "harness_check_readpackageconfig",
@@ -43357,7 +43525,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-check.ts",
-      "source_location": "L240",
+      "source_location": "L350",
       "weight": 1.0,
       "_src": "harness_check_collectharnessonboardingerrors",
       "_tgt": "harness_check_listworkspacepackagedirs",
@@ -43369,7 +43537,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-check.ts",
-      "source_location": "L405",
+      "source_location": "L515",
       "weight": 1.0,
       "_src": "harness_check_validateharnessdocs",
       "_tgt": "harness_check_collectharnessonboardingerrors",
@@ -43381,7 +43549,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-check.ts",
-      "source_location": "L369",
+      "source_location": "L479",
       "weight": 1.0,
       "_src": "harness_check_collecttestingdocerrors",
       "_tgt": "harness_check_extracttestscriptfromcommand",
@@ -43393,7 +43561,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-check.ts",
-      "source_location": "L322",
+      "source_location": "L432",
       "weight": 1.0,
       "_src": "harness_check_collecttestsurfaceroots",
       "_tgt": "harness_check_walkfiles",
@@ -43405,7 +43573,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-check.ts",
-      "source_location": "L394",
+      "source_location": "L504",
       "weight": 1.0,
       "_src": "harness_check_collecttestingdocerrors",
       "_tgt": "harness_check_collecttestsurfaceroots",
@@ -43417,7 +43585,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-check.ts",
-      "source_location": "L486",
+      "source_location": "L596",
       "weight": 1.0,
       "_src": "harness_check_validateharnessdocs",
       "_tgt": "harness_check_collecttestingdocerrors",
@@ -43429,7 +43597,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-check.ts",
-      "source_location": "L539",
+      "source_location": "L651",
       "weight": 1.0,
       "_src": "harness_check_runharnesscheck",
       "_tgt": "harness_check_validateharnessdocs",
@@ -45073,7 +45241,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-self-review.ts",
-      "source_location": "L92",
+      "source_location": "L97",
       "weight": 1.0,
       "_src": "scripts_harness_self_review_ts",
       "_tgt": "harness_self_review_normalizerepopath",
@@ -45085,7 +45253,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-self-review.ts",
-      "source_location": "L96",
+      "source_location": "L101",
       "weight": 1.0,
       "_src": "scripts_harness_self_review_ts",
       "_tgt": "harness_self_review_sortuniquepaths",
@@ -45097,7 +45265,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-self-review.ts",
-      "source_location": "L102",
+      "source_location": "L107",
       "weight": 1.0,
       "_src": "scripts_harness_self_review_ts",
       "_tgt": "harness_self_review_matchespathprefix",
@@ -45109,7 +45277,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-self-review.ts",
-      "source_location": "L116",
+      "source_location": "L121",
       "weight": 1.0,
       "_src": "scripts_harness_self_review_ts",
       "_tgt": "harness_self_review_normalizevalidationcommand",
@@ -45121,7 +45289,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-self-review.ts",
-      "source_location": "L124",
+      "source_location": "L129",
       "weight": 1.0,
       "_src": "scripts_harness_self_review_ts",
       "_tgt": "harness_self_review_normalizebehaviorscenarioname",
@@ -45133,7 +45301,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-self-review.ts",
-      "source_location": "L128",
+      "source_location": "L133",
       "weight": 1.0,
       "_src": "scripts_harness_self_review_ts",
       "_tgt": "harness_self_review_formatvalidationcommand",
@@ -45145,7 +45313,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-self-review.ts",
-      "source_location": "L136",
+      "source_location": "L141",
       "weight": 1.0,
       "_src": "scripts_harness_self_review_ts",
       "_tgt": "harness_self_review_quotecode",
@@ -45157,7 +45325,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-self-review.ts",
-      "source_location": "L140",
+      "source_location": "L145",
       "weight": 1.0,
       "_src": "scripts_harness_self_review_ts",
       "_tgt": "harness_self_review_fileexists",
@@ -45169,7 +45337,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-self-review.ts",
-      "source_location": "L149",
+      "source_location": "L154",
       "weight": 1.0,
       "_src": "scripts_harness_self_review_ts",
       "_tgt": "harness_self_review_readjsonfile",
@@ -45181,7 +45349,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-self-review.ts",
-      "source_location": "L153",
+      "source_location": "L158",
       "weight": 1.0,
       "_src": "scripts_harness_self_review_ts",
       "_tgt": "harness_self_review_runcommand",
@@ -45193,7 +45361,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-self-review.ts",
-      "source_location": "L173",
+      "source_location": "L178",
       "weight": 1.0,
       "_src": "scripts_harness_self_review_ts",
       "_tgt": "harness_self_review_getchangedfilesfromgit",
@@ -45205,7 +45373,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-self-review.ts",
-      "source_location": "L237",
+      "source_location": "L242",
       "weight": 1.0,
       "_src": "scripts_harness_self_review_ts",
       "_tgt": "harness_self_review_parseruntimescenarios",
@@ -45217,7 +45385,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-self-review.ts",
-      "source_location": "L243",
+      "source_location": "L248",
       "weight": 1.0,
       "_src": "scripts_harness_self_review_ts",
       "_tgt": "harness_self_review_loadselfreviewtarget",
@@ -45229,7 +45397,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-self-review.ts",
-      "source_location": "L375",
+      "source_location": "L380",
       "weight": 1.0,
       "_src": "scripts_harness_self_review_ts",
       "_tgt": "harness_self_review_loadselfreviewtargets",
@@ -45241,7 +45409,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-self-review.ts",
-      "source_location": "L394",
+      "source_location": "L399",
       "weight": 1.0,
       "_src": "scripts_harness_self_review_ts",
       "_tgt": "harness_self_review_collectcoverage",
@@ -45253,7 +45421,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-self-review.ts",
-      "source_location": "L472",
+      "source_location": "L477",
       "weight": 1.0,
       "_src": "scripts_harness_self_review_ts",
       "_tgt": "harness_self_review_islikelycodeorconfig",
@@ -45265,7 +45433,19 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-self-review.ts",
-      "source_location": "L493",
+      "source_location": "L498",
+      "weight": 1.0,
+      "_src": "scripts_harness_self_review_ts",
+      "_tgt": "harness_self_review_isworktreemetadatapath",
+      "source": "scripts_harness_self_review_ts",
+      "target": "harness_self_review_isworktreemetadatapath",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/harness-self-review.ts",
+      "source_location": "L507",
       "weight": 1.0,
       "_src": "scripts_harness_self_review_ts",
       "_tgt": "harness_self_review_evaluategraphifyfreshness",
@@ -45277,7 +45457,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-self-review.ts",
-      "source_location": "L557",
+      "source_location": "L573",
       "weight": 1.0,
       "_src": "scripts_harness_self_review_ts",
       "_tgt": "harness_self_review_runquietharnesscheck",
@@ -45289,7 +45469,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-self-review.ts",
-      "source_location": "L566",
+      "source_location": "L582",
       "weight": 1.0,
       "_src": "scripts_harness_self_review_ts",
       "_tgt": "harness_self_review_appendlistsection",
@@ -45301,7 +45481,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-self-review.ts",
-      "source_location": "L585",
+      "source_location": "L601",
       "weight": 1.0,
       "_src": "scripts_harness_self_review_ts",
       "_tgt": "harness_self_review_buildmarkdownbundle",
@@ -45313,7 +45493,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-self-review.ts",
-      "source_location": "L742",
+      "source_location": "L758",
       "weight": 1.0,
       "_src": "scripts_harness_self_review_ts",
       "_tgt": "harness_self_review_parsecliarguments",
@@ -45325,7 +45505,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-self-review.ts",
-      "source_location": "L791",
+      "source_location": "L807",
       "weight": 1.0,
       "_src": "scripts_harness_self_review_ts",
       "_tgt": "harness_self_review_runharnessselfreview",
@@ -45337,7 +45517,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-self-review.ts",
-      "source_location": "L103",
+      "source_location": "L108",
       "weight": 1.0,
       "_src": "harness_self_review_matchespathprefix",
       "_tgt": "harness_self_review_normalizerepopath",
@@ -45349,7 +45529,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-self-review.ts",
-      "source_location": "L360",
+      "source_location": "L365",
       "weight": 1.0,
       "_src": "harness_self_review_loadselfreviewtarget",
       "_tgt": "harness_self_review_normalizerepopath",
@@ -45361,7 +45541,19 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-self-review.ts",
-      "source_location": "L231",
+      "source_location": "L499",
+      "weight": 1.0,
+      "_src": "harness_self_review_isworktreemetadatapath",
+      "_tgt": "harness_self_review_normalizerepopath",
+      "source": "harness_self_review_normalizerepopath",
+      "target": "harness_self_review_isworktreemetadatapath",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/harness-self-review.ts",
+      "source_location": "L236",
       "weight": 1.0,
       "_src": "harness_self_review_getchangedfilesfromgit",
       "_tgt": "harness_self_review_sortuniquepaths",
@@ -45373,7 +45565,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-self-review.ts",
-      "source_location": "L390",
+      "source_location": "L395",
       "weight": 1.0,
       "_src": "harness_self_review_loadselfreviewtargets",
       "_tgt": "harness_self_review_sortuniquepaths",
@@ -45385,7 +45577,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-self-review.ts",
-      "source_location": "L426",
+      "source_location": "L431",
       "weight": 1.0,
       "_src": "harness_self_review_collectcoverage",
       "_tgt": "harness_self_review_sortuniquepaths",
@@ -45397,7 +45589,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-self-review.ts",
-      "source_location": "L518",
+      "source_location": "L532",
       "weight": 1.0,
       "_src": "harness_self_review_evaluategraphifyfreshness",
       "_tgt": "harness_self_review_sortuniquepaths",
@@ -45409,7 +45601,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-self-review.ts",
-      "source_location": "L827",
+      "source_location": "L843",
       "weight": 1.0,
       "_src": "harness_self_review_runharnessselfreview",
       "_tgt": "harness_self_review_sortuniquepaths",
@@ -45421,7 +45613,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-self-review.ts",
-      "source_location": "L343",
+      "source_location": "L348",
       "weight": 1.0,
       "_src": "harness_self_review_loadselfreviewtarget",
       "_tgt": "harness_self_review_normalizebehaviorscenarioname",
@@ -45433,7 +45625,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-self-review.ts",
-      "source_location": "L437",
+      "source_location": "L442",
       "weight": 1.0,
       "_src": "harness_self_review_collectcoverage",
       "_tgt": "harness_self_review_formatvalidationcommand",
@@ -45445,7 +45637,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-self-review.ts",
-      "source_location": "L603",
+      "source_location": "L619",
       "weight": 1.0,
       "_src": "harness_self_review_buildmarkdownbundle",
       "_tgt": "harness_self_review_quotecode",
@@ -45457,7 +45649,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-self-review.ts",
-      "source_location": "L268",
+      "source_location": "L273",
       "weight": 1.0,
       "_src": "harness_self_review_loadselfreviewtarget",
       "_tgt": "harness_self_review_fileexists",
@@ -45469,7 +45661,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-self-review.ts",
-      "source_location": "L177",
+      "source_location": "L182",
       "weight": 1.0,
       "_src": "harness_self_review_getchangedfilesfromgit",
       "_tgt": "harness_self_review_runcommand",
@@ -45481,7 +45673,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-self-review.ts",
-      "source_location": "L353",
+      "source_location": "L358",
       "weight": 1.0,
       "_src": "harness_self_review_loadselfreviewtarget",
       "_tgt": "harness_self_review_parseruntimescenarios",
@@ -45493,7 +45685,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-self-review.ts",
-      "source_location": "L381",
+      "source_location": "L386",
       "weight": 1.0,
       "_src": "harness_self_review_loadselfreviewtargets",
       "_tgt": "harness_self_review_loadselfreviewtarget",
@@ -45505,7 +45697,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-self-review.ts",
-      "source_location": "L824",
+      "source_location": "L840",
       "weight": 1.0,
       "_src": "harness_self_review_runharnessselfreview",
       "_tgt": "harness_self_review_loadselfreviewtargets",
@@ -45517,7 +45709,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-self-review.ts",
-      "source_location": "L834",
+      "source_location": "L850",
       "weight": 1.0,
       "_src": "harness_self_review_runharnessselfreview",
       "_tgt": "harness_self_review_collectcoverage",
@@ -45529,7 +45721,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-self-review.ts",
-      "source_location": "L848",
+      "source_location": "L864",
       "weight": 1.0,
       "_src": "harness_self_review_runharnessselfreview",
       "_tgt": "harness_self_review_evaluategraphifyfreshness",
@@ -45541,7 +45733,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-self-review.ts",
-      "source_location": "L610",
+      "source_location": "L626",
       "weight": 1.0,
       "_src": "harness_self_review_buildmarkdownbundle",
       "_tgt": "harness_self_review_appendlistsection",
@@ -45553,7 +45745,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "scripts/harness-self-review.ts",
-      "source_location": "L867",
+      "source_location": "L883",
       "weight": 1.0,
       "_src": "harness_self_review_runharnessselfreview",
       "_tgt": "harness_self_review_buildmarkdownbundle",

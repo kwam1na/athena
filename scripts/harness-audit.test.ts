@@ -19,6 +19,26 @@ async function createFixtureRepo() {
   tempRoots.push(rootDir);
 
   await write(
+    "README.md",
+    [
+      "# athena",
+      "",
+      "List runtime behavior scenarios with `bun run harness:behavior --list`.",
+      "Bundled scenarios include:",
+      "",
+      "- `sample-runtime-smoke`",
+      "- `athena-admin-shell-boot`",
+      "- `athena-convex-storefront-composition`",
+      "- `athena-convex-storefront-failure-visibility`",
+      "- `storefront-checkout-bootstrap`",
+      "- `storefront-checkout-validation-blocker`",
+      "- `storefront-checkout-verification-recovery`",
+      "",
+    ].join("\n"),
+    rootDir
+  );
+
+  await write(
     "packages/AGENTS.md",
     [
       "# Packages Agent Router",
@@ -148,6 +168,15 @@ async function createFixtureRepo() {
       "Machine-readable review coverage lives in [validation-map.json](./validation-map.json).",
       "- [Test index](./test-index.md)",
       "- [Validation guide](./validation-guide.md)",
+      "Use `bun run harness:behavior --list` to inspect available runtime scenarios.",
+      "Current shared scenarios include:",
+      "- `sample-runtime-smoke`",
+      "- `athena-admin-shell-boot`",
+      "- `athena-convex-storefront-composition`",
+      "- `athena-convex-storefront-failure-visibility`",
+      "- `storefront-checkout-bootstrap`",
+      "- `storefront-checkout-validation-blocker`",
+      "- `storefront-checkout-verification-recovery`",
       "Default regression: `bun run --filter '@athena/webapp' test`.",
       "Convex validation: `bun run --filter '@athena/webapp' audit:convex` and `bun run --filter '@athena/webapp' lint:convex:changed`.",
       "Covered test surfaces include `src/tests` and `convex`.",
@@ -165,6 +194,15 @@ async function createFixtureRepo() {
       "Machine-readable review coverage lives in [validation-map.json](./validation-map.json).",
       "- [Test index](./test-index.md)",
       "- [Validation guide](./validation-guide.md)",
+      "Use `bun run harness:behavior --list` to inspect available runtime scenarios.",
+      "Current shared scenarios include:",
+      "- `sample-runtime-smoke`",
+      "- `athena-admin-shell-boot`",
+      "- `athena-convex-storefront-composition`",
+      "- `athena-convex-storefront-failure-visibility`",
+      "- `storefront-checkout-bootstrap`",
+      "- `storefront-checkout-validation-blocker`",
+      "- `storefront-checkout-verification-recovery`",
       "Default regression: `bun run --filter '@athena/storefront-webapp' test`.",
       "Browser journeys: `bun run --filter '@athena/storefront-webapp' test:e2e`.",
       "Covered test surfaces include `tests/e2e`.",

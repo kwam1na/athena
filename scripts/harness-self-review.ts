@@ -24,6 +24,11 @@ const GRAPHIFY_ARTIFACTS = [
   "graphify-out/GRAPH_REPORT.md",
   "graphify-out/graph.json",
 ] as const;
+const WORKTREE_METADATA_PREFIXES = [
+  ".worktrees/",
+  "worktrees/",
+  "packages/.claude/worktrees/",
+] as const;
 
 type ValidationCommand =
   | { kind: "script"; script: string }
@@ -490,6 +495,15 @@ function isLikelyCodeOrConfig(filePath: string) {
   ].includes(ext);
 }
 
+function isWorktreeMetadataPath(filePath: string) {
+  const normalizedPath = normalizeRepoPath(filePath);
+  return WORKTREE_METADATA_PREFIXES.some(
+    (pathPrefix) =>
+      normalizedPath === pathPrefix.slice(0, -1) ||
+      normalizedPath.startsWith(pathPrefix)
+  );
+}
+
 async function evaluateGraphifyFreshness(
   rootDir: string,
   changedFiles: string[]
@@ -521,7 +535,9 @@ async function evaluateGraphifyFreshness(
   );
   const nonGraphifyCodeChanges = normalizedChanged.filter(
     (filePath) =>
-      !filePath.startsWith("graphify-out/") && isLikelyCodeOrConfig(filePath)
+      !filePath.startsWith("graphify-out/") &&
+      !isWorktreeMetadataPath(filePath) &&
+      isLikelyCodeOrConfig(filePath)
   );
 
   if (nonGraphifyCodeChanges.length === 0) {

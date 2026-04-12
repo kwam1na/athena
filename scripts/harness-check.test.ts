@@ -37,6 +37,26 @@ async function createFixtureRepo() {
   tempRoots.push(rootDir);
 
   await write(
+    "README.md",
+    [
+      "# athena",
+      "",
+      "List runtime behavior scenarios with `bun run harness:behavior --list`.",
+      "Bundled scenarios include:",
+      "",
+      "- `sample-runtime-smoke`",
+      "- `athena-admin-shell-boot`",
+      "- `athena-convex-storefront-composition`",
+      "- `athena-convex-storefront-failure-visibility`",
+      "- `storefront-checkout-bootstrap`",
+      "- `storefront-checkout-validation-blocker`",
+      "- `storefront-checkout-verification-recovery`",
+      "",
+    ].join("\n"),
+    rootDir
+  );
+
+  await write(
     "packages/AGENTS.md",
     [
       "# Packages Agent Router",
@@ -107,6 +127,16 @@ async function createFixtureRepo() {
         appName === "athena-webapp" ? "# Athena Webapp Testing" : "# Storefront Webapp Testing",
         "",
         ...REQUIRED_TESTING_LINKS.map((link) => `- [${link}](${link})`),
+        "",
+        "Use `bun run harness:behavior --list` to inspect available runtime scenarios.",
+        "Current shared scenarios include:",
+        "- `sample-runtime-smoke`",
+        "- `athena-admin-shell-boot`",
+        "- `athena-convex-storefront-composition`",
+        "- `athena-convex-storefront-failure-visibility`",
+        "- `storefront-checkout-bootstrap`",
+        "- `storefront-checkout-validation-blocker`",
+        "- `storefront-checkout-verification-recovery`",
         "",
         ...(appName === "athena-webapp"
           ? [
@@ -436,6 +466,29 @@ describe("validateHarnessDocs", () => {
 
     await expect(validateHarnessDocs(rootDir)).resolves.toContain(
       "Stale generated harness doc: packages/athena-webapp/docs/agent/validation-map.json"
+    );
+  });
+
+  it("reports scenario-doc drift when documented runtime scenarios do not match the registry", async () => {
+    const rootDir = await createFixtureRepo();
+    await write(
+      "packages/athena-webapp/docs/agent/testing.md",
+      [
+        "# Athena Webapp Testing",
+        "",
+        "- [test-index](./test-index.md)",
+        "- [validation-guide](./validation-guide.md)",
+        "",
+        "Use `bun run harness:behavior --list` to inspect available runtime scenarios.",
+        "Current shared scenarios include:",
+        "- `sample-runtime-smoke`",
+        "",
+      ].join("\n"),
+      rootDir
+    );
+
+    await expect(validateHarnessDocs(rootDir)).resolves.toContain(
+      "Runtime behavior scenario docs drift in packages/athena-webapp/docs/agent/testing.md: missing `athena-admin-shell-boot`, `athena-convex-storefront-composition`, `athena-convex-storefront-failure-visibility`, `storefront-checkout-bootstrap`, `storefront-checkout-validation-blocker`, `storefront-checkout-verification-recovery`. Run `bun run harness:behavior --list` and sync this list to scripts/harness-behavior-scenarios.ts."
     );
   });
 });
