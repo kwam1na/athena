@@ -14,9 +14,10 @@ If `bun run harness:review` reports a coverage gap, the touched `packages/storef
 
 If `bun run harness:audit` reports a coverage gap, a live `src/` or `tests/` surface exists without a corresponding validation-map entry. Add or tighten the affected surface mapping before handoff so future agents can trust the repo-wide scan.
 
-Use `bun run harness:behavior --list` to inspect available runtime scenarios. The
-repo ships with `sample-runtime-smoke` as a shared contract example; follow-on
-Athena and Storefront journey scenarios should build on the same runner.
+Use `bun run harness:behavior --list` to inspect available runtime scenarios.
+Current shared scenarios include `sample-runtime-smoke`,
+`athena-admin-shell-boot`, `athena-convex-storefront-composition`, and
+`athena-convex-storefront-failure-visibility`.
 
 Start with the package suite in [vitest.config.ts](../../vitest.config.ts): `bun run --filter '@athena/storefront-webapp' test`. It is the default regression pass for API wrappers, route helpers, checkout state, and shared utility logic.
 

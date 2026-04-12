@@ -18,9 +18,13 @@ Key repo-level commands:
 
 `bun run harness:test` is the canonical harness implementation gate for harness scripts, graphify tooling, and pre-push review wiring.
 
-List runtime behavior scenarios with `bun run harness:behavior --list`. The bundled
-`sample-runtime-smoke` scenario boots a local fixture app, drives a browser click,
-captures runtime signals, and tears down automatically.
+List runtime behavior scenarios with `bun run harness:behavior --list`.
+Bundled scenarios include:
+
+- `sample-runtime-smoke`
+- `athena-admin-shell-boot`
+- `athena-convex-storefront-composition`
+- `athena-convex-storefront-failure-visibility`
 
 ## Graphify
 
