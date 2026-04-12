@@ -28,6 +28,48 @@ const STOREFRONT_CHECKOUT_VALIDATION_BLOCKER_PATH =
   "/shop/checkout/not-a-real-session";
 const STOREFRONT_CHECKOUT_RECOVERY_PATH = "/shop/checkout?origin=paystack";
 
+const SAMPLE_RUNTIME_LATENCY_THRESHOLDS = {
+  latency: {
+    maxTotalDurationMs: 30_000,
+    maxPhaseDurationMs: {
+      boot: 20_000,
+      readiness: 20_000,
+      browser: 10_000,
+      runtime: 5_000,
+      assertion: 5_000,
+      cleanup: 10_000,
+    },
+  },
+} satisfies HarnessBehaviorScenario["thresholds"];
+
+const ATHENA_RUNTIME_LATENCY_THRESHOLDS = {
+  latency: {
+    maxTotalDurationMs: 90_000,
+    maxPhaseDurationMs: {
+      boot: 25_000,
+      readiness: 25_000,
+      browser: 30_000,
+      runtime: 5_000,
+      assertion: 5_000,
+      cleanup: 10_000,
+    },
+  },
+} satisfies HarnessBehaviorScenario["thresholds"];
+
+const STOREFRONT_RUNTIME_LATENCY_THRESHOLDS = {
+  latency: {
+    maxTotalDurationMs: 220_000,
+    maxPhaseDurationMs: {
+      boot: 140_000,
+      readiness: 140_000,
+      browser: 45_000,
+      runtime: 5_000,
+      assertion: 5_000,
+      cleanup: 15_000,
+    },
+  },
+} satisfies HarnessBehaviorScenario["thresholds"];
+
 type StorefrontBehaviorMode =
   | "checkout-bootstrap"
   | "validation-blocker"
@@ -176,7 +218,16 @@ export const SAMPLE_RUNTIME_SMOKE_SCENARIO: HarnessBehaviorScenario<SampleScenar
         pattern: "RUNTIME_SIGNAL:browser-clicked",
         minMatches: 1,
       },
+      {
+        name: "sample-app-runtime-errors",
+        processId: "sample-app",
+        source: "combined",
+        pattern: "signal request failed",
+        minMatches: 0,
+        maxMatches: 0,
+      },
     ],
+    thresholds: SAMPLE_RUNTIME_LATENCY_THRESHOLDS,
     assert: async ({ browserResult, runtimeSignals }) => {
       if (browserResult.signalStatus !== "signal-recorded") {
         throw new Error(
@@ -243,7 +294,16 @@ export const ATHENA_ADMIN_SHELL_BOOT_SCENARIO: HarnessBehaviorScenario<AthenaAdm
         pattern: "RUNTIME_SIGNAL:athena-admin-shell-boot",
         minMatches: 1,
       },
+      {
+        name: "athena-runtime-errors",
+        processId: "athena-runtime-app",
+        source: "combined",
+        pattern: /(admin shell runtime signal failed|storefront request failed)/,
+        minMatches: 0,
+        maxMatches: 0,
+      },
     ],
+    thresholds: ATHENA_RUNTIME_LATENCY_THRESHOLDS,
     assert: async ({ browserResult, runtimeSignals }) => {
       if (browserResult.authState !== "authed") {
         throw new Error(
@@ -349,7 +409,16 @@ export const ATHENA_CONVEX_COMPOSITION_SCENARIO: HarnessBehaviorScenario<AthenaC
         pattern: "RUNTIME_SIGNAL:convex-storefront-query",
         minMatches: 1,
       },
+      {
+        name: "athena-runtime-errors",
+        processId: "athena-runtime-app",
+        source: "combined",
+        pattern: /(admin shell runtime signal failed|storefront request failed)/,
+        minMatches: 0,
+        maxMatches: 0,
+      },
     ],
+    thresholds: ATHENA_RUNTIME_LATENCY_THRESHOLDS,
     assert: async ({ browserResult, runtimeSignals }) => {
       if (browserResult.authState !== "authed") {
         throw new Error(
@@ -458,7 +527,16 @@ export const ATHENA_CONVEX_FAILURE_VISIBILITY_SCENARIO: HarnessBehaviorScenario<
         pattern: "RUNTIME_SIGNAL:convex-storefront-route-hit",
         minMatches: 1,
       },
+      {
+        name: "athena-runtime-errors",
+        processId: "athena-runtime-app",
+        source: "combined",
+        pattern: /(admin shell runtime signal failed|storefront request failed)/,
+        minMatches: 0,
+        maxMatches: 0,
+      },
     ],
+    thresholds: ATHENA_RUNTIME_LATENCY_THRESHOLDS,
     assert: async ({ browserResult, runtimeSignals }) => {
       if (browserResult.authState !== "authed") {
         throw new Error(
@@ -521,7 +599,16 @@ export const STOREFRONT_CHECKOUT_BOOTSTRAP_SCENARIO: HarnessBehaviorScenario<Sto
         pattern: "RUNTIME_SIGNAL:storefront-checkout-bootstrap-loaded",
         minMatches: 1,
       },
+      {
+        name: "storefront-runtime-api-errors",
+        processId: "storefront-api",
+        source: "combined",
+        pattern: "Unhandled fixture route",
+        minMatches: 0,
+        maxMatches: 0,
+      },
     ],
+    thresholds: STOREFRONT_RUNTIME_LATENCY_THRESHOLDS,
     assert: async ({ browserResult, runtimeSignals }) => {
       if (browserResult.observedText !== "Checkout") {
         throw new Error(
@@ -573,7 +660,16 @@ export const STOREFRONT_CHECKOUT_VALIDATION_BLOCKER_SCENARIO: HarnessBehaviorSce
         pattern: "RUNTIME_SIGNAL:storefront-checkout-session-missing",
         minMatches: 1,
       },
+      {
+        name: "storefront-runtime-api-errors",
+        processId: "storefront-api",
+        source: "combined",
+        pattern: "Unhandled fixture route",
+        minMatches: 0,
+        maxMatches: 0,
+      },
     ],
+    thresholds: STOREFRONT_RUNTIME_LATENCY_THRESHOLDS,
     assert: async ({ browserResult, runtimeSignals }) => {
       if (
         !browserResult.observedText.includes("This checkout session does not exist")
@@ -629,7 +725,16 @@ export const STOREFRONT_CHECKOUT_VERIFICATION_RECOVERY_SCENARIO: HarnessBehavior
         pattern: "RUNTIME_SIGNAL:storefront-payment-verification-requested",
         minMatches: 1,
       },
+      {
+        name: "storefront-runtime-api-errors",
+        processId: "storefront-api",
+        source: "combined",
+        pattern: "Unhandled fixture route",
+        minMatches: 0,
+        maxMatches: 0,
+      },
     ],
+    thresholds: STOREFRONT_RUNTIME_LATENCY_THRESHOLDS,
     assert: async ({ browserResult, runtimeSignals }) => {
       if (!browserResult.observedText.includes("Get excited, Ada!")) {
         throw new Error(

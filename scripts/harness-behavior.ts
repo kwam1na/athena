@@ -60,6 +60,7 @@ export type HarnessBehaviorRuntimeSignalExpectation = {
   processId?: string;
   source?: HarnessBehaviorSignalSource;
   minMatches?: number;
+  maxMatches?: number;
 };
 
 export type HarnessBehaviorRuntimeSignalResult = {
@@ -67,6 +68,8 @@ export type HarnessBehaviorRuntimeSignalResult = {
   processId: string | null;
   source: HarnessBehaviorSignalSource;
   pattern: RegExp;
+  minMatches: number;
+  maxMatches: number | null;
   matchCount: number;
   matchedLines: string[];
 };
@@ -123,6 +126,15 @@ export type HarnessBehaviorAssertionContext<TBrowserResult> =
 export type HarnessBehaviorCleanupContext<TBrowserResult> =
   HarnessBehaviorAssertionContext<TBrowserResult>;
 
+export type HarnessBehaviorLatencyThresholds = {
+  maxTotalDurationMs?: number;
+  maxPhaseDurationMs?: Partial<Record<HarnessBehaviorPhase, number>>;
+};
+
+export type HarnessBehaviorThresholds = {
+  latency?: HarnessBehaviorLatencyThresholds;
+};
+
 export type HarnessBehaviorScenario<TBrowserResult = unknown> = {
   name: string;
   description?: string;
@@ -135,6 +147,7 @@ export type HarnessBehaviorScenario<TBrowserResult = unknown> = {
   assert: (
     context: HarnessBehaviorAssertionContext<TBrowserResult>
   ) => Promise<void>;
+  thresholds?: HarnessBehaviorThresholds;
   cleanup?: (
     context: HarnessBehaviorCleanupContext<TBrowserResult>
   ) => Promise<void>;
@@ -148,14 +161,74 @@ export type HarnessBehaviorPhase =
   | "assertion"
   | "cleanup";
 
+export type HarnessBehaviorPhaseDuration = {
+  phase: HarnessBehaviorPhase;
+  durationMs: number;
+};
+
+export type HarnessBehaviorRuntimeSignalSummary = {
+  name: string;
+  processId: string | null;
+  source: HarnessBehaviorSignalSource;
+  pattern: string;
+  minMatches: number;
+  maxMatches: number | null;
+  matchCount: number;
+  sampleMatches: string[];
+};
+
+export type HarnessBehaviorAssertionDiagnostic =
+  | {
+      type: "runtime-signal-below-minimum";
+      message: string;
+      signalName: string;
+      observedMatches: number;
+      minMatches: number;
+    }
+  | {
+      type: "runtime-signal-above-maximum";
+      message: string;
+      signalName: string;
+      observedMatches: number;
+      maxMatches: number;
+    }
+  | {
+      type: "latency-phase-threshold-breached";
+      message: string;
+      phase: HarnessBehaviorPhase;
+      observedDurationMs: number;
+      maxDurationMs: number;
+    }
+  | {
+      type: "latency-total-threshold-breached";
+      message: string;
+      observedDurationMs: number;
+      maxDurationMs: number;
+    };
+
+export type HarnessBehaviorScenarioReport = {
+  scenarioName: string;
+  status: "passed" | "failed";
+  totalDurationMs: number;
+  phaseDurations: HarnessBehaviorPhaseDuration[];
+  runtimeSignals: HarnessBehaviorRuntimeSignalSummary[];
+  diagnostics: HarnessBehaviorAssertionDiagnostic[];
+  failure?: {
+    phase: HarnessBehaviorPhase;
+    details: string;
+  };
+};
+
 export class HarnessBehaviorPhaseError extends Error {
   phase: HarnessBehaviorPhase;
   details: string;
+  report?: HarnessBehaviorScenarioReport;
 
   constructor(
     phase: HarnessBehaviorPhase,
     details: string,
-    cause?: unknown
+    cause?: unknown,
+    report?: HarnessBehaviorScenarioReport
   ) {
     const formattedDetails = details.trim();
     super(
@@ -167,6 +240,7 @@ export class HarnessBehaviorPhaseError extends Error {
     this.name = "HarnessBehaviorPhaseError";
     this.phase = phase;
     this.details = formattedDetails;
+    this.report = report;
   }
 }
 
@@ -621,9 +695,10 @@ function collectRuntimeSignalMatches(
     }
 
     const minMatches = expectation.minMatches ?? 1;
-    if (matchedLines.length < minMatches) {
+    const maxMatches = expectation.maxMatches ?? null;
+    if (maxMatches !== null && maxMatches < minMatches) {
       throw new Error(
-        `Runtime signal "${expectation.name}" expected at least ${minMatches} match(es) for ${regex}, found ${matchedLines.length}.`
+        `Runtime signal "${expectation.name}" has invalid thresholds: maxMatches (${maxMatches}) must be >= minMatches (${minMatches}).`
       );
     }
 
@@ -632,12 +707,101 @@ function collectRuntimeSignalMatches(
       processId: expectation.processId ?? null,
       source,
       pattern: regex,
+      minMatches,
+      maxMatches,
       matchCount: matchedLines.length,
       matchedLines,
     };
   }
 
   return results;
+}
+
+function collectRuntimeSignalDiagnostics(
+  runtimeSignals: Record<string, HarnessBehaviorRuntimeSignalResult>
+) {
+  const diagnostics: HarnessBehaviorAssertionDiagnostic[] = [];
+
+  for (const runtimeSignal of Object.values(runtimeSignals)) {
+    if (runtimeSignal.matchCount < runtimeSignal.minMatches) {
+      diagnostics.push({
+        type: "runtime-signal-below-minimum",
+        signalName: runtimeSignal.name,
+        observedMatches: runtimeSignal.matchCount,
+        minMatches: runtimeSignal.minMatches,
+        message: `Runtime signal "${runtimeSignal.name}" expected at least ${runtimeSignal.minMatches} match(es), found ${runtimeSignal.matchCount}.`,
+      });
+    }
+
+    if (
+      runtimeSignal.maxMatches !== null &&
+      runtimeSignal.matchCount > runtimeSignal.maxMatches
+    ) {
+      diagnostics.push({
+        type: "runtime-signal-above-maximum",
+        signalName: runtimeSignal.name,
+        observedMatches: runtimeSignal.matchCount,
+        maxMatches: runtimeSignal.maxMatches,
+        message: `Runtime signal "${runtimeSignal.name}" expected at most ${runtimeSignal.maxMatches} match(es), found ${runtimeSignal.matchCount}.`,
+      });
+    }
+  }
+
+  return diagnostics;
+}
+
+function collectLatencyDiagnostics(
+  thresholds: HarnessBehaviorLatencyThresholds | undefined,
+  phaseDurations: Partial<Record<HarnessBehaviorPhase, number>>,
+  totalDurationMs: number
+) {
+  if (!thresholds) {
+    return [] satisfies HarnessBehaviorAssertionDiagnostic[];
+  }
+
+  const diagnostics: HarnessBehaviorAssertionDiagnostic[] = [];
+  if (thresholds.maxTotalDurationMs !== undefined) {
+    if (totalDurationMs > thresholds.maxTotalDurationMs) {
+      diagnostics.push({
+        type: "latency-total-threshold-breached",
+        observedDurationMs: totalDurationMs,
+        maxDurationMs: thresholds.maxTotalDurationMs,
+        message: `Total scenario duration ${totalDurationMs}ms exceeded threshold ${thresholds.maxTotalDurationMs}ms.`,
+      });
+    }
+  }
+
+  for (const [phaseName, maxDurationMs] of Object.entries(
+    thresholds.maxPhaseDurationMs ?? {}
+  )) {
+    if (maxDurationMs === undefined) {
+      continue;
+    }
+
+    const phase = phaseName as HarnessBehaviorPhase;
+    const observedDurationMs = phaseDurations[phase];
+    if (observedDurationMs === undefined) {
+      continue;
+    }
+
+    if (observedDurationMs > maxDurationMs) {
+      diagnostics.push({
+        type: "latency-phase-threshold-breached",
+        phase,
+        observedDurationMs,
+        maxDurationMs,
+        message: `Phase "${phase}" duration ${observedDurationMs}ms exceeded threshold ${maxDurationMs}ms.`,
+      });
+    }
+  }
+
+  return diagnostics;
+}
+
+function formatAssertionDiagnostics(
+  diagnostics: HarnessBehaviorAssertionDiagnostic[]
+) {
+  return diagnostics.map((diagnostic) => diagnostic.message).join(" ");
 }
 
 type HarnessBehaviorPlaywrightBrowser = {
@@ -801,16 +965,32 @@ function wrapPhaseError(
   return new HarnessBehaviorPhaseError(phase, formatError(error), error);
 }
 
+async function runPhaseWithDuration<T>(
+  phase: HarnessBehaviorPhase,
+  phaseDurations: Partial<Record<HarnessBehaviorPhase, number>>,
+  action: () => Promise<T>
+) {
+  const startedAt = Date.now();
+  try {
+    return await action();
+  } finally {
+    phaseDurations[phase] = Date.now() - startedAt;
+  }
+}
+
 export async function runHarnessBehaviorScenario<TBrowserResult>(
   rootDir: string,
   scenario: HarnessBehaviorScenario<TBrowserResult>,
   options: RunHarnessBehaviorOptions = {}
 ) {
+  const scenarioStartedAt = Date.now();
   const logger = options.logger ?? console;
   const fetchImpl = options.fetchImpl ?? fetch;
   const sleepImpl = options.sleep ?? sleep;
   const runPlaywrightImpl = options.runPlaywrightFlow ?? runPlaywrightFlow;
   const runningProcesses = new Map<string, RunningProcess>();
+  const phaseDurations: Partial<Record<HarnessBehaviorPhase, number>> = {};
+  const assertionDiagnostics: HarnessBehaviorAssertionDiagnostic[] = [];
   let browserResult: TBrowserResult | undefined;
   let runtimeSignals: Record<string, HarnessBehaviorRuntimeSignalResult> = {};
   let pendingError: HarnessBehaviorPhaseError | null = null;
@@ -837,103 +1017,123 @@ export async function runHarnessBehaviorScenario<TBrowserResult>(
     logger.log(`[harness:behavior] ${scenario.description}`);
   }
 
+  const runPhase = <T>(
+    phase: HarnessBehaviorPhase,
+    action: () => Promise<T>
+  ) => {
+    currentPhase = phase;
+    return runPhaseWithDuration(phase, phaseDurations, action);
+  };
+
   try {
-    currentPhase = "boot";
-    logPhase(logger, "boot", "booting scenario processes");
-    for (const processDefinition of scenario.processes) {
-      const runningProcess = await startProcess(rootDir, processDefinition, logger);
-      runningProcesses.set(processDefinition.id, runningProcess);
-    }
-
-    currentPhase = "readiness";
-    logPhase(logger, "readiness", "running readiness checks");
-    for (const check of scenario.readiness) {
-      if (check.kind === "http") {
-        logPhase(
-          logger,
-          "readiness",
-          `check "${check.name}" -> ${check.url} (expect ${check.expectedStatus ?? 200})`
-        );
-        await runHttpReadinessCheck(check, fetchImpl, sleepImpl);
-        continue;
+    await runPhase("boot", async () => {
+      logPhase(logger, "boot", "booting scenario processes");
+      for (const processDefinition of scenario.processes) {
+        const runningProcess = await startProcess(rootDir, processDefinition, logger);
+        runningProcesses.set(processDefinition.id, runningProcess);
       }
-
-      if (check.kind === "log") {
-        const processHandle = processHandles()[check.processId];
-        if (!processHandle) {
-          throw new Error(
-            `Readiness check "${check.name}" references unknown process "${check.processId}".`
-          );
-        }
-        logPhase(
-          logger,
-          "readiness",
-          `check "${check.name}" waiting for ${check.processId} output`
-        );
-        await processHandle.waitForOutput(check.pattern, {
-          source: check.source ?? "combined",
-          timeoutMs: check.timeoutMs ?? DEFAULT_READY_TIMEOUT_MS,
-        });
-        continue;
-      }
-
-      logPhase(logger, "readiness", `check "${check.name}" (custom)`);
-      await check.check(baseContext());
-    }
-
-    currentPhase = "browser";
-    logPhase(logger, "browser", "running browser flow");
-    browserResult = await scenario.browser({
-      ...baseContext(),
-      runPlaywrightFlow: runPlaywrightImpl,
     });
 
-    currentPhase = "runtime";
-    logPhase(logger, "runtime", "collecting runtime signals");
-    runtimeSignals = collectRuntimeSignalMatches(
-      scenario.runtimeSignals ?? [],
-      processHandles()
-    );
+    await runPhase("readiness", async () => {
+      logPhase(logger, "readiness", "running readiness checks");
+      for (const check of scenario.readiness) {
+        if (check.kind === "http") {
+          logPhase(
+            logger,
+            "readiness",
+            `check "${check.name}" -> ${check.url} (expect ${check.expectedStatus ?? 200})`
+          );
+          await runHttpReadinessCheck(check, fetchImpl, sleepImpl);
+          continue;
+        }
 
-    for (const runtimeSignal of Object.values(runtimeSignals)) {
-      logPhase(
-        logger,
-        "runtime",
-        `${runtimeSignal.name}: matched ${runtimeSignal.matchCount} line(s)`
+        if (check.kind === "log") {
+          const processHandle = processHandles()[check.processId];
+          if (!processHandle) {
+            throw new Error(
+              `Readiness check "${check.name}" references unknown process "${check.processId}".`
+            );
+          }
+          logPhase(
+            logger,
+            "readiness",
+            `check "${check.name}" waiting for ${check.processId} output`
+          );
+          await processHandle.waitForOutput(check.pattern, {
+            source: check.source ?? "combined",
+            timeoutMs: check.timeoutMs ?? DEFAULT_READY_TIMEOUT_MS,
+          });
+          continue;
+        }
+
+        logPhase(logger, "readiness", `check "${check.name}" (custom)`);
+        await check.check(baseContext());
+      }
+    });
+
+    browserResult = await runPhase("browser", async () => {
+      logPhase(logger, "browser", "running browser flow");
+      return scenario.browser({
+        ...baseContext(),
+        runPlaywrightFlow: runPlaywrightImpl,
+      });
+    });
+
+    runtimeSignals = await runPhase("runtime", async () => {
+      logPhase(logger, "runtime", "collecting runtime signals");
+      const collectedSignals = collectRuntimeSignalMatches(
+        scenario.runtimeSignals ?? [],
+        processHandles()
       );
-    }
 
-    currentPhase = "assertion";
-    logPhase(logger, "assertion", "running scenario assertions");
-    await scenario.assert({
-      ...baseContext(),
-      browserResult: browserResult as TBrowserResult,
-      runtimeSignals,
+      for (const runtimeSignal of Object.values(collectedSignals)) {
+        const maxMatchesSuffix =
+          runtimeSignal.maxMatches === null
+            ? ""
+            : `, max ${runtimeSignal.maxMatches}`;
+        logPhase(
+          logger,
+          "runtime",
+          `${runtimeSignal.name}: matched ${runtimeSignal.matchCount} line(s) [min ${runtimeSignal.minMatches}${maxMatchesSuffix}]`
+        );
+      }
+
+      return collectedSignals;
+    });
+
+    await runPhase("assertion", async () => {
+      logPhase(logger, "assertion", "running scenario assertions");
+      await scenario.assert({
+        ...baseContext(),
+        browserResult: browserResult as TBrowserResult,
+        runtimeSignals,
+      });
     });
   } catch (error) {
     pendingError = wrapPhaseError(currentPhase, error);
   } finally {
     try {
-      currentPhase = "cleanup";
-      logPhase(logger, "cleanup", "tearing down scenario resources");
+      await runPhase("cleanup", async () => {
+        logPhase(logger, "cleanup", "tearing down scenario resources");
 
-      if (scenario.cleanup && browserResult !== undefined) {
-        await scenario.cleanup({
-          ...baseContext(),
-          browserResult,
-          runtimeSignals,
-        });
-      } else if (scenario.cleanup) {
-        await scenario.cleanup({
-          ...baseContext(),
-          browserResult: undefined as TBrowserResult,
-          runtimeSignals,
-        });
-      }
+        if (scenario.cleanup && browserResult !== undefined) {
+          await scenario.cleanup({
+            ...baseContext(),
+            browserResult,
+            runtimeSignals,
+          });
+        } else if (scenario.cleanup) {
+          await scenario.cleanup({
+            ...baseContext(),
+            browserResult: undefined as TBrowserResult,
+            runtimeSignals,
+          });
+        }
 
-      for (const runningProcess of [...runningProcesses.values()].reverse()) {
-        await runningProcess.stop();
-      }
+        for (const runningProcess of [...runningProcesses.values()].reverse()) {
+          await runningProcess.stop();
+        }
+      });
     } catch (cleanupError) {
       const wrappedCleanupError = wrapPhaseError("cleanup", cleanupError);
       if (pendingError) {
@@ -946,11 +1146,70 @@ export async function runHarnessBehaviorScenario<TBrowserResult>(
     }
   }
 
+  assertionDiagnostics.push(...collectRuntimeSignalDiagnostics(runtimeSignals));
+
+  const totalDurationMs = Date.now() - scenarioStartedAt;
+  assertionDiagnostics.push(
+    ...collectLatencyDiagnostics(
+      scenario.thresholds?.latency,
+      phaseDurations,
+      totalDurationMs
+    )
+  );
+
+  if (!pendingError && assertionDiagnostics.length > 0) {
+    pendingError = new HarnessBehaviorPhaseError(
+      "assertion",
+      formatAssertionDiagnostics(assertionDiagnostics)
+    );
+  }
+
+  const orderedPhases: HarnessBehaviorPhase[] = [
+    "boot",
+    "readiness",
+    "browser",
+    "runtime",
+    "assertion",
+    "cleanup",
+  ];
+  const report: HarnessBehaviorScenarioReport = {
+    scenarioName: scenario.name,
+    status: pendingError ? "failed" : "passed",
+    totalDurationMs,
+    phaseDurations: orderedPhases
+      .filter((phase) => phaseDurations[phase] !== undefined)
+      .map((phase) => ({
+        phase,
+        durationMs: phaseDurations[phase] as number,
+      })),
+    runtimeSignals: Object.values(runtimeSignals).map((runtimeSignal) => ({
+      name: runtimeSignal.name,
+      processId: runtimeSignal.processId,
+      source: runtimeSignal.source,
+      pattern: runtimeSignal.pattern.source,
+      minMatches: runtimeSignal.minMatches,
+      maxMatches: runtimeSignal.maxMatches,
+      matchCount: runtimeSignal.matchCount,
+      sampleMatches: runtimeSignal.matchedLines.slice(0, 5),
+    })),
+    diagnostics: assertionDiagnostics,
+    failure: pendingError
+      ? {
+          phase: pendingError.phase,
+          details: pendingError.details,
+        }
+      : undefined,
+  };
+
+  logger.log(`[harness:behavior:report] ${JSON.stringify(report)}`);
+
   if (pendingError) {
+    pendingError.report = report;
     throw pendingError;
   }
 
   logger.log(`[harness:behavior] Scenario ${scenario.name} passed.`);
+  return report;
 }
 
 export function parseHarnessBehaviorArgs(

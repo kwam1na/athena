@@ -33,5 +33,20 @@ describe("HARNESS_BEHAVIOR_SCENARIOS", () => {
     expect(recoveryScenario?.runtimeSignals?.map((signal) => signal.name)).toContain(
       "storefront-payment-verification-requested"
     );
+    expect(
+      bootstrapScenario?.runtimeSignals?.find(
+        (signal) => signal.name === "storefront-runtime-api-errors"
+      )
+    ).toMatchObject({
+      minMatches: 0,
+      maxMatches: 0,
+    });
+  });
+
+  it("applies latency thresholds to every registered scenario", () => {
+    for (const scenario of HARNESS_BEHAVIOR_SCENARIOS) {
+      expect(scenario.thresholds?.latency?.maxTotalDurationMs).toBeDefined();
+      expect(scenario.thresholds?.latency?.maxPhaseDurationMs).toBeDefined();
+    }
   });
 });

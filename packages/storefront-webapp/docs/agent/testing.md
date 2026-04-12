@@ -8,6 +8,8 @@ Use the repo-root harness commands together:
 - `bun run harness:behavior --scenario <name>` runs shared runtime behavior scenarios that boot app processes, wait for readiness, drive browser interactions, assert runtime signals, and clean up automatically.
 - `bun run harness:behavior --scenario <name> --record-video` captures browser-flow evidence for handoff under `artifacts/harness-behavior/videos/<scenario>/<run-stamp>/`.
 
+Behavior runs emit `[harness:behavior:report]` JSON with per-phase latency and runtime-signal diagnostics. Thresholds are configured per scenario through `runtimeSignals[].minMatches` / `runtimeSignals[].maxMatches` and `thresholds.latency` in [scripts/harness-behavior-scenarios.ts](../../../../scripts/harness-behavior-scenarios.ts).
+
 - [Test index](./test-index.md)
 - [Validation guide](./validation-guide.md)
 
