@@ -14,29 +14,27 @@ const REVIEW_TARGETS = [
   },
 ] as const;
 
-type ValidationRule = {
-  pathPrefix: string;
-  scripts: string[];
-};
+type ValidationCommand =
+  | { kind: "script"; script: string }
+  | { kind: "raw"; command: string };
 
 type ValidationSurface = {
   name: string;
   pathPrefixes: string[];
-  scripts: string[];
+  commands: ValidationCommand[];
 };
 
 type ValidationMap = {
   workspace: string;
   packageDir: string;
-  rules: ValidationRule[];
-  surfaces?: ValidationSurface[];
+  surfaces: ValidationSurface[];
 };
 
 type LoadedReviewTarget = {
   packageDir: string;
   validationMapPath: string;
   workspace: string;
-  rules: ValidationRule[];
+  surfaces: ValidationSurface[];
 };
 
 type HarnessReviewLogger = Pick<Console, "log" | "error">;
@@ -46,6 +44,7 @@ type HarnessReviewOptions = {
   logger?: HarnessReviewLogger;
   runHarnessCheck?: (rootDir: string) => Promise<void>;
   runPackageScript?: (workspace: string, script: string) => Promise<void>;
+  runRawCommand?: (command: string) => Promise<void>;
 };
 
 function normalizeRepoPath(repoPath: string) {
@@ -66,6 +65,14 @@ function matchesPathPrefix(filePath: string, pathPrefix: string) {
   );
 }
 
+function normalizeValidationCommand(
+  command: ValidationCommand
+): ValidationCommand {
+  return command.kind === "raw"
+    ? { kind: "raw", command: command.command.trim() }
+    : { kind: "script", script: command.script };
+}
+
 async function fileExists(filePath: string) {
   try {
     await access(filePath);
@@ -77,19 +84,6 @@ async function fileExists(filePath: string) {
 
 async function readJsonFile<T>(filePath: string) {
   return JSON.parse(await readFile(filePath, "utf8")) as T;
-}
-
-function toValidationRules(validationMap: ValidationMap) {
-  if (validationMap.surfaces && validationMap.surfaces.length > 0) {
-    return validationMap.surfaces.flatMap((surface) =>
-      surface.pathPrefixes.map((pathPrefix) => ({
-        pathPrefix,
-        scripts: surface.scripts,
-      }))
-    );
-  }
-
-  return validationMap.rules;
 }
 
 async function loadReviewTarget(
@@ -135,19 +129,50 @@ async function loadReviewTarget(
     );
   }
 
-  const validationRules = toValidationRules(validationMap);
+  const surfaces = Array.isArray(validationMap.surfaces)
+    ? validationMap.surfaces
+    : [];
 
-  for (const rule of validationRules) {
-    if (!(await fileExists(path.join(rootDir, rule.pathPrefix)))) {
+  if (surfaces.length === 0) {
+    throw new Error(
+      `Stale harness review config: ${validationMapPath} must define at least one validation surface.`
+    );
+  }
+
+  for (const surface of surfaces) {
+    if (!Array.isArray(surface.pathPrefixes) || surface.pathPrefixes.length === 0) {
       throw new Error(
-        `Stale harness review config: ${validationMapPath} references missing path prefix "${rule.pathPrefix}".`
+        `Stale harness review config: ${validationMapPath} includes an empty path prefix list for "${surface.name}".`
       );
     }
 
-    for (const script of rule.scripts) {
-      if (!packageJson.scripts?.[script]) {
+    if (!Array.isArray(surface.commands)) {
+      throw new Error(
+        `Stale harness review config: ${validationMapPath} is missing commands for "${surface.name}".`
+      );
+    }
+
+    for (const pathPrefix of surface.pathPrefixes) {
+      if (!(await fileExists(path.join(rootDir, pathPrefix)))) {
         throw new Error(
-          `Stale harness review config: ${validationMapPath} references missing script "${validationMap.workspace}:${script}".`
+          `Stale harness review config: ${validationMapPath} references missing path prefix "${pathPrefix}".`
+        );
+      }
+    }
+
+    for (const command of surface.commands.map(normalizeValidationCommand)) {
+      if (command.kind === "script") {
+        if (!packageJson.scripts?.[command.script]) {
+          throw new Error(
+            `Stale harness review config: ${validationMapPath} references missing script "${validationMap.workspace}:${command.script}".`
+          );
+        }
+        continue;
+      }
+
+      if (!command.command) {
+        throw new Error(
+          `Stale harness review config: ${validationMapPath} includes an empty raw command for "${surface.name}".`
         );
       }
     }
@@ -157,9 +182,10 @@ async function loadReviewTarget(
     packageDir: normalizeRepoPath(validationMap.packageDir),
     validationMapPath,
     workspace: validationMap.workspace,
-    rules: validationRules.map((rule) => ({
-      pathPrefix: normalizeRepoPath(rule.pathPrefix),
-      scripts: rule.scripts,
+    surfaces: surfaces.map((surface) => ({
+      name: surface.name,
+      pathPrefixes: surface.pathPrefixes.map(normalizeRepoPath),
+      commands: surface.commands.map(normalizeValidationCommand),
     })),
   } satisfies LoadedReviewTarget;
 }
@@ -180,12 +206,15 @@ async function loadReviewTargets(rootDir: string) {
   return targets;
 }
 
-function collectScriptsForChangedFiles(
+function collectCommandsForChangedFiles(
   changedFiles: string[],
   targets: LoadedReviewTarget[]
 ) {
   const normalizedChangedFiles = changedFiles.map(normalizeRepoPath);
-  const selectedScripts: Array<{ workspace: string; script: string }> = [];
+  const selectedCommands: Array<
+    | { kind: "script"; workspace: string; script: string }
+    | { kind: "raw"; command: string }
+  > = [];
   const uncoveredFiles: string[] = [];
   const targetFiles = normalizedChangedFiles.filter((filePath) =>
     targets.some((target) => matchesPathPrefix(filePath, `${target.packageDir}/`))
@@ -200,36 +229,51 @@ function collectScriptsForChangedFiles(
       continue;
     }
 
-    const seenScripts = new Set<string>();
+    const seenCommands = new Set<string>();
 
     for (const changedFile of targetChangedFiles) {
-      const matchingRules = target.rules.filter((rule) =>
-        matchesPathPrefix(changedFile, rule.pathPrefix)
+      const matchingSurfaces = target.surfaces.filter((surface) =>
+        surface.pathPrefixes.some((pathPrefix) =>
+          matchesPathPrefix(changedFile, pathPrefix)
+        )
       );
 
-      if (matchingRules.length === 0) {
+      if (matchingSurfaces.length === 0) {
         uncoveredFiles.push(changedFile);
         continue;
       }
 
-      for (const rule of matchingRules) {
-        for (const script of rule.scripts) {
-          if (seenScripts.has(script)) {
+      for (const surface of matchingSurfaces) {
+        for (const command of surface.commands) {
+          const commandKey =
+            command.kind === "script"
+              ? `${target.workspace}:${command.script}`
+              : `raw:${command.command}`;
+
+          if (seenCommands.has(commandKey)) {
             continue;
           }
 
-          selectedScripts.push({
-            workspace: target.workspace,
-            script,
-          });
-          seenScripts.add(script);
+          if (command.kind === "script") {
+            selectedCommands.push({
+              kind: "script",
+              workspace: target.workspace,
+              script: command.script,
+            });
+          } else {
+            selectedCommands.push({
+              kind: "raw",
+              command: command.command,
+            });
+          }
+          seenCommands.add(commandKey);
         }
       }
     }
   }
 
   return {
-    selectedScripts,
+    selectedCommands,
     uncoveredFiles,
     targetFiles,
   };
@@ -287,6 +331,19 @@ async function runPackageScript(rootDir: string, workspace: string, script: stri
   }
 }
 
+async function runRawCommand(rootDir: string, command: string) {
+  const subprocess = Bun.spawn(["/bin/zsh", "-lc", command], {
+    cwd: rootDir,
+    stdout: "inherit",
+    stderr: "inherit",
+  });
+  const exitCode = await subprocess.exited;
+
+  if (exitCode !== 0) {
+    throw new Error(`Command failed (${exitCode}): ${command}`);
+  }
+}
+
 export async function runHarnessReview(
   rootDir: string,
   options: HarnessReviewOptions = {}
@@ -299,8 +356,8 @@ export async function runHarnessReview(
   await runCheck(rootDir);
 
   const reviewTargets = await loadReviewTargets(rootDir);
-  const { selectedScripts, uncoveredFiles, targetFiles } =
-    collectScriptsForChangedFiles(changedFiles, reviewTargets);
+  const { selectedCommands, uncoveredFiles, targetFiles } =
+    collectCommandsForChangedFiles(changedFiles, reviewTargets);
 
   if (uncoveredFiles.length > 0) {
     throw new Error(
@@ -320,10 +377,20 @@ export async function runHarnessReview(
     return;
   }
 
-  for (const { workspace, script } of selectedScripts) {
-    logger.log(`Running ${workspace}:${script}`);
-    await (options.runPackageScript ?? ((nextWorkspace, nextScript) =>
-      runPackageScript(rootDir, nextWorkspace, nextScript)))(workspace, script);
+  for (const command of selectedCommands) {
+    if (command.kind === "script") {
+      logger.log(`Running ${command.workspace}:${command.script}`);
+      await (options.runPackageScript ?? ((nextWorkspace, nextScript) =>
+        runPackageScript(rootDir, nextWorkspace, nextScript)))(
+        command.workspace,
+        command.script
+      );
+      continue;
+    }
+
+    logger.log(`Running raw command: ${command.command}`);
+    await (options.runRawCommand ?? ((nextCommand) =>
+      runRawCommand(rootDir, nextCommand)))(command.command);
   }
 }
 

@@ -375,4 +375,36 @@ describe("validateHarnessDocs", () => {
       "Stale generated harness doc: packages/storefront-webapp/docs/agent/route-index.md"
     );
   });
+
+  it("treats validation-map.json as a generated harness artifact", async () => {
+    const rootDir = await createFixtureRepo();
+
+    await expect(validateHarnessDocs(rootDir)).resolves.not.toContain(
+      "Missing required harness file: packages/athena-webapp/docs/agent/validation-map.json"
+    );
+    await expect(validateHarnessDocs(rootDir)).resolves.not.toContain(
+      "Missing required harness file: packages/storefront-webapp/docs/agent/validation-map.json"
+    );
+  });
+
+  it("reports stale generated validation maps when the shared config changes", async () => {
+    const rootDir = await createFixtureRepo();
+    await write(
+      "packages/athena-webapp/docs/agent/validation-map.json",
+      JSON.stringify(
+        {
+          workspace: "@athena/webapp",
+          packageDir: "packages/athena-webapp",
+          surfaces: [],
+        },
+        null,
+        2
+      ),
+      rootDir
+    );
+
+    await expect(validateHarnessDocs(rootDir)).resolves.toContain(
+      "Stale generated harness doc: packages/athena-webapp/docs/agent/validation-map.json"
+    );
+  });
 });

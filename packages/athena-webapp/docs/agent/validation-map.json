@@ -3,84 +3,106 @@
   "packageDir": "packages/athena-webapp",
   "surfaces": [
     {
-      "name": "runtime-routes",
+      "name": "route-or-ui-only-edits",
       "pathPrefixes": [
-        "packages/athena-webapp/src/assets/",
+        "packages/athena-webapp/src/assets",
         "packages/athena-webapp/src/config.ts",
-        "packages/athena-webapp/src/index.css",
+        "packages/athena-webapp/src/routes",
+        "packages/athena-webapp/src/components",
+        "packages/athena-webapp/src/hooks",
+        "packages/athena-webapp/src/contexts",
+        "packages/athena-webapp/src/index.css"
+      ],
+      "commands": [
+        {
+          "kind": "script",
+          "script": "test"
+        },
+        {
+          "kind": "script",
+          "script": "lint:architecture"
+        }
+      ]
+    },
+    {
+      "name": "shared-lib-or-utility-edits",
+      "pathPrefixes": [
+        "packages/athena-webapp/src/lib",
+        "packages/athena-webapp/src/settings",
+        "packages/athena-webapp/src/utils",
+        "packages/athena-webapp/src/stores"
+      ],
+      "commands": [
+        {
+          "kind": "script",
+          "script": "test"
+        },
+        {
+          "kind": "raw",
+          "command": "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json"
+        }
+      ]
+    },
+    {
+      "name": "frontend-test-harness-edits",
+      "pathPrefixes": [
+        "packages/athena-webapp/src/test",
+        "packages/athena-webapp/src/tests"
+      ],
+      "commands": [
+        {
+          "kind": "script",
+          "script": "test"
+        }
+      ]
+    },
+    {
+      "name": "convex-or-backend-adjacent-edits",
+      "pathPrefixes": [
+        "packages/athena-webapp/convex",
+        "packages/athena-webapp/src/routes/_authed",
+        "packages/athena-webapp/src/main.tsx"
+      ],
+      "commands": [
+        {
+          "kind": "script",
+          "script": "test"
+        },
+        {
+          "kind": "script",
+          "script": "audit:convex"
+        },
+        {
+          "kind": "script",
+          "script": "lint:convex:changed"
+        }
+      ]
+    },
+    {
+      "name": "route-runtime-or-build-pipeline-edits",
+      "pathPrefixes": [
         "packages/athena-webapp/src/main.tsx",
         "packages/athena-webapp/src/routeTree.gen.ts",
-        "packages/athena-webapp/src/routes/"
+        "packages/athena-webapp/vite.config.ts"
       ],
-      "scripts": ["test"]
-    },
-    {
-      "name": "shared-frontend",
-      "pathPrefixes": [
-        "packages/athena-webapp/src/components/",
-        "packages/athena-webapp/src/contexts/",
-        "packages/athena-webapp/src/hooks/",
-        "packages/athena-webapp/src/lib/",
-        "packages/athena-webapp/src/settings/",
-        "packages/athena-webapp/src/stores/",
-        "packages/athena-webapp/src/utils/"
-      ],
-      "scripts": ["test"]
-    },
-    {
-      "name": "frontend-tests",
-      "pathPrefixes": [
-        "packages/athena-webapp/src/test/",
-        "packages/athena-webapp/src/tests/"
-      ],
-      "scripts": ["test"]
+      "commands": [
+        {
+          "kind": "raw",
+          "command": "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json"
+        },
+        {
+          "kind": "script",
+          "script": "build"
+        }
+      ]
     },
     {
       "name": "harness-docs",
       "pathPrefixes": [
         "packages/athena-webapp/AGENTS.md",
-        "packages/athena-webapp/docs/agent/"
+        "packages/athena-webapp/docs/agent"
       ],
-      "scripts": []
-    },
-    {
-      "name": "convex-runtime",
-      "pathPrefixes": [
-        "packages/athena-webapp/convex/app.ts",
-        "packages/athena-webapp/convex/auth.config.js",
-        "packages/athena-webapp/convex/auth.ts",
-        "packages/athena-webapp/convex/crons.ts",
-        "packages/athena-webapp/convex/env.ts",
-        "packages/athena-webapp/convex/http.ts",
-        "packages/athena-webapp/convex/schema.ts",
-        "packages/athena-webapp/convex/tsconfig.json",
-        "packages/athena-webapp/convex/utils.ts"
-      ],
-      "scripts": ["audit:convex", "lint:convex:changed", "test"]
-    },
-    {
-      "name": "convex-domains",
-      "pathPrefixes": [
-        "packages/athena-webapp/convex/cache/",
-        "packages/athena-webapp/convex/cloudflare/",
-        "packages/athena-webapp/convex/constants/",
-        "packages/athena-webapp/convex/emails/",
-        "packages/athena-webapp/convex/http/",
-        "packages/athena-webapp/convex/inventory/",
-        "packages/athena-webapp/convex/lib/",
-        "packages/athena-webapp/convex/llm/",
-        "packages/athena-webapp/convex/mailersend/",
-        "packages/athena-webapp/convex/migrations/",
-        "packages/athena-webapp/convex/mtn/",
-        "packages/athena-webapp/convex/otp/",
-        "packages/athena-webapp/convex/paystack/",
-        "packages/athena-webapp/convex/schemas/",
-        "packages/athena-webapp/convex/sendgrid/",
-        "packages/athena-webapp/convex/services/",
-        "packages/athena-webapp/convex/storeFront/",
-        "packages/athena-webapp/convex/types/"
-      ],
-      "scripts": ["audit:convex", "lint:convex:changed", "test"]
+      "commands": []
     }
   ]
 }

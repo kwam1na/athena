@@ -75,10 +75,15 @@ async function createFixtureRepo() {
       {
         workspace: "@athena/webapp",
         packageDir: "packages/athena-webapp",
-        rules: [
+        surfaces: [
           {
-            pathPrefix: "packages/athena-webapp/",
-            scripts: ["audit:convex", "lint:convex:changed", "test"],
+            name: "athena-package",
+            pathPrefixes: ["packages/athena-webapp"],
+            commands: [
+              { kind: "script", script: "audit:convex" },
+              { kind: "script", script: "lint:convex:changed" },
+              { kind: "script", script: "test" },
+            ],
           },
         ],
       },
@@ -93,10 +98,11 @@ async function createFixtureRepo() {
       {
         workspace: "@athena/storefront-webapp",
         packageDir: "packages/storefront-webapp",
-        rules: [
+        surfaces: [
           {
-            pathPrefix: "packages/storefront-webapp/",
-            scripts: ["test"],
+            name: "storefront-package",
+            pathPrefixes: ["packages/storefront-webapp"],
+            commands: [{ kind: "script", script: "test" }],
           },
         ],
       },
@@ -218,10 +224,11 @@ describe("runHarnessReview", () => {
         {
           workspace: "@athena/webapp",
           packageDir: "packages/athena-webapp",
-          rules: [
+          surfaces: [
             {
-              pathPrefix: "packages/athena-webapp/",
-              scripts: ["missing-script"],
+              name: "athena-package",
+              pathPrefixes: ["packages/athena-webapp"],
+              commands: [{ kind: "script", script: "missing-script" }],
             },
           ],
         },
@@ -254,10 +261,15 @@ describe("runHarnessReview", () => {
         {
           workspace: "@athena/webapp",
           packageDir: "packages/athena-webapp",
-          rules: [
+          surfaces: [
             {
-              pathPrefix: "packages/athena-webapp/convex/",
-              scripts: ["audit:convex", "lint:convex:changed", "test"],
+              name: "convex-only",
+              pathPrefixes: ["packages/athena-webapp/convex"],
+              commands: [
+                { kind: "script", script: "audit:convex" },
+                { kind: "script", script: "lint:convex:changed" },
+                { kind: "script", script: "test" },
+              ],
             },
           ],
         },
@@ -307,5 +319,79 @@ describe("runHarnessReview", () => {
     expect(logs).toContain(
       "No target-app validations selected; no touched files under packages/athena-webapp or packages/storefront-webapp."
     );
+  });
+
+  it("runs command-based validation surfaces including raw repo-root commands", async () => {
+    const rootDir = await createFixtureRepo();
+    const steps: string[] = [];
+
+    await write(
+      "packages/athena-webapp/package.json",
+      JSON.stringify(
+        {
+          name: "@athena/webapp",
+          scripts: {
+            test: "echo test",
+          },
+        },
+        null,
+        2
+      ),
+      rootDir
+    );
+    await write(
+      "packages/athena-webapp/docs/agent/validation-map.json",
+      JSON.stringify(
+        {
+          workspace: "@athena/webapp",
+          packageDir: "packages/athena-webapp",
+          surfaces: [
+            {
+              name: "shared-lib-or-utility-edits",
+              pathPrefixes: ["packages/athena-webapp/src/lib"],
+              commands: [
+                { kind: "script", script: "test" },
+                {
+                  kind: "raw",
+                  command:
+                    "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json",
+                },
+              ],
+            },
+          ],
+        },
+        null,
+        2
+      ),
+      rootDir
+    );
+    await write(
+      "packages/athena-webapp/src/lib/session.ts",
+      "export const session = true;\n",
+      rootDir
+    );
+
+    await runHarnessReview(rootDir, {
+      getChangedFiles: async () => ["packages/athena-webapp/src/lib/session.ts"],
+      runHarnessCheck: async () => {
+        steps.push("harness:check");
+      },
+      runPackageScript: async (workspace, script) => {
+        steps.push(`${workspace}:${script}`);
+      },
+      runRawCommand: async (command) => {
+        steps.push(`raw:${command}`);
+      },
+      logger: {
+        log() {},
+        error() {},
+      },
+    });
+
+    expect(steps).toEqual([
+      "harness:check",
+      "@athena/webapp:test",
+      "raw:bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json",
+    ]);
   });
 });
