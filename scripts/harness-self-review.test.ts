@@ -267,4 +267,43 @@ describe("runHarnessSelfReview", () => {
     expect(result.markdown).toContain("Storefront Webapp");
     expect(result.markdown).toContain("Full browser journeys and payment redirects");
   });
+
+  it("ignores worktree metadata changes when evaluating graphify freshness", async () => {
+    const rootDir = await createFixtureRepo();
+
+    const result = await runHarnessSelfReview(rootDir, {
+      baseRef: "origin/main",
+      getChangedFiles: async () => ({
+        baseFiles: [".worktrees/codex-v26-208/.git"],
+        trackedFiles: [],
+        untrackedFiles: [],
+      }),
+      runHarnessCheck: async () => {},
+    });
+
+    expect(result.warnings).toEqual([]);
+    expect(result.markdown).toContain("status: n/a");
+    expect(result.markdown).toContain(
+      "No code-or-config changes detected outside Graphify artifacts."
+    );
+  });
+
+  it("keeps stale graphify warnings for real code/config changes", async () => {
+    const rootDir = await createFixtureRepo();
+
+    const result = await runHarnessSelfReview(rootDir, {
+      baseRef: "origin/main",
+      getChangedFiles: async () => ({
+        baseFiles: ["packages/athena-webapp/src/lib/session.ts"],
+        trackedFiles: [],
+        untrackedFiles: [],
+      }),
+      runHarnessCheck: async () => {},
+    });
+
+    expect(result.warnings).toContain(
+      "Graphify appears stale relative to current changed files. Run `bun run graphify:rebuild` before handoff."
+    );
+    expect(result.markdown).toContain("status: stale");
+  });
 });
