@@ -26,9 +26,23 @@ Bundled scenarios include:
 - `athena-admin-shell-boot`
 - `athena-convex-storefront-composition`
 - `athena-convex-storefront-failure-visibility`
+- `storefront-checkout-bootstrap`
+- `storefront-checkout-validation-blocker`
+- `storefront-checkout-verification-recovery`
 
 Add `--record-video` to persist browser-flow evidence under
 `artifacts/harness-behavior/videos/<scenario>/<run-stamp>/`.
+
+`harness:behavior` now emits a machine-parseable per-scenario report line:
+
+- `[harness:behavior:report] { ...json... }`
+
+Each report includes phase durations, runtime-signal summaries, and threshold diagnostics.
+Scenario thresholds are configured in `scripts/harness-behavior-scenarios.ts` via:
+
+- `runtimeSignals[].minMatches` / `runtimeSignals[].maxMatches`
+- `thresholds.latency.maxPhaseDurationMs`
+- `thresholds.latency.maxTotalDurationMs`
 
 ## Graphify
 

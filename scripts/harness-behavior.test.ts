@@ -60,7 +60,7 @@ describe("runHarnessBehaviorScenario", () => {
     const executionOrder: string[] = [];
     const logs: string[] = [];
 
-    await runHarnessBehaviorScenario(
+    const report = await runHarnessBehaviorScenario(
       rootDir,
       {
         name: "unit-happy-path",
@@ -131,6 +131,18 @@ describe("runHarnessBehaviorScenario", () => {
     expect(logs.some((line) => line.includes("[browser]"))).toBe(true);
     expect(logs.some((line) => line.includes("[runtime]"))).toBe(true);
     expect(logs.some((line) => line.includes("[assertion]"))).toBe(true);
+    expect(logs.some((line) => line.includes("[harness:behavior:report]"))).toBe(
+      true
+    );
+    expect(report.status).toBe("passed");
+    expect(report.diagnostics).toEqual([]);
+    expect(report.runtimeSignals).toEqual([
+      expect.objectContaining({
+        name: "heartbeat-signal",
+        minMatches: 1,
+        maxMatches: null,
+      }),
+    ]);
     expect(await readFile(stopFile, "utf8")).toBe("stopped");
   });
 
@@ -246,6 +258,117 @@ describe("runHarnessBehaviorScenario", () => {
     } satisfies Partial<HarnessBehaviorPhaseError>);
 
     expect(await readFile(stopFile, "utf8")).toBe("stopped");
+  });
+
+  it("fails deterministically when runtime signal max threshold is breached", async () => {
+    const rootDir = await createFixtureRoot("athena-harness-runtime-threshold-");
+    const stopFile = path.join(rootDir, "stop.log");
+    const appScriptPath = path.join(rootDir, "fixtures", "runtime-app.ts");
+
+    await write(
+      "fixtures/runtime-app.ts",
+      [
+        'console.log("APP_READY");',
+        'console.error("RUNTIME_ERROR:boom");',
+        "const stopFile = process.env.STOP_FILE;",
+        "setInterval(() => {}, 50);",
+        "process.on(\"SIGTERM\", async () => {",
+        "  if (stopFile) {",
+        '    await Bun.write(stopFile, "stopped");',
+        "  }",
+        "  process.exit(0);",
+        "});",
+      ].join("\n"),
+      rootDir
+    );
+
+    let thrown: HarnessBehaviorPhaseError | null = null;
+
+    await expect(
+      runHarnessBehaviorScenario(rootDir, {
+        name: "unit-runtime-threshold-failure",
+        processes: [
+          {
+            id: "runtime-app",
+            command: `bun ${appScriptPath}`,
+            env: {
+              STOP_FILE: stopFile,
+            },
+            readyPattern: "APP_READY",
+            readyTimeoutMs: 2_000,
+          },
+        ],
+        readiness: [],
+        browser: async () => ({ ok: true }),
+        runtimeSignals: [
+          {
+            name: "runtime-error-signal",
+            processId: "runtime-app",
+            source: "combined",
+            pattern: "RUNTIME_ERROR:",
+            minMatches: 0,
+            maxMatches: 0,
+          },
+        ],
+        assert: async () => {},
+      }).catch((error: unknown) => {
+        thrown = error as HarnessBehaviorPhaseError;
+        throw error;
+      })
+    ).rejects.toMatchObject({
+      phase: "assertion",
+    } satisfies Partial<HarnessBehaviorPhaseError>);
+
+    expect(thrown?.report?.status).toBe("failed");
+    expect(thrown?.report?.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "runtime-signal-above-maximum",
+          signalName: "runtime-error-signal",
+        }),
+      ])
+    );
+    expect(await readFile(stopFile, "utf8")).toBe("stopped");
+  });
+
+  it("fails deterministically when latency thresholds are exceeded", async () => {
+    await expect(
+      runHarnessBehaviorScenario("/tmp", {
+        name: "unit-latency-threshold-failure",
+        processes: [],
+        readiness: [],
+        browser: async () => {
+          await new Promise<void>((resolve) => {
+            setTimeout(resolve, 25);
+          });
+          return { ok: true };
+        },
+        runtimeSignals: [],
+        thresholds: {
+          latency: {
+            maxTotalDurationMs: 10,
+            maxPhaseDurationMs: {
+              browser: 10,
+            },
+          },
+        },
+        assert: async () => {},
+      })
+    ).rejects.toMatchObject({
+      phase: "assertion",
+      report: {
+        status: "failed",
+        diagnostics: expect.arrayContaining([
+          expect.objectContaining({
+            type: "latency-total-threshold-breached",
+          }),
+          expect.objectContaining({
+            type: "latency-phase-threshold-breached",
+            phase: "browser",
+          }),
+        ]),
+      },
+    });
   });
 });
 
