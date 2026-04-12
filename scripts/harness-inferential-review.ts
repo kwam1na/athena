@@ -89,6 +89,7 @@ type InferentialReviewOptions = {
     input: InferentialProviderInput
   ) => Promise<InferentialProviderResult>;
   semanticMode?: InferentialShadowMode;
+  persistHistory?: boolean;
   runSemanticAnalysis?: (
     input: InferentialProviderInput
   ) => Promise<InferentialSemanticAnalysisResult>;
@@ -936,6 +937,26 @@ async function writeMachineOutput(
   await writeFile(`${absoluteOutputPath}`, `${JSON.stringify(output, null, 2)}\n`);
 }
 
+function toHistoryFileStamp(generatedAt: string) {
+  return generatedAt.replaceAll(":", "-").replaceAll(".", "-");
+}
+
+async function writeHistorySnapshot(
+  rootDir: string,
+  machineOutputPath: string,
+  output: InferentialMachineOutput
+) {
+  const absoluteHistoryPath = path.join(
+    rootDir,
+    path.dirname(machineOutputPath),
+    "history",
+    `${toHistoryFileStamp(output.generatedAt)}.json`
+  );
+
+  await mkdir(path.dirname(absoluteHistoryPath), { recursive: true });
+  await writeFile(absoluteHistoryPath, `${JSON.stringify(output, null, 2)}\n`);
+}
+
 function createOutput(params: {
   status: InferentialStatus;
   summary: string;
@@ -1238,6 +1259,30 @@ export async function runHarnessInferentialReview(
       machine,
       machineOutputPath,
     };
+  }
+
+  if (options.persistHistory) {
+    try {
+      await writeHistorySnapshot(rootDir, machineOutputPath, machine);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      machine = createRuntimeFailure(
+        `Unable to write inferential history snapshot: ${message}`,
+        baseRef,
+        changedFiles,
+        targetFiles,
+        nowIso(),
+        reviewMode
+      );
+      const runtimeReport = buildHumanReport(machine);
+      await writeMachineOutput(rootDir, machineOutputPath, machine);
+      return {
+        exitCode: 1,
+        humanReport: runtimeReport,
+        machine,
+        machineOutputPath,
+      };
+    }
   }
 
   if (machine.status === "fail" || machine.status === "error") {

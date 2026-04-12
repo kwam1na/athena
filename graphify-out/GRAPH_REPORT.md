@@ -5,7 +5,7 @@
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 2779 nodes · 2313 edges · 1113 communities detected
+- 2787 nodes · 2333 edges · 1113 communities detected
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS
 - Token cost: 0 input · 0 output
 
@@ -1131,10 +1131,10 @@
 4. `DataTableColumnHeader()` - 14 edges
 5. `toV2Config()` - 13 edges
 6. `validateHarnessDocs()` - 13 edges
-7. `getBaseUrl()` - 12 edges
-8. `fileExists()` - 12 edges
-9. `runHarnessInferentialReview()` - 12 edges
-10. `OrdersTableToolbarProvider()` - 9 edges
+7. `runHarnessInferentialReview()` - 13 edges
+8. `getBaseUrl()` - 12 edges
+9. `fileExists()` - 12 edges
+10. `collectHarnessScorecard()` - 11 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `getAmountPaidForOrder()` --calls--> `getDiscountValue()`  [EXTRACTED]
@@ -1155,8 +1155,8 @@ Cohesion: 0.09
 Nodes (45): compactContext(), createAuthEntryViewedEvent(), createAuthRequestStartedEvent(), createAuthVerificationSucceededEvent(), createAuthVerificationViewedEvent(), createBagAddSucceededEvent(), createBagMoveToSavedEvent(), createBagRemoveSucceededEvent() (+37 more)
 
 ### Community 1 - "Community 1"
-Cohesion: 0.13
-Nodes (36): buildFinding(), buildHumanReport(), buildSemanticPrompt(), buildShadowSummary(), collectHarnessSafetySignalFindings(), collectHarnessScriptTestUpdateFindings(), createOutput(), createProviderFailure() (+28 more)
+Cohesion: 0.12
+Nodes (38): buildFinding(), buildHumanReport(), buildSemanticPrompt(), buildShadowSummary(), collectHarnessSafetySignalFindings(), collectHarnessScriptTestUpdateFindings(), createOutput(), createProviderFailure() (+30 more)
 
 ### Community 2 - "Community 2"
 Cohesion: 0.15
@@ -1175,16 +1175,16 @@ Cohesion: 0.13
 Nodes (22): asRegExp(), collectLatencyDiagnostics(), collectRuntimeSignalDiagnostics(), collectRuntimeSignalMatches(), consumeLines(), escapeRegExp(), formatAssertionDiagnostics(), formatError() (+14 more)
 
 ### Community 6 - "Community 6"
+Cohesion: 0.16
+Nodes (20): buildDocumentationStatus(), buildEmptyHistoryMetric(), buildGraphifyStatus(), buildSummary(), collectHarnessScorecard(), countMissingSnippets(), createFileSystem(), extractScenarioNames() (+12 more)
+
+### Community 7 - "Community 7"
 Cohesion: 0.15
 Nodes (19): appendListSection(), buildMarkdownBundle(), collectCoverage(), evaluateGraphifyFreshness(), fileExists(), formatValidationCommand(), getChangedFilesFromGit(), isLocalGeneratedArtifactPath() (+11 more)
 
-### Community 7 - "Community 7"
+### Community 8 - "Community 8"
 Cohesion: 0.27
 Nodes (20): asBoolean(), asMtnMomoSetupStatus(), asNumber(), asOptionalArray(), asRecord(), asString(), cleanUndefined(), firstDefined() (+12 more)
-
-### Community 8 - "Community 8"
-Cohesion: 0.18
-Nodes (16): buildDocumentationStatus(), buildGraphifyStatus(), buildSummary(), collectHarnessScorecard(), countMissingSnippets(), createFileSystem(), extractScenarioNames(), extractScenarioSection() (+8 more)
 
 ### Community 9 - "Community 9"
 Cohesion: 0.11
@@ -1219,16 +1219,16 @@ Cohesion: 0.2
 Nodes (9): collectCommandsForChangedFiles(), fileExists(), hasAnyHarnessDocs(), loadReviewTarget(), loadReviewTargets(), matchesPathPrefix(), normalizeBehaviorScenarioName(), normalizeRepoPath() (+1 more)
 
 ### Community 17 - "Community 17"
+Cohesion: 0.23
+Nodes (14): buildNumericTrendStats(), buildRegressionWarnings(), buildRuntimeTrendOutput(), buildScenarioTrend(), collectHarnessRuntimeTrends(), formatMs(), formatPercent(), parseHarnessBehaviorReportLines() (+6 more)
+
+### Community 18 - "Community 18"
 Cohesion: 0.13
 Nodes (1): DataTableColumnHeader()
 
-### Community 18 - "Community 18"
+### Community 19 - "Community 19"
 Cohesion: 0.28
 Nodes (12): addGroupedError(), collectLiveSurfaceEntries(), fileExists(), formatGroupedErrors(), hasAnyHarnessDocs(), inferGroupFromError(), loadAuditTarget(), matchesPathPrefix() (+4 more)
-
-### Community 19 - "Community 19"
-Cohesion: 0.24
-Nodes (13): buildNumericTrendStats(), buildRegressionWarnings(), buildRuntimeTrendOutput(), buildScenarioTrend(), collectHarnessRuntimeTrends(), formatMs(), formatPercent(), parseHarnessBehaviorReportLines() (+5 more)
 
 ### Community 20 - "Community 20"
 Cohesion: 0.18
@@ -1275,20 +1275,20 @@ Cohesion: 0.36
 Nodes (8): collectAllPages(), createTransactionFromSessionHandler(), listCompletedTransactionsForDay(), listProductSkusByProductId(), listSessionItems(), listStoreProducts(), listStoreSkus(), listTransactionItems()
 
 ### Community 31 - "Community 31"
-Cohesion: 0.31
-Nodes (5): formatDeliveryAddress(), getAmountPaidForOrder(), getDiscountValue(), getOrderAmount(), getPotentialPoints()
-
-### Community 32 - "Community 32"
 Cohesion: 0.29
 Nodes (6): handleFileSelect(), handleRevert(), handleUpload(), resetEditState(), uploadImage(), validateFile()
 
-### Community 33 - "Community 33"
+### Community 32 - "Community 32"
 Cohesion: 0.2
 Nodes (0):
 
-### Community 34 - "Community 34"
+### Community 33 - "Community 33"
 Cohesion: 0.38
 Nodes (9): awardPointsForGuestOrders(), awardPointsForPastOrder(), getBaseUrl(), getEligiblePastOrders(), getOrderRewardPoints(), getPointHistory(), getRewardTiers(), getUserPoints() (+1 more)
+
+### Community 34 - "Community 34"
+Cohesion: 0.31
+Nodes (5): formatDeliveryAddress(), getAmountPaidForOrder(), getDiscountValue(), getOrderAmount(), getPotentialPoints()
 
 ### Community 35 - "Community 35"
 Cohesion: 0.28
@@ -1427,16 +1427,16 @@ Cohesion: 0.33
 Nodes (0):
 
 ### Community 69 - "Community 69"
-Cohesion: 0.47
-Nodes (3): onDrop(), removeImage(), unmarkForDeletion()
-
-### Community 70 - "Community 70"
 Cohesion: 0.33
 Nodes (0):
 
-### Community 71 - "Community 71"
+### Community 70 - "Community 70"
 Cohesion: 0.4
 Nodes (2): useBulkOperations(), validateOperationValue()
+
+### Community 71 - "Community 71"
+Cohesion: 0.33
+Nodes (0):
 
 ### Community 72 - "Community 72"
 Cohesion: 0.33
@@ -1451,28 +1451,28 @@ Cohesion: 0.33
 Nodes (0):
 
 ### Community 75 - "Community 75"
-Cohesion: 0.33
-Nodes (0):
+Cohesion: 0.4
+Nodes (2): onSubmit(), saveStoreChanges()
 
 ### Community 76 - "Community 76"
 Cohesion: 0.4
 Nodes (2): onSubmit(), saveStoreChanges()
 
 ### Community 77 - "Community 77"
-Cohesion: 0.4
-Nodes (2): onSubmit(), saveStoreChanges()
-
-### Community 78 - "Community 78"
 Cohesion: 0.47
 Nodes (3): getBaseUrl(), getPromoCodes(), redeemPromoCode()
+
+### Community 78 - "Community 78"
+Cohesion: 0.33
+Nodes (0):
 
 ### Community 79 - "Community 79"
 Cohesion: 0.33
 Nodes (0):
 
 ### Community 80 - "Community 80"
-Cohesion: 0.33
-Nodes (0):
+Cohesion: 0.47
+Nodes (3): onDrop(), removeImage(), unmarkForDeletion()
 
 ### Community 81 - "Community 81"
 Cohesion: 0.53
@@ -7290,12 +7290,12 @@ _Questions this graph is uniquely positioned to answer:_
 - **Should `Community 0` be split into smaller, more focused modules?**
   _Cohesion score 0.09 - nodes in this community are weakly interconnected._
 - **Should `Community 1` be split into smaller, more focused modules?**
-  _Cohesion score 0.13 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.12 - nodes in this community are weakly interconnected._
 - **Should `Community 5` be split into smaller, more focused modules?**
   _Cohesion score 0.13 - nodes in this community are weakly interconnected._
 - **Should `Community 9` be split into smaller, more focused modules?**
   _Cohesion score 0.11 - nodes in this community are weakly interconnected._
 - **Should `Community 13` be split into smaller, more focused modules?**
   _Cohesion score 0.12 - nodes in this community are weakly interconnected._
-- **Should `Community 17` be split into smaller, more focused modules?**
+- **Should `Community 18` be split into smaller, more focused modules?**
   _Cohesion score 0.13 - nodes in this community are weakly interconnected._

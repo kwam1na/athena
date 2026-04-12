@@ -1,10 +1,27 @@
-import { describe, expect, it } from "vitest";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
 
-import { collectHarnessRuntimeTrends, parseHarnessBehaviorReportLines } from "./harness-runtime-trends";
+import {
+  collectHarnessRuntimeTrends,
+  parseHarnessBehaviorReportLines,
+  runHarnessRuntimeTrends,
+} from "./harness-runtime-trends";
+
+const tempRoots: string[] = [];
 
 function buildReportLine(report: Record<string, unknown>) {
   return `[harness:behavior:report] ${JSON.stringify(report)}`;
 }
+
+afterEach(async () => {
+  await Promise.all(
+    tempRoots.splice(0).map((rootDir) =>
+      rm(rootDir, { recursive: true, force: true })
+    )
+  );
+});
 
 describe("parseHarnessBehaviorReportLines", () => {
   it("extracts reports and keeps malformed report lines as parse errors", () => {
@@ -247,5 +264,51 @@ describe("collectHarnessRuntimeTrends", () => {
           'Scenario "sample-runtime-smoke" average total duration 2500ms exceeds the warning threshold 1500ms.',
       },
     ]);
+  });
+
+  it("writes latest and timestamped runtime-trend history snapshots when persistence is enabled", async () => {
+    const rootDir = await mkdtemp(
+      path.join(tmpdir(), "athena-harness-runtime-trends-")
+    );
+    tempRoots.push(rootDir);
+
+    const result = await runHarnessRuntimeTrends(
+      rootDir,
+      [
+        buildReportLine({
+          scenarioName: "sample-runtime-smoke",
+          status: "passed",
+          totalDurationMs: 1000,
+          phaseDurations: [{ phase: "boot", durationMs: 100 }],
+          runtimeSignals: [],
+          diagnostics: [],
+        }),
+      ],
+      {
+        nowIso: () => "2026-04-12T05:00:00.000Z",
+        persistHistory: true,
+      }
+    );
+
+    expect(result.outputPath).toBe("artifacts/harness-behavior/trends/latest.json");
+
+    const latest = JSON.parse(
+      await readFile(
+        path.join(rootDir, "artifacts/harness-behavior/trends/latest.json"),
+        "utf8"
+      )
+    ) as { summary: { reportCount: number } };
+    const historySnapshot = JSON.parse(
+      await readFile(
+        path.join(
+          rootDir,
+          "artifacts/harness-behavior/trends/history/2026-04-12T05-00-00-000Z.json"
+        ),
+        "utf8"
+      )
+    ) as { summary: { reportCount: number } };
+
+    expect(latest.summary.reportCount).toBe(1);
+    expect(historySnapshot.summary.reportCount).toBe(1);
   });
 });

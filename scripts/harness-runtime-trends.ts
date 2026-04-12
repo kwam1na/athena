@@ -99,12 +99,17 @@ type HarnessRuntimeTrendOptions = {
   nowIso?: () => string;
   thresholds?: HarnessRuntimeTrendThresholds;
   logger?: HarnessRuntimeTrendLogger;
+  persistHistory?: boolean;
 };
 
 type HarnessRuntimeTrendRunResult = {
   output: HarnessRuntimeTrendsOutput;
   outputPath: string;
 };
+
+function toHistoryFileStamp(generatedAt: string) {
+  return generatedAt.replaceAll(":", "-").replaceAll(".", "-");
+}
 
 function splitInputLines(source: string | readonly string[]) {
   return typeof source === "string"
@@ -478,6 +483,18 @@ export async function runHarnessRuntimeTrends(
   const absoluteOutputPath = path.join(rootDir, outputPath);
   await mkdir(path.dirname(absoluteOutputPath), { recursive: true });
   await writeFile(absoluteOutputPath, `${JSON.stringify(output, null, 2)}\n`);
+
+  if (options.persistHistory) {
+    const absoluteHistoryPath = path.join(
+      rootDir,
+      path.dirname(outputPath),
+      "history",
+      `${toHistoryFileStamp(output.generatedAt)}.json`
+    );
+    await mkdir(path.dirname(absoluteHistoryPath), { recursive: true });
+    await writeFile(absoluteHistoryPath, `${JSON.stringify(output, null, 2)}\n`);
+  }
+
   return {
     output,
     outputPath,
@@ -486,6 +503,6 @@ export async function runHarnessRuntimeTrends(
 
 if (import.meta.main) {
   const input = await new Response(Bun.stdin).text();
-  const result = collectHarnessRuntimeTrends(input);
-  console.log(JSON.stringify(result, null, 2));
+  const result = await runHarnessRuntimeTrends(process.cwd(), input);
+  console.log(JSON.stringify(result.output, null, 2));
 }
