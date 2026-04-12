@@ -298,7 +298,16 @@ describe("runHarnessBehaviorScenario", () => {
             readyTimeoutMs: 2_000,
           },
         ],
-        readiness: [],
+        readiness: [
+          {
+            name: "runtime-error-observed",
+            kind: "log",
+            processId: "runtime-app",
+            source: "combined",
+            pattern: "RUNTIME_ERROR:",
+            timeoutMs: 2_000,
+          },
+        ],
         browser: async () => ({ ok: true }),
         runtimeSignals: [
           {
