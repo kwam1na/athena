@@ -23,7 +23,8 @@
           "kind": "script",
           "script": "test"
         }
-      ]
+      ],
+      "behaviorScenarios": []
     },
     {
       "name": "shared-lib-utility-or-api-wrapper-edits",
@@ -41,7 +42,8 @@
           "kind": "raw",
           "command": "bunx tsc --noEmit -p packages/storefront-webapp/tsconfig.json"
         }
-      ]
+      ],
+      "behaviorScenarios": []
     },
     {
       "name": "checkout-or-auth-route-boundary-edits",
@@ -59,6 +61,9 @@
           "kind": "script",
           "script": "lint:architecture"
         }
+      ],
+      "behaviorScenarios": [
+        "storefront-checkout-bootstrap"
       ]
     },
     {
@@ -77,6 +82,11 @@
           "kind": "script",
           "script": "test:e2e"
         }
+      ],
+      "behaviorScenarios": [
+        "storefront-checkout-bootstrap",
+        "storefront-checkout-validation-blocker",
+        "storefront-checkout-verification-recovery"
       ]
     },
     {
@@ -85,7 +95,8 @@
         "packages/storefront-webapp/AGENTS.md",
         "packages/storefront-webapp/docs/agent"
       ],
-      "commands": []
+      "commands": [],
+      "behaviorScenarios": []
     }
   ]
 }

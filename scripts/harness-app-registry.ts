@@ -52,6 +52,7 @@ export type HarnessValidationScenario = {
   title: string;
   touchedPaths: string[];
   commands: ValidationCommand[];
+  behaviorScenarios?: string[];
   note: string;
 };
 
@@ -224,6 +225,10 @@ export const HARNESS_APP_REGISTRY = [
           { kind: "script", script: "audit:convex" },
           { kind: "script", script: "lint:convex:changed" },
         ],
+        behaviorScenarios: [
+          "athena-convex-storefront-composition",
+          "athena-convex-storefront-failure-visibility",
+        ],
         note: "Any change that can affect Convex HTTP wiring, schemas, queries, or route-to-backend composition should include the Convex audit pair.",
       },
       {
@@ -236,6 +241,7 @@ export const HARNESS_APP_REGISTRY = [
           },
           { kind: "script", script: "build" },
         ],
+        behaviorScenarios: ["athena-admin-shell-boot"],
         note: "Run these when bootstrap, generated router state, or package build configuration changes.",
       },
     ],
@@ -335,6 +341,7 @@ export const HARNESS_APP_REGISTRY = [
           { kind: "script", script: "test" },
           { kind: "script", script: "lint:architecture" },
         ],
+        behaviorScenarios: ["storefront-checkout-bootstrap"],
         note: "Use the scoped architecture lint when lower-level helpers could accidentally depend on checkout or auth route entrypoints.",
       },
       {
@@ -347,6 +354,11 @@ export const HARNESS_APP_REGISTRY = [
         commands: [
           { kind: "script", script: "test" },
           { kind: "script", script: "test:e2e" },
+        ],
+        behaviorScenarios: [
+          "storefront-checkout-bootstrap",
+          "storefront-checkout-validation-blocker",
+          "storefront-checkout-verification-recovery",
         ],
         note: "Run the Playwright layer when navigation, checkout, or redirect behavior could change the end-to-end customer path.",
       },
@@ -375,4 +387,3 @@ export const HARNESS_PACKAGE_REGISTRY = [
 export function getHarnessPackageRegistration(packageDir: string) {
   return HARNESS_PACKAGE_REGISTRY.find((entry) => entry.packageDir === packageDir);
 }
-

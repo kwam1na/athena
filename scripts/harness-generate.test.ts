@@ -106,6 +106,9 @@ describe("generateHarnessDocs", () => {
     expect(docs.get("packages/athena-webapp/docs/agent/validation-map.json")).toContain(
       "\"commands\""
     );
+    expect(docs.get("packages/athena-webapp/docs/agent/validation-map.json")).toContain(
+      "\"behaviorScenarios\""
+    );
     expect(docs.get("packages/storefront-webapp/docs/agent/validation-map.json")).toContain(
       "\"kind\": \"raw\""
     );
