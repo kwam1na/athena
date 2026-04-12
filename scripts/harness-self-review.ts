@@ -29,6 +29,7 @@ const WORKTREE_METADATA_PREFIXES = [
   "worktrees/",
   "packages/.claude/worktrees/",
 ] as const;
+const LOCAL_GENERATED_ARTIFACT_PREFIXES = ["artifacts/"] as const;
 
 type ValidationCommand =
   | { kind: "script"; script: string }
@@ -504,6 +505,15 @@ function isWorktreeMetadataPath(filePath: string) {
   );
 }
 
+function isLocalGeneratedArtifactPath(filePath: string) {
+  const normalizedPath = normalizeRepoPath(filePath);
+  return LOCAL_GENERATED_ARTIFACT_PREFIXES.some(
+    (pathPrefix) =>
+      normalizedPath === pathPrefix.slice(0, -1) ||
+      normalizedPath.startsWith(pathPrefix)
+  );
+}
+
 async function evaluateGraphifyFreshness(
   rootDir: string,
   changedFiles: string[]
@@ -537,13 +547,15 @@ async function evaluateGraphifyFreshness(
     (filePath) =>
       !filePath.startsWith("graphify-out/") &&
       !isWorktreeMetadataPath(filePath) &&
+      !isLocalGeneratedArtifactPath(filePath) &&
       isLikelyCodeOrConfig(filePath)
   );
 
   if (nonGraphifyCodeChanges.length === 0) {
     return {
       status: "n/a",
-      detail: "No code-or-config changes detected outside Graphify artifacts.",
+      detail:
+        "No source/config changes detected outside Graphify artifacts and local generated paths.",
     };
   }
 

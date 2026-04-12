@@ -49,6 +49,10 @@ type InferentialProviderResult = {
   findings: InferentialFinding[];
 };
 
+type InferentialSemanticAnalysisResult = {
+  findings: InferentialFinding[];
+};
+
 type InferentialReviewLogger = Pick<Console, "log" | "error">;
 
 type InferentialReviewOptions = {
@@ -57,6 +61,9 @@ type InferentialReviewOptions = {
   runProvider?: (
     input: InferentialProviderInput
   ) => Promise<InferentialProviderResult>;
+  runSemanticAnalysis?: (
+    input: InferentialProviderInput
+  ) => Promise<InferentialSemanticAnalysisResult>;
   machineOutputPath?: string;
   nowIso?: () => string;
   logger?: InferentialReviewLogger;
@@ -238,6 +245,195 @@ function buildFinding(
 
 function includesCaseInsensitive(haystack: string, needle: string) {
   return haystack.toLowerCase().includes(needle.toLowerCase());
+}
+
+function slugifyForFindingId(value: string) {
+  return normalizeRepoPath(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function isHarnessScriptSourceFile(filePath: string) {
+  const normalized = normalizeRepoPath(filePath);
+  return normalized.startsWith("scripts/harness-") && normalized.endsWith(".ts") && !normalized.endsWith(".test.ts");
+}
+
+function toHarnessScriptTestPath(filePath: string) {
+  return normalizeRepoPath(filePath).replace(/\.ts$/, ".test.ts");
+}
+
+function formatMissingSignals(snippets: string[]) {
+  return snippets.map((snippet) => `\`${snippet}\``).join(", ");
+}
+
+function createReducedSignalFinding(
+  filePath: string,
+  title: string,
+  severity: InferentialSeverity,
+  missingSignals: string[],
+  remediation: string
+): InferentialFinding {
+  return buildFinding(
+    `reduced-safety-signals-${slugifyForFindingId(filePath)}`,
+    severity,
+    title,
+    filePath,
+    `This file is missing safety or wiring signal(s): ${formatMissingSignals(missingSignals)}.`,
+    remediation
+  );
+}
+
+async function collectHarnessScriptTestUpdateFindings(
+  rootDir: string,
+  changedFiles: string[]
+) {
+  const changedFileSet = new Set(sortUnique(changedFiles));
+  const findings: InferentialFinding[] = [];
+
+  for (const changedFile of changedFileSet) {
+    if (!isHarnessScriptSourceFile(changedFile)) {
+      continue;
+    }
+
+    const matchingTestFile = toHarnessScriptTestPath(changedFile);
+    if (changedFileSet.has(matchingTestFile)) {
+      continue;
+    }
+
+    const testFileExists = await fileExists(path.join(rootDir, matchingTestFile));
+    findings.push(
+      buildFinding(
+        `missing-harness-script-test-update-${slugifyForFindingId(changedFile)}`,
+        "medium",
+        "Harness script changed without test update",
+        changedFile,
+        testFileExists
+          ? `This harness-critical script changed, but its sibling test file ${matchingTestFile} was not part of the same change.`
+          : `This harness-critical script changed, but the expected sibling test file ${matchingTestFile} is missing.`,
+        testFileExists
+          ? `Update ${matchingTestFile} alongside the script change so the regression coverage stays deterministic.`
+          : `Create ${matchingTestFile} alongside the script change so the regression coverage stays deterministic.`
+      )
+    );
+  }
+
+  return findings;
+}
+
+async function collectHarnessSafetySignalFindings(
+  rootDir: string,
+  changedFiles: string[]
+) {
+  const changedFileSet = new Set(sortUnique(changedFiles));
+  const findings: InferentialFinding[] = [];
+
+  const fileRules: Array<{
+    filePath: string;
+    severity: InferentialSeverity;
+    title: string;
+    requiredSignals: string[];
+    remediation: string;
+  }> = [
+    {
+      filePath: "package.json",
+      severity: "high",
+      title: "PR preflight lost harness safety wiring",
+      requiredSignals: [
+        "bun run harness:check",
+        "bun run harness:audit",
+        "bun run graphify:check",
+      ],
+      remediation:
+        "Restore the pr:athena safety chain so the harness check, audit, and graphify gates still run before merge.",
+    },
+    {
+      filePath: ".github/workflows/athena-pr-tests.yml",
+      severity: "high",
+      title: "Athena PR workflow lost harness safety wiring",
+      requiredSignals: [
+        "run: bun run harness:check",
+        "run: bun run harness:audit",
+        "run: bun run graphify:check",
+      ],
+      remediation:
+        "Restore the harness validation steps in the PR workflow so CI still exercises the safety ladder.",
+    },
+    {
+      filePath: "packages/athena-webapp/docs/agent/testing.md",
+      severity: "medium",
+      title: "Athena testing guidance lost harness coverage signals",
+      requiredSignals: [
+        "bun run harness:check",
+        "bun run harness:review",
+        "bun run harness:audit",
+      ],
+      remediation:
+        "Restore the harness check, review, and audit guidance so agents can follow the validation ladder from the testing doc.",
+    },
+    {
+      filePath: "packages/storefront-webapp/docs/agent/testing.md",
+      severity: "medium",
+      title: "Storefront testing guidance lost harness coverage signals",
+      requiredSignals: [
+        "bun run harness:check",
+        "bun run harness:review",
+        "bun run harness:audit",
+      ],
+      remediation:
+        "Restore the harness check, review, and audit guidance so agents can follow the validation ladder from the testing doc.",
+    },
+  ];
+
+  for (const rule of fileRules) {
+    if (!changedFileSet.has(rule.filePath)) {
+      continue;
+    }
+
+    const contents = await readUtf8OrNull(path.join(rootDir, rule.filePath));
+    if (!contents) {
+      continue;
+    }
+
+    const missingSignals = rule.requiredSignals.filter(
+      (signal) => !includesCaseInsensitive(contents, signal)
+    );
+
+    if (missingSignals.length === 0) {
+      continue;
+    }
+
+    findings.push(
+      createReducedSignalFinding(
+        rule.filePath,
+        rule.title,
+        rule.severity,
+        missingSignals,
+        rule.remediation
+      )
+    );
+  }
+
+  return findings;
+}
+
+async function runDeterministicSemanticAnalysis(
+  input: InferentialProviderInput
+): Promise<InferentialSemanticAnalysisResult> {
+  const findings = [
+    ...(await collectHarnessScriptTestUpdateFindings(
+      input.rootDir,
+      input.changedFiles
+    )),
+    ...(await collectHarnessSafetySignalFindings(
+      input.rootDir,
+      input.changedFiles
+    )),
+  ];
+
+  return {
+    findings: sortFindings(findings),
+  };
 }
 
 export async function runDeterministicInferentialProvider(
@@ -570,10 +766,12 @@ export async function runHarnessInferentialReview(
     options.getChangedFiles ?? getChangedFilesForInferentialReview;
   const runProvider =
     options.runProvider ?? runDeterministicInferentialProvider;
+  const runSemanticAnalysis =
+    options.runSemanticAnalysis ?? runDeterministicSemanticAnalysis;
 
   let changedFiles: string[] = [];
   let targetFiles: string[] = [];
-  let machine: InferentialMachineOutput;
+  let machine: InferentialMachineOutput | undefined;
 
   try {
     changedFiles = sortUnique(await getChangedFiles(rootDir, baseRef));
@@ -617,26 +815,14 @@ export async function runHarnessInferentialReview(
     };
   }
 
+  let providerResult: InferentialProviderResult | null = null;
+
   try {
-    const providerResult = await runProvider({
+    providerResult = await runProvider({
       rootDir,
       baseRef,
       changedFiles,
       targetFiles,
-    });
-    const findings = sortFindings(providerResult.findings);
-    machine = createOutput({
-      status: findings.length > 0 ? "fail" : "pass",
-      summary:
-        findings.length > 0
-          ? `Inferential review found ${findings.length} actionable finding(s).`
-          : "Inferential review completed with no actionable findings.",
-      baseRef,
-      changedFiles,
-      targetFiles,
-      providerName: providerResult.providerName,
-      findings,
-      generatedAt: nowIso(),
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -647,6 +833,51 @@ export async function runHarnessInferentialReview(
       targetFiles,
       nowIso()
     );
+  }
+
+  if (!machine) {
+    if (!providerResult) {
+      throw new Error("Inferential review did not produce provider output.");
+    }
+
+    try {
+      const semanticResult = await runSemanticAnalysis({
+        rootDir,
+        baseRef,
+        changedFiles,
+        targetFiles,
+      });
+      const findings = sortFindings([
+        ...providerResult.findings,
+        ...semanticResult.findings,
+      ]);
+      machine = createOutput({
+        status: findings.length > 0 ? "fail" : "pass",
+        summary:
+          findings.length > 0
+            ? `Inferential review found ${findings.length} actionable finding(s).`
+            : "Inferential review completed with no actionable findings.",
+        baseRef,
+        changedFiles,
+        targetFiles,
+        providerName: providerResult.providerName,
+        findings,
+        generatedAt: nowIso(),
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      machine = createRuntimeFailure(
+        `Semantic analysis failed: ${message}`,
+        baseRef,
+        changedFiles,
+        targetFiles,
+        nowIso()
+      );
+    }
+  }
+
+  if (!machine) {
+    throw new Error("Inferential review did not produce machine output.");
   }
 
   const humanReport = buildHumanReport(machine);

@@ -11,9 +11,12 @@ Key repo-level commands:
 - `bun run harness:audit`
 - `bun run harness:review`
 - `bun run harness:inferential-review`
+- `bun run harness:scorecard`
+- `bun run harness:janitor`
 - `bun run harness:self-review --base origin/main`
 - `bun run harness:behavior --scenario <name>`
 - `bun run harness:behavior --scenario <name> --record-video`
+- `cat <behavior-log-file> | bun run harness:runtime-trends`
 - `bun run architecture:check`
 - `bun run pre-push:review`
 - `bun run pr:athena`
@@ -47,6 +50,18 @@ Scenario thresholds are configured in `scripts/harness-behavior-scenarios.ts` vi
 - `runtimeSignals[].minMatches` / `runtimeSignals[].maxMatches`
 - `thresholds.latency.maxPhaseDurationMs`
 - `thresholds.latency.maxTotalDurationMs`
+
+`harness:scorecard` emits a deterministic quality artifact at:
+
+- `artifacts/harness-scorecard/latest.json`
+
+`harness:runtime-trends` consumes `[harness:behavior:report]` lines from stdin and
+prints aggregated scenario trend telemetry (pass/fail rates, latency stats, and
+runtime-signal health diagnostics).
+
+`harness:janitor` runs drift sensors in report mode by default. Add `--repair` to
+apply safe automated repair steps (`harness:generate` and `graphify:rebuild`) before
+re-running checks.
 
 ## Graphify
 

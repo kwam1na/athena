@@ -268,25 +268,32 @@ describe("runHarnessSelfReview", () => {
     expect(result.markdown).toContain("Full browser journeys and payment redirects");
   });
 
-  it("ignores worktree metadata changes when evaluating graphify freshness", async () => {
-    const rootDir = await createFixtureRepo();
+  it.each([
+    [".worktrees/codex-v26-208/.git", ".worktrees"],
+    ["worktrees/codex-v26-208/.git", "worktrees"],
+    ["artifacts/harness-behavior/video.webm", "artifacts"],
+  ])(
+    "ignores %s changes when evaluating graphify freshness",
+    async (changedPath) => {
+      const rootDir = await createFixtureRepo();
 
-    const result = await runHarnessSelfReview(rootDir, {
-      baseRef: "origin/main",
-      getChangedFiles: async () => ({
-        baseFiles: [".worktrees/codex-v26-208/.git"],
-        trackedFiles: [],
-        untrackedFiles: [],
-      }),
-      runHarnessCheck: async () => {},
-    });
+      const result = await runHarnessSelfReview(rootDir, {
+        baseRef: "origin/main",
+        getChangedFiles: async () => ({
+          baseFiles: [changedPath],
+          trackedFiles: [],
+          untrackedFiles: [],
+        }),
+        runHarnessCheck: async () => {},
+      });
 
-    expect(result.warnings).toEqual([]);
-    expect(result.markdown).toContain("status: n/a");
-    expect(result.markdown).toContain(
-      "No code-or-config changes detected outside Graphify artifacts."
-    );
-  });
+      expect(result.warnings).toEqual([]);
+      expect(result.markdown).toContain("status: n/a");
+      expect(result.markdown).toContain(
+        "No source/config changes detected outside Graphify artifacts and local generated paths."
+      );
+    }
+  );
 
   it("keeps stale graphify warnings for real code/config changes", async () => {
     const rootDir = await createFixtureRepo();
