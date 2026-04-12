@@ -3,8 +3,29 @@ import { runHarnessReview } from "./harness-review";
 const ROOT_DIR = process.cwd();
 const BASE_REF = "origin/main";
 
-async function getChangedFilesVsOriginMain(rootDir: string): Promise<string[]> {
-  const refCheck = Bun.spawn(["git", "rev-parse", "--verify", BASE_REF], {
+type SpawnedProcess = {
+  exited: Promise<number>;
+  stdout?: ReadableStream | null;
+  stderr?: ReadableStream | null;
+};
+
+type PrePushReviewLogger = Pick<Console, "log" | "warn" | "error">;
+
+type PrePushReviewOptions = {
+  getChangedFiles?: (rootDir: string) => Promise<string[]>;
+  runArchitectureCheck?: (rootDir: string) => Promise<void>;
+  runHarnessReview?: (
+    rootDir: string,
+    options: { getChangedFiles: (rootDir: string) => Promise<string[]> }
+  ) => Promise<void>;
+  logger?: PrePushReviewLogger;
+};
+
+export async function getChangedFilesVsOriginMain(
+  rootDir: string,
+  spawn: (command: string[], options: { cwd: string; stdout: "pipe"; stderr: "pipe" }) => SpawnedProcess = Bun.spawn
+): Promise<string[]> {
+  const refCheck = spawn(["git", "rev-parse", "--verify", BASE_REF], {
     cwd: rootDir,
     stdout: "pipe",
     stderr: "pipe",
@@ -18,7 +39,7 @@ async function getChangedFilesVsOriginMain(rootDir: string): Promise<string[]> {
     return [];
   }
 
-  const proc = Bun.spawn(
+  const proc = spawn(
     ["git", "diff", "--name-only", `${BASE_REF}...HEAD`],
     { cwd: rootDir, stdout: "pipe", stderr: "pipe" }
   );
@@ -41,7 +62,7 @@ async function getChangedFilesVsOriginMain(rootDir: string): Promise<string[]> {
     .filter(Boolean);
 }
 
-async function runArchitectureCheck(rootDir: string): Promise<void> {
+export async function runArchitectureCheck(rootDir: string): Promise<void> {
   const proc = Bun.spawn(["bun", "run", "architecture:check"], {
     cwd: rootDir,
     stdout: "inherit",
@@ -53,23 +74,33 @@ async function runArchitectureCheck(rootDir: string): Promise<void> {
   }
 }
 
-async function main() {
-  console.log("[pre-push] Running pre-push validation suite...\n");
+export async function runPrePushReview(
+  rootDir: string,
+  options: PrePushReviewOptions = {}
+) {
+  const logger = options.logger ?? console;
+  const getChangedFiles = options.getChangedFiles ?? getChangedFilesVsOriginMain;
+  const runArchitecture = options.runArchitectureCheck ?? runArchitectureCheck;
+  const review = options.runHarnessReview ?? runHarnessReview;
 
-  console.log("[pre-push] Step 1/2: architecture:check");
-  await runArchitectureCheck(ROOT_DIR);
+  logger.log("[pre-push] Running pre-push validation suite...\n");
+
+  logger.log("[pre-push] Step 1/2: architecture:check");
+  await runArchitecture(rootDir);
 
   // runHarnessReview internally runs harness:check first, then targeted per-surface scripts
-  console.log("[pre-push] Step 2/2: harness:review (vs origin/main)");
-  await runHarnessReview(ROOT_DIR, {
-    getChangedFiles: getChangedFilesVsOriginMain,
+  logger.log("[pre-push] Step 2/2: harness:review (vs origin/main)");
+  await review(rootDir, {
+    getChangedFiles,
   });
 
-  console.log("\n[pre-push] All checks passed.");
+  logger.log("\n[pre-push] All checks passed.");
 }
 
-main().catch((error: unknown) => {
-  const message = error instanceof Error ? error.message : String(error);
-  console.error(`\n[pre-push] BLOCKED: ${message}`);
-  process.exit(1);
-});
+if (import.meta.main) {
+  runPrePushReview(ROOT_DIR).catch((error: unknown) => {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`\n[pre-push] BLOCKED: ${message}`);
+    process.exit(1);
+  });
+}

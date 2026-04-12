@@ -1,5 +1,33 @@
 # athena
 
-let's go again
+## Harness
 
-ci-check-smoke: storefront workflow validation.
+This repo uses a docs-first agent harness for `packages/athena-webapp` and `packages/storefront-webapp`.
+
+Key repo-level commands:
+
+- `bun run harness:check`
+- `bun run harness:audit`
+- `bun run harness:review`
+- `bun run architecture:check`
+- `bun run pre-push:review`
+- `bun run pr:athena`
+
+## Graphify
+
+The repo keeps a graphify knowledge graph at `graphify-out/`.
+
+Use `bun run graphify:rebuild` after code changes. The command prefers the interpreter recorded in `.graphify_python` and falls back to `python3` only if that file is missing.
+
+If you need to repair the local graphify setup, make sure `.graphify_python` points at a Python environment that can import `graphify`. In this repo that is typically a pipx-managed interpreter.
+
+Tracked graphify artifacts:
+
+- `graphify-out/GRAPH_REPORT.md`
+- `graphify-out/graph.json`
+
+Local-only graphify artifacts:
+
+- `graphify-out/cache/`
+
+`graphify-out/cache/` is intentionally ignored because it is a large local acceleration cache, not a reviewable source artifact.
