@@ -5,7 +5,7 @@
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 2630 nodes · 2049 edges · 1100 communities detected
+- 2636 nodes · 2061 edges · 1100 communities detected
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS
 - Token cost: 0 input · 0 output
 
@@ -1118,10 +1118,10 @@
 4. `DataTableColumnHeader()` - 14 edges
 5. `toV2Config()` - 13 edges
 6. `getBaseUrl()` - 12 edges
-7. `OrdersTableToolbarProvider()` - 9 edges
-8. `useOrdersTableToolbar()` - 9 edges
-9. `usePOSSessionManager()` - 9 edges
-10. `asRecord()` - 9 edges
+7. `fileExists()` - 10 edges
+8. `OrdersTableToolbarProvider()` - 9 edges
+9. `useOrdersTableToolbar()` - 9 edges
+10. `usePOSSessionManager()` - 9 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `getAmountPaidForOrder()` --calls--> `getDiscountValue()`  [EXTRACTED]
@@ -1154,28 +1154,28 @@ Cohesion: 0.13
 Nodes (22): asRegExp(), collectLatencyDiagnostics(), collectRuntimeSignalDiagnostics(), collectRuntimeSignalMatches(), consumeLines(), escapeRegExp(), formatAssertionDiagnostics(), formatError() (+14 more)
 
 ### Community 4 - "Community 4"
-Cohesion: 0.16
-Nodes (17): appendListSection(), buildMarkdownBundle(), collectCoverage(), evaluateGraphifyFreshness(), fileExists(), formatValidationCommand(), getChangedFilesFromGit(), loadSelfReviewTarget() (+9 more)
+Cohesion: 0.2
+Nodes (22): collectHarnessOnboardingErrors(), collectMarkdownLinkErrors(), collectReferencedPathErrors(), collectRuntimeScenarioDocSyncErrors(), collectTestingDocErrors(), collectTestSurfaceRoots(), extractInlineCode(), extractRuntimeScenarioSection() (+14 more)
 
 ### Community 5 - "Community 5"
+Cohesion: 0.16
+Nodes (18): appendListSection(), buildMarkdownBundle(), collectCoverage(), evaluateGraphifyFreshness(), fileExists(), formatValidationCommand(), getChangedFilesFromGit(), isWorktreeMetadataPath() (+10 more)
+
+### Community 6 - "Community 6"
 Cohesion: 0.27
 Nodes (20): asBoolean(), asMtnMomoSetupStatus(), asNumber(), asOptionalArray(), asRecord(), asString(), cleanUndefined(), firstDefined() (+12 more)
 
-### Community 6 - "Community 6"
+### Community 7 - "Community 7"
 Cohesion: 0.11
 Nodes (2): isSkuReserved(), shouldDisable()
 
-### Community 7 - "Community 7"
+### Community 8 - "Community 8"
 Cohesion: 0.15
 Nodes (10): capitalizeFirstLetter(), capitalizeWords(), cn(), currencyFormatter(), formatDate(), getErrorForField(), getProductName(), getRelativeTime() (+2 more)
 
-### Community 8 - "Community 8"
+### Community 9 - "Community 9"
 Cohesion: 0.21
 Nodes (18): buildFinding(), buildHumanReport(), createOutput(), createProviderFailure(), createRuntimeFailure(), fileExists(), formatStatusLabel(), getChangedFilesForInferentialReview() (+10 more)
-
-### Community 9 - "Community 9"
-Cohesion: 0.27
-Nodes (18): collectHarnessOnboardingErrors(), collectMarkdownLinkErrors(), collectReferencedPathErrors(), collectTestingDocErrors(), collectTestSurfaceRoots(), extractInlineCode(), extractTestScriptFromCommand(), fileExists() (+10 more)
 
 ### Community 10 - "Community 10"
 Cohesion: 0.16
@@ -1330,16 +1330,16 @@ Cohesion: 0.29
 Nodes (0):
 
 ### Community 48 - "Community 48"
-Cohesion: 0.33
-Nodes (2): getProductName(), sortProduct()
-
-### Community 49 - "Community 49"
 Cohesion: 0.52
 Nodes (6): addItemToSavedBag(), getActiveSavedBag(), getBaseUrl(), removeItemFromSavedBag(), updateSavedBagItem(), updateSavedBagOwner()
 
-### Community 50 - "Community 50"
+### Community 49 - "Community 49"
 Cohesion: 0.29
 Nodes (0):
+
+### Community 50 - "Community 50"
+Cohesion: 0.33
+Nodes (2): getProductName(), sortProduct()
 
 ### Community 51 - "Community 51"
 Cohesion: 0.52
@@ -1491,19 +1491,19 @@ Nodes (0):
 
 ### Community 88 - "Community 88"
 Cohesion: 0.4
-Nodes (1): Header()
+Nodes (0):
 
 ### Community 89 - "Community 89"
 Cohesion: 0.4
 Nodes (0):
 
 ### Community 90 - "Community 90"
-Cohesion: 0.4
-Nodes (0):
-
-### Community 91 - "Community 91"
 Cohesion: 0.5
 Nodes (2): handleFileSelect(), validateFile()
+
+### Community 91 - "Community 91"
+Cohesion: 0.4
+Nodes (0):
 
 ### Community 92 - "Community 92"
 Cohesion: 0.4
@@ -1515,7 +1515,7 @@ Nodes (0):
 
 ### Community 94 - "Community 94"
 Cohesion: 0.4
-Nodes (0):
+Nodes (1): Header()
 
 ### Community 95 - "Community 95"
 Cohesion: 0.4
@@ -7220,7 +7220,7 @@ _Questions this graph is uniquely positioned to answer:_
   _Cohesion score 0.09 - nodes in this community are weakly interconnected._
 - **Should `Community 3` be split into smaller, more focused modules?**
   _Cohesion score 0.13 - nodes in this community are weakly interconnected._
-- **Should `Community 6` be split into smaller, more focused modules?**
+- **Should `Community 7` be split into smaller, more focused modules?**
   _Cohesion score 0.11 - nodes in this community are weakly interconnected._
 - **Should `Community 11` be split into smaller, more focused modules?**
   _Cohesion score 0.12 - nodes in this community are weakly interconnected._
