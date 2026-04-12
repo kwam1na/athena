@@ -207,6 +207,37 @@ describe("validateHarnessDocs", () => {
     await expect(validateHarnessDocs(rootDir)).resolves.toEqual([]);
   });
 
+  it("reports onboarding gaps when a packages/* workspace is not registered", async () => {
+    const rootDir = await createFixtureRepo();
+    await write(
+      "packages/unregistered-webapp/package.json",
+      JSON.stringify(
+        {
+          name: "@athena/unregistered-webapp",
+          scripts: {
+            test: "vitest run",
+          },
+        },
+        null,
+        2
+      ),
+      rootDir
+    );
+
+    await expect(validateHarnessDocs(rootDir)).resolves.toContain(
+      "Harness onboarding gap: packages/unregistered-webapp exists under packages/* but is not registered in scripts/harness-app-registry.ts."
+    );
+  });
+
+  it("reports onboarding gaps when a registered package is missing required entry docs", async () => {
+    const rootDir = await createFixtureRepo();
+    await rm(path.join(rootDir, "packages/athena-webapp/AGENTS.md"));
+
+    await expect(validateHarnessDocs(rootDir)).resolves.toContain(
+      "Harness onboarding gap: packages/athena-webapp is registered but missing required harness entry doc packages/athena-webapp/AGENTS.md."
+    );
+  });
+
   it("reports missing required harness files", async () => {
     const rootDir = await createFixtureRepo();
     await rm(

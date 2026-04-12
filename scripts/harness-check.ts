@@ -1,41 +1,25 @@
 import { access, readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 
-import { generateHarnessDocs, GENERATED_HARNESS_DOCS } from "./harness-generate";
+import {
+  HARNESS_APP_REGISTRY,
+  HARNESS_PACKAGE_REGISTRY,
+  PACKAGES_AGENTS_PATH,
+  REQUIRED_CODE_MAP_LINKS,
+  REQUIRED_INDEX_LINKS,
+  REQUIRED_TESTING_LINKS,
+  type HarnessAppName,
+  type HarnessAppRegistryEntry,
+} from "./harness-app-registry";
+import { generateHarnessDocs } from "./harness-generate";
 
-const APP_NAMES = ["athena-webapp", "storefront-webapp"] as const;
-const REQUIRED_APP_FILES = [
-  "AGENTS.md",
-  "docs/agent/index.md",
-  "docs/agent/architecture.md",
-  "docs/agent/testing.md",
-  "docs/agent/code-map.md",
-  ...GENERATED_HARNESS_DOCS,
-] as const;
-const REQUIRED_INDEX_LINKS = [
-  "./architecture.md",
-  "./testing.md",
-  "./code-map.md",
-  "./route-index.md",
-  "./test-index.md",
-  "./key-folder-index.md",
-  "./validation-guide.md",
-] as const;
-const REQUIRED_TESTING_LINKS = [
-  "./test-index.md",
-  "./validation-guide.md",
-] as const;
-const REQUIRED_CODE_MAP_LINKS = [
-  "./route-index.md",
-  "./key-folder-index.md",
-] as const;
 const MARKDOWN_LINK_PATTERN = /\[[^\]]+\]\(([^)]+)\)/g;
 const INLINE_CODE_PATTERN = /`([^`\n]+)`/g;
 const PLAYWRIGHT_TEST_DIR_PATTERN =
   /testDir\s*:\s*["'`](.+?)["'`]/;
 
 type HarnessAppConfig = {
-  appName: (typeof APP_NAMES)[number];
+  appName: HarnessAppName;
   packageName: string;
   packageDir: string;
   scripts: Record<string, string>;
@@ -196,8 +180,11 @@ async function collectReferencedPathErrors(
   return errors;
 }
 
-async function readPackageConfig(rootDir: string, appName: (typeof APP_NAMES)[number]) {
-  const packageDir = path.posix.join("packages", appName);
+async function readPackageConfig(
+  rootDir: string,
+  app: Pick<HarnessAppRegistryEntry, "appName" | "packageDir">
+) {
+  const packageDir = app.packageDir;
   const packageJsonPath = path.join(rootDir, packageDir, "package.json");
 
   if (!(await fileExists(packageJsonPath))) {
@@ -214,11 +201,65 @@ async function readPackageConfig(rootDir: string, appName: (typeof APP_NAMES)[nu
   }
 
   return {
-    appName,
+    appName: app.appName,
     packageDir,
     packageName: parsedPackage.name,
     scripts: parsedPackage.scripts ?? {},
   } satisfies HarnessAppConfig;
+}
+
+async function listWorkspacePackageDirs(rootDir: string) {
+  const packagesRoot = path.join(rootDir, "packages");
+  if (!(await fileExists(packagesRoot))) {
+    return [];
+  }
+
+  const entries = await readdir(packagesRoot, { withFileTypes: true });
+  const packageDirs: string[] = [];
+
+  for (const entry of entries) {
+    if (!entry.isDirectory() || entry.name.startsWith(".")) {
+      continue;
+    }
+
+    const packageDir = path.posix.join("packages", entry.name);
+    if (await fileExists(path.join(rootDir, packageDir, "package.json"))) {
+      packageDirs.push(packageDir);
+    }
+  }
+
+  return packageDirs.sort();
+}
+
+async function collectHarnessOnboardingErrors(rootDir: string) {
+  const errors: string[] = [];
+  const registeredPackageDirs = new Set(
+    HARNESS_PACKAGE_REGISTRY.map((entry) => entry.packageDir)
+  );
+
+  for (const packageDir of await listWorkspacePackageDirs(rootDir)) {
+    if (!registeredPackageDirs.has(packageDir)) {
+      errors.push(
+        `Harness onboarding gap: ${packageDir} exists under packages/* but is not registered in scripts/harness-app-registry.ts.`
+      );
+    }
+  }
+
+  for (const registration of HARNESS_PACKAGE_REGISTRY) {
+    if (registration.kind !== "harness-app") {
+      continue;
+    }
+
+    for (const requiredEntryDoc of registration.requiredEntryDocs) {
+      if (!(await fileExists(path.join(rootDir, requiredEntryDoc)))) {
+        errors.push(
+          `Harness onboarding gap: ${registration.packageDir} is registered but missing required harness entry doc ${requiredEntryDoc}.`
+        );
+      }
+    }
+  }
+
+  return errors;
 }
 
 function extractTestScriptFromCommand(
@@ -361,27 +402,28 @@ async function collectTestingDocErrors(
 }
 
 export async function validateHarnessDocs(rootDir: string) {
-  const errors: string[] = [];
-  const markdownFiles = ["packages/AGENTS.md"];
-  const packageConfigs = new Map<
-    (typeof APP_NAMES)[number],
-    HarnessAppConfig
-  >();
+  const errors = await collectHarnessOnboardingErrors(rootDir);
+  const markdownFiles = [PACKAGES_AGENTS_PATH];
+  const packageConfigs = new Map<HarnessAppName, HarnessAppConfig>();
   const generatedDocs = await generateHarnessDocs(rootDir);
 
-  if (!(await fileExists(path.join(rootDir, "packages/AGENTS.md")))) {
-    errors.push("Missing required harness file: packages/AGENTS.md");
+  if (!(await fileExists(path.join(rootDir, PACKAGES_AGENTS_PATH)))) {
+    errors.push(`Missing required harness file: ${PACKAGES_AGENTS_PATH}`);
     return errors;
   }
 
-  for (const appName of APP_NAMES) {
-    const packageConfig = await readPackageConfig(rootDir, appName);
+  for (const app of HARNESS_APP_REGISTRY) {
+    const packageConfig = await readPackageConfig(rootDir, app);
     if (packageConfig) {
-      packageConfigs.set(appName, packageConfig);
+      packageConfigs.set(app.appName, packageConfig);
     }
 
-    for (const relativeFile of REQUIRED_APP_FILES) {
-      const repoRelativePath = path.posix.join("packages", appName, relativeFile);
+    const requiredAppFiles = [
+      ...app.harnessDocs.requiredEntryDocs,
+      ...app.harnessDocs.generatedDocs,
+    ];
+
+    for (const repoRelativePath of requiredAppFiles) {
       if (!(await fileExists(path.join(rootDir, repoRelativePath)))) {
         errors.push(`Missing required harness file: ${repoRelativePath}`);
         continue;
@@ -405,10 +447,10 @@ export async function validateHarnessDocs(rootDir: string) {
     errors.push(...linkErrors);
 
     if (!markdownFile.endsWith("/docs/agent/index.md")) {
-      const appName = APP_NAMES.find((candidate) =>
-        markdownFile.startsWith(`packages/${candidate}/`)
+      const app = HARNESS_APP_REGISTRY.find((candidate) =>
+        markdownFile.startsWith(`${candidate.packageDir}/`)
       );
-      const packageConfig = appName ? packageConfigs.get(appName) : null;
+      const packageConfig = app ? packageConfigs.get(app.appName) : null;
       const linkTargets = new Set(
         [...contents.matchAll(MARKDOWN_LINK_PATTERN)]
           .map((match) => stripLinkDecorations(match[1]?.trim() ?? ""))
