@@ -83,7 +83,24 @@ async function resolveGraphifyPython(rootDir: string) {
   }
 
   const configuredPython = (await readFile(configuredPythonPath, "utf8")).trim();
-  return configuredPython || "python3";
+  if (!configuredPython) {
+    return "python3";
+  }
+
+  const looksLikePath =
+    configuredPython.includes(path.sep) || configuredPython.includes("/");
+  if (!looksLikePath) {
+    return configuredPython;
+  }
+
+  if (await fileExists(configuredPython)) {
+    return configuredPython;
+  }
+
+  console.warn(
+    `[graphify rebuild] Configured interpreter not found (${configuredPython}); falling back to python3.`
+  );
+  return "python3";
 }
 
 export async function runGraphifyRebuild(
