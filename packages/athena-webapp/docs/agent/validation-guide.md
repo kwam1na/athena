@@ -6,7 +6,7 @@ Use this decision guide to answer “what should I run for this change?” based
 
 ## Route or UI-only edits
 
-Touched surfaces: `src/routes`, `src/components`, `src/hooks`, `src/contexts`
+Touched surfaces: `src/assets`, `src/config.ts`, `src/routes`, `src/components`, `src/hooks`, `src/contexts`, `src/index.css`
 
 Run:
 
@@ -17,7 +17,7 @@ Use this for authenticated dashboard flows, route trees, and UI behavior changes
 
 ## Shared-lib or utility edits
 
-Touched surfaces: `src/lib`, `src/utils`, `src/stores`
+Touched surfaces: `src/lib`, `src/settings`, `src/utils`, `src/stores`
 
 Run:
 
@@ -25,6 +25,16 @@ Run:
 - `bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json`
 
 Reach for the package suite first, then typecheck when helpers or shared state can affect many call sites.
+
+## Frontend test harness edits
+
+Touched surfaces: `src/test`, `src/tests`
+
+Run:
+
+- `bun run --filter '@athena/webapp' test`
+
+Run the package suite when package-local frontend test helpers or focused regression tests change.
 
 ## Convex or backend-adjacent edits
 

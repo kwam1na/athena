@@ -6,7 +6,7 @@ Use this decision guide to answer “what should I run for this change?” based
 
 ## Route or UI-only edits
 
-Touched surfaces: `src/routes`, `src/components`, `src/hooks`, `src/contexts`
+Touched surfaces: `src/assets`, `src/client.tsx`, `src/config.ts`, `src/index.css`, `src/main.tsx`, `src/router.tsx`, `src/routes`, `src/components`, `src/hooks`, `src/contexts`, `src/routeTree.gen.ts`, `src/ssr.tsx`
 
 Run:
 

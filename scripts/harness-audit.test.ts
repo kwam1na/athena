@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -186,7 +186,7 @@ async function createFixtureRepo() {
               "packages/athena-webapp/src/routes/",
               "packages/athena-webapp/src/routeTree.gen.ts",
             ],
-            scripts: ["test"],
+            commands: [{ kind: "script", script: "test" }],
           },
           {
             name: "shared-ui",
@@ -199,7 +199,7 @@ async function createFixtureRepo() {
               "packages/athena-webapp/src/stores/",
               "packages/athena-webapp/src/utils/",
             ],
-            scripts: ["test"],
+            commands: [{ kind: "script", script: "test" }],
           },
           {
             name: "convex-surface",
@@ -209,7 +209,11 @@ async function createFixtureRepo() {
               "packages/athena-webapp/convex/inventory/",
               "packages/athena-webapp/convex/storeFront/",
             ],
-            scripts: ["audit:convex", "lint:convex:changed", "test"],
+            commands: [
+              { kind: "script", script: "audit:convex" },
+              { kind: "script", script: "lint:convex:changed" },
+              { kind: "script", script: "test" },
+            ],
           },
           {
             name: "tests",
@@ -217,7 +221,7 @@ async function createFixtureRepo() {
               "packages/athena-webapp/src/test/",
               "packages/athena-webapp/src/tests/",
             ],
-            scripts: ["test"],
+            commands: [{ kind: "script", script: "test" }],
           },
         ],
       },
@@ -242,7 +246,7 @@ async function createFixtureRepo() {
               "packages/storefront-webapp/src/routes/",
               "packages/storefront-webapp/src/ssr.tsx",
             ],
-            scripts: ["test"],
+            commands: [{ kind: "script", script: "test" }],
           },
           {
             name: "shared-app",
@@ -254,12 +258,15 @@ async function createFixtureRepo() {
               "packages/storefront-webapp/src/lib/",
               "packages/storefront-webapp/src/utils/",
             ],
-            scripts: ["test"],
+            commands: [{ kind: "script", script: "test" }],
           },
           {
             name: "tests",
             pathPrefixes: ["packages/storefront-webapp/tests/e2e/"],
-            scripts: ["test", "test:e2e"],
+            commands: [
+              { kind: "script", script: "test" },
+              { kind: "script", script: "test:e2e" },
+            ],
           },
         ],
       },
@@ -270,7 +277,11 @@ async function createFixtureRepo() {
   );
 
   await write("packages/athena-webapp/src/main.tsx", "export {};\n", rootDir);
+  await write("packages/athena-webapp/src/assets/placeholder.png", "", rootDir);
+  await write("packages/athena-webapp/src/config.ts", "export {};\n", rootDir);
+  await write("packages/athena-webapp/src/index.css", "body {}\n", rootDir);
   await write("packages/athena-webapp/src/routeTree.gen.ts", "export {};\n", rootDir);
+  await write("packages/athena-webapp/src/routes/_authed/index.tsx", "export {};\n", rootDir);
   await write("packages/athena-webapp/src/routes/index.tsx", "export {};\n", rootDir);
   await write("packages/athena-webapp/src/components/AppShell.tsx", "export {};\n", rootDir);
   await write("packages/athena-webapp/src/hooks/useAuth.ts", "export {};\n", rootDir);
@@ -285,11 +296,18 @@ async function createFixtureRepo() {
   await write("packages/athena-webapp/convex/http/router.ts", "export {};\n", rootDir);
   await write("packages/athena-webapp/convex/inventory/item.ts", "export {};\n", rootDir);
   await write("packages/athena-webapp/convex/storeFront/cart.ts", "export {};\n", rootDir);
+  await write("packages/athena-webapp/vite.config.ts", "export default {};\n", rootDir);
 
+  await write("packages/storefront-webapp/src/assets/placeholder.png", "", rootDir);
   await write("packages/storefront-webapp/src/client.tsx", "export {};\n", rootDir);
+  await write("packages/storefront-webapp/src/config.ts", "export {};\n", rootDir);
+  await write("packages/storefront-webapp/src/index.css", "body {}\n", rootDir);
+  await write("packages/storefront-webapp/src/main.tsx", "export {};\n", rootDir);
   await write("packages/storefront-webapp/src/router.tsx", "export {};\n", rootDir);
   await write("packages/storefront-webapp/src/routeTree.gen.ts", "export {};\n", rootDir);
+  await write("packages/storefront-webapp/src/routes/auth.verify.tsx", "export {};\n", rootDir);
   await write("packages/storefront-webapp/src/routes/__root.tsx", "export {};\n", rootDir);
+  await write("packages/storefront-webapp/src/routes/shop/checkout/index.tsx", "export {};\n", rootDir);
   await write("packages/storefront-webapp/src/ssr.tsx", "export {};\n", rootDir);
   await write("packages/storefront-webapp/src/api/storefront.ts", "export {};\n", rootDir);
   await write("packages/storefront-webapp/src/components/checkout/Bag.tsx", "export {};\n", rootDir);
@@ -351,12 +369,15 @@ describe("runHarnessAudit", () => {
                 "packages/storefront-webapp/src/routes/",
                 "packages/storefront-webapp/src/ssr.tsx",
               ],
-              scripts: ["test"],
+              commands: [{ kind: "script", script: "test" }],
             },
             {
               name: "tests",
               pathPrefixes: ["packages/storefront-webapp/tests/e2e/"],
-              scripts: ["test", "test:e2e"],
+              commands: [
+                { kind: "script", script: "test" },
+                { kind: "script", script: "test:e2e" },
+              ],
             },
           ],
         },
@@ -388,7 +409,7 @@ describe("runHarnessAudit", () => {
                 "packages/athena-webapp/src/routeTree.gen.ts",
                 "packages/athena-webapp/src/missing-runtime/",
               ],
-              scripts: ["test"],
+              commands: [{ kind: "script", script: "test" }],
             },
           ],
         },
@@ -425,5 +446,26 @@ describe("runHarnessAudit", () => {
     await expect(runHarnessAudit(rootDir)).rejects.toThrow(
       /Missing required script "@athena\/storefront-webapp:test:e2e" while generating harness docs\./
     );
+  });
+
+  it("accepts generated command-based validation surfaces that include raw repo-root commands", async () => {
+    const rootDir = await createFixtureRepo();
+    await expect(
+      readFile(
+        path.join(rootDir, "packages/athena-webapp/docs/agent/validation-map.json"),
+        "utf8"
+      )
+    ).resolves.toContain('"kind": "raw"');
+    await expect(
+      readFile(
+        path.join(
+          rootDir,
+          "packages/storefront-webapp/docs/agent/validation-map.json"
+        ),
+        "utf8"
+      )
+    ).resolves.toContain('"kind": "raw"');
+
+    await expect(runHarnessAudit(rootDir)).resolves.toBeUndefined();
   });
 });

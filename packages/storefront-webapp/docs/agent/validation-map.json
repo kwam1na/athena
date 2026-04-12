@@ -3,44 +3,89 @@
   "packageDir": "packages/storefront-webapp",
   "surfaces": [
     {
-      "name": "runtime-routes",
+      "name": "route-or-ui-only-edits",
       "pathPrefixes": [
-        "packages/storefront-webapp/src/assets/",
+        "packages/storefront-webapp/src/assets",
         "packages/storefront-webapp/src/client.tsx",
         "packages/storefront-webapp/src/config.ts",
         "packages/storefront-webapp/src/index.css",
         "packages/storefront-webapp/src/main.tsx",
-        "packages/storefront-webapp/src/routeTree.gen.ts",
         "packages/storefront-webapp/src/router.tsx",
-        "packages/storefront-webapp/src/routes/",
+        "packages/storefront-webapp/src/routes",
+        "packages/storefront-webapp/src/components",
+        "packages/storefront-webapp/src/hooks",
+        "packages/storefront-webapp/src/contexts",
+        "packages/storefront-webapp/src/routeTree.gen.ts",
         "packages/storefront-webapp/src/ssr.tsx"
       ],
-      "scripts": ["test"]
+      "commands": [
+        {
+          "kind": "script",
+          "script": "test"
+        }
+      ]
     },
     {
-      "name": "shared-app",
+      "name": "shared-lib-utility-or-api-wrapper-edits",
       "pathPrefixes": [
-        "packages/storefront-webapp/src/api/",
-        "packages/storefront-webapp/src/components/",
-        "packages/storefront-webapp/src/contexts/",
-        "packages/storefront-webapp/src/hooks/",
-        "packages/storefront-webapp/src/lib/",
-        "packages/storefront-webapp/src/utils/"
+        "packages/storefront-webapp/src/lib",
+        "packages/storefront-webapp/src/utils",
+        "packages/storefront-webapp/src/api"
       ],
-      "scripts": ["test"]
+      "commands": [
+        {
+          "kind": "script",
+          "script": "test"
+        },
+        {
+          "kind": "raw",
+          "command": "bunx tsc --noEmit -p packages/storefront-webapp/tsconfig.json"
+        }
+      ]
     },
     {
-      "name": "browser-tests",
-      "pathPrefixes": ["packages/storefront-webapp/tests/e2e/"],
-      "scripts": ["test", "test:e2e"]
+      "name": "checkout-or-auth-route-boundary-edits",
+      "pathPrefixes": [
+        "packages/storefront-webapp/src/routes/shop/checkout",
+        "packages/storefront-webapp/src/components/checkout",
+        "packages/storefront-webapp/src/routes/auth.verify.tsx"
+      ],
+      "commands": [
+        {
+          "kind": "script",
+          "script": "test"
+        },
+        {
+          "kind": "script",
+          "script": "lint:architecture"
+        }
+      ]
+    },
+    {
+      "name": "full-browser-journeys-and-payment-redirects",
+      "pathPrefixes": [
+        "packages/storefront-webapp/tests/e2e",
+        "packages/storefront-webapp/src/routes/shop/checkout",
+        "packages/storefront-webapp/src/components/checkout"
+      ],
+      "commands": [
+        {
+          "kind": "script",
+          "script": "test"
+        },
+        {
+          "kind": "script",
+          "script": "test:e2e"
+        }
+      ]
     },
     {
       "name": "harness-docs",
       "pathPrefixes": [
         "packages/storefront-webapp/AGENTS.md",
-        "packages/storefront-webapp/docs/agent/"
+        "packages/storefront-webapp/docs/agent"
       ],
-      "scripts": []
+      "commands": []
     }
   ]
 }

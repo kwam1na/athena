@@ -11,7 +11,12 @@ export const GENERATED_HARNESS_DOCS = [
   "docs/agent/test-index.md",
   "docs/agent/key-folder-index.md",
   "docs/agent/validation-guide.md",
+  "docs/agent/validation-map.json",
 ] as const;
+
+type ValidationCommand =
+  | { kind: "script"; script: string }
+  | { kind: "raw"; command: string };
 
 type GeneratedHarnessAppConfig = {
   appName: "athena-webapp" | "storefront-webapp";
@@ -25,10 +30,7 @@ type GeneratedHarnessAppConfig = {
   validationScenarios: Array<{
     title: string;
     touchedPaths: string[];
-    commands: Array<
-      | { kind: "script"; script: string }
-      | { kind: "raw"; command: string }
-    >;
+    commands: ValidationCommand[];
     note: string;
   }>;
 };
@@ -96,10 +98,13 @@ const APP_CONFIGS: GeneratedHarnessAppConfig[] = [
       {
         title: "Route or UI-only edits",
         touchedPaths: [
+          "src/assets",
+          "src/config.ts",
           "src/routes",
           "src/components",
           "src/hooks",
           "src/contexts",
+          "src/index.css",
         ],
         commands: [
           { kind: "script", script: "test" },
@@ -109,7 +114,7 @@ const APP_CONFIGS: GeneratedHarnessAppConfig[] = [
       },
       {
         title: "Shared-lib or utility edits",
-        touchedPaths: ["src/lib", "src/utils", "src/stores"],
+        touchedPaths: ["src/lib", "src/settings", "src/utils", "src/stores"],
         commands: [
           { kind: "script", script: "test" },
           {
@@ -118,6 +123,12 @@ const APP_CONFIGS: GeneratedHarnessAppConfig[] = [
           },
         ],
         note: "Reach for the package suite first, then typecheck when helpers or shared state can affect many call sites.",
+      },
+      {
+        title: "Frontend test harness edits",
+        touchedPaths: ["src/test", "src/tests"],
+        commands: [{ kind: "script", script: "test" }],
+        note: "Run the package suite when package-local frontend test helpers or focused regression tests change.",
       },
       {
         title: "Convex or backend-adjacent edits",
@@ -196,10 +207,18 @@ const APP_CONFIGS: GeneratedHarnessAppConfig[] = [
       {
         title: "Route or UI-only edits",
         touchedPaths: [
+          "src/assets",
+          "src/client.tsx",
+          "src/config.ts",
+          "src/index.css",
+          "src/main.tsx",
+          "src/router.tsx",
           "src/routes",
           "src/components",
           "src/hooks",
           "src/contexts",
+          "src/routeTree.gen.ts",
+          "src/ssr.tsx",
         ],
         commands: [{ kind: "script", script: "test" }],
         note: "Start here for most layout, component, and route behavior changes that do not alter the checkout or browser-journey contract.",
@@ -459,6 +478,54 @@ function formatScriptCommand(packageConfig: PackageConfig, script: string) {
   return `bun run --filter '${packageConfig.packageName}' ${script}`;
 }
 
+function toRepoValidationPath(packageDir: string, touchedPath: string) {
+  const normalizedPath = normalizeRepoPath(touchedPath).replace(/\/+$/, "");
+  return normalizeRepoPath(path.posix.join(packageDir, normalizedPath));
+}
+
+function slugifyTitle(title: string) {
+  return title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function formatValidationCommandForDoc(
+  packageConfig: PackageConfig,
+  command: ValidationCommand
+) {
+  return command.kind === "raw"
+    ? command.command
+    : formatScriptCommand(packageConfig, command.script);
+}
+
+function toGeneratedValidationMap(
+  config: GeneratedHarnessAppConfig,
+  packageConfig: PackageConfig
+) {
+  return {
+    workspace: packageConfig.packageName,
+    packageDir: config.packageDir,
+    surfaces: [
+      ...config.validationScenarios.map((scenario) => ({
+        name: slugifyTitle(scenario.title),
+        pathPrefixes: scenario.touchedPaths.map((touchedPath) =>
+          toRepoValidationPath(config.packageDir, touchedPath)
+        ),
+        commands: scenario.commands,
+      })),
+      {
+        name: "harness-docs",
+        pathPrefixes: [
+          `${config.packageDir}/AGENTS.md`,
+          `${config.packageDir}/docs/agent`,
+        ],
+        commands: [] as ValidationCommand[],
+      },
+    ],
+  };
+}
+
 function buildGeneratedDoc(
   title: string,
   introLines: string[],
@@ -592,13 +659,7 @@ async function buildValidationGuide(
     bodyLines.push("");
 
     for (const command of scenario.commands) {
-      bodyLines.push(
-        `- \`${
-          command.kind === "raw"
-            ? command.command
-            : formatScriptCommand(packageConfig, command.script)
-        }\``
-      );
+      bodyLines.push(`- \`${formatValidationCommandForDoc(packageConfig, command)}\``);
     }
 
     bodyLines.push("");
@@ -611,6 +672,13 @@ async function buildValidationGuide(
     [],
     bodyLines
   );
+}
+
+async function buildValidationMap(
+  config: GeneratedHarnessAppConfig,
+  packageConfig: PackageConfig
+) {
+  return `${JSON.stringify(toGeneratedValidationMap(config, packageConfig), null, 2)}\n`;
 }
 
 export async function generateHarnessDocs(rootDir: string) {
@@ -633,6 +701,10 @@ export async function generateHarnessDocs(rootDir: string) {
     docs.set(
       `${config.packageDir}/docs/agent/validation-guide.md`,
       await buildValidationGuide(config, packageConfig)
+    );
+    docs.set(
+      `${config.packageDir}/docs/agent/validation-map.json`,
+      await buildValidationMap(config, packageConfig)
     );
   }
 

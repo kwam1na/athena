@@ -18,29 +18,26 @@ const AUDIT_TARGETS = [
   },
 ] as const;
 
-type ValidationRule = {
-  pathPrefix: string;
-  scripts: string[];
-};
+type ValidationCommand =
+  | { kind: "script"; script: string }
+  | { kind: "raw"; command: string };
 
 type ValidationSurface = {
   name: string;
   pathPrefixes: string[];
-  scripts: string[];
+  commands: ValidationCommand[];
 };
 
 type ValidationMap = {
   workspace: string;
   packageDir: string;
-  rules?: ValidationRule[];
-  surfaces?: ValidationSurface[];
+  surfaces: ValidationSurface[];
 };
 
 type LoadedAuditTarget = {
   appName: (typeof AUDIT_TARGETS)[number]["appName"];
   auditedRoots: readonly string[];
   packageDir: string;
-  packageScripts: Record<string, string>;
   surfaces: ValidationSurface[];
   testingDocContents: string;
 };
@@ -76,16 +73,12 @@ async function readJsonFile<T>(filePath: string) {
   return JSON.parse(await readFile(filePath, "utf8")) as T;
 }
 
-function toValidationSurfaces(validationMap: ValidationMap) {
-  if (validationMap.surfaces && validationMap.surfaces.length > 0) {
-    return validationMap.surfaces;
-  }
-
-  return (validationMap.rules ?? []).map((rule, index) => ({
-    name: `rule-${index + 1}`,
-    pathPrefixes: [rule.pathPrefix],
-    scripts: rule.scripts,
-  }));
+function normalizeValidationCommand(
+  command: ValidationCommand
+): ValidationCommand {
+  return command.kind === "raw"
+    ? { kind: "raw", command: command.command.trim() }
+    : { kind: "script", script: command.script };
 }
 
 function addGroupedError(
@@ -223,7 +216,10 @@ async function loadAuditTarget(
     );
   }
 
-  const surfaces = toValidationSurfaces(validationMap);
+  const surfaces = Array.isArray(validationMap.surfaces)
+    ? validationMap.surfaces
+    : [];
+
   if (surfaces.length === 0) {
     addGroupedError(
       groupedErrors,
@@ -233,12 +229,21 @@ async function loadAuditTarget(
   }
 
   for (const surface of surfaces) {
-    if (surface.pathPrefixes.length === 0) {
+    if (!Array.isArray(surface.pathPrefixes) || surface.pathPrefixes.length === 0) {
       addGroupedError(
         groupedErrors,
         target.appName,
         `Empty validation surface "${surface.name}" in ${target.validationMapPath}.`
       );
+    }
+
+    if (!Array.isArray(surface.commands)) {
+      addGroupedError(
+        groupedErrors,
+        target.appName,
+        `Missing commands for validation surface "${surface.name}" in ${target.validationMapPath}.`
+      );
+      continue;
     }
 
     for (const pathPrefix of surface.pathPrefixes) {
@@ -251,12 +256,23 @@ async function loadAuditTarget(
       }
     }
 
-    for (const script of surface.scripts) {
-      if (!packageJson.scripts?.[script]) {
+    for (const command of surface.commands.map(normalizeValidationCommand)) {
+      if (command.kind === "script") {
+        if (!packageJson.scripts?.[command.script]) {
+          addGroupedError(
+            groupedErrors,
+            target.appName,
+            `Stale validation surface: ${target.validationMapPath} references missing script "${validationMap.workspace}:${command.script}".`
+          );
+        }
+        continue;
+      }
+
+      if (!command.command) {
         addGroupedError(
           groupedErrors,
           target.appName,
-          `Stale validation surface: ${target.validationMapPath} references missing script "${validationMap.workspace}:${script}".`
+          `Stale validation surface: ${target.validationMapPath} includes an empty raw command in "${surface.name}".`
         );
       }
     }
@@ -267,9 +283,12 @@ async function loadAuditTarget(
     loadedTarget: {
       appName: target.appName,
       auditedRoots: target.auditedRoots,
-      packageDir: validationMap.packageDir,
-      packageScripts: packageJson.scripts ?? {},
-      surfaces,
+      packageDir: normalizeRepoPath(validationMap.packageDir),
+      surfaces: surfaces.map((surface) => ({
+        name: surface.name,
+        pathPrefixes: surface.pathPrefixes.map(normalizeRepoPath),
+        commands: surface.commands.map(normalizeValidationCommand),
+      })),
       testingDocContents,
     } satisfies LoadedAuditTarget,
   };
