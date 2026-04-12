@@ -181,6 +181,7 @@ docs/superpowers/plans/
 docs/superpowers/specs/
 .dual-graph/
 graphify-out/cache/
+artifacts/harness-behavior/videos/
 
 packages/athena-webapp/stats.html
 packages/storefront-webapp/stats.html

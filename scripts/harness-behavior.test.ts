@@ -253,6 +253,7 @@ describe("parseHarnessBehaviorArgs", () => {
     expect(parseHarnessBehaviorArgs(["--scenario", "sample-runtime-smoke"])).toEqual({
       help: false,
       list: false,
+      recordVideo: false,
       scenarioName: "sample-runtime-smoke",
     });
   });
@@ -261,7 +262,38 @@ describe("parseHarnessBehaviorArgs", () => {
     expect(parseHarnessBehaviorArgs(["--list"])).toEqual({
       help: false,
       list: true,
+      recordVideo: false,
       scenarioName: null,
+    });
+  });
+
+  it("parses --record-video with --scenario", () => {
+    expect(
+      parseHarnessBehaviorArgs([
+        "--scenario",
+        "athena-admin-shell-boot",
+        "--record-video",
+      ])
+    ).toEqual({
+      help: false,
+      list: false,
+      recordVideo: true,
+      scenarioName: "athena-admin-shell-boot",
+    });
+  });
+
+  it("parses --record-video=false", () => {
+    expect(
+      parseHarnessBehaviorArgs([
+        "--scenario",
+        "athena-admin-shell-boot",
+        "--record-video=false",
+      ])
+    ).toEqual({
+      help: false,
+      list: false,
+      recordVideo: false,
+      scenarioName: "athena-admin-shell-boot",
     });
   });
 
@@ -269,5 +301,15 @@ describe("parseHarnessBehaviorArgs", () => {
     expect(() => parseHarnessBehaviorArgs(["--scenario"])).toThrow(
       "Missing scenario name after --scenario."
     );
+  });
+
+  it("throws when --record-video has an invalid value", () => {
+    expect(() =>
+      parseHarnessBehaviorArgs([
+        "--scenario",
+        "athena-admin-shell-boot",
+        "--record-video=maybe",
+      ])
+    ).toThrow("Invalid value for --record-video");
   });
 });

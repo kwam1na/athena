@@ -11,6 +11,7 @@ Key repo-level commands:
 - `bun run harness:audit`
 - `bun run harness:review`
 - `bun run harness:behavior --scenario <name>`
+- `bun run harness:behavior --scenario <name> --record-video`
 - `bun run architecture:check`
 - `bun run pre-push:review`
 - `bun run pr:athena`
@@ -18,9 +19,16 @@ Key repo-level commands:
 
 `bun run harness:test` is the canonical harness implementation gate for harness scripts, graphify tooling, and pre-push review wiring.
 
-List runtime behavior scenarios with `bun run harness:behavior --list`. The bundled
-`sample-runtime-smoke` scenario boots a local fixture app, drives a browser click,
-captures runtime signals, and tears down automatically.
+List runtime behavior scenarios with `bun run harness:behavior --list`.
+Bundled scenarios include:
+
+- `sample-runtime-smoke`
+- `athena-admin-shell-boot`
+- `athena-convex-storefront-composition`
+- `athena-convex-storefront-failure-visibility`
+
+Add `--record-video` to persist browser-flow evidence under
+`artifacts/harness-behavior/videos/<scenario>/<run-stamp>/`.
 
 ## Graphify
 
