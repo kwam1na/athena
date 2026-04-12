@@ -5,6 +5,7 @@ Use the repo-root harness commands together:
 - `bun run harness:check` validates the docs themselves: required files, links, path references, and documented test commands.
 - `bun run harness:review` is the touched-file pass. It always runs `bun run harness:check` first, then uses the machine-readable [validation map](./validation-map.json) to decide whether `@athena/storefront-webapp` baseline validations and mapped runtime behavior scenarios should run for the files you changed.
 - `bun run harness:audit` is the full-app pass. It scans the current `storefront-webapp` surface even when nothing is touched and fails on stale harness docs, stale validation-map paths, or live surfaces that the validation map does not cover yet.
+- `bun run harness:inferential-review` is the blocking inferential pass. It emits human-readable remediation plus a machine-readable inferential review artifact in the repo-level artifacts directory.
 - `bun run harness:behavior --scenario <name>` runs shared runtime behavior scenarios that boot app processes, wait for readiness, drive browser interactions, assert runtime signals, and clean up automatically.
 - `bun run harness:behavior --scenario <name> --record-video` captures browser-flow evidence for handoff under `artifacts/harness-behavior/videos/<scenario>/<run-stamp>/`.
 
@@ -16,6 +17,8 @@ Behavior runs emit `[harness:behavior:report]` JSON with per-phase latency and r
 If `bun run harness:review` reports a coverage gap, the touched `packages/storefront-webapp` file is not represented in the validation map yet. Update the map (including `behaviorScenarios` when runtime checks are required) and this testing guide together before handoff so the harness stays honest.
 
 If `bun run harness:audit` reports a coverage gap, a live `src/` or `tests/` surface exists without a corresponding validation-map entry. Add or tighten the affected surface mapping before handoff so future agents can trust the repo-wide scan.
+
+If `bun run harness:inferential-review` reports findings, treat them as blocking: the command exits non-zero and includes remediation guidance for each actionable issue. If it reports a provider/runtime error, resolve the error and rerun before handoff.
 
 Use `bun run harness:behavior --list` to inspect available runtime scenarios.
 Current shared scenarios include:

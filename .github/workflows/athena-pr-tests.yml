@@ -40,6 +40,9 @@ jobs:
       - name: Audit harness coverage
         run: bun run harness:audit
 
+      - name: Inferential harness review
+        run: bun run harness:inferential-review
+
       - name: Check graphify freshness
         run: bun run graphify:check
 
