@@ -4,6 +4,7 @@
   "scripts": {
     "prepare": "husky",
     "architecture:check": "bun scripts/architecture-boundary-check.ts",
+    "graphify:check": "bun scripts/graphify-check.ts",
     "graphify:rebuild": "bun scripts/graphify-rebuild.ts",
     "harness:audit": "bun scripts/harness-audit.ts",
     "harness:behavior": "bun scripts/harness-behavior.ts",
@@ -13,7 +14,7 @@
     "harness:review": "bun scripts/harness-review.ts",
     "harness:test": "bun test scripts/harness-audit.test.ts scripts/harness-check.test.ts scripts/harness-generate.test.ts scripts/harness-review.test.ts scripts/graphify-rebuild.test.ts scripts/pre-push-review.test.ts",
     "pre-push:review": "bun scripts/pre-push-review.ts",
-    "pr:athena": "bun run --filter '@athena/webapp' audit:convex && bun run --filter '@athena/webapp' lint:convex:changed && bun run architecture:check && bun run --filter '@athena/webapp' test && bun run --filter '@athena/storefront-webapp' test && bun run harness:test && bun run harness:check && bun run harness:audit",
+    "pr:athena": "bun run --filter '@athena/webapp' audit:convex && bun run --filter '@athena/webapp' lint:convex:changed && bun run architecture:check && bun run --filter '@athena/webapp' test && bun run --filter '@athena/storefront-webapp' test && bun run harness:test && bun run harness:check && bun run harness:audit && bun run graphify:check",
     "test": "bun run --filter '@athena/webapp' test && bun run --filter '@athena/storefront-webapp' test",
     "test:coverage": "bun run --filter '@athena/webapp' test:coverage && bun run --filter '@athena/storefront-webapp' test:coverage && bun scripts/coverage-summary.mjs"
   },

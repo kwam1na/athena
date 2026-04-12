@@ -37,6 +37,9 @@ jobs:
       - name: Audit harness coverage
         run: bun run harness:audit
 
+      - name: Check graphify freshness
+        run: bun run graphify:check
+
   harness-implementation-tests:
     name: Harness Implementation Tests
     runs-on: ubuntu-latest
