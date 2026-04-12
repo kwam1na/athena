@@ -298,6 +298,23 @@ function buildSummary(
   };
 }
 
+async function hasAnyHarnessDocs(
+  rootDir: string,
+  app: HarnessAppRegistryEntry,
+  fsApi: ScorecardFileSystem
+) {
+  for (const repoRelativePath of [
+    ...app.harnessDocs.requiredEntryDocs,
+    ...app.harnessDocs.generatedDocs,
+  ]) {
+    if (await fsApi.fileExists(path.join(rootDir, repoRelativePath))) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 async function inspectAppDocumentation(
   rootDir: string,
   app: HarnessAppRegistryEntry,
@@ -446,19 +463,26 @@ export async function collectHarnessScorecard(
   const expectedScenarios = sortUnique(
     HARNESS_BEHAVIOR_SCENARIOS.map((scenario) => scenario.name)
   );
+  const activeApps: HarnessAppRegistryEntry[] = [];
+
+  for (const app of HARNESS_APP_REGISTRY) {
+    if (await hasAnyHarnessDocs(rootDir, app, fsApi)) {
+      activeApps.push(app);
+    }
+  }
 
   const appStatuses = await Promise.all(
-    HARNESS_APP_REGISTRY.map((app) =>
+    activeApps.map((app) =>
       inspectAppDocumentation(rootDir, app, fsApi, expectedScenarios)
     )
   );
 
   const registry = {
     definition:
-      "Static harness app registry and shared runtime scenario inventory from scripts/harness-app-registry.ts and scripts/harness-behavior-scenarios.ts.",
-    appCount: HARNESS_APP_REGISTRY.length,
+      "Harness app registry entries with materialized docs plus the shared runtime scenario inventory from scripts/harness-app-registry.ts and scripts/harness-behavior-scenarios.ts.",
+    appCount: activeApps.length,
     scenarioCount: expectedScenarios.length,
-    apps: HARNESS_APP_REGISTRY.map((app) => ({
+    apps: activeApps.map((app) => ({
       appName: app.appName,
       label: app.label,
       validationSurfaceCount:

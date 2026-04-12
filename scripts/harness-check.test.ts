@@ -251,6 +251,11 @@ async function createFixtureRepo() {
     rootDir
   );
   await write(
+    "packages/valkey-proxy-server/README.md",
+    "# Valkey Proxy Server\n",
+    rootDir
+  );
+  await write(
     "packages/valkey-proxy-server/AGENTS.md",
     [
       "# valkey-proxy-server",
@@ -284,8 +289,9 @@ async function createFixtureRepo() {
       ...REQUIRED_TESTING_LINKS.map((link) => `- [${link}](${link})`),
       "",
       "Use `bun run harness:review` to validate the package surface mappings.",
-      "The main validation surface is `index.js` and `test-connection.js`.",
+      "The main validation surfaces are `package.json`, `README.md`, `index.js`, and `test-connection.js`.",
       "Run `bun run --filter 'valkey-proxy-server' test:connection` for the connection probe.",
+      "Covered test surfaces include `package.json`, `README.md`, `index.js`, and `test-connection.js`.",
     ].join("\n"),
     rootDir
   );
@@ -392,6 +398,8 @@ async function createFixtureRepo() {
           {
             name: "service-entry-or-connection-probe-edits",
             pathPrefixes: [
+              "packages/valkey-proxy-server/package.json",
+              "packages/valkey-proxy-server/README.md",
               "packages/valkey-proxy-server/index.js",
               "packages/valkey-proxy-server/test-connection.js",
             ],

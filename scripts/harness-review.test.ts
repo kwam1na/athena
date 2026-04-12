@@ -63,6 +63,11 @@ async function createFixtureRepo() {
     ),
     rootDir
   );
+  await write(
+    "packages/valkey-proxy-server/README.md",
+    "# Valkey Proxy Server\n",
+    rootDir
+  );
 
   await write(
     "packages/athena-webapp/docs/agent/testing.md",
@@ -91,7 +96,7 @@ async function createFixtureRepo() {
       "",
       "Run `bun run harness:review` from the repo root for touched-file validation coverage.",
       "Machine-readable review coverage lives in [validation-map.json](./validation-map.json).",
-      "The main validation surface is `index.js` and `test-connection.js`.",
+      "The main validation surfaces are `package.json`, `README.md`, `index.js`, and `test-connection.js`.",
     ].join("\n"),
     rootDir
   );
@@ -147,7 +152,12 @@ async function createFixtureRepo() {
         surfaces: [
           {
             name: "service-entry-and-connection-probe",
-            pathPrefixes: ["packages/valkey-proxy-server/index.js"],
+            pathPrefixes: [
+              "packages/valkey-proxy-server/package.json",
+              "packages/valkey-proxy-server/README.md",
+              "packages/valkey-proxy-server/index.js",
+              "packages/valkey-proxy-server/test-connection.js",
+            ],
             commands: [{ kind: "script", script: "test:connection" }],
           },
         ],
@@ -263,6 +273,30 @@ describe("runHarnessReview", () => {
 
     await runHarnessReview(rootDir, {
       getChangedFiles: async () => ["packages/valkey-proxy-server/index.js"],
+      runHarnessCheck: async () => {
+        steps.push("harness:check");
+      },
+      runPackageScript: async (workspace, script) => {
+        steps.push(`${workspace}:${script}`);
+      },
+      logger: {
+        log() {},
+        error() {},
+      },
+    });
+
+    expect(steps).toEqual([
+      "harness:check",
+      "valkey-proxy-server:test:connection",
+    ]);
+  });
+
+  it("runs service-package validations for valkey package metadata changes", async () => {
+    const rootDir = await createFixtureRepo();
+    const steps: string[] = [];
+
+    await runHarnessReview(rootDir, {
+      getChangedFiles: async () => ["packages/valkey-proxy-server/package.json"],
       runHarnessCheck: async () => {
         steps.push("harness:check");
       },

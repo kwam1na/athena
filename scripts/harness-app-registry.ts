@@ -443,9 +443,14 @@ export const HARNESS_APP_REGISTRY = [
     validationScenarios: [
       {
         title: "Service entry or connection probe edits",
-        touchedPaths: ["index.js", "test-connection.js"],
+        touchedPaths: [
+          "package.json",
+          "README.md",
+          "index.js",
+          "test-connection.js",
+        ],
         commands: [{ kind: "script", script: "test:connection" }],
-        note: "Use the connection probe when the HTTP entrypoint or connection harness changes.",
+        note: "Use the connection probe when the package manifest, operator docs, HTTP entrypoint, or connection harness changes.",
       },
     ],
   },

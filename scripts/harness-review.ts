@@ -89,8 +89,31 @@ async function loadReviewTarget(
   testingDocPath: string,
   validationMapPath: string
 ) {
+  const absoluteTestingDocPath = path.join(rootDir, testingDocPath);
+  const absoluteValidationMapPath = path.join(rootDir, validationMapPath);
+  const [testingDocExists, validationMapExists] = await Promise.all([
+    fileExists(absoluteTestingDocPath),
+    fileExists(absoluteValidationMapPath),
+  ]);
+
+  if (!testingDocExists && !validationMapExists) {
+    return null;
+  }
+
+  if (!testingDocExists) {
+    throw new Error(
+      `Stale harness review config: missing testing guide ${testingDocPath}.`
+    );
+  }
+
+  if (!validationMapExists) {
+    throw new Error(
+      `Stale harness review config: missing validation map ${validationMapPath}.`
+    );
+  }
+
   const testingDocContents = await readFile(
-    path.join(rootDir, testingDocPath),
+    absoluteTestingDocPath,
     "utf8"
   );
 
@@ -106,7 +129,6 @@ async function loadReviewTarget(
     );
   }
 
-  const absoluteValidationMapPath = path.join(rootDir, validationMapPath);
   const validationMap = await readJsonFile<ValidationMap>(absoluteValidationMapPath);
   const packageJsonPath = path.join(rootDir, validationMap.packageDir, "package.json");
 
@@ -212,13 +234,14 @@ async function loadReviewTargets(rootDir: string) {
   const targets: LoadedReviewTarget[] = [];
 
   for (const target of REVIEW_TARGETS) {
-    targets.push(
-      await loadReviewTarget(
-        rootDir,
-        target.testingDocPath,
-        target.validationMapPath
-      )
+    const loadedTarget = await loadReviewTarget(
+      rootDir,
+      target.testingDocPath,
+      target.validationMapPath
     );
+    if (loadedTarget) {
+      targets.push(loadedTarget);
+    }
   }
 
   return targets;

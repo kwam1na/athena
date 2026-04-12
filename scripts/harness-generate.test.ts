@@ -79,6 +79,11 @@ async function createFixtureRepo() {
     ),
     rootDir
   );
+  await write(
+    "packages/valkey-proxy-server/README.md",
+    "# Valkey Proxy Server\n",
+    rootDir
+  );
   await write("packages/valkey-proxy-server/index.js", "export {};\n", rootDir);
   await write(
     "packages/valkey-proxy-server/test-connection.js",
@@ -118,6 +123,8 @@ describe("generateHarnessDocs", () => {
       "src/routes/_authed/dashboard.index.tsx"
     );
     expect(docs.get("packages/valkey-proxy-server/docs/agent/entry-index.md")).toBeDefined();
+    expect(docs.get("packages/valkey-proxy-server/docs/agent/entry-index.md")).toContain("package.json");
+    expect(docs.get("packages/valkey-proxy-server/docs/agent/entry-index.md")).toContain("README.md");
     expect(docs.get("packages/valkey-proxy-server/docs/agent/entry-index.md")).toContain("index.js");
     expect(docs.get("packages/valkey-proxy-server/docs/agent/entry-index.md")).toContain("test-connection.js");
     expect(docs.get("packages/storefront-webapp/docs/agent/test-index.md")).toContain(

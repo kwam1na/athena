@@ -148,8 +148,19 @@ async function loadAuditTarget(
   const groupedErrors = new Map<string, string[]>();
   const absoluteValidationMapPath = path.join(rootDir, target.validationMapPath);
   const absoluteTestingDocPath = path.join(rootDir, target.testingDocPath);
+  const [validationMapExists, testingDocExists] = await Promise.all([
+    fileExists(absoluteValidationMapPath),
+    fileExists(absoluteTestingDocPath),
+  ]);
 
-  if (!(await fileExists(absoluteValidationMapPath))) {
+  if (!validationMapExists && !testingDocExists) {
+    return {
+      groupedErrors,
+      loadedTarget: null,
+    };
+  }
+
+  if (!validationMapExists) {
     addGroupedError(
       groupedErrors,
       target.appName,
@@ -161,7 +172,7 @@ async function loadAuditTarget(
     };
   }
 
-  if (!(await fileExists(absoluteTestingDocPath))) {
+  if (!testingDocExists) {
     addGroupedError(
       groupedErrors,
       target.appName,

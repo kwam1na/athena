@@ -100,6 +100,11 @@ async function createFixtureRepo() {
     ),
     rootDir
   );
+  await write(
+    "packages/valkey-proxy-server/README.md",
+    "# Valkey Proxy Server\n",
+    rootDir
+  );
 
   await write(
     "packages/athena-webapp/AGENTS.md",
@@ -282,9 +287,9 @@ async function createFixtureRepo() {
       "Machine-readable review coverage lives in [validation-map.json](./validation-map.json).",
       "- [Test index](./test-index.md)",
       "- [Validation guide](./validation-guide.md)",
-      "The main test surfaces are `index.js` and `test-connection.js`.",
+      "The main test surfaces are `package.json`, `README.md`, `index.js`, and `test-connection.js`.",
       "Run `bun run --filter 'valkey-proxy-server' test:connection` for the connection probe.",
-      "Covered test surfaces include `index.js` and `test-connection.js`.",
+      "Covered test surfaces include `package.json`, `README.md`, `index.js`, and `test-connection.js`.",
     ].join("\n"),
     rootDir
   );
@@ -374,6 +379,8 @@ async function createFixtureRepo() {
           {
             name: "service-entry-or-connection-probe-edits",
             pathPrefixes: [
+              "packages/valkey-proxy-server/package.json",
+              "packages/valkey-proxy-server/README.md",
               "packages/valkey-proxy-server/index.js",
               "packages/valkey-proxy-server/test-connection.js",
             ],

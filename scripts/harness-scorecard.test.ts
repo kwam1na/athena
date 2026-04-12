@@ -166,10 +166,12 @@ describe("collectHarnessScorecard", () => {
       "inferential",
       "graphify",
     ]);
+    expect(first.metrics.registry.definition).toContain("materialized docs");
     expect(first.metrics.registry.appCount).toBe(2);
     expect(first.metrics.registry.scenarioCount).toBe(
       HARNESS_BEHAVIOR_SCENARIOS.length
     );
+    expect(first.metrics.documentation.appCount).toBe(2);
     expect(first.metrics.documentation.healthyAppCount).toBe(2);
     expect(first.metrics.documentation.degradedAppCount).toBe(0);
     expect(first.metrics.inferential.status).toBe("skipped");

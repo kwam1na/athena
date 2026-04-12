@@ -17,7 +17,6 @@ const INLINE_CODE_PATTERN = /`([^`\n]+)`/g;
 const PLAYWRIGHT_TEST_DIR_PATTERN =
   /testDir\s*:\s*["'`](.+?)["'`]/;
 const RUNTIME_SCENARIO_INLINE_CODE_PATTERN = /`([a-z0-9]+(?:-[a-z0-9]+)+)`/g;
-const CODE_FILE_PATTERN = /\.(?:[cm]?[jt]sx?)$/;
 const RUNTIME_SCENARIO_SECTION_MARKERS = [
   "Current shared scenarios include",
   "Bundled scenarios include",
@@ -34,6 +33,10 @@ type HarnessAppConfig = {
   packageDir: string;
   scripts: Record<string, string>;
 };
+
+function normalizeRepoPath(repoPath: string) {
+  return repoPath.replaceAll("\\", "/");
+}
 
 function stripLinkDecorations(linkTarget: string) {
   return linkTarget.split("#", 1)[0]?.split("?", 1)[0] ?? "";
@@ -54,6 +57,22 @@ async function fileExists(filePath: string) {
   } catch {
     return false;
   }
+}
+
+async function hasAnyHarnessDocs(
+  rootDir: string,
+  app: Pick<HarnessAppRegistryEntry, "harnessDocs">
+) {
+  for (const repoRelativePath of [
+    ...app.harnessDocs.requiredEntryDocs,
+    ...app.harnessDocs.generatedDocs,
+  ]) {
+    if (await fileExists(path.join(rootDir, repoRelativePath))) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 function sortUniqueEntries(entries: string[]) {
@@ -354,15 +373,15 @@ async function collectHarnessOnboardingErrors(rootDir: string) {
     }
   }
 
-  for (const registration of HARNESS_PACKAGE_REGISTRY) {
-    if (registration.kind !== "harness-app") {
+  for (const app of HARNESS_APP_REGISTRY) {
+    if (!(await hasAnyHarnessDocs(rootDir, app))) {
       continue;
     }
 
-    for (const requiredEntryDoc of registration.requiredEntryDocs) {
+    for (const requiredEntryDoc of app.harnessDocs.requiredEntryDocs) {
       if (!(await fileExists(path.join(rootDir, requiredEntryDoc)))) {
         errors.push(
-          `Harness onboarding gap: ${registration.packageDir} is registered but missing required harness entry doc ${requiredEntryDoc}.`
+          `Harness onboarding gap: ${app.packageDir} is registered but missing required harness entry doc ${requiredEntryDoc}.`
         );
       }
     }
@@ -423,32 +442,38 @@ async function walkFiles(dirPath: string): Promise<string[]> {
   return files.flat();
 }
 
-async function collectServiceCodeFiles(
+async function collectServiceDocumentedSurfaces(
   rootDir: string,
-  packageDir: string
+  app: Pick<HarnessAppRegistryEntry, "packageDir" | "validationScenarios">
 ) {
-  const packageRoot = path.join(rootDir, packageDir);
-  const allFiles = await walkFiles(packageRoot);
-
-  return allFiles
-    .map((filePath) => path.relative(packageRoot, filePath).split(path.sep).join("/"))
-    .filter(
-      (repoRelativePath) =>
-        !repoRelativePath.startsWith("node_modules/") &&
-        !repoRelativePath.startsWith("dist/") &&
-        !repoRelativePath.startsWith("coverage/") &&
-        CODE_FILE_PATTERN.test(repoRelativePath)
+  const packageRoot = path.join(rootDir, app.packageDir);
+  const documentedSurfaces = new Set(
+    app.validationScenarios.flatMap((scenario) =>
+      scenario.touchedPaths
+        .map((repoRelativePath) =>
+          normalizeRepoPath(repoRelativePath).replace(/\/+$/, "")
+        )
+        .filter(Boolean)
     )
-    .sort();
+  );
+  const existingSurfaces: string[] = [];
+
+  for (const repoRelativePath of [...documentedSurfaces].sort()) {
+    if (await fileExists(path.join(packageRoot, repoRelativePath))) {
+      existingSurfaces.push(repoRelativePath);
+    }
+  }
+
+  return existingSurfaces;
 }
 
 async function collectTestSurfaceRoots(
   rootDir: string,
-  app: Pick<HarnessAppRegistryEntry, "archetype" | "packageDir">,
+  app: Pick<HarnessAppRegistryEntry, "archetype" | "packageDir" | "validationScenarios">,
   packageConfig: HarnessAppConfig
 ) {
   if (app.archetype === "service-package") {
-    return collectServiceCodeFiles(rootDir, packageConfig.packageDir);
+    return collectServiceDocumentedSurfaces(rootDir, app);
   }
 
   const packageRoot = path.join(rootDir, packageConfig.packageDir);
@@ -553,6 +578,10 @@ export async function validateHarnessDocs(rootDir: string) {
     const packageConfig = await readPackageConfig(rootDir, app);
     if (packageConfig) {
       packageConfigs.set(app.appName, packageConfig);
+    }
+
+    if (!(await hasAnyHarnessDocs(rootDir, app))) {
+      continue;
     }
 
     const requiredAppFiles = [

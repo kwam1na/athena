@@ -128,32 +128,36 @@ async function collectRouteGroups(
   return groups;
 }
 
-async function collectServiceCodeFiles(
+async function collectServiceDocumentedEntries(
   rootDir: string,
   config: HarnessAppRegistryEntry
 ) {
   const packageRoot = path.join(rootDir, config.packageDir);
-  const files = await walkFiles(packageRoot);
+  const documentedEntries = new Set(
+    config.validationScenarios.flatMap((scenario) =>
+      scenario.touchedPaths
+        .map((repoRelativePath) =>
+          normalizeRepoPath(repoRelativePath).replace(/\/+$/, "")
+        )
+        .filter(Boolean)
+    )
+  );
+  const existingEntries: string[] = [];
 
-  return files
-    .map((filePath) =>
-      normalizeRepoPath(path.relative(packageRoot, filePath))
-    )
-    .filter(
-      (repoRelativePath) =>
-        !repoRelativePath.startsWith("node_modules/") &&
-        !repoRelativePath.startsWith("dist/") &&
-        !repoRelativePath.startsWith("coverage/") &&
-        CODE_FILE_PATTERN.test(repoRelativePath)
-    )
-    .sort();
+  for (const repoRelativePath of [...documentedEntries].sort()) {
+    if (await fileExists(path.join(packageRoot, repoRelativePath))) {
+      existingEntries.push(repoRelativePath);
+    }
+  }
+
+  return existingEntries;
 }
 
 async function collectServiceEntryGroups(
   rootDir: string,
   config: HarnessAppRegistryEntry
 ) {
-  const files = await collectServiceCodeFiles(rootDir, config);
+  const files = await collectServiceDocumentedEntries(rootDir, config);
   const groups = new Map<string, string[]>();
 
   for (const entryFile of files) {
@@ -204,7 +208,7 @@ async function collectTestSurfaceRoots(
   packageConfig: PackageConfig
 ) {
   if (config.archetype === "service-package") {
-    return collectServiceCodeFiles(rootDir, config);
+    return collectServiceDocumentedEntries(rootDir, config);
   }
 
   const packageRoot = path.join(rootDir, config.packageDir);
@@ -362,7 +366,7 @@ async function buildDiscoveryIndex(
     config.archetype === "service-package" ? "Entry" : "Route";
   const discoveryIntro =
     config.archetype === "service-package"
-      ? `This entry index enumerates the current files under the package root so agents can orient quickly without scanning the whole package.`
+      ? `This entry index enumerates the current harness-mapped package files so agents can orient quickly without scanning the whole package.`
       : `This route index enumerates the current files under \`${config.routeRoot}\` so agents can orient quickly without scanning the whole package.`;
 
   return buildGeneratedDoc(
@@ -420,7 +424,7 @@ async function buildTestIndex(
     indexTitle,
     [
       config.archetype === "service-package"
-        ? "This index enumerates the current service entry and connection probe files and ties them back to the package-level commands agents should start from."
+        ? "This index enumerates the current harness-mapped service files and ties them back to the package-level commands agents should start from."
         : "This index enumerates the current automated test files and ties them back to the package-level commands agents should start from.",
     ],
     bodyLines
