@@ -11,9 +11,13 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { runGraphifyRebuild } from "./graphify-rebuild";
+import { GRAPHIFY_WIKI_ARTIFACTS } from "./graphify-wiki";
 
-const TRACKED_GRAPHIFY_ARTIFACTS = ["GRAPH_REPORT.md", "graph.json"] as const;
-const GRAPHIFY_OUTPUT_DIR = "graphify-out";
+const TRACKED_GRAPHIFY_ARTIFACTS = [
+  ...GRAPHIFY_WIKI_ARTIFACTS,
+  "graphify-out/GRAPH_REPORT.md",
+  "graphify-out/graph.json",
+] as const;
 const SKIP_DIRS = new Set([
   "node_modules",
   "worktrees",
@@ -120,13 +124,13 @@ async function collectStaleGraphifyArtifacts(rootDir: string, workspaceRoot: str
   const staleArtifacts: string[] = [];
 
   for (const artifactName of TRACKED_GRAPHIFY_ARTIFACTS) {
-    const trackedArtifactPath = path.join(rootDir, GRAPHIFY_OUTPUT_DIR, artifactName);
-    const freshArtifactPath = path.join(workspaceRoot, GRAPHIFY_OUTPUT_DIR, artifactName);
+    const trackedArtifactPath = path.join(rootDir, artifactName);
+    const freshArtifactPath = path.join(workspaceRoot, artifactName);
     const trackedExists = await fileExists(trackedArtifactPath);
     const freshExists = await fileExists(freshArtifactPath);
 
     if (!trackedExists || !freshExists) {
-      staleArtifacts.push(`- ${GRAPHIFY_OUTPUT_DIR}/${artifactName} (missing artifact)`);
+      staleArtifacts.push(`- ${artifactName} (missing artifact)`);
       continue;
     }
 
@@ -136,7 +140,7 @@ async function collectStaleGraphifyArtifacts(rootDir: string, workspaceRoot: str
     ]);
 
     if (!trackedContents.equals(freshContents)) {
-      staleArtifacts.push(`- ${GRAPHIFY_OUTPUT_DIR}/${artifactName}`);
+      staleArtifacts.push(`- ${artifactName}`);
     }
   }
 

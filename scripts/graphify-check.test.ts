@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { runGraphifyCheck } from "./graphify-check";
+import { GRAPHIFY_WIKI_ARTIFACTS } from "./graphify-wiki";
 
 const tempRoots: string[] = [];
 
@@ -20,6 +21,16 @@ async function createFixtureRoot() {
   return rootDir;
 }
 
+async function writeGraphifyWikiArtifacts(rootDir: string, variant: "fresh" | "stale") {
+  for (const artifactPath of GRAPHIFY_WIKI_ARTIFACTS) {
+    await write(
+      artifactPath,
+      `${variant === "fresh" ? "fresh" : "stale"} ${path.basename(artifactPath)}\n`,
+      rootDir
+    );
+  }
+}
+
 afterEach(async () => {
   await Promise.all(
     tempRoots.splice(0).map((rootDir) =>
@@ -33,12 +44,14 @@ describe("runGraphifyCheck", () => {
     const rootDir = await createFixtureRoot();
     await write("graphify-out/GRAPH_REPORT.md", "fresh report\n", rootDir);
     await write("graphify-out/graph.json", '{"fresh":true}\n', rootDir);
+    await writeGraphifyWikiArtifacts(rootDir, "fresh");
 
     await expect(
       runGraphifyCheck(rootDir, {
         runGraphifyRebuild: async (workspaceRoot) => {
           await write("graphify-out/GRAPH_REPORT.md", "fresh report\n", workspaceRoot);
           await write("graphify-out/graph.json", '{"fresh":true}\n', workspaceRoot);
+          await writeGraphifyWikiArtifacts(workspaceRoot, "fresh");
         },
       })
     ).resolves.toBeUndefined();
@@ -48,15 +61,34 @@ describe("runGraphifyCheck", () => {
     const rootDir = await createFixtureRoot();
     await write("graphify-out/GRAPH_REPORT.md", "stale report\n", rootDir);
     await write("graphify-out/graph.json", '{"stale":true}\n', rootDir);
+    await writeGraphifyWikiArtifacts(rootDir, "stale");
 
     await expect(
       runGraphifyCheck(rootDir, {
         runGraphifyRebuild: async (workspaceRoot) => {
           await write("graphify-out/GRAPH_REPORT.md", "fresh report\n", workspaceRoot);
           await write("graphify-out/graph.json", '{"fresh":true}\n', workspaceRoot);
+          await writeGraphifyWikiArtifacts(workspaceRoot, "fresh");
         },
       })
     ).rejects.toThrow("bun run graphify:rebuild");
+  });
+
+  it("fails when wiki artifacts drift even if the graph report stays fresh", async () => {
+    const rootDir = await createFixtureRoot();
+    await write("graphify-out/GRAPH_REPORT.md", "fresh report\n", rootDir);
+    await write("graphify-out/graph.json", '{"fresh":true}\n', rootDir);
+    await writeGraphifyWikiArtifacts(rootDir, "stale");
+
+    await expect(
+      runGraphifyCheck(rootDir, {
+        runGraphifyRebuild: async (workspaceRoot) => {
+          await write("graphify-out/GRAPH_REPORT.md", "fresh report\n", workspaceRoot);
+          await write("graphify-out/graph.json", '{"fresh":true}\n', workspaceRoot);
+          await writeGraphifyWikiArtifacts(workspaceRoot, "fresh");
+        },
+      })
+    ).rejects.toThrow("graphify-out/wiki/index.md");
   });
 
   it("does not rewrite tracked artifacts while performing the check", async () => {
