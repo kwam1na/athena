@@ -1,6 +1,6 @@
 # Athena Webapp
 
-Landing page for packages/athena-webapp. Start with the package entry docs, then jump into the graph hotspots below.
+Landing page for packages/athena-webapp. Use this page to orient around graph hotspots, then switch to the package entry docs for operational rules and validation.
 
 ## Package Docs
 - [AGENTS.md](../../../packages/athena-webapp/AGENTS.md)
@@ -17,7 +17,7 @@ Landing page for packages/athena-webapp. Start with the package entry docs, then
 - [validation-map.json](../../../packages/athena-webapp/docs/agent/validation-map.json)
 
 ## Graph Hotspots
-- `storeConfigV2.ts` (27 edges, Community 2) - [`packages/athena-webapp/convex/inventory/storeConfigV2.ts`](../../../packages/athena-webapp/convex/inventory/storeConfigV2.ts)
+- `storeConfigV2.ts` (27 edges, Community 3) - [`packages/athena-webapp/convex/inventory/storeConfigV2.ts`](../../../packages/athena-webapp/convex/inventory/storeConfigV2.ts)
 - `ProductStock.tsx` (19 edges, Community 9) - [`packages/athena-webapp/src/components/add-product/ProductStock.tsx`](../../../packages/athena-webapp/src/components/add-product/ProductStock.tsx)
 - `checkoutSession.ts` (17 edges, Community 11) - [`packages/athena-webapp/convex/storeFront/checkoutSession.ts`](../../../packages/athena-webapp/convex/storeFront/checkoutSession.ts)
 - `DataTableViewOptions()` (16 edges, Community 13) - [`packages/athena-webapp/src/components/user-bags/user-bags-table/data-table-view-options.tsx`](../../../packages/athena-webapp/src/components/user-bags/user-bags-table/data-table-view-options.tsx)
@@ -25,4 +25,5 @@ Landing page for packages/athena-webapp. Start with the package entry docs, then
 
 ## Navigation
 - [wiki index](../index.md) - back to the wiki index
+- [packages/AGENTS.md](../../../packages/AGENTS.md) - package router and operational guide entrypoint
 - [GRAPH_REPORT.md](../../GRAPH_REPORT.md) - full graph report

@@ -67,6 +67,10 @@ re-running checks.
 
 The repo keeps a graphify knowledge graph at `graphify-out/`.
 
+Start with [the Graphify wiki index](./graphify-out/wiki/index.md) for repo-wide navigation, package landing pages, and graph hotspots.
+
+Use [the packages agent router](./packages/AGENTS.md) plus each package's `AGENTS.md` and `docs/agent/*` docs as the operational source of truth for edits and validation.
+
 Use `bun run graphify:check` as the non-mutating freshness gate for tracked graphify artifacts.
 
 Use `bun run graphify:rebuild` as the repair path when the check reports stale artifacts. The rebuild command uses the interpreter recorded in `.graphify_python` (default `python3` in this repo).
@@ -77,6 +81,8 @@ Tracked graphify artifacts:
 
 - `graphify-out/GRAPH_REPORT.md`
 - `graphify-out/graph.json`
+- `graphify-out/wiki/index.md`
+- `graphify-out/wiki/packages/*.md`
 
 Local-only graphify artifacts:
 

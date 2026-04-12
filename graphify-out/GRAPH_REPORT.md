@@ -5,7 +5,7 @@
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 2764 nodes · 2274 edges · 1113 communities detected
+- 2769 nodes · 2289 edges · 1113 communities detected
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS
 - Token cost: 0 input · 0 output
 
@@ -1130,9 +1130,9 @@
 3. `DataTableViewOptions()` - 16 edges
 4. `DataTableColumnHeader()` - 14 edges
 5. `toV2Config()` - 13 edges
-6. `getBaseUrl()` - 12 edges
-7. `fileExists()` - 12 edges
-8. `validateHarnessDocs()` - 10 edges
+6. `validateHarnessDocs()` - 13 edges
+7. `getBaseUrl()` - 12 edges
+8. `fileExists()` - 12 edges
 9. `OrdersTableToolbarProvider()` - 9 edges
 10. `useOrdersTableToolbar()` - 9 edges
 
@@ -1156,15 +1156,15 @@ Nodes (45): compactContext(), createAuthEntryViewedEvent(), createAuthRequestSta
 
 ### Community 1 - "Community 1"
 Cohesion: 0.15
-Nodes (27): buildDiscoveryIndex(), buildGeneratedDoc(), buildKeyFolderIndex(), buildTestIndex(), buildValidationGuide(), buildValidationMap(), collectFolderFacts(), collectRouteGroups() (+19 more)
+Nodes (31): collectHarnessOnboardingErrors(), collectMarkdownLinkErrors(), collectMissingRequiredLinkErrors(), collectPackageGuideLinkErrors(), collectPackagesRouterLinkErrors(), collectReadmeLinkErrors(), collectReferencedPathErrors(), collectRuntimeScenarioDocSyncErrors() (+23 more)
 
 ### Community 2 - "Community 2"
-Cohesion: 0.16
-Nodes (25): asArray(), asBoolean(), asMtnMomoSetupStatus(), asNumber(), asOptionalArray(), asRecord(), assignOrDelete(), asString() (+17 more)
+Cohesion: 0.15
+Nodes (27): buildDiscoveryIndex(), buildGeneratedDoc(), buildKeyFolderIndex(), buildTestIndex(), buildValidationGuide(), buildValidationMap(), collectFolderFacts(), collectRouteGroups() (+19 more)
 
 ### Community 3 - "Community 3"
-Cohesion: 0.17
-Nodes (25): collectHarnessOnboardingErrors(), collectMarkdownLinkErrors(), collectReferencedPathErrors(), collectRuntimeScenarioDocSyncErrors(), collectServiceDocumentedSurfaces(), collectTestingDocErrors(), collectTestSurfaceRoots(), extractInlineCode() (+17 more)
+Cohesion: 0.16
+Nodes (25): asArray(), asBoolean(), asMtnMomoSetupStatus(), asNumber(), asOptionalArray(), asRecord(), assignOrDelete(), asString() (+17 more)
 
 ### Community 4 - "Community 4"
 Cohesion: 0.17
@@ -1363,16 +1363,16 @@ Cohesion: 0.29
 Nodes (0):
 
 ### Community 53 - "Community 53"
+Cohesion: 0.33
+Nodes (2): getProductName(), sortProduct()
+
+### Community 54 - "Community 54"
 Cohesion: 0.52
 Nodes (6): addItemToSavedBag(), getActiveSavedBag(), getBaseUrl(), removeItemFromSavedBag(), updateSavedBagItem(), updateSavedBagOwner()
 
-### Community 54 - "Community 54"
+### Community 55 - "Community 55"
 Cohesion: 0.29
 Nodes (0):
-
-### Community 55 - "Community 55"
-Cohesion: 0.33
-Nodes (2): getProductName(), sortProduct()
 
 ### Community 56 - "Community 56"
 Cohesion: 0.52

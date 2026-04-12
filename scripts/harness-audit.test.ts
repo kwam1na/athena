@@ -23,6 +23,9 @@ async function createFixtureRepo() {
     [
       "# athena",
       "",
+      "Start with [the Graphify wiki index](./graphify-out/wiki/index.md) for repo and package navigation.",
+      "Use [the packages router](./packages/AGENTS.md) for operational package entry docs.",
+      "",
       "List runtime behavior scenarios with `bun run harness:behavior --list`.",
       "Bundled scenarios include:",
       "",
@@ -43,10 +46,31 @@ async function createFixtureRepo() {
     [
       "# Packages Agent Router",
       "",
+      "- [Graphify wiki index](../graphify-out/wiki/index.md)",
+      "- [Athena webapp graph page](../graphify-out/wiki/packages/athena-webapp.md)",
+      "- [Storefront webapp graph page](../graphify-out/wiki/packages/storefront-webapp.md)",
+      "- [Valkey proxy server graph page](../graphify-out/wiki/packages/valkey-proxy-server.md)",
       "- [Athena webapp](./athena-webapp/AGENTS.md)",
       "- [Storefront webapp](./storefront-webapp/AGENTS.md)",
       "- [Valkey proxy server](./valkey-proxy-server/AGENTS.md)",
     ].join("\n"),
+    rootDir
+  );
+
+  await write("graphify-out/wiki/index.md", "# Graphify Wiki\n", rootDir);
+  await write(
+    "graphify-out/wiki/packages/athena-webapp.md",
+    "# Athena Webapp\n",
+    rootDir
+  );
+  await write(
+    "graphify-out/wiki/packages/storefront-webapp.md",
+    "# Storefront Webapp\n",
+    rootDir
+  );
+  await write(
+    "graphify-out/wiki/packages/valkey-proxy-server.md",
+    "# Valkey Proxy Server\n",
     rootDir
   );
 
@@ -113,6 +137,7 @@ async function createFixtureRepo() {
     [
       "# Athena Webapp Agent Guide",
       "",
+      "- [Graph page](../../graphify-out/wiki/packages/athena-webapp.md)",
       "- [Harness index](./docs/agent/index.md)",
       "- [Architecture](./docs/agent/architecture.md)",
       "- [Testing](./docs/agent/testing.md)",
@@ -125,6 +150,7 @@ async function createFixtureRepo() {
     [
       "# Storefront Webapp Agent Guide",
       "",
+      "- [Graph page](../../graphify-out/wiki/packages/storefront-webapp.md)",
       "- [Harness index](./docs/agent/index.md)",
       "- [Architecture](./docs/agent/architecture.md)",
       "- [Testing](./docs/agent/testing.md)",
@@ -137,6 +163,7 @@ async function createFixtureRepo() {
     [
       "# Valkey Proxy Server Agent Guide",
       "",
+      "- [Graph page](../../graphify-out/wiki/packages/valkey-proxy-server.md)",
       "- [Harness index](./docs/agent/index.md)",
       "- [Architecture](./docs/agent/architecture.md)",
       "- [Testing](./docs/agent/testing.md)",

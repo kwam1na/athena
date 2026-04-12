@@ -89,6 +89,8 @@ describe("generateGraphifyWikiPages", () => {
 
     expect(Array.from(pages.keys())).toEqual(GRAPHIFY_WIKI_ARTIFACTS);
     expect(pages.get("graphify-out/wiki/index.md")).toContain("# Graphify Wiki");
+    expect(pages.get("graphify-out/wiki/index.md")).toContain("## Entry Docs");
+    expect(pages.get("graphify-out/wiki/index.md")).toContain("packages/AGENTS.md");
     expect(pages.get("graphify-out/wiki/index.md")).toContain("Repo Summary");
     expect(pages.get("graphify-out/wiki/index.md")).toContain("sharedHotspot()");
     expect(pages.get("graphify-out/wiki/index.md")).toContain(
@@ -101,10 +103,19 @@ describe("generateGraphifyWikiPages", () => {
       pages.get("graphify-out/wiki/packages/athena-webapp.md")
     ).toContain("docs/agent/testing.md");
     expect(
+      pages.get("graphify-out/wiki/packages/athena-webapp.md")
+    ).toContain("packages/AGENTS.md");
+    expect(
       pages.get("graphify-out/wiki/packages/storefront-webapp.md")
     ).toContain("storeHotspot()");
     expect(
       pages.get("graphify-out/wiki/packages/storefront-webapp.md")
     ).toContain("docs/agent/code-map.md");
+    expect(
+      pages.get("graphify-out/wiki/packages/valkey-proxy-server.md")
+    ).toContain("# Valkey Proxy Server");
+    expect(
+      pages.get("graphify-out/wiki/packages/valkey-proxy-server.md")
+    ).toContain("No graph hotspots were found");
   });
 });

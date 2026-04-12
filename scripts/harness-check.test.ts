@@ -54,6 +54,9 @@ async function createFixtureRepo() {
     [
       "# athena",
       "",
+      "Start with [the Graphify wiki index](./graphify-out/wiki/index.md) for repo and package navigation.",
+      "Use [the packages router](./packages/AGENTS.md) for operational package entry docs.",
+      "",
       "List runtime behavior scenarios with `bun run harness:behavior --list`.",
       "Bundled scenarios include:",
       "",
@@ -74,10 +77,31 @@ async function createFixtureRepo() {
     [
       "# Packages Agent Router",
       "",
+      "- [Graphify wiki index](../graphify-out/wiki/index.md)",
+      "- [Athena webapp graph page](../graphify-out/wiki/packages/athena-webapp.md)",
+      "- [Storefront webapp graph page](../graphify-out/wiki/packages/storefront-webapp.md)",
+      "- [Valkey proxy server graph page](../graphify-out/wiki/packages/valkey-proxy-server.md)",
       "- [Athena webapp](./athena-webapp/AGENTS.md)",
       "- [Storefront webapp](./storefront-webapp/AGENTS.md)",
       "- [Valkey proxy server](./valkey-proxy-server/AGENTS.md)",
     ].join("\n"),
+    rootDir
+  );
+
+  await write("graphify-out/wiki/index.md", "# Graphify Wiki\n", rootDir);
+  await write(
+    "graphify-out/wiki/packages/athena-webapp.md",
+    "# Athena Webapp\n",
+    rootDir
+  );
+  await write(
+    "graphify-out/wiki/packages/storefront-webapp.md",
+    "# Storefront Webapp\n",
+    rootDir
+  );
+  await write(
+    "graphify-out/wiki/packages/valkey-proxy-server.md",
+    "# Valkey Proxy Server\n",
     rootDir
   );
 
@@ -112,6 +136,7 @@ async function createFixtureRepo() {
       [
         `# ${appName}`,
         "",
+        `- [Graph page](../../graphify-out/wiki/packages/${appName}.md)`,
         "- [Harness index](./docs/agent/index.md)",
         "- [Architecture](./docs/agent/architecture.md)",
         "- [Testing](./docs/agent/testing.md)",
@@ -262,6 +287,7 @@ async function createFixtureRepo() {
     [
       "# valkey-proxy-server",
       "",
+      "- [Graph page](../../graphify-out/wiki/packages/valkey-proxy-server.md)",
       "- [Harness index](./docs/agent/index.md)",
       "- [Architecture](./docs/agent/architecture.md)",
       "- [Testing](./docs/agent/testing.md)",
@@ -508,6 +534,72 @@ describe("validateHarnessDocs", () => {
 
     await expect(validateHarnessDocs(rootDir)).resolves.toContain(
       "Broken markdown link in packages/athena-webapp/AGENTS.md: ./docs/agent/missing.md"
+    );
+  });
+
+  it("reports missing graphify links from the README", async () => {
+    const rootDir = await createFixtureRepo();
+    await write(
+      "README.md",
+      [
+        "# athena",
+        "",
+        "List runtime behavior scenarios with `bun run harness:behavior --list`.",
+        "Bundled scenarios include:",
+        "",
+        "- `sample-runtime-smoke`",
+        "- `athena-admin-shell-boot`",
+        "- `athena-convex-storefront-composition`",
+        "- `athena-convex-storefront-failure-visibility`",
+        "- `storefront-checkout-bootstrap`",
+        "- `storefront-checkout-validation-blocker`",
+        "- `storefront-checkout-verification-recovery`",
+        "",
+      ].join("\n"),
+      rootDir
+    );
+
+    await expect(validateHarnessDocs(rootDir)).resolves.toContain(
+      "Missing required README graphify link in README.md: ./graphify-out/wiki/index.md"
+    );
+  });
+
+  it("reports missing graphify links from the packages router", async () => {
+    const rootDir = await createFixtureRepo();
+    await write(
+      "packages/AGENTS.md",
+      [
+        "# Packages Agent Router",
+        "",
+        "- [Athena webapp](./athena-webapp/AGENTS.md)",
+        "- [Storefront webapp](./storefront-webapp/AGENTS.md)",
+        "- [Valkey proxy server](./valkey-proxy-server/AGENTS.md)",
+      ].join("\n"),
+      rootDir
+    );
+
+    await expect(validateHarnessDocs(rootDir)).resolves.toContain(
+      "Missing required packages router link in packages/AGENTS.md: ../graphify-out/wiki/index.md"
+    );
+  });
+
+  it("reports missing graphify links from package AGENTS guides", async () => {
+    const rootDir = await createFixtureRepo();
+    await write(
+      "packages/athena-webapp/AGENTS.md",
+      [
+        "# athena-webapp",
+        "",
+        "- [Harness index](./docs/agent/index.md)",
+        "- [Architecture](./docs/agent/architecture.md)",
+        "- [Testing](./docs/agent/testing.md)",
+        "- [Code map](./docs/agent/code-map.md)",
+      ].join("\n"),
+      rootDir
+    );
+
+    await expect(validateHarnessDocs(rootDir)).resolves.toContain(
+      "Missing required package guide link in packages/athena-webapp/AGENTS.md: ../../graphify-out/wiki/packages/athena-webapp.md"
     );
   });
 
