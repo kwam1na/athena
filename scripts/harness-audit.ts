@@ -63,6 +63,26 @@ async function fileExists(filePath: string) {
   }
 }
 
+async function hasAnyHarnessDocs(
+  rootDir: string,
+  target: { testingDocPath: string; validationMapPath: string }
+) {
+  const packageDocsRoot = path.dirname(target.testingDocPath);
+
+  for (const repoRelativePath of [
+    target.testingDocPath,
+    target.validationMapPath,
+    path.posix.join(packageDocsRoot, "index.md"),
+    path.posix.join(path.posix.dirname(packageDocsRoot), "AGENTS.md"),
+  ]) {
+    if (await fileExists(path.join(rootDir, repoRelativePath))) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 async function readJsonFile<T>(filePath: string) {
   return JSON.parse(await readFile(filePath, "utf8")) as T;
 }
@@ -148,19 +168,7 @@ async function loadAuditTarget(
   const groupedErrors = new Map<string, string[]>();
   const absoluteValidationMapPath = path.join(rootDir, target.validationMapPath);
   const absoluteTestingDocPath = path.join(rootDir, target.testingDocPath);
-  const [validationMapExists, testingDocExists] = await Promise.all([
-    fileExists(absoluteValidationMapPath),
-    fileExists(absoluteTestingDocPath),
-  ]);
-
-  if (!validationMapExists && !testingDocExists) {
-    return {
-      groupedErrors,
-      loadedTarget: null,
-    };
-  }
-
-  if (!validationMapExists) {
+  if (!(await fileExists(absoluteValidationMapPath))) {
     addGroupedError(
       groupedErrors,
       target.appName,
@@ -172,7 +180,7 @@ async function loadAuditTarget(
     };
   }
 
-  if (!testingDocExists) {
+  if (!(await fileExists(absoluteTestingDocPath))) {
     addGroupedError(
       groupedErrors,
       target.appName,
@@ -353,7 +361,24 @@ export async function runHarnessAudit(rootDir: string) {
   }
 
   const loadedTargets: LoadedAuditTarget[] = [];
-  for (const target of AUDIT_TARGETS) {
+  const auditTargets = [];
+  for (const app of HARNESS_APP_REGISTRY) {
+    const target = {
+      appName: app.appName,
+      auditedRoots: app.auditedRoots,
+      testingDocPath: app.harnessDocs.testingPath,
+      validationMapPath: app.harnessDocs.validationMapPath,
+    };
+    if (
+      app.onboardingStatus === "planned" &&
+      !(await hasAnyHarnessDocs(rootDir, target))
+    ) {
+      continue;
+    }
+    auditTargets.push(target);
+  }
+
+  for (const target of auditTargets) {
     const { groupedErrors: targetErrors, loadedTarget } = await loadAuditTarget(
       rootDir,
       target

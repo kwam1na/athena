@@ -73,6 +73,7 @@ export type HarnessValidationScenario = {
 export type HarnessAppName = "athena-webapp" | "storefront-webapp" | "valkey-proxy-server";
 
 export type HarnessAppArchetype = "webapp" | "service-package";
+export type HarnessOnboardingStatus = "active" | "planned";
 
 export type HarnessDocPaths = {
   agentsPath: string;
@@ -97,6 +98,7 @@ export type HarnessAppRegistryEntry = {
   label: string;
   packageDir: string;
   archetype: HarnessAppArchetype;
+  onboardingStatus: HarnessOnboardingStatus;
   routeRoot?: string;
   auditedRoots: readonly string[];
   harnessDocs: HarnessDocPaths;
@@ -174,6 +176,7 @@ export const HARNESS_APP_REGISTRY = [
     appName: "athena-webapp",
     label: "Athena Webapp",
     archetype: "webapp",
+    onboardingStatus: "active",
     packageDir: "packages/athena-webapp",
     routeRoot: "src/routes",
     auditedRoots: ["src", "convex"],
@@ -295,6 +298,7 @@ export const HARNESS_APP_REGISTRY = [
     appName: "storefront-webapp",
     label: "Storefront Webapp",
     archetype: "webapp",
+    onboardingStatus: "active",
     packageDir: "packages/storefront-webapp",
     routeRoot: "src/routes",
     auditedRoots: ["src", "tests"],
@@ -414,6 +418,7 @@ export const HARNESS_APP_REGISTRY = [
     appName: "valkey-proxy-server",
     label: "Valkey Proxy Server",
     archetype: "service-package",
+    onboardingStatus: "planned",
     packageDir: "packages/valkey-proxy-server",
     auditedRoots: ["."],
     harnessDocs: buildHarnessDocPathsForArchetype(

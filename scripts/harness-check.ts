@@ -75,6 +75,17 @@ async function hasAnyHarnessDocs(
   return false;
 }
 
+async function isEnforcedHarnessApp(
+  rootDir: string,
+  app: HarnessAppRegistryEntry
+) {
+  if (app.onboardingStatus === "active") {
+    return true;
+  }
+
+  return hasAnyHarnessDocs(rootDir, app);
+}
+
 function sortUniqueEntries(entries: string[]) {
   return [...new Set(entries.filter(Boolean))].sort((left, right) =>
     left.localeCompare(right)
@@ -374,7 +385,7 @@ async function collectHarnessOnboardingErrors(rootDir: string) {
   }
 
   for (const app of HARNESS_APP_REGISTRY) {
-    if (!(await hasAnyHarnessDocs(rootDir, app))) {
+    if (!(await isEnforcedHarnessApp(rootDir, app))) {
       continue;
     }
 
@@ -568,6 +579,7 @@ export async function validateHarnessDocs(rootDir: string) {
   const markdownFiles = [PACKAGES_AGENTS_PATH];
   const packageConfigs = new Map<HarnessAppName, HarnessAppConfig>();
   const generatedDocs = await generateHarnessDocs(rootDir);
+  const enforcedApps: HarnessAppRegistryEntry[] = [];
 
   if (!(await fileExists(path.join(rootDir, PACKAGES_AGENTS_PATH)))) {
     errors.push(`Missing required harness file: ${PACKAGES_AGENTS_PATH}`);
@@ -580,9 +592,11 @@ export async function validateHarnessDocs(rootDir: string) {
       packageConfigs.set(app.appName, packageConfig);
     }
 
-    if (!(await hasAnyHarnessDocs(rootDir, app))) {
+    if (!(await isEnforcedHarnessApp(rootDir, app))) {
       continue;
     }
+
+    enforcedApps.push(app);
 
     const requiredAppFiles = [
       ...app.harnessDocs.requiredEntryDocs,
@@ -612,7 +626,7 @@ export async function validateHarnessDocs(rootDir: string) {
     );
     errors.push(...linkErrors);
 
-    const app = HARNESS_APP_REGISTRY.find((candidate) =>
+    const app = enforcedApps.find((candidate) =>
       markdownFile.startsWith(`${candidate.packageDir}/`)
     );
     const packageConfig = app ? packageConfigs.get(app.appName) : null;

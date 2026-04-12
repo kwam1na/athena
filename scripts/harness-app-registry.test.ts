@@ -10,6 +10,7 @@ describe("HARNESS_APP_REGISTRY", () => {
 
     expect(valkeyProxy?.appName).toBe("valkey-proxy-server");
     expect(valkeyProxy?.archetype).toBe("service-package");
+    expect(valkeyProxy?.onboardingStatus).toBe("planned");
     expect(valkeyProxy?.packageDir).toBe("packages/valkey-proxy-server");
     expect(valkeyProxy?.auditedRoots).toEqual(["."]);
     expect(valkeyProxy?.harnessDocs.entryIndexPath).toBe(
@@ -40,5 +41,13 @@ describe("HARNESS_APP_REGISTRY", () => {
       ],
       commands: [{ kind: "script", script: "test:connection" }],
     });
+  });
+
+  it("keeps the webapps as active harness apps", () => {
+    const statuses = HARNESS_APP_REGISTRY.filter(
+      (entry) => entry.appName !== "valkey-proxy-server"
+    ).map((entry) => entry.onboardingStatus);
+
+    expect(statuses).toEqual(["active", "active"]);
   });
 });

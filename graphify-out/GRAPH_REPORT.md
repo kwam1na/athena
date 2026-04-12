@@ -5,7 +5,7 @@
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 2724 nodes · 2211 edges · 1109 communities detected
+- 2727 nodes · 2219 edges · 1109 communities detected
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS
 - Token cost: 0 input · 0 output
 
@@ -1160,11 +1160,11 @@ Nodes (25): asArray(), asBoolean(), asMtnMomoSetupStatus(), asNumber(), asOption
 
 ### Community 3 - "Community 3"
 Cohesion: 0.17
-Nodes (26): buildFinding(), buildHumanReport(), collectHarnessSafetySignalFindings(), collectHarnessScriptTestUpdateFindings(), createOutput(), createProviderFailure(), createReducedSignalFinding(), createRuntimeFailure() (+18 more)
+Nodes (25): collectHarnessOnboardingErrors(), collectMarkdownLinkErrors(), collectReferencedPathErrors(), collectRuntimeScenarioDocSyncErrors(), collectServiceDocumentedSurfaces(), collectTestingDocErrors(), collectTestSurfaceRoots(), extractInlineCode() (+17 more)
 
 ### Community 4 - "Community 4"
-Cohesion: 0.18
-Nodes (24): collectHarnessOnboardingErrors(), collectMarkdownLinkErrors(), collectReferencedPathErrors(), collectRuntimeScenarioDocSyncErrors(), collectServiceDocumentedSurfaces(), collectTestingDocErrors(), collectTestSurfaceRoots(), extractInlineCode() (+16 more)
+Cohesion: 0.17
+Nodes (26): buildFinding(), buildHumanReport(), collectHarnessSafetySignalFindings(), collectHarnessScriptTestUpdateFindings(), createOutput(), createProviderFailure(), createReducedSignalFinding(), createRuntimeFailure() (+18 more)
 
 ### Community 5 - "Community 5"
 Cohesion: 0.13
@@ -1207,24 +1207,24 @@ Cohesion: 0.21
 Nodes (14): CheckoutSessionError, createCheckoutSession(), defaultCheckoutActionMessage(), getActiveCheckoutSession(), getBaseUrl(), getCheckoutActionErrorMessage(), getCheckoutErrorMessageFromPayload(), getCheckoutSession() (+6 more)
 
 ### Community 15 - "Community 15"
+Cohesion: 0.2
+Nodes (9): collectCommandsForChangedFiles(), fileExists(), hasAnyHarnessDocs(), loadReviewTarget(), loadReviewTargets(), matchesPathPrefix(), normalizeBehaviorScenarioName(), normalizeRepoPath() (+1 more)
+
+### Community 16 - "Community 16"
 Cohesion: 0.13
 Nodes (1): DataTableColumnHeader()
 
-### Community 16 - "Community 16"
-Cohesion: 0.2
-Nodes (8): collectCommandsForChangedFiles(), fileExists(), loadReviewTarget(), loadReviewTargets(), matchesPathPrefix(), normalizeBehaviorScenarioName(), normalizeRepoPath(), runHarnessReview()
-
 ### Community 17 - "Community 17"
+Cohesion: 0.28
+Nodes (12): addGroupedError(), collectLiveSurfaceEntries(), fileExists(), formatGroupedErrors(), hasAnyHarnessDocs(), inferGroupFromError(), loadAuditTarget(), matchesPathPrefix() (+4 more)
+
+### Community 18 - "Community 18"
 Cohesion: 0.24
 Nodes (13): buildNumericTrendStats(), buildRegressionWarnings(), buildRuntimeTrendOutput(), buildScenarioTrend(), collectHarnessRuntimeTrends(), formatMs(), formatPercent(), parseHarnessBehaviorReportLines() (+5 more)
 
-### Community 18 - "Community 18"
+### Community 19 - "Community 19"
 Cohesion: 0.18
 Nodes (5): handleSave(), hasReceivingAccountDetails(), normalizePrimaryAccounts(), toPatchReceivingAccounts(), trimToUndefined()
-
-### Community 19 - "Community 19"
-Cohesion: 0.29
-Nodes (11): addGroupedError(), collectLiveSurfaceEntries(), fileExists(), formatGroupedErrors(), inferGroupFromError(), loadAuditTarget(), matchesPathPrefix(), normalizeBehaviorScenarioName() (+3 more)
 
 ### Community 20 - "Community 20"
 Cohesion: 0.18
@@ -1263,20 +1263,20 @@ Cohesion: 0.36
 Nodes (8): collectAllPages(), createTransactionFromSessionHandler(), listCompletedTransactionsForDay(), listProductSkusByProductId(), listSessionItems(), listStoreProducts(), listStoreSkus(), listTransactionItems()
 
 ### Community 29 - "Community 29"
-Cohesion: 0.31
-Nodes (5): formatDeliveryAddress(), getAmountPaidForOrder(), getDiscountValue(), getOrderAmount(), getPotentialPoints()
-
-### Community 30 - "Community 30"
 Cohesion: 0.29
 Nodes (6): handleFileSelect(), handleRevert(), handleUpload(), resetEditState(), uploadImage(), validateFile()
 
-### Community 31 - "Community 31"
+### Community 30 - "Community 30"
 Cohesion: 0.2
 Nodes (0):
 
-### Community 32 - "Community 32"
+### Community 31 - "Community 31"
 Cohesion: 0.38
 Nodes (9): awardPointsForGuestOrders(), awardPointsForPastOrder(), getBaseUrl(), getEligiblePastOrders(), getOrderRewardPoints(), getPointHistory(), getRewardTiers(), getUserPoints() (+1 more)
+
+### Community 32 - "Community 32"
+Cohesion: 0.31
+Nodes (5): formatDeliveryAddress(), getAmountPaidForOrder(), getDiscountValue(), getOrderAmount(), getPotentialPoints()
 
 ### Community 33 - "Community 33"
 Cohesion: 0.28
@@ -1300,11 +1300,11 @@ Nodes (1): Logger
 
 ### Community 38 - "Community 38"
 Cohesion: 0.43
-Nodes (6): buildMtnCollectionsLookupPrefixes(), isTargetEnvironment(), readScopedValue(), resolveConfigForPrefix(), resolveMtnCollectionsConfigFromEnv(), toEnvSegment()
+Nodes (6): sendDiscountCodeEmail(), sendDiscountReminderEmail(), sendFeedbackRequestEmail(), sendNewOrderEmail(), sendOrderEmail(), sendVerificationCode()
 
 ### Community 39 - "Community 39"
 Cohesion: 0.43
-Nodes (6): sendDiscountCodeEmail(), sendDiscountReminderEmail(), sendFeedbackRequestEmail(), sendNewOrderEmail(), sendOrderEmail(), sendVerificationCode()
+Nodes (6): buildMtnCollectionsLookupPrefixes(), isTargetEnvironment(), readScopedValue(), resolveConfigForPrefix(), resolveMtnCollectionsConfigFromEnv(), toEnvSegment()
 
 ### Community 40 - "Community 40"
 Cohesion: 0.25
@@ -7273,5 +7273,5 @@ _Questions this graph is uniquely positioned to answer:_
   _Cohesion score 0.11 - nodes in this community are weakly interconnected._
 - **Should `Community 12` be split into smaller, more focused modules?**
   _Cohesion score 0.12 - nodes in this community are weakly interconnected._
-- **Should `Community 15` be split into smaller, more focused modules?**
+- **Should `Community 16` be split into smaller, more focused modules?**
   _Cohesion score 0.13 - nodes in this community are weakly interconnected._

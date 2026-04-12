@@ -68,10 +68,13 @@ type HarnessScorecardOutput = {
     registry: {
       definition: string;
       appCount: number;
+      activeAppCount: number;
+      plannedAppCount: number;
       scenarioCount: number;
       apps: Array<{
         appName: string;
         label: string;
+        onboardingStatus: "active" | "planned";
         validationSurfaceCount: number;
         scenarioCount: number;
       }>;
@@ -463,34 +466,41 @@ export async function collectHarnessScorecard(
   const expectedScenarios = sortUnique(
     HARNESS_BEHAVIOR_SCENARIOS.map((scenario) => scenario.name)
   );
-  const activeApps: HarnessAppRegistryEntry[] = [];
+  const materializedApps: HarnessAppRegistryEntry[] = [];
 
   for (const app of HARNESS_APP_REGISTRY) {
     if (await hasAnyHarnessDocs(rootDir, app, fsApi)) {
-      activeApps.push(app);
+      materializedApps.push(app);
     }
   }
 
   const appStatuses = await Promise.all(
-    activeApps.map((app) =>
+    materializedApps.map((app) =>
       inspectAppDocumentation(rootDir, app, fsApi, expectedScenarios)
     )
   );
 
   const registry = {
     definition:
-      "Harness app registry entries with materialized docs plus the shared runtime scenario inventory from scripts/harness-app-registry.ts and scripts/harness-behavior-scenarios.ts.",
-    appCount: activeApps.length,
+      "Registered harness apps, onboarding states, and shared runtime scenario inventory from scripts/harness-app-registry.ts and scripts/harness-behavior-scenarios.ts.",
+    appCount: HARNESS_APP_REGISTRY.length,
+    activeAppCount: HARNESS_APP_REGISTRY.filter(
+      (app) => app.onboardingStatus === "active"
+    ).length,
+    plannedAppCount: HARNESS_APP_REGISTRY.filter(
+      (app) => app.onboardingStatus === "planned"
+    ).length,
     scenarioCount: expectedScenarios.length,
-    apps: activeApps.map((app) => ({
+    apps: HARNESS_APP_REGISTRY.map((app) => ({
       appName: app.appName,
       label: app.label,
-      validationSurfaceCount:
-        appStatuses.find((metric) => metric.appName === app.appName)
-          ?.validationSurfaceCount ?? 0,
-      scenarioCount:
-        appStatuses.find((metric) => metric.appName === app.appName)
-          ?.documentedScenarioCount ?? 0,
+      onboardingStatus: app.onboardingStatus,
+      validationSurfaceCount: app.validationScenarios.length,
+      scenarioCount: sortUnique(
+        app.validationScenarios.flatMap(
+          (scenario) => scenario.behaviorScenarios ?? []
+        )
+      ).length,
     })),
     scenarioNames: expectedScenarios,
   };
