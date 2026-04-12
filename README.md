@@ -14,6 +14,7 @@ Key repo-level commands:
 - `bun run architecture:check`
 - `bun run pre-push:review`
 - `bun run pr:athena`
+- `bun run graphify:check`
 
 `bun run harness:test` is the canonical harness implementation gate for harness scripts, graphify tooling, and pre-push review wiring.
 
@@ -25,9 +26,11 @@ captures runtime signals, and tears down automatically.
 
 The repo keeps a graphify knowledge graph at `graphify-out/`.
 
-Use `bun run graphify:rebuild` after code changes. The command prefers the interpreter recorded in `.graphify_python` and falls back to `python3` only if that file is missing.
+Use `bun run graphify:check` as the non-mutating freshness gate for tracked graphify artifacts.
 
-If you need to repair the local graphify setup, make sure `.graphify_python` points at a Python environment that can import `graphify`. In this repo that is typically a pipx-managed interpreter.
+Use `bun run graphify:rebuild` as the repair path when the check reports stale artifacts. The rebuild command uses the interpreter recorded in `.graphify_python` (default `python3` in this repo).
+
+If you need to repair the local graphify setup, make sure `python3` can import `graphify` and upgrade it with `python3 -m pip install --upgrade graphifyy`.
 
 Tracked graphify artifacts:
 

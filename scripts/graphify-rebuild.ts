@@ -4,6 +4,8 @@ import path from "node:path";
 export const GRAPHIFY_REBUILD_SNIPPET =
   [
     "import os",
+    "import re",
+    "import shutil",
     "from pathlib import Path",
     "from graphify.extract import extract",
     "from graphify.build import build_from_json",
@@ -31,6 +33,11 @@ export const GRAPHIFY_REBUILD_SNIPPET =
     "            if file_path.suffix in EXTENSIONS:",
     "                results.append(file_path)",
     "    return sorted(results)",
+    "out = ROOT / 'graphify-out'",
+    "out.mkdir(exist_ok=True)",
+    "cache_dir = out / 'cache'",
+    "if cache_dir.exists():",
+    "    shutil.rmtree(cache_dir)",
     "code_files = collect_repo_files(ROOT)",
     "if not code_files:",
     "    raise SystemExit('[graphify rebuild] No code files found - nothing to rebuild.')",
@@ -43,10 +50,14 @@ export const GRAPHIFY_REBUILD_SNIPPET =
     "surprises = surprising_connections(graph, communities)",
     "labels = {cid: 'Community ' + str(cid) for cid in communities}",
     "questions = suggest_questions(graph, communities, labels)",
-    "out = ROOT / 'graphify-out'",
-    "out.mkdir(exist_ok=True)",
     "report = generate(graph, communities, cohesion, labels, gods, surprises, detection, {'input': 0, 'output': 0}, str(ROOT), suggested_questions=questions)",
-    "(out / 'GRAPH_REPORT.md').write_text(report)",
+    "report_lines = report.splitlines()",
+    "if report_lines:",
+    "    report_lines[0] = re.sub(r'\\s+\\(\\d{4}-\\d{2}-\\d{2}\\)$', '', report_lines[0])",
+    "normalized_report = '\\n'.join(line.rstrip() for line in report_lines)",
+    "if report.endswith('\\n'):",
+    "    normalized_report += '\\n'",
+    "(out / 'GRAPH_REPORT.md').write_text(normalized_report)",
     "to_json(graph, communities, str(out / 'graph.json'))",
     "flag = out / 'needs_update'",
     "if flag.exists():",
@@ -80,7 +91,24 @@ async function resolveGraphifyPython(rootDir: string) {
   }
 
   const configuredPython = (await readFile(configuredPythonPath, "utf8")).trim();
-  return configuredPython || "python3";
+  if (!configuredPython) {
+    return "python3";
+  }
+
+  const looksLikePath =
+    configuredPython.includes(path.sep) || configuredPython.includes("/");
+  if (!looksLikePath) {
+    return configuredPython;
+  }
+
+  if (await fileExists(configuredPython)) {
+    return configuredPython;
+  }
+
+  console.warn(
+    `[graphify rebuild] Configured interpreter not found (${configuredPython}); falling back to python3.`
+  );
+  return "python3";
 }
 
 export async function runGraphifyRebuild(

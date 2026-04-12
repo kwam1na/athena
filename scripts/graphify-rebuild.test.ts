@@ -28,9 +28,28 @@ afterEach(async () => {
 });
 
 describe("runGraphifyRebuild", () => {
+  it("resets graphify cache before extraction to avoid cross-version drift", () => {
+    expect(GRAPHIFY_REBUILD_SNIPPET).toContain("import shutil");
+    expect(GRAPHIFY_REBUILD_SNIPPET).toContain("cache_dir = out / 'cache'");
+    expect(GRAPHIFY_REBUILD_SNIPPET).toContain("shutil.rmtree(cache_dir)");
+  });
+
+  it("normalizes date-bearing report headers for stable freshness checks", () => {
+    expect(GRAPHIFY_REBUILD_SNIPPET).toContain("import re");
+    expect(GRAPHIFY_REBUILD_SNIPPET).toContain("report_lines[0] = re.sub(");
+    expect(GRAPHIFY_REBUILD_SNIPPET).toContain(
+      "normalized_report = '\\n'.join(line.rstrip() for line in report_lines)"
+    );
+  });
+
   it("uses the repo-pinned graphify python when available", async () => {
     const rootDir = await createFixtureRoot();
-    await write(".graphify_python", "/tmp/graphify-python\n", rootDir);
+    await write("graphify-python", "", rootDir);
+    await write(
+      ".graphify_python",
+      `${path.join(rootDir, "graphify-python")}\n`,
+      rootDir
+    );
 
     const commands: string[][] = [];
 
@@ -45,12 +64,31 @@ describe("runGraphifyRebuild", () => {
     });
 
     expect(commands).toEqual([
-      ["/tmp/graphify-python", "-c", GRAPHIFY_REBUILD_SNIPPET],
+      [path.join(rootDir, "graphify-python"), "-c", GRAPHIFY_REBUILD_SNIPPET],
     ]);
   });
 
   it("falls back to python3 when no pinned graphify python is configured", async () => {
     const rootDir = await createFixtureRoot();
+    const commands: string[][] = [];
+
+    await runGraphifyRebuild(rootDir, {
+      spawn(command) {
+        commands.push(command);
+        return {
+          exited: Promise.resolve(0),
+          stderr: new ReadableStream(),
+        };
+      },
+    });
+
+    expect(commands).toEqual([["python3", "-c", GRAPHIFY_REBUILD_SNIPPET]]);
+  });
+
+  it("falls back to python3 when the pinned graphify python path does not exist", async () => {
+    const rootDir = await createFixtureRoot();
+    await write(".graphify_python", "/tmp/missing-graphify-python\n", rootDir);
+
     const commands: string[][] = [];
 
     await runGraphifyRebuild(rootDir, {

@@ -28,6 +28,9 @@ jobs:
       - name: Install dependencies
         run: bun install
 
+      - name: Install Graphify runtime
+        run: python3 -m pip install graphifyy
+
       - name: Check harness docs
         run: bun run harness:check
 
@@ -36,6 +39,9 @@ jobs:
 
       - name: Audit harness coverage
         run: bun run harness:audit
+
+      - name: Check graphify freshness
+        run: bun run graphify:check
 
   harness-implementation-tests:
     name: Harness Implementation Tests
