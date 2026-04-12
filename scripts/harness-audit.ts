@@ -102,7 +102,10 @@ function shouldSkipSurfaceEntry(entryName: string) {
   return (
     entryName.startsWith(".") ||
     entryName === "_generated" ||
+    entryName === "AGENTS.md" ||
+    entryName === "docs" ||
     entryName === "README.md" ||
+    entryName === "package.json" ||
     entryName === "coverage" ||
     entryName === "dist" ||
     entryName === "node_modules"

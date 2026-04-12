@@ -5,8 +5,6 @@ import {
   HARNESS_APP_REGISTRY,
   HARNESS_PACKAGE_REGISTRY,
   PACKAGES_AGENTS_PATH,
-  REQUIRED_CODE_MAP_LINKS,
-  REQUIRED_INDEX_LINKS,
   REQUIRED_TESTING_LINKS,
   type HarnessAppName,
   type HarnessAppRegistryEntry,
@@ -19,6 +17,7 @@ const INLINE_CODE_PATTERN = /`([^`\n]+)`/g;
 const PLAYWRIGHT_TEST_DIR_PATTERN =
   /testDir\s*:\s*["'`](.+?)["'`]/;
 const RUNTIME_SCENARIO_INLINE_CODE_PATTERN = /`([a-z0-9]+(?:-[a-z0-9]+)+)`/g;
+const CODE_FILE_PATTERN = /\.(?:[cm]?[jt]sx?)$/;
 const RUNTIME_SCENARIO_SECTION_MARKERS = [
   "Current shared scenarios include",
   "Bundled scenarios include",
@@ -424,10 +423,34 @@ async function walkFiles(dirPath: string): Promise<string[]> {
   return files.flat();
 }
 
+async function collectServiceCodeFiles(
+  rootDir: string,
+  packageDir: string
+) {
+  const packageRoot = path.join(rootDir, packageDir);
+  const allFiles = await walkFiles(packageRoot);
+
+  return allFiles
+    .map((filePath) => path.relative(packageRoot, filePath).split(path.sep).join("/"))
+    .filter(
+      (repoRelativePath) =>
+        !repoRelativePath.startsWith("node_modules/") &&
+        !repoRelativePath.startsWith("dist/") &&
+        !repoRelativePath.startsWith("coverage/") &&
+        CODE_FILE_PATTERN.test(repoRelativePath)
+    )
+    .sort();
+}
+
 async function collectTestSurfaceRoots(
   rootDir: string,
+  app: Pick<HarnessAppRegistryEntry, "archetype" | "packageDir">,
   packageConfig: HarnessAppConfig
 ) {
+  if (app.archetype === "service-package") {
+    return collectServiceCodeFiles(rootDir, packageConfig.packageDir);
+  }
+
   const packageRoot = path.join(rootDir, packageConfig.packageDir);
   const allFiles = await walkFiles(packageRoot);
   const surfaces = new Set<string>();
@@ -469,6 +492,7 @@ async function collectTestSurfaceRoots(
 async function collectTestingDocErrors(
   rootDir: string,
   filePath: string,
+  app: Pick<HarnessAppRegistryEntry, "archetype" | "packageDir">,
   packageConfig: HarnessAppConfig,
   contents: string
 ) {
@@ -490,8 +514,11 @@ async function collectTestingDocErrors(
     }
   }
 
-  const requiredScripts = new Set(["test"]);
-  if (packageConfig.scripts["test:e2e"]) {
+  const requiredScripts =
+    app.archetype === "service-package"
+      ? new Set(["test:connection"])
+      : new Set(["test"]);
+  if (app.archetype === "webapp" && packageConfig.scripts["test:e2e"]) {
     requiredScripts.add("test:e2e");
   }
 
@@ -501,7 +528,7 @@ async function collectTestingDocErrors(
     }
   }
 
-  const requiredSurfaces = await collectTestSurfaceRoots(rootDir, packageConfig);
+  const requiredSurfaces = await collectTestSurfaceRoots(rootDir, app, packageConfig);
   for (const surface of requiredSurfaces) {
     if (!contents.includes(surface)) {
       errors.push(`Missing documented test surface in ${filePath}: ${surface}`);
@@ -556,17 +583,17 @@ export async function validateHarnessDocs(rootDir: string) {
     );
     errors.push(...linkErrors);
 
-    if (!markdownFile.endsWith("/docs/agent/index.md")) {
-      const app = HARNESS_APP_REGISTRY.find((candidate) =>
-        markdownFile.startsWith(`${candidate.packageDir}/`)
-      );
-      const packageConfig = app ? packageConfigs.get(app.appName) : null;
-      const linkTargets = new Set(
-        [...contents.matchAll(MARKDOWN_LINK_PATTERN)]
-          .map((match) => stripLinkDecorations(match[1]?.trim() ?? ""))
-          .filter(Boolean)
-      );
+    const app = HARNESS_APP_REGISTRY.find((candidate) =>
+      markdownFile.startsWith(`${candidate.packageDir}/`)
+    );
+    const packageConfig = app ? packageConfigs.get(app.appName) : null;
+    const linkTargets = new Set(
+      [...contents.matchAll(MARKDOWN_LINK_PATTERN)]
+        .map((match) => stripLinkDecorations(match[1]?.trim() ?? ""))
+        .filter(Boolean)
+    );
 
+    if (!markdownFile.endsWith("/docs/agent/index.md")) {
       if (
         packageConfig &&
         (markdownFile.endsWith("/docs/agent/code-map.md") ||
@@ -596,6 +623,7 @@ export async function validateHarnessDocs(rootDir: string) {
           ...(await collectTestingDocErrors(
             rootDir,
             markdownFile,
+            app,
             packageConfig,
             contents
           ))
@@ -603,7 +631,7 @@ export async function validateHarnessDocs(rootDir: string) {
       }
 
       if (packageConfig && markdownFile.endsWith("/docs/agent/code-map.md")) {
-        for (const requiredLink of REQUIRED_CODE_MAP_LINKS) {
+        for (const requiredLink of app.harnessDocs.requiredCodeMapLinks) {
           if (!linkTargets.has(requiredLink)) {
             errors.push(
               `Missing required code-map link in ${markdownFile}: ${requiredLink}`
@@ -615,13 +643,11 @@ export async function validateHarnessDocs(rootDir: string) {
       continue;
     }
 
-    const linkTargets = new Set(
-      [...contents.matchAll(MARKDOWN_LINK_PATTERN)]
-        .map((match) => stripLinkDecorations(match[1]?.trim() ?? ""))
-        .filter(Boolean)
-    );
+    if (!app) {
+      continue;
+    }
 
-    for (const requiredLink of REQUIRED_INDEX_LINKS) {
+    for (const requiredLink of app.harnessDocs.requiredIndexLinks) {
       if (!linkTargets.has(requiredLink)) {
         errors.push(
           `Missing required index link in ${markdownFile}: ${requiredLink}`

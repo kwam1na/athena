@@ -4,7 +4,6 @@ export const PACKAGES_ROOT_DIR = "packages";
 export const PACKAGES_AGENTS_PATH = `${PACKAGES_ROOT_DIR}/AGENTS.md` as const;
 
 export const GENERATED_HARNESS_DOCS = [
-  "docs/agent/route-index.md",
   "docs/agent/test-index.md",
   "docs/agent/key-folder-index.md",
   "docs/agent/validation-guide.md",
@@ -39,6 +38,21 @@ export const REQUIRED_CODE_MAP_LINKS = [
   "./key-folder-index.md",
 ] as const;
 
+export const SERVICE_REQUIRED_INDEX_LINKS = [
+  "./architecture.md",
+  "./testing.md",
+  "./code-map.md",
+  "./entry-index.md",
+  "./test-index.md",
+  "./key-folder-index.md",
+  "./validation-guide.md",
+] as const;
+
+export const SERVICE_REQUIRED_CODE_MAP_LINKS = [
+  "./entry-index.md",
+  "./key-folder-index.md",
+] as const;
+
 export type ValidationCommand =
   | { kind: "script"; script: string }
   | { kind: "raw"; command: string };
@@ -56,7 +70,9 @@ export type HarnessValidationScenario = {
   note: string;
 };
 
-export type HarnessAppName = "athena-webapp" | "storefront-webapp";
+export type HarnessAppName = "athena-webapp" | "storefront-webapp" | "valkey-proxy-server";
+
+export type HarnessAppArchetype = "webapp" | "service-package";
 
 export type HarnessDocPaths = {
   agentsPath: string;
@@ -64,11 +80,14 @@ export type HarnessDocPaths = {
   architecturePath: string;
   testingPath: string;
   codeMapPath: string;
-  routeIndexPath: string;
+  routeIndexPath?: string;
+  entryIndexPath?: string;
   testIndexPath: string;
   keyFolderIndexPath: string;
   validationGuidePath: string;
   validationMapPath: string;
+  requiredIndexLinks: readonly string[];
+  requiredCodeMapLinks: readonly string[];
   requiredEntryDocs: readonly string[];
   generatedDocs: readonly string[];
 };
@@ -77,7 +96,8 @@ export type HarnessAppRegistryEntry = {
   appName: HarnessAppName;
   label: string;
   packageDir: string;
-  routeRoot: string;
+  archetype: HarnessAppArchetype;
+  routeRoot?: string;
   auditedRoots: readonly string[];
   harnessDocs: HarnessDocPaths;
   keyFolderGroups: HarnessKeyFolderGroup[];
@@ -102,12 +122,23 @@ export type HarnessPackageRegistration =
   | NonHarnessPackageRegistration;
 
 function buildHarnessDocPaths(packageDir: string): HarnessDocPaths {
+  return buildHarnessDocPathsForArchetype(packageDir, "webapp");
+}
+
+function buildHarnessDocPathsForArchetype(
+  packageDir: string,
+  archetype: HarnessAppArchetype
+): HarnessDocPaths {
   const requiredEntryDocs = REQUIRED_HARNESS_ENTRY_DOCS.map((relativePath) =>
     path.posix.join(packageDir, relativePath)
   );
-  const generatedDocs = GENERATED_HARNESS_DOCS.map((relativePath) =>
+  const discoveryIndexPath =
+    archetype === "webapp"
+      ? path.posix.join(packageDir, "docs/agent/route-index.md")
+      : path.posix.join(packageDir, "docs/agent/entry-index.md");
+  const generatedDocs = [discoveryIndexPath, ...GENERATED_HARNESS_DOCS.map((relativePath) =>
     path.posix.join(packageDir, relativePath)
-  );
+  )];
 
   return {
     agentsPath: path.posix.join(packageDir, "AGENTS.md"),
@@ -115,11 +146,24 @@ function buildHarnessDocPaths(packageDir: string): HarnessDocPaths {
     architecturePath: path.posix.join(packageDir, "docs/agent/architecture.md"),
     testingPath: path.posix.join(packageDir, "docs/agent/testing.md"),
     codeMapPath: path.posix.join(packageDir, "docs/agent/code-map.md"),
-    routeIndexPath: path.posix.join(packageDir, "docs/agent/route-index.md"),
+    routeIndexPath:
+      archetype === "webapp" ? path.posix.join(packageDir, "docs/agent/route-index.md") : undefined,
+    entryIndexPath:
+      archetype === "service-package"
+        ? path.posix.join(packageDir, "docs/agent/entry-index.md")
+        : undefined,
     testIndexPath: path.posix.join(packageDir, "docs/agent/test-index.md"),
     keyFolderIndexPath: path.posix.join(packageDir, "docs/agent/key-folder-index.md"),
     validationGuidePath: path.posix.join(packageDir, "docs/agent/validation-guide.md"),
     validationMapPath: path.posix.join(packageDir, "docs/agent/validation-map.json"),
+    requiredIndexLinks:
+      archetype === "webapp"
+        ? REQUIRED_INDEX_LINKS
+        : SERVICE_REQUIRED_INDEX_LINKS,
+    requiredCodeMapLinks:
+      archetype === "webapp"
+        ? REQUIRED_CODE_MAP_LINKS
+        : SERVICE_REQUIRED_CODE_MAP_LINKS,
     requiredEntryDocs,
     generatedDocs,
   };
@@ -129,10 +173,11 @@ export const HARNESS_APP_REGISTRY = [
   {
     appName: "athena-webapp",
     label: "Athena Webapp",
+    archetype: "webapp",
     packageDir: "packages/athena-webapp",
     routeRoot: "src/routes",
     auditedRoots: ["src", "convex"],
-    harnessDocs: buildHarnessDocPaths("packages/athena-webapp"),
+    harnessDocs: buildHarnessDocPathsForArchetype("packages/athena-webapp", "webapp"),
     keyFolderGroups: [
       {
         title: "Core app surfaces",
@@ -249,10 +294,11 @@ export const HARNESS_APP_REGISTRY = [
   {
     appName: "storefront-webapp",
     label: "Storefront Webapp",
+    archetype: "webapp",
     packageDir: "packages/storefront-webapp",
     routeRoot: "src/routes",
     auditedRoots: ["src", "tests"],
-    harnessDocs: buildHarnessDocPaths("packages/storefront-webapp"),
+    harnessDocs: buildHarnessDocPathsForArchetype("packages/storefront-webapp", "webapp"),
     keyFolderGroups: [
       {
         title: "Core app surfaces",
@@ -364,15 +410,48 @@ export const HARNESS_APP_REGISTRY = [
       },
     ],
   },
+  {
+    appName: "valkey-proxy-server",
+    label: "Valkey Proxy Server",
+    archetype: "service-package",
+    packageDir: "packages/valkey-proxy-server",
+    auditedRoots: ["."],
+    harnessDocs: buildHarnessDocPathsForArchetype(
+      "packages/valkey-proxy-server",
+      "service-package"
+    ),
+    keyFolderGroups: [
+      {
+        title: "Service entry and support surfaces",
+        folders: [
+          {
+            path: ".",
+            description: "Root service entry files, connection probes, and package metadata.",
+          },
+        ],
+      },
+      {
+        title: "Docs and harness surfaces",
+        folders: [
+          {
+            path: "docs/agent",
+            description: "Harness docs, generated indexes, and validation map content.",
+          },
+        ],
+      },
+    ],
+    validationScenarios: [
+      {
+        title: "Service entry or connection probe edits",
+        touchedPaths: ["index.js", "test-connection.js"],
+        commands: [{ kind: "script", script: "test:connection" }],
+        note: "Use the connection probe when the HTTP entrypoint or connection harness changes.",
+      },
+    ],
+  },
 ] satisfies HarnessAppRegistryEntry[];
 
-const NON_HARNESS_PACKAGE_REGISTRY = [
-  {
-    kind: "non-harness",
-    packageDir: "packages/valkey-proxy-server",
-    note: "This workspace is intentionally outside the webapp docs-first harness.",
-  },
-] as const satisfies readonly NonHarnessPackageRegistration[];
+const NON_HARNESS_PACKAGE_REGISTRY = [] as const satisfies readonly NonHarnessPackageRegistration[];
 
 export const HARNESS_PACKAGE_REGISTRY = [
   ...HARNESS_APP_REGISTRY.map((entry) => ({

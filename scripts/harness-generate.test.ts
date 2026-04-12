@@ -63,6 +63,29 @@ async function createFixtureRepo() {
   await write("packages/athena-webapp/convex/example.test.ts", "export {};\n", rootDir);
   await write("packages/athena-webapp/convex/http.ts", "export {};\n", rootDir);
 
+  await write(
+    "packages/valkey-proxy-server/package.json",
+    JSON.stringify(
+      {
+        name: "valkey-proxy-server",
+        scripts: {
+          start: "node index.js",
+          "test:connection": "node test-connection.js",
+          dev: "nodemon index.js",
+        },
+      },
+      null,
+      2
+    ),
+    rootDir
+  );
+  await write("packages/valkey-proxy-server/index.js", "export {};\n", rootDir);
+  await write(
+    "packages/valkey-proxy-server/test-connection.js",
+    "export {};\n",
+    rootDir
+  );
+
   await write("packages/storefront-webapp/src/routes/shop/index.tsx", "export {};\n", rootDir);
   await write("packages/storefront-webapp/src/routes/shop/checkout/index.tsx", "export {};\n", rootDir);
   await write("packages/storefront-webapp/src/components/checkout/CheckoutProvider.tsx", "export {};\n", rootDir);
@@ -94,6 +117,9 @@ describe("generateHarnessDocs", () => {
     expect(docs.get("packages/athena-webapp/docs/agent/route-index.md")).toContain(
       "src/routes/_authed/dashboard.index.tsx"
     );
+    expect(docs.get("packages/valkey-proxy-server/docs/agent/entry-index.md")).toBeDefined();
+    expect(docs.get("packages/valkey-proxy-server/docs/agent/entry-index.md")).toContain("index.js");
+    expect(docs.get("packages/valkey-proxy-server/docs/agent/entry-index.md")).toContain("test-connection.js");
     expect(docs.get("packages/storefront-webapp/docs/agent/test-index.md")).toContain(
       "tests/e2e"
     );
@@ -127,6 +153,12 @@ describe("generateHarnessDocs", () => {
         "utf8"
       )
     ).resolves.toContain("# Athena Webapp Route Index");
+    await expect(
+      readFile(
+        path.join(rootDir, "packages/valkey-proxy-server/docs/agent/entry-index.md"),
+        "utf8"
+      )
+    ).resolves.toContain("# Valkey Proxy Server Entry Index");
     await expect(
       readFile(
         path.join(rootDir, "packages/storefront-webapp/docs/agent/validation-guide.md"),
