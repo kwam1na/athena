@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { runHarnessAudit } from "./harness-audit";
+import { writeGeneratedHarnessDocs } from "./harness-generate";
 
 const tempRoots: string[] = [];
 
@@ -35,6 +36,8 @@ async function createFixtureRepo() {
         name: "@athena/webapp",
         scripts: {
           "audit:convex": "echo audit",
+          build: "echo build",
+          "lint:architecture": "echo architecture",
           "lint:convex:changed": "echo lint",
           test: "echo test",
         },
@@ -50,6 +53,8 @@ async function createFixtureRepo() {
       {
         name: "@athena/storefront-webapp",
         scripts: {
+          build: "echo build",
+          "lint:architecture": "echo architecture",
           test: "echo test",
           "test:e2e": "echo e2e",
         },
@@ -94,6 +99,10 @@ async function createFixtureRepo() {
         "- [Architecture](./architecture.md)",
         "- [Testing](./testing.md)",
         "- [Code map](./code-map.md)",
+        "- [Route index](./route-index.md)",
+        "- [Test index](./test-index.md)",
+        "- [Key folder index](./key-folder-index.md)",
+        "- [Validation guide](./validation-guide.md)",
       ].join("\n"),
       rootDir
     );
@@ -109,11 +118,17 @@ async function createFixtureRepo() {
         ? [
             "# Athena Webapp Code Map",
             "",
+            "- [Route index](./route-index.md)",
+            "- [Key folder index](./key-folder-index.md)",
+            "",
             "- [Routes](../../src/routes/index.tsx)",
             "- [Convex HTTP](../../convex/http.ts)",
           ].join("\n")
         : [
             "# Storefront Webapp Code Map",
+            "",
+            "- [Route index](./route-index.md)",
+            "- [Key folder index](./key-folder-index.md)",
             "",
             "- [Routes](../../src/routes/__root.tsx)",
             "- [API](../../src/api/storefront.ts)",
@@ -131,6 +146,8 @@ async function createFixtureRepo() {
       "Run `bun run harness:review` for touched-file validation coverage.",
       "Run `bun run harness:audit` for full-app stale-doc and validation-map coverage auditing.",
       "Machine-readable review coverage lives in [validation-map.json](./validation-map.json).",
+      "- [Test index](./test-index.md)",
+      "- [Validation guide](./validation-guide.md)",
       "Default regression: `bun run --filter '@athena/webapp' test`.",
       "Convex validation: `bun run --filter '@athena/webapp' audit:convex` and `bun run --filter '@athena/webapp' lint:convex:changed`.",
       "Covered test surfaces include `src/tests` and `convex`.",
@@ -146,6 +163,8 @@ async function createFixtureRepo() {
       "Run `bun run harness:review` for touched-file validation coverage.",
       "Run `bun run harness:audit` for full-app stale-doc and validation-map coverage auditing.",
       "Machine-readable review coverage lives in [validation-map.json](./validation-map.json).",
+      "- [Test index](./test-index.md)",
+      "- [Validation guide](./validation-guide.md)",
       "Default regression: `bun run --filter '@athena/storefront-webapp' test`.",
       "Browser journeys: `bun run --filter '@athena/storefront-webapp' test:e2e`.",
       "Covered test surfaces include `tests/e2e`.",
@@ -280,6 +299,8 @@ async function createFixtureRepo() {
   await write("packages/storefront-webapp/src/utils/price.ts", "export {};\n", rootDir);
   await write("packages/storefront-webapp/tests/e2e/checkout.spec.ts", "export {};\n", rootDir);
 
+  await writeGeneratedHarnessDocs(rootDir);
+
   return rootDir;
 }
 
@@ -294,6 +315,15 @@ afterEach(async () => {
 describe("runHarnessAudit", () => {
   it("passes when current app surfaces are fully mapped", async () => {
     const rootDir = await createFixtureRepo();
+
+    await expect(runHarnessAudit(rootDir)).resolves.toBeUndefined();
+  });
+
+  it("ignores local-only noise files when auditing live surfaces", async () => {
+    const rootDir = await createFixtureRepo();
+    await write("packages/athena-webapp/src/.DS_Store", "", rootDir);
+    await write("packages/athena-webapp/convex/.DS_Store", "", rootDir);
+    await write("packages/storefront-webapp/src/.env", "FOO=bar\n", rootDir);
 
     await expect(runHarnessAudit(rootDir)).resolves.toBeUndefined();
   });
@@ -381,6 +411,8 @@ describe("runHarnessAudit", () => {
         {
           name: "@athena/storefront-webapp",
           scripts: {
+            build: "echo build",
+            "lint:architecture": "echo architecture",
             test: "echo test",
           },
         },
@@ -391,7 +423,7 @@ describe("runHarnessAudit", () => {
     );
 
     await expect(runHarnessAudit(rootDir)).rejects.toThrow(
-      /storefront-webapp[\s\S]*Invalid documented test command in packages\/storefront-webapp\/docs\/agent\/testing\.md: bun run --filter '@athena\/storefront-webapp' test:e2e/
+      /Missing required script "@athena\/storefront-webapp:test:e2e" while generating harness docs\./
     );
   });
 });

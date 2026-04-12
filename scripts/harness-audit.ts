@@ -109,6 +109,7 @@ function inferGroupFromError(error: string) {
 
 function shouldSkipSurfaceEntry(entryName: string) {
   return (
+    entryName.startsWith(".") ||
     entryName === "_generated" ||
     entryName === "README.md" ||
     entryName === "coverage" ||

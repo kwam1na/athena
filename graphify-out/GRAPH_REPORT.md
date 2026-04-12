@@ -1,25 +1,25 @@
-# Graph Report - .  (2026-04-09)
+# Graph Report - .  (2026-04-11)
 
 ## Corpus Check
-- 1203 files · ~0 words
+- 1170 files · ~0 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 2282 nodes · 5098 edges · 72 communities detected
-- Extraction: 91% EXTRACTED · 9% INFERRED · 0% AMBIGUOUS · INFERRED: 475 edges (avg confidence: 0.5)
+- 2102 nodes · 4792 edges · 72 communities detected
+- Extraction: 92% EXTRACTED · 8% INFERRED · 0% AMBIGUOUS · INFERRED: 401 edges (avg confidence: 0.5)
 - Token cost: 0 input · 0 output
 
 ## God Nodes (most connected - your core abstractions)
 1. `createJourneyEvent()` - 40 edges
-2. `CodexAppServerClient` - 23 edges
-3. `getStoreConfigV2()` - 16 edges
-4. `toV2Config()` - 13 edges
-5. `getBaseUrl()` - 12 edges
-6. `resolveEffectiveConfig()` - 10 edges
-7. `LinearTrackerClient` - 10 edges
-8. `usePOSSessionManager()` - 9 edges
-9. `getBaseUrl()` - 9 edges
-10. `handleRequest()` - 9 edges
+2. `getStoreConfigV2()` - 16 edges
+3. `toV2Config()` - 13 edges
+4. `getBaseUrl()` - 12 edges
+5. `usePOSSessionManager()` - 9 edges
+6. `getBaseUrl()` - 9 edges
+7. `Logger` - 8 edges
+8. `asRecord()` - 8 edges
+9. `buildTestIndex()` - 8 edges
+10. `collectAllPages()` - 7 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `getAmountPaidForOrder()` --calls--> `getDiscountValue()`  [INFERRED]
@@ -37,19 +37,19 @@
 
 ### Community 0 - "Community 0"
 Cohesion: 0.01
-Nodes (16): AnalyticsCombinedUsers(), processAnalyticsToUsers(), AnalyticsTopUsers(), processAnalyticsToUsers(), isSkuReserved(), shouldDisable(), handleFileSelect(), validateFile() (+8 more)
+Nodes (2): handleFileSelect(), validateFile()
 
 ### Community 1 - "Community 1"
 Cohesion: 0.01
-Nodes (15): getRemainingForFreeDelivery(), hasWaiverConfigured(), isAnyFeeWaived(), isFeeWaived(), meetsThreshold(), handleKeyDown(), handleRedeemPromoCode(), getPromoAlertCopy() (+7 more)
+Nodes (9): handleKeyDown(), handleRedeemPromoCode(), getPromoAlertCopy(), PromoAlert(), getBaseUrl(), getPromoCodes(), redeemPromoCode(), clearFilters() (+1 more)
 
 ### Community 2 - "Community 2"
-Cohesion: 0.01
-Nodes (50): getAllCategories(), getAllCategoriesWithSubcategories(), getBaseUrl(), getCategory(), expectIndex(), getTableIndexes(), acquireInventoryHold(), acquireInventoryHoldsBatch() (+42 more)
+Cohesion: 0.02
+Nodes (44): getAllCategories(), getAllCategoriesWithSubcategories(), getBaseUrl(), getCategory(), getCachedTokenRecord(), resolveAccessTokenForStore(), resolveConfigForStore(), expectIndex() (+36 more)
 
 ### Community 3 - "Community 3"
 Cohesion: 0.02
-Nodes (84): asObject(), parseCliArgs(), parsePortArg(), parseWorkflowServerPort(), runCli(), runCliEntry(), SymphonyError, handleRequest() (+76 more)
+Nodes (19): AnalyticsCombinedUsers(), processAnalyticsToUsers(), AnalyticsTopUsers(), processAnalyticsToUsers(), handleSave(), hasReceivingAccountDetails(), normalizePrimaryAccounts(), toPatchReceivingAccounts() (+11 more)
 
 ### Community 4 - "Community 4"
 Cohesion: 0.02
@@ -57,95 +57,95 @@ Nodes (17): handleNewSession(), resetAutoSessionInitialized(), Logger, handleNew
 
 ### Community 5 - "Community 5"
 Cohesion: 0.03
-Nodes (12): getNonEmptyString(), isFailureStatus(), normalizeEvent(), handleSave(), hasReceivingAccountDetails(), normalizePrimaryAccounts(), toPatchReceivingAccounts(), trimToUndefined() (+4 more)
+Nodes (11): getRemainingForFreeDelivery(), hasWaiverConfigured(), isAnyFeeWaived(), isFeeWaived(), meetsThreshold(), onSubmit(), saveStoreChanges(), getActiveUser() (+3 more)
 
 ### Community 6 - "Community 6"
 Cohesion: 0.03
-Nodes (12): createReview(), deleteReview(), getBaseUrl(), getReviewByOrderItem(), getReviewsByProductId(), getReviewsByProductSkuId(), getUserReviews(), getUserReviewsForProduct() (+4 more)
+Nodes (14): isSkuReserved(), shouldDisable(), createReview(), deleteReview(), getBaseUrl(), getReviewByOrderItem(), getReviewsByProductId(), getReviewsByProductSkuId() (+6 more)
 
 ### Community 7 - "Community 7"
-Cohesion: 0.03
-Nodes (9): bufferToHex(), collectBrowserInfo(), generateBrowserFingerprint(), hashFingerprintSource(), modifyProduct(), onSubmit(), saveProduct(), onSubmit() (+1 more)
+Cohesion: 0.05
+Nodes (63): onSubmit(), reportAuthFailure(), resendVerificationCode(), addItemToBag(), clearBag(), getActiveBag(), getBaseUrl(), listBagItems() (+55 more)
 
 ### Community 8 - "Community 8"
-Cohesion: 0.05
-Nodes (26): buildApprovalResponse(), buildHeaders(), CodexAppServerClient, createCollectionsAccessToken(), encodeBasicAuth(), getRequestToPayStatus(), requestToPay(), toError() (+18 more)
+Cohesion: 0.03
+Nodes (5): modifyProduct(), onSubmit(), saveProduct(), onSubmit(), saveStoreChanges()
 
 ### Community 9 - "Community 9"
 Cohesion: 0.05
-Nodes (39): getAllColors(), getBaseUrl(), asInt(), asObject(), asPositiveInt(), asString(), asStringArray(), buildMtnCollectionsLookupPrefixes() (+31 more)
+Nodes (39): buildUsername(), normalizeNameSegment(), buildOrderStatusMessage(), buildPickupDetails(), sendPaymentVerificationEmails(), sendPODOrderEmails(), shouldSendToAdmins(), getDeliveryAddress() (+31 more)
 
 ### Community 10 - "Community 10"
+Cohesion: 0.05
+Nodes (37): checkIfItemsHaveChanged(), CheckoutSessionError, createCheckoutSession(), createOnlineOrder(), defaultCheckoutActionMessage(), findBestValuePromoCode(), getActiveCheckoutSession(), getBaseUrl() (+29 more)
+
+### Community 11 - "Community 11"
 Cohesion: 0.03
 Nodes (4): cancelOrder(), getErrorMessage(), placeOrder(), ValkeyClient
 
-### Community 11 - "Community 11"
-Cohesion: 0.05
-Nodes (31): checkIfItemsHaveChanged(), CheckoutSessionError, createCheckoutSession(), createOnlineOrder(), defaultCheckoutActionMessage(), findBestValuePromoCode(), getActiveCheckoutSession(), getBaseUrl() (+23 more)
-
 ### Community 12 - "Community 12"
-Cohesion: 0.06
-Nodes (29): onSubmit(), reportAuthFailure(), resendVerificationCode(), addItemToBag(), clearBag(), getActiveBag(), getBaseUrl(), listBagItems() (+21 more)
+Cohesion: 0.05
+Nodes (21): acquireInventoryHold(), acquireInventoryHoldsBatch(), adjustInventoryHold(), releaseInventoryHold(), validateInventoryAvailability(), collectAllPages(), createTransactionFromSessionHandler(), listCompletedTransactionsForDay() (+13 more)
 
 ### Community 13 - "Community 13"
-Cohesion: 0.04
-Nodes (2): onSubmit(), saveStoreChanges()
+Cohesion: 0.07
+Nodes (53): addGroupedError(), collectLiveSurfaceEntries(), fileExists(), formatGroupedErrors(), inferGroupFromError(), loadAuditTarget(), matchesPathPrefix(), normalizeRepoPath() (+45 more)
 
 ### Community 14 - "Community 14"
-Cohesion: 0.08
-Nodes (45): compactContext(), createAuthEntryViewedEvent(), createAuthRequestStartedEvent(), createAuthVerificationSucceededEvent(), createAuthVerificationViewedEvent(), createBagAddSucceededEvent(), createBagMoveToSavedEvent(), createBagRemoveSucceededEvent() (+37 more)
-
-### Community 15 - "Community 15"
-Cohesion: 0.1
-Nodes (28): asArray(), asBoolean(), asMtnMomoSetupStatus(), asNumber(), asOptionalArray(), asRecord(), assignOrDelete(), asString() (+20 more)
-
-### Community 16 - "Community 16"
-Cohesion: 0.1
-Nodes (26): handleDeliveryRestrictionToggle(), handlePickupRestrictionToggle(), handleSaveDeliveryRestriction(), handleSavePickupRestriction(), saveDeliveryRestriction(), savePickupRestriction(), asBoolean(), asMtnMomoSetupStatus() (+18 more)
-
-### Community 17 - "Community 17"
-Cohesion: 0.07
+Cohesion: 0.05
 Nodes (7): handleFileSelect(), handleRevert(), handleUpload(), resetEditState(), uploadImage(), validateFile(), MockImage
 
+### Community 15 - "Community 15"
+Cohesion: 0.05
+Nodes (13): getAllColors(), getBaseUrl(), getNonEmptyString(), isFailureStatus(), normalizeEvent(), buildQueryString(), getAllProducts(), getBaseUrl() (+5 more)
+
+### Community 16 - "Community 16"
+Cohesion: 0.06
+Nodes (0): 
+
+### Community 17 - "Community 17"
+Cohesion: 0.12
+Nodes (26): handleDeliveryRestrictionToggle(), handlePickupRestrictionToggle(), handleSaveDeliveryRestriction(), handleSavePickupRestriction(), saveDeliveryRestriction(), savePickupRestriction(), asBoolean(), asMtnMomoSetupStatus() (+18 more)
+
 ### Community 18 - "Community 18"
-Cohesion: 0.11
-Nodes (27): collectMarkdownLinkErrors(), collectReferencedPathErrors(), collectTestingDocErrors(), collectTestSurfaceRoots(), extractInlineCode(), extractTestScriptFromCommand(), fileExists(), isLikelyPathReference() (+19 more)
+Cohesion: 0.14
+Nodes (12): collectScriptsForChangedFiles(), fileExists(), loadReviewTarget(), loadReviewTargets(), matchesPathPrefix(), normalizeRepoPath(), runHarnessReview(), createFixtureRepo() (+4 more)
 
 ### Community 19 - "Community 19"
+Cohesion: 0.22
+Nodes (9): awardPointsForGuestOrders(), awardPointsForPastOrder(), getBaseUrl(), getEligiblePastOrders(), getOrderRewardPoints(), getPointHistory(), getRewardTiers(), getUserPoints() (+1 more)
+
+### Community 20 - "Community 20"
 Cohesion: 0.17
 Nodes (0): 
 
-### Community 20 - "Community 20"
+### Community 21 - "Community 21"
 Cohesion: 0.18
 Nodes (0): 
 
-### Community 21 - "Community 21"
-Cohesion: 0.22
-Nodes (2): useBulkOperations(), validateOperationValue()
-
 ### Community 22 - "Community 22"
-Cohesion: 0.2
-Nodes (0): 
-
-### Community 23 - "Community 23"
 Cohesion: 0.24
 Nodes (3): bootstrapCheckout(), createBootstrapToken(), createMarker()
+
+### Community 23 - "Community 23"
+Cohesion: 0.2
+Nodes (0): 
 
 ### Community 24 - "Community 24"
 Cohesion: 0.39
 Nodes (7): calculateRefundAmount(), getAmountRefunded(), getAvailableItems(), getItemsToRefund(), getNetAmount(), shouldShowReturnToStock(), validateRefund()
 
 ### Community 25 - "Community 25"
-Cohesion: 0.4
-Nodes (0): 
+Cohesion: 0.32
+Nodes (3): fileExists(), resolveGraphifyPython(), runGraphifyRebuild()
 
 ### Community 26 - "Community 26"
 Cohesion: 0.7
-Nodes (4): runTests(), testBasicOperations(), testClusterInfo(), testConnection()
+Nodes (4): bufferToHex(), collectBrowserInfo(), generateBrowserFingerprint(), hashFingerprintSource()
 
 ### Community 27 - "Community 27"
-Cohesion: 0.67
-Nodes (0): 
+Cohesion: 0.7
+Nodes (4): runTests(), testBasicOperations(), testClusterInfo(), testConnection()
 
 ### Community 28 - "Community 28"
 Cohesion: 1.0
@@ -422,9 +422,9 @@ _Questions this graph is uniquely positioned to answer:_
   _`toV2Config()` has 12 INFERRED edges - model-reasoned connections that need verification._
 - **Are the 11 inferred relationships involving `getBaseUrl()` (e.g. with `createReview()` and `getReviewByOrderItem()`) actually correct?**
   _`getBaseUrl()` has 11 INFERRED edges - model-reasoned connections that need verification._
+- **Are the 8 inferred relationships involving `usePOSSessionManager()` (e.g. with `usePOSSessionCreate()` and `usePOSSessionUpdate()`) actually correct?**
+  _`usePOSSessionManager()` has 8 INFERRED edges - model-reasoned connections that need verification._
 - **Should `Community 0` be split into smaller, more focused modules?**
   _Cohesion score 0.01 - nodes in this community are weakly interconnected._
 - **Should `Community 1` be split into smaller, more focused modules?**
-  _Cohesion score 0.01 - nodes in this community are weakly interconnected._
-- **Should `Community 2` be split into smaller, more focused modules?**
   _Cohesion score 0.01 - nodes in this community are weakly interconnected._

@@ -251,6 +251,10 @@ function normalizeRepoPath(filePath: string) {
   return filePath.split(path.sep).join("/");
 }
 
+function shouldSkipGeneratedEntry(entryName: string) {
+  return entryName.startsWith(".");
+}
+
 async function fileExists(filePath: string) {
   try {
     await access(filePath);
@@ -267,14 +271,16 @@ async function walkFiles(dirPath: string): Promise<string[]> {
 
   const entries = await readdir(dirPath, { withFileTypes: true });
   const files = await Promise.all(
-    entries.map(async (entry) => {
+    entries
+      .filter((entry) => !shouldSkipGeneratedEntry(entry.name))
+      .map(async (entry) => {
       const entryPath = path.join(dirPath, entry.name);
       if (entry.isDirectory()) {
         return walkFiles(entryPath);
       }
 
       return [entryPath];
-    })
+      })
   );
 
   return files.flat();
@@ -432,7 +438,10 @@ async function collectFolderFacts(
 
   const allFiles = await walkFiles(absoluteFolderPath);
   const directChildren = await readdir(absoluteFolderPath, { withFileTypes: true });
-  const childNames = directChildren.map((entry) => entry.name).sort();
+  const childNames = directChildren
+    .filter((entry) => !shouldSkipGeneratedEntry(entry.name))
+    .map((entry) => entry.name)
+    .sort();
 
   return {
     fileCount: allFiles.length,
