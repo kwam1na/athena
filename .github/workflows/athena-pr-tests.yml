@@ -29,7 +29,7 @@ jobs:
         run: bun install
 
       - name: Install Graphify runtime
-        run: python3 -m pip install graphifyy
+        run: python3 -m pip install graphifyy==0.3.11
 
       - name: Check harness docs
         run: bun run harness:check
