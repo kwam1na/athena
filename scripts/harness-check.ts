@@ -552,7 +552,11 @@ async function collectTestingDocErrors(
 
   const requiredScripts =
     app.archetype === "service-package"
-      ? new Set(["test:connection"])
+      ? new Set(
+          ["test", "test:connection"].filter(
+            (script) => packageConfig.scripts[script]
+          )
+        )
       : new Set(["test"]);
   if (app.archetype === "webapp" && packageConfig.scripts["test:e2e"]) {
     requiredScripts.add("test:e2e");

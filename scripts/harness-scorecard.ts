@@ -382,6 +382,19 @@ async function inspectAppDocumentation(
   };
 }
 
+function getDocumentedScenarioExpectations(
+  app: HarnessAppRegistryEntry,
+  sharedScenarios: string[]
+) {
+  const appBehaviorScenarioCount = sortUnique(
+    app.validationScenarios.flatMap(
+      (scenario) => scenario.behaviorScenarios ?? []
+    )
+  ).length;
+
+  return appBehaviorScenarioCount > 0 ? sharedScenarios : [];
+}
+
 async function inspectInferentialArtifact(rootDir: string, fsApi: ScorecardFileSystem, nowIso: string) {
   const artifactPath = path.join(
     rootDir,
@@ -476,7 +489,12 @@ export async function collectHarnessScorecard(
 
   const appStatuses = await Promise.all(
     materializedApps.map((app) =>
-      inspectAppDocumentation(rootDir, app, fsApi, expectedScenarios)
+      inspectAppDocumentation(
+        rootDir,
+        app,
+        fsApi,
+        getDocumentedScenarioExpectations(app, expectedScenarios)
+      )
     )
   );
 

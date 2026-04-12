@@ -18,7 +18,7 @@ Landing page for packages/athena-webapp. Start with the package entry docs, then
 
 ## Graph Hotspots
 - `storeConfigV2.ts` (27 edges, Community 2) - [`packages/athena-webapp/convex/inventory/storeConfigV2.ts`](../../../packages/athena-webapp/convex/inventory/storeConfigV2.ts)
-- `ProductStock.tsx` (19 edges, Community 8) - [`packages/athena-webapp/src/components/add-product/ProductStock.tsx`](../../../packages/athena-webapp/src/components/add-product/ProductStock.tsx)
+- `ProductStock.tsx` (19 edges, Community 9) - [`packages/athena-webapp/src/components/add-product/ProductStock.tsx`](../../../packages/athena-webapp/src/components/add-product/ProductStock.tsx)
 - `checkoutSession.ts` (17 edges, Community 11) - [`packages/athena-webapp/convex/storeFront/checkoutSession.ts`](../../../packages/athena-webapp/convex/storeFront/checkoutSession.ts)
 - `DataTableViewOptions()` (16 edges, Community 13) - [`packages/athena-webapp/src/components/user-bags/user-bags-table/data-table-view-options.tsx`](../../../packages/athena-webapp/src/components/user-bags/user-bags-table/data-table-view-options.tsx)
 - `storeConfig.ts` (16 edges, Community 7) - [`packages/athena-webapp/src/lib/storeConfig.ts`](../../../packages/athena-webapp/src/lib/storeConfig.ts)

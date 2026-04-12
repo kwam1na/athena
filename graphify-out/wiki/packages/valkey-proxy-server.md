@@ -17,11 +17,11 @@ Landing page for packages/valkey-proxy-server. Start with the package entry docs
 - [validation-map.json](../../../packages/valkey-proxy-server/docs/agent/validation-map.json)
 
 ## Graph Hotspots
-- `runTests()` (4 edges, Community 117) - [`packages/valkey-proxy-server/test-connection.js`](../../../packages/valkey-proxy-server/test-connection.js)
-- `test-connection.js` (4 edges, Community 117) - [`packages/valkey-proxy-server/test-connection.js`](../../../packages/valkey-proxy-server/test-connection.js)
-- `testBasicOperations()` (2 edges, Community 117) - [`packages/valkey-proxy-server/test-connection.js`](../../../packages/valkey-proxy-server/test-connection.js)
-- `testClusterInfo()` (2 edges, Community 117) - [`packages/valkey-proxy-server/test-connection.js`](../../../packages/valkey-proxy-server/test-connection.js)
-- `testConnection()` (2 edges, Community 117) - [`packages/valkey-proxy-server/test-connection.js`](../../../packages/valkey-proxy-server/test-connection.js)
+- `app.js` (11 edges, Community 23) - [`packages/valkey-proxy-server/app.js`](../../../packages/valkey-proxy-server/app.js)
+- `deleteKeysIndividually()` (3 edges, Community 23) - [`packages/valkey-proxy-server/app.js`](../../../packages/valkey-proxy-server/app.js)
+- `invalidateAcrossCluster()` (3 edges, Community 23) - [`packages/valkey-proxy-server/app.js`](../../../packages/valkey-proxy-server/app.js)
+- `invalidateAcrossClusterWithPipeline()` (3 edges, Community 23) - [`packages/valkey-proxy-server/app.js`](../../../packages/valkey-proxy-server/app.js)
+- `scanNodeForPattern()` (3 edges, Community 23) - [`packages/valkey-proxy-server/app.js`](../../../packages/valkey-proxy-server/app.js)
 
 ## Navigation
 - [wiki index](../index.md) - back to the wiki index

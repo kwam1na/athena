@@ -70,6 +70,7 @@ async function createFixtureRepo() {
         name: "valkey-proxy-server",
         scripts: {
           start: "node index.js",
+          test: "node --test app.test.js",
           "test:connection": "node test-connection.js",
           dev: "nodemon index.js",
         },
@@ -84,6 +85,9 @@ async function createFixtureRepo() {
     "# Valkey Proxy Server\n",
     rootDir
   );
+  await write("packages/valkey-proxy-server/app.js", "module.exports = {};\n", rootDir);
+  await write("packages/valkey-proxy-server/app.test.js", "module.exports = {};\n", rootDir);
+  await write("packages/valkey-proxy-server/docs/agent/index.md", "# Docs\n", rootDir);
   await write("packages/valkey-proxy-server/index.js", "export {};\n", rootDir);
   await write(
     "packages/valkey-proxy-server/test-connection.js",
@@ -125,8 +129,16 @@ describe("generateHarnessDocs", () => {
     expect(docs.get("packages/valkey-proxy-server/docs/agent/entry-index.md")).toBeDefined();
     expect(docs.get("packages/valkey-proxy-server/docs/agent/entry-index.md")).toContain("package.json");
     expect(docs.get("packages/valkey-proxy-server/docs/agent/entry-index.md")).toContain("README.md");
+    expect(docs.get("packages/valkey-proxy-server/docs/agent/entry-index.md")).toContain("app.js");
+    expect(docs.get("packages/valkey-proxy-server/docs/agent/entry-index.md")).toContain("app.test.js");
     expect(docs.get("packages/valkey-proxy-server/docs/agent/entry-index.md")).toContain("index.js");
     expect(docs.get("packages/valkey-proxy-server/docs/agent/entry-index.md")).toContain("test-connection.js");
+    expect(docs.get("packages/valkey-proxy-server/docs/agent/test-index.md")).toContain(
+      "bun run --filter 'valkey-proxy-server' test"
+    );
+    expect(docs.get("packages/valkey-proxy-server/docs/agent/key-folder-index.md")).toContain(
+      "entry-index.md"
+    );
     expect(docs.get("packages/storefront-webapp/docs/agent/test-index.md")).toContain(
       "tests/e2e"
     );

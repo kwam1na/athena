@@ -102,6 +102,27 @@ function summarizeChildren(children: string[]) {
   return children.slice(0, 5).join(", ");
 }
 
+function isWithinFolder(relativePath: string, folderPath: string) {
+  if (folderPath === ".") {
+    return true;
+  }
+
+  return (
+    relativePath === folderPath ||
+    relativePath.startsWith(`${folderPath}/`)
+  );
+}
+
+function toPackageRelativeGeneratedDocPaths(
+  config: HarnessAppRegistryEntry
+) {
+  return config.harnessDocs.generatedDocs.map((generatedDocPath) =>
+    normalizeRepoPath(
+      path.posix.relative(config.packageDir, generatedDocPath)
+    )
+  );
+}
+
 async function collectRouteGroups(
   rootDir: string,
   config: HarnessAppRegistryEntry
@@ -258,11 +279,32 @@ async function collectFolderFacts(
     return null;
   }
 
-  const allFiles = await walkFiles(absoluteFolderPath);
+  const packageRoot = path.join(rootDir, config.packageDir);
+  const existingFiles = (await walkFiles(absoluteFolderPath)).map((filePath) =>
+    normalizeRepoPath(path.relative(packageRoot, filePath))
+  );
+  const virtualFiles = toPackageRelativeGeneratedDocPaths(config).filter(
+    (generatedDocPath) =>
+      isWithinFolder(generatedDocPath, normalizeRepoPath(folderPath))
+  );
+  const allFiles = [...new Set([...existingFiles, ...virtualFiles])].sort();
   const directChildren = await readdir(absoluteFolderPath, { withFileTypes: true });
   const childNames = directChildren
     .filter((entry) => !shouldSkipGeneratedEntry(entry.name))
     .map((entry) => entry.name)
+    .concat(
+      virtualFiles.map((generatedDocPath) => {
+        if (folderPath === ".") {
+          return generatedDocPath.split("/", 1)[0] ?? generatedDocPath;
+        }
+
+        const relativeToFolder = generatedDocPath.slice(`${folderPath}/`.length);
+        return relativeToFolder.split("/", 1)[0] ?? relativeToFolder;
+      })
+    )
+    .filter(Boolean)
+    .filter((childName) => !shouldSkipGeneratedEntry(childName))
+    .filter((childName, index, children) => children.indexOf(childName) === index)
     .sort();
 
   return {
@@ -336,9 +378,9 @@ function buildGeneratedDoc(
   introLines: string[],
   bodyLines: string[]
 ) {
-  return [title, "", GENERATED_DOC_NOTICE, "", ...introLines, "", ...bodyLines, ""]
+  return `${[title, "", GENERATED_DOC_NOTICE, "", ...introLines, "", ...bodyLines]
     .join("\n")
-    .replace(/\n{3,}/g, "\n\n");
+    .replace(/\n{3,}/g, "\n\n")}\n`;
 }
 
 async function buildDiscoveryIndex(
@@ -387,7 +429,9 @@ async function buildTestIndex(
       : await collectTestFiles(rootDir, config);
   const surfaces = await collectTestSurfaceRoots(rootDir, config, packageConfig);
   const documentedCommands =
-    config.archetype === "service-package" ? ["test:connection"] : ["test"];
+    config.archetype === "service-package"
+      ? ["test", "test:connection"].filter((script) => packageConfig.scripts[script])
+      : ["test"];
   if (config.archetype === "webapp" && packageConfig.scripts["test:e2e"]) {
     documentedCommands.push("test:e2e");
   }

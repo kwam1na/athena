@@ -104,6 +104,55 @@ async function createFixtureRepo(includeArtifacts: boolean) {
     rootDir
   );
 
+  await write(
+    "packages/valkey-proxy-server/docs/agent/testing.md",
+    [
+      "# Valkey Proxy Server Testing",
+      "",
+      "- `bun run harness:check`",
+      "- `bun run harness:review`",
+      "- `bun run harness:audit`",
+      "- [validation-map.json](./validation-map.json)",
+      "",
+      "Default local checks start with `bun run --filter 'valkey-proxy-server' test`.",
+      "Live connectivity checks use `bun run --filter 'valkey-proxy-server' test:connection`.",
+    ].join("\n"),
+    rootDir
+  );
+
+  await write(
+    "packages/valkey-proxy-server/docs/agent/validation-map.json",
+    JSON.stringify(
+      {
+        workspace: "valkey-proxy-server",
+        packageDir: "packages/valkey-proxy-server",
+        surfaces: [
+          {
+            name: "service-entry-and-support-surfaces",
+            pathPrefixes: [
+              "packages/valkey-proxy-server/package.json",
+              "packages/valkey-proxy-server/README.md",
+              "packages/valkey-proxy-server/app.js",
+              "packages/valkey-proxy-server/app.test.js",
+              "packages/valkey-proxy-server/index.js",
+            ],
+            commands: [{ kind: "script", script: "test" }],
+            behaviorScenarios: [],
+          },
+          {
+            name: "live-connection-probe-edits",
+            pathPrefixes: ["packages/valkey-proxy-server/test-connection.js"],
+            commands: [{ kind: "script", script: "test" }],
+            behaviorScenarios: [],
+          },
+        ],
+      },
+      null,
+      2
+    ),
+    rootDir
+  );
+
   if (includeArtifacts) {
     await write(
       "artifacts/harness-inferential-review/latest.json",
@@ -168,8 +217,8 @@ describe("collectHarnessScorecard", () => {
     ]);
     expect(first.metrics.registry.definition).toContain("onboarding states");
     expect(first.metrics.registry.appCount).toBe(3);
-    expect(first.metrics.registry.activeAppCount).toBe(2);
-    expect(first.metrics.registry.plannedAppCount).toBe(1);
+    expect(first.metrics.registry.activeAppCount).toBe(3);
+    expect(first.metrics.registry.plannedAppCount).toBe(0);
     expect(first.metrics.registry.scenarioCount).toBe(
       HARNESS_BEHAVIOR_SCENARIOS.length
     );
@@ -177,14 +226,14 @@ describe("collectHarnessScorecard", () => {
       expect.arrayContaining([
         expect.objectContaining({
           appName: "valkey-proxy-server",
-          onboardingStatus: "planned",
-          validationSurfaceCount: 1,
+          onboardingStatus: "active",
+          validationSurfaceCount: 2,
           scenarioCount: 0,
         }),
       ])
     );
-    expect(first.metrics.documentation.appCount).toBe(2);
-    expect(first.metrics.documentation.healthyAppCount).toBe(2);
+    expect(first.metrics.documentation.appCount).toBe(3);
+    expect(first.metrics.documentation.healthyAppCount).toBe(3);
     expect(first.metrics.documentation.degradedAppCount).toBe(0);
     expect(first.metrics.inferential.status).toBe("skipped");
     expect(first.metrics.inferential.findingCount).toBe(0);

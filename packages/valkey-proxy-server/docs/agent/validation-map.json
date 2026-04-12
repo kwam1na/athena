@@ -1,0 +1,57 @@
+{
+  "workspace": "valkey-proxy-server",
+  "packageDir": "packages/valkey-proxy-server",
+  "surfaces": [
+    {
+      "name": "service-logic-docs-or-entrypoint-edits",
+      "pathPrefixes": [
+        "packages/valkey-proxy-server/package.json",
+        "packages/valkey-proxy-server/README.md",
+        "packages/valkey-proxy-server/app.js",
+        "packages/valkey-proxy-server/app.test.js",
+        "packages/valkey-proxy-server/index.js"
+      ],
+      "commands": [
+        {
+          "kind": "script",
+          "script": "test"
+        },
+        {
+          "kind": "raw",
+          "command": "node --check packages/valkey-proxy-server/app.js"
+        },
+        {
+          "kind": "raw",
+          "command": "node --check packages/valkey-proxy-server/index.js"
+        }
+      ],
+      "behaviorScenarios": []
+    },
+    {
+      "name": "live-connection-probe-edits",
+      "pathPrefixes": [
+        "packages/valkey-proxy-server/test-connection.js"
+      ],
+      "commands": [
+        {
+          "kind": "script",
+          "script": "test"
+        },
+        {
+          "kind": "raw",
+          "command": "node --check packages/valkey-proxy-server/test-connection.js"
+        }
+      ],
+      "behaviorScenarios": []
+    },
+    {
+      "name": "harness-docs",
+      "pathPrefixes": [
+        "packages/valkey-proxy-server/AGENTS.md",
+        "packages/valkey-proxy-server/docs/agent"
+      ],
+      "commands": [],
+      "behaviorScenarios": []
+    }
+  ]
+}

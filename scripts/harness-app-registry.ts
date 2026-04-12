@@ -418,7 +418,7 @@ export const HARNESS_APP_REGISTRY = [
     appName: "valkey-proxy-server",
     label: "Valkey Proxy Server",
     archetype: "service-package",
-    onboardingStatus: "planned",
+    onboardingStatus: "active",
     packageDir: "packages/valkey-proxy-server",
     auditedRoots: ["."],
     harnessDocs: buildHarnessDocPathsForArchetype(
@@ -447,15 +447,38 @@ export const HARNESS_APP_REGISTRY = [
     ],
     validationScenarios: [
       {
-        title: "Service entry or connection probe edits",
+        title: "Service logic, docs, or entrypoint edits",
         touchedPaths: [
           "package.json",
           "README.md",
+          "app.js",
+          "app.test.js",
           "index.js",
-          "test-connection.js",
         ],
-        commands: [{ kind: "script", script: "test:connection" }],
-        note: "Use the connection probe when the package manifest, operator docs, HTTP entrypoint, or connection harness changes.",
+        commands: [
+          { kind: "script", script: "test" },
+          {
+            kind: "raw",
+            command: "node --check packages/valkey-proxy-server/app.js",
+          },
+          {
+            kind: "raw",
+            command: "node --check packages/valkey-proxy-server/index.js",
+          },
+        ],
+        note: "Use the local test suite and syntax checks when handler logic, operator docs, or runtime bootstrap changes.",
+      },
+      {
+        title: "Live connection probe edits",
+        touchedPaths: ["test-connection.js"],
+        commands: [
+          { kind: "script", script: "test" },
+          {
+            kind: "raw",
+            command: "node --check packages/valkey-proxy-server/test-connection.js",
+          },
+        ],
+        note: "Keep the live Redis probe syntax-checked locally; run the environment-dependent connection probe manually when cluster access is available.",
       },
     ],
   },

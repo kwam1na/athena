@@ -5,6 +5,7 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
+    "test": "node --test app.test.js",
     "test:connection": "node test-connection.js",
     "dev": "nodemon index.js"
   },
