@@ -60,6 +60,14 @@
         {
           "kind": "script",
           "script": "lint:architecture"
+        },
+        {
+          "kind": "raw",
+          "command": "bun run harness:behavior --scenario storefront-checkout-bootstrap"
+        },
+        {
+          "kind": "raw",
+          "command": "bun run harness:behavior --scenario storefront-checkout-validation-blocker"
         }
       ],
       "behaviorScenarios": [
@@ -81,6 +89,18 @@
         {
           "kind": "script",
           "script": "test:e2e"
+        },
+        {
+          "kind": "raw",
+          "command": "bun run harness:behavior --scenario storefront-checkout-bootstrap"
+        },
+        {
+          "kind": "raw",
+          "command": "bun run harness:behavior --scenario storefront-checkout-validation-blocker"
+        },
+        {
+          "kind": "raw",
+          "command": "bun run harness:behavior --scenario storefront-checkout-verification-recovery"
         }
       ],
       "behaviorScenarios": [

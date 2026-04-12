@@ -45,6 +45,9 @@ Run:
 - `bun run --filter '@athena/webapp' test`
 - `bun run --filter '@athena/webapp' audit:convex`
 - `bun run --filter '@athena/webapp' lint:convex:changed`
+- `bun run harness:behavior --scenario athena-admin-shell-boot`
+- `bun run harness:behavior --scenario athena-convex-storefront-composition`
+- `bun run harness:behavior --scenario athena-convex-storefront-failure-visibility`
 
 Behavior scenarios:
 
@@ -61,6 +64,7 @@ Run:
 
 - `bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json`
 - `bun run --filter '@athena/webapp' build`
+- `bun run harness:behavior --scenario athena-admin-shell-boot`
 
 Behavior scenarios:
 

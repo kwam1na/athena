@@ -33,6 +33,9 @@ jobs:
       - name: Install Graphify runtime
         run: python3 -m pip install graphifyy
 
+      - name: Run harness self-review
+        run: bun run harness:self-review --base origin/main
+
       - name: Check harness docs
         run: bun run harness:check
 

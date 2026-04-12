@@ -61,13 +61,16 @@ describe("pre-push review wiring", () => {
     expect(files).toEqual([]);
   });
 
-  it("runs architecture checks before harness review", async () => {
+  it("runs self-review before architecture checks and harness review", async () => {
     const steps: string[] = [];
 
     await prePushReview.runPrePushReview(ROOT_DIR, {
       getChangedFiles: async () => {
         steps.push("changed-files");
         return ["packages/athena-webapp/src/main.tsx"];
+      },
+      runHarnessSelfReview: async () => {
+        steps.push("harness:self-review:origin/main");
       },
       runArchitectureCheck: async () => {
         steps.push("architecture:check");
@@ -85,6 +88,7 @@ describe("pre-push review wiring", () => {
     });
 
     expect(steps).toEqual([
+      "harness:self-review:origin/main",
       "architecture:check",
       "harness:review",
       "changed-files",
@@ -113,6 +117,8 @@ describe("repo harness ergonomics", () => {
     expect(workflow).toContain("- cron:");
     expect(workflow).toContain("workflow_dispatch:");
     expect(workflow).toContain("harness-implementation-tests:");
+    expect(workflow).toContain("fetch-depth: 0");
+    expect(workflow).toContain("run: bun run harness:self-review --base origin/main");
     expect(workflow).toContain("run: bun run harness:test");
     expect(workflow).toContain("run: python3 -m pip install graphifyy");
     expect(workflow).toContain("run: bun run harness:audit");
@@ -140,6 +146,7 @@ describe("repo harness ergonomics", () => {
 
     expect(readme).toContain("bun run harness:test");
     expect(readme).toContain("bun run harness:inferential-review");
+    expect(readme).toContain("bun run harness:self-review --base origin/main");
   });
 
   it("documents graphify setup and tracked artifact policy in the README", async () => {

@@ -11,6 +11,7 @@ Key repo-level commands:
 - `bun run harness:audit`
 - `bun run harness:review`
 - `bun run harness:inferential-review`
+- `bun run harness:self-review --base origin/main`
 - `bun run harness:behavior --scenario <name>`
 - `bun run harness:behavior --scenario <name> --record-video`
 - `bun run architecture:check`
