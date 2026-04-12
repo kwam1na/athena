@@ -166,10 +166,24 @@ describe("collectHarnessScorecard", () => {
       "inferential",
       "graphify",
     ]);
-    expect(first.metrics.registry.appCount).toBe(2);
+    expect(first.metrics.registry.definition).toContain("onboarding states");
+    expect(first.metrics.registry.appCount).toBe(3);
+    expect(first.metrics.registry.activeAppCount).toBe(2);
+    expect(first.metrics.registry.plannedAppCount).toBe(1);
     expect(first.metrics.registry.scenarioCount).toBe(
       HARNESS_BEHAVIOR_SCENARIOS.length
     );
+    expect(first.metrics.registry.apps).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          appName: "valkey-proxy-server",
+          onboardingStatus: "planned",
+          validationSurfaceCount: 1,
+          scenarioCount: 0,
+        }),
+      ])
+    );
+    expect(first.metrics.documentation.appCount).toBe(2);
     expect(first.metrics.documentation.healthyAppCount).toBe(2);
     expect(first.metrics.documentation.degradedAppCount).toBe(0);
     expect(first.metrics.inferential.status).toBe("skipped");

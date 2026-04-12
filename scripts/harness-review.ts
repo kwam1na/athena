@@ -80,6 +80,26 @@ async function fileExists(filePath: string) {
   }
 }
 
+async function hasAnyHarnessDocs(
+  rootDir: string,
+  target: { testingDocPath: string; validationMapPath: string }
+) {
+  const packageDocsRoot = path.dirname(target.testingDocPath);
+
+  for (const repoRelativePath of [
+    target.testingDocPath,
+    target.validationMapPath,
+    path.posix.join(packageDocsRoot, "index.md"),
+    path.posix.join(path.posix.dirname(packageDocsRoot), "AGENTS.md"),
+  ]) {
+    if (await fileExists(path.join(rootDir, repoRelativePath))) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 async function readJsonFile<T>(filePath: string) {
   return JSON.parse(await readFile(filePath, "utf8")) as T;
 }
@@ -89,8 +109,22 @@ async function loadReviewTarget(
   testingDocPath: string,
   validationMapPath: string
 ) {
+  const absoluteTestingDocPath = path.join(rootDir, testingDocPath);
+  const absoluteValidationMapPath = path.join(rootDir, validationMapPath);
+  if (!(await fileExists(absoluteTestingDocPath))) {
+    throw new Error(
+      `Stale harness review config: missing testing guide ${testingDocPath}.`
+    );
+  }
+
+  if (!(await fileExists(absoluteValidationMapPath))) {
+    throw new Error(
+      `Stale harness review config: missing validation map ${validationMapPath}.`
+    );
+  }
+
   const testingDocContents = await readFile(
-    path.join(rootDir, testingDocPath),
+    absoluteTestingDocPath,
     "utf8"
   );
 
@@ -106,7 +140,6 @@ async function loadReviewTarget(
     );
   }
 
-  const absoluteValidationMapPath = path.join(rootDir, validationMapPath);
   const validationMap = await readJsonFile<ValidationMap>(absoluteValidationMapPath);
   const packageJsonPath = path.join(rootDir, validationMap.packageDir, "package.json");
 
@@ -211,14 +244,31 @@ async function loadReviewTarget(
 async function loadReviewTargets(rootDir: string) {
   const targets: LoadedReviewTarget[] = [];
 
-  for (const target of REVIEW_TARGETS) {
-    targets.push(
-      await loadReviewTarget(
-        rootDir,
-        target.testingDocPath,
-        target.validationMapPath
-      )
+  const reviewTargets = [];
+  for (const app of HARNESS_APP_REGISTRY) {
+    const target = {
+      packageDir: app.packageDir,
+      testingDocPath: app.harnessDocs.testingPath,
+      validationMapPath: app.harnessDocs.validationMapPath,
+    };
+    if (
+      app.onboardingStatus === "planned" &&
+      !(await hasAnyHarnessDocs(rootDir, target))
+    ) {
+      continue;
+    }
+    reviewTargets.push(target);
+  }
+
+  for (const target of reviewTargets) {
+    const loadedTarget = await loadReviewTarget(
+      rootDir,
+      target.testingDocPath,
+      target.validationMapPath
     );
+    if (loadedTarget) {
+      targets.push(loadedTarget);
+    }
   }
 
   return targets;
@@ -420,7 +470,7 @@ export async function runHarnessReview(
   }
 
   if (targetFiles.length === 0) {
-    const packageDirList = REVIEW_TARGETS.map((target) => target.packageDir);
+    const packageDirList = reviewTargets.map((target) => target.packageDir);
     logger.log(
       `No target-app validations selected; no touched files under ${packageDirList.join(" or ")}.`
     );

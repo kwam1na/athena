@@ -5,8 +5,6 @@ import {
   HARNESS_APP_REGISTRY,
   HARNESS_PACKAGE_REGISTRY,
   PACKAGES_AGENTS_PATH,
-  REQUIRED_CODE_MAP_LINKS,
-  REQUIRED_INDEX_LINKS,
   REQUIRED_TESTING_LINKS,
   type HarnessAppName,
   type HarnessAppRegistryEntry,
@@ -36,6 +34,10 @@ type HarnessAppConfig = {
   scripts: Record<string, string>;
 };
 
+function normalizeRepoPath(repoPath: string) {
+  return repoPath.replaceAll("\\", "/");
+}
+
 function stripLinkDecorations(linkTarget: string) {
   return linkTarget.split("#", 1)[0]?.split("?", 1)[0] ?? "";
 }
@@ -55,6 +57,33 @@ async function fileExists(filePath: string) {
   } catch {
     return false;
   }
+}
+
+async function hasAnyHarnessDocs(
+  rootDir: string,
+  app: Pick<HarnessAppRegistryEntry, "harnessDocs">
+) {
+  for (const repoRelativePath of [
+    ...app.harnessDocs.requiredEntryDocs,
+    ...app.harnessDocs.generatedDocs,
+  ]) {
+    if (await fileExists(path.join(rootDir, repoRelativePath))) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+async function isEnforcedHarnessApp(
+  rootDir: string,
+  app: HarnessAppRegistryEntry
+) {
+  if (app.onboardingStatus === "active") {
+    return true;
+  }
+
+  return hasAnyHarnessDocs(rootDir, app);
 }
 
 function sortUniqueEntries(entries: string[]) {
@@ -355,15 +384,15 @@ async function collectHarnessOnboardingErrors(rootDir: string) {
     }
   }
 
-  for (const registration of HARNESS_PACKAGE_REGISTRY) {
-    if (registration.kind !== "harness-app") {
+  for (const app of HARNESS_APP_REGISTRY) {
+    if (!(await isEnforcedHarnessApp(rootDir, app))) {
       continue;
     }
 
-    for (const requiredEntryDoc of registration.requiredEntryDocs) {
+    for (const requiredEntryDoc of app.harnessDocs.requiredEntryDocs) {
       if (!(await fileExists(path.join(rootDir, requiredEntryDoc)))) {
         errors.push(
-          `Harness onboarding gap: ${registration.packageDir} is registered but missing required harness entry doc ${requiredEntryDoc}.`
+          `Harness onboarding gap: ${app.packageDir} is registered but missing required harness entry doc ${requiredEntryDoc}.`
         );
       }
     }
@@ -424,10 +453,40 @@ async function walkFiles(dirPath: string): Promise<string[]> {
   return files.flat();
 }
 
+async function collectServiceDocumentedSurfaces(
+  rootDir: string,
+  app: Pick<HarnessAppRegistryEntry, "packageDir" | "validationScenarios">
+) {
+  const packageRoot = path.join(rootDir, app.packageDir);
+  const documentedSurfaces = new Set(
+    app.validationScenarios.flatMap((scenario) =>
+      scenario.touchedPaths
+        .map((repoRelativePath) =>
+          normalizeRepoPath(repoRelativePath).replace(/\/+$/, "")
+        )
+        .filter(Boolean)
+    )
+  );
+  const existingSurfaces: string[] = [];
+
+  for (const repoRelativePath of [...documentedSurfaces].sort()) {
+    if (await fileExists(path.join(packageRoot, repoRelativePath))) {
+      existingSurfaces.push(repoRelativePath);
+    }
+  }
+
+  return existingSurfaces;
+}
+
 async function collectTestSurfaceRoots(
   rootDir: string,
+  app: Pick<HarnessAppRegistryEntry, "archetype" | "packageDir" | "validationScenarios">,
   packageConfig: HarnessAppConfig
 ) {
+  if (app.archetype === "service-package") {
+    return collectServiceDocumentedSurfaces(rootDir, app);
+  }
+
   const packageRoot = path.join(rootDir, packageConfig.packageDir);
   const allFiles = await walkFiles(packageRoot);
   const surfaces = new Set<string>();
@@ -469,6 +528,7 @@ async function collectTestSurfaceRoots(
 async function collectTestingDocErrors(
   rootDir: string,
   filePath: string,
+  app: Pick<HarnessAppRegistryEntry, "archetype" | "packageDir">,
   packageConfig: HarnessAppConfig,
   contents: string
 ) {
@@ -490,8 +550,11 @@ async function collectTestingDocErrors(
     }
   }
 
-  const requiredScripts = new Set(["test"]);
-  if (packageConfig.scripts["test:e2e"]) {
+  const requiredScripts =
+    app.archetype === "service-package"
+      ? new Set(["test:connection"])
+      : new Set(["test"]);
+  if (app.archetype === "webapp" && packageConfig.scripts["test:e2e"]) {
     requiredScripts.add("test:e2e");
   }
 
@@ -501,7 +564,7 @@ async function collectTestingDocErrors(
     }
   }
 
-  const requiredSurfaces = await collectTestSurfaceRoots(rootDir, packageConfig);
+  const requiredSurfaces = await collectTestSurfaceRoots(rootDir, app, packageConfig);
   for (const surface of requiredSurfaces) {
     if (!contents.includes(surface)) {
       errors.push(`Missing documented test surface in ${filePath}: ${surface}`);
@@ -516,6 +579,7 @@ export async function validateHarnessDocs(rootDir: string) {
   const markdownFiles = [PACKAGES_AGENTS_PATH];
   const packageConfigs = new Map<HarnessAppName, HarnessAppConfig>();
   const generatedDocs = await generateHarnessDocs(rootDir);
+  const enforcedApps: HarnessAppRegistryEntry[] = [];
 
   if (!(await fileExists(path.join(rootDir, PACKAGES_AGENTS_PATH)))) {
     errors.push(`Missing required harness file: ${PACKAGES_AGENTS_PATH}`);
@@ -527,6 +591,12 @@ export async function validateHarnessDocs(rootDir: string) {
     if (packageConfig) {
       packageConfigs.set(app.appName, packageConfig);
     }
+
+    if (!(await isEnforcedHarnessApp(rootDir, app))) {
+      continue;
+    }
+
+    enforcedApps.push(app);
 
     const requiredAppFiles = [
       ...app.harnessDocs.requiredEntryDocs,
@@ -556,17 +626,17 @@ export async function validateHarnessDocs(rootDir: string) {
     );
     errors.push(...linkErrors);
 
-    if (!markdownFile.endsWith("/docs/agent/index.md")) {
-      const app = HARNESS_APP_REGISTRY.find((candidate) =>
-        markdownFile.startsWith(`${candidate.packageDir}/`)
-      );
-      const packageConfig = app ? packageConfigs.get(app.appName) : null;
-      const linkTargets = new Set(
-        [...contents.matchAll(MARKDOWN_LINK_PATTERN)]
-          .map((match) => stripLinkDecorations(match[1]?.trim() ?? ""))
-          .filter(Boolean)
-      );
+    const app = enforcedApps.find((candidate) =>
+      markdownFile.startsWith(`${candidate.packageDir}/`)
+    );
+    const packageConfig = app ? packageConfigs.get(app.appName) : null;
+    const linkTargets = new Set(
+      [...contents.matchAll(MARKDOWN_LINK_PATTERN)]
+        .map((match) => stripLinkDecorations(match[1]?.trim() ?? ""))
+        .filter(Boolean)
+    );
 
+    if (!markdownFile.endsWith("/docs/agent/index.md")) {
       if (
         packageConfig &&
         (markdownFile.endsWith("/docs/agent/code-map.md") ||
@@ -596,6 +666,7 @@ export async function validateHarnessDocs(rootDir: string) {
           ...(await collectTestingDocErrors(
             rootDir,
             markdownFile,
+            app,
             packageConfig,
             contents
           ))
@@ -603,7 +674,7 @@ export async function validateHarnessDocs(rootDir: string) {
       }
 
       if (packageConfig && markdownFile.endsWith("/docs/agent/code-map.md")) {
-        for (const requiredLink of REQUIRED_CODE_MAP_LINKS) {
+        for (const requiredLink of app.harnessDocs.requiredCodeMapLinks) {
           if (!linkTargets.has(requiredLink)) {
             errors.push(
               `Missing required code-map link in ${markdownFile}: ${requiredLink}`
@@ -615,13 +686,11 @@ export async function validateHarnessDocs(rootDir: string) {
       continue;
     }
 
-    const linkTargets = new Set(
-      [...contents.matchAll(MARKDOWN_LINK_PATTERN)]
-        .map((match) => stripLinkDecorations(match[1]?.trim() ?? ""))
-        .filter(Boolean)
-    );
+    if (!app) {
+      continue;
+    }
 
-    for (const requiredLink of REQUIRED_INDEX_LINKS) {
+    for (const requiredLink of app.harnessDocs.requiredIndexLinks) {
       if (!linkTargets.has(requiredLink)) {
         errors.push(
           `Missing required index link in ${markdownFile}: ${requiredLink}`
