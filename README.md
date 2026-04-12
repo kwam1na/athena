@@ -6,12 +6,15 @@ This repo uses a docs-first agent harness for `packages/athena-webapp` and `pack
 
 Key repo-level commands:
 
+- `bun run harness:test`
 - `bun run harness:check`
 - `bun run harness:audit`
 - `bun run harness:review`
 - `bun run architecture:check`
 - `bun run pre-push:review`
 - `bun run pr:athena`
+
+`bun run harness:test` is the canonical harness implementation gate for harness scripts, graphify tooling, and pre-push review wiring.
 
 ## Graphify
 

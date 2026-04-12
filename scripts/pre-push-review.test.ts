@@ -112,17 +112,26 @@ describe("repo harness ergonomics", () => {
     expect(workflow).toContain("schedule:");
     expect(workflow).toContain("- cron:");
     expect(workflow).toContain("workflow_dispatch:");
+    expect(workflow).toContain("harness-implementation-tests:");
+    expect(workflow).toContain("run: bun run harness:test");
     expect(workflow).toContain("run: bun run harness:audit");
   });
 
-  it("includes harness audit in the local pr:athena command", async () => {
+  it("includes harness implementation tests in the local pr:athena command", async () => {
     const packageJson = JSON.parse(
       await readFile(path.join(ROOT_DIR, "package.json"), "utf8")
     ) as {
       scripts?: Record<string, string>;
     };
 
+    expect(packageJson.scripts?.["pr:athena"]).toContain("bun run harness:test");
     expect(packageJson.scripts?.["pr:athena"]).toContain("bun run harness:audit");
+  });
+
+  it("documents harness implementation tests as a repo-level command", async () => {
+    const readme = await readFile(path.join(ROOT_DIR, "README.md"), "utf8");
+
+    expect(readme).toContain("bun run harness:test");
   });
 
   it("documents graphify setup and tracked artifact policy in the README", async () => {
