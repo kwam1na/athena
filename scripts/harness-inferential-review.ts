@@ -769,6 +769,22 @@ export async function runDeterministicInferentialProvider(
         "Add a workflow step with `run: bun run harness:inferential-review` in the harness validation job."
       )
     );
+  } else if (
+    !includesCaseInsensitive(
+      workflowContents,
+      "HARNESS_INFERENTIAL_SEMANTIC_MODE: shadow"
+    )
+  ) {
+    findings.push(
+      buildFinding(
+        "missing-ci-shadow-semantic-mode",
+        "high",
+        "CI inferential review is not running in semantic shadow mode",
+        ".github/workflows/athena-pr-tests.yml",
+        "Athena PR workflow still runs inferential review without the semantic shadow lane enabled, so PR CI cannot collect the new shadow telemetry.",
+        "Set `HARNESS_INFERENTIAL_SEMANTIC_MODE: shadow` on the inferential review workflow step while keeping deterministic inferential findings authoritative."
+      )
+    );
   }
 
   const testingDocs = [

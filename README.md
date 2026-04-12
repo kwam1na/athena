@@ -11,12 +11,15 @@ Key repo-level commands:
 - `bun run harness:audit`
 - `bun run harness:review`
 - `bun run harness:inferential-review`
+- `HARNESS_INFERENTIAL_SEMANTIC_MODE=shadow bun run harness:inferential-review`
+- `HARNESS_INFERENTIAL_SEMANTIC_MODE=shadow bun run harness:inferential-review --persist-history`
 - `bun run harness:scorecard`
 - `bun run harness:janitor`
 - `bun run harness:self-review --base origin/main`
 - `bun run harness:behavior --scenario <name>`
 - `bun run harness:behavior --scenario <name> --record-video`
 - `cat <behavior-log-file> | bun run harness:runtime-trends`
+- `cat <behavior-log-file> | bun run harness:runtime-trends --persist-history`
 - `bun run architecture:check`
 - `bun run pre-push:review`
 - `bun run pr:athena`
@@ -55,9 +58,33 @@ Scenario thresholds are configured in `scripts/harness-behavior-scenarios.ts` vi
 
 - `artifacts/harness-scorecard/latest.json`
 
+`harness:inferential-review` has two lanes:
+
+- deterministic findings remain the blocking source of truth
+- `HARNESS_INFERENTIAL_SEMANTIC_MODE=shadow` adds a semantic shadow lane for telemetry without changing the exit code
+
+When `ANTHROPIC_API_KEY` is not configured, the shadow lane records a skipped status instead of failing the deterministic lane.
+
+Use `--persist-history` when you want append-only timestamped inferential snapshots alongside the latest artifact:
+
+- `artifacts/harness-inferential-review/latest.json`
+- `artifacts/harness-inferential-review/history/<run-stamp>.json`
+
 `harness:runtime-trends` consumes `[harness:behavior:report]` lines from stdin and
 prints aggregated scenario trend telemetry (pass/fail rates, latency stats, and
 runtime-signal health diagnostics).
+
+Use `--persist-history` to keep timestamped runtime trend snapshots alongside the latest trend artifact:
+
+- `artifacts/harness-behavior/trends/latest.json`
+- `artifacts/harness-behavior/trends/history/<run-stamp>.json`
+
+GitHub Actions wiring:
+
+- PR CI runs `bun run harness:inferential-review` with `HARNESS_INFERENTIAL_SEMANTIC_MODE=shadow`
+- scheduled and manual harness runs persist inferential history by default
+- manual runs can paste `[harness:behavior:report]` lines through the workflow dispatch input to persist runtime trend history
+- PR and scheduled/manual harness jobs upload inferential, runtime-trend, and scorecard artifacts for inspection
 
 `harness:janitor` runs drift sensors in report mode by default. Add `--repair` to
 apply safe automated repair steps (`harness:generate` and `graphify:rebuild`) before

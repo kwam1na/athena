@@ -47,6 +47,8 @@ async function createFixtureRepo() {
       "      - name: Harness check",
       "        run: bun run harness:check",
       "      - name: Inferential harness review",
+      "        env:",
+      "          HARNESS_INFERENTIAL_SEMANTIC_MODE: shadow",
       "        run: bun run harness:inferential-review",
       "      - name: Harness audit",
       "        run: bun run harness:audit",
@@ -174,6 +176,43 @@ describe("runHarnessInferentialReview", () => {
       filePath: "scripts/harness-inferential-review.ts",
     });
     expect(result.humanReport).toContain("Harness script changed without test update");
+  });
+
+  it("fails when the PR workflow omits semantic shadow mode on inferential review", async () => {
+    const rootDir = await createFixtureRepo();
+    await write(
+      ".github/workflows/athena-pr-tests.yml",
+      [
+        "name: Athena PR Tests",
+        "jobs:",
+        "  harness-validation:",
+        "    steps:",
+        "      - name: Harness check",
+        "        run: bun run harness:check",
+        "      - name: Inferential harness review",
+        "        run: bun run harness:inferential-review",
+        "      - name: Harness audit",
+        "        run: bun run harness:audit",
+        "      - name: Graphify check",
+        "        run: bun run graphify:check",
+      ].join("\n"),
+      rootDir
+    );
+
+    const result = await runHarnessInferentialReview(rootDir, {
+      getChangedFiles: async () => [".github/workflows/athena-pr-tests.yml"],
+      nowIso: () => "2026-04-12T05:00:00.000Z",
+    });
+
+    expect(result.exitCode).toBe(1);
+    expect(result.machine.status).toBe("fail");
+    expect(result.machine.findings).toContainEqual(
+      expect.objectContaining({
+        id: "missing-ci-shadow-semantic-mode",
+        severity: "high",
+        filePath: ".github/workflows/athena-pr-tests.yml",
+      })
+    );
   });
 
   it("passes cleanly with zero actionable findings", async () => {
