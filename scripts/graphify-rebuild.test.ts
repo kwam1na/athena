@@ -34,6 +34,14 @@ describe("runGraphifyRebuild", () => {
     expect(GRAPHIFY_REBUILD_SNIPPET).toContain("shutil.rmtree(cache_dir)");
   });
 
+  it("normalizes date-bearing report headers for stable freshness checks", () => {
+    expect(GRAPHIFY_REBUILD_SNIPPET).toContain("import re");
+    expect(GRAPHIFY_REBUILD_SNIPPET).toContain("report_lines[0] = re.sub(");
+    expect(GRAPHIFY_REBUILD_SNIPPET).toContain(
+      "normalized_report = '\\n'.join(line.rstrip() for line in report_lines)"
+    );
+  });
+
   it("uses the repo-pinned graphify python when available", async () => {
     const rootDir = await createFixtureRoot();
     await write("graphify-python", "", rootDir);

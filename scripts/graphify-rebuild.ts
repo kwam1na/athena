@@ -4,6 +4,7 @@ import path from "node:path";
 export const GRAPHIFY_REBUILD_SNIPPET =
   [
     "import os",
+    "import re",
     "import shutil",
     "from pathlib import Path",
     "from graphify.extract import extract",
@@ -50,7 +51,10 @@ export const GRAPHIFY_REBUILD_SNIPPET =
     "labels = {cid: 'Community ' + str(cid) for cid in communities}",
     "questions = suggest_questions(graph, communities, labels)",
     "report = generate(graph, communities, cohesion, labels, gods, surprises, detection, {'input': 0, 'output': 0}, str(ROOT), suggested_questions=questions)",
-    "normalized_report = '\\n'.join(line.rstrip() for line in report.splitlines())",
+    "report_lines = report.splitlines()",
+    "if report_lines:",
+    "    report_lines[0] = re.sub(r'\\s+\\(\\d{4}-\\d{2}-\\d{2}\\)$', '', report_lines[0])",
+    "normalized_report = '\\n'.join(line.rstrip() for line in report_lines)",
     "if report.endswith('\\n'):",
     "    normalized_report += '\\n'",
     "(out / 'GRAPH_REPORT.md').write_text(normalized_report)",
