@@ -2,11 +2,13 @@
   "name": "athena",
   "private": true,
   "scripts": {
+    "prepare": "husky",
     "architecture:check": "bun scripts/architecture-boundary-check.ts",
     "harness:audit": "bun scripts/harness-audit.ts",
     "harness:check": "bun scripts/harness-check.ts",
     "harness:generate": "bun scripts/harness-generate.ts",
     "harness:review": "bun scripts/harness-review.ts",
+    "pre-push:review": "bun scripts/pre-push-review.ts",
     "pr:athena": "bun run --filter '@athena/webapp' audit:convex && bun run --filter '@athena/webapp' lint:convex:changed && bun run architecture:check && bun run --filter '@athena/webapp' test && bun run --filter '@athena/storefront-webapp' test && bun run harness:check",
     "test": "bun run --filter '@athena/webapp' test && bun run --filter '@athena/storefront-webapp' test",
     "test:coverage": "bun run --filter '@athena/webapp' test:coverage && bun run --filter '@athena/storefront-webapp' test:coverage && bun scripts/coverage-summary.mjs"
@@ -21,6 +23,7 @@
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.3.0",
     "@testing-library/user-event": "^14.6.1",
+    "husky": "^9.1.7",
     "jsdom": "^26.1.0",
     "vitest": "^3.1.4"
   }
