@@ -33,6 +33,7 @@ type ValidationSurface = {
   name: string;
   pathPrefixes: string[];
   commands: ValidationCommand[];
+  behaviorScenarios?: string[];
 };
 
 type ValidationMap = {
@@ -118,6 +119,10 @@ function normalizeValidationCommand(
   return command.kind === "raw"
     ? { kind: "raw", command: command.command.trim() }
     : { kind: "script", script: command.script };
+}
+
+function normalizeBehaviorScenarioName(scenario: string) {
+  return scenario.trim();
 }
 
 function formatValidationCommand(workspace: string, command: ValidationCommand) {
@@ -324,6 +329,23 @@ async function loadSelfReviewTarget(
         );
       }
     }
+
+    if (
+      surface.behaviorScenarios !== undefined &&
+      !Array.isArray(surface.behaviorScenarios)
+    ) {
+      throw new Error(
+        `Stale harness self-review config: ${target.validationMapPath} includes invalid behavior scenarios for "${surface.name}".`
+      );
+    }
+
+    for (const scenario of surface.behaviorScenarios ?? []) {
+      if (typeof scenario !== "string" || !normalizeBehaviorScenarioName(scenario)) {
+        throw new Error(
+          `Stale harness self-review config: ${target.validationMapPath} includes an empty behavior scenario for "${surface.name}".`
+        );
+      }
+    }
   }
 
   const absoluteValidationGuidePath = path.join(rootDir, target.validationGuidePath);
@@ -342,6 +364,9 @@ async function loadSelfReviewTarget(
       name: surface.name,
       pathPrefixes: surface.pathPrefixes.map(normalizeRepoPath),
       commands: surface.commands.map(normalizeValidationCommand),
+      behaviorScenarios: (surface.behaviorScenarios ?? []).map(
+        normalizeBehaviorScenarioName
+      ),
     })),
     runtimeScenarios,
   } satisfies LoadedSelfReviewTarget;

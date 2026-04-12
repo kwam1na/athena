@@ -19,6 +19,7 @@ type ValidationSurface = {
   name: string;
   pathPrefixes: string[];
   commands: ValidationCommand[];
+  behaviorScenarios?: string[];
 };
 
 type ValidationMap = {
@@ -72,6 +73,10 @@ function normalizeValidationCommand(
   return command.kind === "raw"
     ? { kind: "raw", command: command.command.trim() }
     : { kind: "script", script: command.script };
+}
+
+function normalizeBehaviorScenarioName(scenario: string) {
+  return scenario.trim();
 }
 
 function addGroupedError(
@@ -269,6 +274,27 @@ async function loadAuditTarget(
         );
       }
     }
+
+    if (
+      surface.behaviorScenarios !== undefined &&
+      !Array.isArray(surface.behaviorScenarios)
+    ) {
+      addGroupedError(
+        groupedErrors,
+        target.appName,
+        `Stale validation surface: ${target.validationMapPath} includes invalid behavior scenarios in "${surface.name}".`
+      );
+    }
+
+    for (const scenario of surface.behaviorScenarios ?? []) {
+      if (typeof scenario !== "string" || !normalizeBehaviorScenarioName(scenario)) {
+        addGroupedError(
+          groupedErrors,
+          target.appName,
+          `Stale validation surface: ${target.validationMapPath} includes an empty behavior scenario in "${surface.name}".`
+        );
+      }
+    }
   }
 
   return {
@@ -281,6 +307,9 @@ async function loadAuditTarget(
         name: surface.name,
         pathPrefixes: surface.pathPrefixes.map(normalizeRepoPath),
         commands: surface.commands.map(normalizeValidationCommand),
+        behaviorScenarios: (surface.behaviorScenarios ?? []).map(
+          normalizeBehaviorScenarioName
+        ),
       })),
       testingDocContents,
     } satisfies LoadedAuditTarget,

@@ -267,6 +267,7 @@ function toGeneratedValidationMap(
           toRepoValidationPath(config.packageDir, touchedPath)
         ),
         commands: scenario.commands,
+        behaviorScenarios: scenario.behaviorScenarios ?? [],
       })),
       {
         name: "harness-docs",
@@ -275,6 +276,7 @@ function toGeneratedValidationMap(
           path.posix.dirname(config.harnessDocs.indexPath),
         ],
         commands: [] as ValidationCommand[],
+        behaviorScenarios: [] as string[],
       },
     ],
   };
@@ -414,6 +416,15 @@ async function buildValidationGuide(
 
     for (const command of scenario.commands) {
       bodyLines.push(`- \`${formatValidationCommandForDoc(packageConfig, command)}\``);
+    }
+
+    if ((scenario.behaviorScenarios?.length ?? 0) > 0) {
+      bodyLines.push("");
+      bodyLines.push("Behavior scenarios:");
+      bodyLines.push("");
+      for (const behaviorScenario of scenario.behaviorScenarios ?? []) {
+        bodyLines.push(`- \`${behaviorScenario}\``);
+      }
     }
 
     bodyLines.push("");

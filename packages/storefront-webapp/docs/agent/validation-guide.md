@@ -34,6 +34,10 @@ Run:
 - `bun run --filter '@athena/storefront-webapp' test`
 - `bun run --filter '@athena/storefront-webapp' lint:architecture`
 
+Behavior scenarios:
+
+- `storefront-checkout-bootstrap`
+
 Use the scoped architecture lint when lower-level helpers could accidentally depend on checkout or auth route entrypoints.
 
 ## Full browser journeys and payment redirects
@@ -44,6 +48,12 @@ Run:
 
 - `bun run --filter '@athena/storefront-webapp' test`
 - `bun run --filter '@athena/storefront-webapp' test:e2e`
+
+Behavior scenarios:
+
+- `storefront-checkout-bootstrap`
+- `storefront-checkout-validation-blocker`
+- `storefront-checkout-verification-recovery`
 
 Run the Playwright layer when navigation, checkout, or redirect behavior could change the end-to-end customer path.
 

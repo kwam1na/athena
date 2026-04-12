@@ -123,6 +123,21 @@ async function createFixtureRepo() {
     "export const storefront = true;\n",
     rootDir
   );
+  await write(
+    "packages/storefront-webapp/src/routes/shop/checkout/index.tsx",
+    "export const checkoutRoute = true;\n",
+    rootDir
+  );
+  await write(
+    "packages/storefront-webapp/src/components/checkout/CheckoutProvider.tsx",
+    "export const checkoutProvider = true;\n",
+    rootDir
+  );
+  await write(
+    "packages/storefront-webapp/src/routes/auth.verify.tsx",
+    "export const authVerifyRoute = true;\n",
+    rootDir
+  );
 
   return rootDir;
 }
@@ -393,5 +408,231 @@ describe("runHarnessReview", () => {
       "@athena/webapp:test",
       "raw:bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json",
     ]);
+  });
+
+  it("runs mapped storefront behavior scenarios for checkout-critical surfaces", async () => {
+    const rootDir = await createFixtureRepo();
+    const steps: string[] = [];
+
+    await write(
+      "packages/storefront-webapp/docs/agent/validation-map.json",
+      JSON.stringify(
+        {
+          workspace: "@athena/storefront-webapp",
+          packageDir: "packages/storefront-webapp",
+          surfaces: [
+            {
+              name: "checkout-or-auth-route-boundary-edits",
+              pathPrefixes: [
+                "packages/storefront-webapp/src/routes/shop/checkout",
+                "packages/storefront-webapp/src/components/checkout",
+                "packages/storefront-webapp/src/routes/auth.verify.tsx",
+              ],
+              commands: [{ kind: "script", script: "test" }],
+              behaviorScenarios: ["storefront-checkout-bootstrap"],
+            },
+          ],
+        },
+        null,
+        2
+      ),
+      rootDir
+    );
+
+    await runHarnessReview(rootDir, {
+      getChangedFiles: async () => [
+        "packages/storefront-webapp/src/routes/shop/checkout/index.tsx",
+      ],
+      runHarnessCheck: async () => {
+        steps.push("harness:check");
+      },
+      runPackageScript: async (workspace, script) => {
+        steps.push(`${workspace}:${script}`);
+      },
+      runHarnessBehaviorScenario: async (scenario) => {
+        steps.push(`behavior:${scenario}`);
+      },
+      logger: {
+        log() {},
+        error() {},
+      },
+    });
+
+    expect(steps).toEqual([
+      "harness:check",
+      "@athena/storefront-webapp:test",
+      "behavior:storefront-checkout-bootstrap",
+    ]);
+  });
+
+  it("runs mapped athena behavior scenarios for convex composition surfaces", async () => {
+    const rootDir = await createFixtureRepo();
+    const steps: string[] = [];
+
+    await write(
+      "packages/athena-webapp/docs/agent/validation-map.json",
+      JSON.stringify(
+        {
+          workspace: "@athena/webapp",
+          packageDir: "packages/athena-webapp",
+          surfaces: [
+            {
+              name: "convex-or-backend-adjacent-edits",
+              pathPrefixes: ["packages/athena-webapp/convex"],
+              commands: [{ kind: "script", script: "test" }],
+              behaviorScenarios: [
+                "athena-convex-storefront-composition",
+                "athena-convex-storefront-failure-visibility",
+              ],
+            },
+          ],
+        },
+        null,
+        2
+      ),
+      rootDir
+    );
+
+    await runHarnessReview(rootDir, {
+      getChangedFiles: async () => ["packages/athena-webapp/convex/placeholder.ts"],
+      runHarnessCheck: async () => {
+        steps.push("harness:check");
+      },
+      runPackageScript: async (workspace, script) => {
+        steps.push(`${workspace}:${script}`);
+      },
+      runHarnessBehaviorScenario: async (scenario) => {
+        steps.push(`behavior:${scenario}`);
+      },
+      logger: {
+        log() {},
+        error() {},
+      },
+    });
+
+    expect(steps).toEqual([
+      "harness:check",
+      "@athena/webapp:test",
+      "behavior:athena-convex-storefront-composition",
+      "behavior:athena-convex-storefront-failure-visibility",
+    ]);
+  });
+
+  it("dedupes behavior scenarios selected by multiple touched files", async () => {
+    const rootDir = await createFixtureRepo();
+    const steps: string[] = [];
+
+    await write(
+      "packages/storefront-webapp/docs/agent/validation-map.json",
+      JSON.stringify(
+        {
+          workspace: "@athena/storefront-webapp",
+          packageDir: "packages/storefront-webapp",
+          surfaces: [
+            {
+              name: "checkout-route-edits",
+              pathPrefixes: ["packages/storefront-webapp/src/routes/shop/checkout"],
+              commands: [{ kind: "script", script: "test" }],
+              behaviorScenarios: ["storefront-checkout-bootstrap"],
+            },
+            {
+              name: "checkout-component-edits",
+              pathPrefixes: ["packages/storefront-webapp/src/components/checkout"],
+              commands: [{ kind: "script", script: "test" }],
+              behaviorScenarios: ["storefront-checkout-bootstrap"],
+            },
+          ],
+        },
+        null,
+        2
+      ),
+      rootDir
+    );
+    await write(
+      "packages/storefront-webapp/src/components/checkout/CheckoutProvider.tsx",
+      "export const provider = true;\n",
+      rootDir
+    );
+
+    await runHarnessReview(rootDir, {
+      getChangedFiles: async () => [
+        "packages/storefront-webapp/src/routes/shop/checkout/index.tsx",
+        "packages/storefront-webapp/src/components/checkout/CheckoutProvider.tsx",
+      ],
+      runHarnessCheck: async () => {
+        steps.push("harness:check");
+      },
+      runPackageScript: async (workspace, script) => {
+        steps.push(`${workspace}:${script}`);
+      },
+      runHarnessBehaviorScenario: async (scenario) => {
+        steps.push(`behavior:${scenario}`);
+      },
+      logger: {
+        log() {},
+        error() {},
+      },
+    });
+
+    expect(steps).toEqual([
+      "harness:check",
+      "@athena/storefront-webapp:test",
+      "behavior:storefront-checkout-bootstrap",
+    ]);
+  });
+
+  it("does not run behavior scenarios for docs-only touched files", async () => {
+    const rootDir = await createFixtureRepo();
+    const steps: string[] = [];
+
+    await write(
+      "packages/storefront-webapp/docs/agent/testing.md",
+      [
+        "# Storefront Webapp Testing",
+        "",
+        "Run `bun run harness:review` from the repo root for touched-file validation coverage.",
+        "Machine-readable review coverage lives in [validation-map.json](./validation-map.json).",
+      ].join("\n"),
+      rootDir
+    );
+    await write(
+      "packages/storefront-webapp/docs/agent/validation-map.json",
+      JSON.stringify(
+        {
+          workspace: "@athena/storefront-webapp",
+          packageDir: "packages/storefront-webapp",
+          surfaces: [
+            {
+              name: "harness-docs",
+              pathPrefixes: ["packages/storefront-webapp/docs/agent"],
+              commands: [],
+              behaviorScenarios: [],
+            },
+          ],
+        },
+        null,
+        2
+      ),
+      rootDir
+    );
+
+    await runHarnessReview(rootDir, {
+      getChangedFiles: async () => ["packages/storefront-webapp/docs/agent/testing.md"],
+      runHarnessCheck: async () => {
+        steps.push("harness:check");
+      },
+      runPackageScript: async (workspace, script) => {
+        steps.push(`${workspace}:${script}`);
+      },
+      runHarnessBehaviorScenario: async (scenario) => {
+        steps.push(`behavior:${scenario}`);
+      },
+      logger: {
+        log() {},
+        error() {},
+      },
+    });
+
+    expect(steps).toEqual(["harness:check"]);
   });
 });

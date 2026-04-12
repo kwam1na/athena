@@ -14,6 +14,7 @@ type ValidationSurface = {
   name: string;
   pathPrefixes: string[];
   commands: ValidationCommand[];
+  behaviorScenarios?: string[];
 };
 
 type ValidationMap = {
@@ -37,6 +38,7 @@ type HarnessReviewOptions = {
   runHarnessCheck?: (rootDir: string) => Promise<void>;
   runPackageScript?: (workspace: string, script: string) => Promise<void>;
   runRawCommand?: (command: string) => Promise<void>;
+  runHarnessBehaviorScenario?: (scenario: string) => Promise<void>;
 };
 
 function normalizeRepoPath(repoPath: string) {
@@ -63,6 +65,10 @@ function normalizeValidationCommand(
   return command.kind === "raw"
     ? { kind: "raw", command: command.command.trim() }
     : { kind: "script", script: command.script };
+}
+
+function normalizeBehaviorScenarioName(scenario: string) {
+  return scenario.trim();
 }
 
 async function fileExists(filePath: string) {
@@ -168,6 +174,23 @@ async function loadReviewTarget(
         );
       }
     }
+
+    if (
+      surface.behaviorScenarios !== undefined &&
+      !Array.isArray(surface.behaviorScenarios)
+    ) {
+      throw new Error(
+        `Stale harness review config: ${validationMapPath} includes invalid behavior scenarios for "${surface.name}".`
+      );
+    }
+
+    for (const scenario of surface.behaviorScenarios ?? []) {
+      if (typeof scenario !== "string" || !normalizeBehaviorScenarioName(scenario)) {
+        throw new Error(
+          `Stale harness review config: ${validationMapPath} includes an empty behavior scenario for "${surface.name}".`
+        );
+      }
+    }
   }
 
   return {
@@ -178,6 +201,9 @@ async function loadReviewTarget(
       name: surface.name,
       pathPrefixes: surface.pathPrefixes.map(normalizeRepoPath),
       commands: surface.commands.map(normalizeValidationCommand),
+      behaviorScenarios: (surface.behaviorScenarios ?? []).map(
+        normalizeBehaviorScenarioName
+      ),
     })),
   } satisfies LoadedReviewTarget;
 }
@@ -202,11 +228,13 @@ function collectCommandsForChangedFiles(
   changedFiles: string[],
   targets: LoadedReviewTarget[]
 ) {
-  const normalizedChangedFiles = changedFiles.map(normalizeRepoPath);
+  const normalizedChangedFiles = changedFiles.map(normalizeRepoPath).sort();
   const selectedCommands: Array<
     | { kind: "script"; workspace: string; script: string }
     | { kind: "raw"; command: string }
   > = [];
+  const selectedBehaviorScenarios: string[] = [];
+  const seenBehaviorScenarios = new Set<string>();
   const uncoveredFiles: string[] = [];
   const targetFiles = normalizedChangedFiles.filter((filePath) =>
     targets.some((target) => matchesPathPrefix(filePath, `${target.packageDir}/`))
@@ -260,12 +288,22 @@ function collectCommandsForChangedFiles(
           }
           seenCommands.add(commandKey);
         }
+
+        for (const scenario of surface.behaviorScenarios ?? []) {
+          if (seenBehaviorScenarios.has(scenario)) {
+            continue;
+          }
+
+          selectedBehaviorScenarios.push(scenario);
+          seenBehaviorScenarios.add(scenario);
+        }
       }
     }
   }
 
   return {
     selectedCommands,
+    selectedBehaviorScenarios,
     uncoveredFiles,
     targetFiles,
   };
@@ -336,6 +374,20 @@ async function runRawCommand(rootDir: string, command: string) {
   }
 }
 
+async function runHarnessBehaviorScenario(rootDir: string, scenario: string) {
+  const command = ["bun", "run", "harness:behavior", "--scenario", scenario];
+  const subprocess = Bun.spawn(command, {
+    cwd: rootDir,
+    stdout: "inherit",
+    stderr: "inherit",
+  });
+  const exitCode = await subprocess.exited;
+
+  if (exitCode !== 0) {
+    throw new Error(`Command failed (${exitCode}): ${command.join(" ")}`);
+  }
+}
+
 export async function runHarnessReview(
   rootDir: string,
   options: HarnessReviewOptions = {}
@@ -348,7 +400,12 @@ export async function runHarnessReview(
   await runCheck(rootDir);
 
   const reviewTargets = await loadReviewTargets(rootDir);
-  const { selectedCommands, uncoveredFiles, targetFiles } =
+  const {
+    selectedCommands,
+    selectedBehaviorScenarios,
+    uncoveredFiles,
+    targetFiles,
+  } =
     collectCommandsForChangedFiles(changedFiles, reviewTargets);
 
   if (uncoveredFiles.length > 0) {
@@ -384,6 +441,21 @@ export async function runHarnessReview(
     logger.log(`Running raw command: ${command.command}`);
     await (options.runRawCommand ?? ((nextCommand) =>
       runRawCommand(rootDir, nextCommand)))(command.command);
+  }
+
+  if (selectedBehaviorScenarios.length === 0) {
+    logger.log("No runtime behavior scenarios selected from touched surfaces.");
+    return;
+  }
+
+  logger.log(
+    `Selected runtime behavior scenarios: ${selectedBehaviorScenarios.join(", ")}`
+  );
+
+  for (const scenario of selectedBehaviorScenarios) {
+    logger.log(`Running harness:behavior scenario: ${scenario}`);
+    await (options.runHarnessBehaviorScenario ?? ((nextScenario) =>
+      runHarnessBehaviorScenario(rootDir, nextScenario)))(scenario);
   }
 }
 

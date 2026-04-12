@@ -22,7 +22,8 @@
           "kind": "script",
           "script": "lint:architecture"
         }
-      ]
+      ],
+      "behaviorScenarios": []
     },
     {
       "name": "shared-lib-or-utility-edits",
@@ -41,7 +42,8 @@
           "kind": "raw",
           "command": "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json"
         }
-      ]
+      ],
+      "behaviorScenarios": []
     },
     {
       "name": "frontend-test-harness-edits",
@@ -54,7 +56,8 @@
           "kind": "script",
           "script": "test"
         }
-      ]
+      ],
+      "behaviorScenarios": []
     },
     {
       "name": "convex-or-backend-adjacent-edits",
@@ -76,6 +79,10 @@
           "kind": "script",
           "script": "lint:convex:changed"
         }
+      ],
+      "behaviorScenarios": [
+        "athena-convex-storefront-composition",
+        "athena-convex-storefront-failure-visibility"
       ]
     },
     {
@@ -94,6 +101,9 @@
           "kind": "script",
           "script": "build"
         }
+      ],
+      "behaviorScenarios": [
+        "athena-admin-shell-boot"
       ]
     },
     {
@@ -102,7 +112,8 @@
         "packages/athena-webapp/AGENTS.md",
         "packages/athena-webapp/docs/agent"
       ],
-      "commands": []
+      "commands": [],
+      "behaviorScenarios": []
     }
   ]
 }

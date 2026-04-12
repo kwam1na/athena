@@ -5,7 +5,7 @@
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 2601 nodes · 1999 edges · 1098 communities detected
+- 2605 nodes · 2006 edges · 1098 communities detected
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS
 - Token cost: 0 input · 0 output
 
@@ -1148,16 +1148,16 @@ Cohesion: 0.18
 Nodes (24): buildGeneratedDoc(), buildKeyFolderIndex(), buildRouteIndex(), buildTestIndex(), buildValidationGuide(), buildValidationMap(), collectFolderFacts(), collectRouteGroups() (+16 more)
 
 ### Community 3 - "Community 3"
+Cohesion: 0.16
+Nodes (17): appendListSection(), buildMarkdownBundle(), collectCoverage(), evaluateGraphifyFreshness(), fileExists(), formatValidationCommand(), getChangedFilesFromGit(), loadSelfReviewTarget() (+9 more)
+
+### Community 4 - "Community 4"
 Cohesion: 0.27
 Nodes (20): asBoolean(), asMtnMomoSetupStatus(), asNumber(), asOptionalArray(), asRecord(), asString(), cleanUndefined(), firstDefined() (+12 more)
 
-### Community 4 - "Community 4"
-Cohesion: 0.17
-Nodes (19): asRegExp(), collectRuntimeSignalMatches(), consumeLines(), escapeRegExp(), formatError(), HarnessBehaviorPhaseError, logPhase(), parseHarnessBehaviorArgs() (+11 more)
-
 ### Community 5 - "Community 5"
 Cohesion: 0.17
-Nodes (16): appendListSection(), buildMarkdownBundle(), collectCoverage(), evaluateGraphifyFreshness(), fileExists(), formatValidationCommand(), getChangedFilesFromGit(), loadSelfReviewTarget() (+8 more)
+Nodes (19): asRegExp(), collectRuntimeSignalMatches(), consumeLines(), escapeRegExp(), formatError(), HarnessBehaviorPhaseError, logPhase(), parseHarnessBehaviorArgs() (+11 more)
 
 ### Community 6 - "Community 6"
 Cohesion: 0.11
@@ -1188,24 +1188,24 @@ Cohesion: 0.13
 Nodes (1): DataTableColumnHeader()
 
 ### Community 13 - "Community 13"
-Cohesion: 0.18
-Nodes (5): handleSave(), hasReceivingAccountDetails(), normalizePrimaryAccounts(), toPatchReceivingAccounts(), trimToUndefined()
+Cohesion: 0.2
+Nodes (8): collectCommandsForChangedFiles(), fileExists(), loadReviewTarget(), loadReviewTargets(), matchesPathPrefix(), normalizeBehaviorScenarioName(), normalizeRepoPath(), runHarnessReview()
 
 ### Community 14 - "Community 14"
 Cohesion: 0.18
-Nodes (3): isValidEmail(), isValidPhone(), validateCustomer()
+Nodes (5): handleSave(), hasReceivingAccountDetails(), normalizePrimaryAccounts(), toPatchReceivingAccounts(), trimToUndefined()
 
 ### Community 15 - "Community 15"
 Cohesion: 0.29
-Nodes (12): createReview(), deleteReview(), getBaseUrl(), getReviewByOrderItem(), getReviewsByProductId(), getReviewsByProductSkuId(), getUserReviews(), getUserReviewsForProduct() (+4 more)
+Nodes (11): addGroupedError(), collectLiveSurfaceEntries(), fileExists(), formatGroupedErrors(), inferGroupFromError(), loadAuditTarget(), matchesPathPrefix(), normalizeBehaviorScenarioName() (+3 more)
 
 ### Community 16 - "Community 16"
-Cohesion: 0.31
-Nodes (10): addGroupedError(), collectLiveSurfaceEntries(), fileExists(), formatGroupedErrors(), inferGroupFromError(), loadAuditTarget(), matchesPathPrefix(), normalizeRepoPath() (+2 more)
+Cohesion: 0.18
+Nodes (3): isValidEmail(), isValidPhone(), validateCustomer()
 
 ### Community 17 - "Community 17"
-Cohesion: 0.23
-Nodes (7): collectCommandsForChangedFiles(), fileExists(), loadReviewTarget(), loadReviewTargets(), matchesPathPrefix(), normalizeRepoPath(), runHarnessReview()
+Cohesion: 0.29
+Nodes (12): createReview(), deleteReview(), getBaseUrl(), getReviewByOrderItem(), getReviewsByProductId(), getReviewsByProductSkuId(), getUserReviews(), getUserReviewsForProduct() (+4 more)
 
 ### Community 18 - "Community 18"
 Cohesion: 0.33
@@ -1324,16 +1324,16 @@ Cohesion: 0.29
 Nodes (0):
 
 ### Community 47 - "Community 47"
-Cohesion: 0.33
-Nodes (2): getProductName(), sortProduct()
-
-### Community 48 - "Community 48"
 Cohesion: 0.52
 Nodes (6): addItemToSavedBag(), getActiveSavedBag(), getBaseUrl(), removeItemFromSavedBag(), updateSavedBagItem(), updateSavedBagOwner()
 
-### Community 49 - "Community 49"
+### Community 48 - "Community 48"
 Cohesion: 0.29
 Nodes (0):
+
+### Community 49 - "Community 49"
+Cohesion: 0.33
+Nodes (2): getProductName(), sortProduct()
 
 ### Community 50 - "Community 50"
 Cohesion: 0.52

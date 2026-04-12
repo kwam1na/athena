@@ -46,6 +46,11 @@ Run:
 - `bun run --filter '@athena/webapp' audit:convex`
 - `bun run --filter '@athena/webapp' lint:convex:changed`
 
+Behavior scenarios:
+
+- `athena-convex-storefront-composition`
+- `athena-convex-storefront-failure-visibility`
+
 Any change that can affect Convex HTTP wiring, schemas, queries, or route-to-backend composition should include the Convex audit pair.
 
 ## Route runtime or build-pipeline edits
@@ -56,6 +61,10 @@ Run:
 
 - `bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json`
 - `bun run --filter '@athena/webapp' build`
+
+Behavior scenarios:
+
+- `athena-admin-shell-boot`
 
 Run these when bootstrap, generated router state, or package build configuration changes.
 
