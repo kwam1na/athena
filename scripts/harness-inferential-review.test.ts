@@ -189,8 +189,49 @@ describe("runHarnessInferentialReview", () => {
 
     expect(result.exitCode).toBe(0);
     expect(result.machine.status).toBe("pass");
+    expect(result.machine.reviewMode).toBe("deterministic-only");
     expect(result.machine.findings).toEqual([]);
     expect(result.humanReport).toContain("No actionable inferential findings.");
+  });
+
+  it("records semantic shadow findings without changing the blocking result", async () => {
+    const rootDir = await createFixtureRepo();
+
+    const result = await runHarnessInferentialReview(rootDir, {
+      getChangedFiles: async () => ["package.json"],
+      runSemanticAnalysis: async () => ({
+        providerName: "semantic-shadow-stub",
+        findings: [
+          {
+            id: "semantic-doc-gap",
+            severity: "low",
+            title: "Semantic doc gap",
+            filePath: "package.json",
+            rationale: "The semantic reviewer found a likely docs mismatch.",
+            remediation: "Document the new wiring in the testing guide.",
+          },
+        ],
+      }),
+      semanticMode: "shadow",
+      nowIso: () => "2026-04-12T05:00:00.000Z",
+    });
+
+    expect(result.exitCode).toBe(0);
+    expect(result.machine.status).toBe("pass");
+    expect(result.machine.reviewMode).toBe("semantic-shadow");
+    expect(result.machine.findings).toEqual([]);
+    expect(result.machine.errors).toEqual([]);
+    expect(result.machine.shadow).toMatchObject({
+      status: "fail",
+      providerName: "semantic-shadow-stub",
+      findings: [
+        {
+          id: "semantic-doc-gap",
+          severity: "low",
+          filePath: "package.json",
+        },
+      ],
+    });
   });
 
   it("returns deterministic actionable runtime/provider failure output", async () => {
@@ -215,26 +256,29 @@ describe("runHarnessInferentialReview", () => {
     expect(result.humanReport).toContain("Confirm provider configuration and connectivity");
   });
 
-  it("returns deterministic runtime failure output when semantic analysis throws", async () => {
+  it("records semantic shadow errors without making the command blocking", async () => {
     const rootDir = await createFixtureRepo();
 
     const result = await runHarnessInferentialReview(rootDir, {
-      getChangedFiles: async () => ["scripts/harness-inferential-review.ts"],
+      getChangedFiles: async () => ["package.json"],
       runSemanticAnalysis: async () => {
         throw new Error("semantic parse failure");
       },
+      semanticMode: "shadow",
       nowIso: () => "2026-04-12T05:00:00.000Z",
     });
 
-    expect(result.exitCode).toBe(1);
-    expect(result.machine.status).toBe("error");
-    expect(result.machine.errors).toMatchObject([
+    expect(result.exitCode).toBe(0);
+    expect(result.machine.status).toBe("pass");
+    expect(result.machine.errors).toEqual([]);
+    expect(result.machine.shadow?.errors).toMatchObject([
       {
         code: "INFERENTIAL_RUNTIME_FAILURE",
       },
     ]);
-    expect(result.humanReport).toContain("Semantic analysis failed");
-    expect(result.humanReport).toContain("Inspect the runtime error output");
+    expect(result.machine.shadow?.status).toBe("error");
+    expect(result.humanReport).toContain("Shadow semantic review");
+    expect(result.humanReport).toContain("semantic parse failure");
   });
 
   it("is explicit and clean when no harness-critical files are in scope", async () => {
@@ -251,17 +295,42 @@ describe("runHarnessInferentialReview", () => {
     expect(result.humanReport).toContain("No harness-critical files are in scope.");
   });
 
-  it("writes machine-readable output via the default artifact path", async () => {
+  it("writes machine-readable output with additive shadow data via the default artifact path", async () => {
     const rootDir = await createFixtureRepo();
 
     const result = await runHarnessInferentialReview(rootDir, {
-      getChangedFiles: async () => ["README.md"],
+      getChangedFiles: async () => ["package.json"],
+      semanticMode: "shadow",
+      runSemanticAnalysis: async () => ({
+        providerName: "semantic-shadow-stub",
+        findings: [
+          {
+            id: "semantic-doc-gap",
+            severity: "low",
+            title: "Semantic doc gap",
+            filePath: "package.json",
+            rationale: "The semantic reviewer found a likely docs mismatch.",
+            remediation: "Document the new wiring in the testing guide.",
+          },
+        ],
+      }),
       nowIso: () => "2026-04-12T05:00:00.000Z",
     });
 
     const saved = JSON.parse(
       await readFile(path.join(rootDir, result.machineOutputPath), "utf8")
-    ) as { status: string };
-    expect(saved.status).toBe("skipped");
+    ) as {
+      status: string;
+      providerName: string;
+      reviewMode?: string;
+      shadow?: { providerName: string; status: string };
+    };
+    expect(saved.status).toBe("pass");
+    expect(saved.providerName).toBe("deterministic-policy-v1");
+    expect(saved.reviewMode).toBe("semantic-shadow");
+    expect(saved.shadow).toMatchObject({
+      providerName: "semantic-shadow-stub",
+      status: "fail",
+    });
   });
 });

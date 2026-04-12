@@ -1,9 +1,15 @@
+import Anthropic from "@anthropic-ai/sdk";
 import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 const DEFAULT_BASE_REF = "origin/main";
 const DEFAULT_MACHINE_OUTPUT_PATH =
   "artifacts/harness-inferential-review/latest.json";
+const DEFAULT_SEMANTIC_MODE = "off";
+const DEFAULT_SEMANTIC_PROVIDER_MODEL = "claude-3-5-haiku-20241022";
+const DEFAULT_SEMANTIC_PROVIDER_NAME = "anthropic-shadow-v1";
+const MAX_PROMPT_TARGET_FILES = 6;
+const MAX_PROMPT_FILE_CHARS = 6000;
 
 type InferentialSeverity = "high" | "medium" | "low";
 
@@ -23,10 +29,22 @@ type InferentialError = {
 };
 
 type InferentialStatus = "pass" | "fail" | "error" | "skipped";
+type InferentialReviewMode = "deterministic-only" | "semantic-shadow";
+type InferentialShadowMode = "off" | "shadow";
+
+type InferentialShadowMachineOutput = {
+  generatedAt: string;
+  status: InferentialStatus;
+  summary: string;
+  providerName: string;
+  findings: InferentialFinding[];
+  errors: InferentialError[];
+};
 
 type InferentialMachineOutput = {
   version: "1.0";
   generatedAt: string;
+  reviewMode: InferentialReviewMode;
   baseRef: string;
   status: InferentialStatus;
   summary: string;
@@ -35,6 +53,7 @@ type InferentialMachineOutput = {
   targetFiles: string[];
   findings: InferentialFinding[];
   errors: InferentialError[];
+  shadow?: InferentialShadowMachineOutput;
 };
 
 type InferentialProviderInput = {
@@ -49,8 +68,16 @@ type InferentialProviderResult = {
   findings: InferentialFinding[];
 };
 
-type InferentialSemanticAnalysisResult = {
+type InferentialDeterministicAnalysisResult = {
   findings: InferentialFinding[];
+};
+
+type InferentialSemanticAnalysisResult = {
+  providerName: string;
+  findings: InferentialFinding[];
+  summary?: string;
+  status?: InferentialStatus;
+  errors?: InferentialError[];
 };
 
 type InferentialReviewLogger = Pick<Console, "log" | "error">;
@@ -61,6 +88,7 @@ type InferentialReviewOptions = {
   runProvider?: (
     input: InferentialProviderInput
   ) => Promise<InferentialProviderResult>;
+  semanticMode?: InferentialShadowMode;
   runSemanticAnalysis?: (
     input: InferentialProviderInput
   ) => Promise<InferentialSemanticAnalysisResult>;
@@ -419,7 +447,7 @@ async function collectHarnessSafetySignalFindings(
 
 async function runDeterministicSemanticAnalysis(
   input: InferentialProviderInput
-): Promise<InferentialSemanticAnalysisResult> {
+): Promise<InferentialDeterministicAnalysisResult> {
   const findings = [
     ...(await collectHarnessScriptTestUpdateFindings(
       input.rootDir,
@@ -433,6 +461,214 @@ async function runDeterministicSemanticAnalysis(
 
   return {
     findings: sortFindings(findings),
+  };
+}
+
+function resolveSemanticMode(
+  optionMode?: InferentialShadowMode
+): InferentialShadowMode {
+  const rawMode =
+    optionMode ?? process.env.HARNESS_INFERENTIAL_SEMANTIC_MODE ?? DEFAULT_SEMANTIC_MODE;
+
+  return rawMode === "shadow" ? "shadow" : "off";
+}
+
+function buildShadowSummary(findings: InferentialFinding[]) {
+  return findings.length > 0
+    ? `Shadow semantic review found ${findings.length} possible issue(s).`
+    : "Shadow semantic review found no semantic issues.";
+}
+
+function truncateForPrompt(contents: string) {
+  if (contents.length <= MAX_PROMPT_FILE_CHARS) {
+    return contents;
+  }
+
+  return `${contents.slice(0, MAX_PROMPT_FILE_CHARS)}\n...[truncated]`;
+}
+
+async function buildSemanticPrompt(input: InferentialProviderInput) {
+  const fileSections: string[] = [];
+
+  for (const filePath of input.targetFiles.slice(0, MAX_PROMPT_TARGET_FILES)) {
+    const contents = await readUtf8OrNull(path.join(input.rootDir, filePath));
+    fileSections.push(
+      [
+        `FILE: ${filePath}`,
+        "CONTENT:",
+        contents ? truncateForPrompt(contents) : "[missing]",
+      ].join("\n")
+    );
+  }
+
+  return [
+    "You are reviewing Athena harness-critical files in semantic shadow mode.",
+    "Return JSON only with this exact shape:",
+    '{"summary":"string","findings":[{"id":"string","severity":"high|medium|low","title":"string","filePath":"string","rationale":"string","remediation":"string"}]}',
+    "Only report likely semantic or operational issues that a deterministic rule might miss.",
+    "If there are no likely issues, return {\"summary\":\"No semantic issues detected.\",\"findings\":[]}.",
+    `Base ref: ${input.baseRef}`,
+    `Changed files (${input.changedFiles.length}): ${input.changedFiles.join(", ")}`,
+    `Target files (${input.targetFiles.length}): ${input.targetFiles.join(", ")}`,
+    "",
+    fileSections.join("\n\n"),
+  ].join("\n");
+}
+
+function extractTextFromAnthropicResponse(content: unknown) {
+  if (!Array.isArray(content)) {
+    return String(content ?? "");
+  }
+
+  return content
+    .map((entry) => {
+      if (typeof entry === "string") {
+        return entry;
+      }
+
+      if (
+        typeof entry === "object" &&
+        entry !== null &&
+        "type" in entry &&
+        "text" in entry &&
+        (entry as { type?: string }).type === "text"
+      ) {
+        return String((entry as { text?: string }).text ?? "");
+      }
+
+      return "";
+    })
+    .join("\n");
+}
+
+function extractJsonPayload(responseText: string) {
+  const trimmed = responseText.trim();
+  if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+    return trimmed;
+  }
+
+  const fencedMatch = trimmed.match(/```(?:json)?\s*([\s\S]+?)```/i);
+  if (fencedMatch?.[1]) {
+    return fencedMatch[1].trim();
+  }
+
+  const firstBrace = trimmed.indexOf("{");
+  const lastBrace = trimmed.lastIndexOf("}");
+  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+    return trimmed.slice(firstBrace, lastBrace + 1);
+  }
+
+  throw new Error("Semantic provider response did not include JSON output.");
+}
+
+function normalizeSemanticFinding(
+  value: unknown
+): InferentialFinding | null {
+  if (typeof value !== "object" || value === null) {
+    return null;
+  }
+
+  const candidate = value as Record<string, unknown>;
+  const id =
+    typeof candidate.id === "string" && candidate.id.trim()
+      ? candidate.id.trim()
+      : null;
+  const severity =
+    candidate.severity === "high" ||
+    candidate.severity === "medium" ||
+    candidate.severity === "low"
+      ? candidate.severity
+      : null;
+  const title =
+    typeof candidate.title === "string" && candidate.title.trim()
+      ? candidate.title.trim()
+      : null;
+  const filePath =
+    typeof candidate.filePath === "string" && candidate.filePath.trim()
+      ? normalizeRepoPath(candidate.filePath)
+      : null;
+  const rationale =
+    typeof candidate.rationale === "string" && candidate.rationale.trim()
+      ? candidate.rationale.trim()
+      : null;
+  const remediation =
+    typeof candidate.remediation === "string" && candidate.remediation.trim()
+      ? candidate.remediation.trim()
+      : null;
+
+  if (!id || !severity || !title || !filePath || !rationale || !remediation) {
+    return null;
+  }
+
+  return {
+    id,
+    severity,
+    title,
+    filePath,
+    rationale,
+    remediation,
+  };
+}
+
+function parseSemanticResponse(responseText: string) {
+  const parsed = JSON.parse(extractJsonPayload(responseText)) as {
+    summary?: unknown;
+    findings?: unknown;
+  };
+
+  const findings = Array.isArray(parsed.findings)
+    ? parsed.findings
+        .map((finding) => normalizeSemanticFinding(finding))
+        .filter((finding): finding is InferentialFinding => finding !== null)
+    : [];
+
+  const summary =
+    typeof parsed.summary === "string" && parsed.summary.trim()
+      ? parsed.summary.trim()
+      : buildShadowSummary(findings);
+
+  return {
+    summary,
+    findings: sortFindings(findings),
+  };
+}
+
+async function runAnthropicSemanticAnalysis(
+  input: InferentialProviderInput
+): Promise<InferentialSemanticAnalysisResult> {
+  const model =
+    process.env.HARNESS_INFERENTIAL_ANTHROPIC_MODEL?.trim() ||
+    DEFAULT_SEMANTIC_PROVIDER_MODEL;
+  const providerName = `${DEFAULT_SEMANTIC_PROVIDER_NAME}:${model}`;
+  const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
+
+  if (!apiKey) {
+    return {
+      providerName,
+      status: "skipped",
+      summary:
+        "Shadow semantic review skipped because ANTHROPIC_API_KEY is not configured.",
+      findings: [],
+    };
+  }
+
+  const prompt = await buildSemanticPrompt(input);
+  const anthropic = new Anthropic({ apiKey });
+  const completion = await anthropic.messages.create({
+    model,
+    max_tokens: 1200,
+    temperature: 0,
+    messages: [{ role: "user", content: prompt }],
+  });
+
+  const responseText = extractTextFromAnthropicResponse(completion.content);
+  const parsed = parseSemanticResponse(responseText);
+
+  return {
+    providerName,
+    status: parsed.findings.length > 0 ? "fail" : "pass",
+    summary: parsed.summary,
+    findings: parsed.findings,
   };
 }
 
@@ -626,6 +862,7 @@ function buildHumanReport(output: InferentialMachineOutput) {
   lines.push("# Harness Inferential Review");
   lines.push("");
   lines.push(`Status: ${formatStatusLabel(output.status)}`);
+  lines.push(`Review mode: ${output.reviewMode}`);
   lines.push(`Provider: ${output.providerName}`);
   lines.push(`Base ref: ${output.baseRef}`);
   lines.push(`Changed files: ${output.changedFiles.length}`);
@@ -660,6 +897,32 @@ function buildHumanReport(output: InferentialMachineOutput) {
     lines.push("");
   }
 
+  if (output.shadow) {
+    lines.push("Shadow semantic review:");
+    lines.push(`- Status: ${formatStatusLabel(output.shadow.status)}`);
+    lines.push(`- Provider: ${output.shadow.providerName}`);
+    lines.push(`- Summary: ${output.shadow.summary}`);
+
+    if (output.shadow.findings.length > 0) {
+      for (const finding of output.shadow.findings) {
+        lines.push(
+          `- [${finding.severity.toUpperCase()}] ${finding.title} (${finding.filePath})`
+        );
+        lines.push(`  Rationale: ${finding.rationale}`);
+        lines.push(`  Remediation: ${finding.remediation}`);
+      }
+    }
+
+    if (output.shadow.errors.length > 0) {
+      for (const error of output.shadow.errors) {
+        lines.push(`- ${error.code}: ${error.message}`);
+        lines.push(`  Remediation: ${error.remediation}`);
+      }
+    }
+
+    lines.push("");
+  }
+
   return lines.join("\n");
 }
 
@@ -683,16 +946,38 @@ function createOutput(params: {
   errors?: InferentialError[];
   providerName: string;
   generatedAt: string;
+  reviewMode?: InferentialReviewMode;
+  shadow?: InferentialShadowMachineOutput;
 }): InferentialMachineOutput {
   return {
     version: "1.0",
     generatedAt: params.generatedAt,
+    reviewMode: params.reviewMode ?? "deterministic-only",
     baseRef: params.baseRef,
     status: params.status,
     summary: params.summary,
     providerName: params.providerName,
     changedFiles: sortUnique(params.changedFiles),
     targetFiles: sortUnique(params.targetFiles),
+    findings: sortFindings(params.findings ?? []),
+    errors: params.errors ?? [],
+    shadow: params.shadow,
+  };
+}
+
+function createShadowOutput(params: {
+  status: InferentialStatus;
+  summary: string;
+  providerName: string;
+  generatedAt: string;
+  findings?: InferentialFinding[];
+  errors?: InferentialError[];
+}): InferentialShadowMachineOutput {
+  return {
+    generatedAt: params.generatedAt,
+    status: params.status,
+    summary: params.summary,
+    providerName: params.providerName,
     findings: sortFindings(params.findings ?? []),
     errors: params.errors ?? [],
   };
@@ -703,7 +988,8 @@ function createProviderFailure(
   baseRef: string,
   changedFiles: string[],
   targetFiles: string[],
-  generatedAt: string
+  generatedAt: string,
+  reviewMode: InferentialReviewMode
 ): InferentialMachineOutput {
   return createOutput({
     status: "error",
@@ -714,6 +1000,7 @@ function createProviderFailure(
     targetFiles,
     providerName: "deterministic-policy-v1",
     generatedAt,
+    reviewMode,
     errors: [
       {
         code: "INFERENTIAL_PROVIDER_FAILURE",
@@ -730,7 +1017,8 @@ function createRuntimeFailure(
   baseRef: string,
   changedFiles: string[],
   targetFiles: string[],
-  generatedAt: string
+  generatedAt: string,
+  reviewMode: InferentialReviewMode
 ): InferentialMachineOutput {
   return createOutput({
     status: "error",
@@ -741,6 +1029,7 @@ function createRuntimeFailure(
     targetFiles,
     providerName: "deterministic-policy-v1",
     generatedAt,
+    reviewMode,
     errors: [
       {
         code: "INFERENTIAL_RUNTIME_FAILURE",
@@ -760,6 +1049,9 @@ export async function runHarnessInferentialReview(
   const machineOutputPath =
     options.machineOutputPath ?? DEFAULT_MACHINE_OUTPUT_PATH;
   const nowIso = options.nowIso ?? (() => new Date().toISOString());
+  const semanticMode = resolveSemanticMode(options.semanticMode);
+  const reviewMode: InferentialReviewMode =
+    semanticMode === "shadow" ? "semantic-shadow" : "deterministic-only";
   const logger = options.logger ?? console;
 
   const getChangedFiles =
@@ -767,7 +1059,7 @@ export async function runHarnessInferentialReview(
   const runProvider =
     options.runProvider ?? runDeterministicInferentialProvider;
   const runSemanticAnalysis =
-    options.runSemanticAnalysis ?? runDeterministicSemanticAnalysis;
+    options.runSemanticAnalysis ?? runAnthropicSemanticAnalysis;
 
   let changedFiles: string[] = [];
   let targetFiles: string[] = [];
@@ -783,7 +1075,8 @@ export async function runHarnessInferentialReview(
       baseRef,
       changedFiles,
       targetFiles,
-      nowIso()
+      nowIso(),
+      reviewMode
     );
     const humanReport = buildHumanReport(machine);
     await writeMachineOutput(rootDir, machineOutputPath, machine);
@@ -804,6 +1097,7 @@ export async function runHarnessInferentialReview(
       targetFiles,
       providerName: "deterministic-policy-v1",
       generatedAt: nowIso(),
+      reviewMode,
     });
     const humanReport = buildHumanReport(machine);
     await writeMachineOutput(rootDir, machineOutputPath, machine);
@@ -831,7 +1125,8 @@ export async function runHarnessInferentialReview(
       baseRef,
       changedFiles,
       targetFiles,
-      nowIso()
+      nowIso(),
+      reviewMode
     );
   }
 
@@ -841,7 +1136,7 @@ export async function runHarnessInferentialReview(
     }
 
     try {
-      const semanticResult = await runSemanticAnalysis({
+      const deterministicResult = await runDeterministicSemanticAnalysis({
         rootDir,
         baseRef,
         changedFiles,
@@ -849,7 +1144,7 @@ export async function runHarnessInferentialReview(
       });
       const findings = sortFindings([
         ...providerResult.findings,
-        ...semanticResult.findings,
+        ...deterministicResult.findings,
       ]);
       machine = createOutput({
         status: findings.length > 0 ? "fail" : "pass",
@@ -863,21 +1158,62 @@ export async function runHarnessInferentialReview(
         providerName: providerResult.providerName,
         findings,
         generatedAt: nowIso(),
+        reviewMode,
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       machine = createRuntimeFailure(
-        `Semantic analysis failed: ${message}`,
+        `Deterministic inferential analysis failed: ${message}`,
         baseRef,
         changedFiles,
         targetFiles,
-        nowIso()
+        nowIso(),
+        reviewMode
       );
     }
   }
 
   if (!machine) {
     throw new Error("Inferential review did not produce machine output.");
+  }
+
+  if (semanticMode === "shadow" && machine.status !== "error") {
+    try {
+      const semanticResult = await runSemanticAnalysis({
+        rootDir,
+        baseRef,
+        changedFiles,
+        targetFiles,
+      });
+      const shadowFindings = sortFindings(semanticResult.findings);
+      machine.shadow = createShadowOutput({
+        generatedAt: nowIso(),
+        providerName: semanticResult.providerName,
+        status:
+          semanticResult.status ??
+          (shadowFindings.length > 0 ? "fail" : "pass"),
+        summary: semanticResult.summary ?? buildShadowSummary(shadowFindings),
+        findings: shadowFindings,
+        errors: semanticResult.errors ?? [],
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      machine.shadow = createShadowOutput({
+        generatedAt: nowIso(),
+        providerName: DEFAULT_SEMANTIC_PROVIDER_NAME,
+        status: "error",
+        summary:
+          "Shadow semantic review failed, but deterministic inferential review remains authoritative.",
+        errors: [
+          {
+            code: "INFERENTIAL_RUNTIME_FAILURE",
+            message: `Semantic analysis failed: ${message}`,
+            remediation:
+              "Inspect the shadow semantic provider output or configuration, then rerun `bun run harness:inferential-review`.",
+          },
+        ],
+      });
+    }
   }
 
   const humanReport = buildHumanReport(machine);
@@ -891,7 +1227,8 @@ export async function runHarnessInferentialReview(
       baseRef,
       changedFiles,
       targetFiles,
-      nowIso()
+      nowIso(),
+      reviewMode
     );
     const runtimeReport = buildHumanReport(machine);
     await writeMachineOutput(rootDir, machineOutputPath, machine);
