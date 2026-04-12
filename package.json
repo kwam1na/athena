@@ -4,6 +4,7 @@
   "scripts": {
     "prepare": "husky",
     "architecture:check": "bun scripts/architecture-boundary-check.ts",
+    "graphify:rebuild": "bun scripts/graphify-rebuild.ts",
     "harness:audit": "bun scripts/harness-audit.ts",
     "harness:check": "bun scripts/harness-check.ts",
     "harness:generate": "bun scripts/harness-generate.ts",
