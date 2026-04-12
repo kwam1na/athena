@@ -6,6 +6,7 @@ Use the repo-root harness commands together:
 - `bun run harness:review` is the touched-file pass. It always runs `bun run harness:check` first, then uses the machine-readable [validation map](./validation-map.json) to decide whether `@athena/webapp` baseline validations should run for the files you changed.
 - `bun run harness:audit` is the full-app pass. It scans the current `athena-webapp` surface even when nothing is touched and fails on stale harness docs, stale validation-map paths, or live surfaces that the validation map does not cover yet.
 - `bun run harness:behavior --scenario <name>` runs shared runtime behavior scenarios that boot app processes, wait for readiness, drive browser interactions, assert runtime signals, and clean up automatically.
+- `bun run harness:behavior --scenario <name> --record-video` captures browser-flow evidence for handoff under `artifacts/harness-behavior/videos/<scenario>/<run-stamp>/`.
 
 - [Test index](./test-index.md)
 - [Validation guide](./validation-guide.md)

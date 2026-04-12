@@ -1,5 +1,6 @@
 import path from "node:path";
 import { spawn as spawnChildProcess } from "node:child_process";
+import { mkdir } from "node:fs/promises";
 
 import { HARNESS_BEHAVIOR_SCENARIOS } from "./harness-behavior-scenarios";
 
@@ -72,12 +73,19 @@ export type HarnessBehaviorRuntimeSignalResult = {
 export type HarnessBehaviorPlaywrightFlowOptions<TStepResult> = {
   url: string;
   headless?: boolean;
+  recordVideo?: boolean;
+  videoDir?: string;
+  videoSize?: {
+    width: number;
+    height: number;
+  };
   steps: (context: { page: HarnessBehaviorPlaywrightPage }) => Promise<TStepResult>;
 };
 
 export type HarnessBehaviorPlaywrightFlowResult<TStepResult> = {
   consoleMessages: string[];
   stepResult: TStepResult;
+  videoPath?: string;
 };
 
 export type HarnessBehaviorProcessHandle = {
@@ -191,6 +199,7 @@ type RunHarnessBehaviorOptions = {
 export type ParsedHarnessBehaviorArgs = {
   help: boolean;
   list: boolean;
+  recordVideo: boolean;
   scenarioName: string | null;
 };
 
@@ -602,7 +611,15 @@ function collectRuntimeSignalMatches(
 
 type HarnessBehaviorPlaywrightBrowser = {
   close: () => Promise<void>;
-  newContext: () => Promise<HarnessBehaviorPlaywrightContext>;
+  newContext: (options?: {
+    recordVideo?: {
+      dir: string;
+      size?: {
+        width: number;
+        height: number;
+      };
+    };
+  }) => Promise<HarnessBehaviorPlaywrightContext>;
 };
 
 type HarnessBehaviorPlaywrightContext = {
@@ -625,6 +642,11 @@ export type HarnessBehaviorPlaywrightPage = {
     options?: { timeout?: number }
   ) => Promise<unknown>;
   textContent: (selector: string) => Promise<string | null>;
+  video: () =>
+    | {
+        path: () => Promise<string>;
+      }
+    | null;
 };
 
 type HarnessBehaviorPlaywrightModule = {
@@ -638,18 +660,56 @@ export async function runPlaywrightFlow<TStepResult>(
 ) {
   let browser: HarnessBehaviorPlaywrightBrowser | null = null;
   let browserContext: HarnessBehaviorPlaywrightContext | null = null;
+  let page: HarnessBehaviorPlaywrightPage | null = null;
+  let recordedVideo:
+    | {
+        path: () => Promise<string>;
+      }
+    | null = null;
+  let videoPath: string | undefined;
+  let hasStepResult = false;
+  let stepResult!: TStepResult;
+  const consoleMessages: string[] = [];
+  let flowError: unknown = null;
 
   try {
     const playwright = (await import(
       "@playwright/test"
     )) as unknown as HarnessBehaviorPlaywrightModule;
 
+    let contextRecordVideoOptions:
+      | {
+          dir: string;
+          size?: {
+            width: number;
+            height: number;
+          };
+        }
+      | undefined;
+
+    if (options.recordVideo) {
+      const defaultVideoDir = path.join(
+        process.cwd(),
+        "artifacts",
+        "harness-behavior",
+        "videos"
+      );
+      const videoDir = options.videoDir ?? defaultVideoDir;
+      await mkdir(videoDir, { recursive: true });
+      contextRecordVideoOptions = {
+        dir: videoDir,
+        size: options.videoSize,
+      };
+    }
+
     browser = await playwright.chromium.launch({
       headless: options.headless ?? true,
     });
-    browserContext = await browser.newContext();
-    const page = await browserContext.newPage();
-    const consoleMessages: string[] = [];
+    browserContext = await browser.newContext({
+      recordVideo: contextRecordVideoOptions,
+    });
+    page = await browserContext.newPage();
+    recordedVideo = options.recordVideo ? page.video() : null;
     page.on("console", (message) => {
       consoleMessages.push(message.text());
     });
@@ -657,15 +717,10 @@ export async function runPlaywrightFlow<TStepResult>(
       waitUntil: "networkidle",
     });
 
-    const stepResult = await options.steps({ page });
-    return {
-      consoleMessages,
-      stepResult,
-    } satisfies HarnessBehaviorPlaywrightFlowResult<TStepResult>;
+    stepResult = await options.steps({ page });
+    hasStepResult = true;
   } catch (error) {
-    throw new Error(
-      `Playwright browser flow failed: ${formatError(error)}`
-    );
+    flowError = error;
   } finally {
     if (browserContext) {
       await browserContext.close();
@@ -673,7 +728,35 @@ export async function runPlaywrightFlow<TStepResult>(
     if (browser) {
       await browser.close();
     }
+
+    // Playwright only finalizes video files after the browser context closes.
+    if (recordedVideo) {
+      try {
+        videoPath = await recordedVideo.path();
+      } catch (videoError) {
+        flowError ??= new Error(
+          `Video capture finalization failed: ${formatError(videoError)}`
+        );
+      }
+    }
   }
+  if (flowError) {
+    throw new Error(
+      `Playwright browser flow failed: ${formatError(flowError)}`
+    );
+  }
+
+  if (!hasStepResult) {
+    throw new Error(
+      "Playwright browser flow failed: scenario steps did not produce a result."
+    );
+  }
+
+  return {
+    consoleMessages,
+    stepResult,
+    videoPath,
+  } satisfies HarnessBehaviorPlaywrightFlowResult<TStepResult>;
 }
 
 function wrapPhaseError(
@@ -845,6 +928,7 @@ export function parseHarnessBehaviorArgs(
   let scenarioName: string | null = null;
   let list = false;
   let help = false;
+  let recordVideo = false;
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
@@ -857,6 +941,28 @@ export function parseHarnessBehaviorArgs(
     if (arg === "--list") {
       list = true;
       continue;
+    }
+
+    if (arg === "--record-video") {
+      recordVideo = true;
+      continue;
+    }
+
+    if (arg.startsWith("--record-video=")) {
+      const rawValue = arg.split("=", 2)[1];
+      if (rawValue === "true" || rawValue === "1") {
+        recordVideo = true;
+        continue;
+      }
+
+      if (rawValue === "false" || rawValue === "0") {
+        recordVideo = false;
+        continue;
+      }
+
+      throw new Error(
+        `Invalid value for --record-video: "${rawValue}". Expected true, false, 1, or 0.`
+      );
     }
 
     if (arg === "--scenario") {
@@ -883,6 +989,7 @@ export function parseHarnessBehaviorArgs(
   return {
     help,
     list,
+    recordVideo,
     scenarioName,
   };
 }
@@ -890,6 +997,7 @@ export function parseHarnessBehaviorArgs(
 function printHarnessBehaviorUsage(logger: HarnessBehaviorLogger) {
   logger.log("Usage:");
   logger.log("  bun run harness:behavior --scenario <name>");
+  logger.log("  bun run harness:behavior --scenario <name> --record-video");
   logger.log("  bun run harness:behavior --list");
   logger.log("  bun run harness:behavior --help");
 }
@@ -934,11 +1042,53 @@ export async function runHarnessBehaviorCli(
     );
   }
 
+  const baseRunPlaywrightFlow = options.runPlaywrightFlow ?? runPlaywrightFlow;
+  let runPlaywrightFlowOverride = options.runPlaywrightFlow;
+
+  if (parsedArgs.recordVideo) {
+    const runStamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const videoDir = path.join(
+      rootDir,
+      "artifacts",
+      "harness-behavior",
+      "videos",
+      selectedScenario.name,
+      runStamp
+    );
+
+    logger.log(
+      `[harness:behavior] Video capture enabled -> ${path.relative(
+        rootDir,
+        videoDir
+      )}`
+    );
+
+    runPlaywrightFlowOverride = async <TStepResult>(
+      playwrightOptions: HarnessBehaviorPlaywrightFlowOptions<TStepResult>
+    ) => {
+      const flowResult = await baseRunPlaywrightFlow({
+        ...playwrightOptions,
+        recordVideo: true,
+        videoDir,
+      });
+
+      if (flowResult.videoPath) {
+        logPhase(
+          logger,
+          "browser",
+          `video artifact captured at ${flowResult.videoPath}`
+        );
+      }
+
+      return flowResult;
+    };
+  }
+
   await runHarnessBehaviorScenario(rootDir, selectedScenario, {
     logger,
     fetchImpl: options.fetchImpl,
     sleep: options.sleep,
-    runPlaywrightFlow: options.runPlaywrightFlow,
+    runPlaywrightFlow: runPlaywrightFlowOverride,
   });
 }
 
