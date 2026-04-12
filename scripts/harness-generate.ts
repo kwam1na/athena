@@ -378,9 +378,9 @@ function buildGeneratedDoc(
   introLines: string[],
   bodyLines: string[]
 ) {
-  return [title, "", GENERATED_DOC_NOTICE, "", ...introLines, "", ...bodyLines, ""]
+  return `${[title, "", GENERATED_DOC_NOTICE, "", ...introLines, "", ...bodyLines]
     .join("\n")
-    .replace(/\n{3,}/g, "\n\n");
+    .replace(/\n{3,}/g, "\n\n")}\n`;
 }
 
 async function buildDiscoveryIndex(
