@@ -1,24 +1,16 @@
 import { access, readFile } from "node:fs/promises";
 import path from "node:path";
 
+import { HARNESS_APP_REGISTRY } from "./harness-app-registry";
 import { validateHarnessDocs } from "./harness-check";
 
-const SELF_REVIEW_TARGETS = [
-  {
-    appLabel: "Athena Webapp",
-    packageDir: "packages/athena-webapp",
-    testingDocPath: "packages/athena-webapp/docs/agent/testing.md",
-    validationMapPath: "packages/athena-webapp/docs/agent/validation-map.json",
-    validationGuidePath: "packages/athena-webapp/docs/agent/validation-guide.md",
-  },
-  {
-    appLabel: "Storefront Webapp",
-    packageDir: "packages/storefront-webapp",
-    testingDocPath: "packages/storefront-webapp/docs/agent/testing.md",
-    validationMapPath: "packages/storefront-webapp/docs/agent/validation-map.json",
-    validationGuidePath: "packages/storefront-webapp/docs/agent/validation-guide.md",
-  },
-] as const;
+const SELF_REVIEW_TARGETS = HARNESS_APP_REGISTRY.map((app) => ({
+  appLabel: app.label,
+  packageDir: app.packageDir,
+  testingDocPath: app.harnessDocs.testingPath,
+  validationMapPath: app.harnessDocs.validationMapPath,
+  validationGuidePath: app.harnessDocs.validationGuidePath,
+}));
 
 const GRAPHIFY_ARTIFACTS = [
   "graphify-out/GRAPH_REPORT.md",

@@ -49,6 +49,21 @@ async function createFixtureRepo() {
   );
 
   await write(
+    "packages/valkey-proxy-server/package.json",
+    JSON.stringify(
+      {
+        name: "valkey-proxy-server",
+        scripts: {
+          test: "node --test app.test.js",
+        },
+      },
+      null,
+      2
+    ),
+    rootDir
+  );
+
+  await write(
     "packages/athena-webapp/docs/agent/testing.md",
     [
       "# Athena Webapp Testing",
@@ -63,6 +78,17 @@ async function createFixtureRepo() {
     "packages/storefront-webapp/docs/agent/testing.md",
     [
       "# Storefront Webapp Testing",
+      "",
+      "Run `bun run harness:review` from the repo root for touched-file validation coverage.",
+      "Machine-readable review coverage lives in [validation-map.json](./validation-map.json).",
+    ].join("\n"),
+    rootDir
+  );
+
+  await write(
+    "packages/valkey-proxy-server/docs/agent/testing.md",
+    [
+      "# Valkey Proxy Server Testing",
       "",
       "Run `bun run harness:review` from the repo root for touched-file validation coverage.",
       "Machine-readable review coverage lives in [validation-map.json](./validation-map.json).",
@@ -135,6 +161,53 @@ async function createFixtureRepo() {
   );
 
   await write(
+    "packages/valkey-proxy-server/docs/agent/validation-map.json",
+    JSON.stringify(
+      {
+        workspace: "valkey-proxy-server",
+        packageDir: "packages/valkey-proxy-server",
+        surfaces: [
+          {
+            name: "service-logic-docs-or-entrypoint-edits",
+            pathPrefixes: [
+              "packages/valkey-proxy-server/package.json",
+              "packages/valkey-proxy-server/README.md",
+              "packages/valkey-proxy-server/app.js",
+              "packages/valkey-proxy-server/app.test.js",
+              "packages/valkey-proxy-server/index.js",
+            ],
+            commands: [
+              { kind: "script", script: "test" },
+              {
+                kind: "raw",
+                command: "node --check packages/valkey-proxy-server/app.js",
+              },
+              {
+                kind: "raw",
+                command: "node --check packages/valkey-proxy-server/index.js",
+              },
+            ],
+          },
+          {
+            name: "live-connection-probe-edits",
+            pathPrefixes: ["packages/valkey-proxy-server/test-connection.js"],
+            commands: [
+              { kind: "script", script: "test" },
+              {
+                kind: "raw",
+                command: "node --check packages/valkey-proxy-server/test-connection.js",
+              },
+            ],
+          },
+        ],
+      },
+      null,
+      2
+    ),
+    rootDir
+  );
+
+  await write(
     "packages/athena-webapp/docs/agent/validation-guide.md",
     [
       "# Athena Webapp Validation Guide",
@@ -169,10 +242,31 @@ async function createFixtureRepo() {
     rootDir
   );
 
+  await write(
+    "packages/valkey-proxy-server/docs/agent/validation-guide.md",
+    [
+      "# Valkey Proxy Server Validation Guide",
+      "",
+      "## Service logic, docs, or entrypoint edits",
+      "",
+      "Run:",
+      "",
+      "- `bun run --filter 'valkey-proxy-server' test`",
+      "- `node --check packages/valkey-proxy-server/app.js`",
+      "- `node --check packages/valkey-proxy-server/index.js`",
+    ].join("\n"),
+    rootDir
+  );
+
   await write("packages/athena-webapp/src/routes/index.tsx", "export {};\n", rootDir);
   await write("packages/athena-webapp/src/lib/session.ts", "export {};\n", rootDir);
   await write("packages/athena-webapp/src/unmapped.ts", "export {};\n", rootDir);
   await write("packages/storefront-webapp/src/routes/index.tsx", "export {};\n", rootDir);
+  await write("packages/valkey-proxy-server/README.md", "# Valkey\n", rootDir);
+  await write("packages/valkey-proxy-server/app.js", "module.exports = {};\n", rootDir);
+  await write("packages/valkey-proxy-server/app.test.js", "module.exports = {};\n", rootDir);
+  await write("packages/valkey-proxy-server/index.js", "module.exports = {};\n", rootDir);
+  await write("packages/valkey-proxy-server/test-connection.js", "module.exports = {};\n", rootDir);
 
   await write("graphify-out/GRAPH_REPORT.md", "# Graph\n", rootDir);
   await write("graphify-out/graph.json", "{}\n", rootDir);
@@ -266,6 +360,31 @@ describe("runHarnessSelfReview", () => {
     expect(result.blockers).toEqual([]);
     expect(result.markdown).toContain("Storefront Webapp");
     expect(result.markdown).toContain("Full browser journeys and payment redirects");
+  });
+
+  it("selects deterministic service-package validations for valkey changes", async () => {
+    const rootDir = await createFixtureRepo();
+
+    const result = await runHarnessSelfReview(rootDir, {
+      baseRef: "origin/main",
+      getChangedFiles: async () => ({
+        baseFiles: ["packages/valkey-proxy-server/package.json"],
+        trackedFiles: [],
+        untrackedFiles: [],
+      }),
+      runHarnessCheck: async () => {},
+    });
+
+    expect(result.blockers).toEqual([]);
+    expect(result.markdown).toContain("Valkey Proxy Server");
+    expect(result.markdown).toContain("service-logic-docs-or-entrypoint-edits");
+    expect(result.markdown).toContain("bun run --filter 'valkey-proxy-server' test");
+    expect(result.markdown).toContain(
+      "node --check packages/valkey-proxy-server/app.js"
+    );
+    expect(result.markdown).toContain(
+      "node --check packages/valkey-proxy-server/index.js"
+    );
   });
 
   it.each([
