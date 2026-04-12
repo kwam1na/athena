@@ -10,7 +10,7 @@ describe("HARNESS_APP_REGISTRY", () => {
 
     expect(valkeyProxy?.appName).toBe("valkey-proxy-server");
     expect(valkeyProxy?.archetype).toBe("service-package");
-    expect(valkeyProxy?.onboardingStatus).toBe("planned");
+    expect(valkeyProxy?.onboardingStatus).toBe("active");
     expect(valkeyProxy?.packageDir).toBe("packages/valkey-proxy-server");
     expect(valkeyProxy?.auditedRoots).toEqual(["."]);
     expect(valkeyProxy?.harnessDocs.entryIndexPath).toBe(
@@ -29,25 +29,47 @@ describe("HARNESS_APP_REGISTRY", () => {
       (entry) => entry.appName === "valkey-proxy-server"
     );
     const serviceScenario = valkeyProxy?.validationScenarios.find(
-      (scenario) => scenario.title === "Service entry or connection probe edits"
+      (scenario) => scenario.title === "Service logic, docs, or entrypoint edits"
+    );
+    const liveProbeScenario = valkeyProxy?.validationScenarios.find(
+      (scenario) => scenario.title === "Live connection probe edits"
     );
 
     expect(serviceScenario).toMatchObject({
       touchedPaths: [
         "package.json",
         "README.md",
+        "app.js",
+        "app.test.js",
         "index.js",
-        "test-connection.js",
       ],
-      commands: [{ kind: "script", script: "test:connection" }],
+      commands: [
+        { kind: "script", script: "test" },
+        {
+          kind: "raw",
+          command: "node --check packages/valkey-proxy-server/app.js",
+        },
+        {
+          kind: "raw",
+          command: "node --check packages/valkey-proxy-server/index.js",
+        },
+      ],
+    });
+    expect(liveProbeScenario).toMatchObject({
+      touchedPaths: ["test-connection.js"],
+      commands: [
+        { kind: "script", script: "test" },
+        {
+          kind: "raw",
+          command: "node --check packages/valkey-proxy-server/test-connection.js",
+        },
+      ],
     });
   });
 
-  it("keeps the webapps as active harness apps", () => {
-    const statuses = HARNESS_APP_REGISTRY.filter(
-      (entry) => entry.appName !== "valkey-proxy-server"
-    ).map((entry) => entry.onboardingStatus);
+  it("keeps every registered app active once onboarding is complete", () => {
+    const statuses = HARNESS_APP_REGISTRY.map((entry) => entry.onboardingStatus);
 
-    expect(statuses).toEqual(["active", "active"]);
+    expect(statuses).toEqual(["active", "active", "active"]);
   });
 });

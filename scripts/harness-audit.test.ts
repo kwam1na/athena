@@ -45,6 +45,7 @@ async function createFixtureRepo() {
       "",
       "- [Athena webapp](./athena-webapp/AGENTS.md)",
       "- [Storefront webapp](./storefront-webapp/AGENTS.md)",
+      "- [Valkey proxy server](./valkey-proxy-server/AGENTS.md)",
     ].join("\n"),
     rootDir
   );
@@ -91,6 +92,7 @@ async function createFixtureRepo() {
         name: "valkey-proxy-server",
         scripts: {
           start: "node index.js",
+          test: "node --test app.test.js",
           "test:connection": "node test-connection.js",
           dev: "nodemon index.js",
         },
@@ -287,9 +289,10 @@ async function createFixtureRepo() {
       "Machine-readable review coverage lives in [validation-map.json](./validation-map.json).",
       "- [Test index](./test-index.md)",
       "- [Validation guide](./validation-guide.md)",
-      "The main test surfaces are `package.json`, `README.md`, `index.js`, and `test-connection.js`.",
+      "The main test surfaces are `package.json`, `README.md`, `app.js`, `app.test.js`, `index.js`, and `test-connection.js`.",
+      "Run `bun run --filter 'valkey-proxy-server' test` for the deterministic local pass.",
       "Run `bun run --filter 'valkey-proxy-server' test:connection` for the connection probe.",
-      "Covered test surfaces include `package.json`, `README.md`, `index.js`, and `test-connection.js`.",
+      "Covered test surfaces include `app.test.js`, `app.js`, `index.js`, and `test-connection.js`.",
     ].join("\n"),
     rootDir
   );
@@ -538,6 +541,12 @@ async function createFixtureRepo() {
   await write("packages/storefront-webapp/src/lib/storefrontObservability.ts", "export {};\n", rootDir);
   await write("packages/storefront-webapp/src/utils/price.ts", "export {};\n", rootDir);
   await write("packages/storefront-webapp/tests/e2e/checkout.spec.ts", "export {};\n", rootDir);
+  await write("packages/valkey-proxy-server/app.js", "export const app = true;\n", rootDir);
+  await write(
+    "packages/valkey-proxy-server/app.test.js",
+    "export const appTest = true;\n",
+    rootDir
+  );
   await write("packages/valkey-proxy-server/index.js", "export const proxy = true;\n", rootDir);
   await write(
     "packages/valkey-proxy-server/test-connection.js",

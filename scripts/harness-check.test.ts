@@ -76,6 +76,7 @@ async function createFixtureRepo() {
       "",
       "- [Athena webapp](./athena-webapp/AGENTS.md)",
       "- [Storefront webapp](./storefront-webapp/AGENTS.md)",
+      "- [Valkey proxy server](./valkey-proxy-server/AGENTS.md)",
     ].join("\n"),
     rootDir
   );
@@ -241,6 +242,7 @@ async function createFixtureRepo() {
         name: "valkey-proxy-server",
         scripts: {
           start: "node index.js",
+          test: "node --test app.test.js",
           "test:connection": "node test-connection.js",
           dev: "nodemon index.js",
         },
@@ -289,9 +291,10 @@ async function createFixtureRepo() {
       ...REQUIRED_TESTING_LINKS.map((link) => `- [${link}](${link})`),
       "",
       "Use `bun run harness:review` to validate the package surface mappings.",
-      "The main validation surfaces are `package.json`, `README.md`, `index.js`, and `test-connection.js`.",
-      "Run `bun run --filter 'valkey-proxy-server' test:connection` for the connection probe.",
-      "Covered test surfaces include `package.json`, `README.md`, `index.js`, and `test-connection.js`.",
+      "The main validation surfaces are `package.json`, `README.md`, `app.js`, `app.test.js`, `index.js`, and `test-connection.js`.",
+      "Run `bun run --filter 'valkey-proxy-server' test` for the deterministic local pass.",
+      "Run `bun run --filter 'valkey-proxy-server' test:connection` for the live connection probe.",
+      "Covered test surfaces include `app.test.js`, `app.js`, `index.js`, and `test-connection.js`.",
     ].join("\n"),
     rootDir
   );
@@ -306,6 +309,8 @@ async function createFixtureRepo() {
     ].join("\n"),
     rootDir
   );
+  await write("packages/valkey-proxy-server/app.js", "export {};\n", rootDir);
+  await write("packages/valkey-proxy-server/app.test.js", "export {};\n", rootDir);
   await write("packages/valkey-proxy-server/index.js", "export {};\n", rootDir);
   await write(
     "packages/valkey-proxy-server/test-connection.js",

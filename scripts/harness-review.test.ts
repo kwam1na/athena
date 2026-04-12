@@ -54,6 +54,7 @@ async function createFixtureRepo() {
         name: "valkey-proxy-server",
         scripts: {
           start: "node index.js",
+          test: "node --test app.test.js",
           "test:connection": "node test-connection.js",
           dev: "nodemon index.js",
         },
@@ -96,7 +97,7 @@ async function createFixtureRepo() {
       "",
       "Run `bun run harness:review` from the repo root for touched-file validation coverage.",
       "Machine-readable review coverage lives in [validation-map.json](./validation-map.json).",
-      "The main validation surfaces are `package.json`, `README.md`, `index.js`, and `test-connection.js`.",
+      "The main validation surfaces are `package.json`, `README.md`, `app.js`, `app.test.js`, `index.js`, and `test-connection.js`.",
     ].join("\n"),
     rootDir
   );
@@ -151,14 +152,36 @@ async function createFixtureRepo() {
         packageDir: "packages/valkey-proxy-server",
         surfaces: [
           {
-            name: "service-entry-and-connection-probe",
+            name: "service-entry-and-support-surfaces",
             pathPrefixes: [
               "packages/valkey-proxy-server/package.json",
               "packages/valkey-proxy-server/README.md",
+              "packages/valkey-proxy-server/app.js",
+              "packages/valkey-proxy-server/app.test.js",
               "packages/valkey-proxy-server/index.js",
-              "packages/valkey-proxy-server/test-connection.js",
             ],
-            commands: [{ kind: "script", script: "test:connection" }],
+            commands: [
+              { kind: "script", script: "test" },
+              {
+                kind: "raw",
+                command: "node --check packages/valkey-proxy-server/app.js",
+              },
+              {
+                kind: "raw",
+                command: "node --check packages/valkey-proxy-server/index.js",
+              },
+            ],
+          },
+          {
+            name: "live-connection-probe-edits",
+            pathPrefixes: ["packages/valkey-proxy-server/test-connection.js"],
+            commands: [
+              { kind: "script", script: "test" },
+              {
+                kind: "raw",
+                command: "node --check packages/valkey-proxy-server/test-connection.js",
+              },
+            ],
           },
         ],
       },
@@ -179,11 +202,13 @@ async function createFixtureRepo() {
     "export const storefront = true;\n",
     rootDir
   );
+  await write("packages/valkey-proxy-server/app.js", "export const app = true;\n", rootDir);
   await write(
-    "packages/valkey-proxy-server/index.js",
-    "export const proxy = true;\n",
+    "packages/valkey-proxy-server/app.test.js",
+    "export const appTest = true;\n",
     rootDir
   );
+  await write("packages/valkey-proxy-server/index.js", "export const proxy = true;\n", rootDir);
   await write(
     "packages/valkey-proxy-server/test-connection.js",
     "export const probe = true;\n",
@@ -279,6 +304,9 @@ describe("runHarnessReview", () => {
       runPackageScript: async (workspace, script) => {
         steps.push(`${workspace}:${script}`);
       },
+      runRawCommand: async (command) => {
+        steps.push(command);
+      },
       logger: {
         log() {},
         error() {},
@@ -287,7 +315,9 @@ describe("runHarnessReview", () => {
 
     expect(steps).toEqual([
       "harness:check",
-      "valkey-proxy-server:test:connection",
+      "valkey-proxy-server:test",
+      "node --check packages/valkey-proxy-server/app.js",
+      "node --check packages/valkey-proxy-server/index.js",
     ]);
   });
 
@@ -303,6 +333,9 @@ describe("runHarnessReview", () => {
       runPackageScript: async (workspace, script) => {
         steps.push(`${workspace}:${script}`);
       },
+      runRawCommand: async (command) => {
+        steps.push(command);
+      },
       logger: {
         log() {},
         error() {},
@@ -311,7 +344,9 @@ describe("runHarnessReview", () => {
 
     expect(steps).toEqual([
       "harness:check",
-      "valkey-proxy-server:test:connection",
+      "valkey-proxy-server:test",
+      "node --check packages/valkey-proxy-server/app.js",
+      "node --check packages/valkey-proxy-server/index.js",
     ]);
   });
 
