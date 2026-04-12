@@ -116,6 +116,7 @@ describe("repo harness ergonomics", () => {
     expect(workflow).toContain("run: bun run harness:test");
     expect(workflow).toContain("run: python3 -m pip install graphifyy");
     expect(workflow).toContain("run: bun run harness:audit");
+    expect(workflow).toContain("run: bun run harness:inferential-review");
     expect(workflow).toContain("run: bun run graphify:check");
   });
 
@@ -128,6 +129,9 @@ describe("repo harness ergonomics", () => {
 
     expect(packageJson.scripts?.["pr:athena"]).toContain("bun run harness:test");
     expect(packageJson.scripts?.["pr:athena"]).toContain("bun run harness:audit");
+    expect(packageJson.scripts?.["pr:athena"]).toContain(
+      "bun run harness:inferential-review"
+    );
     expect(packageJson.scripts?.["pr:athena"]).toContain("bun run graphify:check");
   });
 
@@ -135,6 +139,7 @@ describe("repo harness ergonomics", () => {
     const readme = await readFile(path.join(ROOT_DIR, "README.md"), "utf8");
 
     expect(readme).toContain("bun run harness:test");
+    expect(readme).toContain("bun run harness:inferential-review");
   });
 
   it("documents graphify setup and tracked artifact policy in the README", async () => {
