@@ -6,6 +6,7 @@
     "architecture:check": "bun scripts/architecture-boundary-check.ts",
     "graphify:rebuild": "bun scripts/graphify-rebuild.ts",
     "harness:audit": "bun scripts/harness-audit.ts",
+    "harness:behavior": "bun scripts/harness-behavior.ts",
     "harness:check": "bun scripts/harness-check.ts",
     "harness:generate": "bun scripts/harness-generate.ts",
     "harness:self-review": "bun scripts/harness-self-review.ts",
