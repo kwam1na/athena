@@ -7,6 +7,12 @@ on:
   schedule:
     - cron: "0 14 * * 1"
   workflow_dispatch:
+    inputs:
+      runtime_behavior_report_lines:
+        description: Optional literal [harness:behavior:report] lines to aggregate into runtime trend history.
+        required: false
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -46,6 +52,9 @@ jobs:
         run: bun run harness:audit
 
       - name: Inferential harness review
+        env:
+          HARNESS_INFERENTIAL_SEMANTIC_MODE: shadow
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: bun run harness:inferential-review
 
       - name: Generate harness scorecard
@@ -53,6 +62,16 @@ jobs:
 
       - name: Check graphify freshness
         run: bun run graphify:check
+
+      - name: Upload harness validation artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: harness-validation-artifacts
+          path: |
+            artifacts/harness-inferential-review
+            artifacts/harness-scorecard/latest.json
+          if-no-files-found: ignore
 
   harness-janitor-report:
     name: Harness Janitor Report
@@ -78,6 +97,55 @@ jobs:
 
       - name: Run harness janitor (report mode)
         run: bun run harness:janitor
+
+      - name: Persist inferential history (shadow mode)
+        env:
+          HARNESS_INFERENTIAL_SEMANTIC_MODE: shadow
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: bun run harness:inferential-review --persist-history
+
+      - name: Persist runtime trend history when harness behavior logs are available
+        shell: bash
+        run: |
+          set -euo pipefail
+          INPUT_FILE="$(mktemp)"
+          python3 - <<'PY' > "$INPUT_FILE"
+          import json
+          import os
+          import sys
+
+          with open(os.environ["GITHUB_EVENT_PATH"], "r", encoding="utf-8") as handle:
+              event = json.load(handle)
+
+          sys.stdout.write(event.get("inputs", {}).get("runtime_behavior_report_lines", ""))
+          PY
+
+          if [ -s "$INPUT_FILE" ]; then
+            cat "$INPUT_FILE" | bun run harness:runtime-trends --persist-history
+            exit 0
+          fi
+
+          mapfile -t behavior_logs < <(find artifacts/harness-behavior -type f \( -name '*.log' -o -name '*.txt' \) 2>/dev/null | sort)
+          if [ "${#behavior_logs[@]}" -eq 0 ]; then
+            echo "No harness behavior logs found; skipping runtime trend history persistence."
+            exit 0
+          fi
+
+          cat "${behavior_logs[@]}" | bun run harness:runtime-trends --persist-history
+
+      - name: Generate harness telemetry scorecard
+        run: bun run harness:scorecard
+
+      - name: Upload harness telemetry artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: harness-telemetry-artifacts
+          path: |
+            artifacts/harness-inferential-review
+            artifacts/harness-behavior/trends
+            artifacts/harness-scorecard/latest.json
+          if-no-files-found: ignore
 
   harness-implementation-tests:
     name: Harness Implementation Tests

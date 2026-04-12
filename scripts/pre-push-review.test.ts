@@ -122,7 +122,12 @@ describe("repo harness ergonomics", () => {
     expect(workflow).toContain("run: bun run harness:test");
     expect(workflow).toContain("run: python3 -m pip install graphifyy");
     expect(workflow).toContain("run: bun run harness:audit");
+    expect(workflow).toContain("HARNESS_INFERENTIAL_SEMANTIC_MODE: shadow");
     expect(workflow).toContain("run: bun run harness:inferential-review");
+    expect(workflow).toContain("run: bun run harness:inferential-review --persist-history");
+    expect(workflow).toContain("bun run harness:runtime-trends --persist-history");
+    expect(workflow).toContain("runtime_behavior_report_lines:");
+    expect(workflow).toContain("actions/upload-artifact@v4");
     expect(workflow).toContain("run: bun run graphify:check");
   });
 
@@ -146,6 +151,8 @@ describe("repo harness ergonomics", () => {
 
     expect(readme).toContain("bun run harness:test");
     expect(readme).toContain("bun run harness:inferential-review");
+    expect(readme).toContain("HARNESS_INFERENTIAL_SEMANTIC_MODE=shadow");
+    expect(readme).toContain("--persist-history");
     expect(readme).toContain("bun run harness:self-review --base origin/main");
   });
 
@@ -158,6 +165,8 @@ describe("repo harness ergonomics", () => {
     expect(readme).toContain("graphify-out/GRAPH_REPORT.md");
     expect(readme).toContain("graphify-out/graph.json");
     expect(readme).toContain("graphify-out/cache");
+    expect(readme).toContain("artifacts/harness-inferential-review/history/");
+    expect(readme).toContain("artifacts/harness-behavior/trends/history/");
   });
 
   it("ignores the generated graphify cache directory", async () => {
