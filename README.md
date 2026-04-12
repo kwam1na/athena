@@ -19,6 +19,8 @@ Key repo-level commands:
 - `bun run graphify:check`
 
 `bun run harness:test` is the canonical harness implementation gate for harness scripts, graphify tooling, and pre-push review wiring.
+It targets repo-root `scripts/*.test.ts` files only (excluding cloned worktree trees).
+Use `bun run harness:test -- --dry-run` to print the selected files without executing tests.
 
 List runtime behavior scenarios with `bun run harness:behavior --list`.
 Bundled scenarios include:
