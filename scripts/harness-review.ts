@@ -1,22 +1,14 @@
 import { access, readFile } from "node:fs/promises";
 import path from "node:path";
 
+import { HARNESS_APP_REGISTRY, type ValidationCommand } from "./harness-app-registry";
 import { runHarnessCheck } from "./harness-check";
 
-const REVIEW_TARGETS = [
-  {
-    testingDocPath: "packages/athena-webapp/docs/agent/testing.md",
-    validationMapPath: "packages/athena-webapp/docs/agent/validation-map.json",
-  },
-  {
-    testingDocPath: "packages/storefront-webapp/docs/agent/testing.md",
-    validationMapPath: "packages/storefront-webapp/docs/agent/validation-map.json",
-  },
-] as const;
-
-type ValidationCommand =
-  | { kind: "script"; script: string }
-  | { kind: "raw"; command: string };
+const REVIEW_TARGETS = HARNESS_APP_REGISTRY.map((app) => ({
+  packageDir: app.packageDir,
+  testingDocPath: app.harnessDocs.testingPath,
+  validationMapPath: app.harnessDocs.validationMapPath,
+}));
 
 type ValidationSurface = {
   name: string;
@@ -371,8 +363,9 @@ export async function runHarnessReview(
   }
 
   if (targetFiles.length === 0) {
+    const packageDirList = REVIEW_TARGETS.map((target) => target.packageDir);
     logger.log(
-      "No target-app validations selected; no touched files under packages/athena-webapp or packages/storefront-webapp."
+      `No target-app validations selected; no touched files under ${packageDirList.join(" or ")}.`
     );
     return;
   }

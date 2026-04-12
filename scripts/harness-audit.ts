@@ -1,26 +1,19 @@
 import { access, readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 
+import {
+  HARNESS_APP_REGISTRY,
+  type HarnessAppName,
+  type ValidationCommand,
+} from "./harness-app-registry";
 import { validateHarnessDocs } from "./harness-check";
 
-const AUDIT_TARGETS = [
-  {
-    appName: "athena-webapp",
-    auditedRoots: ["src", "convex"],
-    testingDocPath: "packages/athena-webapp/docs/agent/testing.md",
-    validationMapPath: "packages/athena-webapp/docs/agent/validation-map.json",
-  },
-  {
-    appName: "storefront-webapp",
-    auditedRoots: ["src", "tests"],
-    testingDocPath: "packages/storefront-webapp/docs/agent/testing.md",
-    validationMapPath: "packages/storefront-webapp/docs/agent/validation-map.json",
-  },
-] as const;
-
-type ValidationCommand =
-  | { kind: "script"; script: string }
-  | { kind: "raw"; command: string };
+const AUDIT_TARGETS = HARNESS_APP_REGISTRY.map((app) => ({
+  appName: app.appName,
+  auditedRoots: app.auditedRoots,
+  testingDocPath: app.harnessDocs.testingPath,
+  validationMapPath: app.harnessDocs.validationMapPath,
+}));
 
 type ValidationSurface = {
   name: string;
@@ -35,7 +28,7 @@ type ValidationMap = {
 };
 
 type LoadedAuditTarget = {
-  appName: (typeof AUDIT_TARGETS)[number]["appName"];
+  appName: HarnessAppName;
   auditedRoots: readonly string[];
   packageDir: string;
   surfaces: ValidationSurface[];
