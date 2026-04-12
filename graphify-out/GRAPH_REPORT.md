@@ -5,7 +5,7 @@
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 2769 nodes · 2289 edges · 1113 communities detected
+- 2779 nodes · 2313 edges · 1113 communities detected
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS
 - Token cost: 0 input · 0 output
 
@@ -1133,8 +1133,8 @@
 6. `validateHarnessDocs()` - 13 edges
 7. `getBaseUrl()` - 12 edges
 8. `fileExists()` - 12 edges
-9. `OrdersTableToolbarProvider()` - 9 edges
-10. `useOrdersTableToolbar()` - 9 edges
+9. `runHarnessInferentialReview()` - 12 edges
+10. `OrdersTableToolbarProvider()` - 9 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `getAmountPaidForOrder()` --calls--> `getDiscountValue()`  [EXTRACTED]
@@ -1155,20 +1155,20 @@ Cohesion: 0.09
 Nodes (45): compactContext(), createAuthEntryViewedEvent(), createAuthRequestStartedEvent(), createAuthVerificationSucceededEvent(), createAuthVerificationViewedEvent(), createBagAddSucceededEvent(), createBagMoveToSavedEvent(), createBagRemoveSucceededEvent() (+37 more)
 
 ### Community 1 - "Community 1"
-Cohesion: 0.15
-Nodes (31): collectHarnessOnboardingErrors(), collectMarkdownLinkErrors(), collectMissingRequiredLinkErrors(), collectPackageGuideLinkErrors(), collectPackagesRouterLinkErrors(), collectReadmeLinkErrors(), collectReferencedPathErrors(), collectRuntimeScenarioDocSyncErrors() (+23 more)
+Cohesion: 0.13
+Nodes (36): buildFinding(), buildHumanReport(), buildSemanticPrompt(), buildShadowSummary(), collectHarnessSafetySignalFindings(), collectHarnessScriptTestUpdateFindings(), createOutput(), createProviderFailure() (+28 more)
 
 ### Community 2 - "Community 2"
 Cohesion: 0.15
-Nodes (27): buildDiscoveryIndex(), buildGeneratedDoc(), buildKeyFolderIndex(), buildTestIndex(), buildValidationGuide(), buildValidationMap(), collectFolderFacts(), collectRouteGroups() (+19 more)
+Nodes (31): collectHarnessOnboardingErrors(), collectMarkdownLinkErrors(), collectMissingRequiredLinkErrors(), collectPackageGuideLinkErrors(), collectPackagesRouterLinkErrors(), collectReadmeLinkErrors(), collectReferencedPathErrors(), collectRuntimeScenarioDocSyncErrors() (+23 more)
 
 ### Community 3 - "Community 3"
-Cohesion: 0.16
-Nodes (25): asArray(), asBoolean(), asMtnMomoSetupStatus(), asNumber(), asOptionalArray(), asRecord(), assignOrDelete(), asString() (+17 more)
+Cohesion: 0.15
+Nodes (27): buildDiscoveryIndex(), buildGeneratedDoc(), buildKeyFolderIndex(), buildTestIndex(), buildValidationGuide(), buildValidationMap(), collectFolderFacts(), collectRouteGroups() (+19 more)
 
 ### Community 4 - "Community 4"
-Cohesion: 0.17
-Nodes (26): buildFinding(), buildHumanReport(), collectHarnessSafetySignalFindings(), collectHarnessScriptTestUpdateFindings(), createOutput(), createProviderFailure(), createReducedSignalFinding(), createRuntimeFailure() (+18 more)
+Cohesion: 0.16
+Nodes (25): asArray(), asBoolean(), asMtnMomoSetupStatus(), asNumber(), asOptionalArray(), asRecord(), assignOrDelete(), asString() (+17 more)
 
 ### Community 5 - "Community 5"
 Cohesion: 0.13
@@ -7289,6 +7289,8 @@ _Questions this graph is uniquely positioned to answer:_
 
 - **Should `Community 0` be split into smaller, more focused modules?**
   _Cohesion score 0.09 - nodes in this community are weakly interconnected._
+- **Should `Community 1` be split into smaller, more focused modules?**
+  _Cohesion score 0.13 - nodes in this community are weakly interconnected._
 - **Should `Community 5` be split into smaller, more focused modules?**
   _Cohesion score 0.13 - nodes in this community are weakly interconnected._
 - **Should `Community 9` be split into smaller, more focused modules?**
