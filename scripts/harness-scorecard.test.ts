@@ -160,6 +160,7 @@ async function createFixtureRepo(includeArtifacts: boolean) {
         {
           version: "1.0",
           generatedAt: "2026-04-12T04:55:00.000Z",
+          reviewMode: "semantic-shadow",
           baseRef: "origin/main",
           status: "skipped",
           summary: "No harness-critical files are in scope. Inferential review skipped.",
@@ -168,6 +169,148 @@ async function createFixtureRepo(includeArtifacts: boolean) {
           targetFiles: [],
           findings: [],
           errors: [],
+          shadow: {
+            generatedAt: "2026-04-12T04:55:00.000Z",
+            status: "skipped",
+            summary:
+              "Shadow semantic review skipped because ANTHROPIC_API_KEY is not configured.",
+            providerName: "semantic-shadow-stub",
+            findings: [],
+            errors: [],
+          },
+        },
+        null,
+        2
+      ),
+      rootDir
+    );
+    await write(
+      "artifacts/harness-inferential-review/history/2026-04-11T05-00-00-000Z.json",
+      JSON.stringify(
+        {
+          version: "1.0",
+          generatedAt: "2026-04-11T05:00:00.000Z",
+          reviewMode: "semantic-shadow",
+          baseRef: "origin/main",
+          status: "pass",
+          summary: "Inferential review completed with no actionable findings.",
+          providerName: "deterministic-policy-v1",
+          changedFiles: ["scripts/harness-scorecard.ts"],
+          targetFiles: ["scripts/harness-scorecard.ts"],
+          findings: [],
+          errors: [],
+          shadow: {
+            generatedAt: "2026-04-11T05:00:00.000Z",
+            status: "pass",
+            summary: "Shadow semantic review found no semantic issues.",
+            providerName: "semantic-shadow-stub",
+            findings: [],
+            errors: [],
+          },
+        },
+        null,
+        2
+      ),
+      rootDir
+    );
+    await write(
+      "artifacts/harness-inferential-review/history/2026-04-12T04-55-00-000Z.json",
+      JSON.stringify(
+        {
+          version: "1.0",
+          generatedAt: "2026-04-12T04:55:00.000Z",
+          reviewMode: "semantic-shadow",
+          baseRef: "origin/main",
+          status: "skipped",
+          summary: "No harness-critical files are in scope. Inferential review skipped.",
+          providerName: "deterministic-policy-v1",
+          changedFiles: ["README.md"],
+          targetFiles: [],
+          findings: [],
+          errors: [],
+          shadow: {
+            generatedAt: "2026-04-12T04:55:00.000Z",
+            status: "skipped",
+            summary:
+              "Shadow semantic review skipped because ANTHROPIC_API_KEY is not configured.",
+            providerName: "semantic-shadow-stub",
+            findings: [],
+            errors: [],
+          },
+        },
+        null,
+        2
+      ),
+      rootDir
+    );
+
+    await write(
+      "artifacts/harness-behavior/trends/latest.json",
+      JSON.stringify(
+        {
+          version: "1.0",
+          generatedAt: "2026-04-12T04:58:00.000Z",
+          parseErrors: [],
+          scenarios: [
+            {
+              scenarioName: "sample-runtime-smoke",
+              reportCount: 1,
+              passCount: 1,
+              failCount: 0,
+              passRate: 1,
+              totalDurationMs: {
+                count: 1,
+                minMs: 1000,
+                maxMs: 1000,
+                averageMs: 1000,
+                p50Ms: 1000,
+                p90Ms: 1000,
+              },
+              phaseDurations: [],
+              runtimeSignals: {
+                totalCount: 0,
+                belowMinCount: 0,
+                aboveMaxCount: 0,
+                withinBoundsCount: 0,
+              },
+              failurePhases: [],
+              diagnostics: [],
+            },
+          ],
+          summary: {
+            reportCount: 1,
+            scenarioCount: 1,
+            passCount: 1,
+            failCount: 0,
+            parseErrorCount: 0,
+            status: "healthy",
+            note: "1 parsed reports across 1 scenarios. 0 parse errors. 0 regression warnings.",
+            regressions: [],
+          },
+        },
+        null,
+        2
+      ),
+      rootDir
+    );
+    await write(
+      "artifacts/harness-behavior/trends/history/2026-04-12T04-58-00-000Z.json",
+      JSON.stringify(
+        {
+          version: "1.0",
+          generatedAt: "2026-04-12T04:58:00.000Z",
+          parseErrors: [],
+          scenarios: [],
+          summary: {
+            reportCount: 1,
+            scenarioCount: 1,
+            passCount: 1,
+            failCount: 0,
+            parseErrorCount: 0,
+            status: "healthy",
+            note: "history sample",
+            regressions: [],
+          },
         },
         null,
         2
@@ -213,6 +356,7 @@ describe("collectHarnessScorecard", () => {
       "registry",
       "documentation",
       "inferential",
+      "runtimeTrends",
       "graphify",
     ]);
     expect(first.metrics.registry.definition).toContain("onboarding states");
@@ -236,7 +380,28 @@ describe("collectHarnessScorecard", () => {
     expect(first.metrics.documentation.healthyAppCount).toBe(3);
     expect(first.metrics.documentation.degradedAppCount).toBe(0);
     expect(first.metrics.inferential.status).toBe("skipped");
+    expect(first.metrics.inferential.reviewMode).toBe("semantic-shadow");
+    expect(first.metrics.inferential.shadow).toMatchObject({
+      status: "skipped",
+      providerName: "semantic-shadow-stub",
+    });
     expect(first.metrics.inferential.findingCount).toBe(0);
+    expect(first.metrics.inferential.history).toMatchObject({
+      present: true,
+      sampleCount: 2,
+      parseErrorCount: 0,
+    });
+    expect(first.metrics.runtimeTrends).toMatchObject({
+      present: true,
+      status: "healthy",
+      reportCount: 1,
+      scenarioCount: 1,
+    });
+    expect(first.metrics.runtimeTrends.history).toMatchObject({
+      present: true,
+      sampleCount: 1,
+      parseErrorCount: 0,
+    });
     expect(first.metrics.graphify.status).toBe("paired");
     expect(first.metrics.graphify.reportPresent).toBe(true);
     expect(first.metrics.graphify.graphPresent).toBe(true);
@@ -250,8 +415,99 @@ describe("collectHarnessScorecard", () => {
     });
 
     expect(result.metrics.inferential.status).toBe("missing");
+    expect(result.metrics.runtimeTrends.status).toBe("missing");
     expect(result.metrics.graphify.status).toBe("missing");
     expect(result.summary.status).toBe("degraded");
     expect(result.summary.missingSignals).toBeGreaterThan(0);
+  });
+
+  it("surfaces malformed history and repeated shadow provider errors without crashing", async () => {
+    const rootDir = await createFixtureRepo(true);
+
+    await write(
+      "artifacts/harness-inferential-review/history/2026-04-12T05-10-00-000Z.json",
+      "not-json\n",
+      rootDir
+    );
+    await write(
+      "artifacts/harness-inferential-review/history/2026-04-12T05-15-00-000Z.json",
+      JSON.stringify(
+        {
+          version: "1.0",
+          generatedAt: "2026-04-12T05:15:00.000Z",
+          reviewMode: "semantic-shadow",
+          baseRef: "origin/main",
+          status: "pass",
+          summary: "Inferential review completed with no actionable findings.",
+          providerName: "deterministic-policy-v1",
+          changedFiles: ["scripts/harness-scorecard.ts"],
+          targetFiles: ["scripts/harness-scorecard.ts"],
+          findings: [],
+          errors: [],
+          shadow: {
+            generatedAt: "2026-04-12T05:15:00.000Z",
+            status: "error",
+            summary:
+              "Shadow semantic review failed, but deterministic inferential review remains authoritative.",
+            providerName: "semantic-shadow-stub",
+            findings: [],
+            errors: [
+              {
+                code: "INFERENTIAL_RUNTIME_FAILURE",
+                message: "provider timeout",
+                remediation: "retry",
+              },
+            ],
+          },
+        },
+        null,
+        2
+      ),
+      rootDir
+    );
+    await write(
+      "artifacts/harness-inferential-review/history/2026-04-12T05-20-00-000Z.json",
+      JSON.stringify(
+        {
+          version: "1.0",
+          generatedAt: "2026-04-12T05:20:00.000Z",
+          reviewMode: "semantic-shadow",
+          baseRef: "origin/main",
+          status: "pass",
+          summary: "Inferential review completed with no actionable findings.",
+          providerName: "deterministic-policy-v1",
+          changedFiles: ["scripts/harness-scorecard.ts"],
+          targetFiles: ["scripts/harness-scorecard.ts"],
+          findings: [],
+          errors: [],
+          shadow: {
+            generatedAt: "2026-04-12T05:20:00.000Z",
+            status: "error",
+            summary:
+              "Shadow semantic review failed, but deterministic inferential review remains authoritative.",
+            providerName: "semantic-shadow-stub",
+            findings: [],
+            errors: [
+              {
+                code: "INFERENTIAL_RUNTIME_FAILURE",
+                message: "provider timeout",
+                remediation: "retry",
+              },
+            ],
+          },
+        },
+        null,
+        2
+      ),
+      rootDir
+    );
+
+    const result = await collectHarnessScorecard(rootDir, {
+      nowIso: () => "2026-04-12T05:30:00.000Z",
+    });
+
+    expect(result.metrics.inferential.history.parseErrorCount).toBe(1);
+    expect(result.metrics.inferential.history.shadowErrorCount).toBeGreaterThanOrEqual(2);
+    expect(result.summary.status).toBe("mixed");
   });
 });

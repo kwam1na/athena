@@ -89,6 +89,7 @@ type InferentialReviewOptions = {
     input: InferentialProviderInput
   ) => Promise<InferentialProviderResult>;
   semanticMode?: InferentialShadowMode;
+  persistHistory?: boolean;
   runSemanticAnalysis?: (
     input: InferentialProviderInput
   ) => Promise<InferentialSemanticAnalysisResult>;
@@ -936,6 +937,26 @@ async function writeMachineOutput(
   await writeFile(`${absoluteOutputPath}`, `${JSON.stringify(output, null, 2)}\n`);
 }
 
+function toHistoryFileStamp(generatedAt: string) {
+  return generatedAt.replaceAll(":", "-").replaceAll(".", "-");
+}
+
+async function writeHistorySnapshot(
+  rootDir: string,
+  machineOutputPath: string,
+  output: InferentialMachineOutput
+) {
+  const absoluteHistoryPath = path.join(
+    rootDir,
+    path.dirname(machineOutputPath),
+    "history",
+    `${toHistoryFileStamp(output.generatedAt)}.json`
+  );
+
+  await mkdir(path.dirname(absoluteHistoryPath), { recursive: true });
+  await writeFile(absoluteHistoryPath, `${JSON.stringify(output, null, 2)}\n`);
+}
+
 function createOutput(params: {
   status: InferentialStatus;
   summary: string;
@@ -1240,6 +1261,30 @@ export async function runHarnessInferentialReview(
     };
   }
 
+  if (options.persistHistory) {
+    try {
+      await writeHistorySnapshot(rootDir, machineOutputPath, machine);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      machine = createRuntimeFailure(
+        `Unable to write inferential history snapshot: ${message}`,
+        baseRef,
+        changedFiles,
+        targetFiles,
+        nowIso(),
+        reviewMode
+      );
+      const runtimeReport = buildHumanReport(machine);
+      await writeMachineOutput(rootDir, machineOutputPath, machine);
+      return {
+        exitCode: 1,
+        humanReport: runtimeReport,
+        machine,
+        machineOutputPath,
+      };
+    }
+  }
+
   if (machine.status === "fail" || machine.status === "error") {
     logger.error("[harness:inferential-review] blocking findings detected.");
     return {
@@ -1261,11 +1306,13 @@ export async function runHarnessInferentialReview(
 
 type ParsedCliArgs = {
   baseRef: string;
+  persistHistory: boolean;
   help: boolean;
 };
 
-function parseCliArgs(argv: string[]): ParsedCliArgs {
+export function parseHarnessInferentialReviewArgs(argv: string[]): ParsedCliArgs {
   let baseRef = DEFAULT_BASE_REF;
+  let persistHistory = false;
 
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -1277,8 +1324,14 @@ function parseCliArgs(argv: string[]): ParsedCliArgs {
     if (arg === "--help" || arg === "-h") {
       return {
         baseRef,
+        persistHistory,
         help: true,
       };
+    }
+
+    if (arg === "--persist-history") {
+      persistHistory = true;
+      continue;
     }
 
     if (arg === "--base") {
@@ -1311,22 +1364,24 @@ function parseCliArgs(argv: string[]): ParsedCliArgs {
 
   return {
     baseRef,
+    persistHistory,
     help: false,
   };
 }
 
 if (import.meta.main) {
   try {
-    const parsed = parseCliArgs(Bun.argv.slice(2));
+    const parsed = parseHarnessInferentialReviewArgs(Bun.argv.slice(2));
     if (parsed.help) {
       console.log(
-        "Usage: bun run harness:inferential-review [--base <ref>]"
+        "Usage: bun run harness:inferential-review [--base <ref>] [--persist-history]"
       );
       process.exit(0);
     }
 
     const result = await runHarnessInferentialReview(process.cwd(), {
       baseRef: parsed.baseRef,
+      persistHistory: parsed.persistHistory,
     });
     console.log(result.humanReport);
     console.log(`Machine output: ${result.machineOutputPath}`);

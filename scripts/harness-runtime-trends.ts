@@ -99,12 +99,22 @@ type HarnessRuntimeTrendOptions = {
   nowIso?: () => string;
   thresholds?: HarnessRuntimeTrendThresholds;
   logger?: HarnessRuntimeTrendLogger;
+  persistHistory?: boolean;
 };
 
 type HarnessRuntimeTrendRunResult = {
   output: HarnessRuntimeTrendsOutput;
   outputPath: string;
 };
+
+type ParsedHarnessRuntimeTrendsArgs = {
+  persistHistory: boolean;
+  help: boolean;
+};
+
+function toHistoryFileStamp(generatedAt: string) {
+  return generatedAt.replaceAll(":", "-").replaceAll(".", "-");
+}
 
 function splitInputLines(source: string | readonly string[]) {
   return typeof source === "string"
@@ -478,14 +488,67 @@ export async function runHarnessRuntimeTrends(
   const absoluteOutputPath = path.join(rootDir, outputPath);
   await mkdir(path.dirname(absoluteOutputPath), { recursive: true });
   await writeFile(absoluteOutputPath, `${JSON.stringify(output, null, 2)}\n`);
+
+  if (options.persistHistory) {
+    const absoluteHistoryPath = path.join(
+      rootDir,
+      path.dirname(outputPath),
+      "history",
+      `${toHistoryFileStamp(output.generatedAt)}.json`
+    );
+    await mkdir(path.dirname(absoluteHistoryPath), { recursive: true });
+    await writeFile(absoluteHistoryPath, `${JSON.stringify(output, null, 2)}\n`);
+  }
+
   return {
     output,
     outputPath,
   };
 }
 
+export function parseHarnessRuntimeTrendsArgs(
+  argv: string[]
+): ParsedHarnessRuntimeTrendsArgs {
+  let persistHistory = false;
+
+  for (const arg of argv) {
+    if (!arg) {
+      continue;
+    }
+
+    if (arg === "--help" || arg === "-h") {
+      return {
+        persistHistory,
+        help: true,
+      };
+    }
+
+    if (arg === "--persist-history") {
+      persistHistory = true;
+      continue;
+    }
+
+    throw new Error(
+      `Unknown argument: ${arg}. Usage: bun run harness:runtime-trends [--persist-history]`
+    );
+  }
+
+  return {
+    persistHistory,
+    help: false,
+  };
+}
+
 if (import.meta.main) {
+  const parsed = parseHarnessRuntimeTrendsArgs(Bun.argv.slice(2));
+  if (parsed.help) {
+    console.log("Usage: bun run harness:runtime-trends [--persist-history]");
+    process.exit(0);
+  }
+
   const input = await new Response(Bun.stdin).text();
-  const result = collectHarnessRuntimeTrends(input);
-  console.log(JSON.stringify(result, null, 2));
+  const result = await runHarnessRuntimeTrends(process.cwd(), input, {
+    persistHistory: parsed.persistHistory,
+  });
+  console.log(JSON.stringify(result.output, null, 2));
 }

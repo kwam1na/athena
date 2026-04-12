@@ -3,7 +3,10 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { runHarnessInferentialReview } from "./harness-inferential-review";
+import {
+  parseHarnessInferentialReviewArgs,
+  runHarnessInferentialReview,
+} from "./harness-inferential-review";
 
 const tempRoots: string[] = [];
 
@@ -331,6 +334,54 @@ describe("runHarnessInferentialReview", () => {
     expect(saved.shadow).toMatchObject({
       providerName: "semantic-shadow-stub",
       status: "fail",
+    });
+  });
+
+  it("writes a timestamped inferential history snapshot when persistence is enabled", async () => {
+    const rootDir = await createFixtureRepo();
+
+    await runHarnessInferentialReview(rootDir, {
+      getChangedFiles: async () => ["package.json"],
+      semanticMode: "shadow",
+      persistHistory: true,
+      runSemanticAnalysis: async () => ({
+        providerName: "semantic-shadow-stub",
+        findings: [],
+      }),
+      nowIso: () => "2026-04-12T05:00:00.000Z",
+    });
+
+    const historySnapshot = JSON.parse(
+      await readFile(
+        path.join(
+          rootDir,
+          "artifacts/harness-inferential-review/history/2026-04-12T05-00-00-000Z.json"
+        ),
+        "utf8"
+      )
+    ) as {
+      status: string;
+      reviewMode?: string;
+      shadow?: { providerName: string; status: string };
+    };
+
+    expect(historySnapshot.status).toBe("pass");
+    expect(historySnapshot.reviewMode).toBe("semantic-shadow");
+    expect(historySnapshot.shadow).toMatchObject({
+      providerName: "semantic-shadow-stub",
+      status: "pass",
+    });
+  });
+});
+
+describe("parseHarnessInferentialReviewArgs", () => {
+  it("accepts --persist-history", () => {
+    expect(
+      parseHarnessInferentialReviewArgs(["--base", "origin/main", "--persist-history"])
+    ).toMatchObject({
+      baseRef: "origin/main",
+      persistHistory: true,
+      help: false,
     });
   });
 });
