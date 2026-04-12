@@ -25,7 +25,7 @@ async function createFixtureRepo() {
       {
         scripts: {
           "pr:athena":
-            "bun run harness:check && bun run harness:inferential-review && bun run harness:audit",
+            "bun run harness:check && bun run harness:inferential-review && bun run harness:audit && bun run graphify:check",
         },
       },
       null,
@@ -41,8 +41,14 @@ async function createFixtureRepo() {
       "jobs:",
       "  harness-validation:",
       "    steps:",
+      "      - name: Harness check",
+      "        run: bun run harness:check",
       "      - name: Inferential harness review",
       "        run: bun run harness:inferential-review",
+      "      - name: Harness audit",
+      "        run: bun run harness:audit",
+      "      - name: Graphify check",
+      "        run: bun run graphify:check",
     ].join("\n"),
     rootDir
   );
@@ -52,6 +58,9 @@ async function createFixtureRepo() {
     [
       "# Athena Webapp Testing",
       "",
+      "- `bun run harness:check` keeps the repo safety ladder intact.",
+      "- `bun run harness:review` covers mapped validation surfaces.",
+      "- `bun run harness:audit` keeps the validation map and docs in sync.",
       "- `bun run harness:inferential-review` is the inferential harness gate.",
       "- Inferential findings are blocking and exit non-zero with remediation guidance.",
     ].join("\n"),
@@ -63,8 +72,39 @@ async function createFixtureRepo() {
     [
       "# Storefront Webapp Testing",
       "",
+      "- `bun run harness:check` keeps the repo safety ladder intact.",
+      "- `bun run harness:review` covers mapped validation surfaces.",
+      "- `bun run harness:audit` keeps the validation map and docs in sync.",
       "- `bun run harness:inferential-review` is the inferential harness gate.",
       "- Inferential findings are blocking and exit non-zero with remediation guidance.",
+    ].join("\n"),
+    rootDir
+  );
+
+  await write(
+    "scripts/harness-inferential-review.ts",
+    [
+      "export const harnessInferentialReviewStub = true;",
+      "",
+      "export function runHarnessInferentialReviewStub() {",
+      "  return harnessInferentialReviewStub;",
+      "}",
+    ].join("\n"),
+    rootDir
+  );
+
+  await write(
+    "scripts/harness-inferential-review.test.ts",
+    [
+      "import { describe, expect, it } from \"vitest\";",
+      "",
+      "import { runHarnessInferentialReviewStub } from \"./harness-inferential-review\";",
+      "",
+      "describe(\"runHarnessInferentialReviewStub\", () => {",
+      "  it(\"returns the stubbed value\", () => {",
+      "    expect(runHarnessInferentialReviewStub()).toBe(true);",
+      "  });",
+      "});",
     ].join("\n"),
     rootDir
   );
@@ -88,7 +128,8 @@ describe("runHarnessInferentialReview", () => {
       JSON.stringify(
         {
           scripts: {
-            "pr:athena": "bun run harness:check && bun run harness:audit",
+            "pr:athena":
+              "bun run harness:check && bun run harness:audit && bun run graphify:check",
           },
         },
         null,
@@ -113,6 +154,25 @@ describe("runHarnessInferentialReview", () => {
     expect(result.humanReport).toContain("Remediation:");
   });
 
+  it("fails when a harness-critical script changes without its test update", async () => {
+    const rootDir = await createFixtureRepo();
+
+    const result = await runHarnessInferentialReview(rootDir, {
+      getChangedFiles: async () => ["scripts/harness-inferential-review.ts"],
+      nowIso: () => "2026-04-12T05:00:00.000Z",
+    });
+
+    expect(result.exitCode).toBe(1);
+    expect(result.machine.status).toBe("fail");
+    expect(result.machine.findings).toHaveLength(1);
+    expect(result.machine.findings[0]).toMatchObject({
+      id: "missing-harness-script-test-update-scripts-harness-inferential-review-ts",
+      severity: "medium",
+      filePath: "scripts/harness-inferential-review.ts",
+    });
+    expect(result.humanReport).toContain("Harness script changed without test update");
+  });
+
   it("passes cleanly with zero actionable findings", async () => {
     const rootDir = await createFixtureRepo();
 
@@ -121,6 +181,8 @@ describe("runHarnessInferentialReview", () => {
         "package.json",
         ".github/workflows/athena-pr-tests.yml",
         "packages/athena-webapp/docs/agent/testing.md",
+        "scripts/harness-inferential-review.ts",
+        "scripts/harness-inferential-review.test.ts",
       ],
       nowIso: () => "2026-04-12T05:00:00.000Z",
     });
@@ -151,6 +213,28 @@ describe("runHarnessInferentialReview", () => {
     ]);
     expect(result.humanReport).toContain("Provider/runtime failure");
     expect(result.humanReport).toContain("Confirm provider configuration and connectivity");
+  });
+
+  it("returns deterministic runtime failure output when semantic analysis throws", async () => {
+    const rootDir = await createFixtureRepo();
+
+    const result = await runHarnessInferentialReview(rootDir, {
+      getChangedFiles: async () => ["scripts/harness-inferential-review.ts"],
+      runSemanticAnalysis: async () => {
+        throw new Error("semantic parse failure");
+      },
+      nowIso: () => "2026-04-12T05:00:00.000Z",
+    });
+
+    expect(result.exitCode).toBe(1);
+    expect(result.machine.status).toBe("error");
+    expect(result.machine.errors).toMatchObject([
+      {
+        code: "INFERENTIAL_RUNTIME_FAILURE",
+      },
+    ]);
+    expect(result.humanReport).toContain("Semantic analysis failed");
+    expect(result.humanReport).toContain("Inspect the runtime error output");
   });
 
   it("is explicit and clean when no harness-critical files are in scope", async () => {
