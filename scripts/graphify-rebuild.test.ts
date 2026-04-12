@@ -28,6 +28,12 @@ afterEach(async () => {
 });
 
 describe("runGraphifyRebuild", () => {
+  it("resets graphify cache before extraction to avoid cross-version drift", () => {
+    expect(GRAPHIFY_REBUILD_SNIPPET).toContain("import shutil");
+    expect(GRAPHIFY_REBUILD_SNIPPET).toContain("cache_dir = out / 'cache'");
+    expect(GRAPHIFY_REBUILD_SNIPPET).toContain("shutil.rmtree(cache_dir)");
+  });
+
   it("uses the repo-pinned graphify python when available", async () => {
     const rootDir = await createFixtureRoot();
     await write("graphify-python", "", rootDir);

@@ -28,9 +28,9 @@ The repo keeps a graphify knowledge graph at `graphify-out/`.
 
 Use `bun run graphify:check` as the non-mutating freshness gate for tracked graphify artifacts.
 
-Use `bun run graphify:rebuild` as the repair path when the check reports stale artifacts. The rebuild command prefers the interpreter recorded in `.graphify_python` and falls back to `python3` only if that file is missing.
+Use `bun run graphify:rebuild` as the repair path when the check reports stale artifacts. The rebuild command uses the interpreter recorded in `.graphify_python` (default `python3` in this repo).
 
-If you need to repair the local graphify setup, make sure `.graphify_python` points at a Python environment that can import `graphify`. In this repo that is typically a pipx-managed interpreter.
+If you need to repair the local graphify setup, make sure `python3` can import `graphify` and upgrade it with `python3 -m pip install --upgrade graphifyy`.
 
 Tracked graphify artifacts:
 
