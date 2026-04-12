@@ -4,6 +4,8 @@ on:
   pull_request:
     branches:
       - main
+  schedule:
+    - cron: "0 14 * * 1"
   workflow_dispatch:
 
 permissions:
