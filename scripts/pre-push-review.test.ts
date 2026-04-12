@@ -114,6 +114,7 @@ describe("repo harness ergonomics", () => {
     expect(workflow).toContain("workflow_dispatch:");
     expect(workflow).toContain("harness-implementation-tests:");
     expect(workflow).toContain("run: bun run harness:test");
+    expect(workflow).toContain("run: python3 -m pip install graphifyy");
     expect(workflow).toContain("run: bun run harness:audit");
     expect(workflow).toContain("run: bun run graphify:check");
   });
