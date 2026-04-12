@@ -180,6 +180,7 @@ packages/.claude/worktrees/
 docs/superpowers/plans/
 docs/superpowers/specs/
 .dual-graph/
+graphify-out/cache/
 
 packages/athena-webapp/stats.html
 packages/storefront-webapp/stats.html
