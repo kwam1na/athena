@@ -1,7 +1,7 @@
 import { access, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import { HARNESS_APP_REGISTRY } from "./harness-app-registry";
+import { HARNESS_APP_REGISTRY, PACKAGES_AGENTS_PATH } from "./harness-app-registry";
 
 const GRAPHIFY_OUTPUT_DIR = "graphify-out";
 const GRAPHIFY_WIKI_DIR = path.posix.join(GRAPHIFY_OUTPUT_DIR, "wiki");
@@ -233,7 +233,11 @@ function buildRootIndexPage(params: {
   const lines = [
     "# Graphify Wiki",
     "",
-    "Graphify is the navigation layer for the repo graph. For deeper analysis, open `graphify-out/GRAPH_REPORT.md`.",
+    "Graphify is the navigation layer for the repo graph. Use the entry docs below for operational rules and validation, and open `graphify-out/GRAPH_REPORT.md` for deeper analysis.",
+    "",
+    "## Entry Docs",
+    `- ${toMarkdownLink(pagePath, "AGENTS.md", "AGENTS.md")} - repo-wide workflow, guardrails, and graphify usage rules`,
+    `- ${toMarkdownLink(pagePath, "packages/AGENTS.md", "packages/AGENTS.md")} - package router plus the operational guides for each harnessed package`,
     "",
     "## Repo Summary",
     `- Code files discovered: ${params.codeFileCount}`,
@@ -281,7 +285,7 @@ function buildPackagePage(params: {
   const lines = [
     `# ${params.packageEntry.label}`,
     "",
-    `Landing page for ${params.packageEntry.packageDir}. Start with the package entry docs, then jump into the graph hotspots below.`,
+    `Landing page for ${params.packageEntry.packageDir}. Use this page to orient around graph hotspots, then switch to the package entry docs for operational rules and validation.`,
     "",
     "## Package Docs",
     `- ${toMarkdownLink(
@@ -324,6 +328,7 @@ function buildPackagePage(params: {
       path.posix.join(GRAPHIFY_WIKI_DIR, "index.md"),
       "wiki index"
     )} - back to the wiki index`,
+    `- ${toMarkdownLink(pagePath, PACKAGES_AGENTS_PATH, "packages/AGENTS.md")} - package router and operational guide entrypoint`,
     `- ${toMarkdownLink(pagePath, GRAPHIFY_REPORT_PATH, "GRAPH_REPORT.md")} - full graph report`,
   ];
 

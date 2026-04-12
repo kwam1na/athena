@@ -1,6 +1,6 @@
 # Storefront Webapp
 
-Landing page for packages/storefront-webapp. Start with the package entry docs, then jump into the graph hotspots below.
+Landing page for packages/storefront-webapp. Use this page to orient around graph hotspots, then switch to the package entry docs for operational rules and validation.
 
 ## Package Docs
 - [AGENTS.md](../../../packages/storefront-webapp/AGENTS.md)
@@ -25,4 +25,5 @@ Landing page for packages/storefront-webapp. Start with the package entry docs, 
 
 ## Navigation
 - [wiki index](../index.md) - back to the wiki index
+- [packages/AGENTS.md](../../../packages/AGENTS.md) - package router and operational guide entrypoint
 - [GRAPH_REPORT.md](../../GRAPH_REPORT.md) - full graph report

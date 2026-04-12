@@ -26,6 +26,8 @@ const RUNTIME_SCENARIO_DOCS = [
   "packages/athena-webapp/docs/agent/testing.md",
   "packages/storefront-webapp/docs/agent/testing.md",
 ] as const;
+const README_PATH = "README.md" as const;
+const GRAPHIFY_WIKI_INDEX_PATH = "graphify-out/wiki/index.md" as const;
 
 type HarnessAppConfig = {
   appName: HarnessAppName;
@@ -40,6 +42,31 @@ function normalizeRepoPath(repoPath: string) {
 
 function stripLinkDecorations(linkTarget: string) {
   return linkTarget.split("#", 1)[0]?.split("?", 1)[0] ?? "";
+}
+
+function toRelativeLinkTarget(filePath: string, targetPath: string) {
+  const relativePath = normalizeRepoPath(
+    path.posix.relative(path.posix.dirname(filePath), normalizeRepoPath(targetPath))
+  );
+
+  return relativePath.startsWith(".") ? relativePath : `./${relativePath}`;
+}
+
+function collectMissingRequiredLinkErrors(
+  filePath: string,
+  linkTargets: Set<string>,
+  requiredLinks: string[],
+  label: string
+) {
+  const errors: string[] = [];
+
+  for (const requiredLink of requiredLinks) {
+    if (!linkTargets.has(requiredLink)) {
+      errors.push(`Missing required ${label} link in ${filePath}: ${requiredLink}`);
+    }
+  }
+
+  return errors;
 }
 
 function isRelativeLink(linkTarget: string) {
@@ -578,9 +605,67 @@ async function collectTestingDocErrors(
   return errors;
 }
 
+function collectReadmeLinkErrors(filePath: string, linkTargets: Set<string>) {
+  return collectMissingRequiredLinkErrors(
+    filePath,
+    linkTargets,
+    [
+      toRelativeLinkTarget(filePath, GRAPHIFY_WIKI_INDEX_PATH),
+      toRelativeLinkTarget(filePath, PACKAGES_AGENTS_PATH),
+    ],
+    "README graphify"
+  );
+}
+
+function collectPackagesRouterLinkErrors(
+  filePath: string,
+  linkTargets: Set<string>,
+  apps: HarnessAppRegistryEntry[]
+) {
+  const requiredLinks = [
+    toRelativeLinkTarget(filePath, GRAPHIFY_WIKI_INDEX_PATH),
+    ...apps.flatMap((app) => [
+      toRelativeLinkTarget(filePath, app.harnessDocs.agentsPath),
+      toRelativeLinkTarget(
+        filePath,
+        path.posix.join("graphify-out/wiki/packages", `${app.appName}.md`)
+      ),
+    ]),
+  ];
+
+  return collectMissingRequiredLinkErrors(
+    filePath,
+    linkTargets,
+    requiredLinks,
+    "packages router"
+  );
+}
+
+function collectPackageGuideLinkErrors(
+  filePath: string,
+  linkTargets: Set<string>,
+  app: HarnessAppRegistryEntry
+) {
+  return collectMissingRequiredLinkErrors(
+    filePath,
+    linkTargets,
+    [
+      toRelativeLinkTarget(
+        filePath,
+        path.posix.join("graphify-out/wiki/packages", `${app.appName}.md`)
+      ),
+      toRelativeLinkTarget(filePath, app.harnessDocs.indexPath),
+      toRelativeLinkTarget(filePath, app.harnessDocs.architecturePath),
+      toRelativeLinkTarget(filePath, app.harnessDocs.testingPath),
+      toRelativeLinkTarget(filePath, app.harnessDocs.codeMapPath),
+    ],
+    "package guide"
+  );
+}
+
 export async function validateHarnessDocs(rootDir: string) {
   const errors = await collectHarnessOnboardingErrors(rootDir);
-  const markdownFiles = [PACKAGES_AGENTS_PATH];
+  const markdownFiles = [README_PATH, PACKAGES_AGENTS_PATH];
   const packageConfigs = new Map<HarnessAppName, HarnessAppConfig>();
   const generatedDocs = await generateHarnessDocs(rootDir);
   const enforcedApps: HarnessAppRegistryEntry[] = [];
@@ -639,6 +724,23 @@ export async function validateHarnessDocs(rootDir: string) {
         .map((match) => stripLinkDecorations(match[1]?.trim() ?? ""))
         .filter(Boolean)
     );
+
+    if (markdownFile === README_PATH) {
+      errors.push(...collectReadmeLinkErrors(markdownFile, linkTargets));
+      continue;
+    }
+
+    if (markdownFile === PACKAGES_AGENTS_PATH) {
+      errors.push(
+        ...collectPackagesRouterLinkErrors(markdownFile, linkTargets, enforcedApps)
+      );
+      continue;
+    }
+
+    if (app && markdownFile === app.harnessDocs.agentsPath) {
+      errors.push(...collectPackageGuideLinkErrors(markdownFile, linkTargets, app));
+      continue;
+    }
 
     if (!markdownFile.endsWith("/docs/agent/index.md")) {
       if (
