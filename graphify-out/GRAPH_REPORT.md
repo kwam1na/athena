@@ -5,7 +5,7 @@
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 2643 nodes · 2067 edges · 1102 communities detected
+- 2644 nodes · 2068 edges · 1102 communities detected
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS
 - Token cost: 0 input · 0 output
 
@@ -1596,7 +1596,7 @@ Cohesion: 0.5
 Nodes (2): createFixtureRepo(), write()
 
 ### Community 114 - "Community 114"
-Cohesion: 0.5
+Cohesion: 0.4
 Nodes (0):
 
 ### Community 115 - "Community 115"
@@ -1612,28 +1612,28 @@ Cohesion: 0.5
 Nodes (0):
 
 ### Community 118 - "Community 118"
+Cohesion: 0.5
+Nodes (0):
+
+### Community 119 - "Community 119"
 Cohesion: 0.67
 Nodes (2): toDisplayAmount(), toPesewas()
 
-### Community 119 - "Community 119"
+### Community 120 - "Community 120"
 Cohesion: 0.83
 Nodes (3): getCachedTokenRecord(), resolveAccessTokenForStore(), resolveConfigForStore()
 
-### Community 120 - "Community 120"
+### Community 121 - "Community 121"
 Cohesion: 0.67
 Nodes (2): maskMtnPartyId(), normalizeCollectionsTransaction()
 
-### Community 121 - "Community 121"
+### Community 122 - "Community 122"
 Cohesion: 0.67
 Nodes (2): expectIndex(), getTableIndexes()
 
-### Community 122 - "Community 122"
+### Community 123 - "Community 123"
 Cohesion: 0.67
 Nodes (2): getNonEmptyString(), normalizeStorefrontObservabilityEvent()
-
-### Community 123 - "Community 123"
-Cohesion: 0.5
-Nodes (0):
 
 ### Community 124 - "Community 124"
 Cohesion: 0.5
@@ -1648,12 +1648,12 @@ Cohesion: 0.5
 Nodes (0):
 
 ### Community 127 - "Community 127"
-Cohesion: 0.67
-Nodes (2): countGroupedAnalytics(), groupAnalytics()
-
-### Community 128 - "Community 128"
 Cohesion: 0.5
 Nodes (0):
+
+### Community 128 - "Community 128"
+Cohesion: 0.67
+Nodes (2): countGroupedAnalytics(), groupAnalytics()
 
 ### Community 129 - "Community 129"
 Cohesion: 0.5
@@ -1684,32 +1684,32 @@ Cohesion: 0.5
 Nodes (0):
 
 ### Community 136 - "Community 136"
-Cohesion: 0.67
-Nodes (2): getRiskStyles(), RiskIndicators()
-
-### Community 137 - "Community 137"
 Cohesion: 0.5
 Nodes (0):
+
+### Community 137 - "Community 137"
+Cohesion: 0.67
+Nodes (2): getRiskStyles(), RiskIndicators()
 
 ### Community 138 - "Community 138"
 Cohesion: 0.5
 Nodes (0):
 
 ### Community 139 - "Community 139"
-Cohesion: 0.83
-Nodes (3): getBaseUrl(), getUserRedeemedOffers(), submitOffer()
+Cohesion: 0.5
+Nodes (0):
 
 ### Community 140 - "Community 140"
 Cohesion: 0.83
-Nodes (3): getAllStores(), getBaseUrl(), getStore()
+Nodes (3): getBaseUrl(), getUserRedeemedOffers(), submitOffer()
 
 ### Community 141 - "Community 141"
 Cohesion: 0.83
-Nodes (3): getAllSubcategories(), getBaseUrl(), getSubategory()
+Nodes (3): getAllStores(), getBaseUrl(), getStore()
 
 ### Community 142 - "Community 142"
-Cohesion: 0.5
-Nodes (0):
+Cohesion: 0.83
+Nodes (3): getAllSubcategories(), getBaseUrl(), getSubategory()
 
 ### Community 143 - "Community 143"
 Cohesion: 0.5
@@ -1736,36 +1736,36 @@ Cohesion: 0.5
 Nodes (0):
 
 ### Community 149 - "Community 149"
+Cohesion: 0.5
+Nodes (0):
+
+### Community 150 - "Community 150"
 Cohesion: 0.67
 Nodes (2): clearFilters(), onMobileFiltersCloseClick()
 
-### Community 150 - "Community 150"
+### Community 151 - "Community 151"
 Cohesion: 0.83
 Nodes (3): cancelOrder(), getErrorMessage(), placeOrder()
 
-### Community 151 - "Community 151"
+### Community 152 - "Community 152"
 Cohesion: 0.83
 Nodes (3): bootstrapCheckout(), createBootstrapToken(), createMarker()
 
-### Community 152 - "Community 152"
+### Community 153 - "Community 153"
 Cohesion: 0.5
 Nodes (0):
 
-### Community 153 - "Community 153"
+### Community 154 - "Community 154"
 Cohesion: 0.83
 Nodes (3): fileExists(), resolveGraphifyPython(), runGraphifyRebuild()
 
-### Community 154 - "Community 154"
+### Community 155 - "Community 155"
 Cohesion: 0.5
 Nodes (0):
-
-### Community 155 - "Community 155"
-Cohesion: 0.67
-Nodes (2): collectHarnessTestTargets(), runHarnessTest()
 
 ### Community 156 - "Community 156"
-Cohesion: 0.5
-Nodes (0):
+Cohesion: 0.67
+Nodes (2): collectHarnessTestTargets(), runHarnessTest()
 
 ### Community 157 - "Community 157"
 Cohesion: 0.5

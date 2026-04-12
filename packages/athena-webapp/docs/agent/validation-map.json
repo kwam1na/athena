@@ -78,18 +78,6 @@
         {
           "kind": "script",
           "script": "lint:convex:changed"
-        },
-        {
-          "kind": "raw",
-          "command": "bun run harness:behavior --scenario athena-admin-shell-boot"
-        },
-        {
-          "kind": "raw",
-          "command": "bun run harness:behavior --scenario athena-convex-storefront-composition"
-        },
-        {
-          "kind": "raw",
-          "command": "bun run harness:behavior --scenario athena-convex-storefront-failure-visibility"
         }
       ],
       "behaviorScenarios": [
@@ -112,10 +100,6 @@
         {
           "kind": "script",
           "script": "build"
-        },
-        {
-          "kind": "raw",
-          "command": "bun run harness:behavior --scenario athena-admin-shell-boot"
         }
       ],
       "behaviorScenarios": [

@@ -104,19 +104,13 @@ describe("generateHarnessDocs", () => {
       "Full browser journeys"
     );
     expect(docs.get("packages/athena-webapp/docs/agent/validation-map.json")).toContain(
-      "bun run harness:behavior --scenario athena-admin-shell-boot"
+      "\"commands\""
     );
     expect(docs.get("packages/athena-webapp/docs/agent/validation-map.json")).toContain(
       "\"behaviorScenarios\""
     );
     expect(docs.get("packages/storefront-webapp/docs/agent/validation-map.json")).toContain(
-      "bun run harness:behavior --scenario storefront-checkout-verification-recovery"
-    );
-    expect(docs.get("packages/athena-webapp/docs/agent/validation-guide.md")).toContain(
-      "bun run harness:behavior --scenario athena-convex-storefront-composition"
-    );
-    expect(docs.get("packages/storefront-webapp/docs/agent/validation-guide.md")).toContain(
-      "bun run harness:behavior --scenario storefront-checkout-bootstrap"
+      "\"kind\": \"raw\""
     );
 
     expect(await generateHarnessDocs(rootDir)).toEqual(docs);
@@ -144,6 +138,6 @@ describe("generateHarnessDocs", () => {
         path.join(rootDir, "packages/athena-webapp/docs/agent/validation-map.json"),
         "utf8"
       )
-    ).resolves.toContain("bun run harness:behavior --scenario athena-admin-shell-boot");
+    ).resolves.toContain("\"lint:architecture\"");
   });
 });

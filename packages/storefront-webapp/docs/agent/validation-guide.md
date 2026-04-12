@@ -33,8 +33,6 @@ Run:
 
 - `bun run --filter '@athena/storefront-webapp' test`
 - `bun run --filter '@athena/storefront-webapp' lint:architecture`
-- `bun run harness:behavior --scenario storefront-checkout-bootstrap`
-- `bun run harness:behavior --scenario storefront-checkout-validation-blocker`
 
 Behavior scenarios:
 
@@ -50,9 +48,6 @@ Run:
 
 - `bun run --filter '@athena/storefront-webapp' test`
 - `bun run --filter '@athena/storefront-webapp' test:e2e`
-- `bun run harness:behavior --scenario storefront-checkout-bootstrap`
-- `bun run harness:behavior --scenario storefront-checkout-validation-blocker`
-- `bun run harness:behavior --scenario storefront-checkout-verification-recovery`
 
 Behavior scenarios:
 
