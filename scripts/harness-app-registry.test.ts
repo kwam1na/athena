@@ -55,6 +55,9 @@ describe("HARNESS_APP_REGISTRY", () => {
         },
       ],
     });
+    expect(serviceScenario?.behaviorScenarios).toEqual([
+      "valkey-proxy-local-request-response",
+    ]);
     expect(liveProbeScenario).toMatchObject({
       touchedPaths: ["test-connection.js"],
       commands: [

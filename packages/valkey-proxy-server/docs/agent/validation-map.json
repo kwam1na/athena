@@ -25,7 +25,9 @@
           "command": "node --check packages/valkey-proxy-server/index.js"
         }
       ],
-      "behaviorScenarios": []
+      "behaviorScenarios": [
+        "valkey-proxy-local-request-response"
+      ]
     },
     {
       "name": "live-connection-probe-edits",

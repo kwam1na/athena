@@ -21,6 +21,10 @@ node --check test-connection.js
 
 These commands do not require a live Redis cluster.
 
+### Local runtime behavior scenario
+
+Use `bun run harness:behavior --scenario valkey-proxy-local-request-response` to boot the local in-memory proxy and exercise the request/response round trip without live Valkey credentials.
+
 ### Live Redis connectivity probe
 
 Use this when you change TLS, cluster wiring, or AWS network assumptions and have the required environment/network access:

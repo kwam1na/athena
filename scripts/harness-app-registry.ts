@@ -466,6 +466,7 @@ export const HARNESS_APP_REGISTRY = [
             command: "node --check packages/valkey-proxy-server/index.js",
           },
         ],
+        behaviorScenarios: ["valkey-proxy-local-request-response"],
         note: "Use the local test suite and syntax checks when handler logic, operator docs, or runtime bootstrap changes.",
       },
       {

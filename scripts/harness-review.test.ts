@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   getChangedFilesForHarnessReview,
   parseHarnessReviewArgs,
+  resolveHarnessReviewShell,
   runHarnessReview,
 } from "./harness-review";
 
@@ -176,6 +177,7 @@ async function createFixtureRepo() {
                 command: "node --check packages/valkey-proxy-server/index.js",
               },
             ],
+            behaviorScenarios: ["valkey-proxy-local-request-response"],
           },
           {
             name: "live-connection-probe-edits",
@@ -333,6 +335,9 @@ describe("runHarnessReview", () => {
       runRawCommand: async (command) => {
         steps.push(command);
       },
+      runHarnessBehaviorScenario: async (scenario) => {
+        steps.push(`behavior:${scenario}`);
+      },
       logger: {
         log() {},
         error() {},
@@ -344,6 +349,7 @@ describe("runHarnessReview", () => {
       "valkey-proxy-server:test",
       "node --check packages/valkey-proxy-server/app.js",
       "node --check packages/valkey-proxy-server/index.js",
+      "behavior:valkey-proxy-local-request-response",
     ]);
   });
 
@@ -362,6 +368,9 @@ describe("runHarnessReview", () => {
       runRawCommand: async (command) => {
         steps.push(command);
       },
+      runHarnessBehaviorScenario: async (scenario) => {
+        steps.push(`behavior:${scenario}`);
+      },
       logger: {
         log() {},
         error() {},
@@ -373,6 +382,7 @@ describe("runHarnessReview", () => {
       "valkey-proxy-server:test",
       "node --check packages/valkey-proxy-server/app.js",
       "node --check packages/valkey-proxy-server/index.js",
+      "behavior:valkey-proxy-local-request-response",
     ]);
   });
 
@@ -861,6 +871,30 @@ describe("parseHarnessReviewArgs", () => {
     expect(() => parseHarnessReviewArgs(["--base"])).toThrow(
       "Missing value for --base. Usage: bun run harness:review --base origin/main"
     );
+  });
+});
+
+describe("resolveHarnessReviewShell", () => {
+  it("prefers SHELL when it exists", () => {
+    const shellPath = resolveHarnessReviewShell({
+      env: {
+        SHELL: "/custom/shell",
+      },
+      fileExists: (filePath) => filePath === "/custom/shell",
+    });
+
+    expect(shellPath).toBe("/custom/shell");
+  });
+
+  it("falls back to a known shell path when SHELL is missing", () => {
+    const shellPath = resolveHarnessReviewShell({
+      env: {
+        SHELL: "/missing/shell",
+      },
+      fileExists: (filePath) => filePath === "/bin/bash",
+    });
+
+    expect(shellPath).toBe("/bin/bash");
   });
 });
 

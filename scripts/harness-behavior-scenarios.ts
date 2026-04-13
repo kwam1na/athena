@@ -22,6 +22,10 @@ const STOREFRONT_RUNTIME_APP_PORT = Number.parseInt(
   process.env.HARNESS_BEHAVIOR_STOREFRONT_APP_PORT ?? "4314",
   10
 );
+const VALKEY_RUNTIME_PORT = Number.parseInt(
+  process.env.HARNESS_BEHAVIOR_VALKEY_PORT ?? "4315",
+  10
+);
 
 const STOREFRONT_CHECKOUT_BOOTSTRAP_PATH = "/shop/checkout";
 const STOREFRONT_CHECKOUT_VALIDATION_BLOCKER_PATH =
@@ -101,6 +105,14 @@ type StorefrontScenarioBrowserResult = {
   observedText: string;
   consoleMessages: string[];
 };
+type ValkeyScenarioBrowserResult = {
+  rootText: string;
+  healthStatus: string;
+  setStatus: number;
+  getStatus: number;
+  roundTripValue: string;
+  consoleMessages: string[];
+};
 
 function createAthenaRuntimeProcess(): HarnessBehaviorProcessDefinition {
   return {
@@ -116,6 +128,22 @@ function createAthenaRuntimeProcess(): HarnessBehaviorProcessDefinition {
 
 function buildAthenaRuntimeUrl(pathname: string) {
   return `http://127.0.0.1:${ATHENA_RUNTIME_PORT}${pathname}`;
+}
+
+function createValkeyRuntimeProcess(): HarnessBehaviorProcessDefinition {
+  return {
+    id: "valkey-runtime-app",
+    command: "bun scripts/harness-behavior-fixtures/valkey-runtime-app.ts",
+    env: {
+      HARNESS_BEHAVIOR_PORT: String(VALKEY_RUNTIME_PORT),
+    },
+    readyPattern: `SERVER_READY:${VALKEY_RUNTIME_PORT}`,
+    readyTimeoutMs: 20_000,
+  };
+}
+
+function buildValkeyRuntimeUrl(pathname: string) {
+  return `http://127.0.0.1:${VALKEY_RUNTIME_PORT}${pathname}`;
 }
 
 function createStorefrontRuntimeProcesses(mode: StorefrontBehaviorMode) {
@@ -752,11 +780,157 @@ export const STOREFRONT_CHECKOUT_VERIFICATION_RECOVERY_SCENARIO: HarnessBehavior
     },
   };
 
+export const VALKEY_PROXY_LOCAL_REQUEST_RESPONSE_SCENARIO: HarnessBehaviorScenario<ValkeyScenarioBrowserResult> =
+  {
+    name: "valkey-proxy-local-request-response",
+    description:
+      "Boots a local Valkey proxy fixture with an in-memory client and verifies a request/response round trip without live credentials.",
+    processes: [createValkeyRuntimeProcess()],
+    readiness: [
+      {
+        kind: "http",
+        name: "valkey-runtime-health",
+        url: buildValkeyRuntimeUrl("/health"),
+        expectedStatus: 200,
+        timeoutMs: 20_000,
+        intervalMs: 250,
+      },
+    ],
+    browser: async ({ runPlaywrightFlow }) => {
+      const flowResult = await runPlaywrightFlow({
+        url: buildValkeyRuntimeUrl("/"),
+        steps: async ({ page }) => {
+          const rootText = (await page.textContent("body"))?.trim() ?? "";
+
+          const healthResponse = await page.evaluate(async () => {
+            const response = await fetch("/health");
+            return {
+              status: response.status,
+              body: await response.json(),
+            };
+          });
+
+          const roundTripResponse = await page.evaluate(async () => {
+            const payload = {
+              key: "fixture:round-trip",
+              value: {
+                state: "ready",
+                attempts: 2,
+              },
+            };
+
+            const setResponse = await fetch("/set", {
+              method: "POST",
+              headers: {
+                "content-type": "application/json",
+              },
+              body: JSON.stringify(payload),
+            });
+
+            const getResponse = await fetch("/get", {
+              method: "POST",
+              headers: {
+                "content-type": "application/json",
+              },
+              body: JSON.stringify({
+                key: payload.key,
+              }),
+            });
+
+            return {
+              setStatus: setResponse.status,
+              getStatus: getResponse.status,
+              roundTripValue: (await getResponse.json()).value ?? "",
+            };
+          });
+
+          return {
+            rootText,
+            healthStatus: healthResponse.body.status,
+            setStatus: roundTripResponse.setStatus,
+            getStatus: roundTripResponse.getStatus,
+            roundTripValue: roundTripResponse.roundTripValue,
+          };
+        },
+      });
+
+      return {
+        rootText: flowResult.stepResult.rootText,
+        healthStatus: flowResult.stepResult.healthStatus,
+        setStatus: flowResult.stepResult.setStatus,
+        getStatus: flowResult.stepResult.getStatus,
+        roundTripValue: flowResult.stepResult.roundTripValue,
+        consoleMessages: flowResult.consoleMessages,
+      };
+    },
+    runtimeSignals: [
+      {
+        name: "valkey-proxy-round-trip",
+        processId: "valkey-runtime-app",
+        source: "stdout",
+        pattern: "RUNTIME_SIGNAL:valkey-proxy-round-trip",
+        minMatches: 0,
+        maxMatches: 1,
+      },
+    ],
+    thresholds: {
+      latency: {
+        maxTotalDurationMs: 20_000,
+        maxPhaseDurationMs: {
+          boot: 10_000,
+          readiness: 10_000,
+          browser: 5_000,
+          runtime: 5_000,
+          assertion: 5_000,
+          cleanup: 5_000,
+        },
+      },
+    },
+    assert: async ({ browserResult, runtimeSignals }) => {
+      if (browserResult.rootText !== "Valkey proxy running") {
+        throw new Error(
+          `Expected Valkey root text "Valkey proxy running", received "${browserResult.rootText}".`
+        );
+      }
+
+      if (browserResult.healthStatus !== "healthy") {
+        throw new Error(
+          `Expected Valkey health status "healthy", received "${browserResult.healthStatus}".`
+        );
+      }
+
+      if (browserResult.setStatus !== 200) {
+        throw new Error(
+          `Expected Valkey set status 200, received "${browserResult.setStatus}".`
+        );
+      }
+
+      if (browserResult.getStatus !== 200) {
+        throw new Error(
+          `Expected Valkey get status 200, received "${browserResult.getStatus}".`
+        );
+      }
+
+      if (
+        browserResult.roundTripValue !==
+        JSON.stringify({
+          state: "ready",
+          attempts: 2,
+        })
+      ) {
+        throw new Error(
+          `Expected Valkey round-trip payload to be preserved, received "${browserResult.roundTripValue}".`
+        );
+      }
+    },
+  };
+
 export const HARNESS_BEHAVIOR_SCENARIOS: HarnessBehaviorScenario[] = [
   SAMPLE_RUNTIME_SMOKE_SCENARIO,
   ATHENA_ADMIN_SHELL_BOOT_SCENARIO,
   ATHENA_CONVEX_COMPOSITION_SCENARIO,
   ATHENA_CONVEX_FAILURE_VISIBILITY_SCENARIO,
+  VALKEY_PROXY_LOCAL_REQUEST_RESPONSE_SCENARIO,
   STOREFRONT_CHECKOUT_BOOTSTRAP_SCENARIO,
   STOREFRONT_CHECKOUT_VALIDATION_BLOCKER_SCENARIO,
   STOREFRONT_CHECKOUT_VERIFICATION_RECOVERY_SCENARIO,

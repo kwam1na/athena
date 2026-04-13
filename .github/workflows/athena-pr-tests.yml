@@ -39,6 +39,9 @@ jobs:
       - name: Install Graphify runtime
         run: python3 -m pip install graphifyy
 
+      - name: Install Playwright browser
+        run: bunx playwright install --with-deps chromium
+
       - name: Run harness self-review
         run: bun run harness:self-review --base origin/main
 

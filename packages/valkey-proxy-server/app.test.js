@@ -1,7 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const { createHandlers, serializeRedisValue } = require("./app");
+const { createApp, createHandlers, serializeRedisValue } = require("./app");
 
 function createResponseRecorder() {
   return {
@@ -27,6 +27,26 @@ function createSilentLogger() {
     log() {},
     warn() {},
     error() {},
+  };
+}
+
+function createInMemoryRedis() {
+  const values = new Map();
+
+  return {
+    async ping() {
+      return "PONG";
+    },
+    async get(key) {
+      return values.has(key) ? values.get(key) : null;
+    },
+    async set(key, value) {
+      values.set(key, value);
+      return "OK";
+    },
+    async del(key) {
+      return values.delete(key) ? 1 : 0;
+    },
   };
 }
 
@@ -114,4 +134,54 @@ test("health returns unhealthy when redis ping fails", async () => {
     status: "unhealthy",
     error: "unreachable",
   });
+});
+
+test("createApp serves a local round trip without live Valkey credentials", async () => {
+  const redis = createInMemoryRedis();
+  const app = createApp({ redis, logger: createSilentLogger() });
+  const server = app.listen(0);
+
+  await new Promise((resolve) => {
+    server.once("listening", resolve);
+  });
+
+  const address = server.address();
+  assert.ok(address && typeof address === "object");
+  const baseUrl = `http://127.0.0.1:${address.port}`;
+
+  try {
+    const healthResponse = await fetch(`${baseUrl}/health`);
+    assert.equal(healthResponse.status, 200);
+    assert.deepEqual(await healthResponse.json(), { status: "healthy" });
+
+    const payload = { state: "ready", attempts: 2 };
+    const setResponse = await fetch(`${baseUrl}/set`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        key: "fixture:round-trip",
+        value: payload,
+      }),
+    });
+    assert.equal(setResponse.status, 200);
+    assert.deepEqual(await setResponse.json(), { ok: true });
+
+    const getResponse = await fetch(`${baseUrl}/get`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        key: "fixture:round-trip",
+      }),
+    });
+    assert.equal(getResponse.status, 200);
+    assert.deepEqual(await getResponse.json(), {
+      value: JSON.stringify(payload),
+    });
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
 });

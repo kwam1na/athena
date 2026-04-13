@@ -149,6 +149,11 @@ async function createFixtureRepo(
       "- `bun run harness:audit`",
       "- [validation-map.json](./validation-map.json)",
       "",
+      "Use `bun run harness:behavior --list` to inspect available runtime scenarios.",
+      "Current shared scenarios include:",
+      scenarioList,
+      "",
+      "Use `bun run harness:behavior --scenario valkey-proxy-local-request-response` for the local request/response smoke check.",
       "Default local checks start with `bun run --filter 'valkey-proxy-server' test`.",
       "Live connectivity checks use `bun run --filter 'valkey-proxy-server' test:connection`.",
     ].join("\n"),
@@ -172,7 +177,7 @@ async function createFixtureRepo(
               "packages/valkey-proxy-server/index.js",
             ],
             commands: [{ kind: "script", script: "test" }],
-            behaviorScenarios: [],
+            behaviorScenarios: ["valkey-proxy-local-request-response"],
           },
           {
             name: "live-connection-probe-edits",
@@ -382,7 +387,7 @@ describe("collectHarnessScorecard", () => {
           appName: "valkey-proxy-server",
           onboardingStatus: "active",
           validationSurfaceCount: 2,
-          scenarioCount: 0,
+          scenarioCount: 1,
         }),
       ])
     );

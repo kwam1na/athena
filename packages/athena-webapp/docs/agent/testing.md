@@ -26,6 +26,7 @@ Current shared scenarios include:
 - `athena-admin-shell-boot`
 - `athena-convex-storefront-composition`
 - `athena-convex-storefront-failure-visibility`
+- `valkey-proxy-local-request-response`
 - `storefront-checkout-bootstrap`
 - `storefront-checkout-validation-blocker`
 - `storefront-checkout-verification-recovery`
