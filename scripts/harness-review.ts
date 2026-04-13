@@ -32,8 +32,13 @@ type LoadedReviewTarget = {
 
 type HarnessReviewLogger = Pick<Console, "log" | "error">;
 
+type ParsedHarnessReviewArgs = {
+  baseRef?: string;
+};
+
 type HarnessReviewOptions = {
-  getChangedFiles?: (rootDir: string) => Promise<string[]>;
+  baseRef?: string;
+  getChangedFiles?: (rootDir: string, baseRef?: string) => Promise<string[]>;
   logger?: HarnessReviewLogger;
   runHarnessCheck?: (rootDir: string) => Promise<void>;
   runPackageScript?: (workspace: string, script: string) => Promise<void>;
@@ -102,6 +107,12 @@ async function hasAnyHarnessDocs(
 
 async function readJsonFile<T>(filePath: string) {
   return JSON.parse(await readFile(filePath, "utf8")) as T;
+}
+
+function sortUniquePaths(paths: string[]) {
+  return [...new Set(paths.map((entry) => normalizeRepoPath(entry).trim()).filter(Boolean))].sort(
+    (left, right) => left.localeCompare(right)
+  );
 }
 
 async function loadReviewTarget(
@@ -359,42 +370,118 @@ function collectCommandsForChangedFiles(
   };
 }
 
-async function getChangedFilesFromGit(rootDir: string) {
-  const trackedDiff = Bun.spawn(
-    ["git", "diff", "--name-only", "--diff-filter=ACDMRTUXB", "HEAD", "--"],
-    {
-      cwd: rootDir,
-      stdout: "pipe",
-      stderr: "pipe",
-    }
-  );
-  const untrackedDiff = Bun.spawn(["git", "ls-files", "--others", "--exclude-standard"], {
+async function runGitCommand(rootDir: string, command: string[]) {
+  const process = Bun.spawn(command, {
     cwd: rootDir,
     stdout: "pipe",
     stderr: "pipe",
   });
 
-  const [trackedOutput, untrackedOutput, trackedExitCode, untrackedExitCode] =
-    await Promise.all([
-      new Response(trackedDiff.stdout).text(),
-      new Response(untrackedDiff.stdout).text(),
-      trackedDiff.exited,
-      untrackedDiff.exited,
+  const [stdout, stderr, exitCode] = await Promise.all([
+    new Response(process.stdout).text(),
+    new Response(process.stderr).text(),
+    process.exited,
+  ]);
+
+  return {
+    stdout,
+    stderr,
+    exitCode,
+  };
+}
+
+export async function getChangedFilesForHarnessReview(
+  rootDir: string,
+  baseRef?: string
+) {
+  const trackedDiff = runGitCommand(rootDir, [
+    "git",
+    "diff",
+    "--name-only",
+    "--diff-filter=ACDMRTUXB",
+    "HEAD",
+    "--",
+  ]);
+  const untrackedDiff = runGitCommand(rootDir, [
+    "git",
+    "ls-files",
+    "--others",
+    "--exclude-standard",
+  ]);
+
+  if (!baseRef) {
+    const [trackedResult, untrackedResult] = await Promise.all([
+      trackedDiff,
+      untrackedDiff,
     ]);
 
-  if (trackedExitCode !== 0) {
-    const stderr = await new Response(trackedDiff.stderr).text();
-    throw new Error(stderr.trim() || "Failed to read tracked git changes.");
+    if (trackedResult.exitCode !== 0) {
+      throw new Error(
+        trackedResult.stderr.trim() || "Failed to read tracked git changes."
+      );
+    }
+
+    if (untrackedResult.exitCode !== 0) {
+      throw new Error(
+        untrackedResult.stderr.trim() || "Failed to read untracked git changes."
+      );
+    }
+
+    return sortUniquePaths([
+      ...trackedResult.stdout.split("\n"),
+      ...untrackedResult.stdout.split("\n"),
+    ]);
   }
 
-  if (untrackedExitCode !== 0) {
-    const stderr = await new Response(untrackedDiff.stderr).text();
-    throw new Error(stderr.trim() || "Failed to read untracked git changes.");
+  const refCheck = await runGitCommand(rootDir, [
+    "git",
+    "rev-parse",
+    "--verify",
+    baseRef,
+  ]);
+
+  if (refCheck.exitCode !== 0) {
+    const detail = refCheck.stderr.trim() || `${baseRef} is not reachable.`;
+    throw new Error(`Base ref check failed for ${baseRef}: ${detail}`);
   }
 
-  return [...trackedOutput.split("\n"), ...untrackedOutput.split("\n")]
-    .map((filePath) => filePath.trim())
-    .filter(Boolean);
+  const [baseDiff, trackedResult, untrackedResult] = await Promise.all([
+    runGitCommand(rootDir, [
+      "git",
+      "diff",
+      "--name-only",
+      "--diff-filter=ACDMRTUXB",
+      `${baseRef}...HEAD`,
+      "--",
+    ]),
+    trackedDiff,
+    untrackedDiff,
+  ]);
+
+  if (baseDiff.exitCode !== 0) {
+    throw new Error(
+      baseDiff.stderr.trim() ||
+        `Failed to read changed files against ${baseRef}.`
+    );
+  }
+
+  if (trackedResult.exitCode !== 0) {
+    throw new Error(
+      trackedResult.stderr.trim() || "Failed to read tracked git changes."
+    );
+  }
+
+  if (untrackedResult.exitCode !== 0) {
+    throw new Error(
+      untrackedResult.stderr.trim() || "Failed to read untracked git changes."
+    );
+  }
+
+  return sortUniquePaths([
+    ...baseDiff.stdout.split("\n"),
+    ...trackedResult.stdout.split("\n"),
+    ...untrackedResult.stdout.split("\n"),
+  ]);
 }
 
 async function runPackageScript(rootDir: string, workspace: string, script: string) {
@@ -444,8 +531,12 @@ export async function runHarnessReview(
 ) {
   const logger = options.logger ?? console;
   const runCheck = options.runHarnessCheck ?? runHarnessCheck;
+  const baseRef = options.baseRef;
   const changedFiles =
-    (await (options.getChangedFiles ?? getChangedFilesFromGit)(rootDir)) ?? [];
+    (await (options.getChangedFiles ?? getChangedFilesForHarnessReview)(
+      rootDir,
+      baseRef
+    )) ?? [];
 
   await runCheck(rootDir);
 
@@ -509,6 +600,54 @@ export async function runHarnessReview(
   }
 }
 
+export function parseHarnessReviewArgs(
+  argv: string[]
+): ParsedHarnessReviewArgs {
+  let baseRef: string | undefined;
+
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index];
+
+    if (arg === "--base") {
+      const value = argv[index + 1]?.trim();
+      if (!value) {
+        throw new Error(
+          "Missing value for --base. Usage: bun run harness:review --base origin/main"
+        );
+      }
+      baseRef = value;
+      index += 1;
+      continue;
+    }
+
+    if (arg.startsWith("--base=")) {
+      const value = arg.slice("--base=".length).trim();
+      if (!value) {
+        throw new Error(
+          "Missing value for --base. Usage: bun run harness:review --base origin/main"
+        );
+      }
+      baseRef = value;
+      continue;
+    }
+
+    throw new Error(
+      `Unknown argument: ${arg}. Usage: bun run harness:review [--base <ref>]`
+    );
+  }
+
+  return {
+    baseRef,
+  };
+}
+
 if (import.meta.main) {
-  await runHarnessReview(process.cwd());
+  try {
+    const parsed = parseHarnessReviewArgs(Bun.argv.slice(2));
+    await runHarnessReview(process.cwd(), { baseRef: parsed.baseRef });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`\n[harness:review] BLOCKED: ${message}`);
+    process.exit(1);
+  }
 }

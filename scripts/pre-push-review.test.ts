@@ -76,9 +76,7 @@ describe("pre-push review wiring", () => {
         steps.push("architecture:check");
       },
       runHarnessReview: async (_rootDir, options) => {
-        steps.push("harness:review");
-        const files = await options.getChangedFiles(ROOT_DIR);
-        steps.push(`files:${files.join(",")}`);
+        steps.push(`harness:review:${options.baseRef}`);
       },
       logger: {
         log() {},
@@ -90,10 +88,66 @@ describe("pre-push review wiring", () => {
     expect(steps).toEqual([
       "harness:self-review:origin/main",
       "architecture:check",
-      "harness:review",
-      "changed-files",
-      "files:packages/athena-webapp/src/main.tsx",
+      "harness:review:origin/main",
     ]);
+  });
+
+  it("preserves the non-blocking origin/main fallback when handing off to harness review", async () => {
+    const steps: string[] = [];
+
+    await prePushReview.runPrePushReview(ROOT_DIR, {
+      getChangedFiles: async () => {
+        steps.push("changed-files-fallback");
+        return [];
+      },
+      runHarnessSelfReview: async () => {
+        steps.push("harness:self-review:origin/main");
+      },
+      runArchitectureCheck: async () => {
+        steps.push("architecture:check");
+      },
+      runHarnessReview: async (_rootDir, options) => {
+        steps.push(`harness:review:${options.baseRef}`);
+        const files = await options.getChangedFiles?.(ROOT_DIR, options.baseRef);
+        steps.push(`files:${files?.join(",") ?? ""}`);
+      },
+      logger: {
+        log() {},
+        warn() {},
+        error() {},
+      },
+    });
+
+    expect(steps).toEqual([
+      "harness:self-review:origin/main",
+      "architecture:check",
+      "harness:review:origin/main",
+      "changed-files-fallback",
+      "files:",
+    ]);
+  });
+
+  it("does not pass the base ref into default-style changed-file helpers", async () => {
+    const observedSpawnTypes: string[] = [];
+
+    await prePushReview.runPrePushReview(ROOT_DIR, {
+      getChangedFiles: (async (_rootDir: string, spawn = Bun.spawn) => {
+        observedSpawnTypes.push(typeof spawn);
+        return [];
+      }) as unknown as (rootDir: string) => Promise<string[]>,
+      runHarnessSelfReview: async () => {},
+      runArchitectureCheck: async () => {},
+      runHarnessReview: async (_rootDir, options) => {
+        await options.getChangedFiles?.(ROOT_DIR, options.baseRef);
+      },
+      logger: {
+        log() {},
+        warn() {},
+        error() {},
+      },
+    });
+
+    expect(observedSpawnTypes).toEqual(["function"]);
   });
 
   it("keeps the husky pre-push hook pointed at the repo review script", async () => {
@@ -119,6 +173,7 @@ describe("repo harness ergonomics", () => {
     expect(workflow).toContain("harness-implementation-tests:");
     expect(workflow).toContain("fetch-depth: 0");
     expect(workflow).toContain("run: bun run harness:self-review --base origin/main");
+    expect(workflow).toContain("run: bun run harness:review --base origin/main");
     expect(workflow).toContain("run: bun run harness:test");
     expect(workflow).toContain("run: python3 -m pip install graphifyy");
     expect(workflow).toContain("run: bun run harness:audit");
@@ -139,6 +194,9 @@ describe("repo harness ergonomics", () => {
     };
 
     expect(packageJson.scripts?.["pr:athena"]).toContain("bun run harness:test");
+    expect(packageJson.scripts?.["pr:athena"]).toContain(
+      "bun run harness:review --base origin/main"
+    );
     expect(packageJson.scripts?.["pr:athena"]).toContain("bun run harness:audit");
     expect(packageJson.scripts?.["pr:athena"]).toContain(
       "bun run harness:inferential-review"

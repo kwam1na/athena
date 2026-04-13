@@ -17,7 +17,10 @@ type PrePushReviewOptions = {
   runHarnessSelfReview?: (rootDir: string) => Promise<void>;
   runHarnessReview?: (
     rootDir: string,
-    options: { getChangedFiles: (rootDir: string) => Promise<string[]> }
+    options: {
+      baseRef: string;
+      getChangedFiles?: (rootDir: string, baseRef?: string) => Promise<string[]>;
+    }
   ) => Promise<void>;
   logger?: PrePushReviewLogger;
 };
@@ -96,6 +99,8 @@ export async function runPrePushReview(
 ) {
   const logger = options.logger ?? console;
   const getChangedFiles = options.getChangedFiles ?? getChangedFilesVsOriginMain;
+  const getChangedFilesForHarnessReview = async (nextRootDir: string) =>
+    getChangedFiles(nextRootDir);
   const runArchitecture = options.runArchitectureCheck ?? runArchitectureCheck;
   const runSelfReview = options.runHarnessSelfReview ?? runHarnessSelfReview;
   const review = options.runHarnessReview ?? runHarnessReview;
@@ -111,7 +116,8 @@ export async function runPrePushReview(
   // runHarnessReview internally runs harness:check first, then targeted per-surface scripts
   logger.log(`[pre-push] Step 3/3: harness:review (vs ${BASE_REF})`);
   await review(rootDir, {
-    getChangedFiles,
+    baseRef: BASE_REF,
+    getChangedFiles: getChangedFilesForHarnessReview,
   });
 
   logger.log("\n[pre-push] All checks passed.");
