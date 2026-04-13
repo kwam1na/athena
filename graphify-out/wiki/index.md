@@ -8,14 +8,14 @@ Graphify is the navigation layer for the repo graph. Use the entry docs below fo
 
 ## Repo Summary
 - Code files discovered: 1198
-- Graph nodes: 2788
-- Graph edges: 2334
+- Graph nodes: 2800
+- Graph edges: 2358
 - Communities: 1113
 
 ## Graph Hotspots
-- `storefrontJourneyEvents.ts` (45 edges, Community 0) - [`packages/storefront-webapp/src/lib/storefrontJourneyEvents.ts`](../../packages/storefront-webapp/src/lib/storefrontJourneyEvents.ts)
-- `createJourneyEvent()` (40 edges, Community 0) - [`packages/storefront-webapp/src/lib/storefrontJourneyEvents.ts`](../../packages/storefront-webapp/src/lib/storefrontJourneyEvents.ts)
-- `harness-inferential-review.ts` (39 edges, Community 1) - [`scripts/harness-inferential-review.ts`](../../scripts/harness-inferential-review.ts)
+- `harness-inferential-review.ts` (46 edges, Community 0) - [`scripts/harness-inferential-review.ts`](../../scripts/harness-inferential-review.ts)
+- `storefrontJourneyEvents.ts` (45 edges, Community 1) - [`packages/storefront-webapp/src/lib/storefrontJourneyEvents.ts`](../../packages/storefront-webapp/src/lib/storefrontJourneyEvents.ts)
+- `createJourneyEvent()` (40 edges, Community 1) - [`packages/storefront-webapp/src/lib/storefrontJourneyEvents.ts`](../../packages/storefront-webapp/src/lib/storefrontJourneyEvents.ts)
 - `harness-check.ts` (32 edges, Community 2) - [`scripts/harness-check.ts`](../../scripts/harness-check.ts)
 - `harness-generate.ts` (30 edges, Community 3) - [`scripts/harness-generate.ts`](../../scripts/harness-generate.ts)
 - `storeConfigV2.ts` (27 edges, Community 4) - [`packages/athena-webapp/convex/inventory/storeConfigV2.ts`](../../packages/athena-webapp/convex/inventory/storeConfigV2.ts)

@@ -18,7 +18,7 @@
     "harness:review": "bun scripts/harness-review.ts",
     "harness:test": "bun scripts/harness-test.ts",
     "pre-push:review": "bun scripts/pre-push-review.ts",
-    "pr:athena": "bun run --filter '@athena/webapp' audit:convex && bun run --filter '@athena/webapp' lint:convex:changed && bun run architecture:check && bun run --filter '@athena/webapp' test && bun run --filter '@athena/storefront-webapp' test && bun run harness:test && bun run harness:check && bun run harness:inferential-review && bun run harness:audit && bun run harness:scorecard && bun run graphify:check",
+    "pr:athena": "bun run --filter '@athena/webapp' audit:convex && bun run --filter '@athena/webapp' lint:convex:changed && bun run architecture:check && bun run --filter '@athena/webapp' test && bun run --filter '@athena/storefront-webapp' test && bun run harness:test && bun run harness:check && bun run harness:review --base origin/main && bun run harness:inferential-review && bun run harness:audit && bun run harness:scorecard && bun run graphify:check",
     "test": "bun run --filter '@athena/webapp' test && bun run --filter '@athena/storefront-webapp' test",
     "test:coverage": "bun run --filter '@athena/webapp' test:coverage && bun run --filter '@athena/storefront-webapp' test:coverage && bun scripts/coverage-summary.mjs"
   },

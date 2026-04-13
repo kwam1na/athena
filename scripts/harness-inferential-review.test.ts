@@ -28,7 +28,7 @@ async function createFixtureRepo() {
       {
         scripts: {
           "pr:athena":
-            "bun run harness:check && bun run harness:inferential-review && bun run harness:audit && bun run graphify:check",
+            "bun run harness:check && bun run harness:review --base origin/main && bun run harness:inferential-review && bun run harness:audit && bun run graphify:check",
         },
       },
       null,
@@ -46,6 +46,8 @@ async function createFixtureRepo() {
       "    steps:",
       "      - name: Harness check",
       "        run: bun run harness:check",
+      "      - name: Targeted harness review",
+      "        run: bun run harness:review --base origin/main",
       "      - name: Inferential harness review",
       "        env:",
       "          HARNESS_INFERENTIAL_SEMANTIC_MODE: shadow",
@@ -134,7 +136,7 @@ describe("runHarnessInferentialReview", () => {
         {
           scripts: {
             "pr:athena":
-              "bun run harness:check && bun run harness:audit && bun run graphify:check",
+              "bun run harness:check && bun run harness:review --base origin/main && bun run harness:audit && bun run graphify:check",
           },
         },
         null,
@@ -157,6 +159,138 @@ describe("runHarnessInferentialReview", () => {
       filePath: "package.json",
     });
     expect(result.humanReport).toContain("Remediation:");
+  });
+
+  it("fails when pr:athena omits harness review", async () => {
+    const rootDir = await createFixtureRepo();
+    await write(
+      "package.json",
+      JSON.stringify(
+        {
+          scripts: {
+            "pr:athena":
+              "bun run harness:check && bun run harness:inferential-review && bun run harness:audit && bun run graphify:check",
+          },
+        },
+        null,
+        2
+      ),
+      rootDir
+    );
+
+    const result = await runHarnessInferentialReview(rootDir, {
+      getChangedFiles: async () => ["package.json"],
+      nowIso: () => "2026-04-12T05:00:00.000Z",
+    });
+
+    expect(result.exitCode).toBe(1);
+    expect(result.machine.status).toBe("fail");
+    expect(result.machine.findings).toContainEqual(
+      expect.objectContaining({
+        id: "missing-pr-athena-review-step",
+        severity: "high",
+        filePath: "package.json",
+      })
+    );
+  });
+
+  it("fails when pr:athena is blank", async () => {
+    const rootDir = await createFixtureRepo();
+    await write(
+      "package.json",
+      JSON.stringify(
+        {
+          scripts: {
+            "pr:athena": "",
+          },
+        },
+        null,
+        2
+      ),
+      rootDir
+    );
+
+    const result = await runHarnessInferentialReview(rootDir, {
+      getChangedFiles: async () => ["package.json"],
+      nowIso: () => "2026-04-12T05:00:00.000Z",
+    });
+
+    expect(result.exitCode).toBe(1);
+    expect(result.machine.status).toBe("fail");
+    expect(result.machine.findings).toContainEqual(
+      expect.objectContaining({
+        id: "missing-pr-athena-review-step",
+        severity: "high",
+        filePath: "package.json",
+      })
+    );
+    expect(result.machine.findings).toContainEqual(
+      expect.objectContaining({
+        id: "missing-pr-athena-inferential-step",
+        severity: "high",
+        filePath: "package.json",
+      })
+    );
+  });
+
+  it("accepts the equals-form harness review flag in pr:athena", async () => {
+    const rootDir = await createFixtureRepo();
+    await write(
+      "package.json",
+      JSON.stringify(
+        {
+          scripts: {
+            "pr:athena":
+              "bun run harness:check && bun run harness:review --base=origin/main && bun run harness:inferential-review && bun run harness:audit && bun run graphify:check",
+          },
+        },
+        null,
+        2
+      ),
+      rootDir
+    );
+
+    const result = await runHarnessInferentialReview(rootDir, {
+      getChangedFiles: async () => ["package.json"],
+      nowIso: () => "2026-04-12T05:00:00.000Z",
+    });
+
+    expect(result.exitCode).toBe(0);
+    expect(result.machine.status).toBe("pass");
+    expect(result.machine.findings).toEqual([]);
+  });
+
+  it("does not treat echoed harness review text as a real pr:athena gate", async () => {
+    const rootDir = await createFixtureRepo();
+    await write(
+      "package.json",
+      JSON.stringify(
+        {
+          scripts: {
+            "pr:athena":
+              "echo bun run harness:review --base origin/main && bun run harness:inferential-review && bun run harness:audit && bun run graphify:check",
+          },
+        },
+        null,
+        2
+      ),
+      rootDir
+    );
+
+    const result = await runHarnessInferentialReview(rootDir, {
+      getChangedFiles: async () => ["package.json"],
+      nowIso: () => "2026-04-12T05:00:00.000Z",
+    });
+
+    expect(result.exitCode).toBe(1);
+    expect(result.machine.status).toBe("fail");
+    expect(result.machine.findings).toContainEqual(
+      expect.objectContaining({
+        id: "missing-pr-athena-review-step",
+        severity: "high",
+        filePath: "package.json",
+      })
+    );
   });
 
   it("fails when a harness-critical script changes without its test update", async () => {
@@ -189,6 +323,8 @@ describe("runHarnessInferentialReview", () => {
         "    steps:",
         "      - name: Harness check",
         "        run: bun run harness:check",
+        "      - name: Targeted harness review",
+        "        run: bun run harness:review --base origin/main",
         "      - name: Inferential harness review",
         "        run: bun run harness:inferential-review",
         "      - name: Harness audit",
@@ -209,6 +345,163 @@ describe("runHarnessInferentialReview", () => {
     expect(result.machine.findings).toContainEqual(
       expect.objectContaining({
         id: "missing-ci-shadow-semantic-mode",
+        severity: "high",
+        filePath: ".github/workflows/athena-pr-tests.yml",
+      })
+    );
+  });
+
+  it("fails when the PR workflow omits harness review", async () => {
+    const rootDir = await createFixtureRepo();
+    await write(
+      ".github/workflows/athena-pr-tests.yml",
+      [
+        "name: Athena PR Tests",
+        "jobs:",
+        "  harness-validation:",
+        "    steps:",
+        "      - name: Harness check",
+        "        run: bun run harness:check",
+        "      - name: Inferential harness review",
+        "        env:",
+        "          HARNESS_INFERENTIAL_SEMANTIC_MODE: shadow",
+        "        run: bun run harness:inferential-review",
+        "      - name: Harness audit",
+        "        run: bun run harness:audit",
+        "      - name: Graphify check",
+        "        run: bun run graphify:check",
+      ].join("\n"),
+      rootDir
+    );
+
+    const result = await runHarnessInferentialReview(rootDir, {
+      getChangedFiles: async () => [".github/workflows/athena-pr-tests.yml"],
+      nowIso: () => "2026-04-12T05:00:00.000Z",
+    });
+
+    expect(result.exitCode).toBe(1);
+    expect(result.machine.status).toBe("fail");
+    expect(result.machine.findings).toContainEqual(
+      expect.objectContaining({
+        id: "missing-ci-review-step",
+        severity: "high",
+        filePath: ".github/workflows/athena-pr-tests.yml",
+      })
+    );
+  });
+
+  it("accepts the equals-form harness review flag in the PR workflow", async () => {
+    const rootDir = await createFixtureRepo();
+    await write(
+      ".github/workflows/athena-pr-tests.yml",
+      [
+        "name: Athena PR Tests",
+        "jobs:",
+        "  harness-validation:",
+        "    steps:",
+        "      - name: Harness check",
+        "        run: bun run harness:check",
+        "      - name: Targeted harness review",
+        "        run: bun run harness:review --base=origin/main",
+        "      - name: Inferential harness review",
+        "        env:",
+        "          HARNESS_INFERENTIAL_SEMANTIC_MODE: shadow",
+        "        run: bun run harness:inferential-review",
+        "      - name: Harness audit",
+        "        run: bun run harness:audit",
+        "      - name: Graphify check",
+        "        run: bun run graphify:check",
+      ].join("\n"),
+      rootDir
+    );
+
+    const result = await runHarnessInferentialReview(rootDir, {
+      getChangedFiles: async () => [".github/workflows/athena-pr-tests.yml"],
+      nowIso: () => "2026-04-12T05:00:00.000Z",
+    });
+
+    expect(result.exitCode).toBe(0);
+    expect(result.machine.status).toBe("pass");
+    expect(result.machine.findings).toEqual([]);
+  });
+
+  it("does not treat commented harness review text as a real workflow gate", async () => {
+    const rootDir = await createFixtureRepo();
+    await write(
+      ".github/workflows/athena-pr-tests.yml",
+      [
+        "name: Athena PR Tests",
+        "jobs:",
+        "  harness-validation:",
+        "    steps:",
+        "      - name: Harness check",
+        "        run: bun run harness:check",
+        "      # run: bun run harness:review --base origin/main",
+        "      - name: Inferential harness review",
+        "        env:",
+        "          HARNESS_INFERENTIAL_SEMANTIC_MODE: shadow",
+        "        run: bun run harness:inferential-review",
+        "      - name: Harness audit",
+        "        run: bun run harness:audit",
+        "      - name: Graphify check",
+        "        run: bun run graphify:check",
+      ].join("\n"),
+      rootDir
+    );
+
+    const result = await runHarnessInferentialReview(rootDir, {
+      getChangedFiles: async () => [".github/workflows/athena-pr-tests.yml"],
+      nowIso: () => "2026-04-12T05:00:00.000Z",
+    });
+
+    expect(result.exitCode).toBe(1);
+    expect(result.machine.status).toBe("fail");
+    expect(result.machine.findings).toContainEqual(
+      expect.objectContaining({
+        id: "missing-ci-review-step",
+        severity: "high",
+        filePath: ".github/workflows/athena-pr-tests.yml",
+      })
+    );
+  });
+
+  it("does not treat harness review in another job as the PR validation gate", async () => {
+    const rootDir = await createFixtureRepo();
+    await write(
+      ".github/workflows/athena-pr-tests.yml",
+      [
+        "name: Athena PR Tests",
+        "jobs:",
+        "  janitor:",
+        "    steps:",
+        "      - name: Scheduled harness review",
+        "        run: bun run harness:review --base origin/main",
+        "  harness-validation:",
+        "    steps:",
+        "      - name: Harness check",
+        "        run: bun run harness:check",
+        "      - name: Inferential harness review",
+        "        env:",
+        "          HARNESS_INFERENTIAL_SEMANTIC_MODE: shadow",
+        "        run: bun run harness:inferential-review",
+        "      - name: Harness audit",
+        "        run: bun run harness:audit",
+        "      - name: Graphify check",
+        "        run: bun run graphify:check",
+      ].join("\n"),
+      rootDir
+    );
+
+    const result = await runHarnessInferentialReview(rootDir, {
+      getChangedFiles: async () => [".github/workflows/athena-pr-tests.yml"],
+      nowIso: () => "2026-04-12T05:00:00.000Z",
+    });
+
+    expect(result.exitCode).toBe(1);
+    expect(result.machine.status).toBe("fail");
+    expect(result.machine.findings).toContainEqual(
+      expect.objectContaining({
+        id: "missing-ci-review-step",
         severity: "high",
         filePath: ".github/workflows/athena-pr-tests.yml",
       })

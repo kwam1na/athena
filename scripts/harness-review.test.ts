@@ -1,9 +1,14 @@
+import { spawnSync } from "node:child_process";
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { runHarnessReview } from "./harness-review";
+import {
+  getChangedFilesForHarnessReview,
+  parseHarnessReviewArgs,
+  runHarnessReview,
+} from "./harness-review";
 
 const tempRoots: string[] = [];
 
@@ -231,6 +236,27 @@ async function createFixtureRepo() {
   );
 
   return rootDir;
+}
+
+function runGit(rootDir: string, args: string[]) {
+  const result = spawnSync("git", args, {
+    cwd: rootDir,
+    encoding: "utf8",
+  });
+
+  if (result.status !== 0) {
+    throw new Error(result.stderr.trim() || `git ${args.join(" ")} failed`);
+  }
+
+  return result.stdout.trim();
+}
+
+function initializeGitHistory(rootDir: string) {
+  runGit(rootDir, ["init"]);
+  runGit(rootDir, ["config", "user.name", "Athena Harness Tests"]);
+  runGit(rootDir, ["config", "user.email", "athena-harness-tests@example.com"]);
+  runGit(rootDir, ["add", "."]);
+  runGit(rootDir, ["commit", "-m", "Initial fixture"]);
 }
 
 afterEach(async () => {
@@ -783,5 +809,107 @@ describe("runHarnessReview", () => {
     });
 
     expect(steps).toEqual(["harness:check"]);
+  });
+
+  it("passes the requested base ref to the changed-file selector", async () => {
+    const rootDir = await createFixtureRepo();
+    const observedBaseRefs: Array<string | undefined> = [];
+    const steps: string[] = [];
+
+    await runHarnessReview(rootDir, {
+      baseRef: "origin/main",
+      getChangedFiles: async (_nextRootDir, baseRef) => {
+        observedBaseRefs.push(baseRef);
+        return ["packages/athena-webapp/src/app.ts"];
+      },
+      runHarnessCheck: async () => {
+        steps.push("harness:check");
+      },
+      runPackageScript: async (workspace, script) => {
+        steps.push(`${workspace}:${script}`);
+      },
+      logger: {
+        log() {},
+        error() {},
+      },
+    });
+
+    expect(observedBaseRefs).toEqual(["origin/main"]);
+    expect(steps).toEqual([
+      "harness:check",
+      "@athena/webapp:audit:convex",
+      "@athena/webapp:lint:convex:changed",
+      "@athena/webapp:test",
+    ]);
+  });
+});
+
+describe("parseHarnessReviewArgs", () => {
+  it("accepts --base <ref>", () => {
+    expect(parseHarnessReviewArgs(["--base", "origin/main"])).toEqual({
+      baseRef: "origin/main",
+    });
+  });
+
+  it("accepts --base=<ref>", () => {
+    expect(parseHarnessReviewArgs(["--base=origin/main"])).toEqual({
+      baseRef: "origin/main",
+    });
+  });
+
+  it("rejects missing --base values", () => {
+    expect(() => parseHarnessReviewArgs(["--base"])).toThrow(
+      "Missing value for --base. Usage: bun run harness:review --base origin/main"
+    );
+  });
+});
+
+describe("getChangedFilesForHarnessReview", () => {
+  it("combines base diff, tracked changes, and untracked files without duplicates", async () => {
+    const rootDir = await createFixtureRepo();
+    initializeGitHistory(rootDir);
+
+    await write(
+      "packages/athena-webapp/src/app.ts",
+      "export const app = 'committed-change';\n",
+      rootDir
+    );
+    runGit(rootDir, ["add", "packages/athena-webapp/src/app.ts"]);
+    runGit(rootDir, ["commit", "-m", "Committed athena change"]);
+
+    await write(
+      "packages/athena-webapp/src/app.ts",
+      "export const app = 'working-tree-change';\n",
+      rootDir
+    );
+    await write(
+      "packages/storefront-webapp/src/app.ts",
+      "export const storefront = 'working-tree-change';\n",
+      rootDir
+    );
+    await write(
+      "packages/valkey-proxy-server/new-surface.js",
+      "export const newSurface = true;\n",
+      rootDir
+    );
+
+    await expect(
+      getChangedFilesForHarnessReview(rootDir, "HEAD~1")
+    ).resolves.toEqual([
+      "packages/athena-webapp/src/app.ts",
+      "packages/storefront-webapp/src/app.ts",
+      "packages/valkey-proxy-server/new-surface.js",
+    ]);
+  });
+
+  it("fails clearly when the base ref is unreachable", async () => {
+    const rootDir = await createFixtureRepo();
+    initializeGitHistory(rootDir);
+
+    await expect(
+      getChangedFilesForHarnessReview(rootDir, "origin/does-not-exist")
+    ).rejects.toThrow(
+      "Base ref check failed for origin/does-not-exist"
+    );
   });
 });

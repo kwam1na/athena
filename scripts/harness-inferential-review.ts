@@ -276,6 +276,98 @@ function includesCaseInsensitive(haystack: string, needle: string) {
   return haystack.toLowerCase().includes(needle.toLowerCase());
 }
 
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function buildShellCommandPattern(commandBody: string) {
+  return new RegExp(
+    `(?:^|&&|\\|\\||;)\\s*${commandBody}(?=\\s*(?:&&|\\|\\||;|$))`,
+    "i"
+  );
+}
+
+function hasHarnessReviewCommand(value: string, baseRef: string) {
+  const pattern = buildShellCommandPattern(
+    `bun\\s+run\\s+harness:review\\s+--base(?:\\s+|=)${escapeRegExp(baseRef)}`
+  );
+  return pattern.test(value);
+}
+
+function hasHarnessInferentialCommand(value: string) {
+  return buildShellCommandPattern(
+    "bun\\s+run\\s+harness:inferential-review"
+  ).test(value);
+}
+
+function extractWorkflowJobSection(
+  workflowContents: string,
+  jobName: string
+) {
+  const lines = workflowContents.split(/\r?\n/);
+  let inJobsBlock = false;
+  let insideTargetJob = false;
+  const section: string[] = [];
+
+  for (const line of lines) {
+    if (!inJobsBlock) {
+      if (line.trim() === "jobs:") {
+        inJobsBlock = true;
+      }
+      continue;
+    }
+
+    const jobMatch = line.match(/^  ([A-Za-z0-9_-]+):\s*$/);
+    if (jobMatch) {
+      if (insideTargetJob) {
+        break;
+      }
+
+      insideTargetJob = jobMatch[1] === jobName;
+    }
+
+    if (insideTargetJob) {
+      section.push(line);
+    }
+  }
+
+  return section.join("\n");
+}
+
+function extractWorkflowRunCommands(
+  workflowContents: string,
+  jobName: string
+) {
+  const jobSection = extractWorkflowJobSection(workflowContents, jobName);
+  if (!jobSection) {
+    return [];
+  }
+
+  return jobSection
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith("run:"))
+    .map((line) => line.slice("run:".length).trim())
+    .filter(Boolean);
+}
+
+function workflowJobHasEnvSetting(
+  workflowContents: string,
+  jobName: string,
+  key: string,
+  value: string
+) {
+  const jobSection = extractWorkflowJobSection(workflowContents, jobName);
+  if (!jobSection) {
+    return false;
+  }
+
+  return jobSection
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .some((line) => line === `${key}: ${value}`);
+}
+
 function slugifyForFindingId(value: string) {
   return normalizeRepoPath(value)
     .toLowerCase()
@@ -677,6 +769,8 @@ export async function runDeterministicInferentialProvider(
   input: InferentialProviderInput
 ): Promise<InferentialProviderResult> {
   const findings: InferentialFinding[] = [];
+  const reviewBaseRef = "origin/main";
+  const workflowJobName = "harness-validation";
   const packageJsonPath = path.join(input.rootDir, "package.json");
   const workflowPath = path.join(
     input.rootDir,
@@ -724,10 +818,20 @@ export async function runDeterministicInferentialProvider(
       );
     }
 
-    if (
-      prAthenaScript &&
-      !includesCaseInsensitive(prAthenaScript, "bun run harness:inferential-review")
-    ) {
+    if (!hasHarnessReviewCommand(prAthenaScript, reviewBaseRef)) {
+      findings.push(
+        buildFinding(
+          "missing-pr-athena-review-step",
+          "high",
+          "pr:athena omits harness review",
+          "package.json",
+          "Athena preflight does not currently include the harness review gate.",
+          "Add `bun run harness:review --base origin/main` to the `pr:athena` script before final success output."
+        )
+      );
+    }
+
+    if (!hasHarnessInferentialCommand(prAthenaScript)) {
       findings.push(
         buildFinding(
           "missing-pr-athena-inferential-step",
@@ -754,9 +858,26 @@ export async function runDeterministicInferentialProvider(
       )
     );
   } else if (
-    !includesCaseInsensitive(
-      workflowContents,
-      "run: bun run harness:inferential-review"
+    !extractWorkflowRunCommands(workflowContents, workflowJobName).some(
+      (command) => hasHarnessReviewCommand(command, reviewBaseRef)
+    )
+  ) {
+    findings.push(
+      buildFinding(
+        "missing-ci-review-step",
+        "high",
+        "CI omits harness review",
+        ".github/workflows/athena-pr-tests.yml",
+        "Athena PR workflow does not enforce the harness review gate as a blocking CI step.",
+        "Add a workflow step with `run: bun run harness:review --base origin/main` in the harness validation job."
+      )
+    );
+  }
+
+  if (
+    workflowContents &&
+    !extractWorkflowRunCommands(workflowContents, workflowJobName).some(
+      hasHarnessInferentialCommand
     )
   ) {
     findings.push(
@@ -769,10 +890,15 @@ export async function runDeterministicInferentialProvider(
         "Add a workflow step with `run: bun run harness:inferential-review` in the harness validation job."
       )
     );
-  } else if (
-    !includesCaseInsensitive(
+  }
+
+  if (
+    workflowContents &&
+    !workflowJobHasEnvSetting(
       workflowContents,
-      "HARNESS_INFERENTIAL_SEMANTIC_MODE: shadow"
+      workflowJobName,
+      "HARNESS_INFERENTIAL_SEMANTIC_MODE",
+      "shadow"
     )
   ) {
     findings.push(
