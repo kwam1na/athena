@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { access, readFile } from "node:fs/promises";
 import path from "node:path";
 
@@ -498,8 +499,30 @@ async function runPackageScript(rootDir: string, workspace: string, script: stri
   }
 }
 
+export function resolveHarnessReviewShell(options: {
+  env?: NodeJS.ProcessEnv;
+  fileExists?: (filePath: string) => boolean;
+} = {}) {
+  const env = options.env ?? process.env;
+  const fileExists = options.fileExists ?? existsSync;
+  const candidates = [env.SHELL, "/bin/zsh", "/bin/bash", "/bin/sh"];
+
+  for (const candidate of candidates) {
+    if (!candidate) {
+      continue;
+    }
+
+    if (fileExists(candidate)) {
+      return candidate;
+    }
+  }
+
+  return "/bin/sh";
+}
+
 async function runRawCommand(rootDir: string, command: string) {
-  const subprocess = Bun.spawn(["/bin/zsh", "-lc", command], {
+  const shellPath = resolveHarnessReviewShell();
+  const subprocess = Bun.spawn([shellPath, "-lc", command], {
     cwd: rootDir,
     stdout: "inherit",
     stderr: "inherit",

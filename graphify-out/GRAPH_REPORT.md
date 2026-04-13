@@ -5,7 +5,7 @@
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 2811 nodes · 2371 edges · 1115 communities detected
+- 2812 nodes · 2374 edges · 1115 communities detected
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS
 - Token cost: 0 input · 0 output
 
@@ -1198,7 +1198,7 @@ Nodes (10): capitalizeFirstLetter(), capitalizeWords(), cn(), currencyFormatter(
 
 ### Community 11 - "Community 11"
 Cohesion: 0.17
-Nodes (12): collectCommandsForChangedFiles(), fileExists(), getChangedFilesForHarnessReview(), hasAnyHarnessDocs(), loadReviewTarget(), loadReviewTargets(), matchesPathPrefix(), normalizeBehaviorScenarioName() (+4 more)
+Nodes (14): collectCommandsForChangedFiles(), fileExists(), getChangedFilesForHarnessReview(), hasAnyHarnessDocs(), loadReviewTarget(), loadReviewTargets(), matchesPathPrefix(), normalizeBehaviorScenarioName() (+6 more)
 
 ### Community 12 - "Community 12"
 Cohesion: 0.16
@@ -1433,16 +1433,16 @@ Cohesion: 0.33
 Nodes (0):
 
 ### Community 70 - "Community 70"
-Cohesion: 0.33
-Nodes (0):
+Cohesion: 0.47
+Nodes (3): onDrop(), removeImage(), unmarkForDeletion()
 
 ### Community 71 - "Community 71"
-Cohesion: 0.4
-Nodes (2): useBulkOperations(), validateOperationValue()
-
-### Community 72 - "Community 72"
 Cohesion: 0.33
 Nodes (0):
+
+### Community 72 - "Community 72"
+Cohesion: 0.4
+Nodes (2): useBulkOperations(), validateOperationValue()
 
 ### Community 73 - "Community 73"
 Cohesion: 0.33
@@ -1457,28 +1457,28 @@ Cohesion: 0.33
 Nodes (0):
 
 ### Community 76 - "Community 76"
-Cohesion: 0.4
-Nodes (2): onSubmit(), saveStoreChanges()
+Cohesion: 0.33
+Nodes (0):
 
 ### Community 77 - "Community 77"
 Cohesion: 0.4
 Nodes (2): onSubmit(), saveStoreChanges()
 
 ### Community 78 - "Community 78"
-Cohesion: 0.47
-Nodes (3): getBaseUrl(), getPromoCodes(), redeemPromoCode()
+Cohesion: 0.4
+Nodes (2): onSubmit(), saveStoreChanges()
 
 ### Community 79 - "Community 79"
-Cohesion: 0.33
-Nodes (0):
+Cohesion: 0.47
+Nodes (3): getBaseUrl(), getPromoCodes(), redeemPromoCode()
 
 ### Community 80 - "Community 80"
 Cohesion: 0.33
 Nodes (0):
 
 ### Community 81 - "Community 81"
-Cohesion: 0.47
-Nodes (3): onDrop(), removeImage(), unmarkForDeletion()
+Cohesion: 0.33
+Nodes (0):
 
 ### Community 82 - "Community 82"
 Cohesion: 0.53

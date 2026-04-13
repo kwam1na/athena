@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   getChangedFilesForHarnessReview,
   parseHarnessReviewArgs,
+  resolveHarnessReviewShell,
   runHarnessReview,
 } from "./harness-review";
 
@@ -870,6 +871,30 @@ describe("parseHarnessReviewArgs", () => {
     expect(() => parseHarnessReviewArgs(["--base"])).toThrow(
       "Missing value for --base. Usage: bun run harness:review --base origin/main"
     );
+  });
+});
+
+describe("resolveHarnessReviewShell", () => {
+  it("prefers SHELL when it exists", () => {
+    const shellPath = resolveHarnessReviewShell({
+      env: {
+        SHELL: "/custom/shell",
+      },
+      fileExists: (filePath) => filePath === "/custom/shell",
+    });
+
+    expect(shellPath).toBe("/custom/shell");
+  });
+
+  it("falls back to a known shell path when SHELL is missing", () => {
+    const shellPath = resolveHarnessReviewShell({
+      env: {
+        SHELL: "/missing/shell",
+      },
+      fileExists: (filePath) => filePath === "/bin/bash",
+    });
+
+    expect(shellPath).toBe("/bin/bash");
   });
 });
 
