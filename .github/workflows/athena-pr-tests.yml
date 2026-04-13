@@ -42,6 +42,9 @@ jobs:
       - name: Run harness self-review
         run: bun run harness:self-review --base origin/main
 
+      - name: Run harness review
+        run: bun run harness:review --base origin/main
+
       - name: Check harness docs
         run: bun run harness:check
 
