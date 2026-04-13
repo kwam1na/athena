@@ -308,6 +308,22 @@ function buildGraphifyStatus(reportPresent: boolean, graphPresent: boolean) {
   return "missing" as const;
 }
 
+function isHealthyInferentialStatus(status: ArtifactStatus | "missing") {
+  return status === "pass" || status === "healthy";
+}
+
+function buildInferentialSummaryNote(status: ArtifactStatus | "missing") {
+  if (status === "missing") {
+    return "Inferential artifact missing.";
+  }
+
+  if (status === "skipped") {
+    return "Inferential artifact skipped and treated as non-healthy.";
+  }
+
+  return `Inferential artifact ${status}.`;
+}
+
 function buildSummary(
   documentation: HarnessScorecardOutput["metrics"]["documentation"],
   inferential: HarnessScorecardOutput["metrics"]["inferential"],
@@ -316,12 +332,15 @@ function buildSummary(
 ): HarnessScorecardOutput["summary"] {
   const healthySignals =
     documentation.healthyAppCount +
-    (inferential.status === "missing" ? 0 : 1) +
+    (isHealthyInferentialStatus(inferential.status) ? 1 : 0) +
     (runtimeTrends.status === "missing" ? 0 : 1) +
     (graphify.status === "paired" ? 1 : 0);
   const degradedSignals =
     documentation.degradedAppCount +
-    (inferential.status === "fail" || inferential.status === "error" ? 1 : 0) +
+    (!isHealthyInferentialStatus(inferential.status) &&
+    inferential.status !== "missing"
+      ? 1
+      : 0) +
     ((inferential.history.shadowErrorCount ?? 0) >= 2 ? 1 : 0) +
     (inferential.history.parseErrorCount > 0 ? 1 : 0) +
     (runtimeTrends.status === "mixed" || runtimeTrends.status === "degraded" ? 1 : 0) +
@@ -344,11 +363,7 @@ function buildSummary(
   noteParts.push(
     `${documentation.healthyAppCount} documentation apps healthy, ${documentation.degradedAppCount} degraded, and ${documentation.missingAppCount} missing.`
   );
-  noteParts.push(
-    inferential.status === "missing"
-      ? "Inferential artifact missing."
-      : `Inferential artifact ${inferential.status}.`
-  );
+  noteParts.push(buildInferentialSummaryNote(inferential.status));
   noteParts.push(
     runtimeTrends.status === "missing"
       ? "Runtime trend artifact missing."

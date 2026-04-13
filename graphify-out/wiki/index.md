@@ -8,8 +8,8 @@ Graphify is the navigation layer for the repo graph. Use the entry docs below fo
 
 ## Repo Summary
 - Code files discovered: 1200
-- Graph nodes: 2808
-- Graph edges: 2365
+- Graph nodes: 2811
+- Graph edges: 2371
 - Communities: 1115
 
 ## Graph Hotspots
@@ -18,9 +18,9 @@ Graphify is the navigation layer for the repo graph. Use the entry docs below fo
 - `createJourneyEvent()` (40 edges, Community 1) - [`packages/storefront-webapp/src/lib/storefrontJourneyEvents.ts`](../../packages/storefront-webapp/src/lib/storefrontJourneyEvents.ts)
 - `harness-check.ts` (32 edges, Community 2) - [`scripts/harness-check.ts`](../../scripts/harness-check.ts)
 - `harness-generate.ts` (30 edges, Community 3) - [`scripts/harness-generate.ts`](../../scripts/harness-generate.ts)
+- `harness-scorecard.ts` (27 edges, Community 5) - [`scripts/harness-scorecard.ts`](../../scripts/harness-scorecard.ts)
 - `storeConfigV2.ts` (27 edges, Community 4) - [`packages/athena-webapp/convex/inventory/storeConfigV2.ts`](../../packages/athena-webapp/convex/inventory/storeConfigV2.ts)
-- `harness-scorecard.ts` (25 edges, Community 6) - [`scripts/harness-scorecard.ts`](../../scripts/harness-scorecard.ts)
-- `harness-behavior.ts` (24 edges, Community 5) - [`scripts/harness-behavior.ts`](../../scripts/harness-behavior.ts)
+- `harness-behavior.ts` (24 edges, Community 6) - [`scripts/harness-behavior.ts`](../../scripts/harness-behavior.ts)
 
 ## Registered Packages
 - [Athena Webapp](packages/athena-webapp.md)

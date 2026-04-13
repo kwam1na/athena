@@ -14,7 +14,42 @@ async function write(relativePath: string, contents: string, rootDir: string) {
   await writeFile(filePath, contents);
 }
 
-async function createFixtureRepo(includeArtifacts: boolean) {
+function createInferentialArtifact(status: "skipped" | "pass") {
+  return {
+    version: "1.0",
+    generatedAt: "2026-04-12T04:55:00.000Z",
+    reviewMode: "semantic-shadow",
+    baseRef: "origin/main",
+    status,
+    summary:
+      status === "skipped"
+        ? "No harness-critical files are in scope. Inferential review skipped."
+        : "Inferential review completed with no actionable findings.",
+    providerName: "deterministic-policy-v1",
+    changedFiles:
+      status === "skipped" ? ["README.md"] : ["scripts/harness-scorecard.ts"],
+    targetFiles:
+      status === "skipped" ? [] : ["scripts/harness-scorecard.ts"],
+    findings: [],
+    errors: [],
+    shadow: {
+      generatedAt: "2026-04-12T04:55:00.000Z",
+      status,
+      summary:
+        status === "skipped"
+          ? "Shadow semantic review skipped because ANTHROPIC_API_KEY is not configured."
+          : "Shadow semantic review found no semantic issues.",
+      providerName: "semantic-shadow-stub",
+      findings: [],
+      errors: [],
+    },
+  };
+}
+
+async function createFixtureRepo(
+  includeArtifacts: boolean,
+  inferentialStatus: "skipped" | "pass" = "skipped"
+) {
   const rootDir = await mkdtemp(path.join(tmpdir(), "athena-harness-scorecard-"));
   tempRoots.push(rootDir);
 
@@ -161,32 +196,7 @@ async function createFixtureRepo(includeArtifacts: boolean) {
   if (includeArtifacts) {
     await write(
       "artifacts/harness-inferential-review/latest.json",
-      JSON.stringify(
-        {
-          version: "1.0",
-          generatedAt: "2026-04-12T04:55:00.000Z",
-          reviewMode: "semantic-shadow",
-          baseRef: "origin/main",
-          status: "skipped",
-          summary: "No harness-critical files are in scope. Inferential review skipped.",
-          providerName: "deterministic-policy-v1",
-          changedFiles: ["README.md"],
-          targetFiles: [],
-          findings: [],
-          errors: [],
-          shadow: {
-            generatedAt: "2026-04-12T04:55:00.000Z",
-            status: "skipped",
-            summary:
-              "Shadow semantic review skipped because ANTHROPIC_API_KEY is not configured.",
-            providerName: "semantic-shadow-stub",
-            findings: [],
-            errors: [],
-          },
-        },
-        null,
-        2
-      ),
+      JSON.stringify(createInferentialArtifact(inferentialStatus), null, 2),
       rootDir
     );
     await write(
@@ -354,7 +364,7 @@ describe("collectHarnessScorecard", () => {
       version: "1.0",
       generatedAt: "2026-04-12T05:00:00.000Z",
       summary: {
-        status: "healthy",
+        status: "mixed",
       },
     });
     expect(Object.keys(first.metrics)).toEqual([
@@ -410,6 +420,35 @@ describe("collectHarnessScorecard", () => {
     expect(first.metrics.graphify.status).toBe("paired");
     expect(first.metrics.graphify.reportPresent).toBe(true);
     expect(first.metrics.graphify.graphPresent).toBe(true);
+    expect(first.summary).toMatchObject({
+      status: "mixed",
+      healthySignals: 5,
+      degradedSignals: 1,
+      missingSignals: 0,
+    });
+    expect(first.summary.note).toContain(
+      "Inferential artifact skipped and treated as non-healthy."
+    );
+  });
+
+  it("counts a passing inferential artifact as healthy", async () => {
+    const rootDir = await createFixtureRepo(true, "pass");
+
+    const result = await collectHarnessScorecard(rootDir, {
+      nowIso: () => "2026-04-12T05:00:00.000Z",
+    });
+
+    expect(result.metrics.inferential.status).toBe("pass");
+    expect(result.metrics.inferential.summary).toBe(
+      "Inferential review completed with no actionable findings."
+    );
+    expect(result.summary).toMatchObject({
+      status: "healthy",
+      healthySignals: 6,
+      degradedSignals: 0,
+      missingSignals: 0,
+    });
+    expect(result.summary.note).toContain("Inferential artifact pass.");
   });
 
   it("marks missing inferential and graphify artifacts explicitly", async () => {
