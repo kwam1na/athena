@@ -176,6 +176,9 @@ describe("repo harness ergonomics", () => {
     expect(workflow).toContain("run: bun run harness:review --base origin/main");
     expect(workflow).toContain("run: bun run harness:test");
     expect(workflow).toContain("run: python3 -m pip install graphifyy");
+    expect(workflow).toContain(
+      "run: bunx playwright install --with-deps chromium"
+    );
     expect(workflow).toContain("run: bun run harness:audit");
     expect(workflow).toContain("HARNESS_INFERENTIAL_SEMANTIC_MODE: shadow");
     expect(workflow).toContain("run: bun run harness:inferential-review");
