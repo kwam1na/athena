@@ -24,6 +24,7 @@ const RUNTIME_SCENARIO_SECTION_MARKERS = [
 const RUNTIME_SCENARIO_DOCS = [
   "README.md",
   "packages/athena-webapp/docs/agent/testing.md",
+  "packages/valkey-proxy-server/docs/agent/testing.md",
   "packages/storefront-webapp/docs/agent/testing.md",
 ] as const;
 const README_PATH = "README.md" as const;
@@ -127,6 +128,7 @@ function isRuntimeScenarioName(value: string) {
   return (
     value === "sample-runtime-smoke" ||
     value.startsWith("athena-") ||
+    value.startsWith("valkey-") ||
     value.startsWith("storefront-")
   );
 }

@@ -92,6 +92,18 @@ async function createFixtureRepo() {
       "",
       "Run `bun run harness:review` from the repo root for touched-file validation coverage.",
       "Machine-readable review coverage lives in [validation-map.json](./validation-map.json).",
+      "Use `bun run harness:behavior --list` to inspect available runtime scenarios.",
+      "Current shared scenarios include:",
+      "- `sample-runtime-smoke`",
+      "- `athena-admin-shell-boot`",
+      "- `athena-convex-storefront-composition`",
+      "- `athena-convex-storefront-failure-visibility`",
+      "- `valkey-proxy-local-request-response`",
+      "- `storefront-checkout-bootstrap`",
+      "- `storefront-checkout-validation-blocker`",
+      "- `storefront-checkout-verification-recovery`",
+      "",
+      "Use `bun run harness:behavior --scenario valkey-proxy-local-request-response` for the local request/response smoke check.",
     ].join("\n"),
     rootDir
   );
@@ -187,6 +199,7 @@ async function createFixtureRepo() {
                 command: "node --check packages/valkey-proxy-server/index.js",
               },
             ],
+            behaviorScenarios: ["valkey-proxy-local-request-response"],
           },
           {
             name: "live-connection-probe-edits",
@@ -254,6 +267,10 @@ async function createFixtureRepo() {
       "- `bun run --filter 'valkey-proxy-server' test`",
       "- `node --check packages/valkey-proxy-server/app.js`",
       "- `node --check packages/valkey-proxy-server/index.js`",
+      "",
+      "Behavior scenarios:",
+      "",
+      "- `valkey-proxy-local-request-response`",
     ].join("\n"),
     rootDir
   );
@@ -385,6 +402,7 @@ describe("runHarnessSelfReview", () => {
     expect(result.markdown).toContain(
       "node --check packages/valkey-proxy-server/index.js"
     );
+    expect(result.markdown).toContain("## Runtime behavior scenarios");
   });
 
   it.each([

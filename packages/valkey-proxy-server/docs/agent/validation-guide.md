@@ -14,6 +14,10 @@ Run:
 - `node --check packages/valkey-proxy-server/app.js`
 - `node --check packages/valkey-proxy-server/index.js`
 
+Behavior scenarios:
+
+- `valkey-proxy-local-request-response`
+
 Use the local test suite and syntax checks when handler logic, operator docs, or runtime bootstrap changes.
 
 ## Live connection probe edits

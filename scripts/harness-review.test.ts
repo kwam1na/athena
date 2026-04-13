@@ -171,6 +171,7 @@ async function createFixtureRepo() {
                 command: "node --check packages/valkey-proxy-server/index.js",
               },
             ],
+            behaviorScenarios: ["valkey-proxy-local-request-response"],
           },
           {
             name: "live-connection-probe-edits",
@@ -307,6 +308,9 @@ describe("runHarnessReview", () => {
       runRawCommand: async (command) => {
         steps.push(command);
       },
+      runHarnessBehaviorScenario: async (scenario) => {
+        steps.push(`behavior:${scenario}`);
+      },
       logger: {
         log() {},
         error() {},
@@ -318,6 +322,7 @@ describe("runHarnessReview", () => {
       "valkey-proxy-server:test",
       "node --check packages/valkey-proxy-server/app.js",
       "node --check packages/valkey-proxy-server/index.js",
+      "behavior:valkey-proxy-local-request-response",
     ]);
   });
 
@@ -336,6 +341,9 @@ describe("runHarnessReview", () => {
       runRawCommand: async (command) => {
         steps.push(command);
       },
+      runHarnessBehaviorScenario: async (scenario) => {
+        steps.push(`behavior:${scenario}`);
+      },
       logger: {
         log() {},
         error() {},
@@ -347,6 +355,7 @@ describe("runHarnessReview", () => {
       "valkey-proxy-server:test",
       "node --check packages/valkey-proxy-server/app.js",
       "node --check packages/valkey-proxy-server/index.js",
+      "behavior:valkey-proxy-local-request-response",
     ]);
   });
 

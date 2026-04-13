@@ -64,6 +64,7 @@ async function createFixtureRepo() {
       "- `athena-admin-shell-boot`",
       "- `athena-convex-storefront-composition`",
       "- `athena-convex-storefront-failure-visibility`",
+      "- `valkey-proxy-local-request-response`",
       "- `storefront-checkout-bootstrap`",
       "- `storefront-checkout-validation-blocker`",
       "- `storefront-checkout-verification-recovery`",
@@ -173,6 +174,7 @@ async function createFixtureRepo() {
         "- `athena-admin-shell-boot`",
         "- `athena-convex-storefront-composition`",
         "- `athena-convex-storefront-failure-visibility`",
+        "- `valkey-proxy-local-request-response`",
         "- `storefront-checkout-bootstrap`",
         "- `storefront-checkout-validation-blocker`",
         "- `storefront-checkout-verification-recovery`",
@@ -318,6 +320,18 @@ async function createFixtureRepo() {
       "",
       "Use `bun run harness:review` to validate the package surface mappings.",
       "The main validation surfaces are `package.json`, `README.md`, `app.js`, `app.test.js`, `index.js`, and `test-connection.js`.",
+      "Use `bun run harness:behavior --list` to inspect available runtime scenarios.",
+      "Current shared scenarios include:",
+      "- `sample-runtime-smoke`",
+      "- `athena-admin-shell-boot`",
+      "- `athena-convex-storefront-composition`",
+      "- `athena-convex-storefront-failure-visibility`",
+      "- `valkey-proxy-local-request-response`",
+      "- `storefront-checkout-bootstrap`",
+      "- `storefront-checkout-validation-blocker`",
+      "- `storefront-checkout-verification-recovery`",
+      "",
+      "Use `bun run harness:behavior --scenario valkey-proxy-local-request-response` for the local request/response smoke check.",
       "Run `bun run --filter 'valkey-proxy-server' test` for the deterministic local pass.",
       "Run `bun run --filter 'valkey-proxy-server' test:connection` for the live connection probe.",
       "Covered test surfaces include `app.test.js`, `app.js`, `index.js`, and `test-connection.js`.",
@@ -545,15 +559,16 @@ describe("validateHarnessDocs", () => {
         "# athena",
         "",
         "List runtime behavior scenarios with `bun run harness:behavior --list`.",
-        "Bundled scenarios include:",
-        "",
-        "- `sample-runtime-smoke`",
-        "- `athena-admin-shell-boot`",
-        "- `athena-convex-storefront-composition`",
-        "- `athena-convex-storefront-failure-visibility`",
-        "- `storefront-checkout-bootstrap`",
-        "- `storefront-checkout-validation-blocker`",
-        "- `storefront-checkout-verification-recovery`",
+      "Bundled scenarios include:",
+      "",
+      "- `sample-runtime-smoke`",
+      "- `athena-admin-shell-boot`",
+      "- `athena-convex-storefront-composition`",
+      "- `athena-convex-storefront-failure-visibility`",
+      "- `valkey-proxy-local-request-response`",
+      "- `storefront-checkout-bootstrap`",
+      "- `storefront-checkout-validation-blocker`",
+      "- `storefront-checkout-verification-recovery`",
         "",
       ].join("\n"),
       rootDir
@@ -788,7 +803,7 @@ describe("validateHarnessDocs", () => {
     );
 
     await expect(validateHarnessDocs(rootDir)).resolves.toContain(
-      "Runtime behavior scenario docs drift in packages/athena-webapp/docs/agent/testing.md: missing `athena-admin-shell-boot`, `athena-convex-storefront-composition`, `athena-convex-storefront-failure-visibility`, `storefront-checkout-bootstrap`, `storefront-checkout-validation-blocker`, `storefront-checkout-verification-recovery`. Run `bun run harness:behavior --list` and sync this list to scripts/harness-behavior-scenarios.ts."
+      "Runtime behavior scenario docs drift in packages/athena-webapp/docs/agent/testing.md: missing `athena-admin-shell-boot`, `athena-convex-storefront-composition`, `athena-convex-storefront-failure-visibility`, `storefront-checkout-bootstrap`, `storefront-checkout-validation-blocker`, `storefront-checkout-verification-recovery`, `valkey-proxy-local-request-response`. Run `bun run harness:behavior --list` and sync this list to scripts/harness-behavior-scenarios.ts."
     );
   });
 });
