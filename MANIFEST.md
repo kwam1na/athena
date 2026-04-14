@@ -286,6 +286,15 @@ HTTP bridge to the local Valkey instance on the DigitalOcean droplet.
 | **PostHog** | Product analytics in storefront (installed, currently disabled in `main.tsx`) |
 | **OpenAI / Anthropic** | LLM-powered store and user insights (via `convex/llm/`) |
 
+## Production Observability
+
+Production monitoring is documented in [docs/operations/production-observability-v1.md](./docs/operations/production-observability-v1.md).
+
+- Athena public availability is the shallow Convex Hono `/health` route on the API gateway or Convex HTTP host, separate from the Athena browser app host.
+- Storefront production readiness uses browser-level selectors and a dedicated synthetic checkout-start journey, not a route-local `/health`.
+- Synthetic storefront traffic must use `origin=synthetic_monitor` so Athena can exclude it from business analytics defaults while keeping it visible in operator diagnostics.
+- Cloudflare, Checkly, Slack routing, and the dedicated monitor SKU contract are external operator configuration and should be updated through the runbook, not by guessing from vendor dashboards.
+
 ---
 
 ## Local Development
