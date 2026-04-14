@@ -94,10 +94,27 @@ describe("V26-169 time/query refactors", () => {
 
   it("keeps synthetic monitor traffic out of default business analytics queries", () => {
     const analyticsSource = readSource("convex/storeFront/analytics.ts");
+    const customerTimelineSource = readSource(
+      "convex/storeFront/customerBehaviorTimeline.ts"
+    );
+    const userSource = readSource("convex/storeFront/user.ts");
     const defaultStoreQueryMatches = analyticsSource.match(
       /\.withIndex\("by_storeId", \(q\) => q\.eq\("storeId", args\.storeId\)\)\s+\.filter\(\(q\) => q\.neq\(q\.field\("origin"\), SYNTHETIC_MONITOR_ORIGIN\)\)\s+\.order\("desc"\)\s+\.take\(250\)/g
     );
 
     expect(defaultStoreQueryMatches).toHaveLength(2);
+    expect(customerTimelineSource).toContain(
+      '.filter((q) => q.neq(q.field("origin"), SYNTHETIC_MONITOR_ORIGIN))'
+    );
+    expect(
+      userSource.match(
+        /\.filter\(\(q\) => q\.neq\(q\.field\("origin"\), SYNTHETIC_MONITOR_ORIGIN\)\)/g
+      )
+    ).toHaveLength(2);
+    expect(
+      userSource.match(
+        /SYNTHETIC_MONITOR_ORIGIN/g
+      )
+    ).toHaveLength(9);
   });
 });

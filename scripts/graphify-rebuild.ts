@@ -1,4 +1,4 @@
-import { access, readFile } from "node:fs/promises";
+import { access, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { writeGraphifyWikiPages } from "./graphify-wiki";
@@ -78,6 +78,14 @@ type GraphifyRebuildOptions = {
   writeGraphifyWikiPages?: (rootDir: string) => Promise<void>;
 };
 
+type JsonValue =
+  | null
+  | boolean
+  | number
+  | string
+  | JsonValue[]
+  | { [key: string]: JsonValue };
+
 async function fileExists(filePath: string) {
   try {
     await access(filePath);
@@ -114,6 +122,58 @@ async function resolveGraphifyPython(rootDir: string) {
   return "python3";
 }
 
+function isJsonObject(value: JsonValue): value is { [key: string]: JsonValue } {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function sortJsonValue(value: JsonValue): JsonValue {
+  if (Array.isArray(value)) {
+    return value.map(sortJsonValue);
+  }
+
+  if (!isJsonObject(value)) {
+    return value;
+  }
+
+  return Object.fromEntries(
+    Object.entries(value)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, nestedValue]) => [key, sortJsonValue(nestedValue)])
+  );
+}
+
+function sortJsonArray(values: JsonValue[]) {
+  return [...values].sort((left, right) =>
+    JSON.stringify(left).localeCompare(JSON.stringify(right))
+  );
+}
+
+export function normalizeGraphJsonContents(contents: string) {
+  const parsed = JSON.parse(contents) as JsonValue;
+  const normalized = sortJsonValue(parsed);
+
+  if (isJsonObject(normalized)) {
+    for (const listKey of ["nodes", "links", "hyperedges"] as const) {
+      const listValue = normalized[listKey];
+      if (Array.isArray(listValue)) {
+        normalized[listKey] = sortJsonArray(listValue);
+      }
+    }
+  }
+
+  return `${JSON.stringify(normalized, null, 2)}\n`;
+}
+
+async function normalizeGraphJsonArtifact(rootDir: string) {
+  const graphJsonPath = path.join(rootDir, "graphify-out/graph.json");
+  if (!(await fileExists(graphJsonPath))) {
+    return;
+  }
+
+  const contents = await readFile(graphJsonPath, "utf8");
+  await writeFile(graphJsonPath, normalizeGraphJsonContents(contents));
+}
+
 export async function runGraphifyRebuild(
   rootDir: string,
   options: GraphifyRebuildOptions = {}
@@ -130,6 +190,7 @@ export async function runGraphifyRebuild(
   const exitCode = await subprocess.exited;
 
   if (exitCode === 0) {
+    await normalizeGraphJsonArtifact(rootDir);
     await (options.writeGraphifyWikiPages ?? writeGraphifyWikiPages)(rootDir);
     return;
   }

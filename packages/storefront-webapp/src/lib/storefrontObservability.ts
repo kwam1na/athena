@@ -94,6 +94,7 @@ type StorefrontObservabilityRuntimeContext = {
     origin?: string;
     utm_source?: string;
   };
+  isBrowserAutomation?: boolean;
   userId?: string;
   guestId?: string;
   storage?: Pick<Storage, "getItem" | "setItem">;
@@ -109,6 +110,38 @@ type StorefrontObservabilityTransport = (
 
 export function isSyntheticMonitorOrigin(origin?: string | null) {
   return origin === SYNTHETIC_MONITOR_ORIGIN;
+}
+
+export function isBrowserAutomationContext(
+  isBrowserAutomation?: boolean,
+) {
+  if (typeof isBrowserAutomation === "boolean") {
+    return isBrowserAutomation;
+  }
+
+  return typeof navigator !== "undefined" && navigator.webdriver === true;
+}
+
+export function resolveStorefrontAnalyticsOrigin({
+  explicitOrigin,
+  searchOrigin,
+  utmSource,
+  isBrowserAutomation,
+}: {
+  explicitOrigin?: string;
+  searchOrigin?: string;
+  utmSource?: string;
+  isBrowserAutomation?: boolean;
+}) {
+  if (isSyntheticMonitorOrigin(searchOrigin)) {
+    if (isBrowserAutomationContext(isBrowserAutomation)) {
+      return SYNTHETIC_MONITOR_ORIGIN;
+    }
+
+    return explicitOrigin ?? utmSource;
+  }
+
+  return explicitOrigin ?? searchOrigin ?? utmSource;
 }
 
 export function getOrCreateStorefrontObservabilitySessionId(
@@ -148,10 +181,15 @@ export function createStorefrontObservabilityContext(
     : runtimeContext.guestId
       ? "guest"
       : "unknown";
+  const origin = resolveStorefrontAnalyticsOrigin({
+    searchOrigin: search.origin,
+    utmSource: search.utm_source,
+    isBrowserAutomation: runtimeContext.isBrowserAutomation,
+  });
 
   return storefrontObservabilityBaseContextSchema.parse({
     route: runtimeContext.pathname || "/",
-    origin: search.origin ?? search.utm_source,
+    origin,
     sessionId: getOrCreateStorefrontObservabilitySessionId(
       runtimeContext.storage,
     ),

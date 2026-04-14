@@ -1,11 +1,11 @@
 # Graph Report - .
 
 ## Corpus Check
-- 1209 files · ~0 words
+- 1210 files · ~0 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 2829 nodes · 2382 edges · 1124 communities detected
+- 2837 nodes · 2399 edges · 1125 communities detected
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS
 - Token cost: 0 input · 0 output
 
@@ -1134,6 +1134,7 @@
 - [[_COMMUNITY_Community 1121|Community 1121]]
 - [[_COMMUNITY_Community 1122|Community 1122]]
 - [[_COMMUNITY_Community 1123|Community 1123]]
+- [[_COMMUNITY_Community 1124|Community 1124]]
 
 ## God Nodes (most connected - your core abstractions)
 1. `createJourneyEvent()` - 40 edges
@@ -1322,140 +1323,140 @@ Cohesion: 0.44
 Nodes (1): Logger
 
 ### Community 40 - "Community 40"
-Cohesion: 0.43
-Nodes (6): buildMtnCollectionsLookupPrefixes(), isTargetEnvironment(), readScopedValue(), resolveConfigForPrefix(), resolveMtnCollectionsConfigFromEnv(), toEnvSegment()
+Cohesion: 0.47
+Nodes (8): fileExists(), isJsonObject(), normalizeGraphJsonArtifact(), normalizeGraphJsonContents(), resolveGraphifyPython(), runGraphifyRebuild(), sortJsonArray(), sortJsonValue()
 
 ### Community 41 - "Community 41"
 Cohesion: 0.43
-Nodes (6): sendDiscountCodeEmail(), sendDiscountReminderEmail(), sendFeedbackRequestEmail(), sendNewOrderEmail(), sendOrderEmail(), sendVerificationCode()
+Nodes (6): buildMtnCollectionsLookupPrefixes(), isTargetEnvironment(), readScopedValue(), resolveConfigForPrefix(), resolveMtnCollectionsConfigFromEnv(), toEnvSegment()
 
 ### Community 42 - "Community 42"
+Cohesion: 0.43
+Nodes (6): sendDiscountCodeEmail(), sendDiscountReminderEmail(), sendFeedbackRequestEmail(), sendNewOrderEmail(), sendOrderEmail(), sendVerificationCode()
+
+### Community 43 - "Community 43"
 Cohesion: 0.25
 Nodes (1): DataTableRowActions()
 
-### Community 43 - "Community 43"
+### Community 44 - "Community 44"
 Cohesion: 0.29
 Nodes (2): handleNewSession(), resetAutoSessionInitialized()
 
-### Community 44 - "Community 44"
+### Community 45 - "Community 45"
 Cohesion: 0.25
 Nodes (0):
 
-### Community 45 - "Community 45"
+### Community 46 - "Community 46"
 Cohesion: 0.46
 Nodes (7): addItemToBag(), clearBag(), getActiveBag(), getBaseUrl(), removeItemFromBag(), updateBagItem(), updateBagOwner()
 
-### Community 46 - "Community 46"
+### Community 47 - "Community 47"
 Cohesion: 0.43
 Nodes (6): buildQueryString(), getAllProducts(), getBaseUrl(), getBestSellers(), getFeatured(), getProduct()
 
-### Community 47 - "Community 47"
+### Community 48 - "Community 48"
 Cohesion: 0.25
 Nodes (0):
 
-### Community 48 - "Community 48"
+### Community 49 - "Community 49"
+Cohesion: 0.43
+Nodes (7): createStorefrontObservabilityContext(), createStorefrontObservabilityPayload(), getOrCreateStorefrontObservabilitySessionId(), isBrowserAutomationContext(), isSyntheticMonitorOrigin(), resolveStorefrontAnalyticsOrigin(), trackStorefrontEvent()
+
+### Community 50 - "Community 50"
 Cohesion: 0.52
 Nodes (5): acquireInventoryHold(), acquireInventoryHoldsBatch(), adjustInventoryHold(), releaseInventoryHold(), validateInventoryAvailability()
 
-### Community 49 - "Community 49"
+### Community 51 - "Community 51"
 Cohesion: 0.57
 Nodes (6): buildHeaders(), createCollectionsAccessToken(), encodeBasicAuth(), getRequestToPayStatus(), requestToPay(), toError()
 
-### Community 50 - "Community 50"
+### Community 52 - "Community 52"
 Cohesion: 0.57
 Nodes (5): getDeliveryAddress(), getLocationDetails(), getPickupLocation(), handleOrderStatusUpdate(), processOrderUpdateEmail()
-
-### Community 51 - "Community 51"
-Cohesion: 0.29
-Nodes (0):
-
-### Community 52 - "Community 52"
-Cohesion: 0.29
-Nodes (0):
 
 ### Community 53 - "Community 53"
 Cohesion: 0.29
 Nodes (0):
 
 ### Community 54 - "Community 54"
-Cohesion: 0.33
-Nodes (2): getProductName(), sortProduct()
+Cohesion: 0.29
+Nodes (0):
 
 ### Community 55 - "Community 55"
-Cohesion: 0.52
-Nodes (6): addItemToSavedBag(), getActiveSavedBag(), getBaseUrl(), removeItemFromSavedBag(), updateSavedBagItem(), updateSavedBagOwner()
+Cohesion: 0.29
+Nodes (0):
 
 ### Community 56 - "Community 56"
 Cohesion: 0.52
-Nodes (5): emitSignal(), handleCheckoutSessionFetch(), handleCheckoutSessionUpdate(), jsonResponse(), withCorsHeaders()
+Nodes (6): addItemToSavedBag(), getActiveSavedBag(), getBaseUrl(), removeItemFromSavedBag(), updateSavedBagItem(), updateSavedBagOwner()
 
 ### Community 57 - "Community 57"
 Cohesion: 0.33
-Nodes (2): overwriteFreshGraphifyArtifacts(), write()
+Nodes (2): getProductName(), sortProduct()
 
 ### Community 58 - "Community 58"
-Cohesion: 0.38
-Nodes (4): createFixtureRepo(), initializeGitHistory(), runGit(), write()
+Cohesion: 0.52
+Nodes (5): emitSignal(), handleCheckoutSessionFetch(), handleCheckoutSessionUpdate(), jsonResponse(), withCorsHeaders()
 
 ### Community 59 - "Community 59"
 Cohesion: 0.33
-Nodes (1): ValkeyClient
+Nodes (2): overwriteFreshGraphifyArtifacts(), write()
 
 ### Community 60 - "Community 60"
-Cohesion: 0.33
-Nodes (0):
+Cohesion: 0.38
+Nodes (4): createFixtureRepo(), initializeGitHistory(), runGit(), write()
 
 ### Community 61 - "Community 61"
-Cohesion: 0.73
-Nodes (5): buildOrderStatusMessage(), buildPickupDetails(), sendPaymentVerificationEmails(), sendPODOrderEmails(), shouldSendToAdmins()
+Cohesion: 0.33
+Nodes (1): ValkeyClient
 
 ### Community 62 - "Community 62"
 Cohesion: 0.33
 Nodes (0):
 
 ### Community 63 - "Community 63"
-Cohesion: 0.47
-Nodes (3): clearBagItems(), createOrderFromCheckoutSession(), generateOrderNumber()
+Cohesion: 0.73
+Nodes (5): buildOrderStatusMessage(), buildPickupDetails(), sendPaymentVerificationEmails(), sendPODOrderEmails(), shouldSendToAdmins()
 
 ### Community 64 - "Community 64"
 Cohesion: 0.33
-Nodes (1): DataTableToolbar()
+Nodes (0):
 
 ### Community 65 - "Community 65"
+Cohesion: 0.47
+Nodes (3): clearBagItems(), createOrderFromCheckoutSession(), generateOrderNumber()
+
+### Community 66 - "Community 66"
+Cohesion: 0.33
+Nodes (1): DataTableToolbar()
+
+### Community 67 - "Community 67"
 Cohesion: 0.53
 Nodes (2): SelectedProductsProvider(), useSelectedProducts()
 
-### Community 66 - "Community 66"
+### Community 68 - "Community 68"
 Cohesion: 0.4
 Nodes (2): buildUsername(), normalizeNameSegment()
-
-### Community 67 - "Community 67"
-Cohesion: 0.33
-Nodes (0):
-
-### Community 68 - "Community 68"
-Cohesion: 0.33
-Nodes (0):
 
 ### Community 69 - "Community 69"
 Cohesion: 0.33
 Nodes (0):
 
 ### Community 70 - "Community 70"
-Cohesion: 0.47
-Nodes (3): onDrop(), removeImage(), unmarkForDeletion()
+Cohesion: 0.33
+Nodes (0):
 
 ### Community 71 - "Community 71"
 Cohesion: 0.33
 Nodes (0):
 
 ### Community 72 - "Community 72"
-Cohesion: 0.4
-Nodes (2): useBulkOperations(), validateOperationValue()
-
-### Community 73 - "Community 73"
 Cohesion: 0.33
 Nodes (0):
+
+### Community 73 - "Community 73"
+Cohesion: 0.4
+Nodes (2): useBulkOperations(), validateOperationValue()
 
 ### Community 74 - "Community 74"
 Cohesion: 0.33
@@ -1470,47 +1471,47 @@ Cohesion: 0.33
 Nodes (0):
 
 ### Community 77 - "Community 77"
-Cohesion: 0.4
-Nodes (2): onSubmit(), saveStoreChanges()
+Cohesion: 0.33
+Nodes (0):
 
 ### Community 78 - "Community 78"
 Cohesion: 0.4
 Nodes (2): onSubmit(), saveStoreChanges()
 
 ### Community 79 - "Community 79"
-Cohesion: 0.47
-Nodes (3): getBaseUrl(), getPromoCodes(), redeemPromoCode()
+Cohesion: 0.4
+Nodes (2): onSubmit(), saveStoreChanges()
 
 ### Community 80 - "Community 80"
-Cohesion: 0.33
-Nodes (0):
+Cohesion: 0.47
+Nodes (3): getBaseUrl(), getPromoCodes(), redeemPromoCode()
 
 ### Community 81 - "Community 81"
 Cohesion: 0.33
 Nodes (0):
 
 ### Community 82 - "Community 82"
-Cohesion: 0.53
-Nodes (5): getRemainingForFreeDelivery(), hasWaiverConfigured(), isAnyFeeWaived(), isFeeWaived(), meetsThreshold()
-
-### Community 83 - "Community 83"
-Cohesion: 0.47
-Nodes (4): createStorefrontObservabilityContext(), createStorefrontObservabilityPayload(), getOrCreateStorefrontObservabilitySessionId(), trackStorefrontEvent()
-
-### Community 84 - "Community 84"
-Cohesion: 0.47
-Nodes (3): onSubmit(), reportAuthFailure(), resendVerificationCode()
-
-### Community 85 - "Community 85"
-Cohesion: 0.67
-Nodes (5): collectRepoCodeFiles(), collectStaleGraphifyArtifacts(), copyGraphifyCheckInputs(), fileExists(), runGraphifyCheck()
-
-### Community 86 - "Community 86"
 Cohesion: 0.33
 Nodes (0):
 
+### Community 83 - "Community 83"
+Cohesion: 0.47
+Nodes (3): onDrop(), removeImage(), unmarkForDeletion()
+
+### Community 84 - "Community 84"
+Cohesion: 0.53
+Nodes (5): getRemainingForFreeDelivery(), hasWaiverConfigured(), isAnyFeeWaived(), isFeeWaived(), meetsThreshold()
+
+### Community 85 - "Community 85"
+Cohesion: 0.47
+Nodes (3): onSubmit(), reportAuthFailure(), resendVerificationCode()
+
+### Community 86 - "Community 86"
+Cohesion: 0.67
+Nodes (5): collectRepoCodeFiles(), collectStaleGraphifyArtifacts(), copyGraphifyCheckInputs(), fileExists(), runGraphifyCheck()
+
 ### Community 87 - "Community 87"
-Cohesion: 0.4
+Cohesion: 0.33
 Nodes (0):
 
 ### Community 88 - "Community 88"
@@ -1526,28 +1527,28 @@ Cohesion: 0.4
 Nodes (0):
 
 ### Community 91 - "Community 91"
+Cohesion: 0.4
+Nodes (0):
+
+### Community 92 - "Community 92"
 Cohesion: 0.7
 Nodes (4): getPaystackHeaders(), initializeTransaction(), initiateRefund(), verifyTransaction()
 
-### Community 92 - "Community 92"
+### Community 93 - "Community 93"
 Cohesion: 0.4
 Nodes (0):
-
-### Community 93 - "Community 93"
-Cohesion: 0.6
-Nodes (3): getNonEmptyString(), isFailureStatus(), normalizeEvent()
 
 ### Community 94 - "Community 94"
 Cohesion: 0.6
-Nodes (3): createOffer(), isDuplicate(), updateStoreFrontActorEmail()
+Nodes (3): getNonEmptyString(), isFailureStatus(), normalizeEvent()
 
 ### Community 95 - "Community 95"
-Cohesion: 0.5
-Nodes (2): getNonEmptyString(), normalizeStorefrontObservabilityEvent()
+Cohesion: 0.6
+Nodes (3): createOffer(), isDuplicate(), updateStoreFrontActorEmail()
 
 ### Community 96 - "Community 96"
-Cohesion: 0.4
-Nodes (0):
+Cohesion: 0.5
+Nodes (2): getNonEmptyString(), normalizeStorefrontObservabilityEvent()
 
 ### Community 97 - "Community 97"
 Cohesion: 0.4
@@ -1555,7 +1556,7 @@ Nodes (0):
 
 ### Community 98 - "Community 98"
 Cohesion: 0.4
-Nodes (1): Header()
+Nodes (0):
 
 ### Community 99 - "Community 99"
 Cohesion: 0.4
@@ -1583,7 +1584,7 @@ Nodes (0):
 
 ### Community 105 - "Community 105"
 Cohesion: 0.4
-Nodes (0):
+Nodes (1): Header()
 
 ### Community 106 - "Community 106"
 Cohesion: 0.4
@@ -1602,16 +1603,16 @@ Cohesion: 0.4
 Nodes (0):
 
 ### Community 110 - "Community 110"
+Cohesion: 0.4
+Nodes (0):
+
+### Community 111 - "Community 111"
 Cohesion: 0.7
 Nodes (4): bufferToHex(), collectBrowserInfo(), generateBrowserFingerprint(), hashFingerprintSource()
 
-### Community 111 - "Community 111"
-Cohesion: 0.4
-Nodes (1): MockImage
-
 ### Community 112 - "Community 112"
 Cohesion: 0.4
-Nodes (0):
+Nodes (1): MockImage
 
 ### Community 113 - "Community 113"
 Cohesion: 0.4
@@ -1626,35 +1627,35 @@ Cohesion: 0.4
 Nodes (0):
 
 ### Community 116 - "Community 116"
-Cohesion: 0.7
-Nodes (4): getAllCategories(), getAllCategoriesWithSubcategories(), getBaseUrl(), getCategory()
+Cohesion: 0.4
+Nodes (0):
 
 ### Community 117 - "Community 117"
 Cohesion: 0.7
-Nodes (4): getBaseUrl(), getOrder(), getOrders(), updateOrdersOwner()
+Nodes (4): getAllCategories(), getAllCategoriesWithSubcategories(), getBaseUrl(), getCategory()
 
 ### Community 118 - "Community 118"
 Cohesion: 0.7
-Nodes (4): getActiveUser(), getBaseUrl(), getGuest(), updateUser()
+Nodes (4): getBaseUrl(), getOrder(), getOrders(), updateOrdersOwner()
 
 ### Community 119 - "Community 119"
-Cohesion: 0.4
-Nodes (0):
+Cohesion: 0.7
+Nodes (4): getActiveUser(), getBaseUrl(), getGuest(), updateUser()
 
 ### Community 120 - "Community 120"
 Cohesion: 0.4
 Nodes (0):
 
 ### Community 121 - "Community 121"
-Cohesion: 0.7
-Nodes (4): createStorefrontFailureEvent(), emitStorefrontFailure(), inferStorefrontJourneyFromRoute(), normalizeStorefrontError()
-
-### Community 122 - "Community 122"
 Cohesion: 0.4
 Nodes (0):
 
+### Community 122 - "Community 122"
+Cohesion: 0.7
+Nodes (4): createStorefrontFailureEvent(), emitStorefrontFailure(), inferStorefrontJourneyFromRoute(), normalizeStorefrontError()
+
 ### Community 123 - "Community 123"
-Cohesion: 0.5
+Cohesion: 0.4
 Nodes (0):
 
 ### Community 124 - "Community 124"
@@ -1670,24 +1671,24 @@ Cohesion: 0.5
 Nodes (0):
 
 ### Community 127 - "Community 127"
+Cohesion: 0.5
+Nodes (0):
+
+### Community 128 - "Community 128"
 Cohesion: 0.67
 Nodes (2): toDisplayAmount(), toPesewas()
 
-### Community 128 - "Community 128"
+### Community 129 - "Community 129"
 Cohesion: 0.83
 Nodes (3): getCachedTokenRecord(), resolveAccessTokenForStore(), resolveConfigForStore()
 
-### Community 129 - "Community 129"
+### Community 130 - "Community 130"
 Cohesion: 0.67
 Nodes (2): maskMtnPartyId(), normalizeCollectionsTransaction()
 
-### Community 130 - "Community 130"
+### Community 131 - "Community 131"
 Cohesion: 0.67
 Nodes (2): expectIndex(), getTableIndexes()
-
-### Community 131 - "Community 131"
-Cohesion: 0.5
-Nodes (0):
 
 ### Community 132 - "Community 132"
 Cohesion: 0.5
@@ -1706,12 +1707,12 @@ Cohesion: 0.5
 Nodes (0):
 
 ### Community 136 - "Community 136"
-Cohesion: 0.67
-Nodes (2): countGroupedAnalytics(), groupAnalytics()
-
-### Community 137 - "Community 137"
 Cohesion: 0.5
 Nodes (0):
+
+### Community 137 - "Community 137"
+Cohesion: 0.67
+Nodes (2): countGroupedAnalytics(), groupAnalytics()
 
 ### Community 138 - "Community 138"
 Cohesion: 0.5
@@ -1742,32 +1743,32 @@ Cohesion: 0.5
 Nodes (0):
 
 ### Community 145 - "Community 145"
-Cohesion: 0.67
-Nodes (2): getRiskStyles(), RiskIndicators()
-
-### Community 146 - "Community 146"
 Cohesion: 0.5
 Nodes (0):
+
+### Community 146 - "Community 146"
+Cohesion: 0.67
+Nodes (2): getRiskStyles(), RiskIndicators()
 
 ### Community 147 - "Community 147"
 Cohesion: 0.5
 Nodes (0):
 
 ### Community 148 - "Community 148"
-Cohesion: 0.83
-Nodes (3): getBaseUrl(), getUserRedeemedOffers(), submitOffer()
+Cohesion: 0.5
+Nodes (0):
 
 ### Community 149 - "Community 149"
 Cohesion: 0.83
-Nodes (3): getAllStores(), getBaseUrl(), getStore()
+Nodes (3): getBaseUrl(), getUserRedeemedOffers(), submitOffer()
 
 ### Community 150 - "Community 150"
 Cohesion: 0.83
-Nodes (3): getAllSubcategories(), getBaseUrl(), getSubategory()
+Nodes (3): getAllStores(), getBaseUrl(), getStore()
 
 ### Community 151 - "Community 151"
-Cohesion: 0.5
-Nodes (0):
+Cohesion: 0.83
+Nodes (3): getAllSubcategories(), getBaseUrl(), getSubategory()
 
 ### Community 152 - "Community 152"
 Cohesion: 0.5
@@ -1790,32 +1791,32 @@ Cohesion: 0.5
 Nodes (0):
 
 ### Community 157 - "Community 157"
+Cohesion: 0.5
+Nodes (0):
+
+### Community 158 - "Community 158"
 Cohesion: 0.67
 Nodes (2): clearFilters(), onMobileFiltersCloseClick()
 
-### Community 158 - "Community 158"
+### Community 159 - "Community 159"
 Cohesion: 0.83
 Nodes (3): cancelOrder(), getErrorMessage(), placeOrder()
 
-### Community 159 - "Community 159"
+### Community 160 - "Community 160"
 Cohesion: 0.83
 Nodes (3): bootstrapCheckout(), createBootstrapToken(), createMarker()
 
-### Community 160 - "Community 160"
+### Community 161 - "Community 161"
 Cohesion: 0.5
 Nodes (0):
 
-### Community 161 - "Community 161"
+### Community 162 - "Community 162"
 Cohesion: 0.83
 Nodes (3): createFixtureRoot(), write(), writeGraphifyWikiArtifacts()
 
-### Community 162 - "Community 162"
+### Community 163 - "Community 163"
 Cohesion: 0.5
 Nodes (0):
-
-### Community 163 - "Community 163"
-Cohesion: 0.83
-Nodes (3): fileExists(), resolveGraphifyPython(), runGraphifyRebuild()
 
 ### Community 164 - "Community 164"
 Cohesion: 0.67
@@ -5657,6 +5658,10 @@ Nodes (0):
 Cohesion: 1.0
 Nodes (0):
 
+### Community 1124 - "Community 1124"
+Cohesion: 1.0
+Nodes (0):
+
 ## Knowledge Gaps
 - **Thin community `Community 274`** (2 nodes): `stream.ts`, `getCloudflareConfig()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
@@ -7102,261 +7107,263 @@ Nodes (0):
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
 - **Thin community `Community 995`** (1 nodes): `playwright.config.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 996`** (1 nodes): `types.ts`
+- **Thin community `Community 996`** (1 nodes): `analytics.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 997`** (1 nodes): `HeartIconFilled.tsx`
+- **Thin community `Community 997`** (1 nodes): `types.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 998`** (1 nodes): `client.tsx`
+- **Thin community `Community 998`** (1 nodes): `HeartIconFilled.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 999`** (1 nodes): `DefaultCatchBoundary.tsx`
+- **Thin community `Community 999`** (1 nodes): `client.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1000`** (1 nodes): `HomePage.test.tsx`
+- **Thin community `Community 1000`** (1 nodes): `DefaultCatchBoundary.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1001`** (1 nodes): `ProductCard.tsx`
+- **Thin community `Community 1001`** (1 nodes): `HomePage.test.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1002`** (1 nodes): `Upsell.tsx`
+- **Thin community `Community 1002`** (1 nodes): `ProductCard.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1003`** (1 nodes): `Checkout.test.tsx`
+- **Thin community `Community 1003`** (1 nodes): `Upsell.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1004`** (1 nodes): `Checkout.tsx`
+- **Thin community `Community 1004`** (1 nodes): `Checkout.test.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1005`** (1 nodes): `CustomerInfoSection.tsx`
+- **Thin community `Community 1005`** (1 nodes): `Checkout.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1006`** (1 nodes): `schema.ts`
+- **Thin community `Community 1006`** (1 nodes): `CustomerInfoSection.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1007`** (1 nodes): `DeliveryDetailsSection.tsx`
+- **Thin community `Community 1007`** (1 nodes): `schema.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1008`** (1 nodes): `checkoutStorage.test.ts`
+- **Thin community `Community 1008`** (1 nodes): `DeliveryDetailsSection.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1009`** (1 nodes): `deliveryFees.test.ts`
+- **Thin community `Community 1009`** (1 nodes): `checkoutStorage.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1010`** (1 nodes): `deriveCheckoutState.test.ts`
+- **Thin community `Community 1010`** (1 nodes): `deliveryFees.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1011`** (1 nodes): `billingDetailsSchema.ts`
+- **Thin community `Community 1011`** (1 nodes): `deriveCheckoutState.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1012`** (1 nodes): `checkoutFormSchema.ts`
+- **Thin community `Community 1012`** (1 nodes): `billingDetailsSchema.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1013`** (1 nodes): `customerDetailsSchema.ts`
+- **Thin community `Community 1013`** (1 nodes): `checkoutFormSchema.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1014`** (1 nodes): `deliveryDetailsSchema.ts`
+- **Thin community `Community 1014`** (1 nodes): `customerDetailsSchema.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1015`** (1 nodes): `webOrderSchema.ts`
+- **Thin community `Community 1015`** (1 nodes): `deliveryDetailsSchema.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1016`** (1 nodes): `types.ts`
+- **Thin community `Community 1016`** (1 nodes): `webOrderSchema.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1017`** (1 nodes): `utils.test.ts`
+- **Thin community `Community 1017`** (1 nodes): `types.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1018`** (1 nodes): `ProductFilterBar.tsx`
+- **Thin community `Community 1018`** (1 nodes): `utils.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1019`** (1 nodes): `BestSellersSection.test.tsx`
+- **Thin community `Community 1019`** (1 nodes): `ProductFilterBar.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1020`** (1 nodes): `HomeHero.tsx`
+- **Thin community `Community 1020`** (1 nodes): `BestSellersSection.test.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1021`** (1 nodes): `HomeHeroSection.tsx`
+- **Thin community `Community 1021`** (1 nodes): `HomeHero.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1022`** (1 nodes): `MobileMenu.tsx`
+- **Thin community `Community 1022`** (1 nodes): `HomeHeroSection.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1023`** (1 nodes): `constants.ts`
+- **Thin community `Community 1023`** (1 nodes): `MobileMenu.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1024`** (1 nodes): `navBarConstants.ts`
+- **Thin community `Community 1024`** (1 nodes): `constants.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1025`** (1 nodes): `About.tsx`
+- **Thin community `Community 1025`** (1 nodes): `navBarConstants.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1026`** (1 nodes): `AboutProduct.tsx`
+- **Thin community `Community 1026`** (1 nodes): `About.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1027`** (1 nodes): `ProductActions.test.tsx`
+- **Thin community `Community 1027`** (1 nodes): `AboutProduct.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1028`** (1 nodes): `ProductInfo.tsx`
+- **Thin community `Community 1028`** (1 nodes): `ProductActions.test.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1029`** (1 nodes): `ProductReviews.tsx`
+- **Thin community `Community 1029`** (1 nodes): `ProductInfo.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1030`** (1 nodes): `ProductsNavigationBar.tsx`
+- **Thin community `Community 1030`** (1 nodes): `ProductReviews.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1031`** (1 nodes): `ErrorMessage.tsx`
+- **Thin community `Community 1031`** (1 nodes): `ProductsNavigationBar.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1032`** (1 nodes): `ExistingReviewMessage.tsx`
+- **Thin community `Community 1032`** (1 nodes): `ErrorMessage.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1033`** (1 nodes): `ReviewForm.tsx`
+- **Thin community `Community 1033`** (1 nodes): `ExistingReviewMessage.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1034`** (1 nodes): `SuccessMessage.tsx`
+- **Thin community `Community 1034`** (1 nodes): `ReviewForm.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1035`** (1 nodes): `types.ts`
+- **Thin community `Community 1035`** (1 nodes): `SuccessMessage.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1036`** (1 nodes): `SavedBag.tsx`
+- **Thin community `Community 1036`** (1 nodes): `types.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1037`** (1 nodes): `SavedIcon.tsx`
+- **Thin community `Community 1037`** (1 nodes): `SavedBag.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1038`** (1 nodes): `CartIcon.tsx`
+- **Thin community `Community 1038`** (1 nodes): `SavedIcon.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1039`** (1 nodes): `ShoppingBag.test.tsx`
+- **Thin community `Community 1039`** (1 nodes): `CartIcon.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1040`** (1 nodes): `empty-state.tsx`
+- **Thin community `Community 1040`** (1 nodes): `ShoppingBag.test.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1041`** (1 nodes): `Maintenance.tsx`
+- **Thin community `Community 1041`** (1 nodes): `empty-state.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1042`** (1 nodes): `AnimatedCard.tsx`
+- **Thin community `Community 1042`** (1 nodes): `Maintenance.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1043`** (1 nodes): `accordion.tsx`
+- **Thin community `Community 1043`** (1 nodes): `AnimatedCard.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1044`** (1 nodes): `alert.tsx`
+- **Thin community `Community 1044`** (1 nodes): `accordion.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1045`** (1 nodes): `breadcrumb.tsx`
+- **Thin community `Community 1045`** (1 nodes): `alert.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1046`** (1 nodes): `button.tsx`
+- **Thin community `Community 1046`** (1 nodes): `breadcrumb.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1047`** (1 nodes): `card.tsx`
+- **Thin community `Community 1047`** (1 nodes): `button.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1048`** (1 nodes): `checkbox.tsx`
+- **Thin community `Community 1048`** (1 nodes): `card.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1049`** (1 nodes): `command.tsx`
+- **Thin community `Community 1049`** (1 nodes): `checkbox.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1050`** (1 nodes): `context-menu.tsx`
+- **Thin community `Community 1050`** (1 nodes): `command.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1051`** (1 nodes): `dialog.tsx`
+- **Thin community `Community 1051`** (1 nodes): `context-menu.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1052`** (1 nodes): `dropdown-menu.tsx`
+- **Thin community `Community 1052`** (1 nodes): `dialog.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1053`** (1 nodes): `form.tsx`
+- **Thin community `Community 1053`** (1 nodes): `dropdown-menu.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1054`** (1 nodes): `icons.tsx`
+- **Thin community `Community 1054`** (1 nodes): `form.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1055`** (1 nodes): `image-with-fallback.tsx`
+- **Thin community `Community 1055`** (1 nodes): `icons.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1056`** (1 nodes): `input-otp.tsx`
+- **Thin community `Community 1056`** (1 nodes): `image-with-fallback.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1057`** (1 nodes): `input-with-end-button.tsx`
+- **Thin community `Community 1057`** (1 nodes): `input-otp.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1058`** (1 nodes): `input.tsx`
+- **Thin community `Community 1058`** (1 nodes): `input-with-end-button.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1059`** (1 nodes): `label.tsx`
+- **Thin community `Community 1059`** (1 nodes): `input.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1060`** (1 nodes): `LeaveAReviewModalForm.tsx`
+- **Thin community `Community 1060`** (1 nodes): `label.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1061`** (1 nodes): `action-modal.tsx`
+- **Thin community `Community 1061`** (1 nodes): `LeaveAReviewModalForm.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1062`** (1 nodes): `welcomeBackModalAnimations.ts`
+- **Thin community `Community 1062`** (1 nodes): `action-modal.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1063`** (1 nodes): `index.ts`
+- **Thin community `Community 1063`** (1 nodes): `welcomeBackModalAnimations.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1064`** (1 nodes): `types.ts`
+- **Thin community `Community 1064`** (1 nodes): `index.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1065`** (1 nodes): `navigation-menu.tsx`
+- **Thin community `Community 1065`** (1 nodes): `types.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1066`** (1 nodes): `popover.tsx`
+- **Thin community `Community 1066`** (1 nodes): `navigation-menu.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1067`** (1 nodes): `radio-group.tsx`
+- **Thin community `Community 1067`** (1 nodes): `popover.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1068`** (1 nodes): `scroll-area.tsx`
+- **Thin community `Community 1068`** (1 nodes): `radio-group.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1069`** (1 nodes): `select.tsx`
+- **Thin community `Community 1069`** (1 nodes): `scroll-area.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1070`** (1 nodes): `separator.tsx`
+- **Thin community `Community 1070`** (1 nodes): `select.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1071`** (1 nodes): `sheet.tsx`
+- **Thin community `Community 1071`** (1 nodes): `separator.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1072`** (1 nodes): `table.tsx`
+- **Thin community `Community 1072`** (1 nodes): `sheet.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1073`** (1 nodes): `tabs.tsx`
+- **Thin community `Community 1073`** (1 nodes): `table.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1074`** (1 nodes): `textarea.tsx`
+- **Thin community `Community 1074`** (1 nodes): `tabs.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1075`** (1 nodes): `toggle-group.tsx`
+- **Thin community `Community 1075`** (1 nodes): `textarea.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1076`** (1 nodes): `toggle.tsx`
+- **Thin community `Community 1076`** (1 nodes): `toggle-group.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1077`** (1 nodes): `tooltip.tsx`
+- **Thin community `Community 1077`** (1 nodes): `toggle.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1078`** (1 nodes): `config.ts`
+- **Thin community `Community 1078`** (1 nodes): `tooltip.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1079`** (1 nodes): `use-store-modal.tsx`
+- **Thin community `Community 1079`** (1 nodes): `config.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1080`** (1 nodes): `useOrganizationModal.tsx`
+- **Thin community `Community 1080`** (1 nodes): `use-store-modal.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1081`** (1 nodes): `useStorefrontObservability.ts`
+- **Thin community `Community 1081`** (1 nodes): `useOrganizationModal.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1082`** (1 nodes): `constants.ts`
+- **Thin community `Community 1082`** (1 nodes): `useStorefrontObservability.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1083`** (1 nodes): `countries.ts`
+- **Thin community `Community 1083`** (1 nodes): `constants.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1084`** (1 nodes): `feeUtils.test.ts`
+- **Thin community `Community 1084`** (1 nodes): `countries.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1085`** (1 nodes): `ghana.ts`
+- **Thin community `Community 1085`** (1 nodes): `feeUtils.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1086`** (1 nodes): `ghanaRegions.ts`
+- **Thin community `Community 1086`** (1 nodes): `ghana.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1087`** (1 nodes): `maintenanceUtils.test.ts`
+- **Thin community `Community 1087`** (1 nodes): `ghanaRegions.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1088`** (1 nodes): `index.ts`
+- **Thin community `Community 1088`** (1 nodes): `maintenanceUtils.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1089`** (1 nodes): `store.ts`
+- **Thin community `Community 1089`** (1 nodes): `index.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1090`** (1 nodes): `bag.ts`
+- **Thin community `Community 1090`** (1 nodes): `store.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1091`** (1 nodes): `bagItem.ts`
+- **Thin community `Community 1091`** (1 nodes): `bag.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1092`** (1 nodes): `category.ts`
+- **Thin community `Community 1092`** (1 nodes): `bagItem.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1093`** (1 nodes): `organization.ts`
+- **Thin community `Community 1093`** (1 nodes): `category.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1094`** (1 nodes): `product.ts`
+- **Thin community `Community 1094`** (1 nodes): `organization.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1095`** (1 nodes): `store.ts`
+- **Thin community `Community 1095`** (1 nodes): `product.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1096`** (1 nodes): `subcategory.ts`
+- **Thin community `Community 1096`** (1 nodes): `store.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1097`** (1 nodes): `user.ts`
+- **Thin community `Community 1097`** (1 nodes): `subcategory.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1098`** (1 nodes): `states.ts`
+- **Thin community `Community 1098`** (1 nodes): `user.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1099`** (1 nodes): `storefrontFailureObservability.test.ts`
+- **Thin community `Community 1099`** (1 nodes): `states.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1100`** (1 nodes): `storefrontJourneyEvents.test.ts`
+- **Thin community `Community 1100`** (1 nodes): `storefrontFailureObservability.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1101`** (1 nodes): `utils.test.ts`
+- **Thin community `Community 1101`** (1 nodes): `storefrontJourneyEvents.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1102`** (1 nodes): `routeTree.gen.ts`
+- **Thin community `Community 1102`** (1 nodes): `utils.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1103`** (1 nodes): `__root.tsx`
+- **Thin community `Community 1103`** (1 nodes): `routeTree.gen.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1104`** (1 nodes): `$orderItemId.review.tsx`
+- **Thin community `Community 1104`** (1 nodes): `__root.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1105`** (1 nodes): `index.tsx`
+- **Thin community `Community 1105`** (1 nodes): `$orderItemId.review.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1106`** (1 nodes): `$subcategorySlug.tsx`
+- **Thin community `Community 1106`** (1 nodes): `index.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1107`** (1 nodes): `index.tsx`
+- **Thin community `Community 1107`** (1 nodes): `$subcategorySlug.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1108`** (1 nodes): `rewards.index.tsx`
+- **Thin community `Community 1108`** (1 nodes): `index.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1109`** (1 nodes): `shop.saved.index.tsx`
+- **Thin community `Community 1109`** (1 nodes): `rewards.index.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1110`** (1 nodes): `index.tsx`
+- **Thin community `Community 1110`** (1 nodes): `shop.saved.index.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1111`** (1 nodes): `bag.index.tsx`
+- **Thin community `Community 1111`** (1 nodes): `index.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1112`** (1 nodes): `complete.tsx`
+- **Thin community `Community 1112`** (1 nodes): `bag.index.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1113`** (1 nodes): `incomplete.tsx`
+- **Thin community `Community 1113`** (1 nodes): `complete.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1114`** (1 nodes): `index.tsx`
+- **Thin community `Community 1114`** (1 nodes): `incomplete.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1115`** (1 nodes): `pending.tsx`
+- **Thin community `Community 1115`** (1 nodes): `index.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1116`** (1 nodes): `ssr.tsx`
+- **Thin community `Community 1116`** (1 nodes): `pending.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1117`** (1 nodes): `tailwind.config.js`
+- **Thin community `Community 1117`** (1 nodes): `ssr.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1118`** (1 nodes): `vitest.config.ts`
+- **Thin community `Community 1118`** (1 nodes): `tailwind.config.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1119`** (1 nodes): `vitest.setup.ts`
+- **Thin community `Community 1119`** (1 nodes): `vitest.config.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1120`** (1 nodes): `index.js`
+- **Thin community `Community 1120`** (1 nodes): `vitest.setup.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1121`** (1 nodes): `harness-app-registry.test.ts`
+- **Thin community `Community 1121`** (1 nodes): `index.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1122`** (1 nodes): `valkey-runtime-app.test.ts`
+- **Thin community `Community 1122`** (1 nodes): `harness-app-registry.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1123`** (1 nodes): `harness-behavior-scenarios.test.ts`
+- **Thin community `Community 1123`** (1 nodes): `valkey-runtime-app.test.ts`
+  Too small to be a meaningful cluster - may be noise or needs more connections extracted.
+- **Thin community `Community 1124`** (1 nodes): `harness-behavior-scenarios.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
 
 ## Suggested Questions
