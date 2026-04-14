@@ -566,6 +566,12 @@ async function createFixtureRepo() {
   await write("packages/athena-webapp/vite.config.ts", "export default {};\n", rootDir);
 
   await write("packages/storefront-webapp/src/assets/placeholder.png", "", rootDir);
+  await write(
+    "packages/storefront-webapp/tsconfig.json",
+    JSON.stringify({ compilerOptions: {} }, null, 2),
+    rootDir
+  );
+  await write("packages/storefront-webapp/vite.config.ts", "export default {};\n", rootDir);
   await write("packages/storefront-webapp/src/client.tsx", "export {};\n", rootDir);
   await write("packages/storefront-webapp/src/config.ts", "export {};\n", rootDir);
   await write("packages/storefront-webapp/src/index.css", "body {}\n", rootDir);
@@ -653,7 +659,9 @@ describe("runHarnessAudit", () => {
             {
               name: "runtime-routes",
               pathPrefixes: [
+                "packages/storefront-webapp/tsconfig.json",
                 "packages/storefront-webapp/src/client.tsx",
+                "packages/storefront-webapp/vite.config.ts",
                 "packages/storefront-webapp/src/router.tsx",
                 "packages/storefront-webapp/src/routeTree.gen.ts",
                 "packages/storefront-webapp/src/routes/",

@@ -15,7 +15,7 @@ This key-folder index highlights the main directories agents are likely to need 
 
 ## Backend and test surfaces
 
-- [`convex`](../../convex) — Convex functions, HTTP composition, schemas, and backend tests. Currently 209 file(s); key children: README.md, _generated, app.ts, auth.config.js, auth.ts.
+- [`convex`](../../convex) — Convex functions, HTTP composition, schemas, and backend tests. Currently 210 file(s); key children: README.md, _generated, app.ts, auth.config.js, auth.ts.
 - [`src/tests`](../../src/tests) — Focused browser-facing regression tests. Currently 6 file(s); key children: README.md, SUMMARY.md, pos.
 - [`src/test`](../../src/test) — Package test harness helpers and setup. Currently 1 file(s); key children: setup.ts.
 

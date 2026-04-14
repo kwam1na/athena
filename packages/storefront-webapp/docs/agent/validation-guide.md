@@ -6,13 +6,24 @@ Use this decision guide to answer “what should I run for this change?” based
 
 ## Route or UI-only edits
 
-Touched surfaces: `src/assets`, `src/client.tsx`, `src/config.ts`, `src/index.css`, `src/main.tsx`, `src/router.tsx`, `src/routes`, `src/components`, `src/hooks`, `src/contexts`, `src/routeTree.gen.ts`, `src/ssr.tsx`
+Touched surfaces: `src/assets`, `src/config.ts`, `src/index.css`, `src/routes`, `src/components`, `src/hooks`, `src/contexts`
 
 Run:
 
 - `bun run --filter '@athena/storefront-webapp' test`
 
 Start here for most layout, component, and route behavior changes that do not alter the checkout or browser-journey contract.
+
+## Route runtime or build-pipeline edits
+
+Touched surfaces: `tsconfig.json`, `src/client.tsx`, `src/main.tsx`, `src/router.tsx`, `src/routeTree.gen.ts`, `src/ssr.tsx`, `vite.config.ts`
+
+Run:
+
+- `bun run --filter '@athena/storefront-webapp' test`
+- `bunx tsc --noEmit -p packages/storefront-webapp/tsconfig.json`
+
+Use this when the TanStack Start bootstrap, generated router state, or TypeScript/build wiring changes.
 
 ## Shared-lib, utility, or API-wrapper edits
 

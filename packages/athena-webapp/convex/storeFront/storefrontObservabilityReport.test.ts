@@ -1,13 +1,14 @@
 import { describe, expect, it } from "vitest";
 import type { Doc, Id } from "../_generated/dataModel";
 import { buildStorefrontObservabilityReport } from "./storefrontObservabilityReport";
+import { SYNTHETIC_MONITOR_ORIGIN } from "./syntheticMonitor";
 
 type AnalyticsDoc = Doc<"analytics">;
 
 function createAnalyticsEvent(
   overrides: Partial<AnalyticsDoc> & {
     data?: Record<string, unknown>;
-  } = {}
+  } = {},
 ): AnalyticsDoc {
   const { data, ...restOverrides } = overrides;
   const baseEvent: AnalyticsDoc = {
@@ -83,6 +84,8 @@ describe("buildStorefrontObservabilityReport", () => {
     expect(report.summary.totalEvents).toBe(4);
     expect(report.summary.totalFailures).toBe(1);
     expect(report.summary.uniqueSessions).toBe(3);
+    expect(report.summary.syntheticEvents).toBe(0);
+    expect(report.summary.syntheticFailures).toBe(0);
 
     expect(report.funnel).toEqual([
       {
@@ -139,6 +142,7 @@ describe("buildStorefrontObservabilityReport", () => {
       createAnalyticsEvent({
         _id: "analytics_failure_2" as Id<"analytics">,
         _creationTime: 200,
+        origin: SYNTHETIC_MONITOR_ORIGIN,
         data: {
           journey: "checkout",
           step: "payment_submission",
@@ -168,11 +172,15 @@ describe("buildStorefrontObservabilityReport", () => {
         count: 2,
         uniqueSessions: 2,
         latestEventTime: 200,
+        trafficSource: "mixed",
+        syntheticEvents: 1,
+        customerEvents: 1,
         sessions: ["session-a", "session-b"],
         sample: {
           journey: "checkout",
           step: "payment_submission",
           route: "/checkout",
+          origin: "homepage",
           errorCode: "timeout",
           errorMessage: "Request timed out",
         },
@@ -182,15 +190,22 @@ describe("buildStorefrontObservabilityReport", () => {
         count: 1,
         uniqueSessions: 1,
         latestEventTime: 300,
+        trafficSource: "customer",
+        syntheticEvents: 0,
+        customerEvents: 1,
         sessions: ["session-c"],
         sample: {
           journey: "auth",
           step: "auth_verification",
           route: "/checkout/login",
+          origin: "homepage",
           errorCode: undefined,
           errorMessage: undefined,
         },
       },
     ]);
+
+    expect(report.summary.syntheticEvents).toBe(1);
+    expect(report.summary.syntheticFailures).toBe(1);
   });
 });

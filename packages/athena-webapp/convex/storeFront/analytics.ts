@@ -5,6 +5,7 @@ import {
   buildStorefrontObservabilityReport,
   STOREFRONT_OBSERVABILITY_ACTION,
 } from "./storefrontObservabilityReport";
+import { SYNTHETIC_MONITOR_ORIGIN } from "./syntheticMonitor";
 
 const entity = "analytics";
 const MAX_ANALYTICS_RESULTS = 500;
@@ -16,7 +17,7 @@ const MAX_PRODUCT_SKUS_PER_PRODUCT = 50;
 const MAX_STOREFRONT_OBSERVABILITY_RESULTS = 2000;
 
 function extractPromoCodeId(
-  data: Record<string, any>
+  data: Record<string, any>,
 ): Id<"promoCode"> | undefined {
   const promoCodeId = data.promoCodeId;
 
@@ -29,69 +30,95 @@ function getAnalyticsByStoreQuery(
   ctx: QueryCtx,
   storeId: Id<"store">,
   startDate?: number,
-  endDate?: number
+  endDate?: number,
+  options?: {
+    includeSyntheticMonitor?: boolean;
+  },
 ) {
+  const includeSyntheticMonitor = options?.includeSyntheticMonitor ?? false;
+  let query;
+
   if (startDate !== undefined && endDate !== undefined) {
-    return ctx.db.query(entity).withIndex("by_storeId", (q) =>
-      q.eq("storeId", storeId)
-        .gte("_creationTime", startDate)
-        .lte("_creationTime", endDate)
-    );
+    query = ctx.db
+      .query(entity)
+      .withIndex("by_storeId", (q) =>
+        q
+          .eq("storeId", storeId)
+          .gte("_creationTime", startDate)
+          .lte("_creationTime", endDate),
+      );
+  } else if (startDate !== undefined) {
+    query = ctx.db
+      .query(entity)
+      .withIndex("by_storeId", (q) =>
+        q.eq("storeId", storeId).gte("_creationTime", startDate),
+      );
+  } else if (endDate !== undefined) {
+    query = ctx.db
+      .query(entity)
+      .withIndex("by_storeId", (q) =>
+        q.eq("storeId", storeId).lte("_creationTime", endDate),
+      );
+  } else {
+    query = ctx.db
+      .query(entity)
+      .withIndex("by_storeId", (q) => q.eq("storeId", storeId));
   }
 
-  if (startDate !== undefined) {
-    return ctx.db.query(entity).withIndex("by_storeId", (q) =>
-      q.eq("storeId", storeId).gte("_creationTime", startDate)
-    );
+  if (includeSyntheticMonitor) {
+    return query;
   }
 
-  if (endDate !== undefined) {
-    return ctx.db.query(entity).withIndex("by_storeId", (q) =>
-      q.eq("storeId", storeId).lte("_creationTime", endDate)
-    );
-  }
-
-  return ctx.db
-    .query(entity)
-    .withIndex("by_storeId", (q) => q.eq("storeId", storeId));
+  return query.filter((q) =>
+    q.neq(q.field("origin"), SYNTHETIC_MONITOR_ORIGIN),
+  );
 }
 
 function getCompletedOrdersQuery(
   ctx: QueryCtx,
   storeId: Id<"store">,
   startDate?: number,
-  endDate?: number
+  endDate?: number,
 ) {
   if (startDate !== undefined && endDate !== undefined) {
-    return ctx.db.query("onlineOrder").withIndex("by_storeId_status", (q) =>
-      q.eq("storeId", storeId)
-        .eq("status", "completed")
-        .gte("_creationTime", startDate)
-        .lte("_creationTime", endDate)
-    );
+    return ctx.db
+      .query("onlineOrder")
+      .withIndex("by_storeId_status", (q) =>
+        q
+          .eq("storeId", storeId)
+          .eq("status", "completed")
+          .gte("_creationTime", startDate)
+          .lte("_creationTime", endDate),
+      );
   }
 
   if (startDate !== undefined) {
-    return ctx.db.query("onlineOrder").withIndex("by_storeId_status", (q) =>
-      q
-        .eq("storeId", storeId)
-        .eq("status", "completed")
-        .gte("_creationTime", startDate)
-    );
+    return ctx.db
+      .query("onlineOrder")
+      .withIndex("by_storeId_status", (q) =>
+        q
+          .eq("storeId", storeId)
+          .eq("status", "completed")
+          .gte("_creationTime", startDate),
+      );
   }
 
   if (endDate !== undefined) {
-    return ctx.db.query("onlineOrder").withIndex("by_storeId_status", (q) =>
-      q
-        .eq("storeId", storeId)
-        .eq("status", "completed")
-        .lte("_creationTime", endDate)
-    );
+    return ctx.db
+      .query("onlineOrder")
+      .withIndex("by_storeId_status", (q) =>
+        q
+          .eq("storeId", storeId)
+          .eq("status", "completed")
+          .lte("_creationTime", endDate),
+      );
   }
 
-  return ctx.db.query("onlineOrder").withIndex("by_storeId_status", (q) =>
-    q.eq("storeId", storeId).eq("status", "completed")
-  );
+  return ctx.db
+    .query("onlineOrder")
+    .withIndex("by_storeId_status", (q) =>
+      q.eq("storeId", storeId).eq("status", "completed"),
+    );
 }
 
 function getAnalyticsByStoreAndActionQuery(
@@ -99,39 +126,62 @@ function getAnalyticsByStoreAndActionQuery(
   storeId: Id<"store">,
   action: string,
   startDate?: number,
-  endDate?: number
+  endDate?: number,
+  options?: {
+    includeSyntheticMonitor?: boolean;
+  },
 ) {
+  const includeSyntheticMonitor = options?.includeSyntheticMonitor ?? false;
+  let query;
+
   if (startDate !== undefined && endDate !== undefined) {
-    return ctx.db.query(entity).withIndex("by_storeId_action", (q) =>
-      q.eq("storeId", storeId)
-        .eq("action", action)
-        .gte("_creationTime", startDate)
-        .lte("_creationTime", endDate)
-    );
+    query = ctx.db
+      .query(entity)
+      .withIndex("by_storeId_action", (q) =>
+        q
+          .eq("storeId", storeId)
+          .eq("action", action)
+          .gte("_creationTime", startDate)
+          .lte("_creationTime", endDate),
+      );
+  } else if (startDate !== undefined) {
+    query = ctx.db
+      .query(entity)
+      .withIndex("by_storeId_action", (q) =>
+        q
+          .eq("storeId", storeId)
+          .eq("action", action)
+          .gte("_creationTime", startDate),
+      );
+  } else if (endDate !== undefined) {
+    query = ctx.db
+      .query(entity)
+      .withIndex("by_storeId_action", (q) =>
+        q
+          .eq("storeId", storeId)
+          .eq("action", action)
+          .lte("_creationTime", endDate),
+      );
+  } else {
+    query = ctx.db
+      .query(entity)
+      .withIndex("by_storeId_action", (q) =>
+        q.eq("storeId", storeId).eq("action", action),
+      );
   }
 
-  if (startDate !== undefined) {
-    return ctx.db.query(entity).withIndex("by_storeId_action", (q) =>
-      q.eq("storeId", storeId).eq("action", action).gte("_creationTime", startDate)
-    );
+  if (includeSyntheticMonitor) {
+    return query;
   }
 
-  if (endDate !== undefined) {
-    return ctx.db.query(entity).withIndex("by_storeId_action", (q) =>
-      q.eq("storeId", storeId).eq("action", action).lte("_creationTime", endDate)
-    );
-  }
-
-  return ctx.db
-    .query(entity)
-    .withIndex("by_storeId_action", (q) =>
-      q.eq("storeId", storeId).eq("action", action)
-    );
+  return query.filter((q) =>
+    q.neq(q.field("origin"), SYNTHETIC_MONITOR_ORIGIN),
+  );
 }
 
 async function getSkuMapForProducts(
   ctx: QueryCtx,
-  productIds: Id<"product">[]
+  productIds: Id<"product">[],
 ): Promise<Map<string, Doc<"productSku">>> {
   const skuMap = new Map<string, Doc<"productSku">>();
   const uniqueProductIds = [...new Set(productIds)];
@@ -146,7 +196,7 @@ async function getSkuMapForProducts(
       skus.forEach((sku) => {
         skuMap.set(`${sku.productId}-${sku.sku}`, sku);
       });
-    })
+    }),
   );
 
   return skuMap;
@@ -182,7 +232,7 @@ export const updateOwner = mutation({
     const records = await ctx.db
       .query(entity)
       .withIndex("by_storeFrontUserId", (q) =>
-        q.eq("storeFrontUserId", args.guestId)
+        q.eq("storeFrontUserId", args.guestId),
       )
       .take(MAX_ANALYTICS_MUTATIONS);
 
@@ -191,8 +241,8 @@ export const updateOwner = mutation({
       records.map((record) =>
         ctx.db.patch("analytics", record._id, {
           storeFrontUserId: args.userId,
-        })
-      )
+        }),
+      ),
     );
 
     return { updated: records.length };
@@ -222,8 +272,9 @@ export const getAll = query({
           q
             .eq("storeId", args.storeId)
             .eq("action", args.action!)
-            .eq("productId", args.productId)
+            .eq("productId", args.productId),
         )
+        .filter((q) => q.neq(q.field("origin"), SYNTHETIC_MONITOR_ORIGIN))
         .order("desc")
         .take(MAX_ANALYTICS_RESULTS);
     }
@@ -232,8 +283,9 @@ export const getAll = query({
       return await ctx.db
         .query(entity)
         .withIndex("by_storeId_action", (q) =>
-          q.eq("storeId", args.storeId).eq("action", args.action!)
+          q.eq("storeId", args.storeId).eq("action", args.action!),
         )
+        .filter((q) => q.neq(q.field("origin"), SYNTHETIC_MONITOR_ORIGIN))
         .order("desc")
         .take(MAX_ANALYTICS_RESULTS);
     }
@@ -241,6 +293,7 @@ export const getAll = query({
     return await ctx.db
       .query(entity)
       .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
+      .filter((q) => q.neq(q.field("origin"), SYNTHETIC_MONITOR_ORIGIN))
       .order("desc")
       .take(250);
     // .collect();
@@ -261,8 +314,9 @@ export const getAllInternal = internalQuery({
           q
             .eq("storeId", args.storeId)
             .eq("action", args.action!)
-            .eq("productId", args.productId)
+            .eq("productId", args.productId),
         )
+        .filter((q) => q.neq(q.field("origin"), SYNTHETIC_MONITOR_ORIGIN))
         .order("desc")
         .take(MAX_ANALYTICS_RESULTS);
     }
@@ -271,8 +325,9 @@ export const getAllInternal = internalQuery({
       return await ctx.db
         .query(entity)
         .withIndex("by_storeId_action", (q) =>
-          q.eq("storeId", args.storeId).eq("action", args.action!)
+          q.eq("storeId", args.storeId).eq("action", args.action!),
         )
+        .filter((q) => q.neq(q.field("origin"), SYNTHETIC_MONITOR_ORIGIN))
         .order("desc")
         .take(MAX_ANALYTICS_RESULTS);
     }
@@ -280,6 +335,7 @@ export const getAllInternal = internalQuery({
     return await ctx.db
       .query(entity)
       .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
+      .filter((q) => q.neq(q.field("origin"), SYNTHETIC_MONITOR_ORIGIN))
       .order("desc")
       .take(250);
   },
@@ -292,20 +348,26 @@ export const getAllPaginated = query({
     action: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const baseQuery = args.action
+    const indexedQuery = args.action
       ? ctx.db
           .query(entity)
           .withIndex("by_storeId_action", (q) =>
-            q.eq("storeId", args.storeId).eq("action", args.action!)
+            q.eq("storeId", args.storeId).eq("action", args.action!),
           )
       : ctx.db
           .query(entity)
           .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId));
 
-    const { page, continueCursor, isDone } = await baseQuery.order("desc").paginate({
-      numItems: 10,
-      cursor: args.cursor,
-    });
+    const baseQuery = indexedQuery.filter((q) =>
+      q.neq(q.field("origin"), SYNTHETIC_MONITOR_ORIGIN),
+    );
+
+    const { page, continueCursor, isDone } = await baseQuery
+      .order("desc")
+      .paginate({
+        numItems: 10,
+        cursor: args.cursor,
+      });
 
     return {
       items: page,
@@ -334,23 +396,22 @@ export const getProductViewCount = query({
       ctx.db
         .query(entity)
         .withIndex("by_action_productId", (q) =>
-          q.eq("action", "viewed_product").eq("productId", args.productId)
+          q.eq("action", "viewed_product").eq("productId", args.productId),
         )
+        .filter((q) => q.neq(q.field("origin"), SYNTHETIC_MONITOR_ORIGIN))
         .take(MAX_PRODUCT_VIEW_RECORDS),
       ctx.db
         .query(entity)
         .withIndex("by_action_productId", (q) =>
-          q.eq("action", "view_product").eq("productId", args.productId)
+          q.eq("action", "view_product").eq("productId", args.productId),
         )
+        .filter((q) => q.neq(q.field("origin"), SYNTHETIC_MONITOR_ORIGIN))
         .take(MAX_PRODUCT_VIEW_RECORDS),
     ]);
 
-    const totalRecords = [
-      ...viewedProductRecords,
-      ...legacyViewProductRecords,
-    ];
+    const totalRecords = [...viewedProductRecords, ...legacyViewProductRecords];
     const dailyRecords = totalRecords.filter(
-      (rec) => rec._creationTime >= args.currentDayStartMs
+      (rec) => rec._creationTime >= args.currentDayStartMs,
     );
 
     return {
@@ -367,9 +428,8 @@ export const getByPromoCodeId = query({
   handler: async (ctx, args) => {
     return await ctx.db
       .query(entity)
-      .withIndex("by_promoCodeId", (q) =>
-        q.eq("promoCodeId", args.promoCodeId)
-      )
+      .withIndex("by_promoCodeId", (q) => q.eq("promoCodeId", args.promoCodeId))
+      .filter((q) => q.neq(q.field("origin"), SYNTHETIC_MONITOR_ORIGIN))
       .order("desc")
       .take(MAX_PROMO_CODE_ANALYTICS_RESULTS);
   },
@@ -388,14 +448,14 @@ export const clear = mutation({
         .withIndex("by_storeFrontUserId_storeId", (q) =>
           q
             .eq("storeFrontUserId", args.storeFrontUserId)
-            .eq("storeId", args.storeId)
+            .eq("storeId", args.storeId),
         )
-        .filter((q) =>
-          q.eq(q.field("action"), args.action)
-        )
+        .filter((q) => q.eq(q.field("action"), args.action))
         .take(MAX_ANALYTICS_MUTATIONS);
 
-      await Promise.all(records.map((record) => ctx.db.delete("analytics", record._id)));
+      await Promise.all(
+        records.map((record) => ctx.db.delete("analytics", record._id)),
+      );
 
       return {
         deleted: records.length,
@@ -406,11 +466,13 @@ export const clear = mutation({
         .withIndex("by_storeFrontUserId_storeId", (q) =>
           q
             .eq("storeFrontUserId", args.storeFrontUserId)
-            .eq("storeId", args.storeId)
+            .eq("storeId", args.storeId),
         )
         .take(MAX_ANALYTICS_MUTATIONS);
 
-      await Promise.all(records.map((record) => ctx.db.delete("analytics", record._id)));
+      await Promise.all(
+        records.map((record) => ctx.db.delete("analytics", record._id)),
+      );
 
       return {
         deleted: records.length,
@@ -430,7 +492,7 @@ export const getEnhancedAnalytics = query({
       ctx,
       args.storeId,
       args.startDate,
-      args.endDate
+      args.endDate,
     )
       .order("desc")
       .take(MAX_ANALYTICS_RESULTS);
@@ -442,22 +504,22 @@ export const getEnhancedAnalytics = query({
 
     // Product view metrics
     const productViews = analytics.filter((a) =>
-      ["viewed_product", "view_product"].includes(a.action)
+      ["viewed_product", "view_product"].includes(a.action),
     );
 
     // Cart metrics (using actual tracked actions)
     const cartActions = analytics.filter((a) =>
-      ["added_product_to_bag", "updated_product_in_bag"].includes(a.action)
+      ["added_product_to_bag", "updated_product_in_bag"].includes(a.action),
     );
 
     // Checkout metrics
     const checkoutActions = analytics.filter((a) =>
-      ["initiated_checkout", "checkout_initiated"].includes(a.action)
+      ["initiated_checkout", "checkout_initiated"].includes(a.action),
     );
 
     // Purchase metrics
     const purchaseActions = analytics.filter((a) =>
-      ["finalized_checkout", "checkout_finalized"].includes(a.action)
+      ["finalized_checkout", "checkout_finalized"].includes(a.action),
     );
 
     // Device breakdown
@@ -468,7 +530,7 @@ export const getEnhancedAnalytics = query({
         else acc.unknown++;
         return acc;
       },
-      { mobile: 0, desktop: 0, unknown: 0 }
+      { mobile: 0, desktop: 0, unknown: 0 },
     );
 
     // Calculate conversion rates
@@ -503,7 +565,7 @@ export const getEnhancedAnalytics = query({
         overallConversionRate:
           productViews.length > 0
             ? Math.round(
-                (purchaseActions.length / productViews.length) * 100 * 100
+                (purchaseActions.length / productViews.length) * 100 * 100,
               ) / 100
             : 0,
       },
@@ -524,14 +586,14 @@ export const getRevenueAnalytics = query({
       ctx,
       args.storeId,
       args.startDate,
-      args.endDate
+      args.endDate,
     )
       .order("desc")
       .take(MAX_REPORTING_ORDERS);
 
     const totalRevenue = orders.reduce(
       (sum, order) => sum + (order.amount || 0),
-      0
+      0,
     );
     const totalOrders = orders.length;
     const averageOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
@@ -543,7 +605,7 @@ export const getRevenueAnalytics = query({
         acc[day] = (acc[day] || 0) + (order.amount || 0);
         return acc;
       },
-      {} as Record<string, number>
+      {} as Record<string, number>,
     );
 
     return {
@@ -567,7 +629,7 @@ export const getTopProducts = query({
       ctx,
       args.storeId,
       args.startDate,
-      args.endDate
+      args.endDate,
     )
       .order("desc")
       .take(MAX_PRODUCT_VIEW_RECORDS);
@@ -577,7 +639,7 @@ export const getTopProducts = query({
       .filter(
         (a) =>
           ["viewed_product", "view_product"].includes(a.action) &&
-          a.data?.product
+          a.data?.product,
       )
       .reduce(
         (acc, a) => {
@@ -585,7 +647,7 @@ export const getTopProducts = query({
           acc[productId] = (acc[productId] || 0) + 1;
           return acc;
         },
-        {} as Record<string, number>
+        {} as Record<string, number>,
       );
 
     // Sort and limit results
@@ -609,7 +671,7 @@ export const getVisitorInsights = query({
       ctx,
       args.storeId,
       args.startDate,
-      args.endDate
+      args.endDate,
     )
       .order("desc")
       .take(5000);
@@ -621,12 +683,12 @@ export const getVisitorInsights = query({
         acc[hour] = (acc[hour] || 0) + 1;
         return acc;
       },
-      {} as Record<number, number>
+      {} as Record<number, number>,
     );
 
     // Find peak hour
     const peakHour = Object.entries(visitorsByHour).sort(
-      ([, a], [, b]) => b - a
+      ([, a], [, b]) => b - a,
     )[0]?.[0];
 
     // Calculate returning visitors
@@ -642,15 +704,15 @@ export const getVisitorInsights = query({
           .withIndex("by_storeFrontUserId", (q) =>
             q
               .eq("storeFrontUserId", userId)
-              .lt("_creationTime", args.startDate ?? 0)
+              .lt("_creationTime", args.startDate ?? 0),
           )
           .first();
         return previousActivity ? 1 : 0;
-      })
+      }),
     );
     const returningVisitorCount = returningVisitorChecks.reduce(
       (sum: number, val: number) => sum + val,
-      0
+      0,
     );
 
     return {
@@ -672,8 +734,8 @@ export const getStoreActivityTimeline = query({
         v.literal("24h"),
         v.literal("7d"),
         v.literal("30d"),
-        v.literal("all")
-      )
+        v.literal("all"),
+      ),
     ),
     currentTimeMs: v.number(),
   },
@@ -728,7 +790,7 @@ export const getStoreActivityTimeline = query({
       ctx,
       storeId,
       timeFilter,
-      undefined
+      undefined,
     )
       .order("desc")
       .take(limit);
@@ -742,7 +804,10 @@ export const getStoreActivityTimeline = query({
     await Promise.all(
       userIds.map(async (userId) => {
         try {
-          const user = await ctx.db.get("storeFrontUser", userId as Id<"storeFrontUser">);
+          const user = await ctx.db.get(
+            "storeFrontUser",
+            userId as Id<"storeFrontUser">,
+          );
           if (user && "email" in user) {
             userData.set(userId, { email: user.email });
           }
@@ -756,7 +821,7 @@ export const getStoreActivityTimeline = query({
             // User not found in either table
           }
         }
-      })
+      }),
     );
 
     // Batch fetch product data
@@ -764,7 +829,7 @@ export const getStoreActivityTimeline = query({
       ...new Set(
         analytics
           .filter((a) => a.data.product)
-          .map((a) => a.data.product as Id<"product">)
+          .map((a) => a.data.product as Id<"product">),
       ),
     ];
 
@@ -775,7 +840,7 @@ export const getStoreActivityTimeline = query({
         } catch {
           return null;
         }
-      })
+      }),
     );
 
     const productMap = new Map();
@@ -831,7 +896,8 @@ export const getStorefrontObservabilityReport = query({
       args.storeId,
       STOREFRONT_OBSERVABILITY_ACTION,
       args.startDate,
-      args.endDate
+      args.endDate,
+      { includeSyntheticMonitor: true },
     )
       .order("desc")
       .take(MAX_STOREFRONT_OBSERVABILITY_RESULTS);
@@ -852,7 +918,7 @@ export const getConsolidatedAnalytics = query({
       ctx,
       args.storeId,
       args.startDate,
-      args.endDate
+      args.endDate,
     )
       .order("desc")
       .take(MAX_PRODUCT_VIEW_RECORDS);
@@ -864,22 +930,22 @@ export const getConsolidatedAnalytics = query({
 
     // Product view metrics
     const productViews = analytics.filter((a) =>
-      ["viewed_product", "view_product"].includes(a.action)
+      ["viewed_product", "view_product"].includes(a.action),
     );
 
     // Cart metrics
     const cartActions = analytics.filter((a) =>
-      ["added_product_to_bag", "updated_product_in_bag"].includes(a.action)
+      ["added_product_to_bag", "updated_product_in_bag"].includes(a.action),
     );
 
     // Checkout metrics
     const checkoutActions = analytics.filter((a) =>
-      ["initiated_checkout", "checkout_initiated"].includes(a.action)
+      ["initiated_checkout", "checkout_initiated"].includes(a.action),
     );
 
     // Purchase metrics
     const purchaseActions = analytics.filter((a) =>
-      ["finalized_checkout", "checkout_finalized"].includes(a.action)
+      ["finalized_checkout", "checkout_finalized"].includes(a.action),
     );
 
     // Device breakdown
@@ -890,7 +956,7 @@ export const getConsolidatedAnalytics = query({
         else acc.unknown++;
         return acc;
       },
-      { mobile: 0, desktop: 0, unknown: 0 }
+      { mobile: 0, desktop: 0, unknown: 0 },
     );
 
     // Calculate conversion rates
@@ -912,7 +978,7 @@ export const getConsolidatedAnalytics = query({
       .filter(
         (a) =>
           ["viewed_product", "view_product"].includes(a.action) &&
-          a.data?.product
+          a.data?.product,
       )
       .reduce(
         (acc, a) => {
@@ -920,7 +986,7 @@ export const getConsolidatedAnalytics = query({
           acc[productId] = (acc[productId] || 0) + 1;
           return acc;
         },
-        {} as Record<string, number>
+        {} as Record<string, number>,
       );
 
     const topProducts = Object.entries(productViews_TopProducts)
@@ -935,25 +1001,25 @@ export const getConsolidatedAnalytics = query({
         acc[hour] = (acc[hour] || 0) + 1;
         return acc;
       },
-      {} as Record<number, number>
+      {} as Record<number, number>,
     );
 
     const peakHour = Object.entries(visitorsByHour).sort(
-      ([, a], [, b]) => b - a
+      ([, a], [, b]) => b - a,
     )[0]?.[0];
 
     const orders = await getCompletedOrdersQuery(
       ctx,
       args.storeId,
       args.startDate,
-      args.endDate
+      args.endDate,
     )
       .order("desc")
       .take(MAX_REPORTING_ORDERS);
 
     const totalRevenue = orders.reduce(
       (sum, order) => sum + (order.amount || 0),
-      0
+      0,
     );
     const totalOrders = orders.length;
     const averageOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
@@ -964,7 +1030,7 @@ export const getConsolidatedAnalytics = query({
         acc[day] = (acc[day] || 0) + (order.amount || 0);
         return acc;
       },
-      {} as Record<string, number>
+      {} as Record<string, number>,
     );
 
     // Calculate new vs returning visitors (simplified)
@@ -988,7 +1054,7 @@ export const getConsolidatedAnalytics = query({
         overallConversionRate:
           productViews.length > 0
             ? Math.round(
-                (purchaseActions.length / productViews.length) * 100 * 100
+                (purchaseActions.length / productViews.length) * 100 * 100,
               ) / 100
             : 0,
       },

@@ -91,4 +91,13 @@ describe("V26-169 time/query refactors", () => {
     expect(analyticsSource).not.toContain('query("productSku").collect()');
     expect(analyticsSource).not.toContain('.query("onlineOrder")\n      .filter(');
   });
+
+  it("keeps synthetic monitor traffic out of default business analytics queries", () => {
+    const analyticsSource = readSource("convex/storeFront/analytics.ts");
+    const defaultStoreQueryMatches = analyticsSource.match(
+      /\.withIndex\("by_storeId", \(q\) => q\.eq\("storeId", args\.storeId\)\)\s+\.filter\(\(q\) => q\.neq\(q\.field\("origin"\), SYNTHETIC_MONITOR_ORIGIN\)\)\s+\.order\("desc"\)\s+\.take\(250\)/g
+    );
+
+    expect(defaultStoreQueryMatches).toHaveLength(2);
+  });
 });

@@ -16,13 +16,7 @@ function formatLabel(value: string) {
   return snakeCaseToWords(value);
 }
 
-function SummaryCard({
-  label,
-  value,
-}: {
-  label: string;
-  value: number;
-}) {
+function SummaryCard({ label, value }: { label: string; value: number }) {
   return (
     <div className="rounded-lg border bg-muted/30 p-4">
       <p className="text-sm text-muted-foreground">{label}</p>
@@ -31,12 +25,34 @@ function SummaryCard({
   );
 }
 
+function getTrafficSourceBadge(
+  trafficSource: "customer" | "synthetic_monitor" | "mixed",
+) {
+  switch (trafficSource) {
+    case "synthetic_monitor":
+      return {
+        label: "Synthetic monitor",
+        variant: "secondary" as const,
+      };
+    case "mixed":
+      return {
+        label: "Mixed traffic",
+        variant: "outline" as const,
+      };
+    default:
+      return {
+        label: "Customer traffic",
+        variant: "outline" as const,
+      };
+  }
+}
+
 export default function StorefrontObservabilityPanel() {
   const { activeStore } = useGetActiveStore();
 
   const report = useQuery(
     api.storeFront.analytics.getStorefrontObservabilityReport,
-    activeStore?._id ? { storeId: activeStore._id } : "skip"
+    activeStore?._id ? { storeId: activeStore._id } : "skip",
   );
 
   if (!activeStore || report === undefined) {
@@ -44,11 +60,13 @@ export default function StorefrontObservabilityPanel() {
       <Card>
         <CardHeader>
           <CardTitle className="text-lg">Storefront observability</CardTitle>
-          <CardDescription>Loading the latest journey diagnostics.</CardDescription>
+          <CardDescription>
+            Loading the latest journey diagnostics.
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-3 md:grid-cols-3">
-            {[0, 1, 2].map((index) => (
+          <div className="grid gap-3 md:grid-cols-4">
+            {[0, 1, 2, 3].map((index) => (
               <div
                 key={index}
                 className="h-24 animate-pulse rounded-lg bg-muted/50"
@@ -73,10 +91,23 @@ export default function StorefrontObservabilityPanel() {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        <div className="grid gap-3 md:grid-cols-3">
-          <SummaryCard label="Observed events" value={report.summary.totalEvents} />
-          <SummaryCard label="Failure events" value={report.summary.totalFailures} />
-          <SummaryCard label="Correlated sessions" value={report.summary.uniqueSessions} />
+        <div className="grid gap-3 md:grid-cols-4">
+          <SummaryCard
+            label="Observed events"
+            value={report.summary.totalEvents}
+          />
+          <SummaryCard
+            label="Failure events"
+            value={report.summary.totalFailures}
+          />
+          <SummaryCard
+            label="Correlated sessions"
+            value={report.summary.uniqueSessions}
+          />
+          <SummaryCard
+            label="Synthetic monitor events"
+            value={report.summary.syntheticEvents}
+          />
         </div>
 
         <div className="grid gap-6 xl:grid-cols-2">
@@ -99,11 +130,22 @@ export default function StorefrontObservabilityPanel() {
                 <tbody>
                   {report.funnel.length > 0 ? (
                     report.funnel.map((entry) => (
-                      <tr key={`${entry.journey}-${entry.step}-${entry.status}`} className="border-t">
-                        <td className="px-4 py-3">{formatLabel(entry.journey)}</td>
+                      <tr
+                        key={`${entry.journey}-${entry.step}-${entry.status}`}
+                        className="border-t"
+                      >
+                        <td className="px-4 py-3">
+                          {formatLabel(entry.journey)}
+                        </td>
                         <td className="px-4 py-3">{formatLabel(entry.step)}</td>
                         <td className="px-4 py-3">
-                          <Badge variant={entry.status === "failed" ? "destructive" : "secondary"}>
+                          <Badge
+                            variant={
+                              entry.status === "failed"
+                                ? "destructive"
+                                : "secondary"
+                            }
+                          >
                             {formatLabel(entry.status)}
                           </Badge>
                         </td>
@@ -113,8 +155,12 @@ export default function StorefrontObservabilityPanel() {
                     ))
                   ) : (
                     <tr>
-                      <td className="px-4 py-6 text-muted-foreground" colSpan={5}>
-                        No storefront observability events have been recorded yet.
+                      <td
+                        className="px-4 py-6 text-muted-foreground"
+                        colSpan={5}
+                      >
+                        No storefront observability events have been recorded
+                        yet.
                       </td>
                     </tr>
                   )}
@@ -130,45 +176,72 @@ export default function StorefrontObservabilityPanel() {
             </div>
             <div className="space-y-3">
               {report.failureClusters.length > 0 ? (
-                report.failureClusters.map((cluster) => (
-                  <div
-                    key={cluster.errorCategory}
-                    className="rounded-lg border p-4"
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <Badge variant="destructive">
-                            {formatLabel(cluster.errorCategory)}
-                          </Badge>
-                          <span className="text-sm text-muted-foreground">
-                            {cluster.count} events across {cluster.uniqueSessions} sessions
-                          </span>
+                report.failureClusters.map((cluster) => {
+                  const sourceBadge = getTrafficSourceBadge(
+                    cluster.trafficSource,
+                  );
+
+                  return (
+                    <div
+                      key={cluster.errorCategory}
+                      className="rounded-lg border p-4"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <Badge variant="destructive">
+                              {formatLabel(cluster.errorCategory)}
+                            </Badge>
+                            <Badge variant={sourceBadge.variant}>
+                              {sourceBadge.label}
+                            </Badge>
+                            <span className="text-sm text-muted-foreground">
+                              {cluster.count} events across{" "}
+                              {cluster.uniqueSessions} sessions
+                            </span>
+                          </div>
+                          <p className="text-sm">
+                            {formatLabel(cluster.sample.journey)} /{" "}
+                            {formatLabel(cluster.sample.step)}
+                          </p>
                         </div>
-                        <p className="text-sm">
-                          {formatLabel(cluster.sample.journey)} /{" "}
-                          {formatLabel(cluster.sample.step)}
+                        <p className="text-xs text-muted-foreground">
+                          Latest {getRelativeTime(cluster.latestEventTime)}
                         </p>
                       </div>
-                      <p className="text-xs text-muted-foreground">
-                        Latest {getRelativeTime(cluster.latestEventTime)}
-                      </p>
-                    </div>
 
-                    <div className="mt-3 space-y-2 text-sm text-muted-foreground">
-                      {cluster.sample.route && <p>Route: {cluster.sample.route}</p>}
-                      {cluster.sample.errorCode && <p>Code: {cluster.sample.errorCode}</p>}
-                      {cluster.sample.errorMessage && (
-                        <p>Message: {cluster.sample.errorMessage}</p>
-                      )}
-                      <p>Sessions: {cluster.sessions.slice(0, 3).join(", ")}</p>
+                      <div className="mt-3 space-y-2 text-sm text-muted-foreground">
+                        {cluster.syntheticEvents > 0 && (
+                          <p>
+                            Synthetic monitor events: {cluster.syntheticEvents}
+                            {cluster.customerEvents > 0
+                              ? ` • Customer events: ${cluster.customerEvents}`
+                              : ""}
+                          </p>
+                        )}
+                        {cluster.sample.origin && (
+                          <p>Origin: {formatLabel(cluster.sample.origin)}</p>
+                        )}
+                        {cluster.sample.route && (
+                          <p>Route: {cluster.sample.route}</p>
+                        )}
+                        {cluster.sample.errorCode && (
+                          <p>Code: {cluster.sample.errorCode}</p>
+                        )}
+                        {cluster.sample.errorMessage && (
+                          <p>Message: {cluster.sample.errorMessage}</p>
+                        )}
+                        <p>
+                          Sessions: {cluster.sessions.slice(0, 3).join(", ")}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                ))
+                  );
+                })
               ) : (
                 <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-                  No failure clusters yet. Failed storefront observability events
-                  will appear here automatically.
+                  No failure clusters yet. Failed storefront observability
+                  events will appear here automatically.
                 </div>
               )}
             </div>

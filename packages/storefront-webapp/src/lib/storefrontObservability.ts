@@ -5,6 +5,7 @@ export const STOREFRONT_OBSERVABILITY_ACTION = "storefront_observability";
 export const STOREFRONT_OBSERVABILITY_SCHEMA_VERSION = 1;
 export const STOREFRONT_OBSERVABILITY_SESSION_KEY =
   "athena.storefront.observability.session_id";
+export const SYNTHETIC_MONITOR_ORIGIN = "synthetic_monitor";
 
 const stepPattern = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/;
 
@@ -105,6 +106,10 @@ type StorefrontObservabilityTransportPayload = Parameters<
 type StorefrontObservabilityTransport = (
   payload: StorefrontObservabilityTransportPayload,
 ) => Promise<unknown>;
+
+export function isSyntheticMonitorOrigin(origin?: string | null) {
+  return origin === SYNTHETIC_MONITOR_ORIGIN;
+}
 
 export function getOrCreateStorefrontObservabilitySessionId(
   storage?: Pick<Storage, "getItem" | "setItem">,

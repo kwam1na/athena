@@ -1,11 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  SYNTHETIC_MONITOR_ORIGIN,
   STOREFRONT_OBSERVABILITY_ACTION,
   STOREFRONT_OBSERVABILITY_SESSION_KEY,
   createStorefrontObservabilityContext,
   createStorefrontObservabilityPayload,
   getOrCreateStorefrontObservabilitySessionId,
+  isSyntheticMonitorOrigin,
   trackStorefrontEvent,
 } from "./storefrontObservability";
 
@@ -116,6 +118,20 @@ describe("storefront observability", () => {
     expect(getOrCreateStorefrontObservabilitySessionId(storage)).toBe(
       firstContext.sessionId,
     );
+  });
+
+  it("reserves a canonical origin for synthetic monitors", () => {
+    const context = createStorefrontObservabilityContext({
+      pathname: "/shop/checkout",
+      search: {
+        origin: SYNTHETIC_MONITOR_ORIGIN,
+      },
+      storage,
+    });
+
+    expect(context.origin).toBe(SYNTHETIC_MONITOR_ORIGIN);
+    expect(isSyntheticMonitorOrigin(context.origin)).toBe(true);
+    expect(isSyntheticMonitorOrigin("homepage")).toBe(false);
   });
 
   it("fails predictably when required event fields are invalid", () => {
