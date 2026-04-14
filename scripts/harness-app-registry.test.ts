@@ -70,6 +70,28 @@ describe("HARNESS_APP_REGISTRY", () => {
     });
   });
 
+  it("keeps storefront full-browser validation scoped to routes and playwright specs", () => {
+    const storefront = HARNESS_APP_REGISTRY.find(
+      (entry) => entry.appName === "storefront-webapp"
+    );
+    const fullBrowserScenario = storefront?.validationScenarios.find(
+      (scenario) => scenario.title === "Full browser journeys and payment redirects"
+    );
+
+    expect(fullBrowserScenario).toMatchObject({
+      touchedPaths: ["tests/e2e", "src/routes/shop/checkout"],
+      commands: [
+        { kind: "script", script: "test" },
+        { kind: "script", script: "test:e2e" },
+      ],
+      behaviorScenarios: [
+        "storefront-checkout-bootstrap",
+        "storefront-checkout-validation-blocker",
+        "storefront-checkout-verification-recovery",
+      ],
+    });
+  });
+
   it("keeps every registered app active once onboarding is complete", () => {
     const statuses = HARNESS_APP_REGISTRY.map((entry) => entry.onboardingStatus);
 

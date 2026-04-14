@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import Footer from "./footer/Footer";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useNavigationBarContext } from "@/contexts/NavigationBarProvider";
 import { useProductQueries } from "@/lib/queries/product";
 import { MARKER_KEY } from "@/lib/constants";
@@ -32,6 +32,18 @@ import { useStorefrontObservability } from "@/hooks/useStorefrontObservability";
 import { createLandingPageViewedEvent } from "@/lib/storefrontJourneyEvents";
 
 const origin = "homepage";
+
+type HomePageReadyShellProps = {
+  children: ReactNode;
+};
+
+export function HomePageReadyShell({ children }: HomePageReadyShellProps) {
+  return (
+    <div data-testid="storefront-homepage-ready" className="min-h-screen overflow-x-hidden">
+      {children}
+    </div>
+  );
+}
 
 export default function HomePage() {
   const homeHeroRef = useRef<HTMLDivElement>(null);
@@ -259,7 +271,7 @@ export default function HomePage() {
         promoCode={storeConfig.promotions.leaveAReviewDiscountCodeModalPromoCode}
       />
 
-      <div className="min-h-screen overflow-x-hidden">
+      <HomePageReadyShell>
         <div className="overflow-x-hidden">
           <div className="space-y-16 md:space-y-56 pb-32">
             {/* Hero Section */}
@@ -306,7 +318,7 @@ export default function HomePage() {
             footerRef={footerRef}
           />
         )}
-      </div>
+      </HomePageReadyShell>
     </>
   );
 }

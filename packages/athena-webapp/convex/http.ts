@@ -49,6 +49,13 @@ app.use(
   }),
 );
 
+app.get("/health", (c) => {
+  return c.json({
+    app: "athena-webapp-backend",
+    status: "ok",
+  });
+});
+
 app.route("/upsells", upsellRoutes);
 
 app.route("/stores", storeRoutes);

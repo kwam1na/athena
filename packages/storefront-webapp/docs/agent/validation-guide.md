@@ -42,7 +42,7 @@ Use the scoped architecture lint when lower-level helpers could accidentally dep
 
 ## Full browser journeys and payment redirects
 
-Touched surfaces: `tests/e2e`, `src/routes/shop/checkout`, `src/components/checkout`
+Touched surfaces: `tests/e2e`, `src/routes/shop/checkout`
 
 Run:
 

@@ -100,6 +100,34 @@ const PendingItem = ({ session, count }: { session: any; count: number }) => {
   );
 };
 
+type ShoppingBagCheckoutButtonProps = {
+  hasPendingOrders: boolean;
+  isProcessingCheckoutRequest: boolean;
+  isUpdatingBag: boolean;
+  onCheckoutClick: () => void | Promise<void>;
+};
+
+export function ShoppingBagCheckoutButton({
+  hasPendingOrders,
+  isProcessingCheckoutRequest,
+  isUpdatingBag,
+  onCheckoutClick,
+}: ShoppingBagCheckoutButtonProps) {
+  return (
+    <LoadingButton
+      isLoading={isProcessingCheckoutRequest}
+      onClick={onCheckoutClick}
+      data-testid="storefront-bag-start-checkout"
+      className={`group font-light w-[240px] text-accent2 ${isUpdatingBag ? "pointer-events-none" : ""}`}
+      variant={"clear"}
+      disabled={hasPendingOrders}
+    >
+      <p className="font-medium">Checkout</p>
+      <ArrowRight className="w-4 h-4 ml-2 -me-1 ms-2 transition-transform group-hover:translate-x-0.5" />
+    </LoadingButton>
+  );
+}
+
 type BagItemWithDiscountProps = {
   item: BagItem;
   index: number;
@@ -720,16 +748,12 @@ export default function ShoppingBag() {
                   </div>
 
                   <div className="space-y-4">
-                    <LoadingButton
-                      isLoading={isProcessingCheckoutRequest}
-                      onClick={handleOnCheckoutClick}
-                      className={`group font-light w-[240px] text-accent2 ${isUpdatingBag ? "pointer-events-none" : ""}`}
-                      variant={"clear"}
-                      disabled={hasPendingOrders}
-                    >
-                      <p className="font-medium">Checkout</p>
-                      <ArrowRight className="w-4 h-4 ml-2 -me-1 ms-2 transition-transform group-hover:translate-x-0.5" />
-                    </LoadingButton>
+                    <ShoppingBagCheckoutButton
+                      hasPendingOrders={hasPendingOrders}
+                      isProcessingCheckoutRequest={isProcessingCheckoutRequest}
+                      isUpdatingBag={isUpdatingBag}
+                      onCheckoutClick={handleOnCheckoutClick}
+                    />
                   </div>
                 </div>
               </motion.div>

@@ -62,7 +62,10 @@ const MainComponent = () => {
   }, [activeSession]);
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 w-full min-h-screen">
+    <div
+      data-testid="storefront-checkout-ready"
+      className="grid grid-cols-1 lg:grid-cols-12 w-full min-h-screen"
+    >
       {/* Left Panel */}
       <AnimatePresence>
         <motion.div
