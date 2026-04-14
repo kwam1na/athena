@@ -267,7 +267,13 @@ export const HARNESS_APP_REGISTRY = [
       },
       {
         title: "Convex or backend-adjacent edits",
-        touchedPaths: ["convex", "src/routes/_authed", "src/main.tsx"],
+        touchedPaths: [
+          "convex",
+          "scripts/convex-audit.sh",
+          "scripts/convex-lint-changed.sh",
+          "src/routes/_authed",
+          "src/main.tsx",
+        ],
         commands: [
           { kind: "script", script: "test" },
           { kind: "script", script: "audit:convex" },

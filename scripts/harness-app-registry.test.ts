@@ -121,6 +121,34 @@ describe("HARNESS_APP_REGISTRY", () => {
     });
   });
 
+  it("covers Athena convex validation scripts in the backend-adjacent scenario", () => {
+    const athena = HARNESS_APP_REGISTRY.find(
+      (entry) => entry.appName === "athena-webapp"
+    );
+    const backendScenario = athena?.validationScenarios.find(
+      (scenario) => scenario.title === "Convex or backend-adjacent edits"
+    );
+
+    expect(backendScenario).toMatchObject({
+      touchedPaths: [
+        "convex",
+        "scripts/convex-audit.sh",
+        "scripts/convex-lint-changed.sh",
+        "src/routes/_authed",
+        "src/main.tsx",
+      ],
+      commands: [
+        { kind: "script", script: "test" },
+        { kind: "script", script: "audit:convex" },
+        { kind: "script", script: "lint:convex:changed" },
+      ],
+      behaviorScenarios: [
+        "athena-convex-storefront-composition",
+        "athena-convex-storefront-failure-visibility",
+      ],
+    });
+  });
+
   it("keeps every registered app active once onboarding is complete", () => {
     const statuses = HARNESS_APP_REGISTRY.map((entry) => entry.onboardingStatus);
 

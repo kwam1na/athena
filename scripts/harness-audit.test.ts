@@ -563,6 +563,16 @@ async function createFixtureRepo() {
   await write("packages/athena-webapp/convex/http/router.ts", "export {};\n", rootDir);
   await write("packages/athena-webapp/convex/inventory/item.ts", "export {};\n", rootDir);
   await write("packages/athena-webapp/convex/storeFront/cart.ts", "export {};\n", rootDir);
+  await write(
+    "packages/athena-webapp/scripts/convex-audit.sh",
+    "#!/usr/bin/env bash\nexit 0\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/scripts/convex-lint-changed.sh",
+    "#!/usr/bin/env bash\nexit 0\n",
+    rootDir
+  );
   await write("packages/athena-webapp/vite.config.ts", "export default {};\n", rootDir);
 
   await write("packages/storefront-webapp/src/assets/placeholder.png", "", rootDir);

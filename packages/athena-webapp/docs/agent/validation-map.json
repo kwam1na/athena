@@ -63,6 +63,8 @@
       "name": "convex-or-backend-adjacent-edits",
       "pathPrefixes": [
         "packages/athena-webapp/convex",
+        "packages/athena-webapp/scripts/convex-audit.sh",
+        "packages/athena-webapp/scripts/convex-lint-changed.sh",
         "packages/athena-webapp/src/routes/_authed",
         "packages/athena-webapp/src/main.tsx"
       ],
