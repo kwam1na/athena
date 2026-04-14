@@ -16,6 +16,7 @@ This index enumerates the current automated test files and ties them back to the
 ## Section `convex`
 
 - [`convex/http/domains/storeFront/routes/security.test.ts`](../../convex/http/domains/storeFront/routes/security.test.ts)
+- [`convex/http/health.test.ts`](../../convex/http/health.test.ts)
 - [`convex/http/routerComposition.test.ts`](../../convex/http/routerComposition.test.ts)
 - [`convex/inventory/posQueryCleanup.test.ts`](../../convex/inventory/posQueryCleanup.test.ts)
 - [`convex/inventory/sessionQueryIndexes.test.ts`](../../convex/inventory/sessionQueryIndexes.test.ts)
@@ -43,6 +44,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`src/lib/productUtils.test.ts`](../../src/lib/productUtils.test.ts)
 - [`src/lib/storeConfig.test.ts`](../../src/lib/storeConfig.test.ts)
 - [`src/lib/utils.test.ts`](../../src/lib/utils.test.ts)
+- [`src/routes/login/_layout.index.test.tsx`](../../src/routes/login/_layout.index.test.tsx)
 - [`src/tests/pos/backend.test.ts`](../../src/tests/pos/backend.test.ts)
 - [`src/tests/pos/inventoryValidationLogic.test.ts`](../../src/tests/pos/inventoryValidationLogic.test.ts)
 - [`src/tests/pos/simple.test.ts`](../../src/tests/pos/simple.test.ts)

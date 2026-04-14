@@ -17,12 +17,17 @@ This index enumerates the current automated test files and ties them back to the
 ## Section `src`
 
 - [`src/api/checkoutSession.test.ts`](../../src/api/checkoutSession.test.ts)
+- [`src/components/HomePage.test.tsx`](../../src/components/HomePage.test.tsx)
+- [`src/components/checkout/Checkout.test.tsx`](../../src/components/checkout/Checkout.test.tsx)
 - [`src/components/checkout/checkoutStorage.test.ts`](../../src/components/checkout/checkoutStorage.test.ts)
 - [`src/components/checkout/deliveryFees.test.ts`](../../src/components/checkout/deliveryFees.test.ts)
 - [`src/components/checkout/deriveCheckoutState.test.ts`](../../src/components/checkout/deriveCheckoutState.test.ts)
 - [`src/components/checkout/schemas/checkoutSchemas.test.ts`](../../src/components/checkout/schemas/checkoutSchemas.test.ts)
 - [`src/components/checkout/schemas/webOrderSchema.test.ts`](../../src/components/checkout/schemas/webOrderSchema.test.ts)
 - [`src/components/checkout/utils.test.ts`](../../src/components/checkout/utils.test.ts)
+- [`src/components/home/BestSellersSection.test.tsx`](../../src/components/home/BestSellersSection.test.tsx)
+- [`src/components/product-page/ProductActions.test.tsx`](../../src/components/product-page/ProductActions.test.tsx)
+- [`src/components/shopping-bag/ShoppingBag.test.tsx`](../../src/components/shopping-bag/ShoppingBag.test.tsx)
 - [`src/lib/feeUtils.test.ts`](../../src/lib/feeUtils.test.ts)
 - [`src/lib/maintenanceUtils.test.ts`](../../src/lib/maintenanceUtils.test.ts)
 - [`src/lib/storeConfig.test.ts`](../../src/lib/storeConfig.test.ts)

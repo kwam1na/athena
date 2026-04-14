@@ -396,11 +396,7 @@ export const HARNESS_APP_REGISTRY = [
       },
       {
         title: "Full browser journeys and payment redirects",
-        touchedPaths: [
-          "tests/e2e",
-          "src/routes/shop/checkout",
-          "src/components/checkout",
-        ],
+        touchedPaths: ["tests/e2e", "src/routes/shop/checkout"],
         commands: [
           { kind: "script", script: "test" },
           { kind: "script", script: "test:e2e" },

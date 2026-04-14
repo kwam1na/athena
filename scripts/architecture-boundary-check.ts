@@ -1,4 +1,5 @@
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { ESLint } from "eslint";
 import reactHooks from "eslint-plugin-react-hooks";
@@ -26,6 +27,8 @@ const CHECKS = {
   },
 };
 
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+
 async function run() {
   const requestedChecks = process.argv.slice(2);
   const checkNames =
@@ -43,7 +46,7 @@ async function run() {
     }
 
     const eslint = new ESLint({
-      cwd: path.join(process.cwd(), check.relativeDir),
+      cwd: path.join(repoRoot, check.relativeDir),
       overrideConfigFile: true,
       overrideConfig: tseslint.config(
         {

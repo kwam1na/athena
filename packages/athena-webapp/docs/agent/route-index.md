@@ -65,6 +65,7 @@ This route index enumerates the current files under `src/routes` so agents can o
 
 ## Section `login`
 
+- [`src/routes/login/_layout.index.test.tsx`](../../src/routes/login/_layout.index.test.tsx)
 - [`src/routes/login/_layout.index.tsx`](../../src/routes/login/_layout.index.tsx)
 - [`src/routes/login/_layout.tsx`](../../src/routes/login/_layout.tsx)
 

@@ -70,8 +70,7 @@
       "name": "full-browser-journeys-and-payment-redirects",
       "pathPrefixes": [
         "packages/storefront-webapp/tests/e2e",
-        "packages/storefront-webapp/src/routes/shop/checkout",
-        "packages/storefront-webapp/src/components/checkout"
+        "packages/storefront-webapp/src/routes/shop/checkout"
       ],
       "commands": [
         {

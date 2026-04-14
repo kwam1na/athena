@@ -39,6 +39,7 @@ export function ProductActions({
             isLoading={false}
             onClick={handleUpdateBag}
             disabled={isSoldOut}
+            data-testid="storefront-product-add-to-bag"
           >
             {isUpdatingBag ? "Adding to Bag.." : "Add to Bag"}
           </LoadingButton>
