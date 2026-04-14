@@ -5,7 +5,7 @@
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 2837 nodes · 2399 edges · 1125 communities detected
+- 2838 nodes · 2400 edges · 1125 communities detected
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS
 - Token cost: 0 input · 0 output
 
@@ -1303,28 +1303,28 @@ Cohesion: 0.38
 Nodes (9): awardPointsForGuestOrders(), awardPointsForPastOrder(), getBaseUrl(), getEligiblePastOrders(), getOrderRewardPoints(), getPointHistory(), getRewardTiers(), getUserPoints() (+1 more)
 
 ### Community 35 - "Community 35"
+Cohesion: 0.4
+Nodes (8): fileExists(), isJsonObject(), normalizeGraphJsonArtifact(), normalizeGraphJsonContents(), resolveGraphifyPython(), runGraphifyRebuild(), sortJsonArray(), sortJsonValue()
+
+### Community 36 - "Community 36"
 Cohesion: 0.28
 Nodes (3): modifyProduct(), onSubmit(), saveProduct()
 
-### Community 36 - "Community 36"
+### Community 37 - "Community 37"
 Cohesion: 0.25
 Nodes (2): handleNewSession(), resetAutoSessionInitialized()
 
-### Community 37 - "Community 37"
+### Community 38 - "Community 38"
 Cohesion: 0.39
 Nodes (7): calculateRefundAmount(), getAmountRefunded(), getAvailableItems(), getItemsToRefund(), getNetAmount(), shouldShowReturnToStock(), validateRefund()
 
-### Community 38 - "Community 38"
+### Community 39 - "Community 39"
 Cohesion: 0.39
 Nodes (6): handleDeliveryRestrictionToggle(), handlePickupRestrictionToggle(), handleSaveDeliveryRestriction(), handleSavePickupRestriction(), saveDeliveryRestriction(), savePickupRestriction()
 
-### Community 39 - "Community 39"
+### Community 40 - "Community 40"
 Cohesion: 0.44
 Nodes (1): Logger
-
-### Community 40 - "Community 40"
-Cohesion: 0.47
-Nodes (8): fileExists(), isJsonObject(), normalizeGraphJsonArtifact(), normalizeGraphJsonContents(), resolveGraphifyPython(), runGraphifyRebuild(), sortJsonArray(), sortJsonValue()
 
 ### Community 41 - "Community 41"
 Cohesion: 0.43
@@ -1451,16 +1451,16 @@ Cohesion: 0.33
 Nodes (0):
 
 ### Community 72 - "Community 72"
-Cohesion: 0.33
-Nodes (0):
+Cohesion: 0.47
+Nodes (3): onDrop(), removeImage(), unmarkForDeletion()
 
 ### Community 73 - "Community 73"
-Cohesion: 0.4
-Nodes (2): useBulkOperations(), validateOperationValue()
-
-### Community 74 - "Community 74"
 Cohesion: 0.33
 Nodes (0):
+
+### Community 74 - "Community 74"
+Cohesion: 0.4
+Nodes (2): useBulkOperations(), validateOperationValue()
 
 ### Community 75 - "Community 75"
 Cohesion: 0.33
@@ -1475,28 +1475,28 @@ Cohesion: 0.33
 Nodes (0):
 
 ### Community 78 - "Community 78"
-Cohesion: 0.4
-Nodes (2): onSubmit(), saveStoreChanges()
+Cohesion: 0.33
+Nodes (0):
 
 ### Community 79 - "Community 79"
 Cohesion: 0.4
 Nodes (2): onSubmit(), saveStoreChanges()
 
 ### Community 80 - "Community 80"
-Cohesion: 0.47
-Nodes (3): getBaseUrl(), getPromoCodes(), redeemPromoCode()
+Cohesion: 0.4
+Nodes (2): onSubmit(), saveStoreChanges()
 
 ### Community 81 - "Community 81"
-Cohesion: 0.33
-Nodes (0):
+Cohesion: 0.47
+Nodes (3): getBaseUrl(), getPromoCodes(), redeemPromoCode()
 
 ### Community 82 - "Community 82"
 Cohesion: 0.33
 Nodes (0):
 
 ### Community 83 - "Community 83"
-Cohesion: 0.47
-Nodes (3): onDrop(), removeImage(), unmarkForDeletion()
+Cohesion: 0.33
+Nodes (0):
 
 ### Community 84 - "Community 84"
 Cohesion: 0.53
@@ -1560,19 +1560,19 @@ Nodes (0):
 
 ### Community 99 - "Community 99"
 Cohesion: 0.4
-Nodes (0):
+Nodes (1): Header()
 
 ### Community 100 - "Community 100"
 Cohesion: 0.4
 Nodes (0):
 
 ### Community 101 - "Community 101"
-Cohesion: 0.5
-Nodes (2): handleFileSelect(), validateFile()
-
-### Community 102 - "Community 102"
 Cohesion: 0.4
 Nodes (0):
+
+### Community 102 - "Community 102"
+Cohesion: 0.5
+Nodes (2): handleFileSelect(), validateFile()
 
 ### Community 103 - "Community 103"
 Cohesion: 0.4
@@ -1584,7 +1584,7 @@ Nodes (0):
 
 ### Community 105 - "Community 105"
 Cohesion: 0.4
-Nodes (1): Header()
+Nodes (0):
 
 ### Community 106 - "Community 106"
 Cohesion: 0.4

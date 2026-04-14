@@ -1,10 +1,11 @@
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
   GRAPHIFY_REBUILD_SNIPPET,
+  normalizeGraphJsonContents,
   runGraphifyRebuild,
 } from "./graphify-rebuild";
 
@@ -165,7 +166,7 @@ describe("runGraphifyRebuild", () => {
     });
 
     await expect(
-      Bun.file(path.join(rootDir, "graphify-out/graph.json")).text()
+      readFile(path.join(rootDir, "graphify-out/graph.json"), "utf8")
     ).resolves.toBe(`{
   "directed": false,
   "graph": {
@@ -202,6 +203,46 @@ describe("runGraphifyRebuild", () => {
     {
       "id": "z-node",
       "label": "zeta"
+    }
+  ]
+}
+`);
+  });
+
+  it("sorts graph.json keys and lists with locale-independent ordering", () => {
+    expect(
+      normalizeGraphJsonContents(
+        JSON.stringify({
+          graph: {
+            a: 1,
+            _: 1,
+            A: 1,
+          },
+          nodes: [
+            { id: "a-node", label: "lower" },
+            { id: "_-node", label: "underscore" },
+            { id: "A-node", label: "upper" },
+          ],
+        })
+      )
+    ).toBe(`{
+  "graph": {
+    "A": 1,
+    "_": 1,
+    "a": 1
+  },
+  "nodes": [
+    {
+      "id": "A-node",
+      "label": "upper"
+    },
+    {
+      "id": "_-node",
+      "label": "underscore"
+    },
+    {
+      "id": "a-node",
+      "label": "lower"
     }
   ]
 }

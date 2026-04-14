@@ -126,6 +126,18 @@ function isJsonObject(value: JsonValue): value is { [key: string]: JsonValue } {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
+function compareDeterministically(left: string, right: string) {
+  if (left < right) {
+    return -1;
+  }
+
+  if (left > right) {
+    return 1;
+  }
+
+  return 0;
+}
+
 function sortJsonValue(value: JsonValue): JsonValue {
   if (Array.isArray(value)) {
     return value.map(sortJsonValue);
@@ -137,14 +149,14 @@ function sortJsonValue(value: JsonValue): JsonValue {
 
   return Object.fromEntries(
     Object.entries(value)
-      .sort(([left], [right]) => left.localeCompare(right))
+      .sort(([left], [right]) => compareDeterministically(left, right))
       .map(([key, nestedValue]) => [key, sortJsonValue(nestedValue)])
   );
 }
 
 function sortJsonArray(values: JsonValue[]) {
   return [...values].sort((left, right) =>
-    JSON.stringify(left).localeCompare(JSON.stringify(right))
+    compareDeterministically(JSON.stringify(left), JSON.stringify(right))
   );
 }
 
