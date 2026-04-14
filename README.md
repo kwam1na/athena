@@ -103,7 +103,7 @@ Use `bun run graphify:check` as the non-mutating freshness gate for tracked grap
 
 Use `bun run graphify:rebuild` as the repair path when the check reports stale artifacts. The rebuild command uses the interpreter recorded in `.graphify_python` (default `python3` in this repo).
 
-If you need to repair the local graphify setup, make sure `python3` can import `graphify` and upgrade it with `python3 -m pip install --upgrade graphifyy`.
+If you need to repair the local graphify setup, install the repo-pinned runtime with `python3 -m pip install -r .graphify-requirements.txt`.
 
 Tracked graphify artifacts:
 

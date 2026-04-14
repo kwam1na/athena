@@ -175,7 +175,9 @@ describe("repo harness ergonomics", () => {
     expect(workflow).toContain("run: bun run harness:self-review --base origin/main");
     expect(workflow).toContain("run: bun run harness:review --base origin/main");
     expect(workflow).toContain("run: bun run harness:test");
-    expect(workflow).toContain("run: python3 -m pip install graphifyy");
+    expect(workflow).toContain(
+      "run: python3 -m pip install -r .graphify-requirements.txt"
+    );
     expect(workflow).toContain(
       "run: bunx playwright install --with-deps chromium"
     );
@@ -223,6 +225,7 @@ describe("repo harness ergonomics", () => {
     expect(readme).toContain("bun run graphify:check");
     expect(readme).toContain("bun run graphify:rebuild");
     expect(readme).toContain(".graphify_python");
+    expect(readme).toContain(".graphify-requirements.txt");
     expect(readme).toContain("graphify-out/GRAPH_REPORT.md");
     expect(readme).toContain("graphify-out/graph.json");
     expect(readme).toContain("graphify-out/cache");
