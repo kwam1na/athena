@@ -13,6 +13,7 @@ New storefront telemetry must use `useStorefrontObservability()` or the pure hel
 - `origin=synthetic_monitor` is reserved for production synthetic checks.
 - Synthetic monitors should set the origin on the monitored URL from an automated browser session, for example `/shop/product/<id>?origin=synthetic_monitor`.
 - Business-facing Athena analytics defaults exclude `synthetic_monitor` traffic, but Athena observability diagnostics keep it visible so operators can correlate monitor failures without polluting customer reporting.
+- The full production operator setup for Cloudflare, Checkly, Slack, and the dedicated monitor SKU is documented in [../../../../docs/operations/production-observability-v1.md](../../../../docs/operations/production-observability-v1.md).
 
 ## Canonical Payload Fields
 

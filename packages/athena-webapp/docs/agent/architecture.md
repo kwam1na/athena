@@ -6,6 +6,8 @@ Backend and integration boundaries sit in Convex. The top-level HTTP entrypoint 
 
 Production readiness for Athena belongs on the Hono boundary in [convex/http.ts](../../convex/http.ts), where the shallow `/health` route can answer without depending on the browser router or authenticated shell composition.
 
+For production monitor inventory, Cloudflare thresholds, Checkly login reachability expectations, and Slack routing, use the repo runbook in [docs/operations/production-observability-v1.md](../../../../docs/operations/production-observability-v1.md) instead of recreating the contract locally in package docs.
+
 Storefront reporting boundaries also live in Convex. Business-facing analytics defaults flow through [convex/storeFront/analytics.ts](../../convex/storeFront/analytics.ts), which excludes the reserved `origin=synthetic_monitor` monitor traffic by default, while operator diagnostics stay inclusive through [convex/storeFront/storefrontObservabilityReport.ts](../../convex/storeFront/storefrontObservabilityReport.ts) and [convex/storeFront/customerObservabilityTimelineData.ts](../../convex/storeFront/customerObservabilityTimelineData.ts).
 
 When you need to move logic across the browser/server boundary, prefer the Convex guidance in [convex/README.md](../../convex/README.md): keep public functions thin, treat Hono routes as explicit public boundaries, and push reusable server logic behind internal helpers instead of duplicating fetch-time behavior in React code.

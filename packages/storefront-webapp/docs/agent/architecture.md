@@ -8,6 +8,8 @@ The canonical storefront observability contract lives in [src/lib/storefrontObse
 
 For production observability, treat the homepage-ready selector as the public readiness contract rather than adding a React-route `/health` page under `src/routes`. The root app shell in [src/routes/\_\_root.tsx](../../src/routes/__root.tsx) composes store bootstrap and observability providers before route content renders, so a route-local `/health` would not be a shallow runtime signal.
 
+The operator-facing Cloudflare, Checkly, Slack, and dedicated monitor SKU setup lives in [docs/operations/production-observability-v1.md](../../../../docs/operations/production-observability-v1.md). Keep that runbook aligned with any selector or synthetic contract changes in this package.
+
 If a change affects routing, search params, or layout ownership, inspect the generated tree in [src/routeTree.gen.ts](../../src/routeTree.gen.ts) but avoid editing it directly. Change the route source files under `src/routes` and regenerate through the normal app tooling instead.
 
 The first-pass architecture lint check protects the checkout and auth route entrypoints under `src/routes/shop/checkout/**`, [src/routes/login.tsx](../../src/routes/login.tsx), [src/routes/signup.tsx](../../src/routes/signup.tsx), and [src/routes/auth.verify.tsx](../../src/routes/auth.verify.tsx). Directly related lower-layer files under `src/components/checkout`, `src/components/auth`, the scoped auth/checkout APIs, checkout/auth hooks, and the checkout/auth query-observability helpers may be imported by those routes, but they must not import back upward into the route files.
