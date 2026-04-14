@@ -5,14 +5,40 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CONVEX_DIR="$ROOT_DIR/convex"
 
-if ! command -v rg >/dev/null 2>&1; then
-  echo "ripgrep (rg) is required for audit:convex" >&2
+if command -v rg >/dev/null 2>&1; then
+  SEARCH_BACKEND="rg"
+elif command -v grep >/dev/null 2>&1; then
+  SEARCH_BACKEND="grep"
+else
+  echo "audit:convex requires either ripgrep (rg) or grep" >&2
   exit 1
 fi
 
+search_fixed() {
+  local pattern="$1"
+
+  if [ "$SEARCH_BACKEND" = "rg" ]; then
+    rg -n -F --glob '!convex/_generated/**' "$pattern" "$CONVEX_DIR"
+    return
+  fi
+
+  grep -RInF --exclude-dir=_generated -- "$pattern" "$CONVEX_DIR"
+}
+
+search_regex() {
+  local pattern="$1"
+
+  if [ "$SEARCH_BACKEND" = "rg" ]; then
+    rg -n --glob '!convex/_generated/**' "$pattern" "$CONVEX_DIR"
+    return
+  fi
+
+  grep -RInE --exclude-dir=_generated -- "$pattern" "$CONVEX_DIR"
+}
+
 count_fixed_matches() {
   local pattern="$1"
-  rg -n -F --glob '!convex/_generated/**' "$pattern" "$CONVEX_DIR" | wc -l | tr -d ' '
+  search_fixed "$pattern" | wc -l | tr -d ' '
 }
 
 echo "Convex audit report"
@@ -85,9 +111,9 @@ echo
 
 echo "Sample implicit db ID locations"
 echo "-------------------------------"
-rg -n --glob '!convex/_generated/**' 'ctx\.db\.(get|patch|replace|delete)\([^\",]' "$CONVEX_DIR" | sed -n '1,20p' || true
+search_regex 'ctx\.db\.(get|patch|replace|delete)\([^\",]' | sed -n '1,20p' || true
 echo
 
 echo "Sample public api refs inside Convex"
 echo "------------------------------------"
-rg -n --glob '!convex/_generated/**' 'api\.(app|inventory|storeFront)\.' "$CONVEX_DIR" | sed -n '1,20p' || true
+search_regex 'api\.(app|inventory|storeFront)\.' | sed -n '1,20p' || true

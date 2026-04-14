@@ -267,7 +267,13 @@ export const HARNESS_APP_REGISTRY = [
       },
       {
         title: "Convex or backend-adjacent edits",
-        touchedPaths: ["convex", "src/routes/_authed", "src/main.tsx"],
+        touchedPaths: [
+          "convex",
+          "scripts/convex-audit.sh",
+          "scripts/convex-lint-changed.sh",
+          "src/routes/_authed",
+          "src/main.tsx",
+        ],
         commands: [
           { kind: "script", script: "test" },
           { kind: "script", script: "audit:convex" },
@@ -352,20 +358,36 @@ export const HARNESS_APP_REGISTRY = [
         title: "Route or UI-only edits",
         touchedPaths: [
           "src/assets",
-          "src/client.tsx",
           "src/config.ts",
           "src/index.css",
-          "src/main.tsx",
-          "src/router.tsx",
           "src/routes",
           "src/components",
           "src/hooks",
           "src/contexts",
-          "src/routeTree.gen.ts",
-          "src/ssr.tsx",
         ],
         commands: [{ kind: "script", script: "test" }],
         note: "Start here for most layout, component, and route behavior changes that do not alter the checkout or browser-journey contract.",
+      },
+      {
+        title: "Route runtime or build-pipeline edits",
+        touchedPaths: [
+          "tsconfig.json",
+          "src/client.tsx",
+          "src/main.tsx",
+          "src/router.tsx",
+          "src/routeTree.gen.ts",
+          "src/ssr.tsx",
+          "vite.config.ts",
+        ],
+        commands: [
+          { kind: "script", script: "test" },
+          {
+            kind: "raw",
+            command:
+              "bunx tsc --noEmit -p packages/storefront-webapp/tsconfig.json",
+          },
+        ],
+        note: "Use this when the TanStack Start bootstrap, generated router state, or TypeScript/build wiring changes.",
       },
       {
         title: "Shared-lib, utility, or API-wrapper edits",

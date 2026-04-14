@@ -5,6 +5,7 @@ import {
   buildCustomerObservabilityTimeline,
   STOREFRONT_OBSERVABILITY_ACTION,
 } from "./customerObservabilityTimelineData";
+import { SYNTHETIC_MONITOR_ORIGIN } from "./syntheticMonitor";
 
 const MAX_PRODUCT_SKUS_PER_PRODUCT = 50;
 
@@ -29,14 +30,18 @@ function getCustomerAnalyticsQuery(
   timeFilter?: number,
 ) {
   if (timeFilter !== undefined) {
-    return ctx.db.query("analytics").withIndex("by_storeFrontUserId", (q) =>
-      q.eq("storeFrontUserId", userId).gte("_creationTime", timeFilter),
-    );
+    return ctx.db
+      .query("analytics")
+      .withIndex("by_storeFrontUserId", (q) =>
+        q.eq("storeFrontUserId", userId).gte("_creationTime", timeFilter),
+      )
+      .filter((q) => q.neq(q.field("origin"), SYNTHETIC_MONITOR_ORIGIN));
   }
 
   return ctx.db
     .query("analytics")
-    .withIndex("by_storeFrontUserId", (q) => q.eq("storeFrontUserId", userId));
+    .withIndex("by_storeFrontUserId", (q) => q.eq("storeFrontUserId", userId))
+    .filter((q) => q.neq(q.field("origin"), SYNTHETIC_MONITOR_ORIGIN));
 }
 
 async function getTimelineUserData(
@@ -168,18 +173,13 @@ export const getCustomerBehaviorTimeline = query({
         break;
     }
 
-    // Get analytics data with time filtering
-    let analyticsQuery = ctx.db
-      .query("analytics")
-      .filter((q) => q.eq(q.field("storeFrontUserId"), userId));
-
-    if (timeFilter) {
-      analyticsQuery = analyticsQuery.filter((q) =>
-        q.gte(q.field("_creationTime"), timeFilter)
-      );
-    }
-
-    const analytics = await analyticsQuery.order("desc").take(limit);
+    const analytics = await getCustomerAnalyticsQuery(
+      ctx,
+      userId,
+      timeFilter,
+    )
+      .order("desc")
+      .take(limit);
 
     // Get user data
     let userData: { email?: string } = {};

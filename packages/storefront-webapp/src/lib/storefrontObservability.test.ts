@@ -1,11 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  SYNTHETIC_MONITOR_ORIGIN,
   STOREFRONT_OBSERVABILITY_ACTION,
   STOREFRONT_OBSERVABILITY_SESSION_KEY,
+  resolveStorefrontAnalyticsOrigin,
   createStorefrontObservabilityContext,
   createStorefrontObservabilityPayload,
   getOrCreateStorefrontObservabilitySessionId,
+  isSyntheticMonitorOrigin,
   trackStorefrontEvent,
 } from "./storefrontObservability";
 
@@ -116,6 +119,53 @@ describe("storefront observability", () => {
     expect(getOrCreateStorefrontObservabilitySessionId(storage)).toBe(
       firstContext.sessionId,
     );
+  });
+
+  it("reserves a canonical origin for synthetic monitors in browser automation", () => {
+    const context = createStorefrontObservabilityContext({
+      pathname: "/shop/checkout",
+      search: {
+        origin: SYNTHETIC_MONITOR_ORIGIN,
+      },
+      isBrowserAutomation: true,
+      storage,
+    });
+
+    expect(context.origin).toBe(SYNTHETIC_MONITOR_ORIGIN);
+    expect(isSyntheticMonitorOrigin(context.origin)).toBe(true);
+    expect(isSyntheticMonitorOrigin("homepage")).toBe(false);
+  });
+
+  it("does not treat bare synthetic query params as monitor traffic in normal browsers", () => {
+    const context = createStorefrontObservabilityContext({
+      pathname: "/shop/checkout",
+      search: {
+        origin: SYNTHETIC_MONITOR_ORIGIN,
+        utm_source: "newsletter",
+      },
+      isBrowserAutomation: false,
+      storage,
+    });
+
+    expect(context.origin).toBe("newsletter");
+  });
+
+  it("lets synthetic automation override explicit customer origins", () => {
+    expect(
+      resolveStorefrontAnalyticsOrigin({
+        explicitOrigin: "homepage",
+        searchOrigin: SYNTHETIC_MONITOR_ORIGIN,
+        isBrowserAutomation: true,
+      }),
+    ).toBe(SYNTHETIC_MONITOR_ORIGIN);
+
+    expect(
+      resolveStorefrontAnalyticsOrigin({
+        explicitOrigin: "homepage",
+        searchOrigin: SYNTHETIC_MONITOR_ORIGIN,
+        isBrowserAutomation: false,
+      }),
+    ).toBe("homepage");
   });
 
   it("fails predictably when required event fields are invalid", () => {

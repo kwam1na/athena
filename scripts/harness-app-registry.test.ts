@@ -92,6 +92,63 @@ describe("HARNESS_APP_REGISTRY", () => {
     });
   });
 
+  it("covers storefront runtime and build-pipeline edits with a typecheck scenario", () => {
+    const storefront = HARNESS_APP_REGISTRY.find(
+      (entry) => entry.appName === "storefront-webapp"
+    );
+    const runtimeScenario = storefront?.validationScenarios.find(
+      (scenario) => scenario.title === "Route runtime or build-pipeline edits"
+    );
+
+    expect(runtimeScenario).toMatchObject({
+      touchedPaths: [
+        "tsconfig.json",
+        "src/client.tsx",
+        "src/main.tsx",
+        "src/router.tsx",
+        "src/routeTree.gen.ts",
+        "src/ssr.tsx",
+        "vite.config.ts",
+      ],
+      commands: [
+        { kind: "script", script: "test" },
+        {
+          kind: "raw",
+          command:
+            "bunx tsc --noEmit -p packages/storefront-webapp/tsconfig.json",
+        },
+      ],
+    });
+  });
+
+  it("covers Athena convex validation scripts in the backend-adjacent scenario", () => {
+    const athena = HARNESS_APP_REGISTRY.find(
+      (entry) => entry.appName === "athena-webapp"
+    );
+    const backendScenario = athena?.validationScenarios.find(
+      (scenario) => scenario.title === "Convex or backend-adjacent edits"
+    );
+
+    expect(backendScenario).toMatchObject({
+      touchedPaths: [
+        "convex",
+        "scripts/convex-audit.sh",
+        "scripts/convex-lint-changed.sh",
+        "src/routes/_authed",
+        "src/main.tsx",
+      ],
+      commands: [
+        { kind: "script", script: "test" },
+        { kind: "script", script: "audit:convex" },
+        { kind: "script", script: "lint:convex:changed" },
+      ],
+      behaviorScenarios: [
+        "athena-convex-storefront-composition",
+        "athena-convex-storefront-failure-visibility",
+      ],
+    });
+  });
+
   it("keeps every registered app active once onboarding is complete", () => {
     const statuses = HARNESS_APP_REGISTRY.map((entry) => entry.onboardingStatus);
 

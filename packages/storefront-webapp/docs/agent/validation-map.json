@@ -6,22 +6,40 @@
       "name": "route-or-ui-only-edits",
       "pathPrefixes": [
         "packages/storefront-webapp/src/assets",
-        "packages/storefront-webapp/src/client.tsx",
         "packages/storefront-webapp/src/config.ts",
         "packages/storefront-webapp/src/index.css",
-        "packages/storefront-webapp/src/main.tsx",
-        "packages/storefront-webapp/src/router.tsx",
         "packages/storefront-webapp/src/routes",
         "packages/storefront-webapp/src/components",
         "packages/storefront-webapp/src/hooks",
-        "packages/storefront-webapp/src/contexts",
-        "packages/storefront-webapp/src/routeTree.gen.ts",
-        "packages/storefront-webapp/src/ssr.tsx"
+        "packages/storefront-webapp/src/contexts"
       ],
       "commands": [
         {
           "kind": "script",
           "script": "test"
+        }
+      ],
+      "behaviorScenarios": []
+    },
+    {
+      "name": "route-runtime-or-build-pipeline-edits",
+      "pathPrefixes": [
+        "packages/storefront-webapp/tsconfig.json",
+        "packages/storefront-webapp/src/client.tsx",
+        "packages/storefront-webapp/src/main.tsx",
+        "packages/storefront-webapp/src/router.tsx",
+        "packages/storefront-webapp/src/routeTree.gen.ts",
+        "packages/storefront-webapp/src/ssr.tsx",
+        "packages/storefront-webapp/vite.config.ts"
+      ],
+      "commands": [
+        {
+          "kind": "script",
+          "script": "test"
+        },
+        {
+          "kind": "raw",
+          "command": "bunx tsc --noEmit -p packages/storefront-webapp/tsconfig.json"
         }
       ],
       "behaviorScenarios": []

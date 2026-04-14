@@ -37,7 +37,7 @@ jobs:
         run: bun install
 
       - name: Install Graphify runtime
-        run: python3 -m pip install graphifyy
+        run: python3 -m pip install -r .graphify-requirements.txt
 
       - name: Install Playwright browser
         run: bunx playwright install --with-deps chromium
@@ -99,7 +99,7 @@ jobs:
         run: bun install
 
       - name: Install Graphify runtime
-        run: python3 -m pip install graphifyy
+        run: python3 -m pip install -r .graphify-requirements.txt
 
       - name: Run harness janitor (report mode)
         run: bun run harness:janitor

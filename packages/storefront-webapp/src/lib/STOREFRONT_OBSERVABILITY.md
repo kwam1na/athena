@@ -8,6 +8,12 @@ New storefront telemetry must use `useStorefrontObservability()` or the pure hel
 - `origin`: preserved as the top-level analytics origin when available
 - `data`: the canonical forward-looking observability payload
 
+## Reserved Origins
+
+- `origin=synthetic_monitor` is reserved for production synthetic checks.
+- Synthetic monitors should set the origin on the monitored URL from an automated browser session, for example `/shop/product/<id>?origin=synthetic_monitor`.
+- Business-facing Athena analytics defaults exclude `synthetic_monitor` traffic, but Athena observability diagnostics keep it visible so operators can correlate monitor failures without polluting customer reporting.
+
 ## Canonical Payload Fields
 
 - `schemaVersion`

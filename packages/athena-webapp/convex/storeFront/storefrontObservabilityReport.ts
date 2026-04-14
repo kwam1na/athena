@@ -1,4 +1,5 @@
 import type { Doc } from "../_generated/dataModel";
+import { isSyntheticMonitorOrigin } from "./syntheticMonitor";
 
 export const STOREFRONT_OBSERVABILITY_ACTION = "storefront_observability";
 
@@ -18,11 +19,15 @@ export type StorefrontObservabilityFailureCluster = {
   count: number;
   uniqueSessions: number;
   latestEventTime: number;
+  trafficSource: "customer" | "synthetic_monitor" | "mixed";
+  syntheticEvents: number;
+  customerEvents: number;
   sessions: string[];
   sample: {
     journey: string;
     step: string;
     route?: string;
+    origin?: string;
     errorCode?: string;
     errorMessage?: string;
   };
@@ -38,6 +43,7 @@ export type StorefrontObservabilityRecentEvent = {
   errorCode?: string;
   errorMessage?: string;
   origin?: string;
+  isSyntheticMonitor: boolean;
   eventTime: number;
 };
 
@@ -46,6 +52,8 @@ export type StorefrontObservabilityReport = {
     totalEvents: number;
     totalFailures: number;
     uniqueSessions: number;
+    syntheticEvents: number;
+    syntheticFailures: number;
   };
   funnel: StorefrontObservabilityFunnelEntry[];
   failureClusters: StorefrontObservabilityFailureCluster[];
@@ -57,11 +65,13 @@ type NormalizedObservabilityEvent = StorefrontObservabilityRecentEvent & {
 };
 
 function getNonEmptyString(value: unknown) {
-  return typeof value === "string" && value.trim().length > 0 ? value : undefined;
+  return typeof value === "string" && value.trim().length > 0
+    ? value
+    : undefined;
 }
 
 function normalizeStorefrontObservabilityEvent(
-  analyticsEvent: AnalyticsDoc
+  analyticsEvent: AnalyticsDoc,
 ): NormalizedObservabilityEvent | null {
   if (analyticsEvent.action !== STOREFRONT_OBSERVABILITY_ACTION) {
     return null;
@@ -88,12 +98,31 @@ function normalizeStorefrontObservabilityEvent(
     errorCode: getNonEmptyString(analyticsEvent.data?.errorCode),
     errorMessage: getNonEmptyString(analyticsEvent.data?.errorMessage),
     origin: analyticsEvent.origin,
+    isSyntheticMonitor: isSyntheticMonitorOrigin(analyticsEvent.origin),
     eventTime: analyticsEvent._creationTime,
   };
 }
 
+function getTrafficSource({
+  syntheticEvents,
+  customerEvents,
+}: {
+  syntheticEvents: number;
+  customerEvents: number;
+}) {
+  if (syntheticEvents > 0 && customerEvents > 0) {
+    return "mixed" as const;
+  }
+
+  if (syntheticEvents > 0) {
+    return "synthetic_monitor" as const;
+  }
+
+  return "customer" as const;
+}
+
 export function buildStorefrontObservabilityReport(
-  analyticsEvents: AnalyticsDoc[]
+  analyticsEvents: AnalyticsDoc[],
 ): StorefrontObservabilityReport {
   const observabilityEvents = analyticsEvents
     .map(normalizeStorefrontObservabilityEvent)
@@ -116,14 +145,21 @@ export function buildStorefrontObservabilityReport(
       errorCategory: string;
       count: number;
       latestEventTime: number;
+      syntheticEvents: number;
+      customerEvents: number;
       sessions: Set<string>;
       sample: StorefrontObservabilityFailureCluster["sample"];
     }
   >();
   const uniqueSessions = new Set<string>();
+  let syntheticEvents = 0;
+  let syntheticFailures = 0;
 
   for (const event of observabilityEvents) {
     uniqueSessions.add(event.sessionId);
+    if (event.isSyntheticMonitor) {
+      syntheticEvents += 1;
+    }
 
     const funnelKey = [event.journey, event.step, event.status].join("::");
     const funnelEntry = funnelMap.get(funnelKey) ?? {
@@ -136,7 +172,10 @@ export function buildStorefrontObservabilityReport(
     };
 
     funnelEntry.count += 1;
-    funnelEntry.latestEventTime = Math.max(funnelEntry.latestEventTime, event.eventTime);
+    funnelEntry.latestEventTime = Math.max(
+      funnelEntry.latestEventTime,
+      event.eventTime,
+    );
     funnelEntry.sessions.add(event.sessionId);
     funnelMap.set(funnelKey, funnelEntry);
 
@@ -148,20 +187,29 @@ export function buildStorefrontObservabilityReport(
       errorCategory: event.errorCategory,
       count: 0,
       latestEventTime: event.eventTime,
+      syntheticEvents: 0,
+      customerEvents: 0,
       sessions: new Set<string>(),
       sample: {
         journey: event.journey,
         step: event.step,
         route: event.route,
+        origin: event.origin,
         errorCode: event.errorCode,
         errorMessage: event.errorMessage,
       },
     };
 
     clusterEntry.count += 1;
+    if (event.isSyntheticMonitor) {
+      clusterEntry.syntheticEvents += 1;
+      syntheticFailures += 1;
+    } else {
+      clusterEntry.customerEvents += 1;
+    }
     clusterEntry.latestEventTime = Math.max(
       clusterEntry.latestEventTime,
-      event.eventTime
+      event.eventTime,
     );
     clusterEntry.sessions.add(event.sessionId);
     failureClusterMap.set(event.errorCategory, clusterEntry);
@@ -194,6 +242,12 @@ export function buildStorefrontObservabilityReport(
       count: entry.count,
       uniqueSessions: entry.sessions.size,
       latestEventTime: entry.latestEventTime,
+      trafficSource: getTrafficSource({
+        syntheticEvents: entry.syntheticEvents,
+        customerEvents: entry.customerEvents,
+      }),
+      syntheticEvents: entry.syntheticEvents,
+      customerEvents: entry.customerEvents,
       sessions: [...entry.sessions].sort(),
       sample: entry.sample,
     }))
@@ -208,9 +262,12 @@ export function buildStorefrontObservabilityReport(
   return {
     summary: {
       totalEvents: observabilityEvents.length,
-      totalFailures: observabilityEvents.filter((event) => event.status === "failed")
-        .length,
+      totalFailures: observabilityEvents.filter(
+        (event) => event.status === "failed",
+      ).length,
       uniqueSessions: uniqueSessions.size,
+      syntheticEvents,
+      syntheticFailures,
     },
     funnel,
     failureClusters,

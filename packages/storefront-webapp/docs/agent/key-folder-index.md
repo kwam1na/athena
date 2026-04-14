@@ -11,7 +11,7 @@ This key-folder index highlights the main directories agents are likely to need 
 - [`src/hooks`](../../src/hooks) — Client hooks for bag, routing, observability, and auth interactions. Currently 28 file(s); key children: TRACKING_SCALABILITY.md, use-store-modal.tsx, useAuth.ts, useCheckout.ts, useDiscountCodeAlert.tsx.
 - [`src/contexts`](../../src/contexts) — Shared client providers for store, navigation, and observability state. Currently 4 file(s); key children: FormSubmissionProvider.tsx, NavigationBarProvider.tsx, StoreContext.tsx, StorefrontObservabilityProvider.tsx.
 - [`src/lib`](../../src/lib) — Shared utilities, query helpers, schemas, and domain logic. Currently 46 file(s); key children: STOREFRONT_OBSERVABILITY.md, constants.ts, countries.ts, currency.ts, feeUtils.test.ts.
-- [`src/api`](../../src/api) — Backend-facing request wrappers and typed API helpers. Currently 24 file(s); key children: analytics.ts, auth.ts, bag.ts, bannerMessage.ts, category.ts.
+- [`src/api`](../../src/api) — Backend-facing request wrappers and typed API helpers. Currently 25 file(s); key children: analytics.test.ts, analytics.ts, auth.ts, bag.ts, bannerMessage.ts.
 
 ## Validation and support surfaces
 

@@ -1,9 +1,13 @@
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { GRAPHIFY_REBUILD_SNIPPET, runGraphifyRebuild } from "./graphify-rebuild";
+import {
+  GRAPHIFY_REBUILD_SNIPPET,
+  normalizeGraphJsonContents,
+  runGraphifyRebuild,
+} from "./graphify-rebuild";
 
 const tempRoots: string[] = [];
 
@@ -124,6 +128,125 @@ describe("runGraphifyRebuild", () => {
     });
 
     expect(writes).toEqual([rootDir]);
+  });
+
+  it("normalizes graph.json into a deterministic order after rebuild", async () => {
+    const rootDir = await createFixtureRoot();
+    await write(
+      "graphify-out/graph.json",
+      JSON.stringify(
+        {
+          multigraph: false,
+          directed: false,
+          graph: { z: 1, a: 2 },
+          nodes: [
+            { label: "zeta", id: "z-node" },
+            { id: "a-node", label: "alpha" },
+          ],
+          links: [
+            { target: "z-node", relation: "contains", source: "b-node" },
+            { relation: "contains", source: "a-node", target: "a-node" },
+          ],
+          hyperedges: [{ z: 1, a: 2 }, { a: 1 }],
+        },
+        null,
+        2
+      ),
+      rootDir
+    );
+
+    await runGraphifyRebuild(rootDir, {
+      spawn() {
+        return {
+          exited: Promise.resolve(0),
+          stderr: new ReadableStream(),
+        };
+      },
+      writeGraphifyWikiPages: async () => {},
+    });
+
+    await expect(
+      readFile(path.join(rootDir, "graphify-out/graph.json"), "utf8")
+    ).resolves.toBe(`{
+  "directed": false,
+  "graph": {
+    "a": 2,
+    "z": 1
+  },
+  "hyperedges": [
+    {
+      "a": 1
+    },
+    {
+      "a": 2,
+      "z": 1
+    }
+  ],
+  "links": [
+    {
+      "relation": "contains",
+      "source": "a-node",
+      "target": "a-node"
+    },
+    {
+      "relation": "contains",
+      "source": "b-node",
+      "target": "z-node"
+    }
+  ],
+  "multigraph": false,
+  "nodes": [
+    {
+      "id": "a-node",
+      "label": "alpha"
+    },
+    {
+      "id": "z-node",
+      "label": "zeta"
+    }
+  ]
+}
+`);
+  });
+
+  it("sorts graph.json keys and lists with locale-independent ordering", () => {
+    expect(
+      normalizeGraphJsonContents(
+        JSON.stringify({
+          graph: {
+            a: 1,
+            _: 1,
+            A: 1,
+          },
+          nodes: [
+            { id: "a-node", label: "lower" },
+            { id: "_-node", label: "underscore" },
+            { id: "A-node", label: "upper" },
+          ],
+        })
+      )
+    ).toBe(`{
+  "graph": {
+    "A": 1,
+    "_": 1,
+    "a": 1
+  },
+  "nodes": [
+    {
+      "id": "A-node",
+      "label": "upper"
+    },
+    {
+      "id": "_-node",
+      "label": "underscore"
+    },
+    {
+      "id": "a-node",
+      "label": "lower"
+    }
+  ]
+}
+`);
   });
 
   it("surfaces stderr when the graphify rebuild command fails", async () => {

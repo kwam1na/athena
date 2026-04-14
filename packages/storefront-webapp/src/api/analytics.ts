@@ -1,4 +1,5 @@
 import config from "@/config";
+import { resolveStorefrontAnalyticsOrigin } from "@/lib/storefrontObservability";
 
 export async function postAnalytics({
   action,
@@ -11,9 +12,23 @@ export async function postAnalytics({
   data?: Record<string, any>;
   productId?: string;
 }) {
+  const searchParams =
+    typeof window !== "undefined"
+      ? new URLSearchParams(window.location.search)
+      : null;
+  const resolvedOrigin = resolveStorefrontAnalyticsOrigin({
+    explicitOrigin: origin,
+    searchOrigin: searchParams?.get("origin") ?? undefined,
+    utmSource: searchParams?.get("utm_source") ?? undefined,
+  });
   const response = await fetch(`${config.apiGateway.URL}/analytics`, {
     method: "POST",
-    body: JSON.stringify({ action, origin, data, productId }),
+    body: JSON.stringify({
+      action,
+      origin: resolvedOrigin,
+      data,
+      productId,
+    }),
     headers: {
       "Content-Type": "application/json",
     },

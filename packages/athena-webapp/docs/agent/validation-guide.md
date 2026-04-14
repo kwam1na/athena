@@ -38,7 +38,7 @@ Run the package suite when package-local frontend test helpers or focused regres
 
 ## Convex or backend-adjacent edits
 
-Touched surfaces: `convex`, `src/routes/_authed`, `src/main.tsx`
+Touched surfaces: `convex`, `scripts/convex-audit.sh`, `scripts/convex-lint-changed.sh`, `src/routes/_authed`, `src/main.tsx`
 
 Run:
 

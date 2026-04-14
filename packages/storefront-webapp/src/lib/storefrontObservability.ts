@@ -5,6 +5,7 @@ export const STOREFRONT_OBSERVABILITY_ACTION = "storefront_observability";
 export const STOREFRONT_OBSERVABILITY_SCHEMA_VERSION = 1;
 export const STOREFRONT_OBSERVABILITY_SESSION_KEY =
   "athena.storefront.observability.session_id";
+export const SYNTHETIC_MONITOR_ORIGIN = "synthetic_monitor";
 
 const stepPattern = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/;
 
@@ -93,6 +94,7 @@ type StorefrontObservabilityRuntimeContext = {
     origin?: string;
     utm_source?: string;
   };
+  isBrowserAutomation?: boolean;
   userId?: string;
   guestId?: string;
   storage?: Pick<Storage, "getItem" | "setItem">;
@@ -105,6 +107,42 @@ type StorefrontObservabilityTransportPayload = Parameters<
 type StorefrontObservabilityTransport = (
   payload: StorefrontObservabilityTransportPayload,
 ) => Promise<unknown>;
+
+export function isSyntheticMonitorOrigin(origin?: string | null) {
+  return origin === SYNTHETIC_MONITOR_ORIGIN;
+}
+
+export function isBrowserAutomationContext(
+  isBrowserAutomation?: boolean,
+) {
+  if (typeof isBrowserAutomation === "boolean") {
+    return isBrowserAutomation;
+  }
+
+  return typeof navigator !== "undefined" && navigator.webdriver === true;
+}
+
+export function resolveStorefrontAnalyticsOrigin({
+  explicitOrigin,
+  searchOrigin,
+  utmSource,
+  isBrowserAutomation,
+}: {
+  explicitOrigin?: string;
+  searchOrigin?: string;
+  utmSource?: string;
+  isBrowserAutomation?: boolean;
+}) {
+  if (isSyntheticMonitorOrigin(searchOrigin)) {
+    if (isBrowserAutomationContext(isBrowserAutomation)) {
+      return SYNTHETIC_MONITOR_ORIGIN;
+    }
+
+    return explicitOrigin ?? utmSource;
+  }
+
+  return explicitOrigin ?? searchOrigin ?? utmSource;
+}
 
 export function getOrCreateStorefrontObservabilitySessionId(
   storage?: Pick<Storage, "getItem" | "setItem">,
@@ -143,10 +181,15 @@ export function createStorefrontObservabilityContext(
     : runtimeContext.guestId
       ? "guest"
       : "unknown";
+  const origin = resolveStorefrontAnalyticsOrigin({
+    searchOrigin: search.origin,
+    utmSource: search.utm_source,
+    isBrowserAutomation: runtimeContext.isBrowserAutomation,
+  });
 
   return storefrontObservabilityBaseContextSchema.parse({
     route: runtimeContext.pathname || "/",
-    origin: search.origin ?? search.utm_source,
+    origin,
     sessionId: getOrCreateStorefrontObservabilitySessionId(
       runtimeContext.storage,
     ),

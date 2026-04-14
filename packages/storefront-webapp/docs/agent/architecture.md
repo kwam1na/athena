@@ -1,10 +1,12 @@
 # Storefront Webapp Architecture
 
-This package is a TanStack Start app with separate browser and server entrypoints in [src/client.tsx](../../src/client.tsx) and [src/ssr.tsx](../../src/ssr.tsx). The router factory in [src/router.tsx](../../src/router.tsx) is shared between them, and the app shell plus global providers live in [src/routes/__root.tsx](../../src/routes/__root.tsx).
+This package is a TanStack Start app with separate browser and server entrypoints in [src/client.tsx](../../src/client.tsx) and [src/ssr.tsx](../../src/ssr.tsx). The router factory in [src/router.tsx](../../src/router.tsx) is shared between them, and the app shell plus global providers live in [src/routes/\_\_root.tsx](../../src/routes/__root.tsx).
 
 Most data access flows through thin API wrappers rather than direct backend logic in components. Representative entrypoints are [src/api/storefront.ts](../../src/api/storefront.ts), [src/api/checkoutSession.ts](../../src/api/checkoutSession.ts), and the query helpers in [src/lib/queries/onlineOrder.ts](../../src/lib/queries/onlineOrder.ts). Those feed route-level UI and shared state through [src/contexts/StoreContext.tsx](../../src/contexts/StoreContext.tsx), [src/contexts/StorefrontObservabilityProvider.tsx](../../src/contexts/StorefrontObservabilityProvider.tsx), and checkout-specific state in [src/components/checkout/CheckoutProvider.tsx](../../src/components/checkout/CheckoutProvider.tsx).
 
-For production observability, treat the homepage-ready selector as the public readiness contract rather than adding a React-route `/health` page under `src/routes`. The root app shell in [src/routes/__root.tsx](../../src/routes/__root.tsx) composes store bootstrap and observability providers before route content renders, so a route-local `/health` would not be a shallow runtime signal.
+The canonical storefront observability contract lives in [src/lib/storefrontObservability.ts](../../src/lib/storefrontObservability.ts) and [src/lib/STOREFRONT_OBSERVABILITY.md](../../src/lib/STOREFRONT_OBSERVABILITY.md). Production synthetics must use the reserved `origin=synthetic_monitor` marker from an automated browser session so Athena can exclude that traffic from business analytics defaults while keeping it visible in observability diagnostics.
+
+For production observability, treat the homepage-ready selector as the public readiness contract rather than adding a React-route `/health` page under `src/routes`. The root app shell in [src/routes/\_\_root.tsx](../../src/routes/__root.tsx) composes store bootstrap and observability providers before route content renders, so a route-local `/health` would not be a shallow runtime signal.
 
 If a change affects routing, search params, or layout ownership, inspect the generated tree in [src/routeTree.gen.ts](../../src/routeTree.gen.ts) but avoid editing it directly. Change the route source files under `src/routes` and regenerate through the normal app tooling instead.
 

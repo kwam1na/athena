@@ -9,6 +9,7 @@ import { v } from "convex/values";
 import { addressSchema } from "../schemas/storeFront";
 import { api, internal } from "../_generated/api";
 import { Id } from "../_generated/dataModel";
+import { SYNTHETIC_MONITOR_ORIGIN } from "./syntheticMonitor";
 
 const entity = "storeFrontUser";
 
@@ -150,6 +151,7 @@ export const getAllUserActivity = query({
       .withIndex("by_storeFrontUserId", (q) =>
         q.eq("storeFrontUserId", args.id)
       )
+      .filter((q) => q.neq(q.field("origin"), SYNTHETIC_MONITOR_ORIGIN))
       .collect();
 
     // Get unique user IDs from analytics
@@ -209,6 +211,7 @@ export const getAllUserActivityInternal = internalQuery({
       .withIndex("by_storeFrontUserId", (q) =>
         q.eq("storeFrontUserId", args.id)
       )
+      .filter((q) => q.neq(q.field("origin"), SYNTHETIC_MONITOR_ORIGIN))
       .collect();
 
     const userIds = new Set<string>();
@@ -286,6 +289,7 @@ export const getLastViewedProduct = query({
       .filter((q) =>
         q.and(
           q.eq(q.field("action"), "viewed_product"),
+          q.neq(q.field("origin"), SYNTHETIC_MONITOR_ORIGIN),
           q.lte(q.field("_creationTime"), cutoff)
         )
       )
@@ -343,6 +347,7 @@ export const getLastViewedProduct = query({
       .filter((q) =>
         q.and(
           q.eq(q.field("action"), "viewed_product"),
+          q.neq(q.field("origin"), SYNTHETIC_MONITOR_ORIGIN),
           q.lte(q.field("_creationTime"), cutoff)
         )
       )
@@ -429,7 +434,12 @@ export const getLastViewedProducts = query({
       .withIndex("by_storeFrontUserId", (q) =>
         q.eq("storeFrontUserId", args.id)
       )
-      .filter((q) => q.eq(q.field("action"), "viewed_product"))
+      .filter((q) =>
+        q.and(
+          q.eq(q.field("action"), "viewed_product"),
+          q.neq(q.field("origin"), SYNTHETIC_MONITOR_ORIGIN)
+        )
+      )
       .order("desc")
       .take(200); // Increased limit to get more products
 
@@ -474,7 +484,12 @@ export const getLastViewedProducts = query({
         .withIndex("by_storeFrontUserId", (q) =>
           q.eq("storeFrontUserId", args.id)
         )
-        .filter((q) => q.eq(q.field("action"), "viewed_product"))
+        .filter((q) =>
+          q.and(
+            q.eq(q.field("action"), "viewed_product"),
+            q.neq(q.field("origin"), SYNTHETIC_MONITOR_ORIGIN)
+          )
+        )
         .order("desc")
         .take(500); // Check more all-time views
 
@@ -554,7 +569,12 @@ export const getLastViewedProductsInternal = internalQuery({
       .withIndex("by_storeFrontUserId", (q) =>
         q.eq("storeFrontUserId", args.id)
       )
-      .filter((q) => q.eq(q.field("action"), "viewed_product"))
+      .filter((q) =>
+        q.and(
+          q.eq(q.field("action"), "viewed_product"),
+          q.neq(q.field("origin"), SYNTHETIC_MONITOR_ORIGIN)
+        )
+      )
       .order("desc")
       .take(200);
 
@@ -605,7 +625,12 @@ export const getMostRecentActivity = query({
     // Get only the most recent analytics record
     const analytics = await ctx.db
       .query("analytics")
-      .filter((q) => q.eq(q.field("storeFrontUserId"), args.id))
+      .filter((q) =>
+        q.and(
+          q.eq(q.field("storeFrontUserId"), args.id),
+          q.neq(q.field("origin"), SYNTHETIC_MONITOR_ORIGIN)
+        )
+      )
       .order("desc") // Most recent first
       .first();
 
