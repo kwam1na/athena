@@ -42,6 +42,11 @@ export default defineConfig({
     alias: {
       "~": __dirname,
       "@": path.resolve(__dirname, "./src"),
+      "@tanstack/start": path.resolve(__dirname, "../../node_modules/@tanstack/start"),
+      "@tanstack/react-router": path.resolve(
+        __dirname,
+        "../../node_modules/@tanstack/react-router",
+      ),
     },
   },
 });

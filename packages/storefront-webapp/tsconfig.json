@@ -29,7 +29,11 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"],
-      "@athena/webapp": ["../athena-webapp"]
+      "@athena/webapp": ["../athena-webapp"],
+      "@tanstack/start": ["../../node_modules/@tanstack/start"],
+      "@tanstack/start/*": ["../../node_modules/@tanstack/start/*"],
+      "@tanstack/react-router": ["../../node_modules/@tanstack/react-router"],
+      "@tanstack/react-router/*": ["../../node_modules/@tanstack/react-router/*"]
     },
     "types": ["vitest/globals", "vite/client", "@testing-library/jest-dom"]
   }
