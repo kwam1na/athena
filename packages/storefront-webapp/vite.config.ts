@@ -42,10 +42,17 @@ export default defineConfig({
     alias: {
       "~": __dirname,
       "@": path.resolve(__dirname, "./src"),
-      "@tanstack/start": path.resolve(__dirname, "../../node_modules/@tanstack/start"),
+      "@tanstack/start": path.resolve(
+        __dirname,
+        "../../node_modules/@tanstack/start/dist/esm/client.js",
+      ),
+      "@tanstack/start/server": path.resolve(
+        __dirname,
+        "../../node_modules/@tanstack/start/dist/esm/server.js",
+      ),
       "@tanstack/react-router": path.resolve(
         __dirname,
-        "../../node_modules/@tanstack/react-router",
+        "../../node_modules/@tanstack/react-router/dist/esm/index.js",
       ),
     },
   },
