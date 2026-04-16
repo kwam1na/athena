@@ -38,4 +38,5 @@ This index enumerates the current automated test files and ties them back to the
 - [`src/lib/storefrontJourneyEvents.test.ts`](../../src/lib/storefrontJourneyEvents.test.ts)
 - [`src/lib/storefrontObservability.test.ts`](../../src/lib/storefrontObservability.test.ts)
 - [`src/lib/utils.test.ts`](../../src/lib/utils.test.ts)
+- [`src/routes/-homePageLoader.test.ts`](../../src/routes/-homePageLoader.test.ts)
 

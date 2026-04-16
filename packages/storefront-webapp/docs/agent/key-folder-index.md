@@ -6,7 +6,7 @@ This key-folder index highlights the main directories agents are likely to need 
 
 ## Core app surfaces
 
-- [`src/routes`](../../src/routes) — TanStack Start routes, layouts, and browser journey entrypoints. Currently 32 file(s); key children: __root.tsx, _layout, _layout.tsx, auth.verify.tsx, index.tsx.
+- [`src/routes`](../../src/routes) — TanStack Start routes, layouts, and browser journey entrypoints. Currently 34 file(s); key children: -homePageLoader.test.ts, -homePageLoader.ts, __root.tsx, _layout, _layout.tsx.
 - [`src/components`](../../src/components) — Reusable storefront UI and feature-specific checkout/catalog components. Currently 186 file(s); key children: DefaultCatchBoundary.tsx, EntityPage.tsx, HomePage.test.tsx, HomePage.tsx, ProductActionBar.tsx.
 - [`src/hooks`](../../src/hooks) — Client hooks for bag, routing, observability, and auth interactions. Currently 28 file(s); key children: TRACKING_SCALABILITY.md, use-store-modal.tsx, useAuth.ts, useCheckout.ts, useDiscountCodeAlert.tsx.
 - [`src/contexts`](../../src/contexts) — Shared client providers for store, navigation, and observability state. Currently 4 file(s); key children: FormSubmissionProvider.tsx, NavigationBarProvider.tsx, StoreContext.tsx, StorefrontObservabilityProvider.tsx.

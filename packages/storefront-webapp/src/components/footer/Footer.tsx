@@ -1,7 +1,7 @@
 import { useStoreContext } from "@/contexts/StoreContext";
 import { Link } from "@tanstack/react-router";
 import { useGetStoreCategories } from "../navigation/hooks";
-import { forwardRef } from "react";
+import { forwardRef, useEffect, useState } from "react";
 import { getStoreConfigV2 } from "@/lib/storeConfig";
 
 interface FooterLinkGroup {
@@ -117,9 +117,38 @@ export function FooterInner({
 const Footer = forwardRef<
   HTMLDivElement,
   {
-    categoriesEnabled?: boolean;
+    deferCategories?: boolean;
   }
->(({ categoriesEnabled = true }, ref) => {
+>(({ deferCategories = false }, ref) => {
+  const [categoriesEnabled, setCategoriesEnabled] = useState(!deferCategories);
+
+  useEffect(() => {
+    if (!deferCategories) {
+      setCategoriesEnabled(true);
+      return;
+    }
+
+    const enableCategories = () => {
+      setCategoriesEnabled(true);
+    };
+
+    if ("requestIdleCallback" in window) {
+      const idleId = window.requestIdleCallback(enableCategories, {
+        timeout: 1500,
+      });
+
+      return () => {
+        window.cancelIdleCallback(idleId);
+      };
+    }
+
+    const timeoutId = globalThis.setTimeout(enableCategories, 1500);
+
+    return () => {
+      globalThis.clearTimeout(timeoutId);
+    };
+  }, [deferCategories]);
+
   const { categories } = useGetStoreCategories({
     enabled: categoriesEnabled,
   });

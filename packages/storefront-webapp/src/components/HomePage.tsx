@@ -20,6 +20,7 @@ import { getStoreConfigV2 } from "@/lib/storeConfig";
 import { useStorefrontObservability } from "@/hooks/useStorefrontObservability";
 import { createLandingPageViewedEvent } from "@/lib/storefrontJourneyEvents";
 import { resolveHomepageContent } from "./home/homePageContent";
+import type { HomePageLoaderData } from "@/routes/-homePageLoader";
 
 const origin = "homepage";
 
@@ -38,15 +39,10 @@ export function HomePageReadyShell({ children }: HomePageReadyShellProps) {
   );
 }
 
-type HomePageInitialData = {
-  bestSellers?: any[];
-  featured?: any[];
-};
-
 export default function HomePage({
   initialData,
 }: {
-  initialData?: HomePageInitialData;
+  initialData?: HomePageLoaderData;
 }) {
   const homeHeroRef = useRef<HTMLDivElement>(null);
   const bestSellersRef = useRef<HTMLDivElement>(null);
@@ -92,17 +88,23 @@ export default function HomePage({
 
   const productQueries = useProductQueries();
 
-  const initialBestSellers = initialData?.bestSellers;
-  const initialFeatured = initialData?.featured;
+  const initialBestSellers = initialData?.bestSellers?.data;
+  const initialBestSellersUpdatedAt = initialData?.bestSellers?.updatedAt;
+  const initialFeatured = initialData?.featured?.data;
+  const initialFeaturedUpdatedAt = initialData?.featured?.updatedAt;
 
   const { data: bestSellers, isLoading: isLoadingBestSellers } = useQuery({
     ...productQueries.bestSellers(),
     initialData: initialBestSellers,
+    initialDataUpdatedAt: initialBestSellersUpdatedAt,
+    refetchOnMount: initialBestSellers ? false : undefined,
   });
 
   const { data: featured, isLoading: isLoadingFeatured } = useQuery({
     ...productQueries.featured(),
     initialData: initialFeatured,
+    initialDataUpdatedAt: initialFeaturedUpdatedAt,
+    refetchOnMount: initialFeatured ? false : undefined,
   });
 
   // Handle scroll events - now only runs after localStorage is loaded
@@ -272,7 +274,7 @@ export default function HomePage({
 
         <Footer
           ref={footerRef}
-          categoriesEnabled={shouldLoadEngagementPrompts}
+          deferCategories
         />
 
         {upsell && (

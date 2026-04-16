@@ -1,20 +1,9 @@
-import { getBestSellers, getFeatured } from "@/api/product";
 import { createFileRoute } from "@tanstack/react-router";
 import HomePage from "@/components/HomePage";
+import { loadHomePageData } from "./-homePageLoader";
 
 export const Route = createFileRoute("/")({
-  loader: async () => {
-    const [bestSellers, featured] = await Promise.all([
-      getBestSellers(),
-      getFeatured(),
-    ]);
-
-    return {
-      bestSellers,
-      featured,
-    };
-  },
-
+  loader: () => loadHomePageData(),
   component: HomeRoute,
 });
 
