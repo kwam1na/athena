@@ -19,7 +19,6 @@ import {
   getHoverClass,
   getSubmenuBGClass,
   getNavBarAnimationDelay,
-  getOverlayClass,
 } from "./navBarStyles";
 
 const item = {
@@ -29,18 +28,52 @@ const item = {
 };
 
 export default function NavigationBar() {
-  const { store } = useStoreContext();
-  const { bagCount } = useShoppingBag();
+  const { store, navBarClassname, showNavbar, hideNavbar } = useStoreContext();
+  const { navBarLayout, appLocation } = useNavigationBarContext();
+
+  if (!store || !appLocation) return null;
+
+  return (
+    <NavigationBarInner
+      appLocation={appLocation}
+      hideNavbar={hideNavbar}
+      navBarClassname={navBarClassname}
+      navBarLayout={navBarLayout}
+      showNavbar={showNavbar}
+      store={store}
+    />
+  );
+}
+
+function NavigationBarInner({
+  store,
+  navBarClassname,
+  showNavbar,
+  hideNavbar,
+  navBarLayout,
+  appLocation,
+}: {
+  store: NonNullable<ReturnType<typeof useStoreContext>["store"]>;
+  navBarClassname: string;
+  showNavbar: () => void;
+  hideNavbar: () => void;
+  navBarLayout: ReturnType<typeof useNavigationBarContext>["navBarLayout"];
+  appLocation: NonNullable<
+    ReturnType<typeof useNavigationBarContext>["appLocation"]
+  >;
+}) {
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [isMobileMenuShowing, setIsMobileMenuShowing] = useState(false);
-
   const [isMobileBagMenuShowing, setIsMobileBagMenuShowing] = useState(false);
+  const [shouldLoadBagState, setShouldLoadBagState] = useState(
+    appLocation !== "homepage",
+  );
 
+  const { bagCount } = useShoppingBag({
+    enabled:
+      shouldLoadBagState || activeMenu === "bag" || isMobileBagMenuShowing,
+  });
   const { categories, categoryToSubcategoriesMap } = useGetStoreCategories();
-
-  const { navBarClassname, showNavbar, hideNavbar } = useStoreContext();
-
-  const { navBarLayout, appLocation } = useNavigationBarContext();
 
   // Use styling utility instead of hardcoded hover class logic
   const hoverClass = getHoverClass(navBarLayout, appLocation);
@@ -141,6 +174,7 @@ export default function NavigationBar() {
   };
 
   const handleShowMobileBagMenu = () => {
+    setShouldLoadBagState(true);
     setIsMobileBagMenuShowing(true);
     hideNavbar();
   };
@@ -169,7 +203,11 @@ export default function NavigationBar() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, [prevScrollY]);
 
-  if (!store || !appLocation) return null;
+  useEffect(() => {
+    if (appLocation !== "homepage") {
+      setShouldLoadBagState(true);
+    }
+  }, [appLocation]);
 
   // Use styling utilities instead of hardcoded class strings
   const mainWrapperClass = getMainWrapperClass(navBarLayout);
@@ -267,7 +305,10 @@ export default function NavigationBar() {
                     >
                       <span
                         className="hidden lg:flex cursor-pointer hover:-rotate-6 transition-all duration-300 ease-out"
-                        onClick={() => setActiveMenu("bag")}
+                        onClick={() => {
+                          setShouldLoadBagState(true);
+                          setActiveMenu("bag");
+                        }}
                       >
                         <CartIcon
                           notificationCount={bagCount}

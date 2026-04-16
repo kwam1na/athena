@@ -1,7 +1,6 @@
 import { useStoreContext } from "@/contexts/StoreContext";
 import { Link } from "@tanstack/react-router";
 import { useGetStoreCategories } from "../navigation/hooks";
-import { WIGLUB_HAIR_STUDIO_LOCATION_URL } from "@/lib/constants";
 import { forwardRef } from "react";
 import { getStoreConfigV2 } from "@/lib/storeConfig";
 
@@ -25,11 +24,13 @@ function LinkGroup({ group }: { group: FooterLinkGroup }) {
   );
 }
 
-export function FooterInner() {
+export function FooterInner({
+  categories,
+}: {
+  categories?: Array<{ value: string; label: string }>;
+}) {
   const { store } = useStoreContext();
   const storeConfig = getStoreConfigV2(store);
-
-  const { categories } = useGetStoreCategories();
 
   const storeLinks = categories?.map((s) => (
     <Link
@@ -113,11 +114,20 @@ export function FooterInner() {
   );
 }
 
-const Footer = forwardRef<HTMLDivElement>((_, ref) => {
+const Footer = forwardRef<
+  HTMLDivElement,
+  {
+    categoriesEnabled?: boolean;
+  }
+>(({ categoriesEnabled = true }, ref) => {
+  const { categories } = useGetStoreCategories({
+    enabled: categoriesEnabled,
+  });
+
   return (
     <div ref={ref} className="pt-8 bg-accent5">
       <div className="container mx-auto max-w-[1024px] px-6 lg:px-0">
-        <FooterInner />
+        <FooterInner categories={categories} />
       </div>
     </div>
   );

@@ -177,6 +177,7 @@ dist
 # Local Claude/Codex worktree tracking metadata
 packages/.claude/worktrees/
 /worktrees/
+/.worktrees/
 docs/superpowers/plans/
 docs/superpowers/specs/
 .dual-graph/

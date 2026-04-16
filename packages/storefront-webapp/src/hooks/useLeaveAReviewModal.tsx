@@ -14,11 +14,18 @@ const LEAVE_REVIEW_DISMISSED_KEY = "leave_review_modal_dismissed";
  * Custom hook to handle leave a review modal logic
  * Uses the generic useModalState hook for state management and checks eligibility
  */
-export function useLeaveAReviewModal() {
+export function useLeaveAReviewModal({
+  enabled = true,
+}: {
+  enabled?: boolean;
+} = {}) {
   const { store } = useStoreContext();
   const storeConfig = getStoreConfigV2(store);
   const onlineOrderQueries = useOnlineOrderQueries();
-  const { data: onlineOrders } = useQuery(onlineOrderQueries.list());
+  const { data: onlineOrders } = useQuery({
+    ...onlineOrderQueries.list(),
+    enabled: enabled && onlineOrderQueries.list().enabled,
+  });
   const { hasUserReviewForOrderItem } = useReviewQueries();
 
   // Get the most recent order
@@ -26,9 +33,12 @@ export function useLeaveAReviewModal() {
   const itemToReview = orderToReview?.items?.[0];
 
   // Check if user already reviewed this item
-  const { data: hasReviewed } = useQuery(
-    hasUserReviewForOrderItem((itemToReview as any)?._id)
-  );
+  const { data: hasReviewed } = useQuery({
+    ...hasUserReviewForOrderItem((itemToReview as any)?._id),
+    enabled:
+      enabled &&
+      hasUserReviewForOrderItem((itemToReview as any)?._id).enabled !== false,
+  });
 
   // Check if order can be reviewed
   const canReview = ["delivered", "picked-up"].includes(

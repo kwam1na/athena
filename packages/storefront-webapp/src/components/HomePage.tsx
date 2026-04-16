@@ -5,31 +5,21 @@ import { useNavigationBarContext } from "@/contexts/NavigationBarProvider";
 import { useProductQueries } from "@/lib/queries/product";
 import { MARKER_KEY } from "@/lib/constants";
 import { ProductReminderBar } from "./ProductReminderBar";
-import { PromoAlert } from "./home/PromoAlert";
-import { usePromoAlert } from "@/hooks/usePromoAlert";
 import { useProductReminder } from "@/hooks/useProductReminder";
 import { HomeHeroSectionWithRef } from "./home/HomeHeroSection";
 import { BestSellersSection } from "./home/BestSellersSection";
 import { FeaturedProductsSection } from "./home/FeaturedProductsSection";
-import { useSearch } from "@tanstack/react-router";
-import { RewardsAlert } from "./home/RewardsAlert";
 import { useDiscountCodeAlert } from "@/hooks/useDiscountCodeAlert";
-import { useRewardsAlert } from "@/hooks/useRewardsAlert";
 import { useLeaveAReviewModal } from "@/hooks/useLeaveAReviewModal";
-import { WelcomeBackModal } from "./ui/modals/WelcomeBackModal";
-import { ChevronDown, GiftIcon } from "lucide-react";
+import { GiftIcon } from "lucide-react";
 import { motion } from "framer-motion";
 import { useStoreContext } from "@/contexts/StoreContext";
 import { postAnalytics } from "@/api/analytics";
-import { useUpsellsQueries } from "@/lib/queries/upsells";
-import { UpsellModal } from "./ui/modals/UpsellModal";
-import { getRelativeTime } from "@/lib/utils";
-import { ProductActionBar } from "./ProductActionBar";
-import { useShoppingBag } from "@/hooks/useShoppingBag";
 import { LeaveAReviewModal } from "./ui/modals/LeaveAReviewModal";
 import { getStoreConfigV2 } from "@/lib/storeConfig";
 import { useStorefrontObservability } from "@/hooks/useStorefrontObservability";
 import { createLandingPageViewedEvent } from "@/lib/storefrontJourneyEvents";
+import { resolveHomepageContent } from "./home/homePageContent";
 
 const origin = "homepage";
 
@@ -39,13 +29,25 @@ type HomePageReadyShellProps = {
 
 export function HomePageReadyShell({ children }: HomePageReadyShellProps) {
   return (
-    <div data-testid="storefront-homepage-ready" className="min-h-screen overflow-x-hidden">
+    <div
+      data-testid="storefront-homepage-ready"
+      className="min-h-screen overflow-x-hidden"
+    >
       {children}
     </div>
   );
 }
 
-export default function HomePage() {
+type HomePageInitialData = {
+  bestSellers?: any[];
+  featured?: any[];
+};
+
+export default function HomePage({
+  initialData,
+}: {
+  initialData?: HomePageInitialData;
+}) {
   const homeHeroRef = useRef<HTMLDivElement>(null);
   const bestSellersRef = useRef<HTMLDivElement>(null);
   const footerRef = useRef<HTMLDivElement>(null);
@@ -55,35 +57,21 @@ export default function HomePage() {
   const storeConfig = getStoreConfigV2(store);
   const { track } = useStorefrontObservability();
 
-  // console.log("store", store);
-
   const { setNavBarLayout, setAppLocation } = useNavigationBarContext();
 
-  // Use extracted custom hooks
-  // const { isPromoAlertOpen, handleClosePromoAlert } = usePromoAlert();
-
-  // const {
-  //   isRewardsAlertOpen,
-  //   isRewardsAlertDismissed,
-  //   handleCloseRewardsAlert,
-  //   lastRewardsAlertShownTime,
-  // } = useRewardsAlert();
+  const [shouldLoadEngagementPrompts, setShouldLoadEngagementPrompts] =
+    useState(false);
 
   const {
-    isDiscountModalOpen,
     setIsDiscountModalOpen,
-    handleCloseDiscountModal,
-    completeDiscountModalFlow,
     hasDiscountModalBeenShown,
-    hasCompletedDiscountModalFlow,
     setHasDiscountModalBeenShown,
     isDiscountModalDismissed,
-    lastDiscountModalShownTime,
     isDiscountModalStateLoaded,
-    openDiscountModal,
-    hasRedeemedOffers,
     redeemedOffers,
-  } = useDiscountCodeAlert();
+  } = useDiscountCodeAlert({
+    enabled: shouldLoadEngagementPrompts,
+  });
 
   const {
     isLeaveReviewModalOpen,
@@ -92,7 +80,9 @@ export default function HomePage() {
     hasCompletedLeaveReviewModalFlow,
     openLeaveReviewModal,
     canShowModal,
-  } = useLeaveAReviewModal();
+  } = useLeaveAReviewModal({
+    enabled: shouldLoadEngagementPrompts,
+  });
 
   const [hasScrolledPastThreshold, setHasScrolledPastThreshold] =
     useState(false);
@@ -102,13 +92,18 @@ export default function HomePage() {
 
   const productQueries = useProductQueries();
 
-  const { data: bestSellers, isLoading: isLoadingBestSellers } = useQuery(
-    productQueries.bestSellers()
-  );
+  const initialBestSellers = initialData?.bestSellers;
+  const initialFeatured = initialData?.featured;
 
-  const { data: featured, isLoading: isLoadingFeatured } = useQuery(
-    productQueries.featured()
-  );
+  const { data: bestSellers, isLoading: isLoadingBestSellers } = useQuery({
+    ...productQueries.bestSellers(),
+    initialData: initialBestSellers,
+  });
+
+  const { data: featured, isLoading: isLoadingFeatured } = useQuery({
+    ...productQueries.featured(),
+    initialData: initialFeatured,
+  });
 
   // Handle scroll events - now only runs after localStorage is loaded
   useEffect(() => {
@@ -132,6 +127,7 @@ export default function HomePage() {
     };
 
     window.addEventListener("scroll", handleScroll);
+    handleScroll();
 
     return () => {
       window.removeEventListener("scroll", handleScroll);
@@ -142,6 +138,26 @@ export default function HomePage() {
     isDiscountModalDismissed,
     isDiscountModalStateLoaded,
   ]);
+
+  useEffect(() => {
+    if (shouldLoadEngagementPrompts) return;
+
+    const enablePrompts = () => {
+      setShouldLoadEngagementPrompts(true);
+    };
+
+    window.addEventListener("scroll", enablePrompts, { passive: true, once: true });
+    window.addEventListener("pointerdown", enablePrompts, { passive: true, once: true });
+    window.addEventListener("keydown", enablePrompts, { once: true });
+    window.addEventListener("touchstart", enablePrompts, { passive: true, once: true });
+
+    return () => {
+      window.removeEventListener("scroll", enablePrompts);
+      window.removeEventListener("pointerdown", enablePrompts);
+      window.removeEventListener("keydown", enablePrompts);
+      window.removeEventListener("touchstart", enablePrompts);
+    };
+  }, [shouldLoadEngagementPrompts]);
 
   useEffect(() => {
     setNavBarLayout("sticky");
@@ -164,18 +180,6 @@ export default function HomePage() {
     });
   }, [track]);
 
-  const handleClickOnDiscountCode = async () => {
-    openDiscountModal();
-
-    await postAnalytics({
-      action: "clicked_on_discount_code_trigger",
-      origin: "homepage",
-      data: {
-        promoCodeId: storeConfig.promotions.homepageDiscountCodeModalPromoCode,
-      },
-    });
-  };
-
   const handleClickOnLeaveReviewButton = async () => {
     openLeaveReviewModal();
 
@@ -188,66 +192,20 @@ export default function HomePage() {
     });
   };
 
-  const bestSellersSorted = bestSellers?.sort(
-    (a: any, b: any) => a.rank - b.rank
-  );
-
-  const bestSellersProducts = bestSellersSorted?.map((bestSeller: any) => {
-    return bestSeller.productSku;
+  const {
+    bestSellersProducts,
+    featuredSectionSorted,
+    shopLookProduct,
+    hasHomepageData,
+  } = resolveHomepageContent({
+    bestSellers: bestSellers as any,
+    featured: featured as any,
   });
-
-  const featuredSectionSorted = featured
-    ?.sort((a: any, b: any) => a.rank - b.rank)
-    .filter((item: any) => item.type === "regular");
-
-  const shopLookSorted = featured
-    ?.sort((a, b) => (a.rank || 0) - (b.rank || 0))
-    .filter((item) => item.type === "shop_look");
-
-  const shopLookProduct = shopLookSorted?.[0];
 
   const isLoading = isLoadingBestSellers || isLoadingFeatured;
 
-  if (isLoading) return <div className="h-screen" />;
-
-  const lastDiscountModalShownTimeAgo =
-    Date.now() - (lastDiscountModalShownTime || 0);
-
-  const meetsConditionsToShowUpsell =
-    lastDiscountModalShownTimeAgo > 1000 * 60 * 60 * 1 &&
-    isDiscountModalDismissed;
-
-  // const meetsConditionsToShowUpsell = true;
-
   return (
     <>
-      {/* <PromoAlert
-        isOpen={isPromoAlertOpen && !isRewardsAlertOpen}
-        onClose={handleClosePromoAlert}
-      /> */}
-
-      {/* <RewardsAlert isOpen={true} onClose={() => {}} /> */}
-
-      {/* {meetsConditionsToShowUpsell && (
-        <UpsellModal
-          promoCode={store?.config?.homepageDiscountCodeModalPromoCode}
-        />
-      )}
-
-      <WelcomeBackModal
-        isOpen={isDiscountModalOpen}
-        onClose={handleCloseDiscountModal}
-        onSuccess={completeDiscountModalFlow}
-        promoCode={store?.config?.homepageDiscountCodeModalPromoCode}
-      /> */}
-
-      {/* <WelcomeBackModal
-        isOpen={isDiscountModalOpen}
-        onClose={handleCloseDiscountModal}
-        onSuccess={completeDiscountModalFlow}
-        promoCode={store?.config?.homepageDiscountCodeModalPromoCode}
-      /> */}
-
       {/* Floating leave a review button */}
       {!hasCompletedLeaveReviewModalFlow &&
         storeConfig.promotions.leaveAReviewDiscountCodeModalPromoCode &&
@@ -284,18 +242,25 @@ export default function HomePage() {
 
             <div className="container mx-auto space-y-24 md:space-y-48 pb-8 px-4 lg:px-0">
               {/* Best Sellers Section with peek-a-boo effect on mobile */}
-              {Boolean(bestSellersSorted?.length) && (
+              {!hasHomepageData && isLoading && (
+                <div
+                  data-testid="homepage-critical-content"
+                  className="min-h-[12rem]"
+                />
+              )}
+
+              {Boolean(bestSellersProducts.length) && (
                 <div ref={bestSellersRef} className="relative md:mt-0">
                   <div className="absolute -top-12 left-0 right-0 h-12 bg-gradient-to-b from-transparent to-white/10 md:hidden" />
                   <BestSellersSection
-                    bestSellersProducts={bestSellersProducts || []}
+                    bestSellersProducts={bestSellersProducts}
                     origin={origin}
                   />
                 </div>
               )}
 
               {/* Featured Products Section */}
-              {Boolean(featuredSectionSorted?.length) && (
+              {Boolean(featuredSectionSorted.length) && (
                 <FeaturedProductsSection
                   featuredSectionSorted={featuredSectionSorted}
                   origin={origin}
@@ -305,7 +270,10 @@ export default function HomePage() {
           </div>
         </div>
 
-        <Footer ref={footerRef} />
+        <Footer
+          ref={footerRef}
+          categoriesEnabled={shouldLoadEngagementPrompts}
+        />
 
         {upsell && (
           <ProductReminderBar

@@ -1,6 +1,6 @@
-import { useEffect, useRef } from "react";
-import Hls from "hls.js";
 import { motion } from "framer-motion";
+import Hls from "hls.js";
+import { useEffect, useRef } from "react";
 
 interface VideoPlayerProps {
   hlsUrl: string;
