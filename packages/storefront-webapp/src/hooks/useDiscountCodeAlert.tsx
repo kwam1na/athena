@@ -11,7 +11,11 @@ const DISCOUNT_CODE_ALERT_DISMISSED_KEY = "discount_code_alert_dismissed";
  * Custom hook to handle discount code alert logic for the welcome back modal
  * Uses the generic useModalState hook for state management and checks eligibility
  */
-export function useDiscountCodeAlert() {
+export function useDiscountCodeAlert({
+  enabled = true,
+}: {
+  enabled?: boolean;
+} = {}) {
   const {
     isOpen,
     setIsOpen,
@@ -35,7 +39,10 @@ export function useDiscountCodeAlert() {
 
   const offersQueries = useUserOffersQueries();
 
-  const { data: redeemedOffers } = useQuery(offersQueries.redeemed());
+  const { data: redeemedOffers } = useQuery({
+    ...offersQueries.redeemed(),
+    enabled: enabled && offersQueries.redeemed().enabled,
+  });
 
   return {
     isDiscountModalOpen: isOpen,

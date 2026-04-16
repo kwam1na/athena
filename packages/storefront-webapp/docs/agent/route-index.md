@@ -6,6 +6,8 @@ This route index enumerates the current files under `src/routes` so agents can o
 
 ## Top-level entries
 
+- [`src/routes/-homePageLoader.test.ts`](../../src/routes/-homePageLoader.test.ts)
+- [`src/routes/-homePageLoader.ts`](../../src/routes/-homePageLoader.ts)
 - [`src/routes/__root.tsx`](../../src/routes/__root.tsx)
 - [`src/routes/_layout.tsx`](../../src/routes/_layout.tsx)
 - [`src/routes/auth.verify.tsx`](../../src/routes/auth.verify.tsx)

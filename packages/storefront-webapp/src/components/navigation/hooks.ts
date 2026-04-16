@@ -1,14 +1,19 @@
-import { getAllCategoriesWithSubcategories } from "@/api/category";
-import { getAllSubcategories } from "@/api/subcategory";
-import { useStoreContext } from "@/contexts/StoreContext";
 import { useInventoryQueries } from "@/lib/queries/inventory";
 import { capitalizeWords } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
 
 // value=id and label=name
-export function useGetStoreSubcategories() {
-  const { data } = useQuery(useInventoryQueries().subcategories());
+export function useGetStoreSubcategories({
+  enabled = true,
+}: {
+  enabled?: boolean;
+} = {}) {
+  const subcategoriesQuery = useInventoryQueries().subcategories();
+  const { data } = useQuery({
+    ...subcategoriesQuery,
+    enabled: enabled && subcategoriesQuery.enabled,
+  });
 
   const subcategories: Array<{ value: string; label: string }> | undefined =
     data
@@ -18,8 +23,16 @@ export function useGetStoreSubcategories() {
   return subcategories;
 }
 
-export function useGetStoreCategories() {
-  const { data } = useQuery(useInventoryQueries().categories());
+export function useGetStoreCategories({
+  enabled = true,
+}: {
+  enabled?: boolean;
+} = {}) {
+  const categoriesQuery = useInventoryQueries().categories();
+  const { data } = useQuery({
+    ...categoriesQuery,
+    enabled: enabled && categoriesQuery.enabled,
+  });
 
   const categories: Array<{ value: string; label: string }> | undefined = data
     ?.map((category) => ({ value: category.slug, label: category.name }))

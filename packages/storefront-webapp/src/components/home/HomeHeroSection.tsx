@@ -46,6 +46,8 @@ export function HomeHeroSection({
             transition={{ duration: 0.6, delay: 0.8 }}
             src={storeConfig.media.images.shopTheLookImage}
             className="w-full lg:w-[50%] h-screen object-cover"
+            loading="lazy"
+            decoding="async"
           />
         </Link>
 

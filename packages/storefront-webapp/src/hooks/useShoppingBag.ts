@@ -49,7 +49,11 @@ export type Discount = {
   value: number;
 };
 
-export const useShoppingBag = () => {
+export const useShoppingBag = ({
+  enabled = true,
+}: {
+  enabled?: boolean;
+} = {}) => {
   const queryClient = useQueryClient();
   const { baseContext, track } = useStorefrontObservability();
 
@@ -61,14 +65,26 @@ export const useShoppingBag = () => {
     useState<UnavailableProducts>([]);
 
   const bagQueries = useBagQueries();
-
-  const { data: savedBag } = useQuery(bagQueries.activeSavedBag());
-
-  const { data: bag } = useQuery(bagQueries.activeBag());
-
   const promoCodeQueries = usePromoCodesQueries();
 
-  const { data: promoCodeItems } = useQuery(promoCodeQueries.getAllItems());
+  const activeSavedBagQuery = bagQueries.activeSavedBag();
+  const activeBagQuery = bagQueries.activeBag();
+  const promoCodeItemsQuery = promoCodeQueries.getAllItems();
+
+  const { data: savedBag } = useQuery({
+    ...activeSavedBagQuery,
+    enabled: enabled && activeSavedBagQuery.enabled,
+  });
+
+  const { data: bag } = useQuery({
+    ...activeBagQuery,
+    enabled: enabled && activeBagQuery.enabled,
+  });
+
+  const { data: promoCodeItems } = useQuery({
+    ...promoCodeItemsQuery,
+    enabled: enabled && promoCodeItemsQuery.enabled,
+  });
 
   const reportFailure = ({
     step,

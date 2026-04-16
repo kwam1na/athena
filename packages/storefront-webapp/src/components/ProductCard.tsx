@@ -45,6 +45,9 @@ export function ProductCard({
         <img
           alt={`${product?.name} image`}
           className="aspect-square md:aspect-auto md:w-[300px] md:h-[400px] object-cover rounded"
+          decoding="async"
+          loading="lazy"
+          sizes="(max-width: 768px) 50vw, (max-width: 1280px) 33vw, 25vw"
           src={displayedSku.images[0] || fallbackImageUrl}
         />
         {isSoldOut && (
@@ -124,6 +127,9 @@ export function ProductSkuCard({
         <img
           alt={`${sku?.productName} image`}
           className="aspect-square md:aspect-auto md:w-[300px] md:h-[400px] object-cover rounded"
+          decoding="async"
+          loading="lazy"
+          sizes="(max-width: 768px) 50vw, (max-width: 1280px) 33vw, 25vw"
           src={sku.images[0] || fallbackImageUrl}
         />
 

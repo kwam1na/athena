@@ -1,21 +1,23 @@
-import config from "@/config";
 import { useStoreContext } from "@/contexts/StoreContext";
 import { motion } from "framer-motion";
-import Hls from "hls.js";
-import { useEffect, useRef } from "react";
+import { lazy, Suspense } from "react";
 import { ScrollDownButton } from "../ui/ScrollDownButton";
-import { VideoPlayer } from "./VideoPlayer";
 import { getStoreConfigV2 } from "@/lib/storeConfig";
 
 interface HomeHeroProps {
   nextSectionRef?: React.RefObject<HTMLDivElement>;
 }
 
+const LazyVideoPlayer = lazy(async () => {
+  const module = await import("./VideoPlayer");
+
+  return { default: module.VideoPlayer };
+});
+
 export const HomeHero = ({ nextSectionRef }: HomeHeroProps) => {
   const { store } = useStoreContext();
   const storeConfig = getStoreConfigV2(store);
 
-  const videoRef = useRef<HTMLVideoElement>(null);
   const hlsUrl = storeConfig.media.reels.activeHlsUrl;
 
   // Determine which hero to display (default to "reel" for backward compatibility)
@@ -38,7 +40,11 @@ export const HomeHero = ({ nextSectionRef }: HomeHeroProps) => {
   return (
     <section className="relative w-full h-screen flex items-center justify-center text-white text-center">
       {/* Background Video - shown when heroDisplayType is "reel" or not set */}
-      {shouldShowVideo && <VideoPlayer hlsUrl={hlsUrl!} />}
+      {shouldShowVideo && hlsUrl && (
+        <Suspense fallback={null}>
+          <LazyVideoPlayer hlsUrl={hlsUrl} />
+        </Suspense>
+      )}
 
       {/* Background Image - shown when heroDisplayType is "image" */}
       {shouldShowImage && (
