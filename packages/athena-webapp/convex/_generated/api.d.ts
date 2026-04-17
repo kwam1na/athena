@@ -184,6 +184,7 @@ import type * as storeFront_savedBag from "../storeFront/savedBag.js";
 import type * as storeFront_savedBagItem from "../storeFront/savedBagItem.js";
 import type * as storeFront_storefrontObservabilityReport from "../storeFront/storefrontObservabilityReport.js";
 import type * as storeFront_supportTicket from "../storeFront/supportTicket.js";
+import type * as storeFront_syntheticMonitor from "../storeFront/syntheticMonitor.js";
 import type * as storeFront_user from "../storeFront/user.js";
 import type * as storeFront_userOffers from "../storeFront/userOffers.js";
 import type * as storeFront_users from "../storeFront/users.js";
@@ -373,6 +374,7 @@ declare const fullApi: ApiFromModules<{
   "storeFront/savedBagItem": typeof storeFront_savedBagItem;
   "storeFront/storefrontObservabilityReport": typeof storeFront_storefrontObservabilityReport;
   "storeFront/supportTicket": typeof storeFront_supportTicket;
+  "storeFront/syntheticMonitor": typeof storeFront_syntheticMonitor;
   "storeFront/user": typeof storeFront_user;
   "storeFront/userOffers": typeof storeFront_userOffers;
   "storeFront/users": typeof storeFront_users;
