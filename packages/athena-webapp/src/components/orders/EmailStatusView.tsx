@@ -20,7 +20,7 @@ export function EmailStatusView() {
   const [sendingUpdateEmail, setSendingUpdateEmail] = useState(false);
 
   const sendOrderEmail = useAction(
-    api.storeFront.onlineOrderUtilFns.sendOrderUpdateEmail
+    api.storeFront.onlineOrderUtilFns.sendOrderUpdateEmail,
   );
 
   if (!order || !activeStore) return null;
@@ -87,9 +87,7 @@ export function EmailStatusView() {
       hideHeaderBottomBorder
       className="h-auto w-full"
       header={
-        <p className="text-sm text-sm text-muted-foreground">
-          Email communications
-        </p>
+        <p className="text-sm text-sm text-muted-foreground">Messaging</p>
       }
     >
       <div className="py-4 grid grid-cols-1 gap-8">

@@ -10,6 +10,7 @@ import {
   CircleFadingPlus,
   Dot,
   X,
+  BadgeCheckIcon,
 } from "lucide-react";
 import View from "../View";
 import { useOnlineOrder } from "~/src/contexts/OnlineOrderContext";
@@ -27,6 +28,7 @@ import { Button } from "../ui/button";
 import { toast } from "sonner";
 import { useAuth } from "~/src/hooks/useAuth";
 import { getAmountPaidForOrder } from "./utils";
+import { toDisplayAmount } from "~/convex/lib/currency";
 
 interface ExternalTransaction {
   id: string;
@@ -223,12 +225,22 @@ export function OrderDetailsView() {
       hideBorder
       hideHeaderBottomBorder
       className="h-auto w-full"
-      header={<p className="text-sm text-sm text-muted-foreground">Payment</p>}
+      header={
+        <div className="flex items-center gap-2">
+          <p className="text-sm text-sm text-muted-foreground">Payment</p>{" "}
+          {order.hasVerifiedPayment && (
+            <div className="flex gap-1 items-center">
+              <BadgeCheckIcon className={`w-3 h-3 text-green-700`} />
+              <p className="text-xs font-medium text-green-700">Verified</p>
+            </div>
+          )}
+        </div>
+      }
     >
       <div className="py-4">
         <div className="space-y-4">
           {/* Payment Method Display */}
-          <div className="flex items-center gap-8">
+          <div className="flex items-center gap-1">
             <div className="space-y-2">
               {isPODOrder ? (
                 <div className="flex items-center gap-2">
@@ -246,6 +258,9 @@ export function OrderDetailsView() {
               ) : (
                 <p className="text-sm">{`${paymentMethod?.bank} ${paymentChannel}`}</p>
               )}
+            </div>
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">{`ending in ${paymentMethod?.last4}`}</p>
             </div>
 
             {/* Payment Status Badges */}
@@ -268,43 +283,42 @@ export function OrderDetailsView() {
               </div>
             ) : (
               // Regular Payment Status
-              <div>
-                {order.hasVerifiedPayment ? (
-                  <VerifiedBadge
-                    status={`Paid ${formatter.format(amountPaid / 100)}`}
-                    withCheck={false}
-                  />
-                ) : (
-                  <div className="flex items-center gap-2">
-                    <Badge
-                      variant="outline"
-                      className="text-yellow-600 bg-yellow-50"
-                    >
-                      <p className="text-xs">Not verified</p>
-                    </Badge>
-                    {!order.autoVerifiedAt && (
-                      <p className="text-xs text-muted-foreground italic">
-                        Auto-verification hasn't been attempted yet
-                      </p>
-                    )}
-                    {/* <Button variant="link" onClick={handleMarkAsVerified}>
-                      Mark as verified
-                    </Button> */}
-                  </div>
-                )}
-              </div>
+              !order.hasVerifiedPayment && (
+                <div className="flex items-center gap-2">
+                  <Badge
+                    variant="outline"
+                    className="text-yellow-600 bg-yellow-50"
+                  >
+                    <p className="text-xs">Not verified</p>
+                  </Badge>
+                  {!order.autoVerifiedAt && (
+                    <p className="text-xs text-muted-foreground italic">
+                      Auto-verification hasn't been attempted yet
+                    </p>
+                  )}
+                </div>
+              )
             )}
           </div>
 
-          {/* Payment Details */}
-          {!isPODOrder && (
-            <div className="space-y-4">
-              <p className="text-sm">{`Account ending in ${paymentMethod?.last4}`}</p>
+          {order.hasVerifiedPayment && (
+            <div className="flex">
+              <VerifiedBadge
+                status={`Paid ${formatter.format(toDisplayAmount(amountPaid))}`}
+                withCheck={false}
+              />
             </div>
           )}
 
+          {/* Payment Details */}
+          {/* {!isPODOrder && (
+            <div className="space-y-4">
+              <p className="text-sm">{`Account ending in ${paymentMethod?.last4}`}</p>
+            </div>
+          )} */}
+
           {/* Reference Information */}
-          <div className="flex items-center gap-8">
+          {/* <div className="flex items-center gap-8">
             {!isPODOrder ? (
               <p className="text-sm">
                 External payment reference <b>{order?.externalReference}</b>
@@ -321,9 +335,9 @@ export function OrderDetailsView() {
                 <p className="text-xs">Duplicate order</p>
               </Badge>
             )}
-          </div>
+          </div> */}
 
-          {!isPODOrder && externalTransactions.length > 0 && (
+          {/* {!isPODOrder && externalTransactions.length > 0 && (
             <div className="space-y-4 pt-8">
               <p className="text-sm text-sm text-muted-foreground">
                 Payment history
@@ -337,7 +351,7 @@ export function OrderDetailsView() {
                 ))}
               </div>
             </div>
-          )}
+          )} */}
 
           {/* POD Payment Instructions */}
           {isPODOrder && !order.paymentCollected && (
