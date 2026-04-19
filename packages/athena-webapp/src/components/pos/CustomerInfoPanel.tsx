@@ -25,6 +25,7 @@ import { useState } from "react";
 import { POS_MESSAGES, showValidationError } from "../../lib/pos/toastService";
 import { currencyFormatter } from "~/convex/utils";
 import { POSCustomerSummary } from "~/types";
+import { formatStoredAmount } from "~/src/lib/pos/displayAmounts";
 
 interface CustomerInfoPanelProps {
   isOpen: boolean;
@@ -316,7 +317,10 @@ export function CustomerInfoPanel({
                                   customer.totalSpent > 0 && (
                                     <span className="flex items-center gap-1">
                                       <Package className="w-3 h-3" />
-                                      {formatter.format(customer.totalSpent)}
+                                      {formatStoredAmount(
+                                        formatter,
+                                        customer.totalSpent
+                                      )}
                                     </span>
                                   )}
                                 {customer.transactionCount &&

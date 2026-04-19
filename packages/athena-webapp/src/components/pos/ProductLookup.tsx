@@ -7,6 +7,7 @@ import { Product } from "./types";
 import { usePOSProductSearch } from "@/hooks/usePOSProducts";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { currencyFormatter } from "~/convex/utils";
+import { formatStoredAmount } from "~/src/lib/pos/displayAmounts";
 
 interface ProductLookupProps {
   isOpen: boolean;
@@ -94,7 +95,7 @@ export function ProductLookup({
                           )}
                           <div className="flex items-center gap-2">
                             <p className="text-sm font-semibold">
-                              {formatter.format(product.price)}
+                              {formatStoredAmount(formatter, product.price)}
                             </p>
                             {product.quantityAvailable && (
                               <span className="text-xs text-muted-foreground">

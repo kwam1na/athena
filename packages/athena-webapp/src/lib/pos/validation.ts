@@ -9,6 +9,7 @@ import { CartItem } from "@/components/pos/types";
 import { Product, CustomerInfo } from "@/components/pos/types";
 import { POSSession } from "../../../types";
 import { logger } from "../logger";
+import { formatStoredAmount } from "./displayAmounts";
 
 export interface ValidationResult {
   isValid: boolean;
@@ -330,7 +331,7 @@ export function validatePaymentAmount(
   // For card and mobile_money, amount cannot exceed remaining due
   if (amount > remainingDue && paymentMethod !== "cash") {
     errors.push(
-      `Payment amount (${formatter.format(amount)}) cannot exceed remaining due (${formatter.format(remainingDue)})`
+      `Payment amount (${formatStoredAmount(formatter, amount)}) cannot exceed remaining due (${formatStoredAmount(formatter, remainingDue)})`
     );
   }
 
@@ -371,7 +372,7 @@ export function validatePayments(
 
   if (totalPaid < totalDue) {
     errors.push(
-      `Insufficient payment. Total due: ${formatter.format(totalDue)}, Total paid: ${formatter.format(totalPaid)}`
+      `Insufficient payment. Total due: ${formatStoredAmount(formatter, totalDue)}, Total paid: ${formatStoredAmount(formatter, totalPaid)}`
     );
   }
 

@@ -14,6 +14,7 @@ import { currencyFormatter } from "~/convex/utils";
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
 import { capitalizeWords } from "~/src/lib/utils";
 import { Id } from "~/convex/_generated/dataModel";
+import { formatStoredAmount } from "~/src/lib/pos/displayAmounts";
 
 interface CartItemsProps {
   cartItems: CartItem[];
@@ -124,7 +125,7 @@ export function CartItems({
                     )}
 
                     <p className="text-sm font-medium pt-2">
-                      {formatter.format(item.price)}
+                      {formatStoredAmount(formatter, item.price)}
                     </p>
                   </div>
                 </div>
@@ -177,7 +178,10 @@ export function CartItems({
                 {/* Total Price */}
                 <div className="col-span-2 text-right">
                   <p className="font-semibold text-sm">
-                    {formatter.format(item.price * item.quantity)}
+                    {formatStoredAmount(
+                      formatter,
+                      item.price * item.quantity
+                    )}
                   </p>
                 </div>
 
