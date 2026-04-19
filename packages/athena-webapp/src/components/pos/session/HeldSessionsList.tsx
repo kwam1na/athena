@@ -6,6 +6,7 @@ import { Users, ShoppingCart, PlayCircle, Ban, Clock } from "lucide-react";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { useGetCurrencyFormatter } from "~/src/hooks/useGetCurrencyFormatter";
 import { usePOSStore } from "~/src/stores/posStore";
+import { formatStoredAmount } from "~/src/lib/pos/displayAmounts";
 
 interface HeldSession {
   _id: Id<"posSession">;
@@ -97,7 +98,9 @@ export function HeldSessionsList({
                     <ShoppingCart className="h-3 w-3" />
                     {getSessionCartItemsCount(session)}
                   </span>
-                  {session.total && <b>{formatter.format(session.total)}</b>}
+                  {session.total && (
+                    <b>{formatStoredAmount(formatter, session.total)}</b>
+                  )}
                   {/* <span>
                     Held at {formatTime(session.heldAt || session.updatedAt)}
                   </span> */}

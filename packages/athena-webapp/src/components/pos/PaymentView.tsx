@@ -22,6 +22,10 @@ import {
   validatePaymentAmount,
   canCompleteTransaction,
 } from "~/src/lib/pos/validation";
+import {
+  formatStoredAmount,
+  parseDisplayAmountInput,
+} from "~/src/lib/pos/displayAmounts";
 import { cn } from "~/src/lib/utils";
 
 export type SelectedPaymentMethod = "cash" | "mobile_money" | "card";
@@ -142,7 +146,7 @@ export const PaymentView = ({
   // Update display value when currentAmount changes
   useEffect(() => {
     if (currentAmount !== undefined) {
-      setDisplayValue(formatter.format(currentAmount));
+      setDisplayValue(formatStoredAmount(formatter, currentAmount));
     } else {
       setDisplayValue("");
     }
@@ -223,37 +227,25 @@ export const PaymentView = ({
 
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const rawValue = e.target.value;
-    // Remove all non-numeric characters except decimal point
-    const numericValue = rawValue.replace(/[^\d.]/g, "");
+    const parsedAmount = parseDisplayAmountInput(rawValue);
 
-    // Handle empty input
-    if (numericValue === "" || numericValue === ".") {
+    if (parsedAmount === undefined) {
       setDisplayValue("");
       setCurrentAmount(undefined);
       return;
     }
 
-    // Parse the numeric value
-    const numValue = parseFloat(numericValue);
-
-    // Validate the number
-    if (!isNaN(numValue) && numValue >= 0) {
-      // Check max constraint for non-cash payments
-      if (selectedPaymentMethod !== "cash" && numValue > remainingDue) {
-        // Don't update if exceeds max for non-cash
-        return;
-      }
-
-      setCurrentAmount(numValue);
-      // Format with commas for display
-      setDisplayValue(formatter.format(numValue));
+    if (selectedPaymentMethod !== "cash" && parsedAmount > remainingDue) {
+      return;
     }
+
+    setCurrentAmount(parsedAmount);
+    setDisplayValue(formatStoredAmount(formatter, parsedAmount));
   };
 
   const handleAmountBlur = () => {
-    // Ensure display is properly formatted on blur
     if (currentAmount !== undefined) {
-      setDisplayValue(formatter.format(currentAmount));
+      setDisplayValue(formatStoredAmount(formatter, currentAmount));
     }
   };
 
@@ -320,7 +312,9 @@ export const PaymentView = ({
                 </div>
                 {currentAmount && (
                   <span className="font-semibold">
-                    {currentAmount ? formatter.format(currentAmount) : "0.00"}
+                    {currentAmount
+                      ? formatStoredAmount(formatter, currentAmount)
+                      : "0.00"}
                   </span>
                 )}
               </div>

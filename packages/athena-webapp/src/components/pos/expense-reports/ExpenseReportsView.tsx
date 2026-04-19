@@ -12,6 +12,7 @@ import { currencyFormatter } from "~/convex/utils";
 import { expenseReportColumns, ExpenseReportRow } from "./expenseReportColumns";
 import { SimplePageHeader } from "../../common/PageHeader";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { formatStoredAmount } from "~/src/lib/pos/displayAmounts";
 
 // Helper to check if timestamp is today
 const isToday = (timestamp: number) => {
@@ -40,7 +41,7 @@ export function ExpenseReportsView() {
     return expenseTransactions.map((transaction: any) => ({
       _id: transaction._id,
       transactionNumber: transaction.transactionNumber,
-      formattedTotal: formatter.format(transaction.totalValue),
+      formattedTotal: formatStoredAmount(formatter, transaction.totalValue),
       cashierName: transaction.cashierName,
       itemCount: transaction.itemCount,
       completedAt: transaction.completedAt,

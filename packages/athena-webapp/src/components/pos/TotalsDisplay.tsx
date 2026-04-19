@@ -1,3 +1,5 @@
+import { formatStoredAmount } from "~/src/lib/pos/displayAmounts";
+
 interface TotalsDisplayItem {
   label: string;
   value: number;
@@ -31,7 +33,7 @@ export const TotalsDisplay = ({ items }: TotalsDisplayProps) => {
                 : "text-3xl font-semibold"
             }
           >
-            {item.formatter.format(item.value)}
+            {formatStoredAmount(item.formatter, item.value)}
           </span>
         </div>
       ))}

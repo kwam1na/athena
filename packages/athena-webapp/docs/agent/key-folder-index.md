@@ -7,10 +7,10 @@ This key-folder index highlights the main directories agents are likely to need 
 ## Core app surfaces
 
 - [`src/routes`](../../src/routes) — TanStack route entrypoints and authenticated shells. Currently 56 file(s); key children: __root.tsx, _authed, _authed.tsx, index.tsx, join-team.index.tsx.
-- [`src/components`](../../src/components) — UI components, views, and package-local feature widgets. Currently 463 file(s); key children: GenericComboBox.tsx, Navbar.tsx, OrganizationView.tsx, OrganizationsView.tsx, PermissionGate.tsx.
+- [`src/components`](../../src/components) — UI components, views, and package-local feature widgets. Currently 464 file(s); key children: GenericComboBox.tsx, Navbar.tsx, OrganizationView.tsx, OrganizationsView.tsx, PermissionGate.tsx.
 - [`src/hooks`](../../src/hooks) — React hooks that fan out auth, shell, and feature state. Currently 43 file(s); key children: use-image-upload.ts, use-mobile.tsx, use-navigate-back.ts, use-navigation-keyboard-shortcuts.ts, use-pagination-persistence.ts.
 - [`src/contexts`](../../src/contexts) — Context providers for app-wide state and wiring. Currently 5 file(s); key children: OnlineOrderContext.tsx, PermissionsContext.tsx, ProductContext.tsx, ThemeContext.tsx, UserContext.tsx.
-- [`src/lib`](../../src/lib) — Shared frontend helpers, schemas, and package utilities. Currently 33 file(s); key children: aws.ts, behaviorUtils.ts, browserFingerprint.ts, constants.ts, countries.ts.
+- [`src/lib`](../../src/lib) — Shared frontend helpers, schemas, and package utilities. Currently 35 file(s); key children: aws.ts, behaviorUtils.ts, browserFingerprint.ts, constants.ts, countries.ts.
 - [`src/utils`](../../src/utils) — Cross-cutting browser helpers and lower-level utilities. Currently 4 file(s); key children: formatNumber.ts, index.ts, session.ts, versionChecker.ts.
 
 ## Backend and test surfaces

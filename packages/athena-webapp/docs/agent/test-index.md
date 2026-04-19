@@ -36,12 +36,14 @@ This index enumerates the current automated test files and ties them back to the
 ## Section `src`
 
 - [`src/components/bulk-operations/BulkOperationsPreview.test.tsx`](../../src/components/bulk-operations/BulkOperationsPreview.test.tsx)
+- [`src/components/pos/TotalsDisplay.test.tsx`](../../src/components/pos/TotalsDisplay.test.tsx)
 - [`src/components/store-configuration/components/MtnMomoView.test.tsx`](../../src/components/store-configuration/components/MtnMomoView.test.tsx)
 - [`src/components/ui/button.test.tsx`](../../src/components/ui/button.test.tsx)
 - [`src/components/ui/calendar.test.tsx`](../../src/components/ui/calendar.test.tsx)
 - [`src/components/users/TimelineEventCard.test.tsx`](../../src/components/users/TimelineEventCard.test.tsx)
 - [`src/hooks/useBulkOperations.test.ts`](../../src/hooks/useBulkOperations.test.ts)
 - [`src/lib/imageUtils.test.ts`](../../src/lib/imageUtils.test.ts)
+- [`src/lib/pos/displayAmounts.test.ts`](../../src/lib/pos/displayAmounts.test.ts)
 - [`src/lib/productUtils.test.ts`](../../src/lib/productUtils.test.ts)
 - [`src/lib/storeConfig.test.ts`](../../src/lib/storeConfig.test.ts)
 - [`src/lib/utils.test.ts`](../../src/lib/utils.test.ts)

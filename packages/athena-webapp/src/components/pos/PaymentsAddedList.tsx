@@ -5,9 +5,11 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { usePOSStore } from "~/src/stores/posStore";
 import { validatePaymentAmount } from "~/src/lib/pos/validation";
+import { formatStoredAmount, parseDisplayAmountInput } from "~/src/lib/pos/displayAmounts";
 import { Payment } from "./types";
 import { SelectedPaymentMethod } from "./PaymentView";
 import { usePOSOperations } from "~/src/hooks/usePOSOperations";
+import { toDisplayAmount } from "~/convex/lib/currency";
 
 interface PaymentsAddedListProps {
   formatter: Intl.NumberFormat;
@@ -119,12 +121,17 @@ export const PaymentsAddedList = ({
                 </span>
                 <Input
                   type="number"
-                  value={editingAmount || undefined}
+                  value={
+                    editingAmount !== undefined
+                      ? toDisplayAmount(editingAmount)
+                      : ""
+                  }
                   onChange={(e) =>
-                    setEditingAmount(Number(e.target.value) || undefined)
+                    setEditingAmount(parseDisplayAmountInput(e.target.value))
                   }
                   className="h-8 flex-1"
                   min={0}
+                  step="0.01"
                 />
                 <Button
                   size="sm"
@@ -142,7 +149,7 @@ export const PaymentsAddedList = ({
                 <div className="flex items-center gap-2 text-lg">
                   {getPaymentMethodLabel(payment.method)}
                   <span className="font-semibold">
-                    {formatter.format(payment.amount)}
+                    {formatStoredAmount(formatter, payment.amount)}
                   </span>
                 </div>
                 {!state.isTransactionCompleted && !readOnly && (

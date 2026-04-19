@@ -27,6 +27,7 @@ import type { Id } from "~/convex/_generated/dataModel";
 import { Card, CardContent, CardHeader, CardTitle } from "../../ui/card";
 import { EmptyState } from "../../states/empty/empty-state";
 import { currencyFormatter } from "~/convex/utils";
+import { formatStoredAmount } from "~/src/lib/pos/displayAmounts";
 
 type RouteParams =
   | {
@@ -170,7 +171,10 @@ export function TransactionView() {
                         transaction.changeGiven > 0 && (
                           <p className="text-xs text-muted-foreground">
                             Change given:{" "}
-                            {formatter.format(transaction.changeGiven)}
+                            {formatStoredAmount(
+                              formatter,
+                              transaction.changeGiven
+                            )}
                           </p>
                         )}
                     </div>

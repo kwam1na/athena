@@ -27,6 +27,7 @@ import { usePOSStore } from "~/src/stores/posStore";
 import { PaymentView, type SelectedPaymentMethod } from "./PaymentView";
 import { TotalsDisplay } from "./TotalsDisplay";
 import { PaymentsAddedList } from "./PaymentsAddedList";
+import { formatStoredAmount } from "~/src/lib/pos/displayAmounts";
 
 interface OrderSummaryProps {
   cartItems: CartItem[];
@@ -219,8 +220,11 @@ export function OrderSummary({
 
         return {
           name: capitalizeWords(item.name),
-          totalPrice: formatter.format(item.price * item.quantity),
-          quantityLabel: `${item.quantity} × ${formatter.format(item.price)}`,
+          totalPrice: formatStoredAmount(
+            formatter,
+            item.price * item.quantity
+          ),
+          quantityLabel: `${item.quantity} × ${formatStoredAmount(formatter, item.price)}`,
           skuOrBarcode: item.sku || item.barcode,
           attributes:
             attributeParts.length > 0 ? attributeParts.join(" • ") : undefined,
@@ -250,7 +254,7 @@ export function OrderSummary({
         paymentsToFormat && paymentsToFormat.length > 0
           ? paymentsToFormat.map((payment: Payment) => ({
               method: payment.method,
-              amount: formatter.format(payment.amount),
+              amount: formatStoredAmount(formatter, payment.amount),
             }))
           : undefined;
 
@@ -265,7 +269,10 @@ export function OrderSummary({
         formattedPayments &&
         formattedPayments.length > 0 &&
         totalPaidFromPayments > completedData.total
-          ? formatter.format(totalPaidFromPayments - completedData.total)
+          ? formatStoredAmount(
+              formatter,
+              totalPaidFromPayments - completedData.total
+            )
           : undefined;
 
       const storeContact = activeStore.config?.contactInfo;
@@ -274,7 +281,7 @@ export function OrderSummary({
 
       const receiptHTML = await render(
         <PosReceiptEmail
-          amountPaid={formatter.format(totalPaidFromPayments)}
+          amountPaid={formatStoredAmount(formatter, totalPaidFromPayments)}
           storeName={activeStore.name || "Store Name"}
           storeContact={
             activeStore.config
@@ -312,13 +319,13 @@ export function OrderSummary({
           registerNumber={registerNumber || undefined}
           customerInfo={completedData.customerInfo}
           items={receiptItems}
-          subtotal={formatter.format(completedData.subtotal)}
+          subtotal={formatStoredAmount(formatter, completedData.subtotal)}
           tax={
             completedData.tax > 0
-              ? formatter.format(completedData.tax)
+              ? formatStoredAmount(formatter, completedData.tax)
               : undefined
           }
-          total={formatter.format(completedData.total)}
+          total={formatStoredAmount(formatter, completedData.total)}
           paymentMethodLabel={paymentMethodLabel}
           payments={formattedPayments}
           changeGiven={changeGiven}
@@ -399,7 +406,7 @@ export function OrderSummary({
                   ? [
                       {
                         label: "Change Due",
-                        value: -changeDue,
+                        value: changeDue,
                         formatter,
                         highlight: true,
                       },

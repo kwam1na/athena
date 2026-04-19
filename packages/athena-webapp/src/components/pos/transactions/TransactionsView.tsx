@@ -15,6 +15,7 @@ import {
 } from "./transactionColumns";
 import { SimplePageHeader } from "../../common/PageHeader";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { formatStoredAmount } from "~/src/lib/pos/displayAmounts";
 
 function formatPaymentMethod(method: string | null) {
   if (!method) return "Unknown";
@@ -48,7 +49,7 @@ export function TransactionsView() {
     return transactions.map((transaction: any) => ({
       _id: transaction._id,
       transactionNumber: transaction.transactionNumber,
-      formattedTotal: formatter.format(transaction.total),
+      formattedTotal: formatStoredAmount(formatter, transaction.total),
       paymentMethodLabel: formatPaymentMethod(transaction.paymentMethod),
       paymentMethod: transaction.paymentMethod || "cash",
       cashierName: transaction.cashierName,
