@@ -11951,7 +11951,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_product_imagesview_tsx",
       "source_file": "packages/athena-webapp/src/components/product/ImagesView.tsx",
-      "source_location": "L36",
+      "source_location": "L38",
       "target": "imagesview_handlekeydown",
       "weight": 1
     },
@@ -11963,7 +11963,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_product_productstock_tsx",
       "source_file": "packages/athena-webapp/src/components/product/ProductStock.tsx",
-      "source_location": "L47",
+      "source_location": "L57",
       "target": "productstock_lowstockstatus",
       "weight": 1
     },
@@ -11975,7 +11975,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_product_productstock_tsx",
       "source_file": "packages/athena-webapp/src/components/product/ProductStock.tsx",
-      "source_location": "L38",
+      "source_location": "L48",
       "target": "productstock_outofstockstatus",
       "weight": 1
     },
@@ -11987,7 +11987,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_product_productstock_tsx",
       "source_file": "packages/athena-webapp/src/components/product/ProductStock.tsx",
-      "source_location": "L4",
+      "source_location": "L11",
       "target": "productstock_productstockstatus",
       "weight": 1
     },
@@ -33490,7 +33490,7 @@
       "label": "LowStockStatus()",
       "norm_label": "lowstockstatus()",
       "source_file": "packages/athena-webapp/src/components/product/ProductStock.tsx",
-      "source_location": "L47"
+      "source_location": "L57"
     },
     {
       "community": 143,
@@ -33499,7 +33499,7 @@
       "label": "OutOfStockStatus()",
       "norm_label": "outofstockstatus()",
       "source_file": "packages/athena-webapp/src/components/product/ProductStock.tsx",
-      "source_location": "L38"
+      "source_location": "L48"
     },
     {
       "community": 143,
@@ -33508,7 +33508,7 @@
       "label": "ProductStockStatus()",
       "norm_label": "productstockstatus()",
       "source_file": "packages/athena-webapp/src/components/product/ProductStock.tsx",
-      "source_location": "L4"
+      "source_location": "L11"
     },
     {
       "community": 144,
@@ -42076,7 +42076,7 @@
       "label": "handleKeyDown()",
       "norm_label": "handlekeydown()",
       "source_file": "packages/athena-webapp/src/components/product/ImagesView.tsx",
-      "source_location": "L36"
+      "source_location": "L38"
     },
     {
       "community": 372,

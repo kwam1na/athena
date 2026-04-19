@@ -84,14 +84,14 @@ export function DetailsView() {
             <p className={`text-sm ${stockLabelColor}`}>
               {activeProductVariant.stock}
             </p>
-            <span className="text-xs">
+            {/* <span className="text-xs">
               <ProductStockStatus productVariant={activeProductVariant} />
-            </span>
+            </span> */}
           </div>
         </div>
 
         <div className="space-y-4">
-          <p className="text-sm text-muted-foreground"># Available</p>
+          <p className="text-sm text-muted-foreground">Sellable</p>
           <p className="text-sm">{activeProductVariant.quantityAvailable}</p>
         </div>
       </FadeIn>

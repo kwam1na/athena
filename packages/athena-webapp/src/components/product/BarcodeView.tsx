@@ -53,8 +53,8 @@ export function BarcodeView() {
     <View hideBorder hideHeaderBottomBorder className="h-auto w-full">
       <FadeIn className="py-4 space-y-4">
         <div className="flex items-center justify-between">
-          <p className="text-sm font-medium">Barcode</p>
-          <div className="flex items-center gap-2">
+          {/* <p className="text-sm text-muted-foreground">Barcode</p> */}
+          {/* <div className="flex items-center gap-2">
             <Button size="sm" variant="outline" onClick={handleDownload}>
               <Download className="w-3 h-3 mr-2" />
               Save PNG
@@ -63,7 +63,7 @@ export function BarcodeView() {
               <Printer className="w-3 h-3 mr-2" />
               Print
             </Button>
-          </div>
+          </div> */}
         </div>
 
         <div
