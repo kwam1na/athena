@@ -33,10 +33,6 @@ const ProductDetailViewHeader = () => {
           <p className="text-sm">
             {capitalizeWords(activeProduct?.name || "")}
           </p>
-
-          <div className="text-xs flex items-center gap-4">
-            {activeProduct && <ProductStatus product={activeProduct} />}
-          </div>
         </>
       }
     />

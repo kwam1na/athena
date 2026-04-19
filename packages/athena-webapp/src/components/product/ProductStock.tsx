@@ -30,7 +30,10 @@ export const ProductStockStatus = ({
     (productVariant.quantityAvailable || 0) <= 2
   ) {
     return (
-      <Badge variant={"outline"} className="flex bg-yellow-50 items-center">
+      <Badge
+        variant={"outline"}
+        className="flex bg-yellow-50 border-none items-center"
+      >
         <AlertOctagonIcon className="w-3.5 h-3.5 text-yellow-600 mr-2" />
         <p className="text-yellow-700">Low stock</p>
       </Badge>
@@ -38,7 +41,10 @@ export const ProductStockStatus = ({
   }
 
   return (
-    <Badge variant={"outline"} className="flex bg-green-100 items-center">
+    <Badge
+      variant={"outline"}
+      className="flex bg-green-100 border-none items-center"
+    >
       <CheckCircle2 className="w-3.5 h-3.5 text-green-700 mr-2" />
       <p className="text-green-800">In stock</p>
     </Badge>

@@ -83,7 +83,13 @@ export function ImagesView() {
               <div className="relative">
                 {i == 0 && (
                   <div className="font-medium text-xs absolute top-0 left-0 m-2">
-                    <ProductStockStatus productVariant={activeProductVariant} />
+                    {activeProduct.isVisible ? (
+                      <ProductStockStatus
+                        productVariant={activeProductVariant}
+                      />
+                    ) : (
+                      <ProductStatus product={activeProduct} />
+                    )}
                   </div>
                 )}
                 <img
