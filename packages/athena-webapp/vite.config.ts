@@ -1,4 +1,3 @@
-
 import react from "@vitejs/plugin-react";
 import { TanStackRouterVite } from "@tanstack/router-plugin/vite";
 import path from "path";
@@ -10,12 +9,12 @@ export default defineConfig(({ mode }) => ({
   build: {
     rollupOptions: {
       treeshake: true,
-      plugins: [
-        visualizer({
-          filename: "stats.html",
-          template: "treemap",
-        }),
-      ],
+      // plugins: [
+      //   visualizer({
+      //     filename: "stats.html",
+      //     template: "treemap",
+      //   }),
+      // ],
       output: {
         manualChunks(id) {
           if (id.includes("node_modules")) {
@@ -27,7 +26,9 @@ export default defineConfig(({ mode }) => ({
       },
     },
   },
-  plugins: (mode === "test" ? [react()] : [TanStackRouterVite(), react()]) as any,
+  plugins: (mode === "test"
+    ? [react()]
+    : [TanStackRouterVite(), react()]) as any,
   resolve: {
     alias: {
       "~": __dirname,

@@ -9,12 +9,12 @@ export default defineConfig({
   build: {
     rollupOptions: {
       treeshake: true,
-      plugins: [
-        visualizer({
-          filename: "stats.html",
-          template: "treemap",
-        }),
-      ],
+      // plugins: [
+      //   visualizer({
+      //     filename: "stats.html",
+      //     template: "treemap",
+      //   }),
+      // ],
       output: {
         manualChunks(id) {
           if (id.includes("node_modules")) {

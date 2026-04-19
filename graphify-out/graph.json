@@ -11963,7 +11963,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_product_productstock_tsx",
       "source_file": "packages/athena-webapp/src/components/product/ProductStock.tsx",
-      "source_location": "L57",
+      "source_location": "L63",
       "target": "productstock_lowstockstatus",
       "weight": 1
     },
@@ -11975,7 +11975,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_product_productstock_tsx",
       "source_file": "packages/athena-webapp/src/components/product/ProductStock.tsx",
-      "source_location": "L48",
+      "source_location": "L54",
       "target": "productstock_outofstockstatus",
       "weight": 1
     },
@@ -16511,7 +16511,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_vite_config_ts",
       "source_file": "packages/athena-webapp/vite.config.ts",
-      "source_location": "L20",
+      "source_location": "L19",
       "target": "vite_config_manualchunks",
       "weight": 1
     },
@@ -33490,7 +33490,7 @@
       "label": "LowStockStatus()",
       "norm_label": "lowstockstatus()",
       "source_file": "packages/athena-webapp/src/components/product/ProductStock.tsx",
-      "source_location": "L57"
+      "source_location": "L63"
     },
     {
       "community": 143,
@@ -33499,7 +33499,7 @@
       "label": "OutOfStockStatus()",
       "norm_label": "outofstockstatus()",
       "source_file": "packages/athena-webapp/src/components/product/ProductStock.tsx",
-      "source_location": "L48"
+      "source_location": "L54"
     },
     {
       "community": 143,
