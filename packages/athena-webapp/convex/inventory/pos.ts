@@ -1,14 +1,9 @@
 import { query, mutation, MutationCtx, QueryCtx } from "../_generated/server";
 import { v } from "convex/values";
-import type { Id } from "../_generated/dataModel";
+import type { Doc, Id } from "../_generated/dataModel";
 import { capitalizeWords, generateTransactionNumber } from "../utils";
 
 const CONVEX_PRODUCT_ID_PATTERN = /^[a-z0-9]{32}$/;
-const POS_SEARCH_PAGE_SIZE = 200;
-const POS_PRODUCT_LOOKUP_SKU_PAGE_SIZE = 100;
-const POS_TRANSACTION_ITEM_PAGE_SIZE = 200;
-const POS_SESSION_ITEM_PAGE_SIZE = 200;
-const POS_TODAY_SUMMARY_PAGE_SIZE = 100;
 
 type PosReadCtx = QueryCtx | MutationCtx;
 
@@ -16,76 +11,90 @@ function isConvexProductId(value: string): value is Id<"product"> {
   return CONVEX_PRODUCT_ID_PATTERN.test(value);
 }
 
-async function collectAllPages<T>(
-  loadPage: (cursor: string | null) => Promise<{
-    page: T[];
-    continueCursor: string | null;
-    isDone: boolean;
-  }>
-) {
+async function readAllQueryResults<T>(query: AsyncIterable<T>) {
   const results: T[] = [];
-  let cursor: string | null = null;
 
-  while (true) {
-    const page = await loadPage(cursor);
-    results.push(...page.page);
-
-    if (page.isDone) {
-      return results;
-    }
-
-    cursor = page.continueCursor;
+  for await (const item of query) {
+    results.push(item);
   }
+
+  return results;
 }
 
 async function listProductSkusByProductId(
   ctx: QueryCtx,
   productId: Id<"product">
 ) {
-  return collectAllPages((cursor) =>
+  return readAllQueryResults(
     ctx.db
       .query("productSku")
       .withIndex("by_productId", (q) => q.eq("productId", productId))
-      .paginate({ cursor, numItems: POS_PRODUCT_LOOKUP_SKU_PAGE_SIZE })
   );
 }
 
-async function listStoreProducts(ctx: QueryCtx, storeId: Id<"store">) {
-  return collectAllPages((cursor) =>
-    ctx.db
-      .query("product")
-      .withIndex("by_storeId", (q) => q.eq("storeId", storeId))
-      .paginate({ cursor, numItems: POS_SEARCH_PAGE_SIZE })
-  );
-}
+async function listMatchingStoreSkus(
+  ctx: QueryCtx,
+  storeId: Id<"store">,
+  searchQuery: string
+) {
+  const matches: Array<{
+    product: Doc<"product">;
+    sku: Doc<"productSku">;
+  }> = [];
+  const productCache = new Map<Id<"product">, Doc<"product"> | null>();
 
-async function listStoreSkus(ctx: QueryCtx, storeId: Id<"store">) {
-  return collectAllPages((cursor) =>
-    ctx.db
-      .query("productSku")
-      .withIndex("by_storeId", (q) => q.eq("storeId", storeId))
-      .paginate({ cursor, numItems: POS_SEARCH_PAGE_SIZE })
-  );
+  for await (const sku of ctx.db
+    .query("productSku")
+    .withIndex("by_storeId", (q) => q.eq("storeId", storeId))) {
+    let product = productCache.get(sku.productId);
+
+    if (product === undefined) {
+      product = (await ctx.db.get("product", sku.productId)) ?? null;
+      productCache.set(sku.productId, product);
+    }
+
+    if (!product || product.storeId !== storeId) {
+      continue;
+    }
+
+    const barcodeMatches =
+      sku.barcode?.toLowerCase().includes(searchQuery) ?? false;
+    const skuMatches = sku.sku?.toLowerCase().includes(searchQuery) ?? false;
+    const nameMatches = product.name.toLowerCase().includes(searchQuery);
+    const productIdMatches = product._id.toLowerCase().includes(searchQuery);
+    const descriptionMatches =
+      product.description?.toLowerCase().includes(searchQuery) ?? false;
+
+    if (
+      barcodeMatches ||
+      skuMatches ||
+      nameMatches ||
+      descriptionMatches ||
+      productIdMatches
+    ) {
+      matches.push({ product, sku });
+    }
+  }
+
+  return matches;
 }
 
 async function listTransactionItems(
   ctx: PosReadCtx,
   transactionId: Id<"posTransaction">
 ) {
-  return collectAllPages((cursor) =>
+  return readAllQueryResults(
     ctx.db
       .query("posTransactionItem")
       .withIndex("by_transactionId", (q) => q.eq("transactionId", transactionId))
-      .paginate({ cursor, numItems: POS_TRANSACTION_ITEM_PAGE_SIZE })
   );
 }
 
 async function listSessionItems(ctx: MutationCtx, sessionId: Id<"posSession">) {
-  return collectAllPages((cursor) =>
+  return readAllQueryResults(
     ctx.db
       .query("posSessionItem")
       .withIndex("by_sessionId", (q) => q.eq("sessionId", sessionId))
-      .paginate({ cursor, numItems: POS_SESSION_ITEM_PAGE_SIZE })
   );
 }
 
@@ -95,7 +104,7 @@ async function listCompletedTransactionsForDay(
   startOfDay: number,
   endOfDay: number
 ) {
-  return collectAllPages((cursor) =>
+  return readAllQueryResults(
     ctx.db
       .query("posTransaction")
       .withIndex("by_storeId_status_completedAt", (q) =>
@@ -105,7 +114,6 @@ async function listCompletedTransactionsForDay(
           .gte("completedAt", startOfDay)
           .lte("completedAt", endOfDay)
       )
-      .paginate({ cursor, numItems: POS_TODAY_SUMMARY_PAGE_SIZE })
   );
 }
 
@@ -126,16 +134,16 @@ export const searchProducts = query({
 
       if (product?.storeId === args.storeId) {
         const productSkus = await listProductSkusByProductId(ctx, product._id);
+        let categoryName = "";
+
+        if (product.categoryId) {
+          const category = await ctx.db.get("category", product.categoryId);
+          categoryName = category?.name || "";
+        }
 
         const results = await Promise.all(
           productSkus.map(async (sku) => {
             if (!sku.netPrice) return null;
-
-            let categoryName = "";
-            if (product.categoryId) {
-              const category = await ctx.db.get("category", product.categoryId);
-              categoryName = (category as any)?.name || "";
-            }
 
             let colorName = "";
             if (sku.color) {
@@ -173,60 +181,21 @@ export const searchProducts = query({
     // matching across product name, description, SKU, barcode, and product id.
     // Keep that behavior intact here while exact product-id and barcode paths
     // move onto direct indexed reads in V26-173.
-    const allProducts = await listStoreProducts(ctx, args.storeId);
-
-    const allSkus = await listStoreSkus(ctx, args.storeId);
-
-    // Create a map of products by ID for easy lookup
-    const productMap = new Map();
-    allProducts.forEach((product) => {
-      productMap.set(product._id, product);
-    });
-
-    // Find matching SKUs (by SKU code, barcode, or product name)
-    const matchingSkus = allSkus.filter((sku) => {
-      const product = productMap.get(sku.productId);
-      if (!product) return false;
-
-      // Search in barcode field
-      const barcodeMatches = sku.barcode?.toLowerCase().includes(query);
-
-      // Search in SKU code
-      const skuMatches = sku.sku?.toLowerCase().includes(query);
-
-      // Search in product name
-      const nameMatches = product.name.toLowerCase().includes(query);
-
-      const productIdMatches = product._id.toLowerCase().includes(query);
-
-      // Search in product description
-      const descriptionMatches = product.description
-        ?.toLowerCase()
-        .includes(query);
-
-      return (
-        barcodeMatches ||
-        skuMatches ||
-        nameMatches ||
-        descriptionMatches ||
-        productIdMatches
-      );
-    });
+    const matchingSkus = await listMatchingStoreSkus(ctx, args.storeId, query);
 
     // Transform to POS-friendly format
     const results = await Promise.all(
       matchingSkus
         // .filter((sku) => sku.quantityAvailable > 0) // Only show available items
         // .slice(0, 20) // Limit results for performance
-        .map(async (sku) => {
-          const product = productMap.get(sku.productId);
-          if (!product || !sku.netPrice) return null;
+        .map(async ({ product, sku }) => {
+          if (!sku.netPrice) return null;
 
           // Get category name
           let categoryName = "";
           if (product.categoryId) {
             const category = await ctx.db.get("category", product.categoryId);
-            categoryName = (category as any)?.name || "";
+            categoryName = category?.name || "";
           }
 
           // Get color name if exists

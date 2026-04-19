@@ -47,6 +47,16 @@ describe("V26-173 POS query cleanup", () => {
     );
   });
 
+  it("avoids manual pagination loops in POS query helpers", () => {
+    const source = readProjectFile("convex", "inventory", "pos.ts").replace(
+      /\s+/g,
+      " "
+    );
+
+    expect(source).not.toContain("async function collectAllPages");
+    expect(source).not.toContain('.paginate({ cursor, numItems:');
+  });
+
   it("passes Convex lint without a file-level waiver on pos.ts", async () => {
     const source = readProjectFile("convex", "inventory", "pos.ts");
 
