@@ -19,8 +19,12 @@ const StoreVisitors = () => {
   const uniqueVisitorsToday = useQuery(
     api.storeFront.guest.getUniqueVisitorsForDay,
     activeStore?._id
-      ? { storeId: activeStore._id, startTimeMs: startOfDay, endTimeMs: endOfDay }
-      : "skip"
+      ? {
+          storeId: activeStore._id,
+          startTimeMs: startOfDay,
+          endTimeMs: endOfDay,
+        }
+      : "skip",
   );
 
   // if (!activeStore) return null;
@@ -46,7 +50,7 @@ const ActiveCheckoutSessions = () => {
 
   const activeCheckoutSessions = useQuery(
     api.storeFront.checkoutSession.getActiveCheckoutSessionsForStore,
-    activeStore?._id ? { storeId: activeStore._id } : "skip"
+    activeStore?._id ? { storeId: activeStore._id } : "skip",
   );
 
   // if (!activeCheckoutSessions) return null;
@@ -86,7 +90,7 @@ export default function AnalyticsView() {
 
   const analytics = useQuery(
     api.storeFront.analytics.getAll,
-    activeStore?._id ? { storeId: activeStore._id } : "skip"
+    activeStore?._id ? { storeId: activeStore._id } : "skip",
   );
 
   const items = analytics?.sort((a, b) => b._creationTime - a._creationTime);
@@ -137,11 +141,11 @@ export default function AnalyticsView() {
           </div>
         </div>
         <div className="space-y-16">
-          <StorefrontObservabilityPanel />
           <div className="grid grid-cols-2 gap-12">
-          <AnalyticsCombinedUsers items={items} />
+            <AnalyticsCombinedUsers items={items} />
             <AnalyticsProducts items={items} />
           </div>
+          <StorefrontObservabilityPanel />
         </div>
       </FadeIn>
     </View>
