@@ -167,9 +167,7 @@ export default function AnalyticsCombinedUsers({
   });
 
   // Sort by total actions (most active first)
-  const sortedData = combinedData.sort(
-    (a, b) => b.totalActions - a.totalActions
-  );
+  const sortedData = combinedData.sort((a, b) => b.lastActive - a.lastActive);
 
   return (
     <div className="container mx-auto">

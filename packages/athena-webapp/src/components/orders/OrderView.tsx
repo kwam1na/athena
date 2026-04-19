@@ -263,6 +263,8 @@ const Header = () => {
       hasIssuedRefund) ||
     isOrderOpen;
 
+  const orderDate = new Date(order._creationTime);
+
   return (
     <>
       <ActionModal
@@ -310,7 +312,7 @@ const Header = () => {
             </div>
 
             <p className="text-xs text-muted-foreground">
-              {`placed ${getRelativeTime(order._creationTime)}`}
+              {`created ${orderDate.toDateString()}, ${orderDate.toLocaleTimeString()} (${getRelativeTime(order._creationTime)})`}
             </p>
           </>
         }
