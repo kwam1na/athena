@@ -23,6 +23,8 @@ import { usePermissions } from "~/src/hooks/usePermissions";
 import { FadeIn } from "../common/FadeIn";
 import { Skeleton } from "../ui/skeleton";
 import { useEffect } from "react";
+import { ProductStockStatus } from "./ProductStock";
+import { ProductStatus } from "./ProductStatus";
 
 export function ImagesView() {
   const { activeProductVariant } = useProduct();
@@ -53,7 +55,7 @@ export function ImagesView() {
       if (event.key === "v" && activeProduct) {
         window.open(
           `${config.storeFrontUrl}/shop/product/${activeProduct?._id}?variant=${activeProductVariant?.sku}`,
-          "_blank"
+          "_blank",
         );
       }
     };
@@ -78,14 +80,21 @@ export function ImagesView() {
         <div className="py-4 grid grid-cols-2 gap-2">
           {activeProductVariant.images.map((image, i) => {
             return (
-              <img
-                key={i}
-                alt="Uploaded image"
-                className={`aspect-square w-full rounded-md object-cover transition-opacity duration-300 ${image.markedForDeletion ? "opacity-50" : ""}`}
-                height="200"
-                src={image.preview}
-                width="200"
-              />
+              <div className="relative">
+                {i == 0 && (
+                  <div className="font-medium text-xs absolute top-0 left-0 m-2">
+                    <ProductStockStatus productVariant={activeProductVariant} />
+                  </div>
+                )}
+                <img
+                  key={i}
+                  alt="Uploaded image"
+                  className={`aspect-square w-full rounded-md object-cover transition-opacity duration-300`}
+                  height="200"
+                  src={image.preview}
+                  width="200"
+                />
+              </div>
             );
           })}
 
@@ -123,7 +132,7 @@ export function ImagesView() {
               onClick={() => {
                 window.open(
                   `${config.storeFrontUrl}/shop/product/${activeProduct?._id}?variant=${activeProductVariant?.sku}`,
-                  "_blank"
+                  "_blank",
                 );
               }}
               className="flex items-center gap-2"

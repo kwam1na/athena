@@ -1,5 +1,4 @@
 import { AlertOctagonIcon, AlertTriangle, EyeOff } from "lucide-react";
-import { capitalizeFirstLetter, slugToWords } from "~/src/lib/utils";
 import { Product } from "~/types";
 import { Badge } from "../ui/badge";
 

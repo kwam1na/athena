@@ -59,12 +59,12 @@ export const ProductDetailView = () => {
 
                 <AttributesView />
 
-                <CategorizationView />
+                {/* <CategorizationView /> */}
 
                 <BarcodeView />
               </div>
 
-              <div className="space-y-8">
+              <div className="space-y-16">
                 <ImagesView />
 
                 <AnalyticsInsights />
