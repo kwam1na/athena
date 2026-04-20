@@ -14,6 +14,7 @@ type PrePushReviewLogger = Pick<Console, "log" | "warn" | "error">;
 type PrePushReviewOptions = {
   getChangedFiles?: (rootDir: string) => Promise<string[]>;
   runArchitectureCheck?: (rootDir: string) => Promise<void>;
+  runHarnessInferentialReview?: (rootDir: string) => Promise<void>;
   runHarnessImplementationTests?: (rootDir: string) => Promise<void>;
   runHarnessSelfReview?: (rootDir: string) => Promise<void>;
   runHarnessReview?: (
@@ -117,6 +118,18 @@ export async function runHarnessImplementationTests(rootDir: string): Promise<vo
   }
 }
 
+export async function runHarnessInferentialReview(rootDir: string): Promise<void> {
+  const proc = Bun.spawn(["bun", "run", "harness:inferential-review"], {
+    cwd: rootDir,
+    stdout: "inherit",
+    stderr: "inherit",
+  });
+  const exitCode = await proc.exited;
+  if (exitCode !== 0) {
+    throw new Error(`harness:inferential-review failed (exit ${exitCode})`);
+  }
+}
+
 function shouldRunHarnessImplementationTests(changedFiles: string[]): boolean {
   return changedFiles.some((filePath) =>
     HARNESS_IMPLEMENTATION_CHANGE_PATTERNS.some((pattern) => pattern.test(filePath))
@@ -130,6 +143,8 @@ export async function runPrePushReview(
   const logger = options.logger ?? console;
   const getChangedFiles = options.getChangedFiles ?? getChangedFilesVsOriginMain;
   const runArchitecture = options.runArchitectureCheck ?? runArchitectureCheck;
+  const runInferentialReview =
+    options.runHarnessInferentialReview ?? runHarnessInferentialReview;
   const runHarnessTests =
     options.runHarnessImplementationTests ?? runHarnessImplementationTests;
   const runSelfReview = options.runHarnessSelfReview ?? runHarnessSelfReview;
@@ -151,29 +166,32 @@ export async function runPrePushReview(
 
   logger.log("[pre-push] Running pre-push validation suite...\n");
 
-  logger.log(`[pre-push] Step 1/4: harness:self-review (vs ${BASE_REF})`);
+  logger.log(`[pre-push] Step 1/5: harness:self-review (vs ${BASE_REF})`);
   await runSelfReview(rootDir);
 
-  logger.log("[pre-push] Step 2/4: architecture:check");
+  logger.log("[pre-push] Step 2/5: architecture:check");
   await runArchitecture(rootDir);
 
   const changedFiles = await loadChangedFiles();
 
   if (shouldRunHarnessImplementationTests(changedFiles)) {
     logger.log(
-      "[pre-push] Step 3/4: harness:test (harness-owned changes detected)"
+      "[pre-push] Step 3/5: harness:test (harness-owned changes detected)"
     );
     await runHarnessTests(rootDir);
   } else {
-    logger.log("[pre-push] Step 3/4: harness:test skipped (no harness-owned changes)");
+    logger.log("[pre-push] Step 3/5: harness:test skipped (no harness-owned changes)");
   }
 
   // runHarnessReview internally runs harness:check first, then targeted per-surface scripts
-  logger.log(`[pre-push] Step 4/4: harness:review (vs ${BASE_REF})`);
+  logger.log(`[pre-push] Step 4/5: harness:review (vs ${BASE_REF})`);
   await review(rootDir, {
     baseRef: BASE_REF,
     getChangedFiles: getChangedFilesForHarnessReview,
   });
+
+  logger.log("[pre-push] Step 5/5: harness:inferential-review");
+  await runInferentialReview(rootDir);
 
   logger.log("\n[pre-push] All checks passed.");
 }

@@ -61,7 +61,7 @@ describe("pre-push review wiring", () => {
     expect(files).toEqual([]);
   });
 
-  it("runs self-review before architecture checks and harness review", async () => {
+  it("runs self-review before architecture checks, harness review, and inferential review", async () => {
     const steps: string[] = [];
 
     await prePushReview.runPrePushReview(ROOT_DIR, {
@@ -78,18 +78,22 @@ describe("pre-push review wiring", () => {
       runHarnessReview: async (_rootDir, options) => {
         steps.push(`harness:review:${options.baseRef}`);
       },
+      runHarnessInferentialReview: async () => {
+        steps.push("harness:inferential-review");
+      },
       logger: {
         log() {},
         warn() {},
         error() {},
       },
-    });
+    } as any);
 
     expect(steps).toEqual([
       "harness:self-review:origin/main",
       "architecture:check",
       "changed-files",
       "harness:review:origin/main",
+      "harness:inferential-review",
     ]);
   });
 
@@ -115,12 +119,15 @@ describe("pre-push review wiring", () => {
         const files = await options.getChangedFiles?.(ROOT_DIR, options.baseRef);
         steps.push(`files:${files?.join(",") ?? ""}`);
       },
+      runHarnessInferentialReview: async () => {
+        steps.push("harness:inferential-review");
+      },
       logger: {
         log() {},
         warn() {},
         error() {},
       },
-    });
+    } as any);
 
     expect(steps).toEqual([
       "harness:self-review:origin/main",
@@ -129,6 +136,7 @@ describe("pre-push review wiring", () => {
       "harness:test",
       "harness:review:origin/main",
       "files:scripts/harness-check.test.ts",
+      "harness:inferential-review",
     ]);
   });
 
@@ -154,12 +162,15 @@ describe("pre-push review wiring", () => {
         const files = await options.getChangedFiles?.(ROOT_DIR, options.baseRef);
         steps.push(`files:${files?.join(",") ?? ""}`);
       },
+      runHarnessInferentialReview: async () => {
+        steps.push("harness:inferential-review");
+      },
       logger: {
         log() {},
         warn() {},
         error() {},
       },
-    });
+    } as any);
 
     expect(steps).toEqual([
       "harness:self-review:origin/main",
@@ -167,6 +178,7 @@ describe("pre-push review wiring", () => {
       "changed-files",
       "harness:review:origin/main",
       "files:packages/athena-webapp/src/main.tsx",
+      "harness:inferential-review",
     ]);
   });
 
@@ -189,12 +201,15 @@ describe("pre-push review wiring", () => {
         const files = await options.getChangedFiles?.(ROOT_DIR, options.baseRef);
         steps.push(`files:${files?.join(",") ?? ""}`);
       },
+      runHarnessInferentialReview: async () => {
+        steps.push("harness:inferential-review");
+      },
       logger: {
         log() {},
         warn() {},
         error() {},
       },
-    });
+    } as any);
 
     expect(steps).toEqual([
       "harness:self-review:origin/main",
@@ -202,6 +217,7 @@ describe("pre-push review wiring", () => {
       "changed-files-fallback",
       "harness:review:origin/main",
       "files:",
+      "harness:inferential-review",
     ]);
   });
 
@@ -215,6 +231,7 @@ describe("pre-push review wiring", () => {
       }) as unknown as (rootDir: string) => Promise<string[]>,
       runHarnessSelfReview: async () => {},
       runArchitectureCheck: async () => {},
+      runHarnessInferentialReview: async () => {},
       runHarnessReview: async (_rootDir, options) => {
         await options.getChangedFiles?.(ROOT_DIR, options.baseRef);
       },

@@ -115,5 +115,11 @@ Tracked graphify artifacts:
 Local-only graphify artifacts:
 
 - `graphify-out/cache/`
+- `artifacts/harness-inferential-review/`
+- `artifacts/harness-scorecard/`
+- `artifacts/harness-behavior/trends/`
+- `artifacts/harness-behavior/videos/`
 
 `graphify-out/cache/` is intentionally ignored because it is a large local acceleration cache, not a reviewable source artifact.
+
+The `artifacts/harness-*/` paths above are also intentionally ignored because they are machine-generated local or CI evidence outputs, not reviewable source artifacts.
