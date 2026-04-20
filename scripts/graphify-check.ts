@@ -13,7 +13,7 @@ import path from "node:path";
 import { runGraphifyRebuild } from "./graphify-rebuild";
 import { GRAPHIFY_WIKI_ARTIFACTS } from "./graphify-wiki";
 
-const TRACKED_GRAPHIFY_ARTIFACTS = [
+export const TRACKED_GRAPHIFY_ARTIFACTS = [
   ...GRAPHIFY_WIKI_ARTIFACTS,
   "graphify-out/GRAPH_REPORT.md",
   "graphify-out/graph.json",

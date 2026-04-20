@@ -1,7 +1,7 @@
 import { HARNESS_APP_REGISTRY } from "./harness-app-registry";
 import { validateHarnessDocs } from "./harness-check";
 import { writeGeneratedHarnessDocs } from "./harness-generate";
-import { runGraphifyRebuild as rebuildGraphifyArtifacts } from "./graphify-rebuild";
+import { runGraphifyCheck } from "./graphify-check";
 import { runHarnessSelfReview as runStructuredHarnessSelfReview } from "./harness-self-review";
 import { runHarnessReview } from "./harness-review";
 
@@ -25,7 +25,7 @@ type HarnessSelfReviewSummary = {
 
 type PrePushReviewOptions = {
   getChangedFiles?: (rootDir: string) => Promise<string[]>;
-  runGraphifyRebuild?: (rootDir: string) => Promise<void>;
+  runGraphifyCheck?: (rootDir: string) => Promise<void>;
   runArchitectureCheck?: (rootDir: string) => Promise<void>;
   runHarnessInferentialReview?: (rootDir: string) => Promise<void>;
   runHarnessGenerate?: (rootDir: string) => Promise<void>;
@@ -52,6 +52,7 @@ const HARNESS_IMPLEMENTATION_CHANGE_PATTERNS = [
   /^README\.md$/,
   /^package\.json$/,
   /^\.github\/workflows\/athena-pr-tests\.yml$/,
+  /^\.husky\/pre-commit$/,
   /^\.husky\/pre-push$/,
 ];
 
@@ -190,8 +191,8 @@ export async function runPrePushReview(
 ) {
   const logger = options.logger ?? console;
   const getChangedFiles = options.getChangedFiles ?? getChangedFilesVsOriginMain;
-  const runGraphifyRepair =
-    options.runGraphifyRebuild ?? rebuildGraphifyArtifacts;
+  const runGraphifyFreshnessCheck =
+    options.runGraphifyCheck ?? runGraphifyCheck;
   const runArchitecture = options.runArchitectureCheck ?? runArchitectureCheck;
   const runHarnessGenerateStep =
     options.runHarnessGenerate ?? runHarnessGenerate;
@@ -239,8 +240,8 @@ export async function runPrePushReview(
 
   logger.log("[pre-push] Running pre-push validation suite...\n");
 
-  logger.log("[pre-push] Step 1/6: graphify:rebuild (auto-repair)");
-  await runGraphifyRepair(rootDir);
+  logger.log("[pre-push] Step 1/6: graphify:check");
+  await runGraphifyFreshnessCheck(rootDir);
 
   logger.log(`[pre-push] Step 2/6: harness:self-review (vs ${BASE_REF})`);
   let selfReviewResult = await runSelfReview(rootDir);
