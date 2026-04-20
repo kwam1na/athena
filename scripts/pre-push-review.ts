@@ -1,8 +1,15 @@
+import { HARNESS_APP_REGISTRY } from "./harness-app-registry";
+import { validateHarnessDocs } from "./harness-check";
+import { writeGeneratedHarnessDocs } from "./harness-generate";
 import { runGraphifyRebuild as rebuildGraphifyArtifacts } from "./graphify-rebuild";
+import { runHarnessSelfReview as runStructuredHarnessSelfReview } from "./harness-self-review";
 import { runHarnessReview } from "./harness-review";
 
 const ROOT_DIR = process.cwd();
 const BASE_REF = "origin/main";
+const GENERATED_HARNESS_DOC_PATHS = new Set(
+  HARNESS_APP_REGISTRY.flatMap((app) => app.harnessDocs.generatedDocs)
+);
 
 type SpawnedProcess = {
   exited: Promise<number>;
@@ -12,13 +19,20 @@ type SpawnedProcess = {
 
 type PrePushReviewLogger = Pick<Console, "log" | "warn" | "error">;
 
+type HarnessSelfReviewSummary = {
+  blockers?: string[];
+};
+
 type PrePushReviewOptions = {
   getChangedFiles?: (rootDir: string) => Promise<string[]>;
   runGraphifyRebuild?: (rootDir: string) => Promise<void>;
   runArchitectureCheck?: (rootDir: string) => Promise<void>;
   runHarnessInferentialReview?: (rootDir: string) => Promise<void>;
+  runHarnessGenerate?: (rootDir: string) => Promise<void>;
   runHarnessImplementationTests?: (rootDir: string) => Promise<void>;
-  runHarnessSelfReview?: (rootDir: string) => Promise<void>;
+  runHarnessSelfReview?: (
+    rootDir: string
+  ) => Promise<HarnessSelfReviewSummary | void>;
   runHarnessReview?: (
     rootDir: string,
     options: {
@@ -26,6 +40,7 @@ type PrePushReviewOptions = {
       getChangedFiles?: (rootDir: string, baseRef?: string) => Promise<string[]>;
     }
   ) => Promise<void>;
+  validateHarnessDocs?: (rootDir: string) => Promise<string[]>;
   logger?: PrePushReviewLogger;
 };
 
@@ -93,19 +108,14 @@ export async function runArchitectureCheck(rootDir: string): Promise<void> {
   }
 }
 
-export async function runHarnessSelfReview(rootDir: string): Promise<void> {
-  const proc = Bun.spawn(
-    ["bun", "run", "harness:self-review", "--base", BASE_REF],
-    {
-      cwd: rootDir,
-      stdout: "inherit",
-      stderr: "inherit",
-    }
-  );
-  const exitCode = await proc.exited;
-  if (exitCode !== 0) {
-    throw new Error(`harness:self-review failed (exit ${exitCode})`);
-  }
+export async function runHarnessSelfReview(
+  rootDir: string
+): Promise<HarnessSelfReviewSummary> {
+  return runStructuredHarnessSelfReview(rootDir, { baseRef: BASE_REF });
+}
+
+export async function runHarnessGenerate(rootDir: string): Promise<void> {
+  await writeGeneratedHarnessDocs(rootDir);
 }
 
 export async function runHarnessImplementationTests(rootDir: string): Promise<void> {
@@ -138,6 +148,42 @@ function shouldRunHarnessImplementationTests(changedFiles: string[]): boolean {
   );
 }
 
+function collectRepairableHarnessDocErrors(errors: string[]) {
+  const repairableErrors: string[] = [];
+
+  for (const error of errors) {
+    if (error.startsWith("Stale generated harness doc: ")) {
+      repairableErrors.push(error);
+      continue;
+    }
+
+    const missingFileMatch = error.match(/^Missing required harness file: (.+)$/);
+    if (
+      missingFileMatch?.[1] &&
+      GENERATED_HARNESS_DOC_PATHS.has(missingFileMatch[1])
+    ) {
+      repairableErrors.push(error);
+      continue;
+    }
+
+    const generatedDocMatch = error.match(
+      /^(?:Broken markdown link in|Missing referenced path in) ([^:]+):/
+    );
+    if (
+      generatedDocMatch?.[1] &&
+      GENERATED_HARNESS_DOC_PATHS.has(generatedDocMatch[1])
+    ) {
+      repairableErrors.push(error);
+    }
+  }
+
+  return repairableErrors;
+}
+
+function formatBlockerList(stepName: string, blockers: string[]) {
+  return `${stepName} blocked:\n${blockers.map((blocker) => `- ${blocker}`).join("\n")}`;
+}
+
 export async function runPrePushReview(
   rootDir: string,
   options: PrePushReviewOptions = {}
@@ -147,13 +193,18 @@ export async function runPrePushReview(
   const runGraphifyRepair =
     options.runGraphifyRebuild ?? rebuildGraphifyArtifacts;
   const runArchitecture = options.runArchitectureCheck ?? runArchitectureCheck;
+  const runHarnessGenerateStep =
+    options.runHarnessGenerate ?? runHarnessGenerate;
   const runInferentialReview =
     options.runHarnessInferentialReview ?? runHarnessInferentialReview;
   const runHarnessTests =
     options.runHarnessImplementationTests ?? runHarnessImplementationTests;
   const runSelfReview = options.runHarnessSelfReview ?? runHarnessSelfReview;
   const review = options.runHarnessReview ?? runHarnessReview;
+  const validateHarnessDocsStep =
+    options.validateHarnessDocs ?? validateHarnessDocs;
   let changedFilesPromise: Promise<string[]> | undefined;
+  let repairedGeneratedHarnessDocs = false;
 
   const loadChangedFiles = () => {
     changedFilesPromise ??= getChangedFiles(rootDir);
@@ -168,13 +219,44 @@ export async function runPrePushReview(
     return getChangedFiles(nextRootDir);
   };
 
+  const maybeRepairGeneratedHarnessDocs = async (reason: string) => {
+    if (repairedGeneratedHarnessDocs) {
+      return false;
+    }
+
+    const repairableErrors = collectRepairableHarnessDocErrors(
+      await validateHarnessDocsStep(rootDir)
+    );
+    if (repairableErrors.length === 0) {
+      return false;
+    }
+
+    logger.log(`[pre-push] Auto-repair: harness:generate (${reason})`);
+    await runHarnessGenerateStep(rootDir);
+    repairedGeneratedHarnessDocs = true;
+    return true;
+  };
+
   logger.log("[pre-push] Running pre-push validation suite...\n");
 
   logger.log("[pre-push] Step 1/6: graphify:rebuild (auto-repair)");
   await runGraphifyRepair(rootDir);
 
   logger.log(`[pre-push] Step 2/6: harness:self-review (vs ${BASE_REF})`);
-  await runSelfReview(rootDir);
+  let selfReviewResult = await runSelfReview(rootDir);
+  if ((selfReviewResult?.blockers?.length ?? 0) > 0) {
+    const repaired = await maybeRepairGeneratedHarnessDocs(
+      "repairable harness doc drift detected after harness:self-review"
+    );
+    if (repaired) {
+      selfReviewResult = await runSelfReview(rootDir);
+    }
+  }
+  if ((selfReviewResult?.blockers?.length ?? 0) > 0) {
+    throw new Error(
+      formatBlockerList("harness:self-review", selfReviewResult.blockers ?? [])
+    );
+  }
 
   logger.log("[pre-push] Step 3/6: architecture:check");
   await runArchitecture(rootDir);
@@ -192,10 +274,24 @@ export async function runPrePushReview(
 
   // runHarnessReview internally runs harness:check first, then targeted per-surface scripts
   logger.log(`[pre-push] Step 5/6: harness:review (vs ${BASE_REF})`);
-  await review(rootDir, {
-    baseRef: BASE_REF,
-    getChangedFiles: getChangedFilesForHarnessReview,
-  });
+  try {
+    await review(rootDir, {
+      baseRef: BASE_REF,
+      getChangedFiles: getChangedFilesForHarnessReview,
+    });
+  } catch (error) {
+    const repaired = await maybeRepairGeneratedHarnessDocs(
+      "repairable harness doc drift detected after harness:review failed"
+    );
+    if (!repaired) {
+      throw error;
+    }
+
+    await review(rootDir, {
+      baseRef: BASE_REF,
+      getChangedFiles: getChangedFilesForHarnessReview,
+    });
+  }
 
   logger.log("[pre-push] Step 6/6: harness:inferential-review");
   await runInferentialReview(rootDir);
