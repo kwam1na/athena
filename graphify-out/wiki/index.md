@@ -8,9 +8,9 @@ Graphify is the navigation layer for the repo graph. Use the entry docs below fo
 
 ## Repo Summary
 - Code files discovered: 1250
-- Graph nodes: 9636
-- Graph edges: 19778
-- Communities: 1187
+- Graph nodes: 9637
+- Graph edges: 19780
+- Communities: 1188
 
 ## Graph Hotspots
 - `globals-runtime.js` (2490 edges, Community 2) - [`packages/athena-webapp/storybook-static/sb-manager/globals-runtime.js`](../../packages/athena-webapp/storybook-static/sb-manager/globals-runtime.js)
