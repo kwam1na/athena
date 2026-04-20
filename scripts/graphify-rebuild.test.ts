@@ -38,6 +38,10 @@ describe("runGraphifyRebuild", () => {
     expect(GRAPHIFY_REBUILD_SNIPPET).toContain("shutil.rmtree(cache_dir)");
   });
 
+  it("skips generated storybook-static outputs during graph extraction", () => {
+    expect(GRAPHIFY_REBUILD_SNIPPET).toContain("'storybook-static'");
+  });
+
   it("normalizes date-bearing report headers for stable freshness checks", () => {
     expect(GRAPHIFY_REBUILD_SNIPPET).toContain("import re");
     expect(GRAPHIFY_REBUILD_SNIPPET).toContain("report_lines[0] = re.sub(");
@@ -70,6 +74,31 @@ describe("runGraphifyRebuild", () => {
 
     expect(commands).toEqual([
       [path.join(rootDir, "graphify-python"), "-c", GRAPHIFY_REBUILD_SNIPPET],
+    ]);
+  });
+
+  it("pins PYTHONHASHSEED for deterministic graphify subprocess output", async () => {
+    const rootDir = await createFixtureRoot();
+    const spawnOptions: Array<{ cwd: string; env?: Record<string, string | undefined> }> = [];
+
+    await runGraphifyRebuild(rootDir, {
+      spawn(_command, options) {
+        spawnOptions.push(options);
+        return {
+          exited: Promise.resolve(0),
+          stderr: new ReadableStream(),
+        };
+      },
+      writeGraphifyWikiPages: async () => {},
+    });
+
+    expect(spawnOptions).toEqual([
+      {
+        cwd: rootDir,
+        env: expect.objectContaining({
+          PYTHONHASHSEED: "0",
+        }),
+      },
     ]);
   });
 

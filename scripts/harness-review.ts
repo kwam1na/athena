@@ -376,6 +376,7 @@ async function runGitCommand(rootDir: string, command: string[]) {
     cwd: rootDir,
     stdout: "pipe",
     stderr: "pipe",
+    env: buildGitProcessEnv(),
   });
 
   const [stdout, stderr, exitCode] = await Promise.all([
@@ -389,6 +390,12 @@ async function runGitCommand(rootDir: string, command: string[]) {
     stderr,
     exitCode,
   };
+}
+
+export function buildGitProcessEnv(env: NodeJS.ProcessEnv = process.env) {
+  return Object.fromEntries(
+    Object.entries(env).filter(([key]) => !key.startsWith("GIT_"))
+  );
 }
 
 export async function getChangedFilesForHarnessReview(

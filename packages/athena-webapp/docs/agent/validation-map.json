@@ -109,6 +109,31 @@
       ]
     },
     {
+      "name": "storybook-and-frontend-tooling-edits",
+      "pathPrefixes": [
+        "packages/athena-webapp/.storybook",
+        "packages/athena-webapp/src/stories",
+        "packages/athena-webapp/package.json",
+        "packages/athena-webapp/eslint.config.js",
+        "packages/athena-webapp/.gitignore"
+      ],
+      "commands": [
+        {
+          "kind": "script",
+          "script": "test"
+        },
+        {
+          "kind": "script",
+          "script": "build"
+        },
+        {
+          "kind": "script",
+          "script": "storybook:build"
+        }
+      ],
+      "behaviorScenarios": []
+    },
+    {
       "name": "harness-docs",
       "pathPrefixes": [
         "packages/athena-webapp/AGENTS.md",

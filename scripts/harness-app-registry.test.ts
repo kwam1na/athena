@@ -149,6 +149,32 @@ describe("HARNESS_APP_REGISTRY", () => {
     });
   });
 
+  it("covers Athena Storybook and frontend tooling edits with isolated validation", () => {
+    const athena = HARNESS_APP_REGISTRY.find(
+      (entry) => entry.appName === "athena-webapp"
+    );
+    const storybookScenario = athena?.validationScenarios.find(
+      (scenario) => scenario.title === "Storybook and frontend tooling edits"
+    );
+
+    expect(storybookScenario).toMatchObject({
+      touchedPaths: [
+        ".storybook",
+        "src/stories",
+        "package.json",
+        "eslint.config.js",
+        ".gitignore",
+      ],
+      commands: [
+        { kind: "script", script: "test" },
+        { kind: "script", script: "build" },
+        { kind: "script", script: "storybook:build" },
+      ],
+      note:
+        "Use this when Storybook config, story files, or package-level frontend tooling changes need isolated validation.",
+    });
+  });
+
   it("keeps every registered app active once onboarding is complete", () => {
     const statuses = HARNESS_APP_REGISTRY.map((entry) => entry.onboardingStatus);
 

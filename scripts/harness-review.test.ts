@@ -5,6 +5,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
+  buildGitProcessEnv,
   getChangedFilesForHarnessReview,
   parseHarnessReviewArgs,
   resolveHarnessReviewShell,
@@ -31,6 +32,7 @@ async function createFixtureRepo() {
         scripts: {
           "audit:convex": "echo audit",
           "lint:convex:changed": "echo lint",
+          "storybook:build": "echo storybook",
           test: "echo test",
         },
       },
@@ -244,6 +246,7 @@ function runGit(rootDir: string, args: string[]) {
   const result = spawnSync("git", args, {
     cwd: rootDir,
     encoding: "utf8",
+    env: buildGitProcessEnv(),
   });
 
   if (result.status !== 0) {
@@ -531,6 +534,7 @@ describe("runHarnessReview", () => {
         {
           name: "@athena/webapp",
           scripts: {
+            "storybook:build": "echo storybook",
             test: "echo test",
           },
         },
@@ -934,6 +938,21 @@ describe("getChangedFilesForHarnessReview", () => {
       "packages/storefront-webapp/src/app.ts",
       "packages/valkey-proxy-server/new-surface.js",
     ]);
+  });
+
+  it("strips inherited git hook variables when spawning fixture repo commands", () => {
+    const env = buildGitProcessEnv({
+      PATH: "/usr/bin",
+      HOME: "/tmp/home",
+      GIT_DIR: "/tmp/worktree-git-dir",
+      GIT_WORK_TREE: "/tmp/worktree",
+      GIT_INDEX_FILE: "/tmp/index",
+    });
+
+    expect(env).toEqual({
+      PATH: "/usr/bin",
+      HOME: "/tmp/home",
+    });
   });
 
   it("fails clearly when the base ref is unreachable", async () => {

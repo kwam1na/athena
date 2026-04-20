@@ -112,4 +112,34 @@ describe("runGraphifyCheck", () => {
       readFile(path.join(rootDir, "graphify-out/graph.json"), "utf8")
     ).resolves.toBe('{"original":true}\n');
   });
+
+  it("ignores generated storybook-static outputs when preparing graphify check inputs", async () => {
+    const rootDir = await createFixtureRoot();
+    await write("packages/athena-webapp/storybook-static/mock.js", "export const generated = true;\n", rootDir);
+    await write("graphify-out/GRAPH_REPORT.md", "clean report\n", rootDir);
+    await write("graphify-out/graph.json", '{"clean":true}\n', rootDir);
+    await writeGraphifyWikiArtifacts(rootDir, "fresh");
+
+    await expect(
+      runGraphifyCheck(rootDir, {
+        runGraphifyRebuild: async (workspaceRoot) => {
+          const generatedPath = path.join(
+            workspaceRoot,
+            "packages/athena-webapp/storybook-static/mock.js"
+          );
+
+          try {
+            await readFile(generatedPath, "utf8");
+            await write("graphify-out/GRAPH_REPORT.md", "generated report\n", workspaceRoot);
+            await write("graphify-out/graph.json", '{"generated":true}\n', workspaceRoot);
+          } catch {
+            await write("graphify-out/GRAPH_REPORT.md", "clean report\n", workspaceRoot);
+            await write("graphify-out/graph.json", '{"clean":true}\n', workspaceRoot);
+          }
+
+          await writeGraphifyWikiArtifacts(workspaceRoot, "fresh");
+        },
+      })
+    ).resolves.toBeUndefined();
+  });
 });

@@ -182,6 +182,9 @@ docs/superpowers/plans/
 docs/superpowers/specs/
 .dual-graph/
 graphify-out/cache/
+artifacts/harness-inferential-review/
+artifacts/harness-scorecard/
+artifacts/harness-behavior/trends/
 artifacts/harness-behavior/videos/
 
 packages/athena-webapp/stats.html

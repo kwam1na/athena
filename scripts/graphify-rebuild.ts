@@ -17,7 +17,7 @@ export const GRAPHIFY_REBUILD_SNIPPET =
     "from graphify.export import to_json",
     "ROOT = Path('.')",
     "EXTENSIONS = {'.py', '.js', '.ts', '.tsx', '.go', '.rs', '.java', '.c', '.h', '.cpp', '.cc', '.cxx', '.hpp', '.rb', '.cs', '.kt', '.kts', '.scala', '.php', '.swift', '.lua', '.toc', '.zig', '.ps1', '.m', '.mm'}",
-    "SKIP_DIRS = {'node_modules', 'worktrees', 'graphify-out', '__pycache__', 'coverage', 'dist'}",
+    "SKIP_DIRS = {'node_modules', 'worktrees', 'graphify-out', '__pycache__', 'coverage', 'dist', 'storybook-static'}",
     "def collect_repo_files(root: Path) -> list[Path]:",
     "    results = []",
     "    for dirpath, dirnames, filenames in os.walk(root):",
@@ -73,8 +73,13 @@ type SpawnedProcess = {
   stderr?: ReadableStream | null;
 };
 
+type GraphifyRebuildEnvironment = Record<string, string | undefined>;
+
 type GraphifyRebuildOptions = {
-  spawn?: (command: string[], options: { cwd: string }) => SpawnedProcess;
+  spawn?: (
+    command: string[],
+    options: { cwd: string; env: GraphifyRebuildEnvironment }
+  ) => SpawnedProcess;
   writeGraphifyWikiPages?: (rootDir: string) => Promise<void>;
 };
 
@@ -192,10 +197,15 @@ export async function runGraphifyRebuild(
 ) {
   const graphifyPython = await resolveGraphifyPython(rootDir);
   const command = [graphifyPython, "-c", GRAPHIFY_REBUILD_SNIPPET];
+  const env = {
+    ...process.env,
+    PYTHONHASHSEED: "0",
+  };
   const subprocess =
-    options.spawn?.(command, { cwd: rootDir }) ??
+    options.spawn?.(command, { cwd: rootDir, env }) ??
     Bun.spawn(command, {
       cwd: rootDir,
+      env,
       stdout: "inherit",
       stderr: "pipe",
     });

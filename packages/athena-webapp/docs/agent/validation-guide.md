@@ -68,3 +68,15 @@ Behavior scenarios:
 
 Run these when bootstrap, generated router state, or package build configuration changes.
 
+## Storybook and frontend tooling edits
+
+Touched surfaces: `.storybook`, `src/stories`, `package.json`, `eslint.config.js`, `.gitignore`
+
+Run:
+
+- `bun run --filter '@athena/webapp' test`
+- `bun run --filter '@athena/webapp' build`
+- `bun run --filter '@athena/webapp' storybook:build`
+
+Use this when Storybook config, story files, or package-level frontend tooling changes need isolated validation.
+

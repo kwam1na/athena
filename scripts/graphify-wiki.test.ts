@@ -118,4 +118,44 @@ describe("generateGraphifyWikiPages", () => {
       pages.get("graphify-out/wiki/packages/valkey-proxy-server.md")
     ).toContain("No graph hotspots were found");
   });
+
+  it("ignores generated storybook-static outputs in repo summaries", async () => {
+    const rootDir = await createFixtureRoot();
+    await write(
+      "graphify-out/graph.json",
+      JSON.stringify(
+        {
+          directed: false,
+          multigraph: false,
+          graph: {},
+          nodes: [
+            {
+              label: "appEntry()",
+              file_type: "code",
+              source_file: "packages/athena-webapp/src/main.ts",
+              source_location: "L1",
+              id: "app_entry",
+              community: 1,
+            },
+          ],
+          links: [],
+          hyperedges: [],
+        },
+        null,
+        2
+      ),
+      rootDir
+    );
+    await write("packages/athena-webapp/src/main.ts", "export const app = true;\n", rootDir);
+    await write(
+      "packages/athena-webapp/storybook-static/assets/generated.js",
+      "export const generated = true;\n",
+      rootDir
+    );
+
+    const pages = await generateGraphifyWikiPages(rootDir);
+
+    expect(pages.get("graphify-out/wiki/index.md")).toContain("- Code files discovered: 1");
+    expect(pages.get("graphify-out/wiki/index.md")).not.toContain("generated.js");
+  });
 });

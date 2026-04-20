@@ -298,6 +298,22 @@ export const HARNESS_APP_REGISTRY = [
         behaviorScenarios: ["athena-admin-shell-boot"],
         note: "Run these when bootstrap, generated router state, or package build configuration changes.",
       },
+      {
+        title: "Storybook and frontend tooling edits",
+        touchedPaths: [
+          ".storybook",
+          "src/stories",
+          "package.json",
+          "eslint.config.js",
+          ".gitignore",
+        ],
+        commands: [
+          { kind: "script", script: "test" },
+          { kind: "script", script: "build" },
+          { kind: "script", script: "storybook:build" },
+        ],
+        note: "Use this when Storybook config, story files, or package-level frontend tooling changes need isolated validation.",
+      },
     ],
   },
   {

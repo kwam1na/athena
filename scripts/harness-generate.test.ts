@@ -27,6 +27,7 @@ async function createFixtureRepo() {
           "audit:convex": "bash ./scripts/convex-audit.sh",
           "lint:convex:changed": "bash ./scripts/convex-lint-changed.sh",
           build: "vite build && tsc --noEmit",
+          "storybook:build": "storybook build",
           "lint:architecture": "bun ../../scripts/architecture-boundary-check.ts athena-webapp",
         },
       },
@@ -62,6 +63,14 @@ async function createFixtureRepo() {
   await write("packages/athena-webapp/src/example.test.tsx", "export {};\n", rootDir);
   await write("packages/athena-webapp/convex/example.test.ts", "export {};\n", rootDir);
   await write("packages/athena-webapp/convex/http.ts", "export {};\n", rootDir);
+  await write("packages/athena-webapp/.storybook/main.ts", "export default {};\n", rootDir);
+  await write(
+    "packages/athena-webapp/src/stories/Guidance/Introduction.stories.tsx",
+    "export default {};\n",
+    rootDir
+  );
+  await write("packages/athena-webapp/.gitignore", "storybook-static\n", rootDir);
+  await write("packages/athena-webapp/eslint.config.js", "export default [];\n", rootDir);
 
   await write(
     "packages/valkey-proxy-server/package.json",

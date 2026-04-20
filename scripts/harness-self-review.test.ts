@@ -24,6 +24,7 @@ async function createFixtureRepo() {
         name: "@athena/webapp",
         scripts: {
           test: "echo test",
+          "storybook:build": "echo storybook",
           "lint:architecture": "echo lint",
         },
       },

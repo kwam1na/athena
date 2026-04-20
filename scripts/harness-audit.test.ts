@@ -83,6 +83,7 @@ async function createFixtureRepo() {
         scripts: {
           "audit:convex": "echo audit",
           build: "echo build",
+          "storybook:build": "echo storybook",
           "lint:architecture": "echo architecture",
           "lint:convex:changed": "echo lint",
           test: "echo test",
@@ -146,6 +147,14 @@ async function createFixtureRepo() {
     ].join("\n"),
     rootDir
   );
+  await write("packages/athena-webapp/.storybook/main.ts", "export default {};\n", rootDir);
+  await write(
+    "packages/athena-webapp/src/stories/Guidance/Introduction.stories.tsx",
+    "export default {};\n",
+    rootDir
+  );
+  await write("packages/athena-webapp/.gitignore", "storybook-static\n", rootDir);
+  await write("packages/athena-webapp/eslint.config.js", "export default [];\n", rootDir);
   await write(
     "packages/storefront-webapp/AGENTS.md",
     [
