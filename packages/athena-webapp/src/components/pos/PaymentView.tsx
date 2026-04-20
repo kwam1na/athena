@@ -277,8 +277,8 @@ export const PaymentView = ({
             <Input
               type="text"
               placeholder="0.00"
-              className="h-16 w-full"
-              textSize="4xl"
+              size="lg"
+              className="h-16 w-full text-4xl"
               value={displayValue}
               onChange={handleAmountChange}
               onBlur={handleAmountBlur}
