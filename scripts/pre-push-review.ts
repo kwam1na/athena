@@ -14,6 +14,7 @@ type PrePushReviewLogger = Pick<Console, "log" | "warn" | "error">;
 type PrePushReviewOptions = {
   getChangedFiles?: (rootDir: string) => Promise<string[]>;
   runArchitectureCheck?: (rootDir: string) => Promise<void>;
+  runHarnessImplementationTests?: (rootDir: string) => Promise<void>;
   runHarnessSelfReview?: (rootDir: string) => Promise<void>;
   runHarnessReview?: (
     rootDir: string,
@@ -24,6 +25,17 @@ type PrePushReviewOptions = {
   ) => Promise<void>;
   logger?: PrePushReviewLogger;
 };
+
+const HARNESS_IMPLEMENTATION_CHANGE_PATTERNS = [
+  /^scripts\//,
+  /^packages\/[^/]+\/docs\/agent\//,
+  /^packages\/[^/]+\/AGENTS\.md$/,
+  /^packages\/AGENTS\.md$/,
+  /^README\.md$/,
+  /^package\.json$/,
+  /^\.github\/workflows\/athena-pr-tests\.yml$/,
+  /^\.husky\/pre-push$/,
+];
 
 export async function getChangedFilesVsOriginMain(
   rootDir: string,
@@ -93,28 +105,71 @@ export async function runHarnessSelfReview(rootDir: string): Promise<void> {
   }
 }
 
+export async function runHarnessImplementationTests(rootDir: string): Promise<void> {
+  const proc = Bun.spawn(["bun", "run", "harness:test"], {
+    cwd: rootDir,
+    stdout: "inherit",
+    stderr: "inherit",
+  });
+  const exitCode = await proc.exited;
+  if (exitCode !== 0) {
+    throw new Error(`harness:test failed (exit ${exitCode})`);
+  }
+}
+
+function shouldRunHarnessImplementationTests(changedFiles: string[]): boolean {
+  return changedFiles.some((filePath) =>
+    HARNESS_IMPLEMENTATION_CHANGE_PATTERNS.some((pattern) => pattern.test(filePath))
+  );
+}
+
 export async function runPrePushReview(
   rootDir: string,
   options: PrePushReviewOptions = {}
 ) {
   const logger = options.logger ?? console;
   const getChangedFiles = options.getChangedFiles ?? getChangedFilesVsOriginMain;
-  const getChangedFilesForHarnessReview = async (nextRootDir: string) =>
-    getChangedFiles(nextRootDir);
   const runArchitecture = options.runArchitectureCheck ?? runArchitectureCheck;
+  const runHarnessTests =
+    options.runHarnessImplementationTests ?? runHarnessImplementationTests;
   const runSelfReview = options.runHarnessSelfReview ?? runHarnessSelfReview;
   const review = options.runHarnessReview ?? runHarnessReview;
+  let changedFilesPromise: Promise<string[]> | undefined;
+
+  const loadChangedFiles = () => {
+    changedFilesPromise ??= getChangedFiles(rootDir);
+    return changedFilesPromise;
+  };
+
+  const getChangedFilesForHarnessReview = async (nextRootDir: string) => {
+    if (nextRootDir === rootDir) {
+      return loadChangedFiles();
+    }
+
+    return getChangedFiles(nextRootDir);
+  };
 
   logger.log("[pre-push] Running pre-push validation suite...\n");
 
-  logger.log(`[pre-push] Step 1/3: harness:self-review (vs ${BASE_REF})`);
+  logger.log(`[pre-push] Step 1/4: harness:self-review (vs ${BASE_REF})`);
   await runSelfReview(rootDir);
 
-  logger.log("[pre-push] Step 2/3: architecture:check");
+  logger.log("[pre-push] Step 2/4: architecture:check");
   await runArchitecture(rootDir);
 
+  const changedFiles = await loadChangedFiles();
+
+  if (shouldRunHarnessImplementationTests(changedFiles)) {
+    logger.log(
+      "[pre-push] Step 3/4: harness:test (harness-owned changes detected)"
+    );
+    await runHarnessTests(rootDir);
+  } else {
+    logger.log("[pre-push] Step 3/4: harness:test skipped (no harness-owned changes)");
+  }
+
   // runHarnessReview internally runs harness:check first, then targeted per-surface scripts
-  logger.log(`[pre-push] Step 3/3: harness:review (vs ${BASE_REF})`);
+  logger.log(`[pre-push] Step 4/4: harness:review (vs ${BASE_REF})`);
   await review(rootDir, {
     baseRef: BASE_REF,
     getChangedFiles: getChangedFilesForHarnessReview,

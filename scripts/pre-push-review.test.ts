@@ -88,7 +88,85 @@ describe("pre-push review wiring", () => {
     expect(steps).toEqual([
       "harness:self-review:origin/main",
       "architecture:check",
+      "changed-files",
       "harness:review:origin/main",
+    ]);
+  });
+
+  it("runs harness implementation tests when harness-owned files change", async () => {
+    const steps: string[] = [];
+
+    await prePushReview.runPrePushReview(ROOT_DIR, {
+      getChangedFiles: async () => {
+        steps.push("changed-files");
+        return ["scripts/harness-check.test.ts"];
+      },
+      runHarnessSelfReview: async () => {
+        steps.push("harness:self-review:origin/main");
+      },
+      runArchitectureCheck: async () => {
+        steps.push("architecture:check");
+      },
+      runHarnessImplementationTests: async () => {
+        steps.push("harness:test");
+      },
+      runHarnessReview: async (_rootDir, options) => {
+        steps.push(`harness:review:${options.baseRef}`);
+        const files = await options.getChangedFiles?.(ROOT_DIR, options.baseRef);
+        steps.push(`files:${files?.join(",") ?? ""}`);
+      },
+      logger: {
+        log() {},
+        warn() {},
+        error() {},
+      },
+    });
+
+    expect(steps).toEqual([
+      "harness:self-review:origin/main",
+      "architecture:check",
+      "changed-files",
+      "harness:test",
+      "harness:review:origin/main",
+      "files:scripts/harness-check.test.ts",
+    ]);
+  });
+
+  it("skips harness implementation tests when harness-owned files are untouched", async () => {
+    const steps: string[] = [];
+
+    await prePushReview.runPrePushReview(ROOT_DIR, {
+      getChangedFiles: async () => {
+        steps.push("changed-files");
+        return ["packages/athena-webapp/src/main.tsx"];
+      },
+      runHarnessSelfReview: async () => {
+        steps.push("harness:self-review:origin/main");
+      },
+      runArchitectureCheck: async () => {
+        steps.push("architecture:check");
+      },
+      runHarnessImplementationTests: async () => {
+        steps.push("harness:test");
+      },
+      runHarnessReview: async (_rootDir, options) => {
+        steps.push(`harness:review:${options.baseRef}`);
+        const files = await options.getChangedFiles?.(ROOT_DIR, options.baseRef);
+        steps.push(`files:${files?.join(",") ?? ""}`);
+      },
+      logger: {
+        log() {},
+        warn() {},
+        error() {},
+      },
+    });
+
+    expect(steps).toEqual([
+      "harness:self-review:origin/main",
+      "architecture:check",
+      "changed-files",
+      "harness:review:origin/main",
+      "files:packages/athena-webapp/src/main.tsx",
     ]);
   });
 
@@ -121,8 +199,8 @@ describe("pre-push review wiring", () => {
     expect(steps).toEqual([
       "harness:self-review:origin/main",
       "architecture:check",
-      "harness:review:origin/main",
       "changed-files-fallback",
+      "harness:review:origin/main",
       "files:",
     ]);
   });

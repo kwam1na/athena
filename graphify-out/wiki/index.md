@@ -8,8 +8,8 @@ Graphify is the navigation layer for the repo graph. Use the entry docs below fo
 
 ## Repo Summary
 - Code files discovered: 1250
-- Graph nodes: 9634
-- Graph edges: 19775
+- Graph nodes: 9636
+- Graph edges: 19778
 - Communities: 1187
 
 ## Graph Hotspots
@@ -20,7 +20,7 @@ Graphify is the navigation layer for the repo graph. Use the entry docs below fo
 - `axe-K0go3vIa.js` (540 edges, Community 4) - [`packages/athena-webapp/storybook-static/assets/axe-K0go3vIa.js`](../../packages/athena-webapp/storybook-static/assets/axe-K0go3vIa.js)
 - `common-manager-bundle.js` (374 edges, Community 5) - [`packages/athena-webapp/storybook-static/sb-addons/storybook-core-server-presets-0/common-manager-bundle.js`](../../packages/athena-webapp/storybook-static/sb-addons/storybook-core-server-presets-0/common-manager-bundle.js)
 - `react-18-Cw4lkx7g.js` (261 edges, Community 6) - [`packages/athena-webapp/storybook-static/assets/react-18-Cw4lkx7g.js`](../../packages/athena-webapp/storybook-static/assets/react-18-Cw4lkx7g.js)
-- `filter()` (77 edges, Community 10) - [`packages/athena-webapp/storybook-static/sb-manager/globals-runtime.js`](../../packages/athena-webapp/storybook-static/sb-manager/globals-runtime.js)
+- `filter()` (77 edges, Community 8) - [`packages/athena-webapp/storybook-static/sb-manager/globals-runtime.js`](../../packages/athena-webapp/storybook-static/sb-manager/globals-runtime.js)
 
 ## Registered Packages
 - [Athena Webapp](packages/athena-webapp.md)

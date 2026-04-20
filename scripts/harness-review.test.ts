@@ -31,6 +31,7 @@ async function createFixtureRepo() {
         scripts: {
           "audit:convex": "echo audit",
           "lint:convex:changed": "echo lint",
+          "storybook:build": "echo storybook",
           test: "echo test",
         },
       },
@@ -531,6 +532,7 @@ describe("runHarnessReview", () => {
         {
           name: "@athena/webapp",
           scripts: {
+            "storybook:build": "echo storybook",
             test: "echo test",
           },
         },

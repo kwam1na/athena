@@ -119,6 +119,7 @@ async function createFixtureRepo() {
             "lint:convex:changed": "bash ./scripts/convex-lint-changed.sh",
             "lint:architecture": "bun ../../scripts/architecture-boundary-check.ts athena-webapp",
             build: "vite build && tsc --noEmit",
+            "storybook:build": "storybook build",
           }
         : {
             test: "vitest run",
@@ -131,6 +132,17 @@ async function createFixtureRepo() {
       JSON.stringify({ name: packageName, scripts }, null, 2),
       rootDir
     );
+
+    if (appName === "athena-webapp") {
+      await write(`packages/${appName}/.storybook/main.ts`, "export default {};\n", rootDir);
+      await write(
+        `packages/${appName}/src/stories/Guidance/Introduction.stories.tsx`,
+        "export default {};\n",
+        rootDir
+      );
+      await write(`packages/${appName}/.gitignore`, "storybook-static\n", rootDir);
+      await write(`packages/${appName}/eslint.config.js`, "export default [];\n", rootDir);
+    }
 
     await write(
       `packages/${appName}/AGENTS.md`,
