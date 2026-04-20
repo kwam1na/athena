@@ -11423,7 +11423,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_pos_ordersummary_tsx",
       "source_file": "packages/athena-webapp/src/components/pos/OrderSummary.tsx",
-      "source_location": "L322",
+      "source_location": "L320",
       "target": "ordersummary_formatstoredamount",
       "weight": 1
     },
@@ -11435,7 +11435,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_pos_ordersummary_tsx",
       "source_file": "packages/athena-webapp/src/components/pos/OrderSummary.tsx",
-      "source_location": "L129",
+      "source_location": "L130",
       "target": "ordersummary_handlecompletetransaction",
       "weight": 1
     },
@@ -11447,7 +11447,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_pos_ordersummary_tsx",
       "source_file": "packages/athena-webapp/src/components/pos/OrderSummary.tsx",
-      "source_location": "L163",
+      "source_location": "L164",
       "target": "ordersummary_handlenewtransaction",
       "weight": 1
     },
@@ -11459,7 +11459,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_pos_ordersummary_tsx",
       "source_file": "packages/athena-webapp/src/components/pos/OrderSummary.tsx",
-      "source_location": "L151",
+      "source_location": "L152",
       "target": "ordersummary_handleselectedpaymentmethod",
       "weight": 1
     },
@@ -11591,7 +11591,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_pos_pointofsaleview_tsx",
       "source_file": "packages/athena-webapp/src/components/pos/PointOfSaleView.tsx",
-      "source_location": "L34",
+      "source_location": "L35",
       "target": "pointofsaleview_navigation",
       "weight": 1
     },
@@ -31900,7 +31900,7 @@
       "label": "formatStoredAmount()",
       "norm_label": "formatstoredamount()",
       "source_file": "packages/athena-webapp/src/components/pos/OrderSummary.tsx",
-      "source_location": "L322"
+      "source_location": "L320"
     },
     {
       "community": 110,
@@ -31909,7 +31909,7 @@
       "label": "handleCompleteTransaction()",
       "norm_label": "handlecompletetransaction()",
       "source_file": "packages/athena-webapp/src/components/pos/OrderSummary.tsx",
-      "source_location": "L129"
+      "source_location": "L130"
     },
     {
       "community": 110,
@@ -31918,7 +31918,7 @@
       "label": "handleNewTransaction()",
       "norm_label": "handlenewtransaction()",
       "source_file": "packages/athena-webapp/src/components/pos/OrderSummary.tsx",
-      "source_location": "L163"
+      "source_location": "L164"
     },
     {
       "community": 110,
@@ -31927,7 +31927,7 @@
       "label": "handleSelectedPaymentMethod()",
       "norm_label": "handleselectedpaymentmethod()",
       "source_file": "packages/athena-webapp/src/components/pos/OrderSummary.tsx",
-      "source_location": "L151"
+      "source_location": "L152"
     },
     {
       "community": 110,
@@ -42718,7 +42718,7 @@
       "label": "Navigation()",
       "norm_label": "navigation()",
       "source_file": "packages/athena-webapp/src/components/pos/PointOfSaleView.tsx",
-      "source_location": "L34"
+      "source_location": "L35"
     },
     {
       "community": 364,
