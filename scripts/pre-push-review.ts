@@ -1,3 +1,4 @@
+import { runGraphifyRebuild as rebuildGraphifyArtifacts } from "./graphify-rebuild";
 import { runHarnessReview } from "./harness-review";
 
 const ROOT_DIR = process.cwd();
@@ -13,6 +14,7 @@ type PrePushReviewLogger = Pick<Console, "log" | "warn" | "error">;
 
 type PrePushReviewOptions = {
   getChangedFiles?: (rootDir: string) => Promise<string[]>;
+  runGraphifyRebuild?: (rootDir: string) => Promise<void>;
   runArchitectureCheck?: (rootDir: string) => Promise<void>;
   runHarnessInferentialReview?: (rootDir: string) => Promise<void>;
   runHarnessImplementationTests?: (rootDir: string) => Promise<void>;
@@ -142,6 +144,8 @@ export async function runPrePushReview(
 ) {
   const logger = options.logger ?? console;
   const getChangedFiles = options.getChangedFiles ?? getChangedFilesVsOriginMain;
+  const runGraphifyRepair =
+    options.runGraphifyRebuild ?? rebuildGraphifyArtifacts;
   const runArchitecture = options.runArchitectureCheck ?? runArchitectureCheck;
   const runInferentialReview =
     options.runHarnessInferentialReview ?? runHarnessInferentialReview;
@@ -166,31 +170,34 @@ export async function runPrePushReview(
 
   logger.log("[pre-push] Running pre-push validation suite...\n");
 
-  logger.log(`[pre-push] Step 1/5: harness:self-review (vs ${BASE_REF})`);
+  logger.log("[pre-push] Step 1/6: graphify:rebuild (auto-repair)");
+  await runGraphifyRepair(rootDir);
+
+  logger.log(`[pre-push] Step 2/6: harness:self-review (vs ${BASE_REF})`);
   await runSelfReview(rootDir);
 
-  logger.log("[pre-push] Step 2/5: architecture:check");
+  logger.log("[pre-push] Step 3/6: architecture:check");
   await runArchitecture(rootDir);
 
   const changedFiles = await loadChangedFiles();
 
   if (shouldRunHarnessImplementationTests(changedFiles)) {
     logger.log(
-      "[pre-push] Step 3/5: harness:test (harness-owned changes detected)"
+      "[pre-push] Step 4/6: harness:test (harness-owned changes detected)"
     );
     await runHarnessTests(rootDir);
   } else {
-    logger.log("[pre-push] Step 3/5: harness:test skipped (no harness-owned changes)");
+    logger.log("[pre-push] Step 4/6: harness:test skipped (no harness-owned changes)");
   }
 
   // runHarnessReview internally runs harness:check first, then targeted per-surface scripts
-  logger.log(`[pre-push] Step 4/5: harness:review (vs ${BASE_REF})`);
+  logger.log(`[pre-push] Step 5/6: harness:review (vs ${BASE_REF})`);
   await review(rootDir, {
     baseRef: BASE_REF,
     getChangedFiles: getChangedFilesForHarnessReview,
   });
 
-  logger.log("[pre-push] Step 5/5: harness:inferential-review");
+  logger.log("[pre-push] Step 6/6: harness:inferential-review");
   await runInferentialReview(rootDir);
 
   logger.log("\n[pre-push] All checks passed.");

@@ -73,6 +73,31 @@ describe("runGraphifyRebuild", () => {
     ]);
   });
 
+  it("pins PYTHONHASHSEED for deterministic graphify subprocess output", async () => {
+    const rootDir = await createFixtureRoot();
+    const spawnOptions: Array<{ cwd: string; env?: Record<string, string | undefined> }> = [];
+
+    await runGraphifyRebuild(rootDir, {
+      spawn(_command, options) {
+        spawnOptions.push(options);
+        return {
+          exited: Promise.resolve(0),
+          stderr: new ReadableStream(),
+        };
+      },
+      writeGraphifyWikiPages: async () => {},
+    });
+
+    expect(spawnOptions).toEqual([
+      {
+        cwd: rootDir,
+        env: expect.objectContaining({
+          PYTHONHASHSEED: "0",
+        }),
+      },
+    ]);
+  });
+
   it("falls back to python3 when no pinned graphify python is configured", async () => {
     const rootDir = await createFixtureRoot();
     const commands: string[][] = [];

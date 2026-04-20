@@ -73,8 +73,13 @@ type SpawnedProcess = {
   stderr?: ReadableStream | null;
 };
 
+type GraphifyRebuildEnvironment = Record<string, string | undefined>;
+
 type GraphifyRebuildOptions = {
-  spawn?: (command: string[], options: { cwd: string }) => SpawnedProcess;
+  spawn?: (
+    command: string[],
+    options: { cwd: string; env: GraphifyRebuildEnvironment }
+  ) => SpawnedProcess;
   writeGraphifyWikiPages?: (rootDir: string) => Promise<void>;
 };
 
@@ -192,10 +197,15 @@ export async function runGraphifyRebuild(
 ) {
   const graphifyPython = await resolveGraphifyPython(rootDir);
   const command = [graphifyPython, "-c", GRAPHIFY_REBUILD_SNIPPET];
+  const env = {
+    ...process.env,
+    PYTHONHASHSEED: "0",
+  };
   const subprocess =
-    options.spawn?.(command, { cwd: rootDir }) ??
+    options.spawn?.(command, { cwd: rootDir, env }) ??
     Bun.spawn(command, {
       cwd: rootDir,
+      env,
       stdout: "inherit",
       stderr: "pipe",
     });

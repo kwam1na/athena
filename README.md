@@ -29,6 +29,8 @@ Key repo-level commands:
 It targets repo-root `scripts/*.test.ts` files only (excluding cloned worktree trees).
 Use `bun run harness:test -- --dry-run` to print the selected files without executing tests.
 
+`pre-push:review` automatically runs `bun run graphify:rebuild` before the local validation suite, so stale tracked graphify artifacts get repaired before freshness-sensitive checks execute.
+
 List runtime behavior scenarios with `bun run harness:behavior --list`.
 Bundled scenarios include:
 
@@ -101,7 +103,7 @@ Use [the packages agent router](./packages/AGENTS.md) plus each package's `AGENT
 
 Use `bun run graphify:check` as the non-mutating freshness gate for tracked graphify artifacts.
 
-Use `bun run graphify:rebuild` as the repair path when the check reports stale artifacts. The rebuild command uses the interpreter recorded in `.graphify_python` (default `python3` in this repo).
+Use `bun run graphify:rebuild` as the repair path when the check reports stale artifacts. The rebuild command uses the interpreter recorded in `.graphify_python` (default `python3` in this repo). Local `pre-push:review` runs this repair step automatically before its validation suite.
 
 If you need to repair the local graphify setup, install the repo-pinned runtime with `python3 -m pip install -r .graphify-requirements.txt`.
 
