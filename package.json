@@ -1,6 +1,7 @@
 {
   "name": "athena",
   "private": true,
+  "packageManager": "bun@1.1.29",
   "scripts": {
     "prepare": "husky",
     "architecture:check": "bun scripts/architecture-boundary-check.ts",

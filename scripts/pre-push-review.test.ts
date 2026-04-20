@@ -528,4 +528,17 @@ describe("repo harness ergonomics", () => {
       "bun scripts/pre-commit-generated-artifacts.ts"
     );
   });
+
+  it("pins Bun in package.json and keeps GitHub Actions aligned with that repo version", async () => {
+    const [packageJsonText, workflow] = await Promise.all([
+      readFile(path.join(ROOT_DIR, "package.json"), "utf8"),
+      readFile(path.join(ROOT_DIR, ".github/workflows/athena-pr-tests.yml"), "utf8"),
+    ]);
+
+    expect(JSON.parse(packageJsonText)).toMatchObject({
+      packageManager: "bun@1.1.29",
+    });
+    expect(workflow).toContain("bun-version-file: package.json");
+    expect(workflow).not.toContain("bun-version: latest");
+  });
 });
