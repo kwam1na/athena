@@ -20,7 +20,7 @@ interface CartItemsProps {
   cartItems: CartItem[];
   onUpdateQuantity?: (
     id: Id<"posSessionItem"> | Id<"expenseSessionItem">,
-    newQuantity: number
+    newQuantity: number,
   ) => void;
   onRemoveItem?: (id: Id<"posSessionItem"> | Id<"expenseSessionItem">) => void;
   clearCart?: () => void;
@@ -115,7 +115,7 @@ export function CartItems({
                     </div>
 
                     {(item.size || item.length || item.color) && (
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-xs text-muted-foreground capitalize">
                         {item.length && `${item.length}"`}
                         {item.size && item.length && " • "}
                         {item.size && `${item.size}`}
@@ -146,7 +146,7 @@ export function CartItems({
                             item.id as
                               | Id<"posSessionItem">
                               | Id<"expenseSessionItem">,
-                            item.quantity - 1
+                            item.quantity - 1,
                           )
                         }
                       >
@@ -165,7 +165,7 @@ export function CartItems({
                             item.id as
                               | Id<"posSessionItem">
                               | Id<"expenseSessionItem">,
-                            item.quantity + 1
+                            item.quantity + 1,
                           )
                         }
                       >
@@ -178,10 +178,7 @@ export function CartItems({
                 {/* Total Price */}
                 <div className="col-span-2 text-right">
                   <p className="font-semibold text-sm">
-                    {formatStoredAmount(
-                      formatter,
-                      item.price * item.quantity
-                    )}
+                    {formatStoredAmount(formatter, item.price * item.quantity)}
                   </p>
                 </div>
 
@@ -197,7 +194,7 @@ export function CartItems({
                         onRemoveItem(
                           item.id as
                             | Id<"posSessionItem">
-                            | Id<"expenseSessionItem">
+                            | Id<"expenseSessionItem">,
                         )
                       }
                     >

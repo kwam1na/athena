@@ -90,11 +90,6 @@ export function OrderSummary({
   const [selectedPaymentMethod, setSelectedPaymentMethod] =
     useState<SelectedPaymentMethod | null>(null);
 
-  const activeSession = usePOSActiveSession(
-    activeStore?._id as Id<"store">,
-    terminal?._id as Id<"posTerminal">
-  );
-
   const cashier = usePOSCashier();
   // Use store state for most current data, fall back to props for compatibility
   const currentCartItems = readOnly
@@ -106,6 +101,12 @@ export function OrderSummary({
     readOnly && customerInfo
       ? customerInfo
       : state.currentCustomer || customerInfo;
+
+  const activeSession = usePOSActiveSession(
+    activeStore?._id as Id<"store">,
+    terminal?._id as Id<"posTerminal">,
+    cashier?._id,
+  );
 
   // Use store state for real-time totals, fallback to props for session-based POS
   const subtotal = readOnly
@@ -120,7 +121,7 @@ export function OrderSummary({
 
   const cartItemsCount = currentCartItems.reduce(
     (sum, item) => sum + item.quantity,
-    0
+    0,
   );
 
   const cartItemsCountText =
@@ -149,7 +150,7 @@ export function OrderSummary({
   };
 
   const handleSelectedPaymentMethod = (
-    method: SelectedPaymentMethod | null
+    method: SelectedPaymentMethod | null,
   ) => {
     if (method) {
       store.setTransactionCompleting(true);
@@ -220,10 +221,7 @@ export function OrderSummary({
 
         return {
           name: capitalizeWords(item.name),
-          totalPrice: formatStoredAmount(
-            formatter,
-            item.price * item.quantity
-          ),
+          totalPrice: formatStoredAmount(formatter, item.price * item.quantity),
           quantityLabel: `${item.quantity} × ${formatStoredAmount(formatter, item.price)}`,
           skuOrBarcode: item.sku || item.barcode,
           attributes:
@@ -232,7 +230,7 @@ export function OrderSummary({
       });
 
       const paymentMethodLabel = formatPaymentMethod(
-        completedData.paymentMethod
+        completedData.paymentMethod,
       );
 
       // Format payments - use completedTransactionData payments if transaction is completed,
@@ -262,7 +260,7 @@ export function OrderSummary({
       const totalPaidFromPayments = paymentsToFormat
         ? paymentsToFormat.reduce(
             (sum: number, p: Payment) => sum + p.amount,
-            0
+            0,
           )
         : 0;
       const changeGiven =
@@ -271,7 +269,7 @@ export function OrderSummary({
         totalPaidFromPayments > completedData.total
           ? formatStoredAmount(
               formatter,
-              totalPaidFromPayments - completedData.total
+              totalPaidFromPayments - completedData.total,
             )
           : undefined;
 
@@ -329,7 +327,7 @@ export function OrderSummary({
           paymentMethodLabel={paymentMethodLabel}
           payments={formattedPayments}
           changeGiven={changeGiven}
-        />
+        />,
       );
 
       printReceipt(receiptHTML);
@@ -352,7 +350,7 @@ export function OrderSummary({
         state.isTransactionCompleted && "border rounded-lg",
         terminal === null &&
           !readOnly &&
-          "opacity-60 transition-all duration-300"
+          "opacity-60 transition-all duration-300",
         // state.isTransactionCompleted && "h-[70vh]"
       )}
     >

@@ -8,6 +8,7 @@ import { currencyFormatter } from "~/convex/utils";
 import { Check } from "lucide-react";
 import { CashierView } from "../pos/CashierView";
 import { useExpenseStore } from "~/src/stores/expenseStore";
+import { toDisplayAmount } from "~/convex/lib/currency";
 
 interface ExpenseCompletionProps {
   cartItems: CartItem[];
@@ -97,7 +98,7 @@ export function ExpenseCompletion({
               Total Value
             </span>
             <span className="text-4xl font-bold text-gray-900">
-              {formatter.format(totalValue)}
+              {formatter.format(toDisplayAmount(totalValue))}
             </span>
           </div>
           {/* <p className="text-xs text-gray-500 mt-1">

@@ -30,6 +30,7 @@ import { useGetTerminal } from "~/src/hooks/useGetTerminal";
 import { Badge } from "../ui/badge";
 import { cn } from "~/src/lib/utils";
 import { usePermissions } from "~/src/hooks/usePermissions";
+import { toDisplayAmount } from "~/convex/lib/currency";
 
 const Navigation = () => {
   return (
@@ -47,13 +48,13 @@ export default function PointOfSaleView() {
 
   const analytics = useQuery(
     api.storeFront.analytics.getAll,
-    activeStore?._id ? { storeId: activeStore._id } : "skip"
+    activeStore?._id ? { storeId: activeStore._id } : "skip",
   );
 
   // Get today's POS transaction summary
   const todaySummary = useQuery(
     api.inventory.pos.getTodaySummary,
-    activeStore?._id ? { storeId: activeStore._id } : "skip"
+    activeStore?._id ? { storeId: activeStore._id } : "skip",
   );
 
   // Currency formatter
@@ -183,7 +184,7 @@ export default function PointOfSaleView() {
                     key={feature.title}
                     className={cn(
                       "border rounded-lg cursor-pointer",
-                      feature.enabled === false && "cursor-not-allowed"
+                      feature.enabled === false && "cursor-not-allowed",
                     )}
                   >
                     <Link
@@ -225,25 +226,7 @@ export default function PointOfSaleView() {
         {/* Today's Summary */}
         <div>
           <h2 className="text-xl font-medium mb-6">Summary</h2>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="border rounded-lg">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm text-muted-foreground">
-                  Transactions
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {todaySummary ? (
-                    todaySummary.totalTransactions
-                  ) : (
-                    <span className="text-muted-foreground">--</span>
-                  )}
-                </div>
-                <p className="text-xs text-muted-foreground">Today</p>
-              </CardContent>
-            </div>
-
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {hasFullAdminAccess && (
               <>
                 <div className="border rounded-lg">
@@ -252,10 +235,12 @@ export default function PointOfSaleView() {
                       Total Sales
                     </CardTitle>
                   </CardHeader>
-                  <CardContent>
+                  <CardContent className="space-y-2">
                     <div className="text-2xl font-bold">
                       {todaySummary ? (
-                        currencyFormatter.format(todaySummary.totalSales)
+                        currencyFormatter.format(
+                          toDisplayAmount(todaySummary.totalSales),
+                        )
                       ) : (
                         <span className="text-muted-foreground">--</span>
                       )}
@@ -269,10 +254,28 @@ export default function PointOfSaleView() {
             <div className="border rounded-lg">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm text-muted-foreground">
+                  Transactions
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <div className="text-2xl font-bold">
+                  {todaySummary ? (
+                    todaySummary.totalTransactions
+                  ) : (
+                    <span className="text-muted-foreground">--</span>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">Today</p>
+              </CardContent>
+            </div>
+
+            <div className="border rounded-lg">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm text-muted-foreground">
                   Items Sold
                 </CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-2">
                 <div className="text-2xl font-bold">
                   {todaySummary ? (
                     todaySummary.totalItemsSold
@@ -284,7 +287,7 @@ export default function PointOfSaleView() {
               </CardContent>
             </div>
 
-            {hasFullAdminAccess && (
+            {/* {hasFullAdminAccess && (
               <div className="border rounded-lg">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm text-muted-foreground">
@@ -294,7 +297,9 @@ export default function PointOfSaleView() {
                 <CardContent>
                   <div className="text-2xl font-bold">
                     {todaySummary ? (
-                      currencyFormatter.format(todaySummary.averageTransaction)
+                      currencyFormatter.format(
+                        toDisplayAmount(todaySummary.averageTransaction),
+                      )
                     ) : (
                       <span className="text-muted-foreground">--</span>
                     )}
@@ -302,7 +307,7 @@ export default function PointOfSaleView() {
                   <p className="text-xs text-muted-foreground">Today</p>
                 </CardContent>
               </div>
-            )}
+            )} */}
           </div>
         </div>
       </FadeIn>
