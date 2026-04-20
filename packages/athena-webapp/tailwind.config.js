@@ -18,10 +18,27 @@ export default {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        sans: ["var(--font-sans)"],
+        display: ["var(--font-display)"],
+        mono: ["var(--font-mono)"],
+      },
       borderRadius: {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
+      },
+      spacing: {
+        "layout-2xs": "var(--space-2xs)",
+        "layout-xs": "var(--space-xs)",
+        "layout-sm": "var(--space-sm)",
+        "layout-md": "var(--space-md)",
+        "layout-lg": "var(--space-lg)",
+        "layout-xl": "var(--space-xl)",
+        "layout-2xl": "var(--space-2xl)",
+        "layout-3xl": "var(--space-3xl)",
+        "control-standard": "var(--control-height-standard)",
+        "control-compact": "var(--control-height-compact)",
       },
       colors: {
         background: "hsl(var(--background))",
@@ -54,6 +71,31 @@ export default {
           DEFAULT: "hsl(var(--destructive))",
           foreground: "hsl(var(--destructive-foreground))",
         },
+        surface: {
+          DEFAULT: "hsl(var(--surface))",
+          muted: "hsl(var(--surface-muted))",
+          raised: "hsl(var(--surface-raised))",
+        },
+        shell: {
+          DEFAULT: "hsl(var(--shell))",
+          foreground: "hsl(var(--shell-foreground))",
+        },
+        signal: {
+          DEFAULT: "hsl(var(--signal))",
+          foreground: "hsl(var(--signal-foreground))",
+        },
+        success: {
+          DEFAULT: "hsl(var(--success))",
+          foreground: "hsl(var(--success-foreground))",
+        },
+        warning: {
+          DEFAULT: "hsl(var(--warning))",
+          foreground: "hsl(var(--warning-foreground))",
+        },
+        danger: {
+          DEFAULT: "hsl(var(--danger))",
+          foreground: "hsl(var(--danger-foreground))",
+        },
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
@@ -73,9 +115,20 @@ export default {
           "accent-foreground": "hsl(var(--sidebar-accent-foreground))",
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
-          "primary-foreground": "hsl(var(--sidebar-primary-foreground))",
-          "accent-foreground": "hsl(var(--sidebar-accent-foreground))",
         },
+      },
+      boxShadow: {
+        surface: "var(--shadow-surface)",
+        overlay: "var(--shadow-overlay)",
+      },
+      transitionDuration: {
+        fast: "var(--motion-fast)",
+        standard: "var(--motion-standard)",
+        slow: "var(--motion-slow)",
+      },
+      transitionTimingFunction: {
+        standard: "var(--ease-standard)",
+        emphasized: "var(--ease-emphasized)",
       },
       keyframes: {
         "accordion-down": {
@@ -112,12 +165,48 @@ export default {
             borderWidth: "2.5px",
           },
         },
+        "focus-sweep": {
+          "0%": {
+            transform: "translateX(-12%)",
+            opacity: "0.42",
+          },
+          "100%": {
+            transform: "translateX(112%)",
+            opacity: "1",
+          },
+        },
+        "presence-lift": {
+          "0%": {
+            opacity: "0",
+            transform: "translateY(10px) scale(0.985)",
+          },
+          "100%": {
+            opacity: "1",
+            transform: "translateY(0) scale(1)",
+          },
+        },
+        "status-breathe": {
+          "0%, 100%": {
+            opacity: "0.45",
+            transform: "scaleX(0.92)",
+          },
+          "50%": {
+            opacity: "1",
+            transform: "scaleX(1)",
+          },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
         "caret-blink": "caret-blink 1.25s ease-out infinite",
         "border-pulsate": "border-pulsate 2s ease-in-out infinite",
+        "focus-sweep":
+          "focus-sweep var(--motion-standard) var(--ease-emphasized) infinite",
+        "presence-lift":
+          "presence-lift var(--motion-standard) var(--ease-emphasized) infinite alternate",
+        "status-breathe":
+          "status-breathe var(--motion-slow) var(--ease-standard) infinite",
       },
     },
   },

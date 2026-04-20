@@ -161,6 +161,8 @@ describe("HARNESS_APP_REGISTRY", () => {
       touchedPaths: [
         ".storybook",
         "src/stories",
+        "src/index.css",
+        "tailwind.config.js",
         "package.json",
         "eslint.config.js",
         ".gitignore",
