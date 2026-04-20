@@ -29,7 +29,8 @@ Key repo-level commands:
 It targets repo-root `scripts/*.test.ts` files only (excluding cloned worktree trees).
 Use `bun run harness:test -- --dry-run` to print the selected files without executing tests.
 
-`pre-push:review` automatically runs `bun run graphify:rebuild` before the local validation suite, so stale tracked graphify artifacts get repaired before freshness-sensitive checks execute.
+`pre-commit:generated-artifacts` automatically runs `bun run graphify:rebuild` and stages the tracked graphify outputs before the commit is finalized, so the pushed ref includes the refreshed graph artifacts.
+`pre-push:review` uses `bun run graphify:check` as a non-mutating freshness gate before the rest of the local validation suite.
 If `harness:self-review` or `harness:review` gets blocked by stale generated harness docs, the hook runs `bun run harness:generate` once and retries the blocked step.
 
 List runtime behavior scenarios with `bun run harness:behavior --list`.
@@ -104,7 +105,7 @@ Use [the packages agent router](./packages/AGENTS.md) plus each package's `AGENT
 
 Use `bun run graphify:check` as the non-mutating freshness gate for tracked graphify artifacts.
 
-Use `bun run graphify:rebuild` as the repair path when the check reports stale artifacts. The rebuild command uses the interpreter recorded in `.graphify_python` (default `python3` in this repo). Local `pre-push:review` runs this repair step automatically before its validation suite.
+Use `bun run graphify:rebuild` as the repair path when the check reports stale artifacts. The rebuild command uses the interpreter recorded in `.graphify_python` (default `python3` in this repo). Local `pre-commit:generated-artifacts` runs this repair step and stages the tracked graphify outputs before the commit is finalized, while `pre-push:review` re-checks freshness without mutating the tree.
 
 If you need to repair the local graphify setup, install the repo-pinned runtime with `python3 -m pip install -r .graphify-requirements.txt`.
 

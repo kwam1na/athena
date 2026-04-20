@@ -83,6 +83,14 @@ describe("runHarnessBehaviorScenario", () => {
               executionOrder.push("readiness");
             },
           },
+          {
+            name: "heartbeat-ready-check",
+            kind: "log",
+            processId: "runtime-app",
+            source: "stdout",
+            pattern: "RUNTIME_SIGNAL:heartbeat",
+            timeoutMs: 2_000,
+          },
         ],
         browser: async () => {
           executionOrder.push("browser");
@@ -95,7 +103,7 @@ describe("runHarnessBehaviorScenario", () => {
             name: "heartbeat-signal",
             processId: "runtime-app",
             source: "stdout",
-            pattern: "RUNTIME_SIGNAL:booted",
+            pattern: "RUNTIME_SIGNAL:heartbeat",
             minMatches: 1,
           },
         ],

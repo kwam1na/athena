@@ -61,7 +61,7 @@ describe("pre-push review wiring", () => {
     expect(files).toEqual([]);
   });
 
-  it("runs graphify rebuild before self-review, architecture checks, harness review, and inferential review", async () => {
+  it("runs graphify check before self-review, architecture checks, harness review, and inferential review", async () => {
     const steps: string[] = [];
 
     await prePushReview.runPrePushReview(ROOT_DIR, {
@@ -69,8 +69,8 @@ describe("pre-push review wiring", () => {
         steps.push("changed-files");
         return ["packages/athena-webapp/src/main.tsx"];
       },
-      runGraphifyRebuild: async () => {
-        steps.push("graphify:rebuild");
+      runGraphifyCheck: async () => {
+        steps.push("graphify:check");
       },
       runHarnessSelfReview: async () => {
         steps.push("harness:self-review:origin/main");
@@ -92,7 +92,7 @@ describe("pre-push review wiring", () => {
     } as any);
 
     expect(steps).toEqual([
-      "graphify:rebuild",
+      "graphify:check",
       "harness:self-review:origin/main",
       "architecture:check",
       "changed-files",
@@ -109,8 +109,8 @@ describe("pre-push review wiring", () => {
         steps.push("changed-files");
         return ["scripts/harness-check.test.ts"];
       },
-      runGraphifyRebuild: async () => {
-        steps.push("graphify:rebuild");
+      runGraphifyCheck: async () => {
+        steps.push("graphify:check");
       },
       runHarnessSelfReview: async () => {
         steps.push("harness:self-review:origin/main");
@@ -137,7 +137,7 @@ describe("pre-push review wiring", () => {
     } as any);
 
     expect(steps).toEqual([
-      "graphify:rebuild",
+      "graphify:check",
       "harness:self-review:origin/main",
       "architecture:check",
       "changed-files",
@@ -156,8 +156,8 @@ describe("pre-push review wiring", () => {
         steps.push("changed-files");
         return ["packages/athena-webapp/src/main.tsx"];
       },
-      runGraphifyRebuild: async () => {
-        steps.push("graphify:rebuild");
+      runGraphifyCheck: async () => {
+        steps.push("graphify:check");
       },
       runHarnessSelfReview: async () => {
         steps.push("harness:self-review:origin/main");
@@ -184,7 +184,7 @@ describe("pre-push review wiring", () => {
     } as any);
 
     expect(steps).toEqual([
-      "graphify:rebuild",
+      "graphify:check",
       "harness:self-review:origin/main",
       "architecture:check",
       "changed-files",
@@ -202,8 +202,8 @@ describe("pre-push review wiring", () => {
         steps.push("changed-files-fallback");
         return [];
       },
-      runGraphifyRebuild: async () => {
-        steps.push("graphify:rebuild");
+      runGraphifyCheck: async () => {
+        steps.push("graphify:check");
       },
       runHarnessSelfReview: async () => {
         steps.push("harness:self-review:origin/main");
@@ -227,7 +227,7 @@ describe("pre-push review wiring", () => {
     } as any);
 
     expect(steps).toEqual([
-      "graphify:rebuild",
+      "graphify:check",
       "harness:self-review:origin/main",
       "architecture:check",
       "changed-files-fallback",
@@ -246,8 +246,8 @@ describe("pre-push review wiring", () => {
         steps.push("changed-files");
         return ["packages/athena-webapp/src/main.tsx"];
       },
-      runGraphifyRebuild: async () => {
-        steps.push("graphify:rebuild");
+      runGraphifyCheck: async () => {
+        steps.push("graphify:check");
       },
       runHarnessSelfReview: async () => {
         selfReviewRuns += 1;
@@ -280,7 +280,7 @@ describe("pre-push review wiring", () => {
     } as any);
 
     expect(steps).toEqual([
-      "graphify:rebuild",
+      "graphify:check",
       "harness:self-review:1",
       "harness:generate",
       "harness:self-review:2",
@@ -300,8 +300,8 @@ describe("pre-push review wiring", () => {
           steps.push("changed-files");
           return [];
         },
-        runGraphifyRebuild: async () => {
-          steps.push("graphify:rebuild");
+        runGraphifyCheck: async () => {
+          steps.push("graphify:check");
         },
         runHarnessSelfReview: async () => {
           steps.push("harness:self-review");
@@ -330,7 +330,7 @@ describe("pre-push review wiring", () => {
       } as any)
     ).rejects.toThrow("harness:self-review blocked");
 
-    expect(steps).toEqual(["graphify:rebuild", "harness:self-review"]);
+    expect(steps).toEqual(["graphify:check", "harness:self-review"]);
   });
 
   it("auto-repairs stale generated harness docs after harness:review fails and retries once", async () => {
@@ -342,8 +342,8 @@ describe("pre-push review wiring", () => {
         steps.push("changed-files");
         return ["packages/athena-webapp/src/main.tsx"];
       },
-      runGraphifyRebuild: async () => {
-        steps.push("graphify:rebuild");
+      runGraphifyCheck: async () => {
+        steps.push("graphify:check");
       },
       runHarnessSelfReview: async () => {
         steps.push("harness:self-review");
@@ -376,7 +376,7 @@ describe("pre-push review wiring", () => {
     } as any);
 
     expect(steps).toEqual([
-      "graphify:rebuild",
+      "graphify:check",
       "harness:self-review",
       "architecture:check",
       "changed-files",
@@ -395,7 +395,7 @@ describe("pre-push review wiring", () => {
         observedSpawnTypes.push(typeof spawn);
         return [];
       }) as unknown as (rootDir: string) => Promise<string[]>,
-      runGraphifyRebuild: async () => {},
+      runGraphifyCheck: async () => {},
       runHarnessSelfReview: async () => {},
       runArchitectureCheck: async () => {},
       runHarnessInferentialReview: async () => {},
@@ -419,6 +419,15 @@ describe("pre-push review wiring", () => {
     );
 
     expect(hookContents).toContain("bun run pre-push:review");
+  });
+
+  it("keeps the husky pre-commit hook pointed at the generated-artifact repair script", async () => {
+    const hookContents = await readFile(
+      path.join(ROOT_DIR, ".husky/pre-commit"),
+      "utf8"
+    );
+
+    expect(hookContents).toContain("bun run pre-commit:generated-artifacts");
   });
 });
 
@@ -485,11 +494,12 @@ describe("repo harness ergonomics", () => {
     const readme = await readFile(path.join(ROOT_DIR, "README.md"), "utf8");
 
     expect(readme).toContain(
-      "`pre-push:review` automatically runs `bun run graphify:rebuild`"
+      "`pre-commit:generated-artifacts` automatically runs `bun run graphify:rebuild`"
     );
     expect(readme).toContain(
       "runs `bun run harness:generate` once and retries the blocked step"
     );
+    expect(readme).toContain("`pre-push:review` uses `bun run graphify:check`");
     expect(readme).toContain("bun run graphify:check");
     expect(readme).toContain("bun run graphify:rebuild");
     expect(readme).toContain(".graphify_python");
@@ -505,5 +515,17 @@ describe("repo harness ergonomics", () => {
     const gitignore = await readFile(path.join(ROOT_DIR, ".gitignore"), "utf8");
 
     expect(gitignore).toContain("graphify-out/cache/");
+  });
+
+  it("wires a repo-level pre-commit generated-artifact repair command", async () => {
+    const packageJson = JSON.parse(
+      await readFile(path.join(ROOT_DIR, "package.json"), "utf8")
+    ) as {
+      scripts?: Record<string, string>;
+    };
+
+    expect(packageJson.scripts?.["pre-commit:generated-artifacts"]).toBe(
+      "bun scripts/pre-commit-generated-artifacts.ts"
+    );
   });
 });
