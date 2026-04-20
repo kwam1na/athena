@@ -28,6 +28,7 @@ Key repo-level commands:
 `bun run harness:test` is the canonical harness implementation gate for harness scripts, graphify tooling, and pre-push review wiring.
 It targets repo-root `scripts/*.test.ts` files only (excluding cloned worktree trees).
 Use `bun run harness:test -- --dry-run` to print the selected files without executing tests.
+The repo pins Bun via `package.json` (`bun@1.1.29` today), and GitHub Actions reads that same repo-declared version so CI and local harness runs stay aligned.
 
 `pre-commit:generated-artifacts` automatically runs `bun run graphify:rebuild` and stages the tracked graphify outputs before the commit is finalized, so the pushed ref includes the refreshed graph artifacts.
 `pre-push:review` uses `bun run graphify:check` as a non-mutating freshness gate before the rest of the local validation suite.
