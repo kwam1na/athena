@@ -42,6 +42,7 @@ const SKIP_DIRS = new Set([
   "__pycache__",
   "coverage",
   "dist",
+  "storybook-static",
 ]);
 
 type GraphifyNode = {

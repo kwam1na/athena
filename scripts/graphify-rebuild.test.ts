@@ -38,6 +38,10 @@ describe("runGraphifyRebuild", () => {
     expect(GRAPHIFY_REBUILD_SNIPPET).toContain("shutil.rmtree(cache_dir)");
   });
 
+  it("skips generated storybook-static outputs during graph extraction", () => {
+    expect(GRAPHIFY_REBUILD_SNIPPET).toContain("'storybook-static'");
+  });
+
   it("normalizes date-bearing report headers for stable freshness checks", () => {
     expect(GRAPHIFY_REBUILD_SNIPPET).toContain("import re");
     expect(GRAPHIFY_REBUILD_SNIPPET).toContain("report_lines[0] = re.sub(");

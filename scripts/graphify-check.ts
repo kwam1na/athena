@@ -25,6 +25,7 @@ const SKIP_DIRS = new Set([
   "__pycache__",
   "coverage",
   "dist",
+  "storybook-static",
 ]);
 const CODE_EXTENSIONS = new Set([
   ".py",

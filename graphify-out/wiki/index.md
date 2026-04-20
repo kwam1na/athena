@@ -7,20 +7,20 @@ Graphify is the navigation layer for the repo graph. Use the entry docs below fo
 - [packages/AGENTS.md](../../packages/AGENTS.md) - package router plus the operational guides for each harnessed package
 
 ## Repo Summary
-- Code files discovered: 1250
-- Graph nodes: 9638
-- Graph edges: 19781
-- Communities: 1187
+- Code files discovered: 1225
+- Graph nodes: 2874
+- Graph edges: 2421
+- Communities: 1140
 
 ## Graph Hotspots
-- `globals-runtime.js` (2490 edges, Community 2) - [`packages/athena-webapp/storybook-static/sb-manager/globals-runtime.js`](../../packages/athena-webapp/storybook-static/sb-manager/globals-runtime.js)
-- `iframe-DsMvxffV.js` (1192 edges, Community 0) - [`packages/athena-webapp/storybook-static/assets/iframe-DsMvxffV.js`](../../packages/athena-webapp/storybook-static/assets/iframe-DsMvxffV.js)
-- `DocsRenderer-LL677BLK-igHKf-Zb.js` (917 edges, Community 1) - [`packages/athena-webapp/storybook-static/assets/DocsRenderer-LL677BLK-igHKf-Zb.js`](../../packages/athena-webapp/storybook-static/assets/DocsRenderer-LL677BLK-igHKf-Zb.js)
-- `runtime.js` (636 edges, Community 3) - [`packages/athena-webapp/storybook-static/sb-manager/runtime.js`](../../packages/athena-webapp/storybook-static/sb-manager/runtime.js)
-- `axe-K0go3vIa.js` (540 edges, Community 4) - [`packages/athena-webapp/storybook-static/assets/axe-K0go3vIa.js`](../../packages/athena-webapp/storybook-static/assets/axe-K0go3vIa.js)
-- `common-manager-bundle.js` (374 edges, Community 5) - [`packages/athena-webapp/storybook-static/sb-addons/storybook-core-server-presets-0/common-manager-bundle.js`](../../packages/athena-webapp/storybook-static/sb-addons/storybook-core-server-presets-0/common-manager-bundle.js)
-- `react-18-Cw4lkx7g.js` (261 edges, Community 6) - [`packages/athena-webapp/storybook-static/assets/react-18-Cw4lkx7g.js`](../../packages/athena-webapp/storybook-static/assets/react-18-Cw4lkx7g.js)
-- `filter()` (77 edges, Community 9) - [`packages/athena-webapp/storybook-static/sb-manager/globals-runtime.js`](../../packages/athena-webapp/storybook-static/sb-manager/globals-runtime.js)
+- `harness-inferential-review.ts` (46 edges, Community 0) - [`scripts/harness-inferential-review.ts`](../../scripts/harness-inferential-review.ts)
+- `storefrontJourneyEvents.ts` (45 edges, Community 1) - [`packages/storefront-webapp/src/lib/storefrontJourneyEvents.ts`](../../packages/storefront-webapp/src/lib/storefrontJourneyEvents.ts)
+- `createJourneyEvent()` (40 edges, Community 1) - [`packages/storefront-webapp/src/lib/storefrontJourneyEvents.ts`](../../packages/storefront-webapp/src/lib/storefrontJourneyEvents.ts)
+- `harness-check.ts` (32 edges, Community 2) - [`scripts/harness-check.ts`](../../scripts/harness-check.ts)
+- `harness-generate.ts` (30 edges, Community 3) - [`scripts/harness-generate.ts`](../../scripts/harness-generate.ts)
+- `harness-scorecard.ts` (27 edges, Community 5) - [`scripts/harness-scorecard.ts`](../../scripts/harness-scorecard.ts)
+- `storeConfigV2.ts` (27 edges, Community 4) - [`packages/athena-webapp/convex/inventory/storeConfigV2.ts`](../../packages/athena-webapp/convex/inventory/storeConfigV2.ts)
+- `harness-behavior.ts` (24 edges, Community 6) - [`scripts/harness-behavior.ts`](../../scripts/harness-behavior.ts)
 
 ## Registered Packages
 - [Athena Webapp](packages/athena-webapp.md)

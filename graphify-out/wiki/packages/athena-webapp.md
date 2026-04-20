@@ -17,11 +17,11 @@ Landing page for packages/athena-webapp. Use this page to orient around graph ho
 - [validation-map.json](../../../packages/athena-webapp/docs/agent/validation-map.json)
 
 ## Graph Hotspots
-- `globals-runtime.js` (2490 edges, Community 2) - [`packages/athena-webapp/storybook-static/sb-manager/globals-runtime.js`](../../../packages/athena-webapp/storybook-static/sb-manager/globals-runtime.js)
-- `iframe-DsMvxffV.js` (1192 edges, Community 0) - [`packages/athena-webapp/storybook-static/assets/iframe-DsMvxffV.js`](../../../packages/athena-webapp/storybook-static/assets/iframe-DsMvxffV.js)
-- `DocsRenderer-LL677BLK-igHKf-Zb.js` (917 edges, Community 1) - [`packages/athena-webapp/storybook-static/assets/DocsRenderer-LL677BLK-igHKf-Zb.js`](../../../packages/athena-webapp/storybook-static/assets/DocsRenderer-LL677BLK-igHKf-Zb.js)
-- `runtime.js` (636 edges, Community 3) - [`packages/athena-webapp/storybook-static/sb-manager/runtime.js`](../../../packages/athena-webapp/storybook-static/sb-manager/runtime.js)
-- `axe-K0go3vIa.js` (540 edges, Community 4) - [`packages/athena-webapp/storybook-static/assets/axe-K0go3vIa.js`](../../../packages/athena-webapp/storybook-static/assets/axe-K0go3vIa.js)
+- `storeConfigV2.ts` (27 edges, Community 4) - [`packages/athena-webapp/convex/inventory/storeConfigV2.ts`](../../../packages/athena-webapp/convex/inventory/storeConfigV2.ts)
+- `ProductStock.tsx` (19 edges, Community 10) - [`packages/athena-webapp/src/components/add-product/ProductStock.tsx`](../../../packages/athena-webapp/src/components/add-product/ProductStock.tsx)
+- `checkoutSession.ts` (17 edges, Community 12) - [`packages/athena-webapp/convex/storeFront/checkoutSession.ts`](../../../packages/athena-webapp/convex/storeFront/checkoutSession.ts)
+- `DataTableViewOptions()` (16 edges, Community 14) - [`packages/athena-webapp/src/components/user-bags/user-bags-table/data-table-view-options.tsx`](../../../packages/athena-webapp/src/components/user-bags/user-bags-table/data-table-view-options.tsx)
+- `storeConfig.ts` (16 edges, Community 8) - [`packages/athena-webapp/src/lib/storeConfig.ts`](../../../packages/athena-webapp/src/lib/storeConfig.ts)
 
 ## Navigation
 - [wiki index](../index.md) - back to the wiki index
