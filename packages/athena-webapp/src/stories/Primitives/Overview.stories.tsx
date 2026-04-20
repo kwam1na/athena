@@ -7,17 +7,17 @@ function PrimitivesOverview() {
     <StorybookShell
       eyebrow="Primitives"
       title="Shared UI contracts"
-      description="The primitive layer will document and normalize the controls Athena depends on before shell patterns and templates expand the system."
+      description="The primitive layer now documents the controls Athena depends on before shell patterns and templates expand the system."
     >
       <StorybookSection
-        title="Targeted components"
-        description="The next primitive ticket will focus on the highest-leverage shared controls."
+        title="Coverage"
+        description="The story set focuses on the controls and surfaces that show up in real Athena flows."
       >
         <StorybookList
           items={[
-            "Buttons, badges, inputs, selects, and textareas.",
-            "Dialogs, sheets, tabs, tables, skeletons, spinners, and toast surfaces.",
-            "State coverage for loading, disabled, destructive, compact, and dark-theme cases.",
+            "Controls: buttons, badges, inputs, selects, textareas, switches, toggles, toggle groups, radio groups, and separators.",
+            "Surfaces: cards, tabs, tables, scroll areas, dialogs, sheets, popovers, and tooltips.",
+            "Feedback: skeletons, spinners, and toast surfaces in loading and success states.",
           ]}
         />
       </StorybookSection>

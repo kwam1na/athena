@@ -40,6 +40,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`src/components/store-configuration/components/MtnMomoView.test.tsx`](../../src/components/store-configuration/components/MtnMomoView.test.tsx)
 - [`src/components/ui/button.test.tsx`](../../src/components/ui/button.test.tsx)
 - [`src/components/ui/calendar.test.tsx`](../../src/components/ui/calendar.test.tsx)
+- [`src/components/ui/primitives.test.tsx`](../../src/components/ui/primitives.test.tsx)
 - [`src/components/users/TimelineEventCard.test.tsx`](../../src/components/users/TimelineEventCard.test.tsx)
 - [`src/hooks/useBulkOperations.test.ts`](../../src/hooks/useBulkOperations.test.ts)
 - [`src/lib/imageUtils.test.ts`](../../src/lib/imageUtils.test.ts)

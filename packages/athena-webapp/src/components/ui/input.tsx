@@ -1,35 +1,34 @@
 import * as React from "react";
+import { cva, type VariantProps } from "class-variance-authority";
 
 import { cn } from "@/lib/utils";
 
-export interface InputProps extends React.ComponentProps<"input"> {
-  textSize?: "sm" | "base" | "lg" | "xl" | "2xl" | "3xl" | "4xl";
-}
+const inputVariants = cva(
+  "flex w-full rounded-md border border-input bg-background ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
+  {
+    variants: {
+      size: {
+        sm: "h-9 px-2.5 py-1.5 text-sm",
+        default: "h-10 px-3 py-2 text-base md:text-sm",
+        lg: "h-11 px-4 py-2 text-base",
+      },
+    },
+    defaultVariants: {
+      size: "default",
+    },
+  }
+);
 
-const textSizeMap = {
-  sm: "text-sm",
-  base: "text-base",
-  lg: "text-lg",
-  xl: "text-xl",
-  "2xl": "text-2xl",
-  "3xl": "text-3xl",
-  "4xl": "text-4xl",
-} as const;
+export interface InputProps
+  extends Omit<React.ComponentProps<"input">, "size">,
+    VariantProps<typeof inputVariants> {}
 
 const Input = React.forwardRef<HTMLInputElement, InputProps>(
-  ({ className, type, textSize, ...props }, ref) => {
-    const textSizeClass = textSize
-      ? textSizeMap[textSize]
-      : "text-base md:text-sm";
-
+  ({ className, type, size, ...props }, ref) => {
     return (
       <input
         type={type}
-        className={cn(
-          "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
-          textSizeClass,
-          className
-        )}
+        className={cn(inputVariants({ size }), className)}
         ref={ref}
         {...props}
       />
