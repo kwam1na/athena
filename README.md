@@ -30,6 +30,7 @@ It targets repo-root `scripts/*.test.ts` files only (excluding cloned worktree t
 Use `bun run harness:test -- --dry-run` to print the selected files without executing tests.
 
 `pre-push:review` automatically runs `bun run graphify:rebuild` before the local validation suite, so stale tracked graphify artifacts get repaired before freshness-sensitive checks execute.
+If `harness:self-review` or `harness:review` gets blocked by stale generated harness docs, the hook runs `bun run harness:generate` once and retries the blocked step.
 
 List runtime behavior scenarios with `bun run harness:behavior --list`.
 Bundled scenarios include:
