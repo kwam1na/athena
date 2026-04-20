@@ -1,25 +1,35 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 
-import { StorybookList, StorybookSection, StorybookShell } from "../storybook-shell";
+import { StorybookCallout, StorybookList, StorybookSection, StorybookShell } from "../storybook-shell";
 
 function TemplatesOverview() {
   return (
     <StorybookShell
       eyebrow="Templates"
-      title="Reference admin workspaces"
-      description="Templates will show how Athena's foundations, primitives, and shell patterns should compose at page level without becoming router-backed production screens."
+      title="Athena reference workspaces"
+      description="Templates are Storybook-only scenes that show how Athena's foundations, patterns, and density rules should compose across common admin workspaces."
     >
       <StorybookSection
-        title="Planned references"
-        description="These references are alignment tools for future rollout, not app migrations."
+        title="Coverage"
+        description="These scenes are reference material for the design-system rollout, not application routes."
       >
         <StorybookList
           items={[
-            "Dashboard workspace with hierarchy for metrics and sections.",
-            "Operational data workspace with tables, filters, and states.",
-            "Settings workspace with structured form layout and density rules.",
+            "Dashboard workspace for hierarchy, revenue context, and action rails.",
+            "Data workspace for dense tables, filters, and exception lanes.",
+            "Settings workspace for permissions, density, and publishing posture.",
           ]}
         />
+      </StorybookSection>
+
+      <StorybookSection
+        title="Review stance"
+        description="Each workspace uses static fixtures so the composition stays readable without router, auth, or Convex state."
+      >
+        <StorybookCallout title="Reference-only rule">
+          Use these stories to align on layout, hierarchy, and density. Do not wire them to live
+          data, feature flags, or production navigation.
+        </StorybookCallout>
       </StorybookSection>
     </StorybookShell>
   );
@@ -34,4 +44,4 @@ export default meta;
 
 type Story = StoryObj<typeof meta>;
 
-export const PlannedCoverage: Story = {};
+export const Overview: Story = {};
