@@ -36,6 +36,7 @@ This index enumerates the current automated test files and ties them back to the
 ## Section `src`
 
 - [`src/components/bulk-operations/BulkOperationsPreview.test.tsx`](../../src/components/bulk-operations/BulkOperationsPreview.test.tsx)
+- [`src/components/orders/OrderStatus.test.tsx`](../../src/components/orders/OrderStatus.test.tsx)
 - [`src/components/pos/TotalsDisplay.test.tsx`](../../src/components/pos/TotalsDisplay.test.tsx)
 - [`src/components/store-configuration/components/MtnMomoView.test.tsx`](../../src/components/store-configuration/components/MtnMomoView.test.tsx)
 - [`src/components/ui/button.test.tsx`](../../src/components/ui/button.test.tsx)

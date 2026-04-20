@@ -37,7 +37,7 @@ export const BagItemView = ({
       className="flex items-center gap-4"
     >
       <div className="flex items-center gap-4">
-        {item.productImage ? (
+        {item.productImage && item.productName ? (
           <div className="relative">
             <img
               src={item.productImage}

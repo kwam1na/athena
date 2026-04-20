@@ -16,12 +16,12 @@
 
 @layer base {
   :root {
-    --font-sans: "Avenir Next", "Avenir", "Segoe UI", "Helvetica Neue", sans-serif;
-    --font-display: "Iowan Old Style", "Palatino Linotype", "Book Antiqua",
+    --font-sans: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+    --font-display: "Inter", "Palatino Linotype", "Book Antiqua",
       Georgia, serif;
     --font-mono: "SFMono-Regular", "JetBrains Mono", "Menlo", monospace;
 
-    --background: 40 35% 96%;
+    --background: 0 0% 100%;
     --foreground: 222 28% 16%;
     --card: 40 42% 99%;
     --card-foreground: 222 28% 16%;
@@ -37,8 +37,8 @@
     --accent-foreground: 222 28% 16%;
     --destructive: 4 71% 54%;
     --destructive-foreground: 0 0% 98%;
-    --border: 219 16% 82%;
-    --input: 219 16% 82%;
+    --border: 220 16% 88%;
+    --input: 220 16% 88%;
     --ring: 26 73% 48%;
 
     --surface: 40 42% 99%;
@@ -61,7 +61,7 @@
     --chart-4: 37 82% 59%;
     --chart-5: 278 34% 48%;
 
-    --radius: 0.95rem;
+    --radius: 0.75rem;
     --space-2xs: 0.25rem;
     --space-xs: 0.5rem;
     --space-sm: 0.75rem;
@@ -82,13 +82,13 @@
     --ease-standard: cubic-bezier(0.22, 1, 0.36, 1);
     --ease-emphasized: cubic-bezier(0.2, 0.84, 0.24, 1);
 
-    --sidebar-background: var(--shell);
-    --sidebar-foreground: var(--shell-foreground);
+    --sidebar-background: var(--background);
+    --sidebar-foreground: var(--foreground);
     --sidebar-primary: var(--signal);
     --sidebar-primary-foreground: var(--signal-foreground);
-    --sidebar-accent: 222 25% 20%;
-    --sidebar-accent-foreground: 35 42% 95%;
-    --sidebar-border: 222 18% 24%;
+    --sidebar-accent: 220 20% 96%;
+    --sidebar-accent-foreground: var(--foreground);
+    --sidebar-border: 220 16% 88%;
     --sidebar-ring: var(--signal);
   }
 
@@ -155,11 +155,6 @@
 
   body {
     @apply bg-background text-foreground font-sans;
-    background-image: linear-gradient(
-      180deg,
-      hsl(var(--background)),
-      hsl(var(--surface-muted))
-    );
   }
 
   ::selection {

@@ -14,7 +14,7 @@ export const OrderStatus = ({ order }: { order: any }) => {
   return (
     <Badge
       variant="outline"
-      className={`rounded-md px-2 py-1 ${
+      className={`rounded-md border-transparent px-2 py-1 ${
         order.status.includes("refunded")
           ? "bg-red-100 text-red-600"
           : order.status === "cancelled"
