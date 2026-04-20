@@ -155,6 +155,7 @@ async function createFixtureRepo() {
   );
   await write("packages/athena-webapp/.gitignore", "storybook-static\n", rootDir);
   await write("packages/athena-webapp/eslint.config.js", "export default [];\n", rootDir);
+  await write("packages/athena-webapp/tailwind.config.js", "export default {};\n", rootDir);
   await write(
     "packages/storefront-webapp/AGENTS.md",
     [

@@ -70,7 +70,7 @@ Run these when bootstrap, generated router state, or package build configuration
 
 ## Storybook and frontend tooling edits
 
-Touched surfaces: `.storybook`, `src/stories`, `package.json`, `eslint.config.js`, `.gitignore`
+Touched surfaces: `.storybook`, `src/stories`, `src/index.css`, `tailwind.config.js`, `package.json`, `eslint.config.js`, `.gitignore`
 
 Run:
 

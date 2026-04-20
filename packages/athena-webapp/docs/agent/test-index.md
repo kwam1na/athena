@@ -48,6 +48,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`src/lib/storeConfig.test.ts`](../../src/lib/storeConfig.test.ts)
 - [`src/lib/utils.test.ts`](../../src/lib/utils.test.ts)
 - [`src/routes/login/_layout.index.test.tsx`](../../src/routes/login/_layout.index.test.tsx)
+- [`src/stories/Foundations/foundations-content.test.tsx`](../../src/stories/Foundations/foundations-content.test.tsx)
 - [`src/tests/pos/backend.test.ts`](../../src/tests/pos/backend.test.ts)
 - [`src/tests/pos/inventoryValidationLogic.test.ts`](../../src/tests/pos/inventoryValidationLogic.test.ts)
 - [`src/tests/pos/simple.test.ts`](../../src/tests/pos/simple.test.ts)

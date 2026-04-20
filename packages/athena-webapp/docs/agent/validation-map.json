@@ -113,6 +113,8 @@
       "pathPrefixes": [
         "packages/athena-webapp/.storybook",
         "packages/athena-webapp/src/stories",
+        "packages/athena-webapp/src/index.css",
+        "packages/athena-webapp/tailwind.config.js",
         "packages/athena-webapp/package.json",
         "packages/athena-webapp/eslint.config.js",
         "packages/athena-webapp/.gitignore"
