@@ -77,20 +77,27 @@ export function TimelineEventCard({ event }: TimelineEventCardProps) {
                   search={{ variant: event.productSku!, o: getOrigin() }}
                   className="flex items-center gap-4"
                 >
-                  <img
-                    src={event.productInfo?.images?.[0]}
-                    alt={event.productInfo?.name || "product image"}
-                    className="w-16 h-16 aspect-square object-cover rounded-lg"
-                  />
+                  {event.productInfo?.name ? (
+                    <img
+                      src={event.productInfo?.images?.[0]}
+                      alt={event.productInfo?.name || "product image"}
+                      className="w-16 h-16 aspect-square object-cover rounded-lg"
+                    />
+                  ) : (
+                    <div className="w-16 h-16 bg-white rounded-lg" />
+                  )}
+
                   <div className="space-y-2">
                     <p className="text-sm font-medium capitalize">
                       {productLabel}
                     </p>
-                    <p className="text-xs font-medium">
-                      {formatter.format(
-                        toDisplayAmount(event.productInfo?.price || 0),
-                      )}
-                    </p>
+                    {event.productInfo?.price && (
+                      <p className="text-xs font-medium">
+                        {formatter.format(
+                          toDisplayAmount(event.productInfo?.price || 0),
+                        )}
+                      </p>
+                    )}
                   </div>
                 </Link>
               </p>

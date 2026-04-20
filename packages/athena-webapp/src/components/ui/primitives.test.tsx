@@ -2,6 +2,7 @@ import { render, screen } from "@testing-library/react"
 import { describe, expect, it } from "vitest"
 
 import { Badge } from "./badge"
+import { Button } from "./button"
 import {
   Select,
   SelectContent,
@@ -22,6 +23,15 @@ describe("primitive sizing and token semantics", () => {
     expect(badge).toHaveClass("bg-destructive")
     expect(badge).toHaveClass("text-destructive-foreground")
     expect(badge).toHaveClass("h-6")
+  })
+
+  it("keeps outline buttons on the foreground token", () => {
+    render(<Button variant="outline">Switch organization</Button>)
+
+    const button = screen.getByRole("button", { name: "Switch organization" })
+
+    expect(button).toHaveClass("bg-background")
+    expect(button).toHaveClass("text-foreground")
   })
 
   it("exposes input sizing variants", () => {
