@@ -1,0 +1,147 @@
+import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import schema from "../schema";
+
+type IndexExpectation = {
+  table: string;
+  descriptor: string;
+  fields: string[];
+};
+
+function getTableIndexes(tableName: string) {
+  return ((schema as any).tables[tableName]?.indexes ?? []) as Array<{
+    indexDescriptor: string;
+    fields: string[];
+  }>;
+}
+
+function expectIndex({ table, descriptor, fields }: IndexExpectation) {
+  expect(getTableIndexes(table)).toContainEqual({
+    indexDescriptor: descriptor,
+    fields,
+  });
+}
+
+function getSource(relativePath: string) {
+  return readFileSync(new URL(relativePath, import.meta.url), "utf8");
+}
+
+describe("operations query indexing", () => {
+  it("defines additive schema indexes for the operations rails", () => {
+    [
+      {
+        table: "customerProfile",
+        descriptor: "by_storeId_email",
+        fields: ["storeId", "email"],
+      },
+      {
+        table: "customerProfile",
+        descriptor: "by_storeId_phoneNumber",
+        fields: ["storeId", "phoneNumber"],
+      },
+      {
+        table: "customerProfile",
+        descriptor: "by_storeFrontUserId",
+        fields: ["storeFrontUserId"],
+      },
+      {
+        table: "customerProfile",
+        descriptor: "by_guestId",
+        fields: ["guestId"],
+      },
+      {
+        table: "customerProfile",
+        descriptor: "by_posCustomerId",
+        fields: ["posCustomerId"],
+      },
+      {
+        table: "staffProfile",
+        descriptor: "by_storeId_userId",
+        fields: ["storeId", "userId"],
+      },
+      {
+        table: "staffRoleAssignment",
+        descriptor: "by_staffProfileId",
+        fields: ["staffProfileId"],
+      },
+      {
+        table: "staffRoleAssignment",
+        descriptor: "by_storeId_role",
+        fields: ["storeId", "role"],
+      },
+      {
+        table: "operationalWorkItem",
+        descriptor: "by_storeId_status",
+        fields: ["storeId", "status"],
+      },
+      {
+        table: "operationalEvent",
+        descriptor: "by_storeId_subject",
+        fields: ["storeId", "subjectType", "subjectId"],
+      },
+      {
+        table: "inventoryMovement",
+        descriptor: "by_storeId_productSkuId",
+        fields: ["storeId", "productSkuId"],
+      },
+      {
+        table: "inventoryMovement",
+        descriptor: "by_storeId_source",
+        fields: ["storeId", "sourceType", "sourceId"],
+      },
+      {
+        table: "paymentAllocation",
+        descriptor: "by_storeId_target",
+        fields: ["storeId", "targetType", "targetId"],
+      },
+      {
+        table: "registerSession",
+        descriptor: "by_storeId_status",
+        fields: ["storeId", "status"],
+      },
+      {
+        table: "registerSession",
+        descriptor: "by_storeId_registerNumber",
+        fields: ["storeId", "registerNumber"],
+      },
+      {
+        table: "approvalRequest",
+        descriptor: "by_storeId_subject",
+        fields: ["storeId", "subjectType", "subjectId"],
+      },
+    ].forEach(expectIndex);
+  });
+
+  it("uses indexed lookups in the operations modules", () => {
+    const customerProfilesSource = getSource("./customerProfiles.ts");
+    const staffProfilesSource = getSource("./staffProfiles.ts");
+    const inventoryMovementsSource = getSource("./inventoryMovements.ts");
+    const paymentAllocationsSource = getSource("./paymentAllocations.ts");
+    const operationalEventsSource = getSource("./operationalEvents.ts");
+
+    expect(customerProfilesSource).toContain('.withIndex("by_storeFrontUserId"');
+    expect(customerProfilesSource).toContain('.withIndex("by_guestId"');
+    expect(customerProfilesSource).toContain('.withIndex("by_posCustomerId"');
+    expect(customerProfilesSource).toContain('.withIndex("by_storeId_email"');
+    expect(customerProfilesSource).toContain('.withIndex("by_storeId_phoneNumber"');
+
+    expect(staffProfilesSource).toContain('.withIndex("by_storeId_userId"');
+    expect(staffProfilesSource).toContain('.withIndex("by_staffProfileId"');
+    expect(inventoryMovementsSource).toContain(
+      '.withIndex("by_storeId_productSkuId"'
+    );
+    expect(paymentAllocationsSource).toContain('.withIndex("by_storeId_target"');
+    expect(operationalEventsSource).toContain('.withIndex("by_storeId_subject"');
+  });
+
+  it("threads operations roles into membership and POS customer linking surfaces", () => {
+    const organizationMemberSource = getSource("../schemas/inventory/organizationMember.ts");
+    const posCustomersSource = getSource("../inventory/posCustomers.ts");
+    const typesSource = getSource("../schema.ts");
+
+    expect(organizationMemberSource).toContain("operationalRoles");
+    expect(posCustomersSource).toContain("ensureCustomerProfileFromSourcesWithCtx");
+    expect(typesSource).toContain("customerProfileSchema");
+    expect(typesSource).toContain("staffProfileSchema");
+  });
+});

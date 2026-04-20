@@ -61,6 +61,17 @@ import {
   mtnCollectionsTokenSchema,
   mtnCollectionTransactionSchema,
 } from "./schemas/payments/mtnCollections";
+import {
+  approvalRequestSchema,
+  customerProfileSchema,
+  inventoryMovementSchema,
+  operationalEventSchema,
+  operationalWorkItemSchema,
+  paymentAllocationSchema,
+  registerSessionSchema,
+  staffProfileSchema,
+  staffRoleAssignmentSchema,
+} from "./schemas/operations";
 
 const schema = defineSchema({
   ...authTables,
@@ -73,6 +84,12 @@ const schema = defineSchema({
     .index("by_storeId_action_productId", ["storeId", "action", "productId"])
     .index("by_promoCodeId", ["promoCodeId"]),
   appVerificationCode: defineTable(appVerificationCodeSchema),
+  approvalRequest: defineTable(approvalRequestSchema)
+    .index("by_storeId", ["storeId"])
+    .index("by_storeId_status", ["storeId", "status"])
+    .index("by_storeId_subject", ["storeId", "subjectType", "subjectId"])
+    .index("by_workItemId", ["workItemId"])
+    .index("by_registerSessionId", ["registerSessionId"]),
   athenaUser: defineTable(athenaUserSchema),
   bag: defineTable(bagSchema)
     .index("by_storeId", ["storeId"])
@@ -106,11 +123,23 @@ const schema = defineSchema({
     .index("by_storeId", ["storeId"])
     .index("by_collectionId", ["collectionId"]),
   customer: defineTable(customerSchema),
+  customerProfile: defineTable(customerProfileSchema)
+    .index("by_storeId", ["storeId"])
+    .index("by_storeId_email", ["storeId", "email"])
+    .index("by_storeId_phoneNumber", ["storeId", "phoneNumber"])
+    .index("by_storeFrontUserId", ["storeFrontUserId"])
+    .index("by_guestId", ["guestId"])
+    .index("by_posCustomerId", ["posCustomerId"]),
   featuredItem: defineTable(featuredItemSchema),
   guest: defineTable(guestSchema)
     .index("by_storeId", ["storeId"])
     .index("by_marker", ["marker"]),
   inviteCode: defineTable(inviteCodeSchema),
+  inventoryMovement: defineTable(inventoryMovementSchema)
+    .index("by_storeId", ["storeId"])
+    .index("by_storeId_productSkuId", ["storeId", "productSkuId"])
+    .index("by_storeId_source", ["storeId", "sourceType", "sourceId"])
+    .index("by_workItemId", ["workItemId"]),
   onlineOrder: defineTable(onlineOrderSchema)
     .index("by_checkoutSessionId", ["checkoutSessionId"])
     .index("by_storeFrontUserId", ["storeFrontUserId"])
@@ -192,10 +221,36 @@ const schema = defineSchema({
   promoCodeItem: defineTable(promoCodeItemSchema)
     .index("by_promoCodeId", ["promoCodeId"])
     .index("by_productSkuId", ["productSkuId"]),
+  operationalEvent: defineTable(operationalEventSchema)
+    .index("by_storeId", ["storeId"])
+    .index("by_storeId_subject", ["storeId", "subjectType", "subjectId"])
+    .index("by_customerProfileId", ["customerProfileId"])
+    .index("by_workItemId", ["workItemId"])
+    .index("by_registerSessionId", ["registerSessionId"]),
+  operationalWorkItem: defineTable(operationalWorkItemSchema)
+    .index("by_storeId", ["storeId"])
+    .index("by_storeId_status", ["storeId", "status"])
+    .index("by_storeId_type", ["storeId", "type"])
+    .index("by_storeId_assignedTo", ["storeId", "assignedToStaffProfileId"])
+    .index("by_customerProfileId", ["customerProfileId"])
+    .index("by_approvalState", ["approvalState"]),
+  paymentAllocation: defineTable(paymentAllocationSchema)
+    .index("by_storeId", ["storeId"])
+    .index("by_storeId_target", ["storeId", "targetType", "targetId"])
+    .index("by_registerSessionId", ["registerSessionId"])
+    .index("by_customerProfileId", ["customerProfileId"])
+    .index("by_onlineOrderId", ["onlineOrderId"])
+    .index("by_workItemId", ["workItemId"]),
   redeemedPromoCode: defineTable(redeemedPromoCodeSchema).index(
     "by_promoCodeId_storeFrontUserId",
     ["promoCodeId", "storeFrontUserId"]
   ),
+  registerSession: defineTable(registerSessionSchema)
+    .index("by_storeId", ["storeId"])
+    .index("by_storeId_status", ["storeId", "status"])
+    .index("by_storeId_registerNumber", ["storeId", "registerNumber"])
+    .index("by_terminalId", ["terminalId"])
+    .index("by_managerApprovalRequestId", ["managerApprovalRequestId"]),
   savedBag: defineTable(savedBagSchema).index("by_storeFrontUserId", [
     "storeFrontUserId",
   ]),
@@ -239,6 +294,16 @@ const schema = defineSchema({
     .index("by_promoCodeId", ["promoCodeId"])
     .index("by_storeId", ["storeId"])
     .index("by_storeId_status", ["storeId", "status"]),
+  staffProfile: defineTable(staffProfileSchema)
+    .index("by_storeId", ["storeId"])
+    .index("by_userId", ["userId"])
+    .index("by_storeId_userId", ["storeId", "userId"])
+    .index("by_storeId_status", ["storeId", "status"]),
+  staffRoleAssignment: defineTable(staffRoleAssignmentSchema)
+    .index("by_staffProfileId", ["staffProfileId"])
+    .index("by_storeId", ["storeId"])
+    .index("by_storeId_role", ["storeId", "role"])
+    .index("by_userId", ["userId"]),
 });
 
 export default schema;

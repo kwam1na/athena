@@ -1,6 +1,7 @@
 import { query, mutation } from "../_generated/server";
 import { v } from "convex/values";
 import { Doc, Id } from "../_generated/dataModel";
+import { ensureCustomerProfileFromSourcesWithCtx } from "../operations/customerProfiles";
 
 // Search customers by name, email, or phone
 export const searchCustomers = query({
@@ -307,6 +308,12 @@ export const linkToStoreFrontUser = mutation({
       phone: storeFrontUser.phoneNumber || posCustomer.phone,
     });
 
+    await ensureCustomerProfileFromSourcesWithCtx(ctx, {
+      posCustomerId: args.posCustomerId,
+      storeFrontUserId: args.storeFrontUserId,
+      fallbackStoreId: posCustomer.storeId,
+    });
+
     return null;
   },
 });
@@ -331,6 +338,12 @@ export const linkToGuest = mutation({
       // Optionally update contact info from guest
       email: guest.email || posCustomer.email,
       phone: guest.phoneNumber || posCustomer.phone,
+    });
+
+    await ensureCustomerProfileFromSourcesWithCtx(ctx, {
+      posCustomerId: args.posCustomerId,
+      guestId: args.guestId,
+      fallbackStoreId: posCustomer.storeId,
     });
 
     return null;

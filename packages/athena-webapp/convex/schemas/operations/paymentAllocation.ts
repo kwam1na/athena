@@ -1,0 +1,25 @@
+import { v } from "convex/values";
+
+export const paymentAllocationSchema = v.object({
+  storeId: v.id("store"),
+  organizationId: v.optional(v.id("organization")),
+  targetType: v.string(),
+  targetId: v.string(),
+  allocationType: v.string(),
+  direction: v.union(v.literal("in"), v.literal("out")),
+  method: v.string(),
+  amount: v.number(),
+  currency: v.optional(v.string()),
+  status: v.union(v.literal("recorded"), v.literal("voided")),
+  collectedInStore: v.boolean(),
+  recordedAt: v.number(),
+  actorUserId: v.optional(v.id("athenaUser")),
+  actorStaffProfileId: v.optional(v.id("staffProfile")),
+  customerProfileId: v.optional(v.id("customerProfile")),
+  workItemId: v.optional(v.id("operationalWorkItem")),
+  registerSessionId: v.optional(v.id("registerSession")),
+  onlineOrderId: v.optional(v.id("onlineOrder")),
+  posTransactionId: v.optional(v.id("posTransaction")),
+  externalReference: v.optional(v.string()),
+  notes: v.optional(v.string()),
+});
