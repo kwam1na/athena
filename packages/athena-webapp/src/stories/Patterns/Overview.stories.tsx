@@ -10,14 +10,14 @@ function PatternsOverview() {
       description="Patterns are where the system starts to feel like Athena: navigation, page headers, metric surfaces, filters, and shared app states."
     >
       <StorybookSection
-        title="Planned shell stories"
-        description="Pattern stories will avoid live app state and use stable fixtures instead."
+        title="Shell stories"
+        description="These stories are authored scenes, not primitive showcases. They use stable fixtures so the admin shell reads like Athena without live app dependencies."
       >
         <StorybookList
           items={[
-            "Sidebar navigation and shell rhythm.",
-            "Page headers, toolbar rows, and metric surfaces.",
-            "Empty, loading, error, and confirmation patterns.",
+            "Athena admin shell composition with sidebar, header, metrics, and loading surfaces.",
+            "Focused sidebar, page header, and metric surface stories for design review.",
+            "Static loading states that keep the shell rhythm intact while data resolves.",
           ]}
         />
       </StorybookSection>
