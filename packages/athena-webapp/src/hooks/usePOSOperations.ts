@@ -22,6 +22,11 @@ import {
 import { usePOSActiveSession } from "./usePOSSessions";
 import { POSSession } from "~/types";
 import { useGetCurrencyFormatter } from "./useGetCurrencyFormatter";
+import { completeTransaction as runCompleteTransaction } from "@/lib/pos/application/useCases/completeTransaction";
+import {
+  useConvexCommandGateway,
+  useConvexDirectTransactionMutation,
+} from "@/lib/pos/infrastructure/convex/commandGateway";
 
 /**
  * Unified hook for POS operations
@@ -30,35 +35,16 @@ import { useGetCurrencyFormatter } from "./useGetCurrencyFormatter";
 export const usePOSOperations = () => {
   const store = usePOSStore();
   const formatter = useGetCurrencyFormatter();
+  const { completeTransaction: completeSessionCommand } =
+    useConvexCommandGateway();
 
   // Convex mutations
-  const createSessionMutation = useMutation(
-    api.inventory.posSessions.createSession
-  );
   const updateSessionMutation = useMutation(
     api.inventory.posSessions.updateSession
   );
-  const holdSessionMutation = useMutation(
-    api.inventory.posSessions.holdSession
-  );
-  const resumeSessionMutation = useMutation(
-    api.inventory.posSessions.resumeSession
-  );
-  const completeSessionMutation = useMutation(
-    api.inventory.posSessions.completeSession
-  );
-  const completeTransactionMutation = useMutation(
-    api.inventory.pos.completeTransaction
-  );
+  const completeTransactionMutation = useConvexDirectTransactionMutation();
   const createCustomerMutation = useMutation(
     api.inventory.posCustomers.createCustomer
-  );
-  // Item mutations
-  const addOrUpdateItemMutation = useMutation(
-    api.inventory.posSessionItems.addOrUpdateItem
-  );
-  const removeItemMutation = useMutation(
-    api.inventory.posSessionItems.removeItem
   );
 
   // Customer operations hooks
@@ -124,17 +110,21 @@ export const usePOSOperations = () => {
             const finalSubtotal = store.cart.subtotal;
             const finalTax = store.cart.tax;
 
-            const completeResult = await completeSessionMutation({
-              sessionId: sessionId as Id<"posSession">,
-              payments,
-              notes: `Register: ${store.ui.registerNumber}`,
-              // Explicitly pass final transaction totals
-              subtotal: finalSubtotal,
-              tax: finalTax,
-              total: finalTotal,
+            const completeResult = await runCompleteTransaction({
+              gateway: {
+                completeTransaction: completeSessionCommand,
+              },
+              command: {
+                sessionId: sessionId as Id<"posSession">,
+                payments,
+                notes: `Register: ${store.ui.registerNumber}`,
+                subtotal: finalSubtotal,
+                tax: finalTax,
+                total: finalTotal,
+              },
             });
 
-            if (!completeResult.success) {
+            if (!completeResult.ok) {
               logger.error("Failed to complete session", {
                 sessionId,
                 message: completeResult.message,
@@ -291,7 +281,7 @@ export const usePOSOperations = () => {
       [
         validateCart,
         validatePayments,
-        completeSessionMutation,
+        completeSessionCommand,
         completeTransactionMutation,
         store,
         formatter,

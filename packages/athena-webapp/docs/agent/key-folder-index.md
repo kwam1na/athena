@@ -12,7 +12,7 @@ This key-folder index highlights the main directories agents are likely to need 
 - [`src/components/procurement`](../../src/components/procurement) — Procurement planning and receiving views for replenishment pressure and purchase-order execution. Currently 4 file(s); key children: ProcurementView.test.tsx, ProcurementView.tsx, ReceivingView.test.tsx, ReceivingView.tsx.
 - [`src/hooks`](../../src/hooks) — React hooks that fan out auth, shell, and feature state. Currently 43 file(s); key children: use-image-upload.ts, use-mobile.tsx, use-navigate-back.ts, use-navigation-keyboard-shortcuts.ts, use-pagination-persistence.ts.
 - [`src/contexts`](../../src/contexts) — Context providers for app-wide state and wiring. Currently 5 file(s); key children: OnlineOrderContext.tsx, PermissionsContext.tsx, ProductContext.tsx, ThemeContext.tsx, UserContext.tsx.
-- [`src/lib`](../../src/lib) — Shared frontend helpers, schemas, and package utilities. Currently 42 file(s); key children: aws.ts, behaviorUtils.ts, browserFingerprint.ts, constants.ts, countries.ts.
+- [`src/lib`](../../src/lib) — Shared frontend helpers, schemas, and package utilities. Currently 56 file(s); key children: aws.ts, behaviorUtils.ts, browserFingerprint.ts, constants.ts, countries.ts.
 - [`src/utils`](../../src/utils) — Cross-cutting browser helpers and lower-level utilities. Currently 3 file(s); key children: formatNumber.ts, index.ts, versionChecker.ts.
 
 ## Backend and test surfaces
