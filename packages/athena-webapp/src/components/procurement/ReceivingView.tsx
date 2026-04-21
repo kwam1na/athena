@@ -23,6 +23,11 @@ type ReceivingViewProps = {
   storeId: Id<"store">;
 };
 
+type ReceivingBatchLineItem = {
+  purchaseOrderLineItemId: Id<"purchaseOrderLineItem">;
+  receivedQuantity: number;
+};
+
 function buildSubmissionKey(purchaseOrderId: Id<"purchaseOrder">) {
   return `receive-${purchaseOrderId}-${Date.now().toString(36)}`;
 }
@@ -32,6 +37,32 @@ function buildDefaultReceivedQuantities(lineItems: ReceivingViewLineItem[]) {
     lineItems.map((lineItem) => [
       lineItem._id,
       String(Math.max(0, lineItem.orderedQuantity - lineItem.receivedQuantity)),
+    ])
+  );
+}
+
+function buildReceivedQuantitiesAfterSubmission(
+  lineItems: ReceivingViewLineItem[],
+  batchLineItems: ReceivingBatchLineItem[]
+) {
+  const receivedByLineItemId = new Map(
+    batchLineItems.map((lineItem) => [
+      lineItem.purchaseOrderLineItemId,
+      lineItem.receivedQuantity,
+    ])
+  );
+
+  return Object.fromEntries(
+    lineItems.map((lineItem) => [
+      lineItem._id,
+      String(
+        Math.max(
+          0,
+          lineItem.orderedQuantity -
+            lineItem.receivedQuantity -
+            (receivedByLineItemId.get(lineItem._id) ?? 0)
+        )
+      ),
     ])
   );
 }
@@ -90,6 +121,9 @@ export function ReceivingView({
         submissionKey,
       });
       toast.success("Receiving batch recorded");
+      setReceivedQuantities(
+        buildReceivedQuantitiesAfterSubmission(lineItems, batchLineItems)
+      );
       setSubmissionKey(buildSubmissionKey(purchaseOrderId));
     } catch (error) {
       toast.error("Failed to record receiving batch", {

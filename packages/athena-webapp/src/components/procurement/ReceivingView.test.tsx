@@ -174,4 +174,52 @@ describe("ReceivingView", () => {
       screen.getByLabelText(/received quantity for curly closure/i)
     ).toHaveValue(1);
   });
+
+  it("updates displayed quantities to the remaining amounts after a successful receipt", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <ReceivingView
+        lineItems={[
+          {
+            _id: "line-item-1" as Id<"purchaseOrderLineItem">,
+            description: "Curly closure",
+            orderedQuantity: 4,
+            productSkuId: "sku-1" as Id<"productSku">,
+            receivedQuantity: 1,
+          },
+        ]}
+        purchaseOrderId={"purchase-order-1" as Id<"purchaseOrder">}
+        storeId={"store-1" as Id<"store">}
+      />
+    );
+
+    await user.clear(
+      screen.getByLabelText(/received quantity for curly closure/i)
+    );
+    await user.type(
+      screen.getByLabelText(/received quantity for curly closure/i),
+      "2"
+    );
+    await user.click(screen.getByRole("button", { name: /record receiving batch/i }));
+
+    await waitFor(() =>
+      expect(receivePurchaseOrderBatch).toHaveBeenCalledWith(
+        expect.objectContaining({
+          lineItems: [
+            {
+              purchaseOrderLineItemId: "line-item-1",
+              receivedQuantity: 2,
+            },
+          ],
+        })
+      )
+    );
+
+    await waitFor(() =>
+      expect(
+        screen.getByLabelText(/received quantity for curly closure/i)
+      ).toHaveValue(1)
+    );
+  });
 });

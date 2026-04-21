@@ -5,7 +5,7 @@
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 3148 nodes · 2657 edges · 1243 communities detected
+- 3149 nodes · 2658 edges · 1243 communities detected
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS
 - Token cost: 0 input · 0 output
 
@@ -1797,16 +1797,16 @@ Cohesion: 0.4
 Nodes (0):
 
 ### Community 129 - "Community 129"
+Cohesion: 0.4
+Nodes (0):
+
+### Community 130 - "Community 130"
 Cohesion: 0.7
 Nodes (4): bufferToHex(), collectBrowserInfo(), generateBrowserFingerprint(), hashFingerprintSource()
 
-### Community 130 - "Community 130"
-Cohesion: 0.4
-Nodes (1): MockImage
-
 ### Community 131 - "Community 131"
 Cohesion: 0.4
-Nodes (0):
+Nodes (1): MockImage
 
 ### Community 132 - "Community 132"
 Cohesion: 0.4
@@ -1821,32 +1821,32 @@ Cohesion: 0.4
 Nodes (0):
 
 ### Community 135 - "Community 135"
-Cohesion: 0.7
-Nodes (4): getAllCategories(), getAllCategoriesWithSubcategories(), getBaseUrl(), getCategory()
+Cohesion: 0.4
+Nodes (0):
 
 ### Community 136 - "Community 136"
 Cohesion: 0.7
-Nodes (4): getBaseUrl(), getOrder(), getOrders(), updateOrdersOwner()
+Nodes (4): getAllCategories(), getAllCategoriesWithSubcategories(), getBaseUrl(), getCategory()
 
 ### Community 137 - "Community 137"
 Cohesion: 0.7
-Nodes (4): getActiveUser(), getBaseUrl(), getGuest(), updateUser()
+Nodes (4): getBaseUrl(), getOrder(), getOrders(), updateOrdersOwner()
 
 ### Community 138 - "Community 138"
-Cohesion: 0.4
-Nodes (0):
+Cohesion: 0.7
+Nodes (4): getActiveUser(), getBaseUrl(), getGuest(), updateUser()
 
 ### Community 139 - "Community 139"
 Cohesion: 0.4
 Nodes (0):
 
 ### Community 140 - "Community 140"
-Cohesion: 0.7
-Nodes (4): createStorefrontFailureEvent(), emitStorefrontFailure(), inferStorefrontJourneyFromRoute(), normalizeStorefrontError()
+Cohesion: 0.4
+Nodes (0):
 
 ### Community 141 - "Community 141"
-Cohesion: 0.5
-Nodes (0):
+Cohesion: 0.7
+Nodes (4): createStorefrontFailureEvent(), emitStorefrontFailure(), inferStorefrontJourneyFromRoute(), normalizeStorefrontError()
 
 ### Community 142 - "Community 142"
 Cohesion: 0.5
@@ -1861,40 +1861,40 @@ Cohesion: 0.5
 Nodes (0):
 
 ### Community 145 - "Community 145"
+Cohesion: 0.5
+Nodes (0):
+
+### Community 146 - "Community 146"
 Cohesion: 0.67
 Nodes (2): toDisplayAmount(), toPesewas()
 
-### Community 146 - "Community 146"
+### Community 147 - "Community 147"
 Cohesion: 0.83
 Nodes (3): getCachedTokenRecord(), resolveAccessTokenForStore(), resolveConfigForStore()
 
-### Community 147 - "Community 147"
+### Community 148 - "Community 148"
 Cohesion: 0.67
 Nodes (2): maskMtnPartyId(), normalizeCollectionsTransaction()
 
-### Community 148 - "Community 148"
+### Community 149 - "Community 149"
 Cohesion: 0.67
 Nodes (2): buildOperationalEvent(), recordOperationalEventWithCtx()
 
-### Community 149 - "Community 149"
-Cohesion: 0.67
-Nodes (2): buildOperationalWorkItem(), createOperationalWorkItemWithCtx()
-
 ### Community 150 - "Community 150"
 Cohesion: 0.67
-Nodes (2): expectIndex(), getTableIndexes()
+Nodes (2): buildOperationalWorkItem(), createOperationalWorkItemWithCtx()
 
 ### Community 151 - "Community 151"
 Cohesion: 0.67
 Nodes (2): expectIndex(), getTableIndexes()
 
 ### Community 152 - "Community 152"
-Cohesion: 0.83
-Nodes (3): findExistingCustomerProfileId(), getStoreOrganizationId(), recordStoreFrontCustomerMilestone()
+Cohesion: 0.67
+Nodes (2): expectIndex(), getTableIndexes()
 
 ### Community 153 - "Community 153"
-Cohesion: 0.5
-Nodes (0):
+Cohesion: 0.83
+Nodes (3): findExistingCustomerProfileId(), getStoreOrganizationId(), recordStoreFrontCustomerMilestone()
 
 ### Community 154 - "Community 154"
 Cohesion: 0.5
@@ -1917,24 +1917,24 @@ Cohesion: 0.5
 Nodes (0):
 
 ### Community 159 - "Community 159"
-Cohesion: 0.67
-Nodes (2): countGroupedAnalytics(), groupAnalytics()
-
-### Community 160 - "Community 160"
 Cohesion: 0.5
 Nodes (0):
+
+### Community 160 - "Community 160"
+Cohesion: 0.67
+Nodes (2): countGroupedAnalytics(), groupAnalytics()
 
 ### Community 161 - "Community 161"
 Cohesion: 0.5
 Nodes (0):
 
 ### Community 162 - "Community 162"
-Cohesion: 0.67
-Nodes (2): handleSubmit(), resetReplacementFields()
-
-### Community 163 - "Community 163"
 Cohesion: 0.5
 Nodes (0):
+
+### Community 163 - "Community 163"
+Cohesion: 0.67
+Nodes (2): handleSubmit(), resetReplacementFields()
 
 ### Community 164 - "Community 164"
 Cohesion: 0.5
