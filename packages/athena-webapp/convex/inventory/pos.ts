@@ -1,3 +1,4 @@
+import { internal } from "../_generated/api";
 import { query, mutation, MutationCtx, QueryCtx } from "../_generated/server";
 import { v } from "convex/values";
 import type { Doc, Id } from "../_generated/dataModel";
@@ -465,7 +466,9 @@ export const completeTransaction = mutation({
       })
     ),
     registerNumber: v.optional(v.string()),
+    terminalId: v.optional(v.id("posTerminal")),
     cashierId: v.optional(v.id("cashier")),
+    registerSessionId: v.optional(v.id("registerSession")),
   },
   handler: async (ctx, args) => {
     // Validate inventory availability with cumulative quantity tracking
@@ -543,9 +546,11 @@ export const completeTransaction = mutation({
       transactionNumber,
       storeId: args.storeId,
       sessionId: undefined, // Direct transaction - no session
+      registerSessionId: args.registerSessionId,
       customerId: args.customerId,
       cashierId: args.cashierId,
       registerNumber: args.registerNumber,
+      terminalId: args.terminalId,
       subtotal: args.subtotal,
       tax: args.tax,
       total: args.total,
@@ -558,6 +563,21 @@ export const completeTransaction = mutation({
       customerInfo: args.customerInfo,
       receiptPrinted: false,
     });
+
+    if (args.registerSessionId) {
+      await ctx.runMutation(
+        internal.operations.registerSessions.recordRegisterSessionTransaction,
+        {
+          adjustmentKind: "sale",
+          changeGiven,
+          payments: args.payments,
+          registerSessionId: args.registerSessionId,
+          registerNumber: args.registerNumber,
+          storeId: args.storeId,
+          terminalId: args.terminalId,
+        }
+      );
+    }
 
     // Update customer statistics if customer is linked
     if (args.customerId) {
@@ -878,6 +898,21 @@ export const voidTransaction = mutation({
       };
     }
 
+    if (transaction.registerSessionId) {
+      await ctx.runMutation(
+        internal.operations.registerSessions.recordRegisterSessionTransaction,
+        {
+          adjustmentKind: "void",
+          changeGiven: transaction.changeGiven,
+          payments: transaction.payments,
+          registerSessionId: transaction.registerSessionId,
+          registerNumber: transaction.registerNumber,
+          storeId: transaction.storeId,
+          terminalId: transaction.terminalId,
+        }
+      );
+    }
+
     // Update transaction status
     await ctx.db.patch("posTransaction", args.transactionId, {
       status: "void",
@@ -910,6 +945,7 @@ export async function createTransactionFromSessionHandler(
   args: {
     sessionId: Id<"posSession">;
     payments: { method: string; amount: number; timestamp: number }[];
+    registerSessionId?: Id<"registerSession">;
     notes?: string;
   }
 ) {
@@ -994,9 +1030,11 @@ export async function createTransactionFromSessionHandler(
     transactionNumber,
     storeId: session.storeId,
     sessionId: args.sessionId, // Link to the session for audit trail
+    registerSessionId: args.registerSessionId,
     customerId: session.customerId,
     cashierId: session.cashierId,
     registerNumber: session.registerNumber,
+    terminalId: session.terminalId,
     subtotal,
     tax,
     total,
@@ -1010,6 +1048,21 @@ export async function createTransactionFromSessionHandler(
     receiptPrinted: false,
     notes: args.notes,
   });
+
+  if (args.registerSessionId) {
+    await ctx.runMutation(
+      internal.operations.registerSessions.recordRegisterSessionTransaction,
+      {
+        adjustmentKind: "sale",
+        changeGiven,
+        payments: args.payments,
+        registerSessionId: args.registerSessionId,
+        registerNumber: session.registerNumber,
+        storeId: session.storeId,
+        terminalId: session.terminalId,
+      }
+    );
+  }
 
   // Update customer statistics if customer is linked
   if (session.customerId) {
@@ -1088,6 +1141,7 @@ export const createTransactionFromSession = mutation({
         timestamp: v.number(),
       })
     ),
+    registerSessionId: v.optional(v.id("registerSession")),
     notes: v.optional(v.string()),
   },
   handler: async (ctx, args) => createTransactionFromSessionHandler(ctx, args),
