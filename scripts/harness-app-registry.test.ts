@@ -102,16 +102,17 @@ describe("HARNESS_APP_REGISTRY", () => {
 
     expect(runtimeScenario).toMatchObject({
       touchedPaths: [
+        "index.html",
+        "package.json",
         "tsconfig.json",
-        "src/client.tsx",
         "src/main.tsx",
         "src/router.tsx",
         "src/routeTree.gen.ts",
-        "src/ssr.tsx",
         "vite.config.ts",
       ],
       commands: [
         { kind: "script", script: "test" },
+        { kind: "script", script: "build" },
         {
           kind: "raw",
           command:

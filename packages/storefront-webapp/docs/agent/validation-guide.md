@@ -16,14 +16,15 @@ Start here for most layout, component, and route behavior changes that do not al
 
 ## Route runtime or build-pipeline edits
 
-Touched surfaces: `tsconfig.json`, `src/client.tsx`, `src/main.tsx`, `src/router.tsx`, `src/routeTree.gen.ts`, `src/ssr.tsx`, `vite.config.ts`
+Touched surfaces: `index.html`, `package.json`, `tsconfig.json`, `src/main.tsx`, `src/router.tsx`, `src/routeTree.gen.ts`, `vite.config.ts`
 
 Run:
 
 - `bun run --filter '@athena/storefront-webapp' test`
+- `bun run --filter '@athena/storefront-webapp' build`
 - `bunx tsc --noEmit -p packages/storefront-webapp/tsconfig.json`
 
-Use this when the TanStack Start bootstrap, generated router state, or TypeScript/build wiring changes.
+Use this when the Vite browser bootstrap, package manifest, generated router state, or TypeScript/build wiring changes.
 
 ## Shared-lib, utility, or API-wrapper edits
 

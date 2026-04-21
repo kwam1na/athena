@@ -389,7 +389,8 @@ async function loadSelfReviewTargets(rootDir: string) {
   };
 }
 
-function collectCoverage(
+async function collectCoverage(
+  rootDir: string,
   changedFiles: string[],
   targets: LoadedSelfReviewTarget[]
 ) {
@@ -408,43 +409,59 @@ function collectCoverage(
     }
 
     const matchedSurfaces: SurfaceCoverage[] = [];
-    const coveredFiles = new Set<string>();
-
-    for (const surface of target.surfaces) {
-      const matchedFiles = touchedFiles.filter((filePath) =>
+    const fileMatches = touchedFiles.map((filePath) => ({
+      filePath,
+      matchingSurfaces: target.surfaces.filter((surface) =>
         surface.pathPrefixes.some((pathPrefix) =>
           matchesPathPrefix(filePath, pathPrefix)
         )
-      );
+      ),
+    }));
+    const hasDirectCoverage = fileMatches.some(
+      ({ matchingSurfaces }) => matchingSurfaces.length > 0
+    );
+    const uncoveredFiles: string[] = [];
 
-      if (matchedFiles.length === 0) {
-        continue;
-      }
-
-      const sortedMatchedFiles = sortUniquePaths(matchedFiles);
-      matchedSurfaces.push({
-        surfaceName: surface.name,
-        files: sortedMatchedFiles,
-      });
-
-      for (const matchedFile of sortedMatchedFiles) {
-        coveredFiles.add(matchedFile);
-      }
-
-      for (const command of surface.commands) {
-        const formattedCommand = formatValidationCommand(target.workspace, command);
-        if (selectedCommandKeys.has(formattedCommand)) {
+    for (const { filePath, matchingSurfaces } of fileMatches) {
+      if (matchingSurfaces.length === 0) {
+        const changedFileExists = await fileExists(path.join(rootDir, filePath));
+        if (!changedFileExists && hasDirectCoverage) {
           continue;
         }
 
-        selectedCommandKeys.add(formattedCommand);
-        selectedValidationCommands.push(formattedCommand);
+        uncoveredFiles.push(filePath);
+        continue;
+      }
+
+      for (const surface of matchingSurfaces) {
+        let matchedSurface = matchedSurfaces.find(
+          (entry) => entry.surfaceName === surface.name
+        );
+
+        if (!matchedSurface) {
+          matchedSurface = {
+            surfaceName: surface.name,
+            files: [],
+          };
+          matchedSurfaces.push(matchedSurface);
+        }
+
+        if (!matchedSurface.files.includes(filePath)) {
+          matchedSurface.files.push(filePath);
+          matchedSurface.files = sortUniquePaths(matchedSurface.files);
+        }
+
+        for (const command of surface.commands) {
+          const formattedCommand = formatValidationCommand(target.workspace, command);
+          if (selectedCommandKeys.has(formattedCommand)) {
+            continue;
+          }
+
+          selectedCommandKeys.add(formattedCommand);
+          selectedValidationCommands.push(formattedCommand);
+        }
       }
     }
-
-    const uncoveredFiles = sortUniquePaths(
-      touchedFiles.filter((filePath) => !coveredFiles.has(filePath))
-    );
 
     for (const filePath of uncoveredFiles) {
       blockers.push(
@@ -851,7 +868,7 @@ export async function runHarnessSelfReview(
   ]);
 
   const { coverageByTarget, blockers: coverageBlockers, selectedValidationCommands } =
-    collectCoverage(allChangedFiles, loadedTargets);
+    await collectCoverage(rootDir, allChangedFiles, loadedTargets);
   blockers.push(...coverageBlockers);
 
   const outsideTargetFiles = allChangedFiles.filter(
