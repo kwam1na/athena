@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation } from "convex/react";
 import { toast } from "sonner";
 
@@ -27,6 +27,15 @@ function buildSubmissionKey(purchaseOrderId: Id<"purchaseOrder">) {
   return `receive-${purchaseOrderId}-${Date.now().toString(36)}`;
 }
 
+function buildDefaultReceivedQuantities(lineItems: ReceivingViewLineItem[]) {
+  return Object.fromEntries(
+    lineItems.map((lineItem) => [
+      lineItem._id,
+      String(Math.max(0, lineItem.orderedQuantity - lineItem.receivedQuantity)),
+    ])
+  );
+}
+
 export function ReceivingView({
   lineItems,
   purchaseOrderId,
@@ -39,15 +48,13 @@ export function ReceivingView({
     buildSubmissionKey(purchaseOrderId)
   );
   const [receivedQuantities, setReceivedQuantities] = useState<Record<string, string>>(
-    () =>
-      Object.fromEntries(
-        lineItems.map((lineItem) => [
-          lineItem._id,
-          String(Math.max(0, lineItem.orderedQuantity - lineItem.receivedQuantity)),
-        ])
-      )
+    () => buildDefaultReceivedQuantities(lineItems)
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    setReceivedQuantities(buildDefaultReceivedQuantities(lineItems));
+  }, [lineItems]);
 
   const remainingTotal = useMemo(
     () =>

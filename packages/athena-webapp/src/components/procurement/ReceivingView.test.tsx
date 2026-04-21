@@ -132,4 +132,46 @@ describe("ReceivingView", () => {
       )
     );
   });
+
+  it("resets displayed quantities when line items refresh after a receipt", () => {
+    const { rerender } = render(
+      <ReceivingView
+        lineItems={[
+          {
+            _id: "line-item-1" as Id<"purchaseOrderLineItem">,
+            description: "Curly closure",
+            orderedQuantity: 4,
+            productSkuId: "sku-1" as Id<"productSku">,
+            receivedQuantity: 1,
+          },
+        ]}
+        purchaseOrderId={"purchase-order-1" as Id<"purchaseOrder">}
+        storeId={"store-1" as Id<"store">}
+      />
+    );
+
+    expect(
+      screen.getByLabelText(/received quantity for curly closure/i)
+    ).toHaveValue(3);
+
+    rerender(
+      <ReceivingView
+        lineItems={[
+          {
+            _id: "line-item-1" as Id<"purchaseOrderLineItem">,
+            description: "Curly closure",
+            orderedQuantity: 4,
+            productSkuId: "sku-1" as Id<"productSku">,
+            receivedQuantity: 3,
+          },
+        ]}
+        purchaseOrderId={"purchase-order-1" as Id<"purchaseOrder">}
+        storeId={"store-1" as Id<"store">}
+      />
+    );
+
+    expect(
+      screen.getByLabelText(/received quantity for curly closure/i)
+    ).toHaveValue(1);
+  });
 });
