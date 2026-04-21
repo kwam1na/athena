@@ -1,77 +1,82 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  Banknote,
-  Smartphone,
-  CreditCard,
-  Plus,
-  Check,
   ArrowRight,
-  X,
-  SquareChevronLeft,
-  SquareChevronLeftIcon,
+  Banknote,
   ChevronLeft,
-  RotateCcw,
+  CreditCard,
   RefreshCw,
+  Smartphone,
   Trash2,
 } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
+import type { ChangeEvent, ReactNode } from "react";
 import { toast } from "sonner";
-import { usePOSStore } from "~/src/stores/posStore";
-import {
-  validatePaymentAmount,
-  canCompleteTransaction,
-} from "~/src/lib/pos/validation";
+
+import type { PosPaymentMethod } from "@/lib/pos/domain";
 import {
   formatStoredAmount,
   parseDisplayAmountInput,
 } from "~/src/lib/pos/displayAmounts";
 import { cn } from "~/src/lib/utils";
+import {
+  canCompleteTransaction,
+  validatePaymentAmount,
+} from "~/src/lib/pos/validation";
 
-export type SelectedPaymentMethod = "cash" | "mobile_money" | "card";
+export type SelectedPaymentMethod = PosPaymentMethod;
 
 interface PaymentViewProps {
-  onAddAnotherPaymentMethod: () => void;
-  onCancel: () => void;
+  cartItemCount: number;
+  paymentCount: number;
+  totalPaid: number;
+  remainingDue: number;
   amountDue: number;
   formatter: Intl.NumberFormat;
   selectedPaymentMethod: SelectedPaymentMethod | null;
   setSelectedPaymentMethod: (method: SelectedPaymentMethod | null) => void;
-  onComplete: () => void;
+  onAddPayment: (method: SelectedPaymentMethod, amount: number) => void;
+  onAddAnotherPaymentMethod: () => void;
+  onClearPayments: () => void;
+  onComplete: () => void | Promise<void>;
+  isCompleting?: boolean;
 }
 
 const ActionButtons = ({
+  cartItemCount,
+  paymentCount,
+  canComplete,
   onAddAnotherPaymentMethod,
   onCancel,
   onComplete,
-  canComplete,
   setSelectedPaymentMethod,
+  isCompleting = false,
 }: {
+  cartItemCount: number;
+  paymentCount: number;
+  canComplete: boolean;
   onAddAnotherPaymentMethod: () => void;
   onCancel: () => void;
-  onComplete: () => void;
-  canComplete: boolean;
+  onComplete: () => void | Promise<void>;
   setSelectedPaymentMethod: (method: SelectedPaymentMethod | null) => void;
+  isCompleting?: boolean;
 }) => {
-  const store = usePOSStore();
-
   return (
     <div className="space-y-4">
-      {store.cart.items.length > 0 && (
+      {cartItemCount > 0 && (
         <>
           {canComplete ? (
-            <>
-              <Button
-                variant="outline"
-                className={cn(
-                  "w-full p-8 text-lg bg-green-600 text-white hover:bg-green-700 hover:text-white"
-                )}
-                onClick={onComplete}
-              >
-                Complete Transaction
-                <ArrowRight className="w-4 h-4 ml-2" />
-              </Button>
-            </>
+            <Button
+              variant="outline"
+              className={cn(
+                "w-full p-8 text-lg bg-green-600 text-white hover:bg-green-700 hover:text-white",
+              )}
+              onClick={onComplete}
+              disabled={isCompleting}
+            >
+              {isCompleting ? "Completing transaction..." : "Complete Transaction"}
+              <ArrowRight className="w-4 h-4 ml-2" />
+            </Button>
           ) : (
             <Button
               variant="outline"
@@ -95,16 +100,14 @@ const ActionButtons = ({
         </>
       )}
 
-      {store.payment.payments.length >= 1 && (
+      {paymentCount >= 1 && (
         <Button
           variant="outline"
           className="w-full p-8 text-lg flex items-center gap-2 text-red-700 hover:text-red-800"
           onClick={onCancel}
         >
           <Trash2 className="w-4 h-4" />
-          {store.payment.payments.length > 1
-            ? "Clear all payments"
-            : "Clear payment"}
+          {paymentCount > 1 ? "Clear all payments" : "Clear payment"}
         </Button>
       )}
     </div>
@@ -112,44 +115,40 @@ const ActionButtons = ({
 };
 
 export const PaymentView = ({
-  onAddAnotherPaymentMethod,
-  onCancel,
+  cartItemCount,
+  paymentCount,
+  totalPaid,
+  remainingDue,
   amountDue,
   formatter,
   selectedPaymentMethod,
   setSelectedPaymentMethod,
+  onAddPayment,
+  onAddAnotherPaymentMethod,
+  onClearPayments,
   onComplete,
+  isCompleting = false,
 }: PaymentViewProps) => {
-  const store = usePOSStore();
   const [currentAmount, setCurrentAmount] = useState<number | undefined>(
-    undefined
+    undefined,
   );
-  const [displayValue, setDisplayValue] = useState<string>("");
+  const [displayValue, setDisplayValue] = useState("");
 
-  // Calculate remaining due from store
-  const remainingDue = amountDue - store.payment.totalPaid;
-  const totalPaid = store.payment.totalPaid;
   const canComplete = canCompleteTransaction(totalPaid, amountDue);
 
-  // Update remaining due when amountDue changes
-  useEffect(() => {
-    store.calculateRemainingDue(amountDue);
-  }, [amountDue, store]);
-
-  // Pre-fill current amount with remaining due
   useEffect(() => {
     if (currentAmount === undefined && remainingDue > 0) {
       setCurrentAmount(remainingDue);
     }
-  }, [remainingDue]);
+  }, [currentAmount, remainingDue]);
 
-  // Update display value when currentAmount changes
   useEffect(() => {
     if (currentAmount !== undefined) {
       setDisplayValue(formatStoredAmount(formatter, currentAmount));
-    } else {
-      setDisplayValue("");
+      return;
     }
+
+    setDisplayValue("");
   }, [currentAmount, formatter]);
 
   const paymentMethodStylesMap = {
@@ -171,13 +170,21 @@ export const PaymentView = ({
       hoverBg: "hover:bg-rose-300",
       hoverText: "hover:text-rose-800",
     },
-  };
+  } satisfies Record<
+    SelectedPaymentMethod,
+    {
+      bg: string;
+      text: string;
+      hoverBg: string;
+      hoverText: string;
+    }
+  >;
 
   const paymentMethodIconMap = {
     cash: <Banknote className="w-4 h-4 mr-2" />,
     mobile_money: <Smartphone className="w-4 h-4 mr-2" />,
     card: <CreditCard className="w-4 h-4 mr-2" />,
-  };
+  } satisfies Record<SelectedPaymentMethod, ReactNode>;
 
   const handleAddPayment = () => {
     if (!selectedPaymentMethod) {
@@ -190,30 +197,27 @@ export const PaymentView = ({
       return;
     }
 
-    // Validate payment amount (allows cash to exceed remaining due for change)
     const validation = validatePaymentAmount(
       currentAmount,
       remainingDue,
       formatter,
-      selectedPaymentMethod
+      selectedPaymentMethod,
     );
+
     if (!validation.isValid) {
       toast.error(validation.errors[0]);
       return;
     }
 
-    console.table({ currentAmount, remainingDue });
+    onAddPayment(selectedPaymentMethod, currentAmount);
 
-    store.addPayment(selectedPaymentMethod, currentAmount);
-    // For cash, if amount exceeds remaining due, clear the input (change will be shown)
-    // For other methods, set to remaining due if fully paid
     if (selectedPaymentMethod === "cash" && currentAmount >= remainingDue) {
       setCurrentAmount(undefined);
     } else {
       setCurrentAmount(
         remainingDue - currentAmount > 0
           ? remainingDue - currentAmount
-          : undefined
+          : undefined,
       );
     }
 
@@ -221,12 +225,14 @@ export const PaymentView = ({
   };
 
   const handleClearAll = () => {
-    store.clearPayments();
-    if (remainingDue > 0) setCurrentAmount(remainingDue);
+    onClearPayments();
+    if (amountDue > 0) {
+      setCurrentAmount(amountDue);
+    }
   };
 
-  const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const rawValue = e.target.value;
+  const handleAmountChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const rawValue = event.target.value;
     const parsedAmount = parseDisplayAmountInput(rawValue);
 
     if (parsedAmount === undefined) {
@@ -250,87 +256,111 @@ export const PaymentView = ({
   };
 
   if (!selectedPaymentMethod) {
-    console.log("no selected payment method");
     return (
       <ActionButtons
+        cartItemCount={cartItemCount}
+        paymentCount={paymentCount}
         onAddAnotherPaymentMethod={onAddAnotherPaymentMethod}
-        onCancel={onCancel}
+        onCancel={handleClearAll}
         onComplete={onComplete}
         canComplete={canComplete}
         setSelectedPaymentMethod={setSelectedPaymentMethod}
+        isCompleting={isCompleting}
       />
     );
   }
 
+  const paymentMethodStyles = paymentMethodStylesMap[selectedPaymentMethod];
+
   return (
-    <div className="space-y-24">
-      {/* Payment Input Section */}
-      {store.payment.remainingDue > 0 && (
-        <div className="space-y-8">
-          <div className="flex items-center gap-2">
-            {paymentMethodIconMap[selectedPaymentMethod]}
-            <p className="font-medium capitalize">
-              Pay with {selectedPaymentMethod.replace("_", " ")}
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Input
-              type="text"
-              placeholder="0.00"
-              size="lg"
-              className="h-16 w-full text-4xl"
-              value={displayValue}
-              onChange={handleAmountChange}
-              onBlur={handleAmountBlur}
-            />
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <p className="text-lg font-medium">Add payment</p>
+        <div className="grid grid-cols-1 gap-2">
+          {(["cash", "mobile_money", "card"] as SelectedPaymentMethod[]).map(
+            (method) => {
+              const styles = paymentMethodStylesMap[method];
 
-            <Button
-              variant="outline"
-              className="p-8"
-              onClick={() => setCurrentAmount(undefined)}
-            >
-              <ChevronLeft className="w-6 h-6" />
-            </Button>
-          </div>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              className={cn(
-                "flex-1 p-8 text-lg",
-                paymentMethodStylesMap[selectedPaymentMethod].bg,
-                paymentMethodStylesMap[selectedPaymentMethod].text,
-                paymentMethodStylesMap[selectedPaymentMethod].hoverBg,
-                paymentMethodStylesMap[selectedPaymentMethod].hoverText
-              )}
-              onClick={handleAddPayment}
-              disabled={!currentAmount || currentAmount <= 0}
-            >
-              <div className="flex items-center gap-2">
-                <div className="flex items-center gap-2">
-                  <Plus className="w-4 h-4" />
-                  <p>Add Payment</p>
-                </div>
-                {currentAmount && (
-                  <span className="font-semibold">
-                    {currentAmount
-                      ? formatStoredAmount(formatter, currentAmount)
-                      : "0.00"}
-                  </span>
-                )}
-              </div>
-            </Button>
-          </div>
+              return (
+                <Button
+                  key={method}
+                  variant="outline"
+                  className={cn(
+                    "w-full py-10 justify-start",
+                    styles.bg,
+                    styles.text,
+                    styles.hoverBg,
+                    styles.hoverText,
+                    selectedPaymentMethod === method &&
+                      "ring-2 ring-offset-2 ring-primary",
+                  )}
+                  onClick={() => setSelectedPaymentMethod(method)}
+                >
+                  {paymentMethodIconMap[method]}
+                  {method === "mobile_money"
+                    ? "Mobile Money"
+                    : method.charAt(0).toUpperCase() + method.slice(1)}
+                </Button>
+              );
+            },
+          )}
         </div>
-      )}
+      </div>
 
-      {/* Action Buttons */}
-      <ActionButtons
-        onAddAnotherPaymentMethod={onAddAnotherPaymentMethod}
-        onCancel={onCancel}
-        onComplete={onComplete}
-        canComplete={canComplete}
-        setSelectedPaymentMethod={setSelectedPaymentMethod}
-      />
+      <div className="space-y-2">
+        <p className="text-sm font-medium text-muted-foreground">Amount</p>
+        <Input
+          type="text"
+          inputMode="decimal"
+          value={displayValue}
+          onChange={handleAmountChange}
+          onBlur={handleAmountBlur}
+          className="h-12 text-lg"
+          placeholder={formatStoredAmount(formatter, remainingDue)}
+        />
+      </div>
+
+      <div className="rounded-lg bg-gray-50 p-4 text-sm">
+        <div className="flex items-center justify-between">
+          <span>Selected method</span>
+          <span className="font-medium capitalize">
+            {selectedPaymentMethod === "mobile_money"
+              ? "Mobile Money"
+              : selectedPaymentMethod}
+          </span>
+        </div>
+        <div className="mt-2 flex items-center justify-between">
+          <span>Remaining due</span>
+          <span className="font-medium">
+            {formatStoredAmount(formatter, remainingDue)}
+          </span>
+        </div>
+      </div>
+
+      <div className="space-y-4">
+        <Button
+          variant="outline"
+          className={cn(
+            "w-full p-8 text-lg",
+            paymentMethodStyles.bg,
+            paymentMethodStyles.text,
+            paymentMethodStyles.hoverBg,
+            paymentMethodStyles.hoverText,
+          )}
+          onClick={handleAddPayment}
+        >
+          Add Payment
+        </Button>
+
+        <Button
+          variant="outline"
+          className="w-full p-8 text-lg flex items-center gap-2 text-red-700 hover:text-red-800"
+          onClick={() => setSelectedPaymentMethod(null)}
+        >
+          <ChevronLeft className="w-4 h-4" />
+          Cancel
+        </Button>
+      </div>
     </div>
   );
 };

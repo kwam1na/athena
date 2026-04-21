@@ -221,11 +221,10 @@ export function TransactionView() {
 
               <OrderSummary
                 cartItems={cartItems}
-                onClearCart={() => {}}
-                onClearCustomer={() => {}}
                 readOnly
+                completedOrderNumber={transaction.transactionNumber}
                 completedTransactionData={completedData}
-                cashierNameOverride={
+                cashierName={
                   transaction.cashier
                     ? `${transaction.cashier.firstName} ${transaction.cashier.lastName.charAt(0)}.`
                     : undefined

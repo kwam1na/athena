@@ -1,13 +1,15 @@
+import { useQuery } from "convex/react";
+import { toast } from "sonner";
+
+import { api } from "~/convex/_generated/api";
 import { Button } from "@/components/ui/button";
-import { CardHeader, CardTitle } from "@/components/ui/card";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
 import { CartItem } from "../pos/types";
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
 import { currencyFormatter } from "~/convex/utils";
-import { Check } from "lucide-react";
 import { CashierView } from "../pos/CashierView";
 import { useExpenseStore } from "~/src/stores/expenseStore";
+import { useExpenseActiveSession } from "~/src/hooks/useExpenseSessions";
+import { useSessionManagementExpense } from "~/src/hooks/useSessionManagementExpense";
 import { toDisplayAmount } from "~/convex/lib/currency";
 
 interface ExpenseCompletionProps {
@@ -44,6 +46,32 @@ export function ExpenseCompletion({
   const cashierId = useExpenseStore((state) => state.cashier.id);
   const terminalId = useExpenseStore((state) => state.terminalId);
   const storeId = useExpenseStore((state) => state.storeId);
+  const clearCashier = useExpenseStore((state) => state.clearCashier);
+  const activeSession = useExpenseActiveSession(
+    storeId,
+    terminalId,
+    cashierId || undefined,
+  );
+  const { voidSession } = useSessionManagementExpense();
+  const cashier = useQuery(
+    api.inventory.cashier.getById,
+    cashierId ? { id: cashierId } : "skip",
+  );
+  const cashierName = cashier
+    ? `${cashier.firstName} ${cashier.lastName.charAt(0)}.`
+    : "Unassigned";
+
+  const handleCashierSignOut = async () => {
+    if (activeSession) {
+      const result = await voidSession();
+      if (!result.success) {
+        toast.error(result.error);
+        return;
+      }
+    }
+
+    clearCashier();
+  };
 
   //   if (isCompleted && completedTransactionData) {
   //     return (
@@ -130,10 +158,8 @@ export function ExpenseCompletion({
 
         {storeId && terminalId && cashierId && (
           <CashierView
-            storeId={storeId}
-            terminalId={terminalId}
-            cashierId={cashierId}
-            sessionType="expense"
+            cashierName={cashierName}
+            onSignOut={handleCashierSignOut}
           />
         )}
       </div>
