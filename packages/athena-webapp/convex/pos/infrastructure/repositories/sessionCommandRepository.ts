@@ -2,7 +2,7 @@ import type { Doc, Id } from "../../../_generated/dataModel";
 import type { MutationCtx } from "../../../_generated/server";
 
 const ACTIVE_SESSION_CANDIDATE_LIMIT = 100;
-const MAX_SESSION_ITEMS = 200;
+const SESSION_ITEMS_PAGE_SIZE = 200;
 
 export interface SessionCommandRepository {
   getLatestSessionNumber(storeId: Id<"store">): Promise<string | null>;
@@ -83,19 +83,27 @@ export function createSessionCommandRepository(
       return ctx.db.get("posSession", sessionId);
     },
     listSessionItems(sessionId) {
-      return ctx.db
-        .query("posSessionItem")
-        .withIndex("by_sessionId", (q) => q.eq("sessionId", sessionId))
-        .take(MAX_SESSION_ITEMS);
+      return collectSessionItemsFromPages((cursor) =>
+        ctx.db
+          .query("posSessionItem")
+          .withIndex("by_sessionId", (q) => q.eq("sessionId", sessionId))
+          .paginate({
+            cursor,
+            numItems: SESSION_ITEMS_PAGE_SIZE,
+          }),
+      );
     },
-    async findSessionItemBySku(args) {
-      const items = await ctx.db
-        .query("posSessionItem")
-        .withIndex("by_sessionId", (q) => q.eq("sessionId", args.sessionId))
-        .take(MAX_SESSION_ITEMS);
-
-      return (
-        items.find((item) => item.productSkuId === args.productSkuId) ?? null
+    findSessionItemBySku(args) {
+      return findSessionItemBySkuInPages(
+        (cursor) =>
+          ctx.db
+            .query("posSessionItem")
+            .withIndex("by_sessionId", (q) => q.eq("sessionId", args.sessionId))
+            .paginate({
+              cursor,
+              numItems: SESSION_ITEMS_PAGE_SIZE,
+            }),
+        args.productSkuId,
       );
     },
     getSessionItemById(itemId) {
@@ -117,4 +125,57 @@ export function createSessionCommandRepository(
       await ctx.db.delete("posSessionItem", itemId);
     },
   };
+}
+
+type PaginatedPage<TItem> = {
+  page: TItem[];
+  isDone: boolean;
+  continueCursor: string;
+};
+
+type PaginatedLoader<TItem> = (
+  cursor: string | null,
+) => Promise<PaginatedPage<TItem>>;
+
+export async function collectSessionItemsFromPages<TItem>(
+  loadPage: PaginatedLoader<TItem>,
+): Promise<TItem[]> {
+  const items: TItem[] = [];
+  let cursor: string | null = null;
+
+  while (true) {
+    const page = await loadPage(cursor);
+    items.push(...page.page);
+
+    if (page.isDone) {
+      return items;
+    }
+
+    cursor = page.continueCursor;
+  }
+}
+
+export async function findSessionItemBySkuInPages<
+  TItem extends Pick<Doc<"posSessionItem">, "productSkuId">,
+>(
+  loadPage: PaginatedLoader<TItem>,
+  productSkuId: Id<"productSku">,
+): Promise<TItem | null> {
+  let cursor: string | null = null;
+
+  while (true) {
+    const page = await loadPage(cursor);
+    const matchingItem =
+      page.page.find((item) => item.productSkuId === productSkuId) ?? null;
+
+    if (matchingItem) {
+      return matchingItem;
+    }
+
+    if (page.isDone) {
+      return null;
+    }
+
+    cursor = page.continueCursor;
+  }
 }

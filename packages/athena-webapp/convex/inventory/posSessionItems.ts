@@ -9,8 +9,9 @@ import {
   runRemoveSessionItemCommand,
   runUpsertSessionItemCommand,
 } from "../pos/application/commands/sessionCommands";
+import { collectSessionItemsFromPages } from "../pos/infrastructure/repositories/sessionCommandRepository";
 
-const MAX_SESSION_ITEMS = 200;
+const SESSION_ITEMS_PAGE_SIZE = 200;
 
 // Get all items for a session
 export const getSessionItems = query({
@@ -38,10 +39,15 @@ export const getSessionItems = query({
     })
   ),
   handler: async (ctx, args) => {
-    const items = await ctx.db
-      .query("posSessionItem")
-      .withIndex("by_sessionId", (q) => q.eq("sessionId", args.sessionId))
-      .take(MAX_SESSION_ITEMS);
+    const items = await collectSessionItemsFromPages((cursor) =>
+      ctx.db
+        .query("posSessionItem")
+        .withIndex("by_sessionId", (q) => q.eq("sessionId", args.sessionId))
+        .paginate({
+          cursor,
+          numItems: SESSION_ITEMS_PAGE_SIZE,
+        }),
+    );
 
     return items;
   },
