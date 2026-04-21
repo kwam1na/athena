@@ -86,6 +86,8 @@ This index enumerates the current automated test files and ties them back to the
 - [`src/hooks/useBulkOperations.test.ts`](../../src/hooks/useBulkOperations.test.ts)
 - [`src/lib/imageUtils.test.ts`](../../src/lib/imageUtils.test.ts)
 - [`src/lib/pos/displayAmounts.test.ts`](../../src/lib/pos/displayAmounts.test.ts)
+- [`src/lib/pos/domain/cart.test.ts`](../../src/lib/pos/domain/cart.test.ts)
+- [`src/lib/pos/domain/session.test.ts`](../../src/lib/pos/domain/session.test.ts)
 - [`src/lib/productUtils.test.ts`](../../src/lib/productUtils.test.ts)
 - [`src/lib/storeConfig.test.ts`](../../src/lib/storeConfig.test.ts)
 - [`src/lib/utils.test.ts`](../../src/lib/utils.test.ts)
