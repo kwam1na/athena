@@ -24,18 +24,22 @@
     {
       "name": "route-runtime-or-build-pipeline-edits",
       "pathPrefixes": [
+        "packages/storefront-webapp/index.html",
+        "packages/storefront-webapp/package.json",
         "packages/storefront-webapp/tsconfig.json",
-        "packages/storefront-webapp/src/client.tsx",
         "packages/storefront-webapp/src/main.tsx",
         "packages/storefront-webapp/src/router.tsx",
         "packages/storefront-webapp/src/routeTree.gen.ts",
-        "packages/storefront-webapp/src/ssr.tsx",
         "packages/storefront-webapp/vite.config.ts"
       ],
       "commands": [
         {
           "kind": "script",
           "script": "test"
+        },
+        {
+          "kind": "script",
+          "script": "build"
         },
         {
           "kind": "raw",

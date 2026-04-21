@@ -286,7 +286,8 @@ async function loadReviewTargets(rootDir: string) {
   return targets;
 }
 
-function collectCommandsForChangedFiles(
+async function collectCommandsForChangedFiles(
+  rootDir: string,
   changedFiles: string[],
   targets: LoadedReviewTarget[]
 ) {
@@ -312,15 +313,25 @@ function collectCommandsForChangedFiles(
     }
 
     const seenCommands = new Set<string>();
-
-    for (const changedFile of targetChangedFiles) {
-      const matchingSurfaces = target.surfaces.filter((surface) =>
+    const fileMatches = targetChangedFiles.map((changedFile) => ({
+      changedFile,
+      matchingSurfaces: target.surfaces.filter((surface) =>
         surface.pathPrefixes.some((pathPrefix) =>
           matchesPathPrefix(changedFile, pathPrefix)
         )
-      );
+      ),
+    }));
+    const hasDirectCoverage = fileMatches.some(
+      ({ matchingSurfaces }) => matchingSurfaces.length > 0
+    );
 
+    for (const { changedFile, matchingSurfaces } of fileMatches) {
       if (matchingSurfaces.length === 0) {
+        const changedFileExists = await fileExists(path.join(rootDir, changedFile));
+        if (!changedFileExists && hasDirectCoverage) {
+          continue;
+        }
+
         uncoveredFiles.push(changedFile);
         continue;
       }
@@ -577,7 +588,7 @@ export async function runHarnessReview(
     uncoveredFiles,
     targetFiles,
   } =
-    collectCommandsForChangedFiles(changedFiles, reviewTargets);
+    await collectCommandsForChangedFiles(rootDir, changedFiles, reviewTargets);
 
   if (uncoveredFiles.length > 0) {
     throw new Error(

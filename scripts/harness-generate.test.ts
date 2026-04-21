@@ -106,6 +106,20 @@ async function createFixtureRepo() {
 
   await write("packages/storefront-webapp/src/routes/shop/index.tsx", "export {};\n", rootDir);
   await write("packages/storefront-webapp/src/routes/shop/checkout/index.tsx", "export {};\n", rootDir);
+  await write(
+    "packages/storefront-webapp/index.html",
+    "<!doctype html><html><body><div id=\"root\"></div></body></html>\n",
+    rootDir
+  );
+  await write(
+    "packages/storefront-webapp/tsconfig.json",
+    JSON.stringify({ compilerOptions: {} }, null, 2),
+    rootDir
+  );
+  await write("packages/storefront-webapp/vite.config.ts", "export default {};\n", rootDir);
+  await write("packages/storefront-webapp/src/main.tsx", "export {};\n", rootDir);
+  await write("packages/storefront-webapp/src/router.tsx", "export {};\n", rootDir);
+  await write("packages/storefront-webapp/src/routeTree.gen.ts", "export {};\n", rootDir);
   await write("packages/storefront-webapp/src/components/checkout/CheckoutProvider.tsx", "export {};\n", rootDir);
   await write("packages/storefront-webapp/src/hooks/useShoppingBag.ts", "export {};\n", rootDir);
   await write("packages/storefront-webapp/src/lib/storeConfig.ts", "export {};\n", rootDir);
