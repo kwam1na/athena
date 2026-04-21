@@ -165,6 +165,10 @@ import type * as schemas_serviceOps_serviceCase from "../schemas/serviceOps/serv
 import type * as schemas_serviceOps_serviceCaseLineItem from "../schemas/serviceOps/serviceCaseLineItem.js";
 import type * as schemas_serviceOps_serviceCatalog from "../schemas/serviceOps/serviceCatalog.js";
 import type * as schemas_serviceOps_serviceInventoryUsage from "../schemas/serviceOps/serviceInventoryUsage.js";
+import type * as schemas_stockOps_index from "../schemas/stockOps/index.js";
+import type * as schemas_stockOps_purchaseOrder from "../schemas/stockOps/purchaseOrder.js";
+import type * as schemas_stockOps_purchaseOrderLineItem from "../schemas/stockOps/purchaseOrderLineItem.js";
+import type * as schemas_stockOps_vendor from "../schemas/stockOps/vendor.js";
 import type * as schemas_storeFront_analytics from "../schemas/storeFront/analytics.js";
 import type * as schemas_storeFront_bag from "../schemas/storeFront/bag.js";
 import type * as schemas_storeFront_bagItem from "../schemas/storeFront/bagItem.js";
@@ -190,6 +194,8 @@ import type * as serviceOps_catalog from "../serviceOps/catalog.js";
 import type * as serviceOps_serviceCases from "../serviceOps/serviceCases.js";
 import type * as services_orderEmailService from "../services/orderEmailService.js";
 import type * as services_paystackService from "../services/paystackService.js";
+import type * as stockOps_purchaseOrders from "../stockOps/purchaseOrders.js";
+import type * as stockOps_vendors from "../stockOps/vendors.js";
 import type * as storeFront_analytics from "../storeFront/analytics.js";
 import type * as storeFront_auth from "../storeFront/auth.js";
 import type * as storeFront_bag from "../storeFront/bag.js";
@@ -204,6 +210,7 @@ import type * as storeFront_helpers_onlineOrder from "../storeFront/helpers/onli
 import type * as storeFront_helpers_orderOperations from "../storeFront/helpers/orderOperations.js";
 import type * as storeFront_helpers_orderUpdateEmails from "../storeFront/helpers/orderUpdateEmails.js";
 import type * as storeFront_helpers_paymentHelpers from "../storeFront/helpers/paymentHelpers.js";
+import type * as storeFront_helpers_returnExchangeOperations from "../storeFront/helpers/returnExchangeOperations.js";
 import type * as storeFront_offers from "../storeFront/offers.js";
 import type * as storeFront_onlineOrder from "../storeFront/onlineOrder.js";
 import type * as storeFront_onlineOrderItem from "../storeFront/onlineOrderItem.js";
@@ -387,6 +394,10 @@ declare const fullApi: ApiFromModules<{
   "schemas/serviceOps/serviceCaseLineItem": typeof schemas_serviceOps_serviceCaseLineItem;
   "schemas/serviceOps/serviceCatalog": typeof schemas_serviceOps_serviceCatalog;
   "schemas/serviceOps/serviceInventoryUsage": typeof schemas_serviceOps_serviceInventoryUsage;
+  "schemas/stockOps/index": typeof schemas_stockOps_index;
+  "schemas/stockOps/purchaseOrder": typeof schemas_stockOps_purchaseOrder;
+  "schemas/stockOps/purchaseOrderLineItem": typeof schemas_stockOps_purchaseOrderLineItem;
+  "schemas/stockOps/vendor": typeof schemas_stockOps_vendor;
   "schemas/storeFront/analytics": typeof schemas_storeFront_analytics;
   "schemas/storeFront/bag": typeof schemas_storeFront_bag;
   "schemas/storeFront/bagItem": typeof schemas_storeFront_bagItem;
@@ -412,6 +423,8 @@ declare const fullApi: ApiFromModules<{
   "serviceOps/serviceCases": typeof serviceOps_serviceCases;
   "services/orderEmailService": typeof services_orderEmailService;
   "services/paystackService": typeof services_paystackService;
+  "stockOps/purchaseOrders": typeof stockOps_purchaseOrders;
+  "stockOps/vendors": typeof stockOps_vendors;
   "storeFront/analytics": typeof storeFront_analytics;
   "storeFront/auth": typeof storeFront_auth;
   "storeFront/bag": typeof storeFront_bag;
@@ -426,6 +439,7 @@ declare const fullApi: ApiFromModules<{
   "storeFront/helpers/orderOperations": typeof storeFront_helpers_orderOperations;
   "storeFront/helpers/orderUpdateEmails": typeof storeFront_helpers_orderUpdateEmails;
   "storeFront/helpers/paymentHelpers": typeof storeFront_helpers_paymentHelpers;
+  "storeFront/helpers/returnExchangeOperations": typeof storeFront_helpers_returnExchangeOperations;
   "storeFront/offers": typeof storeFront_offers;
   "storeFront/onlineOrder": typeof storeFront_onlineOrder;
   "storeFront/onlineOrderItem": typeof storeFront_onlineOrderItem;

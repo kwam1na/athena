@@ -37,6 +37,8 @@ This index enumerates the current automated test files and ties them back to the
 - [`convex/serviceOps/catalogAppointments.test.ts`](../../convex/serviceOps/catalogAppointments.test.ts)
 - [`convex/serviceOps/moduleWiring.test.ts`](../../convex/serviceOps/moduleWiring.test.ts)
 - [`convex/serviceOps/serviceCases.test.ts`](../../convex/serviceOps/serviceCases.test.ts)
+- [`convex/stockOps/purchaseOrders.test.ts`](../../convex/stockOps/purchaseOrders.test.ts)
+- [`convex/stockOps/vendors.test.ts`](../../convex/stockOps/vendors.test.ts)
 - [`convex/storeFront/commerceQueryIndexes.test.ts`](../../convex/storeFront/commerceQueryIndexes.test.ts)
 - [`convex/storeFront/customerBehaviorTimeline.test.ts`](../../convex/storeFront/customerBehaviorTimeline.test.ts)
 - [`convex/storeFront/customerObservabilityTimeline.test.ts`](../../convex/storeFront/customerObservabilityTimeline.test.ts)
