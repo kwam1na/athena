@@ -10,10 +10,68 @@ const REGISTER_SESSION_TRANSITIONS = {
 } as const;
 
 type RegisterSessionStatus = keyof typeof REGISTER_SESSION_TRANSITIONS;
+type RegisterSessionIdentity = {
+  registerNumber?: string | null;
+  terminalId?: Id<"posTerminal">;
+};
+type RegisterSessionCashAdjustmentKind = "sale" | "void";
 
 function trimOptional(value?: string | null) {
   const nextValue = value?.trim();
   return nextValue ? nextValue : undefined;
+}
+
+function normalizeRegisterSessionIdentity<T extends RegisterSessionIdentity>(args: T) {
+  return {
+    ...args,
+    registerNumber: trimOptional(args.registerNumber),
+  };
+}
+
+export function assertRegisterSessionIdentity<T extends RegisterSessionIdentity>(args: T) {
+  const normalizedArgs = normalizeRegisterSessionIdentity(args);
+
+  if (!normalizedArgs.registerNumber && !normalizedArgs.terminalId) {
+    throw new Error("Register sessions require a register number or terminal.");
+  }
+
+  return normalizedArgs;
+}
+
+export function assertRegisterSessionMatchesTransaction(
+  session: RegisterSessionIdentity,
+  transactionIdentity: RegisterSessionIdentity
+) {
+  const normalizedSession = normalizeRegisterSessionIdentity(session);
+  const normalizedTransaction = normalizeRegisterSessionIdentity(transactionIdentity);
+
+  if (!normalizedTransaction.registerNumber && !normalizedTransaction.terminalId) {
+    throw new Error(
+      "Register session transactions must include a register number or terminal."
+    );
+  }
+
+  let hasSharedIdentity = false;
+
+  if (normalizedSession.registerNumber && normalizedTransaction.registerNumber) {
+    hasSharedIdentity = true;
+
+    if (normalizedSession.registerNumber !== normalizedTransaction.registerNumber) {
+      throw new Error("Register session does not match the transaction identity.");
+    }
+  }
+
+  if (normalizedSession.terminalId && normalizedTransaction.terminalId) {
+    hasSharedIdentity = true;
+
+    if (normalizedSession.terminalId !== normalizedTransaction.terminalId) {
+      throw new Error("Register session does not match the transaction identity.");
+    }
+  }
+
+  if (!hasSharedIdentity) {
+    throw new Error("Register session does not match the transaction identity.");
+  }
 }
 
 export function buildRegisterSession(args: {
@@ -27,8 +85,11 @@ export function buildRegisterSession(args: {
   expectedCash?: number;
   notes?: string;
 }) {
+  const identity = normalizeRegisterSessionIdentity(args);
+
   return {
     ...args,
+    ...identity,
     status: "open" as const,
     openedAt: Date.now(),
     expectedCash: args.expectedCash ?? args.openingFloat,
@@ -61,6 +122,47 @@ export function assertValidRegisterSessionTransition(
       `Cannot change register session from ${currentStatus} to ${nextStatus}.`
     );
   }
+}
+
+export function buildRegisterSessionTransactionPatch(
+  session: {
+    countedCash?: number;
+    expectedCash: number;
+    status: RegisterSessionStatus;
+  },
+  args: {
+    adjustmentKind: RegisterSessionCashAdjustmentKind;
+    payments: Array<{ method: string; amount: number; timestamp: number }>;
+    changeGiven?: number;
+  }
+) {
+  const expectedCashDelta = calculateRegisterSessionCashDelta({
+    changeGiven: args.changeGiven,
+    payments: args.payments,
+  });
+  const updates: Record<string, number | RegisterSessionStatus> = {};
+
+  if (expectedCashDelta > 0) {
+    const nextExpectedCash =
+      session.expectedCash +
+      (args.adjustmentKind === "void" ? -expectedCashDelta : expectedCashDelta);
+
+    if (nextExpectedCash < 0) {
+      throw new Error("Register session expected cash cannot be negative.");
+    }
+
+    updates.expectedCash = nextExpectedCash;
+
+    if (session.countedCash !== undefined) {
+      updates.variance = session.countedCash - nextExpectedCash;
+    }
+  }
+
+  if (args.adjustmentKind === "sale" && session.status === "open") {
+    updates.status = "active";
+  }
+
+  return updates;
 }
 
 async function findConflictingRegisterSession(
@@ -113,8 +215,19 @@ export const openRegisterSession = internalMutation({
     notes: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    await findConflictingRegisterSession(ctx, args);
-    const sessionId = await ctx.db.insert("registerSession", buildRegisterSession(args));
+    const identity = assertRegisterSessionIdentity(args);
+
+    await findConflictingRegisterSession(ctx, {
+      ...args,
+      ...identity,
+    });
+    const sessionId = await ctx.db.insert(
+      "registerSession",
+      buildRegisterSession({
+        ...args,
+        ...identity,
+      })
+    );
     return ctx.db.get("registerSession", sessionId);
   },
 });
@@ -160,6 +273,7 @@ export const recordRegisterSessionTransaction = internalMutation({
   args: {
     registerSessionId: v.id("registerSession"),
     storeId: v.id("store"),
+    adjustmentKind: v.union(v.literal("sale"), v.literal("void")),
     payments: v.array(
       v.object({
         method: v.string(),
@@ -168,6 +282,8 @@ export const recordRegisterSessionTransaction = internalMutation({
       })
     ),
     changeGiven: v.optional(v.number()),
+    registerNumber: v.optional(v.string()),
+    terminalId: v.optional(v.id("posTerminal")),
   },
   handler: async (ctx, args) => {
     const session = await ctx.db.get("registerSession", args.registerSessionId);
@@ -175,24 +291,16 @@ export const recordRegisterSessionTransaction = internalMutation({
       throw new Error("Register session not found for this store.");
     }
 
-    if (session.status === "closing" || session.status === "closed") {
+    assertRegisterSessionMatchesTransaction(session, args);
+
+    if (
+      args.adjustmentKind === "sale" &&
+      (session.status === "closing" || session.status === "closed")
+    ) {
       throw new Error("Register session is not accepting new transactions.");
     }
 
-    const expectedCashDelta = calculateRegisterSessionCashDelta({
-      changeGiven: args.changeGiven,
-      payments: args.payments,
-    });
-
-    const updates: Record<string, unknown> = {};
-
-    if (expectedCashDelta > 0) {
-      updates.expectedCash = session.expectedCash + expectedCashDelta;
-    }
-
-    if (session.status === "open") {
-      updates.status = "active";
-    }
+    const updates = buildRegisterSessionTransactionPatch(session, args);
 
     if (Object.keys(updates).length > 0) {
       await ctx.db.patch("registerSession", args.registerSessionId, updates);

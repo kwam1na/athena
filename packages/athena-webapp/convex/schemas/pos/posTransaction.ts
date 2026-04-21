@@ -8,6 +8,7 @@ export const posTransactionSchema = v.object({
   customerId: v.optional(v.id("posCustomer")), // Link to POS customer
   cashierId: v.optional(v.id("cashier")), // Cashier who processed the transaction
   registerNumber: v.optional(v.string()),
+  terminalId: v.optional(v.id("posTerminal")),
   subtotal: v.number(),
   tax: v.number(),
   total: v.number(),

@@ -466,6 +466,7 @@ export const completeTransaction = mutation({
       })
     ),
     registerNumber: v.optional(v.string()),
+    terminalId: v.optional(v.id("posTerminal")),
     cashierId: v.optional(v.id("cashier")),
     registerSessionId: v.optional(v.id("registerSession")),
   },
@@ -549,6 +550,7 @@ export const completeTransaction = mutation({
       customerId: args.customerId,
       cashierId: args.cashierId,
       registerNumber: args.registerNumber,
+      terminalId: args.terminalId,
       subtotal: args.subtotal,
       tax: args.tax,
       total: args.total,
@@ -566,10 +568,13 @@ export const completeTransaction = mutation({
       await ctx.runMutation(
         internal.operations.registerSessions.recordRegisterSessionTransaction,
         {
+          adjustmentKind: "sale",
           changeGiven,
           payments: args.payments,
           registerSessionId: args.registerSessionId,
+          registerNumber: args.registerNumber,
           storeId: args.storeId,
+          terminalId: args.terminalId,
         }
       );
     }
@@ -893,6 +898,21 @@ export const voidTransaction = mutation({
       };
     }
 
+    if (transaction.registerSessionId) {
+      await ctx.runMutation(
+        internal.operations.registerSessions.recordRegisterSessionTransaction,
+        {
+          adjustmentKind: "void",
+          changeGiven: transaction.changeGiven,
+          payments: transaction.payments,
+          registerSessionId: transaction.registerSessionId,
+          registerNumber: transaction.registerNumber,
+          storeId: transaction.storeId,
+          terminalId: transaction.terminalId,
+        }
+      );
+    }
+
     // Update transaction status
     await ctx.db.patch("posTransaction", args.transactionId, {
       status: "void",
@@ -1014,6 +1034,7 @@ export async function createTransactionFromSessionHandler(
     customerId: session.customerId,
     cashierId: session.cashierId,
     registerNumber: session.registerNumber,
+    terminalId: session.terminalId,
     subtotal,
     tax,
     total,
@@ -1032,10 +1053,13 @@ export async function createTransactionFromSessionHandler(
     await ctx.runMutation(
       internal.operations.registerSessions.recordRegisterSessionTransaction,
       {
+        adjustmentKind: "sale",
         changeGiven,
         payments: args.payments,
         registerSessionId: args.registerSessionId,
+        registerNumber: session.registerNumber,
         storeId: session.storeId,
+        terminalId: session.terminalId,
       }
     );
   }

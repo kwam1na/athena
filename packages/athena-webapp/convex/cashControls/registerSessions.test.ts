@@ -1,15 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
 import type { Id } from "../_generated/dataModel";
 import {
+  assertRegisterSessionIdentity,
+  assertRegisterSessionMatchesTransaction,
   assertValidRegisterSessionTransition,
   buildRegisterSession,
+  buildRegisterSessionTransactionPatch,
   calculateRegisterSessionCashDelta,
 } from "../operations/registerSessions";
-
-function getSource(relativePath: string) {
-  return readFileSync(new URL(relativePath, import.meta.url), "utf8");
-}
 
 describe("cash controls register sessions", () => {
   it("opens sessions with opening float as the initial expected cash", () => {
@@ -68,24 +66,93 @@ describe("cash controls register sessions", () => {
     ).not.toThrow();
   });
 
-  it("guards duplicate open sessions and wires POS cash activity back to register sessions", () => {
-    const registerSessionsSource = getSource("../operations/registerSessions.ts");
-    const posSource = getSource("../inventory/pos.ts");
-    const posTransactionSchemaSource = getSource("../schemas/pos/posTransaction.ts");
+  it("requires a register or terminal identity when opening a session", () => {
+    expect(() =>
+      assertRegisterSessionIdentity({})
+    ).toThrow("Register sessions require a register number or terminal.");
 
-    expect(registerSessionsSource).toContain('.withIndex("by_storeId_registerNumber"');
-    expect(registerSessionsSource).toContain(
-      'throw new Error("A register session is already open for this register.");'
+    expect(() =>
+      assertRegisterSessionIdentity({ registerNumber: "A1" })
+    ).not.toThrow();
+
+    expect(() =>
+      assertRegisterSessionIdentity({
+        terminalId: "terminal_1" as Id<"posTerminal">,
+      })
+    ).not.toThrow();
+  });
+
+  it("rejects transaction activity that does not match the register session identity", () => {
+    const registerSession = buildRegisterSession({
+      storeId: "store_1" as Id<"store">,
+      openingFloat: 5000,
+      registerNumber: "A1",
+      terminalId: "terminal_1" as Id<"posTerminal">,
+    });
+
+    expect(() =>
+      assertRegisterSessionMatchesTransaction(registerSession, {})
+    ).toThrow(
+      "Register session transactions must include a register number or terminal."
     );
-    expect(registerSessionsSource).toContain(
-      'throw new Error("A register session is already open for this terminal.");'
-    );
-    expect(registerSessionsSource).toContain(
-      "export const recordRegisterSessionTransaction = internalMutation({"
-    );
-    expect(posSource).toContain("recordRegisterSessionTransaction");
-    expect(posTransactionSchemaSource).toContain(
-      'registerSessionId: v.optional(v.id("registerSession"))'
-    );
+
+    expect(() =>
+      assertRegisterSessionMatchesTransaction(registerSession, {
+        registerNumber: "B2",
+      })
+    ).toThrow("Register session does not match the transaction identity.");
+
+    expect(() =>
+      assertRegisterSessionMatchesTransaction(registerSession, {
+        registerNumber: "A1",
+      })
+    ).not.toThrow();
+
+    expect(() =>
+      assertRegisterSessionMatchesTransaction(registerSession, {
+        terminalId: "terminal_1" as Id<"posTerminal">,
+      })
+    ).not.toThrow();
+  });
+
+  it("builds register-session cash updates for sales and voids", () => {
+    const registerSession = {
+      ...buildRegisterSession({
+        storeId: "store_1" as Id<"store">,
+        openingFloat: 5000,
+        registerNumber: "A1",
+      }),
+      expectedCash: 5000,
+    };
+
+    expect(
+      buildRegisterSessionTransactionPatch(registerSession, {
+        adjustmentKind: "sale",
+        changeGiven: 1000,
+        payments: [{ amount: 9000, method: "cash", timestamp: 1 }],
+      })
+    ).toEqual({
+      expectedCash: 13000,
+      status: "active",
+    });
+
+    expect(
+      buildRegisterSessionTransactionPatch(
+        {
+          ...registerSession,
+          countedCash: 12000,
+          expectedCash: 13000,
+          status: "closed" as const,
+        },
+        {
+          adjustmentKind: "void",
+          changeGiven: 1000,
+          payments: [{ amount: 9000, method: "cash", timestamp: 1 }],
+        }
+      )
+    ).toEqual({
+      expectedCash: 5000,
+      variance: 7000,
+    });
   });
 });
