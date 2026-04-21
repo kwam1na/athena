@@ -7,9 +7,9 @@ Graphify is the navigation layer for the repo graph. Use the entry docs below fo
 - [packages/AGENTS.md](../../packages/AGENTS.md) - package router plus the operational guides for each harnessed package
 
 ## Repo Summary
-- Code files discovered: 1323
-- Graph nodes: 3131
-- Graph edges: 2645
+- Code files discovered: 1322
+- Graph nodes: 3130
+- Graph edges: 2644
 - Communities: 1238
 
 ## Graph Hotspots
