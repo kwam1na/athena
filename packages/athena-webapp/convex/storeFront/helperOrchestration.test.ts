@@ -86,4 +86,40 @@ describe("shared helper orchestration", () => {
       "ctx.runMutation(\n            internal.storeFront.onlineOrder.returnAllItemsToStockInternal"
     );
   });
+
+  it("extracts online-order operations rail orchestration behind a shared helper", () => {
+    const helper = readProjectFile(
+      "convex",
+      "storeFront",
+      "helpers",
+      "orderOperations.ts"
+    );
+    const orderHelper = readProjectFile(
+      "convex",
+      "storeFront",
+      "helpers",
+      "onlineOrder.ts"
+    );
+    const onlineOrder = readProjectFile(
+      "convex",
+      "storeFront",
+      "onlineOrder.ts"
+    );
+    const onlineOrderItem = readProjectFile(
+      "convex",
+      "storeFront",
+      "onlineOrderItem.ts"
+    );
+    const payment = readProjectFile("convex", "storeFront", "payment.ts");
+
+    expect(helper).toContain("export async function recordOnlineOrderCreatedEvent");
+    expect(helper).toContain("export async function recordOnlineOrderPaymentVerified");
+    expect(helper).toContain("export async function recordOnlineOrderRestockMovement");
+    expect(orderHelper).toContain('from "./orderOperations"');
+    expect(onlineOrder).toContain('from "./helpers/orderOperations"');
+    expect(onlineOrderItem).toContain('from "./helpers/orderOperations"');
+    expect(payment).toContain(
+      "internal.operations.paymentAllocations.recordPaymentAllocation"
+    );
+  });
 });

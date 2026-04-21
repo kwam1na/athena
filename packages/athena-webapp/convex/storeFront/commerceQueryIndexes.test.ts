@@ -62,6 +62,16 @@ describe("commerce query indexing", () => {
       },
       {
         table: "onlineOrder",
+        descriptor: "by_customerProfileId",
+        fields: ["customerProfileId"],
+      },
+      {
+        table: "onlineOrder",
+        descriptor: "by_externalTransactionId",
+        fields: ["externalTransactionId"],
+      },
+      {
+        table: "onlineOrder",
         descriptor: "by_storeFrontUserId",
         fields: ["storeFrontUserId"],
       },
@@ -110,6 +120,7 @@ describe("commerce query indexing", () => {
   it("uses indexed lookups in the checkout-session and online-order modules", () => {
     const checkoutSessionSource = getSource("./checkoutSession.ts");
     const onlineOrderSource = getSource("./onlineOrder.ts");
+    const helperSource = getSource("./helpers/onlineOrder.ts");
     const analyticsSource = getSource("./analytics.ts");
 
     expect(checkoutSessionSource).toContain('.withIndex("by_storeFrontUserId"');
@@ -117,6 +128,8 @@ describe("commerce query indexing", () => {
     expect(onlineOrderSource).toContain('.withIndex("by_checkoutSessionId"');
     expect(onlineOrderSource).toContain('.withIndex("by_storeFrontUserId"');
     expect(onlineOrderSource).toContain('.withIndex("by_orderId"');
+    expect(helperSource).toContain('.withIndex("by_externalReference"');
+    expect(helperSource).toContain('.withIndex("by_externalTransactionId"');
     expect(analyticsSource).toContain('.withIndex("by_promoCodeId"');
   });
 });

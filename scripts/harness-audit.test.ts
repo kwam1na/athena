@@ -94,6 +94,7 @@ async function createFixtureRepo() {
     ),
     rootDir
   );
+  await write("packages/athena-webapp/types.ts", "export type Placeholder = {};\n", rootDir);
   await write(
     "packages/storefront-webapp/package.json",
     JSON.stringify(

@@ -54,10 +54,25 @@ export type Guest = Doc<"guest">;
 export type Address = Infer<typeof addressSchema>;
 
 export type AthenaUser = Doc<"athenaUser">;
+export type CustomerProfile = Doc<"customerProfile">;
+export type StaffProfile = Doc<"staffProfile">;
+export type StaffRoleAssignment = Doc<"staffRoleAssignment">;
+export type OperationalWorkItem = Doc<"operationalWorkItem">;
+export type OperationalEvent = Doc<"operationalEvent">;
+export type InventoryMovement = Doc<"inventoryMovement">;
+export type PaymentAllocation = Doc<"paymentAllocation">;
+export type RegisterSession = Doc<"registerSession">;
+export type ApprovalRequest = Doc<"approvalRequest">;
 
 // Role and Permission Types
 export type Role = "full_admin" | "pos_only";
 export type Permission = "access_admin" | "access_pos";
+export type OperationalRole =
+  | "manager"
+  | "front_desk"
+  | "stylist"
+  | "technician"
+  | "cashier";
 
 export type CheckoutSessionItem = Doc<"checkoutSessionItem">;
 

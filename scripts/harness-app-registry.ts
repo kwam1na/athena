@@ -249,7 +249,7 @@ export const HARNESS_APP_REGISTRY = [
       },
       {
         title: "Shared-lib or utility edits",
-        touchedPaths: ["src/lib", "src/settings", "src/utils", "src/stores"],
+        touchedPaths: ["src/lib", "src/settings", "src/utils", "src/stores", "types.ts"],
         commands: [
           { kind: "script", script: "test" },
           {

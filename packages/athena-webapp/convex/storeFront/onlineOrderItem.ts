@@ -6,6 +6,10 @@ import {
   mutation,
 } from "../_generated/server";
 import { Id } from "../_generated/dataModel";
+import {
+  recordOnlineOrderFulfillmentMovement,
+  recordOnlineOrderRestockMovement,
+} from "./helpers/orderOperations";
 
 const entity = "onlineOrderItem";
 
@@ -25,12 +29,16 @@ const updateOnlineOrderItem = async (
     updates: Record<string, any>;
   }
 ) => {
+  const existingOrderItem = await ctx.db.get("onlineOrderItem", args.id);
+  if (!existingOrderItem) return;
+
   await ctx.db.patch("onlineOrderItem", args.id, args.updates);
 
   const { isReady } = args.updates;
+  const wasReady = existingOrderItem.isReady === true;
 
   // update the inventory count of the product sku
-  if (isReady) {
+  if (isReady === true && !wasReady) {
     const orderItem = await ctx.db.get("onlineOrderItem", args.id);
 
     if (!orderItem) return;
@@ -42,7 +50,15 @@ const updateOnlineOrderItem = async (
     await ctx.db.patch("productSku", productSku._id, {
       inventoryCount: Math.max(productSku.inventoryCount - orderItem.quantity, 0),
     });
-  } else if (isReady == false) {
+
+    const order = await ctx.db.get("onlineOrder", orderItem.orderId);
+    if (order) {
+      await recordOnlineOrderFulfillmentMovement(ctx, {
+        item: orderItem,
+        order,
+      });
+    }
+  } else if (isReady === false && wasReady) {
     const orderItem = await ctx.db.get("onlineOrderItem", args.id);
 
     if (!orderItem) return;
@@ -54,6 +70,15 @@ const updateOnlineOrderItem = async (
     await ctx.db.patch("productSku", productSku._id, {
       inventoryCount: productSku.inventoryCount + orderItem.quantity,
     });
+
+    const order = await ctx.db.get("onlineOrder", orderItem.orderId);
+    if (order) {
+      await recordOnlineOrderRestockMovement(ctx, {
+        item: orderItem,
+        order,
+        reasonCode: "online_order_item_unreadied",
+      });
+    }
   }
 };
 
