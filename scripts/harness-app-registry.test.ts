@@ -173,6 +173,41 @@ describe("HARNESS_APP_REGISTRY", () => {
     );
   });
 
+  it("documents cash-controls workflow validation coverage in Athena harness docs", () => {
+    const athena = HARNESS_APP_REGISTRY.find(
+      (entry) => entry.appName === "athena-webapp"
+    );
+    const cashControlsScenario = athena?.validationScenarios.find(
+      (scenario) => scenario.title === "Cash-controls workflow edits"
+    );
+
+    expect(cashControlsScenario).toMatchObject({
+      touchedPaths: [
+        "convex/cashControls",
+        "convex/operations/registerSessions.ts",
+        "src/components/cash-controls",
+        "src/components/operations/OperationsQueueView.tsx",
+        "src/components/app-sidebar.tsx",
+        "src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/cash-controls",
+      ],
+      commands: [
+        {
+          kind: "raw",
+          command:
+            "bun run --filter '@athena/webapp' test -- convex/cashControls/registerSessions.test.ts convex/cashControls/closeouts.test.ts convex/cashControls/deposits.test.ts src/components/cash-controls/RegisterCloseoutView.test.tsx src/components/cash-controls/CashControlsDashboard.test.tsx src/components/cash-controls/RegisterSessionView.test.tsx src/components/operations/OperationsQueueView.test.tsx",
+        },
+        {
+          kind: "raw",
+          command: "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json",
+        },
+        { kind: "script", script: "build" },
+      ],
+      note:
+        "Use this when register-session, deposit, closeout, dashboard, operations-queue approval, or cash-controls route wiring changes. Start `bunx convex dev` from `packages/athena-webapp` before validation when generated client refs or new Convex function exports changed.",
+      behaviorScenarios: ["athena-admin-shell-boot"],
+    });
+  });
+
   it("covers Athena shared type exports in the shared-lib validation scenario", () => {
     const athena = HARNESS_APP_REGISTRY.find(
       (entry) => entry.appName === "athena-webapp"
