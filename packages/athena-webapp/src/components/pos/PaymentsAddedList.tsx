@@ -1,20 +1,27 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Smartphone, CreditCardIcon, Banknote, X } from "lucide-react";
+import { Banknote, CreditCardIcon, Smartphone, X } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-import { usePOSStore } from "~/src/stores/posStore";
-import { validatePaymentAmount } from "~/src/lib/pos/validation";
-import { formatStoredAmount, parseDisplayAmountInput } from "~/src/lib/pos/displayAmounts";
-import { Payment } from "./types";
-import { SelectedPaymentMethod } from "./PaymentView";
-import { usePOSOperations } from "~/src/hooks/usePOSOperations";
+
 import { toDisplayAmount } from "~/convex/lib/currency";
+import {
+  formatStoredAmount,
+  parseDisplayAmountInput,
+} from "~/src/lib/pos/displayAmounts";
+import { validatePaymentAmount } from "~/src/lib/pos/validation";
+
+import type { Payment } from "./types";
+import type { SelectedPaymentMethod } from "./PaymentView";
 
 interface PaymentsAddedListProps {
+  payments: Payment[];
   formatter: Intl.NumberFormat;
   totalAmountDue: number;
   readOnly?: boolean;
+  isTransactionCompleted?: boolean;
+  onUpdatePayment?: (paymentId: string, amount: number) => void;
+  onRemovePayment?: (paymentId: string) => void;
 }
 
 const getPaymentMethodLabel = (method: SelectedPaymentMethod) => {
@@ -44,17 +51,18 @@ const getPaymentMethodLabel = (method: SelectedPaymentMethod) => {
 };
 
 export const PaymentsAddedList = ({
+  payments,
   formatter,
   totalAmountDue,
-  readOnly,
+  readOnly = false,
+  isTransactionCompleted = false,
+  onUpdatePayment,
+  onRemovePayment,
 }: PaymentsAddedListProps) => {
-  const store = usePOSStore();
   const [editingPaymentId, setEditingPaymentId] = useState<string | null>(null);
   const [editingAmount, setEditingAmount] = useState<number | undefined>(
-    undefined
+    undefined,
   );
-
-  const { state } = usePOSOperations();
 
   const handleStartEdit = (payment: Payment) => {
     setEditingPaymentId(payment.id);
@@ -67,27 +75,28 @@ export const PaymentsAddedList = ({
       return;
     }
 
-    const payment = store.payment.payments.find((p) => p.id === paymentId);
-    if (!payment) return;
+    const payment = payments.find((candidate) => candidate.id === paymentId);
+    if (!payment || !onUpdatePayment) {
+      return;
+    }
 
-    const otherPaymentsTotal = store.payment.payments
-      .filter((p) => p.id !== paymentId)
-      .reduce((sum, p) => sum + p.amount, 0);
+    const otherPaymentsTotal = payments
+      .filter((candidate) => candidate.id !== paymentId)
+      .reduce((sum, candidate) => sum + candidate.amount, 0);
     const newRemainingDue = totalAmountDue - otherPaymentsTotal;
 
-    // Validate payment amount (allows cash to exceed remaining due for change)
     const validation = validatePaymentAmount(
       editingAmount,
       newRemainingDue,
       formatter,
-      payment.method
+      payment.method,
     );
     if (!validation.isValid) {
       toast.error(validation.errors[0]);
       return;
     }
 
-    store.updatePayment(paymentId, editingAmount);
+    onUpdatePayment(paymentId, editingAmount);
     setEditingPaymentId(null);
     setEditingAmount(undefined);
   };
@@ -97,11 +106,7 @@ export const PaymentsAddedList = ({
     setEditingAmount(undefined);
   };
 
-  const handleRemovePayment = (paymentId: string) => {
-    store.removePayment(paymentId);
-  };
-
-  if (store.payment.payments.length === 0) {
+  if (payments.length === 0) {
     return null;
   }
 
@@ -109,7 +114,7 @@ export const PaymentsAddedList = ({
     <div className="space-y-4">
       <p className="text-lg font-medium">Payments</p>
       <div className="space-y-4">
-        {store.payment.payments.map((payment) => (
+        {payments.map((payment) => (
           <div
             key={payment.id}
             className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
@@ -126,8 +131,10 @@ export const PaymentsAddedList = ({
                       ? toDisplayAmount(editingAmount)
                       : ""
                   }
-                  onChange={(e) =>
-                    setEditingAmount(parseDisplayAmountInput(e.target.value))
+                  onChange={(event) =>
+                    setEditingAmount(
+                      parseDisplayAmountInput(event.target.value),
+                    )
                   }
                   className="h-8 flex-1"
                   min={0}
@@ -152,15 +159,26 @@ export const PaymentsAddedList = ({
                     {formatStoredAmount(formatter, payment.amount)}
                   </span>
                 </div>
-                {!state.isTransactionCompleted && !readOnly && (
+                {!isTransactionCompleted && !readOnly && (
                   <div className="flex gap-2">
-                    <Button
-                      variant="ghost"
-                      className="p-8"
-                      onClick={() => handleRemovePayment(payment.id)}
-                    >
-                      <X className="w-4 h-4" />
-                    </Button>
+                    {onUpdatePayment && (
+                      <Button
+                        variant="ghost"
+                        className="px-4"
+                        onClick={() => handleStartEdit(payment)}
+                      >
+                        Edit
+                      </Button>
+                    )}
+                    {onRemovePayment && (
+                      <Button
+                        variant="ghost"
+                        className="p-8"
+                        onClick={() => onRemovePayment(payment.id)}
+                      >
+                        <X className="w-4 h-4" />
+                      </Button>
+                    )}
                   </div>
                 )}
               </>
