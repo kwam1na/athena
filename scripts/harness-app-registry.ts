@@ -254,6 +254,32 @@ export const HARNESS_APP_REGISTRY = [
           "Use this for authenticated dashboard flows, service-management screens, route trees, and UI behavior changes that stay inside the frontend shell.",
       },
       {
+        title: "Cash-controls workflow edits",
+        touchedPaths: [
+          "convex/cashControls",
+          "convex/operations/registerSessions.ts",
+          "src/components/cash-controls",
+          "src/components/operations/OperationsQueueView.tsx",
+          "src/components/app-sidebar.tsx",
+          "src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/cash-controls",
+        ],
+        commands: [
+          {
+            kind: "raw",
+            command:
+              "bun run --filter '@athena/webapp' test -- convex/cashControls/registerSessions.test.ts convex/cashControls/closeouts.test.ts convex/cashControls/deposits.test.ts src/components/cash-controls/RegisterCloseoutView.test.tsx src/components/cash-controls/CashControlsDashboard.test.tsx src/components/cash-controls/RegisterSessionView.test.tsx src/components/operations/OperationsQueueView.test.tsx",
+          },
+          {
+            kind: "raw",
+            command: "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json",
+          },
+          { kind: "script", script: "build" },
+        ],
+        behaviorScenarios: ["athena-admin-shell-boot"],
+        note:
+          "Use this when register-session, deposit, closeout, dashboard, operations-queue approval, or cash-controls route wiring changes. Start `bunx convex dev` from `packages/athena-webapp` before validation when generated client refs or new Convex function exports changed.",
+      },
+      {
         title: "Shared-lib or utility edits",
         touchedPaths: ["src/lib", "src/settings", "src/utils", "src/stores", "types.ts"],
         commands: [

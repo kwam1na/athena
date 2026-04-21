@@ -26,6 +26,34 @@
       "behaviorScenarios": []
     },
     {
+      "name": "cash-controls-workflow-edits",
+      "pathPrefixes": [
+        "packages/athena-webapp/convex/cashControls",
+        "packages/athena-webapp/convex/operations/registerSessions.ts",
+        "packages/athena-webapp/src/components/cash-controls",
+        "packages/athena-webapp/src/components/operations/OperationsQueueView.tsx",
+        "packages/athena-webapp/src/components/app-sidebar.tsx",
+        "packages/athena-webapp/src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/cash-controls"
+      ],
+      "commands": [
+        {
+          "kind": "raw",
+          "command": "bun run --filter '@athena/webapp' test -- convex/cashControls/registerSessions.test.ts convex/cashControls/closeouts.test.ts convex/cashControls/deposits.test.ts src/components/cash-controls/RegisterCloseoutView.test.tsx src/components/cash-controls/CashControlsDashboard.test.tsx src/components/cash-controls/RegisterSessionView.test.tsx src/components/operations/OperationsQueueView.test.tsx"
+        },
+        {
+          "kind": "raw",
+          "command": "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json"
+        },
+        {
+          "kind": "script",
+          "script": "build"
+        }
+      ],
+      "behaviorScenarios": [
+        "athena-admin-shell-boot"
+      ]
+    },
+    {
       "name": "shared-lib-or-utility-edits",
       "pathPrefixes": [
         "packages/athena-webapp/src/lib",

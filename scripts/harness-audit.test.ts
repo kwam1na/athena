@@ -563,8 +563,28 @@ async function createFixtureRepo() {
   await write("packages/athena-webapp/src/index.css", "body {}\n", rootDir);
   await write("packages/athena-webapp/src/routeTree.gen.ts", "export {};\n", rootDir);
   await write("packages/athena-webapp/src/routes/_authed/index.tsx", "export {};\n", rootDir);
+  await write(
+    "packages/athena-webapp/src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/cash-controls/index.tsx",
+    "export {};\n",
+    rootDir
+  );
   await write("packages/athena-webapp/src/routes/index.tsx", "export {};\n", rootDir);
   await write("packages/athena-webapp/src/components/AppShell.tsx", "export {};\n", rootDir);
+  await write(
+    "packages/athena-webapp/src/components/app-sidebar.tsx",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/src/components/cash-controls/CashControlsDashboard.tsx",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/src/components/operations/OperationsQueueView.tsx",
+    "export {};\n",
+    rootDir
+  );
   await write("packages/athena-webapp/src/hooks/useAuth.ts", "export {};\n", rootDir);
   await write("packages/athena-webapp/src/contexts/AuthContext.tsx", "export {};\n", rootDir);
   await write("packages/athena-webapp/src/lib/session.ts", "export {};\n", rootDir);
@@ -575,7 +595,17 @@ async function createFixtureRepo() {
   await write("packages/athena-webapp/src/test/setup.ts", "export {};\n", rootDir);
   await write("packages/athena-webapp/convex/http.ts", "export {};\n", rootDir);
   await write("packages/athena-webapp/convex/http/router.ts", "export {};\n", rootDir);
+  await write(
+    "packages/athena-webapp/convex/cashControls/closeouts.ts",
+    "export {};\n",
+    rootDir
+  );
   await write("packages/athena-webapp/convex/inventory/item.ts", "export {};\n", rootDir);
+  await write(
+    "packages/athena-webapp/convex/operations/registerSessions.ts",
+    "export {};\n",
+    rootDir
+  );
   await write("packages/athena-webapp/convex/storeFront/cart.ts", "export {};\n", rootDir);
   await write(
     "packages/athena-webapp/scripts/convex-audit.sh",
