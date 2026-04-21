@@ -15,6 +15,7 @@ This index enumerates the current automated test files and ties them back to the
 
 ## Section `convex`
 
+- [`convex/cashControls/paymentAllocationAttribution.test.ts`](../../convex/cashControls/paymentAllocationAttribution.test.ts)
 - [`convex/cashControls/registerSessions.test.ts`](../../convex/cashControls/registerSessions.test.ts)
 - [`convex/convexAuditScript.test.ts`](../../convex/convexAuditScript.test.ts)
 - [`convex/http/domains/storeFront/routes/security.test.ts`](../../convex/http/domains/storeFront/routes/security.test.ts)

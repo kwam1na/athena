@@ -1,5 +1,6 @@
 import { Doc, Id } from "../../_generated/dataModel";
 import { MutationCtx } from "../../_generated/server";
+import { resolveRegisterSessionForInStoreCollectionWithCtx } from "../../cashControls/paymentAllocationAttribution";
 import { ensureCustomerProfileFromSourcesWithCtx } from "../../operations/customerProfiles";
 import { recordInventoryMovementWithCtx } from "../../operations/inventoryMovements";
 import { recordOperationalEventWithCtx } from "../../operations/operationalEvents";
@@ -288,6 +289,7 @@ export async function recordOnlineOrderPaymentCollected(
   ctx: MutationCtx,
   args: {
     order: Doc<"onlineOrder">;
+    registerSessionId?: Id<"registerSession">;
     signedInAthenaUser?: SignedInAthenaUser;
   }
 ) {
@@ -300,18 +302,27 @@ export async function recordOnlineOrderPaymentCollected(
     ctx,
     args.order
   );
+  const collectedInStore = args.order.deliveryMethod === "pickup";
+  const resolvedRegisterSessionId = collectedInStore
+    ? await resolveRegisterSessionForInStoreCollectionWithCtx(ctx, {
+        actorUserId: args.signedInAthenaUser?.id,
+        registerSessionId: args.registerSessionId,
+        storeId: args.order.storeId,
+      })
+    : undefined;
 
   const allocation = await recordPaymentAllocationWithCtx(ctx, {
     actorUserId: args.signedInAthenaUser?.id,
     allocationType: "payment_on_delivery_collection",
     amount,
-    collectedInStore: true,
+    collectedInStore,
     customerProfileId,
     externalReference:
       args.order.externalTransactionId ?? args.order.externalReference,
     method: getOnlineOrderPaymentMethodLabel(args.order),
     onlineOrderId: args.order._id,
     organizationId,
+    registerSessionId: resolvedRegisterSessionId,
     storeId: args.order.storeId,
     targetId: args.order._id,
     targetType: "online_order",
@@ -324,6 +335,7 @@ export async function recordOnlineOrderPaymentCollected(
     onlineOrderId: args.order._id,
     organizationId,
     paymentAllocationId: allocation?._id,
+    registerSessionId: resolvedRegisterSessionId,
     reason: getOnlineOrderPaymentMethodLabel(args.order),
     storeId: args.order.storeId,
     subjectId: args.order._id,

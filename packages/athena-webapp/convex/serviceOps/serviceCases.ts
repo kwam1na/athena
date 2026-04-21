@@ -3,6 +3,7 @@
 import { mutation, query, MutationCtx, QueryCtx } from "../_generated/server";
 import { Id } from "../_generated/dataModel";
 import { v } from "convex/values";
+import { resolveRegisterSessionForInStoreCollectionWithCtx } from "../cashControls/paymentAllocationAttribution";
 import {
   recordInventoryMovementWithCtx,
   summarizeInventoryMovements,
@@ -572,25 +573,37 @@ export const recordServicePayment = mutation({
     actorStaffProfileId: v.optional(v.id("staffProfile")),
     actorUserId: v.optional(v.id("athenaUser")),
     amount: v.number(),
+    collectedInStore: v.optional(v.boolean()),
     direction: v.optional(v.union(v.literal("in"), v.literal("out"))),
     method: v.string(),
     notes: v.optional(v.string()),
+    registerSessionId: v.optional(v.id("registerSession")),
     serviceCaseId: v.id("serviceCase"),
   },
   handler: async (ctx, args) => {
     const { serviceCase, workItem } = await getServiceCaseContext(ctx, args.serviceCaseId);
+    const collectedInStore = args.collectedInStore ?? true;
+    const resolvedRegisterSessionId = collectedInStore
+      ? await resolveRegisterSessionForInStoreCollectionWithCtx(ctx, {
+          actorStaffProfileId: args.actorStaffProfileId,
+          actorUserId: args.actorUserId,
+          registerSessionId: args.registerSessionId,
+          storeId: serviceCase.storeId,
+        })
+      : undefined;
 
     const paymentAllocation = await recordPaymentAllocationWithCtx(ctx, {
       actorStaffProfileId: args.actorStaffProfileId,
       actorUserId: args.actorUserId,
       allocationType: args.direction === "out" ? "service_refund" : "service_payment",
       amount: args.amount,
-      collectedInStore: true,
+      collectedInStore,
       customerProfileId: serviceCase.customerProfileId,
       direction: args.direction,
       method: args.method,
       notes: args.notes,
       organizationId: serviceCase.organizationId,
+      registerSessionId: resolvedRegisterSessionId,
       storeId: serviceCase.storeId,
       targetId: serviceCase._id,
       targetType: "service_case",
@@ -606,6 +619,7 @@ export const recordServicePayment = mutation({
       eventType: args.direction === "out" ? "service_case_refunded" : "service_case_paid",
       organizationId: serviceCase.organizationId,
       paymentAllocationId: paymentAllocation?._id,
+      registerSessionId: resolvedRegisterSessionId,
       storeId: serviceCase.storeId,
       subjectId: serviceCase._id,
       subjectType: "service_case",

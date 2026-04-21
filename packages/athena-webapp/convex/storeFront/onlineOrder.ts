@@ -84,6 +84,7 @@ async function applyOnlineOrderUpdate(
   ctx: MutationCtx,
   order: Doc<"onlineOrder">,
   args: {
+    registerSessionId?: Id<"registerSession">;
     returnItemsToStock?: boolean;
     signedInAthenaUser?: SignedInAthenaUser;
     update: Record<string, any>;
@@ -192,6 +193,7 @@ async function applyOnlineOrderUpdate(
   if (paymentCollectedChanged) {
     await recordOnlineOrderPaymentCollected(ctx, {
       order: nextOrder,
+      registerSessionId: args.registerSessionId,
       signedInAthenaUser: args.signedInAthenaUser,
     });
   }
@@ -573,6 +575,7 @@ export const update = mutation({
   args: {
     orderId: v.optional(v.id("onlineOrder")),
     externalReference: v.optional(v.string()),
+    registerSessionId: v.optional(v.id("registerSession")),
     update: v.record(v.string(), v.any()),
     returnItemsToStock: v.optional(v.boolean()),
     signedInAthenaUser: v.optional(
@@ -650,6 +653,7 @@ export const updateInternal = internalMutation({
   args: {
     orderId: v.optional(v.id("onlineOrder")),
     externalReference: v.optional(v.string()),
+    registerSessionId: v.optional(v.id("registerSession")),
     update: v.record(v.string(), v.any()),
     returnItemsToStock: v.optional(v.boolean()),
     signedInAthenaUser: v.optional(

@@ -2,6 +2,8 @@ import { internal } from "../_generated/api";
 import { query, mutation, MutationCtx, QueryCtx } from "../_generated/server";
 import { v } from "convex/values";
 import type { Doc, Id } from "../_generated/dataModel";
+import { buildInStorePaymentAllocations } from "../cashControls/paymentAllocationAttribution";
+import { recordPaymentAllocationWithCtx } from "../operations/paymentAllocations";
 import { capitalizeWords, generateTransactionNumber } from "../utils";
 
 const CONVEX_PRODUCT_ID_PATTERN = /^[a-z0-9]{32}$/;
@@ -579,6 +581,22 @@ export const completeTransaction = mutation({
       );
     }
 
+    const store = await ctx.db.get("store", args.storeId);
+    await Promise.all(
+      buildInStorePaymentAllocations({
+        allocationType: "retail_sale",
+        changeGiven,
+        externalReferencePrefix: `${transactionNumber}:sale`,
+        organizationId: store?.organizationId,
+        payments: args.payments,
+        posTransactionId: transactionId,
+        registerSessionId: args.registerSessionId,
+        storeId: args.storeId,
+        targetId: transactionId,
+        targetType: "pos_transaction",
+      }).map((allocation) => recordPaymentAllocationWithCtx(ctx, allocation))
+    );
+
     // Update customer statistics if customer is linked
     if (args.customerId) {
       const customer = await ctx.db.get("posCustomer", args.customerId);
@@ -913,6 +931,23 @@ export const voidTransaction = mutation({
       );
     }
 
+    const store = await ctx.db.get("store", transaction.storeId);
+    await Promise.all(
+      buildInStorePaymentAllocations({
+        allocationType: "retail_sale_void",
+        changeGiven: transaction.changeGiven,
+        direction: "out",
+        externalReferencePrefix: `${transaction.transactionNumber}:void`,
+        organizationId: store?.organizationId,
+        payments: transaction.payments,
+        posTransactionId: transaction._id,
+        registerSessionId: transaction.registerSessionId,
+        storeId: transaction.storeId,
+        targetId: transaction._id,
+        targetType: "pos_transaction",
+      }).map((allocation) => recordPaymentAllocationWithCtx(ctx, allocation))
+    );
+
     // Update transaction status
     await ctx.db.patch("posTransaction", args.transactionId, {
       status: "void",
@@ -1063,6 +1098,22 @@ export async function createTransactionFromSessionHandler(
       }
     );
   }
+
+  const store = await ctx.db.get("store", session.storeId);
+  await Promise.all(
+    buildInStorePaymentAllocations({
+      allocationType: "retail_sale",
+      changeGiven,
+      externalReferencePrefix: `${transactionNumber}:sale`,
+      organizationId: store?.organizationId,
+      payments: args.payments,
+      posTransactionId: transactionId,
+      registerSessionId: args.registerSessionId,
+      storeId: session.storeId,
+      targetId: transactionId,
+      targetType: "pos_transaction",
+    }).map((allocation) => recordPaymentAllocationWithCtx(ctx, allocation))
+  );
 
   // Update customer statistics if customer is linked
   if (session.customerId) {
