@@ -1,9 +1,4 @@
 import * as React from "react";
-import {
-  ChevronDownIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
-} from "lucide-react";
 import { DayPicker } from "react-day-picker";
 
 import { cn } from "@/lib/utils";
@@ -13,7 +8,6 @@ function Calendar({
   className,
   classNames,
   showOutsideDays = true,
-  captionLayout = "label",
   buttonVariant = "ghost",
   components,
   ...props
@@ -23,7 +17,6 @@ function Calendar({
   return (
     <DayPicker
       showOutsideDays={showOutsideDays}
-      captionLayout={captionLayout}
       className={cn("bg-background p-3", className)}
       classNames={{
         months: "flex flex-col gap-4 sm:flex-row sm:gap-4",
@@ -64,32 +57,7 @@ function Calendar({
         day_hidden: "invisible",
         ...classNames,
       }}
-      components={{
-        Chevron: ({ className, orientation, ...iconProps }) => {
-          if (orientation === "left") {
-            return (
-              <ChevronLeftIcon
-                className={cn("h-4 w-4", className)}
-                {...iconProps}
-              />
-            );
-          }
-
-          if (orientation === "right") {
-            return (
-              <ChevronRightIcon
-                className={cn("h-4 w-4", className)}
-                {...iconProps}
-              />
-            );
-          }
-
-          return (
-            <ChevronDownIcon className={cn("h-4 w-4", className)} {...iconProps} />
-          );
-        },
-        ...components,
-      }}
+      components={components}
       {...props}
     />
   );

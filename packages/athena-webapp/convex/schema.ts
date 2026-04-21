@@ -72,6 +72,13 @@ import {
   staffProfileSchema,
   staffRoleAssignmentSchema,
 } from "./schemas/operations";
+import {
+  serviceAppointmentSchema,
+  serviceCatalogSchema,
+  serviceCaseLineItemSchema,
+  serviceCaseSchema,
+  serviceInventoryUsageSchema,
+} from "./schemas/serviceOps";
 
 const schema = defineSchema({
   ...authTables,
@@ -259,6 +266,28 @@ const schema = defineSchema({
   savedBagItem: defineTable(savedBagItemSchema).index("by_savedBagId", [
     "savedBagId",
   ]),
+  serviceAppointment: defineTable(serviceAppointmentSchema)
+    .index("by_storeId_startAt", ["storeId", "startAt"])
+    .index("by_staffProfileId_startAt", ["assignedStaffProfileId", "startAt"])
+    .index("by_customerProfileId", ["customerProfileId"])
+    .index("by_serviceCaseId", ["serviceCaseId"]),
+  serviceCatalog: defineTable(serviceCatalogSchema)
+    .index("by_storeId", ["storeId"])
+    .index("by_storeId_status", ["storeId", "status"])
+    .index("by_storeId_slug", ["storeId", "slug"]),
+  serviceCase: defineTable(serviceCaseSchema)
+    .index("by_storeId", ["storeId"])
+    .index("by_storeId_status", ["storeId", "status"])
+    .index("by_operationalWorkItemId", ["operationalWorkItemId"])
+    .index("by_customerProfileId", ["customerProfileId"])
+    .index("by_appointmentId", ["appointmentId"]),
+  serviceCaseLineItem: defineTable(serviceCaseLineItemSchema).index(
+    "by_serviceCaseId",
+    ["serviceCaseId"]
+  ),
+  serviceInventoryUsage: defineTable(serviceInventoryUsageSchema)
+    .index("by_serviceCaseId", ["serviceCaseId"])
+    .index("by_productSkuId", ["productSkuId"]),
   store: defineTable(storeSchema),
   storeAsset: defineTable(storeAssetSchema),
   storeFrontSession: defineTable(storeFrontSessionSchema),

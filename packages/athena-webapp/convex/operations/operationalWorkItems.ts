@@ -61,32 +61,41 @@ export const createOperationalWorkItem = internalMutation({
   handler: (ctx, args) => createOperationalWorkItemWithCtx(ctx, args),
 });
 
+export async function updateOperationalWorkItemStatusWithCtx(
+  ctx: MutationCtx,
+  args: {
+    workItemId: Id<"operationalWorkItem">;
+    status: string;
+    approvalState?: string;
+  }
+) {
+  const nextFields: Record<string, unknown> = {
+    status: args.status,
+  };
+
+  if (args.approvalState) {
+    nextFields.approvalState = args.approvalState;
+  }
+
+  if (args.status === "in_progress") {
+    nextFields.startedAt = Date.now();
+  }
+
+  if (args.status === "completed") {
+    nextFields.completedAt = Date.now();
+  }
+
+  await ctx.db.patch("operationalWorkItem", args.workItemId, nextFields);
+  return ctx.db.get("operationalWorkItem", args.workItemId);
+}
+
 export const updateOperationalWorkItemStatus = internalMutation({
   args: {
     workItemId: v.id("operationalWorkItem"),
     status: v.string(),
     approvalState: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
-    const nextFields: Record<string, unknown> = {
-      status: args.status,
-    };
-
-    if (args.approvalState) {
-      nextFields.approvalState = args.approvalState;
-    }
-
-    if (args.status === "in_progress") {
-      nextFields.startedAt = Date.now();
-    }
-
-    if (args.status === "completed") {
-      nextFields.completedAt = Date.now();
-    }
-
-    await ctx.db.patch("operationalWorkItem", args.workItemId, nextFields);
-    return ctx.db.get("operationalWorkItem", args.workItemId);
-  },
+  handler: (ctx, args) => updateOperationalWorkItemStatusWithCtx(ctx, args),
 });
 
 export const listOpenOperationalWorkItems = internalQuery({

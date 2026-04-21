@@ -13,7 +13,7 @@ Run:
 - `bun run --filter '@athena/webapp' test`
 - `bun run --filter '@athena/webapp' lint:architecture`
 
-Use this for authenticated dashboard flows, route trees, and UI behavior changes that stay inside the frontend shell.
+Use this for authenticated dashboard flows, service-management screens, route trees, and UI behavior changes that stay inside the frontend shell.
 
 ## Shared-lib or utility edits
 
@@ -51,7 +51,7 @@ Behavior scenarios:
 - `athena-convex-storefront-composition`
 - `athena-convex-storefront-failure-visibility`
 
-Any change that can affect Convex HTTP wiring, schemas, queries, or route-to-backend composition should include the Convex audit pair.
+Any change that can affect Convex HTTP wiring, serviceOps schemas and workflows, shared operational rails, or route-to-backend composition should include the Convex audit pair.
 
 ## Route runtime or build-pipeline edits
 

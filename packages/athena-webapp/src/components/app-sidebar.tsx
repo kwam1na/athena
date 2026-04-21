@@ -36,9 +36,9 @@ import {
   MessageCircle,
   MessageCircleDashed,
   MessageCircleMore,
+  CalendarDays,
   Tag,
   XCircle,
-  ChevronDown,
   ShoppingCart,
   Layers,
 } from "lucide-react";
@@ -52,11 +52,6 @@ import { useQuery } from "convex/react";
 import { api } from "~/convex/_generated/api";
 import { useGetUnresolvedProducts } from "../hooks/useGetProducts";
 // import { useProductWithNoImagesNotification } from "../hooks/useProductWithNoImagesNotification";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@radix-ui/react-collapsible";
 import { useGetCategories } from "../hooks/useGetCategories";
 import { PermissionGate } from "./PermissionGate";
 import { usePermissions } from "../hooks/usePermissions";
@@ -158,23 +153,6 @@ export function AppSidebar() {
                   >
                     <ScanBarcode className="w-4 h-4" />
                     <p className="font-medium">Point of Sale</p>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-
-              <SidebarMenuItem>
-                <SidebarMenuButton disabled={!canAccessOperations()} asChild>
-                  <Link
-                    to="/$orgUrlSlug/store/$storeUrlSlug/services/intake"
-                    params={(p) => ({
-                      ...p,
-                      orgUrlSlug: activeOrganization?.slug,
-                      storeUrlSlug: activeStore?.slug,
-                    })}
-                    className="flex items-center"
-                  >
-                    <PackageOpenIcon className="w-4 h-4" />
-                    <p className="font-medium">Service Intake</p>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -649,6 +627,83 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+
+        <PermissionGate requires="full_admin">
+          <SidebarGroup>
+            <SidebarGroupLabel>Services</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild>
+                    <Link
+                      to="/$orgUrlSlug/store/$storeUrlSlug/services/intake"
+                      params={(p) => ({
+                        ...p,
+                        orgUrlSlug: activeOrganization?.slug,
+                        storeUrlSlug: activeStore?.slug,
+                      })}
+                      className="flex items-center"
+                    >
+                      <PackageOpenIcon className="w-4 h-4" />
+                      <p className="font-medium">Service Intake</p>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild>
+                    <Link
+                      to="/$orgUrlSlug/store/$storeUrlSlug/services/appointments"
+                      params={(p) => ({
+                        ...p,
+                        orgUrlSlug: activeOrganization?.slug,
+                        storeUrlSlug: activeStore?.slug,
+                      })}
+                      className="flex items-center"
+                    >
+                      <CalendarDays className="w-4 h-4" />
+                      <p className="font-medium">Appointments</p>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild>
+                    <Link
+                      to="/$orgUrlSlug/store/$storeUrlSlug/services/active-cases"
+                      params={(p) => ({
+                        ...p,
+                        orgUrlSlug: activeOrganization?.slug,
+                        storeUrlSlug: activeStore?.slug,
+                      })}
+                      className="flex items-center"
+                    >
+                      <PackageCheckIcon className="w-4 h-4" />
+                      <p className="font-medium">Active Cases</p>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild>
+                    <Link
+                      to="/$orgUrlSlug/store/$storeUrlSlug/services/catalog-management"
+                      params={(p) => ({
+                        ...p,
+                        orgUrlSlug: activeOrganization?.slug,
+                        storeUrlSlug: activeStore?.slug,
+                      })}
+                      className="flex items-center"
+                    >
+                      <Tag className="w-4 h-4" />
+                      <p className="font-medium">Catalog Management</p>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        </PermissionGate>
 
         <PermissionGate requires="full_admin">
           <SidebarGroup>
