@@ -16,6 +16,12 @@ type ReceivingPlanLineItem = ReceivingLineItemInput & {
   productSkuId: string;
 };
 
+type ReceivingSkuDelta = {
+  productId?: string;
+  productSkuId: string;
+  receivedQuantity: number;
+};
+
 function trimOptional(value?: string | null) {
   const nextValue = value?.trim();
   return nextValue ? nextValue : undefined;
@@ -52,6 +58,16 @@ export function calculatePurchaseOrderReceivingStatus(
     : "partially_received";
 }
 
+export function assertReceivablePurchaseOrderStatus(status: string) {
+  if (status === "received") {
+    throw new Error("Purchase order is already fully received.");
+  }
+
+  if (!["ordered", "partially_received"].includes(status)) {
+    throw new Error(`Cannot receive purchase order while it is ${status}.`);
+  }
+}
+
 export function assertReceivingLineQuantities(
   lineItems: Array<ReceivingLineItemInput>
 ) {
@@ -80,6 +96,38 @@ export function assertDistinctReceivingLineItems(
 
     seenLineItemIds.add(lineItem.purchaseOrderLineItemId);
   });
+}
+
+export function summarizeReceivingSkuDeltas(
+  lineItems: Array<{
+    productId?: string;
+    productSkuId: string;
+    receivedQuantity: number;
+  }>
+) {
+  const skuDeltaById = new Map<string, ReceivingSkuDelta>();
+
+  lineItems.forEach((lineItem) => {
+    const existingLineItem = skuDeltaById.get(lineItem.productSkuId);
+
+    if (existingLineItem) {
+      existingLineItem.receivedQuantity += lineItem.receivedQuantity;
+
+      if (!existingLineItem.productId && lineItem.productId) {
+        existingLineItem.productId = lineItem.productId;
+      }
+
+      return;
+    }
+
+    skuDeltaById.set(lineItem.productSkuId, {
+      productId: lineItem.productId,
+      productSkuId: lineItem.productSkuId,
+      receivedQuantity: lineItem.receivedQuantity,
+    });
+  });
+
+  return [...skuDeltaById.values()];
 }
 
 function buildReceivingBatchSourceId(
@@ -145,9 +193,7 @@ export const receivePurchaseOrderBatch = mutation({
       return existingReceivingBatch;
     }
 
-    if (purchaseOrder.status === "received") {
-      throw new Error("Purchase order is already fully received.");
-    }
+    assertReceivablePurchaseOrderStatus(purchaseOrder.status);
 
     if (args.lineItems.length === 0) {
       throw new Error("Receiving batches require at least one line item.");
@@ -220,37 +266,35 @@ export const receivePurchaseOrderBatch = mutation({
       receivedAt: now,
     });
 
-    await Promise.all(
-      normalizedLineItems.map(async (lineItem) => {
-        const productSku = await ctx.db.get(
-          "productSku",
-          lineItem.productSkuId as Id<"productSku">
-        );
-        if (!productSku || String(productSku.storeId) !== String(args.storeId)) {
-          throw new Error("Receiving SKU not found for this store.");
-        }
+    for (const skuDelta of summarizeReceivingSkuDeltas(normalizedLineItems)) {
+      const productSku = await ctx.db.get(
+        "productSku",
+        skuDelta.productSkuId as Id<"productSku">
+      );
+      if (!productSku || String(productSku.storeId) !== String(args.storeId)) {
+        throw new Error("Receiving SKU not found for this store.");
+      }
 
-        await ctx.db.patch("productSku", lineItem.productSkuId as never, {
-          inventoryCount: productSku.inventoryCount + lineItem.receivedQuantity,
-          quantityAvailable:
-            productSku.quantityAvailable + lineItem.receivedQuantity,
-        });
+      await ctx.db.patch("productSku", skuDelta.productSkuId as never, {
+        inventoryCount: productSku.inventoryCount + skuDelta.receivedQuantity,
+        quantityAvailable:
+          productSku.quantityAvailable + skuDelta.receivedQuantity,
+      });
 
-        await recordInventoryMovementWithCtx(ctx, {
-          actorUserId: args.receivedByUserId,
-          movementType: "receipt",
-          notes: trimOptional(args.notes),
-          organizationId: purchaseOrder.organizationId,
-          productId: lineItem.productId as Id<"product"> | undefined,
-          productSkuId: lineItem.productSkuId as Id<"productSku">,
-          quantityDelta: lineItem.receivedQuantity,
-          reasonCode: "purchase_order_receipt",
-          sourceId,
-          sourceType: "purchase_order_receiving_batch",
-          storeId: args.storeId,
-        });
-      })
-    );
+      await recordInventoryMovementWithCtx(ctx, {
+        actorUserId: args.receivedByUserId,
+        movementType: "receipt",
+        notes: trimOptional(args.notes),
+        organizationId: purchaseOrder.organizationId,
+        productId: skuDelta.productId as Id<"product"> | undefined,
+        productSkuId: skuDelta.productSkuId as Id<"productSku">,
+        quantityDelta: skuDelta.receivedQuantity,
+        reasonCode: "purchase_order_receipt",
+        sourceId,
+        sourceType: "purchase_order_receiving_batch",
+        storeId: args.storeId,
+      });
+    }
 
     await Promise.all(
       normalizedLineItems.map(async (lineItem) => {

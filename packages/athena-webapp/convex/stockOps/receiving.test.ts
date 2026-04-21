@@ -3,9 +3,11 @@ import { describe, expect, it } from "vitest";
 
 import {
   assertDistinctReceivingLineItems,
+  assertReceivablePurchaseOrderStatus,
   assertReceivingLineQuantities,
   calculatePurchaseOrderReceivingStatus,
   calculateReceivingBatchTotals,
+  summarizeReceivingSkuDeltas,
 } from "./receiving";
 
 function getSource(relativePath: string) {
@@ -75,6 +77,52 @@ describe("stock ops receiving", () => {
         },
       ])
     ).toThrow("cannot include the same purchase order line twice");
+  });
+
+  it("only accepts receivable purchase-order statuses", () => {
+    expect(() => assertReceivablePurchaseOrderStatus("draft")).toThrow(
+      "Cannot receive purchase order while it is draft"
+    );
+    expect(() => assertReceivablePurchaseOrderStatus("approved")).toThrow(
+      "Cannot receive purchase order while it is approved"
+    );
+    expect(() => assertReceivablePurchaseOrderStatus("ordered")).not.toThrow();
+    expect(() =>
+      assertReceivablePurchaseOrderStatus("partially_received")
+    ).not.toThrow();
+  });
+
+  it("coalesces repeated sku deltas before inventory updates are written", () => {
+    expect(
+      summarizeReceivingSkuDeltas([
+        {
+          productId: "product-1",
+          productSkuId: "sku-1",
+          receivedQuantity: 2,
+        },
+        {
+          productId: "product-1",
+          productSkuId: "sku-1",
+          receivedQuantity: 3,
+        },
+        {
+          productId: "product-2",
+          productSkuId: "sku-2",
+          receivedQuantity: 1,
+        },
+      ])
+    ).toEqual([
+      {
+        productId: "product-1",
+        productSkuId: "sku-1",
+        receivedQuantity: 5,
+      },
+      {
+        productId: "product-2",
+        productSkuId: "sku-2",
+        receivedQuantity: 1,
+      },
+    ]);
   });
 
   it("short-circuits duplicate batch submissions through the receiving batch lookup", () => {

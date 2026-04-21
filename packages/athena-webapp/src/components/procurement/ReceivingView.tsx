@@ -23,6 +23,10 @@ type ReceivingViewProps = {
   storeId: Id<"store">;
 };
 
+function buildSubmissionKey(purchaseOrderId: Id<"purchaseOrder">) {
+  return `receive-${purchaseOrderId}-${Date.now().toString(36)}`;
+}
+
 export function ReceivingView({
   lineItems,
   purchaseOrderId,
@@ -31,8 +35,8 @@ export function ReceivingView({
   const receivePurchaseOrderBatch = useMutation(
     api.stockOps.receiving.receivePurchaseOrderBatch
   );
-  const [submissionKey, setSubmissionKey] = useState(
-    `receive-${purchaseOrderId}`
+  const [submissionKey, setSubmissionKey] = useState(() =>
+    buildSubmissionKey(purchaseOrderId)
   );
   const [receivedQuantities, setReceivedQuantities] = useState<Record<string, string>>(
     () =>
@@ -57,19 +61,29 @@ export function ReceivingView({
   );
 
   const handleSubmit = async () => {
+    const batchLineItems = lineItems
+      .map((lineItem) => ({
+        purchaseOrderLineItemId: lineItem._id,
+        receivedQuantity: Number(receivedQuantities[lineItem._id] ?? "0"),
+      }))
+      .filter((lineItem) => lineItem.receivedQuantity > 0);
+
+    if (batchLineItems.length === 0) {
+      toast.error("Add at least one received quantity greater than zero.");
+      return;
+    }
+
     try {
       setIsSubmitting(true);
       await receivePurchaseOrderBatch({
-        lineItems: lineItems.map((lineItem) => ({
-          purchaseOrderLineItemId: lineItem._id,
-          receivedQuantity: Number(receivedQuantities[lineItem._id] ?? "0"),
-        })),
+        lineItems: batchLineItems,
         purchaseOrderId,
         receivedByUserId: undefined,
         storeId,
         submissionKey,
       });
       toast.success("Receiving batch recorded");
+      setSubmissionKey(buildSubmissionKey(purchaseOrderId));
     } catch (error) {
       toast.error("Failed to record receiving batch", {
         description: (error as Error).message,
