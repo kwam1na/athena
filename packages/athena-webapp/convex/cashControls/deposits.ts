@@ -10,6 +10,7 @@ const CASH_DEPOSIT_ALLOCATION_TYPE = "cash_deposit";
 const CASH_DEPOSIT_SUBJECT_TYPE = "register_cash_deposit";
 const RECENT_DEPOSIT_LIMIT = 10;
 const SESSION_LIMIT = 100;
+const TIMELINE_LIMIT = 200;
 
 type StaffNameMap = Map<Id<"staffProfile">, string>;
 
@@ -254,7 +255,8 @@ async function listRegisterSessionTimeline(
     await ctx.db
       .query("operationalEvent")
       .withIndex("by_registerSessionId", (q) => q.eq("registerSessionId", registerSessionId))
-      .collect()
+      .order("desc")
+      .take(TIMELINE_LIMIT)
   ).sort((left, right) => right.createdAt - left.createdAt);
 }
 
@@ -309,7 +311,8 @@ export const getDashboardSnapshot = query({
         .withIndex("by_storeId_status", (q) =>
           q.eq("storeId", args.storeId).eq("status", "pending")
         )
-        .collect(),
+        .order("desc")
+        .take(SESSION_LIMIT),
       listStoreDeposits(ctx, args.storeId),
     ]);
 
