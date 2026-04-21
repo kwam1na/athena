@@ -1,5 +1,5 @@
 import { internal } from "../_generated/api";
-import { mutation } from "../_generated/server";
+import { mutation, type MutationCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
 import { v } from "convex/values";
 import { recordInventoryMovementWithCtx } from "../operations/inventoryMovements";
@@ -42,6 +42,16 @@ export function calculateReceivingBatchTotals(
   );
 }
 
+export function calculatePurchaseOrderReceivingStatus(
+  lineItems: Array<{ orderedQuantity: number; receivedQuantity: number }>
+) {
+  return lineItems.every(
+    (lineItem) => lineItem.receivedQuantity >= lineItem.orderedQuantity
+  )
+    ? "received"
+    : "partially_received";
+}
+
 export function assertReceivingLineQuantities(
   lineItems: Array<ReceivingLineItemInput>
 ) {
@@ -63,12 +73,21 @@ function buildReceivingBatchSourceId(
   return `purchase_order_receiving_batch:${purchaseOrderId}:${submissionKey}`;
 }
 
-function isReceivingComplete(lineItems: ReceivingPlanLineItem[]) {
-  return lineItems.every(
-    (lineItem) =>
-      lineItem.currentReceivedQuantity + lineItem.receivedQuantity >=
-      lineItem.orderedQuantity
-  );
+async function listPurchaseOrderLineItems(
+  ctx: MutationCtx,
+  purchaseOrderId: Id<"purchaseOrder">
+) {
+  const lineItems = [];
+
+  for await (const lineItem of ctx.db
+    .query("purchaseOrderLineItem")
+    .withIndex("by_purchaseOrderId", (q) =>
+      q.eq("purchaseOrderId", purchaseOrderId)
+    )) {
+    lineItems.push(lineItem);
+  }
+
+  return lineItems;
 }
 
 export const receivePurchaseOrderBatch = mutation({
@@ -118,20 +137,25 @@ export const receivePurchaseOrderBatch = mutation({
       throw new Error("Receiving batches require at least one line item.");
     }
 
-    const purchaseOrderLineItems = await Promise.all(
-      args.lineItems.map((lineItem) =>
-        ctx.db.get("purchaseOrderLineItem", lineItem.purchaseOrderLineItemId)
-      )
+    const purchaseOrderLineItems = await listPurchaseOrderLineItems(
+      ctx,
+      args.purchaseOrderId
+    );
+    const purchaseOrderLineItemById = new Map(
+      purchaseOrderLineItems.map((lineItem) => [String(lineItem._id), lineItem])
     );
 
-    const normalizedLineItems = purchaseOrderLineItems.map((lineItem, index) => {
+    const normalizedLineItems = args.lineItems.map((requestedLineItem, index) => {
+      const lineItem = purchaseOrderLineItemById.get(
+        String(requestedLineItem.purchaseOrderLineItemId)
+      );
+
       if (!lineItem || lineItem.purchaseOrderId !== args.purchaseOrderId) {
         throw new Error(
           `Receiving line ${index + 1} does not belong to this purchase order.`
         );
       }
 
-      const requestedLineItem = args.lineItems[index]!;
       return {
         _id: String(lineItem._id),
         orderedQuantity: lineItem.orderedQuantity - lineItem.receivedQuantity,
@@ -215,9 +239,20 @@ export const receivePurchaseOrderBatch = mutation({
       })
     );
 
-    const nextPurchaseOrderStatus = isReceivingComplete(normalizedLineItems)
-      ? "received"
-      : "partially_received";
+    const nextReceivedQuantityByLineItemId = new Map(
+      normalizedLineItems.map((lineItem) => [
+        lineItem._id,
+        lineItem.currentReceivedQuantity + lineItem.receivedQuantity,
+      ])
+    );
+    const nextPurchaseOrderStatus = calculatePurchaseOrderReceivingStatus(
+      purchaseOrderLineItems.map((lineItem) => ({
+        orderedQuantity: lineItem.orderedQuantity,
+        receivedQuantity:
+          nextReceivedQuantityByLineItemId.get(String(lineItem._id)) ??
+          lineItem.receivedQuantity,
+      }))
+    );
     const purchaseOrderUpdates: Record<string, unknown> = {
       status: nextPurchaseOrderStatus,
     };
@@ -230,9 +265,7 @@ export const receivePurchaseOrderBatch = mutation({
 
     if (purchaseOrder.operationalWorkItemId) {
       await ctx.runMutation(internal.operations.operationalWorkItems.updateOperationalWorkItemStatus, {
-        status: isReceivingComplete(normalizedLineItems)
-          ? "completed"
-          : "in_progress",
+        status: nextPurchaseOrderStatus === "received" ? "completed" : "in_progress",
         workItemId: purchaseOrder.operationalWorkItemId,
       });
     }

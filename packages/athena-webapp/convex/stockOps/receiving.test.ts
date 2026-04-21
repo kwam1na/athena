@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   assertReceivingLineQuantities,
+  calculatePurchaseOrderReceivingStatus,
   calculateReceivingBatchTotals,
 } from "./receiving";
 
@@ -32,6 +33,34 @@ describe("stock ops receiving", () => {
         },
       ])
     ).toThrow("cannot receive more than ordered");
+  });
+
+  it("keeps a purchase order partially received until every line is satisfied", () => {
+    expect(
+      calculatePurchaseOrderReceivingStatus([
+        {
+          orderedQuantity: 4,
+          receivedQuantity: 4,
+        },
+        {
+          orderedQuantity: 2,
+          receivedQuantity: 0,
+        },
+      ])
+    ).toBe("partially_received");
+
+    expect(
+      calculatePurchaseOrderReceivingStatus([
+        {
+          orderedQuantity: 4,
+          receivedQuantity: 4,
+        },
+        {
+          orderedQuantity: 2,
+          receivedQuantity: 2,
+        },
+      ])
+    ).toBe("received");
   });
 
   it("short-circuits duplicate batch submissions through the receiving batch lookup", () => {
