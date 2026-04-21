@@ -17,6 +17,7 @@ Key boundaries to keep in mind:
 - Browser entry and generated TanStack Router state live in [src/main.tsx](../../src/main.tsx) and [src/routeTree.gen.ts](../../src/routeTree.gen.ts).
 - Inventory and storefront backend routes are composed in [convex/http.ts](../../convex/http.ts) over the schema in [convex/schema.ts](../../convex/schema.ts).
 - App-level auth and shell state usually fan out from [src/hooks/useAuth.ts](../../src/hooks/useAuth.ts) and the authenticated layout in [src/routes/_authed.tsx](../../src/routes/_authed.tsx).
+- Omnichannel returns, exchanges, loyalty milestones, and follow-up history now converge under `convex/storeFront/*` plus the operator views in `src/components/orders` and `src/components/users`.
 
 Common validation commands:
 
