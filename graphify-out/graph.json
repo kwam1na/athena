@@ -8051,7 +8051,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_serviceops_appointments_ts",
       "source_file": "packages/athena-webapp/convex/serviceOps/appointments.ts",
-      "source_location": "L14",
+      "source_location": "L16",
       "target": "appointments_buildserviceappointment",
       "weight": 1
     },
@@ -8063,7 +8063,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_serviceops_appointments_ts",
       "source_file": "packages/athena-webapp/convex/serviceOps/appointments.ts",
-      "source_location": "L40",
+      "source_location": "L42",
       "target": "appointments_findoverlappingappointment",
       "weight": 1
     },
@@ -8075,7 +8075,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_serviceops_catalog_ts",
       "source_file": "packages/athena-webapp/convex/serviceOps/catalog.ts",
-      "source_location": "L6",
+      "source_location": "L8",
       "target": "catalog_buildservicecatalogitem",
       "weight": 1
     },
@@ -8123,7 +8123,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_serviceops_servicecases_ts",
       "source_file": "packages/athena-webapp/convex/serviceOps/serviceCases.ts",
-      "source_location": "L213",
+      "source_location": "L215",
       "target": "servicecases_assertvalidservicecasestatustransition",
       "weight": 1
     },
@@ -8135,7 +8135,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_serviceops_servicecases_ts",
       "source_file": "packages/athena-webapp/convex/serviceOps/serviceCases.ts",
-      "source_location": "L222",
+      "source_location": "L224",
       "target": "servicecases_buildservicecase",
       "weight": 1
     },
@@ -8147,7 +8147,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_serviceops_servicecases_ts",
       "source_file": "packages/athena-webapp/convex/serviceOps/serviceCases.ts",
-      "source_location": "L250",
+      "source_location": "L252",
       "target": "servicecases_buildservicecaselineitem",
       "weight": 1
     },
@@ -8159,7 +8159,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_serviceops_servicecases_ts",
       "source_file": "packages/athena-webapp/convex/serviceOps/serviceCases.ts",
-      "source_location": "L272",
+      "source_location": "L274",
       "target": "servicecases_createservicecasewithctx",
       "weight": 1
     },
@@ -8171,7 +8171,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_serviceops_servicecases_ts",
       "source_file": "packages/athena-webapp/convex/serviceOps/serviceCases.ts",
-      "source_location": "L83",
+      "source_location": "L85",
       "target": "servicecases_deriveservicecasepaymentstatus",
       "weight": 1
     },
@@ -8183,7 +8183,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_serviceops_servicecases_ts",
       "source_file": "packages/athena-webapp/convex/serviceOps/serviceCases.ts",
-      "source_location": "L187",
+      "source_location": "L189",
       "target": "servicecases_getservicecasecontext",
       "weight": 1
     },
@@ -8195,7 +8195,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_serviceops_servicecases_ts",
       "source_file": "packages/athena-webapp/convex/serviceOps/serviceCases.ts",
-      "source_location": "L140",
+      "source_location": "L142",
       "target": "servicecases_listpendingapprovalrequestswithctx",
       "weight": 1
     },
@@ -8207,7 +8207,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_serviceops_servicecases_ts",
       "source_file": "packages/athena-webapp/convex/serviceOps/serviceCases.ts",
-      "source_location": "L127",
+      "source_location": "L129",
       "target": "servicecases_listservicecaseallocationswithctx",
       "weight": 1
     },
@@ -8219,7 +8219,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_serviceops_servicecases_ts",
       "source_file": "packages/athena-webapp/convex/serviceOps/serviceCases.ts",
-      "source_location": "L107",
+      "source_location": "L109",
       "target": "servicecases_listservicecaselineitemswithctx",
       "weight": 1
     },
@@ -8231,7 +8231,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_serviceops_servicecases_ts",
       "source_file": "packages/athena-webapp/convex/serviceOps/serviceCases.ts",
-      "source_location": "L117",
+      "source_location": "L119",
       "target": "servicecases_listserviceinventoryusagewithctx",
       "weight": 1
     },
@@ -8243,7 +8243,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_serviceops_servicecases_ts",
       "source_file": "packages/athena-webapp/convex/serviceOps/serviceCases.ts",
-      "source_location": "L67",
+      "source_location": "L69",
       "target": "servicecases_mapservicecasestatustoworkitemstatus",
       "weight": 1
     },
@@ -8255,7 +8255,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_serviceops_servicecases_ts",
       "source_file": "packages/athena-webapp/convex/serviceOps/serviceCases.ts",
-      "source_location": "L152",
+      "source_location": "L154",
       "target": "servicecases_syncservicecasefinancialswithctx",
       "weight": 1
     },
@@ -28991,7 +28991,7 @@
       "relation": "calls",
       "source": "servicecases_buildservicecase",
       "source_file": "packages/athena-webapp/convex/serviceOps/serviceCases.ts",
-      "source_location": "L287",
+      "source_location": "L289",
       "target": "servicecases_createservicecasewithctx",
       "weight": 1
     },
@@ -29003,7 +29003,7 @@
       "relation": "calls",
       "source": "servicecases_deriveservicecasepaymentstatus",
       "source_file": "packages/athena-webapp/convex/serviceOps/serviceCases.ts",
-      "source_location": "L171",
+      "source_location": "L173",
       "target": "servicecases_syncservicecasefinancialswithctx",
       "weight": 1
     },
@@ -29015,7 +29015,7 @@
       "relation": "calls",
       "source": "servicecases_listservicecaseallocationswithctx",
       "source_file": "packages/athena-webapp/convex/serviceOps/serviceCases.ts",
-      "source_location": "L162",
+      "source_location": "L164",
       "target": "servicecases_syncservicecasefinancialswithctx",
       "weight": 1
     },
@@ -29027,7 +29027,7 @@
       "relation": "calls",
       "source": "servicecases_listservicecaselineitemswithctx",
       "source_file": "packages/athena-webapp/convex/serviceOps/serviceCases.ts",
-      "source_location": "L161",
+      "source_location": "L163",
       "target": "servicecases_syncservicecasefinancialswithctx",
       "weight": 1
     },
@@ -38914,7 +38914,7 @@
       "label": "buildServiceAppointment()",
       "norm_label": "buildserviceappointment()",
       "source_file": "packages/athena-webapp/convex/serviceOps/appointments.ts",
-      "source_location": "L14"
+      "source_location": "L16"
     },
     {
       "community": 191,
@@ -38923,7 +38923,7 @@
       "label": "findOverlappingAppointment()",
       "norm_label": "findoverlappingappointment()",
       "source_file": "packages/athena-webapp/convex/serviceOps/appointments.ts",
-      "source_location": "L40"
+      "source_location": "L42"
     },
     {
       "community": 191,
@@ -40255,7 +40255,7 @@
       "label": "assertValidServiceCaseStatusTransition()",
       "norm_label": "assertvalidservicecasestatustransition()",
       "source_file": "packages/athena-webapp/convex/serviceOps/serviceCases.ts",
-      "source_location": "L213"
+      "source_location": "L215"
     },
     {
       "community": 22,
@@ -40264,7 +40264,7 @@
       "label": "buildServiceCase()",
       "norm_label": "buildservicecase()",
       "source_file": "packages/athena-webapp/convex/serviceOps/serviceCases.ts",
-      "source_location": "L222"
+      "source_location": "L224"
     },
     {
       "community": 22,
@@ -40273,7 +40273,7 @@
       "label": "buildServiceCaseLineItem()",
       "norm_label": "buildservicecaselineitem()",
       "source_file": "packages/athena-webapp/convex/serviceOps/serviceCases.ts",
-      "source_location": "L250"
+      "source_location": "L252"
     },
     {
       "community": 22,
@@ -40282,7 +40282,7 @@
       "label": "createServiceCaseWithCtx()",
       "norm_label": "createservicecasewithctx()",
       "source_file": "packages/athena-webapp/convex/serviceOps/serviceCases.ts",
-      "source_location": "L272"
+      "source_location": "L274"
     },
     {
       "community": 22,
@@ -40291,7 +40291,7 @@
       "label": "deriveServiceCasePaymentStatus()",
       "norm_label": "deriveservicecasepaymentstatus()",
       "source_file": "packages/athena-webapp/convex/serviceOps/serviceCases.ts",
-      "source_location": "L83"
+      "source_location": "L85"
     },
     {
       "community": 22,
@@ -40300,7 +40300,7 @@
       "label": "getServiceCaseContext()",
       "norm_label": "getservicecasecontext()",
       "source_file": "packages/athena-webapp/convex/serviceOps/serviceCases.ts",
-      "source_location": "L187"
+      "source_location": "L189"
     },
     {
       "community": 22,
@@ -40309,7 +40309,7 @@
       "label": "listPendingApprovalRequestsWithCtx()",
       "norm_label": "listpendingapprovalrequestswithctx()",
       "source_file": "packages/athena-webapp/convex/serviceOps/serviceCases.ts",
-      "source_location": "L140"
+      "source_location": "L142"
     },
     {
       "community": 22,
@@ -40318,7 +40318,7 @@
       "label": "listServiceCaseAllocationsWithCtx()",
       "norm_label": "listservicecaseallocationswithctx()",
       "source_file": "packages/athena-webapp/convex/serviceOps/serviceCases.ts",
-      "source_location": "L127"
+      "source_location": "L129"
     },
     {
       "community": 22,
@@ -40327,7 +40327,7 @@
       "label": "listServiceCaseLineItemsWithCtx()",
       "norm_label": "listservicecaselineitemswithctx()",
       "source_file": "packages/athena-webapp/convex/serviceOps/serviceCases.ts",
-      "source_location": "L107"
+      "source_location": "L109"
     },
     {
       "community": 22,
@@ -40336,7 +40336,7 @@
       "label": "listServiceInventoryUsageWithCtx()",
       "norm_label": "listserviceinventoryusagewithctx()",
       "source_file": "packages/athena-webapp/convex/serviceOps/serviceCases.ts",
-      "source_location": "L117"
+      "source_location": "L119"
     },
     {
       "community": 22,
@@ -40345,7 +40345,7 @@
       "label": "mapServiceCaseStatusToWorkItemStatus()",
       "norm_label": "mapservicecasestatustoworkitemstatus()",
       "source_file": "packages/athena-webapp/convex/serviceOps/serviceCases.ts",
-      "source_location": "L67"
+      "source_location": "L69"
     },
     {
       "community": 22,
@@ -40354,7 +40354,7 @@
       "label": "syncServiceCaseFinancialsWithCtx()",
       "norm_label": "syncservicecasefinancialswithctx()",
       "source_file": "packages/athena-webapp/convex/serviceOps/serviceCases.ts",
-      "source_location": "L152"
+      "source_location": "L154"
     },
     {
       "community": 220,
@@ -44053,7 +44053,7 @@
       "label": "buildServiceCatalogItem()",
       "norm_label": "buildservicecatalogitem()",
       "source_file": "packages/athena-webapp/convex/serviceOps/catalog.ts",
-      "source_location": "L6"
+      "source_location": "L8"
     },
     {
       "community": 318,
