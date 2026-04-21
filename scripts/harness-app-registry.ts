@@ -194,6 +194,16 @@ export const HARNESS_APP_REGISTRY = [
             description: "UI components, views, and package-local feature widgets.",
           },
           {
+            path: "src/components/operations",
+            description:
+              "Manager-queue and stock-adjustment workflows that share approval rails with other operational surfaces.",
+          },
+          {
+            path: "src/components/procurement",
+            description:
+              "Procurement planning and receiving views for replenishment pressure and purchase-order execution.",
+          },
+          {
             path: "src/hooks",
             description: "React hooks that fan out auth, shell, and feature state.",
           },
@@ -214,6 +224,11 @@ export const HARNESS_APP_REGISTRY = [
       {
         title: "Backend and test surfaces",
         folders: [
+          {
+            path: "convex/stockOps",
+            description:
+              "Stock-adjustment, procurement, replenishment, receiving, and vendor flows layered over inventory state.",
+          },
           {
             path: "convex/serviceOps",
             description:
@@ -252,6 +267,36 @@ export const HARNESS_APP_REGISTRY = [
         ],
         note:
           "Use this for authenticated dashboard flows, service-management screens, route trees, and UI behavior changes that stay inside the frontend shell.",
+      },
+      {
+        title: "Stock-ops procurement and receiving edits",
+        touchedPaths: [
+          "convex/stockOps",
+          "convex/operations/approvalRequests.ts",
+          "src/components/operations/OperationsQueueView.tsx",
+          "src/components/operations/StockAdjustmentWorkspace.tsx",
+          "src/components/procurement",
+          "src/components/app-sidebar.tsx",
+          "src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations",
+          "src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/procurement.index.tsx",
+        ],
+        commands: [
+          {
+            kind: "raw",
+            command:
+              "bun run --filter '@athena/webapp' test -- convex/stockOps/access.test.ts convex/stockOps/adjustments.test.ts convex/stockOps/purchaseOrders.test.ts convex/stockOps/receiving.test.ts convex/stockOps/replenishment.test.ts convex/stockOps/vendors.test.ts src/components/operations/StockAdjustmentWorkspace.test.tsx src/components/operations/OperationsQueueView.test.tsx src/components/procurement/ProcurementView.test.tsx src/components/procurement/ReceivingView.test.tsx",
+          },
+          { kind: "script", script: "audit:convex" },
+          { kind: "script", script: "lint:convex:changed" },
+          {
+            kind: "raw",
+            command: "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json",
+          },
+          { kind: "script", script: "build" },
+        ],
+        behaviorScenarios: ["athena-admin-shell-boot"],
+        note:
+          "Use this when stock adjustments, procurement recommendations, purchase-order lifecycle changes, or receiving route wiring move. Start `bunx convex dev` from `packages/athena-webapp` before validation when generated client refs or new stockOps function exports changed.",
       },
       {
         title: "Cash-controls workflow edits",

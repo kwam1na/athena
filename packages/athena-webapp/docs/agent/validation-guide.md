@@ -15,6 +15,24 @@ Run:
 
 Use this for authenticated dashboard flows, service-management screens, route trees, and UI behavior changes that stay inside the frontend shell.
 
+## Stock-ops procurement and receiving edits
+
+Touched surfaces: `convex/stockOps`, `convex/operations/approvalRequests.ts`, `src/components/operations/OperationsQueueView.tsx`, `src/components/operations/StockAdjustmentWorkspace.tsx`, `src/components/procurement`, `src/components/app-sidebar.tsx`, `src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations`, `src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/procurement.index.tsx`
+
+Run:
+
+- `bun run --filter '@athena/webapp' test -- convex/stockOps/access.test.ts convex/stockOps/adjustments.test.ts convex/stockOps/purchaseOrders.test.ts convex/stockOps/receiving.test.ts convex/stockOps/replenishment.test.ts convex/stockOps/vendors.test.ts src/components/operations/StockAdjustmentWorkspace.test.tsx src/components/operations/OperationsQueueView.test.tsx src/components/procurement/ProcurementView.test.tsx src/components/procurement/ReceivingView.test.tsx`
+- `bun run --filter '@athena/webapp' audit:convex`
+- `bun run --filter '@athena/webapp' lint:convex:changed`
+- `bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json`
+- `bun run --filter '@athena/webapp' build`
+
+Behavior scenarios:
+
+- `athena-admin-shell-boot`
+
+Use this when stock adjustments, procurement recommendations, purchase-order lifecycle changes, or receiving route wiring move. Start `bunx convex dev` from `packages/athena-webapp` before validation when generated client refs or new stockOps function exports changed.
+
 ## Cash-controls workflow edits
 
 Touched surfaces: `convex/cashControls`, `convex/operations/registerSessions.ts`, `src/components/cash-controls`, `src/components/operations/OperationsQueueView.tsx`, `src/components/app-sidebar.tsx`, `src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/cash-controls`

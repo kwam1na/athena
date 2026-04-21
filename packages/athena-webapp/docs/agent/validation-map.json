@@ -26,6 +26,44 @@
       "behaviorScenarios": []
     },
     {
+      "name": "stock-ops-procurement-and-receiving-edits",
+      "pathPrefixes": [
+        "packages/athena-webapp/convex/stockOps",
+        "packages/athena-webapp/convex/operations/approvalRequests.ts",
+        "packages/athena-webapp/src/components/operations/OperationsQueueView.tsx",
+        "packages/athena-webapp/src/components/operations/StockAdjustmentWorkspace.tsx",
+        "packages/athena-webapp/src/components/procurement",
+        "packages/athena-webapp/src/components/app-sidebar.tsx",
+        "packages/athena-webapp/src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations",
+        "packages/athena-webapp/src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/procurement.index.tsx"
+      ],
+      "commands": [
+        {
+          "kind": "raw",
+          "command": "bun run --filter '@athena/webapp' test -- convex/stockOps/access.test.ts convex/stockOps/adjustments.test.ts convex/stockOps/purchaseOrders.test.ts convex/stockOps/receiving.test.ts convex/stockOps/replenishment.test.ts convex/stockOps/vendors.test.ts src/components/operations/StockAdjustmentWorkspace.test.tsx src/components/operations/OperationsQueueView.test.tsx src/components/procurement/ProcurementView.test.tsx src/components/procurement/ReceivingView.test.tsx"
+        },
+        {
+          "kind": "script",
+          "script": "audit:convex"
+        },
+        {
+          "kind": "script",
+          "script": "lint:convex:changed"
+        },
+        {
+          "kind": "raw",
+          "command": "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json"
+        },
+        {
+          "kind": "script",
+          "script": "build"
+        }
+      ],
+      "behaviorScenarios": [
+        "athena-admin-shell-boot"
+      ]
+    },
+    {
       "name": "cash-controls-workflow-edits",
       "pathPrefixes": [
         "packages/athena-webapp/convex/cashControls",
