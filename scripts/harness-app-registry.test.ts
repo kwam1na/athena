@@ -208,6 +208,61 @@ describe("HARNESS_APP_REGISTRY", () => {
     });
   });
 
+  it("documents stock-ops procurement validation coverage in Athena harness docs", () => {
+    const athena = HARNESS_APP_REGISTRY.find(
+      (entry) => entry.appName === "athena-webapp"
+    );
+    const coreFolders = athena?.keyFolderGroups.find(
+      (group) => group.title === "Core app surfaces"
+    )?.folders;
+    const backendFolders = athena?.keyFolderGroups.find(
+      (group) => group.title === "Backend and test surfaces"
+    )?.folders;
+    const stockOpsScenario = athena?.validationScenarios.find(
+      (scenario) => scenario.title === "Stock-ops procurement and receiving edits"
+    );
+
+    expect(coreFolders).toContainEqual({
+      path: "src/components/procurement",
+      description:
+        "Procurement planning and receiving views for replenishment pressure and purchase-order execution.",
+    });
+    expect(backendFolders).toContainEqual({
+      path: "convex/stockOps",
+      description:
+        "Stock-adjustment, procurement, replenishment, receiving, and vendor flows layered over inventory state.",
+    });
+    expect(stockOpsScenario).toMatchObject({
+      touchedPaths: [
+        "convex/stockOps",
+        "convex/operations/approvalRequests.ts",
+        "src/components/operations/OperationsQueueView.tsx",
+        "src/components/operations/StockAdjustmentWorkspace.tsx",
+        "src/components/procurement",
+        "src/components/app-sidebar.tsx",
+        "src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations",
+        "src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/procurement.index.tsx",
+      ],
+      commands: [
+        {
+          kind: "raw",
+          command:
+            "bun run --filter '@athena/webapp' test -- convex/stockOps/access.test.ts convex/stockOps/adjustments.test.ts convex/stockOps/purchaseOrders.test.ts convex/stockOps/receiving.test.ts convex/stockOps/replenishment.test.ts convex/stockOps/vendors.test.ts src/components/operations/StockAdjustmentWorkspace.test.tsx src/components/operations/OperationsQueueView.test.tsx src/components/procurement/ProcurementView.test.tsx src/components/procurement/ReceivingView.test.tsx",
+        },
+        { kind: "script", script: "audit:convex" },
+        { kind: "script", script: "lint:convex:changed" },
+        {
+          kind: "raw",
+          command: "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json",
+        },
+        { kind: "script", script: "build" },
+      ],
+      note:
+        "Use this when stock adjustments, procurement recommendations, purchase-order lifecycle changes, or receiving route wiring move. Start `bunx convex dev` from `packages/athena-webapp` before validation when generated client refs or new stockOps function exports changed.",
+      behaviorScenarios: ["athena-admin-shell-boot"],
+    });
+  });
+
   it("covers Athena shared type exports in the shared-lib validation scenario", () => {
     const athena = HARNESS_APP_REGISTRY.find(
       (entry) => entry.appName === "athena-webapp"
