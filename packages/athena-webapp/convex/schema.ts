@@ -83,6 +83,7 @@ import {
   purchaseOrderLineItemSchema,
   purchaseOrderSchema,
   receivingBatchSchema,
+  stockAdjustmentBatchSchema,
   vendorSchema,
 } from "./schemas/stockOps";
 
@@ -153,6 +154,14 @@ const schema = defineSchema({
     .index("by_storeId_productSkuId", ["storeId", "productSkuId"])
     .index("by_storeId_source", ["storeId", "sourceType", "sourceId"])
     .index("by_workItemId", ["workItemId"]),
+  stockAdjustmentBatch: defineTable(stockAdjustmentBatchSchema)
+    .index("by_storeId", ["storeId"])
+    .index("by_storeId_adjustmentType_submissionKey", [
+      "storeId",
+      "adjustmentType",
+      "submissionKey",
+    ])
+    .index("by_workItemId", ["operationalWorkItemId"]),
   receivingBatch: defineTable(receivingBatchSchema)
     .index("by_storeId", ["storeId"])
     .index("by_storeId_purchaseOrderId", ["storeId", "purchaseOrderId"])

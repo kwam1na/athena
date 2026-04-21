@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Id } from "../_generated/dataModel";
-import { buildApprovalRequest } from "./approvalRequests";
+import { buildApprovalRequest } from "./approvalRequestHelpers";
 
 describe("approval request helpers", () => {
   it("builds pending approval requests with timestamps", () => {
