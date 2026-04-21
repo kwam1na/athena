@@ -10,6 +10,8 @@ import {
   runUpsertSessionItemCommand,
 } from "../pos/application/commands/sessionCommands";
 
+const MAX_SESSION_ITEMS = 200;
+
 // Get all items for a session
 export const getSessionItems = query({
   args: { sessionId: v.id("posSession") },
@@ -39,7 +41,7 @@ export const getSessionItems = query({
     const items = await ctx.db
       .query("posSessionItem")
       .withIndex("by_sessionId", (q) => q.eq("sessionId", args.sessionId))
-      .collect();
+      .take(MAX_SESSION_ITEMS);
 
     return items;
   },
