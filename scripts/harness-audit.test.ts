@@ -568,6 +568,16 @@ async function createFixtureRepo() {
     "export {};\n",
     rootDir
   );
+  await write(
+    "packages/athena-webapp/src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/index.tsx",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/procurement.index.tsx",
+    "export {};\n",
+    rootDir
+  );
   await write("packages/athena-webapp/src/routes/index.tsx", "export {};\n", rootDir);
   await write("packages/athena-webapp/src/components/AppShell.tsx", "export {};\n", rootDir);
   await write(
@@ -582,6 +592,21 @@ async function createFixtureRepo() {
   );
   await write(
     "packages/athena-webapp/src/components/operations/OperationsQueueView.tsx",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/src/components/operations/StockAdjustmentWorkspace.tsx",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/src/components/procurement/ProcurementView.tsx",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/src/components/procurement/ReceivingView.tsx",
     "export {};\n",
     rootDir
   );
@@ -602,10 +627,16 @@ async function createFixtureRepo() {
   );
   await write("packages/athena-webapp/convex/inventory/item.ts", "export {};\n", rootDir);
   await write(
+    "packages/athena-webapp/convex/operations/approvalRequests.ts",
+    "export {};\n",
+    rootDir
+  );
+  await write(
     "packages/athena-webapp/convex/operations/registerSessions.ts",
     "export {};\n",
     rootDir
   );
+  await write("packages/athena-webapp/convex/stockOps/access.ts", "export {};\n", rootDir);
   await write("packages/athena-webapp/convex/storeFront/cart.ts", "export {};\n", rootDir);
   await write(
     "packages/athena-webapp/scripts/convex-audit.sh",
