@@ -6,6 +6,7 @@ import { recordInventoryMovementWithCtx } from "./inventoryMovements";
 import { createOperationalWorkItemWithCtx } from "./operationalWorkItems";
 import { recordOperationalEventWithCtx } from "./operationalEvents";
 import { recordPaymentAllocationWithCtx } from "./paymentAllocations";
+import { createServiceCaseWithCtx } from "../serviceOps/serviceCases";
 
 const MAX_CUSTOMER_SEARCH_RESULTS = 25;
 const MAX_STAFF_RESULTS = 100;
@@ -314,6 +315,17 @@ export const createServiceIntake = mutation({
       throw new Error("Unable to create the intake work item.");
     }
 
+    const serviceCase = await createServiceCaseWithCtx(ctx, {
+      assignedStaffProfileId: args.assignedStaffProfileId,
+      createdByUserId: args.createdByUserId,
+      customerProfileId: customerProfile._id,
+      notes: trimOptional(args.notes),
+      operationalWorkItemId: workItem._id,
+      organizationId: store.organizationId,
+      serviceMode: "same_day",
+      storeId: args.storeId,
+    });
+
     const approvalRequest = hasDeposit
       ? await (async () => {
           const approvalRequestId = await ctx.db.insert(
@@ -331,8 +343,8 @@ export const createServiceIntake = mutation({
               requestedByStaffProfileId: createdByStaffProfile?._id,
               requestedByUserId: args.createdByUserId,
               storeId: args.storeId,
-              subjectId: workItem._id,
-              subjectType: "operational_work_item",
+              subjectId: serviceCase._id,
+              subjectType: "service_case",
               workItemId: workItem._id,
             })
           );
@@ -354,8 +366,8 @@ export const createServiceIntake = mutation({
       organizationId: store.organizationId,
       quantityDelta: 1,
       reasonCode: "service_item_checkin",
-      sourceId: workItem._id,
-      sourceType: "service_intake",
+      sourceId: serviceCase._id,
+      sourceType: "service_case",
       storeId: args.storeId,
       workItemId: workItem._id,
     });
@@ -372,8 +384,8 @@ export const createServiceIntake = mutation({
             method: args.depositMethod,
             organizationId: store.organizationId,
             storeId: args.storeId,
-            targetId: workItem._id,
-            targetType: "operational_work_item",
+            targetId: serviceCase._id,
+            targetType: "service_case",
             workItemId: workItem._id,
           })
         : null;
@@ -393,15 +405,16 @@ export const createServiceIntake = mutation({
       organizationId: store.organizationId,
       paymentAllocationId: paymentAllocation?._id,
       storeId: args.storeId,
-      subjectId: workItem._id,
+      subjectId: serviceCase._id,
       subjectLabel: workItem.title,
-      subjectType: "operational_work_item",
+      subjectType: "service_case",
       workItemId: workItem._id,
     });
 
     return {
       approvalRequestId: approvalRequest?._id,
       customerProfileId: customerProfile._id,
+      serviceCaseId: serviceCase._id,
       workItemId: workItem._id,
     };
   },

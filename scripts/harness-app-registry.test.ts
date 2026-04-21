@@ -142,11 +142,34 @@ describe("HARNESS_APP_REGISTRY", () => {
         { kind: "script", script: "audit:convex" },
         { kind: "script", script: "lint:convex:changed" },
       ],
+      note:
+        "Any change that can affect Convex HTTP wiring, serviceOps schemas and workflows, shared operational rails, or route-to-backend composition should include the Convex audit pair.",
       behaviorScenarios: [
         "athena-convex-storefront-composition",
         "athena-convex-storefront-failure-visibility",
       ],
     });
+  });
+
+  it("documents Athena service management as a first-class harness discovery surface", () => {
+    const athena = HARNESS_APP_REGISTRY.find(
+      (entry) => entry.appName === "athena-webapp"
+    );
+    const backendFolders = athena?.keyFolderGroups.find(
+      (group) => group.title === "Backend and test surfaces"
+    )?.folders;
+    const routeScenario = athena?.validationScenarios.find(
+      (scenario) => scenario.title === "Route or UI-only edits"
+    );
+
+    expect(backendFolders).toContainEqual({
+      path: "convex/serviceOps",
+      description:
+        "Service catalog, appointment, and service-case workflows layered on operational work items.",
+    });
+    expect(routeScenario?.note).toBe(
+      "Use this for authenticated dashboard flows, service-management screens, route trees, and UI behavior changes that stay inside the frontend shell."
+    );
   });
 
   it("covers Athena shared type exports in the shared-lib validation scenario", () => {

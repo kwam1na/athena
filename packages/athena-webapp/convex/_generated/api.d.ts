@@ -159,6 +159,12 @@ import type * as schemas_pos_posSessionItem from "../schemas/pos/posSessionItem.
 import type * as schemas_pos_posTerminal from "../schemas/pos/posTerminal.js";
 import type * as schemas_pos_posTransaction from "../schemas/pos/posTransaction.js";
 import type * as schemas_pos_posTransactionItem from "../schemas/pos/posTransactionItem.js";
+import type * as schemas_serviceOps_index from "../schemas/serviceOps/index.js";
+import type * as schemas_serviceOps_serviceAppointment from "../schemas/serviceOps/serviceAppointment.js";
+import type * as schemas_serviceOps_serviceCase from "../schemas/serviceOps/serviceCase.js";
+import type * as schemas_serviceOps_serviceCaseLineItem from "../schemas/serviceOps/serviceCaseLineItem.js";
+import type * as schemas_serviceOps_serviceCatalog from "../schemas/serviceOps/serviceCatalog.js";
+import type * as schemas_serviceOps_serviceInventoryUsage from "../schemas/serviceOps/serviceInventoryUsage.js";
 import type * as schemas_storeFront_analytics from "../schemas/storeFront/analytics.js";
 import type * as schemas_storeFront_bag from "../schemas/storeFront/bag.js";
 import type * as schemas_storeFront_bagItem from "../schemas/storeFront/bagItem.js";
@@ -179,6 +185,9 @@ import type * as schemas_storeFront_storeFrontUser from "../schemas/storeFront/s
 import type * as schemas_storeFront_storeFrontVerificationCode from "../schemas/storeFront/storeFrontVerificationCode.js";
 import type * as schemas_storeFront_supportTicket from "../schemas/storeFront/supportTicket.js";
 import type * as sendgrid_index from "../sendgrid/index.js";
+import type * as serviceOps_appointments from "../serviceOps/appointments.js";
+import type * as serviceOps_catalog from "../serviceOps/catalog.js";
+import type * as serviceOps_serviceCases from "../serviceOps/serviceCases.js";
 import type * as services_orderEmailService from "../services/orderEmailService.js";
 import type * as services_paystackService from "../services/paystackService.js";
 import type * as storeFront_analytics from "../storeFront/analytics.js";
@@ -371,6 +380,12 @@ declare const fullApi: ApiFromModules<{
   "schemas/pos/posTerminal": typeof schemas_pos_posTerminal;
   "schemas/pos/posTransaction": typeof schemas_pos_posTransaction;
   "schemas/pos/posTransactionItem": typeof schemas_pos_posTransactionItem;
+  "schemas/serviceOps/index": typeof schemas_serviceOps_index;
+  "schemas/serviceOps/serviceAppointment": typeof schemas_serviceOps_serviceAppointment;
+  "schemas/serviceOps/serviceCase": typeof schemas_serviceOps_serviceCase;
+  "schemas/serviceOps/serviceCaseLineItem": typeof schemas_serviceOps_serviceCaseLineItem;
+  "schemas/serviceOps/serviceCatalog": typeof schemas_serviceOps_serviceCatalog;
+  "schemas/serviceOps/serviceInventoryUsage": typeof schemas_serviceOps_serviceInventoryUsage;
   "schemas/storeFront/analytics": typeof schemas_storeFront_analytics;
   "schemas/storeFront/bag": typeof schemas_storeFront_bag;
   "schemas/storeFront/bagItem": typeof schemas_storeFront_bagItem;
@@ -391,6 +406,9 @@ declare const fullApi: ApiFromModules<{
   "schemas/storeFront/storeFrontVerificationCode": typeof schemas_storeFront_storeFrontVerificationCode;
   "schemas/storeFront/supportTicket": typeof schemas_storeFront_supportTicket;
   "sendgrid/index": typeof sendgrid_index;
+  "serviceOps/appointments": typeof serviceOps_appointments;
+  "serviceOps/catalog": typeof serviceOps_catalog;
+  "serviceOps/serviceCases": typeof serviceOps_serviceCases;
   "services/orderEmailService": typeof services_orderEmailService;
   "services/paystackService": typeof services_paystackService;
   "storeFront/analytics": typeof storeFront_analytics;

@@ -44,6 +44,9 @@ import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugProductsNewRouteImport } from
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugLogsLogIdRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/logs.$logId'
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugBagsBagIdRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/bags.$bagId'
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugServicesIntakeIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/services/intake.index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugServicesCatalogManagementIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/services/catalog-management.index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugServicesAppointmentsIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/services/appointments.index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugServicesActiveCasesIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/services/active-cases.index'
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugReviewsPublishedIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/reviews/published.index'
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugReviewsNewIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/reviews/new.index'
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugProductsComplimentaryIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/index'
@@ -269,6 +272,26 @@ const AuthedOrgUrlSlugStoreStoreUrlSlugServicesIntakeIndexRoute =
     path: '/$orgUrlSlug/store/$storeUrlSlug/services/intake/',
     getParentRoute: () => AuthedRoute,
   } as any)
+const AuthedOrgUrlSlugStoreStoreUrlSlugServicesCatalogManagementIndexRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugServicesCatalogManagementIndexRouteImport.update(
+    {
+      id: '/$orgUrlSlug/store/$storeUrlSlug/services/catalog-management/',
+      path: '/$orgUrlSlug/store/$storeUrlSlug/services/catalog-management/',
+      getParentRoute: () => AuthedRoute,
+    } as any,
+  )
+const AuthedOrgUrlSlugStoreStoreUrlSlugServicesAppointmentsIndexRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugServicesAppointmentsIndexRouteImport.update({
+    id: '/$orgUrlSlug/store/$storeUrlSlug/services/appointments/',
+    path: '/$orgUrlSlug/store/$storeUrlSlug/services/appointments/',
+    getParentRoute: () => AuthedRoute,
+  } as any)
+const AuthedOrgUrlSlugStoreStoreUrlSlugServicesActiveCasesIndexRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugServicesActiveCasesIndexRouteImport.update({
+    id: '/$orgUrlSlug/store/$storeUrlSlug/services/active-cases/',
+    path: '/$orgUrlSlug/store/$storeUrlSlug/services/active-cases/',
+    getParentRoute: () => AuthedRoute,
+  } as any)
 const AuthedOrgUrlSlugStoreStoreUrlSlugReviewsPublishedIndexRoute =
   AuthedOrgUrlSlugStoreStoreUrlSlugReviewsPublishedIndexRouteImport.update({
     id: '/$orgUrlSlug/store/$storeUrlSlug/reviews/published/',
@@ -455,6 +478,9 @@ export interface FileRoutesByFullPath {
   '/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsComplimentaryIndexRoute
   '/$orgUrlSlug/store/$storeUrlSlug/reviews/new/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugReviewsNewIndexRoute
   '/$orgUrlSlug/store/$storeUrlSlug/reviews/published/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugReviewsPublishedIndexRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/services/active-cases/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugServicesActiveCasesIndexRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/services/appointments/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugServicesAppointmentsIndexRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/services/catalog-management/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugServicesCatalogManagementIndexRoute
   '/$orgUrlSlug/store/$storeUrlSlug/services/intake/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugServicesIntakeIndexRoute
 }
 export interface FileRoutesByTo {
@@ -511,6 +537,9 @@ export interface FileRoutesByTo {
   '/$orgUrlSlug/store/$storeUrlSlug/products/complimentary': typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsComplimentaryIndexRoute
   '/$orgUrlSlug/store/$storeUrlSlug/reviews/new': typeof AuthedOrgUrlSlugStoreStoreUrlSlugReviewsNewIndexRoute
   '/$orgUrlSlug/store/$storeUrlSlug/reviews/published': typeof AuthedOrgUrlSlugStoreStoreUrlSlugReviewsPublishedIndexRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/services/active-cases': typeof AuthedOrgUrlSlugStoreStoreUrlSlugServicesActiveCasesIndexRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/services/appointments': typeof AuthedOrgUrlSlugStoreStoreUrlSlugServicesAppointmentsIndexRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/services/catalog-management': typeof AuthedOrgUrlSlugStoreStoreUrlSlugServicesCatalogManagementIndexRoute
   '/$orgUrlSlug/store/$storeUrlSlug/services/intake': typeof AuthedOrgUrlSlugStoreStoreUrlSlugServicesIntakeIndexRoute
 }
 export interface FileRoutesById {
@@ -570,6 +599,9 @@ export interface FileRoutesById {
   '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsComplimentaryIndexRoute
   '/_authed/$orgUrlSlug/store/$storeUrlSlug/reviews/new/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugReviewsNewIndexRoute
   '/_authed/$orgUrlSlug/store/$storeUrlSlug/reviews/published/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugReviewsPublishedIndexRoute
+  '/_authed/$orgUrlSlug/store/$storeUrlSlug/services/active-cases/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugServicesActiveCasesIndexRoute
+  '/_authed/$orgUrlSlug/store/$storeUrlSlug/services/appointments/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugServicesAppointmentsIndexRoute
+  '/_authed/$orgUrlSlug/store/$storeUrlSlug/services/catalog-management/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugServicesCatalogManagementIndexRoute
   '/_authed/$orgUrlSlug/store/$storeUrlSlug/services/intake/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugServicesIntakeIndexRoute
 }
 export interface FileRouteTypes {
@@ -629,6 +661,9 @@ export interface FileRouteTypes {
     | '/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/'
     | '/$orgUrlSlug/store/$storeUrlSlug/reviews/new/'
     | '/$orgUrlSlug/store/$storeUrlSlug/reviews/published/'
+    | '/$orgUrlSlug/store/$storeUrlSlug/services/active-cases/'
+    | '/$orgUrlSlug/store/$storeUrlSlug/services/appointments/'
+    | '/$orgUrlSlug/store/$storeUrlSlug/services/catalog-management/'
     | '/$orgUrlSlug/store/$storeUrlSlug/services/intake/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -685,6 +720,9 @@ export interface FileRouteTypes {
     | '/$orgUrlSlug/store/$storeUrlSlug/products/complimentary'
     | '/$orgUrlSlug/store/$storeUrlSlug/reviews/new'
     | '/$orgUrlSlug/store/$storeUrlSlug/reviews/published'
+    | '/$orgUrlSlug/store/$storeUrlSlug/services/active-cases'
+    | '/$orgUrlSlug/store/$storeUrlSlug/services/appointments'
+    | '/$orgUrlSlug/store/$storeUrlSlug/services/catalog-management'
     | '/$orgUrlSlug/store/$storeUrlSlug/services/intake'
   id:
     | '__root__'
@@ -743,6 +781,9 @@ export interface FileRouteTypes {
     | '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/'
     | '/_authed/$orgUrlSlug/store/$storeUrlSlug/reviews/new/'
     | '/_authed/$orgUrlSlug/store/$storeUrlSlug/reviews/published/'
+    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/services/active-cases/'
+    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/services/appointments/'
+    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/services/catalog-management/'
     | '/_authed/$orgUrlSlug/store/$storeUrlSlug/services/intake/'
   fileRoutesById: FileRoutesById
 }
@@ -1000,6 +1041,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugServicesIntakeIndexRouteImport
       parentRoute: typeof AuthedRoute
     }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/services/catalog-management/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/services/catalog-management/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/services/catalog-management'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/services/catalog-management/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugServicesCatalogManagementIndexRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/services/appointments/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/services/appointments/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/services/appointments'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/services/appointments/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugServicesAppointmentsIndexRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/services/active-cases/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/services/active-cases/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/services/active-cases'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/services/active-cases/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugServicesActiveCasesIndexRouteImport
+      parentRoute: typeof AuthedRoute
+    }
     '/_authed/$orgUrlSlug/store/$storeUrlSlug/reviews/published/': {
       id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/reviews/published/'
       path: '/$orgUrlSlug/store/$storeUrlSlug/reviews/published'
@@ -1201,6 +1263,9 @@ interface AuthedRouteChildren {
   AuthedOrgUrlSlugStoreStoreUrlSlugProductsComplimentaryIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsComplimentaryIndexRoute
   AuthedOrgUrlSlugStoreStoreUrlSlugReviewsNewIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugReviewsNewIndexRoute
   AuthedOrgUrlSlugStoreStoreUrlSlugReviewsPublishedIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugReviewsPublishedIndexRoute
+  AuthedOrgUrlSlugStoreStoreUrlSlugServicesActiveCasesIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugServicesActiveCasesIndexRoute
+  AuthedOrgUrlSlugStoreStoreUrlSlugServicesAppointmentsIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugServicesAppointmentsIndexRoute
+  AuthedOrgUrlSlugStoreStoreUrlSlugServicesCatalogManagementIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugServicesCatalogManagementIndexRoute
   AuthedOrgUrlSlugStoreStoreUrlSlugServicesIntakeIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugServicesIntakeIndexRoute
 }
 
@@ -1302,6 +1367,12 @@ const AuthedRouteChildren: AuthedRouteChildren = {
     AuthedOrgUrlSlugStoreStoreUrlSlugReviewsNewIndexRoute,
   AuthedOrgUrlSlugStoreStoreUrlSlugReviewsPublishedIndexRoute:
     AuthedOrgUrlSlugStoreStoreUrlSlugReviewsPublishedIndexRoute,
+  AuthedOrgUrlSlugStoreStoreUrlSlugServicesActiveCasesIndexRoute:
+    AuthedOrgUrlSlugStoreStoreUrlSlugServicesActiveCasesIndexRoute,
+  AuthedOrgUrlSlugStoreStoreUrlSlugServicesAppointmentsIndexRoute:
+    AuthedOrgUrlSlugStoreStoreUrlSlugServicesAppointmentsIndexRoute,
+  AuthedOrgUrlSlugStoreStoreUrlSlugServicesCatalogManagementIndexRoute:
+    AuthedOrgUrlSlugStoreStoreUrlSlugServicesCatalogManagementIndexRoute,
   AuthedOrgUrlSlugStoreStoreUrlSlugServicesIntakeIndexRoute:
     AuthedOrgUrlSlugStoreStoreUrlSlugServicesIntakeIndexRoute,
 }

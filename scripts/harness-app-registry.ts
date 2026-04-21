@@ -215,6 +215,11 @@ export const HARNESS_APP_REGISTRY = [
         title: "Backend and test surfaces",
         folders: [
           {
+            path: "convex/serviceOps",
+            description:
+              "Service catalog, appointment, and service-case workflows layered on operational work items.",
+          },
+          {
             path: "convex",
             description: "Convex functions, HTTP composition, schemas, and backend tests.",
           },
@@ -245,7 +250,8 @@ export const HARNESS_APP_REGISTRY = [
           { kind: "script", script: "test" },
           { kind: "script", script: "lint:architecture" },
         ],
-        note: "Use this for authenticated dashboard flows, route trees, and UI behavior changes that stay inside the frontend shell.",
+        note:
+          "Use this for authenticated dashboard flows, service-management screens, route trees, and UI behavior changes that stay inside the frontend shell.",
       },
       {
         title: "Shared-lib or utility edits",
@@ -283,7 +289,8 @@ export const HARNESS_APP_REGISTRY = [
           "athena-convex-storefront-composition",
           "athena-convex-storefront-failure-visibility",
         ],
-        note: "Any change that can affect Convex HTTP wiring, schemas, queries, or route-to-backend composition should include the Convex audit pair.",
+        note:
+          "Any change that can affect Convex HTTP wiring, serviceOps schemas and workflows, shared operational rails, or route-to-backend composition should include the Convex audit pair.",
       },
       {
         title: "Route runtime or build-pipeline edits",

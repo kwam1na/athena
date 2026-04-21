@@ -8,7 +8,6 @@ import {
   Clock,
   ClockAlert,
   ClockArrowUp,
-  ClockFading,
   Eye,
   TrendingUp,
   Users,
@@ -83,7 +82,7 @@ export const AnalyticsInsights = () => {
         <div className="space-y-4">
           <div className="flex flex-row items-center gap-4 space-y-0 pb-2">
             <p className="text-sm text-muted-foreground">Last Viewed</p>
-            <ClockFading className="h-4 w-4 text-muted-foreground" />
+            <Clock className="h-4 w-4 text-muted-foreground" />
           </div>
           <div>
             <div className="pt-2 text-sm">
