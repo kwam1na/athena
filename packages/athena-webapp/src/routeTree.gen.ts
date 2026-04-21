@@ -33,6 +33,7 @@ import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugLogsIndexRouteImport } from '
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugDashboardIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/dashboard.index'
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugConfigurationIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/configuration.index'
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugCheckoutSessionsIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/checkout-sessions.index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/cash-controls/index'
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugBulkOperationsIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/bulk-operations/index'
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugBagsIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/bags.index'
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugAssetsIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/assets.index'
@@ -64,10 +65,13 @@ import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugOrdersCompletedIndexRouteImpo
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugOrdersCancelledIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/cancelled.index'
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugOrdersAllIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/all.index'
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOrderSlugIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug/index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsRegistersIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers.index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsCloseoutsIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/cash-controls/closeouts.index'
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugProductsComplimentaryNewRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/new'
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugProductsProductSlugEditRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/edit'
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugPosTransactionsTransactionIdRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId'
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseReportsReportIdRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/$reportId'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsRegistersSessionIdRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId'
 
 const AuthedRoute = AuthedRouteImport.update({
   id: '/_authed',
@@ -204,6 +208,12 @@ const AuthedOrgUrlSlugStoreStoreUrlSlugCheckoutSessionsIndexRoute =
   AuthedOrgUrlSlugStoreStoreUrlSlugCheckoutSessionsIndexRouteImport.update({
     id: '/$orgUrlSlug/store/$storeUrlSlug/checkout-sessions/',
     path: '/$orgUrlSlug/store/$storeUrlSlug/checkout-sessions/',
+    getParentRoute: () => AuthedRoute,
+  } as any)
+const AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsIndexRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsIndexRouteImport.update({
+    id: '/$orgUrlSlug/store/$storeUrlSlug/cash-controls/',
+    path: '/$orgUrlSlug/store/$storeUrlSlug/cash-controls/',
     getParentRoute: () => AuthedRoute,
   } as any)
 const AuthedOrgUrlSlugStoreStoreUrlSlugBulkOperationsIndexRoute =
@@ -396,6 +406,22 @@ const AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOrderSlugIndexRoute =
     path: '/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug/',
     getParentRoute: () => AuthedRoute,
   } as any)
+const AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsRegistersIndexRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsRegistersIndexRouteImport.update(
+    {
+      id: '/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/',
+      path: '/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/',
+      getParentRoute: () => AuthedRoute,
+    } as any,
+  )
+const AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsCloseoutsIndexRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsCloseoutsIndexRouteImport.update(
+    {
+      id: '/$orgUrlSlug/store/$storeUrlSlug/cash-controls/closeouts/',
+      path: '/$orgUrlSlug/store/$storeUrlSlug/cash-controls/closeouts/',
+      getParentRoute: () => AuthedRoute,
+    } as any,
+  )
 const AuthedOrgUrlSlugStoreStoreUrlSlugProductsComplimentaryNewRoute =
   AuthedOrgUrlSlugStoreStoreUrlSlugProductsComplimentaryNewRouteImport.update({
     id: '/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/new',
@@ -422,6 +448,14 @@ const AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseReportsReportIdRoute =
     path: '/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/$reportId',
     getParentRoute: () => AuthedRoute,
   } as any)
+const AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsRegistersSessionIdRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsRegistersSessionIdRouteImport.update(
+    {
+      id: '/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId',
+      path: '/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId',
+      getParentRoute: () => AuthedRoute,
+    } as any,
+  )
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -446,6 +480,7 @@ export interface FileRoutesByFullPath {
   '/$orgUrlSlug/store/$storeUrlSlug/assets/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugAssetsIndexRoute
   '/$orgUrlSlug/store/$storeUrlSlug/bags/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugBagsIndexRoute
   '/$orgUrlSlug/store/$storeUrlSlug/bulk-operations/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugBulkOperationsIndexRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/cash-controls/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsIndexRoute
   '/$orgUrlSlug/store/$storeUrlSlug/checkout-sessions/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugCheckoutSessionsIndexRoute
   '/$orgUrlSlug/store/$storeUrlSlug/configuration/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugConfigurationIndexRoute
   '/$orgUrlSlug/store/$storeUrlSlug/dashboard/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugDashboardIndexRoute
@@ -457,10 +492,13 @@ export interface FileRoutesByFullPath {
   '/$orgUrlSlug/store/$storeUrlSlug/products/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsIndexRoute
   '/$orgUrlSlug/store/$storeUrlSlug/promo-codes/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesIndexRoute
   '/$orgUrlSlug/store/$storeUrlSlug/reviews/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugReviewsIndexRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId': typeof AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsRegistersSessionIdRoute
   '/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/$reportId': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseReportsReportIdRoute
   '/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosTransactionsTransactionIdRoute
   '/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/edit': typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsProductSlugEditRoute
   '/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/new': typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsComplimentaryNewRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/cash-controls/closeouts/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsCloseoutsIndexRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsRegistersIndexRoute
   '/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOrderSlugIndexRoute
   '/$orgUrlSlug/store/$storeUrlSlug/orders/all/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersAllIndexRoute
   '/$orgUrlSlug/store/$storeUrlSlug/orders/cancelled/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersCancelledIndexRoute
@@ -505,6 +543,7 @@ export interface FileRoutesByTo {
   '/$orgUrlSlug/store/$storeUrlSlug/assets': typeof AuthedOrgUrlSlugStoreStoreUrlSlugAssetsIndexRoute
   '/$orgUrlSlug/store/$storeUrlSlug/bags': typeof AuthedOrgUrlSlugStoreStoreUrlSlugBagsIndexRoute
   '/$orgUrlSlug/store/$storeUrlSlug/bulk-operations': typeof AuthedOrgUrlSlugStoreStoreUrlSlugBulkOperationsIndexRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/cash-controls': typeof AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsIndexRoute
   '/$orgUrlSlug/store/$storeUrlSlug/checkout-sessions': typeof AuthedOrgUrlSlugStoreStoreUrlSlugCheckoutSessionsIndexRoute
   '/$orgUrlSlug/store/$storeUrlSlug/configuration': typeof AuthedOrgUrlSlugStoreStoreUrlSlugConfigurationIndexRoute
   '/$orgUrlSlug/store/$storeUrlSlug/dashboard': typeof AuthedOrgUrlSlugStoreStoreUrlSlugDashboardIndexRoute
@@ -516,10 +555,13 @@ export interface FileRoutesByTo {
   '/$orgUrlSlug/store/$storeUrlSlug/products': typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsIndexRoute
   '/$orgUrlSlug/store/$storeUrlSlug/promo-codes': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesIndexRoute
   '/$orgUrlSlug/store/$storeUrlSlug/reviews': typeof AuthedOrgUrlSlugStoreStoreUrlSlugReviewsIndexRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId': typeof AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsRegistersSessionIdRoute
   '/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/$reportId': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseReportsReportIdRoute
   '/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosTransactionsTransactionIdRoute
   '/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/edit': typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsProductSlugEditRoute
   '/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/new': typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsComplimentaryNewRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/cash-controls/closeouts': typeof AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsCloseoutsIndexRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers': typeof AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsRegistersIndexRoute
   '/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOrderSlugIndexRoute
   '/$orgUrlSlug/store/$storeUrlSlug/orders/all': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersAllIndexRoute
   '/$orgUrlSlug/store/$storeUrlSlug/orders/cancelled': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersCancelledIndexRoute
@@ -567,6 +609,7 @@ export interface FileRoutesById {
   '/_authed/$orgUrlSlug/store/$storeUrlSlug/assets/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugAssetsIndexRoute
   '/_authed/$orgUrlSlug/store/$storeUrlSlug/bags/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugBagsIndexRoute
   '/_authed/$orgUrlSlug/store/$storeUrlSlug/bulk-operations/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugBulkOperationsIndexRoute
+  '/_authed/$orgUrlSlug/store/$storeUrlSlug/cash-controls/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsIndexRoute
   '/_authed/$orgUrlSlug/store/$storeUrlSlug/checkout-sessions/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugCheckoutSessionsIndexRoute
   '/_authed/$orgUrlSlug/store/$storeUrlSlug/configuration/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugConfigurationIndexRoute
   '/_authed/$orgUrlSlug/store/$storeUrlSlug/dashboard/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugDashboardIndexRoute
@@ -578,10 +621,13 @@ export interface FileRoutesById {
   '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsIndexRoute
   '/_authed/$orgUrlSlug/store/$storeUrlSlug/promo-codes/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesIndexRoute
   '/_authed/$orgUrlSlug/store/$storeUrlSlug/reviews/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugReviewsIndexRoute
+  '/_authed/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId': typeof AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsRegistersSessionIdRoute
   '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/$reportId': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseReportsReportIdRoute
   '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosTransactionsTransactionIdRoute
   '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/edit': typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsProductSlugEditRoute
   '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/new': typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsComplimentaryNewRoute
+  '/_authed/$orgUrlSlug/store/$storeUrlSlug/cash-controls/closeouts/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsCloseoutsIndexRoute
+  '/_authed/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsRegistersIndexRoute
   '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOrderSlugIndexRoute
   '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/all/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersAllIndexRoute
   '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/cancelled/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersCancelledIndexRoute
@@ -629,6 +675,7 @@ export interface FileRouteTypes {
     | '/$orgUrlSlug/store/$storeUrlSlug/assets/'
     | '/$orgUrlSlug/store/$storeUrlSlug/bags/'
     | '/$orgUrlSlug/store/$storeUrlSlug/bulk-operations/'
+    | '/$orgUrlSlug/store/$storeUrlSlug/cash-controls/'
     | '/$orgUrlSlug/store/$storeUrlSlug/checkout-sessions/'
     | '/$orgUrlSlug/store/$storeUrlSlug/configuration/'
     | '/$orgUrlSlug/store/$storeUrlSlug/dashboard/'
@@ -640,10 +687,13 @@ export interface FileRouteTypes {
     | '/$orgUrlSlug/store/$storeUrlSlug/products/'
     | '/$orgUrlSlug/store/$storeUrlSlug/promo-codes/'
     | '/$orgUrlSlug/store/$storeUrlSlug/reviews/'
+    | '/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId'
     | '/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/$reportId'
     | '/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId'
     | '/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/edit'
     | '/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/new'
+    | '/$orgUrlSlug/store/$storeUrlSlug/cash-controls/closeouts/'
+    | '/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/'
     | '/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug/'
     | '/$orgUrlSlug/store/$storeUrlSlug/orders/all/'
     | '/$orgUrlSlug/store/$storeUrlSlug/orders/cancelled/'
@@ -688,6 +738,7 @@ export interface FileRouteTypes {
     | '/$orgUrlSlug/store/$storeUrlSlug/assets'
     | '/$orgUrlSlug/store/$storeUrlSlug/bags'
     | '/$orgUrlSlug/store/$storeUrlSlug/bulk-operations'
+    | '/$orgUrlSlug/store/$storeUrlSlug/cash-controls'
     | '/$orgUrlSlug/store/$storeUrlSlug/checkout-sessions'
     | '/$orgUrlSlug/store/$storeUrlSlug/configuration'
     | '/$orgUrlSlug/store/$storeUrlSlug/dashboard'
@@ -699,10 +750,13 @@ export interface FileRouteTypes {
     | '/$orgUrlSlug/store/$storeUrlSlug/products'
     | '/$orgUrlSlug/store/$storeUrlSlug/promo-codes'
     | '/$orgUrlSlug/store/$storeUrlSlug/reviews'
+    | '/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId'
     | '/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/$reportId'
     | '/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId'
     | '/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/edit'
     | '/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/new'
+    | '/$orgUrlSlug/store/$storeUrlSlug/cash-controls/closeouts'
+    | '/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers'
     | '/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug'
     | '/$orgUrlSlug/store/$storeUrlSlug/orders/all'
     | '/$orgUrlSlug/store/$storeUrlSlug/orders/cancelled'
@@ -749,6 +803,7 @@ export interface FileRouteTypes {
     | '/_authed/$orgUrlSlug/store/$storeUrlSlug/assets/'
     | '/_authed/$orgUrlSlug/store/$storeUrlSlug/bags/'
     | '/_authed/$orgUrlSlug/store/$storeUrlSlug/bulk-operations/'
+    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/cash-controls/'
     | '/_authed/$orgUrlSlug/store/$storeUrlSlug/checkout-sessions/'
     | '/_authed/$orgUrlSlug/store/$storeUrlSlug/configuration/'
     | '/_authed/$orgUrlSlug/store/$storeUrlSlug/dashboard/'
@@ -760,10 +815,13 @@ export interface FileRouteTypes {
     | '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/'
     | '/_authed/$orgUrlSlug/store/$storeUrlSlug/promo-codes/'
     | '/_authed/$orgUrlSlug/store/$storeUrlSlug/reviews/'
+    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId'
     | '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/$reportId'
     | '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId'
     | '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/edit'
     | '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/new'
+    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/cash-controls/closeouts/'
+    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/'
     | '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug/'
     | '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/all/'
     | '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/cancelled/'
@@ -962,6 +1020,13 @@ declare module '@tanstack/react-router' {
       path: '/$orgUrlSlug/store/$storeUrlSlug/checkout-sessions'
       fullPath: '/$orgUrlSlug/store/$storeUrlSlug/checkout-sessions/'
       preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugCheckoutSessionsIndexRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/cash-controls/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/cash-controls/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/cash-controls'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/cash-controls/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsIndexRouteImport
       parentRoute: typeof AuthedRoute
     }
     '/_authed/$orgUrlSlug/store/$storeUrlSlug/bulk-operations/': {
@@ -1181,6 +1246,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOrderSlugIndexRouteImport
       parentRoute: typeof AuthedRoute
     }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsRegistersIndexRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/cash-controls/closeouts/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/cash-controls/closeouts/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/cash-controls/closeouts'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/cash-controls/closeouts/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsCloseoutsIndexRouteImport
+      parentRoute: typeof AuthedRoute
+    }
     '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/new': {
       id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/new'
       path: '/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/new'
@@ -1209,6 +1288,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseReportsReportIdRouteImport
       parentRoute: typeof AuthedRoute
     }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsRegistersSessionIdRouteImport
+      parentRoute: typeof AuthedRoute
+    }
   }
 }
 
@@ -1231,6 +1317,7 @@ interface AuthedRouteChildren {
   AuthedOrgUrlSlugStoreStoreUrlSlugAssetsIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugAssetsIndexRoute
   AuthedOrgUrlSlugStoreStoreUrlSlugBagsIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugBagsIndexRoute
   AuthedOrgUrlSlugStoreStoreUrlSlugBulkOperationsIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugBulkOperationsIndexRoute
+  AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsIndexRoute
   AuthedOrgUrlSlugStoreStoreUrlSlugCheckoutSessionsIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugCheckoutSessionsIndexRoute
   AuthedOrgUrlSlugStoreStoreUrlSlugConfigurationIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugConfigurationIndexRoute
   AuthedOrgUrlSlugStoreStoreUrlSlugDashboardIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugDashboardIndexRoute
@@ -1242,10 +1329,13 @@ interface AuthedRouteChildren {
   AuthedOrgUrlSlugStoreStoreUrlSlugProductsIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsIndexRoute
   AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesIndexRoute
   AuthedOrgUrlSlugStoreStoreUrlSlugReviewsIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugReviewsIndexRoute
+  AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsRegistersSessionIdRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsRegistersSessionIdRoute
   AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseReportsReportIdRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseReportsReportIdRoute
   AuthedOrgUrlSlugStoreStoreUrlSlugPosTransactionsTransactionIdRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosTransactionsTransactionIdRoute
   AuthedOrgUrlSlugStoreStoreUrlSlugProductsProductSlugEditRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsProductSlugEditRoute
   AuthedOrgUrlSlugStoreStoreUrlSlugProductsComplimentaryNewRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsComplimentaryNewRoute
+  AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsCloseoutsIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsCloseoutsIndexRoute
+  AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsRegistersIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsRegistersIndexRoute
   AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOrderSlugIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOrderSlugIndexRoute
   AuthedOrgUrlSlugStoreStoreUrlSlugOrdersAllIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersAllIndexRoute
   AuthedOrgUrlSlugStoreStoreUrlSlugOrdersCancelledIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersCancelledIndexRoute
@@ -1303,6 +1393,8 @@ const AuthedRouteChildren: AuthedRouteChildren = {
     AuthedOrgUrlSlugStoreStoreUrlSlugBagsIndexRoute,
   AuthedOrgUrlSlugStoreStoreUrlSlugBulkOperationsIndexRoute:
     AuthedOrgUrlSlugStoreStoreUrlSlugBulkOperationsIndexRoute,
+  AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsIndexRoute:
+    AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsIndexRoute,
   AuthedOrgUrlSlugStoreStoreUrlSlugCheckoutSessionsIndexRoute:
     AuthedOrgUrlSlugStoreStoreUrlSlugCheckoutSessionsIndexRoute,
   AuthedOrgUrlSlugStoreStoreUrlSlugConfigurationIndexRoute:
@@ -1325,6 +1417,8 @@ const AuthedRouteChildren: AuthedRouteChildren = {
     AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesIndexRoute,
   AuthedOrgUrlSlugStoreStoreUrlSlugReviewsIndexRoute:
     AuthedOrgUrlSlugStoreStoreUrlSlugReviewsIndexRoute,
+  AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsRegistersSessionIdRoute:
+    AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsRegistersSessionIdRoute,
   AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseReportsReportIdRoute:
     AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseReportsReportIdRoute,
   AuthedOrgUrlSlugStoreStoreUrlSlugPosTransactionsTransactionIdRoute:
@@ -1333,6 +1427,10 @@ const AuthedRouteChildren: AuthedRouteChildren = {
     AuthedOrgUrlSlugStoreStoreUrlSlugProductsProductSlugEditRoute,
   AuthedOrgUrlSlugStoreStoreUrlSlugProductsComplimentaryNewRoute:
     AuthedOrgUrlSlugStoreStoreUrlSlugProductsComplimentaryNewRoute,
+  AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsCloseoutsIndexRoute:
+    AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsCloseoutsIndexRoute,
+  AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsRegistersIndexRoute:
+    AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsRegistersIndexRoute,
   AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOrderSlugIndexRoute:
     AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOrderSlugIndexRoute,
   AuthedOrgUrlSlugStoreStoreUrlSlugOrdersAllIndexRoute:

@@ -174,6 +174,80 @@ export function AppSidebar() {
                 </SidebarMenuButton>
               </SidebarMenuItem>
 
+              <SidebarMenuItem>
+                <SidebarMenuButton disabled={!canAccessOperations()} asChild>
+                  <Link
+                    to="/$orgUrlSlug/store/$storeUrlSlug/cash-controls"
+                    params={(p) => ({
+                      ...p,
+                      orgUrlSlug: activeOrganization?.slug,
+                      storeUrlSlug: activeStore?.slug,
+                    })}
+                    className="flex items-center"
+                  >
+                    <AlertOctagon className="w-4 h-4" />
+                    <p className="font-medium">Cash Controls</p>
+                  </Link>
+                </SidebarMenuButton>
+
+                <SidebarMenuSub>
+                  <SidebarMenuSubItem>
+                    <SidebarMenuButton disabled={!canAccessOperations()} asChild>
+                      <Link
+                        to="/$orgUrlSlug/store/$storeUrlSlug/cash-controls"
+                        params={(p) => ({
+                          ...p,
+                          orgUrlSlug: activeOrganization?.slug,
+                          storeUrlSlug: activeStore?.slug,
+                        })}
+                        className="flex items-center"
+                      >
+                        <Store className="w-4 h-4 mr-2" />
+                        <p className="font-medium">Overview</p>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuSubItem>
+                </SidebarMenuSub>
+
+                <SidebarMenuSub>
+                  <SidebarMenuSubItem>
+                    <SidebarMenuButton disabled={!canAccessOperations()} asChild>
+                      <Link
+                        to="/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers"
+                        params={(p) => ({
+                          ...p,
+                          orgUrlSlug: activeOrganization?.slug,
+                          storeUrlSlug: activeStore?.slug,
+                        })}
+                        className="flex items-center"
+                      >
+                        <ScanBarcode className="w-4 h-4 mr-2" />
+                        <p className="font-medium">Registers</p>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuSubItem>
+                </SidebarMenuSub>
+
+                <SidebarMenuSub>
+                  <SidebarMenuSubItem>
+                    <SidebarMenuButton disabled={!canAccessOperations()} asChild>
+                      <Link
+                        to="/$orgUrlSlug/store/$storeUrlSlug/cash-controls/closeouts"
+                        params={(p) => ({
+                          ...p,
+                          orgUrlSlug: activeOrganization?.slug,
+                          storeUrlSlug: activeStore?.slug,
+                        })}
+                        className="flex items-center"
+                      >
+                        <CheckCircle className="w-4 h-4 mr-2" />
+                        <p className="font-medium">Closeouts</p>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuSubItem>
+                </SidebarMenuSub>
+              </SidebarMenuItem>
+
               {/* Analytics section */}
               <SidebarMenuItem>
                 <SidebarMenuButton disabled={!hasFullAdminAccess} asChild>

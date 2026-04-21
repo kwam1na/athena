@@ -5,6 +5,7 @@ import {
   assertRegisterSessionMatchesTransaction,
   assertValidRegisterSessionTransition,
   buildClosedRegisterSessionPatch,
+  buildRegisterSessionDepositPatch,
   buildRegisterSessionCloseoutPatch,
   buildRegisterSession,
   buildRegisterSessionTransactionPatch,
@@ -197,5 +198,33 @@ describe("cash controls register sessions", () => {
       variance: 200,
     });
     expect(closedPatch.closedAt).toEqual(expect.any(Number));
+  });
+
+  it("subtracts recorded deposits from expected cash without letting the drawer go negative", () => {
+    const registerSession = {
+      ...buildRegisterSession({
+        storeId: "store_1" as Id<"store">,
+        openingFloat: 5000,
+        registerNumber: "A1",
+      }),
+      countedCash: 12000,
+      expectedCash: 13000,
+      status: "active" as const,
+    };
+
+    expect(
+      buildRegisterSessionDepositPatch(registerSession, {
+        amount: 2500,
+      })
+    ).toEqual({
+      expectedCash: 10500,
+      variance: 1500,
+    });
+
+    expect(() =>
+      buildRegisterSessionDepositPatch(registerSession, {
+        amount: 15000,
+      })
+    ).toThrow("Register session expected cash cannot be negative.");
   });
 });

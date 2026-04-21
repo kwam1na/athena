@@ -1,0 +1,173 @@
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+import { RegisterSessionViewContent } from "./RegisterSessionView";
+
+vi.mock("@tanstack/react-router", () => ({
+  Link: ({
+    children,
+    params: _params,
+    to,
+    ...props
+  }: React.AnchorHTMLAttributes<HTMLAnchorElement> & {
+    params?: unknown;
+    to?: string;
+  }) => (
+    <a href={to ?? "#"} {...props}>
+      {children}
+    </a>
+  ),
+}));
+
+vi.mock("../common/PageHeader", () => ({
+  SimplePageHeader: ({ title }: { title: string }) => <div>{title}</div>,
+}));
+
+const baseSnapshot = {
+  closeoutReview: null as
+    | {
+        hasVariance: boolean;
+        reason?: string | null;
+        requiresApproval: boolean;
+        variance: number;
+      }
+    | null,
+  deposits: [] as Array<{
+    _id: string;
+    amount: number;
+    notes?: string | null;
+    recordedAt: number;
+    recordedByStaffName?: string | null;
+    reference?: string | null;
+    registerSessionId?: string | null;
+  }>,
+  registerSession: {
+    _id: "session-1",
+    countedCash: 17100,
+    expectedCash: 17600,
+    netExpectedCash: 17600,
+    openedAt: new Date("2026-04-21T09:15:00.000Z").getTime(),
+    openedByStaffName: "Ama Mensah",
+    openingFloat: 5000,
+    pendingApprovalRequest: null,
+    registerNumber: "Register 3",
+    status: "closing",
+    totalDeposited: 2400,
+    variance: -500,
+  },
+  timeline: [] as Array<{
+    _id: string;
+    actorStaffName?: string | null;
+    createdAt: number;
+    eventType: string;
+    message?: string | null;
+    reason?: string | null;
+  }>,
+};
+
+describe("RegisterSessionViewContent", () => {
+  beforeEach(() => {
+    window.scrollTo = vi.fn();
+  });
+
+  it("shows a loading state while the register session is loading", () => {
+    render(
+      <RegisterSessionViewContent
+        actorUserId="user-1"
+        currency="USD"
+        isLoading
+        onRecordDeposit={vi.fn()}
+        registerSessionSnapshot={baseSnapshot}
+        storeId="store-1"
+      />,
+    );
+
+    expect(screen.getByText("Loading register session...")).toBeInTheDocument();
+  });
+
+  it("renders the register summary, closeout review, deposits, and timeline", () => {
+    render(
+      <RegisterSessionViewContent
+        actorUserId="user-1"
+        currency="USD"
+        isLoading={false}
+        onRecordDeposit={vi.fn()}
+        registerSessionSnapshot={{
+          closeoutReview: {
+            hasVariance: true,
+            reason: "Variance review required.",
+            requiresApproval: true,
+            variance: -500,
+          },
+          deposits: [
+            {
+              _id: "deposit-1",
+              amount: 2400,
+              notes: "Evening drop",
+              recordedAt: new Date("2026-04-21T18:10:00.000Z").getTime(),
+              recordedByStaffName: "Kojo Mensimah",
+              reference: "BANK-339",
+              registerSessionId: "session-1",
+            },
+          ],
+          registerSession: baseSnapshot.registerSession,
+          timeline: [
+            {
+              _id: "event-1",
+              actorStaffName: "Ama Mensah",
+              createdAt: new Date("2026-04-21T17:55:00.000Z").getTime(),
+              eventType: "register_session_cash_deposit_recorded",
+              message: "Recorded cash deposit of 2400.",
+              reason: "Evening drop",
+            },
+          ],
+        }}
+        storeId="store-1"
+      />,
+    );
+
+    expect(screen.getAllByText("Register 3").length).toBeGreaterThan(0);
+    expect(screen.getByText("Variance review required.")).toBeInTheDocument();
+    expect(screen.getByText("Record cash deposit")).toBeInTheDocument();
+    expect(screen.getByText("BANK-339")).toBeInTheDocument();
+    expect(screen.getByText("Recorded cash deposit of 2400.")).toBeInTheDocument();
+    expect(screen.getByText("Ama Mensah")).toBeInTheDocument();
+  });
+
+  it("submits a deposit with store, session, and actor context", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(1000);
+
+    const user = userEvent.setup();
+    const onRecordDeposit = vi.fn().mockResolvedValue(undefined);
+
+    render(
+      <RegisterSessionViewContent
+        actorUserId="user-1"
+        currency="USD"
+        isLoading={false}
+        onRecordDeposit={onRecordDeposit}
+        registerSessionSnapshot={baseSnapshot}
+        storeId="store-1"
+      />,
+    );
+
+    await user.type(screen.getByLabelText("Deposit amount"), "2500");
+    await user.type(screen.getByLabelText("Deposit reference"), "BANK-440");
+    await user.type(screen.getByLabelText("Deposit notes"), "Safe drop before final closeout.");
+    await user.click(screen.getByRole("button", { name: "Record deposit" }));
+
+    await waitFor(() =>
+      expect(onRecordDeposit).toHaveBeenCalledWith({
+        actorStaffProfileId: undefined,
+        actorUserId: "user-1",
+        amount: 2500,
+        notes: "Safe drop before final closeout.",
+        reference: "BANK-440",
+        registerSessionId: "session-1",
+        storeId: "store-1",
+        submissionKey: "register-session-deposit-session-1-rs",
+      }),
+    );
+  });
+});

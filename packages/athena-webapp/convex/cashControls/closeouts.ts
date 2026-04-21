@@ -1,8 +1,8 @@
 import { mutation, MutationCtx, query, QueryCtx } from "../_generated/server";
-import { Id } from "../_generated/dataModel";
+import { Doc, Id } from "../_generated/dataModel";
 import { internal } from "../_generated/api";
 import { v } from "convex/values";
-import { buildApprovalRequest } from "../operations/approvalRequests";
+import { buildApprovalRequest } from "../operations/approvalRequestHelpers";
 import { recordOperationalEventWithCtx } from "../operations/operationalEvents";
 
 const CLOSEOUT_SESSION_LIMIT = 100;
@@ -14,6 +14,76 @@ type CashControlsConfig = {
   requireManagerSignoffForShorts: boolean;
   varianceApprovalThreshold: number;
 };
+
+type CloseoutApprovalRequestRecord = Pick<
+  Doc<"approvalRequest">,
+  "_id" | "createdAt" | "reason" | "registerSessionId" | "requestType" | "requestedByStaffProfileId" | "status"
+>;
+
+type CloseoutApprovalRequestSummary = {
+  _id: Id<"approvalRequest">;
+  createdAt: number;
+  reason?: string;
+  requestedByStaffName: string | null;
+  status: string;
+};
+
+type RegisterSessionCloseoutReview = ReturnType<typeof buildRegisterSessionCloseoutReview>;
+
+type CloseoutSnapshot = {
+  config: CashControlsConfig;
+  registerSessions: Array<
+    Doc<"registerSession"> & {
+      approvalRequest: CloseoutApprovalRequestSummary | null;
+      closeoutReview: RegisterSessionCloseoutReview | null;
+      closedByStaffName: string | null;
+      openedByStaffName: string | null;
+    }
+  >;
+};
+
+type SubmitRegisterSessionCloseoutArgs = {
+  actorStaffProfileId?: Id<"staffProfile">;
+  actorUserId?: Id<"athenaUser">;
+  countedCash: number;
+  notes?: string;
+  registerSessionId: Id<"registerSession">;
+  storeId: Id<"store">;
+};
+
+type SubmitRegisterSessionCloseoutResult =
+  | {
+      action: "approval_required";
+      approvalRequest: Doc<"approvalRequest"> | null;
+      closeoutReview: RegisterSessionCloseoutReview;
+      registerSession: Doc<"registerSession"> | null;
+    }
+  | {
+      action: "closed";
+      closeoutReview: RegisterSessionCloseoutReview;
+      registerSession: Doc<"registerSession"> | null;
+    };
+
+type ReviewRegisterSessionCloseoutArgs = {
+  decision: "approved" | "rejected";
+  decisionNotes?: string;
+  registerSessionId: Id<"registerSession">;
+  reviewedByStaffProfileId?: Id<"staffProfile">;
+  reviewedByUserId?: Id<"athenaUser">;
+  storeId: Id<"store">;
+};
+
+type ReviewRegisterSessionCloseoutResult =
+  | {
+      action: "approved";
+      approvalRequest: Doc<"approvalRequest"> | null;
+      registerSession: Doc<"registerSession"> | null;
+    }
+  | {
+      action: "rejected";
+      approvalRequest: Doc<"approvalRequest"> | null;
+      registerSession: Doc<"registerSession"> | null;
+    };
 
 function asRecord(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -112,7 +182,7 @@ export function buildRegisterSessionCloseoutReview(args: {
 async function listRegisterSessionsForCloseout(
   ctx: Pick<QueryCtx, "db">,
   storeId: Id<"store">
-) {
+): Promise<Array<Doc<"registerSession">>> {
   const [openSessions, activeSessions, closingSessions] = await Promise.all([
     ctx.db
       .query("registerSession")
@@ -160,7 +230,7 @@ async function cancelPendingApprovalIfNeeded(args: {
   approvalRequestId?: Id<"approvalRequest">;
   reviewedByUserId?: Id<"athenaUser">;
   reviewedByStaffProfileId?: Id<"staffProfile">;
-}) {
+}): Promise<Doc<"approvalRequest"> | null> {
   if (!args.approvalRequestId) {
     return null;
   }
@@ -174,7 +244,7 @@ async function cancelPendingApprovalIfNeeded(args: {
     return approvalRequest;
   }
 
-  return args.ctx.runMutation(internal.operations.approvalRequests.decideApprovalRequest, {
+  return args.ctx.runMutation(internal.operations.approvalRequests.decideApprovalRequestInternal, {
     approvalRequestId: approvalRequest._id,
     decision: "cancelled",
     reviewedByStaffProfileId: args.reviewedByStaffProfileId,
@@ -187,7 +257,10 @@ export const getCloseoutSnapshot = query({
   args: {
     storeId: v.id("store"),
   },
-  handler: async (ctx, args) => {
+  handler: async (
+    ctx: QueryCtx,
+    args: { storeId: Id<"store"> }
+  ): Promise<CloseoutSnapshot> => {
     const [registerSessions, pendingApprovalRequests, store] = await Promise.all([
       listRegisterSessionsForCloseout(ctx, args.storeId),
       ctx.db
@@ -199,14 +272,17 @@ export const getCloseoutSnapshot = query({
       ctx.runQuery(internal.inventory.stores.findById, { id: args.storeId }),
     ]);
     const config = getCashControlsConfig(store);
-    const approvalMap = new Map(
+    const approvalMap = new Map<Id<"approvalRequest">, CloseoutApprovalRequestRecord>(
       pendingApprovalRequests
         .filter(
-          (approvalRequest) =>
+          (approvalRequest: Doc<"approvalRequest">) =>
             approvalRequest.registerSessionId &&
             approvalRequest.requestType === "variance_review"
         )
-        .map((approvalRequest) => [approvalRequest._id, approvalRequest])
+        .map((approvalRequest: Doc<"approvalRequest">) => [
+          approvalRequest._id,
+          approvalRequest,
+        ])
     );
     const staffProfileIds = new Set<Id<"staffProfile">>();
 
@@ -232,7 +308,7 @@ export const getCloseoutSnapshot = query({
 
     return {
       config,
-      registerSessions: registerSessions.map((registerSession) => {
+      registerSessions: registerSessions.map((registerSession: Doc<"registerSession">) => {
         const approvalRequest = registerSession.managerApprovalRequestId
           ? approvalMap.get(registerSession.managerApprovalRequestId)
           : null;
@@ -253,17 +329,17 @@ export const getCloseoutSnapshot = query({
                 createdAt: approvalRequest.createdAt,
                 reason: approvalRequest.reason,
                 requestedByStaffName: approvalRequest.requestedByStaffProfileId
-                  ? staffMap.get(approvalRequest.requestedByStaffProfileId)
+                  ? staffMap.get(approvalRequest.requestedByStaffProfileId) ?? null
                   : null,
                 status: approvalRequest.status,
               }
             : null,
           closeoutReview,
           closedByStaffName: registerSession.closedByStaffProfileId
-            ? staffMap.get(registerSession.closedByStaffProfileId)
+            ? staffMap.get(registerSession.closedByStaffProfileId) ?? null
             : null,
           openedByStaffName: registerSession.openedByStaffProfileId
-            ? staffMap.get(registerSession.openedByStaffProfileId)
+            ? staffMap.get(registerSession.openedByStaffProfileId) ?? null
             : null,
         };
       }),
@@ -280,7 +356,10 @@ export const submitRegisterSessionCloseout = mutation({
     registerSessionId: v.id("registerSession"),
     storeId: v.id("store"),
   },
-  handler: async (ctx, args) => {
+  handler: async (
+    ctx: MutationCtx,
+    args: SubmitRegisterSessionCloseoutArgs
+  ): Promise<SubmitRegisterSessionCloseoutResult> => {
     const [registerSession, store] = await Promise.all([
       ctx.db.get("registerSession", args.registerSessionId),
       ctx.runQuery(internal.inventory.stores.findById, { id: args.storeId }),
@@ -429,7 +508,10 @@ export const reviewRegisterSessionCloseout = mutation({
     reviewedByUserId: v.optional(v.id("athenaUser")),
     storeId: v.id("store"),
   },
-  handler: async (ctx, args) => {
+  handler: async (
+    ctx: MutationCtx,
+    args: ReviewRegisterSessionCloseoutArgs
+  ): Promise<ReviewRegisterSessionCloseoutResult> => {
     const registerSession = await ctx.db.get("registerSession", args.registerSessionId);
 
     if (!registerSession || registerSession.storeId !== args.storeId) {
@@ -450,7 +532,7 @@ export const reviewRegisterSessionCloseout = mutation({
     }
 
     const reviewedApprovalRequest = await ctx.runMutation(
-      internal.operations.approvalRequests.decideApprovalRequest,
+      internal.operations.approvalRequests.decideApprovalRequestInternal,
       {
         approvalRequestId: approvalRequest._id,
         decision: args.decision,
