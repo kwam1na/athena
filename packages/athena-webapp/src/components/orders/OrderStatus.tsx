@@ -1,4 +1,10 @@
-import { CheckCircle2, CircleDashed, RotateCcw, XCircle } from "lucide-react";
+import {
+  AlertCircleIcon,
+  CheckCircle2,
+  CircleDashed,
+  RotateCcw,
+  XCircle,
+} from "lucide-react";
 import { capitalizeFirstLetter, slugToWords } from "~/src/lib/utils";
 import { Badge } from "../ui/badge";
 
@@ -10,6 +16,7 @@ export const OrderStatus = ({ order }: { order: any }) => {
     order.status == "picked-up";
 
   const showX = order.status === "cancelled";
+  const showAlert = order.status === "pickup-exception";
 
   return (
     <Badge
@@ -19,6 +26,8 @@ export const OrderStatus = ({ order }: { order: any }) => {
           ? "bg-red-100 text-red-600"
           : order.status === "cancelled"
             ? "bg-red-100 text-red-600"
+            : order.status === "pickup-exception"
+              ? "bg-amber-100 text-amber-700"
             : order.status === "delivered" || order.status === "picked-up"
               ? "bg-green-100 text-green-600"
               : order.status === "out-for-delivery"
@@ -34,6 +43,7 @@ export const OrderStatus = ({ order }: { order: any }) => {
           <RotateCcw className="h-3 w-3 mr-2" />
         )}
         {showX && <XCircle className="h-3 w-3 mr-2" />}
+        {showAlert && <AlertCircleIcon className="h-3 w-3 mr-2" />}
         {order.status.includes("open") && (
           <CircleDashed className="h-3 w-3 mr-2" />
         )}

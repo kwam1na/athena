@@ -12,6 +12,10 @@ export const statuses = [
     label: "Ready for pickup",
   },
   {
+    value: "pickup-exception",
+    label: "Pickup exception",
+  },
+  {
     value: "out-for-delivery",
     label: "Out for delivery",
   },

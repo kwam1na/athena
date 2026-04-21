@@ -23,6 +23,7 @@ import {
   returnOrderItemsToStock,
 } from "./helpers/onlineOrder";
 import {
+  assertValidOnlineOrderStatusTransition,
   recordOnlineOrderRestockMovement,
   recordOnlineOrderPaymentCollected,
   recordOnlineOrderPaymentVerified,
@@ -87,6 +88,10 @@ async function applyOnlineOrderUpdate(
     args.update.paymentCollected === true && !order.paymentCollected;
   const paymentVerifiedChanged =
     args.update.hasVerifiedPayment === true && !order.hasVerifiedPayment;
+  const nextPaymentCollected =
+    typeof args.update.paymentCollected === "boolean"
+      ? args.update.paymentCollected
+      : order.paymentCollected;
   const now = Date.now();
   const baseTransitions = Array.isArray(args.update.transitions)
     ? [...args.update.transitions]
@@ -94,6 +99,14 @@ async function applyOnlineOrderUpdate(
   let updates = { ...args.update };
 
   if (statusChanged) {
+    assertValidOnlineOrderStatusTransition(
+      {
+        ...order,
+        paymentCollected: nextPaymentCollected,
+      },
+      nextStatus!
+    );
+
     updates.transitions = appendTransition(
       baseTransitions,
       nextStatus!,

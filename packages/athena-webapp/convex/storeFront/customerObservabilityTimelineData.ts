@@ -15,18 +15,34 @@ type AnalyticsDoc = Doc<"analytics"> & {
   };
 };
 
+type OperationalEventDoc = Partial<Doc<"operationalEvent">> & {
+  _id: string;
+  _creationTime?: number;
+  createdAt?: number;
+  message?: string;
+  metadata?: Record<string, unknown>;
+  onlineOrderId?: Id<"onlineOrder">;
+  storeId: Id<"store">;
+  subjectId?: string;
+  subjectLabel?: string;
+  subjectType?: string;
+};
+
 export type CustomerObservabilityTimelineEvent = {
-  _id: Id<"analytics">;
+  _id: string;
   _creationTime: number;
-  action: string;
-  storeFrontUserId: Id<"storeFrontUser"> | Id<"guest">;
+  action?: string;
+  eventType?: string;
+  message?: string;
+  source: "observability" | "operations";
+  storeFrontUserId?: Id<"storeFrontUser"> | Id<"guest">;
   storeId: Id<"store">;
   origin?: string;
   device?: string;
   journey: string;
   step: string;
   status: string;
-  sessionId: string;
+  sessionId?: string;
   route?: string;
   errorCategory?: string;
   errorCode?: string;
@@ -35,6 +51,10 @@ export type CustomerObservabilityTimelineEvent = {
   productSku?: string;
   checkoutSessionId?: string;
   orderId?: string;
+  onlineOrderId?: Id<"onlineOrder">;
+  subjectId?: string;
+  subjectLabel?: string;
+  subjectType?: string;
   userData?: {
     email?: string;
   };
@@ -69,9 +89,76 @@ function isFailureStatus(status: string) {
   return status === "failed" || status === "blocked";
 }
 
+function isOperationalEventDoc(
+  event: AnalyticsDoc | OperationalEventDoc,
+): event is OperationalEventDoc {
+  return typeof (event as OperationalEventDoc).eventType === "string";
+}
+
+function getOperationalEventJourney(event: OperationalEventDoc) {
+  return getNonEmptyString(event.subjectType) ?? "operations";
+}
+
+function getOperationalEventStep(event: OperationalEventDoc) {
+  const eventType = getNonEmptyString(event.eventType);
+  if (!eventType) {
+    return "updated";
+  }
+
+  const journeyPrefix = `${getOperationalEventJourney(event)}_`;
+  if (eventType.startsWith(journeyPrefix)) {
+    return eventType.slice(journeyPrefix.length);
+  }
+
+  return eventType;
+}
+
+function getOperationalEventStatus(event: OperationalEventDoc) {
+  const eventType = getNonEmptyString(event.eventType) ?? "";
+
+  if (eventType.includes("cancel")) {
+    return "canceled";
+  }
+
+  if (eventType.includes("refund")) {
+    return "started";
+  }
+
+  return "succeeded";
+}
+
 function normalizeEvent(
-  analyticsEvent: AnalyticsDoc,
+  event: AnalyticsDoc | OperationalEventDoc,
 ): CustomerObservabilityTimelineEvent | null {
+  if (isOperationalEventDoc(event)) {
+    const journey = getOperationalEventJourney(event);
+    const step = getOperationalEventStep(event);
+    const status = getOperationalEventStatus(event);
+    const createdAt = event.createdAt ?? event._creationTime;
+
+    if (!createdAt) {
+      return null;
+    }
+
+    return {
+      _id: String(event._id),
+      _creationTime: createdAt,
+      eventType: getNonEmptyString(event.eventType),
+      message: getNonEmptyString(event.message),
+      source: "operations",
+      storeId: event.storeId,
+      journey,
+      step,
+      status,
+      orderId: getNonEmptyString(event.subjectLabel),
+      onlineOrderId: event.onlineOrderId,
+      subjectId: getNonEmptyString(event.subjectId),
+      subjectLabel: getNonEmptyString(event.subjectLabel),
+      subjectType: getNonEmptyString(event.subjectType),
+    };
+  }
+
+  const analyticsEvent = event;
   if (analyticsEvent.action !== STOREFRONT_OBSERVABILITY_ACTION) {
     return null;
   }
@@ -85,9 +172,10 @@ function normalizeEvent(
   }
 
   return {
-    _id: analyticsEvent._id,
+    _id: String(analyticsEvent._id),
     _creationTime: analyticsEvent._creationTime,
     action: analyticsEvent.action,
+    source: "observability",
     storeFrontUserId: analyticsEvent.storeFrontUserId,
     storeId: analyticsEvent.storeId,
     origin: analyticsEvent.origin,
@@ -116,7 +204,7 @@ function normalizeEvent(
 }
 
 export function buildCustomerObservabilityTimeline(
-  analyticsEvents: AnalyticsDoc[],
+  analyticsEvents: Array<AnalyticsDoc | OperationalEventDoc>,
 ): CustomerObservabilityTimelineData {
   const events = analyticsEvents
     .map(normalizeEvent)
@@ -128,7 +216,11 @@ export function buildCustomerObservabilityTimeline(
   return {
     summary: {
       totalEvents: events.length,
-      uniqueSessions: new Set(events.map((event) => event.sessionId)).size,
+      uniqueSessions: new Set(
+        events
+          .map((event) => event.sessionId)
+          .filter((sessionId): sessionId is string => Boolean(sessionId))
+      ).size,
       failureCount: events.filter((event) => isFailureStatus(event.status)).length,
       latestEvent: latestEvent
         ? {

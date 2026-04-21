@@ -13,15 +13,18 @@ import { capitalizeFirstLetter, snakeCaseToWords } from "./utils";
 export type CustomerObservabilityTimelineEvent = {
   _id: string;
   _creationTime: number;
-  action: string;
-  storeFrontUserId: string;
+  action?: string;
+  eventType?: string;
+  message?: string;
+  source: "observability" | "operations";
+  storeFrontUserId?: string;
   storeId: string;
   origin?: string;
   device?: string;
   journey: string;
   step: string;
   status: string;
-  sessionId: string;
+  sessionId?: string;
   route?: string;
   errorCategory?: string;
   errorCode?: string;
@@ -30,6 +33,10 @@ export type CustomerObservabilityTimelineEvent = {
   productSku?: string;
   checkoutSessionId?: string;
   orderId?: string;
+  onlineOrderId?: string;
+  subjectId?: string;
+  subjectLabel?: string;
+  subjectType?: string;
   userData?: {
     email?: string;
   };
