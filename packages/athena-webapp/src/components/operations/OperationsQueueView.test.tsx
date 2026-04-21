@@ -1,7 +1,41 @@
 import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { OperationsQueueViewContent } from "./OperationsQueueView";
+import {
+  OperationsQueueView,
+  OperationsQueueViewContent,
+} from "./OperationsQueueView";
 import type { Id } from "~/convex/_generated/dataModel";
+
+const mockedHooks = vi.hoisted(() => ({
+  useAuth: vi.fn(),
+  useGetActiveStore: vi.fn(),
+  useMutation: vi.fn(),
+  usePermissions: vi.fn(),
+  useQuery: vi.fn(),
+}));
+
+vi.mock("convex/react", () => ({
+  useMutation: mockedHooks.useMutation,
+  useQuery: mockedHooks.useQuery,
+}));
+
+vi.mock("@/hooks/useAuth", () => ({
+  useAuth: mockedHooks.useAuth,
+}));
+
+vi.mock("@/hooks/useGetActiveStore", () => ({
+  default: mockedHooks.useGetActiveStore,
+}));
+
+vi.mock("@/hooks/usePermissions", () => ({
+  usePermissions: mockedHooks.usePermissions,
+}));
+
+vi.mock("../cash-controls/RegisterCloseoutView", () => ({
+  RegisterCloseoutView: () => (
+    <div data-testid="register-closeout-view">Register closeouts stub</div>
+  ),
+}));
 
 const baseProps = {
   approvalRequests: [] as {
@@ -43,6 +77,24 @@ const baseProps = {
 describe("OperationsQueueViewContent", () => {
   beforeEach(() => {
     window.scrollTo = vi.fn();
+    vi.clearAllMocks();
+    mockedHooks.useAuth.mockReturnValue({
+      user: { _id: "user-1" },
+    });
+    mockedHooks.useGetActiveStore.mockReturnValue({
+      activeStore: { _id: "store-1" },
+    });
+    mockedHooks.usePermissions.mockReturnValue({
+      canAccessOperations: () => true,
+      isLoading: false,
+    });
+    mockedHooks.useMutation.mockReturnValue(vi.fn());
+    mockedHooks.useQuery
+      .mockReturnValueOnce({
+        approvalRequests: [],
+        workItems: [],
+      })
+      .mockReturnValueOnce([]);
   });
 
   it("shows a loading state while permissions are resolving", () => {
@@ -142,5 +194,12 @@ describe("OperationsQueueViewContent", () => {
       approvalRequestId: "approval-1",
       decision: "approved",
     });
+  });
+
+  it("renders the register closeout section in the live operations page", () => {
+    render(<OperationsQueueView />);
+
+    expect(screen.getByText("Operations workspace")).toBeInTheDocument();
+    expect(screen.getByTestId("register-closeout-view")).toBeInTheDocument();
   });
 });

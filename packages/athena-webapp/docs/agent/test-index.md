@@ -15,6 +15,7 @@ This index enumerates the current automated test files and ties them back to the
 
 ## Section `convex`
 
+- [`convex/cashControls/closeouts.test.ts`](../../convex/cashControls/closeouts.test.ts)
 - [`convex/cashControls/paymentAllocationAttribution.test.ts`](../../convex/cashControls/paymentAllocationAttribution.test.ts)
 - [`convex/cashControls/registerSessions.test.ts`](../../convex/cashControls/registerSessions.test.ts)
 - [`convex/convexAuditScript.test.ts`](../../convex/convexAuditScript.test.ts)
@@ -56,6 +57,7 @@ This index enumerates the current automated test files and ties them back to the
 ## Section `src`
 
 - [`src/components/bulk-operations/BulkOperationsPreview.test.tsx`](../../src/components/bulk-operations/BulkOperationsPreview.test.tsx)
+- [`src/components/cash-controls/RegisterCloseoutView.test.tsx`](../../src/components/cash-controls/RegisterCloseoutView.test.tsx)
 - [`src/components/operations/OperationsQueueView.test.tsx`](../../src/components/operations/OperationsQueueView.test.tsx)
 - [`src/components/operations/StockAdjustmentWorkspace.test.tsx`](../../src/components/operations/StockAdjustmentWorkspace.test.tsx)
 - [`src/components/orders/OrderStatus.test.tsx`](../../src/components/orders/OrderStatus.test.tsx)
