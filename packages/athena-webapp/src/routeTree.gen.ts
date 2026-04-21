@@ -25,6 +25,7 @@ import { Route as AuthedOrgUrlSlugSettingsStoresStoreUrlSlugRouteImport } from '
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugReviewsIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/reviews/index'
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/promo-codes/index'
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugProductsIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/products/index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugProcurementIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/procurement.index'
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugPosIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/index'
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugOrdersIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/index'
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugOperationsIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/index'
@@ -160,6 +161,12 @@ const AuthedOrgUrlSlugStoreStoreUrlSlugProductsIndexRoute =
   AuthedOrgUrlSlugStoreStoreUrlSlugProductsIndexRouteImport.update({
     id: '/$orgUrlSlug/store/$storeUrlSlug/products/',
     path: '/$orgUrlSlug/store/$storeUrlSlug/products/',
+    getParentRoute: () => AuthedRoute,
+  } as any)
+const AuthedOrgUrlSlugStoreStoreUrlSlugProcurementIndexRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugProcurementIndexRouteImport.update({
+    id: '/$orgUrlSlug/store/$storeUrlSlug/procurement/',
+    path: '/$orgUrlSlug/store/$storeUrlSlug/procurement/',
     getParentRoute: () => AuthedRoute,
   } as any)
 const AuthedOrgUrlSlugStoreStoreUrlSlugPosIndexRoute =
@@ -489,6 +496,7 @@ export interface FileRoutesByFullPath {
   '/$orgUrlSlug/store/$storeUrlSlug/operations/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsIndexRoute
   '/$orgUrlSlug/store/$storeUrlSlug/orders/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersIndexRoute
   '/$orgUrlSlug/store/$storeUrlSlug/pos/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosIndexRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/procurement/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugProcurementIndexRoute
   '/$orgUrlSlug/store/$storeUrlSlug/products/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsIndexRoute
   '/$orgUrlSlug/store/$storeUrlSlug/promo-codes/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesIndexRoute
   '/$orgUrlSlug/store/$storeUrlSlug/reviews/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugReviewsIndexRoute
@@ -552,6 +560,7 @@ export interface FileRoutesByTo {
   '/$orgUrlSlug/store/$storeUrlSlug/operations': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsIndexRoute
   '/$orgUrlSlug/store/$storeUrlSlug/orders': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersIndexRoute
   '/$orgUrlSlug/store/$storeUrlSlug/pos': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosIndexRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/procurement': typeof AuthedOrgUrlSlugStoreStoreUrlSlugProcurementIndexRoute
   '/$orgUrlSlug/store/$storeUrlSlug/products': typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsIndexRoute
   '/$orgUrlSlug/store/$storeUrlSlug/promo-codes': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesIndexRoute
   '/$orgUrlSlug/store/$storeUrlSlug/reviews': typeof AuthedOrgUrlSlugStoreStoreUrlSlugReviewsIndexRoute
@@ -618,6 +627,7 @@ export interface FileRoutesById {
   '/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsIndexRoute
   '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersIndexRoute
   '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosIndexRoute
+  '/_authed/$orgUrlSlug/store/$storeUrlSlug/procurement/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugProcurementIndexRoute
   '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsIndexRoute
   '/_authed/$orgUrlSlug/store/$storeUrlSlug/promo-codes/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesIndexRoute
   '/_authed/$orgUrlSlug/store/$storeUrlSlug/reviews/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugReviewsIndexRoute
@@ -684,6 +694,7 @@ export interface FileRouteTypes {
     | '/$orgUrlSlug/store/$storeUrlSlug/operations/'
     | '/$orgUrlSlug/store/$storeUrlSlug/orders/'
     | '/$orgUrlSlug/store/$storeUrlSlug/pos/'
+    | '/$orgUrlSlug/store/$storeUrlSlug/procurement/'
     | '/$orgUrlSlug/store/$storeUrlSlug/products/'
     | '/$orgUrlSlug/store/$storeUrlSlug/promo-codes/'
     | '/$orgUrlSlug/store/$storeUrlSlug/reviews/'
@@ -747,6 +758,7 @@ export interface FileRouteTypes {
     | '/$orgUrlSlug/store/$storeUrlSlug/operations'
     | '/$orgUrlSlug/store/$storeUrlSlug/orders'
     | '/$orgUrlSlug/store/$storeUrlSlug/pos'
+    | '/$orgUrlSlug/store/$storeUrlSlug/procurement'
     | '/$orgUrlSlug/store/$storeUrlSlug/products'
     | '/$orgUrlSlug/store/$storeUrlSlug/promo-codes'
     | '/$orgUrlSlug/store/$storeUrlSlug/reviews'
@@ -812,6 +824,7 @@ export interface FileRouteTypes {
     | '/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/'
     | '/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/'
     | '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/'
+    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/procurement/'
     | '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/'
     | '/_authed/$orgUrlSlug/store/$storeUrlSlug/promo-codes/'
     | '/_authed/$orgUrlSlug/store/$storeUrlSlug/reviews/'
@@ -964,6 +977,13 @@ declare module '@tanstack/react-router' {
       path: '/$orgUrlSlug/store/$storeUrlSlug/products'
       fullPath: '/$orgUrlSlug/store/$storeUrlSlug/products/'
       preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsIndexRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/procurement/': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/procurement/'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/procurement'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/procurement/'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugProcurementIndexRouteImport
       parentRoute: typeof AuthedRoute
     }
     '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/': {
@@ -1326,6 +1346,7 @@ interface AuthedRouteChildren {
   AuthedOrgUrlSlugStoreStoreUrlSlugOperationsIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsIndexRoute
   AuthedOrgUrlSlugStoreStoreUrlSlugOrdersIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersIndexRoute
   AuthedOrgUrlSlugStoreStoreUrlSlugPosIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosIndexRoute
+  AuthedOrgUrlSlugStoreStoreUrlSlugProcurementIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugProcurementIndexRoute
   AuthedOrgUrlSlugStoreStoreUrlSlugProductsIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsIndexRoute
   AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesIndexRoute
   AuthedOrgUrlSlugStoreStoreUrlSlugReviewsIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugReviewsIndexRoute
@@ -1411,6 +1432,8 @@ const AuthedRouteChildren: AuthedRouteChildren = {
     AuthedOrgUrlSlugStoreStoreUrlSlugOrdersIndexRoute,
   AuthedOrgUrlSlugStoreStoreUrlSlugPosIndexRoute:
     AuthedOrgUrlSlugStoreStoreUrlSlugPosIndexRoute,
+  AuthedOrgUrlSlugStoreStoreUrlSlugProcurementIndexRoute:
+    AuthedOrgUrlSlugStoreStoreUrlSlugProcurementIndexRoute,
   AuthedOrgUrlSlugStoreStoreUrlSlugProductsIndexRoute:
     AuthedOrgUrlSlugStoreStoreUrlSlugProductsIndexRoute,
   AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesIndexRoute:

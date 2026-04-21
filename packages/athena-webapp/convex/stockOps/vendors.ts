@@ -1,5 +1,6 @@
 import { mutation, query } from "../_generated/server";
 import { v } from "convex/values";
+import { requireStoreFullAdminAccess } from "./access";
 
 const MAX_VENDORS = 200;
 
@@ -22,6 +23,8 @@ export const listVendors = query({
     status: v.optional(v.union(v.literal("active"), v.literal("inactive"))),
   },
   handler: async (ctx, args) => {
+    await requireStoreFullAdminAccess(ctx, args.storeId);
+
     const vendors = args.status
       ? await ctx.db
           .query("vendor")

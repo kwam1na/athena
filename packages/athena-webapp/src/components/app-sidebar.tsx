@@ -248,6 +248,23 @@ export function AppSidebar() {
                 </SidebarMenuSub>
               </SidebarMenuItem>
 
+              <SidebarMenuItem>
+                <SidebarMenuButton disabled={!canAccessOperations()} asChild>
+                  <Link
+                    to="/$orgUrlSlug/store/$storeUrlSlug/procurement"
+                    params={(p) => ({
+                      ...p,
+                      orgUrlSlug: activeOrganization?.slug,
+                      storeUrlSlug: activeStore?.slug,
+                    })}
+                    className="flex items-center"
+                  >
+                    <Truck className="w-4 h-4" />
+                    <p className="font-medium">Procurement</p>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+
               {/* Analytics section */}
               <SidebarMenuItem>
                 <SidebarMenuButton disabled={!hasFullAdminAccess} asChild>
