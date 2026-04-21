@@ -12,35 +12,25 @@ import {
   releaseInventoryHoldsBatch,
   validateInventoryAvailability,
 } from "./helpers/inventoryHolds";
-import {
-  validateSessionActive,
-  validateSessionModifiable,
-} from "./helpers/sessionValidation";
+import { validateSessionModifiable } from "./helpers/sessionValidation";
 import {
   sessionOperationResultValidator,
   sessionResultValidator,
-  sessionSuccess,
   error,
   createSessionResultValidator,
 } from "./helpers/resultTypes";
 import { calculateSessionExpiration } from "./helpers/sessionExpiration";
+import {
+  runHoldSessionCommand,
+  runResumeSessionCommand,
+  runStartSessionCommand,
+} from "../pos/application/commands/sessionCommands";
 import { createTransactionFromSessionHandler } from "./pos";
 
 const MAX_SESSION_ITEMS = 200;
 const SESSION_QUERY_CANDIDATE_LIMIT = 200;
 const ACTIVE_SESSION_CANDIDATE_LIMIT = 100;
 const SESSION_CLEANUP_BATCH_SIZE = 100;
-
-function buildNextSessionNumber(
-  latestSessionNumber: string | undefined,
-  prefix: string
-) {
-  const lastSequence = latestSessionNumber
-    ? Number.parseInt(latestSessionNumber.split("-").at(-1) ?? "0", 10)
-    : 0;
-  const nextSequence = Number.isFinite(lastSequence) ? lastSequence + 1 : 1;
-  return `${prefix}-${String(nextSequence).padStart(3, "0")}`;
-}
 
 async function loadPosSessionItems(ctx: QueryCtx, sessionId: Id<"posSession">) {
   const cartItemsRaw = await ctx.db
@@ -250,105 +240,16 @@ export const createSession = mutation({
   },
   returns: createSessionResultValidator,
   handler: async (ctx, args) => {
-    const now = Date.now();
-    const registerNumber = args.registerNumber || "1";
+    const result = await runStartSessionCommand(ctx, args);
 
-    const existingTerminalSessions = await ctx.db
-      .query("posSession")
-      .withIndex("by_storeId_status_terminalId", (q) =>
-        q
-          .eq("storeId", args.storeId)
-          .eq("status", "active")
-          .eq("terminalId", args.terminalId)
-      )
-      .take(ACTIVE_SESSION_CANDIDATE_LIMIT);
-
-    const nonExpiredTerminalSessions = existingTerminalSessions.filter(
-      (session) => !session.expiresAt || session.expiresAt >= now
-    );
-
-    const existingSession = nonExpiredTerminalSessions.find(
-      (session) => session.cashierId === args.cashierId
-    );
-
-    const cashierSessions = args.cashierId
-      ? await ctx.db
-          .query("posSession")
-          .withIndex("by_cashierId_and_status", (q) =>
-            q.eq("cashierId", args.cashierId!).eq("status", "active")
-          )
-          .take(ACTIVE_SESSION_CANDIDATE_LIMIT)
-      : [];
-
-    const existingSessionOnDifferentTerminal = cashierSessions.find(
-      (session) =>
-        session.storeId === args.storeId &&
-        session.terminalId !== args.terminalId &&
-        (!session.expiresAt || session.expiresAt >= now)
-    );
-
-    if (existingSessionOnDifferentTerminal) {
-      return {
-        success: false as const,
-        message: "A session is active for this cashier on a different terminal",
-      };
-    }
-
-    if (existingSession) {
-      // Check if existing session has items by querying posSessionItem table
-      const existingItems = await ctx.db
-        .query("posSessionItem")
-        .withIndex("by_sessionId", (q) =>
-          q.eq("sessionId", existingSession._id)
-        )
-        .take(MAX_SESSION_ITEMS);
-
-      // Auto-hold the existing session if it has items
-      if (existingItems.length) {
-        await ctx.db.patch("posSession", existingSession._id, {
-          status: "held",
-          heldAt: now,
-          updatedAt: now,
-          holdReason: "Auto-held when new session started",
-        });
-      }
-
+    if (result.status === "ok") {
       return {
         success: true as const,
-        data: {
-          sessionId: existingSession._id,
-          expiresAt: existingSession.expiresAt,
-        },
+        data: result.data,
       };
     }
 
-    const latestSession = await ctx.db
-      .query("posSession")
-      .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
-      .order("desc")
-      .first();
-
-    const sessionNumber = buildNextSessionNumber(
-      latestSession?.sessionNumber,
-      "SES"
-    );
-
-    // Calculate session expiration time
-    const expiresAt = calculateSessionExpiration(now);
-
-    const sessionId = await ctx.db.insert("posSession", {
-      sessionNumber,
-      storeId: args.storeId,
-      cashierId: args.cashierId,
-      terminalId: args.terminalId,
-      registerNumber,
-      status: "active",
-      createdAt: now,
-      updatedAt: now,
-      expiresAt,
-    });
-
-    return { success: true as const, data: { sessionId, expiresAt } };
+    return error(result.message);
   },
 });
 
@@ -416,34 +317,16 @@ export const holdSession = mutation({
   },
   returns: sessionResultValidator,
   handler: async (ctx, args) => {
-    const now = Date.now();
+    const result = await runHoldSessionCommand(ctx, args);
 
-    // Validate session can be modified (checks expiration)
-    const validation = await validateSessionModifiable(
-      ctx.db,
-      args.sessionId,
-      args.cashierId
-    );
-    if (!validation.success) {
-      return error(validation.message!);
+    if (result.status === "ok") {
+      return {
+        success: true as const,
+        data: result.data,
+      };
     }
 
-    // Get current session to access expiresAt
-    const session = await ctx.db.get("posSession", args.sessionId);
-    if (!session) {
-      return error("Session not found");
-    }
-
-    // Keep inventory holds in place when suspending
-    // DO NOT update expiresAt - let holds expire naturally if not resumed
-    await ctx.db.patch("posSession", args.sessionId, {
-      status: "held",
-      heldAt: now,
-      updatedAt: now,
-      holdReason: args.holdReason,
-    });
-
-    return sessionSuccess(args.sessionId, session.expiresAt);
+    return error(result.message);
   },
 });
 
@@ -456,50 +339,16 @@ export const resumeSession = mutation({
   },
   returns: sessionResultValidator,
   handler: async (ctx, args) => {
-    const now = Date.now();
+    const result = await runResumeSessionCommand(ctx, args);
 
-    // Get the session
-    const session = await ctx.db.get("posSession", args.sessionId);
-    if (!session) {
-      return error("Session not found");
+    if (result.status === "ok") {
+      return {
+        success: true as const,
+        data: result.data,
+      };
     }
 
-    // Check if session has expired before resuming
-    if (
-      (session.expiresAt && session.expiresAt < now) ||
-      session.status === "expired"
-    ) {
-      return error("This session has expired. Start a new one to proceed.");
-    }
-
-    // Check that this cashier does not have an active session on a different terminal
-    const cashierSessions = await ctx.db
-      .query("posSession")
-      .withIndex("by_cashierId_and_status", (q) =>
-        q.eq("cashierId", args.cashierId).eq("status", "active")
-      )
-      .take(ACTIVE_SESSION_CANDIDATE_LIMIT);
-
-    const activeSessionsOnOtherTerminals = cashierSessions.filter(
-      (s) => s.expiresAt > now && s.terminalId !== args.terminalId
-    );
-
-    if (activeSessionsOnOtherTerminals.length > 0) {
-      return error("This cashier has an active session on another terminal");
-    }
-
-    // Reset expiration to new window
-    const expiresAt = calculateSessionExpiration(now);
-
-    // Update session status to active
-    await ctx.db.patch("posSession", args.sessionId, {
-      status: "active",
-      resumedAt: now,
-      updatedAt: now,
-      expiresAt,
-    });
-
-    return sessionSuccess(args.sessionId, expiresAt);
+    return error(result.message);
   },
 });
 
