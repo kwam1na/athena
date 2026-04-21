@@ -59,6 +59,8 @@ This index enumerates the current automated test files and ties them back to the
 
 ## Section `src`
 
+- [`src/components/auth/Login/InputOTP.test.tsx`](../../src/components/auth/Login/InputOTP.test.tsx)
+- [`src/components/auth/Login/LoginForm.test.tsx`](../../src/components/auth/Login/LoginForm.test.tsx)
 - [`src/components/bulk-operations/BulkOperationsPreview.test.tsx`](../../src/components/bulk-operations/BulkOperationsPreview.test.tsx)
 - [`src/components/cash-controls/CashControlsDashboard.test.tsx`](../../src/components/cash-controls/CashControlsDashboard.test.tsx)
 - [`src/components/cash-controls/RegisterCloseoutView.test.tsx`](../../src/components/cash-controls/RegisterCloseoutView.test.tsx)
@@ -68,6 +70,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`src/components/orders/OrderStatus.test.tsx`](../../src/components/orders/OrderStatus.test.tsx)
 - [`src/components/orders/ReturnExchangeView.test.tsx`](../../src/components/orders/ReturnExchangeView.test.tsx)
 - [`src/components/orders/utils.test.ts`](../../src/components/orders/utils.test.ts)
+- [`src/components/organization-switcher.test.tsx`](../../src/components/organization-switcher.test.tsx)
 - [`src/components/pos/TotalsDisplay.test.tsx`](../../src/components/pos/TotalsDisplay.test.tsx)
 - [`src/components/procurement/ProcurementView.test.tsx`](../../src/components/procurement/ProcurementView.test.tsx)
 - [`src/components/procurement/ReceivingView.test.tsx`](../../src/components/procurement/ReceivingView.test.tsx)

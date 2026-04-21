@@ -2,6 +2,10 @@ import { internalMutation, mutation, type MutationCtx } from "../_generated/serv
 import type { Id } from "../_generated/dataModel";
 import { v } from "convex/values";
 import { resolveStockAdjustmentApprovalDecisionWithCtx } from "../stockOps/adjustments";
+import {
+  requireAuthenticatedAthenaUserWithCtx,
+  requireOrganizationMemberRoleWithCtx,
+} from "../lib/athenaUserAuth";
 import { buildApprovalRequest } from "./approvalRequestHelpers";
 
 type DecideApprovalRequestArgs = {
@@ -9,6 +13,12 @@ type DecideApprovalRequestArgs = {
   decision: "approved" | "rejected" | "cancelled";
   reviewedByUserId?: Id<"athenaUser">;
   reviewedByStaffProfileId?: Id<"staffProfile">;
+  decisionNotes?: string;
+};
+
+type PublicDecideApprovalRequestArgs = {
+  approvalRequestId: Id<"approvalRequest">;
+  decision: "approved" | "rejected" | "cancelled";
   decisionNotes?: string;
 };
 
@@ -62,6 +72,35 @@ export async function decideApprovalRequestWithCtx(
   return ctx.db.get("approvalRequest", args.approvalRequestId);
 }
 
+export async function decideApprovalRequestAsAuthenticatedUserWithCtx(
+  ctx: MutationCtx,
+  args: PublicDecideApprovalRequestArgs
+) {
+  const approvalRequest = await ctx.db.get("approvalRequest", args.approvalRequestId);
+
+  if (!approvalRequest) {
+    throw new Error("Approval request not found.");
+  }
+
+  if (!approvalRequest.organizationId) {
+    throw new Error("A full-admin reviewer is required to resolve approval requests.");
+  }
+
+  const reviewer = await requireAuthenticatedAthenaUserWithCtx(ctx);
+
+  await requireOrganizationMemberRoleWithCtx(ctx, {
+    allowedRoles: ["full_admin"],
+    failureMessage: "Only full admins can resolve approval requests.",
+    organizationId: approvalRequest.organizationId,
+    userId: reviewer._id,
+  });
+
+  return decideApprovalRequestWithCtx(ctx, {
+    ...args,
+    reviewedByUserId: reviewer._id,
+  });
+}
+
 export const createApprovalRequest = internalMutation({
   args: {
     storeId: v.id("store"),
@@ -86,19 +125,23 @@ export const createApprovalRequest = internalMutation({
 const decideApprovalRequestArgs = {
   approvalRequestId: v.id("approvalRequest"),
   decision: v.union(v.literal("approved"), v.literal("rejected"), v.literal("cancelled")),
+  decisionNotes: v.optional(v.string()),
+};
+
+const decideApprovalRequestInternalArgs = {
+  ...decideApprovalRequestArgs,
   reviewedByUserId: v.optional(v.id("athenaUser")),
   reviewedByStaffProfileId: v.optional(v.id("staffProfile")),
-  decisionNotes: v.optional(v.string()),
 };
 
 export const decideApprovalRequest = mutation({
   args: decideApprovalRequestArgs,
-  handler: (ctx, args) => decideApprovalRequestWithCtx(ctx, args),
+  handler: (ctx, args) => decideApprovalRequestAsAuthenticatedUserWithCtx(ctx, args),
 });
 
 export const decideApprovalRequestInternal = internalMutation({
   args: {
-    ...decideApprovalRequestArgs,
+    ...decideApprovalRequestInternalArgs,
   },
   handler: (ctx, args) => decideApprovalRequestWithCtx(ctx, args),
 });

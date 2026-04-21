@@ -51,6 +51,7 @@ export default function OrganizationSwitcher({
   const { orgUrlSlug } = useParams({ strict: false });
 
   const stores = useGetStores();
+  const { signOut } = useAuthActions();
 
   const formattedItems = items.map((item) => ({
     label: item.name,
@@ -97,6 +98,7 @@ export default function OrganizationSwitcher({
   };
 
   const handleSignOut = async () => {
+    await signOut();
     localStorage.removeItem(LOGGED_IN_USER_ID_KEY);
 
     navigate({ to: "/login" });

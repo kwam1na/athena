@@ -32,7 +32,6 @@ const baseProps = {
   isSubmitting: false,
   onSubmitBatch: vi.fn().mockResolvedValue(undefined),
   storeId: "store-1" as Id<"store">,
-  userId: "user-1" as Id<"athenaUser">,
 };
 
 describe("StockAdjustmentWorkspaceContent", () => {
@@ -60,7 +59,6 @@ describe("StockAdjustmentWorkspaceContent", () => {
     await waitFor(() =>
       expect(baseProps.onSubmitBatch).toHaveBeenCalledWith({
         adjustmentType: "manual",
-        createdByUserId: "user-1",
         lineItems: [
           {
             productSkuId: "sku-1",
@@ -94,7 +92,6 @@ describe("StockAdjustmentWorkspaceContent", () => {
     await waitFor(() =>
       expect(baseProps.onSubmitBatch).toHaveBeenCalledWith({
         adjustmentType: "cycle_count",
-        createdByUserId: "user-1",
         lineItems: [
           {
             countedQuantity: 7,

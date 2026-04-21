@@ -1,10 +1,25 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
 import { buildApprovalRequest } from "./approvalRequestHelpers";
-import { decideApprovalRequestWithCtx } from "./approvalRequests";
+import {
+  decideApprovalRequestAsAuthenticatedUserWithCtx,
+  decideApprovalRequestWithCtx,
+} from "./approvalRequests";
 
-function createApprovalRequestMutationCtx(role: "full_admin" | "pos_only") {
+const mockedAuthServer = vi.hoisted(() => ({
+  getAuthUserId: vi.fn(),
+}));
+
+vi.mock("@convex-dev/auth/server", () => ({
+  getAuthUserId: mockedAuthServer.getAuthUserId,
+}));
+
+function createApprovalRequestMutationCtx(args: {
+  athenaUsers?: Array<{ _id: string; email: string }>;
+  authUserId?: string | null;
+  role: "full_admin" | "pos_only";
+}) {
   const tables = {
     approvalRequest: new Map<string, Record<string, unknown>>([
       [
@@ -21,6 +36,14 @@ function createApprovalRequestMutationCtx(role: "full_admin" | "pos_only") {
         },
       ],
     ]),
+    athenaUser: new Map<string, Record<string, unknown>>(
+      (args.athenaUsers ?? [
+        {
+          _id: "manager-1",
+          email: "manager@example.com",
+        },
+      ]).map((athenaUser) => [athenaUser._id, athenaUser])
+    ),
     inventoryMovement: new Map<string, Record<string, unknown>>(),
     operationalEvent: new Map<string, Record<string, unknown>>(),
     operationalWorkItem: new Map<string, Record<string, unknown>>([
@@ -41,7 +64,7 @@ function createApprovalRequestMutationCtx(role: "full_admin" | "pos_only") {
         {
           _id: "member-1",
           organizationId: "org-1",
-          role,
+          role: args.role,
           userId: "manager-1",
         },
       ],
@@ -93,13 +116,30 @@ function createApprovalRequestMutationCtx(role: "full_admin" | "pos_only") {
         },
       ],
     ]),
+    users: new Map<string, Record<string, unknown>>([
+      [
+        "auth-user-1",
+        {
+          _id: "auth-user-1",
+          email: "manager@example.com",
+        },
+      ],
+    ]),
   };
   const insertCounters: Record<"inventoryMovement" | "operationalEvent", number> = {
     inventoryMovement: 0,
     operationalEvent: 0,
   };
 
+  mockedAuthServer.getAuthUserId.mockResolvedValue(args.authUserId ?? null);
+
   const query = (table: keyof typeof tables) => {
+    if (table === "athenaUser") {
+      return {
+        collect: async () => Array.from(tables.athenaUser.values()),
+      };
+    }
+
     if (table === "organizationMember") {
       return {
         filter(
@@ -165,9 +205,14 @@ function createApprovalRequestMutationCtx(role: "full_admin" | "pos_only") {
   };
 
   const ctx = {
+    auth: {},
     db: {
-      async get(table: keyof typeof tables, id: string) {
-        return tables[table].get(id) ?? null;
+      async get(tableOrId: keyof typeof tables | string, id?: string) {
+        if (id === undefined) {
+          return tables.users.get(tableOrId as string) ?? null;
+        }
+
+        return tables[tableOrId as keyof typeof tables].get(id) ?? null;
       },
       async insert(
         table: "inventoryMovement" | "operationalEvent",
@@ -220,7 +265,10 @@ describe("approval request helpers", () => {
   });
 
   it("allows full-admin reviewers to approve inventory adjustment requests", async () => {
-    const { ctx, tables } = createApprovalRequestMutationCtx("full_admin");
+    const { ctx, tables } = createApprovalRequestMutationCtx({
+      authUserId: "auth-user-1",
+      role: "full_admin",
+    });
 
     await decideApprovalRequestWithCtx(ctx, {
       approvalRequestId: "approval-1" as Id<"approvalRequest">,
@@ -239,7 +287,10 @@ describe("approval request helpers", () => {
   });
 
   it("rejects reviewers who are not full admins", async () => {
-    const { ctx, tables } = createApprovalRequestMutationCtx("pos_only");
+    const { ctx, tables } = createApprovalRequestMutationCtx({
+      authUserId: "auth-user-1",
+      role: "pos_only",
+    });
 
     await expect(() =>
       decideApprovalRequestWithCtx(ctx, {
@@ -255,5 +306,48 @@ describe("approval request helpers", () => {
     expect(tables.stockAdjustmentBatch.get("batch-1")).toMatchObject({
       status: "pending_approval",
     });
+  });
+
+  it("derives the reviewer from the authenticated session", async () => {
+    const { ctx, tables } = createApprovalRequestMutationCtx({
+      authUserId: "auth-user-1",
+      role: "full_admin",
+    });
+
+    await decideApprovalRequestAsAuthenticatedUserWithCtx(ctx, {
+      approvalRequestId: "approval-1" as Id<"approvalRequest">,
+      decision: "approved",
+    });
+
+    expect(tables.approvalRequest.get("approval-1")).toMatchObject({
+      reviewedByUserId: "manager-1",
+      status: "approved",
+    });
+  });
+
+  it("rejects ambiguous duplicate Athena user matches for the authenticated reviewer", async () => {
+    const { ctx } = createApprovalRequestMutationCtx({
+      athenaUsers: [
+        {
+          _id: "manager-1",
+          email: "manager@example.com",
+        },
+        {
+          _id: "manager-2",
+          email: "MANAGER@example.com",
+        },
+      ],
+      authUserId: "auth-user-1",
+      role: "full_admin",
+    });
+
+    await expect(
+      decideApprovalRequestAsAuthenticatedUserWithCtx(ctx, {
+        approvalRequestId: "approval-1" as Id<"approvalRequest">,
+        decision: "approved",
+      })
+    ).rejects.toThrow(
+      "Multiple Athena users match this email. Resolve duplicate accounts before continuing."
+    );
   });
 });

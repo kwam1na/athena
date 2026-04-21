@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { action, internalMutation, mutation } from "../_generated/server";
 import { sendVerificationCode } from "../mailersend";
 import { internal } from "../_generated/api";
+import { syncAuthenticatedAthenaUserWithCtx } from "../lib/athenaUserAuth";
 
 const expirationTimeInMinutes = 10;
 
@@ -104,6 +105,11 @@ export const verifyCode = mutation({
       user,
     };
   },
+});
+
+export const syncAuthenticatedAthenaUser = mutation({
+  args: {},
+  handler: async (ctx) => syncAuthenticatedAthenaUserWithCtx(ctx),
 });
 
 export const sendVerificationCodeViaProvider = action({

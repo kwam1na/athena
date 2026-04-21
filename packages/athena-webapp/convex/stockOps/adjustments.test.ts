@@ -1,7 +1,15 @@
 import { readFileSync } from "node:fs";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { MutationCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
+
+const mockedAuthServer = vi.hoisted(() => ({
+  getAuthUserId: vi.fn(),
+}));
+
+vi.mock("@convex-dev/auth/server", () => ({
+  getAuthUserId: mockedAuthServer.getAuthUserId,
+}));
 
 import {
   STOCK_ADJUSTMENT_APPROVAL_THRESHOLD,
@@ -11,6 +19,7 @@ import {
   requiresStockAdjustmentApproval,
   resolveStockAdjustmentApprovalDecisionWithCtx,
   resolveStockAdjustmentQuantityDelta,
+  submitStockAdjustmentBatchWithCtx,
   summarizeStockAdjustmentLineItems,
 } from "./adjustments";
 
@@ -102,9 +111,12 @@ function createApprovalDecisionMutationCtx() {
   };
 
   const queryTable = (table: "inventoryMovement" | "operationalEvent") => ({
-    withIndex(_index: string, applyIndex: (query: {
-      eq: (field: string, value: unknown) => unknown;
-    }) => unknown) {
+    withIndex(
+      _index: string,
+      applyIndex: (query: {
+        eq: (field: string, value: unknown) => unknown;
+      }) => unknown
+    ) {
       const filters: Array<[string, unknown]> = [];
       const query = {
         eq(field: string, value: unknown) {
@@ -153,6 +165,215 @@ function createApprovalDecisionMutationCtx() {
       },
       query(table: "inventoryMovement" | "operationalEvent") {
         return queryTable(table);
+      },
+    },
+  } as unknown as MutationCtx;
+
+  return { ctx, tables };
+}
+
+function createSubmissionMutationCtx(args: {
+  athenaUsers?: Array<{ _id: string; email: string }>;
+  authUserId?: string | null;
+  membershipRole?: "full_admin" | "pos_only" | null;
+}) {
+  const tables = {
+    approvalRequest: new Map<string, Record<string, unknown>>(),
+    athenaUser: new Map<string, Record<string, unknown>>(
+      (args.athenaUsers ?? [
+        {
+          _id: "operator-1",
+          email: "operator@example.com",
+        },
+      ]).map((athenaUser) => [athenaUser._id, athenaUser])
+    ),
+    inventoryMovement: new Map<string, Record<string, unknown>>(),
+    operationalEvent: new Map<string, Record<string, unknown>>(),
+    operationalWorkItem: new Map<string, Record<string, unknown>>(),
+    organizationMember: new Map<string, Record<string, unknown>>(
+      args.membershipRole
+        ? [
+            [
+              "membership-1",
+              {
+                _id: "membership-1",
+                organizationId: "org-1",
+                role: args.membershipRole,
+                userId: "operator-1",
+              },
+            ],
+          ]
+        : []
+    ),
+    productSku: new Map<string, Record<string, unknown>>([
+      [
+        "sku-1",
+        {
+          _id: "sku-1",
+          inventoryCount: 8,
+          productId: "product-1",
+          productName: "Closure wig",
+          quantityAvailable: 6,
+          sku: "CW-18",
+          storeId: "store-1",
+        },
+      ],
+    ]),
+    stockAdjustmentBatch: new Map<string, Record<string, unknown>>(),
+    store: new Map<string, Record<string, unknown>>([
+      [
+        "store-1",
+        {
+          _id: "store-1",
+          organizationId: "org-1",
+        },
+      ],
+    ]),
+    users: new Map<string, Record<string, unknown>>([
+      [
+        "auth-user-1",
+        {
+          _id: "auth-user-1",
+          email: "operator@example.com",
+        },
+      ],
+    ]),
+  };
+  const insertCounters: Record<
+    | "approvalRequest"
+    | "inventoryMovement"
+    | "operationalEvent"
+    | "operationalWorkItem"
+    | "stockAdjustmentBatch",
+    number
+  > = {
+    approvalRequest: 0,
+    inventoryMovement: 0,
+    operationalEvent: 0,
+    operationalWorkItem: 0,
+    stockAdjustmentBatch: 0,
+  };
+
+  mockedAuthServer.getAuthUserId.mockResolvedValue(args.authUserId ?? null);
+
+  const indexedQuery = (
+    table: "inventoryMovement" | "operationalEvent" | "stockAdjustmentBatch"
+  ) => ({
+    withIndex(
+      _index: string,
+      applyIndex: (query: {
+        eq: (field: string, value: unknown) => unknown;
+      }) => unknown
+    ) {
+      const filters: Array<[string, unknown]> = [];
+      const query = {
+        eq(field: string, value: unknown) {
+          filters.push([field, value]);
+          return query;
+        },
+      };
+
+      applyIndex(query);
+
+      return {
+        collect: async () =>
+          Array.from(tables[table].values()).filter((record) =>
+            filters.every(([field, value]) => record[field] === value)
+          ),
+        first: async () =>
+          Array.from(tables[table].values()).find((record) =>
+            filters.every(([field, value]) => record[field] === value)
+          ) ?? null,
+      };
+    },
+  });
+
+  const ctx = {
+    auth: {},
+    db: {
+      async get(tableOrId: keyof typeof tables | string, id?: string) {
+        if (id === undefined) {
+          return tables.users.get(tableOrId as string) ?? null;
+        }
+
+        return tables[tableOrId as keyof typeof tables].get(id) ?? null;
+      },
+      async insert(
+        table:
+          | "approvalRequest"
+          | "inventoryMovement"
+          | "operationalEvent"
+          | "operationalWorkItem"
+          | "stockAdjustmentBatch",
+        value: Record<string, unknown>
+      ) {
+        insertCounters[table] += 1;
+        const id = `${table}-${insertCounters[table]}`;
+        tables[table].set(id, { _id: id, ...value });
+        return id;
+      },
+      async patch(
+        table: keyof typeof tables,
+        id: string,
+        value: Record<string, unknown>
+      ) {
+        const existingRecord = tables[table].get(id);
+
+        if (!existingRecord) {
+          throw new Error(`Missing ${table} record: ${id}`);
+        }
+
+        tables[table].set(id, { ...existingRecord, ...value });
+      },
+      query(table: keyof typeof tables) {
+        if (table === "athenaUser") {
+          return {
+            collect: async () => Array.from(tables.athenaUser.values()),
+          };
+        }
+
+        if (table === "organizationMember") {
+          return {
+            filter(
+              applyFilter: (queryBuilder: {
+                and: (...conditions: unknown[]) => unknown;
+                eq: (left: unknown, right: unknown) => unknown;
+                field: (name: string) => string;
+              }) => unknown
+            ) {
+              const filters: Array<[string, unknown]> = [];
+              const queryBuilder = {
+                and: (...conditions: unknown[]) => conditions,
+                eq(left: unknown, right: unknown) {
+                  filters.push([left as string, right]);
+                  return { left, right };
+                },
+                field(name: string) {
+                  return name;
+                },
+              };
+
+              applyFilter(queryBuilder);
+
+              return {
+                first: async () =>
+                  Array.from(tables.organizationMember.values()).find((record) =>
+                    filters.every(([field, value]) => record[field] === value)
+                  ) ?? null,
+              };
+            },
+          };
+        }
+
+        if (
+          table === "inventoryMovement" ||
+          table === "operationalEvent" ||
+          table === "stockAdjustmentBatch"
+        ) {
+          return indexedQuery(table);
+        }
+
+        throw new Error(`Unexpected query table: ${table}`);
       },
     },
   } as unknown as MutationCtx;
@@ -275,6 +496,84 @@ describe("stock ops adjustments", () => {
     );
     expect(source).toContain("buildApprovalRequest");
     expect(source).toContain("recordInventoryMovementWithCtx");
+  });
+
+  it("rejects unauthenticated stock-adjustment submissions", async () => {
+    const { ctx } = createSubmissionMutationCtx({
+      authUserId: null,
+      membershipRole: "pos_only",
+    });
+
+    await expect(
+      submitStockAdjustmentBatchWithCtx(ctx, {
+        adjustmentType: "manual",
+        lineItems: [
+          {
+            productSkuId: "sku-1" as Id<"productSku">,
+            quantityDelta: -2,
+          },
+        ],
+        reasonCode: "damage",
+        storeId: "store-1" as Id<"store">,
+        submissionKey: "submission-1",
+      })
+    ).rejects.toThrow("Sign in again to continue.");
+  });
+
+  it("rejects authenticated users without store membership", async () => {
+    const { ctx } = createSubmissionMutationCtx({
+      authUserId: "auth-user-1",
+      membershipRole: null,
+    });
+
+    await expect(
+      submitStockAdjustmentBatchWithCtx(ctx, {
+        adjustmentType: "manual",
+        lineItems: [
+          {
+            productSkuId: "sku-1" as Id<"productSku">,
+            quantityDelta: -2,
+          },
+        ],
+        reasonCode: "damage",
+        storeId: "store-1" as Id<"store">,
+        submissionKey: "submission-2",
+      })
+    ).rejects.toThrow(
+      "You do not have permission to adjust stock for this store."
+    );
+  });
+
+  it("derives the submitting operator from the authenticated session", async () => {
+    const { ctx, tables } = createSubmissionMutationCtx({
+      authUserId: "auth-user-1",
+      membershipRole: "pos_only",
+    });
+
+    await submitStockAdjustmentBatchWithCtx(ctx, {
+      adjustmentType: "manual",
+      lineItems: [
+        {
+          productSkuId: "sku-1" as Id<"productSku">,
+          quantityDelta: -2,
+        },
+      ],
+      reasonCode: "damage",
+      storeId: "store-1" as Id<"store">,
+      submissionKey: "submission-3",
+    });
+
+    expect(Array.from(tables.stockAdjustmentBatch.values())).toEqual([
+      expect.objectContaining({
+        createdByUserId: "operator-1",
+      }),
+    ]);
+    expect(Array.from(tables.inventoryMovement.values())).toEqual([
+      expect.objectContaining({
+        actorUserId: "operator-1",
+        quantityDelta: -2,
+      }),
+    ]);
   });
 
   it("applies approved stock adjustments and closes the review work item", async () => {

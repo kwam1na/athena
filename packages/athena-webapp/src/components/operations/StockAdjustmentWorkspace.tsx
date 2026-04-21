@@ -24,7 +24,6 @@ export type InventorySnapshotItem = {
 
 export type SubmitStockAdjustmentArgs = {
   adjustmentType: "manual" | "cycle_count";
-  createdByUserId?: Id<"athenaUser">;
   lineItems: Array<
     | {
         productSkuId: Id<"productSku">;
@@ -46,7 +45,6 @@ type StockAdjustmentWorkspaceContentProps = {
   isSubmitting: boolean;
   onSubmitBatch: (args: SubmitStockAdjustmentArgs) => Promise<void>;
   storeId?: Id<"store">;
-  userId?: Id<"athenaUser">;
 };
 
 type StockAdjustmentType = "manual" | "cycle_count";
@@ -85,7 +83,6 @@ export function StockAdjustmentWorkspaceContent({
   isSubmitting,
   onSubmitBatch,
   storeId,
-  userId,
 }: StockAdjustmentWorkspaceContentProps) {
   const [adjustmentType, setAdjustmentType] = useState<StockAdjustmentType>("manual");
   const [submissionKey, setSubmissionKey] = useState(() =>
@@ -184,7 +181,6 @@ export function StockAdjustmentWorkspaceContent({
     try {
       await onSubmitBatch({
         adjustmentType,
-        createdByUserId: userId,
         lineItems: changedRows.map((row) => row.submittedLineItem!),
         notes: trimOptional(notes),
         reasonCode:

@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   OperationsQueueView,
@@ -201,5 +201,42 @@ describe("OperationsQueueViewContent", () => {
 
     expect(screen.getByText("Operations workspace")).toBeInTheDocument();
     expect(screen.getByTestId("register-closeout-view")).toBeInTheDocument();
+  });
+
+  it("routes approval decisions without sending a raw Athena user id from the client", async () => {
+    const { default: userEvent } = await import("@testing-library/user-event");
+    const user = userEvent.setup();
+    const submitStockBatch = vi.fn();
+    const decideApprovalRequest = vi.fn().mockResolvedValue(undefined);
+
+    mockedHooks.useMutation.mockReset();
+    mockedHooks.useQuery.mockReset();
+    mockedHooks.useMutation
+      .mockReturnValueOnce(submitStockBatch)
+      .mockReturnValueOnce(decideApprovalRequest);
+    mockedHooks.useQuery
+      .mockReturnValueOnce({
+        approvalRequests: [
+          {
+            _id: "approval-1",
+            requestType: "inventory_adjustment_review",
+            status: "pending",
+            workItemTitle: "Cycle count review · 1 SKU",
+          },
+        ],
+        workItems: [],
+      })
+      .mockReturnValueOnce(baseProps.inventoryItems);
+
+    render(<OperationsQueueView />);
+
+    await user.click(screen.getByRole("button", { name: /approve batch/i }));
+
+    await waitFor(() =>
+      expect(decideApprovalRequest).toHaveBeenCalledWith({
+        approvalRequestId: "approval-1",
+        decision: "approved",
+      })
+    );
   });
 });
