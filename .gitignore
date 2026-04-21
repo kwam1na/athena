@@ -178,8 +178,6 @@ dist
 packages/.claude/worktrees/
 /worktrees/
 /.worktrees/
-docs/superpowers/plans/
-docs/superpowers/specs/
 .dual-graph/
 graphify-out/cache/
 artifacts/harness-inferential-review/
