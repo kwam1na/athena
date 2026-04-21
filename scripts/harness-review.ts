@@ -4,6 +4,7 @@ import path from "node:path";
 
 import { HARNESS_APP_REGISTRY, type ValidationCommand } from "./harness-app-registry";
 import { runHarnessCheck } from "./harness-check";
+import { collectHarnessRepoValidationSelection } from "./harness-repo-validation";
 
 const REVIEW_TARGETS = HARNESS_APP_REGISTRY.map((app) => ({
   packageDir: app.packageDir,
@@ -589,6 +590,7 @@ export async function runHarnessReview(
     targetFiles,
   } =
     await collectCommandsForChangedFiles(rootDir, changedFiles, reviewTargets);
+  const repoValidation = collectHarnessRepoValidationSelection(changedFiles);
 
   if (uncoveredFiles.length > 0) {
     throw new Error(
@@ -601,7 +603,7 @@ export async function runHarnessReview(
     );
   }
 
-  if (targetFiles.length === 0) {
+  if (targetFiles.length === 0 && repoValidation.matchedFiles.length === 0) {
     const packageDirList = reviewTargets.map((target) => target.packageDir);
     logger.log(
       `No target-app validations selected; no touched files under ${packageDirList.join(" or ")}.`
@@ -609,7 +611,15 @@ export async function runHarnessReview(
     return;
   }
 
-  for (const command of selectedCommands) {
+  const combinedCommands = [
+    ...repoValidation.selectedCommands.map((command) => ({
+      kind: "raw" as const,
+      command,
+    })),
+    ...selectedCommands,
+  ];
+
+  for (const command of combinedCommands) {
     if (command.kind === "script") {
       logger.log(`Running ${command.workspace}:${command.script}`);
       await (options.runPackageScript ?? ((nextWorkspace, nextScript) =>

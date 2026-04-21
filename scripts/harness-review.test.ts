@@ -419,6 +419,31 @@ describe("runHarnessReview", () => {
     ]);
   });
 
+  it("runs repo-level harness validations for harness-owned script changes", async () => {
+    const rootDir = await createFixtureRepo();
+    const steps: string[] = [];
+
+    await runHarnessReview(rootDir, {
+      getChangedFiles: async () => ["scripts/harness-review.ts"],
+      runHarnessCheck: async () => {
+        steps.push("harness:check");
+      },
+      runRawCommand: async (command) => {
+        steps.push(command);
+      },
+      logger: {
+        log() {},
+        error() {},
+      },
+    });
+
+    expect(steps).toEqual([
+      "harness:check",
+      "bun run harness:test",
+      "bun run harness:inferential-review",
+    ]);
+  });
+
   it("fails with a stale-harness error when a mapped package script is missing", async () => {
     const rootDir = await createFixtureRepo();
     await write(
@@ -577,10 +602,9 @@ describe("runHarnessReview", () => {
     );
   });
 
-  it("exits cleanly when no target-app files are touched", async () => {
+  it("runs repo-level validations when only repo-owned files are touched", async () => {
     const rootDir = await createFixtureRepo();
     const steps: string[] = [];
-    const logs: string[] = [];
 
     await runHarnessReview(rootDir, {
       getChangedFiles: async () => ["README.md"],
@@ -590,18 +614,20 @@ describe("runHarnessReview", () => {
       runPackageScript: async (workspace, script) => {
         steps.push(`${workspace}:${script}`);
       },
+      runRawCommand: async (command) => {
+        steps.push(`raw:${command}`);
+      },
       logger: {
-        log(message) {
-          logs.push(String(message));
-        },
+        log() {},
         error() {},
       },
     });
 
-    expect(steps).toEqual(["harness:check"]);
-    expect(logs).toContain(
-      "No target-app validations selected; no touched files under packages/athena-webapp or packages/storefront-webapp or packages/valkey-proxy-server."
-    );
+    expect(steps).toEqual([
+      "harness:check",
+      "raw:bun run harness:test",
+      "raw:bun run harness:inferential-review",
+    ]);
   });
 
   it("runs command-based validation surfaces including raw repo-root commands", async () => {
@@ -893,6 +919,9 @@ describe("runHarnessReview", () => {
       runPackageScript: async (workspace, script) => {
         steps.push(`${workspace}:${script}`);
       },
+      runRawCommand: async (command) => {
+        steps.push(`raw:${command}`);
+      },
       runHarnessBehaviorScenario: async (scenario) => {
         steps.push(`behavior:${scenario}`);
       },
@@ -902,7 +931,11 @@ describe("runHarnessReview", () => {
       },
     });
 
-    expect(steps).toEqual(["harness:check"]);
+    expect(steps).toEqual([
+      "harness:check",
+      "raw:bun run harness:test",
+      "raw:bun run harness:inferential-review",
+    ]);
   });
 
   it("passes the requested base ref to the changed-file selector", async () => {

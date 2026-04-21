@@ -3,6 +3,10 @@ import path from "node:path";
 
 import { HARNESS_APP_REGISTRY } from "./harness-app-registry";
 import { validateHarnessDocs } from "./harness-check";
+import {
+  collectHarnessRepoValidationSelection,
+  type HarnessRepoSurfaceCoverage,
+} from "./harness-repo-validation";
 
 const SELF_REVIEW_TARGETS = HARNESS_APP_REGISTRY.map((app) => ({
   appLabel: app.label,
@@ -86,6 +90,8 @@ type TargetCoverage = {
   uncoveredFiles: string[];
   matchedSurfaces: SurfaceCoverage[];
 };
+
+type RepoCoverage = HarnessRepoSurfaceCoverage;
 
 function normalizeRepoPath(repoPath: string) {
   return repoPath.replaceAll("\\", "/");
@@ -623,6 +629,7 @@ function buildMarkdownBundle(params: {
   baseRef: string;
   changedFiles: ChangedFiles;
   allChangedFiles: string[];
+  repoCoverage: RepoCoverage[];
   outsideTargetFiles: string[];
   coverageByTarget: TargetCoverage[];
   selectedValidations: string[];
@@ -692,6 +699,21 @@ function buildMarkdownBundle(params: {
 
       lines.push("");
     }
+  }
+
+  lines.push("## Repo-owned validation surfaces");
+  if (params.repoCoverage.length === 0) {
+    lines.push("- None");
+    lines.push("");
+  } else {
+    for (const coverage of params.repoCoverage) {
+      lines.push(
+        `- ${quoteCode(coverage.surfaceName)}: ${coverage.files
+          .map(quoteCode)
+          .join(", ")}`
+      );
+    }
+    lines.push("");
   }
 
   appendListSection(
@@ -866,19 +888,40 @@ export async function runHarnessSelfReview(
     ...changedFiles.trackedFiles,
     ...changedFiles.untrackedFiles,
   ]);
+  const repoValidation = collectHarnessRepoValidationSelection(allChangedFiles);
 
-  const { coverageByTarget, blockers: coverageBlockers, selectedValidationCommands } =
-    await collectCoverage(rootDir, allChangedFiles, loadedTargets);
+  const {
+    coverageByTarget,
+    blockers: coverageBlockers,
+    selectedValidationCommands: appSelectedValidationCommands,
+  } = await collectCoverage(rootDir, allChangedFiles, loadedTargets);
   blockers.push(...coverageBlockers);
+
+  const selectedValidationCommands = ["bun run harness:check"];
+  const selectedValidationCommandKeys = new Set(selectedValidationCommands);
+
+  for (const command of [
+    ...repoValidation.selectedCommands,
+    ...appSelectedValidationCommands,
+  ]) {
+    if (selectedValidationCommandKeys.has(command)) {
+      continue;
+    }
+
+    selectedValidationCommandKeys.add(command);
+    selectedValidationCommands.push(command);
+  }
 
   const outsideTargetFiles = allChangedFiles.filter(
     (filePath) =>
+      !repoValidation.matchedFiles.includes(filePath) &&
       !loadedTargets.some((target) =>
         matchesPathPrefix(filePath, `${target.packageDir}/`)
       )
   );
 
-  const recommendedValidations = coverageByTarget.length
+  const recommendedValidations =
+    coverageByTarget.length > 0 || repoValidation.matchedFiles.length > 0
     ? ["bun run harness:audit", "bun run pr:athena"]
     : [];
 
@@ -909,6 +952,7 @@ export async function runHarnessSelfReview(
       untrackedFiles: sortUniquePaths(changedFiles.untrackedFiles),
     },
     allChangedFiles,
+    repoCoverage: repoValidation.matchedSurfaces,
     outsideTargetFiles,
     coverageByTarget,
     selectedValidations: selectedValidationCommands,
