@@ -14,7 +14,7 @@ export async function getTerminalForRegisterState(
     return null;
   }
 
-  const terminal = await ctx.db.get(args.terminalId);
+  const terminal = await ctx.db.get("posTerminal", args.terminalId);
   if (
     !terminal ||
     terminal.storeId !== args.storeId ||

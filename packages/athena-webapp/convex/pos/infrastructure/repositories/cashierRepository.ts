@@ -14,7 +14,7 @@ export async function getCashierForRegisterState(
     return null;
   }
 
-  const cashier = await ctx.db.get(args.cashierId);
+  const cashier = await ctx.db.get("cashier", args.cashierId);
   if (!cashier || cashier.storeId !== args.storeId || !cashier.active) {
     return null;
   }
