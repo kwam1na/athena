@@ -168,6 +168,7 @@ import type * as schemas_serviceOps_serviceInventoryUsage from "../schemas/servi
 import type * as schemas_stockOps_index from "../schemas/stockOps/index.js";
 import type * as schemas_stockOps_purchaseOrder from "../schemas/stockOps/purchaseOrder.js";
 import type * as schemas_stockOps_purchaseOrderLineItem from "../schemas/stockOps/purchaseOrderLineItem.js";
+import type * as schemas_stockOps_receivingBatch from "../schemas/stockOps/receivingBatch.js";
 import type * as schemas_stockOps_vendor from "../schemas/stockOps/vendor.js";
 import type * as schemas_storeFront_analytics from "../schemas/storeFront/analytics.js";
 import type * as schemas_storeFront_bag from "../schemas/storeFront/bag.js";
@@ -195,6 +196,7 @@ import type * as serviceOps_serviceCases from "../serviceOps/serviceCases.js";
 import type * as services_orderEmailService from "../services/orderEmailService.js";
 import type * as services_paystackService from "../services/paystackService.js";
 import type * as stockOps_purchaseOrders from "../stockOps/purchaseOrders.js";
+import type * as stockOps_receiving from "../stockOps/receiving.js";
 import type * as stockOps_vendors from "../stockOps/vendors.js";
 import type * as storeFront_analytics from "../storeFront/analytics.js";
 import type * as storeFront_auth from "../storeFront/auth.js";
@@ -397,6 +399,7 @@ declare const fullApi: ApiFromModules<{
   "schemas/stockOps/index": typeof schemas_stockOps_index;
   "schemas/stockOps/purchaseOrder": typeof schemas_stockOps_purchaseOrder;
   "schemas/stockOps/purchaseOrderLineItem": typeof schemas_stockOps_purchaseOrderLineItem;
+  "schemas/stockOps/receivingBatch": typeof schemas_stockOps_receivingBatch;
   "schemas/stockOps/vendor": typeof schemas_stockOps_vendor;
   "schemas/storeFront/analytics": typeof schemas_storeFront_analytics;
   "schemas/storeFront/bag": typeof schemas_storeFront_bag;
@@ -424,6 +427,7 @@ declare const fullApi: ApiFromModules<{
   "services/orderEmailService": typeof services_orderEmailService;
   "services/paystackService": typeof services_paystackService;
   "stockOps/purchaseOrders": typeof stockOps_purchaseOrders;
+  "stockOps/receiving": typeof stockOps_receiving;
   "stockOps/vendors": typeof stockOps_vendors;
   "storeFront/analytics": typeof storeFront_analytics;
   "storeFront/auth": typeof storeFront_auth;
