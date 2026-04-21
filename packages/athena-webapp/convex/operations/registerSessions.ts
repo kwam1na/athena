@@ -169,6 +169,58 @@ export function buildRegisterSessionTransactionPatch(
   return updates;
 }
 
+export function buildRegisterSessionCloseoutPatch(
+  session: {
+    countedCash?: number;
+    expectedCash: number;
+    notes?: string;
+    status: RegisterSessionStatus;
+    variance?: number;
+  },
+  args: {
+    countedCash?: number;
+    notes?: string;
+  }
+) {
+  assertValidRegisterSessionTransition(session.status, "closing");
+
+  return {
+    countedCash: args.countedCash,
+    notes: trimOptional(args.notes) ?? session.notes,
+    status: "closing" as const,
+    variance:
+      args.countedCash !== undefined
+        ? args.countedCash - session.expectedCash
+        : session.variance,
+  };
+}
+
+export function buildClosedRegisterSessionPatch(
+  session: {
+    expectedCash: number;
+    notes?: string;
+    status: RegisterSessionStatus;
+  },
+  args: {
+    countedCash: number;
+    closedByUserId?: Id<"athenaUser">;
+    closedByStaffProfileId?: Id<"staffProfile">;
+    notes?: string;
+  }
+) {
+  assertValidRegisterSessionTransition(session.status, "closed");
+
+  return {
+    closedAt: Date.now(),
+    closedByStaffProfileId: args.closedByStaffProfileId,
+    closedByUserId: args.closedByUserId,
+    countedCash: args.countedCash,
+    notes: trimOptional(args.notes) ?? session.notes,
+    status: "closed" as const,
+    variance: args.countedCash - session.expectedCash,
+  };
+}
+
 async function findConflictingRegisterSession(
   ctx: MutationCtx,
   args: {
@@ -326,13 +378,11 @@ export const beginRegisterSessionCloseout = internalMutation({
       throw new Error("Register session not found.");
     }
 
-    assertValidRegisterSessionTransition(session.status, "closing");
-
-    await ctx.db.patch("registerSession", args.registerSessionId, {
-      countedCash: args.countedCash,
-      notes: trimOptional(args.notes) ?? session.notes,
-      status: "closing",
-    });
+    await ctx.db.patch(
+      "registerSession",
+      args.registerSessionId,
+      buildRegisterSessionCloseoutPatch(session, args)
+    );
 
     return ctx.db.get("registerSession", args.registerSessionId);
   },
@@ -352,17 +402,11 @@ export const closeRegisterSession = internalMutation({
       throw new Error("Register session not found.");
     }
 
-    assertValidRegisterSessionTransition(session.status, "closed");
-
-    await ctx.db.patch("registerSession", args.registerSessionId, {
-      closedAt: Date.now(),
-      closedByStaffProfileId: args.closedByStaffProfileId,
-      closedByUserId: args.closedByUserId,
-      countedCash: args.countedCash,
-      notes: trimOptional(args.notes) ?? session.notes,
-      status: "closed",
-      variance: args.countedCash - session.expectedCash,
-    });
+    await ctx.db.patch(
+      "registerSession",
+      args.registerSessionId,
+      buildClosedRegisterSessionPatch(session, args)
+    );
 
     return ctx.db.get("registerSession", args.registerSessionId);
   },

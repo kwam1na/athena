@@ -4,6 +4,8 @@ import {
   assertRegisterSessionIdentity,
   assertRegisterSessionMatchesTransaction,
   assertValidRegisterSessionTransition,
+  buildClosedRegisterSessionPatch,
+  buildRegisterSessionCloseoutPatch,
   buildRegisterSession,
   buildRegisterSessionTransactionPatch,
   calculateRegisterSessionCashDelta,
@@ -158,5 +160,42 @@ describe("cash controls register sessions", () => {
       expectedCash: 5000,
       variance: 7000,
     });
+  });
+
+  it("computes closeout variance before final signoff", () => {
+    const registerSession = buildRegisterSession({
+      storeId: "store_1" as Id<"store">,
+      openingFloat: 5000,
+      registerNumber: "A1",
+    });
+
+    expect(
+      buildRegisterSessionCloseoutPatch(registerSession, {
+        countedCash: 4800,
+        notes: "Counted after shift.",
+      })
+    ).toEqual({
+      countedCash: 4800,
+      notes: "Counted after shift.",
+      status: "closing",
+      variance: -200,
+    });
+
+    const closedPatch = buildClosedRegisterSessionPatch(
+      {
+        ...registerSession,
+        status: "closing" as const,
+      },
+      {
+        countedCash: 5200,
+      }
+    );
+
+    expect(closedPatch).toMatchObject({
+      countedCash: 5200,
+      status: "closed",
+      variance: 200,
+    });
+    expect(closedPatch.closedAt).toEqual(expect.any(Number));
   });
 });
