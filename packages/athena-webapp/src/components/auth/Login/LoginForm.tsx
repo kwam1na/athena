@@ -1,8 +1,7 @@
 import { useForm } from "@tanstack/react-form";
 import { zodValidator } from "@tanstack/zod-form-adapter";
-import { useAction } from "convex/react";
+import { useAuthActions } from "@convex-dev/auth/react";
 import { useState } from "react";
-import { api } from "~/convex/_generated/api";
 import { Input } from "../../ui/input";
 import { LoadingButton } from "../../ui/loading-button";
 import { z } from "zod";
@@ -13,10 +12,7 @@ export function LoginForm({
   setStep: (step: { email: string }) => void;
 }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const verifyEmail = useAction(
-    api.inventory.auth.sendVerificationCodeViaProvider
-  );
+  const { signIn } = useAuthActions();
 
   const form = useForm({
     validatorAdapter: zodValidator(),
@@ -26,14 +22,14 @@ export function LoginForm({
 
     onSubmit: async ({ value }) => {
       setIsSubmitting(true);
+      const normalizedEmail = value.email.trim().toLowerCase();
 
-      const res = await verifyEmail({ email: value.email });
-
-      if (res.success) {
-        setStep({ email: value.email });
+      try {
+        await signIn("resend-otp", { email: normalizedEmail });
+        setStep({ email: normalizedEmail });
+      } finally {
+        setIsSubmitting(false);
       }
-
-      setIsSubmitting(false);
     },
   });
   return (

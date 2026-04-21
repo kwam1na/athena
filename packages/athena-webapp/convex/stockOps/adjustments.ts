@@ -1,6 +1,10 @@
 import { mutation, query, type MutationCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
 import { v } from "convex/values";
+import {
+  requireAuthenticatedAthenaUserWithCtx,
+  requireOrganizationMemberRoleWithCtx,
+} from "../lib/athenaUserAuth";
 import { buildApprovalRequest } from "../operations/approvalRequestHelpers";
 import { recordInventoryMovementWithCtx } from "../operations/inventoryMovements";
 import { recordOperationalEventWithCtx } from "../operations/operationalEvents";
@@ -400,10 +404,208 @@ export const listInventorySnapshot = query({
   },
 });
 
+type SubmitStockAdjustmentBatchArgs = {
+  adjustmentType: "manual" | "cycle_count";
+  lineItems: StockAdjustmentInputLineItem[];
+  notes?: string;
+  reasonCode: string;
+  storeId: Id<"store">;
+  submissionKey: string;
+};
+
+export async function submitStockAdjustmentBatchWithCtx(
+  ctx: MutationCtx,
+  args: SubmitStockAdjustmentBatchArgs
+) {
+  const submissionKey = trimOptional(args.submissionKey);
+
+  if (!submissionKey) {
+    throw new Error("A stock-adjustment submission key is required.");
+  }
+
+  assertStockAdjustmentReasonCode(args.adjustmentType, args.reasonCode);
+
+  if (args.lineItems.length === 0) {
+    throw new Error("Stock adjustment batches require at least one line item.");
+  }
+
+  assertDistinctStockAdjustmentLineItems(
+    args.lineItems.map((lineItem) => ({
+      productSkuId: String(lineItem.productSkuId),
+    }))
+  );
+
+  const store = await ctx.db.get("store", args.storeId);
+  if (!store) {
+    throw new Error("Store not found.");
+  }
+
+  const createdByUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+
+  await requireOrganizationMemberRoleWithCtx(ctx, {
+    allowedRoles: ["full_admin", "pos_only"],
+    failureMessage: "You do not have permission to adjust stock for this store.",
+    organizationId: store.organizationId,
+    userId: createdByUser._id,
+  });
+
+  const existingStockAdjustmentBatch = await ctx.db
+    .query("stockAdjustmentBatch")
+    .withIndex("by_storeId_adjustmentType_submissionKey", (q) =>
+      q
+        .eq("storeId", args.storeId)
+        .eq("adjustmentType", args.adjustmentType)
+        .eq("submissionKey", submissionKey)
+    )
+    .first();
+
+  if (existingStockAdjustmentBatch) {
+    return existingStockAdjustmentBatch;
+  }
+
+  const productSkus = await Promise.all(
+    args.lineItems.map((lineItem) => ctx.db.get("productSku", lineItem.productSkuId))
+  );
+
+  const normalizedLineItems = args.lineItems.map((requestedLineItem, index) =>
+    assertNormalizedLineItem(
+      productSkus[index] ?? null,
+      args.storeId,
+      args.adjustmentType,
+      requestedLineItem
+    )
+  );
+
+  const summary = summarizeStockAdjustmentLineItems(normalizedLineItems);
+  const approvalRequired = requiresStockAdjustmentApproval(summary);
+  const now = Date.now();
+  const notes = trimOptional(args.notes);
+
+  const stockAdjustmentBatchId = await ctx.db.insert("stockAdjustmentBatch", {
+    adjustmentType: args.adjustmentType,
+    approvalRequired,
+    createdAt: now,
+    createdByUserId: createdByUser._id,
+    lineItemCount: summary.lineItemCount,
+    lineItems: normalizedLineItems,
+    largestAbsoluteDelta: summary.largestAbsoluteDelta,
+    netQuantityDelta: summary.netQuantityDelta,
+    notes,
+    organizationId: store.organizationId,
+    reasonCode: args.reasonCode,
+    status: approvalRequired ? "pending_approval" : "applied",
+    storeId: args.storeId,
+    submissionKey,
+    ...(approvalRequired ? null : { appliedAt: now }),
+  });
+
+  let workItemId: Id<"operationalWorkItem"> | undefined;
+  let approvalRequestId: Id<"approvalRequest"> | undefined;
+
+  if (approvalRequired) {
+    const workItem = await createOperationalWorkItemWithCtx(ctx, {
+      approvalState: "pending",
+      createdByUserId: createdByUser._id,
+      metadata: {
+        adjustmentBatchId: stockAdjustmentBatchId,
+        adjustmentType: args.adjustmentType,
+        largestAbsoluteDelta: summary.largestAbsoluteDelta,
+        lineItemCount: summary.lineItemCount,
+        netQuantityDelta: summary.netQuantityDelta,
+        reasonCode: args.reasonCode,
+      },
+      notes,
+      organizationId: store.organizationId,
+      priority: "high",
+      status: "open",
+      storeId: args.storeId,
+      title: buildStockAdjustmentTitle({
+        adjustmentType: args.adjustmentType,
+        lineItemCount: summary.lineItemCount,
+      }),
+      type: "stock_adjustment_review",
+    });
+
+    workItemId = workItem?._id;
+
+    if (workItemId) {
+      approvalRequestId = await ctx.db.insert(
+        "approvalRequest",
+        buildApprovalRequest({
+          metadata: {
+            adjustmentBatchId: stockAdjustmentBatchId,
+            adjustmentType: args.adjustmentType,
+            approvalThreshold: STOCK_ADJUSTMENT_APPROVAL_THRESHOLD,
+            largestAbsoluteDelta: summary.largestAbsoluteDelta,
+            lineItems: normalizedLineItems,
+            netQuantityDelta: summary.netQuantityDelta,
+            reasonCode: args.reasonCode,
+          },
+          notes,
+          organizationId: store.organizationId,
+          reason: "Inventory variance exceeded the approval threshold.",
+          requestType: "inventory_adjustment_review",
+          requestedByUserId: createdByUser._id,
+          storeId: args.storeId,
+          subjectId: String(stockAdjustmentBatchId),
+          subjectType: "stock_adjustment_batch",
+          workItemId,
+        })
+      );
+
+      await ctx.db.patch("operationalWorkItem", workItemId, {
+        approvalRequestId,
+      });
+    }
+
+    await ctx.db.patch("stockAdjustmentBatch", stockAdjustmentBatchId, {
+      approvalRequestId,
+      operationalWorkItemId: workItemId,
+    });
+  } else {
+    await applyStockAdjustmentBatchWithCtx(ctx, {
+      actorUserId: createdByUser._id,
+      batchId: stockAdjustmentBatchId,
+      lineItems: normalizedLineItems,
+      notes,
+      organizationId: store.organizationId,
+      reasonCode: args.reasonCode as StockAdjustmentReasonCode,
+      storeId: args.storeId,
+    });
+  }
+
+  await recordOperationalEventWithCtx(ctx, {
+    actorUserId: createdByUser._id,
+    approvalRequestId,
+    eventType: approvalRequired
+      ? "stock_adjustment_approval_requested"
+      : "stock_adjustment_applied",
+    metadata: {
+      adjustmentType: args.adjustmentType,
+      approvalRequired,
+      largestAbsoluteDelta: summary.largestAbsoluteDelta,
+      lineItemCount: summary.lineItemCount,
+      netQuantityDelta: summary.netQuantityDelta,
+      reasonCode: args.reasonCode,
+    },
+    organizationId: store.organizationId,
+    reason: notes,
+    storeId: args.storeId,
+    subjectId: String(stockAdjustmentBatchId),
+    subjectLabel: buildStockAdjustmentTitle({
+      adjustmentType: args.adjustmentType,
+      lineItemCount: summary.lineItemCount,
+    }),
+    subjectType: "stock_adjustment_batch",
+    workItemId,
+  });
+
+  return ctx.db.get("stockAdjustmentBatch", stockAdjustmentBatchId);
+}
+
 export const submitStockAdjustmentBatch = mutation({
   args: {
     adjustmentType: v.union(v.literal("manual"), v.literal("cycle_count")),
-    createdByUserId: v.optional(v.id("athenaUser")),
     lineItems: v.array(
       v.object({
         countedQuantity: v.optional(v.number()),
@@ -416,181 +618,5 @@ export const submitStockAdjustmentBatch = mutation({
     storeId: v.id("store"),
     submissionKey: v.string(),
   },
-  handler: async (ctx, args) => {
-    const submissionKey = trimOptional(args.submissionKey);
-
-    if (!submissionKey) {
-      throw new Error("A stock-adjustment submission key is required.");
-    }
-
-    assertStockAdjustmentReasonCode(args.adjustmentType, args.reasonCode);
-
-    if (args.lineItems.length === 0) {
-      throw new Error("Stock adjustment batches require at least one line item.");
-    }
-
-    assertDistinctStockAdjustmentLineItems(
-      args.lineItems.map((lineItem) => ({
-        productSkuId: String(lineItem.productSkuId),
-      }))
-    );
-
-    const store = await ctx.db.get("store", args.storeId);
-    if (!store) {
-      throw new Error("Store not found.");
-    }
-
-    const existingStockAdjustmentBatch = await ctx.db
-      .query("stockAdjustmentBatch")
-      .withIndex("by_storeId_adjustmentType_submissionKey", (q) =>
-        q
-          .eq("storeId", args.storeId)
-          .eq("adjustmentType", args.adjustmentType)
-          .eq("submissionKey", submissionKey)
-      )
-      .first();
-
-    if (existingStockAdjustmentBatch) {
-      return existingStockAdjustmentBatch;
-    }
-
-    const productSkus = await Promise.all(
-      args.lineItems.map((lineItem) => ctx.db.get("productSku", lineItem.productSkuId))
-    );
-
-    const normalizedLineItems = args.lineItems.map((requestedLineItem, index) =>
-      assertNormalizedLineItem(
-        productSkus[index] ?? null,
-        args.storeId,
-        args.adjustmentType,
-        requestedLineItem
-      )
-    );
-
-    const summary = summarizeStockAdjustmentLineItems(normalizedLineItems);
-    const approvalRequired = requiresStockAdjustmentApproval(summary);
-    const now = Date.now();
-    const notes = trimOptional(args.notes);
-
-    const stockAdjustmentBatchId = await ctx.db.insert("stockAdjustmentBatch", {
-      adjustmentType: args.adjustmentType,
-      approvalRequired,
-      createdAt: now,
-      createdByUserId: args.createdByUserId,
-      lineItemCount: summary.lineItemCount,
-      lineItems: normalizedLineItems,
-      largestAbsoluteDelta: summary.largestAbsoluteDelta,
-      netQuantityDelta: summary.netQuantityDelta,
-      notes,
-      organizationId: store.organizationId,
-      reasonCode: args.reasonCode,
-      status: approvalRequired ? "pending_approval" : "applied",
-      storeId: args.storeId,
-      submissionKey,
-      ...(approvalRequired ? null : { appliedAt: now }),
-    });
-
-    let workItemId: Id<"operationalWorkItem"> | undefined;
-    let approvalRequestId: Id<"approvalRequest"> | undefined;
-
-    if (approvalRequired) {
-      const workItem = await createOperationalWorkItemWithCtx(ctx, {
-        approvalState: "pending",
-        createdByUserId: args.createdByUserId,
-        metadata: {
-          adjustmentBatchId: stockAdjustmentBatchId,
-          adjustmentType: args.adjustmentType,
-          largestAbsoluteDelta: summary.largestAbsoluteDelta,
-          lineItemCount: summary.lineItemCount,
-          netQuantityDelta: summary.netQuantityDelta,
-          reasonCode: args.reasonCode,
-        },
-        notes,
-        organizationId: store.organizationId,
-        priority: "high",
-        status: "open",
-        storeId: args.storeId,
-        title: buildStockAdjustmentTitle({
-          adjustmentType: args.adjustmentType,
-          lineItemCount: summary.lineItemCount,
-        }),
-        type: "stock_adjustment_review",
-      });
-
-      workItemId = workItem?._id;
-
-      if (workItemId) {
-        approvalRequestId = await ctx.db.insert(
-          "approvalRequest",
-          buildApprovalRequest({
-            metadata: {
-              adjustmentBatchId: stockAdjustmentBatchId,
-              adjustmentType: args.adjustmentType,
-              approvalThreshold: STOCK_ADJUSTMENT_APPROVAL_THRESHOLD,
-              largestAbsoluteDelta: summary.largestAbsoluteDelta,
-              lineItems: normalizedLineItems,
-              netQuantityDelta: summary.netQuantityDelta,
-              reasonCode: args.reasonCode,
-            },
-            notes,
-            organizationId: store.organizationId,
-            reason: "Inventory variance exceeded the approval threshold.",
-            requestType: "inventory_adjustment_review",
-            requestedByUserId: args.createdByUserId,
-            storeId: args.storeId,
-            subjectId: String(stockAdjustmentBatchId),
-            subjectType: "stock_adjustment_batch",
-            workItemId,
-          })
-        );
-
-        await ctx.db.patch("operationalWorkItem", workItemId, {
-          approvalRequestId,
-        });
-      }
-
-      await ctx.db.patch("stockAdjustmentBatch", stockAdjustmentBatchId, {
-        approvalRequestId,
-        operationalWorkItemId: workItemId,
-      });
-    } else {
-      await applyStockAdjustmentBatchWithCtx(ctx, {
-        actorUserId: args.createdByUserId,
-        batchId: stockAdjustmentBatchId,
-        lineItems: normalizedLineItems,
-        notes,
-        organizationId: store.organizationId,
-        reasonCode: args.reasonCode as StockAdjustmentReasonCode,
-        storeId: args.storeId,
-      });
-    }
-
-    await recordOperationalEventWithCtx(ctx, {
-      actorUserId: args.createdByUserId,
-      approvalRequestId,
-      eventType: approvalRequired
-        ? "stock_adjustment_approval_requested"
-        : "stock_adjustment_applied",
-      metadata: {
-        adjustmentType: args.adjustmentType,
-        approvalRequired,
-        largestAbsoluteDelta: summary.largestAbsoluteDelta,
-        lineItemCount: summary.lineItemCount,
-        netQuantityDelta: summary.netQuantityDelta,
-        reasonCode: args.reasonCode,
-      },
-      organizationId: store.organizationId,
-      reason: notes,
-      storeId: args.storeId,
-      subjectId: String(stockAdjustmentBatchId),
-      subjectLabel: buildStockAdjustmentTitle({
-        adjustmentType: args.adjustmentType,
-        lineItemCount: summary.lineItemCount,
-      }),
-      subjectType: "stock_adjustment_batch",
-      workItemId,
-    });
-
-    return ctx.db.get("stockAdjustmentBatch", stockAdjustmentBatchId);
-  },
+  handler: async (ctx, args) => submitStockAdjustmentBatchWithCtx(ctx, args),
 });

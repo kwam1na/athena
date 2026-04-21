@@ -7,7 +7,6 @@ import { FadeIn } from "../common/FadeIn";
 import { RegisterCloseoutView } from "../cash-controls/RegisterCloseoutView";
 import { EmptyState } from "../states/empty/empty-state";
 import { NoPermissionView } from "../states/no-permission/NoPermissionView";
-import { useAuth } from "@/hooks/useAuth";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { usePermissions } from "@/hooks/usePermissions";
 import { api } from "~/convex/_generated/api";
@@ -56,7 +55,6 @@ type OperationsQueueViewContentProps = {
   onSubmitStockBatch: (args: SubmitStockAdjustmentArgs) => Promise<void>;
   registerCloseoutSection?: ReactNode;
   storeId?: Id<"store">;
-  userId?: Id<"athenaUser">;
   workItems: QueueWorkItem[];
 };
 
@@ -72,7 +70,6 @@ export function OperationsQueueViewContent({
   onSubmitStockBatch,
   registerCloseoutSection,
   storeId,
-  userId,
   workItems,
 }: OperationsQueueViewContentProps) {
   if (isLoadingPermissions) {
@@ -128,7 +125,6 @@ export function OperationsQueueViewContent({
           isSubmitting={isSubmittingStockBatch}
           onSubmitBatch={onSubmitStockBatch}
           storeId={storeId}
-          userId={userId}
         />
 
         <div className="space-y-6">
@@ -255,7 +251,6 @@ export function OperationsQueueViewContent({
 
 export function OperationsQueueView() {
   const { activeStore } = useGetActiveStore();
-  const { user } = useAuth();
   const { canAccessOperations, isLoading } = usePermissions();
   const [isSubmittingStockBatch, setIsSubmittingStockBatch] = useState(false);
   const [decisioningApprovalRequestId, setDecisioningApprovalRequestId] =
@@ -301,7 +296,6 @@ export function OperationsQueueView() {
       await decideApprovalRequest({
         approvalRequestId: args.approvalRequestId,
         decision: args.decision,
-        reviewedByUserId: user?._id,
       });
 
       toast.success(
@@ -331,7 +325,6 @@ export function OperationsQueueView() {
       onSubmitStockBatch={handleSubmitStockBatch}
       registerCloseoutSection={<RegisterCloseoutView />}
       storeId={activeStore?._id}
-      userId={user?._id}
       workItems={queue?.workItems ?? []}
     />
   );

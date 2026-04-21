@@ -13,6 +13,7 @@ import {
   InputOTPGroup,
   InputOTPSlot,
 } from "@/components/ui/input-otp";
+import { useAuthActions } from "@convex-dev/auth/react";
 import { LoadingButton } from "~/src/components/ui/loading-button";
 import { LOGGED_IN_USER_ID_KEY } from "~/src/lib/constants";
 import { useForm } from "react-hook-form";
@@ -21,7 +22,6 @@ import { useMutation } from "convex/react";
 import { useNavigate } from "@tanstack/react-router";
 import { api } from "~/convex/_generated/api";
 import { z } from "zod";
-import { Button } from "../../ui/button";
 
 const FormSchema = z.object({
   pin: z.string().min(6, {
@@ -39,8 +39,11 @@ export function InputOTPForm({ email }: { email: string }) {
 
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const { signIn } = useAuthActions();
 
-  const verifyCode = useMutation(api.inventory.auth.verifyCode);
+  const syncAuthenticatedAthenaUser = useMutation(
+    api.inventory.auth.syncAuthenticatedAthenaUser
+  );
 
   const navigate = useNavigate();
 
@@ -58,23 +61,34 @@ export function InputOTPForm({ email }: { email: string }) {
       setIsSigningIn(true);
       setErrorMessage(null);
 
-      const res = await verifyCode({ code: data.pin, email });
+      const result = await signIn("resend-otp", {
+        code: data.pin,
+        email: email.trim().toLowerCase(),
+      });
 
-      if (res.success) {
-        localStorage.setItem(LOGGED_IN_USER_ID_KEY, res.user._id);
+      if (result.signingIn) {
+        const user = await syncAuthenticatedAthenaUser({});
 
+        if (!user) {
+          throw new Error("Could not load your Athena user profile.");
+        }
+
+        localStorage.setItem(LOGGED_IN_USER_ID_KEY, user._id);
         navigate({ to: "/" });
-      }
-
-      if (res.error) {
-        setErrorMessage(res.message);
+      } else {
+        setErrorMessage("Invalid code entered");
       }
 
       setIsSigningIn(false);
     } catch (e) {
-      if ((e as Error).message.includes("Could not verify code")) {
-        setErrorMessage("Invalid code entered");
-      }
+      const message =
+        e instanceof Error ? e.message : "Could not verify code";
+
+      setErrorMessage(
+        message.includes("Could not verify code")
+          ? "Invalid code entered"
+          : message
+      );
       setIsSigningIn(false);
     }
   }
