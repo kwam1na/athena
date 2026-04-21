@@ -136,7 +136,7 @@ describe("operations query indexing", () => {
 
   it("threads operations roles into membership and POS customer linking surfaces", () => {
     const organizationMemberSource = getSource("../schemas/inventory/organizationMember.ts");
-    const posCustomersSource = getSource("../inventory/posCustomers.ts");
+    const posCustomersSource = getSource("../pos/infrastructure/repositories/customerRepository.ts");
     const typesSource = getSource("../schema.ts");
 
     expect(organizationMemberSource).toContain("operationalRoles");

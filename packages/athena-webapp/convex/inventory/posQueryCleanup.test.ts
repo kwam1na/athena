@@ -20,40 +20,54 @@ describe("V26-173 POS query cleanup", () => {
   });
 
   it("uses direct product-id reads instead of store-wide product scans for POS lookups", () => {
-    const source = readProjectFile("convex", "inventory", "pos.ts").replace(
+    const source = readProjectFile(
+      "convex",
+      "pos",
+      "application",
+      "queries",
+      "searchCatalog.ts"
+    ).replace(
       /\s+/g,
       " "
     );
 
     expect(source).toContain("if (isConvexProductId(query))");
-    expect(source).toContain('ctx.db.get("product", query as Id<"product">)');
-    expect(source).toContain(
-      'ctx.db.get("product", args.barcode as Id<"product">)'
-    );
+    expect(source).toContain('getProductById(ctx, query as Id<"product">)');
+    expect(source).toContain('getProductById(ctx, args.barcode as Id<"product">)');
     expect(source).not.toContain(
-      '.query("product") .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId)) .filter((q) => q.eq(q.field("_id"), args.barcode))'
+      '.query("product") .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))'
     );
   });
 
   it("uses the completed-transaction index for dashboard and completed transaction reads", () => {
-    const source = readProjectFile("convex", "inventory", "pos.ts").replace(
+    const source = readProjectFile(
+      "convex",
+      "pos",
+      "infrastructure",
+      "repositories",
+      "transactionRepository.ts"
+    ).replace(
       /\s+/g,
       " "
     );
 
     expect(source).toContain('withIndex("by_storeId_status_completedAt"');
-    expect(source).not.toContain(
-      '.withIndex("by_storeId", (q) => q.eq("storeId", args.storeId)) .filter((q) => q.and( q.eq(q.field("status"), "completed"), q.gte(q.field("completedAt"), startOfDay), q.lte(q.field("completedAt"), endOfDay) ) )'
-    );
   });
 
-  it("avoids manual pagination loops in POS query helpers", () => {
+  it("keeps the legacy POS inventory surface as a thin transport shim", () => {
     const source = readProjectFile("convex", "inventory", "pos.ts").replace(
       /\s+/g,
       " "
     );
 
-    expect(source).not.toContain("async function collectAllPages");
+    expect(source).toContain(
+      'export { search as searchProducts, barcodeLookup as lookupByBarcode, } from "../pos/public/catalog";'
+    );
+    expect(source).toContain(
+      'export { updateInventory, completeTransaction, getTransaction, getTransactionsByStore, getCompletedTransactions, getTransactionById, voidTransaction, createTransactionFromSession, getRecentTransactionsWithCustomers, getTodaySummary, } from "../pos/public/transactions";'
+    );
+    expect(source).not.toContain("query({");
+    expect(source).not.toContain("mutation({");
     expect(source).not.toContain('.paginate({ cursor, numItems:');
   });
 
