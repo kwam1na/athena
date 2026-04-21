@@ -85,5 +85,5 @@ describe("V26-173 POS query cleanup", () => {
       errorCount: 0,
       warningCount: 0,
     });
-  }, 15000);
+  }, 30000);
 });

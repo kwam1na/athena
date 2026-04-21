@@ -8039,7 +8039,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_operations_registersessions_ts",
       "source_file": "packages/athena-webapp/convex/operations/registerSessions.ts",
-      "source_location": "L127",
+      "source_location": "L131",
       "target": "registersessions_buildregistersessiontransactionpatch",
       "weight": 1
     },
@@ -8063,7 +8063,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_operations_registersessions_ts",
       "source_file": "packages/athena-webapp/convex/operations/registerSessions.ts",
-      "source_location": "L168",
+      "source_location": "L172",
       "target": "registersessions_findconflictingregistersession",
       "weight": 1
     },
@@ -25007,7 +25007,7 @@
       "relation": "calls",
       "source": "registersessions_calculateregistersessioncashdelta",
       "source_file": "packages/athena-webapp/convex/operations/registerSessions.ts",
-      "source_location": "L139",
+      "source_location": "L143",
       "target": "registersessions_buildregistersessiontransactionpatch",
       "weight": 1
     },
@@ -45775,7 +45775,7 @@
       "label": "buildRegisterSessionTransactionPatch()",
       "norm_label": "buildregistersessiontransactionpatch()",
       "source_file": "packages/athena-webapp/convex/operations/registerSessions.ts",
-      "source_location": "L127"
+      "source_location": "L131"
     },
     {
       "community": 34,
@@ -45793,7 +45793,7 @@
       "label": "findConflictingRegisterSession()",
       "norm_label": "findconflictingregistersession()",
       "source_file": "packages/athena-webapp/convex/operations/registerSessions.ts",
-      "source_location": "L168"
+      "source_location": "L172"
     },
     {
       "community": 34,

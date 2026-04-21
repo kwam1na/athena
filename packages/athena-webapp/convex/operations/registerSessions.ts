@@ -114,6 +114,10 @@ export function assertValidRegisterSessionTransition(
   nextStatus: RegisterSessionStatus
 ) {
   if (currentStatus === nextStatus) {
+    if (currentStatus === "closed") {
+      throw new Error("Register session is already closed.");
+    }
+
     return;
   }
 

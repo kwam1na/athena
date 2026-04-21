@@ -64,6 +64,10 @@ describe("cash controls register sessions", () => {
     expect(() =>
       assertValidRegisterSessionTransition("closing", "closed")
     ).not.toThrow();
+
+    expect(() =>
+      assertValidRegisterSessionTransition("closed", "closed")
+    ).toThrow("Register session is already closed.");
   });
 
   it("requires a register or terminal identity when opening a session", () => {
