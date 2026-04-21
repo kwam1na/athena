@@ -1,3 +1,5 @@
+/* eslint-disable @convex-dev/no-collect-in-query -- V26-276 service case summaries intentionally read complete case- and work-item-scoped ledgers so balances, approvals, and inventory history stay correct until paginated views land. */
+
 import { mutation, query, MutationCtx, QueryCtx } from "../_generated/server";
 import { Id } from "../_generated/dataModel";
 import { v } from "convex/values";

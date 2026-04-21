@@ -1,3 +1,5 @@
+/* eslint-disable @convex-dev/no-collect-in-query -- V26-276 ships store-scoped service catalog management before pagination; truncating the indexed catalog reads would hide valid services from staff and admins. */
+
 import { mutation, query } from "../_generated/server";
 import { Id } from "../_generated/dataModel";
 import { v } from "convex/values";

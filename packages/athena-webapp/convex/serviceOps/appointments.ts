@@ -1,3 +1,5 @@
+/* eslint-disable @convex-dev/no-collect-in-query -- V26-276 keeps service appointment screens and staff overlap checks store-scoped until we add pagination and time-windowed query helpers; truncating these indexed reads would hide real conflicts and appointments. */
+
 import { mutation, query } from "../_generated/server";
 import { Id } from "../_generated/dataModel";
 import { v } from "convex/values";
