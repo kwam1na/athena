@@ -1,17 +1,17 @@
 # POS System Test Suite
 
-This directory contains comprehensive tests for the Point of Sale (POS) system, covering all aspects from individual components to complete transaction flows.
+This directory contains tests for the layered Point of Sale (POS) system, covering the browser POS domain, the register view model, and the thin register route shell.
 
 ## Test Structure
 
 ### 📁 Test Files
 
-- **`usePOSOperations.test.ts`** - Core business logic and state management
+- **`useRegisterViewModel.test.ts`** - Register orchestration and command-result handling
+- **`POSRegisterView.test.tsx`** - Thin register route shell rendering
 - **`backend.test.ts`** - Backend functions and inventory validation
 - **`usePrint.test.ts`** - Receipt printing functionality
 - **`integration.test.ts`** - End-to-end transaction flows
 - **`components.test.tsx`** - UI component interactions
-- **`posStore.test.ts`** - Store state management (if needed)
 
 ## Test Coverage Areas
 
@@ -143,7 +143,8 @@ bun test
 ### Specific Test Files
 
 ```bash
-bun test usePOSOperations.test.ts
+bun test src/lib/pos/presentation/register/useRegisterViewModel.test.ts
+bun test src/components/pos/register/POSRegisterView.test.tsx
 bun test integration.test.ts
 bun test components.test.tsx
 ```
@@ -209,11 +210,11 @@ const mockCustomer: CustomerInfo = {
 - **Solution**: Added `isClosing` flag and proper event handling
 - **Test**: `usePrint.test.ts` - "should prevent multiple close attempts"
 
-### 3. Customer Panel Collapsing
+### 3. Customer Panel Stability
 
 - **Problem**: Typing in customer info would close the panel
-- **Solution**: Separate `updateCustomerInfo` vs `selectCustomer` methods
-- **Test**: `usePOSOperations.test.ts` - "should update customer info without closing panel"
+- **Solution**: Keep customer editing local to the register presentation layer
+- **Test**: `useRegisterViewModel.test.ts`
 
 ### 4. POS Transaction Numbers
 
@@ -282,7 +283,7 @@ const mockCustomer: CustomerInfo = {
 
 ```bash
 # Run single test with debug output
-bun test --reporter=verbose usePOSOperations.test.ts
+bun test --reporter=verbose src/lib/pos/presentation/register/useRegisterViewModel.test.ts
 
 # Run with coverage and open report
 bun test --coverage && open coverage/index.html

@@ -1,53 +1,77 @@
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Id } from "~/convex/_generated/dataModel";
 
 const mockUseQuery = vi.fn();
-const mockCreateSession = vi.fn();
+const mockStartSession = vi.fn();
+const mockAddItem = vi.fn();
 const mockHoldSession = vi.fn();
-const mockReleaseInventoryHoldsAndDeleteItems = vi.fn();
-const mockHandleResumeSession = vi.fn();
-const mockHandleHoldCurrentSession = vi.fn();
-const mockHandleVoidSession = vi.fn();
-const mockTransactionProcessPayment = vi.fn();
-const mockTransactionStartNewTransaction = vi.fn();
+const mockCompleteTransaction = vi.fn();
+const mockResumeSession = vi.fn();
+const mockVoidSession = vi.fn();
+const mockUpdateSession = vi.fn();
+const mockReleaseSessionInventoryHoldsAndDeleteItems = vi.fn();
+const mockRemoveItem = vi.fn();
 const mockNavigateBack = vi.fn();
-const mockCartOperations = {
-  addProduct: vi.fn(),
-  addFromBarcode: vi.fn(),
-  updateQuantity: vi.fn(),
-  removeItem: vi.fn(),
-  clearCart: vi.fn(),
-};
-const mockCustomerOperations = {
-  updateCustomerInfo: vi.fn(),
-  clearCustomer: vi.fn(),
-};
 
-let mockStore: ReturnType<typeof createMockStore>;
 let mockActiveStore: { _id: Id<"store">; currency: string } | null;
 let mockTerminal:
   | {
       _id: Id<"posTerminal">;
       displayName: string;
     }
-  | null;
+  | null
+  | undefined;
+let mockRegisterState:
+  | {
+      phase: "requiresCashier" | "readyToStart" | "resumable" | "active";
+      terminal: { _id: string; displayName: string } | null;
+      cashier: { _id: string; firstName: string; lastName: string } | null;
+      activeSession: { _id: string; sessionNumber: string } | null;
+      resumableSession: { _id: string; sessionNumber: string } | null;
+    }
+  | undefined;
 let mockActiveSession:
   | {
       _id: Id<"posSession">;
       status: "active";
       expiresAt: number;
       sessionNumber: string;
-      cartItems: [];
+      updatedAt: number;
+      cartItems: Array<{
+        id: Id<"posSessionItem">;
+        name: string;
+        barcode: string;
+        price: number;
+        quantity: number;
+        productId: Id<"product">;
+        skuId: Id<"productSku">;
+      }>;
+      customer:
+        | {
+            _id: Id<"posCustomer">;
+            name: string;
+            email?: string;
+            phone?: string;
+          }
+        | null;
     }
-  | null;
+  | null
+  | undefined;
 let mockHeldSessions:
-  | {
+  | Array<{
       _id: Id<"posSession">;
+      expiresAt: number;
       sessionNumber: string;
+      updatedAt: number;
       cartItems: [];
-    }[]
+      customer: null;
+    }>
   | undefined;
 let mockBarcodeSearchResult: null;
 let mockProductIdSearchResults: [] | null;
@@ -70,34 +94,12 @@ vi.mock("@/hooks/useGetActiveStore", () => ({
   }),
 }));
 
-vi.mock("@/hooks/useCartOperations", () => ({
-  useCartOperations: () => mockCartOperations,
-}));
-
-vi.mock("@/hooks/useCustomerOperations", () => ({
-  useCustomerOperations: () => mockCustomerOperations,
-}));
-
-vi.mock("@/hooks/usePOSOperations", () => ({
-  usePOSOperations: () => ({
-    transaction: {
-      processPayment: mockTransactionProcessPayment,
-      startNewTransaction: mockTransactionStartNewTransaction,
-    },
-  }),
-}));
-
 vi.mock("@/hooks/useGetTerminal", () => ({
   useGetTerminal: () => mockTerminal,
 }));
 
 vi.mock("@/hooks/use-navigate-back", () => ({
   useNavigateBack: () => mockNavigateBack,
-}));
-
-vi.mock("@/hooks/usePOSSessions", () => ({
-  usePOSActiveSession: () => mockActiveSession,
-  usePOSStoreSessions: () => mockHeldSessions,
 }));
 
 vi.mock("@/hooks/usePOSProducts", () => ({
@@ -109,107 +111,34 @@ vi.mock("@/hooks/useDebounce", () => ({
   useDebounce: (value: string) => value,
 }));
 
-vi.mock("@/hooks/useSessionManagement", () => ({
-  useSessionManagement: () => ({
-    createSession: mockCreateSession,
-    holdSession: mockHoldSession,
+vi.mock("@/lib/pos/infrastructure/convex/registerGateway", () => ({
+  useConvexRegisterState: () => mockRegisterState,
+}));
+
+vi.mock("@/lib/pos/infrastructure/convex/sessionGateway", () => ({
+  useConvexActiveSession: () => mockActiveSession,
+  useConvexHeldSessions: () => mockHeldSessions,
+  useConvexSessionActions: () => ({
+    resumeSession: mockResumeSession,
+    voidSession: mockVoidSession,
+    updateSession: mockUpdateSession,
     releaseSessionInventoryHoldsAndDeleteItems:
-      mockReleaseInventoryHoldsAndDeleteItems,
+      mockReleaseSessionInventoryHoldsAndDeleteItems,
+    removeItem: mockRemoveItem,
   }),
 }));
 
-vi.mock("@/hooks/useSessionManagerOperations", () => ({
-  useSessionManagerOperations: () => ({
-    handleResumeSession: mockHandleResumeSession,
-    handleHoldCurrentSession: mockHandleHoldCurrentSession,
-    handleVoidSession: mockHandleVoidSession,
+vi.mock("@/lib/pos/infrastructure/convex/commandGateway", () => ({
+  useConvexCommandGateway: () => ({
+    startSession: mockStartSession,
+    addItem: mockAddItem,
+    holdSession: mockHoldSession,
+    completeTransaction: mockCompleteTransaction,
   }),
 }));
-
-vi.mock("@/stores/posStore", () => ({
-  usePOSStore: () => mockStore,
-}));
-
-function createMockStore() {
-  return {
-    cart: {
-      items: [
-        {
-          id: "item-1",
-          name: "Body Wave",
-          barcode: "1234567890",
-          price: 120,
-          quantity: 1,
-          productId: "product-1",
-          skuId: "sku-1",
-        },
-      ],
-      subtotal: 120,
-      tax: 0,
-      total: 120,
-    },
-    customer: {
-      current: {
-        customerId: "customer-1",
-        name: "Ama Serwa",
-        email: "ama@example.com",
-        phone: "555-0100",
-      },
-    },
-    payment: {
-      payments: [
-        {
-          id: "payment-1",
-          method: "cash" as const,
-          amount: 120,
-          timestamp: 1,
-        },
-      ],
-    },
-    session: {
-      currentSessionId: "session-1",
-      activeSession: null,
-      isCreating: false,
-    },
-    transaction: {
-      isCompleted: false,
-      completedOrderNumber: null,
-      completedTransactionData: null,
-    },
-    cashier: {
-      id: "cashier-1" as Id<"cashier"> | null,
-      isAuthenticated: true,
-    },
-    ui: {
-      registerNumber: "2",
-      showCustomerPanel: true,
-      showProductEntry: true,
-      productSearchQuery: "",
-    },
-    storeId: "store-1" as Id<"store">,
-    terminalId: "terminal-1" as Id<"posTerminal">,
-    addPayment: vi.fn(),
-    updatePayment: vi.fn(),
-    removePayment: vi.fn(),
-    clearPayments: vi.fn(),
-    setStoreId: vi.fn(),
-    setTerminalId: vi.fn(),
-    loadSessionData: vi.fn(),
-    startNewTransaction: vi.fn(),
-    setCurrentSessionId: vi.fn(),
-    setActiveSession: vi.fn(),
-    clearCashier: vi.fn(),
-    clearCart: vi.fn(),
-    setCashier: vi.fn(),
-    setShowCustomerPanel: vi.fn(),
-    setShowProductEntry: vi.fn(),
-    setProductSearchQuery: vi.fn(),
-  };
-}
 
 describe("useRegisterViewModel", () => {
   beforeEach(() => {
-    mockStore = createMockStore();
     mockActiveStore = {
       _id: "store-1" as Id<"store">,
       currency: "GHS",
@@ -218,12 +147,36 @@ describe("useRegisterViewModel", () => {
       _id: "terminal-1" as Id<"posTerminal">,
       displayName: "Front Counter",
     };
+    mockRegisterState = {
+      phase: "active",
+      terminal: { _id: "terminal-1", displayName: "Front Counter" },
+      cashier: { _id: "cashier-1", firstName: "Ama", lastName: "Kusi" },
+      activeSession: { _id: "session-1", sessionNumber: "POS-0001" },
+      resumableSession: null,
+    };
     mockActiveSession = {
       _id: "session-1" as Id<"posSession">,
       status: "active",
       expiresAt: Date.now() + 60_000,
       sessionNumber: "POS-0001",
-      cartItems: [],
+      updatedAt: Date.now(),
+      cartItems: [
+        {
+          id: "item-1" as Id<"posSessionItem">,
+          name: "Body Wave",
+          barcode: "1234567890",
+          price: 120,
+          quantity: 1,
+          productId: "product-1" as Id<"product">,
+          skuId: "sku-1" as Id<"productSku">,
+        },
+      ],
+      customer: {
+        _id: "customer-1" as Id<"posCustomer">,
+        name: "Ama Serwa",
+        email: "ama@example.com",
+        phone: "555-0100",
+      },
     };
     mockHeldSessions = [];
     mockBarcodeSearchResult = null;
@@ -234,62 +187,221 @@ describe("useRegisterViewModel", () => {
     };
 
     mockUseQuery.mockImplementation(() => mockCashier);
-    mockCreateSession.mockReset();
-    mockHoldSession.mockReset();
-    mockHoldSession.mockResolvedValue({ success: true });
-    mockReleaseInventoryHoldsAndDeleteItems.mockReset();
-    mockReleaseInventoryHoldsAndDeleteItems.mockResolvedValue({
+    mockStartSession.mockReset();
+    mockStartSession.mockResolvedValue({
       success: true,
+      data: {
+        sessionId: "session-2" as Id<"posSession">,
+        expiresAt: Date.now() + 60_000,
+      },
     });
-    mockHandleResumeSession.mockReset();
-    mockHandleHoldCurrentSession.mockReset();
-    mockHandleHoldCurrentSession.mockResolvedValue({ success: true });
-    mockHandleVoidSession.mockReset();
-    mockHandleVoidSession.mockResolvedValue({ success: true });
-    mockTransactionProcessPayment.mockReset();
-    mockTransactionProcessPayment.mockResolvedValue({ success: true });
-    mockTransactionStartNewTransaction.mockReset();
+    mockAddItem.mockReset();
+    mockAddItem.mockResolvedValue({
+      success: true,
+      data: {
+        itemId: "item-2" as Id<"posSessionItem">,
+        expiresAt: Date.now() + 60_000,
+      },
+    });
+    mockHoldSession.mockReset();
+    mockHoldSession.mockResolvedValue({
+      success: true,
+      data: {
+        sessionId: "session-1" as Id<"posSession">,
+        expiresAt: Date.now() + 60_000,
+      },
+    });
+    mockCompleteTransaction.mockReset();
+    mockCompleteTransaction.mockResolvedValue({
+      success: true,
+      data: {
+        sessionId: "session-1" as Id<"posSession">,
+        transactionNumber: "TXN-0001",
+      },
+    });
+    mockResumeSession.mockReset();
+    mockResumeSession.mockResolvedValue({
+      success: true,
+      data: {
+        sessionId: "session-2" as Id<"posSession">,
+        expiresAt: Date.now() + 60_000,
+      },
+    });
+    mockVoidSession.mockReset();
+    mockVoidSession.mockResolvedValue({
+      success: true,
+      data: {
+        sessionId: "session-1" as Id<"posSession">,
+      },
+    });
+    mockUpdateSession.mockReset();
+    mockUpdateSession.mockResolvedValue({
+      sessionId: "session-1" as Id<"posSession">,
+      expiresAt: Date.now() + 60_000,
+    });
+    mockReleaseSessionInventoryHoldsAndDeleteItems.mockReset();
+    mockReleaseSessionInventoryHoldsAndDeleteItems.mockResolvedValue({
+      success: true,
+      data: {
+        sessionId: "session-1" as Id<"posSession">,
+      },
+    });
+    mockRemoveItem.mockReset();
+    mockRemoveItem.mockResolvedValue({
+      success: true,
+      data: {
+        expiresAt: Date.now() + 60_000,
+      },
+    });
     mockNavigateBack.mockReset();
-    Object.values(mockCartOperations).forEach((fn) => fn.mockReset());
-    Object.values(mockCustomerOperations).forEach((fn) => fn.mockReset());
   });
 
-  it("maps register state into shell-ready props", async () => {
+  it("maps register state into shell-ready props without the legacy store", async () => {
     const { useRegisterViewModel } = await import("./useRegisterViewModel");
     const { result } = renderHook(() => useRegisterViewModel());
 
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated("cashier-1" as Id<"cashier">);
+    });
+
     expect(result.current.header.isSessionActive).toBe(true);
     expect(result.current.registerInfo.registerLabel).toBe("Front Counter");
-    expect(result.current.checkout.payments).toEqual(
-      mockStore.payment.payments,
-    );
+    expect(result.current.checkout.payments).toEqual([]);
+    expect(result.current.checkout.total).toBe(120);
+    expect(result.current.customerPanel.customerInfo.name).toBe("Ama Serwa");
     expect(result.current.cashierCard?.cashierName).toBe("Ama K.");
     expect(result.current.authDialog?.open).toBe(false);
   });
 
-  it("holds the active POS session before signing the cashier out when items are present", async () => {
+  it("holds the active POS session before signing the cashier out when session data is present", async () => {
     const { useRegisterViewModel } = await import("./useRegisterViewModel");
     const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated("cashier-1" as Id<"cashier">);
+    });
 
     await act(async () => {
       await result.current.cashierCard?.onSignOut();
     });
 
-    expect(mockHandleHoldCurrentSession).toHaveBeenCalledWith("Signing out");
-    expect(mockHandleVoidSession).not.toHaveBeenCalled();
-    expect(mockStore.clearCashier).toHaveBeenCalled();
+    expect(mockUpdateSession).toHaveBeenCalled();
+    expect(mockHoldSession).toHaveBeenCalledWith({
+      sessionId: "session-1",
+      cashierId: "cashier-1",
+      reason: "Signing out",
+    });
+    expect(result.current.authDialog?.open).toBe(true);
   });
 
   it("opens the cashier auth dialog when a terminal exists but no cashier is signed in", async () => {
-    mockStore.cashier = {
-      id: null as Id<"cashier"> | null,
-      isAuthenticated: false,
-    };
-
     const { useRegisterViewModel } = await import("./useRegisterViewModel");
     const { result } = renderHook(() => useRegisterViewModel());
 
     expect(result.current.authDialog?.open).toBe(true);
     expect(result.current.cashierCard).toBeNull();
+  });
+
+  it("does not void an empty active session when navigating away", async () => {
+    mockActiveSession = {
+      ...mockActiveSession!,
+      cartItems: [],
+      customer: null,
+    };
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated("cashier-1" as Id<"cashier">);
+    });
+
+    await act(async () => {
+      await result.current.onNavigateBack();
+    });
+
+    expect(mockHoldSession).not.toHaveBeenCalled();
+    expect(mockVoidSession).not.toHaveBeenCalled();
+    expect(mockNavigateBack).toHaveBeenCalled();
+  });
+
+  it("does not void an empty active session before resuming a held one", async () => {
+    mockActiveSession = {
+      ...mockActiveSession!,
+      cartItems: [],
+      customer: null,
+    };
+    mockHeldSessions = [
+      {
+        _id: "session-2" as Id<"posSession">,
+        expiresAt: Date.now() + 60_000,
+        sessionNumber: "POS-0002",
+        updatedAt: Date.now(),
+        cartItems: [],
+        customer: null,
+      },
+    ];
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated("cashier-1" as Id<"cashier">);
+    });
+
+    await act(async () => {
+      await result.current.sessionPanel?.onResumeSession(
+        "session-2" as Id<"posSession">,
+      );
+    });
+
+    expect(mockVoidSession).not.toHaveBeenCalled();
+    expect(mockResumeSession).toHaveBeenCalledWith({
+      sessionId: "session-2",
+      cashierId: "cashier-1",
+      terminalId: "terminal-1",
+    });
+  });
+
+  it("does not treat customer-only drafts as holdable sessions", async () => {
+    mockActiveSession = {
+      ...mockActiveSession!,
+      cartItems: [],
+      customer: {
+        _id: "customer-1" as Id<"posCustomer">,
+        name: "Ama Serwa",
+        email: "ama@example.com",
+        phone: "555-0100",
+      },
+    };
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated("cashier-1" as Id<"cashier">);
+    });
+
+    expect(result.current.sessionPanel?.canHoldSession).toBe(false);
+
+    await act(async () => {
+      await result.current.onNavigateBack();
+    });
+
+    expect(mockHoldSession).not.toHaveBeenCalled();
+    expect(mockNavigateBack).toHaveBeenCalled();
+  });
+
+  it("does not require the legacy register store or orchestration hooks", () => {
+    const currentDir = dirname(fileURLToPath(import.meta.url));
+    const source = readFileSync(join(currentDir, "useRegisterViewModel.ts"), "utf8");
+
+    expect(source).not.toContain("usePOSStore");
+    expect(source).not.toContain("useCartOperations");
+    expect(source).not.toContain("useCustomerOperations");
+    expect(source).not.toContain("usePOSOperations");
+    expect(source).not.toContain("usePOSSessions");
+    expect(source).not.toContain("useSessionManagement");
+    expect(source).not.toContain("useSessionManagerOperations");
   });
 });
