@@ -43,7 +43,7 @@ import { Switch } from "../ui/switch";
 import { Label } from "../ui/label";
 import { RefundsView } from "./RefundsView";
 import { ActivityView } from "./ActivityView";
-import { getOrderState } from "./utils";
+import { getOrderState, getPickupActionState } from "./utils";
 import { OrderStatus } from "./OrderStatus";
 import { EmailStatusView } from "./EmailStatusView";
 import { ComposedPageHeader } from "../common/PageHeader";
@@ -192,7 +192,13 @@ const Header = () => {
   const isDelivery = order?.deliveryMethod === "delivery";
   const isPickup = order?.deliveryMethod === "pickup";
 
-  const handleUpdateOrder = async (update: Record<string, any>) => {
+  const handleUpdateOrder = async (
+    update: Record<string, any>,
+    options?: {
+      errorMessage?: string;
+      successMessage?: string;
+    },
+  ) => {
     try {
       setIsUpdatingOrder(true);
       await updateOrder({
@@ -205,11 +211,21 @@ const Header = () => {
             }
           : undefined,
       });
-      toast(`Order marked as ${slugToWords(update.status)}`, {
-        icon: <CheckCircledIcon className="w-4 h-4" />,
-      });
+      toast(
+        options?.successMessage ??
+          (update.status
+            ? `Order marked as ${slugToWords(update.status)}`
+            : "Order updated"),
+        {
+          icon: <CheckCircledIcon className="w-4 h-4" />,
+        },
+      );
     } catch (error) {
       console.error(error);
+      toast(options?.errorMessage ?? "Failed to update order", {
+        icon: <Ban className="w-4 h-4" />,
+        description: (error as Error).message,
+      });
     } finally {
       setIsUpdatingOrder(false);
     }
@@ -257,6 +273,14 @@ const Header = () => {
 
   const { isOrderOpen, isOrderReady, isOrderOutForDelivery } =
     getOrderState(order);
+  const {
+    canMarkPickupException,
+    canResolvePickupException,
+    needsPickupPaymentCollection,
+  } = getPickupActionState(order);
+  const isPODPickupOrder =
+    isPickup &&
+    (order.isPODOrder || order.paymentMethod?.type === "payment_on_delivery");
 
   const canPerformInitialTransition =
     (order.items?.some((item) => !Boolean(item.isRefunded)) &&
@@ -389,15 +413,78 @@ const Header = () => {
               </LoadingButton>
             )}
 
-            {isPickup && isOrderReady && (
+            {canMarkPickupException && (
               <LoadingButton
                 isLoading={isUpdatingOrder}
                 disabled={!isReady}
-                onClick={() => handleUpdateOrder({ status: "picked-up" })}
+                onClick={() =>
+                  handleUpdateOrder(
+                    { status: "pickup-exception" },
+                    {
+                      errorMessage: "Failed to record pickup exception",
+                      successMessage: "Pickup exception recorded",
+                    },
+                  )
+                }
+                variant={"outline"}
+                className="text-amber-700 hover:text-amber-700 hover:bg-amber-50"
+              >
+                <AlertCircleIcon className="h-4 w-4 mr-1" />
+                <p className="text-sm">&rarr; Pickup exception</p>
+              </LoadingButton>
+            )}
+
+            {isPickup && canResolvePickupException && (
+              <LoadingButton
+                isLoading={isUpdatingOrder}
+                disabled={!isReady}
+                onClick={() =>
+                  handleUpdateOrder(
+                    { status: "ready-for-pickup" },
+                    {
+                      errorMessage: "Failed to return order to ready for pickup",
+                      successMessage: "Order returned to ready for pickup",
+                    },
+                  )
+                }
                 variant={"outline"}
               >
                 <Store className="h-4 w-4 mr-1" />
-                <p className="text-sm">&rarr; Picked up</p>
+                <p className="text-sm">&rarr; Back to ready</p>
+              </LoadingButton>
+            )}
+
+            {canMarkPickupException && (
+              <LoadingButton
+                isLoading={isUpdatingOrder}
+                disabled={!isReady}
+                onClick={() =>
+                  handleUpdateOrder(
+                    needsPickupPaymentCollection
+                      ? {
+                          paymentCollected: true,
+                          paymentCollectedAt: Date.now(),
+                          status: "picked-up",
+                        }
+                      : { status: "picked-up" },
+                    {
+                      errorMessage: needsPickupPaymentCollection
+                        ? "Failed to collect payment and complete pickup"
+                        : "Failed to mark order as picked up",
+                      successMessage: needsPickupPaymentCollection
+                        ? "Payment collected and order marked as picked up"
+                        : "Order marked as picked up",
+                    },
+                  )
+                }
+                variant={"outline"}
+              >
+                <Store className="h-4 w-4 mr-1" />
+                <p className="text-sm">
+                  {needsPickupPaymentCollection && isPODPickupOrder
+                    ? "\u2192 Collect payment & mark picked up"
+                    : "\u2192 Picked up"}
+                </p>
               </LoadingButton>
             )}
           </div>

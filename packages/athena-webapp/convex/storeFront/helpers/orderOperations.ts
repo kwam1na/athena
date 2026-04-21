@@ -17,13 +17,68 @@ const ONLINE_ORDER_STATUS_EVENT_TYPES: Record<string, string> = {
   delivered: "online_order_delivered",
   "out-for-delivery": "online_order_out_for_delivery",
   "picked-up": "online_order_picked_up",
+  "pickup-exception": "online_order_pickup_exception",
   "ready-for-delivery": "online_order_ready_for_delivery",
   "ready-for-pickup": "online_order_ready_for_pickup",
   "refund-submitted": "online_order_refund_submitted",
 };
 
+const COMPLETED_ONLINE_ORDER_STATUSES = new Set(["delivered", "picked-up"]);
+
 export function getOnlineOrderStatusEventType(status: string) {
   return ONLINE_ORDER_STATUS_EVENT_TYPES[status] ?? "online_order_status_changed";
+}
+
+function isPaymentOnDeliveryOrder(
+  order: Pick<Doc<"onlineOrder">, "isPODOrder" | "paymentMethod">
+) {
+  return Boolean(
+    order.isPODOrder || order.paymentMethod?.type === "payment_on_delivery"
+  );
+}
+
+export function assertValidOnlineOrderStatusTransition(
+  order: Pick<
+    Doc<"onlineOrder">,
+    "deliveryMethod" | "isPODOrder" | "paymentCollected" | "paymentMethod" | "status"
+  >,
+  nextStatus: string
+) {
+  if (!nextStatus) {
+    return;
+  }
+
+  if (nextStatus === order.status) {
+    if (COMPLETED_ONLINE_ORDER_STATUSES.has(order.status)) {
+      throw new Error(`Order is already completed as ${order.status}.`);
+    }
+
+    return;
+  }
+
+  if (order.deliveryMethod !== "pickup") {
+    return;
+  }
+
+  if (nextStatus === "pickup-exception" && order.status !== "ready-for-pickup") {
+    throw new Error(
+      "Pickup exceptions can only be recorded after the order is ready for pickup."
+    );
+  }
+
+  if (order.status === "pickup-exception" && nextStatus === "picked-up") {
+    throw new Error(
+      "Return the order to ready for pickup before completing the pickup."
+    );
+  }
+
+  if (nextStatus === "picked-up" && isPaymentOnDeliveryOrder(order)) {
+    if (!order.paymentCollected) {
+      throw new Error(
+        "Collect payment before marking this pickup order as picked up."
+      );
+    }
+  }
 }
 
 export function getOnlineOrderPaymentMethodLabel(

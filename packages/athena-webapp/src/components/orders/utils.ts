@@ -12,8 +12,13 @@ export const getOrderState = (order: any) => {
 
   const isOrderPickedUp = order?.status.includes("picked-up");
 
+  const isPickupException = order?.status === "pickup-exception";
+
   const hasOrderTransitioned =
-    isOrderOutForDelivery || isOrderPickedUp || isOrderDelivered;
+    isOrderOutForDelivery ||
+    isOrderPickedUp ||
+    isOrderDelivered ||
+    isPickupException;
 
   const amountRefunded =
     order?.refunds?.reduce(
@@ -47,8 +52,23 @@ export const getOrderState = (order: any) => {
     isOrderOutForDelivery,
     isOrderDelivered,
     isOrderPickedUp,
+    isPickupException,
     hasOrderTransitioned,
     isOrderCompleted,
+  };
+};
+
+export const getPickupActionState = (order: any) => {
+  const { isOrderReady, isPickupException } = getOrderState(order);
+  const isPickupOrder = order?.deliveryMethod === "pickup";
+  const isPODOrder =
+    order?.isPODOrder || order?.paymentMethod?.type === "payment_on_delivery";
+
+  return {
+    canMarkPickupException: isPickupOrder && isOrderReady,
+    canResolvePickupException: isPickupOrder && isPickupException,
+    needsPickupPaymentCollection:
+      isPickupOrder && isOrderReady && isPODOrder && !order?.paymentCollected,
   };
 };
 

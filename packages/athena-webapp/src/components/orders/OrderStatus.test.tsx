@@ -13,4 +13,14 @@ describe("OrderStatus", () => {
     expect(pill).not.toBeNull();
     expect(pill).toHaveClass("border-transparent");
   });
+
+  it("renders pickup exceptions as attention states instead of completion states", () => {
+    render(<OrderStatus order={{ status: "pickup-exception" }} />);
+
+    const label = screen.getByText("Pickup exception");
+    const pill = label.closest("div.inline-flex");
+
+    expect(pill).not.toBeNull();
+    expect(pill).toHaveClass("bg-amber-100", "text-amber-700");
+  });
 });
