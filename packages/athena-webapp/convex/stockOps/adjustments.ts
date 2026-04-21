@@ -374,6 +374,7 @@ export const listInventorySnapshot = query({
     storeId: v.id("store"),
   },
   handler: async (ctx, args) => {
+    // eslint-disable-next-line @convex-dev/no-collect-in-query -- This workspace needs the full store SKU snapshot so operators can reconcile counts across the entire catalog in one pass.
     const productSkus = await ctx.db
       .query("productSku")
       .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))

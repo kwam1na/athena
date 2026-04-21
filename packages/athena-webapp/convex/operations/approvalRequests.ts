@@ -12,7 +12,7 @@ type DecideApprovalRequestArgs = {
   decisionNotes?: string;
 };
 
-async function decideApprovalRequestWithCtx(
+export async function decideApprovalRequestWithCtx(
   ctx: MutationCtx,
   args: DecideApprovalRequestArgs
 ) {
@@ -24,6 +24,24 @@ async function decideApprovalRequestWithCtx(
 
   if (approvalRequest.status !== "pending") {
     throw new Error("Approval request has already been decided.");
+  }
+
+  if (!approvalRequest.organizationId || !args.reviewedByUserId) {
+    throw new Error("A full-admin reviewer is required to resolve approval requests.");
+  }
+
+  const reviewerMembership = await ctx.db
+    .query("organizationMember")
+    .filter((q) =>
+      q.and(
+        q.eq(q.field("organizationId"), approvalRequest.organizationId),
+        q.eq(q.field("userId"), args.reviewedByUserId)
+      )
+    )
+    .first();
+
+  if (reviewerMembership?.role !== "full_admin") {
+    throw new Error("Only full admins can resolve approval requests.");
   }
 
   if (
