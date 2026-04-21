@@ -34,6 +34,7 @@ export const getTiers = query({
     storeId: v.id("store"),
   },
   handler: async (ctx, args) => {
+    // eslint-disable-next-line @convex-dev/no-collect-in-query -- Reward tiers are store-scoped and intentionally returned as the active set for checkout and loyalty surfaces.
     return await ctx.db
       .query("rewardTiers")
       .withIndex("by_store", (q) => q.eq("storeId", args.storeId))
@@ -48,6 +49,7 @@ export const getPointHistory = query({
     storeFrontUserId: v.id("storeFrontUser"),
   },
   handler: async (ctx, args) => {
+    // eslint-disable-next-line @convex-dev/no-collect-in-query -- Point history is intentionally returned as the full user-visible ledger for one storefront account.
     return await ctx.db
       .query("rewardTransactions")
       .withIndex("by_user", (q) =>
@@ -65,7 +67,7 @@ export const awardOrderPoints = internalMutation({
     points: v.number(),
   },
   handler: async (ctx, args) => {
-    const order = await ctx.db.get(args.orderId);
+    const order = await ctx.db.get("onlineOrder", args.orderId);
     if (!order) return { success: false, error: "Order not found" };
 
     // We can only award points to registered users, not guests
@@ -116,7 +118,7 @@ export const awardOrderPoints = internalMutation({
       .first();
 
     if (existing) {
-      await ctx.db.patch(existing._id, {
+      await ctx.db.patch("rewardPoints", existing._id, {
         points: existing.points + args.points,
         updatedAt: Date.now(),
       });
@@ -172,7 +174,7 @@ export const redeemPoints = mutation({
     }
 
     // Get the reward tier
-    const tier = await ctx.db.get(args.rewardTierId);
+    const tier = await ctx.db.get("rewardTiers", args.rewardTierId);
     if (!tier) {
       return { success: false, error: "Reward tier not found" };
     }
@@ -191,7 +193,7 @@ export const redeemPoints = mutation({
     });
 
     // Update the user's point balance
-    await ctx.db.patch(pointsRecord._id, {
+    await ctx.db.patch("rewardPoints", pointsRecord._id, {
       points: pointsRecord.points - tier.pointsRequired,
       updatedAt: Date.now(),
     });
@@ -256,6 +258,7 @@ export const getPastEligibleOrders = query({
   },
   handler: async (ctx, args) => {
     // Get all past orders for this email that were made as a guest
+    // eslint-disable-next-line @convex-dev/no-collect-in-query -- This guest-order recovery flow needs the full matching paid-order set before it can filter already-awarded transactions.
     const guestOrders = await ctx.db
       .query("onlineOrder")
       .filter((q) =>
@@ -305,7 +308,7 @@ export const awardPointsForPastOrder = mutation({
   },
   handler: async (ctx, args) => {
     // Get the order
-    const order = await ctx.db.get(args.orderId);
+    const order = await ctx.db.get("onlineOrder", args.orderId);
     if (!order) return { success: false, error: "Order not found" };
 
     // Check if this order has already had points awarded
@@ -342,7 +345,7 @@ export const awardPointsForPastOrder = mutation({
       .first();
 
     if (existing) {
-      await ctx.db.patch(existing._id, {
+      await ctx.db.patch("rewardPoints", existing._id, {
         points: existing.points + pointsToAward,
         updatedAt: Date.now(),
       });
@@ -398,7 +401,7 @@ export const getOrderPoints = query({
     }
 
     // If no transaction found, get the order to calculate potential points
-    const order = await ctx.db.get(args.orderId);
+    const order = await ctx.db.get("onlineOrder", args.orderId);
     if (!order) {
       return { points: 0 };
     }
@@ -419,7 +422,7 @@ export const awardPointsForGuestOrders = mutation({
   },
   handler: async (ctx, args) => {
     // Get guest information first
-    const guest = await ctx.db.get(args.guestId);
+    const guest = await ctx.db.get("guest", args.guestId);
     if (!guest || !guest.email) {
       return { success: false, error: "Guest not found or has no email" };
     }
@@ -464,7 +467,7 @@ export const awardPointsForGuestOrders = mutation({
         .first();
 
       if (existingTransaction) {
-        await ctx.db.patch(existingTransaction._id, {
+        await ctx.db.patch("rewardTransactions", existingTransaction._id, {
           points: existingTransaction.points + order.potentialPoints,
         });
       } else {
@@ -532,7 +535,7 @@ export const awardPointsForGuestOrders = mutation({
           .first();
 
         if (existingPointsRecord) {
-          return ctx.db.patch(existingPointsRecord._id, {
+          return ctx.db.patch("rewardPoints", existingPointsRecord._id, {
             points: existingPointsRecord.points + points,
             updatedAt: Date.now(),
           });
