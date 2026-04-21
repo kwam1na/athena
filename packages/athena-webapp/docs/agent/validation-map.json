@@ -31,7 +31,8 @@
         "packages/athena-webapp/src/lib",
         "packages/athena-webapp/src/settings",
         "packages/athena-webapp/src/utils",
-        "packages/athena-webapp/src/stores"
+        "packages/athena-webapp/src/stores",
+        "packages/athena-webapp/types.ts"
       ],
       "commands": [
         {

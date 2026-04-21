@@ -1,8 +1,8 @@
-import { internalMutation, internalQuery } from "../_generated/server";
+import { internalMutation, internalQuery, MutationCtx } from "../_generated/server";
 import { Id } from "../_generated/dataModel";
 import { v } from "convex/values";
 
-export function buildPaymentAllocation(args: {
+export type RecordPaymentAllocationArgs = {
   storeId: Id<"store">;
   organizationId?: Id<"organization">;
   targetType: string;
@@ -22,7 +22,9 @@ export function buildPaymentAllocation(args: {
   posTransactionId?: Id<"posTransaction">;
   externalReference?: string;
   notes?: string;
-}) {
+};
+
+export function buildPaymentAllocation(args: RecordPaymentAllocationArgs) {
   if (args.amount <= 0) {
     throw new Error("Payment allocation amount must be positive");
   }
@@ -52,6 +54,58 @@ export function summarizePaymentAllocations(
   );
 }
 
+function matchesExistingAllocation(
+  existingAllocation: {
+    allocationType: string;
+    amount: number;
+    collectedInStore?: boolean;
+    direction: "in" | "out";
+    externalReference?: string;
+    method: string;
+  },
+  args: RecordPaymentAllocationArgs
+) {
+  return (
+    existingAllocation.allocationType === args.allocationType &&
+    existingAllocation.amount === args.amount &&
+    existingAllocation.collectedInStore === (args.collectedInStore ?? false) &&
+    existingAllocation.direction === (args.direction ?? "in") &&
+    existingAllocation.externalReference === args.externalReference &&
+    existingAllocation.method === args.method
+  );
+}
+
+export async function recordPaymentAllocationWithCtx(
+  ctx: MutationCtx,
+  args: RecordPaymentAllocationArgs
+) {
+  // eslint-disable-next-line @convex-dev/no-collect-in-query -- Target-scoped dedupe needs the full indexed allocation set so replayed writes stay idempotent.
+  const existingAllocations = await ctx.db
+    .query("paymentAllocation")
+    .withIndex("by_storeId_target", (q) =>
+      q
+        .eq("storeId", args.storeId)
+        .eq("targetType", args.targetType)
+        .eq("targetId", args.targetId)
+    )
+    .collect();
+
+  const existingAllocation = existingAllocations.find((allocation) =>
+    matchesExistingAllocation(allocation, args)
+  );
+
+  if (existingAllocation) {
+    return existingAllocation;
+  }
+
+  const allocationId = await ctx.db.insert(
+    "paymentAllocation",
+    buildPaymentAllocation(args)
+  );
+
+  return ctx.db.get("paymentAllocation", allocationId);
+}
+
 export const recordPaymentAllocation = internalMutation({
   args: {
     storeId: v.id("store"),
@@ -74,14 +128,7 @@ export const recordPaymentAllocation = internalMutation({
     externalReference: v.optional(v.string()),
     notes: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
-    const allocationId = await ctx.db.insert(
-      "paymentAllocation",
-      buildPaymentAllocation(args)
-    );
-
-    return ctx.db.get(allocationId);
-  },
+  handler: (ctx, args) => recordPaymentAllocationWithCtx(ctx, args),
 });
 
 export const listPaymentAllocationsForTarget = internalQuery({
@@ -91,6 +138,7 @@ export const listPaymentAllocationsForTarget = internalQuery({
     targetId: v.string(),
   },
   handler: async (ctx, args) =>
+    // eslint-disable-next-line @convex-dev/no-collect-in-query -- This ledger helper intentionally returns the full indexed history for one target; limiting it would change semantics.
     ctx.db
       .query("paymentAllocation")
       .withIndex("by_storeId_target", (q) =>

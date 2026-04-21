@@ -1,6 +1,9 @@
-import { internalMutation, internalQuery } from "../_generated/server";
-import { Id } from "../_generated/dataModel";
+import { internalMutation, internalQuery, MutationCtx, query } from "../_generated/server";
+import { Doc, Id } from "../_generated/dataModel";
 import { v } from "convex/values";
+
+const MAX_QUEUE_ITEMS = 100;
+const TERMINAL_WORK_ITEM_STATUSES = new Set(["completed", "cancelled"]);
 
 export function buildOperationalWorkItem(args: {
   storeId: Id<"store">;
@@ -26,6 +29,17 @@ export function buildOperationalWorkItem(args: {
   };
 }
 
+export async function createOperationalWorkItemWithCtx(
+  ctx: MutationCtx,
+  args: Parameters<typeof buildOperationalWorkItem>[0]
+) {
+  const workItemId = await ctx.db.insert(
+    "operationalWorkItem",
+    buildOperationalWorkItem(args)
+  );
+  return ctx.db.get("operationalWorkItem", workItemId);
+}
+
 export const createOperationalWorkItem = internalMutation({
   args: {
     storeId: v.id("store"),
@@ -44,13 +58,7 @@ export const createOperationalWorkItem = internalMutation({
     customerProfileId: v.optional(v.id("customerProfile")),
     approvalRequestId: v.optional(v.id("approvalRequest")),
   },
-  handler: async (ctx, args) => {
-    const workItemId = await ctx.db.insert(
-      "operationalWorkItem",
-      buildOperationalWorkItem(args)
-    );
-    return ctx.db.get(workItemId);
-  },
+  handler: (ctx, args) => createOperationalWorkItemWithCtx(ctx, args),
 });
 
 export const updateOperationalWorkItemStatus = internalMutation({
@@ -76,8 +84,8 @@ export const updateOperationalWorkItemStatus = internalMutation({
       nextFields.completedAt = Date.now();
     }
 
-    await ctx.db.patch(args.workItemId, nextFields);
-    return ctx.db.get(args.workItemId);
+    await ctx.db.patch("operationalWorkItem", args.workItemId, nextFields);
+    return ctx.db.get("operationalWorkItem", args.workItemId);
   },
 });
 
@@ -89,8 +97,130 @@ export const listOpenOperationalWorkItems = internalQuery({
     ctx.db
       .query("operationalWorkItem")
       .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
-      .collect()
+      .take(MAX_QUEUE_ITEMS)
       .then((items) =>
         items.filter((item) => !["completed", "cancelled"].includes(item.status))
       ),
+});
+
+export const getQueueSnapshot = query({
+  args: {
+    storeId: v.id("store"),
+  },
+  handler: async (ctx, args) => {
+    const [workItems, approvalRequests] = await Promise.all([
+      ctx.db
+        .query("operationalWorkItem")
+        .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
+        .take(MAX_QUEUE_ITEMS),
+      ctx.db
+        .query("approvalRequest")
+        .withIndex("by_storeId_status", (q) =>
+          q.eq("storeId", args.storeId).eq("status", "pending")
+        )
+        .take(MAX_QUEUE_ITEMS),
+    ]);
+
+    const openWorkItems = workItems.filter(
+      (item) => !TERMINAL_WORK_ITEM_STATUSES.has(item.status)
+    );
+
+    const customerIds = new Set<string>();
+    const staffIds = new Set<string>();
+    const workItemIds = new Set<string>();
+
+    for (const item of openWorkItems) {
+      if (item.customerProfileId) {
+        customerIds.add(item.customerProfileId);
+      }
+
+      if (item.assignedToStaffProfileId) {
+        staffIds.add(item.assignedToStaffProfileId);
+      }
+
+      if (item.createdByStaffProfileId) {
+        staffIds.add(item.createdByStaffProfileId);
+      }
+    }
+
+    for (const request of approvalRequests) {
+      if (request.requestedByStaffProfileId) {
+        staffIds.add(request.requestedByStaffProfileId);
+      }
+
+      if (request.reviewedByStaffProfileId) {
+        staffIds.add(request.reviewedByStaffProfileId);
+      }
+
+      if (request.workItemId) {
+        workItemIds.add(request.workItemId);
+      }
+    }
+
+    const [customers, staffProfiles, relatedWorkItems] = await Promise.all([
+      Promise.all(
+        Array.from(customerIds).map(async (customerId) => {
+          const customer = await ctx.db.get(
+            "customerProfile",
+            customerId as Id<"customerProfile">
+          );
+          return customer ? [customer._id, customer] : null;
+        })
+      ),
+      Promise.all(
+        Array.from(staffIds).map(async (staffId) => {
+          const staffProfile = await ctx.db.get(
+            "staffProfile",
+            staffId as Id<"staffProfile">
+          );
+          return staffProfile ? [staffProfile._id, staffProfile] : null;
+        })
+      ),
+      Promise.all(
+        Array.from(workItemIds).map(async (workItemId) => {
+          const workItem = await ctx.db.get(
+            "operationalWorkItem",
+            workItemId as Id<"operationalWorkItem">
+          );
+          return workItem ? [workItem._id, workItem] : null;
+        })
+      ),
+    ]);
+
+    const customerMap = new Map<Id<"customerProfile">, Doc<"customerProfile">>(
+      customers.filter(Boolean) as Array<[Id<"customerProfile">, Doc<"customerProfile">]>
+    );
+    const staffMap = new Map<Id<"staffProfile">, Doc<"staffProfile">>(
+      staffProfiles.filter(Boolean) as Array<[Id<"staffProfile">, Doc<"staffProfile">]>
+    );
+    const workItemMap = new Map<
+      Id<"operationalWorkItem">,
+      Doc<"operationalWorkItem">
+    >(
+      relatedWorkItems.filter(Boolean) as Array<
+        [Id<"operationalWorkItem">, Doc<"operationalWorkItem">]
+      >
+    );
+
+    return {
+      approvalRequests: approvalRequests.map((request) => ({
+        ...request,
+        requestedByStaffName: request.requestedByStaffProfileId
+          ? staffMap.get(request.requestedByStaffProfileId)?.fullName
+          : null,
+        workItemTitle: request.workItemId
+          ? workItemMap.get(request.workItemId)?.title
+          : null,
+      })),
+      workItems: openWorkItems.map((item) => ({
+        ...item,
+        assignedStaffName: item.assignedToStaffProfileId
+          ? staffMap.get(item.assignedToStaffProfileId)?.fullName
+          : null,
+        customerName: item.customerProfileId
+          ? customerMap.get(item.customerProfileId)?.fullName
+          : null,
+      })),
+    };
+  },
 });

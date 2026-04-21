@@ -1,5 +1,11 @@
 import { Id } from "../../_generated/dataModel";
 import { MutationCtx, QueryCtx } from "../../_generated/server";
+import { calculateOrderAmount } from "./paymentHelpers";
+import {
+  recordOnlineOrderCreatedEvent,
+  recordOnlineOrderRestockMovement,
+  resolveCustomerProfileForStoreFrontActor,
+} from "./orderOperations";
 
 const MAX_BAG_ITEMS = 200;
 const MAX_CHECKOUT_SESSION_ITEMS = 200;
@@ -24,6 +30,18 @@ export async function findOrderByExternalReference(
     .first();
 }
 
+export async function findOrderByExternalTransactionId(
+  ctx: QueryCtx | MutationCtx,
+  externalTransactionId: string
+) {
+  return await ctx.db
+    .query("onlineOrder")
+    .withIndex("by_externalTransactionId", (q) =>
+      q.eq("externalTransactionId", externalTransactionId)
+    )
+    .first();
+}
+
 export async function clearBagItems(
   ctx: MutationCtx,
   bagId: Id<"bag">
@@ -40,6 +58,7 @@ export async function returnOrderItemsToStock(
   ctx: MutationCtx,
   orderId: Id<"onlineOrder">
 ) {
+  const order = await ctx.db.get("onlineOrder", orderId);
   const orderItems = await ctx.db
     .query("onlineOrderItem")
     .withIndex("by_orderId", (q) => q.eq("orderId", orderId))
@@ -68,6 +87,16 @@ export async function returnOrderItemsToStock(
           ? productSku.inventoryCount + item.quantity
           : productSku.inventoryCount,
       });
+
+      if (order) {
+        await recordOnlineOrderRestockMovement(ctx, {
+          item,
+          order,
+          reasonCode: item.isReady
+            ? "online_order_item_restocked"
+            : "online_order_reservation_released",
+        });
+      }
     })
   );
 }
@@ -103,36 +132,55 @@ export async function createOrderFromCheckoutSession(
   }
 
   const discount = args.discount ?? session.discount;
-
-  const orderId = await ctx.db.insert("onlineOrder", {
+  const store = await ctx.db.get("store", session.storeId);
+  const customerProfile = await resolveCustomerProfileForStoreFrontActor(ctx, {
+    organizationId: store?.organizationId,
     storeFrontUserId: session.storeFrontUserId,
     storeId: session.storeId,
-    checkoutSessionId: args.checkoutSessionId,
-    externalReference: session.externalReference,
-    externalTransactionId:
-      args.externalTransactionId ?? session.externalTransactionId?.toString(),
-    bagId: session.bagId,
-    amount: session.amount,
-    billingDetails: args.billingDetails ?? (session.billingDetails as any),
-    customerDetails: args.customerDetails ?? (session.customerDetails as any),
-    deliveryDetails: args.deliveryDetails ?? (session.deliveryDetails as any),
-    deliveryInstructions:
-      args.deliveryInstructions ?? session.deliveryInstructions,
-    deliveryMethod: args.deliveryMethod ?? session.deliveryMethod ?? "n/a",
-    deliveryOption: args.deliveryOption ?? session.deliveryOption,
-    deliveryFee: args.deliveryFee ?? session.deliveryFee,
-    discount,
-    pickupLocation: args.pickupLocation ?? session.pickupLocation,
-    hasVerifiedPayment: session.hasVerifiedPayment,
-    paymentMethod: args.paymentMethod,
-    orderNumber: generateOrderNumber(),
-    status: "open",
   });
 
   const items = await ctx.db
     .query("checkoutSessionItem")
     .withIndex("by_sessionId", (q) => q.eq("sesionId", args.checkoutSessionId))
     .take(MAX_CHECKOUT_SESSION_ITEMS);
+
+  const paymentDue = calculateOrderAmount({
+    deliveryFee: args.deliveryFee ?? session.deliveryFee ?? 0,
+    discount,
+    items: items.map((item) => ({
+      price: item.price,
+      productSkuId: item.productSkuId,
+      quantity: item.quantity,
+    })),
+    subtotal: session.amount,
+  });
+
+  const orderId = await ctx.db.insert("onlineOrder", {
+    amount: session.amount,
+    bagId: session.bagId,
+    billingDetails: args.billingDetails ?? (session.billingDetails as any),
+    checkoutSessionId: args.checkoutSessionId,
+    customerDetails: args.customerDetails ?? (session.customerDetails as any),
+    customerProfileId: customerProfile?._id,
+    deliveryDetails: args.deliveryDetails ?? (session.deliveryDetails as any),
+    deliveryFee: args.deliveryFee ?? session.deliveryFee,
+    deliveryInstructions:
+      args.deliveryInstructions ?? session.deliveryInstructions,
+    deliveryMethod: args.deliveryMethod ?? session.deliveryMethod ?? "n/a",
+    deliveryOption: args.deliveryOption ?? session.deliveryOption,
+    discount,
+    externalReference: session.externalReference,
+    externalTransactionId:
+      args.externalTransactionId ?? session.externalTransactionId?.toString(),
+    hasVerifiedPayment: session.hasVerifiedPayment,
+    orderNumber: generateOrderNumber(),
+    paymentDue,
+    paymentMethod: args.paymentMethod,
+    pickupLocation: args.pickupLocation ?? session.pickupLocation,
+    status: "open",
+    storeFrontUserId: session.storeFrontUserId,
+    storeId: session.storeId,
+  });
 
   await Promise.all(
     items.map((item) =>
@@ -198,6 +246,11 @@ export async function createOrderFromCheckoutSession(
 
   if (args.clearBag) {
     await clearBagItems(ctx, session.bagId);
+  }
+
+  const createdOrder = await ctx.db.get("onlineOrder", orderId);
+  if (createdOrder) {
+    await recordOnlineOrderCreatedEvent(ctx, createdOrder);
   }
 
   console.log("created online order for session.");

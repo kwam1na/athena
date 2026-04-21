@@ -35,7 +35,7 @@ export const openRegisterSession = internalMutation({
   },
   handler: async (ctx, args) => {
     const sessionId = await ctx.db.insert("registerSession", buildRegisterSession(args));
-    return ctx.db.get(sessionId);
+    return ctx.db.get("registerSession", sessionId);
   },
 });
 
@@ -47,25 +47,31 @@ export const getOpenRegisterSession = internalQuery({
   },
   handler: async (ctx, args) => {
     if (args.registerNumber) {
-      const byRegister = await ctx.db
+      const latestByRegister = await ctx.db
         .query("registerSession")
         .withIndex("by_storeId_registerNumber", (q) =>
           q.eq("storeId", args.storeId).eq("registerNumber", args.registerNumber!)
         )
-        .collect();
+        .order("desc")
+        .first();
 
-      return byRegister.find((session) => session.status !== "closed") ?? null;
+      return latestByRegister && latestByRegister.status !== "closed"
+        ? latestByRegister
+        : null;
     }
 
     if (!args.terminalId) {
       return null;
     }
 
-    const byTerminal = await ctx.db
+    const latestByTerminal = await ctx.db
       .query("registerSession")
       .withIndex("by_terminalId", (q) => q.eq("terminalId", args.terminalId!))
-      .collect();
+      .order("desc")
+      .first();
 
-    return byTerminal.find((session) => session.status !== "closed") ?? null;
+    return latestByTerminal && latestByTerminal.status !== "closed"
+      ? latestByTerminal
+      : null;
   },
 });

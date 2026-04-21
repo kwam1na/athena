@@ -1,9 +1,9 @@
-import { internalMutation, internalQuery } from "../_generated/server";
+import { internalMutation, internalQuery, MutationCtx } from "../_generated/server";
 import { Id } from "../_generated/dataModel";
 import { v } from "convex/values";
 import { buildOperationalEventMessage } from "./helpers/eventBuilders";
 
-export function buildOperationalEvent(args: {
+export type RecordOperationalEventArgs = {
   storeId: Id<"store">;
   organizationId?: Id<"organization">;
   eventType: string;
@@ -23,7 +23,9 @@ export function buildOperationalEvent(args: {
   paymentAllocationId?: Id<"paymentAllocation">;
   onlineOrderId?: Id<"onlineOrder">;
   posTransactionId?: Id<"posTransaction">;
-}) {
+};
+
+export function buildOperationalEvent(args: RecordOperationalEventArgs) {
   return {
     ...args,
     message:
@@ -35,6 +37,68 @@ export function buildOperationalEvent(args: {
       }),
     createdAt: Date.now(),
   };
+}
+
+function matchesExistingEvent(
+  existingEvent: {
+    eventType: string;
+    subjectType: string;
+    subjectId: string;
+    reason?: string;
+    approvalRequestId?: Id<"approvalRequest">;
+    inventoryMovementId?: Id<"inventoryMovement">;
+    onlineOrderId?: Id<"onlineOrder">;
+    paymentAllocationId?: Id<"paymentAllocation">;
+    posTransactionId?: Id<"posTransaction">;
+    registerSessionId?: Id<"registerSession">;
+    workItemId?: Id<"operationalWorkItem">;
+  },
+  args: RecordOperationalEventArgs
+) {
+  return (
+    existingEvent.eventType === args.eventType &&
+    existingEvent.subjectType === args.subjectType &&
+    existingEvent.subjectId === args.subjectId &&
+    existingEvent.reason === args.reason &&
+    existingEvent.approvalRequestId === args.approvalRequestId &&
+    existingEvent.inventoryMovementId === args.inventoryMovementId &&
+    existingEvent.onlineOrderId === args.onlineOrderId &&
+    existingEvent.paymentAllocationId === args.paymentAllocationId &&
+    existingEvent.posTransactionId === args.posTransactionId &&
+    existingEvent.registerSessionId === args.registerSessionId &&
+    existingEvent.workItemId === args.workItemId
+  );
+}
+
+export async function recordOperationalEventWithCtx(
+  ctx: MutationCtx,
+  args: RecordOperationalEventArgs
+) {
+  // eslint-disable-next-line @convex-dev/no-collect-in-query -- Subject-scoped dedupe must inspect the full indexed event history so idempotent replays do not create duplicates.
+  const existingEvents = await ctx.db
+    .query("operationalEvent")
+    .withIndex("by_storeId_subject", (q) =>
+      q
+        .eq("storeId", args.storeId)
+        .eq("subjectType", args.subjectType)
+        .eq("subjectId", args.subjectId)
+    )
+    .collect();
+
+  const existingEvent = existingEvents.find((event) =>
+    matchesExistingEvent(event, args)
+  );
+
+  if (existingEvent) {
+    return existingEvent;
+  }
+
+  const eventId = await ctx.db.insert(
+    "operationalEvent",
+    buildOperationalEvent(args)
+  );
+
+  return ctx.db.get("operationalEvent", eventId);
 }
 
 export const recordOperationalEvent = internalMutation({
@@ -58,14 +122,7 @@ export const recordOperationalEvent = internalMutation({
     onlineOrderId: v.optional(v.id("onlineOrder")),
     posTransactionId: v.optional(v.id("posTransaction")),
   },
-  handler: async (ctx, args) => {
-    const eventId = await ctx.db.insert(
-      "operationalEvent",
-      buildOperationalEvent(args)
-    );
-
-    return ctx.db.get(eventId);
-  },
+  handler: (ctx, args) => recordOperationalEventWithCtx(ctx, args),
 });
 
 export const listOperationalEventsForSubject = internalQuery({
@@ -75,6 +132,7 @@ export const listOperationalEventsForSubject = internalQuery({
     subjectId: v.string(),
   },
   handler: async (ctx, args) =>
+    // eslint-disable-next-line @convex-dev/no-collect-in-query -- This timeline query returns the full indexed history for one subject and should not silently truncate results.
     ctx.db
       .query("operationalEvent")
       .withIndex("by_storeId_subject", (q) =>

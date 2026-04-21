@@ -114,6 +114,7 @@ import type * as operations_operationalEvents from "../operations/operationalEve
 import type * as operations_operationalWorkItems from "../operations/operationalWorkItems.js";
 import type * as operations_paymentAllocations from "../operations/paymentAllocations.js";
 import type * as operations_registerSessions from "../operations/registerSessions.js";
+import type * as operations_serviceIntake from "../operations/serviceIntake.js";
 import type * as operations_staffProfiles from "../operations/staffProfiles.js";
 import type * as otp_ResendOTP from "../otp/ResendOTP.js";
 import type * as otp_VerificationCodeEmail from "../otp/VerificationCodeEmail.js";
@@ -190,6 +191,7 @@ import type * as storeFront_customerObservabilityTimelineData from "../storeFron
 import type * as storeFront_guest from "../storeFront/guest.js";
 import type * as storeFront_helpers_bag from "../storeFront/helpers/bag.js";
 import type * as storeFront_helpers_onlineOrder from "../storeFront/helpers/onlineOrder.js";
+import type * as storeFront_helpers_orderOperations from "../storeFront/helpers/orderOperations.js";
 import type * as storeFront_helpers_orderUpdateEmails from "../storeFront/helpers/orderUpdateEmails.js";
 import type * as storeFront_helpers_paymentHelpers from "../storeFront/helpers/paymentHelpers.js";
 import type * as storeFront_offers from "../storeFront/offers.js";
@@ -324,6 +326,7 @@ declare const fullApi: ApiFromModules<{
   "operations/operationalWorkItems": typeof operations_operationalWorkItems;
   "operations/paymentAllocations": typeof operations_paymentAllocations;
   "operations/registerSessions": typeof operations_registerSessions;
+  "operations/serviceIntake": typeof operations_serviceIntake;
   "operations/staffProfiles": typeof operations_staffProfiles;
   "otp/ResendOTP": typeof otp_ResendOTP;
   "otp/VerificationCodeEmail": typeof otp_VerificationCodeEmail;
@@ -400,6 +403,7 @@ declare const fullApi: ApiFromModules<{
   "storeFront/guest": typeof storeFront_guest;
   "storeFront/helpers/bag": typeof storeFront_helpers_bag;
   "storeFront/helpers/onlineOrder": typeof storeFront_helpers_onlineOrder;
+  "storeFront/helpers/orderOperations": typeof storeFront_helpers_orderOperations;
   "storeFront/helpers/orderUpdateEmails": typeof storeFront_helpers_orderUpdateEmails;
   "storeFront/helpers/paymentHelpers": typeof storeFront_helpers_paymentHelpers;
   "storeFront/offers": typeof storeFront_offers;

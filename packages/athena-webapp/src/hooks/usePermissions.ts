@@ -2,6 +2,7 @@ import { usePermissionsContext } from "../contexts/PermissionsContext";
 import { Role } from "~/types";
 
 interface UsePermissionsReturn {
+  canAccessOperations: () => boolean;
   canAccessPOS: () => boolean;
   canAccessAdmin: () => boolean;
   hasFullAdminAccess: boolean;
@@ -14,6 +15,7 @@ export function usePermissions(): UsePermissionsReturn {
     usePermissionsContext();
 
   return {
+    canAccessOperations: () => role === "full_admin",
     canAccessPOS: () => canAccessPOS,
     canAccessAdmin: () => canAccessAdmin,
     hasFullAdminAccess: role === "full_admin",

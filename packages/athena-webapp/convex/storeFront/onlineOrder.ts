@@ -4,6 +4,7 @@ import {
   internalMutation,
   internalQuery,
   mutation,
+  MutationCtx,
   QueryCtx,
   query,
 } from "../_generated/server";
@@ -17,12 +18,24 @@ import { Doc, Id } from "../_generated/dataModel";
 import { getDiscountValue } from "../inventory/utils";
 import {
   createOrderFromCheckoutSession,
+  findOrderByExternalReference,
+  findOrderByExternalTransactionId,
   returnOrderItemsToStock,
 } from "./helpers/onlineOrder";
+import {
+  recordOnlineOrderRestockMovement,
+  recordOnlineOrderPaymentCollected,
+  recordOnlineOrderPaymentVerified,
+  recordOnlineOrderStatusEvent,
+} from "./helpers/orderOperations";
 
 const entity = "onlineOrder";
 const MAX_ORDER_ITEMS = 200;
 const MAX_ORDERS = 500;
+type SignedInAthenaUser = {
+  id: Id<"athenaUser">;
+  email: string;
+};
 
 async function listOrderItems(
   ctx: QueryCtx,
@@ -32,6 +45,137 @@ async function listOrderItems(
     .query("onlineOrderItem")
     .withIndex("by_orderId", (q) => q.eq("orderId", orderId))
     .take(MAX_ORDER_ITEMS);
+}
+
+function appendTransition(
+  transitions: Array<{
+    status: string;
+    date: number;
+    signedInAthenaUser?: SignedInAthenaUser;
+  }>,
+  status: string,
+  signedInAthenaUser: SignedInAthenaUser | undefined,
+  date: number
+) {
+  if (transitions[transitions.length - 1]?.status === status) {
+    return transitions;
+  }
+
+  return [
+    ...transitions,
+    {
+      status,
+      date,
+      signedInAthenaUser,
+    },
+  ];
+}
+
+async function applyOnlineOrderUpdate(
+  ctx: MutationCtx,
+  order: Doc<"onlineOrder">,
+  args: {
+    returnItemsToStock?: boolean;
+    signedInAthenaUser?: SignedInAthenaUser;
+    update: Record<string, any>;
+  }
+) {
+  const nextStatus =
+    typeof args.update.status === "string" ? args.update.status : undefined;
+  const statusChanged = Boolean(nextStatus && nextStatus !== order.status);
+  const paymentCollectedChanged =
+    args.update.paymentCollected === true && !order.paymentCollected;
+  const paymentVerifiedChanged =
+    args.update.hasVerifiedPayment === true && !order.hasVerifiedPayment;
+  const now = Date.now();
+  const baseTransitions = Array.isArray(args.update.transitions)
+    ? [...args.update.transitions]
+    : [...(order.transitions ?? [])];
+  let updates = { ...args.update };
+
+  if (statusChanged) {
+    updates.transitions = appendTransition(
+      baseTransitions,
+      nextStatus!,
+      args.signedInAthenaUser,
+      now
+    );
+
+    if (nextStatus === "cancelled" && args.returnItemsToStock !== false) {
+      await returnOrderItemsToStock(ctx, order._id);
+    }
+  }
+
+  if (paymentCollectedChanged) {
+    updates.transitions = appendTransition(
+      updates.transitions ?? baseTransitions,
+      "payment_collected",
+      args.signedInAthenaUser,
+      now
+    );
+  }
+
+  const readyStatuses = ["ready-for-pickup", "ready-for-delivery"];
+  if (statusChanged && readyStatuses.includes(nextStatus!)) {
+    updates.readyAt = now;
+  }
+
+  const completedStatuses = ["delivered", "picked-up"];
+  if (statusChanged && completedStatuses.includes(nextStatus!)) {
+    updates.completedAt = now;
+  }
+
+  const shouldSendOrderUpdateEmail =
+    statusChanged &&
+    [
+      ...completedStatuses,
+      "ready-for-pickup",
+      "out-for-delivery",
+      "cancelled",
+    ].includes(nextStatus!);
+
+  if (shouldSendOrderUpdateEmail) {
+    await ctx.scheduler.runAfter(
+      0,
+      internal.storeFront.onlineOrderUtilFns.sendOrderUpdateEmailInternal,
+      {
+        orderId: order._id,
+        newStatus: nextStatus!,
+      }
+    );
+  }
+
+  await ctx.db.patch("onlineOrder", order._id, updates);
+
+  const nextOrder = {
+    ...order,
+    ...updates,
+  } as Doc<"onlineOrder">;
+
+  if (statusChanged) {
+    await recordOnlineOrderStatusEvent(ctx, {
+      nextStatus: nextStatus!,
+      order: nextOrder,
+      previousStatus: order.status,
+      signedInAthenaUser: args.signedInAthenaUser,
+    });
+  }
+
+  if (paymentVerifiedChanged) {
+    await recordOnlineOrderPaymentVerified(ctx, {
+      order: nextOrder,
+      signedInAthenaUser: args.signedInAthenaUser,
+    });
+  }
+
+  if (paymentCollectedChanged) {
+    await recordOnlineOrderPaymentCollected(ctx, {
+      order: nextOrder,
+      signedInAthenaUser: args.signedInAthenaUser,
+    });
+  }
+
+  return nextOrder;
 }
 
 export const create = mutation({
@@ -331,14 +475,13 @@ export const getInternal = internalQuery({
 
 export const getByExternalReference = query({
   args: { externalReference: v.string() },
-  handler: async (ctx, args) => {
-    return await ctx.db
-      .query(entity)
-      .withIndex("by_externalReference", (q) =>
-        q.eq("externalReference", args.externalReference),
-      )
-      .first();
-  },
+  handler: (ctx, args) => findOrderByExternalReference(ctx, args.externalReference),
+});
+
+export const getByExternalTransactionId = internalQuery({
+  args: { externalTransactionId: v.string() },
+  handler: (ctx, args) =>
+    findOrderByExternalTransactionId(ctx, args.externalTransactionId),
 });
 
 export const getByCheckoutSessionId = query({
@@ -407,84 +550,13 @@ export const update = mutation({
     if (args.orderId) {
       const order = await ctx.db.get("onlineOrder", args.orderId);
       if (!order) return { success: false, message: "Order not found" };
-
-      // Initialize base updates from args
-      let updates = { ...args.update };
-
-      // Add transition if status is being updated
-      if (args.update.status) {
-        updates.transitions = [
-          ...(order.transitions ?? []),
-          {
-            status: args.update.status,
-            date: Date.now(),
-            signedInAthenaUser: args.signedInAthenaUser,
-          },
-        ];
-
-        // if we are cancelling the order, conditionally return items to stock
-        if (
-          args.update.status === "cancelled" &&
-          args.returnItemsToStock !== false
-        ) {
-          await returnOrderItemsToStock(ctx, order._id);
-        }
-      }
-
-      // Add transition if payment is being marked as collected for POD orders
-      if (args.update.paymentCollected === true && !order.paymentCollected) {
-        updates.transitions = [
-          ...(updates.transitions ?? order.transitions ?? []),
-          {
-            status: "payment_collected",
-            date: Date.now(),
-            signedInAthenaUser: args.signedInAthenaUser,
-          },
-        ];
-      }
-
-      // Add readyAt timestamp for specific status updates
-      const readyStatuses = ["ready-for-pickup", "ready-for-delivery"];
-      if (readyStatuses.includes(args.update.status)) {
-        updates.readyAt = Date.now();
-      }
-
-      const completedStatuses = ["delivered", "picked-up"];
-      if (completedStatuses.includes(args.update.status)) {
-        updates.completedAt = Date.now();
-      }
-
-      const shouldSendOrderUpdateEmail = [
-        ...completedStatuses,
-        "ready-for-pickup",
-        "out-for-delivery",
-        "cancelled",
-      ].includes(args.update.status);
-
-      if (shouldSendOrderUpdateEmail) {
-        // Send email if status is being updated
-        await ctx.scheduler.runAfter(
-          0,
-          internal.storeFront.onlineOrderUtilFns.sendOrderUpdateEmailInternal,
-          {
-            orderId: args.orderId,
-            newStatus: args.update.status,
-          },
-        );
-      }
-
-      await ctx.db.patch("onlineOrder", args.orderId, updates);
+      await applyOnlineOrderUpdate(ctx, order, args);
       return { success: true, message: "Order updated" };
     }
 
     // external reference is passed in as args from the verifyPayment action
     if (args.externalReference) {
-      const order = await ctx.db
-        .query(entity)
-        .filter((q) =>
-          q.eq(q.field("externalReference"), args.externalReference),
-        )
-        .first();
+      const order = await findOrderByExternalReference(ctx, args.externalReference);
 
       if (!order) return false;
 
@@ -505,28 +577,13 @@ export const update = mutation({
       ];
 
       if (args.update.status) {
-        const updates = {
-          ...rest,
-          refunds,
-          transitions: [
-            ...(order?.transitions ?? []),
-            {
-              status: args.update.status,
-              date: Date.now(),
-              signedInAthenaUser: args.signedInAthenaUser,
-            },
-          ],
-        };
-
-        // if we are cancelling the order, conditionally return items to stock
-        if (
-          args.update.status === "cancelled" &&
-          args.returnItemsToStock !== false
-        ) {
-          await returnOrderItemsToStock(ctx, order._id);
-        }
-
-        await ctx.db.patch("onlineOrder", order._id, updates);
+        await applyOnlineOrderUpdate(ctx, order, {
+          ...args,
+          update: {
+            ...rest,
+            refunds,
+          },
+        });
       } else {
         await ctx.db.patch("onlineOrder", order._id, { ...rest, refunds });
       }
@@ -571,76 +628,12 @@ export const updateInternal = internalMutation({
       const order = await ctx.db.get("onlineOrder", args.orderId);
       if (!order) return { success: false, message: "Order not found" };
 
-      let updates = { ...args.update };
-
-      if (args.update.status) {
-        updates.transitions = [
-          ...(order.transitions ?? []),
-          {
-            status: args.update.status,
-            date: Date.now(),
-            signedInAthenaUser: args.signedInAthenaUser,
-          },
-        ];
-
-        if (
-          args.update.status === "cancelled" &&
-          args.returnItemsToStock !== false
-        ) {
-          await returnOrderItemsToStock(ctx, order._id);
-        }
-      }
-
-      if (args.update.paymentCollected === true && !order.paymentCollected) {
-        updates.transitions = [
-          ...(updates.transitions ?? order.transitions ?? []),
-          {
-            status: "payment_collected",
-            date: Date.now(),
-            signedInAthenaUser: args.signedInAthenaUser,
-          },
-        ];
-      }
-
-      const readyStatuses = ["ready-for-pickup", "ready-for-delivery"];
-      if (readyStatuses.includes(args.update.status)) {
-        updates.readyAt = Date.now();
-      }
-
-      const completedStatuses = ["delivered", "picked-up"];
-      if (completedStatuses.includes(args.update.status)) {
-        updates.completedAt = Date.now();
-      }
-
-      const shouldSendOrderUpdateEmail = [
-        ...completedStatuses,
-        "ready-for-pickup",
-        "out-for-delivery",
-        "cancelled",
-      ].includes(args.update.status);
-
-      if (shouldSendOrderUpdateEmail) {
-        await ctx.scheduler.runAfter(
-          0,
-          internal.storeFront.onlineOrderUtilFns.sendOrderUpdateEmailInternal,
-          {
-            orderId: args.orderId,
-            newStatus: args.update.status,
-          },
-        );
-      }
-
-      await ctx.db.patch("onlineOrder", args.orderId, updates);
+      await applyOnlineOrderUpdate(ctx, order, args);
       return { success: true, message: "Order updated" };
     }
 
     if (args.externalReference) {
-      const order = await ctx.db
-        .query(entity)
-        .filter((q) =>
-          q.eq(q.field("externalReference"), args.externalReference),
-        )
-        .first();
+      const order = await findOrderByExternalReference(ctx, args.externalReference);
 
       if (!order) return false;
 
@@ -661,27 +654,13 @@ export const updateInternal = internalMutation({
       ];
 
       if (args.update.status) {
-        const updates = {
-          ...rest,
-          refunds,
-          transitions: [
-            ...(order?.transitions ?? []),
-            {
-              status: args.update.status,
-              date: Date.now(),
-              signedInAthenaUser: args.signedInAthenaUser,
-            },
-          ],
-        };
-
-        if (
-          args.update.status === "cancelled" &&
-          args.returnItemsToStock !== false
-        ) {
-          await returnOrderItemsToStock(ctx, order._id);
-        }
-
-        await ctx.db.patch("onlineOrder", order._id, updates);
+        await applyOnlineOrderUpdate(ctx, order, {
+          ...args,
+          update: {
+            ...rest,
+            refunds,
+          },
+        });
       } else {
         await ctx.db.patch("onlineOrder", order._id, { ...rest, refunds });
       }
@@ -698,39 +677,46 @@ export const returnItemsToStock = mutation({
   },
   handler: async (ctx, args) => {
     if (args.externalTransactionId) {
-      const order = await ctx.db
-        .query(entity)
-        .filter((q) =>
-          q.eq(q.field("externalTransactionId"), args.externalTransactionId),
-        )
-        .first();
+      const order = await findOrderByExternalTransactionId(
+        ctx,
+        args.externalTransactionId
+      );
 
       if (!order) return false;
 
       if (args.onlineOrderItemIds?.length) {
         await Promise.all(
           args.onlineOrderItemIds.map(async (itemId) => {
+            const onlineOrderItem = await ctx.db.get("onlineOrderItem", itemId);
+            if (!onlineOrderItem || onlineOrderItem.isRestocked) {
+              return;
+            }
+
             await ctx.db.patch("onlineOrderItem", itemId, {
               isRefunded: true,
               isRestocked: true,
             });
-            const onlineOrderItem = await ctx.db.get("onlineOrderItem", itemId);
 
-            if (onlineOrderItem) {
-              const productSku = await ctx.db.get(
-                "productSku",
-                onlineOrderItem.productSkuId,
-              );
+            const productSku = await ctx.db.get(
+              "productSku",
+              onlineOrderItem.productSkuId,
+            );
 
-              if (productSku) {
-                await ctx.db.patch("productSku", onlineOrderItem.productSkuId, {
-                  quantityAvailable:
-                    productSku.quantityAvailable + onlineOrderItem.quantity,
-                  inventoryCount: onlineOrderItem.isReady
-                    ? productSku.inventoryCount + onlineOrderItem.quantity
-                    : productSku.inventoryCount,
-                });
-              }
+            if (productSku) {
+              await ctx.db.patch("productSku", onlineOrderItem.productSkuId, {
+                quantityAvailable:
+                  productSku.quantityAvailable + onlineOrderItem.quantity,
+                inventoryCount: onlineOrderItem.isReady
+                  ? productSku.inventoryCount + onlineOrderItem.quantity
+                  : productSku.inventoryCount,
+              });
+              await recordOnlineOrderRestockMovement(ctx, {
+                item: onlineOrderItem,
+                order,
+                reasonCode: onlineOrderItem.isReady
+                  ? "online_order_item_restocked"
+                  : "online_order_reservation_released",
+              });
             }
           }),
         );
@@ -738,28 +724,7 @@ export const returnItemsToStock = mutation({
         return true;
       }
 
-      const orderItems = await ctx.db
-        .query("onlineOrderItem")
-        .filter((q) => q.eq(q.field("orderId"), order._id))
-        .collect();
-
-      await Promise.all(
-        orderItems.map(async (item) => {
-          await ctx.db.patch("onlineOrderItem", item._id, {
-            isRefunded: true,
-            isRestocked: true,
-          });
-          const productSku = await ctx.db.get("productSku", item.productSkuId);
-          if (productSku) {
-            await ctx.db.patch("productSku", item.productSkuId, {
-              quantityAvailable: productSku.quantityAvailable + item.quantity,
-              inventoryCount: item.isReady
-                ? productSku.inventoryCount + item.quantity
-                : productSku.inventoryCount,
-            });
-          }
-        }),
-      );
+      await returnOrderItemsToStock(ctx, order._id);
 
       return true;
     }
@@ -773,39 +738,46 @@ export const returnItemsToStockInternal = internalMutation({
   },
   handler: async (ctx, args) => {
     if (args.externalTransactionId) {
-      const order = await ctx.db
-        .query(entity)
-        .filter((q) =>
-          q.eq(q.field("externalTransactionId"), args.externalTransactionId),
-        )
-        .first();
+      const order = await findOrderByExternalTransactionId(
+        ctx,
+        args.externalTransactionId
+      );
 
       if (!order) return false;
 
       if (args.onlineOrderItemIds?.length) {
         await Promise.all(
           args.onlineOrderItemIds.map(async (itemId) => {
+            const onlineOrderItem = await ctx.db.get("onlineOrderItem", itemId);
+            if (!onlineOrderItem || onlineOrderItem.isRestocked) {
+              return;
+            }
+
             await ctx.db.patch("onlineOrderItem", itemId, {
               isRefunded: true,
               isRestocked: true,
             });
-            const onlineOrderItem = await ctx.db.get("onlineOrderItem", itemId);
 
-            if (onlineOrderItem) {
-              const productSku = await ctx.db.get(
-                "productSku",
-                onlineOrderItem.productSkuId,
-              );
+            const productSku = await ctx.db.get(
+              "productSku",
+              onlineOrderItem.productSkuId,
+            );
 
-              if (productSku) {
-                await ctx.db.patch("productSku", onlineOrderItem.productSkuId, {
-                  quantityAvailable:
-                    productSku.quantityAvailable + onlineOrderItem.quantity,
-                  inventoryCount: onlineOrderItem.isReady
-                    ? productSku.inventoryCount + onlineOrderItem.quantity
-                    : productSku.inventoryCount,
-                });
-              }
+            if (productSku) {
+              await ctx.db.patch("productSku", onlineOrderItem.productSkuId, {
+                quantityAvailable:
+                  productSku.quantityAvailable + onlineOrderItem.quantity,
+                inventoryCount: onlineOrderItem.isReady
+                  ? productSku.inventoryCount + onlineOrderItem.quantity
+                  : productSku.inventoryCount,
+              });
+              await recordOnlineOrderRestockMovement(ctx, {
+                item: onlineOrderItem,
+                order,
+                reasonCode: onlineOrderItem.isReady
+                  ? "online_order_item_restocked"
+                  : "online_order_reservation_released",
+              });
             }
           }),
         );
@@ -813,28 +785,7 @@ export const returnItemsToStockInternal = internalMutation({
         return true;
       }
 
-      const orderItems = await ctx.db
-        .query("onlineOrderItem")
-        .filter((q) => q.eq(q.field("orderId"), order._id))
-        .collect();
-
-      await Promise.all(
-        orderItems.map(async (item) => {
-          await ctx.db.patch("onlineOrderItem", item._id, {
-            isRefunded: true,
-            isRestocked: true,
-          });
-          const productSku = await ctx.db.get("productSku", item.productSkuId);
-          if (productSku) {
-            await ctx.db.patch("productSku", item.productSkuId, {
-              quantityAvailable: productSku.quantityAvailable + item.quantity,
-              inventoryCount: item.isReady
-                ? productSku.inventoryCount + item.quantity
-                : productSku.inventoryCount,
-            });
-          }
-        }),
-      );
+      await returnOrderItemsToStock(ctx, order._id);
 
       return true;
     }

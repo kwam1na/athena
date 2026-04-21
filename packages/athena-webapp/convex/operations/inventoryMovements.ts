@@ -1,8 +1,8 @@
-import { internalMutation, internalQuery } from "../_generated/server";
+import { internalMutation, internalQuery, MutationCtx } from "../_generated/server";
 import { Id } from "../_generated/dataModel";
 import { v } from "convex/values";
 
-export function buildInventoryMovement(args: {
+export type RecordInventoryMovementArgs = {
   storeId: Id<"store">;
   organizationId?: Id<"organization">;
   movementType: string;
@@ -20,7 +20,9 @@ export function buildInventoryMovement(args: {
   posTransactionId?: Id<"posTransaction">;
   reasonCode?: string;
   notes?: string;
-}) {
+};
+
+export function buildInventoryMovement(args: RecordInventoryMovementArgs) {
   if (args.quantityDelta === 0) {
     throw new Error("Inventory movement requires a non-zero quantity delta");
   }
@@ -46,6 +48,55 @@ export function summarizeInventoryMovements(
   );
 }
 
+function matchesExistingMovement(
+  existingMovement: {
+    movementType: string;
+    quantityDelta: number;
+    productId?: Id<"product">;
+    productSkuId?: Id<"productSku">;
+    reasonCode?: string;
+  },
+  args: RecordInventoryMovementArgs
+) {
+  return (
+    existingMovement.movementType === args.movementType &&
+    existingMovement.quantityDelta === args.quantityDelta &&
+    existingMovement.productId === args.productId &&
+    existingMovement.productSkuId === args.productSkuId &&
+    existingMovement.reasonCode === args.reasonCode
+  );
+}
+
+export async function recordInventoryMovementWithCtx(
+  ctx: MutationCtx,
+  args: RecordInventoryMovementArgs
+) {
+  // eslint-disable-next-line @convex-dev/no-collect-in-query -- Source-scoped dedupe needs the full indexed set for this source, which is bounded by the originating operation's line items.
+  const existingMovements = await ctx.db
+    .query("inventoryMovement")
+    .withIndex("by_storeId_source", (q) =>
+      q
+        .eq("storeId", args.storeId)
+        .eq("sourceType", args.sourceType)
+        .eq("sourceId", args.sourceId)
+    )
+    .collect();
+
+  const existingMovement = existingMovements.find((movement) =>
+    matchesExistingMovement(movement, args)
+  );
+
+  if (existingMovement) {
+    return existingMovement;
+  }
+
+  const movementId = await ctx.db.insert(
+    "inventoryMovement",
+    buildInventoryMovement(args)
+  );
+  return ctx.db.get("inventoryMovement", movementId);
+}
+
 export const recordInventoryMovement = internalMutation({
   args: {
     storeId: v.id("store"),
@@ -66,10 +117,7 @@ export const recordInventoryMovement = internalMutation({
     reasonCode: v.optional(v.string()),
     notes: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
-    const movementId = await ctx.db.insert("inventoryMovement", buildInventoryMovement(args));
-    return ctx.db.get(movementId);
-  },
+  handler: (ctx, args) => recordInventoryMovementWithCtx(ctx, args),
 });
 
 export const listInventoryMovementsForProductSku = internalQuery({
@@ -78,6 +126,7 @@ export const listInventoryMovementsForProductSku = internalQuery({
     productSkuId: v.id("productSku"),
   },
   handler: async (ctx, args) =>
+    // eslint-disable-next-line @convex-dev/no-collect-in-query -- This audit helper intentionally returns the full indexed history for one SKU; adding a limit here would silently truncate callers.
     ctx.db
       .query("inventoryMovement")
       .withIndex("by_storeId_productSkuId", (q) =>

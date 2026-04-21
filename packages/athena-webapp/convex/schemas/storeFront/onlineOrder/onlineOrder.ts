@@ -60,6 +60,7 @@ export const onlineOrderSchema = v.object({
   checkoutSessionId: v.id("checkoutSession"),
   completedAt: v.optional(v.number()),
   customerDetails: customerDetailsSchema,
+  customerProfileId: v.optional(v.id("customerProfile")),
   deliveryDetails: v.union(addressSchema, v.null(), v.string()),
   deliveryInstructions: v.union(v.string(), v.null()),
   deliveryFee: v.union(v.number(), v.null()),

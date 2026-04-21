@@ -149,6 +149,32 @@ describe("HARNESS_APP_REGISTRY", () => {
     });
   });
 
+  it("covers Athena shared type exports in the shared-lib validation scenario", () => {
+    const athena = HARNESS_APP_REGISTRY.find(
+      (entry) => entry.appName === "athena-webapp"
+    );
+    const sharedLibScenario = athena?.validationScenarios.find(
+      (scenario) => scenario.title === "Shared-lib or utility edits"
+    );
+
+    expect(sharedLibScenario).toMatchObject({
+      touchedPaths: [
+        "src/lib",
+        "src/settings",
+        "src/utils",
+        "src/stores",
+        "types.ts",
+      ],
+      commands: [
+        { kind: "script", script: "test" },
+        {
+          kind: "raw",
+          command: "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json",
+        },
+      ],
+    });
+  });
+
   it("covers Athena Storybook and frontend tooling edits with isolated validation", () => {
     const athena = HARNESS_APP_REGISTRY.find(
       (entry) => entry.appName === "athena-webapp"

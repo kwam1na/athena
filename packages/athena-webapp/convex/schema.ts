@@ -142,6 +142,8 @@ const schema = defineSchema({
     .index("by_workItemId", ["workItemId"]),
   onlineOrder: defineTable(onlineOrderSchema)
     .index("by_checkoutSessionId", ["checkoutSessionId"])
+    .index("by_customerProfileId", ["customerProfileId"])
+    .index("by_externalTransactionId", ["externalTransactionId"])
     .index("by_storeFrontUserId", ["storeFrontUserId"])
     .index("by_storeId", ["storeId"])
     .index("by_storeId_status", ["storeId", "status"])

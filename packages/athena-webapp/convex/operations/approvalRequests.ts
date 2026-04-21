@@ -40,7 +40,7 @@ export const createApprovalRequest = internalMutation({
   },
   handler: async (ctx, args) => {
     const requestId = await ctx.db.insert("approvalRequest", buildApprovalRequest(args));
-    return ctx.db.get(requestId);
+    return ctx.db.get("approvalRequest", requestId);
   },
 });
 
@@ -53,7 +53,7 @@ export const decideApprovalRequest = internalMutation({
     decisionNotes: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    await ctx.db.patch(args.approvalRequestId, {
+    await ctx.db.patch("approvalRequest", args.approvalRequestId, {
       status: args.decision,
       reviewedByUserId: args.reviewedByUserId,
       reviewedByStaffProfileId: args.reviewedByStaffProfileId,
@@ -61,6 +61,6 @@ export const decideApprovalRequest = internalMutation({
       decidedAt: Date.now(),
     });
 
-    return ctx.db.get(args.approvalRequestId);
+    return ctx.db.get("approvalRequest", args.approvalRequestId);
   },
 });

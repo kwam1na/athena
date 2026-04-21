@@ -7,6 +7,8 @@ import {
   uniqueOperationalRoles,
 } from "./helpers/linking";
 
+const MAX_STAFF_ROLE_ASSIGNMENTS = 10;
+
 function buildFullName(firstName?: string, lastName?: string, email?: string) {
   const fullName = [firstName, lastName].filter(Boolean).join(" ").trim();
   return fullName || email || "Unknown staff";
@@ -68,7 +70,7 @@ export const ensureStaffProfile = internalMutation({
     ),
   },
   handler: async (ctx, args) => {
-    const user = await ctx.db.get(args.userId);
+    const user = await ctx.db.get("athenaUser", args.userId);
 
     if (!user) {
       throw new Error("Athena user not found");
@@ -113,7 +115,7 @@ export const ensureStaffProfile = internalMutation({
       : await ctx.db.insert("staffProfile", profilePayload);
 
     if (existingProfile) {
-      await ctx.db.patch(existingProfile._id, profilePayload);
+      await ctx.db.patch("staffProfile", existingProfile._id, profilePayload);
     }
 
     const requestedRoles = uniqueOperationalRoles([
@@ -132,11 +134,14 @@ export const ensureStaffProfile = internalMutation({
     const existingAssignments = await ctx.db
       .query("staffRoleAssignment")
       .withIndex("by_staffProfileId", (q) => q.eq("staffProfileId", staffProfileId))
-      .collect();
+      .take(MAX_STAFF_ROLE_ASSIGNMENTS);
 
     for (const assignment of existingAssignments) {
       if (!desiredRoles.some((candidate) => candidate.role === assignment.role)) {
-        await ctx.db.patch(assignment._id, { status: "inactive", isPrimary: false });
+        await ctx.db.patch("staffRoleAssignment", assignment._id, {
+          status: "inactive",
+          isPrimary: false,
+        });
       }
     }
 
@@ -146,7 +151,7 @@ export const ensureStaffProfile = internalMutation({
       );
 
       if (current) {
-        await ctx.db.patch(current._id, {
+        await ctx.db.patch("staffRoleAssignment", current._id, {
           status: "active",
           isPrimary: assignment.isPrimary,
         });
@@ -163,10 +168,10 @@ export const ensureStaffProfile = internalMutation({
       });
     }
 
-    await ctx.db.patch(membership._id, {
+    await ctx.db.patch("organizationMember", membership._id, {
       operationalRoles: desiredRoles.map((assignment) => assignment.role),
     });
 
-    return ctx.db.get(staffProfileId);
+    return ctx.db.get("staffProfile", staffProfileId);
   },
 });

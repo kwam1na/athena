@@ -30,6 +30,7 @@ This route index enumerates the current files under `src/routes` so agents can o
 - [`src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/logs.$logId.tsx`](../../src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/logs.$logId.tsx)
 - [`src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/logs.index.tsx`](../../src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/logs.index.tsx)
 - [`src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/members.index.tsx`](../../src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/members.index.tsx)
+- [`src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/index.tsx`](../../src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/index.tsx)
 - [`src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug/index.tsx`](../../src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug/index.tsx)
 - [`src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/all.index.tsx`](../../src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/all.index.tsx)
 - [`src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/cancelled.index.tsx`](../../src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/cancelled.index.tsx)
@@ -60,6 +61,7 @@ This route index enumerates the current files under `src/routes` so agents can o
 - [`src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/reviews/index.tsx`](../../src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/reviews/index.tsx)
 - [`src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/reviews/new.index.tsx`](../../src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/reviews/new.index.tsx)
 - [`src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/reviews/published.index.tsx`](../../src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/reviews/published.index.tsx)
+- [`src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/services/intake.index.tsx`](../../src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/services/intake.index.tsx)
 - [`src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/users.$userId.tsx`](../../src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/users.$userId.tsx)
 - [`src/routes/_authed/$orgUrlSlug/store/index.tsx`](../../src/routes/_authed/$orgUrlSlug/store/index.tsx)
 

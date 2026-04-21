@@ -17,7 +17,7 @@ Use this for authenticated dashboard flows, route trees, and UI behavior changes
 
 ## Shared-lib or utility edits
 
-Touched surfaces: `src/lib`, `src/settings`, `src/utils`, `src/stores`
+Touched surfaces: `src/lib`, `src/settings`, `src/utils`, `src/stores`, `types.ts`
 
 Run:
 

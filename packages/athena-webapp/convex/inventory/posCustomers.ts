@@ -29,6 +29,7 @@ export const searchCustomers = query({
     const searchTerm = args.searchQuery.toLowerCase().trim();
 
     // Get all customers for the store and filter by search term
+    // eslint-disable-next-line @convex-dev/no-collect-in-query -- Search still performs a store-scoped scan until we add a dedicated search index; bounding here would drop valid matches unpredictably.
     const customers = await ctx.db
       .query("posCustomer")
       .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
@@ -93,7 +94,7 @@ export const getCustomerById = query({
     v.null()
   ),
   handler: async (ctx, args) => {
-    return await ctx.db.get(args.customerId);
+    return await ctx.db.get("posCustomer", args.customerId);
   },
 });
 
@@ -162,7 +163,7 @@ export const createCustomer = mutation({
       isActive: true,
     });
 
-    const customer = await ctx.db.get(customerId);
+    const customer = await ctx.db.get("posCustomer", customerId);
 
     return {
       _id: customer!._id,
@@ -201,7 +202,7 @@ export const updateCustomer = mutation({
     if (args.address) updates.address = args.address;
     if (args.notes) updates.notes = args.notes;
 
-    await ctx.db.patch(args.customerId, updates);
+    await ctx.db.patch("posCustomer", args.customerId, updates);
     return null;
   },
 });
@@ -214,10 +215,10 @@ export const updateCustomerStats = mutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const customer = await ctx.db.get(args.customerId);
+    const customer = await ctx.db.get("posCustomer", args.customerId);
     if (!customer) return null;
 
-    await ctx.db.patch(args.customerId, {
+    await ctx.db.patch("posCustomer", args.customerId, {
       totalSpent: (customer.totalSpent || 0) + args.transactionAmount,
       transactionCount: (customer.transactionCount || 0) + 1,
       lastTransactionAt: Date.now(),
@@ -245,7 +246,7 @@ export const getCustomerTransactions = query({
     })
   ),
   handler: async (ctx, args) => {
-    const customer = await ctx.db.get(args.customerId);
+    const customer = await ctx.db.get("posCustomer", args.customerId);
     if (!customer) return [];
 
     const transactions = await ctx.db
@@ -280,8 +281,11 @@ export const linkToStoreFrontUser = mutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const posCustomer = await ctx.db.get(args.posCustomerId);
-    const storeFrontUser = await ctx.db.get(args.storeFrontUserId);
+    const posCustomer = await ctx.db.get("posCustomer", args.posCustomerId);
+    const storeFrontUser = await ctx.db.get(
+      "storeFrontUser",
+      args.storeFrontUserId
+    );
 
     if (!posCustomer || !storeFrontUser) {
       throw new Error("Customer or storefront user not found");
@@ -301,7 +305,7 @@ export const linkToStoreFrontUser = mutation({
       );
     }
 
-    await ctx.db.patch(args.posCustomerId, {
+    await ctx.db.patch("posCustomer", args.posCustomerId, {
       linkedStoreFrontUserId: args.storeFrontUserId,
       // Optionally update contact info from storefront user
       email: storeFrontUser.email,
@@ -326,14 +330,14 @@ export const linkToGuest = mutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const posCustomer = await ctx.db.get(args.posCustomerId);
-    const guest = await ctx.db.get(args.guestId);
+    const posCustomer = await ctx.db.get("posCustomer", args.posCustomerId);
+    const guest = await ctx.db.get("guest", args.guestId);
 
     if (!posCustomer || !guest) {
       throw new Error("Customer or guest not found");
     }
 
-    await ctx.db.patch(args.posCustomerId, {
+    await ctx.db.patch("posCustomer", args.posCustomerId, {
       linkedGuestId: args.guestId,
       // Optionally update contact info from guest
       email: guest.email || posCustomer.email,

@@ -35,6 +35,7 @@ Start with the package suite in [vitest.config.ts](../../vitest.config.ts): `bun
 
 Escalate validation based on the surface you touched:
 
+- Operations intake or manager-queue changes: run [convex/operations/serviceIntake.test.ts](../../convex/operations/serviceIntake.test.ts), [src/components/services/ServiceIntakeView.test.tsx](../../src/components/services/ServiceIntakeView.test.tsx), and [src/components/operations/OperationsQueueView.test.tsx](../../src/components/operations/OperationsQueueView.test.tsx) before broader package validation.
 - Convex HTTP composition or auth-route changes: run targeted tests like [convex/http/routerComposition.test.ts](../../convex/http/routerComposition.test.ts) and [convex/http/domains/storeFront/routes/security.test.ts](../../convex/http/domains/storeFront/routes/security.test.ts).
 - Inventory query or POS behavior changes: spot-check existing guards such as [convex/inventory/posQueryCleanup.test.ts](../../convex/inventory/posQueryCleanup.test.ts) and [src/tests/pos/usePrint.test.ts](../../src/tests/pos/usePrint.test.ts).
 - Authenticated admin/store route-boundary changes: run `bun run --filter '@athena/webapp' lint:architecture` to catch lower-layer imports that reach back into `_authed` route or shell entrypoints.

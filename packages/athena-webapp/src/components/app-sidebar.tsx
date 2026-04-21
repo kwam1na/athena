@@ -107,7 +107,7 @@ export function AppSidebar() {
     activeStore?._id ? { storeId: activeStore._id } : "skip",
   );
 
-  const { hasFullAdminAccess } = usePermissions();
+  const { canAccessOperations, hasFullAdminAccess } = usePermissions();
 
   if (!activeStore || !activeOrganization) {
     return null;
@@ -158,6 +158,40 @@ export function AppSidebar() {
                   >
                     <ScanBarcode className="w-4 h-4" />
                     <p className="font-medium">Point of Sale</p>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+
+              <SidebarMenuItem>
+                <SidebarMenuButton disabled={!canAccessOperations()} asChild>
+                  <Link
+                    to="/$orgUrlSlug/store/$storeUrlSlug/services/intake"
+                    params={(p) => ({
+                      ...p,
+                      orgUrlSlug: activeOrganization?.slug,
+                      storeUrlSlug: activeStore?.slug,
+                    })}
+                    className="flex items-center"
+                  >
+                    <PackageOpenIcon className="w-4 h-4" />
+                    <p className="font-medium">Service Intake</p>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+
+              <SidebarMenuItem>
+                <SidebarMenuButton disabled={!canAccessOperations()} asChild>
+                  <Link
+                    to="/$orgUrlSlug/store/$storeUrlSlug/operations"
+                    params={(p) => ({
+                      ...p,
+                      orgUrlSlug: activeOrganization?.slug,
+                      storeUrlSlug: activeStore?.slug,
+                    })}
+                    className="flex items-center"
+                  >
+                    <Layers className="w-4 h-4" />
+                    <p className="font-medium">Operations</p>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>

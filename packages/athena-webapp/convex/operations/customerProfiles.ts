@@ -19,6 +19,8 @@ type EnsureCustomerProfileArgs = {
   fallbackOrganizationId?: Id<"organization">;
 };
 
+const MAX_CUSTOMER_PROFILE_MATCH_CANDIDATES = 10;
+
 function compactRecord<T extends Record<string, unknown>>(value: T): Partial<T> {
   return Object.fromEntries(
     Object.entries(value).filter(([, fieldValue]) => fieldValue !== undefined)
@@ -30,10 +32,12 @@ async function loadCustomerSources(
   args: EnsureCustomerProfileArgs
 ) {
   const storeFrontUser = args.storeFrontUserId
-    ? await ctx.db.get(args.storeFrontUserId)
+    ? await ctx.db.get("storeFrontUser", args.storeFrontUserId)
     : null;
-  const guest = args.guestId ? await ctx.db.get(args.guestId) : null;
-  const posCustomer = args.posCustomerId ? await ctx.db.get(args.posCustomerId) : null;
+  const guest = args.guestId ? await ctx.db.get("guest", args.guestId) : null;
+  const posCustomer = args.posCustomerId
+    ? await ctx.db.get("posCustomer", args.posCustomerId)
+    : null;
 
   return { storeFrontUser, guest, posCustomer };
 }
@@ -87,7 +91,7 @@ async function findExistingProfile(
         .withIndex("by_storeId_email", (q) =>
           q.eq("storeId", draft.storeId).eq("email", draft.email)
         )
-        .collect())
+        .take(MAX_CUSTOMER_PROFILE_MATCH_CANDIDATES))
     );
   }
 
@@ -98,7 +102,7 @@ async function findExistingProfile(
         .withIndex("by_storeId_phoneNumber", (q) =>
           q.eq("storeId", draft.storeId).eq("phoneNumber", draft.phoneNumber)
         )
-        .collect())
+        .take(MAX_CUSTOMER_PROFILE_MATCH_CANDIDATES))
     );
   }
 
@@ -116,7 +120,7 @@ export const getById = internalQuery({
   args: {
     profileId: v.id("customerProfile"),
   },
-  handler: async (ctx, args) => ctx.db.get(args.profileId),
+  handler: async (ctx, args) => ctx.db.get("customerProfile", args.profileId),
 });
 
 export const getBySource = internalQuery({
@@ -166,7 +170,7 @@ export const getBySource = internalQuery({
         .withIndex("by_storeId_email", (q) =>
           q.eq("storeId", storeId).eq("email", normalizedEmail)
         )
-        .collect();
+        .take(MAX_CUSTOMER_PROFILE_MATCH_CANDIDATES);
 
       const emailMatch = findMatchingCustomerProfile(emailMatches, {
         storeId,
@@ -188,7 +192,7 @@ export const getBySource = internalQuery({
       .withIndex("by_storeId_phoneNumber", (q) =>
         q.eq("storeId", storeId).eq("phoneNumber", args.phoneNumber!)
       )
-      .collect();
+      .take(MAX_CUSTOMER_PROFILE_MATCH_CANDIDATES);
 
     return (
       findMatchingCustomerProfile(phoneMatches, {
@@ -228,12 +232,12 @@ export async function ensureCustomerProfileFromSourcesWithCtx(
       status: existing.status ?? draft.status,
     });
 
-    await ctx.db.patch(existing._id, updates);
-    return ctx.db.get(existing._id);
+    await ctx.db.patch("customerProfile", existing._id, updates);
+    return ctx.db.get("customerProfile", existing._id);
   }
 
   const profileId = await ctx.db.insert("customerProfile", draft);
-  return ctx.db.get(profileId);
+  return ctx.db.get("customerProfile", profileId);
 }
 
 export const ensureCustomerProfileFromSources = internalMutation({
