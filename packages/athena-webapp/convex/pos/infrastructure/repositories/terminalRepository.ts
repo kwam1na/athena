@@ -53,6 +53,7 @@ export async function listTerminalsForStore(
   ctx: QueryCtx,
   storeId: Id<"store">,
 ) {
+  // eslint-disable-next-line @convex-dev/no-collect-in-query -- Store terminal management needs the full store-scoped roster; limiting this would hide valid terminals from the register UI.
   const terminals = await ctx.db
     .query("posTerminal")
     .withIndex("by_storeId", (q) => q.eq("storeId", storeId))
