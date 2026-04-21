@@ -1,7 +1,6 @@
 import type { FormEvent } from "react";
 
 import type { CustomerInfo, CartItem, Payment, Product } from "@/components/pos/types";
-import type { POSSession } from "~/types";
 import type { Id } from "~/convex/_generated/dataModel";
 import type { PosPaymentMethod } from "@/lib/pos/domain";
 
@@ -52,18 +51,31 @@ export interface RegisterCartState {
 }
 
 export interface RegisterSessionPanelState {
-  storeId: Id<"store">;
-  terminalId: Id<"posTerminal">;
-  cashierId: Id<"cashier">;
-  registerNumber: string;
-  cartItems: CartItem[];
-  customerInfo: CustomerInfo;
-  subtotal: number;
-  tax: number;
-  total: number;
-  onSessionLoaded: (session: POSSession) => void;
-  onNewSession: () => void;
-  resetAutoSessionInitialized: () => void;
+  activeSessionNumber?: string | null;
+  hasExpiredSession: boolean;
+  canHoldSession: boolean;
+  disableNewSession: boolean;
+  heldSessions: Array<{
+    _id: Id<"posSession">;
+    expiresAt: number;
+    sessionNumber: string;
+    cartItems: CartItem[];
+    total?: number;
+    subtotal?: number;
+    heldAt?: number;
+    updatedAt: number;
+    holdReason?: string;
+    customer?: {
+      name: string;
+      email?: string;
+      phone?: string;
+    } | null;
+  }>;
+  onHoldCurrentSession: () => Promise<void>;
+  onVoidCurrentSession: () => Promise<void>;
+  onResumeSession: (sessionId: Id<"posSession">) => Promise<void>;
+  onVoidHeldSession: (sessionId: Id<"posSession">) => Promise<void>;
+  onStartNewSession: () => Promise<void>;
 }
 
 export interface RegisterCheckoutState {

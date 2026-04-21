@@ -1,38 +1,16 @@
-import React from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Users, ShoppingCart, PlayCircle, Ban, Clock } from "lucide-react";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { useGetCurrencyFormatter } from "~/src/hooks/useGetCurrencyFormatter";
-import { usePOSStore } from "~/src/stores/posStore";
 import { formatStoredAmount } from "~/src/lib/pos/displayAmounts";
-
-interface HeldSession {
-  _id: Id<"posSession">;
-  expiresAt: number;
-  sessionNumber: string;
-  cartItems: any[];
-  total?: number;
-  subtotal?: number;
-  heldAt?: number;
-  updatedAt: number;
-  holdReason?: string;
-  customer?: {
-    name: string;
-    email?: string;
-    phone?: string;
-  } | null;
-}
+import type { RegisterSessionPanelState } from "@/lib/pos/presentation/register/registerUiState";
 
 interface HeldSessionsListProps {
-  sessions: HeldSession[];
-  onResumeSession: (
-    sessionId: Id<"posSession">,
-    cashierId: Id<"cashier">,
-    terminalId: Id<"posTerminal">
-  ) => void;
-  onVoidSession: (sessionId: Id<"posSession">) => void;
+  sessions: RegisterSessionPanelState["heldSessions"];
+  onResumeSession: (sessionId: Id<"posSession">) => Promise<void>;
+  onVoidSession: (sessionId: Id<"posSession">) => Promise<void>;
 }
 
 export function HeldSessionsList({
@@ -40,8 +18,6 @@ export function HeldSessionsList({
   onResumeSession,
   onVoidSession,
 }: HeldSessionsListProps) {
-  const store = usePOSStore();
-
   const formatter = useGetCurrencyFormatter();
 
   if (sessions.length === 0) {
@@ -56,12 +32,14 @@ export function HeldSessionsList({
     return timestamp < Date.now();
   };
 
-  const getSessionCartItemsCount = (session: HeldSession) => {
+  const getSessionCartItemsCount = (
+    session: RegisterSessionPanelState["heldSessions"][number],
+  ) => {
     const count = session.cartItems.reduce(
-      (acc, item) => acc + item.quantity,
-      0
+      (acc: number, item) => acc + item.quantity,
+      0,
     );
-    return count == 1 ? `${count} item` : `${count} items`;
+    return count === 1 ? `${count} item` : `${count} items`;
   };
 
   return (
@@ -116,13 +94,7 @@ export function HeldSessionsList({
                   variant="ghost"
                   size="sm"
                   disabled={hasExpired(session.expiresAt)}
-                  onClick={() =>
-                    onResumeSession(
-                      session._id,
-                      store.cashier.id as Id<"cashier">,
-                      store.terminalId as Id<"posTerminal">
-                    )
-                  }
+                  onClick={() => void onResumeSession(session._id)}
                   title="Resume session"
                 >
                   <PlayCircle className="h-4 w-4" />
@@ -130,7 +102,7 @@ export function HeldSessionsList({
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => onVoidSession(session._id)}
+                  onClick={() => void onVoidSession(session._id)}
                   title="Void session"
                 >
                   <Ban className="h-4 w-4 text-destructive" />

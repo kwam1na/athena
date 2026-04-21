@@ -16,10 +16,10 @@ import {
 } from "lucide-react";
 import { CustomerInfo } from "./types";
 import {
-  usePOSCustomerSearch,
-  usePOSCustomerCreate,
-  usePOSCustomerUpdate,
-} from "@/hooks/usePOSCustomers";
+  useConvexPosCustomerSearch,
+  useConvexPosCustomerCreate,
+  useConvexPosCustomerUpdate,
+} from "@/lib/pos/infrastructure/convex/customerGateway";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { useState } from "react";
 import { POS_MESSAGES, showValidationError } from "../../lib/pos/toastService";
@@ -51,9 +51,9 @@ export function CustomerInfoPanel({
     phone: "",
   });
 
-  const searchResults = usePOSCustomerSearch(activeStore?._id, searchQuery);
-  const createCustomer = usePOSCustomerCreate();
-  const updateCustomer = usePOSCustomerUpdate();
+  const searchResults = useConvexPosCustomerSearch(activeStore?._id, searchQuery);
+  const createCustomer = useConvexPosCustomerCreate();
+  const updateCustomer = useConvexPosCustomerUpdate();
 
   const formatter = currencyFormatter(activeStore?.currency || "GHS");
 

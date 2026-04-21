@@ -87,7 +87,7 @@ export interface PosRegisterStateQueryInput {
   storeId?: Id<"store">;
   terminalId?: Id<"posTerminal"> | null;
   cashierId?: Id<"cashier"> | null;
-  registerNumber: string;
+  registerNumber?: string;
 }
 
 export interface PosTerminalLookupInput {

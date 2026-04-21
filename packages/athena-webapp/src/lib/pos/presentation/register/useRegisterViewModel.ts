@@ -1,29 +1,31 @@
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { useQuery } from "convex/react";
 import { toast } from "sonner";
 
 import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
-import type { POSSession } from "~/types";
 
+import type { CustomerInfo, Payment, Product } from "@/components/pos/types";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
-import { useCartOperations } from "@/hooks/useCartOperations";
-import { useCustomerOperations } from "@/hooks/useCustomerOperations";
 import { useDebounce } from "@/hooks/useDebounce";
 import { useGetTerminal } from "@/hooks/useGetTerminal";
 import { useNavigateBack } from "@/hooks/use-navigate-back";
-import { usePOSOperations } from "@/hooks/usePOSOperations";
-import {
-  usePOSActiveSession,
-  usePOSStoreSessions,
-} from "@/hooks/usePOSSessions";
 import {
   usePOSBarcodeSearch,
   usePOSProductIdSearch,
 } from "@/hooks/usePOSProducts";
-import { useSessionManagement } from "@/hooks/useSessionManagement";
-import { useSessionManagerOperations } from "@/hooks/useSessionManagerOperations";
+import {
+  bootstrapRegister,
+} from "@/lib/pos/application/useCases/bootstrapRegister";
+import { addItem as runAddItem } from "@/lib/pos/application/useCases/addItem";
+import { completeTransaction as runCompleteTransaction } from "@/lib/pos/application/useCases/completeTransaction";
+import { holdSession as runHoldSession } from "@/lib/pos/application/useCases/holdSession";
+import { startSession as runStartSession } from "@/lib/pos/application/useCases/startSession";
+import {
+  calculatePosCartTotals,
+  type PosPaymentMethod,
+} from "@/lib/pos/domain";
 import {
   extractBarcodeFromInput,
   type ExtractResult,
@@ -33,9 +35,18 @@ import {
   POS_SEARCH_DEBOUNCE_MS,
 } from "@/lib/pos/constants";
 import { logger } from "@/lib/logger";
-import { usePOSStore } from "@/stores/posStore";
+import { useConvexCommandGateway } from "@/lib/pos/infrastructure/convex/commandGateway";
+import { useConvexRegisterState } from "@/lib/pos/infrastructure/convex/registerGateway";
+import {
+  useConvexActiveSession,
+  useConvexHeldSessions,
+  useConvexSessionActions,
+  type PosSessionCustomer,
+  type PosSessionDetail,
+} from "@/lib/pos/infrastructure/convex/sessionGateway";
 
 import type { RegisterViewModel } from "./registerUiState";
+import { EMPTY_REGISTER_CUSTOMER_INFO } from "./registerUiState";
 import {
   buildRegisterHeaderState,
   buildRegisterInfoState,
@@ -44,290 +55,529 @@ import {
   isRegisterSessionActive,
 } from "./selectors";
 
+function hasCustomerDetails(customer: CustomerInfo | undefined | null): boolean {
+  if (!customer) {
+    return false;
+  }
+
+  return Boolean(
+    customer.customerId ||
+      customer.name.trim() ||
+      customer.email.trim() ||
+      customer.phone.trim(),
+  );
+}
+
+function mapSessionCustomer(customer: PosSessionCustomer): CustomerInfo {
+  if (!customer) {
+    return EMPTY_REGISTER_CUSTOMER_INFO;
+  }
+
+  return {
+    customerId: customer._id,
+    name: customer.name,
+    email: customer.email ?? "",
+    phone: customer.phone ?? "",
+  };
+}
+
+function createPaymentId(): string {
+  return (
+    globalThis.crypto?.randomUUID?.() ??
+    `payment-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+  );
+}
+
 export function useRegisterViewModel(): RegisterViewModel {
   const { activeStore } = useGetActiveStore();
-  const cart = useCartOperations();
-  const customer = useCustomerOperations();
-  const transaction = usePOSOperations();
-  const store = usePOSStore();
-  const {
-    createSession,
-    holdSession,
-    releaseSessionInventoryHoldsAndDeleteItems,
-  } = useSessionManagement();
   const terminal = useGetTerminal();
   const navigateBack = useNavigateBack();
-  const autoSessionInitialized = useRef(false);
-
-  useEffect(() => {
-    if (activeStore?._id && store.storeId !== activeStore._id) {
-      store.setStoreId(activeStore._id);
-    }
-  }, [activeStore?._id, store]);
-
-  useEffect(() => {
-    if (terminal?._id && store.terminalId !== terminal._id) {
-      store.setTerminalId(terminal._id);
-    }
-  }, [terminal?._id, store]);
-
-  const handleSessionLoaded = useCallback(
-    (session: POSSession) => {
-      store.loadSessionData(session);
-    },
-    [store],
+  const [defaultRegisterNumber] = useState("1");
+  const [registerNumberOverride, setRegisterNumberOverride] = useState<
+    string | undefined
+  >(undefined);
+  const [cashierId, setCashierId] = useState<Id<"cashier"> | null>(null);
+  const [showCustomerPanel, setShowCustomerPanel] = useState(false);
+  const [showProductEntry, setShowProductEntry] = useState(true);
+  const [productSearchQuery, setProductSearchQuery] = useState("");
+  const [customerInfo, setCustomerInfo] = useState<CustomerInfo>(
+    EMPTY_REGISTER_CUSTOMER_INFO,
   );
-
-  const resetAutoSessionInitialized = useCallback(() => {
-    autoSessionInitialized.current = false;
-  }, []);
-
-  const handleNewSession = useCallback(() => {
-    store.startNewTransaction();
-    resetAutoSessionInitialized();
-  }, [resetAutoSessionInitialized, store]);
-
-  const activeSessionQuery = usePOSActiveSession(
-    activeStore?._id,
-    store.terminalId,
-    store.cashier.id || undefined,
-    store.ui.registerNumber,
+  const [payments, setPayments] = useState<Payment[]>([]);
+  const [isTransactionCompleted, setIsTransactionCompleted] = useState(false);
+  const [completedOrderNumber, setCompletedOrderNumber] = useState<string | null>(
+    null,
   );
+  const [completedTransactionData, setCompletedTransactionData] =
+    useState<RegisterViewModel["checkout"]["completedTransactionData"]>(null);
+  const bootstrapInitialized = useRef(false);
+  const syncedSessionId = useRef<string | null>(null);
 
-  const heldSessionsQuery = usePOSStoreSessions(
-    activeStore?._id,
-    store.terminalId,
-    store.cashier.id || undefined,
-    "held",
-    1,
-  );
-
-  const sessionManagerOps = useSessionManagerOperations(
-    activeStore?._id || ("" as Id<"store">),
-    store.terminalId || ("" as Id<"posTerminal">),
-    store.cashier.id || ("" as Id<"cashier">),
-    store.ui.registerNumber,
-  );
-
+  const registerState = useConvexRegisterState({
+    storeId: activeStore?._id,
+    terminalId: terminal?._id ?? null,
+    cashierId,
+    registerNumber: registerNumberOverride,
+  });
+  const bootstrapState = bootstrapRegister({
+    registerState,
+  });
+  const activeSession = useConvexActiveSession({
+    storeId: activeStore?._id,
+    terminalId: terminal?._id ?? null,
+    cashierId,
+    registerNumber: registerNumberOverride,
+  });
+  const activeRegisterNumber =
+    activeSession?.registerNumber ??
+    registerState?.activeSession?.registerNumber ??
+    registerState?.resumableSession?.registerNumber;
+  const registerNumber =
+    activeRegisterNumber ?? registerNumberOverride ?? defaultRegisterNumber;
+  const heldSessions = useConvexHeldSessions({
+    storeId: activeStore?._id,
+    terminalId: terminal?._id ?? null,
+    cashierId,
+    limit: 10,
+  });
   const cashier = useQuery(
     api.inventory.cashier.getById,
-    store.cashier.id ? { id: store.cashier.id } : "skip",
+    cashierId ? { id: cashierId } : "skip",
   );
 
-  const isSessionActive = isRegisterSessionActive(activeSessionQuery);
+  useEffect(() => {
+    if (activeRegisterNumber && activeRegisterNumber !== registerNumberOverride) {
+      setRegisterNumberOverride(activeRegisterNumber);
+    }
+  }, [activeRegisterNumber, registerNumberOverride]);
 
-  const handleCashierAuthenticated = useCallback(
-    (cashierId: Id<"cashier">) => {
-      store.setCashier(cashierId);
+  const {
+    startSession: startSessionCommand,
+    addItem: addItemCommand,
+    holdSession: holdSessionCommand,
+    completeTransaction: completeTransactionCommand,
+  } = useConvexCommandGateway();
+  const {
+    resumeSession,
+    voidSession,
+    updateSession,
+    releaseSessionInventoryHoldsAndDeleteItems,
+    removeItem,
+  } = useConvexSessionActions();
+
+  const activeCartItems = activeSession?.cartItems ?? [];
+  const activeTotals = useMemo(
+    () => calculatePosCartTotals(activeCartItems),
+    [activeCartItems],
+  );
+  const hasActiveCustomerDetails = hasCustomerDetails(customerInfo);
+  const hasActiveCartDraft = activeCartItems.length > 0;
+
+  const resetDraftState = useCallback(
+    (options?: {
+      keepCashier?: boolean;
+      keepTransactionCompletion?: boolean;
+    }) => {
+      setShowCustomerPanel(false);
+      setShowProductEntry(true);
+      setProductSearchQuery("");
+      setCustomerInfo(EMPTY_REGISTER_CUSTOMER_INFO);
+      setPayments([]);
+
+      if (!options?.keepTransactionCompletion) {
+        setIsTransactionCompleted(false);
+        setCompletedOrderNumber(null);
+        setCompletedTransactionData(null);
+      }
+
+      if (!options?.keepCashier) {
+        setCashierId(null);
+      }
     },
-    [store],
+    [],
   );
 
-  const createNewSession = useCallback(() => {
-    if (!activeStore?._id) {
+  const requestBootstrap = useCallback(() => {
+    bootstrapInitialized.current = false;
+  }, []);
+
+  const handleSessionExpired = useCallback(() => {
+    logger.warn("[POS] Session expired, clearing cashier and local draft state", {
+      sessionId: activeSession?._id,
+    });
+    requestBootstrap();
+    syncedSessionId.current = null;
+    resetDraftState();
+  }, [activeSession?._id, requestBootstrap, resetDraftState]);
+
+  useEffect(() => {
+    requestBootstrap();
+  }, [
+    requestBootstrap,
+    activeStore?._id,
+    terminal?._id,
+    cashierId,
+    registerNumberOverride,
+  ]);
+
+  useEffect(() => {
+    const sessionId = activeSession?._id ?? null;
+    if (sessionId === syncedSessionId.current) {
       return;
     }
 
-    if (store.session.isCreating) {
-      logger.debug(
-        "[POS] Session creation already in progress, skipping auto-init",
-      );
+    syncedSessionId.current = sessionId;
+
+    if (!sessionId) {
+      if (!isTransactionCompleted) {
+        setCustomerInfo(EMPTY_REGISTER_CUSTOMER_INFO);
+        setPayments([]);
+        setShowCustomerPanel(false);
+      }
       return;
     }
 
-    logger.info("[POS] No active or held session found, creating new session", {
-      storeId: activeStore._id,
-      registerNumber: store.ui.registerNumber,
-      cashierId: store.cashier.id,
+    setCustomerInfo(mapSessionCustomer(activeSession?.customer ?? null));
+    setPayments([]);
+    setShowCustomerPanel(Boolean(activeSession?.customer));
+    setIsTransactionCompleted(false);
+    setCompletedOrderNumber(null);
+    setCompletedTransactionData(null);
+  }, [activeSession?._id, activeSession?.customer, isTransactionCompleted]);
+
+  useEffect(() => {
+    if (isTransactionCompleted || activeCartItems.length > 0 || payments.length === 0) {
+      return;
+    }
+
+    setPayments([]);
+  }, [activeCartItems.length, isTransactionCompleted, payments.length]);
+
+  useEffect(() => {
+    if (!activeSession?.expiresAt) {
+      return;
+    }
+
+    const timeUntilExpiry = activeSession.expiresAt - Date.now();
+    if (timeUntilExpiry <= 0) {
+      handleSessionExpired();
+      return;
+    }
+
+    const timeoutId = setTimeout(handleSessionExpired, timeUntilExpiry);
+    return () => clearTimeout(timeoutId);
+  }, [activeSession?._id, activeSession?.expiresAt, handleSessionExpired]);
+
+  const ensureSessionId = useCallback(async () => {
+    if (activeSession?._id) {
+      return activeSession._id as Id<"posSession">;
+    }
+
+    if (registerState?.activeSession?._id) {
+      return registerState.activeSession._id as Id<"posSession">;
+    }
+
+    if (!activeStore?._id || !terminal?._id || !cashierId) {
+      toast.error("Sign in at a registered terminal before adding products");
+      return null;
+    }
+
+    const result = await runStartSession({
+      gateway: {
+        startSession: startSessionCommand,
+      },
+      command: {
+        storeId: activeStore._id,
+        terminalId: terminal._id,
+        cashierId,
+        registerNumber,
+      },
     });
 
-    createSession(activeStore._id, store.cashier.id || undefined)
-      .then(() => store.startNewTransaction())
-      .catch((error) => {
-        logger.error("[POS] Failed to auto-create session", error);
-        autoSessionInitialized.current = false;
-      });
+    if (!result.ok) {
+      toast.error(result.message);
+      return null;
+    }
+
+    bootstrapInitialized.current = true;
+    return result.data.sessionId;
   }, [
+    activeSession?._id,
     activeStore?._id,
-    createSession,
-    store,
+    cashierId,
+    registerNumber,
+    registerState?.activeSession?._id,
+    startSessionCommand,
+    terminal?._id,
+  ]);
+
+  const persistSessionMetadata = useCallback(
+    async (session: PosSessionDetail | null | undefined) => {
+      if (!session?._id || !cashierId) {
+        return true;
+      }
+
+      try {
+        await updateSession({
+          sessionId: session._id as Id<"posSession">,
+          cashierId,
+          customerId: customerInfo.customerId,
+          customerInfo: hasCustomerDetails(customerInfo)
+            ? {
+                name: customerInfo.name || undefined,
+                email: customerInfo.email || undefined,
+                phone: customerInfo.phone || undefined,
+              }
+            : undefined,
+          subtotal: activeTotals.subtotal,
+          tax: activeTotals.tax,
+          total: activeTotals.total,
+        });
+
+        return true;
+      } catch (error) {
+        logger.error(
+          "[POS] Failed to update session metadata",
+          error instanceof Error ? error : new Error(String(error)),
+        );
+        toast.error("Failed to save session details");
+        return false;
+      }
+    },
+    [activeTotals.subtotal, activeTotals.tax, activeTotals.total, cashierId, customerInfo, updateSession],
+  );
+
+  const holdCurrentSession = useCallback(async (reason?: string) => {
+    if (!activeSession || !cashierId) {
+      toast.error("No active session to hold");
+      return false;
+    }
+
+    const persisted = await persistSessionMetadata(activeSession);
+    if (!persisted) {
+      return false;
+    }
+
+    const result = await runHoldSession({
+      gateway: {
+        holdSession: holdSessionCommand,
+      },
+      command: {
+        sessionId: activeSession._id as Id<"posSession">,
+        cashierId,
+        reason,
+      },
+    });
+
+    if (!result.ok) {
+      toast.error(result.message);
+      return false;
+    }
+
+    resetDraftState({
+      keepCashier: true,
+    });
+    toast.success("Session held");
+    return true;
+  }, [
+    activeSession,
+    cashierId,
+    holdSessionCommand,
+    persistSessionMetadata,
+    resetDraftState,
+  ]);
+
+  const voidCurrentSession = useCallback(async () => {
+    if (!activeSession) {
+      toast.error("No active session to void");
+      return false;
+    }
+
+    const result = await voidSession({
+      sessionId: activeSession._id as Id<"posSession">,
+    });
+
+    if (!result.success) {
+      toast.error(result.message);
+      return false;
+    }
+
+    resetDraftState({
+      keepCashier: true,
+    });
+    toast.success("Session voided");
+    return true;
+  }, [activeSession, resetDraftState, voidSession]);
+
+  const handleResumeSession = useCallback(async (
+    sessionId: Id<"posSession">,
+  ) => {
+    if (!cashierId || !terminal?._id) {
+      toast.error("Sign in at a registered terminal before resuming a session");
+      return;
+    }
+
+    if (activeSession && activeSession._id !== sessionId) {
+      const hasDraftState = activeSession.cartItems.length > 0;
+      const handled = hasDraftState
+        ? await holdCurrentSession("Auto-held before resuming a different session")
+        : true;
+
+      if (!handled) {
+        return;
+      }
+    }
+
+    const result = await resumeSession({
+      sessionId,
+      cashierId,
+      terminalId: terminal._id,
+    });
+
+    if (!result.success) {
+      toast.error(result.message);
+      return;
+    }
+
+    setPayments([]);
+    setShowCustomerPanel(false);
+    bootstrapInitialized.current = true;
+    toast.success("Session resumed");
+  }, [
+    activeSession,
+    cashierId,
+    customerInfo,
+    holdCurrentSession,
+    resumeSession,
+    terminal?._id,
+  ]);
+
+  const handleStartNewSession = useCallback(async () => {
+    if (!activeStore?._id || !terminal?._id || !cashierId) {
+      toast.error("Sign in at a registered terminal before starting a session");
+      return;
+    }
+
+    if (activeSession) {
+      const hasDraftState = activeSession.cartItems.length > 0;
+      const handled = hasDraftState
+        ? await holdCurrentSession("Auto-held for new session")
+        : true;
+
+      if (!handled) {
+        return;
+      }
+    }
+
+    const result = await runStartSession({
+      gateway: {
+        startSession: startSessionCommand,
+      },
+      command: {
+        storeId: activeStore._id,
+        terminalId: terminal._id,
+        cashierId,
+        registerNumber,
+      },
+    });
+
+    if (!result.ok) {
+      toast.error(result.message);
+      return;
+    }
+
+    resetDraftState({
+      keepCashier: true,
+    });
+    bootstrapInitialized.current = true;
+    toast.success("New session created");
+  }, [
+    activeSession,
+    activeStore?._id,
+    cashierId,
+    customerInfo,
+    holdCurrentSession,
+    registerNumber,
+    resetDraftState,
+    startSessionCommand,
+    terminal?._id,
   ]);
 
   useEffect(() => {
-    if (!activeStore?._id || !store.storeId) {
+    if (
+      !activeStore?._id ||
+      !terminal?._id ||
+      !cashierId ||
+      !bootstrapState ||
+      isTransactionCompleted ||
+      bootstrapInitialized.current
+    ) {
       return;
     }
 
-    if (!store.cashier.isAuthenticated) {
+    if (
+      bootstrapState.phase !== "active" &&
+      bootstrapState.phase !== "resumable" &&
+      bootstrapState.phase !== "readyToStart"
+    ) {
       return;
     }
 
-    if (autoSessionInitialized.current) {
-      return;
-    }
+    bootstrapInitialized.current = true;
 
-    if (activeSessionQuery === undefined || heldSessionsQuery === undefined) {
-      return;
-    }
+    void (async () => {
+      if (bootstrapState.phase === "active") {
+        return;
+      }
 
-    autoSessionInitialized.current = true;
-
-    if (activeSessionQuery) {
       if (
-        store.session.currentSessionId &&
-        store.session.currentSessionId !== activeSessionQuery._id
+        bootstrapState.phase === "resumable" &&
+        bootstrapState.resumableSession
       ) {
-        logger.debug(
-          "[POS] Skipping session load - ID mismatch (expecting different session)",
-          {
-            storeSessionId: store.session.currentSessionId,
-            querySessionId: activeSessionQuery._id,
-          },
-        );
+        const result = await resumeSession({
+          sessionId: bootstrapState.resumableSession._id as Id<"posSession">,
+          cashierId,
+          terminalId: terminal._id,
+        });
+
+        if (!result.success) {
+          toast.error(result.message);
+          bootstrapInitialized.current = false;
+        }
+
         return;
       }
 
-      const now = Date.now();
-      if (activeSessionQuery.expiresAt && activeSessionQuery.expiresAt < now) {
-        logger.warn(
-          "[POS] Active session has expired, clearing state and cashier",
-          {
-            sessionId: activeSessionQuery._id,
-            expiresAt: activeSessionQuery.expiresAt,
-            now,
-          },
-        );
-        store.setCurrentSessionId(null);
-        store.setActiveSession(null);
-        store.clearCashier();
-        autoSessionInitialized.current = false;
-        return;
-      }
-
-      logger.info("[POS] Active session found, loading into store", {
-        sessionId: activeSessionQuery._id,
-        sessionNumber: activeSessionQuery.sessionNumber,
-        itemCount: activeSessionQuery.cartItems?.length || 0,
+      const result = await runStartSession({
+        gateway: {
+          startSession: startSessionCommand,
+        },
+        command: {
+          storeId: activeStore._id,
+          terminalId: terminal._id,
+          cashierId,
+          registerNumber: registerNumberOverride,
+        },
       });
 
-      handleSessionLoaded(activeSessionQuery as POSSession);
-      return;
-    }
-
-    if (activeSessionQuery === null) {
-      if (store.session.currentSessionId) {
-        logger.debug("[POS] Clearing stale session ID", {
-          staleSessionId: store.session.currentSessionId,
-        });
-        store.setCurrentSessionId(null);
-        store.setActiveSession(null);
+      if (!result.ok) {
+        toast.error(result.message);
+        bootstrapInitialized.current = false;
       }
-
-      const mostRecentHeldSession =
-        heldSessionsQuery && heldSessionsQuery.length > 0
-          ? heldSessionsQuery[0]
-          : null;
-
-      if (
-        mostRecentHeldSession &&
-        activeStore?._id &&
-        store.terminalId &&
-        store.cashier.id
-      ) {
-        logger.info("[POS] Found held session, attempting auto-resume", {
-          sessionId: mostRecentHeldSession._id,
-          sessionNumber: mostRecentHeldSession.sessionNumber,
-          itemCount: mostRecentHeldSession.cartItems?.length || 0,
-        });
-
-        sessionManagerOps
-          .handleResumeSession(
-            mostRecentHeldSession._id,
-            store.cashier.id,
-            store.terminalId,
-            handleSessionLoaded,
-          )
-          .then((result) => {
-            if (result.success) {
-              logger.info("[POS] Auto-resumed held session successfully", {
-                sessionId: mostRecentHeldSession._id,
-              });
-              return;
-            }
-
-            logger.warn(
-              "[POS] Auto-resume failed, falling back to new session",
-              {
-                sessionId: mostRecentHeldSession._id,
-                error: result.error,
-              },
-            );
-            createNewSession();
-          })
-          .catch((error) => {
-            logger.error(
-              "[POS] Auto-resume error, falling back to new session",
-              {
-                sessionId: mostRecentHeldSession._id,
-                error,
-              },
-            );
-            createNewSession();
-          });
-        return;
-      }
-
-      createNewSession();
-    }
+    })();
   }, [
-    activeSessionQuery,
     activeStore?._id,
-    createNewSession,
-    handleSessionLoaded,
-    heldSessionsQuery,
-    sessionManagerOps,
-    store,
+    bootstrapState,
+    cashierId,
+    isTransactionCompleted,
+    registerNumberOverride,
+    resumeSession,
+    startSessionCommand,
+    terminal?._id,
   ]);
-
-  useEffect(() => {
-    autoSessionInitialized.current = false;
-  }, [activeStore?._id, store.ui.registerNumber]);
-
-  useEffect(() => {
-    if (!activeSessionQuery || !activeSessionQuery.expiresAt) {
-      return;
-    }
-
-    const now = Date.now();
-    const timeUntilExpiry = activeSessionQuery.expiresAt - now;
-
-    if (timeUntilExpiry <= 0) {
-      logger.warn("[POS] Session already expired, clearing cashier", {
-        sessionId: activeSessionQuery._id,
-        expiresAt: activeSessionQuery.expiresAt,
-      });
-      store.clearCashier();
-      store.setCurrentSessionId(null);
-      store.setActiveSession(null);
-      autoSessionInitialized.current = false;
-      return;
-    }
-
-    const timeoutId = setTimeout(() => {
-      logger.warn("[POS] Session expired, clearing cashier", {
-        sessionId: activeSessionQuery._id,
-      });
-      store.clearCashier();
-      store.setCurrentSessionId(null);
-      store.setActiveSession(null);
-      autoSessionInitialized.current = false;
-    }, timeUntilExpiry);
-
-    return () => clearTimeout(timeoutId);
-  }, [activeSessionQuery?.expiresAt, activeSessionQuery?._id, store]);
 
   const extractionCacheRef = useRef<ExtractResult | null>(null);
-  const rawExtraction = extractBarcodeFromInput(store.ui.productSearchQuery);
+  const rawExtraction = extractBarcodeFromInput(productSearchQuery);
   const shouldReuseCachedProductId =
     rawExtraction.type === "barcode" &&
     extractionCacheRef.current?.type === "productId" &&
@@ -349,19 +599,158 @@ export function useRegisterViewModel(): RegisterViewModel {
   }, [extractResult.type, extractResult.value]);
 
   const debouncedValue = useDebounce(extractedValue, POS_SEARCH_DEBOUNCE_MS);
-  const productIdSearchQuery =
-    extractResult.type === "productId" ? debouncedValue : "";
   const productIdSearchResults = usePOSProductIdSearch(
     activeStore?._id,
-    productIdSearchQuery,
+    extractResult.type === "productId" ? debouncedValue : "",
   );
-
-  const barcodeSearchQuery =
-    extractResult.type === "barcode" ? debouncedValue : "";
   const barcodeSearchResult = usePOSBarcodeSearch(
     activeStore?._id,
-    barcodeSearchQuery,
+    extractResult.type === "barcode" ? debouncedValue : "",
   );
+
+  const handleAddProduct = useCallback(async (product: Product) => {
+    if (!cashierId) {
+      toast.error("A cashier must sign in before products can be added");
+      return;
+    }
+
+    if (!product.productId || !product.skuId) {
+      toast.error("Product is missing SKU details");
+      return;
+    }
+
+    const sessionId = await ensureSessionId();
+    if (!sessionId) {
+      return;
+    }
+
+    const existingItem = activeCartItems.find((item) => item.skuId === product.skuId);
+    const nextQuantity = existingItem ? existingItem.quantity + 1 : 1;
+
+    const result = await runAddItem({
+      gateway: {
+        addItem: addItemCommand,
+      },
+      command: {
+        sessionId,
+        cashierId,
+        productId: product.productId,
+        productSkuId: product.skuId,
+        productSku: product.sku || "",
+        barcode: product.barcode || undefined,
+        productName: product.name,
+        price: product.price,
+        quantity: nextQuantity,
+        image: product.image || undefined,
+        size: product.size || undefined,
+        length: product.length || undefined,
+        color: product.color || undefined,
+        areProcessingFeesAbsorbed: product.areProcessingFeesAbsorbed,
+      },
+    });
+
+    if (!result.ok) {
+      toast.error(result.message);
+      return;
+    }
+
+    setProductSearchQuery("");
+  }, [activeCartItems, addItemCommand, cashierId, ensureSessionId]);
+
+  const handleUpdateQuantity = useCallback(async (
+    itemId: Id<"posSessionItem">,
+    quantity: number,
+  ) => {
+    if (!activeSession || !cashierId) {
+      return;
+    }
+
+    const item = activeSession.cartItems.find((candidate) => candidate.id === itemId);
+    if (!item) {
+      return;
+    }
+
+    if (quantity <= 0) {
+      const result = await removeItem({
+        sessionId: activeSession._id as Id<"posSession">,
+        cashierId,
+        itemId,
+      });
+
+      if (!result.success) {
+        toast.error(result.message);
+      }
+
+      return;
+    }
+
+    if (!item.productId || !item.skuId) {
+      toast.error("Item is missing product details");
+      return;
+    }
+
+    const result = await runAddItem({
+      gateway: {
+        addItem: addItemCommand,
+      },
+      command: {
+        sessionId: activeSession._id as Id<"posSession">,
+        cashierId,
+        productId: item.productId,
+        productSkuId: item.skuId,
+        productSku: item.sku || "",
+        barcode: item.barcode || undefined,
+        productName: item.name,
+        price: item.price,
+        quantity,
+        image: item.image || undefined,
+        size: item.size || undefined,
+        length: item.length || undefined,
+        color: item.color || undefined,
+        areProcessingFeesAbsorbed: item.areProcessingFeesAbsorbed,
+      },
+    });
+
+    if (!result.ok) {
+      toast.error(result.message);
+    }
+  }, [activeSession, addItemCommand, cashierId, removeItem]);
+
+  const handleRemoveItem = useCallback(async (
+    itemId: Id<"posSessionItem">,
+  ) => {
+    if (!activeSession || !cashierId) {
+      return;
+    }
+
+    const result = await removeItem({
+      sessionId: activeSession._id as Id<"posSession">,
+      cashierId,
+      itemId,
+    });
+
+    if (!result.success) {
+      toast.error(result.message);
+    }
+  }, [activeSession, cashierId, removeItem]);
+
+  const handleClearCart = useCallback(async () => {
+    if (!activeSession) {
+      return;
+    }
+
+    const result = await releaseSessionInventoryHoldsAndDeleteItems({
+      sessionId: activeSession._id as Id<"posSession">,
+    });
+
+    if (!result.success) {
+      toast.error(result.message);
+      return;
+    }
+
+    setPayments([]);
+    toast.success("Cart cleared");
+  }, [activeSession, releaseSessionInventoryHoldsAndDeleteItems]);
 
   useEffect(() => {
     if (!extractedValue.trim()) {
@@ -374,9 +763,8 @@ export function useRegisterViewModel(): RegisterViewModel {
       productIdSearchResults.length === 1 &&
       productIdSearchResults[0].quantityAvailable > 0
     ) {
-      const timeoutId = setTimeout(async () => {
-        await cart.addProduct(productIdSearchResults[0]);
-        store.setProductSearchQuery("");
+      const timeoutId = setTimeout(() => {
+        void handleAddProduct(productIdSearchResults[0]);
       }, POS_AUTO_ADD_DELAY_MS);
 
       return () => clearTimeout(timeoutId);
@@ -385,14 +773,18 @@ export function useRegisterViewModel(): RegisterViewModel {
     if (extractResult.type === "barcode" && barcodeSearchResult) {
       const shouldAutoAdd = Array.isArray(barcodeSearchResult)
         ? barcodeSearchResult.length === 1 &&
-          barcodeSearchResult[0]?.quantityAvailable &&
-          barcodeSearchResult[0].quantityAvailable > 0
+          (barcodeSearchResult[0]?.quantityAvailable ?? 0) > 0
         : true;
 
       if (shouldAutoAdd) {
-        const timeoutId = setTimeout(async () => {
-          await cart.addFromBarcode(extractedValue, barcodeSearchResult);
-          store.setProductSearchQuery("");
+        const timeoutId = setTimeout(() => {
+          const result = Array.isArray(barcodeSearchResult)
+            ? barcodeSearchResult[0]
+            : barcodeSearchResult;
+
+          if (result) {
+            void handleAddProduct(result);
+          }
         }, POS_AUTO_ADD_DELAY_MS);
 
         return () => clearTimeout(timeoutId);
@@ -400,78 +792,57 @@ export function useRegisterViewModel(): RegisterViewModel {
     }
   }, [
     barcodeSearchResult,
-    cart,
     extractResult.type,
     extractedValue,
+    handleAddProduct,
     productIdSearchResults,
-    store,
   ]);
 
-  const handleBarcodeSubmit = useCallback(
-    async (event: FormEvent) => {
-      event.preventDefault();
-      if (!store.ui.productSearchQuery.trim()) {
-        return;
-      }
-
-      if (extractResult.type === "productId" && productIdSearchResults) {
-        if (productIdSearchResults.length === 1) {
-          await cart.addProduct(productIdSearchResults[0]);
-          store.setProductSearchQuery("");
-        }
-        return;
-      }
-
-      if (extractResult.type === "barcode" && barcodeSearchResult) {
-        const shouldAutoAdd = Array.isArray(barcodeSearchResult)
-          ? barcodeSearchResult.length === 1
-          : true;
-
-        if (shouldAutoAdd) {
-          await cart.addFromBarcode(extractedValue, barcodeSearchResult);
-          store.setProductSearchQuery("");
-        }
-      } else if (extractResult.type === "barcode" && !barcodeSearchResult) {
-        logger.warn("[POS] Barcode not found", {
-          barcode: extractedValue,
-          storeId: activeStore?._id,
-        });
-      }
-    },
-    [
-      activeStore?._id,
-      barcodeSearchResult,
-      cart,
-      extractResult.type,
-      extractedValue,
-      productIdSearchResults,
-      store,
-    ],
-  );
-
-  const handleClearCart = useCallback(async () => {
-    const sessionId = activeSessionQuery?._id || store.session.currentSessionId;
-    if (!sessionId) {
+  const handleBarcodeSubmit = useCallback(async (event: FormEvent) => {
+    event.preventDefault();
+    if (!productSearchQuery.trim()) {
       return;
     }
 
-    const result = await releaseSessionInventoryHoldsAndDeleteItems(
-      sessionId as Id<"posSession">,
-    );
+    if (extractResult.type === "productId" && productIdSearchResults) {
+      if (productIdSearchResults.length === 1) {
+        await handleAddProduct(productIdSearchResults[0]);
+      }
+      return;
+    }
 
-    if (result.success) {
-      toast.success("Cart cleared");
-      cart.clearCart();
+    if (extractResult.type === "barcode" && barcodeSearchResult) {
+      const resolvedProduct = Array.isArray(barcodeSearchResult)
+        ? barcodeSearchResult.length === 1
+          ? barcodeSearchResult[0]
+          : null
+        : barcodeSearchResult;
+
+      if (resolvedProduct) {
+        await handleAddProduct(resolvedProduct);
+        return;
+      }
+    }
+
+    if (extractResult.type === "barcode") {
+      logger.warn("[POS] Barcode not found", {
+        barcode: extractedValue,
+        storeId: activeStore?._id,
+      });
+      toast.error("Barcode not found");
     }
   }, [
-    activeSessionQuery?._id,
-    cart,
-    releaseSessionInventoryHoldsAndDeleteItems,
-    store.session.currentSessionId,
+    activeStore?._id,
+    barcodeSearchResult,
+    extractResult.type,
+    extractedValue,
+    handleAddProduct,
+    productIdSearchResults,
+    productSearchQuery,
   ]);
 
   useEffect(() => {
-    if (!store.transaction.isCompleted && store.ui.showProductEntry) {
+    if (!isTransactionCompleted && showProductEntry) {
       const timer = setTimeout(() => {
         const searchInput = document.querySelector(
           'input[placeholder*="Lookup product"]',
@@ -481,113 +852,237 @@ export function useRegisterViewModel(): RegisterViewModel {
 
       return () => clearTimeout(timer);
     }
-  }, [store.transaction.isCompleted, store.ui.showProductEntry]);
+  }, [isTransactionCompleted, showProductEntry]);
+
+  const handleCashierAuthenticated = useCallback((nextCashierId: Id<"cashier">) => {
+    setCashierId(nextCashierId);
+    requestBootstrap();
+  }, [requestBootstrap]);
 
   const handleNavigateBack = useCallback(async () => {
-    const sessionId = activeSessionQuery?._id || store.session.currentSessionId;
-    if (sessionId && store.cart.items.length > 0) {
-      await holdSession();
+    if (activeSession) {
+      const hasDraftState = activeSession.cartItems.length > 0;
+
+      const handled = hasDraftState
+        ? await holdCurrentSession("Navigating away from register")
+        : true;
+
+      if (!handled) {
+        return;
+      }
     }
 
-    store.clearCart();
-    store.clearCashier();
+    resetDraftState();
     navigateBack();
   }, [
-    activeSessionQuery?._id,
-    holdSession,
+    activeSession,
+    customerInfo,
+    holdCurrentSession,
     navigateBack,
-    store,
+    resetDraftState,
   ]);
 
   const handleCashierSignOut = useCallback(async () => {
-    const session =
-      activeSessionQuery || (store.session.activeSession as POSSession | null);
+    if (activeSession) {
+      const hasDraftState = activeSession.cartItems.length > 0;
 
-    if (session) {
-      if (store.cart.items.length > 0) {
-        const holdResult =
-          await sessionManagerOps.handleHoldCurrentSession("Signing out");
-        if (!holdResult.success) {
-          toast.error(holdResult.error);
-          return;
-        }
+      const handled = hasDraftState
+        ? await holdCurrentSession("Signing out")
+        : await voidCurrentSession();
 
-        store.clearCashier();
-        return;
-      }
-
-      const voidResult = await sessionManagerOps.handleVoidSession(
-        session._id as Id<"posSession">,
-      );
-      if (!voidResult.success) {
-        toast.error(voidResult.error);
+      if (!handled) {
         return;
       }
     }
 
-    store.clearCashier();
-  }, [activeSessionQuery, sessionManagerOps, store]);
+    resetDraftState();
+  }, [
+    activeSession,
+    customerInfo,
+    holdCurrentSession,
+    resetDraftState,
+    voidCurrentSession,
+  ]);
 
   const handleCompleteTransaction = useCallback(async () => {
-    if (!activeSessionQuery || activeSessionQuery.status !== "active") {
+    if (!activeSession) {
+      toast.error("No active session to complete");
       return false;
     }
 
-    const result = await transaction.transaction.processPayment(
-      activeSessionQuery as POSSession,
-    );
+    const persisted = await persistSessionMetadata(activeSession);
+    if (!persisted) {
+      return false;
+    }
 
-    return result.success;
-  }, [activeSessionQuery, transaction.transaction]);
+    const result = await runCompleteTransaction({
+      gateway: {
+        completeTransaction: completeTransactionCommand,
+      },
+      command: {
+        sessionId: activeSession._id as Id<"posSession">,
+        payments: payments.map((payment) => ({
+          method: payment.method,
+          amount: payment.amount,
+          timestamp: payment.timestamp,
+        })),
+        notes: `Register: ${registerNumber}`,
+        subtotal: activeTotals.subtotal,
+        tax: activeTotals.tax,
+        total: activeTotals.total,
+      },
+    });
+
+    if (!result.ok) {
+      toast.error(result.message);
+      return false;
+    }
+
+    setIsTransactionCompleted(true);
+    setCompletedOrderNumber(result.data.transactionNumber);
+    setCompletedTransactionData({
+      paymentMethod: payments[0]?.method ?? "cash",
+      payments: [...payments],
+      completedAt: new Date(),
+      cartItems: [...activeCartItems],
+      subtotal: activeTotals.subtotal,
+      tax: activeTotals.tax,
+      total: activeTotals.total,
+      customerInfo: hasCustomerDetails(customerInfo)
+        ? {
+            name: customerInfo.name,
+            email: customerInfo.email,
+            phone: customerInfo.phone,
+          }
+        : undefined,
+    });
+    toast.success(`Transaction completed: ${result.data.transactionNumber}`);
+    return true;
+  }, [
+    activeCartItems,
+    activeSession,
+    activeTotals.subtotal,
+    activeTotals.tax,
+    activeTotals.total,
+    completeTransactionCommand,
+    customerInfo,
+    payments,
+    persistSessionMetadata,
+    registerNumber,
+  ]);
 
   const handleStartNewTransaction = useCallback(() => {
-    transaction.transaction.startNewTransaction();
-    resetAutoSessionInitialized();
-  }, [resetAutoSessionInitialized, transaction.transaction]);
+    resetDraftState({
+      keepCashier: true,
+    });
+    requestBootstrap();
+  }, [requestBootstrap, resetDraftState]);
 
-  const customerInfo = getRegisterCustomerInfo(store.customer.current);
-  const cashierName = getCashierDisplayName(cashier);
+  const handleAddPayment = useCallback(
+    (method: PosPaymentMethod, amount: number) => {
+      setPayments((current) => [
+        ...current,
+        {
+          id: createPaymentId(),
+          method,
+          amount,
+          timestamp: Date.now(),
+        },
+      ]);
+    },
+    [],
+  );
+
+  const handleUpdatePayment = useCallback((paymentId: string, amount: number) => {
+    setPayments((current) =>
+      current.map((payment) =>
+        payment.id === paymentId ? { ...payment, amount } : payment,
+      ),
+    );
+  }, []);
+
+  const handleRemovePayment = useCallback((paymentId: string) => {
+    setPayments((current) =>
+      current.filter((payment) => payment.id !== paymentId),
+    );
+  }, []);
+
+  const handleClearPayments = useCallback(() => {
+    setPayments([]);
+  }, []);
 
   const header = useMemo(
     () =>
       buildRegisterHeaderState({
-        isSessionActive,
+        isSessionActive: isRegisterSessionActive(activeSession),
       }),
-    [isSessionActive],
+    [activeSession],
   );
 
   const registerInfo = useMemo(
     () =>
       buildRegisterInfoState({
-        customerName: store.customer.current?.name,
+        customerName: hasCustomerDetails(customerInfo)
+          ? customerInfo.name || undefined
+          : undefined,
         registerLabel: terminal?.displayName || "No terminal configured",
-        hasTerminal: terminal !== null,
+        hasTerminal: Boolean(terminal),
       }),
-    [store.customer.current?.name, terminal],
+    [customerInfo, terminal],
   );
 
   const sessionPanel =
-    activeStore?._id && terminal?._id && store.cashier.id
+    activeStore?._id && terminal?._id && cashierId
       ? {
-          storeId: activeStore._id,
-          terminalId: terminal._id,
-          cashierId: store.cashier.id,
-          registerNumber: store.ui.registerNumber,
-          cartItems: store.cart.items,
-          customerInfo,
-          subtotal: store.cart.subtotal,
-          tax: store.cart.tax,
-          total: store.cart.total,
-          onSessionLoaded: handleSessionLoaded,
-          onNewSession: handleNewSession,
-          resetAutoSessionInitialized,
+          activeSessionNumber: activeSession?.sessionNumber ?? null,
+          hasExpiredSession: Boolean(
+            activeSession?.expiresAt && activeSession.expiresAt < Date.now(),
+          ),
+          canHoldSession: Boolean(activeSession) && hasActiveCartDraft,
+          disableNewSession: Boolean(activeSession?.status === "active"),
+          heldSessions:
+            heldSessions?.map((session) => ({
+              _id: session._id as Id<"posSession">,
+              expiresAt: session.expiresAt,
+              sessionNumber: session.sessionNumber,
+              cartItems: session.cartItems,
+              subtotal: session.subtotal,
+              total: session.total,
+              heldAt: session.heldAt,
+              updatedAt: session.updatedAt,
+              holdReason: session.holdReason,
+              customer: session.customer
+                ? {
+                    name: session.customer.name,
+                    email: session.customer.email,
+                    phone: session.customer.phone,
+                  }
+                : null,
+            })) ?? [],
+          onHoldCurrentSession: async () => {
+            await holdCurrentSession();
+          },
+          onVoidCurrentSession: async () => {
+            await voidCurrentSession();
+          },
+          onResumeSession: handleResumeSession,
+          onVoidHeldSession: async (sessionId: Id<"posSession">) => {
+            const result = await voidSession({ sessionId });
+            if (!result.success) {
+              toast.error(result.message);
+              return;
+            }
+
+            toast.success("Held session voided");
+          },
+          onStartNewSession: handleStartNewSession,
         }
       : null;
 
   const cashierCard =
-    activeStore?._id && terminal?._id && store.cashier.id
+    activeStore?._id && terminal?._id && cashierId
       ? {
-          cashierName,
+          cashierName: getCashierDisplayName(cashier),
           onSignOut: handleCashierSignOut,
         }
       : null;
@@ -595,7 +1090,7 @@ export function useRegisterViewModel(): RegisterViewModel {
   const authDialog =
     activeStore?._id && terminal?._id
       ? {
-          open: !store.cashier.isAuthenticated,
+          open: !cashierId,
           storeId: activeStore._id,
           terminalId: terminal._id,
           onAuthenticated: handleCashierAuthenticated,
@@ -608,60 +1103,53 @@ export function useRegisterViewModel(): RegisterViewModel {
     header,
     registerInfo,
     customerPanel: {
-      isOpen: store.ui.showCustomerPanel,
-      onOpenChange: store.setShowCustomerPanel,
-      customerInfo,
-      setCustomerInfo: (nextCustomer) => {
-        if (typeof nextCustomer === "function") {
-          customer.updateCustomerInfo(nextCustomer(customerInfo));
-          return;
-        }
-
-        customer.updateCustomerInfo(nextCustomer);
-      },
+      isOpen: showCustomerPanel,
+      onOpenChange: setShowCustomerPanel,
+      customerInfo: getRegisterCustomerInfo(customerInfo),
+      setCustomerInfo,
     },
     productEntry: {
-      disabled: !terminal,
-      showProductLookup: store.ui.showProductEntry,
-      setShowProductLookup: store.setShowProductEntry,
-      productSearchQuery: store.ui.productSearchQuery,
-      setProductSearchQuery: store.setProductSearchQuery,
+      disabled: !terminal || !cashierId,
+      showProductLookup: showProductEntry,
+      setShowProductLookup: setShowProductEntry,
+      productSearchQuery,
+      setProductSearchQuery,
       onBarcodeSubmit: handleBarcodeSubmit,
-      onAddProduct: cart.addProduct,
+      onAddProduct: handleAddProduct,
       barcodeSearchResult,
-      productIdSearchResults,
+      productIdSearchResults: productIdSearchResults ?? null,
     },
     cart: {
-      items: store.cart.items,
+      items: activeCartItems,
       onUpdateQuantity: (itemId, quantity) =>
-        cart.updateQuantity(itemId as Id<"posSessionItem">, quantity),
+        handleUpdateQuantity(itemId as Id<"posSessionItem">, quantity),
       onRemoveItem: (itemId) =>
-        cart.removeItem(itemId as Id<"posSessionItem">),
+        handleRemoveItem(itemId as Id<"posSessionItem">),
       onClearCart: handleClearCart,
     },
     checkout: {
-      cartItems: store.cart.items,
-      customerInfo: store.customer.current
+      cartItems: activeCartItems,
+      customerInfo: hasCustomerDetails(customerInfo)
         ? {
-            name: store.customer.current.name,
-            email: store.customer.current.email,
-            phone: store.customer.current.phone,
+            name: customerInfo.name,
+            email: customerInfo.email,
+            phone: customerInfo.phone,
           }
         : undefined,
-      registerNumber: store.ui.registerNumber,
-      subtotal: store.cart.subtotal,
-      tax: store.cart.tax,
-      total: store.cart.total,
-      payments: store.payment.payments,
-      hasTerminal: terminal !== null,
-      isTransactionCompleted: store.transaction.isCompleted,
-      completedOrderNumber: store.transaction.completedOrderNumber,
-      completedTransactionData: store.transaction.completedTransactionData,
-      cashierName,
-      onAddPayment: store.addPayment,
-      onUpdatePayment: store.updatePayment,
-      onRemovePayment: store.removePayment,
-      onClearPayments: store.clearPayments,
+      registerNumber,
+      subtotal: activeTotals.subtotal,
+      tax: activeTotals.tax,
+      total: activeTotals.total,
+      payments,
+      hasTerminal: Boolean(terminal),
+      isTransactionCompleted,
+      completedOrderNumber,
+      completedTransactionData,
+      cashierName: getCashierDisplayName(cashier),
+      onAddPayment: handleAddPayment,
+      onUpdatePayment: handleUpdatePayment,
+      onRemovePayment: handleRemovePayment,
+      onClearPayments: handleClearPayments,
       onCompleteTransaction: handleCompleteTransaction,
       onStartNewTransaction: handleStartNewTransaction,
     },
