@@ -31,6 +31,11 @@ Current shared scenarios include:
 - `storefront-checkout-validation-blocker`
 - `storefront-checkout-verification-recovery`
 
+Convex artifact refresh rule:
+
+- If a change needs new `convex/_generated` artifacts or refreshed client refs, start `bunx convex dev` from `packages/athena-webapp` before validation.
+- Do not substitute `bunx convex codegen` for this workflow; local agent worktrees may not have `CONVEX_DEPLOYMENT` configured, and `convex dev` is the documented artifact-refresh path in this repo.
+
 Start with the package suite in [vitest.config.ts](../../vitest.config.ts): `bun run --filter '@athena/webapp' test`. It covers both `src/**/*.test.{ts,tsx}` and `convex/**/*.test.{ts,tsx}`, so it is the default regression pass for mixed UI and backend changes.
 
 Escalate validation based on the surface you touched:

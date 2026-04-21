@@ -27,3 +27,8 @@ Common validation commands:
 - `bun run --filter '@athena/webapp' lint:convex:changed`
 - `bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json`
 - `bun run --filter '@athena/webapp' build`
+
+Generated Convex client note:
+
+- If you need refreshed `convex/_generated` artifacts or new client refs, start `bunx convex dev` from `packages/athena-webapp`.
+- Do not default to `bunx convex codegen`; in this repo it can fail in local workspaces that do not have `CONVEX_DEPLOYMENT` configured.
