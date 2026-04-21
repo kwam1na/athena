@@ -6,6 +6,7 @@ export const operationalEventSchema = v.object({
   eventType: v.string(),
   subjectType: v.string(),
   subjectId: v.string(),
+  subjectLabel: v.optional(v.string()),
   message: v.string(),
   reason: v.optional(v.string()),
   metadata: v.optional(v.record(v.string(), v.any())),

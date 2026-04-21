@@ -150,7 +150,7 @@ export async function resolveCustomerProfileIdForTimeline(
   return null;
 }
 
-async function getCustomerOperationalTimelineEvents(
+export async function getCustomerOperationalTimelineEvents(
   ctx: QueryCtx,
   userId: Id<"storeFrontUser"> | Id<"guest">,
   limit: number,
@@ -168,13 +168,13 @@ async function getCustomerOperationalTimelineEvents(
     .order("desc")
     .take(Math.max(limit * 5, 500));
 
-  const onlineOrderEvents = events.filter(
-    (event) => event.subjectType === "online_order" || Boolean(event.onlineOrderId),
+  const customerEvents = events.filter(
+    (event) => event.customerProfileId === customerProfileId,
   );
 
   const onlineOrderIds = [
     ...new Set(
-      onlineOrderEvents
+      customerEvents
         .map((event) => event.onlineOrderId)
         .filter((onlineOrderId): onlineOrderId is Id<"onlineOrder"> =>
           Boolean(onlineOrderId),
@@ -193,12 +193,13 @@ async function getCustomerOperationalTimelineEvents(
     }
   }
 
-  return onlineOrderEvents.map((event) => ({
+  return customerEvents.map((event) => ({
     ...event,
     _creationTime: event.createdAt,
-    subjectLabel: event.onlineOrderId
-      ? onlineOrderMap.get(event.onlineOrderId)?.orderNumber
-      : undefined,
+    subjectLabel:
+      (event.onlineOrderId
+        ? onlineOrderMap.get(event.onlineOrderId)?.orderNumber
+        : undefined) ?? event.subjectLabel,
   }));
 }
 
