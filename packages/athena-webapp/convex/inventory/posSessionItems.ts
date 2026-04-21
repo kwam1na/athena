@@ -1,25 +1,14 @@
 import { v } from "convex/values";
 import { mutation, query } from "../_generated/server";
-import { Id } from "../_generated/dataModel";
-import {
-  acquireInventoryHold,
-  releaseInventoryHold,
-  adjustInventoryHold,
-  validateInventoryAvailability,
-} from "./helpers/inventoryHolds";
-import {
-  validateSessionActive,
-  validateSessionModifiable,
-  validateItemBelongsToSession,
-} from "./helpers/sessionValidation";
 import {
   itemResultValidator,
   operationSuccessValidator,
   error,
-  itemSuccess,
-  operationSuccess,
 } from "./helpers/resultTypes";
-import { calculateSessionExpiration } from "./helpers/sessionExpiration";
+import {
+  runRemoveSessionItemCommand,
+  runUpsertSessionItemCommand,
+} from "../pos/application/commands/sessionCommands";
 
 // Get all items for a session
 export const getSessionItems = query({
@@ -76,111 +65,16 @@ export const addOrUpdateItem = mutation({
   },
   returns: itemResultValidator,
   handler: async (ctx, args) => {
-    try {
-      const now = Date.now();
+    const result = await runUpsertSessionItemCommand(ctx, args);
 
-      // Validate session is active using helper
-      const validation = await validateSessionActive(
-        ctx.db,
-        args.sessionId,
-        args.cashierId
-      );
-      if (!validation.success) {
-        return error(validation.message!);
-      }
-
-      const session = await ctx.db.get(args.sessionId);
-      if (!session) {
-        return error("Session not found");
-      }
-
-      // Check if item already exists in session
-      const existingItems = await ctx.db
-        .query("posSessionItem")
-        .withIndex("by_sessionId", (q) => q.eq("sessionId", args.sessionId))
-        .collect();
-
-      const existingItem = existingItems.find(
-        (item) => item.productSkuId === args.productSkuId
-      );
-
-      let itemId: Id<"posSessionItem">;
-
-      if (existingItem) {
-        // Item exists - update quantity and adjust inventory holds using helper
-        const adjustResult = await adjustInventoryHold(
-          ctx.db,
-          args.productSkuId,
-          existingItem.quantity,
-          args.quantity
-        );
-
-        if (!adjustResult.success) {
-          return error(adjustResult.message || "Failed to adjust inventory");
-        }
-
-        // Update the item
-        await ctx.db.patch(existingItem._id, {
-          quantity: args.quantity,
-          price: args.price,
-          barcode: args.barcode,
-          color: args.color,
-          updatedAt: now,
-        });
-
-        itemId = existingItem._id;
-      } else {
-        // New item - acquire inventory hold using helper
-        const holdResult = await acquireInventoryHold(
-          ctx.db,
-          args.productSkuId,
-          args.quantity
-        );
-
-        if (!holdResult.success) {
-          return error(
-            holdResult.message || "Failed to acquire inventory hold"
-          );
-        }
-
-        // Create new item
-        itemId = await ctx.db.insert("posSessionItem", {
-          sessionId: args.sessionId,
-          storeId: session.storeId,
-          productId: args.productId,
-          productSkuId: args.productSkuId,
-          productSku: args.productSku,
-          barcode: args.barcode,
-          productName: args.productName,
-          price: args.price,
-          quantity: args.quantity,
-          image: args.image,
-          size: args.size,
-          length: args.length,
-          color: args.color,
-          areProcessingFeesAbsorbed: args.areProcessingFeesAbsorbed,
-          createdAt: now,
-          updatedAt: now,
-        });
-      }
-
-      // Extend session expiration time
-      const expiresAt = calculateSessionExpiration(now);
-
-      await ctx.db.patch(args.sessionId, {
-        updatedAt: now,
-        expiresAt,
-      });
-
-      return itemSuccess(itemId, expiresAt);
-    } catch (err) {
-      console.error("Error in addOrUpdateItem:", err);
-      return error(
-        err instanceof Error
-          ? err.message
-          : "Failed to add item. Please try again."
-      );
+    if (result.status === "ok") {
+      return {
+        success: true as const,
+        data: result.data,
+      };
     }
+
+    return error(result.message);
   },
 });
 
@@ -193,54 +87,15 @@ export const removeItem = mutation({
   },
   returns: operationSuccessValidator,
   handler: async (ctx, args) => {
-    try {
-      const now = Date.now();
+    const result = await runRemoveSessionItemCommand(ctx, args);
 
-      // Validate session can be modified (checks expiration)
-      const sessionValidation = await validateSessionModifiable(
-        ctx.db,
-        args.sessionId,
-        args.cashierId
-      );
-      if (!sessionValidation.success) {
-        return error(sessionValidation.message!);
-      }
-
-      // Validate item belongs to session using helper
-      const validation = await validateItemBelongsToSession(
-        ctx.db,
-        args.itemId,
-        args.sessionId
-      );
-      if (!validation.success) {
-        return error(validation.message!);
-      }
-
-      // Get the item to release its inventory hold
-      const item = await ctx.db.get(args.itemId);
-      if (!item) {
-        return error("Item not found in cart");
-      }
-
-      // Release inventory hold using helper
-      await releaseInventoryHold(ctx.db, item.productSkuId, item.quantity);
-
-      // Delete the item
-      await ctx.db.delete(args.itemId);
-
-      // Extend session expiration time
-      const expiresAt = calculateSessionExpiration(now);
-
-      await ctx.db.patch(args.sessionId, {
-        updatedAt: now,
-        expiresAt,
-      });
-
-      return operationSuccess(expiresAt);
-    } catch (err) {
-      return error(
-        err instanceof Error ? err.message : "Failed to remove item from cart"
-      );
+    if (result.status === "ok") {
+      return {
+        success: true as const,
+        data: result.data,
+      };
     }
+
+    return error(result.message);
   },
 });
