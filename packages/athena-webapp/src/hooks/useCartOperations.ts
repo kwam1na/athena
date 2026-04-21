@@ -13,6 +13,8 @@ import {
   showValidationError,
   showNoActiveSessionError,
 } from "../lib/pos/toastService";
+import { addItem as runAddItem } from "@/lib/pos/application/useCases/addItem";
+import { useConvexCommandGateway } from "@/lib/pos/infrastructure/convex/commandGateway";
 
 /**
  * Hook for POS Cart Operations
@@ -23,11 +25,9 @@ import {
 export const useCartOperations = () => {
   const store = usePOSStore();
   const { createSession } = useSessionManagement();
+  const { addItem: addItemCommand } = useConvexCommandGateway();
 
   // Convex mutations
-  const addOrUpdateItemMutation = useMutation(
-    api.inventory.posSessionItems.addOrUpdateItem
-  );
   const removeItemMutation = useMutation(
     api.inventory.posSessionItems.removeItem
   );
@@ -136,57 +136,61 @@ export const useCartOperations = () => {
         console.log("store in addProduct", store);
 
         // Call server mutation to add/update item with inventory hold
-        const { success, data } = await handlePOSOperation(
-          () =>
-            addOrUpdateItemMutation({
-              sessionId: sessionId as Id<"posSession">,
-              cashierId: store.cashier.id as Id<"cashier">,
-              productId: product.productId!,
-              productSkuId: product.skuId!,
-              productSku: product.sku || "",
-              barcode: product.barcode || undefined,
-              productName: product.name,
-              price: product.price,
-              quantity: newQuantity,
-              image: product.image || undefined,
-              size: product.size || undefined,
-              length: product.length || undefined,
-              color: product.color || undefined,
-              areProcessingFeesAbsorbed: product.areProcessingFeesAbsorbed,
-            }),
-          {
-            showSuccessToast: false, // Silent add for better UX
-            onSuccess: (data) => {
-              // Update local store with the database ID
-              if (existingItem) {
-                store.updateCartQuantity(
-                  existingItem.id as Id<"posSessionItem">,
-                  newQuantity
-                );
-              } else {
-                store.addToCart({
-                  id: data.itemId,
-                  name: product.name,
-                  barcode: product.barcode || "",
-                  sku: product.sku || "",
-                  price: product.price,
-                  quantity: 1,
-                  image: product.image || undefined,
-                  size: product.size || undefined,
-                  length: product.length,
-                  color: product.color,
-                  productId: product.productId!,
-                  skuId: product.skuId!,
-                  areProcessingFeesAbsorbed: product.areProcessingFeesAbsorbed,
-                });
-              }
-              // Update session expiration time
-              store.setSessionExpiresAt(data.expiresAt);
-            },
-          }
-        );
+        const result = await runAddItem({
+          gateway: {
+            addItem: addItemCommand,
+          },
+          command: {
+            sessionId: sessionId as Id<"posSession">,
+            cashierId: store.cashier.id as Id<"cashier">,
+            productId: product.productId!,
+            productSkuId: product.skuId!,
+            productSku: product.sku || "",
+            barcode: product.barcode || undefined,
+            productName: product.name,
+            price: product.price,
+            quantity: newQuantity,
+            image: product.image || undefined,
+            size: product.size || undefined,
+            length: product.length || undefined,
+            color: product.color || undefined,
+            areProcessingFeesAbsorbed: product.areProcessingFeesAbsorbed,
+          },
+        });
 
-        if (success && data) {
+        if (!result.ok) {
+          showValidationError([result.message]);
+          return;
+        }
+
+        const data = result.data;
+
+        if (existingItem) {
+          store.updateCartQuantity(
+            existingItem.id as Id<"posSessionItem">,
+            newQuantity
+          );
+        } else {
+          store.addToCart({
+            id: data.itemId,
+            name: product.name,
+            barcode: product.barcode || "",
+            sku: product.sku || "",
+            price: product.price,
+            quantity: 1,
+            image: product.image || undefined,
+            size: product.size || undefined,
+            length: product.length,
+            color: product.color,
+            productId: product.productId!,
+            skuId: product.skuId!,
+            areProcessingFeesAbsorbed: product.areProcessingFeesAbsorbed,
+          });
+        }
+
+        store.setSessionExpiresAt(data.expiresAt);
+
+        if (data) {
           logger.info("[POS] Product added to cart successfully", {
             productName: product.name,
             itemId: data.itemId,
@@ -203,7 +207,7 @@ export const useCartOperations = () => {
         throw error;
       }
     },
-    [store, ensureSession, addOrUpdateItemMutation]
+    [store, ensureSession, addItemCommand]
   );
 
   /**
@@ -307,7 +311,7 @@ export const useCartOperations = () => {
             itemId,
           }),
         {
-          onSuccess: (data) => {
+          onSuccess: (data: { expiresAt: number }) => {
             // Update local store after successful server update
             store.removeFromCart(itemId);
             // Update session expiration time
@@ -381,43 +385,45 @@ export const useCartOperations = () => {
         return;
       }
 
-      const { success, data } = await handlePOSOperation(
-        () =>
-          addOrUpdateItemMutation({
-            sessionId: sessionId as Id<"posSession">,
-            cashierId: store.cashier.id as Id<"cashier">,
-            productId: item.productId!,
-            productSkuId: item.skuId!,
-            productSku: item.sku || "",
-            barcode: item.barcode || undefined,
-            productName: item.name,
-            price: item.price,
-            quantity,
-            image: item.image || undefined,
-            size: item.size || undefined,
-            length: item.length || undefined,
-            areProcessingFeesAbsorbed: item.areProcessingFeesAbsorbed,
-          }),
-        {
-          showSuccessToast: false, // Silent update for better UX
-          onSuccess: (data) => {
-            // Update local store after successful server update
-            store.updateCartQuantity(itemId, quantity);
-            // Update session expiration time
-            store.setSessionExpiresAt(data.expiresAt);
-          },
-        }
-      );
+      const result = await runAddItem({
+        gateway: {
+          addItem: addItemCommand,
+        },
+        command: {
+          sessionId: sessionId as Id<"posSession">,
+          cashierId: store.cashier.id as Id<"cashier">,
+          productId: item.productId!,
+          productSkuId: item.skuId!,
+          productSku: item.sku || "",
+          barcode: item.barcode || undefined,
+          productName: item.name,
+          price: item.price,
+          quantity,
+          image: item.image || undefined,
+          size: item.size || undefined,
+          length: item.length || undefined,
+          areProcessingFeesAbsorbed: item.areProcessingFeesAbsorbed,
+        },
+      });
 
-      if (success) {
+      if (!result.ok) {
+        showValidationError([result.message]);
+        return;
+      }
+
+      const data = result.data;
+      store.updateCartQuantity(itemId, quantity);
+      store.setSessionExpiresAt(data.expiresAt);
+
+      if (result.ok) {
         logger.info("[POS] Quantity updated successfully", {
           itemName: item.name,
           quantity,
-          sessionExpiresAt: data?.expiresAt,
+          sessionExpiresAt: data.expiresAt,
         });
       }
     },
-    [store, addOrUpdateItemMutation, removeItem]
+    [store, addItemCommand, removeItem]
   );
 
   /**

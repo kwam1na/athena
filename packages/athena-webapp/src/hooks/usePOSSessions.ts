@@ -3,6 +3,7 @@ import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
 import { CartItem, CustomerInfo } from "../components/pos/types";
 import { logger } from "../lib/logger";
+import { useConvexCommandGateway } from "@/lib/pos/infrastructure/convex/commandGateway";
 
 // Hook to get sessions for a store
 export const usePOSStoreSessions = (
@@ -45,7 +46,7 @@ export const usePOSActiveSession = (
 
 // Hook to create a new session
 export const usePOSSessionCreate = () => {
-  const createSession = useMutation(api.inventory.posSessions.createSession);
+  const { startSession } = useConvexCommandGateway();
 
   return {
     createSession: async (
@@ -55,7 +56,7 @@ export const usePOSSessionCreate = () => {
       registerNumber?: string
     ) => {
       try {
-        const result = await createSession({
+        const result = await startSession({
           storeId,
           terminalId,
           cashierId,
@@ -115,7 +116,7 @@ export const usePOSSessionUpdate = () => {
 
 // Hook to hold/suspend a session
 export const usePOSSessionHold = () => {
-  const holdSession = useMutation(api.inventory.posSessions.holdSession);
+  const { holdSession } = useConvexCommandGateway();
 
   return {
     holdSession: async (
@@ -124,7 +125,7 @@ export const usePOSSessionHold = () => {
       holdReason?: string
     ) => {
       try {
-        return await holdSession({ sessionId, cashierId, holdReason });
+        return await holdSession({ sessionId, cashierId, reason: holdReason });
       } catch (error) {
         logger.error("Failed to hold session", error as Error);
         throw error;
@@ -155,9 +156,7 @@ export const usePOSSessionResume = () => {
 
 // Hook to complete a session (convert to transaction)
 export const usePOSSessionComplete = () => {
-  const completeSession = useMutation(
-    api.inventory.posSessions.completeSession
-  );
+  const { completeTransaction } = useConvexCommandGateway();
 
   return {
     completeSession: async (
@@ -175,7 +174,7 @@ export const usePOSSessionComplete = () => {
       }
     ) => {
       try {
-        return await completeSession({
+        return await completeTransaction({
           sessionId,
           ...paymentDetails,
         });

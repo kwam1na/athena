@@ -6,7 +6,7 @@ import { usePOSStore } from "../stores/posStore";
 import { Id } from "../../convex/_generated/dataModel";
 import { logger } from "../lib/logger";
 import { usePOSActiveSession } from "./usePOSSessions";
-import { useGetTerminal } from "./useGetTerminal";
+import { useConvexCommandGateway } from "@/lib/pos/infrastructure/convex/commandGateway";
 
 /**
  * Hook for POS Session Management
@@ -23,15 +23,10 @@ export const useSessionManagement = () => {
     store.cashier.id
   );
 
-  // Convex mutations
-  const createSessionMutation = useMutation(
-    api.inventory.posSessions.createSession
-  );
+  const { startSession, holdSession: holdSessionCommand } =
+    useConvexCommandGateway();
   const updateSessionMutation = useMutation(
     api.inventory.posSessions.updateSession
-  );
-  const holdSessionMutation = useMutation(
-    api.inventory.posSessions.holdSession
   );
   const resumeSessionMutation = useMutation(
     api.inventory.posSessions.resumeSession
@@ -67,7 +62,7 @@ export const useSessionManagement = () => {
         store.clearCart();
         logger.debug("[POS] Cleared cart before creating new session");
 
-        const result = await createSessionMutation({
+        const result = await startSession({
           storeId,
           cashierId: cashierId || (store.cashier.id as Id<"cashier">),
           registerNumber: store.ui.registerNumber,
@@ -99,7 +94,7 @@ export const useSessionManagement = () => {
         store.setSessionCreating(false);
       }
     },
-    [createSessionMutation, store]
+    [startSession, store]
   );
 
   /**
@@ -203,10 +198,10 @@ export const useSessionManagement = () => {
         }
 
         // Then hold the session
-        const result = await holdSessionMutation({
+        const result = await holdSessionCommand({
           sessionId: sessionId as Id<"posSession">,
           cashierId: store.cashier.id as Id<"cashier">,
-          holdReason: reason,
+          reason,
         });
 
         if (!result.success) {
@@ -240,7 +235,7 @@ export const useSessionManagement = () => {
         return { success: false, error: errorMessage };
       }
     },
-    [holdSessionMutation, updateSession, store, activeSession]
+    [holdSessionCommand, updateSession, store, activeSession]
   );
 
   /**
