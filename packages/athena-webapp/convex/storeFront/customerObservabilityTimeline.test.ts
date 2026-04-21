@@ -41,6 +41,52 @@ function createAnalyticsEvent(
 }
 
 describe("buildCustomerObservabilityTimeline", () => {
+  it("includes shared operational milestones for online orders in the customer timeline", () => {
+    const timeline = buildCustomerObservabilityTimeline([
+      {
+        _id: "operational_latest" as Id<"analytics">,
+        _creationTime: 400,
+        createdAt: 400,
+        eventType: "online_order_ready_for_pickup",
+        message: "online_order_ready_for_pickup on ORD-1001",
+        metadata: {
+          deliveryMethod: "pickup",
+        },
+        onlineOrderId: "order_1",
+        storeId: "store_1" as Id<"store">,
+        subjectId: "order_1",
+        subjectLabel: "ORD-1001",
+        subjectType: "online_order",
+      } as any,
+      createAnalyticsEvent({
+        _id: "analytics_previous" as Id<"analytics">,
+        _creationTime: 300,
+        data: {
+          journey: "checkout",
+          step: "payment_submission",
+          status: "succeeded",
+          sessionId: "session-2",
+        },
+      }),
+    ] as AnalyticsDoc[]);
+
+    expect(timeline.events[0]).toMatchObject({
+      journey: "online_order",
+      step: "ready_for_pickup",
+      status: "succeeded",
+      onlineOrderId: "order_1",
+      subjectLabel: "ORD-1001",
+      message: "online_order_ready_for_pickup on ORD-1001",
+      source: "operations",
+    });
+    expect(timeline.events[1]).toMatchObject({
+      journey: "checkout",
+      step: "payment_submission",
+      source: "observability",
+    });
+    expect(timeline.summary.uniqueSessions).toBe(1);
+  });
+
   it("returns observability-first summary and normalized user journey events", () => {
     const timeline = buildCustomerObservabilityTimeline([
       createAnalyticsEvent({

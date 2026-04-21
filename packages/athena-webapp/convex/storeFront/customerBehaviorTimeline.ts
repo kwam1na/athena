@@ -112,6 +112,96 @@ async function getProductInfoMaps(ctx: QueryCtx, analytics: Doc<"analytics">[]) 
   return { productMap, skuMap };
 }
 
+export async function resolveCustomerProfileIdForTimeline(
+  ctx: QueryCtx,
+  userId: Id<"storeFrontUser"> | Id<"guest">,
+) {
+  try {
+    const storeFrontUser = await ctx.db.get(
+      "storeFrontUser",
+      userId as Id<"storeFrontUser">,
+    );
+
+    if (storeFrontUser) {
+      const profile = await ctx.db
+        .query("customerProfile")
+        .withIndex("by_storeFrontUserId", (q) =>
+          q.eq("storeFrontUserId", storeFrontUser._id),
+        )
+        .first();
+
+      return profile?._id ?? null;
+    }
+  } catch {}
+
+  try {
+    const guest = await ctx.db.get("guest", userId as Id<"guest">);
+
+    if (guest) {
+      const profile = await ctx.db
+        .query("customerProfile")
+        .withIndex("by_guestId", (q) => q.eq("guestId", guest._id))
+        .first();
+
+      return profile?._id ?? null;
+    }
+  } catch {}
+
+  return null;
+}
+
+async function getCustomerOperationalTimelineEvents(
+  ctx: QueryCtx,
+  userId: Id<"storeFrontUser"> | Id<"guest">,
+  limit: number,
+) {
+  const customerProfileId = await resolveCustomerProfileIdForTimeline(ctx, userId);
+  if (!customerProfileId) {
+    return [];
+  }
+
+  const events = await ctx.db
+    .query("operationalEvent")
+    .withIndex("by_customerProfileId", (q) =>
+      q.eq("customerProfileId", customerProfileId),
+    )
+    .order("desc")
+    .take(Math.max(limit * 5, 500));
+
+  const onlineOrderEvents = events.filter(
+    (event) => event.subjectType === "online_order" || Boolean(event.onlineOrderId),
+  );
+
+  const onlineOrderIds = [
+    ...new Set(
+      onlineOrderEvents
+        .map((event) => event.onlineOrderId)
+        .filter((onlineOrderId): onlineOrderId is Id<"onlineOrder"> =>
+          Boolean(onlineOrderId),
+        ),
+    ),
+  ];
+
+  const onlineOrders = await Promise.all(
+    onlineOrderIds.map((onlineOrderId) => ctx.db.get("onlineOrder", onlineOrderId)),
+  );
+
+  const onlineOrderMap = new Map<Id<"onlineOrder">, Doc<"onlineOrder">>();
+  for (const onlineOrder of onlineOrders) {
+    if (onlineOrder) {
+      onlineOrderMap.set(onlineOrder._id, onlineOrder);
+    }
+  }
+
+  return onlineOrderEvents.map((event) => ({
+    ...event,
+    _creationTime: event.createdAt,
+    subjectLabel: event.onlineOrderId
+      ? onlineOrderMap.get(event.onlineOrderId)?.orderNumber
+      : undefined,
+  }));
+}
+
 export const getCustomerBehaviorTimeline = query({
   args: {
     userId: v.union(v.id("storeFrontUser"), v.id("guest")),
@@ -410,17 +500,20 @@ export const getCustomerObservabilityTimeline = query({
     }),
     events: v.array(
       v.object({
-        _id: v.id("analytics"),
+        _id: v.string(),
         _creationTime: v.number(),
-        action: v.string(),
-        storeFrontUserId: v.union(v.id("storeFrontUser"), v.id("guest")),
+        action: v.optional(v.string()),
+        eventType: v.optional(v.string()),
+        message: v.optional(v.string()),
+        source: v.union(v.literal("observability"), v.literal("operations")),
+        storeFrontUserId: v.optional(v.union(v.id("storeFrontUser"), v.id("guest"))),
         storeId: v.id("store"),
         origin: v.optional(v.string()),
         device: v.optional(v.string()),
         journey: v.string(),
         step: v.string(),
         status: v.string(),
-        sessionId: v.string(),
+        sessionId: v.optional(v.string()),
         route: v.optional(v.string()),
         errorCategory: v.optional(v.string()),
         errorCode: v.optional(v.string()),
@@ -429,6 +522,10 @@ export const getCustomerObservabilityTimeline = query({
         productSku: v.optional(v.string()),
         checkoutSessionId: v.optional(v.string()),
         orderId: v.optional(v.string()),
+        onlineOrderId: v.optional(v.id("onlineOrder")),
+        subjectId: v.optional(v.string()),
+        subjectLabel: v.optional(v.string()),
+        subjectType: v.optional(v.string()),
         userData: v.optional(
           v.object({
             email: v.optional(v.string()),
@@ -487,6 +584,20 @@ export const getCustomerObservabilityTimeline = query({
       };
     });
 
-    return buildCustomerObservabilityTimeline(enrichedAnalytics);
+    const operationalEvents = await getCustomerOperationalTimelineEvents(
+      ctx,
+      userId,
+      limit,
+    );
+
+    const timeline = buildCustomerObservabilityTimeline([
+      ...operationalEvents,
+      ...enrichedAnalytics,
+    ]);
+
+    return {
+      ...timeline,
+      events: timeline.events.slice(0, limit),
+    };
   },
 });

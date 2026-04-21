@@ -24,6 +24,9 @@ export function TimelineEventCard({ event }: TimelineEventCardProps) {
   const IconComponent = statusStyles.icon;
   const DeviceIcon = getDeviceIcon(event.device);
   const productLabel = event.productInfo?.name ?? event.productSku;
+  const subjectReference = event.subjectLabel ?? event.orderId;
+  const eventMessage =
+    event.message && event.message !== event.eventType ? event.message : undefined;
 
   const formatter = useGetCurrencyFormatter();
 
@@ -57,6 +60,12 @@ export function TimelineEventCard({ event }: TimelineEventCardProps) {
                 <h4 className="text-sm font-medium text-gray-900">
                   {formatObservabilityLabel(event.step)}
                 </h4>
+
+                {subjectReference && (
+                  <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
+                    {subjectReference}
+                  </p>
+                )}
               </div>
 
               <span className="whitespace-nowrap text-xs text-gray-500">
@@ -139,6 +148,10 @@ export function TimelineEventCard({ event }: TimelineEventCardProps) {
                 </span>
               )} */}
             </div>
+
+            {eventMessage && (
+              <p className="mt-3 text-sm text-gray-700">{eventMessage}</p>
+            )}
 
             {(event.errorCategory || event.errorCode || event.errorMessage) && (
               <div className="mt-3 rounded-lg border border-dashed border-muted-foreground/20 bg-background/80 p-3 text-sm">

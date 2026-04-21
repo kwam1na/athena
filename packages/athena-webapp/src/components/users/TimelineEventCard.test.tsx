@@ -49,4 +49,33 @@ describe("TimelineEventCard", () => {
       screen.queryByText("Storefront observability"),
     ).not.toBeInTheDocument();
   });
+
+  it("renders shared order milestones with the order reference and milestone message", () => {
+    render(
+      <TimelineEventCard
+        event={
+          {
+            _id: "operational_1",
+            _creationTime: Date.now() - 30_000,
+            eventType: "online_order_ready_for_pickup",
+            source: "operations",
+            storeId: "store_1",
+            journey: "online_order",
+            step: "ready_for_pickup",
+            status: "succeeded",
+            onlineOrderId: "order_1",
+            subjectLabel: "ORD-1001",
+            message: "Order is bagged and ready for customer pickup.",
+          } as any
+        }
+      />,
+    );
+
+    expect(screen.getByText("Ready for pickup")).toBeInTheDocument();
+    expect(screen.getByText("Online order")).toBeInTheDocument();
+    expect(screen.getByText("ORD-1001")).toBeInTheDocument();
+    expect(
+      screen.getByText("Order is bagged and ready for customer pickup."),
+    ).toBeInTheDocument();
+  });
 });
