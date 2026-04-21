@@ -79,6 +79,11 @@ import {
   serviceCaseSchema,
   serviceInventoryUsageSchema,
 } from "./schemas/serviceOps";
+import {
+  purchaseOrderLineItemSchema,
+  purchaseOrderSchema,
+  vendorSchema,
+} from "./schemas/stockOps";
 
 const schema = defineSchema({
   ...authTables,
@@ -226,6 +231,14 @@ const schema = defineSchema({
     .index("by_storeId", ["storeId"])
     .index("by_storeId_barcode", ["storeId", "barcode"])
     .index("by_storeId_sku", ["storeId", "sku"]),
+  purchaseOrder: defineTable(purchaseOrderSchema)
+    .index("by_storeId", ["storeId"])
+    .index("by_storeId_status", ["storeId", "status"])
+    .index("by_storeId_vendorId", ["storeId", "vendorId"])
+    .index("by_storeId_poNumber", ["storeId", "poNumber"]),
+  purchaseOrderLineItem: defineTable(purchaseOrderLineItemSchema)
+    .index("by_purchaseOrderId", ["purchaseOrderId"])
+    .index("by_storeId_productSkuId", ["storeId", "productSkuId"]),
   promoCode: defineTable(promoCodeSchema),
   promoCodeItem: defineTable(promoCodeItemSchema)
     .index("by_promoCodeId", ["promoCodeId"])
@@ -297,6 +310,10 @@ const schema = defineSchema({
     .index("by_slug", ["slug"])
     .index("by_categoryId_slug", ["categoryId", "slug"]),
   supportTicket: defineTable(supportTicketSchema),
+  vendor: defineTable(vendorSchema)
+    .index("by_storeId", ["storeId"])
+    .index("by_storeId_lookupKey", ["storeId", "lookupKey"])
+    .index("by_storeId_status", ["storeId", "status"]),
   review: defineTable(reviewSchema)
     .index("by_orderItemId", ["orderItemId"])
     .index("by_createdByStoreFrontUserId", ["createdByStoreFrontUserId"])
