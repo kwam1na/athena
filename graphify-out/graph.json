@@ -299,7 +299,7 @@
       "relation": "calls",
       "source": "athenauserauth_findathenauserbyemailwithctx",
       "source_file": "packages/athena-webapp/convex/lib/athenaUserAuth.ts",
-      "source_location": "L58",
+      "source_location": "L61",
       "target": "athenauserauth_getauthenticatedathenauserwithctx",
       "weight": 1
     },
@@ -311,7 +311,7 @@
       "relation": "calls",
       "source": "athenauserauth_getauthenticateduserrecord",
       "source_file": "packages/athena-webapp/convex/lib/athenaUserAuth.ts",
-      "source_location": "L52",
+      "source_location": "L55",
       "target": "athenauserauth_getauthenticatedathenauserwithctx",
       "weight": 1
     },
@@ -323,7 +323,7 @@
       "relation": "calls",
       "source": "athenauserauth_normalizeemail",
       "source_file": "packages/athena-webapp/convex/lib/athenaUserAuth.ts",
-      "source_location": "L47",
+      "source_location": "L50",
       "target": "athenauserauth_getauthenticateduserrecord",
       "weight": 1
     },
@@ -335,7 +335,7 @@
       "relation": "calls",
       "source": "athenauserauth_getauthenticatedathenauserwithctx",
       "source_file": "packages/athena-webapp/convex/lib/athenaUserAuth.ts",
-      "source_location": "L62",
+      "source_location": "L65",
       "target": "athenauserauth_requireauthenticatedathenauserwithctx",
       "weight": 1
     },
@@ -347,7 +347,7 @@
       "relation": "calls",
       "source": "athenauserauth_findathenauserbyemailwithctx",
       "source_file": "packages/athena-webapp/convex/lib/athenaUserAuth.ts",
-      "source_location": "L104",
+      "source_location": "L107",
       "target": "athenauserauth_syncauthenticatedathenauserwithctx",
       "weight": 1
     },
@@ -359,7 +359,7 @@
       "relation": "calls",
       "source": "athenauserauth_getauthenticateduserrecord",
       "source_file": "packages/athena-webapp/convex/lib/athenaUserAuth.ts",
-      "source_location": "L98",
+      "source_location": "L101",
       "target": "athenauserauth_syncauthenticatedathenauserwithctx",
       "weight": 1
     },
@@ -7967,7 +7967,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_lib_athenauserauth_ts",
       "source_file": "packages/athena-webapp/convex/lib/athenaUserAuth.ts",
-      "source_location": "L51",
+      "source_location": "L54",
       "target": "athenauserauth_getauthenticatedathenauserwithctx",
       "weight": 1
     },
@@ -7979,7 +7979,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_lib_athenauserauth_ts",
       "source_file": "packages/athena-webapp/convex/lib/athenaUserAuth.ts",
-      "source_location": "L31",
+      "source_location": "L34",
       "target": "athenauserauth_getauthenticateduserrecord",
       "weight": 1
     },
@@ -8003,7 +8003,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_lib_athenauserauth_ts",
       "source_file": "packages/athena-webapp/convex/lib/athenaUserAuth.ts",
-      "source_location": "L61",
+      "source_location": "L64",
       "target": "athenauserauth_requireauthenticatedathenauserwithctx",
       "weight": 1
     },
@@ -8015,7 +8015,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_lib_athenauserauth_ts",
       "source_file": "packages/athena-webapp/convex/lib/athenaUserAuth.ts",
-      "source_location": "L71",
+      "source_location": "L74",
       "target": "athenauserauth_requireorganizationmemberrolewithctx",
       "weight": 1
     },
@@ -8027,7 +8027,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_lib_athenauserauth_ts",
       "source_file": "packages/athena-webapp/convex/lib/athenaUserAuth.ts",
-      "source_location": "L97",
+      "source_location": "L100",
       "target": "athenauserauth_syncauthenticatedathenauserwithctx",
       "weight": 1
     },
@@ -54676,7 +54676,7 @@
       "label": "getAuthenticatedAthenaUserWithCtx()",
       "norm_label": "getauthenticatedathenauserwithctx()",
       "source_file": "packages/athena-webapp/convex/lib/athenaUserAuth.ts",
-      "source_location": "L51"
+      "source_location": "L54"
     },
     {
       "community": 54,
@@ -54685,7 +54685,7 @@
       "label": "getAuthenticatedUserRecord()",
       "norm_label": "getauthenticateduserrecord()",
       "source_file": "packages/athena-webapp/convex/lib/athenaUserAuth.ts",
-      "source_location": "L31"
+      "source_location": "L34"
     },
     {
       "community": 54,
@@ -54703,7 +54703,7 @@
       "label": "requireAuthenticatedAthenaUserWithCtx()",
       "norm_label": "requireauthenticatedathenauserwithctx()",
       "source_file": "packages/athena-webapp/convex/lib/athenaUserAuth.ts",
-      "source_location": "L61"
+      "source_location": "L64"
     },
     {
       "community": 54,
@@ -54712,7 +54712,7 @@
       "label": "requireOrganizationMemberRoleWithCtx()",
       "norm_label": "requireorganizationmemberrolewithctx()",
       "source_file": "packages/athena-webapp/convex/lib/athenaUserAuth.ts",
-      "source_location": "L71"
+      "source_location": "L74"
     },
     {
       "community": 54,
@@ -54721,7 +54721,7 @@
       "label": "syncAuthenticatedAthenaUserWithCtx()",
       "norm_label": "syncauthenticatedathenauserwithctx()",
       "source_file": "packages/athena-webapp/convex/lib/athenaUserAuth.ts",
-      "source_location": "L97"
+      "source_location": "L100"
     },
     {
       "community": 54,

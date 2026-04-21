@@ -14,6 +14,9 @@ async function findAthenaUserByEmailWithCtx(
   email: string
 ) {
   const normalizedEmail = normalizeEmail(email);
+  // Case-insensitive duplicate detection requires scanning until the schema gains
+  // a normalized-email index for athenaUser records.
+  // eslint-disable-next-line @convex-dev/no-collect-in-query
   const athenaUsers = await ctx.db.query("athenaUser").collect();
   const matchingUsers = athenaUsers.filter(
     (athenaUser) => normalizeEmail(athenaUser.email) === normalizedEmail
@@ -35,7 +38,7 @@ async function getAuthenticatedUserRecord(ctx: AthenaAuthCtx) {
     return null;
   }
 
-  const authUser = await ctx.db.get(authUserId);
+  const authUser = await ctx.db.get("users", authUserId);
 
   if (!authUser || typeof authUser.email !== "string") {
     return null;
