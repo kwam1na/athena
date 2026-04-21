@@ -11,6 +11,9 @@
 import type * as app from "../app.js";
 import type * as auth from "../auth.js";
 import type * as cache_index from "../cache/index.js";
+import type * as cashControls_closeouts from "../cashControls/closeouts.js";
+import type * as cashControls_deposits from "../cashControls/deposits.js";
+import type * as cashControls_paymentAllocationAttribution from "../cashControls/paymentAllocationAttribution.js";
 import type * as cloudflare_r2 from "../cloudflare/r2.js";
 import type * as cloudflare_stream from "../cloudflare/stream.js";
 import type * as constants_countries from "../constants/countries.js";
@@ -245,6 +248,9 @@ declare const fullApi: ApiFromModules<{
   app: typeof app;
   auth: typeof auth;
   "cache/index": typeof cache_index;
+  "cashControls/closeouts": typeof cashControls_closeouts;
+  "cashControls/deposits": typeof cashControls_deposits;
+  "cashControls/paymentAllocationAttribution": typeof cashControls_paymentAllocationAttribution;
   "cloudflare/r2": typeof cloudflare_r2;
   "cloudflare/stream": typeof cloudflare_stream;
   "constants/countries": typeof constants_countries;

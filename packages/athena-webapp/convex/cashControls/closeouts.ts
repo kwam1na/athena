@@ -2,7 +2,7 @@ import { mutation, MutationCtx, query, QueryCtx } from "../_generated/server";
 import { Id } from "../_generated/dataModel";
 import { internal } from "../_generated/api";
 import { v } from "convex/values";
-import { buildApprovalRequest } from "../operations/approvalRequests";
+import { buildApprovalRequest } from "../operations/approvalRequestHelpers";
 import { recordOperationalEventWithCtx } from "../operations/operationalEvents";
 
 const CLOSEOUT_SESSION_LIMIT = 100;
@@ -174,7 +174,7 @@ async function cancelPendingApprovalIfNeeded(args: {
     return approvalRequest;
   }
 
-  return args.ctx.runMutation(internal.operations.approvalRequests.decideApprovalRequest, {
+  return args.ctx.runMutation(internal.operations.approvalRequests.decideApprovalRequestInternal, {
     approvalRequestId: approvalRequest._id,
     decision: "cancelled",
     reviewedByStaffProfileId: args.reviewedByStaffProfileId,
@@ -450,7 +450,7 @@ export const reviewRegisterSessionCloseout = mutation({
     }
 
     const reviewedApprovalRequest = await ctx.runMutation(
-      internal.operations.approvalRequests.decideApprovalRequest,
+      internal.operations.approvalRequests.decideApprovalRequestInternal,
       {
         approvalRequestId: approvalRequest._id,
         decision: args.decision,

@@ -11,18 +11,6 @@ import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Textarea } from "../ui/textarea";
 
-const cashControlsApi = (
-  api as unknown as {
-    cashControls: {
-      closeouts: {
-        getCloseoutSnapshot: any;
-        reviewRegisterSessionCloseout: any;
-        submitRegisterSessionCloseout: any;
-      };
-    };
-  }
-).cashControls.closeouts;
-
 export type RegisterCloseoutSession = {
   _id: string;
   approvalRequest: null | {
@@ -419,15 +407,15 @@ export function RegisterCloseoutView() {
   const { user } = useAuth();
 
   const snapshot = useQuery(
-    cashControlsApi.getCloseoutSnapshot,
+    api.cashControls.closeouts.getCloseoutSnapshot,
     activeStore?._id ? { storeId: activeStore._id } : "skip",
-  ) as { registerSessions: RegisterCloseoutSession[] } | undefined;
+  );
 
   const submitRegisterSessionCloseout = useMutation(
-    cashControlsApi.submitRegisterSessionCloseout,
+    api.cashControls.closeouts.submitRegisterSessionCloseout,
   );
   const reviewRegisterSessionCloseout = useMutation(
-    cashControlsApi.reviewRegisterSessionCloseout,
+    api.cashControls.closeouts.reviewRegisterSessionCloseout,
   );
 
   async function onSubmitCloseout(args: RegisterCloseoutSubmitArgs) {

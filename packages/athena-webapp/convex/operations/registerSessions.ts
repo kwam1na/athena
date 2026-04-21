@@ -195,6 +195,35 @@ export function buildRegisterSessionCloseoutPatch(
   };
 }
 
+export function buildRegisterSessionDepositPatch(
+  session: {
+    countedCash?: number;
+    expectedCash: number;
+    variance?: number;
+  },
+  args: {
+    amount: number;
+  }
+) {
+  if (args.amount <= 0) {
+    throw new Error("Register session deposits must be positive.");
+  }
+
+  const nextExpectedCash = session.expectedCash - args.amount;
+
+  if (nextExpectedCash < 0) {
+    throw new Error("Register session expected cash cannot be negative.");
+  }
+
+  return {
+    expectedCash: nextExpectedCash,
+    variance:
+      session.countedCash !== undefined
+        ? session.countedCash - nextExpectedCash
+        : session.variance,
+  };
+}
+
 export function buildClosedRegisterSessionPatch(
   session: {
     expectedCash: number;
@@ -386,6 +415,40 @@ export const beginRegisterSessionCloseout = internalMutation({
 
     return ctx.db.get("registerSession", args.registerSessionId);
   },
+});
+
+export async function recordRegisterSessionDepositWithCtx(
+  ctx: MutationCtx,
+  args: {
+    amount: number;
+    registerSessionId: Id<"registerSession">;
+  }
+) {
+  const session = await ctx.db.get("registerSession", args.registerSessionId);
+
+  if (!session) {
+    throw new Error("Register session not found.");
+  }
+
+  if (session.status === "closed") {
+    throw new Error("Cannot record a deposit for a closed register session.");
+  }
+
+  await ctx.db.patch(
+    "registerSession",
+    args.registerSessionId,
+    buildRegisterSessionDepositPatch(session, args)
+  );
+
+  return ctx.db.get("registerSession", args.registerSessionId);
+}
+
+export const recordRegisterSessionDeposit = internalMutation({
+  args: {
+    amount: v.number(),
+    registerSessionId: v.id("registerSession"),
+  },
+  handler: (ctx, args) => recordRegisterSessionDepositWithCtx(ctx, args),
 });
 
 export const closeRegisterSession = internalMutation({
