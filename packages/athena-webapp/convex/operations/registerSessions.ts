@@ -1,6 +1,20 @@
-import { internalMutation, internalQuery } from "../_generated/server";
+import { internalMutation, internalQuery, MutationCtx } from "../_generated/server";
 import { Id } from "../_generated/dataModel";
 import { v } from "convex/values";
+
+const REGISTER_SESSION_TRANSITIONS = {
+  active: new Set(["closing"]),
+  closed: new Set<string>(),
+  closing: new Set(["closed"]),
+  open: new Set(["active", "closing"]),
+} as const;
+
+type RegisterSessionStatus = keyof typeof REGISTER_SESSION_TRANSITIONS;
+
+function trimOptional(value?: string | null) {
+  const nextValue = value?.trim();
+  return nextValue ? nextValue : undefined;
+}
 
 export function buildRegisterSession(args: {
   storeId: Id<"store">;
@@ -17,8 +31,73 @@ export function buildRegisterSession(args: {
     ...args,
     status: "open" as const,
     openedAt: Date.now(),
-    expectedCash: args.expectedCash ?? 0,
+    expectedCash: args.expectedCash ?? args.openingFloat,
   };
+}
+
+export function calculateRegisterSessionCashDelta(args: {
+  payments: Array<{ method: string; amount: number; timestamp: number }>;
+  changeGiven?: number;
+}) {
+  const cashTendered = args.payments.reduce(
+    (sum, payment) =>
+      payment.method === "cash" ? sum + payment.amount : sum,
+    0
+  );
+
+  return Math.max(0, cashTendered - (args.changeGiven ?? 0));
+}
+
+export function assertValidRegisterSessionTransition(
+  currentStatus: RegisterSessionStatus,
+  nextStatus: RegisterSessionStatus
+) {
+  if (currentStatus === nextStatus) {
+    return;
+  }
+
+  if (!REGISTER_SESSION_TRANSITIONS[currentStatus].has(nextStatus)) {
+    throw new Error(
+      `Cannot change register session from ${currentStatus} to ${nextStatus}.`
+    );
+  }
+}
+
+async function findConflictingRegisterSession(
+  ctx: MutationCtx,
+  args: {
+    storeId: Id<"store">;
+    registerNumber?: string;
+    terminalId?: Id<"posTerminal">;
+  }
+) {
+  if (args.registerNumber) {
+    const latestByRegister = await ctx.db
+      .query("registerSession")
+      .withIndex("by_storeId_registerNumber", (q) =>
+        q.eq("storeId", args.storeId).eq("registerNumber", args.registerNumber!)
+      )
+      .order("desc")
+      .first();
+
+    if (latestByRegister && latestByRegister.status !== "closed") {
+      throw new Error("A register session is already open for this register.");
+    }
+  }
+
+  if (!args.terminalId) {
+    return;
+  }
+
+  const latestByTerminal = await ctx.db
+    .query("registerSession")
+    .withIndex("by_terminalId", (q) => q.eq("terminalId", args.terminalId!))
+    .order("desc")
+    .first();
+
+  if (latestByTerminal && latestByTerminal.status !== "closed") {
+    throw new Error("A register session is already open for this terminal.");
+  }
 }
 
 export const openRegisterSession = internalMutation({
@@ -34,6 +113,7 @@ export const openRegisterSession = internalMutation({
     notes: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    await findConflictingRegisterSession(ctx, args);
     const sessionId = await ctx.db.insert("registerSession", buildRegisterSession(args));
     return ctx.db.get("registerSession", sessionId);
   },
@@ -73,5 +153,105 @@ export const getOpenRegisterSession = internalQuery({
     return latestByTerminal && latestByTerminal.status !== "closed"
       ? latestByTerminal
       : null;
+  },
+});
+
+export const recordRegisterSessionTransaction = internalMutation({
+  args: {
+    registerSessionId: v.id("registerSession"),
+    storeId: v.id("store"),
+    payments: v.array(
+      v.object({
+        method: v.string(),
+        amount: v.number(),
+        timestamp: v.number(),
+      })
+    ),
+    changeGiven: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const session = await ctx.db.get("registerSession", args.registerSessionId);
+    if (!session || session.storeId !== args.storeId) {
+      throw new Error("Register session not found for this store.");
+    }
+
+    if (session.status === "closing" || session.status === "closed") {
+      throw new Error("Register session is not accepting new transactions.");
+    }
+
+    const expectedCashDelta = calculateRegisterSessionCashDelta({
+      changeGiven: args.changeGiven,
+      payments: args.payments,
+    });
+
+    const updates: Record<string, unknown> = {};
+
+    if (expectedCashDelta > 0) {
+      updates.expectedCash = session.expectedCash + expectedCashDelta;
+    }
+
+    if (session.status === "open") {
+      updates.status = "active";
+    }
+
+    if (Object.keys(updates).length > 0) {
+      await ctx.db.patch("registerSession", args.registerSessionId, updates);
+    }
+
+    return ctx.db.get("registerSession", args.registerSessionId);
+  },
+});
+
+export const beginRegisterSessionCloseout = internalMutation({
+  args: {
+    registerSessionId: v.id("registerSession"),
+    countedCash: v.optional(v.number()),
+    notes: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const session = await ctx.db.get("registerSession", args.registerSessionId);
+    if (!session) {
+      throw new Error("Register session not found.");
+    }
+
+    assertValidRegisterSessionTransition(session.status, "closing");
+
+    await ctx.db.patch("registerSession", args.registerSessionId, {
+      countedCash: args.countedCash,
+      notes: trimOptional(args.notes) ?? session.notes,
+      status: "closing",
+    });
+
+    return ctx.db.get("registerSession", args.registerSessionId);
+  },
+});
+
+export const closeRegisterSession = internalMutation({
+  args: {
+    registerSessionId: v.id("registerSession"),
+    countedCash: v.number(),
+    closedByUserId: v.optional(v.id("athenaUser")),
+    closedByStaffProfileId: v.optional(v.id("staffProfile")),
+    notes: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const session = await ctx.db.get("registerSession", args.registerSessionId);
+    if (!session) {
+      throw new Error("Register session not found.");
+    }
+
+    assertValidRegisterSessionTransition(session.status, "closed");
+
+    await ctx.db.patch("registerSession", args.registerSessionId, {
+      closedAt: Date.now(),
+      closedByStaffProfileId: args.closedByStaffProfileId,
+      closedByUserId: args.closedByUserId,
+      countedCash: args.countedCash,
+      notes: trimOptional(args.notes) ?? session.notes,
+      status: "closed",
+      variance: args.countedCash - session.expectedCash,
+    });
+
+    return ctx.db.get("registerSession", args.registerSessionId);
   },
 });

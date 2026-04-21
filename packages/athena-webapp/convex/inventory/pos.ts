@@ -1,3 +1,4 @@
+import { internal } from "../_generated/api";
 import { query, mutation, MutationCtx, QueryCtx } from "../_generated/server";
 import { v } from "convex/values";
 import type { Doc, Id } from "../_generated/dataModel";
@@ -466,6 +467,7 @@ export const completeTransaction = mutation({
     ),
     registerNumber: v.optional(v.string()),
     cashierId: v.optional(v.id("cashier")),
+    registerSessionId: v.optional(v.id("registerSession")),
   },
   handler: async (ctx, args) => {
     // Validate inventory availability with cumulative quantity tracking
@@ -543,6 +545,7 @@ export const completeTransaction = mutation({
       transactionNumber,
       storeId: args.storeId,
       sessionId: undefined, // Direct transaction - no session
+      registerSessionId: args.registerSessionId,
       customerId: args.customerId,
       cashierId: args.cashierId,
       registerNumber: args.registerNumber,
@@ -558,6 +561,18 @@ export const completeTransaction = mutation({
       customerInfo: args.customerInfo,
       receiptPrinted: false,
     });
+
+    if (args.registerSessionId) {
+      await ctx.runMutation(
+        internal.operations.registerSessions.recordRegisterSessionTransaction,
+        {
+          changeGiven,
+          payments: args.payments,
+          registerSessionId: args.registerSessionId,
+          storeId: args.storeId,
+        }
+      );
+    }
 
     // Update customer statistics if customer is linked
     if (args.customerId) {
@@ -910,6 +925,7 @@ export async function createTransactionFromSessionHandler(
   args: {
     sessionId: Id<"posSession">;
     payments: { method: string; amount: number; timestamp: number }[];
+    registerSessionId?: Id<"registerSession">;
     notes?: string;
   }
 ) {
@@ -994,6 +1010,7 @@ export async function createTransactionFromSessionHandler(
     transactionNumber,
     storeId: session.storeId,
     sessionId: args.sessionId, // Link to the session for audit trail
+    registerSessionId: args.registerSessionId,
     customerId: session.customerId,
     cashierId: session.cashierId,
     registerNumber: session.registerNumber,
@@ -1010,6 +1027,18 @@ export async function createTransactionFromSessionHandler(
     receiptPrinted: false,
     notes: args.notes,
   });
+
+  if (args.registerSessionId) {
+    await ctx.runMutation(
+      internal.operations.registerSessions.recordRegisterSessionTransaction,
+      {
+        changeGiven,
+        payments: args.payments,
+        registerSessionId: args.registerSessionId,
+        storeId: session.storeId,
+      }
+    );
+  }
 
   // Update customer statistics if customer is linked
   if (session.customerId) {
@@ -1088,6 +1117,7 @@ export const createTransactionFromSession = mutation({
         timestamp: v.number(),
       })
     ),
+    registerSessionId: v.optional(v.id("registerSession")),
     notes: v.optional(v.string()),
   },
   handler: async (ctx, args) => createTransactionFromSessionHandler(ctx, args),

@@ -4,6 +4,7 @@ export const posTransactionSchema = v.object({
   transactionNumber: v.string(),
   storeId: v.id("store"),
   sessionId: v.optional(v.id("posSession")), // Link to the session that created this transaction (if created from session)
+  registerSessionId: v.optional(v.id("registerSession")),
   customerId: v.optional(v.id("posCustomer")), // Link to POS customer
   cashierId: v.optional(v.id("cashier")), // Cashier who processed the transaction
   registerNumber: v.optional(v.string()),
