@@ -153,7 +153,13 @@ describe("cash-control payment allocation attribution", () => {
       "serviceOps",
       "serviceCases.ts"
     );
-    const pos = readProjectFile("convex", "inventory", "pos.ts");
+    const pos = readProjectFile(
+      "convex",
+      "pos",
+      "infrastructure",
+      "integrations",
+      "paymentAllocationService.ts"
+    );
 
     expect(serviceIntake).toContain("resolveRegisterSessionForInStoreCollectionWithCtx");
     expect(serviceIntake).toContain('args.intakeChannel === "walk_in"');
