@@ -28,7 +28,13 @@ export default defineConfig(({ mode }) => ({
   },
   plugins: (mode === "test"
     ? [react()]
-    : [TanStackRouterVite(), react()]) as any,
+    : [
+        TanStackRouterVite({
+          // Keep colocated route tests out of route generation.
+          routeFileIgnorePattern: "\\.test\\.",
+        }),
+        react(),
+      ]) as any,
   resolve: {
     alias: {
       "~": __dirname,
