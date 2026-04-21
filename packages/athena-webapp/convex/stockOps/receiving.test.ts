@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import {
+  assertDistinctReceivingLineItems,
   assertReceivingLineQuantities,
   calculatePurchaseOrderReceivingStatus,
   calculateReceivingBatchTotals,
@@ -61,6 +62,19 @@ describe("stock ops receiving", () => {
         },
       ])
     ).toBe("received");
+  });
+
+  it("rejects duplicate purchase-order lines inside one receiving batch", () => {
+    expect(() =>
+      assertDistinctReceivingLineItems([
+        {
+          purchaseOrderLineItemId: "line-1",
+        },
+        {
+          purchaseOrderLineItemId: "line-1",
+        },
+      ])
+    ).toThrow("cannot include the same purchase order line twice");
   });
 
   it("short-circuits duplicate batch submissions through the receiving batch lookup", () => {

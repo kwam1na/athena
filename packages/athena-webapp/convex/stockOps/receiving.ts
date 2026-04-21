@@ -66,6 +66,22 @@ export function assertReceivingLineQuantities(
   });
 }
 
+export function assertDistinctReceivingLineItems(
+  lineItems: Array<{ purchaseOrderLineItemId: string }>
+) {
+  const seenLineItemIds = new Set<string>();
+
+  lineItems.forEach((lineItem) => {
+    if (seenLineItemIds.has(lineItem.purchaseOrderLineItemId)) {
+      throw new Error(
+        "Receiving batches cannot include the same purchase order line twice."
+      );
+    }
+
+    seenLineItemIds.add(lineItem.purchaseOrderLineItemId);
+  });
+}
+
 function buildReceivingBatchSourceId(
   purchaseOrderId: string,
   submissionKey: string
@@ -136,6 +152,12 @@ export const receivePurchaseOrderBatch = mutation({
     if (args.lineItems.length === 0) {
       throw new Error("Receiving batches require at least one line item.");
     }
+
+    assertDistinctReceivingLineItems(
+      args.lineItems.map((lineItem) => ({
+        purchaseOrderLineItemId: String(lineItem.purchaseOrderLineItemId),
+      }))
+    );
 
     const purchaseOrderLineItems = await listPurchaseOrderLineItems(
       ctx,

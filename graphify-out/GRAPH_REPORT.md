@@ -5,7 +5,7 @@
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 3144 nodes · 2653 edges · 1243 communities detected
+- 3145 nodes · 2654 edges · 1243 communities detected
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS
 - Token cost: 0 input · 0 output
 
@@ -1385,20 +1385,20 @@ Cohesion: 0.24
 Nodes (6): createApp(), createHandlers(), deleteKeysIndividually(), invalidateAcrossCluster(), invalidateAcrossClusterWithPipeline(), scanNodeForPattern()
 
 ### Community 26 - "Community 26"
-Cohesion: 0.29
-Nodes (7): formatDeliveryAddress(), getAmountPaidForOrder(), getDiscountValue(), getOrderAmount(), getOrderState(), getPickupActionState(), getPotentialPoints()
-
-### Community 27 - "Community 27"
 Cohesion: 0.33
 Nodes (2): OrdersTableToolbarProvider(), useOrdersTableToolbar()
 
-### Community 28 - "Community 28"
+### Community 27 - "Community 27"
 Cohesion: 0.33
 Nodes (9): usePOSActiveSession(), usePOSSessionComplete(), usePOSSessionCreate(), usePOSSessionHold(), usePOSSessionManager(), usePOSSessionResume(), usePOSSessionUpdate(), usePOSSessionVoid() (+1 more)
 
-### Community 29 - "Community 29"
+### Community 28 - "Community 28"
 Cohesion: 0.18
 Nodes (0):
+
+### Community 29 - "Community 29"
+Cohesion: 0.29
+Nodes (7): formatDeliveryAddress(), getAmountPaidForOrder(), getDiscountValue(), getOrderAmount(), getOrderState(), getPickupActionState(), getPotentialPoints()
 
 ### Community 30 - "Community 30"
 Cohesion: 0.18
@@ -1482,47 +1482,47 @@ Nodes (6): buildMtnCollectionsLookupPrefixes(), isTargetEnvironment(), readScope
 
 ### Community 50 - "Community 50"
 Cohesion: 0.25
-Nodes (1): DataTableRowActions()
+Nodes (0):
 
 ### Community 51 - "Community 51"
-Cohesion: 0.29
-Nodes (2): handleNewSession(), resetAutoSessionInitialized()
+Cohesion: 0.25
+Nodes (1): DataTableRowActions()
 
 ### Community 52 - "Community 52"
-Cohesion: 0.25
-Nodes (0):
+Cohesion: 0.29
+Nodes (2): handleNewSession(), resetAutoSessionInitialized()
 
 ### Community 53 - "Community 53"
 Cohesion: 0.25
 Nodes (0):
 
 ### Community 54 - "Community 54"
-Cohesion: 0.46
-Nodes (7): addItemToBag(), clearBag(), getActiveBag(), getBaseUrl(), removeItemFromBag(), updateBagItem(), updateBagOwner()
-
-### Community 55 - "Community 55"
-Cohesion: 0.43
-Nodes (6): buildQueryString(), getAllProducts(), getBaseUrl(), getBestSellers(), getFeatured(), getProduct()
-
-### Community 56 - "Community 56"
 Cohesion: 0.25
 Nodes (0):
 
+### Community 55 - "Community 55"
+Cohesion: 0.46
+Nodes (7): addItemToBag(), clearBag(), getActiveBag(), getBaseUrl(), removeItemFromBag(), updateBagItem(), updateBagOwner()
+
+### Community 56 - "Community 56"
+Cohesion: 0.43
+Nodes (6): buildQueryString(), getAllProducts(), getBaseUrl(), getBestSellers(), getFeatured(), getProduct()
+
 ### Community 57 - "Community 57"
+Cohesion: 0.25
+Nodes (0):
+
+### Community 58 - "Community 58"
 Cohesion: 0.43
 Nodes (7): createStorefrontObservabilityContext(), createStorefrontObservabilityPayload(), getOrCreateStorefrontObservabilitySessionId(), isBrowserAutomationContext(), isSyntheticMonitorOrigin(), resolveStorefrontAnalyticsOrigin(), trackStorefrontEvent()
 
-### Community 58 - "Community 58"
+### Community 59 - "Community 59"
 Cohesion: 0.52
 Nodes (5): acquireInventoryHold(), acquireInventoryHoldsBatch(), adjustInventoryHold(), releaseInventoryHold(), validateInventoryAvailability()
 
-### Community 59 - "Community 59"
+### Community 60 - "Community 60"
 Cohesion: 0.57
 Nodes (6): buildHeaders(), createCollectionsAccessToken(), encodeBasicAuth(), getRequestToPayStatus(), requestToPay(), toError()
-
-### Community 60 - "Community 60"
-Cohesion: 0.29
-Nodes (0):
 
 ### Community 61 - "Community 61"
 Cohesion: 0.33
@@ -1746,19 +1746,19 @@ Nodes (0):
 
 ### Community 116 - "Community 116"
 Cohesion: 0.4
-Nodes (1): Header()
+Nodes (0):
 
 ### Community 117 - "Community 117"
 Cohesion: 0.4
 Nodes (0):
 
 ### Community 118 - "Community 118"
-Cohesion: 0.4
-Nodes (0):
-
-### Community 119 - "Community 119"
 Cohesion: 0.5
 Nodes (2): handleFileSelect(), validateFile()
+
+### Community 119 - "Community 119"
+Cohesion: 0.4
+Nodes (0):
 
 ### Community 120 - "Community 120"
 Cohesion: 0.4
@@ -1770,7 +1770,7 @@ Nodes (0):
 
 ### Community 122 - "Community 122"
 Cohesion: 0.4
-Nodes (0):
+Nodes (1): Header()
 
 ### Community 123 - "Community 123"
 Cohesion: 0.4
