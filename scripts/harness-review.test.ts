@@ -497,6 +497,86 @@ describe("runHarnessReview", () => {
     );
   });
 
+  it("allows deleted unmapped files when the same package still has direct validation coverage", async () => {
+    const rootDir = await createFixtureRepo();
+    const steps: string[] = [];
+    await write(
+      "packages/storefront-webapp/docs/agent/validation-map.json",
+      JSON.stringify(
+        {
+          workspace: "@athena/storefront-webapp",
+          packageDir: "packages/storefront-webapp",
+          surfaces: [
+            {
+              name: "runtime-entry",
+              pathPrefixes: ["packages/storefront-webapp/src/app.ts"],
+              commands: [{ kind: "script", script: "test" }],
+            },
+          ],
+        },
+        null,
+        2
+      ),
+      rootDir
+    );
+
+    await runHarnessReview(rootDir, {
+      getChangedFiles: async () => [
+        "packages/storefront-webapp/src/app.ts",
+        "packages/storefront-webapp/src/client.tsx",
+      ],
+      runHarnessCheck: async () => {
+        steps.push("harness:check");
+      },
+      runPackageScript: async (workspace, script) => {
+        steps.push(`${workspace}:${script}`);
+      },
+      logger: {
+        log() {},
+        error() {},
+      },
+    });
+
+    expect(steps).toEqual(["harness:check", "@athena/storefront-webapp:test"]);
+  });
+
+  it("still fails when a deleted unmapped file is the only touched surface in a package", async () => {
+    const rootDir = await createFixtureRepo();
+    await write(
+      "packages/storefront-webapp/docs/agent/validation-map.json",
+      JSON.stringify(
+        {
+          workspace: "@athena/storefront-webapp",
+          packageDir: "packages/storefront-webapp",
+          surfaces: [
+            {
+              name: "runtime-entry",
+              pathPrefixes: ["packages/storefront-webapp/src/app.ts"],
+              commands: [{ kind: "script", script: "test" }],
+            },
+          ],
+        },
+        null,
+        2
+      ),
+      rootDir
+    );
+
+    await expect(
+      runHarnessReview(rootDir, {
+        getChangedFiles: async () => ["packages/storefront-webapp/src/client.tsx"],
+        runHarnessCheck: async () => {},
+        runPackageScript: async () => {},
+        logger: {
+          log() {},
+          error() {},
+        },
+      })
+    ).rejects.toThrow(
+      "Harness review coverage gap: packages/storefront-webapp/src/client.tsx is not covered by any validation mapping."
+    );
+  });
+
   it("exits cleanly when no target-app files are touched", async () => {
     const rootDir = await createFixtureRepo();
     const steps: string[] = [];

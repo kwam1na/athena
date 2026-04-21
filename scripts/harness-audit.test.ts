@@ -518,11 +518,14 @@ async function createFixtureRepo() {
           {
             name: "runtime-routes",
             pathPrefixes: [
-              "packages/storefront-webapp/src/client.tsx",
+              "packages/storefront-webapp/index.html",
+              "packages/storefront-webapp/package.json",
+              "packages/storefront-webapp/tsconfig.json",
+              "packages/storefront-webapp/src/main.tsx",
               "packages/storefront-webapp/src/router.tsx",
               "packages/storefront-webapp/src/routeTree.gen.ts",
               "packages/storefront-webapp/src/routes/",
-              "packages/storefront-webapp/src/ssr.tsx",
+              "packages/storefront-webapp/vite.config.ts",
             ],
             commands: [{ kind: "script", script: "test" }],
           },
@@ -586,6 +589,11 @@ async function createFixtureRepo() {
   );
   await write("packages/athena-webapp/vite.config.ts", "export default {};\n", rootDir);
 
+  await write(
+    "packages/storefront-webapp/index.html",
+    "<!doctype html><html><body><div id=\"root\"></div></body></html>\n",
+    rootDir
+  );
   await write("packages/storefront-webapp/src/assets/placeholder.png", "", rootDir);
   await write(
     "packages/storefront-webapp/tsconfig.json",
@@ -593,7 +601,6 @@ async function createFixtureRepo() {
     rootDir
   );
   await write("packages/storefront-webapp/vite.config.ts", "export default {};\n", rootDir);
-  await write("packages/storefront-webapp/src/client.tsx", "export {};\n", rootDir);
   await write("packages/storefront-webapp/src/config.ts", "export {};\n", rootDir);
   await write("packages/storefront-webapp/src/index.css", "body {}\n", rootDir);
   await write("packages/storefront-webapp/src/main.tsx", "export {};\n", rootDir);
@@ -602,7 +609,6 @@ async function createFixtureRepo() {
   await write("packages/storefront-webapp/src/routes/auth.verify.tsx", "export {};\n", rootDir);
   await write("packages/storefront-webapp/src/routes/__root.tsx", "export {};\n", rootDir);
   await write("packages/storefront-webapp/src/routes/shop/checkout/index.tsx", "export {};\n", rootDir);
-  await write("packages/storefront-webapp/src/ssr.tsx", "export {};\n", rootDir);
   await write("packages/storefront-webapp/src/api/storefront.ts", "export {};\n", rootDir);
   await write("packages/storefront-webapp/src/components/checkout/Bag.tsx", "export {};\n", rootDir);
   await write("packages/storefront-webapp/src/contexts/StoreContext.tsx", "export {};\n", rootDir);
@@ -680,13 +686,14 @@ describe("runHarnessAudit", () => {
             {
               name: "runtime-routes",
               pathPrefixes: [
+                "packages/storefront-webapp/index.html",
+                "packages/storefront-webapp/package.json",
                 "packages/storefront-webapp/tsconfig.json",
-                "packages/storefront-webapp/src/client.tsx",
+                "packages/storefront-webapp/src/main.tsx",
                 "packages/storefront-webapp/vite.config.ts",
                 "packages/storefront-webapp/src/router.tsx",
                 "packages/storefront-webapp/src/routeTree.gen.ts",
                 "packages/storefront-webapp/src/routes/",
-                "packages/storefront-webapp/src/ssr.tsx",
               ],
               commands: [{ kind: "script", script: "test" }],
             },

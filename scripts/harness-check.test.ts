@@ -124,6 +124,7 @@ async function createFixtureRepo() {
         : {
             test: "vitest run",
             "test:e2e": "playwright test",
+            build: "vite build && tsc --noEmit",
             "lint:architecture": "bun ../../scripts/architecture-boundary-check.ts storefront-webapp",
           };
 
@@ -215,7 +216,7 @@ async function createFixtureRepo() {
         "",
         appName === "athena-webapp"
           ? "Start from [architecture](./architecture.md) and inspect `src/main.tsx`."
-          : "Start from [architecture](./architecture.md) and inspect `src/client.tsx`.",
+          : "Start from [architecture](./architecture.md) and inspect `src/main.tsx`.",
         "",
       ].join("\n"),
       rootDir
@@ -242,11 +243,32 @@ async function createFixtureRepo() {
       await write("packages/athena-webapp/convex/http.ts", "export {};\n", rootDir);
     } else {
       await write(
+        "packages/storefront-webapp/index.html",
+        "<!doctype html><html><body><div id=\"root\"></div></body></html>\n",
+        rootDir
+      );
+      await write(
         "packages/storefront-webapp/playwright.config.ts",
         'export default { testDir: "./tests/e2e" };\n',
         rootDir
       );
-      await write("packages/storefront-webapp/src/client.tsx", "export {};\n", rootDir);
+      await write(
+        "packages/storefront-webapp/tsconfig.json",
+        JSON.stringify({ compilerOptions: {} }, null, 2),
+        rootDir
+      );
+      await write(
+        "packages/storefront-webapp/vite.config.ts",
+        "export default {};\n",
+        rootDir
+      );
+      await write("packages/storefront-webapp/src/main.tsx", "export {};\n", rootDir);
+      await write("packages/storefront-webapp/src/router.tsx", "export {};\n", rootDir);
+      await write(
+        "packages/storefront-webapp/src/routeTree.gen.ts",
+        "export {};\n",
+        rootDir
+      );
       await write(
         "packages/storefront-webapp/src/routes/shop/checkout/index.tsx",
         "export {};\n",
@@ -683,7 +705,7 @@ describe("validateHarnessDocs", () => {
         "",
         "- [route-index](./route-index.md)",
         "",
-        "Start from [architecture](./architecture.md) and inspect `src/client.tsx`.",
+        "Start from [architecture](./architecture.md) and inspect `src/main.tsx`.",
       ].join("\n"),
       rootDir
     );

@@ -340,7 +340,7 @@ export const HARNESS_APP_REGISTRY = [
         folders: [
           {
             path: "src/routes",
-            description: "TanStack Start routes, layouts, and browser journey entrypoints.",
+            description: "TanStack Router routes, layouts, and browser journey entrypoints.",
           },
           {
             path: "src/components",
@@ -396,23 +396,24 @@ export const HARNESS_APP_REGISTRY = [
       {
         title: "Route runtime or build-pipeline edits",
         touchedPaths: [
+          "index.html",
+          "package.json",
           "tsconfig.json",
-          "src/client.tsx",
           "src/main.tsx",
           "src/router.tsx",
           "src/routeTree.gen.ts",
-          "src/ssr.tsx",
           "vite.config.ts",
         ],
         commands: [
           { kind: "script", script: "test" },
+          { kind: "script", script: "build" },
           {
             kind: "raw",
             command:
               "bunx tsc --noEmit -p packages/storefront-webapp/tsconfig.json",
           },
         ],
-        note: "Use this when the TanStack Start bootstrap, generated router state, or TypeScript/build wiring changes.",
+        note: "Use this when the Vite browser bootstrap, package manifest, generated router state, or TypeScript/build wiring changes.",
       },
       {
         title: "Shared-lib, utility, or API-wrapper edits",

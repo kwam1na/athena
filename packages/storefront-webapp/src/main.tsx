@@ -1,8 +1,8 @@
 import ReactDOM from "react-dom/client";
-import { RouterProvider, createRouter } from "@tanstack/react-router";
-import { routeTree } from "./routeTree.gen";
+import { RouterProvider } from "@tanstack/react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useEffect } from "react";
+import { createRouter } from "./router";
 import { createVersionChecker } from "./utils/versionChecker";
 import { PostHogProvider } from "posthog-js/react";
 
@@ -18,14 +18,7 @@ const queryClient = new QueryClient({
 });
 
 // Set up a Router instance
-const router = createRouter({
-  routeTree,
-  context: {
-    queryClient,
-  },
-  defaultPreload: "intent",
-  defaultPreloadStaleTime: 0,
-});
+const router = createRouter(queryClient);
 
 // Register things for typesafety
 declare module "@tanstack/react-router" {
