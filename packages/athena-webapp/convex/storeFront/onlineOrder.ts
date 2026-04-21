@@ -16,6 +16,10 @@ import {
 import { internal } from "../_generated/api";
 import { Doc, Id } from "../_generated/dataModel";
 import { getDiscountValue } from "../inventory/utils";
+import { buildApprovalRequest } from "../operations/approvalRequests";
+import { recordInventoryMovementWithCtx } from "../operations/inventoryMovements";
+import { recordOperationalEventWithCtx } from "../operations/operationalEvents";
+import { recordPaymentAllocationWithCtx } from "../operations/paymentAllocations";
 import {
   createOrderFromCheckoutSession,
   findOrderByExternalReference,
@@ -24,22 +28,26 @@ import {
 } from "./helpers/onlineOrder";
 import {
   assertValidOnlineOrderStatusTransition,
+  getOnlineOrderPaymentMethodLabel,
   recordOnlineOrderRestockMovement,
   recordOnlineOrderPaymentCollected,
   recordOnlineOrderPaymentVerified,
   recordOnlineOrderStatusEvent,
 } from "./helpers/orderOperations";
+import { buildOnlineOrderReturnExchangePlan } from "./helpers/returnExchangeOperations";
 
 const entity = "onlineOrder";
 const MAX_ORDER_ITEMS = 200;
 const MAX_ORDERS = 500;
+const MAX_OPERATIONAL_EVENTS = 20;
+const MAX_PENDING_APPROVALS = 100;
 type SignedInAthenaUser = {
   id: Id<"athenaUser">;
   email: string;
 };
 
 async function listOrderItems(
-  ctx: QueryCtx,
+  ctx: QueryCtx | MutationCtx,
   orderId: Id<"onlineOrder">,
 ): Promise<Doc<"onlineOrderItem">[]> {
   return await ctx.db
@@ -189,6 +197,21 @@ async function applyOnlineOrderUpdate(
   }
 
   return nextOrder;
+}
+
+function buildReturnExchangeReplacementSourceId(
+  orderId: Id<"onlineOrder">,
+  productSkuId: Id<"productSku">,
+  index: number,
+) {
+  return `${orderId}:${productSkuId}:exchange:${index}`;
+}
+
+function buildReturnExchangeReturnSourceId(
+  orderId: Id<"onlineOrder">,
+  orderItemId: Id<"onlineOrderItem">,
+) {
+  return `${orderId}:${orderItemId}:return`;
 }
 
 export const create = mutation({
@@ -680,6 +703,402 @@ export const updateInternal = internalMutation({
 
       return true;
     }
+  },
+});
+
+export const getReturnExchangeOverview = query({
+  args: {
+    orderId: v.id("onlineOrder"),
+  },
+  returns: v.object({
+    balanceCollectedTotal: v.number(),
+    pendingApprovalCount: v.number(),
+    recentEvents: v.array(
+      v.object({
+        _id: v.id("operationalEvent"),
+        createdAt: v.number(),
+        eventType: v.string(),
+        message: v.string(),
+      }),
+    ),
+    refundTotal: v.number(),
+  }),
+  handler: async (ctx, args) => {
+    const order = await ctx.db.get("onlineOrder", args.orderId);
+
+    if (!order) {
+      return {
+        balanceCollectedTotal: 0,
+        pendingApprovalCount: 0,
+        recentEvents: [],
+        refundTotal: 0,
+      };
+    }
+
+    const [paymentAllocations, operationalEvents, pendingApprovals] =
+      await Promise.all([
+        ctx.db
+          .query("paymentAllocation")
+          .withIndex("by_storeId_target", (q) =>
+            q
+              .eq("storeId", order.storeId)
+              .eq("targetType", "online_order")
+              .eq("targetId", order._id),
+          )
+          .collect(),
+        ctx.db
+          .query("operationalEvent")
+          .withIndex("by_storeId_subject", (q) =>
+            q
+              .eq("storeId", order.storeId)
+              .eq("subjectType", "online_order")
+              .eq("subjectId", order._id),
+          )
+          .collect(),
+        ctx.db
+          .query("approvalRequest")
+          .withIndex("by_storeId_status", (q) =>
+            q.eq("storeId", order.storeId).eq("status", "pending"),
+          )
+          .take(MAX_PENDING_APPROVALS),
+      ]);
+
+    const relevantEvents = operationalEvents
+      .filter(
+        (event) =>
+          event.eventType.includes("return") || event.eventType.includes("exchange"),
+      )
+      .sort((a, b) => b.createdAt - a.createdAt)
+      .slice(0, MAX_OPERATIONAL_EVENTS)
+      .map((event) => ({
+        _id: event._id,
+        createdAt: event.createdAt,
+        eventType: event.eventType,
+        message: event.message,
+      }));
+
+    return {
+      balanceCollectedTotal: paymentAllocations
+        .filter(
+          (allocation) =>
+            allocation.allocationType === "online_order_exchange_balance_collection" &&
+            allocation.direction === "in",
+        )
+        .reduce((sum, allocation) => sum + allocation.amount, 0),
+      pendingApprovalCount: pendingApprovals.filter(
+        (request) =>
+          request.subjectType === "online_order" && request.subjectId === order._id,
+      ).length,
+      recentEvents: relevantEvents,
+      refundTotal: paymentAllocations
+        .filter(
+          (allocation) =>
+            allocation.allocationType === "online_order_return_refund" &&
+            allocation.direction === "out",
+        )
+        .reduce((sum, allocation) => sum + allocation.amount, 0),
+    };
+  },
+});
+
+export const processReturnExchange = mutation({
+  args: {
+    notes: v.optional(v.string()),
+    operationType: v.union(v.literal("exchange"), v.literal("return")),
+    orderId: v.id("onlineOrder"),
+    replacementItems: v.optional(
+      v.array(
+        v.object({
+          productId: v.optional(v.id("product")),
+          productName: v.optional(v.string()),
+          productSkuId: v.id("productSku"),
+          quantity: v.number(),
+          unitPrice: v.number(),
+        }),
+      ),
+    ),
+    restockReturnedItems: v.boolean(),
+    returnItemIds: v.array(v.id("onlineOrderItem")),
+    signedInAthenaUser: v.optional(
+      v.object({
+        id: v.id("athenaUser"),
+        email: v.string(),
+      }),
+    ),
+  },
+  returns: v.object({
+    approvalRequestId: v.optional(v.id("approvalRequest")),
+    balanceDueAmount: v.number(),
+    message: v.string(),
+    refundAmount: v.number(),
+    requiresApproval: v.boolean(),
+    success: v.boolean(),
+  }),
+  handler: async (ctx, args) => {
+    const order = await ctx.db.get("onlineOrder", args.orderId);
+
+    if (!order) {
+      throw new Error("Order not found.");
+    }
+
+    const store = await ctx.db.get("store", order.storeId);
+    const orderItems = await listOrderItems(ctx, order._id);
+    const replacementItems = await Promise.all(
+      (args.replacementItems ?? []).map(async (replacement) => {
+        const productSku = await ctx.db.get("productSku", replacement.productSkuId);
+
+        if (!productSku) {
+          throw new Error("Replacement SKU not found.");
+        }
+
+        const product =
+          (replacement.productId
+            ? await ctx.db.get("product", replacement.productId)
+            : null) ?? (await ctx.db.get("product", productSku.productId));
+
+        return {
+          inventoryCount: productSku.inventoryCount,
+          productId: replacement.productId ?? productSku.productId,
+          productName: replacement.productName ?? product?.name,
+          productSkuId: replacement.productSkuId,
+          quantity: replacement.quantity,
+          quantityAvailable: productSku.quantityAvailable,
+          skuLabel: productSku.sku,
+          unitPrice: replacement.unitPrice,
+        };
+      }),
+    );
+
+    if (args.operationType === "exchange" && replacementItems.length === 0) {
+      throw new Error("Exchange flows require a replacement item.");
+    }
+
+    const plan = buildOnlineOrderReturnExchangePlan({
+      order,
+      orderItems,
+      replacementItems,
+      restockReturnedItems: args.restockReturnedItems,
+      returnItemIds: args.returnItemIds,
+    });
+
+    if (plan.requiresApproval) {
+      const approvalRequestId = await ctx.db.insert(
+        "approvalRequest",
+        buildApprovalRequest({
+          metadata: {
+            operationType: args.operationType,
+            replacementItems: replacementItems.map((item) => ({
+              productName: item.productName ?? item.skuLabel ?? null,
+              productSkuId: item.productSkuId,
+              quantity: item.quantity,
+            })),
+            returnItemIds: args.returnItemIds,
+          },
+          notes: args.notes,
+          organizationId: store?.organizationId,
+          reason: plan.approvalReason ?? undefined,
+          requestType: "online_order_return_review",
+          requestedByUserId: args.signedInAthenaUser?.id,
+          storeId: order.storeId,
+          subjectId: order._id,
+          subjectType: "online_order",
+        }),
+      );
+
+      await recordOperationalEventWithCtx(ctx, {
+        actorUserId: args.signedInAthenaUser?.id,
+        approvalRequestId,
+        customerProfileId: order.customerProfileId,
+        eventType: plan.eventType,
+        message: plan.eventMessage,
+        metadata: {
+          operationType: args.operationType,
+          returnItemIds: args.returnItemIds,
+        },
+        onlineOrderId: order._id,
+        organizationId: store?.organizationId,
+        reason: plan.approvalReason ?? undefined,
+        storeId: order.storeId,
+        subjectId: order._id,
+        subjectLabel: order.orderNumber,
+        subjectType: "online_order",
+      });
+
+      return {
+        approvalRequestId,
+        balanceDueAmount: plan.balanceDueAmount,
+        message: "Return or exchange sent for approval.",
+        refundAmount: plan.refundAmount,
+        requiresApproval: true,
+        success: true,
+      };
+    }
+
+    const now = Date.now();
+
+    await Promise.all(
+      plan.selectedItems.map(async (item) => {
+        const nextFields = {
+          isRefunded: true,
+          ...(args.restockReturnedItems ? { isRestocked: true } : {}),
+        };
+
+        await ctx.db.patch("onlineOrderItem", item._id, nextFields);
+      }),
+    );
+
+    const returnMovementIds = await Promise.all(
+      plan.returnMovements.map(async (movement) => {
+        const productSku = await ctx.db.get("productSku", movement.productSkuId);
+
+        if (!productSku) {
+          throw new Error("Returned item SKU not found.");
+        }
+
+        await ctx.db.patch("productSku", movement.productSkuId, {
+          inventoryCount: productSku.inventoryCount + movement.quantity,
+          quantityAvailable: productSku.quantityAvailable + movement.quantity,
+        });
+
+        const inventoryMovement = await recordInventoryMovementWithCtx(ctx, {
+          actorUserId: args.signedInAthenaUser?.id,
+          customerProfileId: order.customerProfileId,
+          movementType: "restock",
+          notes: args.notes ?? order.orderNumber,
+          onlineOrderId: order._id,
+          organizationId: store?.organizationId,
+          productId: movement.productId,
+          productSkuId: movement.productSkuId,
+          quantityDelta: movement.quantityDelta,
+          reasonCode: movement.reasonCode,
+          sourceId: buildReturnExchangeReturnSourceId(
+            order._id,
+            movement.orderItemId!,
+          ),
+          sourceType: "online_order_return",
+          storeId: order.storeId,
+        });
+
+        return inventoryMovement?._id ?? null;
+      }),
+    );
+
+    const exchangeMovementIds = await Promise.all(
+      plan.exchangeMovements.map(async (movement, index) => {
+        const productSku = await ctx.db.get("productSku", movement.productSkuId);
+
+        if (!productSku) {
+          throw new Error("Replacement SKU not found.");
+        }
+
+        await ctx.db.patch("productSku", movement.productSkuId, {
+          inventoryCount: Math.max(productSku.inventoryCount - movement.quantity, 0),
+          quantityAvailable: Math.max(
+            productSku.quantityAvailable - movement.quantity,
+            0,
+          ),
+        });
+
+        const inventoryMovement = await recordInventoryMovementWithCtx(ctx, {
+          actorUserId: args.signedInAthenaUser?.id,
+          customerProfileId: order.customerProfileId,
+          movementType: "exchange",
+          notes: args.notes ?? order.orderNumber,
+          onlineOrderId: order._id,
+          organizationId: store?.organizationId,
+          productId: movement.productId,
+          productSkuId: movement.productSkuId,
+          quantityDelta: movement.quantityDelta,
+          reasonCode: movement.reasonCode,
+          sourceId: buildReturnExchangeReplacementSourceId(
+            order._id,
+            movement.productSkuId,
+            index,
+          ),
+          sourceType: "online_order_exchange",
+          storeId: order.storeId,
+        });
+
+        return inventoryMovement?._id ?? null;
+      }),
+    );
+
+    const paymentAllocation = plan.paymentAllocation
+      ? await recordPaymentAllocationWithCtx(ctx, {
+          actorUserId: args.signedInAthenaUser?.id,
+          allocationType: plan.paymentAllocation.allocationType,
+          amount: plan.paymentAllocation.amount,
+          collectedInStore: plan.paymentAllocation.direction === "in",
+          customerProfileId: order.customerProfileId,
+          direction: plan.paymentAllocation.direction,
+          method: getOnlineOrderPaymentMethodLabel(order),
+          notes: args.notes,
+          onlineOrderId: order._id,
+          organizationId: store?.organizationId,
+          storeId: order.storeId,
+          targetId: order._id,
+          targetType: "online_order",
+        })
+      : null;
+
+    const nextRefunds =
+      plan.refundAmount > 0
+        ? [
+            ...(order.refunds ?? []),
+            {
+              amount: plan.refundAmount,
+              date: now,
+              id: `return-exchange-${now}`,
+            },
+          ]
+        : order.refunds;
+
+    await ctx.db.patch("onlineOrder", order._id, {
+      refunds: nextRefunds,
+      updatedAt: now,
+    });
+
+    const inventoryMovementIds = [...returnMovementIds, ...exchangeMovementIds].filter(
+      Boolean,
+    );
+
+    await recordOperationalEventWithCtx(ctx, {
+      actorUserId: args.signedInAthenaUser?.id,
+      customerProfileId: order.customerProfileId,
+      eventType: plan.eventType,
+      inventoryMovementId: inventoryMovementIds[0] ?? undefined,
+      message: plan.eventMessage,
+      metadata: {
+        balanceDueAmount: plan.balanceDueAmount,
+        operationType: args.operationType,
+        replacementItems: replacementItems.map((item) => ({
+          productName: item.productName ?? item.skuLabel ?? null,
+          productSkuId: item.productSkuId,
+          quantity: item.quantity,
+        })),
+        refundAmount: plan.refundAmount,
+        returnItemIds: args.returnItemIds,
+      },
+      onlineOrderId: order._id,
+      organizationId: store?.organizationId,
+      paymentAllocationId: paymentAllocation?._id,
+      reason: plan.kind,
+      storeId: order.storeId,
+      subjectId: order._id,
+      subjectLabel: order.orderNumber,
+      subjectType: "online_order",
+    });
+
+    return {
+      balanceDueAmount: plan.balanceDueAmount,
+      message:
+        args.operationType === "exchange"
+          ? "Exchange recorded."
+          : "Return recorded.",
+      refundAmount: plan.refundAmount,
+      requiresApproval: false,
+      success: true,
+    };
   },
 });
 

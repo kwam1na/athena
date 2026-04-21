@@ -48,6 +48,7 @@ import { OrderStatus } from "./OrderStatus";
 import { EmailStatusView } from "./EmailStatusView";
 import { ComposedPageHeader } from "../common/PageHeader";
 import { useAuth } from "~/src/hooks/useAuth";
+import { ReturnExchangeView } from "./ReturnExchangeView";
 
 export function RefundOptions() {
   const { order } = useOnlineOrder();
@@ -597,7 +598,10 @@ export const OrderView = () => {
               </div>
             </div>
 
-            <RefundsView />
+            <div className="space-y-8">
+              <ReturnExchangeView />
+              <RefundsView />
+            </div>
           </div>
 
           <ActivityView />
