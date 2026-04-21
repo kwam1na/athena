@@ -42,6 +42,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`convex/storeFront/customerObservabilityTimeline.test.ts`](../../convex/storeFront/customerObservabilityTimeline.test.ts)
 - [`convex/storeFront/helperOrchestration.test.ts`](../../convex/storeFront/helperOrchestration.test.ts)
 - [`convex/storeFront/orderOperations.test.ts`](../../convex/storeFront/orderOperations.test.ts)
+- [`convex/storeFront/returnExchangeOperations.test.ts`](../../convex/storeFront/returnExchangeOperations.test.ts)
 - [`convex/storeFront/storefrontObservabilityReport.test.ts`](../../convex/storeFront/storefrontObservabilityReport.test.ts)
 - [`convex/storeFront/timeQueryRefactors.test.ts`](../../convex/storeFront/timeQueryRefactors.test.ts)
 
@@ -50,6 +51,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`src/components/bulk-operations/BulkOperationsPreview.test.tsx`](../../src/components/bulk-operations/BulkOperationsPreview.test.tsx)
 - [`src/components/operations/OperationsQueueView.test.tsx`](../../src/components/operations/OperationsQueueView.test.tsx)
 - [`src/components/orders/OrderStatus.test.tsx`](../../src/components/orders/OrderStatus.test.tsx)
+- [`src/components/orders/ReturnExchangeView.test.tsx`](../../src/components/orders/ReturnExchangeView.test.tsx)
 - [`src/components/orders/utils.test.ts`](../../src/components/orders/utils.test.ts)
 - [`src/components/pos/TotalsDisplay.test.tsx`](../../src/components/pos/TotalsDisplay.test.tsx)
 - [`src/components/services/ServiceAppointmentsView.test.tsx`](../../src/components/services/ServiceAppointmentsView.test.tsx)
