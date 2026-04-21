@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "../_generated/server";
 import { buildApprovalRequest } from "./approvalRequestHelpers";
+import { resolveRegisterSessionForInStoreCollectionWithCtx } from "../cashControls/paymentAllocationAttribution";
 import { normalizeLookupValue, normalizePhoneNumber } from "./helpers/linking";
 import { recordInventoryMovementWithCtx } from "./inventoryMovements";
 import { createOperationalWorkItemWithCtx } from "./operationalWorkItems";
@@ -229,6 +230,7 @@ export const createServiceIntake = mutation({
     priority: v.optional(
       v.union(v.literal("normal"), v.literal("high"), v.literal("urgent"))
     ),
+    registerSessionId: v.optional(v.id("registerSession")),
     scheduledAt: v.optional(v.number()),
     serviceTitle: v.string(),
     storeId: v.id("store"),
@@ -289,6 +291,15 @@ export const createServiceIntake = mutation({
     }
 
     const hasDeposit = args.depositAmount !== undefined && args.depositAmount > 0;
+    const collectedInStore = args.intakeChannel === "walk_in";
+    const resolvedRegisterSessionId = hasDeposit && collectedInStore
+      ? await resolveRegisterSessionForInStoreCollectionWithCtx(ctx, {
+          actorStaffProfileId: createdByStaffProfile?._id,
+          actorUserId: args.createdByUserId,
+          registerSessionId: args.registerSessionId,
+          storeId: args.storeId,
+        })
+      : undefined;
     const workItem = await createOperationalWorkItemWithCtx(ctx, {
       approvalState: hasDeposit ? "pending" : "not_required",
       assignedToStaffProfileId: args.assignedStaffProfileId,
@@ -340,6 +351,7 @@ export const createServiceIntake = mutation({
               organizationId: store.organizationId,
               reason: `Approve deposit for ${args.serviceTitle.trim()}`,
               requestType: "service_deposit_review",
+              registerSessionId: resolvedRegisterSessionId,
               requestedByStaffProfileId: createdByStaffProfile?._id,
               requestedByUserId: args.createdByUserId,
               storeId: args.storeId,
@@ -379,10 +391,11 @@ export const createServiceIntake = mutation({
             actorUserId: args.createdByUserId,
             allocationType: "service_deposit",
             amount: args.depositAmount!,
-            collectedInStore: true,
+            collectedInStore,
             customerProfileId: customerProfile._id,
             method: args.depositMethod,
             organizationId: store.organizationId,
+            registerSessionId: resolvedRegisterSessionId,
             storeId: args.storeId,
             targetId: serviceCase._id,
             targetType: "service_case",
@@ -404,6 +417,7 @@ export const createServiceIntake = mutation({
       },
       organizationId: store.organizationId,
       paymentAllocationId: paymentAllocation?._id,
+      registerSessionId: resolvedRegisterSessionId,
       storeId: args.storeId,
       subjectId: serviceCase._id,
       subjectLabel: workItem.title,

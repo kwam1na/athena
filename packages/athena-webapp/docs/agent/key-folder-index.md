@@ -16,7 +16,7 @@ This key-folder index highlights the main directories agents are likely to need 
 ## Backend and test surfaces
 
 - [`convex/serviceOps`](../../convex/serviceOps) — Service catalog, appointment, and service-case workflows layered on operational work items. Currently 6 file(s); key children: appointments.ts, catalog.ts, catalogAppointments.test.ts, moduleWiring.test.ts, serviceCases.test.ts.
-- [`convex`](../../convex) — Convex functions, HTTP composition, schemas, and backend tests. Currently 274 file(s); key children: README.md, _generated, app.ts, auth.config.js, auth.ts.
+- [`convex`](../../convex) — Convex functions, HTTP composition, schemas, and backend tests. Currently 276 file(s); key children: README.md, _generated, app.ts, auth.config.js, auth.ts.
 - [`src/tests`](../../src/tests) — Focused browser-facing regression tests. Currently 6 file(s); key children: README.md, SUMMARY.md, pos.
 - [`src/test`](../../src/test) — Package test harness helpers and setup. Currently 1 file(s); key children: setup.ts.
 
