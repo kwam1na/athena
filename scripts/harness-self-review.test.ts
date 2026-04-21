@@ -362,6 +362,29 @@ describe("runHarnessSelfReview", () => {
     expect(result.markdown).toContain("BLOCKED");
   });
 
+  it("allows deleted unmapped files when the same package still has direct validation coverage", async () => {
+    const rootDir = await createFixtureRepo();
+
+    const result = await runHarnessSelfReview(rootDir, {
+      baseRef: "origin/main",
+      getChangedFiles: async () => ({
+        baseFiles: [
+          "packages/storefront-webapp/src/routes/index.tsx",
+          "packages/storefront-webapp/src/client.tsx",
+        ],
+        trackedFiles: [],
+        untrackedFiles: [],
+      }),
+      runHarnessCheck: async () => {},
+    });
+
+    expect(result.blockers).toEqual([]);
+    expect(result.markdown).not.toContain(
+      "Harness review coverage gap: packages/storefront-webapp/src/client.tsx"
+    );
+    expect(result.markdown).toContain("READY");
+  });
+
   it("lists available runtime behavior scenarios for touched packages", async () => {
     const rootDir = await createFixtureRepo();
 
