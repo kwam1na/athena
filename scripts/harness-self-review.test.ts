@@ -429,6 +429,29 @@ describe("runHarnessSelfReview", () => {
     expect(result.markdown).toContain("## Runtime behavior scenarios");
   });
 
+  it("selects repo-level harness validations for harness-owned repo files", async () => {
+    const rootDir = await createFixtureRepo();
+
+    const result = await runHarnessSelfReview(rootDir, {
+      baseRef: "origin/main",
+      getChangedFiles: async () => ({
+        baseFiles: ["scripts/harness-review.ts"],
+        trackedFiles: [],
+        untrackedFiles: [],
+      }),
+      runHarnessCheck: async () => {},
+    });
+
+    expect(result.blockers).toEqual([]);
+    expect(result.selectedValidations).toContain("bun run harness:test");
+    expect(result.selectedValidations).toContain(
+      "bun run harness:inferential-review"
+    );
+    expect(result.markdown).toContain("## Repo-owned validation surfaces");
+    expect(result.markdown).toContain("scripts/harness-review.ts");
+    expect(result.markdown).not.toContain("## Outside target-app surfaces\n- `scripts/harness-review.ts`");
+  });
+
   it.each([
     [".worktrees/codex-v26-208/.git", ".worktrees"],
     ["worktrees/codex-v26-208/.git", "worktrees"],

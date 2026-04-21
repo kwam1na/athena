@@ -2,6 +2,7 @@ import { HARNESS_APP_REGISTRY } from "./harness-app-registry";
 import { validateHarnessDocs } from "./harness-check";
 import { writeGeneratedHarnessDocs } from "./harness-generate";
 import { runGraphifyCheck } from "./graphify-check";
+import { collectHarnessRepoValidationSelection } from "./harness-repo-validation";
 import { runHarnessSelfReview as runStructuredHarnessSelfReview } from "./harness-self-review";
 import { runHarnessReview } from "./harness-review";
 
@@ -43,18 +44,6 @@ type PrePushReviewOptions = {
   validateHarnessDocs?: (rootDir: string) => Promise<string[]>;
   logger?: PrePushReviewLogger;
 };
-
-const HARNESS_IMPLEMENTATION_CHANGE_PATTERNS = [
-  /^scripts\//,
-  /^packages\/[^/]+\/docs\/agent\//,
-  /^packages\/[^/]+\/AGENTS\.md$/,
-  /^packages\/AGENTS\.md$/,
-  /^README\.md$/,
-  /^package\.json$/,
-  /^\.github\/workflows\/athena-pr-tests\.yml$/,
-  /^\.husky\/pre-commit$/,
-  /^\.husky\/pre-push$/,
-];
 
 export async function getChangedFilesVsOriginMain(
   rootDir: string,
@@ -143,12 +132,6 @@ export async function runHarnessInferentialReview(rootDir: string): Promise<void
   }
 }
 
-function shouldRunHarnessImplementationTests(changedFiles: string[]): boolean {
-  return changedFiles.some((filePath) =>
-    HARNESS_IMPLEMENTATION_CHANGE_PATTERNS.some((pattern) => pattern.test(filePath))
-  );
-}
-
 function collectRepairableHarnessDocErrors(errors: string[]) {
   const repairableErrors: string[] = [];
 
@@ -198,8 +181,6 @@ export async function runPrePushReview(
     options.runHarnessGenerate ?? runHarnessGenerate;
   const runInferentialReview =
     options.runHarnessInferentialReview ?? runHarnessInferentialReview;
-  const runHarnessTests =
-    options.runHarnessImplementationTests ?? runHarnessImplementationTests;
   const runSelfReview = options.runHarnessSelfReview ?? runHarnessSelfReview;
   const review = options.runHarnessReview ?? runHarnessReview;
   const validateHarnessDocsStep =
@@ -263,12 +244,12 @@ export async function runPrePushReview(
   await runArchitecture(rootDir);
 
   const changedFiles = await loadChangedFiles();
+  const repoValidation = collectHarnessRepoValidationSelection(changedFiles);
 
-  if (shouldRunHarnessImplementationTests(changedFiles)) {
+  if (repoValidation.matchedFiles.length > 0) {
     logger.log(
-      "[pre-push] Step 4/6: harness:test (harness-owned changes detected)"
+      "[pre-push] Step 4/6: harness:test skipped (repo harness validations run inside harness:review)"
     );
-    await runHarnessTests(rootDir);
   } else {
     logger.log("[pre-push] Step 4/6: harness:test skipped (no harness-owned changes)");
   }
@@ -294,8 +275,14 @@ export async function runPrePushReview(
     });
   }
 
-  logger.log("[pre-push] Step 6/6: harness:inferential-review");
-  await runInferentialReview(rootDir);
+  if (repoValidation.matchedFiles.length > 0) {
+    logger.log(
+      "[pre-push] Step 6/6: harness:inferential-review skipped (repo harness validations already ran in harness:review)"
+    );
+  } else {
+    logger.log("[pre-push] Step 6/6: harness:inferential-review");
+    await runInferentialReview(rootDir);
+  }
 
   logger.log("\n[pre-push] All checks passed.");
 }

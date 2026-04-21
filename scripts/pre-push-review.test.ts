@@ -101,7 +101,7 @@ describe("pre-push review wiring", () => {
     ]);
   });
 
-  it("runs harness implementation tests when harness-owned files change", async () => {
+  it("lets harness review cover repo harness validations when harness-owned files change", async () => {
     const steps: string[] = [];
 
     await prePushReview.runPrePushReview(ROOT_DIR, {
@@ -141,10 +141,8 @@ describe("pre-push review wiring", () => {
       "harness:self-review:origin/main",
       "architecture:check",
       "changed-files",
-      "harness:test",
       "harness:review:origin/main",
       "files:scripts/harness-check.test.ts",
-      "harness:inferential-review",
     ]);
   });
 
