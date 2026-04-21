@@ -51,6 +51,10 @@ describe("stock ops purchase orders", () => {
     expect(source).toContain(
       "export const updatePurchaseOrderStatus = mutation({"
     );
+    expect(source).toContain("requireStoreFullAdminAccess(ctx, args.storeId);");
+    expect(source).toContain(
+      "requireStoreFullAdminAccess(ctx, purchaseOrder.storeId);"
+    );
     expect(source).toContain("createOperationalWorkItemWithCtx");
     expect(source).toContain("recordOperationalEventWithCtx");
     expect(source).toContain("updateOperationalWorkItemStatus");

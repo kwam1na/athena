@@ -16,6 +16,7 @@ describe("stock ops vendors", () => {
   it("guards duplicate vendors with the store lookup index", () => {
     const source = getSource("./vendors.ts");
 
+    expect(source).toContain("requireStoreFullAdminAccess(ctx, args.storeId);");
     expect(source).toContain("export const createVendor = mutation({");
     expect(source).toContain('.withIndex("by_storeId_lookupKey"');
     expect(source).toContain(

@@ -3,6 +3,7 @@ import { mutation, query } from "../_generated/server";
 import { v } from "convex/values";
 import { createOperationalWorkItemWithCtx } from "../operations/operationalWorkItems";
 import { recordOperationalEventWithCtx } from "../operations/operationalEvents";
+import { requireStoreFullAdminAccess } from "./access";
 
 const MAX_LINE_ITEMS = 200;
 const MAX_PURCHASE_ORDERS = 200;
@@ -100,6 +101,8 @@ export const listPurchaseOrders = query({
     ),
   },
   handler: async (ctx, args) => {
+    await requireStoreFullAdminAccess(ctx, args.storeId);
+
     const purchaseOrders = args.status
       ? await ctx.db
           .query("purchaseOrder")
@@ -125,6 +128,8 @@ export const getPurchaseOrder = query({
     if (!purchaseOrder) {
       return null;
     }
+
+    await requireStoreFullAdminAccess(ctx, purchaseOrder.storeId);
 
     const [lineItems, vendor] = await Promise.all([
       ctx.db
