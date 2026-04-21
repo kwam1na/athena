@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "../_generated/server";
-import { buildApprovalRequest } from "./approvalRequests";
+import { buildApprovalRequest } from "./approvalRequestHelpers";
 import { normalizeLookupValue, normalizePhoneNumber } from "./helpers/linking";
 import { recordInventoryMovementWithCtx } from "./inventoryMovements";
 import { createOperationalWorkItemWithCtx } from "./operationalWorkItems";

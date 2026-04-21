@@ -38,6 +38,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`convex/serviceOps/catalogAppointments.test.ts`](../../convex/serviceOps/catalogAppointments.test.ts)
 - [`convex/serviceOps/moduleWiring.test.ts`](../../convex/serviceOps/moduleWiring.test.ts)
 - [`convex/serviceOps/serviceCases.test.ts`](../../convex/serviceOps/serviceCases.test.ts)
+- [`convex/stockOps/adjustments.test.ts`](../../convex/stockOps/adjustments.test.ts)
 - [`convex/stockOps/purchaseOrders.test.ts`](../../convex/stockOps/purchaseOrders.test.ts)
 - [`convex/stockOps/receiving.test.ts`](../../convex/stockOps/receiving.test.ts)
 - [`convex/stockOps/vendors.test.ts`](../../convex/stockOps/vendors.test.ts)
@@ -55,6 +56,7 @@ This index enumerates the current automated test files and ties them back to the
 
 - [`src/components/bulk-operations/BulkOperationsPreview.test.tsx`](../../src/components/bulk-operations/BulkOperationsPreview.test.tsx)
 - [`src/components/operations/OperationsQueueView.test.tsx`](../../src/components/operations/OperationsQueueView.test.tsx)
+- [`src/components/operations/StockAdjustmentWorkspace.test.tsx`](../../src/components/operations/StockAdjustmentWorkspace.test.tsx)
 - [`src/components/orders/OrderStatus.test.tsx`](../../src/components/orders/OrderStatus.test.tsx)
 - [`src/components/orders/ReturnExchangeView.test.tsx`](../../src/components/orders/ReturnExchangeView.test.tsx)
 - [`src/components/orders/utils.test.ts`](../../src/components/orders/utils.test.ts)

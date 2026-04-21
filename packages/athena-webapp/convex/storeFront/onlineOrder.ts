@@ -16,7 +16,7 @@ import {
 import { internal } from "../_generated/api";
 import { Doc, Id } from "../_generated/dataModel";
 import { getDiscountValue } from "../inventory/utils";
-import { buildApprovalRequest } from "../operations/approvalRequests";
+import { buildApprovalRequest } from "../operations/approvalRequestHelpers";
 import { recordInventoryMovementWithCtx } from "../operations/inventoryMovements";
 import { recordOperationalEventWithCtx } from "../operations/operationalEvents";
 import { recordPaymentAllocationWithCtx } from "../operations/paymentAllocations";
