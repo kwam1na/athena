@@ -199,6 +199,7 @@ import type * as storeFront_customerBehaviorTimeline from "../storeFront/custome
 import type * as storeFront_customerObservabilityTimelineData from "../storeFront/customerObservabilityTimelineData.js";
 import type * as storeFront_guest from "../storeFront/guest.js";
 import type * as storeFront_helpers_bag from "../storeFront/helpers/bag.js";
+import type * as storeFront_helpers_customerEngagementEvents from "../storeFront/helpers/customerEngagementEvents.js";
 import type * as storeFront_helpers_onlineOrder from "../storeFront/helpers/onlineOrder.js";
 import type * as storeFront_helpers_orderOperations from "../storeFront/helpers/orderOperations.js";
 import type * as storeFront_helpers_orderUpdateEmails from "../storeFront/helpers/orderUpdateEmails.js";
@@ -420,6 +421,7 @@ declare const fullApi: ApiFromModules<{
   "storeFront/customerObservabilityTimelineData": typeof storeFront_customerObservabilityTimelineData;
   "storeFront/guest": typeof storeFront_guest;
   "storeFront/helpers/bag": typeof storeFront_helpers_bag;
+  "storeFront/helpers/customerEngagementEvents": typeof storeFront_helpers_customerEngagementEvents;
   "storeFront/helpers/onlineOrder": typeof storeFront_helpers_onlineOrder;
   "storeFront/helpers/orderOperations": typeof storeFront_helpers_orderOperations;
   "storeFront/helpers/orderUpdateEmails": typeof storeFront_helpers_orderUpdateEmails;

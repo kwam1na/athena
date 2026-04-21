@@ -108,6 +108,7 @@ export const recordOperationalEvent = internalMutation({
     eventType: v.string(),
     subjectType: v.string(),
     subjectId: v.string(),
+    subjectLabel: v.optional(v.string()),
     message: v.optional(v.string()),
     reason: v.optional(v.string()),
     metadata: v.optional(v.record(v.string(), v.any())),

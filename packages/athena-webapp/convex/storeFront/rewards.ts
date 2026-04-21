@@ -2,6 +2,11 @@ import { v } from "convex/values";
 import { internalMutation, mutation, query } from "../_generated/server";
 import { Id } from "../_generated/dataModel";
 import { api } from "../_generated/api";
+import { recordStoreFrontCustomerMilestone } from "./helpers/customerEngagementEvents";
+
+function formatPointsLabel(points: number) {
+  return `${points} points`;
+}
 
 // Get user's current points
 export const getUserPoints = query({
@@ -88,7 +93,7 @@ export const awardOrderPoints = internalMutation({
     }
 
     // Record the transaction
-    await ctx.db.insert("rewardTransactions", {
+    const rewardTransactionId = await ctx.db.insert("rewardTransactions", {
       storeFrontUserId: order.storeFrontUserId as Id<"storeFrontUser">,
       storeId: order.storeId,
       points: args.points,
@@ -123,6 +128,22 @@ export const awardOrderPoints = internalMutation({
         updatedAt: Date.now(),
       });
     }
+
+    await recordStoreFrontCustomerMilestone(ctx, {
+      eventType: "loyalty_points_awarded",
+      message: `Awarded ${formatPointsLabel(args.points)} after order ${order.orderNumber}.`,
+      metadata: {
+        orderId: args.orderId,
+        orderNumber: order.orderNumber,
+        points: args.points,
+        reason: "order_placed",
+      },
+      storeFrontUserId: order.storeFrontUserId as Id<"storeFrontUser">,
+      storeId: order.storeId,
+      subjectId: rewardTransactionId,
+      subjectLabel: formatPointsLabel(args.points),
+      subjectType: "loyalty",
+    });
 
     return { success: true };
   },
@@ -162,7 +183,7 @@ export const redeemPoints = mutation({
     }
 
     // Record the redemption transaction
-    await ctx.db.insert("rewardTransactions", {
+    const rewardTransactionId = await ctx.db.insert("rewardTransactions", {
       storeFrontUserId: args.storeFrontUserId,
       storeId: args.storeId,
       points: -tier.pointsRequired, // Negative points for redemption
@@ -173,6 +194,23 @@ export const redeemPoints = mutation({
     await ctx.db.patch(pointsRecord._id, {
       points: pointsRecord.points - tier.pointsRequired,
       updatedAt: Date.now(),
+    });
+
+    await recordStoreFrontCustomerMilestone(ctx, {
+      eventType: "reward_redeemed",
+      message: `Redeemed ${tier.pointsRequired} points for ${tier.name}.`,
+      metadata: {
+        discountType: tier.discountType,
+        discountValue: tier.discountValue,
+        points: tier.pointsRequired,
+        rewardTierId: args.rewardTierId,
+        rewardTierName: tier.name,
+      },
+      storeFrontUserId: args.storeFrontUserId,
+      storeId: args.storeId,
+      subjectId: rewardTransactionId,
+      subjectLabel: tier.name,
+      subjectType: "reward",
     });
 
     // Return the discount information for application
@@ -284,7 +322,7 @@ export const awardPointsForPastOrder = mutation({
     const pointsToAward = Math.floor(order.amount / 1000);
 
     // Record the transaction
-    await ctx.db.insert("rewardTransactions", {
+    const rewardTransactionId = await ctx.db.insert("rewardTransactions", {
       storeFrontUserId: args.storeFrontUserId,
       storeId: order.storeId,
       points: pointsToAward,
@@ -316,6 +354,22 @@ export const awardPointsForPastOrder = mutation({
         updatedAt: Date.now(),
       });
     }
+
+    await recordStoreFrontCustomerMilestone(ctx, {
+      eventType: "loyalty_points_awarded",
+      message: `Awarded ${formatPointsLabel(pointsToAward)} after order ${order.orderNumber}.`,
+      metadata: {
+        orderId: args.orderId,
+        orderNumber: order.orderNumber,
+        points: pointsToAward,
+        reason: "past_order_points",
+      },
+      storeFrontUserId: args.storeFrontUserId,
+      storeId: order.storeId,
+      subjectId: rewardTransactionId,
+      subjectLabel: formatPointsLabel(pointsToAward),
+      subjectType: "loyalty",
+    });
 
     return {
       success: true,
@@ -439,9 +493,28 @@ export const awardPointsForGuestOrders = mutation({
     // Batch insert all new transactions
     if (transactions.length > 0) {
       await Promise.all(
-        transactions.map((transaction) =>
-          ctx.db.insert("rewardTransactions", transaction)
-        )
+        transactions.map(async (transaction) => {
+          const rewardTransactionId = await ctx.db.insert(
+            "rewardTransactions",
+            transaction,
+          );
+
+          await recordStoreFrontCustomerMilestone(ctx, {
+            eventType: "loyalty_points_awarded",
+            message: `Awarded ${formatPointsLabel(transaction.points)} after order ${transaction.orderNumber}.`,
+            metadata: {
+              orderId: transaction.orderId,
+              orderNumber: transaction.orderNumber,
+              points: transaction.points,
+              reason: transaction.reason,
+            },
+            storeFrontUserId: transaction.storeFrontUserId,
+            storeId: transaction.storeId,
+            subjectId: rewardTransactionId,
+            subjectLabel: formatPointsLabel(transaction.points),
+            subjectType: "loyalty",
+          });
+        }),
       );
     }
 

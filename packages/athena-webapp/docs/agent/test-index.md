@@ -41,6 +41,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`convex/storeFront/customerBehaviorTimeline.test.ts`](../../convex/storeFront/customerBehaviorTimeline.test.ts)
 - [`convex/storeFront/customerObservabilityTimeline.test.ts`](../../convex/storeFront/customerObservabilityTimeline.test.ts)
 - [`convex/storeFront/helperOrchestration.test.ts`](../../convex/storeFront/helperOrchestration.test.ts)
+- [`convex/storeFront/helpers/customerEngagementEvents.test.ts`](../../convex/storeFront/helpers/customerEngagementEvents.test.ts)
 - [`convex/storeFront/orderOperations.test.ts`](../../convex/storeFront/orderOperations.test.ts)
 - [`convex/storeFront/returnExchangeOperations.test.ts`](../../convex/storeFront/returnExchangeOperations.test.ts)
 - [`convex/storeFront/storefrontObservabilityReport.test.ts`](../../convex/storeFront/storefrontObservabilityReport.test.ts)

@@ -19,6 +19,7 @@ import {
 } from "../mailersend";
 import { currencyFormatter, getProductName } from "../utils";
 import { getProductDiscountValue } from "../inventory/utils";
+import { recordStoreFrontCustomerMilestone } from "./helpers/customerEngagementEvents";
 
 const entity = "offer" as const;
 const MAX_OFFERS = 500;
@@ -132,6 +133,24 @@ const createOffer = async (
   });
 
   await updateStoreFrontActorEmail(ctx, args.storeFrontUserId, args.email);
+
+  const promoCode = await ctx.db.get("promoCode", args.promoCodeId);
+  const subjectLabel = promoCode?.code ?? args.email;
+
+  await recordStoreFrontCustomerMilestone(ctx, {
+    eventType: "follow_up_offer_requested",
+    message: `Requested ${subjectLabel} follow-up offer.`,
+    metadata: {
+      email: args.email,
+      promoCodeId: args.promoCodeId,
+      promoCode: promoCode?.code ?? null,
+    },
+    storeFrontUserId: args.storeFrontUserId,
+    storeId: args.storeId,
+    subjectId: offerId,
+    subjectLabel,
+    subjectType: "follow_up",
+  });
 
   return {
     success: true,
@@ -486,6 +505,11 @@ export const updateStatus = internalMutation({
     ),
   },
   handler: async (ctx, args) => {
+    const existingOffer = await ctx.db.get("offer", args.id);
+    if (!existingOffer) {
+      return;
+    }
+
     let update: any = {};
 
     if (args.status) {
@@ -501,13 +525,69 @@ export const updateStatus = internalMutation({
     }
 
     if (args.activity) {
-      const offer = await ctx.db.get("offer", args.id);
-      if (offer) {
-        update.activity = [...(offer.activity || []), args.activity];
-      }
+      update.activity = [...(existingOffer.activity || []), args.activity];
     }
 
     await ctx.db.patch("offer", args.id, update);
+
+    const promoCode = await ctx.db.get("promoCode", existingOffer.promoCodeId);
+    const subjectLabel = promoCode?.code ?? existingOffer.email;
+
+    if (args.status === "sent") {
+      await recordStoreFrontCustomerMilestone(ctx, {
+        eventType: "follow_up_offer_sent",
+        message: `Sent ${subjectLabel} follow-up offer email.`,
+        metadata: {
+          email: existingOffer.email,
+          promoCode: promoCode?.code ?? null,
+          promoCodeId: existingOffer.promoCodeId,
+          sentAt: args.sentAt ?? null,
+          status: args.status,
+        },
+        storeFrontUserId: existingOffer.storeFrontUserId,
+        storeId: existingOffer.storeId,
+        subjectId: existingOffer._id,
+        subjectLabel,
+        subjectType: "follow_up",
+      });
+    }
+
+    if (args.status === "reminded") {
+      await recordStoreFrontCustomerMilestone(ctx, {
+        eventType: "follow_up_offer_reminded",
+        message: `Sent ${subjectLabel} follow-up reminder email.`,
+        metadata: {
+          activity: args.activity?.action ?? null,
+          email: existingOffer.email,
+          promoCode: promoCode?.code ?? null,
+          promoCodeId: existingOffer.promoCodeId,
+          status: args.status,
+        },
+        storeFrontUserId: existingOffer.storeFrontUserId,
+        storeId: existingOffer.storeId,
+        subjectId: existingOffer._id,
+        subjectLabel,
+        subjectType: "follow_up",
+      });
+    }
+
+    if (args.status === "redeemed") {
+      await recordStoreFrontCustomerMilestone(ctx, {
+        eventType: "follow_up_offer_redeemed",
+        message: `Redeemed ${subjectLabel} follow-up offer.`,
+        metadata: {
+          email: existingOffer.email,
+          promoCode: promoCode?.code ?? null,
+          promoCodeId: existingOffer.promoCodeId,
+          status: args.status,
+        },
+        storeFrontUserId: existingOffer.storeFrontUserId,
+        storeId: existingOffer.storeId,
+        subjectId: existingOffer._id,
+        subjectLabel,
+        subjectType: "follow_up",
+      });
+    }
   },
 });
 
