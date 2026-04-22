@@ -606,6 +606,16 @@ async function createFixtureRepo() {
     rootDir
   );
   await write(
+    "packages/athena-webapp/src/components/pos/register/POSRegisterView.tsx",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/src/components/pos/register/RegisterDrawerGate.tsx",
+    "export {};\n",
+    rootDir
+  );
+  await write(
     "packages/athena-webapp/src/components/pos/session/HeldSessionsList.tsx",
     "export {};\n",
     rootDir
@@ -653,6 +663,11 @@ async function createFixtureRepo() {
   await write("packages/athena-webapp/src/hooks/useAuth.ts", "export {};\n", rootDir);
   await write("packages/athena-webapp/src/contexts/AuthContext.tsx", "export {};\n", rootDir);
   await write("packages/athena-webapp/src/lib/session.ts", "export {};\n", rootDir);
+  await write(
+    "packages/athena-webapp/src/lib/pos/presentation/register/useRegisterViewModel.ts",
+    "export {};\n",
+    rootDir
+  );
   await write(
     "packages/athena-webapp/shared/serviceIntake.ts",
     "export {};\n",

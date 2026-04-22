@@ -137,6 +137,63 @@ describe("RegisterSessionViewContent", () => {
     expect(screen.getByRole("link", { name: "View trace" })).toBeInTheDocument();
   });
 
+  it("shows the POS-opened drawer lifecycle in the register session detail", () => {
+    render(
+      <RegisterSessionViewContent
+        actorUserId="user-1"
+        currency="USD"
+        isLoading={false}
+        onRecordDeposit={vi.fn()}
+        registerSessionSnapshot={{
+          closeoutReview: null,
+          deposits: [
+            {
+              _id: "deposit-1",
+              amount: 1200,
+              notes: "First safe drop after POS drawer open",
+              recordedAt: new Date("2026-04-22T10:05:00.000Z").getTime(),
+              recordedByStaffName: "Ama Mensah",
+              reference: "SAFE-120",
+              registerSessionId: "session-1",
+            },
+          ],
+          registerSession: {
+            ...baseSnapshot.registerSession,
+            status: "active",
+            totalDeposited: 1200,
+            variance: 0,
+            workflowTraceId: "register_session:drawer-pos-open",
+          },
+          timeline: [
+            {
+              _id: "event-1",
+              actorStaffName: "Ama Mensah",
+              createdAt: new Date("2026-04-22T08:45:00.000Z").getTime(),
+              eventType: "register_session_opened",
+              message: "Opened drawer from POS with opening float of 5000.",
+              reason: "Morning float ready",
+            },
+            {
+              _id: "event-2",
+              actorStaffName: "Ama Mensah",
+              createdAt: new Date("2026-04-22T10:05:00.000Z").getTime(),
+              eventType: "register_session_cash_deposit_recorded",
+              message: "Recorded cash deposit of 1200.",
+              reason: "First safe drop after POS drawer open",
+            },
+          ],
+        }}
+        storeId="store-1"
+      />,
+    );
+
+    expect(screen.getAllByText("Register 3").length).toBeGreaterThan(0);
+    expect(screen.getByText("Opened drawer from POS with opening float of 5000.")).toBeInTheDocument();
+    expect(screen.getAllByText("First safe drop after POS drawer open").length).toBeGreaterThan(0);
+    expect(screen.getByText("SAFE-120")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "View trace" })).toBeInTheDocument();
+  });
+
   it("submits a deposit with store, session, and actor context", async () => {
     vi.spyOn(Date, "now").mockReturnValue(1000);
 

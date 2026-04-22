@@ -336,10 +336,10 @@ export const HARNESS_APP_REGISTRY = [
         ],
         behaviorScenarios: ["athena-admin-shell-boot"],
         note:
-          "Use this when register-session, deposit, closeout, dashboard, operations-queue approval, or cash-controls route wiring changes. Start `bunx convex dev` from `packages/athena-webapp` before validation when generated client refs or new Convex function exports changed.",
+          "Use this when register-session, deposit, closeout, dashboard, operations-queue approval, or cash-controls route wiring changes. This is the confirmation slice for drawers opened from POS showing up in the dashboard and register-session detail views. Start `bunx convex dev` from `packages/athena-webapp` before validation when generated client refs or new Convex function exports changed.",
       },
       {
-        title: "Workflow trace foundation and POS trace-link edits",
+        title: "Workflow trace foundation, POS drawer gate, and trace-link edits",
         touchedPaths: [
           "convex/workflowTraces",
           "convex/schemas/observability",
@@ -356,8 +356,10 @@ export const HARNESS_APP_REGISTRY = [
           "shared/workflowTrace.ts",
           "src/components/traces",
           "src/components/pos/SessionManager.tsx",
+          "src/components/pos/register",
           "src/components/pos/session/HeldSessionsList.tsx",
           "src/components/pos/transactions",
+          "src/lib/pos/presentation/register",
           "src/components/cash-controls/CashControlsDashboard.tsx",
           "src/components/cash-controls/RegisterSessionView.tsx",
           "src/components/cash-controls/RegisterCloseoutView.tsx",
@@ -367,7 +369,7 @@ export const HARNESS_APP_REGISTRY = [
           {
             kind: "raw",
             command:
-              "bun run --filter '@athena/webapp' test -- convex/workflowTraces/presentation.test.ts convex/workflowTraces/queryUsage.test.ts convex/workflowTraces/schemaIndexes.test.ts convex/workflowTraces/adapters/posSale.test.ts convex/workflowTraces/adapters/posSession.test.ts convex/workflowTraces/adapters/registerSession.test.ts convex/pos/application/completeTransaction.test.ts convex/pos/application/getTransactions.test.ts convex/pos/application/posSessionTracing.test.ts convex/inventory/posSessions.trace.test.ts convex/operations/registerSessionTracing.test.ts convex/operations/registerSessions.trace.test.ts convex/cashControls/registerSessionTraceLifecycle.test.ts src/components/traces/WorkflowTraceView.test.tsx 'src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/traces/$traceId.test.tsx' src/components/pos/transactions/WorkflowTraceLink.test.tsx src/components/pos/transactions/transactionColumns.test.tsx src/components/pos/transactions/TransactionView.test.tsx src/components/pos/transactions/TransactionsView.test.tsx src/components/pos/SessionManager.test.tsx src/components/pos/session/HeldSessionsList.test.tsx src/components/cash-controls/CashControlsDashboard.test.tsx src/components/cash-controls/RegisterSessionView.test.tsx src/components/cash-controls/RegisterCloseoutView.test.tsx src/lib/traces/createWorkflowTraceId.test.ts",
+              "bun run --filter '@athena/webapp' test -- convex/workflowTraces/presentation.test.ts convex/workflowTraces/queryUsage.test.ts convex/workflowTraces/schemaIndexes.test.ts convex/workflowTraces/adapters/posSale.test.ts convex/workflowTraces/adapters/posSession.test.ts convex/workflowTraces/adapters/registerSession.test.ts convex/pos/application/completeTransaction.test.ts convex/pos/application/getTransactions.test.ts convex/pos/application/posSessionTracing.test.ts convex/inventory/posSessions.trace.test.ts convex/operations/registerSessionTracing.test.ts convex/operations/registerSessions.trace.test.ts convex/cashControls/registerSessionTraceLifecycle.test.ts src/components/traces/WorkflowTraceView.test.tsx 'src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/traces/$traceId.test.tsx' src/components/pos/transactions/WorkflowTraceLink.test.tsx src/components/pos/transactions/transactionColumns.test.tsx src/components/pos/transactions/TransactionView.test.tsx src/components/pos/transactions/TransactionsView.test.tsx src/components/pos/SessionManager.test.tsx src/components/pos/register/POSRegisterView.test.tsx src/components/pos/session/HeldSessionsList.test.tsx src/lib/pos/presentation/register/useRegisterViewModel.test.ts src/components/cash-controls/CashControlsDashboard.test.tsx src/components/cash-controls/RegisterSessionView.test.tsx src/components/cash-controls/RegisterCloseoutView.test.tsx src/lib/traces/createWorkflowTraceId.test.ts",
           },
           { kind: "script", script: "audit:convex" },
           { kind: "script", script: "lint:convex:changed" },
@@ -383,7 +385,7 @@ export const HARNESS_APP_REGISTRY = [
           "athena-convex-storefront-failure-visibility",
         ],
         note:
-          "Use this when the shared workflow-trace contract, the `pos_sale` / `pos_session` / `register_session` trace writers, the trace route/view, or POS register, transaction, and cash-controls trace entry points change. It exercises the trace schema and presentation contract, the session/register trace writers, the shared trace route, and the operator-facing POS link surfaces before broader package validation.",
+          "Use this when the shared workflow-trace contract, the POS register bootstrap or drawer gate, the `pos_sale` / `pos_session` / `register_session` trace writers, the trace route/view, or POS register, transaction, and cash-controls trace entry points change. It exercises the trace schema and presentation contract, the session/register trace writers, the drawer-open bootstrap handoff, the shared trace route, and the operator-facing POS and cash-controls surfaces before broader package validation.",
       },
       {
         title: "Shared-lib or utility edits",
