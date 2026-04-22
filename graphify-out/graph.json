@@ -503,7 +503,7 @@
       "relation": "calls",
       "source": "cashcontrolsdashboard_formatcurrency",
       "source_file": "packages/athena-webapp/src/components/cash-controls/CashControlsDashboard.tsx",
-      "source_location": "L158",
+      "source_location": "L159",
       "target": "cashcontrolsdashboard_summarystrip",
       "weight": 1
     },
@@ -15515,7 +15515,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_cash_controls_cashcontrolsdashboard_tsx",
       "source_file": "packages/athena-webapp/src/components/cash-controls/CashControlsDashboard.tsx",
-      "source_location": "L95",
+      "source_location": "L96",
       "target": "cashcontrolsdashboard_formatcurrency",
       "weight": 1
     },
@@ -15527,7 +15527,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_cash_controls_cashcontrolsdashboard_tsx",
       "source_file": "packages/athena-webapp/src/components/cash-controls/CashControlsDashboard.tsx",
-      "source_location": "L114",
+      "source_location": "L115",
       "target": "cashcontrolsdashboard_formatregistername",
       "weight": 1
     },
@@ -15539,7 +15539,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_cash_controls_cashcontrolsdashboard_tsx",
       "source_file": "packages/athena-webapp/src/components/cash-controls/CashControlsDashboard.tsx",
-      "source_location": "L103",
+      "source_location": "L104",
       "target": "cashcontrolsdashboard_formatstatuslabel",
       "weight": 1
     },
@@ -15551,7 +15551,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_cash_controls_cashcontrolsdashboard_tsx",
       "source_file": "packages/athena-webapp/src/components/cash-controls/CashControlsDashboard.tsx",
-      "source_location": "L107",
+      "source_location": "L108",
       "target": "cashcontrolsdashboard_formattimestamp",
       "weight": 1
     },
@@ -15563,7 +15563,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_cash_controls_cashcontrolsdashboard_tsx",
       "source_file": "packages/athena-webapp/src/components/cash-controls/CashControlsDashboard.tsx",
-      "source_location": "L119",
+      "source_location": "L120",
       "target": "cashcontrolsdashboard_getvariancetone",
       "weight": 1
     },
@@ -15575,7 +15575,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_cash_controls_cashcontrolsdashboard_tsx",
       "source_file": "packages/athena-webapp/src/components/cash-controls/CashControlsDashboard.tsx",
-      "source_location": "L127",
+      "source_location": "L128",
       "target": "cashcontrolsdashboard_summarystrip",
       "weight": 1
     },
@@ -15587,7 +15587,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_cash_controls_registercloseoutview_tsx",
       "source_file": "packages/athena-webapp/src/components/cash-controls/RegisterCloseoutView.tsx",
-      "source_location": "L65",
+      "source_location": "L66",
       "target": "registercloseoutview_formatsessionname",
       "weight": 1
     },
@@ -15599,7 +15599,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_cash_controls_registercloseoutview_tsx",
       "source_file": "packages/athena-webapp/src/components/cash-controls/RegisterCloseoutView.tsx",
-      "source_location": "L69",
+      "source_location": "L70",
       "target": "registercloseoutview_formatstatuslabel",
       "weight": 1
     },
@@ -15611,7 +15611,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_cash_controls_registercloseoutview_tsx",
       "source_file": "packages/athena-webapp/src/components/cash-controls/RegisterCloseoutView.tsx",
-      "source_location": "L234",
+      "source_location": "L235",
       "target": "registercloseoutview_formattimestamp",
       "weight": 1
     },
@@ -15623,7 +15623,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_cash_controls_registercloseoutview_tsx",
       "source_file": "packages/athena-webapp/src/components/cash-controls/RegisterCloseoutView.tsx",
-      "source_location": "L80",
+      "source_location": "L81",
       "target": "registercloseoutview_getvariance",
       "weight": 1
     },
@@ -15635,7 +15635,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_cash_controls_registercloseoutview_tsx",
       "source_file": "packages/athena-webapp/src/components/cash-controls/RegisterCloseoutView.tsx",
-      "source_location": "L154",
+      "source_location": "L155",
       "target": "registercloseoutview_handlereviewcloseout",
       "weight": 1
     },
@@ -15647,7 +15647,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_cash_controls_registercloseoutview_tsx",
       "source_file": "packages/athena-webapp/src/components/cash-controls/RegisterCloseoutView.tsx",
-      "source_location": "L107",
+      "source_location": "L108",
       "target": "registercloseoutview_handlesubmitcloseout",
       "weight": 1
     },
@@ -15659,7 +15659,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_cash_controls_registercloseoutview_tsx",
       "source_file": "packages/athena-webapp/src/components/cash-controls/RegisterCloseoutView.tsx",
-      "source_location": "L455",
+      "source_location": "L456",
       "target": "registercloseoutview_onreviewcloseout",
       "weight": 1
     },
@@ -15671,7 +15671,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_cash_controls_registercloseoutview_tsx",
       "source_file": "packages/athena-webapp/src/components/cash-controls/RegisterCloseoutView.tsx",
-      "source_location": "L428",
+      "source_location": "L429",
       "target": "registercloseoutview_onsubmitcloseout",
       "weight": 1
     },
@@ -15683,7 +15683,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_cash_controls_registercloseoutview_tsx",
       "source_file": "packages/athena-webapp/src/components/cash-controls/RegisterCloseoutView.tsx",
-      "source_location": "L60",
+      "source_location": "L61",
       "target": "registercloseoutview_trimoptional",
       "weight": 1
     },
@@ -15695,7 +15695,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_cash_controls_registersessionview_tsx",
       "source_file": "packages/athena-webapp/src/components/cash-controls/RegisterSessionView.tsx",
-      "source_location": "L136",
+      "source_location": "L137",
       "target": "registersessionview_builddepositsubmissionkey",
       "weight": 1
     },
@@ -15707,7 +15707,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_cash_controls_registersessionview_tsx",
       "source_file": "packages/athena-webapp/src/components/cash-controls/RegisterSessionView.tsx",
-      "source_location": "L624",
+      "source_location": "L625",
       "target": "registersessionview_errormessage",
       "weight": 1
     },
@@ -15719,7 +15719,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_cash_controls_registersessionview_tsx",
       "source_file": "packages/athena-webapp/src/components/cash-controls/RegisterSessionView.tsx",
-      "source_location": "L140",
+      "source_location": "L141",
       "target": "registersessionview_formatcurrency",
       "weight": 1
     },
@@ -15731,7 +15731,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_cash_controls_registersessionview_tsx",
       "source_file": "packages/athena-webapp/src/components/cash-controls/RegisterSessionView.tsx",
-      "source_location": "L159",
+      "source_location": "L160",
       "target": "registersessionview_formatregistername",
       "weight": 1
     },
@@ -15743,7 +15743,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_cash_controls_registersessionview_tsx",
       "source_file": "packages/athena-webapp/src/components/cash-controls/RegisterSessionView.tsx",
-      "source_location": "L155",
+      "source_location": "L156",
       "target": "registersessionview_formatstatuslabel",
       "weight": 1
     },
@@ -15755,7 +15755,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_cash_controls_registersessionview_tsx",
       "source_file": "packages/athena-webapp/src/components/cash-controls/RegisterSessionView.tsx",
-      "source_location": "L326",
+      "source_location": "L327",
       "target": "registersessionview_formattimestamp",
       "weight": 1
     },
@@ -15767,7 +15767,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_cash_controls_registersessionview_tsx",
       "source_file": "packages/athena-webapp/src/components/cash-controls/RegisterSessionView.tsx",
-      "source_location": "L164",
+      "source_location": "L165",
       "target": "registersessionview_getvariancetone",
       "weight": 1
     },
@@ -15779,7 +15779,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_cash_controls_registersessionview_tsx",
       "source_file": "packages/athena-webapp/src/components/cash-controls/RegisterSessionView.tsx",
-      "source_location": "L244",
+      "source_location": "L245",
       "target": "registersessionview_handlerecorddeposit",
       "weight": 1
     },
@@ -15791,7 +15791,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_cash_controls_registersessionview_tsx",
       "source_file": "packages/athena-webapp/src/components/cash-controls/RegisterSessionView.tsx",
-      "source_location": "L131",
+      "source_location": "L132",
       "target": "registersessionview_trimoptional",
       "weight": 1
     },
@@ -30023,7 +30023,7 @@
       "relation": "calls",
       "source": "registercloseoutview_handlereviewcloseout",
       "source_file": "packages/athena-webapp/src/components/cash-controls/RegisterCloseoutView.tsx",
-      "source_location": "L162",
+      "source_location": "L163",
       "target": "registercloseoutview_onreviewcloseout",
       "weight": 1
     },
@@ -30035,7 +30035,7 @@
       "relation": "calls",
       "source": "registercloseoutview_trimoptional",
       "source_file": "packages/athena-webapp/src/components/cash-controls/RegisterCloseoutView.tsx",
-      "source_location": "L164",
+      "source_location": "L165",
       "target": "registercloseoutview_handlereviewcloseout",
       "weight": 1
     },
@@ -30047,7 +30047,7 @@
       "relation": "calls",
       "source": "registercloseoutview_handlesubmitcloseout",
       "source_file": "packages/athena-webapp/src/components/cash-controls/RegisterCloseoutView.tsx",
-      "source_location": "L127",
+      "source_location": "L128",
       "target": "registercloseoutview_onsubmitcloseout",
       "weight": 1
     },
@@ -30059,7 +30059,7 @@
       "relation": "calls",
       "source": "registercloseoutview_trimoptional",
       "source_file": "packages/athena-webapp/src/components/cash-controls/RegisterCloseoutView.tsx",
-      "source_location": "L129",
+      "source_location": "L130",
       "target": "registercloseoutview_handlesubmitcloseout",
       "weight": 1
     },
@@ -30299,7 +30299,7 @@
       "relation": "calls",
       "source": "registersessionview_builddepositsubmissionkey",
       "source_file": "packages/athena-webapp/src/components/cash-controls/RegisterSessionView.tsx",
-      "source_location": "L274",
+      "source_location": "L275",
       "target": "registersessionview_handlerecorddeposit",
       "weight": 1
     },
@@ -30311,7 +30311,7 @@
       "relation": "calls",
       "source": "registersessionview_trimoptional",
       "source_file": "packages/athena-webapp/src/components/cash-controls/RegisterSessionView.tsx",
-      "source_location": "L265",
+      "source_location": "L266",
       "target": "registersessionview_handlerecorddeposit",
       "weight": 1
     },
@@ -57601,7 +57601,7 @@
       "label": "formatSessionName()",
       "norm_label": "formatsessionname()",
       "source_file": "packages/athena-webapp/src/components/cash-controls/RegisterCloseoutView.tsx",
-      "source_location": "L65"
+      "source_location": "L66"
     },
     {
       "community": 43,
@@ -57610,7 +57610,7 @@
       "label": "formatStatusLabel()",
       "norm_label": "formatstatuslabel()",
       "source_file": "packages/athena-webapp/src/components/cash-controls/RegisterCloseoutView.tsx",
-      "source_location": "L69"
+      "source_location": "L70"
     },
     {
       "community": 43,
@@ -57619,7 +57619,7 @@
       "label": "formatTimestamp()",
       "norm_label": "formattimestamp()",
       "source_file": "packages/athena-webapp/src/components/cash-controls/RegisterCloseoutView.tsx",
-      "source_location": "L73"
+      "source_location": "L74"
     },
     {
       "community": 43,
@@ -57628,7 +57628,7 @@
       "label": "getVariance()",
       "norm_label": "getvariance()",
       "source_file": "packages/athena-webapp/src/components/cash-controls/RegisterCloseoutView.tsx",
-      "source_location": "L80"
+      "source_location": "L81"
     },
     {
       "community": 43,
@@ -57637,7 +57637,7 @@
       "label": "handleReviewCloseout()",
       "norm_label": "handlereviewcloseout()",
       "source_file": "packages/athena-webapp/src/components/cash-controls/RegisterCloseoutView.tsx",
-      "source_location": "L154"
+      "source_location": "L155"
     },
     {
       "community": 43,
@@ -57646,7 +57646,7 @@
       "label": "handleSubmitCloseout()",
       "norm_label": "handlesubmitcloseout()",
       "source_file": "packages/athena-webapp/src/components/cash-controls/RegisterCloseoutView.tsx",
-      "source_location": "L107"
+      "source_location": "L108"
     },
     {
       "community": 43,
@@ -57655,7 +57655,7 @@
       "label": "onReviewCloseout()",
       "norm_label": "onreviewcloseout()",
       "source_file": "packages/athena-webapp/src/components/cash-controls/RegisterCloseoutView.tsx",
-      "source_location": "L455"
+      "source_location": "L456"
     },
     {
       "community": 43,
@@ -57664,7 +57664,7 @@
       "label": "onSubmitCloseout()",
       "norm_label": "onsubmitcloseout()",
       "source_file": "packages/athena-webapp/src/components/cash-controls/RegisterCloseoutView.tsx",
-      "source_location": "L428"
+      "source_location": "L429"
     },
     {
       "community": 43,
@@ -57673,7 +57673,7 @@
       "label": "trimOptional()",
       "norm_label": "trimoptional()",
       "source_file": "packages/athena-webapp/src/components/cash-controls/RegisterCloseoutView.tsx",
-      "source_location": "L60"
+      "source_location": "L61"
     },
     {
       "community": 430,
@@ -57871,7 +57871,7 @@
       "label": "buildDepositSubmissionKey()",
       "norm_label": "builddepositsubmissionkey()",
       "source_file": "packages/athena-webapp/src/components/cash-controls/RegisterSessionView.tsx",
-      "source_location": "L136"
+      "source_location": "L137"
     },
     {
       "community": 44,
@@ -57880,7 +57880,7 @@
       "label": "errorMessage()",
       "norm_label": "errormessage()",
       "source_file": "packages/athena-webapp/src/components/cash-controls/RegisterSessionView.tsx",
-      "source_location": "L624"
+      "source_location": "L625"
     },
     {
       "community": 44,
@@ -57889,7 +57889,7 @@
       "label": "formatCurrency()",
       "norm_label": "formatcurrency()",
       "source_file": "packages/athena-webapp/src/components/cash-controls/RegisterSessionView.tsx",
-      "source_location": "L140"
+      "source_location": "L141"
     },
     {
       "community": 44,
@@ -57898,7 +57898,7 @@
       "label": "formatRegisterName()",
       "norm_label": "formatregistername()",
       "source_file": "packages/athena-webapp/src/components/cash-controls/RegisterSessionView.tsx",
-      "source_location": "L159"
+      "source_location": "L160"
     },
     {
       "community": 44,
@@ -57907,7 +57907,7 @@
       "label": "formatStatusLabel()",
       "norm_label": "formatstatuslabel()",
       "source_file": "packages/athena-webapp/src/components/cash-controls/RegisterSessionView.tsx",
-      "source_location": "L155"
+      "source_location": "L156"
     },
     {
       "community": 44,
@@ -57916,7 +57916,7 @@
       "label": "formatTimestamp()",
       "norm_label": "formattimestamp()",
       "source_file": "packages/athena-webapp/src/components/cash-controls/RegisterSessionView.tsx",
-      "source_location": "L148"
+      "source_location": "L149"
     },
     {
       "community": 44,
@@ -57925,7 +57925,7 @@
       "label": "getVarianceTone()",
       "norm_label": "getvariancetone()",
       "source_file": "packages/athena-webapp/src/components/cash-controls/RegisterSessionView.tsx",
-      "source_location": "L164"
+      "source_location": "L165"
     },
     {
       "community": 44,
@@ -57934,7 +57934,7 @@
       "label": "handleRecordDeposit()",
       "norm_label": "handlerecorddeposit()",
       "source_file": "packages/athena-webapp/src/components/cash-controls/RegisterSessionView.tsx",
-      "source_location": "L244"
+      "source_location": "L245"
     },
     {
       "community": 44,
@@ -57943,7 +57943,7 @@
       "label": "trimOptional()",
       "norm_label": "trimoptional()",
       "source_file": "packages/athena-webapp/src/components/cash-controls/RegisterSessionView.tsx",
-      "source_location": "L131"
+      "source_location": "L132"
     },
     {
       "community": 440,
@@ -67528,7 +67528,7 @@
       "label": "formatCurrency()",
       "norm_label": "formatcurrency()",
       "source_file": "packages/athena-webapp/src/components/cash-controls/CashControlsDashboard.tsx",
-      "source_location": "L95"
+      "source_location": "L96"
     },
     {
       "community": 82,
@@ -67537,7 +67537,7 @@
       "label": "formatRegisterName()",
       "norm_label": "formatregistername()",
       "source_file": "packages/athena-webapp/src/components/cash-controls/CashControlsDashboard.tsx",
-      "source_location": "L114"
+      "source_location": "L115"
     },
     {
       "community": 82,
@@ -67546,7 +67546,7 @@
       "label": "formatStatusLabel()",
       "norm_label": "formatstatuslabel()",
       "source_file": "packages/athena-webapp/src/components/cash-controls/CashControlsDashboard.tsx",
-      "source_location": "L103"
+      "source_location": "L104"
     },
     {
       "community": 82,
@@ -67555,7 +67555,7 @@
       "label": "formatTimestamp()",
       "norm_label": "formattimestamp()",
       "source_file": "packages/athena-webapp/src/components/cash-controls/CashControlsDashboard.tsx",
-      "source_location": "L107"
+      "source_location": "L108"
     },
     {
       "community": 82,
@@ -67564,7 +67564,7 @@
       "label": "getVarianceTone()",
       "norm_label": "getvariancetone()",
       "source_file": "packages/athena-webapp/src/components/cash-controls/CashControlsDashboard.tsx",
-      "source_location": "L119"
+      "source_location": "L120"
     },
     {
       "community": 82,
@@ -67573,7 +67573,7 @@
       "label": "SummaryStrip()",
       "norm_label": "summarystrip()",
       "source_file": "packages/athena-webapp/src/components/cash-controls/CashControlsDashboard.tsx",
-      "source_location": "L127"
+      "source_location": "L128"
     },
     {
       "community": 82,
