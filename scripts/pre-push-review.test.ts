@@ -89,6 +89,7 @@ describe("pre-push review wiring", () => {
       runHarnessInferentialReview: async () => {
         steps.push("harness:inferential-review");
       },
+      getLocalChangedFiles: async () => [],
       logger: {
         log() {},
         warn() {},
@@ -134,6 +135,7 @@ describe("pre-push review wiring", () => {
       runHarnessInferentialReview: async () => {
         steps.push("harness:inferential-review");
       },
+      getLocalChangedFiles: async () => [],
       logger: {
         log() {},
         warn() {},
@@ -179,6 +181,7 @@ describe("pre-push review wiring", () => {
       runHarnessInferentialReview: async () => {
         steps.push("harness:inferential-review");
       },
+      getLocalChangedFiles: async () => [],
       logger: {
         log() {},
         warn() {},
@@ -222,6 +225,7 @@ describe("pre-push review wiring", () => {
       runHarnessInferentialReview: async () => {
         steps.push("harness:inferential-review");
       },
+      getLocalChangedFiles: async () => [],
       logger: {
         log() {},
         warn() {},
@@ -688,6 +692,7 @@ describe("pre-push review wiring", () => {
       runHarnessReview: async (_rootDir, options) => {
         await options.getChangedFiles?.(ROOT_DIR, options.baseRef);
       },
+      getLocalChangedFiles: async () => [],
       logger: {
         log() {},
         warn() {},

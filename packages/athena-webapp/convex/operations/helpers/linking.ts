@@ -1,5 +1,11 @@
 import { Doc, Id } from "../../_generated/dataModel";
 
+import {
+  deriveDefaultOperationalRoles,
+  type OperationalRole,
+  uniqueOperationalRoles,
+} from "../staffRoles";
+
 export type CustomerProfileDraft = {
   storeId: Id<"store">;
   organizationId?: Id<"organization">;
@@ -208,25 +214,8 @@ export function findMatchingCustomerProfile(
   );
 }
 
-export type OperationalRole =
-  | "manager"
-  | "front_desk"
-  | "stylist"
-  | "technician"
-  | "cashier";
-
-export function deriveDefaultOperationalRoles(
-  memberRole: "full_admin" | "pos_only"
-): OperationalRole[] {
-  if (memberRole === "full_admin") {
-    return ["manager"];
-  }
-
-  return ["front_desk", "cashier"];
-}
-
-export function uniqueOperationalRoles(
-  roles: OperationalRole[]
-): OperationalRole[] {
-  return Array.from(new Set(roles));
-}
+export {
+  deriveDefaultOperationalRoles,
+  uniqueOperationalRoles,
+  type OperationalRole,
+};
