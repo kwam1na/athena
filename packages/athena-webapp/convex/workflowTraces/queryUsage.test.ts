@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 
 import type { Id } from "../_generated/dataModel";
+import { buildPosSaleTraceSeed } from "./adapters/posSale";
 import {
   appendWorkflowTraceEventWithCtx,
   createWorkflowTraceWithCtx,
   registerWorkflowTraceLookupWithCtx,
 } from "./core";
+import { recordPosSaleTraceBestEffort } from "../pos/application/commands/completeTransaction";
 import {
   getWorkflowTraceViewByIdWithCtx,
   getWorkflowTraceViewByLookupWithCtx,
@@ -366,6 +368,59 @@ describe("workflow trace core and public helpers", () => {
     expect(byId?.events.map((event) => event.message)).toEqual([
       "Workflow started",
       "Repair order persisted",
+    ]);
+  });
+
+  it("writes a completed POS sale trace that can be resolved by transaction number", async () => {
+    const storeId = "store-a" as Id<"store">;
+    const ctx = createTestCtx();
+    const traceSeed = buildPosSaleTraceSeed({
+      storeId,
+      organizationId: "org-a" as Id<"organization">,
+      startedAt: 100,
+      transactionNumber: " POS-TXN-001 ",
+      posTransactionId: "pos-txn-1" as Id<"posTransaction">,
+      registerSessionId: "register-1" as Id<"registerSession">,
+      cashierId: "cashier-1" as Id<"cashier">,
+      terminalId: "terminal-1" as Id<"posTerminal">,
+      customerId: "customer-1" as Id<"posCustomer">,
+    });
+
+    await recordPosSaleTraceBestEffort(ctx as never, {
+      stage: "bootstrap",
+      traceSeed,
+      transactionId: "pos-txn-1" as Id<"posTransaction">,
+    });
+    await recordPosSaleTraceBestEffort(ctx as never, {
+      stage: "finalized",
+      traceSeed,
+      transactionId: "pos-txn-1" as Id<"posTransaction">,
+      completedAt: 200,
+    });
+
+    const trace = await getWorkflowTraceViewByLookupWithCtx(ctx as never, {
+      storeId,
+      workflowType: "pos_sale",
+      lookupType: "transaction_number",
+      lookupValue: "pos-txn-001",
+    });
+
+    expect(trace?.header.traceId).toBe("pos_sale:pos-txn-001");
+    expect(trace?.header.summary).toBe("Trace for POS transaction POS-TXN-001");
+    expect(trace?.header.primaryLookupValue).toBe("pos-txn-001");
+    expect(trace?.header.status).toBe("succeeded");
+    expect(trace?.header.health).toBe("healthy");
+    expect(trace?.events.map((event) => event.occurredAt)).toEqual([
+      100,
+      200,
+    ]);
+    expect(trace?.events.map((event) => event.step)).toEqual([
+      "sale_completion_started",
+      "sale_completion_completed",
+    ]);
+    expect(trace?.events.map((event) => event.status)).toEqual([
+      "started",
+      "succeeded",
     ]);
   });
 });
