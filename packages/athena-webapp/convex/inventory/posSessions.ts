@@ -12,7 +12,10 @@ import {
   releaseInventoryHoldsBatch,
   validateInventoryAvailability,
 } from "./helpers/inventoryHolds";
-import { validateSessionModifiable } from "./helpers/sessionValidation";
+import {
+  validateSessionActive,
+  validateSessionModifiable,
+} from "./helpers/sessionValidation";
 import {
   sessionOperationResultValidator,
   sessionResultValidator,
@@ -26,6 +29,11 @@ import {
   runStartSessionCommand,
 } from "../pos/application/commands/sessionCommands";
 import { createTransactionFromSessionHandler } from "./pos";
+import {
+  createPosSessionTraceRecorder,
+  type PosSessionTraceStage,
+  type PosSessionTraceableSession,
+} from "../pos/application/commands/posSessionTracing";
 
 const MAX_SESSION_ITEMS = 200;
 const SESSION_QUERY_CANDIDATE_LIMIT = 200;
@@ -104,6 +112,133 @@ async function listPosSessionsForStoreStatus(
   }
 
   return sessions;
+}
+
+async function persistSessionWorkflowTraceIdBestEffort(
+  ctx: MutationCtx,
+  args: {
+    session: PosSessionTraceableSession;
+    traceCreated: boolean;
+    traceId: string;
+  }
+) {
+  if (args.session.workflowTraceId || !args.traceCreated) {
+    return;
+  }
+
+  try {
+    await ctx.db.patch("posSession", args.session._id, {
+      workflowTraceId: args.traceId,
+    });
+  } catch (error) {
+    console.error("[workflow-trace] pos.session.trace.session-link", error);
+  }
+}
+
+async function recordSessionLifecycleTraceBestEffort(
+  ctx: MutationCtx,
+  args: {
+    stage: PosSessionTraceStage;
+    session: PosSessionTraceableSession;
+    occurredAt?: number;
+    transactionId?: Id<"posTransaction">;
+    holdReason?: string;
+    voidReason?: string;
+    customerName?: string;
+    itemName?: string;
+    quantity?: number;
+    previousQuantity?: number;
+    itemCount?: number;
+    paymentMethod?: string;
+    amount?: number;
+    previousAmount?: number;
+    paymentCount?: number;
+  }
+) {
+  try {
+    const traceResult = await createPosSessionTraceRecorder(ctx).record(args);
+    await persistSessionWorkflowTraceIdBestEffort(ctx, {
+      session: args.session,
+      ...traceResult,
+    });
+  } catch (error) {
+    console.error(`[workflow-trace] pos.session.lifecycle.${args.stage}`, error);
+  }
+}
+
+type CustomerSnapshot = {
+  customerId?: Id<"posCustomer">;
+  customerInfo?: {
+    name?: string;
+    email?: string;
+    phone?: string;
+  };
+};
+
+function normalizeCustomerSnapshot(session: CustomerSnapshot) {
+  const customerInfo = session.customerInfo
+    ? {
+        name: session.customerInfo.name?.trim() || undefined,
+        email: session.customerInfo.email?.trim() || undefined,
+        phone: session.customerInfo.phone?.trim() || undefined,
+      }
+    : undefined;
+
+  return {
+    customerId: session.customerId,
+    customerInfo,
+  };
+}
+
+function hasCustomerSnapshotValue(snapshot: ReturnType<typeof normalizeCustomerSnapshot>) {
+  return Boolean(
+    snapshot.customerId ||
+      snapshot.customerInfo?.name ||
+      snapshot.customerInfo?.email ||
+      snapshot.customerInfo?.phone,
+  );
+}
+
+function resolveCustomerTraceStage(
+  previousSession: CustomerSnapshot,
+  nextSession: CustomerSnapshot,
+):
+  | {
+      stage: "customerLinked" | "customerUpdated" | "customerCleared";
+      customerName?: string;
+    }
+  | null {
+  const previous = normalizeCustomerSnapshot(previousSession);
+  const next = normalizeCustomerSnapshot(nextSession);
+
+  const customerUnchanged =
+    previous.customerId === next.customerId &&
+    previous.customerInfo?.name === next.customerInfo?.name &&
+    previous.customerInfo?.email === next.customerInfo?.email &&
+    previous.customerInfo?.phone === next.customerInfo?.phone;
+
+  if (customerUnchanged) {
+    return null;
+  }
+
+  if (!hasCustomerSnapshotValue(next)) {
+    return {
+      stage: "customerCleared",
+      customerName: previous.customerInfo?.name,
+    };
+  }
+
+  if (!hasCustomerSnapshotValue(previous) || previous.customerId !== next.customerId) {
+    return {
+      stage: "customerLinked",
+      customerName: next.customerInfo?.name,
+    };
+  }
+
+  return {
+    stage: "customerUpdated",
+    customerName: next.customerInfo?.name,
+  };
 }
 
 // Get sessions for a store (with filtering)
@@ -275,6 +410,15 @@ export const updateSession = mutation({
   handler: async (ctx, args) => {
     const { sessionId, ...updates } = args;
     const now = Date.now();
+    const currentSession = await ctx.db.get("posSession", sessionId);
+    const previousSession = currentSession
+      ? {
+          ...currentSession,
+          customerInfo: currentSession.customerInfo
+            ? { ...currentSession.customerInfo }
+            : undefined,
+        }
+      : null;
 
     // Validate session can be modified (not completed or void)
     const validation = await validateSessionModifiable(
@@ -284,7 +428,6 @@ export const updateSession = mutation({
     );
     if (!validation.success) {
       // For completed/void sessions, return current state without update
-      const currentSession = await ctx.db.get("posSession", sessionId);
       console.warn(
         `Attempted to update ${currentSession?.status} session ${sessionId}. Ignoring update.`
       );
@@ -303,6 +446,25 @@ export const updateSession = mutation({
       updatedAt: now,
       expiresAt,
     });
+
+    if (previousSession) {
+      const nextSession = {
+        ...previousSession,
+        ...updates,
+        updatedAt: now,
+        expiresAt,
+      };
+      const customerTrace = resolveCustomerTraceStage(previousSession, nextSession);
+
+      if (customerTrace) {
+        await recordSessionLifecycleTraceBestEffort(ctx, {
+          stage: customerTrace.stage,
+          session: nextSession,
+          occurredAt: now,
+          customerName: customerTrace.customerName,
+        });
+      }
+    }
 
     return { sessionId, expiresAt };
   },
@@ -400,21 +562,57 @@ export const completeSession = mutation({
 
     // Mark session as completed and lock in final transaction totals
     // This ensures audit integrity by capturing exact values at completion time
+    await recordSessionLifecycleTraceBestEffort(ctx, {
+      stage: "checkoutSubmitted",
+      session: {
+        ...session,
+        updatedAt: now,
+        payments: args.payments,
+        subtotal: args.subtotal,
+        tax: args.tax,
+        total: args.total,
+      },
+      occurredAt: now,
+      paymentMethod: args.payments[0]?.method,
+      paymentCount: args.payments.length,
+    });
+
     await ctx.db.patch("posSession", args.sessionId, {
       status: "completed",
       completedAt: now,
       updatedAt: now,
       notes: args.notes,
+      payments: args.payments,
       // Save final transaction totals for audit trail
       subtotal: args.subtotal,
       tax: args.tax,
       total: args.total,
     });
 
-    const { transactionNumber } = await createTransactionFromSessionHandler(ctx, {
+    const { transactionId, transactionNumber } =
+      await createTransactionFromSessionHandler(ctx, {
       sessionId: args.sessionId,
       payments: args.payments,
       notes: args.notes,
+    });
+    const sessionTransactionId = transactionId as Id<"posTransaction">;
+
+    await recordSessionLifecycleTraceBestEffort(ctx, {
+      stage: "completed",
+      session: {
+        ...session,
+        status: "completed",
+        completedAt: now,
+        updatedAt: now,
+        notes: args.notes,
+        payments: args.payments,
+        subtotal: args.subtotal,
+        tax: args.tax,
+        total: args.total,
+        transactionId: sessionTransactionId,
+      },
+      occurredAt: now,
+      transactionId: sessionTransactionId,
     });
 
     // Return the session ID since the transaction will be created asynchronously
@@ -488,6 +686,18 @@ export const voidSession = mutation({
       notes: args.voidReason,
     });
 
+    await recordSessionLifecycleTraceBestEffort(ctx, {
+      stage: "voided",
+      session: {
+        ...session,
+        status: "void",
+        updatedAt: now,
+        notes: args.voidReason,
+      },
+      occurredAt: now,
+      voidReason: args.voidReason,
+    });
+
     return { success: true as const, data: { sessionId: args.sessionId } };
   },
 });
@@ -495,6 +705,7 @@ export const voidSession = mutation({
 export const releaseSessionInventoryHoldsAndDeleteItems = mutation({
   args: {
     sessionId: v.id("posSession"),
+    checkoutStateVersion: v.number(),
   },
   returns: v.union(
     v.object({
@@ -509,10 +720,18 @@ export const releaseSessionInventoryHoldsAndDeleteItems = mutation({
     })
   ),
   handler: async (ctx, args) => {
+    const now = Date.now();
     // Get the session
     const session = await ctx.db.get("posSession", args.sessionId);
     if (!session) {
       return error("Session not found");
+    }
+
+    if (args.checkoutStateVersion <= (session.checkoutStateVersion ?? 0)) {
+      return {
+        success: true as const,
+        data: { sessionId: args.sessionId },
+      };
     }
 
     // Query all items for this session
@@ -544,7 +763,115 @@ export const releaseSessionInventoryHoldsAndDeleteItems = mutation({
       itemIds.map((itemId) => ctx.db.delete("posSessionItem", itemId))
     );
 
+    const expiresAt = calculateSessionExpiration(now);
+    await ctx.db.patch("posSession", args.sessionId, {
+      updatedAt: now,
+      expiresAt,
+      checkoutStateVersion: args.checkoutStateVersion,
+      payments: [],
+    });
+
+    if (itemIds.length > 0) {
+      await recordSessionLifecycleTraceBestEffort(ctx, {
+        stage: "cartCleared",
+        session: {
+          ...session,
+          checkoutStateVersion: args.checkoutStateVersion,
+          updatedAt: now,
+          expiresAt,
+          payments: [],
+        },
+        occurredAt: now,
+        itemCount: itemIds.length,
+      });
+    }
+
     return { success: true as const, data: { sessionId: args.sessionId } };
+  },
+});
+
+export const syncSessionCheckoutState = mutation({
+  args: {
+    sessionId: v.id("posSession"),
+    cashierId: v.id("cashier"),
+    checkoutStateVersion: v.number(),
+    payments: v.array(
+      v.object({
+        method: v.string(),
+        amount: v.number(),
+        timestamp: v.number(),
+      })
+    ),
+    stage: v.union(
+      v.literal("paymentAdded"),
+      v.literal("paymentUpdated"),
+      v.literal("paymentRemoved"),
+      v.literal("paymentsCleared")
+    ),
+    paymentMethod: v.optional(v.string()),
+    amount: v.optional(v.number()),
+    previousAmount: v.optional(v.number()),
+  },
+  returns: sessionResultValidator,
+  handler: async (ctx, args) => {
+    const validation = await validateSessionActive(
+      ctx.db,
+      args.sessionId,
+      args.cashierId
+    );
+
+    if (!validation.success) {
+      return error(validation.message || "Session is not active.");
+    }
+
+    const session = await ctx.db.get("posSession", args.sessionId);
+    if (!session) {
+      return error("Session not found");
+    }
+
+    const currentCheckoutStateVersion = session.checkoutStateVersion ?? 0;
+    if (args.checkoutStateVersion <= currentCheckoutStateVersion) {
+      return {
+        success: true as const,
+        data: {
+          sessionId: args.sessionId,
+          expiresAt: session.expiresAt,
+        },
+      };
+    }
+
+    const now = Date.now();
+    const expiresAt = calculateSessionExpiration(now);
+    await ctx.db.patch("posSession", args.sessionId, {
+      payments: args.payments,
+      checkoutStateVersion: args.checkoutStateVersion,
+      updatedAt: now,
+      expiresAt,
+    });
+
+    await recordSessionLifecycleTraceBestEffort(ctx, {
+      stage: args.stage,
+      session: {
+        ...session,
+        payments: args.payments,
+        checkoutStateVersion: args.checkoutStateVersion,
+        updatedAt: now,
+        expiresAt,
+      },
+      occurredAt: now,
+      paymentMethod: args.paymentMethod,
+      amount: args.amount,
+      previousAmount: args.previousAmount,
+      paymentCount: args.payments.length,
+    });
+
+    return {
+      success: true as const,
+      data: {
+        sessionId: args.sessionId,
+        expiresAt,
+      },
+    };
   },
 });
 
@@ -689,13 +1016,29 @@ export const releasePosSessionItems = internalMutation({
 
         // Keep items for record-keeping - don't delete them
         // Items remain associated with expired session for audit trail
+        const wasVoided = session.status === "void";
+        const expirationNote =
+          wasVoided ? session.notes : "Session expired - inventory holds released";
 
         // Mark session as expired
         await ctx.db.patch("posSession", session._id, {
           status: "expired",
           updatedAt: now,
-          notes: "Session expired - inventory holds released",
+          notes: expirationNote,
         });
+
+        if (!wasVoided) {
+          await recordSessionLifecycleTraceBestEffort(ctx, {
+            stage: "expired",
+            session: {
+              ...session,
+              status: "expired",
+              updatedAt: now,
+              notes: expirationNote,
+            },
+            occurredAt: now,
+          });
+        }
 
         releasedSessionIds.push(session._id);
         console.log(

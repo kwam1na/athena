@@ -19,6 +19,7 @@ export interface RegisterCustomerPanelState {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   customerInfo: CustomerInfo;
+  onCustomerCommitted: (customer: CustomerInfo) => Promise<void>;
   setCustomerInfo: (
     customer:
       | CustomerInfo
