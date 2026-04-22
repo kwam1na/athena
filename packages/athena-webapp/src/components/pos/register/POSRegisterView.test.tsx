@@ -67,6 +67,10 @@ vi.mock("./RegisterCheckoutPanel", () => ({
   RegisterCheckoutPanel: () => <div>register-checkout-panel</div>,
 }));
 
+vi.mock("./RegisterDrawerGate", () => ({
+  RegisterDrawerGate: () => <div>register-drawer-gate</div>,
+}));
+
 describe("POSRegisterView", () => {
   it("renders a lightweight empty state while the active store is unresolved", async () => {
     mockUseRegisterViewModel.mockReturnValue({
@@ -78,6 +82,7 @@ describe("POSRegisterView", () => {
       checkout: {
         isTransactionCompleted: false,
       },
+      drawerGate: null,
     });
 
     const { POSRegisterView } = await import("./POSRegisterView");
@@ -114,6 +119,7 @@ describe("POSRegisterView", () => {
       authDialog: {
         open: true,
       },
+      drawerGate: null,
       onNavigateBack: vi.fn(),
     });
 
@@ -127,5 +133,46 @@ describe("POSRegisterView", () => {
     expect(screen.getByText("cart-items")).toBeInTheDocument();
     expect(screen.getByText("register-checkout-panel")).toBeInTheDocument();
     expect(screen.getByText("cashier-auth-dialog")).toBeInTheDocument();
+  });
+
+  it("renders the drawer gate instead of the selling surface while drawer setup is pending", async () => {
+    mockUseRegisterViewModel.mockReturnValue({
+      hasActiveStore: true,
+      header: {
+        title: "POS",
+        isSessionActive: false,
+      },
+      registerInfo: {
+        customerName: undefined,
+        registerLabel: "Front Counter",
+        hasTerminal: true,
+      },
+      customerPanel: {},
+      productEntry: {},
+      cart: {
+        items: [],
+      },
+      checkout: {
+        isTransactionCompleted: false,
+      },
+      drawerGate: {
+        openingFloat: "50.00",
+      },
+      sessionPanel: null,
+      cashierCard: null,
+      authDialog: {
+        open: false,
+      },
+      onNavigateBack: vi.fn(),
+    });
+
+    const { POSRegisterView } = await import("./POSRegisterView");
+    render(<POSRegisterView />);
+
+    expect(screen.getByText("register-drawer-gate")).toBeInTheDocument();
+    expect(screen.queryByText("product-entry")).not.toBeInTheDocument();
+    expect(screen.queryByText("cart-items")).not.toBeInTheDocument();
+    expect(screen.queryByText("register-checkout-panel")).not.toBeInTheDocument();
+    expect(screen.queryByText("register-action-bar")).not.toBeInTheDocument();
   });
 });

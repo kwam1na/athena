@@ -34,6 +34,18 @@ export interface PosCashierDto {
   active?: boolean;
 }
 
+export interface PosCashDrawerDto {
+  _id: Id<"registerSession">;
+  status: "open" | "active" | "closing" | "closed";
+  terminalId?: Id<"posTerminal">;
+  registerNumber?: string;
+  openingFloat: number;
+  expectedCash: number;
+  openedAt: number;
+  notes?: string;
+  workflowTraceId?: string;
+}
+
 export interface PosRegisterSessionDto {
   _id: string;
   sessionNumber: string;
@@ -51,6 +63,7 @@ export interface PosRegisterStateDto {
   phase: PosRegisterPhase;
   terminal: PosTerminalDto | null;
   cashier: PosCashierDto | null;
+  activeRegisterSession: PosCashDrawerDto | null;
   activeSession: PosRegisterSessionDto | null;
   resumableSession: PosRegisterSessionDto | null;
 }
@@ -61,6 +74,7 @@ export interface PosRegisterBootstrapDto {
   canResumeSession: boolean;
   terminal: PosTerminalDto | null;
   cashier: PosCashierDto | null;
+  activeRegisterSession: PosCashDrawerDto | null;
   activeSession: PosRegisterSessionDto | null;
   resumableSession: PosRegisterSessionDto | null;
 }
@@ -116,6 +130,15 @@ export interface PosStartSessionInput {
   terminalId: Id<"posTerminal">;
   cashierId?: Id<"cashier">;
   registerNumber?: string;
+  registerSessionId?: Id<"registerSession">;
+}
+
+export interface PosOpenDrawerInput {
+  storeId: Id<"store">;
+  terminalId?: Id<"posTerminal">;
+  registerNumber?: string;
+  openingFloat: number;
+  notes?: string;
 }
 
 export interface PosAddItemInput {

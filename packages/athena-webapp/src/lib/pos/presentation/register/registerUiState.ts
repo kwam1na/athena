@@ -124,6 +124,19 @@ export interface RegisterCashierCardState {
   onSignOut: () => Promise<void>;
 }
 
+export interface RegisterDrawerGateState {
+  registerLabel: string;
+  registerNumber: string;
+  currency: string;
+  openingFloat: string;
+  notes: string;
+  errorMessage: string | null;
+  isSubmitting: boolean;
+  onOpeningFloatChange: (value: string) => void;
+  onNotesChange: (value: string) => void;
+  onSubmit: () => Promise<void>;
+}
+
 export interface RegisterAuthDialogState {
   open: boolean;
   storeId: Id<"store">;
@@ -142,6 +155,7 @@ export interface RegisterViewModel {
   checkout: RegisterCheckoutState;
   sessionPanel: RegisterSessionPanelState | null;
   cashierCard: RegisterCashierCardState | null;
+  drawerGate: RegisterDrawerGateState | null;
   authDialog: RegisterAuthDialogState | null;
   onNavigateBack: () => Promise<void>;
 }

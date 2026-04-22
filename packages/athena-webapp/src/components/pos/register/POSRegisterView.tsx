@@ -11,6 +11,7 @@ import { useRegisterViewModel } from "@/lib/pos/presentation/register/useRegiste
 import { RegisterActionBar } from "./RegisterActionBar";
 import { RegisterCheckoutPanel } from "./RegisterCheckoutPanel";
 import { RegisterCustomerPanel } from "./RegisterCustomerPanel";
+import { RegisterDrawerGate } from "./RegisterDrawerGate";
 
 export function POSRegisterView() {
   const viewModel = useRegisterViewModel();
@@ -58,7 +59,7 @@ export function POSRegisterView() {
             </div>
           }
           trailingContent={
-            !viewModel.checkout.isTransactionCompleted ? (
+            !viewModel.checkout.isTransactionCompleted && !viewModel.drawerGate ? (
               <RegisterActionBar
                 registerInfo={viewModel.registerInfo}
                 sessionPanel={viewModel.sessionPanel}
@@ -69,63 +70,67 @@ export function POSRegisterView() {
       }
     >
       <FadeIn className="container mx-auto h-full w-full p-6">
-        <div className="space-y-6">
-          {!viewModel.checkout.isTransactionCompleted && (
-            <RegisterCustomerPanel customerPanel={viewModel.customerPanel} />
-          )}
-
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {viewModel.drawerGate ? (
+          <RegisterDrawerGate drawerGate={viewModel.drawerGate} />
+        ) : (
+          <div className="space-y-6">
             {!viewModel.checkout.isTransactionCompleted && (
-              <div className="lg:col-span-2 space-y-16">
-                <div className="px-6">
-                  <ProductEntry
-                    disabled={viewModel.productEntry.disabled}
-                    showProductLookup={viewModel.productEntry.showProductLookup}
-                    setShowProductLookup={
-                      viewModel.productEntry.setShowProductLookup
-                    }
-                    productSearchQuery={
-                      viewModel.productEntry.productSearchQuery
-                    }
-                    setProductSearchQuery={
-                      viewModel.productEntry.setProductSearchQuery
-                    }
-                    onBarcodeSubmit={viewModel.productEntry.onBarcodeSubmit}
-                    onAddProduct={viewModel.productEntry.onAddProduct}
-                    barcodeSearchResult={
-                      viewModel.productEntry.barcodeSearchResult
-                    }
-                    productIdSearchResults={
-                      viewModel.productEntry.productIdSearchResults
-                    }
-                  />
-                </div>
-
-                <div className="bg-white rounded-lg p-6">
-                  <CartItems
-                    cartItems={viewModel.cart.items}
-                    onUpdateQuantity={viewModel.cart.onUpdateQuantity}
-                    onRemoveItem={viewModel.cart.onRemoveItem}
-                    clearCart={viewModel.cart.onClearCart}
-                  />
-                </div>
-              </div>
+              <RegisterCustomerPanel customerPanel={viewModel.customerPanel} />
             )}
 
-            <div
-              className={cn(
-                viewModel.checkout.isTransactionCompleted && "lg:col-span-3",
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {!viewModel.checkout.isTransactionCompleted && (
+                <div className="lg:col-span-2 space-y-16">
+                  <div className="px-6">
+                    <ProductEntry
+                      disabled={viewModel.productEntry.disabled}
+                      showProductLookup={viewModel.productEntry.showProductLookup}
+                      setShowProductLookup={
+                        viewModel.productEntry.setShowProductLookup
+                      }
+                      productSearchQuery={
+                        viewModel.productEntry.productSearchQuery
+                      }
+                      setProductSearchQuery={
+                        viewModel.productEntry.setProductSearchQuery
+                      }
+                      onBarcodeSubmit={viewModel.productEntry.onBarcodeSubmit}
+                      onAddProduct={viewModel.productEntry.onAddProduct}
+                      barcodeSearchResult={
+                        viewModel.productEntry.barcodeSearchResult
+                      }
+                      productIdSearchResults={
+                        viewModel.productEntry.productIdSearchResults
+                      }
+                    />
+                  </div>
+
+                  <div className="bg-white rounded-lg p-6">
+                    <CartItems
+                      cartItems={viewModel.cart.items}
+                      onUpdateQuantity={viewModel.cart.onUpdateQuantity}
+                      onRemoveItem={viewModel.cart.onRemoveItem}
+                      clearCart={viewModel.cart.onClearCart}
+                    />
+                  </div>
+                </div>
               )}
-            >
-              <div className="bg-white rounded-lg p-6">
-                <RegisterCheckoutPanel
-                  checkout={viewModel.checkout}
-                  cashierCard={viewModel.cashierCard}
-                />
+
+              <div
+                className={cn(
+                  viewModel.checkout.isTransactionCompleted && "lg:col-span-3",
+                )}
+              >
+                <div className="bg-white rounded-lg p-6">
+                  <RegisterCheckoutPanel
+                    checkout={viewModel.checkout}
+                    cashierCard={viewModel.cashierCard}
+                  />
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        )}
       </FadeIn>
 
       {viewModel.authDialog && (

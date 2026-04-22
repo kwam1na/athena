@@ -9,6 +9,7 @@ describe("bootstrapRegister", () => {
         phase: "requiresCashier",
         terminal: { _id: "terminal-1", displayName: "Front Counter" },
         cashier: null,
+        activeRegisterSession: null,
         activeSession: null,
         resumableSession: null,
       },

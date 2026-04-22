@@ -21,6 +21,7 @@ import {
 import { addItem as runAddItem } from "@/lib/pos/application/useCases/addItem";
 import { completeTransaction as runCompleteTransaction } from "@/lib/pos/application/useCases/completeTransaction";
 import { holdSession as runHoldSession } from "@/lib/pos/application/useCases/holdSession";
+import { openDrawer as runOpenDrawer } from "@/lib/pos/application/useCases/openDrawer";
 import { startSession as runStartSession } from "@/lib/pos/application/useCases/startSession";
 import {
   calculatePosCartTotals,
@@ -34,6 +35,7 @@ import {
   POS_AUTO_ADD_DELAY_MS,
   POS_SEARCH_DEBOUNCE_MS,
 } from "@/lib/pos/constants";
+import { parseDisplayAmountInput } from "@/lib/pos/displayAmounts";
 import { logger } from "@/lib/logger";
 import { useConvexCommandGateway } from "@/lib/pos/infrastructure/convex/commandGateway";
 import { useConvexRegisterState } from "@/lib/pos/infrastructure/convex/registerGateway";
@@ -88,6 +90,11 @@ function createPaymentId(): string {
   );
 }
 
+function trimOptional(value: string): string | undefined {
+  const trimmedValue = value.trim();
+  return trimmedValue.length > 0 ? trimmedValue : undefined;
+}
+
 export function useRegisterViewModel(): RegisterViewModel {
   const { activeStore } = useGetActiveStore();
   const terminal = useGetTerminal();
@@ -108,6 +115,12 @@ export function useRegisterViewModel(): RegisterViewModel {
   const [completedOrderNumber, setCompletedOrderNumber] = useState<string | null>(
     null,
   );
+  const [drawerOpeningFloat, setDrawerOpeningFloat] = useState("");
+  const [drawerNotes, setDrawerNotes] = useState("");
+  const [drawerErrorMessage, setDrawerErrorMessage] = useState<string | null>(
+    null,
+  );
+  const [isOpeningDrawer, setIsOpeningDrawer] = useState(false);
   const [completedTransactionData, setCompletedTransactionData] =
     useState<RegisterViewModel["checkout"]["completedTransactionData"]>(null);
   const bootstrapInitialized = useRef(false);
@@ -132,8 +145,12 @@ export function useRegisterViewModel(): RegisterViewModel {
   });
   const activeRegisterNumber =
     activeSession?.registerNumber ??
+    registerState?.activeRegisterSession?.registerNumber ??
     registerState?.activeSession?.registerNumber ??
     registerState?.resumableSession?.registerNumber;
+  const activeRegisterSessionId = registerState?.activeRegisterSession?._id as
+    | Id<"registerSession">
+    | undefined;
   const registerNumber =
     activeRegisterNumber ?? registerNumberOverride ?? defaultRegisterNumber;
   const heldSessions = useConvexHeldSessions({
@@ -157,6 +174,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     startSession: startSessionCommand,
     addItem: addItemCommand,
     holdSession: holdSessionCommand,
+    openDrawer: openDrawerCommand,
     completeTransaction: completeTransactionCommand,
   } = useConvexCommandGateway();
   const {
@@ -175,6 +193,15 @@ export function useRegisterViewModel(): RegisterViewModel {
   );
   const hasActiveCustomerDetails = hasCustomerDetails(customerInfo);
   const hasActiveCartDraft = activeCartItems.length > 0;
+  const requiresDrawerGate = Boolean(
+    activeStore?._id &&
+      terminal?._id &&
+      cashierId &&
+      bootstrapState &&
+      (bootstrapState.phase === "readyToStart" ||
+        bootstrapState.phase === "resumable") &&
+      !bootstrapState.activeRegisterSession,
+  );
   const setPaymentState = useCallback((nextPayments: Payment[]) => {
     paymentsRef.current = nextPayments;
     setPayments(nextPayments);
@@ -212,6 +239,17 @@ export function useRegisterViewModel(): RegisterViewModel {
   const requestBootstrap = useCallback(() => {
     bootstrapInitialized.current = false;
   }, []);
+
+  useEffect(() => {
+    if (!registerState?.activeRegisterSession) {
+      return;
+    }
+
+    setDrawerOpeningFloat("");
+    setDrawerNotes("");
+    setDrawerErrorMessage(null);
+    setIsOpeningDrawer(false);
+  }, [registerState?.activeRegisterSession?._id]);
 
   const handleSessionExpired = useCallback(() => {
     logger.warn("[POS] Session expired, clearing cashier and local draft state", {
@@ -296,6 +334,11 @@ export function useRegisterViewModel(): RegisterViewModel {
       return registerState.activeSession._id as Id<"posSession">;
     }
 
+    if (!activeRegisterSessionId) {
+      toast.error("Open the drawer before adding products");
+      return null;
+    }
+
     if (!activeStore?._id || !terminal?._id || !cashierId) {
       toast.error("Sign in at a registered terminal before adding products");
       return null;
@@ -310,6 +353,7 @@ export function useRegisterViewModel(): RegisterViewModel {
         terminalId: terminal._id,
         cashierId,
         registerNumber,
+        registerSessionId: activeRegisterSessionId,
       },
     });
 
@@ -322,6 +366,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     return result.data.sessionId;
   }, [
     activeSession?._id,
+    activeRegisterSessionId,
     activeStore?._id,
     cashierId,
     registerNumber,
@@ -576,6 +621,11 @@ export function useRegisterViewModel(): RegisterViewModel {
       return;
     }
 
+    if (!activeRegisterSessionId) {
+      toast.error("Open the drawer before starting a session");
+      return;
+    }
+
     if (activeSession) {
       const hasDraftState = activeSession.cartItems.length > 0;
       const handled = hasDraftState
@@ -596,6 +646,7 @@ export function useRegisterViewModel(): RegisterViewModel {
         terminalId: terminal._id,
         cashierId,
         registerNumber,
+        registerSessionId: activeRegisterSessionId,
       },
     });
 
@@ -611,6 +662,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     toast.success("New session created");
   }, [
     activeSession,
+    activeRegisterSessionId,
     activeStore?._id,
     cashierId,
     customerInfo,
@@ -621,6 +673,57 @@ export function useRegisterViewModel(): RegisterViewModel {
     terminal?._id,
   ]);
 
+  const handleOpenDrawer = useCallback(async () => {
+    if (!activeStore?._id || !terminal?._id || !cashierId) {
+      setDrawerErrorMessage(
+        "Sign in at a registered terminal before opening the drawer",
+      );
+      return;
+    }
+
+    const parsedOpeningFloat = parseDisplayAmountInput(drawerOpeningFloat);
+    if (parsedOpeningFloat === undefined || parsedOpeningFloat <= 0) {
+      setDrawerErrorMessage("Enter a valid opening float");
+      return;
+    }
+
+    setDrawerErrorMessage(null);
+    setIsOpeningDrawer(true);
+
+    const result = await runOpenDrawer({
+      gateway: {
+        openDrawer: openDrawerCommand,
+      },
+      command: {
+        storeId: activeStore._id,
+        terminalId: terminal._id,
+        registerNumber,
+        openingFloat: parsedOpeningFloat,
+        notes: trimOptional(drawerNotes),
+      },
+    });
+
+    setIsOpeningDrawer(false);
+
+    if (!result.ok) {
+      setDrawerErrorMessage(result.message);
+      toast.error(result.message);
+      return;
+    }
+
+    requestBootstrap();
+    toast.success("Drawer opened");
+  }, [
+    activeStore?._id,
+    cashierId,
+    drawerNotes,
+    drawerOpeningFloat,
+    openDrawerCommand,
+    registerNumber,
+    requestBootstrap,
+    terminal?._id,
+  ]);
+
   useEffect(() => {
     if (
       !activeStore?._id ||
@@ -628,7 +731,8 @@ export function useRegisterViewModel(): RegisterViewModel {
       !cashierId ||
       !bootstrapState ||
       isTransactionCompleted ||
-      bootstrapInitialized.current
+      bootstrapInitialized.current ||
+      requiresDrawerGate
     ) {
       return;
     }
@@ -675,6 +779,9 @@ export function useRegisterViewModel(): RegisterViewModel {
           terminalId: terminal._id,
           cashierId,
           registerNumber: registerNumberOverride,
+          registerSessionId: bootstrapState.activeRegisterSession?._id as
+            | Id<"registerSession">
+            | undefined,
         },
       });
 
@@ -689,6 +796,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     cashierId,
     isTransactionCompleted,
     registerNumberOverride,
+    requiresDrawerGate,
     resumeSession,
     startSessionCommand,
     terminal?._id,
@@ -1263,6 +1371,28 @@ export function useRegisterViewModel(): RegisterViewModel {
         }
       : null;
 
+  const drawerGate =
+    activeStore?._id && terminal?._id && cashierId && requiresDrawerGate
+      ? {
+          registerLabel: terminal.displayName,
+          registerNumber,
+          currency: activeStore.currency,
+          openingFloat: drawerOpeningFloat,
+          notes: drawerNotes,
+          errorMessage: drawerErrorMessage,
+          isSubmitting: isOpeningDrawer,
+          onOpeningFloatChange: (value: string) => {
+            setDrawerOpeningFloat(value);
+            setDrawerErrorMessage(null);
+          },
+          onNotesChange: (value: string) => {
+            setDrawerNotes(value);
+            setDrawerErrorMessage(null);
+          },
+          onSubmit: handleOpenDrawer,
+        }
+      : null;
+
   const authDialog =
     activeStore?._id && terminal?._id
       ? {
@@ -1286,7 +1416,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       setCustomerInfo,
     },
     productEntry: {
-      disabled: !terminal || !cashierId,
+      disabled: !terminal || !cashierId || requiresDrawerGate || isOpeningDrawer,
       showProductLookup: showProductEntry,
       setShowProductLookup: setShowProductEntry,
       productSearchQuery,
@@ -1332,6 +1462,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     },
     sessionPanel,
     cashierCard,
+    drawerGate,
     authDialog,
     onNavigateBack: handleNavigateBack,
   };
