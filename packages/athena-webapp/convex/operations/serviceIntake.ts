@@ -166,8 +166,8 @@ export const listAssignableStaff = query({
 
     return staffProfiles.map((staffProfile) => ({
       _id: staffProfile._id,
-      email: staffProfile.email,
       fullName: staffProfile.fullName,
+      phoneNumber: staffProfile.phoneNumber,
       roles: roleAssignments
         .filter(
           (assignment) =>
