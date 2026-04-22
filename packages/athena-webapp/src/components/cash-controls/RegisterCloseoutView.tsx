@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { useAuth } from "@/hooks/useAuth";
 import { capitalizeWords, currencyFormatter } from "@/lib/utils";
+import { formatStoredAmount } from "@/lib/pos/displayAmounts";
 import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
 import { EmptyState } from "../states/empty/empty-state";
@@ -251,14 +252,14 @@ export function RegisterCloseoutViewContent({
                     <div>
                       <dt className="text-muted-foreground">Expected cash</dt>
                       <dd className="font-medium text-foreground">
-                        {formatter.format(registerSession.expectedCash)}
+                        {formatStoredAmount(formatter, registerSession.expectedCash)}
                       </dd>
                     </div>
                     <div>
                       <dt className="text-muted-foreground">Counted cash</dt>
                       <dd className="font-medium text-foreground">
                         {registerSession.countedCash !== undefined
-                          ? formatter.format(registerSession.countedCash)
+                          ? formatStoredAmount(formatter, registerSession.countedCash)
                           : "Not submitted"}
                       </dd>
                     </div>
@@ -275,7 +276,7 @@ export function RegisterCloseoutViewContent({
                                 : "font-medium text-destructive"
                         }
                       >
-                        {variance === null ? "Pending count" : formatter.format(variance)}
+                        {variance === null ? "Pending count" : formatStoredAmount(formatter, variance)}
                       </dd>
                     </div>
                   </dl>

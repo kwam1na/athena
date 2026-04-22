@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { useProtectedAdminPageState } from "@/hooks/useProtectedAdminPageState";
 import { capitalizeWords, currencyFormatter } from "@/lib/utils";
+import { formatStoredAmount } from "@/lib/pos/displayAmounts";
 import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
 import View from "../View";
@@ -142,7 +143,7 @@ function formatCurrency(currency: string, amount?: number | null) {
     return "Pending";
   }
 
-  return currencyFormatter(currency).format(amount);
+  return formatStoredAmount(currencyFormatter(currency), amount);
 }
 
 function formatTimestamp(timestamp: number) {

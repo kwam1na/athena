@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 
 import { useProtectedAdminPageState } from "@/hooks/useProtectedAdminPageState";
 import { capitalizeWords, currencyFormatter } from "@/lib/utils";
+import { formatStoredAmount } from "@/lib/pos/displayAmounts";
 import { api } from "~/convex/_generated/api";
 import View from "../View";
 import { FadeIn } from "../common/FadeIn";
@@ -97,7 +98,7 @@ function formatCurrency(currency: string, amount?: number | null) {
     return "Pending";
   }
 
-  return currencyFormatter(currency).format(amount);
+  return formatStoredAmount(currencyFormatter(currency), amount);
 }
 
 function formatStatusLabel(status: string) {
