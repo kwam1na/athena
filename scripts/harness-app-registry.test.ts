@@ -270,7 +270,7 @@ describe("HARNESS_APP_REGISTRY", () => {
         "convex/inventory/posSessions.ts",
         "convex/pos/application/queries/getRegisterState.ts",
         "convex/pos/infrastructure/repositories/cashierRepository.ts",
-        "src/components/cashiers/CashierManagement.tsx",
+        "src/components/staff/StaffManagement.tsx",
         "src/components/expense/ExpenseCompletion.tsx",
         "src/components/expense/ExpenseView.tsx",
         "src/components/pos/CashierAuthDialog.tsx",

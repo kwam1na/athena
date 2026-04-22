@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "~/convex/_generated/api";
 import { Id } from "~/convex/_generated/dataModel";
-import { CashierManagement } from "./CashierManagement";
+import { StaffManagement } from "./StaffManagement";
 
 vi.mock("convex/react", () => ({
   useMutation: vi.fn(),
@@ -52,9 +52,13 @@ const defaultStaffProfiles = [
   {
     _id: "staff-1" as Id<"staffProfile">,
     credentialStatus: "pending" as const,
+    email: "ama@example.com",
     firstName: "Ama",
     fullName: "Ama Mensah",
+    hiredAt: new Date("2024-01-15T00:00:00.000Z").getTime(),
+    jobTitle: "Cashier",
     lastName: "Mensah",
+    phoneNumber: "+233200000000",
     primaryRole: "cashier" as const,
     roles: ["cashier" as const],
     status: "active" as const,
@@ -90,6 +94,10 @@ function mockConvex({
   mockedUseMutation.mockImplementation(
     () =>
       ((args: Record<string, unknown>) => {
+        if ("staffProfileId" in args && "requestedRoles" in args) {
+          return updateStaffProfile(args);
+        }
+
         if ("requestedRoles" in args) {
           return createStaffProfile(args);
         }
@@ -111,7 +119,7 @@ async function chooseRole(
   await user.click(await screen.findByRole("option", { name: role }));
 }
 
-describe("CashierManagement", () => {
+describe("StaffManagement", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     createStaffProfile.mockResolvedValue({ _id: "staff-2" });
@@ -123,7 +131,7 @@ describe("CashierManagement", () => {
     mockConvex();
 
     render(
-      <CashierManagement
+      <StaffManagement
         organizationId={"org-1" as Id<"organization">}
         storeId={"store-1" as Id<"store">}
       />,
@@ -144,7 +152,7 @@ describe("CashierManagement", () => {
     const user = userEvent.setup();
 
     render(
-      <CashierManagement
+      <StaffManagement
         organizationId={"org-1" as Id<"organization">}
         storeId={"store-1" as Id<"store">}
       />,
@@ -183,7 +191,7 @@ describe("CashierManagement", () => {
     const user = userEvent.setup();
 
     render(
-      <CashierManagement
+      <StaffManagement
         organizationId={"org-1" as Id<"organization">}
         storeId={"store-1" as Id<"store">}
       />,
@@ -203,5 +211,74 @@ describe("CashierManagement", () => {
       status: "active",
       storeId: "store-1",
     });
+  });
+
+  it("edits an existing staff profile from the roster", async () => {
+    mockConvex();
+    const user = userEvent.setup();
+
+    render(
+      <StaffManagement
+        organizationId={"org-1" as Id<"organization">}
+        storeId={"store-1" as Id<"store">}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /edit/i }));
+
+    const firstNameInput = screen.getByLabelText(/first name/i);
+    await user.clear(firstNameInput);
+    await user.type(firstNameInput, "Afi");
+
+    const emailInput = screen.getByLabelText(/email/i);
+    await user.clear(emailInput);
+    await user.type(emailInput, "afi@example.com");
+
+    await chooseRole(user, /manager/i);
+    await user.click(screen.getByRole("button", { name: /update/i }));
+
+    await waitFor(() => expect(updateStaffProfile).toHaveBeenCalledTimes(1));
+    expect(updateStaffProfile).toHaveBeenCalledWith({
+      email: "afi@example.com",
+      firstName: "Afi",
+      hiredAt: new Date("2024-01-15T00:00:00").getTime(),
+      jobTitle: "Cashier",
+      lastName: "Mensah",
+      organizationId: "org-1",
+      phoneNumber: "+233200000000",
+      requestedRoles: ["manager"],
+      staffCode: undefined,
+      staffProfileId: "staff-1",
+      storeId: "store-1",
+      username: "amens",
+    });
+  });
+
+  it("blocks edits when a different username is already taken in the store", async () => {
+    mockConvex({
+      usernameAvailability: {
+        available: false,
+        normalizedUsername: "taken",
+      },
+    });
+    const user = userEvent.setup();
+
+    render(
+      <StaffManagement
+        organizationId={"org-1" as Id<"organization">}
+        storeId={"store-1" as Id<"store">}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /edit/i }));
+    const usernameInput = screen.getByLabelText(/username/i);
+    await user.clear(usernameInput);
+    await user.type(usernameInput, "taken");
+
+    expect(
+      await screen.findByText(/username is already in use for this store/i),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /update/i })).toBeDisabled();
+    expect(updateStaffProfile).not.toHaveBeenCalled();
   });
 });

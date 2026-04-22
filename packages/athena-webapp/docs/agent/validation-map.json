@@ -100,7 +100,7 @@
         "packages/athena-webapp/convex/inventory/posSessions.ts",
         "packages/athena-webapp/convex/pos/application/queries/getRegisterState.ts",
         "packages/athena-webapp/convex/pos/infrastructure/repositories/cashierRepository.ts",
-        "packages/athena-webapp/src/components/cashiers/CashierManagement.tsx",
+        "packages/athena-webapp/src/components/staff/StaffManagement.tsx",
         "packages/athena-webapp/src/components/expense/ExpenseCompletion.tsx",
         "packages/athena-webapp/src/components/expense/ExpenseView.tsx",
         "packages/athena-webapp/src/components/pos/CashierAuthDialog.tsx",

@@ -32,7 +32,7 @@ import { InviteDataTable } from "./invites-table/components/data-table";
 import { inviteColumns } from "./invites-table/components/inviteColumns";
 import { MembersDataTable } from "./members-table/components/data-table";
 import { membersColumns } from "./members-table/components/membersColumns";
-import { CashierManagement } from "../cashiers";
+import { StaffManagement } from "../staff";
 
 const organizationMemberSchema = z.object({
   email: z.string().email(),
@@ -238,7 +238,7 @@ export const OrganizationMembersView = () => {
 
         {activeStore && activeOrganization && (
           <div className="border-t pt-12">
-            <CashierManagement
+            <StaffManagement
               storeId={activeStore._id}
               organizationId={activeOrganization._id}
             />
