@@ -44,7 +44,9 @@ type StaffProfileRow = {
   firstName?: string | null;
   fullName: string;
   lastName?: string | null;
-  roles?: Array<"manager" | "front_desk" | "stylist" | "technician" | "cashier">;
+  roles?: Array<
+    "manager" | "front_desk" | "stylist" | "technician" | "cashier"
+  >;
   status: "active" | "inactive";
 };
 
@@ -67,7 +69,10 @@ type StaffRosterRow = {
 };
 
 const normalizeNameSegment = (value: string) =>
-  value.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+  value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
 
 const MAX_USERNAME_LENGTH = 5;
 
@@ -112,7 +117,7 @@ const getDisplayName = (profile: {
   }
 
   const parts = [profile.firstName?.trim(), profile.lastName?.trim()].filter(
-    (part): part is string => Boolean(part)
+    (part): part is string => Boolean(part),
   );
 
   return parts.join(" ").trim();
@@ -128,8 +133,7 @@ const formatStatusLabel = (row: StaffRosterRow) => {
   }
 
   return (
-    row.credentialStatus.charAt(0).toUpperCase() +
-    row.credentialStatus.slice(1)
+    row.credentialStatus.charAt(0).toUpperCase() + row.credentialStatus.slice(1)
   );
 };
 
@@ -149,13 +153,13 @@ const CashierForm = ({
   const [isSaving, setIsSaving] = useState(false);
 
   const createStaffProfile = useMutation(
-    api.operations.staffProfiles.createStaffProfile
+    api.operations.staffProfiles.createStaffProfile,
   );
   const createStaffCredential = useMutation(
-    api.operations.staffCredentials.createStaffCredential
+    api.operations.staffCredentials.createStaffCredential,
   );
   const updateStaffProfile = useMutation(
-    api.operations.staffProfiles.updateStaffProfile
+    api.operations.staffProfiles.updateStaffProfile,
   );
 
   const candidateUsername = useMemo(() => {
@@ -165,7 +169,7 @@ const CashierForm = ({
 
   const usernameAvailability = useQuery(
     api.operations.staffCredentials.getStaffCredentialUsernameAvailability,
-    candidateUsername ? { storeId, username: candidateUsername } : "skip"
+    candidateUsername ? { storeId, username: candidateUsername } : "skip",
   );
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -299,6 +303,10 @@ const CashierForm = ({
     }
   }, [candidateUsername, isCheckingUsername, usernameAvailability]);
 
+  const showMismatch = Boolean(
+    pin.length > 0 && pin.length == confirmPin.length && pin !== confirmPin,
+  );
+
   return (
     <form onSubmit={handleSubmit} className="space-y-8">
       <p className="text-md font-medium">Add staff member</p>
@@ -360,6 +368,11 @@ const CashierForm = ({
             size="sm"
           />
         </div>
+        {showMismatch && (
+          <p className="text-sm text-destructive font-medium">
+            Pins don't match
+          </p>
+        )}
       </div>
 
       <div className="flex items-center gap-4">
@@ -390,19 +403,22 @@ export const CashierManagement = ({
     useState<StaffRosterRow | null>(null);
   const [isDeactivating, setIsDeactivating] = useState(false);
 
-  const staffProfiles = useQuery(api.operations.staffProfiles.listStaffProfiles, {
-    storeId,
-  }) as StaffProfileRow[] | undefined;
+  const staffProfiles = useQuery(
+    api.operations.staffProfiles.listStaffProfiles,
+    {
+      storeId,
+    },
+  ) as StaffProfileRow[] | undefined;
   const staffCredentials = useQuery(
     api.operations.staffCredentials.listStaffCredentialsByStore,
-    { storeId }
+    { storeId },
   ) as StaffCredentialRow[] | undefined;
 
   const updateStaffProfile = useMutation(
-    api.operations.staffProfiles.updateStaffProfile
+    api.operations.staffProfiles.updateStaffProfile,
   );
   const updateStaffCredential = useMutation(
-    api.operations.staffCredentials.updateStaffCredential
+    api.operations.staffCredentials.updateStaffCredential,
   );
 
   const roster = useMemo(() => {
@@ -410,7 +426,7 @@ export const CashierManagement = ({
       (staffCredentials ?? []).map((credential) => [
         credential.staffProfileId,
         credential,
-      ])
+      ]),
     );
 
     return (staffProfiles ?? [])
@@ -458,7 +474,7 @@ export const CashierManagement = ({
       toast.success("Staff member deactivated");
     } catch (error) {
       toast.error(
-        (error as Error).message || "Failed to deactivate staff member"
+        (error as Error).message || "Failed to deactivate staff member",
       );
       console.error(error);
     } finally {
@@ -470,7 +486,7 @@ export const CashierManagement = ({
   return (
     <div className="space-y-16">
       <div>
-        <h3 className="text-lg font-medium mb-4">POS Staff</h3>
+        <h3 className="text-lg font-medium mb-4">Staff</h3>
 
         {roster.length > 0 && (
           <div className="border rounded-lg">
@@ -527,7 +543,7 @@ export const CashierManagement = ({
 
         {roster.length === 0 && !showForm && (
           <p className="text-sm text-muted-foreground">
-            No POS staff added yet. Add a staff member to get started.
+            No staff members added yet
           </p>
         )}
       </div>
