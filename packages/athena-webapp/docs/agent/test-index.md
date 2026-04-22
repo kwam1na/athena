@@ -62,6 +62,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`convex/storeFront/returnExchangeOperations.test.ts`](../../convex/storeFront/returnExchangeOperations.test.ts)
 - [`convex/storeFront/storefrontObservabilityReport.test.ts`](../../convex/storeFront/storefrontObservabilityReport.test.ts)
 - [`convex/storeFront/timeQueryRefactors.test.ts`](../../convex/storeFront/timeQueryRefactors.test.ts)
+- [`convex/workflowTraces/schemaIndexes.test.ts`](../../convex/workflowTraces/schemaIndexes.test.ts)
 
 ## Section `src`
 
@@ -100,6 +101,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`src/lib/pos/presentation/register/useRegisterViewModel.test.ts`](../../src/lib/pos/presentation/register/useRegisterViewModel.test.ts)
 - [`src/lib/productUtils.test.ts`](../../src/lib/productUtils.test.ts)
 - [`src/lib/storeConfig.test.ts`](../../src/lib/storeConfig.test.ts)
+- [`src/lib/traces/createWorkflowTraceId.test.ts`](../../src/lib/traces/createWorkflowTraceId.test.ts)
 - [`src/lib/utils.test.ts`](../../src/lib/utils.test.ts)
 - [`src/routeTree.browser-boundary.test.ts`](../../src/routeTree.browser-boundary.test.ts)
 - [`src/routes/login/_layout.index.test.tsx`](../../src/routes/login/_layout.index.test.tsx)

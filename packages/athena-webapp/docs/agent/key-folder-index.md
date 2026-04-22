@@ -12,15 +12,15 @@ This key-folder index highlights the main directories agents are likely to need 
 - [`src/components/procurement`](../../src/components/procurement) — Procurement planning and receiving views for replenishment pressure and purchase-order execution. Currently 4 file(s); key children: ProcurementView.test.tsx, ProcurementView.tsx, ReceivingView.test.tsx, ReceivingView.tsx.
 - [`src/hooks`](../../src/hooks) — React hooks that fan out auth, shell, and feature state. Currently 36 file(s); key children: use-image-upload.ts, use-mobile.tsx, use-navigate-back.ts, use-navigation-keyboard-shortcuts.ts, use-pagination-persistence.ts.
 - [`src/contexts`](../../src/contexts) — Context providers for app-wide state and wiring. Currently 5 file(s); key children: OnlineOrderContext.tsx, PermissionsContext.tsx, ProductContext.tsx, ThemeContext.tsx, UserContext.tsx.
-- [`src/lib`](../../src/lib) — Shared frontend helpers, schemas, and package utilities. Currently 63 file(s); key children: aws.ts, behaviorUtils.ts, browserFingerprint.ts, constants.ts, countries.ts.
-- [`shared`](../../shared) — Browser-safe helpers shared with Convex-backed workflows. Currently 3 file(s); key children: auth.ts, serviceIntake.ts, stockAdjustment.ts.
+- [`src/lib`](../../src/lib) — Shared frontend helpers, schemas, and package utilities. Currently 64 file(s); key children: aws.ts, behaviorUtils.ts, browserFingerprint.ts, constants.ts, countries.ts.
+- [`shared`](../../shared) — Browser-safe helpers shared with Convex-backed workflows. Currently 4 file(s); key children: auth.ts, serviceIntake.ts, stockAdjustment.ts, workflowTrace.ts.
 - [`src/utils`](../../src/utils) — Cross-cutting browser helpers and lower-level utilities. Currently 3 file(s); key children: formatNumber.ts, index.ts, versionChecker.ts.
 
 ## Backend and test surfaces
 
 - [`convex/stockOps`](../../convex/stockOps) — Stock-adjustment, procurement, replenishment, receiving, and vendor flows layered over inventory state. Currently 12 file(s); key children: access.test.ts, access.ts, adjustments.test.ts, adjustments.ts, purchaseOrders.test.ts.
 - [`convex/serviceOps`](../../convex/serviceOps) — Service catalog, appointment, and service-case workflows layered on operational work items. Currently 6 file(s); key children: appointments.ts, catalog.ts, catalogAppointments.test.ts, moduleWiring.test.ts, serviceCases.test.ts.
-- [`convex`](../../convex) — Convex functions, HTTP composition, schemas, and backend tests. Currently 317 file(s); key children: README.md, _generated, app.ts, auth.config.js, auth.ts.
+- [`convex`](../../convex) — Convex functions, HTTP composition, schemas, and backend tests. Currently 322 file(s); key children: README.md, _generated, app.ts, auth.config.js, auth.ts.
 - [`src/tests`](../../src/tests) — Focused browser-facing regression tests. Currently 6 file(s); key children: README.md, SUMMARY.md, pos.
 - [`src/test`](../../src/test) — Package test harness helpers and setup. Currently 1 file(s); key children: setup.ts.
 
