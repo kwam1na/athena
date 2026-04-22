@@ -16,7 +16,7 @@ import {
   ServiceIntakeFormState,
   ServiceIntakeStaffOption,
 } from "./ServiceIntakeForm";
-import { validateServiceIntakeInput } from "~/convex/operations/serviceIntake";
+import { validateServiceIntakeInput } from "~/shared/serviceIntake";
 
 const operationsApi = api.operations;
 

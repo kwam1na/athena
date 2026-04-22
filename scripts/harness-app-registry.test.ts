@@ -152,6 +152,36 @@ describe("HARNESS_APP_REGISTRY", () => {
     });
   });
 
+  it("runs the Athena browser-boundary regression for route runtime changes", () => {
+    const athena = HARNESS_APP_REGISTRY.find(
+      (entry) => entry.appName === "athena-webapp"
+    );
+    const runtimeScenario = athena?.validationScenarios.find(
+      (scenario) => scenario.title === "Route runtime or build-pipeline edits"
+    );
+
+    expect(runtimeScenario).toMatchObject({
+      touchedPaths: [
+        "src/main.tsx",
+        "src/routeTree.gen.ts",
+        "src/routeTree.browser-boundary.test.ts",
+        "vite.config.ts",
+      ],
+      commands: [
+        {
+          kind: "raw",
+          command:
+            "bun run --filter '@athena/webapp' test -- src/routeTree.browser-boundary.test.ts",
+        },
+        {
+          kind: "raw",
+          command: "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json",
+        },
+        { kind: "script", script: "build" },
+      ],
+    });
+  });
+
   it("documents Athena service management as a first-class harness discovery surface", () => {
     const athena = HARNESS_APP_REGISTRY.find(
       (entry) => entry.appName === "athena-webapp"
@@ -270,10 +300,19 @@ describe("HARNESS_APP_REGISTRY", () => {
     const sharedLibScenario = athena?.validationScenarios.find(
       (scenario) => scenario.title === "Shared-lib or utility edits"
     );
+    const coreFolders = athena?.keyFolderGroups.find(
+      (group) => group.title === "Core app surfaces"
+    )?.folders;
 
+    expect(athena?.auditedRoots).toEqual(["src", "shared", "convex"]);
+    expect(coreFolders).toContainEqual({
+      path: "shared",
+      description: "Browser-safe helpers shared with Convex-backed workflows.",
+    });
     expect(sharedLibScenario).toMatchObject({
       touchedPaths: [
         "src/lib",
+        "shared",
         "src/settings",
         "src/utils",
         "src/stores",

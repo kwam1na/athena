@@ -45,7 +45,7 @@ The entire data and API layer for both apps.
 - Dev: `https://jovial-wildebeest-179.convex.cloud` / `.convex.site`
 - Prod: `https://colorless-cardinal-870.convex.cloud` / `.convex.site`
 
-**Auth:** `@convex-dev/auth` with ResendOTP provider (email OTP)
+**Auth:** `@convex-dev/auth` with MailerSend-backed email OTP
 
 ### Schema Domains (`convex/schema.ts`)
 
@@ -95,7 +95,7 @@ The entire data and API layer for both apps.
 **Tech:** React 18, Vite 5, TanStack Router (file-based), TanStack Query, Convex, Zustand, shadcn/ui + Radix UI, Tailwind CSS, React Hook Form + Zod
 
 ### Auth
-1. User logs in via Convex Auth (email OTP through Resend)
+1. User logs in via Convex Auth (email OTP through MailerSend)
 2. `useAuth` hook (`src/hooks/useAuth.ts`) reads user ID from localStorage
 3. Queries `api.inventory.athenaUser.getUserById` to hydrate user
 4. `PermissionsContext` (`src/contexts/PermissionsContext.tsx`) checks org membership and role
@@ -281,7 +281,7 @@ HTTP bridge to the local Valkey instance on the DigitalOcean droplet.
 | **Valkey (local)** | Redis-compatible cache running locally on the DO droplet |
 | **Paystack** | Payment processing (Ghana/Africa). Inline JS in storefront; webhook at `/webhooks/paystack` |
 | **Stripe** | Payment processing (international) |
-| **Resend** | Transactional email (OTP codes, order confirmations) |
+| **MailerSend** | Transactional email (OTP codes, order confirmations) |
 | **Linear** | Issue tracking |
 | **PostHog** | Product analytics in storefront (installed, currently disabled in `main.tsx`) |
 | **OpenAI / Anthropic** | LLM-powered store and user insights (via `convex/llm/`) |

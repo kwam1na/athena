@@ -171,6 +171,12 @@ describe("generateHarnessDocs", () => {
     expect(docs.get("packages/storefront-webapp/docs/agent/validation-guide.md")).toContain(
       "Full browser journeys"
     );
+    expect(docs.get("packages/athena-webapp/docs/agent/validation-guide.md")).toContain(
+      "src/routeTree.browser-boundary.test.ts"
+    );
+    expect(docs.get("packages/athena-webapp/docs/agent/validation-guide.md")).toContain(
+      "Touched surfaces: `src/lib`, `shared`, `src/settings`, `src/utils`, `src/stores`, `types.ts`"
+    );
     expect(docs.get("packages/athena-webapp/docs/agent/validation-map.json")).toContain(
       "\"commands\""
     );

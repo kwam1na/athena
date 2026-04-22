@@ -4,6 +4,7 @@ import { useAuthActions } from "@convex-dev/auth/react";
 import { useState } from "react";
 import { Input } from "../../ui/input";
 import { LoadingButton } from "../../ui/loading-button";
+import { ATHENA_EMAIL_OTP_PROVIDER_ID } from "../../../../shared/auth";
 import { z } from "zod";
 
 export function LoginForm({
@@ -25,7 +26,9 @@ export function LoginForm({
       const normalizedEmail = value.email.trim().toLowerCase();
 
       try {
-        await signIn("resend-otp", { email: normalizedEmail });
+        await signIn(ATHENA_EMAIL_OTP_PROVIDER_ID, {
+          email: normalizedEmail,
+        });
         setStep({ email: normalizedEmail });
       } finally {
         setIsSubmitting(false);

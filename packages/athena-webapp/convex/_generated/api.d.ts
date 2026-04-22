@@ -121,8 +121,7 @@ import type * as operations_paymentAllocations from "../operations/paymentAlloca
 import type * as operations_registerSessions from "../operations/registerSessions.js";
 import type * as operations_serviceIntake from "../operations/serviceIntake.js";
 import type * as operations_staffProfiles from "../operations/staffProfiles.js";
-import type * as otp_ResendOTP from "../otp/ResendOTP.js";
-import type * as otp_VerificationCodeEmail from "../otp/VerificationCodeEmail.js";
+import type * as otp_EmailOTP from "../otp/EmailOTP.js";
 import type * as paystack_index from "../paystack/index.js";
 import type * as pos_application_commands_assignCustomer from "../pos/application/commands/assignCustomer.js";
 import type * as pos_application_commands_completeTransaction from "../pos/application/commands/completeTransaction.js";
@@ -388,8 +387,7 @@ declare const fullApi: ApiFromModules<{
   "operations/registerSessions": typeof operations_registerSessions;
   "operations/serviceIntake": typeof operations_serviceIntake;
   "operations/staffProfiles": typeof operations_staffProfiles;
-  "otp/ResendOTP": typeof otp_ResendOTP;
-  "otp/VerificationCodeEmail": typeof otp_VerificationCodeEmail;
+  "otp/EmailOTP": typeof otp_EmailOTP;
   "paystack/index": typeof paystack_index;
   "pos/application/commands/assignCustomer": typeof pos_application_commands_assignCustomer;
   "pos/application/commands/completeTransaction": typeof pos_application_commands_completeTransaction;
