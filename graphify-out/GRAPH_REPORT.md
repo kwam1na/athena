@@ -5,7 +5,7 @@
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 3684 nodes · 3209 edges · 1389 communities detected
+- 3683 nodes · 3207 edges · 1389 communities detected
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS
 - Token cost: 0 input · 0 output
 
@@ -1655,56 +1655,56 @@ Cohesion: 0.28
 Nodes (3): modifyProduct(), onSubmit(), saveProduct()
 
 ### Community 57 - "Community 57"
-Cohesion: 0.28
-Nodes (4): buildFullName(), buildUsername(), handleSubmit(), normalizeNameSegment()
-
-### Community 58 - "Community 58"
 Cohesion: 0.25
 Nodes (2): handleNewSession(), resetAutoSessionInitialized()
 
-### Community 59 - "Community 59"
+### Community 58 - "Community 58"
 Cohesion: 0.39
 Nodes (7): calculateRefundAmount(), getAmountRefunded(), getAvailableItems(), getItemsToRefund(), getNetAmount(), shouldShowReturnToStock(), validateRefund()
 
-### Community 60 - "Community 60"
+### Community 59 - "Community 59"
 Cohesion: 0.33
 Nodes (6): handleEdit(), handleReset(), handleSubmit(), itemToFormState(), parseServiceCatalogForm(), validateServiceCatalogForm()
 
-### Community 61 - "Community 61"
+### Community 60 - "Community 60"
 Cohesion: 0.39
 Nodes (6): handleDeliveryRestrictionToggle(), handlePickupRestrictionToggle(), handleSaveDeliveryRestriction(), handleSavePickupRestriction(), saveDeliveryRestriction(), savePickupRestriction()
 
-### Community 62 - "Community 62"
+### Community 61 - "Community 61"
 Cohesion: 0.44
 Nodes (1): Logger
 
-### Community 63 - "Community 63"
+### Community 62 - "Community 62"
 Cohesion: 0.5
 Nodes (6): findAthenaUserByEmailWithCtx(), getAuthenticatedAthenaUserWithCtx(), getAuthenticatedUserRecord(), normalizeEmail(), requireAuthenticatedAthenaUserWithCtx(), syncAuthenticatedAthenaUserWithCtx()
 
-### Community 64 - "Community 64"
+### Community 63 - "Community 63"
 Cohesion: 0.43
 Nodes (6): buildMtnCollectionsLookupPrefixes(), isTargetEnvironment(), readScopedValue(), resolveConfigForPrefix(), resolveMtnCollectionsConfigFromEnv(), toEnvSegment()
 
-### Community 65 - "Community 65"
+### Community 64 - "Community 64"
 Cohesion: 0.43
 Nodes (6): buildPosSessionTraceEvent(), buildPosSessionTraceRecord(), buildTraceSummary(), formatPaymentMethod(), recordPosSessionTraceBestEffort(), safeTraceWrite()
 
-### Community 66 - "Community 66"
+### Community 65 - "Community 65"
 Cohesion: 0.25
 Nodes (0):
 
-### Community 67 - "Community 67"
+### Community 66 - "Community 66"
 Cohesion: 0.43
 Nodes (6): sendDiscountCodeEmail(), sendDiscountReminderEmail(), sendFeedbackRequestEmail(), sendNewOrderEmail(), sendOrderEmail(), sendVerificationCode()
 
-### Community 68 - "Community 68"
+### Community 67 - "Community 67"
 Cohesion: 0.36
 Nodes (4): buildPendingSkuContextById(), listPurchaseOrderLineItems(), listReplenishmentRecommendationsWithCtx(), listStoreProductSkus()
 
-### Community 69 - "Community 69"
+### Community 68 - "Community 68"
 Cohesion: 0.25
 Nodes (1): DataTableRowActions()
+
+### Community 69 - "Community 69"
+Cohesion: 0.29
+Nodes (2): buildUsername(), normalizeNameSegment()
 
 ### Community 70 - "Community 70"
 Cohesion: 0.25
