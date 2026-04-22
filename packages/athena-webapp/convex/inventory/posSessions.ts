@@ -727,6 +727,13 @@ export const releaseSessionInventoryHoldsAndDeleteItems = mutation({
       return error("Session not found");
     }
 
+    if (args.checkoutStateVersion <= (session.checkoutStateVersion ?? 0)) {
+      return {
+        success: true as const,
+        data: { sessionId: args.sessionId },
+      };
+    }
+
     // Query all items for this session
     const items = await ctx.db
       .query("posSessionItem")

@@ -507,6 +507,54 @@ describe("pos session lifecycle trace handlers", () => {
     );
   });
 
+  it("ignores stale cart-cleared writes that arrive after a newer checkout sync", async () => {
+    const ctx = createMutationCtx({
+      sessions: [
+        buildSession({
+          _id: "session-stale-clear",
+          checkoutStateVersion: 5,
+          payments: [{ method: "card", amount: 80, timestamp: 2_000 }],
+        }),
+      ],
+      items: [
+        {
+          _id: "item-1",
+          sessionId: "session-stale-clear",
+          productSkuId: "sku-1",
+          quantity: 1,
+        },
+      ],
+    });
+
+    mocks.traceRecord.mockClear();
+
+    const result = await getHandler(releaseSessionInventoryHoldsAndDeleteItems)(
+      ctx as never,
+      {
+        sessionId: "session-stale-clear",
+        checkoutStateVersion: 4,
+      },
+    );
+
+    expect(result).toEqual({
+      success: true,
+      data: {
+        sessionId: "session-stale-clear",
+      },
+    });
+    expect(
+      ctx.sessions.find((session) => session._id === "session-stale-clear"),
+    ).toEqual(
+      expect.objectContaining({
+        payments: [{ method: "card", amount: 80, timestamp: 2_000 }],
+        checkoutStateVersion: 5,
+      }),
+    );
+    expect(mocks.releaseInventoryHoldsBatch).not.toHaveBeenCalled();
+    expect(ctx.db.delete).not.toHaveBeenCalled();
+    expect(mocks.traceRecord).not.toHaveBeenCalled();
+  });
+
   it("records payment milestones while syncing checkout state", async () => {
     const ctx = createMutationCtx({
       sessions: [
