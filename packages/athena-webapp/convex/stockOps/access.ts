@@ -1,3 +1,4 @@
+import { getAuthUserId } from "@convex-dev/auth/server";
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 
@@ -7,13 +8,19 @@ export async function requireStoreFullAdminAccess(
   ctx: StockOpsAccessCtx,
   storeId: Id<"store">
 ) {
-  const identity = await ctx.auth.getUserIdentity();
+  const authUserId = await getAuthUserId(ctx);
 
-  if (!identity?.email) {
+  if (!authUserId) {
     throw new Error("Authentication required.");
   }
 
-  const identityEmail = identity.email;
+  const authUser = await ctx.db.get("users", authUserId);
+
+  if (!authUser || typeof authUser.email !== "string") {
+    throw new Error("Authentication required.");
+  }
+
+  const identityEmail = authUser.email;
 
   const store = await ctx.db.get("store", storeId);
 

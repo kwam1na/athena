@@ -5,11 +5,11 @@ import View from "../View";
 import { FadeIn } from "../common/FadeIn";
 import { EmptyState } from "../states/empty/empty-state";
 import { NoPermissionView } from "../states/no-permission/NoPermissionView";
+import { ProtectedAdminSignInView } from "../states/signed-out/ProtectedAdminSignInView";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
-import useGetActiveStore from "@/hooks/useGetActiveStore";
-import { usePermissions } from "@/hooks/usePermissions";
+import { useProtectedAdminPageState } from "@/hooks/useProtectedAdminPageState";
 import { api } from "~/convex/_generated/api";
 
 type CustomerResult = {
@@ -632,8 +632,13 @@ export function ServiceCasesViewContent({
 }
 
 export function ServiceCasesView() {
-  const { activeStore } = useGetActiveStore();
-  const { canAccessOperations, isLoading } = usePermissions();
+  const {
+    activeStore,
+    canQueryProtectedData,
+    hasFullAdminAccess,
+    isAuthenticated,
+    isLoadingAccess,
+  } = useProtectedAdminPageState();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -641,29 +646,33 @@ export function ServiceCasesView() {
 
   const serviceCases = useQuery(
     api.serviceOps.serviceCases.listActiveServiceCases,
-    activeStore?._id ? { storeId: activeStore._id } : "skip"
+    canQueryProtectedData ? { storeId: activeStore!._id } : "skip"
   ) as ServiceCaseListItem[] | undefined;
 
   const selectedCaseDetails = useQuery(
     api.serviceOps.serviceCases.getServiceCaseDetails,
-    selectedCaseId ? { serviceCaseId: selectedCaseId as any } : "skip"
+    canQueryProtectedData && selectedCaseId
+      ? { serviceCaseId: selectedCaseId as any }
+      : "skip"
   ) as ServiceCaseDetails | null | undefined;
 
   const customerResults = useQuery(
     api.operations.serviceIntake.searchCustomers,
-    activeStore?._id && deferredSearchQuery.trim()
-      ? { searchQuery: deferredSearchQuery, storeId: activeStore._id }
+    canQueryProtectedData && deferredSearchQuery.trim()
+      ? { searchQuery: deferredSearchQuery, storeId: activeStore!._id }
       : "skip"
   ) as CustomerResult[] | undefined;
 
   const staffOptions = useQuery(
     api.operations.serviceIntake.listAssignableStaff,
-    activeStore?._id ? { storeId: activeStore._id } : "skip"
+    canQueryProtectedData ? { storeId: activeStore!._id } : "skip"
   ) as StaffOption[] | undefined;
 
   const catalogItems = useQuery(
     api.serviceOps.catalog.listServiceCatalogItems,
-    activeStore?._id ? { status: "active", storeId: activeStore._id } : "skip"
+    canQueryProtectedData
+      ? { status: "active", storeId: activeStore!._id }
+      : "skip"
   ) as CatalogItem[] | undefined;
 
   const createWalkInServiceCase = useMutation(
@@ -691,6 +700,26 @@ export function ServiceCasesView() {
     }
   };
 
+  if (isLoadingAccess) {
+    return (
+      <View>
+        <div className="container mx-auto py-10 text-sm text-muted-foreground">
+          Loading service cases...
+        </div>
+      </View>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <ProtectedAdminSignInView description="Your Athena session needs to reconnect before service cases can load protected operations data." />
+    );
+  }
+
+  if (!hasFullAdminAccess) {
+    return <NoPermissionView />;
+  }
+
   if (!activeStore) {
     return (
       <View>
@@ -711,8 +740,8 @@ export function ServiceCasesView() {
     <ServiceCasesViewContent
       catalogItems={catalogItems ?? []}
       customerResults={customerResults ?? []}
-      hasFullAdminAccess={canAccessOperations()}
-      isLoadingPermissions={isLoading}
+      hasFullAdminAccess={hasFullAdminAccess}
+      isLoadingPermissions={false}
       isSaving={isSaving}
       onAddLineItem={(args) =>
         withSaveState(async () => {

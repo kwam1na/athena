@@ -1,6 +1,7 @@
 import { createFileRoute, Link, Outlet } from "@tanstack/react-router";
 import { useConvexAuth, useMutation } from "convex/react";
 import { useEffect, useRef, useState } from "react";
+import { useAuthToken } from "@convex-dev/auth/react";
 import {
   LOGGED_IN_USER_ID_KEY,
   PENDING_ATHENA_AUTH_SYNC_KEY,
@@ -47,13 +48,21 @@ export const Route = createFileRoute("/login/_layout")({
 });
 
 export function LoginLayout() {
-  const { isLoading } = useConvexAuth();
+  const { isAuthenticated, isLoading } = useConvexAuth();
+  const authToken = useAuthToken();
   const syncAuthenticatedAthenaUser = useMutation(
     api.inventory.auth.syncAuthenticatedAthenaUser
   );
   const [authSyncError, setAuthSyncError] = useState<string | null>(null);
   const [pendingAuthSyncTick, setPendingAuthSyncTick] = useState(0);
   const isSyncingRef = useRef(false);
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     const handlePendingAuthSync = () => {
@@ -71,14 +80,23 @@ export function LoginLayout() {
   }, []);
 
   useEffect(() => {
-    if (
-      isSyncingRef.current ||
-      sessionStorage.getItem(PENDING_ATHENA_AUTH_SYNC_KEY) !== "1"
-    ) {
+    const pendingAuthSync =
+      sessionStorage.getItem(PENDING_ATHENA_AUTH_SYNC_KEY) === "1";
+    const hasLoggedInUserId = Boolean(
+      localStorage.getItem(LOGGED_IN_USER_ID_KEY)
+    );
+    const shouldRecoverAuthenticatedSession =
+      isAuthenticated && Boolean(authToken) && !hasLoggedInUserId;
+    const shouldCompletePendingAuthSync =
+      pendingAuthSync || shouldRecoverAuthenticatedSession;
+
+    if (isSyncingRef.current || !shouldCompletePendingAuthSync) {
       return;
     }
 
-    let isCancelled = false;
+    if (isLoading || !isAuthenticated || !authToken) {
+      return;
+    }
 
     const completePendingAuthSync = async () => {
       isSyncingRef.current = true;
@@ -114,7 +132,7 @@ export function LoginLayout() {
             : new Error("Could not load your Athena user profile.");
         }
 
-        if (isCancelled) {
+        if (!isMountedRef.current) {
           return;
         }
 
@@ -122,7 +140,7 @@ export function LoginLayout() {
         localStorage.setItem(LOGGED_IN_USER_ID_KEY, user._id);
         window.location.assign("/");
       } catch (error) {
-        if (isCancelled) {
+        if (!isMountedRef.current) {
           return;
         }
 
@@ -137,11 +155,13 @@ export function LoginLayout() {
     };
 
     void completePendingAuthSync();
-
-    return () => {
-      isCancelled = true;
-    };
-  }, [isLoading, pendingAuthSyncTick, syncAuthenticatedAthenaUser]);
+  }, [
+    authToken,
+    isAuthenticated,
+    isLoading,
+    pendingAuthSyncTick,
+    syncAuthenticatedAthenaUser,
+  ]);
 
   return (
     <div className="flex h-screen w-full" aria-busy={isLoading}>

@@ -5,12 +5,12 @@ import View from "../View";
 import { FadeIn } from "../common/FadeIn";
 import { EmptyState } from "../states/empty/empty-state";
 import { NoPermissionView } from "../states/no-permission/NoPermissionView";
+import { ProtectedAdminSignInView } from "../states/signed-out/ProtectedAdminSignInView";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { Textarea } from "../ui/textarea";
-import useGetActiveStore from "@/hooks/useGetActiveStore";
-import { usePermissions } from "@/hooks/usePermissions";
+import { useProtectedAdminPageState } from "@/hooks/useProtectedAdminPageState";
 import { api } from "~/convex/_generated/api";
 
 type ServiceCatalogItem = {
@@ -416,13 +416,18 @@ export function ServiceCatalogViewContent({
 }
 
 export function ServiceCatalogView() {
-  const { activeStore } = useGetActiveStore();
-  const { canAccessOperations, isLoading } = usePermissions();
+  const {
+    activeStore,
+    canQueryProtectedData,
+    hasFullAdminAccess,
+    isAuthenticated,
+    isLoadingAccess,
+  } = useProtectedAdminPageState();
   const [isSaving, setIsSaving] = useState(false);
 
   const items = useQuery(
     api.serviceOps.catalog.listServiceCatalogItems,
-    activeStore?._id ? { storeId: activeStore._id } : "skip"
+    canQueryProtectedData ? { storeId: activeStore!._id } : "skip"
   ) as ServiceCatalogItem[] | undefined;
 
   const createServiceCatalogItem = useMutation(
@@ -444,6 +449,26 @@ export function ServiceCatalogView() {
     }
   };
 
+  if (isLoadingAccess) {
+    return (
+      <View>
+        <div className="container mx-auto py-10 text-sm text-muted-foreground">
+          Loading service catalog...
+        </div>
+      </View>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <ProtectedAdminSignInView description="Your Athena session needs to reconnect before the service catalog can load protected operations data." />
+    );
+  }
+
+  if (!hasFullAdminAccess) {
+    return <NoPermissionView />;
+  }
+
   if (!activeStore) {
     return (
       <View>
@@ -459,8 +484,8 @@ export function ServiceCatalogView() {
 
   return (
     <ServiceCatalogViewContent
-      hasFullAdminAccess={canAccessOperations()}
-      isLoadingPermissions={isLoading}
+      hasFullAdminAccess={hasFullAdminAccess}
+      isLoadingPermissions={false}
       isSaving={isSaving}
       items={items ?? []}
       onArchive={(serviceCatalogId) =>

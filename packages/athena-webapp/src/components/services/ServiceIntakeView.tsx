@@ -5,9 +5,9 @@ import View from "../View";
 import { FadeIn } from "../common/FadeIn";
 import { EmptyState } from "../states/empty/empty-state";
 import { NoPermissionView } from "../states/no-permission/NoPermissionView";
-import useGetActiveStore from "@/hooks/useGetActiveStore";
+import { ProtectedAdminSignInView } from "../states/signed-out/ProtectedAdminSignInView";
 import { useAuth } from "@/hooks/useAuth";
-import { usePermissions } from "@/hooks/usePermissions";
+import { useProtectedAdminPageState } from "@/hooks/useProtectedAdminPageState";
 import { api } from "~/convex/_generated/api";
 import { Id } from "~/convex/_generated/dataModel";
 import {
@@ -212,23 +212,28 @@ export function ServiceIntakeViewContent({
 }
 
 export function ServiceIntakeView() {
-  const { activeStore } = useGetActiveStore();
+  const {
+    activeStore,
+    canQueryProtectedData,
+    hasFullAdminAccess,
+    isAuthenticated,
+    isLoadingAccess,
+  } = useProtectedAdminPageState();
   const { user } = useAuth();
-  const { canAccessOperations, isLoading } = usePermissions();
   const [searchQuery, setSearchQuery] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const deferredSearchQuery = useDeferredValue(searchQuery);
 
   const customerResults = useQuery(
     operationsApi.serviceIntake.searchCustomers,
-    activeStore?._id && deferredSearchQuery.trim()
-      ? { searchQuery: deferredSearchQuery, storeId: activeStore._id }
+    canQueryProtectedData && deferredSearchQuery.trim()
+      ? { searchQuery: deferredSearchQuery, storeId: activeStore!._id }
       : "skip"
   ) as ServiceIntakeCustomerResult[] | undefined;
 
   const staffOptions = useQuery(
     operationsApi.serviceIntake.listAssignableStaff,
-    activeStore?._id ? { storeId: activeStore._id } : "skip"
+    canQueryProtectedData ? { storeId: activeStore!._id } : "skip"
   ) as ServiceIntakeStaffOption[] | undefined;
 
   const createServiceIntake = useMutation(
@@ -243,6 +248,26 @@ export function ServiceIntakeView() {
       setIsSubmitting(false);
     }
   };
+
+  if (isLoadingAccess) {
+    return (
+      <View>
+        <div className="container mx-auto py-10 text-sm text-muted-foreground">
+          Loading service intake...
+        </div>
+      </View>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <ProtectedAdminSignInView description="Your Athena session needs to reconnect before service intake can load protected operations data." />
+    );
+  }
+
+  if (!hasFullAdminAccess) {
+    return <NoPermissionView />;
+  }
 
   if (!activeStore) {
     return (
@@ -260,8 +285,8 @@ export function ServiceIntakeView() {
   return (
     <ServiceIntakeViewContent
       customerResults={customerResults ?? []}
-      hasFullAdminAccess={canAccessOperations()}
-      isLoadingPermissions={isLoading}
+      hasFullAdminAccess={hasFullAdminAccess}
+      isLoadingPermissions={false}
       isSubmitting={isSubmitting}
       onCreateIntake={handleCreateIntake}
       searchQuery={searchQuery}

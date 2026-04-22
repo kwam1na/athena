@@ -1,12 +1,11 @@
 import { useState } from "react";
-import { useConvexAuth, useQuery } from "convex/react";
+import { useQuery } from "convex/react";
 import View from "../View";
 import { FadeIn } from "../common/FadeIn";
 import { EmptyState } from "../states/empty/empty-state";
 import { NoPermissionView } from "../states/no-permission/NoPermissionView";
-import { Button } from "../ui/button";
-import useGetActiveStore from "@/hooks/useGetActiveStore";
-import { usePermissions } from "@/hooks/usePermissions";
+import { ProtectedAdminSignInView } from "../states/signed-out/ProtectedAdminSignInView";
+import { useProtectedAdminPageState } from "@/hooks/useProtectedAdminPageState";
 import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
 
@@ -504,19 +503,15 @@ export function ProcurementViewContent({
 }
 
 export function ProcurementView() {
-  const { activeStore } = useGetActiveStore();
-  const { isAuthenticated, isLoading: isLoadingAuth } = useConvexAuth();
-  const { canAccessOperations, isLoading } = usePermissions();
-  const hasFullAdminAccess = canAccessOperations();
-  const canQueryProtectedProcurement =
-    activeStore?._id &&
-    hasFullAdminAccess &&
-    isAuthenticated &&
-    !isLoadingAuth;
+  const {
+    activeStore,
+    canQueryProtectedData,
+    hasFullAdminAccess,
+    isAuthenticated,
+    isLoadingAccess,
+  } = useProtectedAdminPageState();
   const procurementQueryArgs =
-    canQueryProtectedProcurement
-      ? { storeId: activeStore._id }
-      : "skip";
+    canQueryProtectedData ? { storeId: activeStore!._id } : "skip";
   const recommendations = useQuery(
     api.stockOps.replenishment.listReplenishmentRecommendations,
     procurementQueryArgs
@@ -527,12 +522,10 @@ export function ProcurementView() {
   ) as ProcurementOrderSummary[] | undefined;
   const vendors = useQuery(
     api.stockOps.vendors.listVendors,
-    canQueryProtectedProcurement
-      ? { status: "active", storeId: activeStore._id }
-      : "skip"
+    canQueryProtectedData ? { status: "active", storeId: activeStore!._id } : "skip"
   ) as Array<{ _id: Id<"vendor"> }> | undefined;
 
-  if (isLoading || isLoadingAuth) {
+  if (isLoadingAccess) {
     return (
       <View>
         <div className="container mx-auto py-10 text-sm text-muted-foreground">
@@ -544,19 +537,7 @@ export function ProcurementView() {
 
   if (!isAuthenticated) {
     return (
-      <View>
-        <div className="container mx-auto py-8">
-          <EmptyState
-            cta={
-              <Button asChild className="mt-4" variant="outline">
-                <a href="/login">Sign in again</a>
-              </Button>
-            }
-            description="Your Athena session needs to reconnect before procurement planning can load protected stock operations data."
-            title="Sign in required"
-          />
-        </div>
-      </View>
+      <ProtectedAdminSignInView description="Your Athena session needs to reconnect before procurement planning can load protected stock operations data." />
     );
   }
 
@@ -567,9 +548,7 @@ export function ProcurementView() {
       hasFullAdminAccess={hasFullAdminAccess}
       isLoadingPermissions={false}
       isLoadingProcurement={Boolean(
-        activeStore &&
-          hasFullAdminAccess &&
-          isAuthenticated &&
+        canQueryProtectedData &&
           (recommendations === undefined ||
             purchaseOrders === undefined ||
             vendors === undefined)

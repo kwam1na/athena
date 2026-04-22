@@ -8,6 +8,9 @@ import type { Id } from "~/convex/_generated/dataModel";
 
 const mockedHooks = vi.hoisted(() => ({
   useAuth: vi.fn(),
+  useConvexAuth: vi.fn(),
+  useConvexAuthIdentity: vi.fn(),
+  useGetAuthedUser: vi.fn(),
   useGetActiveStore: vi.fn(),
   useMutation: vi.fn(),
   usePermissions: vi.fn(),
@@ -15,6 +18,7 @@ const mockedHooks = vi.hoisted(() => ({
 }));
 
 vi.mock("convex/react", () => ({
+  useConvexAuth: mockedHooks.useConvexAuth,
   useMutation: mockedHooks.useMutation,
   useQuery: mockedHooks.useQuery,
 }));
@@ -25,6 +29,14 @@ vi.mock("@/hooks/useAuth", () => ({
 
 vi.mock("@/hooks/useGetActiveStore", () => ({
   default: mockedHooks.useGetActiveStore,
+}));
+
+vi.mock("@/hooks/useConvexAuthIdentity", () => ({
+  useConvexAuthIdentity: mockedHooks.useConvexAuthIdentity,
+}));
+
+vi.mock("@/hooks/useGetAuthedUser", () => ({
+  useGetAuthedUser: mockedHooks.useGetAuthedUser,
 }));
 
 vi.mock("@/hooks/usePermissions", () => ({
@@ -81,6 +93,14 @@ describe("OperationsQueueViewContent", () => {
     mockedHooks.useAuth.mockReturnValue({
       user: { _id: "user-1" },
     });
+    mockedHooks.useConvexAuth.mockReturnValue({
+      isAuthenticated: true,
+      isLoading: false,
+    });
+    mockedHooks.useConvexAuthIdentity.mockReturnValue({
+      email: "manager@example.com",
+    });
+    mockedHooks.useGetAuthedUser.mockReturnValue({ _id: "auth-user-1" });
     mockedHooks.useGetActiveStore.mockReturnValue({
       activeStore: { _id: "store-1" },
     });
