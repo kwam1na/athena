@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import {
-  internalMutation,
-  internalQuery,
+  mutation,
+  query,
   type MutationCtx,
   type QueryCtx,
 } from "../_generated/server";
@@ -28,6 +28,9 @@ type OperationalRole =
   | "stylist"
   | "technician"
   | "cashier";
+type StaffCredentialReaderCtx =
+  | Pick<QueryCtx, "db">
+  | Pick<MutationCtx, "db">;
 
 function normalizeUsername(username: string) {
   return username.trim().toLowerCase();
@@ -44,7 +47,7 @@ function requireNonEmptyUsername(username: string) {
 }
 
 async function getCredentialByStaffProfileId(
-  ctx: Pick<MutationCtx, "db"> | Pick<QueryCtx, "db">,
+  ctx: StaffCredentialReaderCtx,
   staffProfileId: Id<"staffProfile">
 ) {
   const activeCredential = await ctx.db
@@ -65,14 +68,14 @@ async function getCredentialByStaffProfileId(
 }
 
 async function getCredentialById(
-  ctx: Pick<MutationCtx, "db"> | Pick<QueryCtx, "db">,
+  ctx: StaffCredentialReaderCtx,
   staffCredentialId: Id<"staffCredential">
 ) {
   return ctx.db.get("staffCredential", staffCredentialId);
 }
 
 async function getCredentialByUsername(
-  ctx: Pick<MutationCtx, "db"> | Pick<QueryCtx, "db">,
+  ctx: StaffCredentialReaderCtx,
   args: {
     storeId: Id<"store">;
     username: string;
@@ -93,7 +96,7 @@ async function getCredentialByUsername(
 }
 
 async function getActiveRolesForStaffProfile(
-  ctx: Pick<MutationCtx, "db"> | Pick<QueryCtx, "db">,
+  ctx: StaffCredentialReaderCtx,
   args: {
     organizationId: Id<"organization">;
     staffProfileId: Id<"staffProfile">;
@@ -116,7 +119,7 @@ async function getActiveRolesForStaffProfile(
 }
 
 async function assertStaffProfileReadyForCredential(
-  ctx: Pick<MutationCtx, "db"> | Pick<QueryCtx, "db">,
+  ctx: StaffCredentialReaderCtx,
   args: {
     organizationId: Id<"organization">;
     staffProfileId: Id<"staffProfile">;
@@ -166,6 +169,37 @@ export async function getStaffCredentialUsernameAvailabilityWithCtx(
     available: !existingCredential,
     normalizedUsername,
   };
+}
+
+export async function listStaffCredentialsByStoreWithCtx(
+  ctx: StaffCredentialReaderCtx,
+  args: {
+    storeId: Id<"store">;
+  }
+) {
+  const [activeCredentials, suspendedCredentials, revokedCredentials] =
+    await Promise.all([
+      ctx.db
+        .query("staffCredential")
+        .withIndex("by_storeId_status", (q) =>
+          q.eq("storeId", args.storeId).eq("status", "active")
+        )
+        .collect(),
+      ctx.db
+        .query("staffCredential")
+        .withIndex("by_storeId_status", (q) =>
+          q.eq("storeId", args.storeId).eq("status", "suspended")
+        )
+        .collect(),
+      ctx.db
+        .query("staffCredential")
+        .withIndex("by_storeId_status", (q) =>
+          q.eq("storeId", args.storeId).eq("status", "revoked")
+        )
+        .collect(),
+    ]);
+
+  return [...activeCredentials, ...suspendedCredentials, ...revokedCredentials];
 }
 
 export async function createStaffCredentialWithCtx(
@@ -367,7 +401,39 @@ export async function authenticateStaffCredentialWithCtx(
   };
 }
 
-export const getStaffCredentialUsernameAvailability = internalQuery({
+export async function authenticateStaffCredentialForTerminalWithCtx(
+  ctx: Pick<MutationCtx, "db">,
+  args: {
+    allowedRoles?: OperationalRole[];
+    pinHash: string;
+    storeId: Id<"store">;
+    terminalId: Id<"posTerminal">;
+    username: string;
+  }
+) {
+  const authentication = await authenticateStaffCredentialWithCtx(ctx, args);
+  const activeSessions = await ctx.db
+    .query("posSession")
+    .withIndex("by_staffProfileId", (q) =>
+      q.eq("staffProfileId", authentication.staffProfileId)
+    )
+    .collect();
+  const now = Date.now();
+  const activeSessionsOnOtherTerminals = activeSessions.filter(
+    (session) =>
+      session.status === "active" &&
+      session.expiresAt > now &&
+      session.terminalId !== args.terminalId
+  );
+
+  if (activeSessionsOnOtherTerminals.length > 0) {
+    throw new Error("This staff member has an active session on another terminal.");
+  }
+
+  return authentication;
+}
+
+export const getStaffCredentialUsernameAvailability = query({
   args: {
     storeId: v.id("store"),
     username: v.string(),
@@ -376,7 +442,14 @@ export const getStaffCredentialUsernameAvailability = internalQuery({
     getStaffCredentialUsernameAvailabilityWithCtx(ctx, args),
 });
 
-export const createStaffCredential = internalMutation({
+export const listStaffCredentialsByStore = query({
+  args: {
+    storeId: v.id("store"),
+  },
+  handler: (ctx, args) => listStaffCredentialsByStoreWithCtx(ctx, args),
+});
+
+export const createStaffCredential = mutation({
   args: {
     organizationId: v.id("organization"),
     pinHash: v.string(),
@@ -387,7 +460,7 @@ export const createStaffCredential = internalMutation({
   handler: (ctx, args) => createStaffCredentialWithCtx(ctx, args),
 });
 
-export const updateStaffCredential = internalMutation({
+export const updateStaffCredential = mutation({
   args: {
     organizationId: v.id("organization"),
     pinHash: v.optional(v.string()),
@@ -400,7 +473,7 @@ export const updateStaffCredential = internalMutation({
   handler: (ctx, args) => updateStaffCredentialWithCtx(ctx, args),
 });
 
-export const authenticateStaffCredential = internalMutation({
+export const authenticateStaffCredential = mutation({
   args: {
     allowedRoles: v.optional(v.array(operationalRoleValidator)),
     pinHash: v.string(),
@@ -408,4 +481,15 @@ export const authenticateStaffCredential = internalMutation({
     username: v.string(),
   },
   handler: (ctx, args) => authenticateStaffCredentialWithCtx(ctx, args),
+});
+
+export const authenticateStaffCredentialForTerminal = mutation({
+  args: {
+    allowedRoles: v.optional(v.array(operationalRoleValidator)),
+    pinHash: v.string(),
+    storeId: v.id("store"),
+    terminalId: v.id("posTerminal"),
+    username: v.string(),
+  },
+  handler: (ctx, args) => authenticateStaffCredentialForTerminalWithCtx(ctx, args),
 });

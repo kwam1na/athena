@@ -8,10 +8,7 @@ import { logger } from "../lib/logger";
 import { useExpenseActiveSession } from "./useExpenseSessions";
 import { useGetTerminal } from "./useGetTerminal";
 
-type ExpenseActorId = Id<"staffProfile"> | Id<"cashier">;
-
-const toStaffProfileId = (actorId: ExpenseActorId) =>
-  actorId as unknown as Id<"staffProfile">;
+type ExpenseActorId = Id<"staffProfile">;
 
 /**
  * Hook for Expense Session Management
@@ -22,9 +19,7 @@ const toStaffProfileId = (actorId: ExpenseActorId) =>
 export const useSessionManagementExpense = () => {
   const store = useExpenseStore();
   const terminal = useGetTerminal();
-  const currentStaffProfileId = store.cashier.id as unknown as
-    | Id<"staffProfile">
-    | null;
+  const currentStaffProfileId = store.cashier.id;
   const activeSession = useExpenseActiveSession(
     store.storeId,
     terminal?._id,
@@ -70,9 +65,7 @@ export const useSessionManagementExpense = () => {
       }
 
       const sessionStaffProfileId =
-        staffProfileId !== undefined
-          ? toStaffProfileId(staffProfileId)
-          : currentStaffProfileId;
+        staffProfileId !== undefined ? staffProfileId : currentStaffProfileId;
 
       if (!sessionStaffProfileId) {
         toast.error("Staff profile missing");
@@ -146,7 +139,7 @@ export const useSessionManagementExpense = () => {
         const result = await updateSessionMutation({
           sessionId: sessionId as Id<"expenseSession">,
           ...updates,
-          staffProfileId: toStaffProfileId(updates.staffProfileId),
+          staffProfileId: updates.staffProfileId,
         });
 
         store.setSessionExpiresAt(result.expiresAt);
@@ -250,7 +243,7 @@ export const useSessionManagementExpense = () => {
       try {
         const result = await resumeSessionMutation({
           sessionId,
-          staffProfileId: toStaffProfileId(staffProfileId),
+          staffProfileId,
           terminalId,
         });
 

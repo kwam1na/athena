@@ -83,8 +83,8 @@ export function ExpenseView() {
       activeSessionQuery.expiresAt > Date.now()
   );
 
-  const handleCashierAuthenticated = (cashierId: Id<"cashier">) => {
-    store.setCashier(cashierId);
+  const handleCashierAuthenticated = (staffProfileId: Id<"staffProfile">) => {
+    store.setCashier(staffProfileId);
   };
 
   // Auto-check for active session or create one on mount
@@ -165,7 +165,7 @@ export function ExpenseView() {
       logger.info("[Expense] No active session found, creating new session", {
         storeId: activeStore._id,
         registerNumber: store.ui.registerNumber,
-        cashierId: store.cashier.id,
+        staffProfileId: store.cashier.id,
       });
 
       createSession(activeStore._id, store.cashier.id || undefined)

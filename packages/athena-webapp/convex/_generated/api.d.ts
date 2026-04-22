@@ -63,7 +63,6 @@ import type * as inventory_athenaUser from "../inventory/athenaUser.js";
 import type * as inventory_auth from "../inventory/auth.js";
 import type * as inventory_bannerMessage from "../inventory/bannerMessage.js";
 import type * as inventory_bestSeller from "../inventory/bestSeller.js";
-import type * as inventory_cashier from "../inventory/cashier.js";
 import type * as inventory_categories from "../inventory/categories.js";
 import type * as inventory_colors from "../inventory/colors.js";
 import type * as inventory_complimentaryProduct from "../inventory/complimentaryProduct.js";
@@ -121,6 +120,7 @@ import type * as operations_paymentAllocations from "../operations/paymentAlloca
 import type * as operations_registerSessionTracing from "../operations/registerSessionTracing.js";
 import type * as operations_registerSessions from "../operations/registerSessions.js";
 import type * as operations_serviceIntake from "../operations/serviceIntake.js";
+import type * as operations_staffCredentials from "../operations/staffCredentials.js";
 import type * as operations_staffProfiles from "../operations/staffProfiles.js";
 import type * as otp_EmailOTP from "../otp/EmailOTP.js";
 import type * as paystack_index from "../paystack/index.js";
@@ -156,7 +156,6 @@ import type * as schemas_inventory_appVerificationCode from "../schemas/inventor
 import type * as schemas_inventory_athenaUser from "../schemas/inventory/athenaUser.js";
 import type * as schemas_inventory_bannerMessage from "../schemas/inventory/bannerMessage.js";
 import type * as schemas_inventory_bestSeller from "../schemas/inventory/bestSeller.js";
-import type * as schemas_inventory_cashier from "../schemas/inventory/cashier.js";
 import type * as schemas_inventory_category from "../schemas/inventory/category.js";
 import type * as schemas_inventory_color from "../schemas/inventory/color.js";
 import type * as schemas_inventory_complimentaryProduct from "../schemas/inventory/complimentaryProduct.js";
@@ -341,7 +340,6 @@ declare const fullApi: ApiFromModules<{
   "inventory/auth": typeof inventory_auth;
   "inventory/bannerMessage": typeof inventory_bannerMessage;
   "inventory/bestSeller": typeof inventory_bestSeller;
-  "inventory/cashier": typeof inventory_cashier;
   "inventory/categories": typeof inventory_categories;
   "inventory/colors": typeof inventory_colors;
   "inventory/complimentaryProduct": typeof inventory_complimentaryProduct;
@@ -399,6 +397,7 @@ declare const fullApi: ApiFromModules<{
   "operations/registerSessionTracing": typeof operations_registerSessionTracing;
   "operations/registerSessions": typeof operations_registerSessions;
   "operations/serviceIntake": typeof operations_serviceIntake;
+  "operations/staffCredentials": typeof operations_staffCredentials;
   "operations/staffProfiles": typeof operations_staffProfiles;
   "otp/EmailOTP": typeof otp_EmailOTP;
   "paystack/index": typeof paystack_index;
@@ -434,7 +433,6 @@ declare const fullApi: ApiFromModules<{
   "schemas/inventory/athenaUser": typeof schemas_inventory_athenaUser;
   "schemas/inventory/bannerMessage": typeof schemas_inventory_bannerMessage;
   "schemas/inventory/bestSeller": typeof schemas_inventory_bestSeller;
-  "schemas/inventory/cashier": typeof schemas_inventory_cashier;
   "schemas/inventory/category": typeof schemas_inventory_category;
   "schemas/inventory/color": typeof schemas_inventory_color;
   "schemas/inventory/complimentaryProduct": typeof schemas_inventory_complimentaryProduct;
@@ -566,10 +564,26 @@ declare const fullApi: ApiFromModules<{
  * const myFunctionReference = api.myModule.myFunction;
  * ```
  */
-export declare const api: FilterApi<
-  typeof fullApi,
-  FunctionReference<any, "public">
->;
+type PublicApi = FilterApi<typeof fullApi, FunctionReference<any, "public">>;
+
+type PublicOperationsApi = {
+  staffCredentials: {
+    getStaffCredentialUsernameAvailability: typeof fullApi["operations/staffCredentials"]["getStaffCredentialUsernameAvailability"];
+    listStaffCredentialsByStore: typeof fullApi["operations/staffCredentials"]["listStaffCredentialsByStore"];
+    createStaffCredential: typeof fullApi["operations/staffCredentials"]["createStaffCredential"];
+    updateStaffCredential: typeof fullApi["operations/staffCredentials"]["updateStaffCredential"];
+    authenticateStaffCredential: typeof fullApi["operations/staffCredentials"]["authenticateStaffCredential"];
+    authenticateStaffCredentialForTerminal: typeof fullApi["operations/staffCredentials"]["authenticateStaffCredentialForTerminal"];
+  };
+  staffProfiles: {
+    getStaffProfileById: typeof fullApi["operations/staffProfiles"]["getStaffProfileById"];
+    listStaffProfiles: typeof fullApi["operations/staffProfiles"]["listStaffProfiles"];
+    createStaffProfile: typeof fullApi["operations/staffProfiles"]["createStaffProfile"];
+    updateStaffProfile: typeof fullApi["operations/staffProfiles"]["updateStaffProfile"];
+  };
+};
+
+export declare const api: PublicApi & { operations: PublicOperationsApi };
 
 /**
  * A utility for referencing Convex functions in your app's internal API.

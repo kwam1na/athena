@@ -3,10 +3,7 @@ import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
 import { logger } from "../lib/logger";
 
-type ExpenseActorId = Id<"staffProfile"> | Id<"cashier">;
-
-const toStaffProfileId = (actorId: ExpenseActorId) =>
-  actorId as unknown as Id<"staffProfile">;
+type ExpenseActorId = Id<"staffProfile">;
 
 // Hook to get expense sessions for a store
 export const useExpenseStoreSessions = (
@@ -21,7 +18,7 @@ export const useExpenseStoreSessions = (
     storeId && staffProfileId
       ? {
           storeId,
-          staffProfileId: toStaffProfileId(staffProfileId),
+          staffProfileId,
           terminalId,
           status,
           limit,
@@ -52,7 +49,7 @@ export const useExpenseActiveSession = (
     storeId && terminalId && staffProfileId
       ? {
           storeId,
-          staffProfileId: toStaffProfileId(staffProfileId),
+          staffProfileId,
           terminalId,
           registerNumber,
         }
@@ -77,7 +74,7 @@ export const useExpenseSessionCreate = () => {
         const result = await createSession({
           storeId,
           terminalId,
-          staffProfileId: toStaffProfileId(staffProfileId),
+          staffProfileId,
           registerNumber,
         });
 
@@ -114,7 +111,7 @@ export const useExpenseSessionUpdate = () => {
       try {
         return await updateSession({
           sessionId,
-          staffProfileId: toStaffProfileId(staffProfileId),
+          staffProfileId,
           ...updates,
         });
       } catch (error) {

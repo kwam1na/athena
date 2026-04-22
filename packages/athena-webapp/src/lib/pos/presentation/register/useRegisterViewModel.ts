@@ -104,12 +104,6 @@ export function useRegisterViewModel(): RegisterViewModel {
   const [staffProfileId, setStaffProfileId] = useState<Id<"staffProfile"> | null>(
     null,
   );
-  const cashierId = staffProfileId as unknown as Id<"cashier"> | null;
-  const setCashierId = (
-    nextCashierId: Id<"cashier"> | Id<"staffProfile"> | null,
-  ) => {
-    setStaffProfileId(nextCashierId as unknown as Id<"staffProfile"> | null);
-  };
   const [showCustomerPanel, setShowCustomerPanel] = useState(false);
   const [showProductEntry, setShowProductEntry] = useState(true);
   const [productSearchQuery, setProductSearchQuery] = useState("");

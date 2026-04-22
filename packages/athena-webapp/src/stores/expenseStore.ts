@@ -45,7 +45,7 @@ interface UIState {
 }
 
 interface CashierState {
-  id: Id<"cashier"> | null;
+  id: Id<"staffProfile"> | null;
   isAuthenticated: boolean;
 }
 
@@ -99,7 +99,7 @@ interface ExpenseState {
   setNotes: (notes: string) => void;
 
   // Cashier Actions
-  setCashier: (cashierId: Id<"cashier"> | null) => void;
+  setCashier: (cashierId: Id<"staffProfile"> | null) => void;
   clearCashier: () => void;
 
   // Global Actions

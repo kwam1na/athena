@@ -43,22 +43,23 @@ export function ExpenseCompletion({
   const { activeStore } = useGetActiveStore();
   const formatter = currencyFormatter(activeStore?.currency || "GHS");
 
-  const cashierId = useExpenseStore((state) => state.cashier.id);
+  const staffProfileId = useExpenseStore((state) => state.cashier.id);
   const terminalId = useExpenseStore((state) => state.terminalId);
   const storeId = useExpenseStore((state) => state.storeId);
   const clearCashier = useExpenseStore((state) => state.clearCashier);
   const activeSession = useExpenseActiveSession(
     storeId,
     terminalId,
-    cashierId || undefined,
+    staffProfileId || undefined,
   );
   const { voidSession } = useSessionManagementExpense();
-  const cashier = useQuery(
-    api.inventory.cashier.getById,
-    cashierId ? { id: cashierId } : "skip",
+  const staffProfile = useQuery(
+    api["operations/staffProfiles"].getStaffProfileById,
+    staffProfileId ? { staffProfileId } : "skip",
   );
-  const cashierName = cashier
-    ? `${cashier.firstName} ${cashier.lastName.charAt(0)}.`
+  const cashierName = staffProfile
+    ? staffProfile.fullName ||
+      [staffProfile.firstName, staffProfile.lastName].filter(Boolean).join(" ")
     : "Unassigned";
 
   const handleCashierSignOut = async () => {
@@ -156,7 +157,7 @@ export function ExpenseCompletion({
           {isCompleting ? "Recording Expense..." : "Complete Expense"}
         </Button>
 
-        {storeId && terminalId && cashierId && (
+        {storeId && terminalId && staffProfileId && (
           <CashierView
             cashierName={cashierName}
             onSignOut={handleCashierSignOut}

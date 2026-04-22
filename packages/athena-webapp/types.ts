@@ -99,8 +99,6 @@ export type BestSeller = Doc<"bestSeller">;
 
 export type BannerMessage = Doc<"bannerMessage">;
 
-export type Cashier = Doc<"cashier">;
-
 export type Analytic = Doc<"analytics"> & {
   userData?: {
     email?: string;
