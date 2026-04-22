@@ -1,7 +1,8 @@
 import { HARNESS_APP_REGISTRY } from "./harness-app-registry";
 import { validateHarnessDocs } from "./harness-check";
+import { TRACKED_GRAPHIFY_ARTIFACTS, runGraphifyCheck } from "./graphify-check";
 import { writeGeneratedHarnessDocs } from "./harness-generate";
-import { runGraphifyCheck } from "./graphify-check";
+import { runGraphifyRebuild } from "./graphify-rebuild";
 import { collectHarnessRepoValidationSelection } from "./harness-repo-validation";
 import { runHarnessSelfReview as runStructuredHarnessSelfReview } from "./harness-self-review";
 import {
@@ -14,8 +15,11 @@ const BASE_REF = "origin/main";
 const GENERATED_HARNESS_DOC_PATHS = new Set(
   HARNESS_APP_REGISTRY.flatMap((app) => app.harnessDocs.generatedDocs)
 );
+const TRACKED_GRAPHIFY_ARTIFACT_PATHS = new Set(TRACKED_GRAPHIFY_ARTIFACTS);
 const REPAIRED_DOCS_COMMIT_BLOCKER =
   "Generated harness docs were auto-repaired locally. Review and commit the repaired files, then push again.";
+const REPAIRED_GRAPHIFY_COMMIT_BLOCKER =
+  "Tracked graphify artifacts were auto-repaired locally. Review and commit the repaired files, then push again.";
 
 type SpawnedProcess = {
   exited: Promise<number>;
@@ -37,6 +41,7 @@ type PrePushReviewOptions = {
   ) => Promise<string[]>;
   getLocalChangedFiles?: (rootDir: string) => Promise<string[]>;
   runGraphifyCheck?: (rootDir: string) => Promise<void>;
+  runGraphifyRebuild?: (rootDir: string) => Promise<void>;
   runArchitectureCheck?: (rootDir: string) => Promise<void>;
   runHarnessInferentialReview?: (rootDir: string) => Promise<void>;
   runHarnessGenerate?: (rootDir: string) => Promise<void>;
@@ -178,6 +183,14 @@ function formatBlockerList(stepName: string, blockers: string[]) {
   return `${stepName} blocked:\n${blockers.map((blocker) => `- ${blocker}`).join("\n")}`;
 }
 
+function isRepairableGraphifyDrift(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return (
+    message.includes("[graphify check] Graphify artifacts are stale:") ||
+    message.includes("Run `bun run graphify:rebuild`")
+  );
+}
+
 export async function runPrePushReview(
   rootDir: string,
   options: PrePushReviewOptions = {}
@@ -193,6 +206,8 @@ export async function runPrePushReview(
     ((nextRootDir: string) => getChangedFilesForHarnessReview(nextRootDir));
   const runGraphifyFreshnessCheck =
     options.runGraphifyCheck ?? runGraphifyCheck;
+  const runGraphifyRebuildStep =
+    options.runGraphifyRebuild ?? runGraphifyRebuild;
   const runArchitecture = options.runArchitectureCheck ?? runArchitectureCheck;
   const runHarnessGenerateStep =
     options.runHarnessGenerate ?? runHarnessGenerate;
@@ -203,6 +218,7 @@ export async function runPrePushReview(
   const validateHarnessDocsStep =
     options.validateHarnessDocs ?? validateHarnessDocs;
   let changedFilesPromise: Promise<string[]> | undefined;
+  let repairedGraphifyArtifacts = false;
   let repairedGeneratedHarnessDocs = false;
   let usingWorkingTreeChangedFiles = false;
 
@@ -252,6 +268,13 @@ export async function runPrePushReview(
     return pendingGeneratedDocs;
   };
 
+  const getPendingGraphifyArtifacts = async () => {
+    const localChangedFiles = await getLocalChangedFiles(rootDir);
+    return localChangedFiles.filter((filePath) =>
+      TRACKED_GRAPHIFY_ARTIFACT_PATHS.has(filePath)
+    );
+  };
+
   const maybeRepairGeneratedHarnessDocs = async (reason: string) => {
     if (repairedGeneratedHarnessDocs) {
       return false;
@@ -271,10 +294,36 @@ export async function runPrePushReview(
     return true;
   };
 
+  const maybeRepairGraphifyArtifacts = async (
+    reason: string,
+    error: unknown
+  ) => {
+    if (repairedGraphifyArtifacts || !isRepairableGraphifyDrift(error)) {
+      return false;
+    }
+
+    logger.log(`[pre-push] Auto-repair: graphify:rebuild (${reason})`);
+    await runGraphifyRebuildStep(rootDir);
+    repairedGraphifyArtifacts = true;
+    return true;
+  };
+
   logger.log("[pre-push] Running pre-push validation suite...\n");
 
   logger.log("[pre-push] Step 1/6: graphify:check");
-  await runGraphifyFreshnessCheck(rootDir);
+  try {
+    await runGraphifyFreshnessCheck(rootDir);
+  } catch (error) {
+    const repaired = await maybeRepairGraphifyArtifacts(
+      "repairable graphify drift detected after graphify:check failed",
+      error
+    );
+    if (!repaired) {
+      throw error;
+    }
+
+    await runGraphifyFreshnessCheck(rootDir);
+  }
 
   logger.log(`[pre-push] Step 2/6: harness:self-review (vs ${BASE_REF})`);
   let selfReviewResult = await runSelfReview(rootDir);
@@ -348,6 +397,15 @@ export async function runPrePushReview(
       "\n[pre-push] Generated harness docs were repaired and revalidated locally."
     );
     throw new Error(REPAIRED_DOCS_COMMIT_BLOCKER);
+  }
+
+  const pendingGraphifyArtifacts = await getPendingGraphifyArtifacts();
+
+  if (repairedGraphifyArtifacts || pendingGraphifyArtifacts.length > 0) {
+    logger.log(
+      "\n[pre-push] Tracked graphify artifacts were repaired and revalidated locally."
+    );
+    throw new Error(REPAIRED_GRAPHIFY_COMMIT_BLOCKER);
   }
 
   logger.log("\n[pre-push] All checks passed.");

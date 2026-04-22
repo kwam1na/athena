@@ -240,6 +240,117 @@ describe("pre-push review wiring", () => {
     ]);
   });
 
+  it("blocks after auto-repairing stale graphify artifacts during graphify:check until they are committed", async () => {
+    const steps: string[] = [];
+    let graphifyCheckRuns = 0;
+    let graphifyArtifactsPending = false;
+
+    await expect(
+      prePushReview.runPrePushReview(ROOT_DIR, {
+        getChangedFiles: async () => {
+          steps.push("changed-files");
+          return ["packages/athena-webapp/src/main.tsx"];
+        },
+        getLocalChangedFiles: async () =>
+          graphifyArtifactsPending ? ["graphify-out/GRAPH_REPORT.md"] : [],
+        runGraphifyCheck: async () => {
+          graphifyCheckRuns += 1;
+          steps.push(`graphify:check:${graphifyCheckRuns}`);
+          if (graphifyCheckRuns === 1) {
+            throw new Error(
+              [
+                "[graphify check] Graphify artifacts are stale:",
+                "- graphify-out/GRAPH_REPORT.md",
+                "Run `bun run graphify:rebuild` from repo root to refresh tracked graphify artifacts.",
+              ].join("\n")
+            );
+          }
+        },
+        runGraphifyRebuild: async () => {
+          graphifyArtifactsPending = true;
+          steps.push("graphify:rebuild");
+        },
+        runHarnessSelfReview: async () => {
+          steps.push("harness:self-review");
+          return { blockers: [] };
+        },
+        runArchitectureCheck: async () => {
+          steps.push("architecture:check");
+        },
+        runHarnessReview: async (_rootDir, options) => {
+          steps.push(`harness:review:${options.baseRef}`);
+        },
+        runHarnessInferentialReview: async () => {
+          steps.push("harness:inferential-review");
+        },
+        logger: {
+          log() {},
+          warn() {},
+          error() {},
+        },
+      } as any)
+    ).rejects.toThrow(
+      "Tracked graphify artifacts were auto-repaired locally. Review and commit the repaired files, then push again."
+    );
+
+    expect(steps).toEqual([
+      "graphify:check:1",
+      "graphify:rebuild",
+      "graphify:check:2",
+      "harness:self-review",
+      "architecture:check",
+      "changed-files",
+      "harness:review:origin/main",
+      "harness:inferential-review",
+    ]);
+  });
+
+  it("blocks when graphify artifacts are already locally modified from a prior repair run", async () => {
+    const steps: string[] = [];
+
+    await expect(
+      prePushReview.runPrePushReview(ROOT_DIR, {
+        getChangedFiles: async () => {
+          steps.push("changed-files");
+          return ["packages/athena-webapp/src/main.tsx"];
+        },
+        getLocalChangedFiles: async () => ["graphify-out/GRAPH_REPORT.md"],
+        runGraphifyCheck: async () => {
+          steps.push("graphify:check");
+        },
+        runHarnessSelfReview: async () => {
+          steps.push("harness:self-review");
+          return { blockers: [] };
+        },
+        runArchitectureCheck: async () => {
+          steps.push("architecture:check");
+        },
+        runHarnessReview: async (_rootDir, options) => {
+          steps.push(`harness:review:${options.baseRef}`);
+        },
+        runHarnessInferentialReview: async () => {
+          steps.push("harness:inferential-review");
+        },
+        logger: {
+          log() {},
+          warn() {},
+          error() {},
+        },
+      } as any)
+    ).rejects.toThrow(
+      "Tracked graphify artifacts were auto-repaired locally. Review and commit the repaired files, then push again."
+    );
+
+    expect(steps).toEqual([
+      "graphify:check",
+      "harness:self-review",
+      "architecture:check",
+      "changed-files",
+      "harness:review:origin/main",
+      "harness:inferential-review",
+    ]);
+  });
+
   it.each(ATHENA_GENERATED_DOC_PATHS)(
     "blocks after auto-repairing stale Athena generated docs (%s) during harness:self-review until they are committed",
     async (generatedDocPath) => {
@@ -682,7 +793,10 @@ describe("repo harness ergonomics", () => {
     expect(readme).toContain(
       "runs `bun run harness:generate` once, retries the blocked step on the repaired tree, and then stops"
     );
-    expect(readme).toContain("`pre-push:review` uses `bun run graphify:check`");
+    expect(readme).toContain("`pre-push:review` starts with `bun run graphify:check`");
+    expect(readme).toContain(
+      "runs `bun run graphify:rebuild` once, reruns `bun run graphify:check`, and then stops"
+    );
     expect(readme).toContain("bun run graphify:check");
     expect(readme).toContain("bun run graphify:rebuild");
     expect(readme).toContain(".graphify_python");

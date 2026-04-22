@@ -5,7 +5,7 @@
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 3562 nodes · 3042 edges · 1368 communities detected
+- 3563 nodes · 3043 edges · 1368 communities detected
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS
 - Token cost: 0 input · 0 output
 
@@ -1534,72 +1534,72 @@ Cohesion: 0.24
 Nodes (6): createApp(), createHandlers(), deleteKeysIndividually(), invalidateAcrossCluster(), invalidateAcrossClusterWithPipeline(), scanNodeForPattern()
 
 ### Community 32 - "Community 32"
-Cohesion: 0.29
-Nodes (7): formatDeliveryAddress(), getAmountPaidForOrder(), getDiscountValue(), getOrderAmount(), getOrderState(), getPickupActionState(), getPotentialPoints()
-
-### Community 33 - "Community 33"
 Cohesion: 0.36
 Nodes (9): applyStockAdjustmentBatchWithCtx(), assertDistinctStockAdjustmentLineItems(), buildResolvedStockAdjustmentStatus(), buildStockAdjustmentDecisionEventType(), buildStockAdjustmentSourceId(), buildStockAdjustmentTitle(), resolveStockAdjustmentApprovalDecisionWithCtx(), submitStockAdjustmentBatchWithCtx() (+1 more)
 
-### Community 34 - "Community 34"
+### Community 33 - "Community 33"
 Cohesion: 0.33
 Nodes (2): OrdersTableToolbarProvider(), useOrdersTableToolbar()
 
-### Community 35 - "Community 35"
+### Community 34 - "Community 34"
 Cohesion: 0.18
 Nodes (0):
+
+### Community 35 - "Community 35"
+Cohesion: 0.29
+Nodes (7): formatDeliveryAddress(), getAmountPaidForOrder(), getDiscountValue(), getOrderAmount(), getOrderState(), getPickupActionState(), getPotentialPoints()
 
 ### Community 36 - "Community 36"
 Cohesion: 0.18
 Nodes (0):
 
 ### Community 37 - "Community 37"
+Cohesion: 0.2
+Nodes (2): formatBlockerList(), runPrePushReview()
+
+### Community 38 - "Community 38"
 Cohesion: 0.27
 Nodes (4): asBoolean(), asNumber(), asRecord(), getCashControlsConfig()
 
-### Community 38 - "Community 38"
+### Community 39 - "Community 39"
 Cohesion: 0.31
 Nodes (6): expenseItemSuccess(), expenseSessionSuccess(), itemSuccess(), operationSuccess(), sessionSuccess(), success()
 
-### Community 39 - "Community 39"
+### Community 40 - "Community 40"
 Cohesion: 0.22
 Nodes (2): isValidEmail(), validateCustomerInfo()
 
-### Community 40 - "Community 40"
+### Community 41 - "Community 41"
 Cohesion: 0.22
 Nodes (2): listProductSkusByProductId(), readAllQueryResults()
 
-### Community 41 - "Community 41"
+### Community 42 - "Community 42"
 Cohesion: 0.2
 Nodes (0):
 
-### Community 42 - "Community 42"
+### Community 43 - "Community 43"
 Cohesion: 0.29
 Nodes (5): handleReviewCloseout(), handleSubmitCloseout(), onReviewCloseout(), onSubmitCloseout(), trimOptional()
 
-### Community 43 - "Community 43"
+### Community 44 - "Community 44"
 Cohesion: 0.24
 Nodes (3): buildDepositSubmissionKey(), handleRecordDeposit(), trimOptional()
 
-### Community 44 - "Community 44"
+### Community 45 - "Community 45"
 Cohesion: 0.29
 Nodes (6): handleFileSelect(), handleRevert(), handleUpload(), resetEditState(), uploadImage(), validateFile()
 
-### Community 45 - "Community 45"
+### Community 46 - "Community 46"
 Cohesion: 0.2
 Nodes (0):
 
-### Community 46 - "Community 46"
+### Community 47 - "Community 47"
 Cohesion: 0.38
 Nodes (9): awardPointsForGuestOrders(), awardPointsForPastOrder(), getBaseUrl(), getEligiblePastOrders(), getOrderRewardPoints(), getPointHistory(), getRewardTiers(), getUserPoints() (+1 more)
 
-### Community 47 - "Community 47"
+### Community 48 - "Community 48"
 Cohesion: 0.4
 Nodes (8): fileExists(), isJsonObject(), normalizeGraphJsonArtifact(), normalizeGraphJsonContents(), resolveGraphifyPython(), runGraphifyRebuild(), sortJsonArray(), sortJsonValue()
-
-### Community 48 - "Community 48"
-Cohesion: 0.22
-Nodes (2): formatBlockerList(), runPrePushReview()
 
 ### Community 49 - "Community 49"
 Cohesion: 0.36
@@ -1746,16 +1746,16 @@ Cohesion: 0.29
 Nodes (0):
 
 ### Community 85 - "Community 85"
+Cohesion: 0.33
+Nodes (2): getProductName(), sortProduct()
+
+### Community 86 - "Community 86"
 Cohesion: 0.29
 Nodes (0):
 
-### Community 86 - "Community 86"
+### Community 87 - "Community 87"
 Cohesion: 0.52
 Nodes (6): addItemToSavedBag(), getActiveSavedBag(), getBaseUrl(), removeItemFromSavedBag(), updateSavedBagItem(), updateSavedBagOwner()
-
-### Community 87 - "Community 87"
-Cohesion: 0.33
-Nodes (2): getProductName(), sortProduct()
 
 ### Community 88 - "Community 88"
 Cohesion: 0.52
