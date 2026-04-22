@@ -16139,7 +16139,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_cashiers_cashiermanagement_test_tsx",
       "source_file": "packages/athena-webapp/src/components/cashiers/CashierManagement.test.tsx",
-      "source_location": "L104",
+      "source_location": "L106",
       "target": "cashiermanagement_test_chooserole",
       "weight": 1
     },
@@ -52894,7 +52894,7 @@
       "label": "chooseRole()",
       "norm_label": "chooserole()",
       "source_file": "packages/athena-webapp/src/components/cashiers/CashierManagement.test.tsx",
-      "source_location": "L104"
+      "source_location": "L106"
     },
     {
       "community": 272,

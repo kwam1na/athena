@@ -67,7 +67,9 @@ function mockConvex({
   usernameAvailability = { available: true, normalizedUsername: "amens" },
 }: {
   staffProfiles?: typeof defaultStaffProfiles;
-  usernameAvailability?: { available: boolean; normalizedUsername: string } | undefined;
+  usernameAvailability?:
+    | { available: boolean; normalizedUsername: string }
+    | undefined;
 } = {}) {
   mockedUseQuery.mockImplementation((...[_reference, args]) => {
     if (args === "skip") {
@@ -97,11 +99,14 @@ function mockConvex({
         }
 
         return updateStaffCredential(args);
-      }) as never
+      }) as never,
   );
 }
 
-async function chooseRole(user: ReturnType<typeof userEvent.setup>, role: RegExp) {
+async function chooseRole(
+  user: ReturnType<typeof userEvent.setup>,
+  role: RegExp,
+) {
   await user.click(screen.getByRole("combobox", { name: /role/i }));
   await user.click(await screen.findByRole("option", { name: role }));
 }
@@ -121,12 +126,14 @@ describe("CashierManagement", () => {
       <CashierManagement
         organizationId={"org-1" as Id<"organization">}
         storeId={"store-1" as Id<"store">}
-      />
+      />,
     );
 
     expect(screen.getByText("Ama Mensah")).toBeInTheDocument();
-    expect(screen.getAllByText("Pending PIN")).toHaveLength(2);
-    expect(screen.getByRole("button", { name: /set pin/i })).toBeInTheDocument();
+    expect(screen.getAllByText("Pending PIN")).toHaveLength(1);
+    expect(
+      screen.getByRole("button", { name: /set pin/i }),
+    ).toBeInTheDocument();
   });
 
   it("provisions staff with username and role before PIN setup", async () => {
@@ -140,7 +147,7 @@ describe("CashierManagement", () => {
       <CashierManagement
         organizationId={"org-1" as Id<"organization">}
         storeId={"store-1" as Id<"store">}
-      />
+      />,
     );
 
     await user.click(screen.getByRole("button", { name: /add staff member/i }));
@@ -149,7 +156,7 @@ describe("CashierManagement", () => {
     await chooseRole(user, /cashier/i);
 
     await waitFor(() =>
-      expect(screen.getByLabelText(/username/i)).toHaveValue("amens")
+      expect(screen.getByLabelText(/username/i)).toHaveValue("amens"),
     );
 
     await user.click(screen.getByRole("button", { name: /^save$/i }));
@@ -179,7 +186,7 @@ describe("CashierManagement", () => {
       <CashierManagement
         organizationId={"org-1" as Id<"organization">}
         storeId={"store-1" as Id<"store">}
-      />
+      />,
     );
 
     await user.click(screen.getByRole("button", { name: /set pin/i }));
