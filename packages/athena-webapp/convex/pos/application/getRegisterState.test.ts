@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { Id } from "../../_generated/dataModel";
 
 import { buildRegisterState } from "./queries/getRegisterState";
 
@@ -7,17 +8,20 @@ describe("buildRegisterState", () => {
     const result = buildRegisterState({
       terminal: null,
       cashier: { _id: "cashier-1", firstName: "Ama", lastName: "K" },
+      activeRegisterSession: null,
       activeSession: null,
       heldSessions: [],
     });
 
     expect(result.phase).toBe("requiresTerminal");
+    expect(result.activeRegisterSession).toBeNull();
   });
 
   it("returns requiresCashier when terminal exists but cashier does not", () => {
     const result = buildRegisterState({
       terminal: { _id: "terminal-1", displayName: "Front Counter" },
       cashier: null,
+      activeRegisterSession: null,
       activeSession: null,
       heldSessions: [],
     });
@@ -29,12 +33,21 @@ describe("buildRegisterState", () => {
     const result = buildRegisterState({
       terminal: { _id: "terminal-1", displayName: "Front Counter" },
       cashier: { _id: "cashier-1", firstName: "Ama", lastName: "K" },
+      activeRegisterSession: {
+        _id: "drawer-1" as Id<"registerSession">,
+        expectedCash: 5000,
+        openedAt: 1710000000000,
+        openingFloat: 5000,
+        registerNumber: "A1",
+        status: "open",
+      },
       activeSession: { _id: "session-1", sessionNumber: "POS-001" },
       heldSessions: [{ _id: "session-2", sessionNumber: "POS-000" }],
     });
 
     expect(result.phase).toBe("active");
     expect(result.activeSession?._id).toBe("session-1");
+    expect(result.activeRegisterSession?._id).toBe("drawer-1");
     expect(result.resumableSession?._id).toBe("session-2");
   });
 
@@ -42,6 +55,7 @@ describe("buildRegisterState", () => {
     const result = buildRegisterState({
       terminal: { _id: "terminal-1", displayName: "Front Counter" },
       cashier: { _id: "cashier-1", firstName: "Ama", lastName: "K" },
+      activeRegisterSession: null,
       activeSession: null,
       heldSessions: [
         { _id: "session-2", sessionNumber: "POS-002" },
@@ -57,6 +71,7 @@ describe("buildRegisterState", () => {
     const result = buildRegisterState({
       terminal: { _id: "terminal-1", displayName: "Front Counter" },
       cashier: { _id: "cashier-1", firstName: "Ama", lastName: "K" },
+      activeRegisterSession: null,
       activeSession: null,
       heldSessions: [],
     });

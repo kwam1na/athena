@@ -11,6 +11,7 @@ import {
   getActiveSessionForRegisterState,
   listHeldSessionsForRegisterState,
 } from "../../infrastructure/repositories/sessionRepository";
+import { getActiveRegisterSessionForRegisterState } from "../../infrastructure/repositories/registerSessionRepository";
 import { getTerminalForRegisterState } from "../../infrastructure/repositories/terminalRepository";
 
 export function buildRegisterState(
@@ -27,6 +28,7 @@ export function buildRegisterState(
     }),
     terminal: input.terminal,
     cashier: input.cashier,
+    activeRegisterSession: input.activeRegisterSession,
     activeSession: input.activeSession,
     resumableSession,
   };
@@ -43,16 +45,19 @@ export async function getRegisterState(
     registerNumber: args.registerNumber,
   };
 
-  const [terminal, cashier, activeSession, heldSessions] = await Promise.all([
+  const [terminal, cashier, activeRegisterSession, activeSession, heldSessions] =
+    await Promise.all([
     getTerminalForRegisterState(ctx, identity),
     getCashierForRegisterState(ctx, identity),
+    getActiveRegisterSessionForRegisterState(ctx, identity),
     getActiveSessionForRegisterState(ctx, identity),
     listHeldSessionsForRegisterState(ctx, identity),
-  ]);
+    ]);
 
   return buildRegisterState({
     terminal,
     cashier,
+    activeRegisterSession,
     activeSession,
     heldSessions,
   });

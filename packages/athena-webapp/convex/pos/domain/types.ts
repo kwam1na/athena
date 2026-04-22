@@ -1,3 +1,5 @@
+import type { Id } from "../../_generated/dataModel";
+
 export type PosServerPhase =
   | "requiresTerminal"
   | "requiresCashier"
@@ -40,6 +42,18 @@ export interface PosRegisterSessionSummary {
   workflowTraceId?: string;
 }
 
+export interface PosCashDrawerSummary {
+  _id: Id<"registerSession">;
+  status: "open" | "active" | "closing" | "closed";
+  terminalId?: Id<"posTerminal">;
+  registerNumber?: string;
+  openingFloat: number;
+  expectedCash: number;
+  openedAt: number;
+  notes?: string;
+  workflowTraceId?: string;
+}
+
 export interface PosRegisterPhaseInput {
   hasTerminal: boolean;
   hasCashier: boolean;
@@ -50,6 +64,7 @@ export interface PosRegisterPhaseInput {
 export interface PosRegisterStateInput {
   terminal: PosTerminalSummary | null;
   cashier: PosCashierSummary | null;
+  activeRegisterSession: PosCashDrawerSummary | null;
   activeSession: PosRegisterSessionSummary | null;
   heldSessions: PosRegisterSessionSummary[];
 }
