@@ -73,6 +73,11 @@ import {
   staffRoleAssignmentSchema,
 } from "./schemas/operations";
 import {
+  workflowTraceEventSchema,
+  workflowTraceLookupSchema,
+  workflowTraceSchema,
+} from "./schemas/observability";
+import {
   serviceAppointmentSchema,
   serviceCatalogSchema,
   serviceCaseLineItemSchema,
@@ -261,6 +266,26 @@ const schema = defineSchema({
   promoCodeItem: defineTable(promoCodeItemSchema)
     .index("by_promoCodeId", ["promoCodeId"])
     .index("by_productSkuId", ["productSkuId"]),
+  workflowTrace: defineTable(workflowTraceSchema)
+    .index("by_storeId_traceId", ["storeId", "traceId"])
+    .index("by_storeId_workflowType_primaryLookup", [
+      "storeId",
+      "workflowType",
+      "primaryLookupType",
+      "primaryLookupValue",
+    ])
+    .index("by_primarySubject", ["primarySubjectType", "primarySubjectId"]),
+  workflowTraceEvent: defineTable(workflowTraceEventSchema)
+    .index("by_storeId_traceId_occurredAt", ["storeId", "traceId", "occurredAt"])
+    .index("by_traceId_sequence", ["traceId", "sequence"]),
+  workflowTraceLookup: defineTable(workflowTraceLookupSchema)
+    .index("by_storeId_workflowType_lookup", [
+      "storeId",
+      "workflowType",
+      "lookupType",
+      "lookupValue",
+    ])
+    .index("by_traceId", ["traceId"]),
   operationalEvent: defineTable(operationalEventSchema)
     .index("by_storeId", ["storeId"])
     .index("by_storeId_subject", ["storeId", "subjectType", "subjectId"])
