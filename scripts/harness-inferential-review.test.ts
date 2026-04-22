@@ -312,6 +312,26 @@ describe("runHarnessInferentialReview", () => {
     expect(result.humanReport).toContain("Harness script changed without test update");
   });
 
+  it("fails when scripts/harness-app-registry.ts changes without scripts/harness-app-registry.test.ts", async () => {
+    const rootDir = await createFixtureRepo();
+
+    const result = await runHarnessInferentialReview(rootDir, {
+      getChangedFiles: async () => ["scripts/harness-app-registry.ts"],
+      nowIso: () => "2026-04-12T05:00:00.000Z",
+    });
+
+    expect(result.exitCode).toBe(1);
+    expect(result.machine.status).toBe("fail");
+    expect(result.machine.findings).toContainEqual(
+      expect.objectContaining({
+        id: "missing-harness-script-test-update-scripts-harness-app-registry-ts",
+        severity: "medium",
+        filePath: "scripts/harness-app-registry.ts",
+      })
+    );
+    expect(result.humanReport).toContain("scripts/harness-app-registry.test.ts");
+  });
+
   it("fails when the PR workflow omits semantic shadow mode on inferential review", async () => {
     const rootDir = await createFixtureRepo();
     await write(
