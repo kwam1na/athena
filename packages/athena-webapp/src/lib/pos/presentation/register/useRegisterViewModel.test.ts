@@ -477,6 +477,43 @@ describe("useRegisterViewModel", () => {
     );
   });
 
+  it("keeps back-to-back payment additions in sync with the latest checkout state", async () => {
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated("cashier-1" as Id<"cashier">);
+    });
+
+    act(() => {
+      result.current.checkout.onAddPayment("cash", 60);
+      result.current.checkout.onAddPayment("card", 60);
+    });
+
+    expect(result.current.checkout.payments).toHaveLength(2);
+    expect(result.current.checkout.payments.map((payment) => payment.method)).toEqual([
+      "cash",
+      "card",
+    ]);
+    expect(mockSyncSessionCheckoutState).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        stage: "paymentAdded",
+        payments: [expect.objectContaining({ method: "cash", amount: 60 })],
+      }),
+    );
+    expect(mockSyncSessionCheckoutState).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        stage: "paymentAdded",
+        payments: [
+          expect.objectContaining({ method: "cash", amount: 60 }),
+          expect.objectContaining({ method: "card", amount: 60 }),
+        ],
+      }),
+    );
+  });
+
   it("records checkout submission before completing the transaction", async () => {
     const { useRegisterViewModel } = await import("./useRegisterViewModel");
     const { result } = renderHook(() => useRegisterViewModel());

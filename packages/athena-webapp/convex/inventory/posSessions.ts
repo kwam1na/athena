@@ -222,7 +222,10 @@ function resolveCustomerTraceStage(
   }
 
   if (!hasCustomerSnapshotValue(next)) {
-    return { stage: "customerCleared" };
+    return {
+      stage: "customerCleared",
+      customerName: previous.customerInfo?.name,
+    };
   }
 
   if (!hasCustomerSnapshotValue(previous) || previous.customerId !== next.customerId) {
