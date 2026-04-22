@@ -179,6 +179,7 @@ packages/.claude/worktrees/
 /worktrees/
 /.worktrees/
 .dual-graph/
+.playwright-cli/
 graphify-out/cache/
 artifacts/harness-inferential-review/
 artifacts/harness-scorecard/
