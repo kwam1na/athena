@@ -267,6 +267,30 @@ describe("register session trace lifecycle handlers", () => {
     });
   });
 
+  it("does not persist the register-session trace link for deposits when trace creation fails", async () => {
+    mocks.traceRecord.mockResolvedValueOnce({
+      traceCreated: false,
+      traceId: "register_session:session-1",
+    });
+    const ctx = createMutationCtx({
+      registerSessions: [buildRegisterSession()],
+    });
+
+    await getHandler(recordRegisterSessionDeposit)(ctx as never, {
+      actorStaffProfileId: "staff-1",
+      amount: 2_500,
+      notes: "Safe drop",
+      reference: "SAFE-1",
+      registerSessionId: "session-1",
+      storeId: "store-1",
+      submissionKey: "deposit-1",
+    });
+
+    expect(ctx.db.patch).not.toHaveBeenCalledWith("registerSession", "session-1", {
+      workflowTraceId: "register_session:session-1",
+    });
+  });
+
   it("records closeout submission and approval-pending trace milestones", async () => {
     const ctx = createMutationCtx({
       registerSessions: [buildRegisterSession()],
@@ -304,6 +328,34 @@ describe("register session trace lifecycle handlers", () => {
       }),
     );
     expect(ctx.db.patch).toHaveBeenCalledWith("registerSession", "session-1", {
+      workflowTraceId: "register_session:session-1",
+    });
+  });
+
+  it("does not persist the register-session trace link for closeouts when trace creation fails", async () => {
+    mocks.traceRecord
+      .mockResolvedValueOnce({
+        traceCreated: false,
+        traceId: "register_session:session-1",
+      })
+      .mockResolvedValueOnce({
+        traceCreated: false,
+        traceId: "register_session:session-1",
+      });
+    const ctx = createMutationCtx({
+      registerSessions: [buildRegisterSession()],
+    });
+
+    await getHandler(submitRegisterSessionCloseout)(ctx as never, {
+      actorStaffProfileId: "staff-1",
+      actorUserId: "user-1",
+      countedCash: 16_050,
+      notes: "Variance requires review",
+      registerSessionId: "session-1",
+      storeId: "store-1",
+    });
+
+    expect(ctx.db.patch).not.toHaveBeenCalledWith("registerSession", "session-1", {
       workflowTraceId: "register_session:session-1",
     });
   });

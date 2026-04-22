@@ -155,6 +155,26 @@ describe("register session workflow trace handlers", () => {
     });
   });
 
+  it("does not persist workflowTraceId when the trace row was not created", async () => {
+    mocks.traceRecord.mockResolvedValueOnce({
+      traceCreated: false,
+      traceId: "register_session:session-1",
+    });
+    const ctx = createMutationCtx();
+
+    await getHandler(openRegisterSession)(ctx as never, {
+      storeId: "store-1",
+      organizationId: "org-1",
+      terminalId: "terminal-1",
+      registerNumber: "A1",
+      openingFloat: 5_000,
+    });
+
+    expect(ctx.db.patch).not.toHaveBeenCalledWith("registerSession", "session-1", {
+      workflowTraceId: "register_session:session-1",
+    });
+  });
+
   it("records a sale adjustment trace when register-session cash changes", async () => {
     const ctx = createMutationCtx({
       sessions: [buildRegisterSession()],

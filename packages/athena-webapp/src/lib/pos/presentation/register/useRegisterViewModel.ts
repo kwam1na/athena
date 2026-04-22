@@ -1209,6 +1209,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     activeStore?._id && terminal?._id && cashierId
       ? {
           activeSessionNumber: activeSession?.sessionNumber ?? null,
+          activeSessionTraceId: activeSession?.workflowTraceId ?? null,
           hasExpiredSession: Boolean(
             activeSession?.expiresAt && activeSession.expiresAt < Date.now(),
           ),
@@ -1224,6 +1225,7 @@ export function useRegisterViewModel(): RegisterViewModel {
               total: session.total,
               heldAt: session.heldAt,
               updatedAt: session.updatedAt,
+              workflowTraceId: session.workflowTraceId,
               holdReason: session.holdReason,
               customer: session.customer
                 ? {

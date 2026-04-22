@@ -1,9 +1,10 @@
 import type { ReactNode } from "react";
 
-import { Link } from "@tanstack/react-router";
-
 import { createWorkflowTraceId } from "~/shared/workflowTrace";
-import { getOrigin } from "~/src/lib/navigationUtils";
+import {
+  WorkflowTraceRouteLink,
+  getWorkflowTraceRouteTarget,
+} from "~/src/components/traces/WorkflowTraceRouteLink";
 
 type WorkflowTraceLinkTarget = {
   traceId: string;
@@ -24,24 +25,12 @@ type WorkflowTraceLinkTarget = {
 export function getWorkflowTraceLinkTarget(
   transactionNumber: string
 ): WorkflowTraceLinkTarget {
-  const traceId = createWorkflowTraceId({
-    workflowType: "pos_sale",
-    primaryLookupValue: transactionNumber,
-  });
-
-  return {
-    traceId,
-    to: "/$orgUrlSlug/store/$storeUrlSlug/traces/$traceId",
-    params: (prev) => ({
-      ...prev,
-      orgUrlSlug: prev.orgUrlSlug!,
-      storeUrlSlug: prev.storeUrlSlug!,
-      traceId,
+  return getWorkflowTraceRouteTarget(
+    createWorkflowTraceId({
+      workflowType: "pos_sale",
+      primaryLookupValue: transactionNumber,
     }),
-    search: {
-      o: getOrigin(),
-    },
-  };
+  );
 }
 
 export function WorkflowTraceLink({
@@ -56,13 +45,8 @@ export function WorkflowTraceLink({
   const target = getWorkflowTraceLinkTarget(transactionNumber);
 
   return (
-    <Link
-      to={target.to}
-      params={target.params}
-      search={target.search}
-      className={className}
-    >
+    <WorkflowTraceRouteLink traceId={target.traceId} className={className}>
       {children ?? "View trace"}
-    </Link>
+    </WorkflowTraceRouteLink>
   );
 }

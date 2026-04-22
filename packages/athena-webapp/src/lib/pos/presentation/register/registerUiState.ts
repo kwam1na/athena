@@ -53,6 +53,7 @@ export interface RegisterCartState {
 
 export interface RegisterSessionPanelState {
   activeSessionNumber?: string | null;
+  activeSessionTraceId?: string | null;
   hasExpiredSession: boolean;
   canHoldSession: boolean;
   disableNewSession: boolean;
@@ -65,6 +66,7 @@ export interface RegisterSessionPanelState {
     subtotal?: number;
     heldAt?: number;
     updatedAt: number;
+    workflowTraceId?: string;
     holdReason?: string;
     customer?: {
       name: string;

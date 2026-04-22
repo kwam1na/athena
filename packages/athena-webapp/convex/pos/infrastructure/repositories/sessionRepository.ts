@@ -112,6 +112,7 @@ export function summarizeRegisterStateSessions(
       expiresAt: session.expiresAt,
       updatedAt: session.updatedAt,
       heldAt: session.heldAt,
+      workflowTraceId: session.workflowTraceId,
     }));
 }
 

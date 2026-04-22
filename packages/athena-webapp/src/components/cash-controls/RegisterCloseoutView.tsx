@@ -7,6 +7,7 @@ import { capitalizeWords, currencyFormatter } from "@/lib/utils";
 import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
 import { EmptyState } from "../states/empty/empty-state";
+import { WorkflowTraceRouteLink } from "../traces/WorkflowTraceRouteLink";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Textarea } from "../ui/textarea";
@@ -33,6 +34,7 @@ export type RegisterCloseoutSession = {
   openedByStaffName?: string | null;
   registerNumber?: string | null;
   status: string;
+  workflowTraceId?: string | null;
 };
 
 type RegisterCloseoutSubmitArgs = {
@@ -236,6 +238,11 @@ export function RegisterCloseoutViewContent({
                       </p>
                       {registerSession.notes ? (
                         <p>Session notes: {registerSession.notes}</p>
+                      ) : null}
+                      {registerSession.workflowTraceId ? (
+                        <WorkflowTraceRouteLink traceId={registerSession.workflowTraceId}>
+                          View trace
+                        </WorkflowTraceRouteLink>
                       ) : null}
                     </div>
                   </div>

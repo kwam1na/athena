@@ -28,6 +28,7 @@ import {
   TableRow,
 } from "../ui/table";
 import { Textarea } from "../ui/textarea";
+import { WorkflowTraceRouteLink } from "../traces/WorkflowTraceRouteLink";
 
 const containerVariants = {
   hidden: {},
@@ -68,6 +69,7 @@ type RegisterSessionDetail = {
   status: string;
   totalDeposited: number;
   variance?: number;
+  workflowTraceId?: string | null;
 };
 
 type RegisterSessionDeposit = {
@@ -335,7 +337,21 @@ export function RegisterSessionViewContent({
               </div>
 
               <div className="mt-4 lg:mt-0">
-                <DetailNav orgUrlSlug={orgUrlSlug} storeUrlSlug={storeUrlSlug} />
+                <div className="flex flex-wrap items-center justify-end gap-2">
+                  {registerSession?.workflowTraceId ? (
+                    <Button
+                      asChild
+                      className="border-stone-300 bg-white/80 text-stone-700 hover:bg-white"
+                      size="sm"
+                      variant="outline"
+                    >
+                      <WorkflowTraceRouteLink traceId={registerSession.workflowTraceId}>
+                        View trace
+                      </WorkflowTraceRouteLink>
+                    </Button>
+                  ) : null}
+                  <DetailNav orgUrlSlug={orgUrlSlug} storeUrlSlug={storeUrlSlug} />
+                </div>
               </div>
             </div>
 
