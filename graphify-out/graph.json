@@ -19391,8 +19391,32 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_staff_staffmanagement_tsx",
       "source_file": "packages/athena-webapp/src/components/staff/StaffManagement.tsx",
-      "source_location": "L733",
-      "target": "staffmanagement_handledeactivate",
+      "source_location": "L569",
+      "target": "staffmanagement_handlepinkeydown",
+      "weight": 1
+    },
+    {
+      "_src": "packages_athena_webapp_src_components_staff_staffmanagement_tsx",
+      "_tgt": "staffmanagement_handlesubmit",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1,
+      "relation": "contains",
+      "source": "packages_athena_webapp_src_components_staff_staffmanagement_tsx",
+      "source_file": "packages/athena-webapp/src/components/staff/StaffManagement.tsx",
+      "source_location": "L587",
+      "target": "staffmanagement_handlesubmit",
+      "weight": 1
+    },
+    {
+      "_src": "packages_athena_webapp_src_components_staff_staffmanagement_tsx",
+      "_tgt": "staffmanagement_if",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1,
+      "relation": "contains",
+      "source": "packages_athena_webapp_src_components_staff_staffmanagement_tsx",
+      "source_file": "packages/athena-webapp/src/components/staff/StaffManagement.tsx",
+      "source_location": "L732",
+      "target": "staffmanagement_if",
       "weight": 1
     },
     {
@@ -60211,7 +60235,25 @@
       "label": "handleDeactivate()",
       "norm_label": "handledeactivate()",
       "source_file": "packages/athena-webapp/src/components/staff/StaffManagement.tsx",
-      "source_location": "L733"
+      "source_location": "L569"
+    },
+    {
+      "community": 48,
+      "file_type": "code",
+      "id": "staffmanagement_handlesubmit",
+      "label": "handleSubmit()",
+      "norm_label": "handlesubmit()",
+      "source_file": "packages/athena-webapp/src/components/staff/StaffManagement.tsx",
+      "source_location": "L342"
+    },
+    {
+      "community": 48,
+      "file_type": "code",
+      "id": "staffmanagement_if",
+      "label": "if()",
+      "norm_label": "if()",
+      "source_file": "packages/athena-webapp/src/components/staff/StaffManagement.tsx",
+      "source_location": "L732"
     },
     {
       "community": 48,
