@@ -390,8 +390,9 @@ describe("completeTransaction trace ordering", () => {
   });
 
   it("uses the stored session drawer binding during session-based checkout", async () => {
+    const runMutation = vi.fn().mockResolvedValue(undefined);
     const ctx = {
-      runMutation: vi.fn().mockResolvedValue(undefined),
+      runMutation,
     } as never;
 
     vi.mocked(getStoreById).mockResolvedValue({
@@ -474,7 +475,7 @@ describe("completeTransaction trace ordering", () => {
         registerSessionId: "register-1",
       }),
     );
-    expect(ctx.runMutation).toHaveBeenCalledWith(
+    expect(runMutation).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
         registerSessionId: "register-1",

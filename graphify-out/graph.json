@@ -9839,7 +9839,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_pos_application_commands_possessiontracing_ts",
       "source_file": "packages/athena-webapp/convex/pos/application/commands/posSessionTracing.ts",
-      "source_location": "L224",
+      "source_location": "L225",
       "target": "possessiontracing_buildpossessiontraceevent",
       "weight": 1
     },
@@ -9851,7 +9851,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_pos_application_commands_possessiontracing_ts",
       "source_file": "packages/athena-webapp/convex/pos/application/commands/posSessionTracing.ts",
-      "source_location": "L140",
+      "source_location": "L141",
       "target": "possessiontracing_buildpossessiontracerecord",
       "weight": 1
     },
@@ -9863,7 +9863,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_pos_application_commands_possessiontracing_ts",
       "source_file": "packages/athena-webapp/convex/pos/application/commands/posSessionTracing.ts",
-      "source_location": "L103",
+      "source_location": "L104",
       "target": "possessiontracing_buildtracesummary",
       "weight": 1
     },
@@ -9875,7 +9875,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_pos_application_commands_possessiontracing_ts",
       "source_file": "packages/athena-webapp/convex/pos/application/commands/posSessionTracing.ts",
-      "source_location": "L557",
+      "source_location": "L558",
       "target": "possessiontracing_createpossessiontracerecorder",
       "weight": 1
     },
@@ -9887,7 +9887,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_pos_application_commands_possessiontracing_ts",
       "source_file": "packages/athena-webapp/convex/pos/application/commands/posSessionTracing.ts",
-      "source_location": "L216",
+      "source_location": "L217",
       "target": "possessiontracing_formatpaymentmethod",
       "weight": 1
     },
@@ -9899,7 +9899,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_pos_application_commands_possessiontracing_ts",
       "source_file": "packages/athena-webapp/convex/pos/application/commands/posSessionTracing.ts",
-      "source_location": "L530",
+      "source_location": "L531",
       "target": "possessiontracing_recordpossessiontracebesteffort",
       "weight": 1
     },
@@ -9911,7 +9911,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_pos_application_commands_possessiontracing_ts",
       "source_file": "packages/athena-webapp/convex/pos/application/commands/posSessionTracing.ts",
-      "source_location": "L522",
+      "source_location": "L523",
       "target": "possessiontracing_safetracewrite",
       "weight": 1
     },
@@ -29615,7 +29615,7 @@
       "relation": "calls",
       "source": "possessiontracing_formatpaymentmethod",
       "source_file": "packages/athena-webapp/convex/pos/application/commands/posSessionTracing.ts",
-      "source_location": "L358",
+      "source_location": "L359",
       "target": "possessiontracing_buildpossessiontraceevent",
       "weight": 1
     },
@@ -29627,7 +29627,7 @@
       "relation": "calls",
       "source": "possessiontracing_buildtracesummary",
       "source_file": "packages/athena-webapp/convex/pos/application/commands/posSessionTracing.ts",
-      "source_location": "L148",
+      "source_location": "L149",
       "target": "possessiontracing_buildpossessiontracerecord",
       "weight": 1
     },
@@ -29639,7 +29639,7 @@
       "relation": "calls",
       "source": "possessiontracing_buildpossessiontraceevent",
       "source_file": "packages/athena-webapp/convex/pos/application/commands/posSessionTracing.ts",
-      "source_location": "L535",
+      "source_location": "L536",
       "target": "possessiontracing_recordpossessiontracebesteffort",
       "weight": 1
     },
@@ -29651,7 +29651,7 @@
       "relation": "calls",
       "source": "possessiontracing_buildpossessiontracerecord",
       "source_file": "packages/athena-webapp/convex/pos/application/commands/posSessionTracing.ts",
-      "source_location": "L534",
+      "source_location": "L535",
       "target": "possessiontracing_recordpossessiontracebesteffort",
       "weight": 1
     },
@@ -29663,7 +29663,7 @@
       "relation": "calls",
       "source": "possessiontracing_safetracewrite",
       "source_file": "packages/athena-webapp/convex/pos/application/commands/posSessionTracing.ts",
-      "source_location": "L538",
+      "source_location": "L539",
       "target": "possessiontracing_recordpossessiontracebesteffort",
       "weight": 1
     },
@@ -62572,7 +62572,7 @@
       "label": "buildPosSessionTraceEvent()",
       "norm_label": "buildpossessiontraceevent()",
       "source_file": "packages/athena-webapp/convex/pos/application/commands/posSessionTracing.ts",
-      "source_location": "L224"
+      "source_location": "L225"
     },
     {
       "community": 61,
@@ -62581,7 +62581,7 @@
       "label": "buildPosSessionTraceRecord()",
       "norm_label": "buildpossessiontracerecord()",
       "source_file": "packages/athena-webapp/convex/pos/application/commands/posSessionTracing.ts",
-      "source_location": "L140"
+      "source_location": "L141"
     },
     {
       "community": 61,
@@ -62590,7 +62590,7 @@
       "label": "buildTraceSummary()",
       "norm_label": "buildtracesummary()",
       "source_file": "packages/athena-webapp/convex/pos/application/commands/posSessionTracing.ts",
-      "source_location": "L103"
+      "source_location": "L104"
     },
     {
       "community": 61,
@@ -62599,7 +62599,7 @@
       "label": "createPosSessionTraceRecorder()",
       "norm_label": "createpossessiontracerecorder()",
       "source_file": "packages/athena-webapp/convex/pos/application/commands/posSessionTracing.ts",
-      "source_location": "L557"
+      "source_location": "L558"
     },
     {
       "community": 61,
@@ -62608,7 +62608,7 @@
       "label": "formatPaymentMethod()",
       "norm_label": "formatpaymentmethod()",
       "source_file": "packages/athena-webapp/convex/pos/application/commands/posSessionTracing.ts",
-      "source_location": "L216"
+      "source_location": "L217"
     },
     {
       "community": 61,
@@ -62617,7 +62617,7 @@
       "label": "recordPosSessionTraceBestEffort()",
       "norm_label": "recordpossessiontracebesteffort()",
       "source_file": "packages/athena-webapp/convex/pos/application/commands/posSessionTracing.ts",
-      "source_location": "L530"
+      "source_location": "L531"
     },
     {
       "community": 61,
@@ -62626,7 +62626,7 @@
       "label": "safeTraceWrite()",
       "norm_label": "safetracewrite()",
       "source_file": "packages/athena-webapp/convex/pos/application/commands/posSessionTracing.ts",
-      "source_location": "L522"
+      "source_location": "L523"
     },
     {
       "community": 610,

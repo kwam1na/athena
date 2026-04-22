@@ -56,6 +56,7 @@ export type PosSessionTraceableSession = Pick<
   | "subtotal"
   | "tax"
   | "total"
+  | "registerSessionId"
   | "workflowTraceId"
 >;
 
