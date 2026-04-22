@@ -8,6 +8,9 @@ import { createOperationalWorkItemWithCtx } from "./operationalWorkItems";
 import { recordOperationalEventWithCtx } from "./operationalEvents";
 import { recordPaymentAllocationWithCtx } from "./paymentAllocations";
 import { createServiceCaseWithCtx } from "../serviceOps/serviceCases";
+import { validateServiceIntakeInput } from "../../shared/serviceIntake";
+
+export { validateServiceIntakeInput } from "../../shared/serviceIntake";
 
 const MAX_CUSTOMER_SEARCH_RESULTS = 25;
 const MAX_STAFF_RESULTS = 100;
@@ -28,41 +31,6 @@ function splitFullName(fullName: string) {
     firstName,
     lastName: rest.length > 0 ? rest.join(" ") : undefined,
   };
-}
-
-export function validateServiceIntakeInput(args: {
-  assignedStaffProfileId?: string | null;
-  customerFullName?: string | null;
-  customerProfileId?: string | null;
-  depositAmount?: number | null;
-  depositMethod?: string | null;
-  serviceTitle?: string | null;
-}) {
-  const errors: string[] = [];
-
-  if (!args.assignedStaffProfileId) {
-    errors.push("An assignee is required.");
-  }
-
-  if (!args.serviceTitle?.trim()) {
-    errors.push("A service title is required.");
-  }
-
-  if (!args.customerProfileId && !args.customerFullName?.trim()) {
-    errors.push("A customer name is required when no customer is linked.");
-  }
-
-  if (args.depositAmount !== undefined && args.depositAmount !== null) {
-    if (args.depositAmount <= 0) {
-      errors.push("Deposit amount must be greater than zero.");
-    }
-
-    if (!args.depositMethod) {
-      errors.push("Select how the deposit was collected.");
-    }
-  }
-
-  return errors;
 }
 
 async function resolveServiceIntakeCustomerProfile(

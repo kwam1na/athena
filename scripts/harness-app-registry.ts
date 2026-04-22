@@ -179,7 +179,7 @@ export const HARNESS_APP_REGISTRY = [
     onboardingStatus: "active",
     packageDir: "packages/athena-webapp",
     routeRoot: "src/routes",
-    auditedRoots: ["src", "convex"],
+    auditedRoots: ["src", "shared", "convex"],
     harnessDocs: buildHarnessDocPathsForArchetype("packages/athena-webapp", "webapp"),
     keyFolderGroups: [
       {
@@ -214,6 +214,10 @@ export const HARNESS_APP_REGISTRY = [
           {
             path: "src/lib",
             description: "Shared frontend helpers, schemas, and package utilities.",
+          },
+          {
+            path: "shared",
+            description: "Browser-safe helpers shared with Convex-backed workflows.",
           },
           {
             path: "src/utils",
@@ -326,7 +330,7 @@ export const HARNESS_APP_REGISTRY = [
       },
       {
         title: "Shared-lib or utility edits",
-        touchedPaths: ["src/lib", "src/settings", "src/utils", "src/stores", "types.ts"],
+        touchedPaths: ["src/lib", "shared", "src/settings", "src/utils", "src/stores", "types.ts"],
         commands: [
           { kind: "script", script: "test" },
           {
@@ -365,8 +369,18 @@ export const HARNESS_APP_REGISTRY = [
       },
       {
         title: "Route runtime or build-pipeline edits",
-        touchedPaths: ["src/main.tsx", "src/routeTree.gen.ts", "vite.config.ts"],
+        touchedPaths: [
+          "src/main.tsx",
+          "src/routeTree.gen.ts",
+          "src/routeTree.browser-boundary.test.ts",
+          "vite.config.ts",
+        ],
         commands: [
+          {
+            kind: "raw",
+            command:
+              "bun run --filter '@athena/webapp' test -- src/routeTree.browser-boundary.test.ts",
+          },
           {
             kind: "raw",
             command: "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json",
@@ -374,7 +388,8 @@ export const HARNESS_APP_REGISTRY = [
           { kind: "script", script: "build" },
         ],
         behaviorScenarios: ["athena-admin-shell-boot"],
-        note: "Run these when bootstrap, generated router state, or package build configuration changes.",
+        note:
+          "Run these when bootstrap, generated router state, or package build configuration changes so browser-entry regressions fail before the route tree reaches Arc.",
       },
       {
         title: "Storybook and frontend tooling edits",

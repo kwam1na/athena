@@ -1,5 +1,11 @@
 import { createFileRoute, Link, Outlet } from "@tanstack/react-router";
-import { useConvexAuth } from "convex/react";
+import { useConvexAuth, useMutation } from "convex/react";
+import { useEffect, useRef, useState } from "react";
+import {
+  LOGGED_IN_USER_ID_KEY,
+  PENDING_ATHENA_AUTH_SYNC_KEY,
+} from "~/src/lib/constants";
+import { api } from "~/convex/_generated/api";
 
 const HOME_PATH = "/";
 
@@ -28,19 +34,117 @@ const QUOTES = [
 ];
 
 const randomQuote = QUOTES[Math.floor(Math.random() * QUOTES.length)];
+const AUTH_SYNC_RETRY_DELAY_MS = 100;
+const AUTH_SYNC_MAX_ATTEMPTS = 20;
+const AUTH_SYNC_RETRYABLE_MESSAGE = "Sign in again to continue.";
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 export const Route = createFileRoute("/login/_layout")({
   component: LoginLayout,
 });
 
-function LoginLayout() {
-  const { isAuthenticated, isLoading } = useConvexAuth();
+export function LoginLayout() {
+  const { isLoading } = useConvexAuth();
+  const syncAuthenticatedAthenaUser = useMutation(
+    api.inventory.auth.syncAuthenticatedAthenaUser
+  );
+  const [authSyncError, setAuthSyncError] = useState<string | null>(null);
+  const [pendingAuthSyncTick, setPendingAuthSyncTick] = useState(0);
+  const isSyncingRef = useRef(false);
 
-  if (isLoading && !isAuthenticated) {
-    return null;
-  }
+  useEffect(() => {
+    const handlePendingAuthSync = () => {
+      setPendingAuthSyncTick((tick) => tick + 1);
+    };
+
+    window.addEventListener("athena:pending-auth-sync", handlePendingAuthSync);
+
+    return () => {
+      window.removeEventListener(
+        "athena:pending-auth-sync",
+        handlePendingAuthSync
+      );
+    };
+  }, []);
+
+  useEffect(() => {
+    if (
+      isSyncingRef.current ||
+      sessionStorage.getItem(PENDING_ATHENA_AUTH_SYNC_KEY) !== "1"
+    ) {
+      return;
+    }
+
+    let isCancelled = false;
+
+    const completePendingAuthSync = async () => {
+      isSyncingRef.current = true;
+      setAuthSyncError(null);
+
+      let user = null;
+      let lastRetryError: unknown = null;
+
+      try {
+        for (let attempt = 0; attempt < AUTH_SYNC_MAX_ATTEMPTS; attempt += 1) {
+          try {
+            user = await syncAuthenticatedAthenaUser({});
+            break;
+          } catch (error) {
+            lastRetryError = error;
+            const message = error instanceof Error ? error.message : "";
+
+            if (!message.includes(AUTH_SYNC_RETRYABLE_MESSAGE)) {
+              throw error;
+            }
+
+            if (attempt === AUTH_SYNC_MAX_ATTEMPTS - 1) {
+              break;
+            }
+
+            await sleep(AUTH_SYNC_RETRY_DELAY_MS);
+          }
+        }
+
+        if (!user) {
+          throw lastRetryError instanceof Error
+            ? lastRetryError
+            : new Error("Could not load your Athena user profile.");
+        }
+
+        if (isCancelled) {
+          return;
+        }
+
+        sessionStorage.removeItem(PENDING_ATHENA_AUTH_SYNC_KEY);
+        localStorage.setItem(LOGGED_IN_USER_ID_KEY, user._id);
+        window.location.assign("/");
+      } catch (error) {
+        if (isCancelled) {
+          return;
+        }
+
+        const message =
+          error instanceof Error
+            ? error.message
+            : "Could not finish loading your Athena profile.";
+
+        setAuthSyncError(message);
+        isSyncingRef.current = false;
+      }
+    };
+
+    void completePendingAuthSync();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [isLoading, pendingAuthSyncTick, syncAuthenticatedAthenaUser]);
+
   return (
-    <div className="flex h-screen w-full">
+    <div className="flex h-screen w-full" aria-busy={isLoading}>
       <div className="absolute left-1/2 top-10 mx-auto flex -translate-x-1/2 transform lg:hidden">
         <Link
           to={HOME_PATH}
@@ -65,6 +169,11 @@ function LoginLayout() {
         <div className="base-grid absolute left-0 top-0 z-0 h-full w-full opacity-40" />
       </div>
       <div className="flex h-full w-full flex-col border-l border-primary/5 bg-card lg:w-[50%]">
+        {authSyncError && (
+          <div className="px-6 pt-6 text-sm text-destructive">
+            {authSyncError}
+          </div>
+        )}
         <Outlet />
       </div>
     </div>

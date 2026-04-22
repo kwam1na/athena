@@ -3,26 +3,17 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { InputOTPForm } from "./InputOTP";
-import { LOGGED_IN_USER_ID_KEY } from "~/src/lib/constants";
+import { PENDING_ATHENA_AUTH_SYNC_KEY } from "~/src/lib/constants";
+import { ATHENA_EMAIL_OTP_PROVIDER_ID } from "../../../../shared/auth";
 
 const mocked = vi.hoisted(() => ({
-  navigate: vi.fn(),
   signIn: vi.fn(),
-  syncAuthenticatedAthenaUser: vi.fn(),
 }));
 
 vi.mock("@convex-dev/auth/react", () => ({
   useAuthActions: () => ({
     signIn: mocked.signIn,
   }),
-}));
-
-vi.mock("convex/react", () => ({
-  useMutation: () => mocked.syncAuthenticatedAthenaUser,
-}));
-
-vi.mock("@tanstack/react-router", () => ({
-  useNavigate: () => mocked.navigate,
 }));
 
 vi.mock("@/components/ui/input-otp", () => ({
@@ -39,55 +30,42 @@ vi.mock("@/components/ui/input-otp", () => ({
 
 describe("InputOTPForm", () => {
   beforeEach(() => {
-    mocked.navigate.mockReset();
     mocked.signIn.mockReset();
-    mocked.syncAuthenticatedAthenaUser.mockReset();
+    window.sessionStorage.clear();
   });
 
-  it("signs in through Convex Auth and syncs the Athena user before navigating", async () => {
+  it("records that the Athena-user sync should finish after Convex Auth signs in", async () => {
     const user = userEvent.setup();
 
     mocked.signIn.mockResolvedValue({ signingIn: true });
-    mocked.syncAuthenticatedAthenaUser.mockResolvedValue({ _id: "user-1" });
 
     render(<InputOTPForm email=" Manager@Example.com " />);
 
     await user.type(screen.getByLabelText(/verification code/i), "123456");
 
     await waitFor(() =>
-      expect(mocked.signIn).toHaveBeenCalledWith("resend-otp", {
+      expect(mocked.signIn).toHaveBeenCalledWith(ATHENA_EMAIL_OTP_PROVIDER_ID, {
         code: "123456",
         email: "manager@example.com",
       })
     );
-    expect(mocked.syncAuthenticatedAthenaUser).toHaveBeenCalledWith({});
-    expect(window.localStorage.setItem).toHaveBeenCalledWith(
-      LOGGED_IN_USER_ID_KEY,
-      "user-1"
+    expect(window.sessionStorage.setItem).toHaveBeenCalledWith(
+      PENDING_ATHENA_AUTH_SYNC_KEY,
+      "1"
     );
-    expect(mocked.navigate).toHaveBeenCalledWith({ to: "/" });
   });
 
-  it("surfaces non-verification sync failures to the operator", async () => {
+  it("surfaces invalid verification codes to the operator", async () => {
     const user = userEvent.setup();
 
-    mocked.signIn.mockResolvedValue({ signingIn: true });
-    mocked.syncAuthenticatedAthenaUser.mockRejectedValue(
-      new Error(
-        "Multiple Athena users match this email. Resolve duplicate accounts before continuing."
-      )
-    );
+    mocked.signIn.mockResolvedValue({ signingIn: false });
 
     render(<InputOTPForm email="manager@example.com" />);
 
     await user.type(screen.getByLabelText(/verification code/i), "123456");
 
     await waitFor(() =>
-      expect(
-        screen.getByText(
-          "Multiple Athena users match this email. Resolve duplicate accounts before continuing."
-        )
-      ).toBeInTheDocument()
+      expect(screen.getByText("Invalid code entered")).toBeInTheDocument()
     );
   });
 });

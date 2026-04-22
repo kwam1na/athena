@@ -14,13 +14,11 @@ import {
   InputOTPSlot,
 } from "@/components/ui/input-otp";
 import { useAuthActions } from "@convex-dev/auth/react";
+import { ATHENA_EMAIL_OTP_PROVIDER_ID } from "../../../../shared/auth";
 import { LoadingButton } from "~/src/components/ui/loading-button";
-import { LOGGED_IN_USER_ID_KEY } from "~/src/lib/constants";
+import { PENDING_ATHENA_AUTH_SYNC_KEY } from "~/src/lib/constants";
 import { useForm } from "react-hook-form";
 import { useState } from "react";
-import { useMutation } from "convex/react";
-import { useNavigate } from "@tanstack/react-router";
-import { api } from "~/convex/_generated/api";
 import { z } from "zod";
 
 const FormSchema = z.object({
@@ -41,12 +39,6 @@ export function InputOTPForm({ email }: { email: string }) {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const { signIn } = useAuthActions();
 
-  const syncAuthenticatedAthenaUser = useMutation(
-    api.inventory.auth.syncAuthenticatedAthenaUser
-  );
-
-  const navigate = useNavigate();
-
   // Automatically submit the form when 6 digits are entered
   const handlePinChange = (newValue: string) => {
     form.setValue("pin", newValue);
@@ -61,25 +53,20 @@ export function InputOTPForm({ email }: { email: string }) {
       setIsSigningIn(true);
       setErrorMessage(null);
 
-      const result = await signIn("resend-otp", {
+      const result = await signIn(ATHENA_EMAIL_OTP_PROVIDER_ID, {
         code: data.pin,
         email: email.trim().toLowerCase(),
       });
 
-      if (result.signingIn) {
-        const user = await syncAuthenticatedAthenaUser({});
-
-        if (!user) {
-          throw new Error("Could not load your Athena user profile.");
-        }
-
-        localStorage.setItem(LOGGED_IN_USER_ID_KEY, user._id);
-        navigate({ to: "/" });
-      } else {
+      if (!result.signingIn) {
         setErrorMessage("Invalid code entered");
+        setIsSigningIn(false);
+        return;
       }
 
-      setIsSigningIn(false);
+      sessionStorage.setItem(PENDING_ATHENA_AUTH_SYNC_KEY, "1");
+      window.dispatchEvent(new Event("athena:pending-auth-sync"));
+      return;
     } catch (e) {
       const message =
         e instanceof Error ? e.message : "Could not verify code";

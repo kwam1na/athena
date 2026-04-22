@@ -7,7 +7,7 @@ import {
   STOCK_ADJUSTMENT_APPROVAL_THRESHOLD,
   requiresStockAdjustmentApproval,
   summarizeStockAdjustmentLineItems,
-} from "~/convex/stockOps/adjustments";
+} from "~/shared/stockAdjustment";
 import type { Id } from "~/convex/_generated/dataModel";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";

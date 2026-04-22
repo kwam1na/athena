@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { LoginForm } from "./LoginForm";
+import { ATHENA_EMAIL_OTP_PROVIDER_ID } from "../../../../shared/auth";
 
 const mocked = vi.hoisted(() => ({
   setStep: vi.fn(),
@@ -32,7 +33,7 @@ describe("LoginForm", () => {
     await user.click(screen.getByRole("button", { name: /continue/i }));
 
     await waitFor(() =>
-      expect(mocked.signIn).toHaveBeenCalledWith("resend-otp", {
+      expect(mocked.signIn).toHaveBeenCalledWith(ATHENA_EMAIL_OTP_PROVIDER_ID, {
         email: "manager@example.com",
       })
     );

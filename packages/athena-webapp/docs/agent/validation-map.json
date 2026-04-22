@@ -95,6 +95,7 @@
       "name": "shared-lib-or-utility-edits",
       "pathPrefixes": [
         "packages/athena-webapp/src/lib",
+        "packages/athena-webapp/shared",
         "packages/athena-webapp/src/settings",
         "packages/athena-webapp/src/utils",
         "packages/athena-webapp/src/stores",
@@ -159,9 +160,14 @@
       "pathPrefixes": [
         "packages/athena-webapp/src/main.tsx",
         "packages/athena-webapp/src/routeTree.gen.ts",
+        "packages/athena-webapp/src/routeTree.browser-boundary.test.ts",
         "packages/athena-webapp/vite.config.ts"
       ],
       "commands": [
+        {
+          "kind": "raw",
+          "command": "bun run --filter '@athena/webapp' test -- src/routeTree.browser-boundary.test.ts"
+        },
         {
           "kind": "raw",
           "command": "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json"

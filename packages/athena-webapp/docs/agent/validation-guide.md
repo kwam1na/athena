@@ -51,7 +51,7 @@ Use this when register-session, deposit, closeout, dashboard, operations-queue a
 
 ## Shared-lib or utility edits
 
-Touched surfaces: `src/lib`, `src/settings`, `src/utils`, `src/stores`, `types.ts`
+Touched surfaces: `src/lib`, `shared`, `src/settings`, `src/utils`, `src/stores`, `types.ts`
 
 Run:
 
@@ -89,10 +89,11 @@ Any change that can affect Convex HTTP wiring, serviceOps schemas and workflows,
 
 ## Route runtime or build-pipeline edits
 
-Touched surfaces: `src/main.tsx`, `src/routeTree.gen.ts`, `vite.config.ts`
+Touched surfaces: `src/main.tsx`, `src/routeTree.gen.ts`, `src/routeTree.browser-boundary.test.ts`, `vite.config.ts`
 
 Run:
 
+- `bun run --filter '@athena/webapp' test -- src/routeTree.browser-boundary.test.ts`
 - `bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json`
 - `bun run --filter '@athena/webapp' build`
 
@@ -100,7 +101,7 @@ Behavior scenarios:
 
 - `athena-admin-shell-boot`
 
-Run these when bootstrap, generated router state, or package build configuration changes.
+Run these when bootstrap, generated router state, or package build configuration changes so browser-entry regressions fail before the route tree reaches Arc.
 
 ## Storybook and frontend tooling edits
 

@@ -562,6 +562,11 @@ async function createFixtureRepo() {
   await write("packages/athena-webapp/src/config.ts", "export {};\n", rootDir);
   await write("packages/athena-webapp/src/index.css", "body {}\n", rootDir);
   await write("packages/athena-webapp/src/routeTree.gen.ts", "export {};\n", rootDir);
+  await write(
+    "packages/athena-webapp/src/routeTree.browser-boundary.test.ts",
+    "export {};\n",
+    rootDir
+  );
   await write("packages/athena-webapp/src/routes/_authed/index.tsx", "export {};\n", rootDir);
   await write(
     "packages/athena-webapp/src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/cash-controls/index.tsx",
@@ -613,6 +618,16 @@ async function createFixtureRepo() {
   await write("packages/athena-webapp/src/hooks/useAuth.ts", "export {};\n", rootDir);
   await write("packages/athena-webapp/src/contexts/AuthContext.tsx", "export {};\n", rootDir);
   await write("packages/athena-webapp/src/lib/session.ts", "export {};\n", rootDir);
+  await write(
+    "packages/athena-webapp/shared/serviceIntake.ts",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/shared/stockAdjustment.ts",
+    "export {};\n",
+    rootDir
+  );
   await write("packages/athena-webapp/src/settings/store.ts", "export {};\n", rootDir);
   await write("packages/athena-webapp/src/stores/appStore.ts", "export {};\n", rootDir);
   await write("packages/athena-webapp/src/utils/format.ts", "export {};\n", rootDir);
