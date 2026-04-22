@@ -583,6 +583,11 @@ async function createFixtureRepo() {
     "export {};\n",
     rootDir
   );
+  await write(
+    "packages/athena-webapp/src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/traces/$traceId.tsx",
+    "export {};\n",
+    rootDir
+  );
   await write("packages/athena-webapp/src/routes/index.tsx", "export {};\n", rootDir);
   await write("packages/athena-webapp/src/components/AppShell.tsx", "export {};\n", rootDir);
   await write(
@@ -591,7 +596,17 @@ async function createFixtureRepo() {
     rootDir
   );
   await write(
+    "packages/athena-webapp/src/components/pos/transactions/WorkflowTraceLink.tsx",
+    "export {};\n",
+    rootDir
+  );
+  await write(
     "packages/athena-webapp/src/components/cash-controls/CashControlsDashboard.tsx",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/src/components/traces/WorkflowTraceView.tsx",
     "export {};\n",
     rootDir
   );
@@ -628,6 +643,11 @@ async function createFixtureRepo() {
     "export {};\n",
     rootDir
   );
+  await write(
+    "packages/athena-webapp/shared/workflowTrace.ts",
+    "export {};\n",
+    rootDir
+  );
   await write("packages/athena-webapp/src/settings/store.ts", "export {};\n", rootDir);
   await write("packages/athena-webapp/src/stores/appStore.ts", "export {};\n", rootDir);
   await write("packages/athena-webapp/src/utils/format.ts", "export {};\n", rootDir);
@@ -641,6 +661,21 @@ async function createFixtureRepo() {
     rootDir
   );
   await write("packages/athena-webapp/convex/inventory/item.ts", "export {};\n", rootDir);
+  await write(
+    "packages/athena-webapp/convex/pos/application/commands/completeTransaction.ts",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/convex/pos/application/queries/getTransactions.ts",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/convex/pos/public/transactions.ts",
+    "export {};\n",
+    rootDir
+  );
   await write(
     "packages/athena-webapp/convex/operations/approvalRequests.ts",
     "export {};\n",
@@ -661,6 +696,21 @@ async function createFixtureRepo() {
   await write(
     "packages/athena-webapp/scripts/convex-lint-changed.sh",
     "#!/usr/bin/env bash\nexit 0\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/convex/schemas/observability/workflowTrace.ts",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/convex/schemas/pos/posTransaction.ts",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/convex/workflowTraces/core.ts",
+    "export {};\n",
     rootDir
   );
   await write("packages/athena-webapp/vite.config.ts", "export default {};\n", rootDir);
