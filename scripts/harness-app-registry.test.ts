@@ -322,19 +322,30 @@ describe("HARNESS_APP_REGISTRY", () => {
       "convex/workflowTraces",
       "convex/schemas/observability",
       "convex/pos/application/commands/completeTransaction.ts",
+      "convex/pos/application/commands/posSessionTracing.ts",
       "convex/pos/application/queries/getTransactions.ts",
       "convex/pos/public/transactions.ts",
+      "convex/inventory/posSessions.ts",
+      "convex/operations/registerSessionTracing.ts",
+      "convex/operations/registerSessions.ts",
+      "convex/cashControls/closeouts.ts",
+      "convex/cashControls/deposits.ts",
       "convex/schemas/pos/posTransaction.ts",
       "shared/workflowTrace.ts",
       "src/components/traces",
+      "src/components/pos/SessionManager.tsx",
+      "src/components/pos/session/HeldSessionsList.tsx",
       "src/components/pos/transactions",
+      "src/components/cash-controls/CashControlsDashboard.tsx",
+      "src/components/cash-controls/RegisterSessionView.tsx",
+      "src/components/cash-controls/RegisterCloseoutView.tsx",
       "src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/traces",
     ]);
     expect(workflowTraceScenario?.commands).toEqual([
       {
         kind: "raw",
         command:
-          "bun run --filter '@athena/webapp' test -- convex/workflowTraces/presentation.test.ts convex/workflowTraces/queryUsage.test.ts convex/workflowTraces/schemaIndexes.test.ts convex/workflowTraces/adapters/posSale.test.ts convex/pos/application/completeTransaction.test.ts convex/pos/application/getTransactions.test.ts src/components/traces/WorkflowTraceView.test.tsx 'src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/traces/$traceId.test.tsx' src/components/pos/transactions/WorkflowTraceLink.test.tsx src/components/pos/transactions/transactionColumns.test.tsx src/components/pos/transactions/TransactionView.test.tsx src/components/pos/transactions/TransactionsView.test.tsx src/lib/traces/createWorkflowTraceId.test.ts",
+          "bun run --filter '@athena/webapp' test -- convex/workflowTraces/presentation.test.ts convex/workflowTraces/queryUsage.test.ts convex/workflowTraces/schemaIndexes.test.ts convex/workflowTraces/adapters/posSale.test.ts convex/workflowTraces/adapters/posSession.test.ts convex/workflowTraces/adapters/registerSession.test.ts convex/pos/application/completeTransaction.test.ts convex/pos/application/getTransactions.test.ts convex/pos/application/posSessionTracing.test.ts convex/inventory/posSessions.trace.test.ts convex/operations/registerSessionTracing.test.ts convex/operations/registerSessions.trace.test.ts convex/cashControls/registerSessionTraceLifecycle.test.ts src/components/traces/WorkflowTraceView.test.tsx 'src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/traces/$traceId.test.tsx' src/components/pos/transactions/WorkflowTraceLink.test.tsx src/components/pos/transactions/transactionColumns.test.tsx src/components/pos/transactions/TransactionView.test.tsx src/components/pos/transactions/TransactionsView.test.tsx src/components/pos/SessionManager.test.tsx src/components/pos/session/HeldSessionsList.test.tsx src/components/cash-controls/CashControlsDashboard.test.tsx src/components/cash-controls/RegisterSessionView.test.tsx src/components/cash-controls/RegisterCloseoutView.test.tsx src/lib/traces/createWorkflowTraceId.test.ts",
       },
       { kind: "script", script: "audit:convex" },
       { kind: "script", script: "lint:convex:changed" },
@@ -345,7 +356,7 @@ describe("HARNESS_APP_REGISTRY", () => {
       { kind: "script", script: "build" },
     ]);
     expect(workflowTraceScenario?.note).toBe(
-      "Use this when the shared workflow-trace contract, the trace route/view, or POS transaction trace links change. It exercises the trace schema and presentation contract, the shared trace route, and the operator-facing POS link surfaces before broader package validation."
+      "Use this when the shared workflow-trace contract, the `pos_sale` / `pos_session` / `register_session` trace writers, the trace route/view, or POS register, transaction, and cash-controls trace entry points change. It exercises the trace schema and presentation contract, the session/register trace writers, the shared trace route, and the operator-facing POS link surfaces before broader package validation."
     );
     expect(workflowTraceScenario?.behaviorScenarios).toEqual([
       "athena-admin-shell-boot",
