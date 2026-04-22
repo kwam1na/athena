@@ -118,6 +118,7 @@ import type * as operations_inventoryMovements from "../operations/inventoryMove
 import type * as operations_operationalEvents from "../operations/operationalEvents.js";
 import type * as operations_operationalWorkItems from "../operations/operationalWorkItems.js";
 import type * as operations_paymentAllocations from "../operations/paymentAllocations.js";
+import type * as operations_registerSessionTracing from "../operations/registerSessionTracing.js";
 import type * as operations_registerSessions from "../operations/registerSessions.js";
 import type * as operations_serviceIntake from "../operations/serviceIntake.js";
 import type * as operations_staffProfiles from "../operations/staffProfiles.js";
@@ -273,6 +274,7 @@ import type * as types_payment from "../types/payment.js";
 import type * as utils from "../utils.js";
 import type * as workflowTraces_adapters_posSale from "../workflowTraces/adapters/posSale.js";
 import type * as workflowTraces_adapters_posSession from "../workflowTraces/adapters/posSession.js";
+import type * as workflowTraces_adapters_registerSession from "../workflowTraces/adapters/registerSession.js";
 import type * as workflowTraces_core from "../workflowTraces/core.js";
 import type * as workflowTraces_presentation from "../workflowTraces/presentation.js";
 import type * as workflowTraces_public from "../workflowTraces/public.js";
@@ -394,6 +396,7 @@ declare const fullApi: ApiFromModules<{
   "operations/operationalEvents": typeof operations_operationalEvents;
   "operations/operationalWorkItems": typeof operations_operationalWorkItems;
   "operations/paymentAllocations": typeof operations_paymentAllocations;
+  "operations/registerSessionTracing": typeof operations_registerSessionTracing;
   "operations/registerSessions": typeof operations_registerSessions;
   "operations/serviceIntake": typeof operations_serviceIntake;
   "operations/staffProfiles": typeof operations_staffProfiles;
@@ -549,6 +552,7 @@ declare const fullApi: ApiFromModules<{
   utils: typeof utils;
   "workflowTraces/adapters/posSale": typeof workflowTraces_adapters_posSale;
   "workflowTraces/adapters/posSession": typeof workflowTraces_adapters_posSession;
+  "workflowTraces/adapters/registerSession": typeof workflowTraces_adapters_registerSession;
   "workflowTraces/core": typeof workflowTraces_core;
   "workflowTraces/presentation": typeof workflowTraces_presentation;
   "workflowTraces/public": typeof workflowTraces_public;
