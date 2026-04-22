@@ -51,7 +51,7 @@ Use this when register-session, deposit, closeout, dashboard, operations-queue a
 
 ## Staff foundation and subsystem credential edits
 
-Touched surfaces: `convex/operations/staffCredentials.ts`, `convex/operations/staffProfiles.ts`, `convex/schema.ts`, `convex/inventory/posSessions.ts`, `convex/pos/application/queries/getRegisterState.ts`, `convex/pos/infrastructure/repositories/cashierRepository.ts`, `src/components/cashiers/CashierManagement.tsx`, `src/components/expense/ExpenseCompletion.tsx`, `src/components/expense/ExpenseView.tsx`, `src/components/pos/CashierAuthDialog.tsx`, `src/hooks/useExpenseSessions.ts`, `src/hooks/useSessionManagementExpense.ts`, `src/lib/pos/presentation/register/useRegisterViewModel.ts`, `src/stores/expenseStore.ts`, `types.ts`
+Touched surfaces: `convex/operations/staffCredentials.ts`, `convex/operations/staffProfiles.ts`, `convex/schema.ts`, `convex/inventory/posSessions.ts`, `convex/pos/application/queries/getRegisterState.ts`, `convex/pos/infrastructure/repositories/cashierRepository.ts`, `src/components/staff/StaffManagement.tsx`, `src/components/expense/ExpenseCompletion.tsx`, `src/components/expense/ExpenseView.tsx`, `src/components/pos/CashierAuthDialog.tsx`, `src/hooks/useExpenseSessions.ts`, `src/hooks/useSessionManagementExpense.ts`, `src/lib/pos/presentation/register/useRegisterViewModel.ts`, `src/stores/expenseStore.ts`, `types.ts`
 
 Run:
 

@@ -1,1 +1,0 @@
-export { CashierManagement } from "./CashierManagement";

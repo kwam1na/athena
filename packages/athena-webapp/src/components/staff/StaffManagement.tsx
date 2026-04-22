@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
-import { Plus, UserMinus } from "lucide-react";
+import { Pencil, Plus, UserMinus } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "~/convex/_generated/api";
 import { Id } from "~/convex/_generated/dataModel";
@@ -35,7 +35,7 @@ import {
   TableRow,
 } from "../ui/table";
 
-interface CashierManagementProps {
+interface StaffManagementProps {
   storeId: Id<"store">;
   organizationId: Id<"organization">;
 }
@@ -50,12 +50,16 @@ type OperationalRole =
 type StaffProfileRow = {
   _id: Id<"staffProfile">;
   credentialStatus: "pending" | "active" | "suspended" | "revoked" | null;
+  email?: string | null;
   firstName: string;
   fullName: string;
   hiredAt?: number | null;
+  jobTitle?: string | null;
   lastName: string;
+  phoneNumber?: string | null;
   primaryRole?: OperationalRole | null;
   roles?: OperationalRole[];
+  staffCode?: string | null;
   status: "active" | "inactive";
   username?: string | null;
 };
@@ -188,47 +192,93 @@ const CredentialStatusBadge = ({ staff }: { staff: StaffProfileRow }) => {
 };
 
 function StaffProvisionForm({
+  mode,
   organizationId,
   onCancel,
   onSuccess,
+  staff,
   storeId,
 }: {
+  mode: "create" | "edit";
   organizationId: Id<"organization">;
   onCancel: () => void;
   onSuccess: () => void;
+  staff?: StaffProfileRow | null;
   storeId: Id<"store">;
 }) {
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [username, setUsername] = useState("");
+  const [firstName, setFirstName] = useState(staff?.firstName ?? "");
+  const [lastName, setLastName] = useState(staff?.lastName ?? "");
+  const [username, setUsername] = useState(staff?.username ?? "");
   const [usernameSuffix, setUsernameSuffix] = useState(1);
   const [isCheckingUsername, setIsCheckingUsername] = useState(false);
-  const [selectedRole, setSelectedRole] = useState<OperationalRole | "">("");
-  const [startDate, setStartDate] = useState("");
-  const [jobTitle, setJobTitle] = useState("");
-  const [phoneNumber, setPhoneNumber] = useState("");
-  const [email, setEmail] = useState("");
+  const [selectedRole, setSelectedRole] = useState<OperationalRole | "">(
+    staff?.primaryRole ?? "",
+  );
+  const [startDate, setStartDate] = useState(
+    staff?.hiredAt
+      ? new Date(staff.hiredAt).toISOString().slice(0, 10)
+      : "",
+  );
+  const [jobTitle, setJobTitle] = useState(staff?.jobTitle ?? "");
+  const [phoneNumber, setPhoneNumber] = useState(staff?.phoneNumber ?? "");
+  const [email, setEmail] = useState(staff?.email ?? "");
   const [staffCode, setStaffCode] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
   const createStaffProfile = useMutation(
     api.operations.staffProfiles.createStaffProfile,
   );
+  const updateStaffProfile = useMutation(
+    api.operations.staffProfiles.updateStaffProfile,
+  );
+
+  const initialUsername = staff?.username?.trim().toLowerCase() ?? "";
+  const normalizedUsername = username.trim().toLowerCase();
+  const isEditingUsername =
+    mode === "edit" &&
+    normalizedUsername.length > 0 &&
+    normalizedUsername !== initialUsername;
 
   const candidateUsername = useMemo(() => {
-    if (!isCheckingUsername) {
+    if (mode !== "create" || !isCheckingUsername) {
       return "";
     }
 
     return buildUsername(firstName, lastName, usernameSuffix);
-  }, [firstName, lastName, usernameSuffix, isCheckingUsername]);
+  }, [firstName, isCheckingUsername, lastName, mode, usernameSuffix]);
 
   const usernameAvailability = useQuery(
     api.operations.staffCredentials.getStaffCredentialUsernameAvailability,
-    candidateUsername ? { storeId, username: candidateUsername } : "skip",
+    mode === "create"
+      ? candidateUsername
+        ? { storeId, username: candidateUsername }
+        : "skip"
+      : isEditingUsername
+        ? { storeId, username }
+        : "skip",
   );
 
   useEffect(() => {
+    setFirstName(staff?.firstName ?? "");
+    setLastName(staff?.lastName ?? "");
+    setUsername(staff?.username ?? "");
+    setSelectedRole(staff?.primaryRole ?? "");
+    setStartDate(
+      staff?.hiredAt ? new Date(staff.hiredAt).toISOString().slice(0, 10) : "",
+    );
+    setJobTitle(staff?.jobTitle ?? "");
+    setPhoneNumber(staff?.phoneNumber ?? "");
+    setEmail(staff?.email ?? "");
+    setStaffCode(staff?.staffCode ?? "");
+    setUsernameSuffix(1);
+    setIsCheckingUsername(mode === "create");
+  }, [mode, staff]);
+
+  useEffect(() => {
+    if (mode !== "create") {
+      return;
+    }
+
     const normalizedFirst = normalizeNameSegment(firstName);
     const normalizedLast = normalizeNameSegment(lastName);
 
@@ -242,9 +292,13 @@ function StaffProvisionForm({
     setUsername("");
     setUsernameSuffix(1);
     setIsCheckingUsername(true);
-  }, [firstName, lastName]);
+  }, [firstName, lastName, mode]);
 
   useEffect(() => {
+    if (mode !== "create") {
+      return;
+    }
+
     if (!isCheckingUsername) {
       return;
     }
@@ -266,20 +320,36 @@ function StaffProvisionForm({
     }
 
     setUsernameSuffix((previous) => previous + 1);
-  }, [candidateUsername, isCheckingUsername, usernameAvailability]);
+  }, [candidateUsername, isCheckingUsername, mode, usernameAvailability]);
+
+  const hasUsernameConflict =
+    mode === "edit" &&
+    isEditingUsername &&
+    usernameAvailability !== undefined &&
+    !usernameAvailability.available;
+
+  const isUsernamePending =
+    mode === "create"
+      ? isCheckingUsername
+      : isEditingUsername && usernameAvailability === undefined;
 
   const isValid =
     firstName.trim() &&
     lastName.trim() &&
     username.trim() &&
     selectedRole &&
-    !isCheckingUsername;
+    !isUsernamePending &&
+    !hasUsernameConflict;
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
 
     if (!isValid) {
-      toast.error("Complete the required staff details before saving.");
+      toast.error(
+        hasUsernameConflict
+          ? "Choose a different username for this store."
+          : "Complete the required staff details before saving.",
+      );
       return;
     }
 
@@ -289,7 +359,7 @@ function StaffProvisionForm({
         ? new Date(`${startDate}T00:00:00`).getTime()
         : undefined;
 
-      const profile = await createStaffProfile({
+      const payload = {
         email: email.trim() || undefined,
         firstName: firstName.trim(),
         hiredAt,
@@ -300,18 +370,39 @@ function StaffProvisionForm({
         requestedRoles: [selectedRole as OperationalRole],
         staffCode: staffCode.trim() || undefined,
         storeId,
-        username,
-      });
+        username: username.trim(),
+      };
+
+      const profile =
+        mode === "create"
+          ? await createStaffProfile(payload)
+          : await updateStaffProfile({
+              ...payload,
+              staffProfileId: staff?._id as Id<"staffProfile">,
+            });
 
       if (!profile?._id) {
-        toast.error("Failed to add staff member");
+        toast.error(
+          mode === "create"
+            ? "Failed to add staff member"
+            : "Failed to update staff member",
+        );
         return;
       }
 
-      toast.success("Staff member added. PIN setup is still pending.");
+      toast.success(
+        mode === "create"
+          ? "Staff member added. PIN setup is still pending."
+          : "Staff member updated.",
+      );
       onSuccess();
     } catch (error) {
-      toast.error((error as Error).message || "Failed to add staff member");
+      toast.error(
+        (error as Error).message ||
+          (mode === "create"
+            ? "Failed to add staff member"
+            : "Failed to update staff member"),
+      );
       console.error(error);
     } finally {
       setIsSaving(false);
@@ -321,7 +412,9 @@ function StaffProvisionForm({
   return (
     <form onSubmit={handleSubmit} className="space-y-8">
       <div className="space-y-2">
-        <p className="text-lg font-medium">Add staff member</p>
+        <p className="text-lg font-medium">
+          {mode === "create" ? "Add staff member" : "Edit staff member"}
+        </p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
@@ -347,14 +440,24 @@ function StaffProvisionForm({
           <Label htmlFor="staff-username">Username</Label>
           <Input
             id="staff-username"
-            value={isCheckingUsername ? "Checking..." : username}
-            readOnly
-            className="cursor-not-allowed bg-muted"
-            disabled={isCheckingUsername}
+            value={isUsernamePending ? "Checking..." : username}
+            readOnly={mode === "create"}
+            className={
+              mode === "create" ? "cursor-not-allowed bg-muted" : undefined
+            }
+            disabled={isUsernamePending}
+            onChange={(event) => setUsername(event.target.value)}
           />
           <p className="text-xs text-muted-foreground">
-            Auto-generated from first and last name
+            {mode === "create"
+              ? "Auto-generated from first and last name"
+              : "Keep the current username or choose a new one"}
           </p>
+          {hasUsernameConflict ? (
+            <p className="text-xs text-destructive">
+              Username is already in use for this store
+            </p>
+          ) : null}
         </div>
 
         <div className="space-y-2">
@@ -415,15 +518,6 @@ function StaffProvisionForm({
           />
         </div>
 
-        {/* <div className="space-y-2 md:col-span-2">
-          <Label htmlFor="staff-code">Staff code</Label>
-          <Input
-            id="staff-code"
-            placeholder="ST-017"
-            value={staffCode}
-            onChange={(event) => setStaffCode(event.target.value)}
-          />
-        </div> */}
       </div>
 
       <div className="flex items-center gap-4">
@@ -434,7 +528,7 @@ function StaffProvisionForm({
           isLoading={isSaving}
           disabled={!isValid}
         >
-          Save
+          {mode === "create" ? "Save" : "Update"}
         </LoadingButton>
 
         <Button variant="ghost" type="button" onClick={onCancel}>
@@ -602,11 +696,13 @@ function CredentialPinDialog({
   );
 }
 
-export const CashierManagement = ({
+export const StaffManagement = ({
   storeId,
   organizationId,
-}: CashierManagementProps) => {
-  const [showForm, setShowForm] = useState(false);
+}: StaffManagementProps) => {
+  const [formState, setFormState] = useState<
+    { mode: "create" } | { mode: "edit"; staff: StaffProfileRow } | null
+  >(null);
   const [pinSetupState, setPinSetupState] =
     useState<PinSetupDialogState | null>(null);
   const [staffToDeactivate, setStaffToDeactivate] =
@@ -751,6 +847,20 @@ export const CashierManagement = ({
                           </Button>
                         ) : null}
 
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() =>
+                            setFormState({
+                              mode: "edit",
+                              staff,
+                            })
+                          }
+                        >
+                          <Pencil className="mr-2 h-4 w-4" />
+                          Edit
+                        </Button>
+
                         {canDeactivate ? (
                           <Button
                             variant="outline"
@@ -778,17 +888,19 @@ export const CashierManagement = ({
         </p>
       )}
 
-      {showForm ? (
+      {formState ? (
         <div className="w-[50%]">
           <StaffProvisionForm
+            mode={formState.mode}
             organizationId={organizationId}
-            onCancel={() => setShowForm(false)}
-            onSuccess={() => setShowForm(false)}
+            onCancel={() => setFormState(null)}
+            onSuccess={() => setFormState(null)}
+            staff={formState.mode === "edit" ? formState.staff : null}
             storeId={storeId}
           />
         </div>
       ) : (
-        <Button variant="ghost" onClick={() => setShowForm(true)}>
+        <Button variant="ghost" onClick={() => setFormState({ mode: "create" })}>
           <Plus className="mr-2 h-4 w-4" />
           Add Staff Member
         </Button>
