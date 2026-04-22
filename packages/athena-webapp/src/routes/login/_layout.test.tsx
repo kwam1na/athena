@@ -116,7 +116,10 @@ describe("LoginLayout", () => {
   });
 
   it("completes auth recovery after the Convex identity settles during an in-flight sync", async () => {
-    const deferred = Promise.withResolvers<{ _id: string }>();
+    let resolveDeferred!: (value: { _id: string }) => void;
+    const deferred = new Promise<{ _id: string }>((resolve) => {
+      resolveDeferred = resolve;
+    });
     let authIdentity: null | undefined = undefined;
 
     mocked.useConvexAuth.mockReturnValue({
@@ -125,7 +128,7 @@ describe("LoginLayout", () => {
     });
     mocked.useAuthToken.mockReturnValue("jwt-123");
     mocked.useConvexAuthIdentity.mockImplementation(() => authIdentity);
-    mocked.syncAuthenticatedAthenaUser.mockReturnValue(deferred.promise);
+    mocked.syncAuthenticatedAthenaUser.mockReturnValue(deferred);
     vi.mocked(window.sessionStorage.getItem).mockReturnValue(null);
 
     const view = render(<LoginLayout />);
@@ -136,7 +139,7 @@ describe("LoginLayout", () => {
 
     authIdentity = null;
     view.rerender(<LoginLayout />);
-    deferred.resolve({ _id: "user-3" });
+    resolveDeferred({ _id: "user-3" });
 
     await waitFor(() =>
       expect(window.localStorage.setItem).toHaveBeenCalledWith(
