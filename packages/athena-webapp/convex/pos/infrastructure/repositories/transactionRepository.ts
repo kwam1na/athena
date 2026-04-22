@@ -41,6 +41,13 @@ export async function getPosSessionById(
   return ctx.db.get("posSession", sessionId);
 }
 
+export async function getRegisterSessionById(
+  ctx: PosTransactionReadCtx,
+  registerSessionId: Id<"registerSession">,
+) {
+  return ctx.db.get("registerSession", registerSessionId);
+}
+
 export async function getCashierById(
   ctx: PosTransactionReadCtx,
   cashierId: Id<"cashier">,

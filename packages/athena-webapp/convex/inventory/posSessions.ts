@@ -372,6 +372,7 @@ export const createSession = mutation({
     terminalId: v.id("posTerminal"),
     cashierId: v.optional(v.id("cashier")),
     registerNumber: v.optional(v.string()),
+    registerSessionId: v.optional(v.id("registerSession")),
   },
   returns: createSessionResultValidator,
   handler: async (ctx, args) => {

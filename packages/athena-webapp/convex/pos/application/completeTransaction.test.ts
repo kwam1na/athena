@@ -17,6 +17,7 @@ import {
   createPosTransaction,
   createPosTransactionItem,
   getPosSessionById,
+  getRegisterSessionById,
   getProductSkuById,
   getStoreById,
   listSessionItems,
@@ -37,6 +38,7 @@ vi.mock("../infrastructure/repositories/transactionRepository", () => ({
   createPosTransaction: vi.fn(),
   createPosTransactionItem: vi.fn(),
   getPosSessionById: vi.fn(),
+  getRegisterSessionById: vi.fn(),
   getPosTransactionById: vi.fn(),
   getProductSkuById: vi.fn(),
   getStoreById: vi.fn(),
@@ -291,6 +293,10 @@ describe("completeTransaction trace ordering", () => {
   });
 
   it("does not write a successful session-sale trace before the session is fully patched", async () => {
+    const ctx = {
+      runMutation: vi.fn().mockResolvedValue(undefined),
+    } as never;
+
     vi.mocked(getStoreById).mockResolvedValue({
       _id: "store-1",
       organizationId: "org-1",
@@ -301,11 +307,19 @@ describe("completeTransaction trace ordering", () => {
       customerId: undefined,
       cashierId: "cashier-1",
       registerNumber: "1",
+      registerSessionId: "register-1",
       subtotal: 10,
       tax: 0,
       total: 10,
       terminalId: "terminal-1",
       customerInfo: undefined,
+    } as never);
+    vi.mocked(getRegisterSessionById).mockResolvedValue({
+      _id: "register-1",
+      storeId: "store-1",
+      status: "open",
+      terminalId: "terminal-1",
+      registerNumber: "1",
     } as never);
     vi.mocked(listSessionItems).mockResolvedValue([
       {
@@ -354,7 +368,7 @@ describe("completeTransaction trace ordering", () => {
     });
 
     await expect(
-      createTransactionFromSessionHandler({} as never, {
+      createTransactionFromSessionHandler(ctx, {
         sessionId: "session-1" as Id<"posSession">,
         payments: [{ method: "cash", amount: 10, timestamp: 1 }],
       }),
@@ -373,6 +387,141 @@ describe("completeTransaction trace ordering", () => {
         workflowTraceId: expect.stringMatching(/^pos_sale:/),
       }),
     );
+  });
+
+  it("uses the stored session drawer binding during session-based checkout", async () => {
+    const ctx = {
+      runMutation: vi.fn().mockResolvedValue(undefined),
+    } as never;
+
+    vi.mocked(getStoreById).mockResolvedValue({
+      _id: "store-1",
+      organizationId: "org-1",
+    } as never);
+    vi.mocked(getPosSessionById).mockResolvedValue({
+      _id: "session-1",
+      storeId: "store-1",
+      customerId: undefined,
+      cashierId: "cashier-1",
+      registerNumber: "1",
+      registerSessionId: "register-1",
+      subtotal: 10,
+      tax: 0,
+      total: 10,
+      terminalId: "terminal-1",
+      customerInfo: undefined,
+    } as never);
+    vi.mocked(getRegisterSessionById).mockResolvedValue({
+      _id: "register-1",
+      storeId: "store-1",
+      status: "open",
+      terminalId: "terminal-1",
+      registerNumber: "1",
+    } as never);
+    vi.mocked(listSessionItems).mockResolvedValue([
+      {
+        _id: "session-item-1",
+        sessionId: "session-1",
+        storeId: "store-1",
+        productId: "product-1",
+        productSkuId: "sku-1",
+        productSku: "SKU-1",
+        productName: "Sneaker",
+        price: 10,
+        quantity: 1,
+        image: undefined,
+      },
+    ] as never);
+    vi.mocked(getProductSkuById).mockResolvedValue({
+      _id: "sku-1",
+      images: [],
+      inventoryCount: 10,
+      productId: "product-1",
+      quantityAvailable: 10,
+      sku: "SKU-1",
+    } as never);
+    vi.mocked(createPosTransaction).mockResolvedValue("txn-1" as never);
+    vi.mocked(recordRetailSalePaymentAllocations).mockResolvedValue(true);
+    vi.mocked(createPosTransactionItem).mockResolvedValue(
+      "txn-item-1" as never,
+    );
+    vi.mocked(patchProductSku).mockResolvedValue(undefined as never);
+    vi.mocked(patchPosSession).mockResolvedValue(undefined as never);
+    vi.mocked(createWorkflowTraceWithCtx).mockResolvedValue("trace-1" as never);
+    vi.mocked(registerWorkflowTraceLookupWithCtx).mockResolvedValue(
+      "lookup-1" as never,
+    );
+    vi.mocked(appendWorkflowTraceEventWithCtx).mockResolvedValue(
+      "event-1" as never,
+    );
+    vi.mocked(patchPosTransaction).mockResolvedValue(undefined as never);
+
+    await expect(
+      createTransactionFromSessionHandler(ctx, {
+        sessionId: "session-1" as Id<"posSession">,
+        payments: [{ method: "cash", amount: 10, timestamp: 1 }],
+      }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        success: true,
+        transactionId: "txn-1",
+      }),
+    );
+
+    expect(createPosTransaction).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        registerSessionId: "register-1",
+      }),
+    );
+    expect(ctx.runMutation).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        registerSessionId: "register-1",
+      }),
+    );
+    expect(recordRetailSalePaymentAllocations).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        registerSessionId: "register-1",
+      }),
+    );
+  });
+
+  it("fails when a session sale is not bound to an open drawer", async () => {
+    vi.mocked(getPosSessionById).mockResolvedValue({
+      _id: "session-1",
+      storeId: "store-1",
+      customerId: undefined,
+      cashierId: "cashier-1",
+      registerNumber: "1",
+      subtotal: 10,
+      tax: 0,
+      total: 10,
+      terminalId: "terminal-1",
+      customerInfo: undefined,
+    } as never);
+    vi.mocked(listSessionItems).mockResolvedValue([
+      {
+        _id: "session-item-1",
+        sessionId: "session-1",
+        storeId: "store-1",
+        productId: "product-1",
+        productSkuId: "sku-1",
+        productSku: "SKU-1",
+        productName: "Sneaker",
+        price: 10,
+        quantity: 1,
+        image: undefined,
+      },
+    ] as never);
+
+    await expect(
+      createTransactionFromSessionHandler({} as never, {
+        sessionId: "session-1" as Id<"posSession">,
+        payments: [{ method: "cash", amount: 10, timestamp: 1 }],
+      }),
+    ).rejects.toThrow("Open the cash drawer before completing this sale.");
   });
 
   it("does not fail direct sale completion when workflowTraceId persistence fails", async () => {
