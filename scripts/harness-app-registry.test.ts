@@ -182,6 +182,22 @@ describe("HARNESS_APP_REGISTRY", () => {
     });
   });
 
+  it("covers Athena frontend test harness surfaces including vitest setup", () => {
+    const athena = HARNESS_APP_REGISTRY.find(
+      (entry) => entry.appName === "athena-webapp"
+    );
+    const frontendHarnessScenario = athena?.validationScenarios.find(
+      (scenario) => scenario.title === "Frontend test harness edits"
+    );
+
+    expect(frontendHarnessScenario).toMatchObject({
+      touchedPaths: ["src/test", "src/tests", "vitest.setup.ts"],
+      commands: [{ kind: "script", script: "test" }],
+      note:
+        "Run the package suite when package-local frontend test helpers or focused regression tests change.",
+    });
+  });
+
   it("documents Athena service management as a first-class harness discovery surface", () => {
     const athena = HARNESS_APP_REGISTRY.find(
       (entry) => entry.appName === "athena-webapp"
