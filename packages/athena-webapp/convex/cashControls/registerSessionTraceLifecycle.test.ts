@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Id } from "../_generated/dataModel";
 
 const mocks = vi.hoisted(() => ({
@@ -39,6 +39,7 @@ import {
 
 type RegisterSessionRecord = {
   _id: Id<"registerSession">;
+  closedAt?: number;
   countedCash?: number;
   expectedCash: number;
   managerApprovalRequestId?: Id<"approvalRequest">;
@@ -163,6 +164,7 @@ function createMutationCtx(seed?: {
         countedCash: args.countedCash,
         notes: args.notes,
         status: session.status === "closing" ? "closed" : "closing",
+        ...(session.status === "closing" ? { closedAt: 333 } : {}),
       });
       return session;
     }
@@ -208,6 +210,7 @@ function getHandler(definition: unknown) {
 describe("register session trace lifecycle handlers", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    vi.spyOn(Date, "now").mockReturnValue(999);
     mocks.recordPaymentAllocationWithCtx.mockResolvedValue({
       _id: "allocation-1",
     });
@@ -222,6 +225,10 @@ describe("register session trace lifecycle handlers", () => {
       traceCreated: true,
       traceId: "register_session:session-1",
     });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it("records a deposit trace and persists the workflowTraceId", async () => {
@@ -248,6 +255,7 @@ describe("register session trace lifecycle handlers", () => {
       expect.anything(),
       expect.objectContaining({
         stage: "deposit_recorded",
+        occurredAt: 999,
         amount: 2_500,
         session: expect.objectContaining({
           _id: "session-1",
@@ -283,6 +291,7 @@ describe("register session trace lifecycle handlers", () => {
       expect.anything(),
       expect.objectContaining({
         stage: "closeout_submitted",
+        occurredAt: 999,
       }),
     );
     expect(mocks.traceRecord).toHaveBeenNthCalledWith(
@@ -290,6 +299,7 @@ describe("register session trace lifecycle handlers", () => {
       expect.anything(),
       expect.objectContaining({
         stage: "approval_pending",
+        occurredAt: 999,
         approvalRequestId: "approval-1",
       }),
     );
@@ -298,7 +308,7 @@ describe("register session trace lifecycle handlers", () => {
     });
   });
 
-  it("records an approval-completed trace milestone after manager approval", async () => {
+  it("records approval and final closed trace milestones after manager approval", async () => {
     const ctx = createMutationCtx({
       approvalRequests: [
         {
@@ -336,14 +346,71 @@ describe("register session trace lifecycle handlers", () => {
       expect.anything(),
       expect.objectContaining({
         stage: "closeout_approved",
+        occurredAt: 333,
         approvalRequestId: "approval-1",
         session: expect.objectContaining({
           _id: "session-1",
         }),
       }),
     );
+    expect(mocks.traceRecord).toHaveBeenNthCalledWith(
+      2,
+      expect.anything(),
+      expect.objectContaining({
+        stage: "closed",
+        occurredAt: 333,
+        session: expect.objectContaining({
+          _id: "session-1",
+          closedAt: 333,
+        }),
+      }),
+    );
     expect(ctx.db.patch).toHaveBeenCalledWith("registerSession", "session-1", {
       workflowTraceId: "register_session:session-1",
     });
+  });
+
+  it("records a rejected closeout trace milestone when manager review fails", async () => {
+    const ctx = createMutationCtx({
+      approvalRequests: [
+        {
+          _id: "approval-1" as Id<"approvalRequest">,
+          createdAt: 222,
+          registerSessionId: "session-1" as Id<"registerSession">,
+          requestType: "variance_review",
+          status: "pending",
+        },
+      ],
+      registerSessions: [
+        buildRegisterSession({
+          countedCash: 16_050,
+          managerApprovalRequestId: "approval-1" as Id<"approvalRequest">,
+          status: "closing",
+        }),
+      ],
+    });
+
+    const result = await getHandler(reviewRegisterSessionCloseout)(ctx as never, {
+      decision: "rejected",
+      decisionNotes: "Recount required",
+      registerSessionId: "session-1",
+      reviewedByStaffProfileId: "staff-2",
+      reviewedByUserId: "user-2",
+      storeId: "store-1",
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        action: "rejected",
+      }),
+    );
+    expect(mocks.traceRecord).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        stage: "closeout_rejected",
+        occurredAt: 999,
+        approvalRequestId: "approval-1",
+      }),
+    );
   });
 });

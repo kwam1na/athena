@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   traceRecord: vi.fn(),
@@ -111,10 +111,15 @@ function getHandler(definition: unknown) {
 describe("register session workflow trace handlers", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    vi.spyOn(Date, "now").mockReturnValue(999);
     mocks.traceRecord.mockResolvedValue({
       traceCreated: true,
       traceId: "register_session:session-1",
     });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it("records an opened trace after opening a register session", async () => {
@@ -179,6 +184,7 @@ describe("register session workflow trace handlers", () => {
       expect.anything(),
       expect.objectContaining({
         stage: "sale_recorded",
+        occurredAt: 999,
         amount: 8_000,
         session: expect.objectContaining({
           _id: "session-1",
@@ -189,5 +195,40 @@ describe("register session workflow trace handlers", () => {
     expect(ctx.db.patch).toHaveBeenCalledWith("registerSession", "session-1", {
       workflowTraceId: "register_session:session-1",
     });
+  });
+
+  it("records a void adjustment trace when register-session cash decreases", async () => {
+    const ctx = createMutationCtx({
+      sessions: [buildRegisterSession({ expectedCash: 13_000, status: "closing" })],
+    });
+
+    const updatedSession = await getHandler(recordRegisterSessionTransaction)(
+      ctx as never,
+      {
+        registerSessionId: "session-1",
+        storeId: "store-1",
+        adjustmentKind: "void",
+        payments: [{ method: "cash", amount: 4_000, timestamp: 1 }],
+        changeGiven: 500,
+        registerNumber: "A1",
+        terminalId: "terminal-1",
+      },
+    );
+
+    expect(updatedSession).toEqual(
+      expect.objectContaining({
+        _id: "session-1",
+        expectedCash: 9_500,
+        status: "closing",
+      }),
+    );
+    expect(mocks.traceRecord).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        stage: "void_recorded",
+        occurredAt: 999,
+        amount: 3_500,
+      }),
+    );
   });
 });

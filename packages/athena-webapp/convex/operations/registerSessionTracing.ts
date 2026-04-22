@@ -53,6 +53,22 @@ type RegisterSessionTraceArgs = {
   variance?: number;
 };
 
+function resolveOccurredAt(input: RegisterSessionTraceArgs) {
+  if (input.occurredAt !== undefined) {
+    return input.occurredAt;
+  }
+
+  switch (input.stage) {
+    case "opened":
+      return input.session.openedAt;
+    case "closeout_approved":
+    case "closed":
+      return input.session.closedAt ?? Date.now();
+    default:
+      return Date.now();
+  }
+}
+
 function safeTraceWrite(
   label: string,
   write: () => Promise<void>,
@@ -80,9 +96,10 @@ function buildTraceRecord(args: {
   input: RegisterSessionTraceArgs;
 }) {
   const baseTrace = args.traceSeed.trace;
+  const occurredAt = resolveOccurredAt(args.input);
   const completedAt =
     args.input.stage === "closeout_approved" || args.input.stage === "closed"
-      ? (args.input.occurredAt ?? args.input.session.closedAt ?? Date.now())
+      ? occurredAt
       : undefined;
 
   switch (args.input.stage) {
@@ -113,10 +130,7 @@ function buildTraceEvent(args: {
   traceSeed: RegisterSessionTraceSeed;
   input: RegisterSessionTraceArgs;
 }) {
-  const occurredAt =
-    args.input.occurredAt ??
-    args.input.session.closedAt ??
-    args.input.session.openedAt;
+  const occurredAt = resolveOccurredAt(args.input);
   const registerLabel =
     args.input.session.registerNumber?.trim() || String(args.input.session._id);
   const details = Object.fromEntries(

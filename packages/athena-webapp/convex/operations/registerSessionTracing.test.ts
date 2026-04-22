@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Id } from "../_generated/dataModel";
 import {
   appendWorkflowTraceEventWithCtx,
@@ -30,6 +30,10 @@ function buildSession() {
 
 beforeEach(() => {
   vi.resetAllMocks();
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 describe("recordRegisterSessionTraceBestEffort", () => {
@@ -103,6 +107,31 @@ describe("recordRegisterSessionTraceBestEffort", () => {
         occurredAt: 222,
         step: "register_session_approval_pending",
         status: "blocked",
+      }),
+    );
+  });
+
+  it("uses the current time for non-open milestones when no occurredAt is provided", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(444);
+    vi.mocked(createWorkflowTraceWithCtx).mockResolvedValue("trace-1" as never);
+    vi.mocked(registerWorkflowTraceLookupWithCtx).mockResolvedValue(
+      "lookup-1" as never,
+    );
+    vi.mocked(appendWorkflowTraceEventWithCtx).mockResolvedValue(
+      "event-1" as never,
+    );
+
+    await recordRegisterSessionTraceBestEffort({} as never, {
+      stage: "deposit_recorded",
+      session: buildSession(),
+      amount: 2_500,
+    });
+
+    expect(appendWorkflowTraceEventWithCtx).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        occurredAt: 444,
+        step: "register_session_deposit_recorded",
       }),
     );
   });

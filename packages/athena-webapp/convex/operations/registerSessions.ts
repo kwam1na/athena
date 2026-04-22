@@ -442,10 +442,12 @@ export const recordRegisterSessionTransaction = internalMutation({
     });
 
     if (amount > 0) {
+      const occurredAt = Date.now();
       const traceResult = await recordRegisterSessionTraceBestEffort(ctx, {
         stage:
           args.adjustmentKind === "sale" ? "sale_recorded" : "void_recorded",
         session: updatedSession,
+        occurredAt,
         amount,
       });
 

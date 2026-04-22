@@ -411,6 +411,7 @@ export const submitRegisterSessionCloseout = mutation({
       }
     );
 
+    const closeoutSubmittedAt = Date.now();
     const closeoutSubmittedTraceResult = await recordRegisterSessionTraceBestEffort(
       ctx,
       {
@@ -422,6 +423,7 @@ export const submitRegisterSessionCloseout = mutation({
             countedCash: args.countedCash,
             status: "closing",
           } as typeof registerSession),
+        occurredAt: closeoutSubmittedAt,
         actorStaffProfileId: args.actorStaffProfileId,
         actorUserId: args.actorUserId,
         countedCash: args.countedCash,
@@ -495,6 +497,7 @@ export const submitRegisterSessionCloseout = mutation({
         "registerSession",
         registerSession._id
       );
+      const approvalPendingAt = Date.now();
       const approvalPendingTraceResult = await recordRegisterSessionTraceBestEffort(
         ctx,
         {
@@ -507,6 +510,7 @@ export const submitRegisterSessionCloseout = mutation({
               managerApprovalRequestId: approvalRequestId,
               status: "closing",
             } as typeof registerSession),
+          occurredAt: approvalPendingAt,
           actorStaffProfileId: args.actorStaffProfileId,
           actorUserId: args.actorUserId,
           approvalRequestId,
@@ -570,6 +574,7 @@ export const submitRegisterSessionCloseout = mutation({
     const closedTraceResult = await recordRegisterSessionTraceBestEffort(ctx, {
       stage: "closed",
       session: closedSession ?? registerSession,
+      occurredAt: closedSession?.closedAt,
       actorStaffProfileId: args.actorStaffProfileId,
       actorUserId: args.actorUserId,
       countedCash: args.countedCash,
@@ -666,6 +671,7 @@ export const reviewRegisterSessionCloseout = mutation({
       const approvalTraceResult = await recordRegisterSessionTraceBestEffort(ctx, {
         stage: "closeout_approved",
         session: closedSession ?? registerSession,
+        occurredAt: closedSession?.closedAt,
         actorStaffProfileId: args.reviewedByStaffProfileId,
         actorUserId: args.reviewedByUserId,
         approvalRequestId: approvalRequest._id,
@@ -676,6 +682,22 @@ export const reviewRegisterSessionCloseout = mutation({
       await persistRegisterSessionWorkflowTraceIdBestEffort(ctx, {
         registerSessionId: registerSession._id,
         traceId: approvalTraceResult.traceId,
+        workflowTraceId: closedSession?.workflowTraceId,
+      });
+
+      const closedTraceResult = await recordRegisterSessionTraceBestEffort(ctx, {
+        stage: "closed",
+        session: closedSession ?? registerSession,
+        occurredAt: closedSession?.closedAt,
+        actorStaffProfileId: args.reviewedByStaffProfileId,
+        actorUserId: args.reviewedByUserId,
+        countedCash: registerSession.countedCash,
+        variance: registerSession.variance,
+      });
+
+      await persistRegisterSessionWorkflowTraceIdBestEffort(ctx, {
+        registerSessionId: registerSession._id,
+        traceId: closedTraceResult.traceId,
         workflowTraceId: closedSession?.workflowTraceId,
       });
 
@@ -702,9 +724,11 @@ export const reviewRegisterSessionCloseout = mutation({
     });
 
     const rejectedSession = await ctx.db.get("registerSession", registerSession._id);
+    const rejectionOccurredAt = Date.now();
     const rejectionTraceResult = await recordRegisterSessionTraceBestEffort(ctx, {
       stage: "closeout_rejected",
       session: rejectedSession ?? registerSession,
+      occurredAt: rejectionOccurredAt,
       actorStaffProfileId: args.reviewedByStaffProfileId,
       actorUserId: args.reviewedByUserId,
       approvalRequestId: approvalRequest._id,

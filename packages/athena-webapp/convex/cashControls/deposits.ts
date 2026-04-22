@@ -538,9 +538,11 @@ export const recordRegisterSessionDeposit = mutation({
       subjectType: CASH_DEPOSIT_SUBJECT_TYPE,
     });
 
+    const occurredAt = Date.now();
     const traceResult = await recordRegisterSessionTraceBestEffort(ctx, {
       stage: "deposit_recorded",
       session: updatedRegisterSession,
+      occurredAt,
       amount: args.amount,
       actorStaffProfileId: args.actorStaffProfileId,
       actorUserId: args.actorUserId,
