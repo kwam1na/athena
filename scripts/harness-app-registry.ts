@@ -194,6 +194,11 @@ export const HARNESS_APP_REGISTRY = [
             description: "UI components, views, and package-local feature widgets.",
           },
           {
+            path: "src/components/traces",
+            description:
+              "Shared workflow trace screens, ordered timelines, and trace detail primitives.",
+          },
+          {
             path: "src/components/operations",
             description:
               "Manager-queue and stock-adjustment workflows that share approval rails with other operational surfaces.",
@@ -237,6 +242,11 @@ export const HARNESS_APP_REGISTRY = [
             path: "convex/serviceOps",
             description:
               "Service catalog, appointment, and service-case workflows layered on operational work items.",
+          },
+          {
+            path: "convex/workflowTraces",
+            description:
+              "Shared workflow trace creation, lookup, presentation, and adapter helpers.",
           },
           {
             path: "convex",
@@ -327,6 +337,42 @@ export const HARNESS_APP_REGISTRY = [
         behaviorScenarios: ["athena-admin-shell-boot"],
         note:
           "Use this when register-session, deposit, closeout, dashboard, operations-queue approval, or cash-controls route wiring changes. Start `bunx convex dev` from `packages/athena-webapp` before validation when generated client refs or new Convex function exports changed.",
+      },
+      {
+        title: "Workflow trace foundation and POS trace-link edits",
+        touchedPaths: [
+          "convex/workflowTraces",
+          "convex/schemas/observability",
+          "convex/pos/application/commands/completeTransaction.ts",
+          "convex/pos/application/queries/getTransactions.ts",
+          "convex/pos/public/transactions.ts",
+          "convex/schemas/pos/posTransaction.ts",
+          "shared/workflowTrace.ts",
+          "src/components/traces",
+          "src/components/pos/transactions",
+          "src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/traces",
+        ],
+        commands: [
+          {
+            kind: "raw",
+            command:
+              "bun run --filter '@athena/webapp' test -- convex/workflowTraces/presentation.test.ts convex/workflowTraces/queryUsage.test.ts convex/workflowTraces/schemaIndexes.test.ts convex/workflowTraces/adapters/posSale.test.ts convex/pos/application/completeTransaction.test.ts convex/pos/application/getTransactions.test.ts src/components/traces/WorkflowTraceView.test.tsx 'src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/traces/$traceId.test.tsx' src/components/pos/transactions/WorkflowTraceLink.test.tsx src/components/pos/transactions/transactionColumns.test.tsx src/components/pos/transactions/TransactionView.test.tsx src/components/pos/transactions/TransactionsView.test.tsx src/lib/traces/createWorkflowTraceId.test.ts",
+          },
+          { kind: "script", script: "audit:convex" },
+          { kind: "script", script: "lint:convex:changed" },
+          {
+            kind: "raw",
+            command: "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json",
+          },
+          { kind: "script", script: "build" },
+        ],
+        behaviorScenarios: [
+          "athena-admin-shell-boot",
+          "athena-convex-storefront-composition",
+          "athena-convex-storefront-failure-visibility",
+        ],
+        note:
+          "Use this when the shared workflow-trace contract, the trace route/view, or POS transaction trace links change. It exercises the trace schema and presentation contract, the shared trace route, and the operator-facing POS link surfaces before broader package validation.",
       },
       {
         title: "Shared-lib or utility edits",

@@ -293,6 +293,67 @@ describe("HARNESS_APP_REGISTRY", () => {
     });
   });
 
+  it("documents workflow trace foundation validation coverage in Athena harness docs", () => {
+    const athena = HARNESS_APP_REGISTRY.find(
+      (entry) => entry.appName === "athena-webapp"
+    );
+    const coreFolders = athena?.keyFolderGroups.find(
+      (group) => group.title === "Core app surfaces"
+    )?.folders;
+    const backendFolders = athena?.keyFolderGroups.find(
+      (group) => group.title === "Backend and test surfaces"
+    )?.folders;
+    const workflowTraceScenario = athena?.validationScenarios.find(
+      (scenario) =>
+        scenario.title === "Workflow trace foundation and POS trace-link edits"
+    );
+
+    expect(coreFolders).toContainEqual({
+      path: "src/components/traces",
+      description:
+        "Shared workflow trace screens, ordered timelines, and trace detail primitives.",
+    });
+    expect(backendFolders).toContainEqual({
+      path: "convex/workflowTraces",
+      description:
+        "Shared workflow trace creation, lookup, presentation, and adapter helpers.",
+    });
+    expect(workflowTraceScenario?.touchedPaths).toEqual([
+      "convex/workflowTraces",
+      "convex/schemas/observability",
+      "convex/pos/application/commands/completeTransaction.ts",
+      "convex/pos/application/queries/getTransactions.ts",
+      "convex/pos/public/transactions.ts",
+      "convex/schemas/pos/posTransaction.ts",
+      "shared/workflowTrace.ts",
+      "src/components/traces",
+      "src/components/pos/transactions",
+      "src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/traces",
+    ]);
+    expect(workflowTraceScenario?.commands).toEqual([
+      {
+        kind: "raw",
+        command:
+          "bun run --filter '@athena/webapp' test -- convex/workflowTraces/presentation.test.ts convex/workflowTraces/queryUsage.test.ts convex/workflowTraces/schemaIndexes.test.ts convex/workflowTraces/adapters/posSale.test.ts convex/pos/application/completeTransaction.test.ts convex/pos/application/getTransactions.test.ts src/components/traces/WorkflowTraceView.test.tsx 'src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/traces/$traceId.test.tsx' src/components/pos/transactions/WorkflowTraceLink.test.tsx src/components/pos/transactions/transactionColumns.test.tsx src/components/pos/transactions/TransactionView.test.tsx src/components/pos/transactions/TransactionsView.test.tsx src/lib/traces/createWorkflowTraceId.test.ts",
+      },
+      { kind: "script", script: "audit:convex" },
+      { kind: "script", script: "lint:convex:changed" },
+      {
+        kind: "raw",
+        command: "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json",
+      },
+      { kind: "script", script: "build" },
+    ]);
+    expect(workflowTraceScenario?.note).toBe(
+      "Use this when the shared workflow-trace contract, the trace route/view, or POS transaction trace links change. It exercises the trace schema and presentation contract, the shared trace route, and the operator-facing POS link surfaces before broader package validation."
+    );
+    expect(workflowTraceScenario?.behaviorScenarios).toEqual([
+      "athena-admin-shell-boot",
+      "athena-convex-storefront-composition",
+      "athena-convex-storefront-failure-visibility",
+    ]);
+  });
+
   it("covers Athena shared type exports in the shared-lib validation scenario", () => {
     const athena = HARNESS_APP_REGISTRY.find(
       (entry) => entry.appName === "athena-webapp"

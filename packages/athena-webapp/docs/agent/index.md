@@ -17,6 +17,8 @@ Key boundaries to keep in mind:
 - Browser entry and generated TanStack Router state live in [src/main.tsx](../../src/main.tsx) and [src/routeTree.gen.ts](../../src/routeTree.gen.ts).
 - Inventory and storefront backend routes are composed in [convex/http.ts](../../convex/http.ts) over the schema in [convex/schema.ts](../../convex/schema.ts).
 - App-level auth and shell state usually fan out from [src/hooks/useAuth.ts](../../src/hooks/useAuth.ts) and the authenticated layout in [src/routes/_authed.tsx](../../src/routes/_authed.tsx).
+- Shared workflow traces now converge under [convex/workflowTraces](../../convex/workflowTraces), the shared trace contract in [shared/workflowTrace.ts](../../shared/workflowTrace.ts), the store-scoped route in [src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/traces/$traceId.tsx](../../src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/traces/$traceId.tsx), and the reusable trace UI in [src/components/traces/WorkflowTraceView.tsx](../../src/components/traces/WorkflowTraceView.tsx).
+- POS trace linking layers on top of that foundation through [convex/workflowTraces/adapters/posSale.ts](../../convex/workflowTraces/adapters/posSale.ts) and the operator entry points under [src/components/pos/transactions](../../src/components/pos/transactions).
 - Stock adjustments, purchase-order workflows, replenishment guidance, and receiving now converge under `convex/stockOps/*` plus the operator views in `src/components/operations` and `src/components/procurement`.
 - Omnichannel returns, exchanges, loyalty milestones, and follow-up history now converge under `convex/storeFront/*` plus the operator views in `src/components/orders` and `src/components/users`.
 

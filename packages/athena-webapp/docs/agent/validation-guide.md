@@ -49,6 +49,26 @@ Behavior scenarios:
 
 Use this when register-session, deposit, closeout, dashboard, operations-queue approval, or cash-controls route wiring changes. Start `bunx convex dev` from `packages/athena-webapp` before validation when generated client refs or new Convex function exports changed.
 
+## Workflow trace foundation and POS trace-link edits
+
+Touched surfaces: `convex/workflowTraces`, `convex/schemas/observability`, `convex/pos/application/commands/completeTransaction.ts`, `convex/pos/application/queries/getTransactions.ts`, `convex/pos/public/transactions.ts`, `convex/schemas/pos/posTransaction.ts`, `shared/workflowTrace.ts`, `src/components/traces`, `src/components/pos/transactions`, `src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/traces`
+
+Run:
+
+- `bun run --filter '@athena/webapp' test -- convex/workflowTraces/presentation.test.ts convex/workflowTraces/queryUsage.test.ts convex/workflowTraces/schemaIndexes.test.ts convex/workflowTraces/adapters/posSale.test.ts convex/pos/application/completeTransaction.test.ts convex/pos/application/getTransactions.test.ts src/components/traces/WorkflowTraceView.test.tsx 'src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/traces/$traceId.test.tsx' src/components/pos/transactions/WorkflowTraceLink.test.tsx src/components/pos/transactions/transactionColumns.test.tsx src/components/pos/transactions/TransactionView.test.tsx src/components/pos/transactions/TransactionsView.test.tsx src/lib/traces/createWorkflowTraceId.test.ts`
+- `bun run --filter '@athena/webapp' audit:convex`
+- `bun run --filter '@athena/webapp' lint:convex:changed`
+- `bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json`
+- `bun run --filter '@athena/webapp' build`
+
+Behavior scenarios:
+
+- `athena-admin-shell-boot`
+- `athena-convex-storefront-composition`
+- `athena-convex-storefront-failure-visibility`
+
+Use this when the shared workflow-trace contract, the trace route/view, or POS transaction trace links change. It exercises the trace schema and presentation contract, the shared trace route, and the operator-facing POS link surfaces before broader package validation.
+
 ## Shared-lib or utility edits
 
 Touched surfaces: `src/lib`, `shared`, `src/settings`, `src/utils`, `src/stores`, `types.ts`
