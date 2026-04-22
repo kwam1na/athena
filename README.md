@@ -25,6 +25,11 @@ Key repo-level commands:
 - `bun run pr:athena`
 - `bun run graphify:check`
 
+For repo-harness edits such as `scripts/harness-app-registry.ts`, keep
+`bun run harness:review --base origin/main` and
+`bun run harness:inferential-review` in the local ladder so a missing sibling
+test update like `scripts/harness-app-registry.test.ts` fails before push.
+
 `bun run harness:test` is the canonical harness implementation gate for harness scripts, graphify tooling, and pre-push review wiring.
 It targets repo-root `scripts/*.test.ts` files only (excluding cloned worktree trees).
 Use `bun run harness:test -- --dry-run` to print the selected files without executing tests.
