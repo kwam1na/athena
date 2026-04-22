@@ -33983,7 +33983,7 @@
       "relation": "contains",
       "source": "scripts_pre_push_review_test_ts",
       "source_file": "scripts/pre-push-review.test.ts",
-      "source_location": "L586",
+      "source_location": "L591",
       "target": "pre_push_review_test_error",
       "weight": 1
     },
@@ -33995,7 +33995,7 @@
       "relation": "contains",
       "source": "scripts_pre_push_review_test_ts",
       "source_file": "scripts/pre-push-review.test.ts",
-      "source_location": "L584",
+      "source_location": "L589",
       "target": "pre_push_review_test_log",
       "weight": 1
     },
@@ -34007,7 +34007,7 @@
       "relation": "contains",
       "source": "scripts_pre_push_review_test_ts",
       "source_file": "scripts/pre-push-review.test.ts",
-      "source_location": "L585",
+      "source_location": "L590",
       "target": "pre_push_review_test_warn",
       "weight": 1
     },
@@ -48601,7 +48601,7 @@
       "label": "error()",
       "norm_label": "error()",
       "source_file": "scripts/pre-push-review.test.ts",
-      "source_location": "L90"
+      "source_location": "L95"
     },
     {
       "community": 231,
@@ -48610,7 +48610,7 @@
       "label": "log()",
       "norm_label": "log()",
       "source_file": "scripts/pre-push-review.test.ts",
-      "source_location": "L88"
+      "source_location": "L93"
     },
     {
       "community": 231,
@@ -48619,7 +48619,7 @@
       "label": "warn()",
       "norm_label": "warn()",
       "source_file": "scripts/pre-push-review.test.ts",
-      "source_location": "L89"
+      "source_location": "L94"
     },
     {
       "community": 231,
