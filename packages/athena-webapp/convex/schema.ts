@@ -390,7 +390,6 @@ const schema = defineSchema({
     .index("by_storeId_status", ["storeId", "status"]),
   staffProfile: defineTable(staffProfileSchema)
     .index("by_storeId", ["storeId"])
-    .index("by_linkedUserId", ["linkedUserId"])
     .index("by_storeId_linkedUserId", ["storeId", "linkedUserId"])
     .index("by_storeId_status", ["storeId", "status"]),
   staffRoleAssignment: defineTable(staffRoleAssignmentSchema)
