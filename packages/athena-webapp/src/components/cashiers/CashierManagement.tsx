@@ -152,7 +152,11 @@ const formatCredentialStatusLabel = (staff: StaffProfileRow) => {
 
 const CredentialStatusBadge = ({ staff }: { staff: StaffProfileRow }) => {
   if (staff.status !== "active") {
-    return <Badge variant="outline">Inactive</Badge>;
+    return (
+      <Badge variant="outline" className="text-gray-400">
+        Inactive
+      </Badge>
+    );
   }
 
   switch (staff.credentialStatus) {
@@ -208,7 +212,7 @@ function StaffProvisionForm({
   const [isSaving, setIsSaving] = useState(false);
 
   const createStaffProfile = useMutation(
-    api.operations.staffProfiles.createStaffProfile
+    api.operations.staffProfiles.createStaffProfile,
   );
 
   const candidateUsername = useMemo(() => {
@@ -221,7 +225,7 @@ function StaffProvisionForm({
 
   const usernameAvailability = useQuery(
     api.operations.staffCredentials.getStaffCredentialUsernameAvailability,
-    candidateUsername ? { storeId, username: candidateUsername } : "skip"
+    candidateUsername ? { storeId, username: candidateUsername } : "skip",
   );
 
   useEffect(() => {
@@ -318,10 +322,6 @@ function StaffProvisionForm({
     <form onSubmit={handleSubmit} className="space-y-8">
       <div className="space-y-2">
         <p className="text-lg font-medium">Add staff member</p>
-        <p className="text-sm text-muted-foreground">
-          Save the staff record and username now. PIN setup can happen later when
-          the staff member is present.
-        </p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
@@ -329,7 +329,6 @@ function StaffProvisionForm({
           <Label htmlFor="staff-first-name">First name</Label>
           <Input
             id="staff-first-name"
-            placeholder="Ama"
             value={firstName}
             onChange={(event) => setFirstName(event.target.value)}
           />
@@ -339,7 +338,6 @@ function StaffProvisionForm({
           <Label htmlFor="staff-last-name">Last name</Label>
           <Input
             id="staff-last-name"
-            placeholder="Mensah"
             value={lastName}
             onChange={(event) => setLastName(event.target.value)}
           />
@@ -349,14 +347,13 @@ function StaffProvisionForm({
           <Label htmlFor="staff-username">Username</Label>
           <Input
             id="staff-username"
-            placeholder="amens"
             value={isCheckingUsername ? "Checking..." : username}
             readOnly
             className="cursor-not-allowed bg-muted"
             disabled={isCheckingUsername}
           />
           <p className="text-xs text-muted-foreground">
-            Athena generates the next available username from the staff name.
+            Auto-generated from first and last name
           </p>
         </div>
 
@@ -395,7 +392,6 @@ function StaffProvisionForm({
           <Label htmlFor="staff-job-title">Job title</Label>
           <Input
             id="staff-job-title"
-            placeholder="Lead stylist"
             value={jobTitle}
             onChange={(event) => setJobTitle(event.target.value)}
           />
@@ -405,7 +401,6 @@ function StaffProvisionForm({
           <Label htmlFor="staff-phone">Phone number</Label>
           <Input
             id="staff-phone"
-            placeholder="+233200000000"
             value={phoneNumber}
             onChange={(event) => setPhoneNumber(event.target.value)}
           />
@@ -415,13 +410,12 @@ function StaffProvisionForm({
           <Label htmlFor="staff-email">Email</Label>
           <Input
             id="staff-email"
-            placeholder="ama@example.com"
             value={email}
             onChange={(event) => setEmail(event.target.value)}
           />
         </div>
 
-        <div className="space-y-2 md:col-span-2">
+        {/* <div className="space-y-2 md:col-span-2">
           <Label htmlFor="staff-code">Staff code</Label>
           <Input
             id="staff-code"
@@ -429,7 +423,7 @@ function StaffProvisionForm({
             value={staffCode}
             onChange={(event) => setStaffCode(event.target.value)}
           />
-        </div>
+        </div> */}
       </div>
 
       <div className="flex items-center gap-4">
@@ -467,7 +461,7 @@ function CredentialPinDialog({
   const [isSaving, setIsSaving] = useState(false);
 
   const updateStaffCredential = useMutation(
-    api.operations.staffCredentials.updateStaffCredential
+    api.operations.staffCredentials.updateStaffCredential,
   );
 
   useEffect(() => {
@@ -478,7 +472,7 @@ function CredentialPinDialog({
   }, [state]);
 
   const showMismatch = Boolean(
-    pin.length > 0 && pin.length === confirmPin.length && pin !== confirmPin
+    pin.length > 0 && pin.length === confirmPin.length && pin !== confirmPin,
   );
 
   const handlePinKeyDown = (event: React.KeyboardEvent) => {
@@ -529,7 +523,7 @@ function CredentialPinDialog({
       toast.success(
         state.mode === "set"
           ? "PIN saved and credential activated"
-          : "PIN reset successfully"
+          : "PIN reset successfully",
       );
       onClose();
     } catch (error) {
@@ -596,7 +590,9 @@ function CredentialPinDialog({
             variant="ghost"
             onClick={handleSubmit}
             isLoading={isSaving}
-            disabled={pin.length !== 6 || confirmPin.length !== 6 || pin !== confirmPin}
+            disabled={
+              pin.length !== 6 || confirmPin.length !== 6 || pin !== confirmPin
+            }
           >
             {state?.mode === "set" ? "Save PIN" : "Reset PIN"}
           </LoadingButton>
@@ -611,31 +607,32 @@ export const CashierManagement = ({
   organizationId,
 }: CashierManagementProps) => {
   const [showForm, setShowForm] = useState(false);
-  const [pinSetupState, setPinSetupState] = useState<PinSetupDialogState | null>(
-    null
-  );
-  const [staffToDeactivate, setStaffToDeactivate] = useState<StaffProfileRow | null>(
-    null
-  );
+  const [pinSetupState, setPinSetupState] =
+    useState<PinSetupDialogState | null>(null);
+  const [staffToDeactivate, setStaffToDeactivate] =
+    useState<StaffProfileRow | null>(null);
   const [isDeactivating, setIsDeactivating] = useState(false);
 
-  const staffProfiles = useQuery(api.operations.staffProfiles.listStaffProfiles, {
-    storeId,
-  }) as StaffProfileRow[] | undefined;
+  const staffProfiles = useQuery(
+    api.operations.staffProfiles.listStaffProfiles,
+    {
+      storeId,
+    },
+  ) as StaffProfileRow[] | undefined;
 
   const updateStaffProfile = useMutation(
-    api.operations.staffProfiles.updateStaffProfile
+    api.operations.staffProfiles.updateStaffProfile,
   );
   const updateStaffCredential = useMutation(
-    api.operations.staffCredentials.updateStaffCredential
+    api.operations.staffCredentials.updateStaffCredential,
   );
 
   const roster = useMemo(
     () =>
       [...(staffProfiles ?? [])].sort((left, right) =>
-        left.fullName.localeCompare(right.fullName)
+        left.fullName.localeCompare(right.fullName),
       ),
-    [staffProfiles]
+    [staffProfiles],
   );
 
   const handleDeactivate = async () => {
@@ -663,7 +660,9 @@ export const CashierManagement = ({
       toast.success("Staff member deactivated");
       setStaffToDeactivate(null);
     } catch (error) {
-      toast.error((error as Error).message || "Failed to deactivate staff member");
+      toast.error(
+        (error as Error).message || "Failed to deactivate staff member",
+      );
       console.error(error);
     } finally {
       setIsDeactivating(false);
@@ -675,8 +674,7 @@ export const CashierManagement = ({
       <div className="space-y-2">
         <h3 className="text-lg font-medium">Staff</h3>
         <p className="text-sm text-muted-foreground">
-          Create staff profiles with usernames now. PIN setup happens separately
-          when the staff member is ready to activate their credential.
+          Manage profiles for staff members
         </p>
       </div>
 
@@ -686,9 +684,8 @@ export const CashierManagement = ({
             <TableHeader>
               <TableRow>
                 <TableHead>Name</TableHead>
-                <TableHead>Username</TableHead>
-                <TableHead>Role</TableHead>
-                <TableHead>Start date</TableHead>
+                {/* <TableHead>Role</TableHead> */}
+                {/* <TableHead>Start date</TableHead> */}
                 <TableHead>Status</TableHead>
                 <TableHead className="w-[240px]">Actions</TableHead>
               </TableRow>
@@ -700,37 +697,36 @@ export const CashierManagement = ({
                   (staff.credentialStatus === "pending" ||
                     staff.credentialStatus === "active");
                 const canDeactivate =
-                  staff.status === "active" && staff.credentialStatus !== "revoked";
+                  staff.status === "active" &&
+                  staff.credentialStatus !== "revoked";
 
                 return (
                   <TableRow key={staff._id}>
-                    <TableCell>
-                      <div className="space-y-1">
+                    <TableCell className="flex items-center gap-4">
+                      <div className="flex gap-2 items-center">
                         <div className="font-medium">{staff.fullName}</div>
-                        {staff.roles && staff.roles.length > 1 ? (
-                          <div className="text-xs text-muted-foreground">
-                            {staff.roles.map((role) => formatRoleLabel(role)).join(", ")}
-                          </div>
-                        ) : null}
+                        <p className="text-muted-foreground text-sm">
+                          {staff.username ?? "—"}
+                        </p>
                       </div>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {staff.username ?? "—"}
-                    </TableCell>
-                    <TableCell>
                       <Badge variant="outline">
                         {formatRoleLabel(staff.primaryRole)}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-muted-foreground">
+                    {/* <TableCell className="text-muted-foreground">
+                      {staff.username ?? "—"}
+                    </TableCell> */}
+                    {/* <TableCell>
+                      <Badge variant="outline">
+                        {formatRoleLabel(staff.primaryRole)}
+                      </Badge>
+                    </TableCell> */}
+                    {/* <TableCell className="text-muted-foreground">
                       {formatStartDate(staff.hiredAt)}
-                    </TableCell>
+                    </TableCell> */}
                     <TableCell>
                       <div className="space-y-1">
                         <CredentialStatusBadge staff={staff} />
-                        <div className="text-xs text-muted-foreground">
-                          {formatCredentialStatusLabel(staff)}
-                        </div>
                       </div>
                     </TableCell>
                     <TableCell>
@@ -742,26 +738,31 @@ export const CashierManagement = ({
                             onClick={() =>
                               setPinSetupState({
                                 mode:
-                                  staff.credentialStatus === "pending" ? "set" : "reset",
+                                  staff.credentialStatus === "pending"
+                                    ? "set"
+                                    : "reset",
                                 staff,
                               })
                             }
                           >
-                            {staff.credentialStatus === "pending" ? "Set PIN" : "Reset PIN"}
+                            {staff.credentialStatus === "pending"
+                              ? "Set PIN"
+                              : "Reset PIN"}
                           </Button>
                         ) : null}
 
                         {canDeactivate ? (
                           <Button
-                            variant="ghost"
+                            variant="outline"
                             size="sm"
                             onClick={() => setStaffToDeactivate(staff)}
                           >
                             <UserMinus className="mr-2 h-4 w-4" />
-                            Deactivate
                           </Button>
                         ) : (
-                          <span className="text-sm text-muted-foreground">No actions</span>
+                          <span className="text-sm text-muted-foreground">
+                            No actions
+                          </span>
                         )}
                       </div>
                     </TableCell>
@@ -772,11 +773,13 @@ export const CashierManagement = ({
           </Table>
         </div>
       ) : (
-        <p className="text-sm text-muted-foreground">No staff members added yet.</p>
+        <p className="text-sm text-muted-foreground">
+          No staff members added yet.
+        </p>
       )}
 
       {showForm ? (
-        <div className="rounded-lg border p-6">
+        <div className="w-[50%]">
           <StaffProvisionForm
             organizationId={organizationId}
             onCancel={() => setShowForm(false)}
@@ -807,7 +810,8 @@ export const CashierManagement = ({
             <DialogTitle>Deactivate staff member</DialogTitle>
             <DialogDescription>
               This will mark the staff profile inactive and revoke the reserved
-              or active credential for {staffToDeactivate?.fullName ?? "this staff member"}.
+              or active credential for{" "}
+              {staffToDeactivate?.fullName ?? "this staff member"}.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

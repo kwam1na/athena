@@ -122,6 +122,7 @@ import type * as operations_registerSessions from "../operations/registerSession
 import type * as operations_serviceIntake from "../operations/serviceIntake.js";
 import type * as operations_staffCredentials from "../operations/staffCredentials.js";
 import type * as operations_staffProfiles from "../operations/staffProfiles.js";
+import type * as operations_staffRoles from "../operations/staffRoles.js";
 import type * as otp_EmailOTP from "../otp/EmailOTP.js";
 import type * as paystack_index from "../paystack/index.js";
 import type * as pos_application_commands_assignCustomer from "../pos/application/commands/assignCustomer.js";
@@ -402,6 +403,7 @@ declare const fullApi: ApiFromModules<{
   "operations/serviceIntake": typeof operations_serviceIntake;
   "operations/staffCredentials": typeof operations_staffCredentials;
   "operations/staffProfiles": typeof operations_staffProfiles;
+  "operations/staffRoles": typeof operations_staffRoles;
   "otp/EmailOTP": typeof otp_EmailOTP;
   "paystack/index": typeof paystack_index;
   "pos/application/commands/assignCustomer": typeof pos_application_commands_assignCustomer;
