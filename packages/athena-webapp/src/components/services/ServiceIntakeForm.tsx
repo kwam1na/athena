@@ -1,6 +1,13 @@
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../ui/select";
 import { Textarea } from "../ui/textarea";
 
 export type ServiceIntakeCustomerResult = {
@@ -183,59 +190,62 @@ export function ServiceIntakeForm({
 
             <div className="space-y-2">
               <Label htmlFor="assigned-staff">Assigned staff</Label>
-              <select
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                id="assigned-staff"
-                onChange={(event) =>
-                  onChange("assignedStaffProfileId", event.target.value)
-                }
+              <Select
+                onValueChange={(value) => onChange("assignedStaffProfileId", value)}
                 value={form.assignedStaffProfileId}
               >
-                <option value="">Select staff member</option>
-                {staffOptions.map((staff) => (
-                  <option key={staff._id} value={staff._id}>
-                    {staff.fullName}
-                    {staff.roles.length > 0 ? ` · ${staff.roles.join(", ")}` : ""}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger aria-label="Assigned staff" id="assigned-staff">
+                  <SelectValue placeholder="Select staff member" />
+                </SelectTrigger>
+                <SelectContent>
+                  {staffOptions.map((staff) => (
+                    <SelectItem key={staff._id} value={staff._id}>
+                      {staff.fullName}
+                      {staff.roles.length > 0 ? ` · ${staff.roles.join(", ")}` : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="intake-channel">Channel</Label>
-              <select
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                id="intake-channel"
-                onChange={(event) =>
+              <Select
+                onValueChange={(value) =>
                   onChange(
                     "intakeChannel",
-                    event.target.value as ServiceIntakeFormState["intakeChannel"]
+                    value as ServiceIntakeFormState["intakeChannel"]
                   )
                 }
                 value={form.intakeChannel}
               >
-                <option value="walk_in">Walk-in</option>
-                <option value="phone_booking">Phone booking</option>
-              </select>
+                <SelectTrigger aria-label="Channel" id="intake-channel">
+                  <SelectValue placeholder="Select channel" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="walk_in">Walk-in</SelectItem>
+                  <SelectItem value="phone_booking">Phone booking</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="priority">Priority</Label>
-              <select
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                id="priority"
-                onChange={(event) =>
-                  onChange(
-                    "priority",
-                    event.target.value as ServiceIntakeFormState["priority"]
-                  )
+              <Select
+                onValueChange={(value) =>
+                  onChange("priority", value as ServiceIntakeFormState["priority"])
                 }
                 value={form.priority}
               >
-                <option value="normal">Normal</option>
-                <option value="high">High</option>
-                <option value="urgent">Urgent</option>
-              </select>
+                <SelectTrigger aria-label="Priority" id="priority">
+                  <SelectValue placeholder="Select priority" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="normal">Normal</SelectItem>
+                  <SelectItem value="high">High</SelectItem>
+                  <SelectItem value="urgent">Urgent</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="space-y-2">
@@ -251,17 +261,19 @@ export function ServiceIntakeForm({
 
             <div className="space-y-2 sm:col-span-2">
               <Label htmlFor="deposit-method">Deposit method</Label>
-              <select
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                id="deposit-method"
-                onChange={(event) => onChange("depositMethod", event.target.value)}
+              <Select
+                onValueChange={(value) => onChange("depositMethod", value)}
                 value={form.depositMethod}
               >
-                <option value="">No deposit collected</option>
-                <option value="cash">Cash</option>
-                <option value="card">Card</option>
-                <option value="mobile_money">Mobile money</option>
-              </select>
+                <SelectTrigger aria-label="Deposit method" id="deposit-method">
+                  <SelectValue placeholder="No deposit collected" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="cash">Cash</SelectItem>
+                  <SelectItem value="card">Card</SelectItem>
+                  <SelectItem value="mobile_money">Mobile money</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="space-y-2 sm:col-span-2">

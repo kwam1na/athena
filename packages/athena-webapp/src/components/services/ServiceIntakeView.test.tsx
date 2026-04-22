@@ -37,6 +37,15 @@ const baseProps = {
   userId: "user-1" as Id<"athenaUser">,
 };
 
+async function chooseSelectOption(
+  user: ReturnType<typeof userEvent.setup>,
+  label: RegExp,
+  option: RegExp
+) {
+  await user.click(screen.getByRole("combobox", { name: label }));
+  await user.click(await screen.findByRole("option", { name: option }));
+}
+
 describe("ServiceIntakeViewContent", () => {
   beforeEach(() => {
     window.scrollTo = vi.fn();
@@ -88,17 +97,11 @@ describe("ServiceIntakeViewContent", () => {
       screen.getByLabelText(/service title/i),
       "Wash and restyle closure wig",
     );
-    await user.selectOptions(
-      screen.getByLabelText(/assigned staff/i),
-      "staff-1",
-    );
+    await chooseSelectOption(user, /assigned staff/i, /adjoa tetteh/i);
     await user.type(screen.getByLabelText(/deposit amount/i), "45");
-    await user.selectOptions(screen.getByLabelText(/deposit method/i), "card");
-    await user.selectOptions(screen.getByLabelText(/priority/i), "urgent");
-    await user.selectOptions(
-      screen.getByLabelText(/channel/i),
-      "phone_booking",
-    );
+    await chooseSelectOption(user, /deposit method/i, /^card$/i);
+    await chooseSelectOption(user, /priority/i, /^urgent$/i);
+    await chooseSelectOption(user, /channel/i, /phone booking/i);
     await user.type(
       screen.getByLabelText(/item description/i),
       "Customer dropped off closure wig with tangling at the crown.",

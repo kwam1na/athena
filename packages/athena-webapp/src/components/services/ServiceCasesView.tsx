@@ -9,6 +9,13 @@ import { ProtectedAdminSignInView } from "../states/signed-out/ProtectedAdminSig
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../ui/select";
 import { useProtectedAdminPageState } from "@/hooks/useProtectedAdminPageState";
 import { api } from "~/convex/_generated/api";
 
@@ -287,66 +294,73 @@ export function ServiceCasesViewContent({
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="case-service-mode">Service mode</Label>
-              <select
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                id="case-service-mode"
-                onChange={(event) =>
+              <Select
+                onValueChange={(value) =>
                   setCreateForm((current) => ({
                     ...current,
-                    serviceMode: event.target.value as CreateServiceCaseArgs["serviceMode"],
+                    serviceMode: value as CreateServiceCaseArgs["serviceMode"],
                   }))
                 }
                 value={createForm.serviceMode}
               >
-                <option value="same_day">Same-day</option>
-                <option value="consultation">Consultation</option>
-                <option value="repair">Repair</option>
-                <option value="revamp">Revamp</option>
-              </select>
+                <SelectTrigger aria-label="Service mode" id="case-service-mode">
+                  <SelectValue placeholder="Select service mode" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="same_day">Same-day</SelectItem>
+                  <SelectItem value="consultation">Consultation</SelectItem>
+                  <SelectItem value="repair">Repair</SelectItem>
+                  <SelectItem value="revamp">Revamp</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="case-service-catalog">Service catalog</Label>
-              <select
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                id="case-service-catalog"
-                onChange={(event) =>
+              <Select
+                onValueChange={(value) =>
                   setCreateForm((current) => ({
                     ...current,
-                    serviceCatalogId: event.target.value,
+                    serviceCatalogId: value,
                   }))
                 }
                 value={createForm.serviceCatalogId}
               >
-                <option value="">Optional catalog item</option>
-                {catalogItems.map((item) => (
-                  <option key={item._id} value={item._id}>
-                    {item.name}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger aria-label="Service catalog" id="case-service-catalog">
+                  <SelectValue placeholder="Optional catalog item" />
+                </SelectTrigger>
+                <SelectContent>
+                  {catalogItems.map((item) => (
+                    <SelectItem key={item._id} value={item._id}>
+                      {item.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="case-assigned-staff">Assigned staff</Label>
-              <select
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                id="case-assigned-staff"
-                onChange={(event) =>
+              <Select
+                onValueChange={(value) =>
                   setCreateForm((current) => ({
                     ...current,
-                    assignedStaffProfileId: event.target.value,
+                    assignedStaffProfileId: value,
                   }))
                 }
                 value={createForm.assignedStaffProfileId}
               >
-                <option value="">Select staff member</option>
-                {staffOptions.map((staff) => (
-                  <option key={staff._id} value={staff._id}>
-                    {staff.fullName}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger aria-label="Assigned staff" id="case-assigned-staff">
+                  <SelectValue placeholder="Select staff member" />
+                </SelectTrigger>
+                <SelectContent>
+                  {staffOptions.map((staff) => (
+                    <SelectItem key={staff._id} value={staff._id}>
+                      {staff.fullName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="space-y-2">
@@ -453,21 +467,24 @@ export function ServiceCasesViewContent({
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="payment-method">Payment method</Label>
-                      <select
-                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                        id="payment-method"
-                        onChange={(event) =>
+                      <Select
+                        onValueChange={(value) =>
                           setPaymentForm((current) => ({
                             ...current,
-                            method: event.target.value,
+                            method: value,
                           }))
                         }
                         value={paymentForm.method}
                       >
-                        <option value="cash">Cash</option>
-                        <option value="card">Card</option>
-                        <option value="mobile_money">Mobile money</option>
-                      </select>
+                        <SelectTrigger aria-label="Payment method" id="payment-method">
+                          <SelectValue placeholder="Select payment method" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="cash">Cash</SelectItem>
+                          <SelectItem value="card">Card</SelectItem>
+                          <SelectItem value="mobile_money">Mobile money</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                     <Button
                       onClick={() =>
@@ -488,18 +505,22 @@ export function ServiceCasesViewContent({
                     <h4 className="font-medium">Case status</h4>
                     <div className="space-y-2">
                       <Label htmlFor="case-status">Case status</Label>
-                      <select
-                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                        id="case-status"
-                        onChange={(event) => setStatusValue(event.target.value)}
-                        value={statusValue}
-                      >
-                        <option value="in_progress">In progress</option>
-                        <option value="awaiting_approval">Awaiting approval</option>
-                        <option value="awaiting_pickup">Awaiting pickup</option>
-                        <option value="completed">Completed</option>
-                        <option value="cancelled">Cancelled</option>
-                      </select>
+                      <Select onValueChange={setStatusValue} value={statusValue}>
+                        <SelectTrigger aria-label="Case status" id="case-status">
+                          <SelectValue placeholder="Select case status" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="in_progress">In progress</SelectItem>
+                          <SelectItem value="awaiting_approval">
+                            Awaiting approval
+                          </SelectItem>
+                          <SelectItem value="awaiting_pickup">
+                            Awaiting pickup
+                          </SelectItem>
+                          <SelectItem value="completed">Completed</SelectItem>
+                          <SelectItem value="cancelled">Cancelled</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                     <Button
                       onClick={() =>

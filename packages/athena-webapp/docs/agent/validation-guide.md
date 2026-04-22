@@ -82,7 +82,7 @@ Reach for the package suite first, then typecheck when helpers or shared state c
 
 ## Frontend test harness edits
 
-Touched surfaces: `src/test`, `src/tests`
+Touched surfaces: `src/test`, `src/tests`, `vitest.setup.ts`
 
 Run:
 

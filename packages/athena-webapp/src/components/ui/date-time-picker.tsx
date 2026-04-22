@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 
 interface DateTimePickerProps {
+  id?: string;
   value?: Date;
   onChange: (date: Date | undefined) => void;
   placeholder?: string;
@@ -19,6 +20,7 @@ interface DateTimePickerProps {
 }
 
 export function DateTimePicker({
+  id,
   value,
   onChange,
   placeholder = "Pick a date and time",
@@ -40,7 +42,12 @@ export function DateTimePicker({
       setSelectedDate(value);
       setHours(value.getHours().toString().padStart(2, "0"));
       setMinutes(value.getMinutes().toString().padStart(2, "0"));
+      return;
     }
+
+    setSelectedDate(undefined);
+    setHours("00");
+    setMinutes("00");
   }, [value]);
 
   const handleDateSelect = (date: Date | undefined) => {
@@ -100,6 +107,7 @@ export function DateTimePicker({
     <Popover open={isOpen} onOpenChange={setIsOpen}>
       <PopoverTrigger asChild>
         <Button
+          id={id}
           variant="outline"
           className={cn(
             "w-full justify-start text-left font-normal",

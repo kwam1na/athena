@@ -20,6 +20,25 @@ vi.mock("convex/react", () => ({
 
 // Only run browser-specific mocks when a window object exists (e.g. jsdom).
 if (typeof window !== "undefined") {
+  const pointerCaptureStub = () => false;
+  const pointerReleaseStub = () => undefined;
+
+  if (!HTMLElement.prototype.hasPointerCapture) {
+    HTMLElement.prototype.hasPointerCapture = pointerCaptureStub;
+  }
+
+  if (!HTMLElement.prototype.setPointerCapture) {
+    HTMLElement.prototype.setPointerCapture = pointerReleaseStub;
+  }
+
+  if (!HTMLElement.prototype.releasePointerCapture) {
+    HTMLElement.prototype.releasePointerCapture = pointerReleaseStub;
+  }
+
+  if (!HTMLElement.prototype.scrollIntoView) {
+    HTMLElement.prototype.scrollIntoView = pointerReleaseStub;
+  }
+
   // Mock window.print for receipt printing tests
   Object.defineProperty(window, "print", {
     value: vi.fn(),

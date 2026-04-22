@@ -46,6 +46,45 @@ const baseProps = {
   ],
 };
 
+async function chooseSelectOption(
+  user: ReturnType<typeof userEvent.setup>,
+  label: RegExp,
+  option: RegExp
+) {
+  await user.click(screen.getByRole("combobox", { name: label }));
+  await user.click(await screen.findByRole("option", { name: option }));
+}
+
+async function chooseDateTime(
+  user: ReturnType<typeof userEvent.setup>,
+  label: RegExp,
+  hours: string,
+  minutes: string
+) {
+  await user.click(screen.getByLabelText(label));
+
+  const dayCell = (await screen.findAllByRole("gridcell")).find((cell) =>
+    /^\d+$/.test((cell.textContent ?? "").trim())
+  );
+
+  if (!dayCell) {
+    throw new Error("No calendar day button found.");
+  }
+
+  const dayButton = dayCell.querySelector("button");
+
+  if (dayButton) {
+    await user.click(dayButton);
+  } else {
+    await user.click(dayCell);
+  }
+  await user.clear(screen.getByPlaceholderText("HH"));
+  await user.type(screen.getByPlaceholderText("HH"), hours);
+  await user.clear(screen.getByPlaceholderText("MM"));
+  await user.type(screen.getByPlaceholderText("MM"), minutes);
+  await user.click(screen.getByRole("button", { name: /done/i }));
+}
+
 describe("ServiceAppointmentsViewContent", () => {
   beforeEach(() => {
     window.scrollTo = vi.fn();
@@ -84,9 +123,9 @@ describe("ServiceAppointmentsViewContent", () => {
     );
 
     await user.click(screen.getByRole("button", { name: /use customer/i }));
-    await user.selectOptions(screen.getByLabelText(/service catalog/i), "catalog-1");
-    await user.selectOptions(screen.getByLabelText(/assigned staff/i), "staff-1");
-    await user.type(screen.getByLabelText(/appointment start/i), "2026-05-01T10:00");
+    await chooseSelectOption(user, /service catalog/i, /closure repair/i);
+    await chooseSelectOption(user, /assigned staff/i, /adjoa tetteh/i);
+    await chooseDateTime(user, /appointment start/i, "10", "00");
     await user.click(screen.getByRole("button", { name: /schedule appointment/i }));
 
     await waitFor(() => expect(onCreateAppointment).toHaveBeenCalledTimes(1));
@@ -113,10 +152,7 @@ describe("ServiceAppointmentsViewContent", () => {
       />,
     );
 
-    await user.type(
-      screen.getByLabelText(/new time for closure repair/i),
-      "2026-05-02T12:30",
-    );
+    await chooseDateTime(user, /new time for closure repair/i, "12", "30");
     await user.click(screen.getByRole("button", { name: /reschedule closure repair/i }));
 
     await waitFor(() => expect(onRescheduleAppointment).toHaveBeenCalledTimes(1));

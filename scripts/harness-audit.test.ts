@@ -567,6 +567,7 @@ async function createFixtureRepo() {
     "export {};\n",
     rootDir
   );
+  await write("packages/athena-webapp/vitest.setup.ts", "export {};\n", rootDir);
   await write("packages/athena-webapp/src/routes/_authed/index.tsx", "export {};\n", rootDir);
   await write(
     "packages/athena-webapp/src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/cash-controls/index.tsx",
