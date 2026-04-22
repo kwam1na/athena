@@ -113,6 +113,7 @@ export function useRegisterViewModel(): RegisterViewModel {
   const bootstrapInitialized = useRef(false);
   const syncedSessionId = useRef<string | null>(null);
   const paymentsRef = useRef<Payment[]>([]);
+  const checkoutStateVersionRef = useRef(0);
 
   const registerState = useConvexRegisterState({
     storeId: activeStore?._id,
@@ -178,6 +179,11 @@ export function useRegisterViewModel(): RegisterViewModel {
     paymentsRef.current = nextPayments;
     setPayments(nextPayments);
   }, []);
+  const allocateCheckoutStateVersion = useCallback(() => {
+    const nextVersion = Math.max(checkoutStateVersionRef.current + 1, Date.now());
+    checkoutStateVersionRef.current = nextVersion;
+    return nextVersion;
+  }, []);
 
   const resetDraftState = useCallback(
     (options?: {
@@ -235,6 +241,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     syncedSessionId.current = sessionId;
 
     if (!sessionId) {
+      checkoutStateVersionRef.current = 0;
       if (!isTransactionCompleted) {
         setCustomerInfo(EMPTY_REGISTER_CUSTOMER_INFO);
         setPaymentState([]);
@@ -243,6 +250,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       return;
     }
 
+    checkoutStateVersionRef.current = 0;
     setCustomerInfo(mapSessionCustomer(activeSession?.customer ?? null));
     setPaymentState(
       (activeSession?.payments ?? []).map((payment) => ({
@@ -412,8 +420,8 @@ export function useRegisterViewModel(): RegisterViewModel {
         | "paymentAdded"
         | "paymentUpdated"
         | "paymentRemoved"
-        | "paymentsCleared"
-        | "checkoutSubmitted";
+        | "paymentsCleared";
+      checkoutStateVersion: number;
       paymentMethod?: PosPaymentMethod;
       amount?: number;
       previousAmount?: number;
@@ -426,6 +434,7 @@ export function useRegisterViewModel(): RegisterViewModel {
         await syncSessionCheckoutState({
           sessionId: activeSession._id as Id<"posSession">,
           cashierId,
+          checkoutStateVersion: args.checkoutStateVersion,
           payments: args.nextPayments.map(({ id, ...payment }) => payment),
           stage: args.stage,
           paymentMethod: args.paymentMethod,
@@ -1013,12 +1022,6 @@ export function useRegisterViewModel(): RegisterViewModel {
       return false;
     }
 
-    await syncCheckoutStateBestEffort({
-      nextPayments: currentPayments,
-      stage: "checkoutSubmitted",
-      paymentMethod: currentPayments[0]?.method,
-    });
-
     const result = await runCompleteTransaction({
       gateway: {
         completeTransaction: completeTransactionCommand,
@@ -1072,7 +1075,6 @@ export function useRegisterViewModel(): RegisterViewModel {
     customerInfo,
     persistSessionMetadata,
     registerNumber,
-    syncCheckoutStateBestEffort,
   ]);
 
   const handleStartNewTransaction = useCallback(() => {
@@ -1085,6 +1087,7 @@ export function useRegisterViewModel(): RegisterViewModel {
   const handleAddPayment = useCallback(
     (method: PosPaymentMethod, amount: number) => {
       const currentPayments = paymentsRef.current;
+      const checkoutStateVersion = allocateCheckoutStateVersion();
       const nextPayment = {
         id: createPaymentId(),
         method,
@@ -1094,17 +1097,19 @@ export function useRegisterViewModel(): RegisterViewModel {
       const nextPayments = [...currentPayments, nextPayment];
       setPaymentState(nextPayments);
       void syncCheckoutStateBestEffort({
+        checkoutStateVersion,
         nextPayments,
         stage: "paymentAdded",
         paymentMethod: method,
         amount,
       });
     },
-    [setPaymentState, syncCheckoutStateBestEffort],
+    [allocateCheckoutStateVersion, setPaymentState, syncCheckoutStateBestEffort],
   );
 
   const handleUpdatePayment = useCallback((paymentId: string, amount: number) => {
     const currentPayments = paymentsRef.current;
+    const checkoutStateVersion = allocateCheckoutStateVersion();
     const previousPayment = currentPayments.find((payment) => payment.id === paymentId);
     const nextPayments = currentPayments.map((payment) =>
       payment.id === paymentId ? { ...payment, amount } : payment,
@@ -1117,16 +1122,18 @@ export function useRegisterViewModel(): RegisterViewModel {
     }
 
     void syncCheckoutStateBestEffort({
+      checkoutStateVersion,
       nextPayments,
       stage: "paymentUpdated",
       paymentMethod: previousPayment.method,
       amount,
       previousAmount: previousPayment.amount,
     });
-  }, [setPaymentState, syncCheckoutStateBestEffort]);
+  }, [allocateCheckoutStateVersion, setPaymentState, syncCheckoutStateBestEffort]);
 
   const handleRemovePayment = useCallback((paymentId: string) => {
     const currentPayments = paymentsRef.current;
+    const checkoutStateVersion = allocateCheckoutStateVersion();
     const removedPayment = currentPayments.find((payment) => payment.id === paymentId);
     const nextPayments = currentPayments.filter((payment) => payment.id !== paymentId);
     setPaymentState(nextPayments);
@@ -1136,24 +1143,27 @@ export function useRegisterViewModel(): RegisterViewModel {
     }
 
     void syncCheckoutStateBestEffort({
+      checkoutStateVersion,
       nextPayments,
       stage: "paymentRemoved",
       paymentMethod: removedPayment.method,
       amount: removedPayment.amount,
     });
-  }, [setPaymentState, syncCheckoutStateBestEffort]);
+  }, [allocateCheckoutStateVersion, setPaymentState, syncCheckoutStateBestEffort]);
 
   const handleClearPayments = useCallback(() => {
     if (paymentsRef.current.length === 0) {
       return;
     }
 
+    const checkoutStateVersion = allocateCheckoutStateVersion();
     setPaymentState([]);
     void syncCheckoutStateBestEffort({
+      checkoutStateVersion,
       nextPayments: [],
       stage: "paymentsCleared",
     });
-  }, [setPaymentState, syncCheckoutStateBestEffort]);
+  }, [allocateCheckoutStateVersion, setPaymentState, syncCheckoutStateBestEffort]);
 
   const header = useMemo(
     () =>

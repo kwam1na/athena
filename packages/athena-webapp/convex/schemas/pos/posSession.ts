@@ -48,6 +48,7 @@ export const posSessionSchema = v.object({
       })
     )
   ),
+  checkoutStateVersion: v.optional(v.number()),
 
   // Notes
   holdReason: v.optional(v.string()),

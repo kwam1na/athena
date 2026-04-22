@@ -464,6 +464,7 @@ describe("useRegisterViewModel", () => {
       expect.objectContaining({
         sessionId: "session-1",
         cashierId: "cashier-1",
+        checkoutStateVersion: expect.any(Number),
         stage: "paymentAdded",
         paymentMethod: "cash",
         amount: 120,
@@ -498,6 +499,7 @@ describe("useRegisterViewModel", () => {
     expect(mockSyncSessionCheckoutState).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({
+        checkoutStateVersion: expect.any(Number),
         stage: "paymentAdded",
         payments: [expect.objectContaining({ method: "cash", amount: 60 })],
       }),
@@ -505,6 +507,7 @@ describe("useRegisterViewModel", () => {
     expect(mockSyncSessionCheckoutState).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({
+        checkoutStateVersion: expect.any(Number),
         stage: "paymentAdded",
         payments: [
           expect.objectContaining({ method: "cash", amount: 60 }),
@@ -514,7 +517,7 @@ describe("useRegisterViewModel", () => {
     );
   });
 
-  it("records checkout submission before completing the transaction", async () => {
+  it("completes the transaction without a separate checkout-submitted sync round-trip", async () => {
     const { useRegisterViewModel } = await import("./useRegisterViewModel");
     const { result } = renderHook(() => useRegisterViewModel());
 
@@ -530,10 +533,8 @@ describe("useRegisterViewModel", () => {
       await result.current.checkout.onCompleteTransaction();
     });
 
-    expect(mockSyncSessionCheckoutState).toHaveBeenCalledWith(
+    expect(mockSyncSessionCheckoutState).not.toHaveBeenCalledWith(
       expect.objectContaining({
-        sessionId: "session-1",
-        cashierId: "cashier-1",
         stage: "checkoutSubmitted",
       }),
     );

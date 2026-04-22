@@ -562,6 +562,21 @@ export const completeSession = mutation({
 
     // Mark session as completed and lock in final transaction totals
     // This ensures audit integrity by capturing exact values at completion time
+    await recordSessionLifecycleTraceBestEffort(ctx, {
+      stage: "checkoutSubmitted",
+      session: {
+        ...session,
+        updatedAt: now,
+        payments: args.payments,
+        subtotal: args.subtotal,
+        tax: args.tax,
+        total: args.total,
+      },
+      occurredAt: now,
+      paymentMethod: args.payments[0]?.method,
+      paymentCount: args.payments.length,
+    });
+
     await ctx.db.patch("posSession", args.sessionId, {
       status: "completed",
       completedAt: now,
@@ -769,6 +784,7 @@ export const syncSessionCheckoutState = mutation({
   args: {
     sessionId: v.id("posSession"),
     cashierId: v.id("cashier"),
+    checkoutStateVersion: v.number(),
     payments: v.array(
       v.object({
         method: v.string(),
@@ -780,8 +796,7 @@ export const syncSessionCheckoutState = mutation({
       v.literal("paymentAdded"),
       v.literal("paymentUpdated"),
       v.literal("paymentRemoved"),
-      v.literal("paymentsCleared"),
-      v.literal("checkoutSubmitted")
+      v.literal("paymentsCleared")
     ),
     paymentMethod: v.optional(v.string()),
     amount: v.optional(v.number()),
@@ -804,10 +819,22 @@ export const syncSessionCheckoutState = mutation({
       return error("Session not found");
     }
 
+    const currentCheckoutStateVersion = session.checkoutStateVersion ?? 0;
+    if (args.checkoutStateVersion <= currentCheckoutStateVersion) {
+      return {
+        success: true as const,
+        data: {
+          sessionId: args.sessionId,
+          expiresAt: session.expiresAt,
+        },
+      };
+    }
+
     const now = Date.now();
     const expiresAt = calculateSessionExpiration(now);
     await ctx.db.patch("posSession", args.sessionId, {
       payments: args.payments,
+      checkoutStateVersion: args.checkoutStateVersion,
       updatedAt: now,
       expiresAt,
     });
@@ -817,6 +844,7 @@ export const syncSessionCheckoutState = mutation({
       session: {
         ...session,
         payments: args.payments,
+        checkoutStateVersion: args.checkoutStateVersion,
         updatedAt: now,
         expiresAt,
       },

@@ -52,6 +52,7 @@ export type PosSessionTraceableSession = Pick<
   | "transactionId"
   | "customerInfo"
   | "payments"
+  | "checkoutStateVersion"
   | "subtotal"
   | "tax"
   | "total"

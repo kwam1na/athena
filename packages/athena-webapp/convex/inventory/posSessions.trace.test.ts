@@ -240,7 +240,16 @@ describe("pos session lifecycle trace handlers", () => {
         transactionNumber: "POS-1001",
       },
     });
-    expect(mocks.traceRecord).toHaveBeenCalledWith(
+    expect(mocks.traceRecord).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        stage: "checkoutSubmitted",
+        paymentMethod: "cash",
+        paymentCount: 1,
+      }),
+    );
+    expect(mocks.traceRecord).toHaveBeenNthCalledWith(
+      2,
       expect.objectContaining({
         stage: "completed",
         transactionId: "txn-1",
@@ -437,7 +446,7 @@ describe("pos session lifecycle trace handlers", () => {
     );
   });
 
-  it("records payment and checkout milestones while syncing checkout state", async () => {
+  it("records payment milestones while syncing checkout state", async () => {
     const ctx = createMutationCtx({
       sessions: [
         buildSession({
@@ -449,6 +458,7 @@ describe("pos session lifecycle trace handlers", () => {
     const paymentResult = await getHandler(syncSessionCheckoutState)(ctx as never, {
       sessionId: "session-checkout",
       cashierId: "cashier-1",
+      checkoutStateVersion: 1,
       payments: [{ method: "cash", amount: 115, timestamp: 1_000 }],
       stage: "paymentAdded",
       paymentMethod: "cash",
@@ -470,28 +480,6 @@ describe("pos session lifecycle trace handlers", () => {
         paymentCount: 1,
       }),
     );
-
-    const checkoutResult = await getHandler(syncSessionCheckoutState)(ctx as never, {
-      sessionId: "session-checkout",
-      cashierId: "cashier-1",
-      payments: [{ method: "cash", amount: 115, timestamp: 1_000 }],
-      stage: "checkoutSubmitted",
-      paymentMethod: "cash",
-    });
-
-    expect(checkoutResult).toEqual({
-      success: true,
-      data: {
-        sessionId: "session-checkout",
-        expiresAt: expect.any(Number),
-      },
-    });
-    expect(mocks.traceRecord).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        stage: "checkoutSubmitted",
-        paymentCount: 1,
-      }),
-    );
   });
 
   it("records payment update, removal, and clear milestones while syncing checkout state", async () => {
@@ -510,6 +498,7 @@ describe("pos session lifecycle trace handlers", () => {
     await getHandler(syncSessionCheckoutState)(ctx as never, {
       sessionId: "session-payment-mutations",
       cashierId: "cashier-1",
+      checkoutStateVersion: 1,
       payments: [
         { method: "cash", amount: 70, timestamp: 1_000 },
         { method: "card", amount: 55, timestamp: 2_000 },
@@ -533,6 +522,7 @@ describe("pos session lifecycle trace handlers", () => {
     await getHandler(syncSessionCheckoutState)(ctx as never, {
       sessionId: "session-payment-mutations",
       cashierId: "cashier-1",
+      checkoutStateVersion: 2,
       payments: [{ method: "cash", amount: 70, timestamp: 1_000 }],
       stage: "paymentRemoved",
       paymentMethod: "card",
@@ -551,6 +541,7 @@ describe("pos session lifecycle trace handlers", () => {
     await getHandler(syncSessionCheckoutState)(ctx as never, {
       sessionId: "session-payment-mutations",
       cashierId: "cashier-1",
+      checkoutStateVersion: 3,
       payments: [],
       stage: "paymentsCleared",
     });
@@ -564,6 +555,55 @@ describe("pos session lifecycle trace handlers", () => {
     expect(
       ctx.sessions.find((session) => session._id === "session-payment-mutations")?.payments,
     ).toEqual([]);
+  });
+
+  it("ignores stale checkout-state sync writes that arrive after a newer payment snapshot", async () => {
+    const ctx = createMutationCtx({
+      sessions: [
+        buildSession({
+          _id: "session-payment-ordering",
+        }),
+      ],
+    });
+
+    mocks.traceRecord.mockClear();
+
+    await getHandler(syncSessionCheckoutState)(ctx as never, {
+      sessionId: "session-payment-ordering",
+      cashierId: "cashier-1",
+      payments: [
+        { method: "cash", amount: 60, timestamp: 1_000 },
+        { method: "card", amount: 55, timestamp: 2_000 },
+      ],
+      stage: "paymentAdded",
+      paymentMethod: "card",
+      amount: 55,
+      checkoutStateVersion: 2,
+    });
+
+    await getHandler(syncSessionCheckoutState)(ctx as never, {
+      sessionId: "session-payment-ordering",
+      cashierId: "cashier-1",
+      payments: [{ method: "cash", amount: 60, timestamp: 1_000 }],
+      stage: "paymentRemoved",
+      paymentMethod: "card",
+      amount: 55,
+      checkoutStateVersion: 1,
+    });
+
+    expect(
+      ctx.sessions.find((session) => session._id === "session-payment-ordering")?.payments,
+    ).toEqual([
+      { method: "cash", amount: 60, timestamp: 1_000 },
+      { method: "card", amount: 55, timestamp: 2_000 },
+    ]);
+    expect(mocks.traceRecord).toHaveBeenCalledTimes(1);
+    expect(mocks.traceRecord).toHaveBeenCalledWith(
+      expect.objectContaining({
+        stage: "paymentAdded",
+        paymentCount: 2,
+      }),
+    );
   });
 
   it("keeps checkout-state sync successful when trace recording fails", async () => {
@@ -580,6 +620,7 @@ describe("pos session lifecycle trace handlers", () => {
     const result = await getHandler(syncSessionCheckoutState)(ctx as never, {
       sessionId: "session-trace-failure",
       cashierId: "cashier-1",
+      checkoutStateVersion: 1,
       payments: [{ method: "cash", amount: 115, timestamp: 1_000 }],
       stage: "paymentAdded",
       paymentMethod: "cash",
