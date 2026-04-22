@@ -404,4 +404,32 @@ describe("useRegisterViewModel", () => {
     expect(source).not.toContain("useSessionManagement");
     expect(source).not.toContain("useSessionManagerOperations");
   });
+
+  it("refuses quantity updates for malformed cart items that are missing sku metadata", async () => {
+    mockActiveSession = {
+      ...mockActiveSession!,
+      cartItems: [
+        {
+          ...mockActiveSession!.cartItems[0],
+          skuId: undefined,
+        } as never,
+      ],
+    };
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated("cashier-1" as Id<"cashier">);
+    });
+
+    await act(async () => {
+      await result.current.cart.onUpdateQuantity(
+        "item-1" as Id<"posSessionItem">,
+        2,
+      );
+    });
+
+    expect(mockAddItem).not.toHaveBeenCalled();
+  });
 });
