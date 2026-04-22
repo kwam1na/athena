@@ -273,14 +273,6 @@ export function useRegisterViewModel(): RegisterViewModel {
   ]);
 
   useEffect(() => {
-    if (isTransactionCompleted || activeCartItems.length > 0 || payments.length === 0) {
-      return;
-    }
-
-    setPaymentState([]);
-  }, [activeCartItems.length, isTransactionCompleted, payments.length, setPaymentState]);
-
-  useEffect(() => {
     if (!activeSession?.expiresAt) {
       return;
     }
@@ -451,6 +443,27 @@ export function useRegisterViewModel(): RegisterViewModel {
     },
     [activeSession?._id, cashierId, syncSessionCheckoutState],
   );
+
+  useEffect(() => {
+    if (isTransactionCompleted || activeCartItems.length > 0 || payments.length === 0) {
+      return;
+    }
+
+    const checkoutStateVersion = allocateCheckoutStateVersion();
+    setPaymentState([]);
+    void syncCheckoutStateBestEffort({
+      checkoutStateVersion,
+      nextPayments: [],
+      stage: "paymentsCleared",
+    });
+  }, [
+    activeCartItems.length,
+    allocateCheckoutStateVersion,
+    isTransactionCompleted,
+    payments.length,
+    setPaymentState,
+    syncCheckoutStateBestEffort,
+  ]);
 
   const holdCurrentSession = useCallback(async (reason?: string) => {
     if (!activeSession || !cashierId) {
@@ -844,8 +857,10 @@ export function useRegisterViewModel(): RegisterViewModel {
       return;
     }
 
+    const checkoutStateVersion = allocateCheckoutStateVersion();
     const result = await releaseSessionInventoryHoldsAndDeleteItems({
       sessionId: activeSession._id as Id<"posSession">,
+      checkoutStateVersion,
     });
 
     if (!result.success) {
@@ -855,7 +870,12 @@ export function useRegisterViewModel(): RegisterViewModel {
 
     setPaymentState([]);
     toast.success("Cart cleared");
-  }, [activeSession, releaseSessionInventoryHoldsAndDeleteItems, setPaymentState]);
+  }, [
+    activeSession,
+    allocateCheckoutStateVersion,
+    releaseSessionInventoryHoldsAndDeleteItems,
+    setPaymentState,
+  ]);
 
   useEffect(() => {
     if (!extractedValue.trim()) {

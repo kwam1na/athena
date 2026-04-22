@@ -705,6 +705,7 @@ export const voidSession = mutation({
 export const releaseSessionInventoryHoldsAndDeleteItems = mutation({
   args: {
     sessionId: v.id("posSession"),
+    checkoutStateVersion: v.number(),
   },
   returns: v.union(
     v.object({
@@ -759,6 +760,7 @@ export const releaseSessionInventoryHoldsAndDeleteItems = mutation({
     await ctx.db.patch("posSession", args.sessionId, {
       updatedAt: now,
       expiresAt,
+      checkoutStateVersion: args.checkoutStateVersion,
       payments: [],
     });
 
@@ -767,6 +769,7 @@ export const releaseSessionInventoryHoldsAndDeleteItems = mutation({
         stage: "cartCleared",
         session: {
           ...session,
+          checkoutStateVersion: args.checkoutStateVersion,
           updatedAt: now,
           expiresAt,
           payments: [],

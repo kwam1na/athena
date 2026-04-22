@@ -55,6 +55,7 @@ type SessionRecord = {
     amount: number;
     timestamp: number;
   }>;
+  checkoutStateVersion?: number;
   subtotal?: number;
   tax?: number;
   total?: number;
@@ -399,6 +400,7 @@ describe("pos session lifecycle trace handlers", () => {
       sessions: [
         buildSession({
           _id: "session-clear",
+          checkoutStateVersion: 2,
           payments: [{ method: "cash", amount: 120, timestamp: 1_000 }],
         }),
       ],
@@ -422,6 +424,7 @@ describe("pos session lifecycle trace handlers", () => {
       ctx as never,
       {
         sessionId: "session-clear",
+        checkoutStateVersion: 4,
       },
     );
 
@@ -437,12 +440,70 @@ describe("pos session lifecycle trace handlers", () => {
         itemCount: 2,
         session: expect.objectContaining({
           _id: "session-clear",
+          checkoutStateVersion: 4,
           payments: [],
         }),
       }),
     );
-    expect(ctx.sessions.find((session) => session._id === "session-clear")?.payments).toEqual(
-      [],
+    expect(
+      ctx.sessions.find((session) => session._id === "session-clear"),
+    ).toEqual(
+      expect.objectContaining({
+        payments: [],
+        checkoutStateVersion: 4,
+      }),
+    );
+  });
+
+  it("keeps cleared carts fenced off from older payment-sync writes", async () => {
+    const ctx = createMutationCtx({
+      sessions: [
+        buildSession({
+          _id: "session-clear-ordering",
+          checkoutStateVersion: 2,
+          payments: [{ method: "cash", amount: 120, timestamp: 1_000 }],
+        }),
+      ],
+      items: [
+        {
+          _id: "item-1",
+          sessionId: "session-clear-ordering",
+          productSkuId: "sku-1",
+          quantity: 1,
+        },
+      ],
+    });
+
+    mocks.traceRecord.mockClear();
+
+    await getHandler(releaseSessionInventoryHoldsAndDeleteItems)(ctx as never, {
+      sessionId: "session-clear-ordering",
+      checkoutStateVersion: 4,
+    });
+
+    await getHandler(syncSessionCheckoutState)(ctx as never, {
+      sessionId: "session-clear-ordering",
+      cashierId: "cashier-1",
+      checkoutStateVersion: 3,
+      payments: [{ method: "cash", amount: 120, timestamp: 1_000 }],
+      stage: "paymentAdded",
+      paymentMethod: "cash",
+      amount: 120,
+    });
+
+    expect(
+      ctx.sessions.find((session) => session._id === "session-clear-ordering"),
+    ).toEqual(
+      expect.objectContaining({
+        payments: [],
+        checkoutStateVersion: 4,
+      }),
+    );
+    expect(mocks.traceRecord).toHaveBeenCalledTimes(1);
+    expect(mocks.traceRecord).toHaveBeenCalledWith(
+      expect.objectContaining({
+        stage: "cartCleared",
+      }),
     );
   });
 

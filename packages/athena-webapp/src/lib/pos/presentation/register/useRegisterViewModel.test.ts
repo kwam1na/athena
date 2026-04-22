@@ -517,6 +517,38 @@ describe("useRegisterViewModel", () => {
     );
   });
 
+  it("syncs cleared payments when the cart becomes empty after item removal", async () => {
+    mockActiveSession = {
+      ...mockActiveSession!,
+      payments: [{ method: "cash", amount: 120, timestamp: 1_000 }],
+    };
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result, rerender } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated("cashier-1" as Id<"cashier">);
+    });
+
+    mockActiveSession = {
+      ...mockActiveSession!,
+      cartItems: [],
+      payments: [{ method: "cash", amount: 120, timestamp: 1_000 }],
+    };
+
+    await act(async () => {
+      rerender();
+    });
+
+    expect(mockSyncSessionCheckoutState).toHaveBeenCalledWith(
+      expect.objectContaining({
+        stage: "paymentsCleared",
+        payments: [],
+      }),
+    );
+    expect(result.current.checkout.payments).toEqual([]);
+  });
+
   it("completes the transaction without a separate checkout-submitted sync round-trip", async () => {
     const { useRegisterViewModel } = await import("./useRegisterViewModel");
     const { result } = renderHook(() => useRegisterViewModel());
