@@ -13,12 +13,14 @@ export const createTransactionFromSession = internalMutation({
     transactionNumber: v.string(),
   }),
   handler: async (ctx, args) => {
-    const session = await ctx.db.get(args.sessionId);
+    const session = await ctx.db.get("expenseSession", args.sessionId);
     if (!session) {
       throw new Error("Expense session not found");
     }
 
     // Query all items for this session from expenseSessionItem table
+    // Expense session carts stay small enough to read in full for a single completion.
+    // eslint-disable-next-line @convex-dev/no-collect-in-query
     const items = await ctx.db
       .query("expenseSessionItem")
       .withIndex("by_sessionId", (q) => q.eq("sessionId", args.sessionId))
@@ -37,7 +39,7 @@ export const createTransactionFromSession = internalMutation({
 
     // Validate SKUs exist and update inventory
     for (const [skuId, totalQuantity] of skuQuantityMap) {
-      const sku = await ctx.db.get(skuId);
+      const sku = await ctx.db.get("productSku", skuId);
       if (!sku) {
         throw new Error(`Product SKU ${skuId} not found`);
       }
@@ -59,7 +61,7 @@ export const createTransactionFromSession = internalMutation({
       // Update inventory
       // Note: quantityAvailable was already reduced when item was added to session (hold)
       // Now we only need to reduce inventoryCount (actual stock)
-      await ctx.db.patch(skuId, {
+      await ctx.db.patch("productSku", skuId, {
         inventoryCount: Math.max(0, sku.inventoryCount - totalQuantity),
       });
     }
@@ -90,13 +92,13 @@ export const createTransactionFromSession = internalMutation({
     await Promise.all(
       items.map(async (item) => {
         // Get product details for image and color
-        const sku = await ctx.db.get(item.productSkuId);
+        const sku = await ctx.db.get("productSku", item.productSkuId);
         const image = item.image ?? sku?.images?.[0];
 
         // Get color from SKU if available
         let colorName: string | undefined;
         if (sku?.color) {
-          const color = await ctx.db.get(sku.color);
+          const color = await ctx.db.get("color", sku.color);
           colorName = color?.name;
         }
         // Fallback to color from session item if available
@@ -186,6 +188,8 @@ export const getExpenseTransactions = query({
         );
         const staffProfileName = staffProfile?.fullName ?? null;
 
+        // Individual transactions have a bounded item count, so reading all items is safe here.
+        // eslint-disable-next-line @convex-dev/no-collect-in-query
         const items = await ctx.db
           .query("expenseTransactionItem")
           .withIndex("by_transactionId", (q) =>
@@ -238,7 +242,7 @@ export const getExpenseTransactionById = query({
     v.null()
   ),
   handler: async (ctx, args) => {
-    const transaction = await ctx.db.get(args.transactionId);
+    const transaction = await ctx.db.get("expenseTransaction", args.transactionId);
     if (!transaction) return null;
 
     // Get staff profile information
@@ -248,6 +252,8 @@ export const getExpenseTransactionById = query({
     );
 
     // Get transaction items
+    // Individual transactions have a bounded item count, so reading all items is safe here.
+    // eslint-disable-next-line @convex-dev/no-collect-in-query
     const items = await ctx.db
       .query("expenseTransactionItem")
       .withIndex("by_transactionId", (q) =>
@@ -289,7 +295,7 @@ export const voidExpenseTransaction = mutation({
     })
   ),
   handler: async (ctx, args) => {
-    const transaction = await ctx.db.get(args.transactionId);
+    const transaction = await ctx.db.get("expenseTransaction", args.transactionId);
     if (!transaction) {
       return {
         success: false as const,
@@ -305,6 +311,8 @@ export const voidExpenseTransaction = mutation({
     }
 
     // Get transaction items to restore inventory
+    // Individual transactions have a bounded item count, so reading all items is safe here.
+    // eslint-disable-next-line @convex-dev/no-collect-in-query
     const items = await ctx.db
       .query("expenseTransactionItem")
       .withIndex("by_transactionId", (q) =>
@@ -314,9 +322,9 @@ export const voidExpenseTransaction = mutation({
 
     // Restore inventory for each item
     for (const item of items) {
-      const sku = await ctx.db.get(item.productSkuId);
+      const sku = await ctx.db.get("productSku", item.productSkuId);
       if (sku) {
-        await ctx.db.patch(item.productSkuId, {
+        await ctx.db.patch("productSku", item.productSkuId, {
           inventoryCount: (sku.inventoryCount || 0) + item.quantity,
           quantityAvailable: (sku.quantityAvailable || 0) + item.quantity,
         });
@@ -324,7 +332,7 @@ export const voidExpenseTransaction = mutation({
     }
 
     // Mark transaction as void
-    await ctx.db.patch(args.transactionId, {
+    await ctx.db.patch("expenseTransaction", args.transactionId, {
       status: "void",
       voidedAt: Date.now(),
       notes: args.voidReason,

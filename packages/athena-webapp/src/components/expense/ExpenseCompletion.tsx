@@ -54,7 +54,7 @@ export function ExpenseCompletion({
   );
   const { voidSession } = useSessionManagementExpense();
   const staffProfile = useQuery(
-    api["operations/staffProfiles"].getStaffProfileById,
+    api.operations.staffProfiles.getStaffProfileById,
     staffProfileId ? { staffProfileId } : "skip",
   );
   const cashierName = staffProfile

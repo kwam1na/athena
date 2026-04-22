@@ -567,6 +567,7 @@ async function createFixtureRepo() {
     "export {};\n",
     rootDir
   );
+  await write("packages/athena-webapp/vitest.setup.ts", "export {};\n", rootDir);
   await write("packages/athena-webapp/src/routes/_authed/index.tsx", "export {};\n", rootDir);
   await write(
     "packages/athena-webapp/src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/cash-controls/index.tsx",
@@ -636,6 +637,11 @@ async function createFixtureRepo() {
     rootDir
   );
   await write(
+    "packages/athena-webapp/src/components/cashiers/CashierManagement.tsx",
+    "export {};\n",
+    rootDir
+  );
+  await write(
     "packages/athena-webapp/src/components/traces/WorkflowTraceView.tsx",
     "export {};\n",
     rootDir
@@ -660,7 +666,32 @@ async function createFixtureRepo() {
     "export {};\n",
     rootDir
   );
+  await write(
+    "packages/athena-webapp/src/components/expense/ExpenseCompletion.tsx",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/src/components/expense/ExpenseView.tsx",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/src/components/pos/CashierAuthDialog.tsx",
+    "export {};\n",
+    rootDir
+  );
   await write("packages/athena-webapp/src/hooks/useAuth.ts", "export {};\n", rootDir);
+  await write(
+    "packages/athena-webapp/src/hooks/useExpenseSessions.ts",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/src/hooks/useSessionManagementExpense.ts",
+    "export {};\n",
+    rootDir
+  );
   await write("packages/athena-webapp/src/contexts/AuthContext.tsx", "export {};\n", rootDir);
   await write("packages/athena-webapp/src/lib/session.ts", "export {};\n", rootDir);
   await write(
@@ -668,6 +699,7 @@ async function createFixtureRepo() {
     "export {};\n",
     rootDir
   );
+  await write("packages/athena-webapp/src/stores/expenseStore.ts", "export {};\n", rootDir);
   await write(
     "packages/athena-webapp/shared/serviceIntake.ts",
     "export {};\n",
@@ -690,6 +722,7 @@ async function createFixtureRepo() {
   await write("packages/athena-webapp/src/test/setup.ts", "export {};\n", rootDir);
   await write("packages/athena-webapp/convex/http.ts", "export {};\n", rootDir);
   await write("packages/athena-webapp/convex/http/router.ts", "export {};\n", rootDir);
+  await write("packages/athena-webapp/convex/schema.ts", "export {};\n", rootDir);
   await write(
     "packages/athena-webapp/convex/cashControls/closeouts.ts",
     "export {};\n",
@@ -708,6 +741,11 @@ async function createFixtureRepo() {
   );
   await write(
     "packages/athena-webapp/convex/pos/application/queries/getTransactions.ts",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/convex/pos/application/queries/getRegisterState.ts",
     "export {};\n",
     rootDir
   );
@@ -732,12 +770,27 @@ async function createFixtureRepo() {
     rootDir
   );
   await write(
+    "packages/athena-webapp/convex/operations/staffCredentials.ts",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/convex/operations/staffProfiles.ts",
+    "export {};\n",
+    rootDir
+  );
+  await write(
     "packages/athena-webapp/convex/cashControls/deposits.ts",
     "export {};\n",
     rootDir
   );
   await write(
     "packages/athena-webapp/convex/inventory/posSessions.ts",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/convex/pos/infrastructure/repositories/cashierRepository.ts",
     "export {};\n",
     rootDir
   );

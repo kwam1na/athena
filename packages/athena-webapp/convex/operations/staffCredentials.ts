@@ -177,20 +177,24 @@ export async function listStaffCredentialsByStoreWithCtx(
     storeId: Id<"store">;
   }
 ) {
+  // Store staff rosters stay small enough for the admin credential screen to read them in full.
   const [activeCredentials, suspendedCredentials, revokedCredentials] =
     await Promise.all([
+      // eslint-disable-next-line @convex-dev/no-collect-in-query
       ctx.db
         .query("staffCredential")
         .withIndex("by_storeId_status", (q) =>
           q.eq("storeId", args.storeId).eq("status", "active")
         )
         .collect(),
+      // eslint-disable-next-line @convex-dev/no-collect-in-query
       ctx.db
         .query("staffCredential")
         .withIndex("by_storeId_status", (q) =>
           q.eq("storeId", args.storeId).eq("status", "suspended")
         )
         .collect(),
+      // eslint-disable-next-line @convex-dev/no-collect-in-query
       ctx.db
         .query("staffCredential")
         .withIndex("by_storeId_status", (q) =>
@@ -412,6 +416,8 @@ export async function authenticateStaffCredentialForTerminalWithCtx(
   }
 ) {
   const authentication = await authenticateStaffCredentialWithCtx(ctx, args);
+  // A staff member can only have a small number of live sessions, so reading them in full is safe.
+  // eslint-disable-next-line @convex-dev/no-collect-in-query
   const activeSessions = await ctx.db
     .query("posSession")
     .withIndex("by_staffProfileId", (q) =>

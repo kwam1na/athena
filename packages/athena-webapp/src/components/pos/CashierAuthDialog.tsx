@@ -40,7 +40,7 @@ export const CashierAuthDialog = ({
   const usernameInputRef = useRef<HTMLInputElement>(null);
 
   const authenticateStaffCredentialForTerminal = useMutation(
-    api["operations/staffCredentials"].authenticateStaffCredentialForTerminal
+    api.operations.staffCredentials.authenticateStaffCredentialForTerminal
   );
 
   const expireAllSessionsForStaff = useMutation(

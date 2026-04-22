@@ -20,7 +20,7 @@ export async function validateSessionExists(
   db: DatabaseReader,
   sessionId: Id<"posSession">
 ): Promise<ValidationResult> {
-  const session = await db.get(sessionId);
+  const session = await db.get("posSession", sessionId);
 
   if (!session) {
     return {
@@ -41,7 +41,7 @@ export async function validateSessionActive(
   sessionId: Id<"posSession">,
   staffProfileId: Id<"staffProfile">
 ): Promise<ValidationResult> {
-  const session = await db.get(sessionId);
+  const session = await db.get("posSession", sessionId);
   const now = Date.now();
 
   console.log("session in validateSessionActive", session);
@@ -97,7 +97,7 @@ export async function validateSessionModifiable(
   sessionId: Id<"posSession">,
   staffProfileId: Id<"staffProfile">
 ): Promise<ValidationResult> {
-  const session = await db.get(sessionId);
+  const session = await db.get("posSession", sessionId);
   const now = Date.now();
 
   if (!session) {
@@ -146,7 +146,7 @@ export async function validateSessionOwnership(
     registerNumber?: string;
   }
 ): Promise<ValidationResult> {
-  const session = await db.get(sessionId);
+  const session = await db.get("posSession", sessionId);
 
   if (!session) {
     return {
@@ -250,7 +250,7 @@ export async function validateItemBelongsToSession(
   itemId: Id<"posSessionItem">,
   sessionId: Id<"posSession">
 ): Promise<ValidationResult> {
-  const item = await db.get(itemId);
+  const item = await db.get("posSessionItem", itemId);
 
   if (!item) {
     return {

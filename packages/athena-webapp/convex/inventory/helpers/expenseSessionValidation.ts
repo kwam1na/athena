@@ -20,7 +20,7 @@ export async function validateExpenseSessionExists(
   db: DatabaseReader,
   sessionId: Id<"expenseSession">
 ): Promise<ExpenseValidationResult> {
-  const session = await db.get(sessionId);
+  const session = await db.get("expenseSession", sessionId);
 
   if (!session) {
     return {
@@ -41,7 +41,7 @@ export async function validateExpenseSessionActive(
   sessionId: Id<"expenseSession">,
   staffProfileId: Id<"staffProfile">
 ): Promise<ExpenseValidationResult> {
-  const session = await db.get(sessionId);
+  const session = await db.get("expenseSession", sessionId);
   const now = Date.now();
 
   if (!session) {
@@ -94,7 +94,7 @@ export async function validateExpenseSessionModifiable(
   sessionId: Id<"expenseSession">,
   staffProfileId: Id<"staffProfile">
 ): Promise<ExpenseValidationResult> {
-  const session = await db.get(sessionId);
+  const session = await db.get("expenseSession", sessionId);
   const now = Date.now();
 
   if (!session) {
@@ -137,7 +137,7 @@ export async function validateExpenseItemBelongsToSession(
   itemId: Id<"expenseSessionItem">,
   sessionId: Id<"expenseSession">
 ): Promise<ExpenseValidationResult> {
-  const item = await db.get(itemId);
+  const item = await db.get("expenseSessionItem", itemId);
 
   if (!item) {
     return {

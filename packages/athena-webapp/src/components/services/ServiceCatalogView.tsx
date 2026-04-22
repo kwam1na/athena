@@ -9,6 +9,13 @@ import { ProtectedAdminSignInView } from "../states/signed-out/ProtectedAdminSig
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../ui/select";
 import { Textarea } from "../ui/textarea";
 import { useProtectedAdminPageState } from "@/hooks/useProtectedAdminPageState";
 import { api } from "~/convex/_generated/api";
@@ -243,41 +250,49 @@ export function ServiceCatalogViewContent({
 
             <div className="space-y-2">
               <Label htmlFor="service-mode">Service mode</Label>
-              <select
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                id="service-mode"
-                onChange={(event) =>
+              <Select
+                onValueChange={(value) =>
                   handleChange(
                     "serviceMode",
-                    event.target.value as ServiceCatalogFormState["serviceMode"]
+                    value as ServiceCatalogFormState["serviceMode"]
                   )
                 }
                 value={form.serviceMode}
               >
-                <option value="same_day">Same-day</option>
-                <option value="consultation">Consultation</option>
-                <option value="repair">Repair</option>
-                <option value="revamp">Revamp</option>
-              </select>
+                <SelectTrigger aria-label="Service mode" id="service-mode">
+                  <SelectValue placeholder="Select service mode" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="same_day">Same-day</SelectItem>
+                  <SelectItem value="consultation">Consultation</SelectItem>
+                  <SelectItem value="repair">Repair</SelectItem>
+                  <SelectItem value="revamp">Revamp</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="pricing-model">Pricing model</Label>
-              <select
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                id="pricing-model"
-                onChange={(event) =>
+              <Select
+                onValueChange={(value) =>
                   handleChange(
                     "pricingModel",
-                    event.target.value as ServiceCatalogFormState["pricingModel"]
+                    value as ServiceCatalogFormState["pricingModel"]
                   )
                 }
                 value={form.pricingModel}
               >
-                <option value="fixed">Fixed</option>
-                <option value="starting_at">Starting at</option>
-                <option value="quote_after_consultation">Quote after consultation</option>
-              </select>
+                <SelectTrigger aria-label="Pricing model" id="pricing-model">
+                  <SelectValue placeholder="Select pricing model" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="fixed">Fixed</SelectItem>
+                  <SelectItem value="starting_at">Starting at</SelectItem>
+                  <SelectItem value="quote_after_consultation">
+                    Quote after consultation
+                  </SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="space-y-2">
@@ -292,21 +307,24 @@ export function ServiceCatalogViewContent({
 
             <div className="space-y-2">
               <Label htmlFor="deposit-rule">Deposit rule</Label>
-              <select
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                id="deposit-rule"
-                onChange={(event) =>
+              <Select
+                onValueChange={(value) =>
                   handleChange(
                     "depositType",
-                    event.target.value as ServiceCatalogFormState["depositType"]
+                    value as ServiceCatalogFormState["depositType"]
                   )
                 }
                 value={form.depositType}
               >
-                <option value="none">No deposit</option>
-                <option value="flat">Flat deposit</option>
-                <option value="percentage">Percentage deposit</option>
-              </select>
+                <SelectTrigger aria-label="Deposit rule" id="deposit-rule">
+                  <SelectValue placeholder="Select deposit rule" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No deposit</SelectItem>
+                  <SelectItem value="flat">Flat deposit</SelectItem>
+                  <SelectItem value="percentage">Percentage deposit</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="space-y-2">
