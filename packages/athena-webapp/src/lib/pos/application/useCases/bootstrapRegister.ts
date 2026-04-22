@@ -14,10 +14,15 @@ export function bootstrapRegister(input: {
 
   return {
     phase: registerState.phase,
-    canStartSession: registerState.phase === "readyToStart",
-    canResumeSession: registerState.phase === "resumable",
+    canStartSession:
+      registerState.phase === "readyToStart" &&
+      Boolean(registerState.activeRegisterSession),
+    canResumeSession:
+      registerState.phase === "resumable" &&
+      Boolean(registerState.activeRegisterSession),
     terminal: registerState.terminal,
     cashier: registerState.cashier,
+    activeRegisterSession: registerState.activeRegisterSession,
     activeSession: registerState.activeSession,
     resumableSession: registerState.resumableSession,
   };

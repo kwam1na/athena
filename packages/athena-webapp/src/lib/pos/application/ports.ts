@@ -2,11 +2,13 @@ import type {
   PosAddItemInput,
   PosAddItemResultDto,
   PosBarcodeLookupInput,
+  PosCashDrawerDto,
   PosCatalogItemDto,
   PosCompleteTransactionInput,
   PosCompleteTransactionResultDto,
   PosHoldSessionInput,
   PosHoldSessionResultDto,
+  PosOpenDrawerInput,
   PosProductIdLookupInput,
   PosProductSearchInput,
   PosRegisterStateDto,
@@ -42,6 +44,7 @@ export interface PosCommandGateway {
   startSession(input: PosStartSessionInput): Promise<PosStartSessionResultDto>;
   addItem(input: PosAddItemInput): Promise<PosAddItemResultDto>;
   holdSession(input: PosHoldSessionInput): Promise<PosHoldSessionResultDto>;
+  openDrawer(input: PosOpenDrawerInput): Promise<PosCashDrawerDto | null>;
   completeTransaction(
     input: PosCompleteTransactionInput,
   ): Promise<PosCompleteTransactionResultDto>;

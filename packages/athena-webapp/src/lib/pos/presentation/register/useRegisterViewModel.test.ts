@@ -12,6 +12,7 @@ const mockStartSession = vi.fn();
 const mockAddItem = vi.fn();
 const mockHoldSession = vi.fn();
 const mockCompleteTransaction = vi.fn();
+const mockOpenDrawer = vi.fn();
 const mockResumeSession = vi.fn();
 const mockVoidSession = vi.fn();
 const mockUpdateSession = vi.fn();
@@ -33,6 +34,17 @@ let mockRegisterState:
       phase: "requiresCashier" | "readyToStart" | "resumable" | "active";
       terminal: { _id: string; displayName: string } | null;
       cashier: { _id: string; firstName: string; lastName: string } | null;
+      activeRegisterSession: {
+        _id: string;
+        status: "open" | "active" | "closing" | "closed";
+        terminalId?: string;
+        registerNumber?: string;
+        openingFloat: number;
+        expectedCash: number;
+        openedAt: number;
+        notes?: string;
+        workflowTraceId?: string;
+      } | null;
       activeSession: { _id: string; sessionNumber: string } | null;
       resumableSession: { _id: string; sessionNumber: string } | null;
     }
@@ -141,6 +153,7 @@ vi.mock("@/lib/pos/infrastructure/convex/commandGateway", () => ({
     addItem: mockAddItem,
     holdSession: mockHoldSession,
     completeTransaction: mockCompleteTransaction,
+    openDrawer: mockOpenDrawer,
   }),
 }));
 
@@ -158,6 +171,17 @@ describe("useRegisterViewModel", () => {
       phase: "active",
       terminal: { _id: "terminal-1", displayName: "Front Counter" },
       cashier: { _id: "cashier-1", firstName: "Ama", lastName: "Kusi" },
+      activeRegisterSession: {
+        _id: "drawer-1",
+        status: "open",
+        terminalId: "terminal-1",
+        registerNumber: "1",
+        openingFloat: 5_000,
+        expectedCash: 5_000,
+        openedAt: Date.now(),
+        notes: "Ready",
+        workflowTraceId: "register_session:drawer-1",
+      },
       activeSession: { _id: "session-1", sessionNumber: "POS-0001" },
       resumableSession: null,
     };
@@ -225,6 +249,18 @@ describe("useRegisterViewModel", () => {
         sessionId: "session-1" as Id<"posSession">,
         transactionNumber: "TXN-0001",
       },
+    });
+    mockOpenDrawer.mockReset();
+    mockOpenDrawer.mockResolvedValue({
+      _id: "drawer-2" as Id<"registerSession">,
+      status: "open",
+      terminalId: "terminal-1" as Id<"posTerminal">,
+      registerNumber: "1",
+      openingFloat: 5_000,
+      expectedCash: 5_000,
+      openedAt: Date.now(),
+      notes: "Opening float ready",
+      workflowTraceId: "register_session:drawer-2",
     });
     mockResumeSession.mockReset();
     mockResumeSession.mockResolvedValue({
@@ -315,6 +351,132 @@ describe("useRegisterViewModel", () => {
 
     expect(result.current.authDialog?.open).toBe(true);
     expect(result.current.cashierCard).toBeNull();
+  });
+
+  it("holds bootstrap on a missing drawer and exposes the drawer gate", async () => {
+    mockRegisterState = {
+      phase: "readyToStart",
+      terminal: { _id: "terminal-1", displayName: "Front Counter" },
+      cashier: { _id: "cashier-1", firstName: "Ama", lastName: "Kusi" },
+      activeRegisterSession: null,
+      activeSession: null,
+      resumableSession: null,
+    };
+    mockActiveSession = null;
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated("cashier-1" as Id<"cashier">);
+    });
+
+    expect(result.current.drawerGate).not.toBeNull();
+    expect(result.current.drawerGate?.errorMessage).toBeNull();
+    expect(result.current.checkout.registerNumber).toBe("1");
+    expect(mockStartSession).not.toHaveBeenCalled();
+  });
+
+  it("opens the drawer and resumes bootstrap with the bound register session id", async () => {
+    mockRegisterState = {
+      phase: "readyToStart",
+      terminal: { _id: "terminal-1", displayName: "Front Counter" },
+      cashier: { _id: "cashier-1", firstName: "Ama", lastName: "Kusi" },
+      activeRegisterSession: null,
+      activeSession: null,
+      resumableSession: null,
+    };
+    mockActiveSession = null;
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result, rerender } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated("cashier-1" as Id<"cashier">);
+    });
+
+    act(() => {
+      result.current.drawerGate?.onOpeningFloatChange("50.00");
+      result.current.drawerGate?.onNotesChange("Opening float ready");
+    });
+
+    await act(async () => {
+      await result.current.drawerGate?.onSubmit();
+    });
+
+    expect(mockOpenDrawer).toHaveBeenCalledWith({
+      storeId: "store-1",
+      terminalId: "terminal-1",
+      registerNumber: "1",
+      openingFloat: 5_000,
+      notes: "Opening float ready",
+    });
+    expect(mockStartSession).not.toHaveBeenCalled();
+
+    mockRegisterState = {
+      phase: "readyToStart",
+      terminal: { _id: "terminal-1", displayName: "Front Counter" },
+      cashier: { _id: "cashier-1", firstName: "Ama", lastName: "Kusi" },
+      activeRegisterSession: {
+        _id: "drawer-2",
+        status: "open",
+        terminalId: "terminal-1",
+        registerNumber: "1",
+        openingFloat: 5_000,
+        expectedCash: 5_000,
+        openedAt: Date.now(),
+      },
+      activeSession: null,
+      resumableSession: null,
+    };
+
+    await act(async () => {
+      rerender();
+    });
+
+    expect(mockStartSession).toHaveBeenCalledWith({
+      storeId: "store-1",
+      terminalId: "terminal-1",
+      cashierId: "cashier-1",
+      registerNumber: "1",
+      registerSessionId: "drawer-2",
+    });
+  });
+
+  it("keeps the operator on the drawer gate when opening the drawer fails", async () => {
+    mockRegisterState = {
+      phase: "readyToStart",
+      terminal: { _id: "terminal-1", displayName: "Front Counter" },
+      cashier: { _id: "cashier-1", firstName: "Ama", lastName: "Kusi" },
+      activeRegisterSession: null,
+      activeSession: null,
+      resumableSession: null,
+    };
+    mockActiveSession = null;
+    mockOpenDrawer.mockRejectedValueOnce(
+      new Error("A register session is already open for this terminal."),
+    );
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated("cashier-1" as Id<"cashier">);
+    });
+
+    act(() => {
+      result.current.drawerGate?.onOpeningFloatChange("50.00");
+    });
+
+    await act(async () => {
+      await result.current.drawerGate?.onSubmit();
+    });
+
+    expect(result.current.drawerGate).not.toBeNull();
+    expect(result.current.drawerGate?.errorMessage).toBe(
+      "A register session is already open for this terminal.",
+    );
+    expect(mockStartSession).not.toHaveBeenCalled();
   });
 
   it("does not void an empty active session when navigating away", async () => {

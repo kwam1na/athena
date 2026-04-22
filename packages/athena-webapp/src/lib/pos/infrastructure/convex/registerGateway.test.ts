@@ -8,6 +8,7 @@ describe("mapRegisterStateDto", () => {
       phase: "readyToStart",
       terminal: { _id: "terminal-1", displayName: "Front Counter" },
       cashier: { _id: "cashier-1", firstName: "Ama", lastName: "K" },
+      activeRegisterSession: null,
       activeSession: null,
       resumableSession: null,
     });

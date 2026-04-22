@@ -16,6 +16,9 @@ export function mapRegisterStateDto(
     phase: dto.phase,
     terminal: dto.terminal ? { ...dto.terminal } : null,
     cashier: dto.cashier ? { ...dto.cashier } : null,
+    activeRegisterSession: dto.activeRegisterSession
+      ? { ...dto.activeRegisterSession }
+      : null,
     activeSession: dto.activeSession ? { ...dto.activeSession } : null,
     resumableSession: dto.resumableSession ? { ...dto.resumableSession } : null,
   };

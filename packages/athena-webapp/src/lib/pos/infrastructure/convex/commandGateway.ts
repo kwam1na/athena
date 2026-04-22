@@ -7,6 +7,7 @@ import type {
   PosCompleteTransactionResultDto,
   PosHoldSessionInput,
   PosHoldSessionResultDto,
+  PosOpenDrawerInput,
   PosStartSessionInput,
   PosStartSessionResultDto,
 } from "@/lib/pos/application/dto";
@@ -17,6 +18,7 @@ export function useConvexCommandGateway(): PosCommandGateway {
   const startSessionMutation = useMutation(api.inventory.posSessions.createSession);
   const addItemMutation = useMutation(api.inventory.posSessionItems.addOrUpdateItem);
   const holdSessionMutation = useMutation(api.inventory.posSessions.holdSession);
+  const openDrawerMutation = useMutation(api.pos.public.register.openDrawer);
   const completeSessionMutation = useMutation(
     api.inventory.posSessions.completeSession,
   );
@@ -34,6 +36,9 @@ export function useConvexCommandGateway(): PosCommandGateway {
         cashierId: input.cashierId,
         holdReason: input.reason,
       });
+    },
+    openDrawer(input: PosOpenDrawerInput) {
+      return openDrawerMutation(input);
     },
     completeTransaction(
       input: PosCompleteTransactionInput,
