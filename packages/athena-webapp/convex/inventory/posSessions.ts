@@ -26,6 +26,11 @@ import {
   runStartSessionCommand,
 } from "../pos/application/commands/sessionCommands";
 import { createTransactionFromSessionHandler } from "./pos";
+import {
+  createPosSessionTraceRecorder,
+  type PosSessionTraceStage,
+  type PosSessionTraceableSession,
+} from "../pos/application/commands/posSessionTracing";
 
 const MAX_SESSION_ITEMS = 200;
 const SESSION_QUERY_CANDIDATE_LIMIT = 200;
@@ -104,6 +109,49 @@ async function listPosSessionsForStoreStatus(
   }
 
   return sessions;
+}
+
+async function persistSessionWorkflowTraceIdBestEffort(
+  ctx: MutationCtx,
+  args: {
+    session: PosSessionTraceableSession;
+    traceCreated: boolean;
+    traceId: string;
+  }
+) {
+  if (args.session.workflowTraceId || !args.traceCreated) {
+    return;
+  }
+
+  try {
+    await ctx.db.patch("posSession", args.session._id, {
+      workflowTraceId: args.traceId,
+    });
+  } catch (error) {
+    console.error("[workflow-trace] pos.session.trace.session-link", error);
+  }
+}
+
+async function recordSessionLifecycleTraceBestEffort(
+  ctx: MutationCtx,
+  args: {
+    stage: PosSessionTraceStage;
+    session: PosSessionTraceableSession;
+    occurredAt?: number;
+    transactionId?: Id<"posTransaction">;
+    holdReason?: string;
+    voidReason?: string;
+  }
+) {
+  try {
+    const traceResult = await createPosSessionTraceRecorder(ctx).record(args);
+    await persistSessionWorkflowTraceIdBestEffort(ctx, {
+      session: args.session,
+      ...traceResult,
+    });
+  } catch (error) {
+    console.error(`[workflow-trace] pos.session.lifecycle.${args.stage}`, error);
+  }
 }
 
 // Get sessions for a store (with filtering)
@@ -411,10 +459,29 @@ export const completeSession = mutation({
       total: args.total,
     });
 
-    const { transactionNumber } = await createTransactionFromSessionHandler(ctx, {
+    const { transactionId, transactionNumber } =
+      await createTransactionFromSessionHandler(ctx, {
       sessionId: args.sessionId,
       payments: args.payments,
       notes: args.notes,
+    });
+    const sessionTransactionId = transactionId as Id<"posTransaction">;
+
+    await recordSessionLifecycleTraceBestEffort(ctx, {
+      stage: "completed",
+      session: {
+        ...session,
+        status: "completed",
+        completedAt: now,
+        updatedAt: now,
+        notes: args.notes,
+        subtotal: args.subtotal,
+        tax: args.tax,
+        total: args.total,
+        transactionId: sessionTransactionId,
+      },
+      occurredAt: now,
+      transactionId: sessionTransactionId,
     });
 
     // Return the session ID since the transaction will be created asynchronously
@@ -486,6 +553,18 @@ export const voidSession = mutation({
       status: "void",
       updatedAt: now,
       notes: args.voidReason,
+    });
+
+    await recordSessionLifecycleTraceBestEffort(ctx, {
+      stage: "voided",
+      session: {
+        ...session,
+        status: "void",
+        updatedAt: now,
+        notes: args.voidReason,
+      },
+      occurredAt: now,
+      voidReason: args.voidReason,
     });
 
     return { success: true as const, data: { sessionId: args.sessionId } };
@@ -689,13 +768,29 @@ export const releasePosSessionItems = internalMutation({
 
         // Keep items for record-keeping - don't delete them
         // Items remain associated with expired session for audit trail
+        const wasVoided = session.status === "void";
+        const expirationNote =
+          wasVoided ? session.notes : "Session expired - inventory holds released";
 
         // Mark session as expired
         await ctx.db.patch("posSession", session._id, {
           status: "expired",
           updatedAt: now,
-          notes: "Session expired - inventory holds released",
+          notes: expirationNote,
         });
+
+        if (!wasVoided) {
+          await recordSessionLifecycleTraceBestEffort(ctx, {
+            stage: "expired",
+            session: {
+              ...session,
+              status: "expired",
+              updatedAt: now,
+              notes: expirationNote,
+            },
+            occurredAt: now,
+          });
+        }
 
         releasedSessionIds.push(session._id);
         console.log(
