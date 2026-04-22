@@ -6,6 +6,7 @@ import { DataTableColumnHeader } from "../../base/table/data-table-column-header
 import { getRelativeTime } from "~/src/lib/utils";
 import { getOrigin } from "~/src/lib/navigationUtils";
 import type { Id } from "~/convex/_generated/dataModel";
+import { WorkflowTraceLink } from "./WorkflowTraceLink";
 
 export type CompletedTransactionRow = {
   _id: Id<"posTransaction">;
@@ -17,6 +18,7 @@ export type CompletedTransactionRow = {
   customerName: string | null;
   itemCount: number;
   completedAt: number;
+  hasTrace: boolean;
 };
 
 const getPaymentMethodIcon = (paymentMethod: string) => {
@@ -41,22 +43,30 @@ export const transactionColumns: ColumnDef<CompletedTransactionRow>[] = [
     cell: ({ row }) => {
       const count = row.original.itemCount;
       return (
-        <Link
-          to="/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId"
-          params={(prev) => ({
-            ...prev,
-            orgUrlSlug: prev.orgUrlSlug!,
-            storeUrlSlug: prev.storeUrlSlug!,
-            transactionId: row.original._id,
-          })}
-          search={{ o: getOrigin() }}
-          className="flex items-center gap-2 text-foreground hover:text-primary"
-        >
-          <span className="font-medium">{`#${row.getValue<string>("transactionNumber")}`}</span>
-          <span className="text-muted-foreground text-sm">
-            {`${count} ${count === 1 ? "item" : "items"}`}
-          </span>
-        </Link>
+        <div className="flex flex-col gap-1">
+          <Link
+            to="/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId"
+            params={(prev) => ({
+              ...prev,
+              orgUrlSlug: prev.orgUrlSlug!,
+              storeUrlSlug: prev.storeUrlSlug!,
+              transactionId: row.original._id,
+            })}
+            search={{ o: getOrigin() }}
+            className="flex items-center gap-2 text-foreground hover:text-primary"
+          >
+            <span className="font-medium">{`#${row.getValue<string>("transactionNumber")}`}</span>
+            <span className="text-muted-foreground text-sm">
+              {`${count} ${count === 1 ? "item" : "items"}`}
+            </span>
+          </Link>
+          {row.original.hasTrace ? (
+            <WorkflowTraceLink
+              transactionNumber={row.original.transactionNumber}
+              className="text-xs text-muted-foreground hover:text-primary"
+            />
+          ) : null}
+        </div>
       );
     },
     enableSorting: false,

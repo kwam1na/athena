@@ -154,6 +154,7 @@ export async function recordPosSaleTraceBestEffort(
 ) {
   const traceRecord = buildPosSaleTraceRecord(args);
   const event = buildPosSaleTraceEvent(args);
+  let traceCreated = false;
 
   const safeWrite = async (label: string, action: () => Promise<unknown>) => {
     await safeTraceWrite(label, action);
@@ -161,6 +162,7 @@ export async function recordPosSaleTraceBestEffort(
 
   await safeWrite("pos.sale.trace.create", async () => {
     await createWorkflowTraceWithCtx(ctx, traceRecord);
+    traceCreated = true;
   });
 
   await safeWrite("pos.sale.trace.lookup", async () => {
@@ -169,6 +171,30 @@ export async function recordPosSaleTraceBestEffort(
 
   await safeWrite("pos.sale.trace.event", async () => {
     await appendWorkflowTraceEventWithCtx(ctx, event);
+  });
+
+  return {
+    traceCreated,
+    traceId: args.traceSeed.trace.traceId,
+  };
+}
+
+async function persistWorkflowTraceIdBestEffort(
+  ctx: MutationCtx,
+  args: {
+    traceCreated: boolean;
+    traceId: string;
+    transactionId: Id<"posTransaction">;
+  },
+) {
+  if (!args.traceCreated) {
+    return;
+  }
+
+  await safeTraceWrite("pos.sale.trace.transaction-link", async () => {
+    await patchPosTransaction(ctx, args.transactionId, {
+      workflowTraceId: args.traceId,
+    });
   });
 }
 
@@ -353,9 +379,14 @@ export async function completeTransaction(
     customerId: args.customerId,
   });
 
-  await recordPosSaleTraceBestEffort(ctx, {
+  const bootstrapTrace = await recordPosSaleTraceBestEffort(ctx, {
     stage: "bootstrap",
     traceSeed,
+    transactionId,
+  });
+
+  await persistWorkflowTraceIdBestEffort(ctx, {
+    ...bootstrapTrace,
     transactionId,
   });
 
@@ -432,11 +463,16 @@ export async function completeTransaction(
     }),
   );
 
-  await recordPosSaleTraceBestEffort(ctx, {
+  const finalizedTrace = await recordPosSaleTraceBestEffort(ctx, {
     stage: "finalized",
     traceSeed,
     transactionId,
     completedAt: Date.now(),
+  });
+
+  await persistWorkflowTraceIdBestEffort(ctx, {
+    ...finalizedTrace,
+    transactionId,
   });
 
   return {
@@ -613,9 +649,14 @@ export async function createTransactionFromSessionHandler(
     customerId: session.customerId,
   });
 
-  await recordPosSaleTraceBestEffort(ctx, {
+  const bootstrapTrace = await recordPosSaleTraceBestEffort(ctx, {
     stage: "bootstrap",
     traceSeed,
+    transactionId,
+  });
+
+  await persistWorkflowTraceIdBestEffort(ctx, {
+    ...bootstrapTrace,
     transactionId,
   });
 
@@ -691,11 +732,16 @@ export async function createTransactionFromSessionHandler(
     transactionId,
   });
 
-  await recordPosSaleTraceBestEffort(ctx, {
+  const finalizedTrace = await recordPosSaleTraceBestEffort(ctx, {
     stage: "finalized",
     traceSeed,
     transactionId,
     completedAt: Date.now(),
+  });
+
+  await persistWorkflowTraceIdBestEffort(ctx, {
+    ...finalizedTrace,
+    transactionId,
   });
 
   return {

@@ -68,6 +68,7 @@ export async function getCompletedTransactions(
         total: transaction.total,
         paymentMethod: transaction.paymentMethod || null,
         completedAt: transaction.completedAt,
+        hasTrace: Boolean(transaction.workflowTraceId),
         cashierName: cashier
           ? formatCashierName({
               firstName: cashier.firstName,
@@ -107,6 +108,7 @@ export async function getTransactionById(
     subtotal: transaction.subtotal ?? 0,
     tax: transaction.tax ?? 0,
     total: transaction.total,
+    hasTrace: Boolean(transaction.workflowTraceId),
     paymentMethod: transaction.paymentMethod,
     payments: transaction.payments,
     totalPaid: transaction.totalPaid ?? transaction.total,
