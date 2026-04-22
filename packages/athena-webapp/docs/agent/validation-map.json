@@ -97,18 +97,29 @@
         "packages/athena-webapp/convex/workflowTraces",
         "packages/athena-webapp/convex/schemas/observability",
         "packages/athena-webapp/convex/pos/application/commands/completeTransaction.ts",
+        "packages/athena-webapp/convex/pos/application/commands/posSessionTracing.ts",
         "packages/athena-webapp/convex/pos/application/queries/getTransactions.ts",
         "packages/athena-webapp/convex/pos/public/transactions.ts",
+        "packages/athena-webapp/convex/inventory/posSessions.ts",
+        "packages/athena-webapp/convex/operations/registerSessionTracing.ts",
+        "packages/athena-webapp/convex/operations/registerSessions.ts",
+        "packages/athena-webapp/convex/cashControls/closeouts.ts",
+        "packages/athena-webapp/convex/cashControls/deposits.ts",
         "packages/athena-webapp/convex/schemas/pos/posTransaction.ts",
         "packages/athena-webapp/shared/workflowTrace.ts",
         "packages/athena-webapp/src/components/traces",
+        "packages/athena-webapp/src/components/pos/SessionManager.tsx",
+        "packages/athena-webapp/src/components/pos/session/HeldSessionsList.tsx",
         "packages/athena-webapp/src/components/pos/transactions",
+        "packages/athena-webapp/src/components/cash-controls/CashControlsDashboard.tsx",
+        "packages/athena-webapp/src/components/cash-controls/RegisterSessionView.tsx",
+        "packages/athena-webapp/src/components/cash-controls/RegisterCloseoutView.tsx",
         "packages/athena-webapp/src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/traces"
       ],
       "commands": [
         {
           "kind": "raw",
-          "command": "bun run --filter '@athena/webapp' test -- convex/workflowTraces/presentation.test.ts convex/workflowTraces/queryUsage.test.ts convex/workflowTraces/schemaIndexes.test.ts convex/workflowTraces/adapters/posSale.test.ts convex/pos/application/completeTransaction.test.ts convex/pos/application/getTransactions.test.ts src/components/traces/WorkflowTraceView.test.tsx 'src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/traces/$traceId.test.tsx' src/components/pos/transactions/WorkflowTraceLink.test.tsx src/components/pos/transactions/transactionColumns.test.tsx src/components/pos/transactions/TransactionView.test.tsx src/components/pos/transactions/TransactionsView.test.tsx src/lib/traces/createWorkflowTraceId.test.ts"
+          "command": "bun run --filter '@athena/webapp' test -- convex/workflowTraces/presentation.test.ts convex/workflowTraces/queryUsage.test.ts convex/workflowTraces/schemaIndexes.test.ts convex/workflowTraces/adapters/posSale.test.ts convex/workflowTraces/adapters/posSession.test.ts convex/workflowTraces/adapters/registerSession.test.ts convex/pos/application/completeTransaction.test.ts convex/pos/application/getTransactions.test.ts convex/pos/application/posSessionTracing.test.ts convex/inventory/posSessions.trace.test.ts convex/operations/registerSessionTracing.test.ts convex/operations/registerSessions.trace.test.ts convex/cashControls/registerSessionTraceLifecycle.test.ts src/components/traces/WorkflowTraceView.test.tsx 'src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/traces/$traceId.test.tsx' src/components/pos/transactions/WorkflowTraceLink.test.tsx src/components/pos/transactions/transactionColumns.test.tsx src/components/pos/transactions/TransactionView.test.tsx src/components/pos/transactions/TransactionsView.test.tsx src/components/pos/SessionManager.test.tsx src/components/pos/session/HeldSessionsList.test.tsx src/components/cash-controls/CashControlsDashboard.test.tsx src/components/cash-controls/RegisterSessionView.test.tsx src/components/cash-controls/RegisterCloseoutView.test.tsx src/lib/traces/createWorkflowTraceId.test.ts"
         },
         {
           "kind": "script",
