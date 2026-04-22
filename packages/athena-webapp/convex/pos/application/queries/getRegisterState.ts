@@ -41,7 +41,7 @@ export async function getRegisterState(
   const identity = {
     storeId: args.storeId,
     terminalId: args.terminalId,
-    cashierId: args.cashierId,
+    staffProfileId: args.staffProfileId,
     registerNumber: args.registerNumber,
   };
 

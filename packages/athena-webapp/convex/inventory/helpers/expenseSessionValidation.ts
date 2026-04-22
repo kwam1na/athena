@@ -39,7 +39,7 @@ export async function validateExpenseSessionExists(
 export async function validateExpenseSessionActive(
   db: DatabaseReader,
   sessionId: Id<"expenseSession">,
-  cashierId: Id<"cashier">
+  staffProfileId: Id<"staffProfile">
 ): Promise<ExpenseValidationResult> {
   const session = await db.get(sessionId);
   const now = Date.now();
@@ -51,10 +51,10 @@ export async function validateExpenseSessionActive(
     };
   }
 
-  if (session.cashierId !== cashierId) {
+  if (session.staffProfileId !== staffProfileId) {
     return {
       success: false,
-      message: "This session is not associated with your cashier.",
+      message: "This session is not associated with your staff profile.",
     };
   }
 
@@ -92,7 +92,7 @@ export async function validateExpenseSessionActive(
 export async function validateExpenseSessionModifiable(
   db: DatabaseReader,
   sessionId: Id<"expenseSession">,
-  cashierId: Id<"cashier">
+  staffProfileId: Id<"staffProfile">
 ): Promise<ExpenseValidationResult> {
   const session = await db.get(sessionId);
   const now = Date.now();
@@ -104,10 +104,10 @@ export async function validateExpenseSessionModifiable(
     };
   }
 
-  if (session.cashierId !== cashierId) {
+  if (session.staffProfileId !== staffProfileId) {
     return {
       success: false,
-      message: "This session is not associated with your cashier.",
+      message: "This session is not associated with your staff profile.",
     };
   }
 

@@ -26,7 +26,7 @@ describe("recordPosSessionTraceBestEffort", () => {
       startedAt: 111,
       sessionNumber: "SES-001",
       posSessionId: "session-1" as Id<"posSession">,
-      cashierId: "cashier-1" as Id<"cashier">,
+      staffProfileId: "staff-1" as Id<"staffProfile">,
       terminalId: "terminal-1" as Id<"posTerminal">,
     });
 
@@ -66,7 +66,7 @@ describe("recordPosSessionTraceBestEffort", () => {
       startedAt: 111,
       sessionNumber: "SES-001",
       posSessionId: "session-1" as Id<"posSession">,
-      cashierId: "cashier-1" as Id<"cashier">,
+      staffProfileId: "staff-1" as Id<"staffProfile">,
       terminalId: "terminal-1" as Id<"posTerminal">,
       posTransactionId: "txn-1" as Id<"posTransaction">,
     });
@@ -117,7 +117,7 @@ describe("recordPosSessionTraceBestEffort", () => {
       startedAt: 111,
       sessionNumber: "SES-001",
       posSessionId: "session-1" as Id<"posSession">,
-      cashierId: "cashier-1" as Id<"cashier">,
+      staffProfileId: "staff-1" as Id<"staffProfile">,
       terminalId: "terminal-1" as Id<"posTerminal">,
     });
 
@@ -158,7 +158,7 @@ describe("recordPosSessionTraceBestEffort", () => {
       storeId: "store-1" as Id<"store">,
       sessionNumber: "SES-001",
       posSessionId: "session-1" as Id<"posSession">,
-      cashierId: "cashier-1" as Id<"cashier">,
+      staffProfileId: "staff-1" as Id<"staffProfile">,
       terminalId: "terminal-1" as Id<"posTerminal">,
     });
 
@@ -199,7 +199,7 @@ describe("recordPosSessionTraceBestEffort", () => {
       storeId: "store-1" as Id<"store">,
       sessionNumber: "SES-001",
       posSessionId: "session-1" as Id<"posSession">,
-      cashierId: "cashier-1" as Id<"cashier">,
+      staffProfileId: "staff-1" as Id<"staffProfile">,
       terminalId: "terminal-1" as Id<"posTerminal">,
     });
 

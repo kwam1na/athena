@@ -51,7 +51,7 @@ export interface PosRegisterSessionDto {
   sessionNumber: string;
   status?: string;
   terminalId?: string;
-  cashierId?: string;
+  staffProfileId?: string;
   registerNumber?: string;
   expiresAt?: number;
   updatedAt?: number;
@@ -101,7 +101,7 @@ export interface PosCatalogItemDto {
 export interface PosRegisterStateQueryInput {
   storeId?: Id<"store">;
   terminalId?: Id<"posTerminal"> | null;
-  cashierId?: Id<"cashier"> | null;
+  staffProfileId?: Id<"staffProfile"> | null;
   registerNumber?: string;
 }
 
@@ -128,7 +128,7 @@ export interface PosProductIdLookupInput {
 export interface PosStartSessionInput {
   storeId: Id<"store">;
   terminalId: Id<"posTerminal">;
-  cashierId?: Id<"cashier">;
+  staffProfileId?: Id<"staffProfile">;
   registerNumber?: string;
   registerSessionId?: Id<"registerSession">;
 }
@@ -145,7 +145,7 @@ export interface PosAddItemInput {
   sessionId: Id<"posSession">;
   productId: Id<"product">;
   productSkuId: Id<"productSku">;
-  cashierId: Id<"cashier">;
+  staffProfileId: Id<"staffProfile">;
   productSku: string;
   barcode?: string;
   productName: string;
@@ -160,7 +160,7 @@ export interface PosAddItemInput {
 
 export interface PosHoldSessionInput {
   sessionId: Id<"posSession">;
-  cashierId: Id<"cashier">;
+  staffProfileId: Id<"staffProfile">;
   reason?: string;
 }
 

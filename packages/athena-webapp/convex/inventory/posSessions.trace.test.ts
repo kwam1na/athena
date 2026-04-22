@@ -40,7 +40,7 @@ type SessionRecord = {
   createdAt: number;
   updatedAt: number;
   expiresAt: number;
-  cashierId?: string;
+  staffProfileId?: string;
   customerId?: string;
   customerInfo?: {
     name?: string;
@@ -188,7 +188,7 @@ function buildSession(overrides: Partial<SessionRecord>): SessionRecord {
     createdAt: 100,
     updatedAt: 100,
     expiresAt: 4_102_444_800_000,
-    cashierId: "cashier-1",
+    staffProfileId: "cashier-1",
     registerNumber: "1",
     ...overrides,
   };
@@ -323,7 +323,7 @@ describe("pos session lifecycle trace handlers", () => {
 
     const result = await getHandler(updateSession)(ctx as never, {
       sessionId: "session-customer",
-      cashierId: "cashier-1",
+      staffProfileId: "cashier-1",
       customerId: "customer-1",
       customerInfo: {
         name: "Ama Serwa",
@@ -370,7 +370,7 @@ describe("pos session lifecycle trace handlers", () => {
 
     const result = await getHandler(updateSession)(ctx as never, {
       sessionId: "session-customer-cleared",
-      cashierId: "cashier-1",
+      staffProfileId: "cashier-1",
       customerId: undefined,
       customerInfo: undefined,
       subtotal: 100,
@@ -483,7 +483,7 @@ describe("pos session lifecycle trace handlers", () => {
 
     await getHandler(syncSessionCheckoutState)(ctx as never, {
       sessionId: "session-clear-ordering",
-      cashierId: "cashier-1",
+      staffProfileId: "cashier-1",
       checkoutStateVersion: 3,
       payments: [{ method: "cash", amount: 120, timestamp: 1_000 }],
       stage: "paymentAdded",
@@ -566,7 +566,7 @@ describe("pos session lifecycle trace handlers", () => {
 
     const paymentResult = await getHandler(syncSessionCheckoutState)(ctx as never, {
       sessionId: "session-checkout",
-      cashierId: "cashier-1",
+      staffProfileId: "cashier-1",
       checkoutStateVersion: 1,
       payments: [{ method: "cash", amount: 115, timestamp: 1_000 }],
       stage: "paymentAdded",
@@ -606,7 +606,7 @@ describe("pos session lifecycle trace handlers", () => {
 
     await getHandler(syncSessionCheckoutState)(ctx as never, {
       sessionId: "session-payment-mutations",
-      cashierId: "cashier-1",
+      staffProfileId: "cashier-1",
       checkoutStateVersion: 1,
       payments: [
         { method: "cash", amount: 70, timestamp: 1_000 },
@@ -630,7 +630,7 @@ describe("pos session lifecycle trace handlers", () => {
 
     await getHandler(syncSessionCheckoutState)(ctx as never, {
       sessionId: "session-payment-mutations",
-      cashierId: "cashier-1",
+      staffProfileId: "cashier-1",
       checkoutStateVersion: 2,
       payments: [{ method: "cash", amount: 70, timestamp: 1_000 }],
       stage: "paymentRemoved",
@@ -649,7 +649,7 @@ describe("pos session lifecycle trace handlers", () => {
 
     await getHandler(syncSessionCheckoutState)(ctx as never, {
       sessionId: "session-payment-mutations",
-      cashierId: "cashier-1",
+      staffProfileId: "cashier-1",
       checkoutStateVersion: 3,
       payments: [],
       stage: "paymentsCleared",
@@ -679,7 +679,7 @@ describe("pos session lifecycle trace handlers", () => {
 
     await getHandler(syncSessionCheckoutState)(ctx as never, {
       sessionId: "session-payment-ordering",
-      cashierId: "cashier-1",
+      staffProfileId: "cashier-1",
       payments: [
         { method: "cash", amount: 60, timestamp: 1_000 },
         { method: "card", amount: 55, timestamp: 2_000 },
@@ -692,7 +692,7 @@ describe("pos session lifecycle trace handlers", () => {
 
     await getHandler(syncSessionCheckoutState)(ctx as never, {
       sessionId: "session-payment-ordering",
-      cashierId: "cashier-1",
+      staffProfileId: "cashier-1",
       payments: [{ method: "cash", amount: 60, timestamp: 1_000 }],
       stage: "paymentRemoved",
       paymentMethod: "card",
@@ -728,7 +728,7 @@ describe("pos session lifecycle trace handlers", () => {
 
     const result = await getHandler(syncSessionCheckoutState)(ctx as never, {
       sessionId: "session-trace-failure",
-      cashierId: "cashier-1",
+      staffProfileId: "cashier-1",
       checkoutStateVersion: 1,
       payments: [{ method: "cash", amount: 115, timestamp: 1_000 }],
       stage: "paymentAdded",

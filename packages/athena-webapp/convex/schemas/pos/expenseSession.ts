@@ -3,7 +3,7 @@ import { v } from "convex/values";
 export const expenseSessionSchema = v.object({
   sessionNumber: v.string(), // Human-readable session ID (e.g., "EXP-001")
   storeId: v.id("store"),
-  cashierId: v.id("cashier"), // Cashier who created the session
+  staffProfileId: v.id("staffProfile"), // Staff profile responsible for the session
   terminalId: v.id("posTerminal"),
   registerNumber: v.optional(v.string()),
 

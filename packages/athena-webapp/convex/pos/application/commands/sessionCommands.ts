@@ -38,20 +38,20 @@ export type PosSessionCommandOutcome<TData> =
 export interface StartSessionArgs {
   storeId: Id<"store">;
   terminalId: Id<"posTerminal">;
-  cashierId?: Id<"cashier">;
+  staffProfileId?: Id<"staffProfile">;
   registerNumber?: string;
   registerSessionId?: Id<"registerSession">;
 }
 
 export interface HoldSessionArgs {
   sessionId: Id<"posSession">;
-  cashierId: Id<"cashier">;
+  staffProfileId: Id<"staffProfile">;
   holdReason?: string;
 }
 
 export interface ResumeSessionArgs {
   sessionId: Id<"posSession">;
-  cashierId: Id<"cashier">;
+  staffProfileId: Id<"staffProfile">;
   terminalId: Id<"posTerminal">;
 }
 
@@ -59,7 +59,7 @@ export interface UpsertSessionItemArgs {
   sessionId: Id<"posSession">;
   productId: Id<"product">;
   productSkuId: Id<"productSku">;
-  cashierId: Id<"cashier">;
+  staffProfileId: Id<"staffProfile">;
   productSku: string;
   barcode?: string;
   productName: string;
@@ -74,7 +74,7 @@ export interface UpsertSessionItemArgs {
 
 export interface RemoveSessionItemArgs {
   sessionId: Id<"posSession">;
-  cashierId: Id<"cashier">;
+  staffProfileId: Id<"staffProfile">;
   itemId: Id<"posSessionItem">;
 }
 
@@ -147,13 +147,13 @@ export function createPosSessionCommandService(
       );
 
       const existingSession = nonExpiredTerminalSessions.find(
-        (session) => session.cashierId === args.cashierId,
+        (session) => session.staffProfileId === args.staffProfileId,
       );
 
-      const cashierSessions = args.cashierId
+      const cashierSessions = args.staffProfileId
         ? await dependencies.repository.listActiveSessionsForCashier({
             storeId: args.storeId,
-            cashierId: args.cashierId,
+            staffProfileId: args.staffProfileId,
           })
         : [];
 
@@ -257,7 +257,7 @@ export function createPosSessionCommandService(
       const sessionId = await dependencies.repository.createSession({
         sessionNumber,
         storeId: args.storeId,
-        cashierId: args.cashierId,
+        staffProfileId: args.staffProfileId,
         terminalId: args.terminalId,
         registerNumber,
         registerSessionId: registerSessionBinding.data.registerSessionId,
@@ -273,7 +273,7 @@ export function createPosSessionCommandService(
           _id: sessionId,
           sessionNumber,
           storeId: args.storeId,
-          cashierId: args.cashierId,
+          staffProfileId: args.staffProfileId,
           terminalId: args.terminalId,
           registerNumber,
           registerSessionId: registerSessionBinding.data.registerSessionId,
@@ -291,7 +291,7 @@ export function createPosSessionCommandService(
     async holdSession(args) {
       const now = dependencies.now();
       const session = await dependencies.repository.getSessionById(args.sessionId);
-      const validation = validateModifiableSession(session, args.cashierId, now);
+      const validation = validateModifiableSession(session, args.staffProfileId, now);
       if (validation.status !== "ok") {
         return validation;
       }
@@ -339,7 +339,7 @@ export function createPosSessionCommandService(
       const cashierSessions =
         await dependencies.repository.listActiveSessionsForCashier({
           storeId: session.storeId,
-          cashierId: args.cashierId,
+          staffProfileId: args.staffProfileId,
         });
       const activeSessionsOnOtherTerminals = cashierSessions.filter(
         (candidate) =>
@@ -394,7 +394,7 @@ export function createPosSessionCommandService(
     async upsertSessionItem(args) {
       const now = dependencies.now();
       const session = await dependencies.repository.getSessionById(args.sessionId);
-      const validation = validateActiveSession(session, args.cashierId, now);
+      const validation = validateActiveSession(session, args.staffProfileId, now);
       if (validation.status !== "ok") {
         return validation;
       }
@@ -486,7 +486,7 @@ export function createPosSessionCommandService(
     async removeSessionItem(args) {
       const now = dependencies.now();
       const session = await dependencies.repository.getSessionById(args.sessionId);
-      const validation = validateModifiableSession(session, args.cashierId, now);
+      const validation = validateModifiableSession(session, args.staffProfileId, now);
       if (validation.status !== "ok") {
         return validation;
       }
@@ -693,7 +693,7 @@ function isSessionExpired(session: Pick<Doc<"posSession">, "expiresAt" | "status
 
 function validateActiveSession(
   session: Doc<"posSession"> | null,
-  cashierId: Id<"cashier">,
+  staffProfileId: Id<"staffProfile">,
   now: number,
 ): PosSessionCommandOutcome<Doc<"posSession">> {
   if (!session) {
@@ -703,7 +703,7 @@ function validateActiveSession(
     );
   }
 
-  if (session.cashierId !== cashierId) {
+  if (session.staffProfileId !== staffProfileId) {
     return failure(
       "cashierMismatch",
       "This session is not associated with your cashier.",
@@ -737,14 +737,14 @@ function validateActiveSession(
 
 function validateModifiableSession(
   session: Doc<"posSession"> | null,
-  cashierId: Id<"cashier">,
+  staffProfileId: Id<"staffProfile">,
   now: number,
 ): PosSessionCommandOutcome<Doc<"posSession">> {
   if (!session) {
     return failure("notFound", "Session not found");
   }
 
-  if (session.cashierId !== cashierId) {
+  if (session.staffProfileId !== staffProfileId) {
     return failure(
       "cashierMismatch",
       "This session is not associated with your cashier.",

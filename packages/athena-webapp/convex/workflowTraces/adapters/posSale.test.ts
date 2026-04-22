@@ -12,7 +12,7 @@ describe("buildPosSaleTraceSeed", () => {
       transactionNumber: " POS-TXN-001 ",
       posTransactionId: "txn_1" as Id<"posTransaction">,
       registerSessionId: "register_1" as Id<"registerSession">,
-      cashierId: "cashier_1" as Id<"cashier">,
+      staffProfileId: "staff_1" as Id<"staffProfile">,
       terminalId: "terminal_1" as Id<"posTerminal">,
       customerId: "customer_1" as Id<"posCustomer">,
     });
@@ -26,7 +26,7 @@ describe("buildPosSaleTraceSeed", () => {
     expect(seed.subjectRefs).toEqual({
       posTransactionId: "txn_1",
       registerSessionId: "register_1",
-      cashierId: "cashier_1",
+      staffProfileId: "staff_1",
       terminalId: "terminal_1",
       customerId: "customer_1",
     });

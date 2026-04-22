@@ -170,7 +170,7 @@ describe("useRegisterViewModel", () => {
     mockRegisterState = {
       phase: "active",
       terminal: { _id: "terminal-1", displayName: "Front Counter" },
-      cashier: { _id: "cashier-1", firstName: "Ama", lastName: "Kusi" },
+      cashier: { _id: "staff-1", firstName: "Ama", lastName: "Kusi" },
       activeRegisterSession: {
         _id: "drawer-1",
         status: "open",
@@ -312,7 +312,7 @@ describe("useRegisterViewModel", () => {
     const { result } = renderHook(() => useRegisterViewModel());
 
     await act(async () => {
-      result.current.authDialog?.onAuthenticated("cashier-1" as Id<"cashier">);
+      result.current.authDialog?.onAuthenticated("staff-1" as Id<"staffProfile">);
     });
 
     expect(result.current.header.isSessionActive).toBe(true);
@@ -329,7 +329,7 @@ describe("useRegisterViewModel", () => {
     const { result } = renderHook(() => useRegisterViewModel());
 
     await act(async () => {
-      result.current.authDialog?.onAuthenticated("cashier-1" as Id<"cashier">);
+      result.current.authDialog?.onAuthenticated("staff-1" as Id<"staffProfile">);
     });
 
     await act(async () => {
@@ -339,7 +339,7 @@ describe("useRegisterViewModel", () => {
     expect(mockUpdateSession).toHaveBeenCalled();
     expect(mockHoldSession).toHaveBeenCalledWith({
       sessionId: "session-1",
-      cashierId: "cashier-1",
+      staffProfileId: "staff-1",
       reason: "Signing out",
     });
     expect(result.current.authDialog?.open).toBe(true);
@@ -357,7 +357,7 @@ describe("useRegisterViewModel", () => {
     mockRegisterState = {
       phase: "readyToStart",
       terminal: { _id: "terminal-1", displayName: "Front Counter" },
-      cashier: { _id: "cashier-1", firstName: "Ama", lastName: "Kusi" },
+      cashier: { _id: "staff-1", firstName: "Ama", lastName: "Kusi" },
       activeRegisterSession: null,
       activeSession: null,
       resumableSession: null,
@@ -368,7 +368,7 @@ describe("useRegisterViewModel", () => {
     const { result } = renderHook(() => useRegisterViewModel());
 
     await act(async () => {
-      result.current.authDialog?.onAuthenticated("cashier-1" as Id<"cashier">);
+      result.current.authDialog?.onAuthenticated("staff-1" as Id<"staffProfile">);
     });
 
     expect(result.current.drawerGate).not.toBeNull();
@@ -381,7 +381,7 @@ describe("useRegisterViewModel", () => {
     mockRegisterState = {
       phase: "readyToStart",
       terminal: { _id: "terminal-1", displayName: "Front Counter" },
-      cashier: { _id: "cashier-1", firstName: "Ama", lastName: "Kusi" },
+      cashier: { _id: "staff-1", firstName: "Ama", lastName: "Kusi" },
       activeRegisterSession: null,
       activeSession: null,
       resumableSession: null,
@@ -392,7 +392,7 @@ describe("useRegisterViewModel", () => {
     const { result, rerender } = renderHook(() => useRegisterViewModel());
 
     await act(async () => {
-      result.current.authDialog?.onAuthenticated("cashier-1" as Id<"cashier">);
+      result.current.authDialog?.onAuthenticated("staff-1" as Id<"staffProfile">);
     });
 
     act(() => {
@@ -416,7 +416,7 @@ describe("useRegisterViewModel", () => {
     mockRegisterState = {
       phase: "readyToStart",
       terminal: { _id: "terminal-1", displayName: "Front Counter" },
-      cashier: { _id: "cashier-1", firstName: "Ama", lastName: "Kusi" },
+      cashier: { _id: "staff-1", firstName: "Ama", lastName: "Kusi" },
       activeRegisterSession: {
         _id: "drawer-2",
         status: "open",
@@ -437,7 +437,7 @@ describe("useRegisterViewModel", () => {
     expect(mockStartSession).toHaveBeenCalledWith({
       storeId: "store-1",
       terminalId: "terminal-1",
-      cashierId: "cashier-1",
+      staffProfileId: "staff-1",
       registerNumber: "1",
       registerSessionId: "drawer-2",
     });
@@ -447,7 +447,7 @@ describe("useRegisterViewModel", () => {
     mockRegisterState = {
       phase: "readyToStart",
       terminal: { _id: "terminal-1", displayName: "Front Counter" },
-      cashier: { _id: "cashier-1", firstName: "Ama", lastName: "Kusi" },
+      cashier: { _id: "staff-1", firstName: "Ama", lastName: "Kusi" },
       activeRegisterSession: null,
       activeSession: null,
       resumableSession: null,
@@ -461,7 +461,7 @@ describe("useRegisterViewModel", () => {
     const { result } = renderHook(() => useRegisterViewModel());
 
     await act(async () => {
-      result.current.authDialog?.onAuthenticated("cashier-1" as Id<"cashier">);
+      result.current.authDialog?.onAuthenticated("staff-1" as Id<"staffProfile">);
     });
 
     act(() => {
@@ -490,7 +490,7 @@ describe("useRegisterViewModel", () => {
     const { result } = renderHook(() => useRegisterViewModel());
 
     await act(async () => {
-      result.current.authDialog?.onAuthenticated("cashier-1" as Id<"cashier">);
+      result.current.authDialog?.onAuthenticated("staff-1" as Id<"staffProfile">);
     });
 
     await act(async () => {
@@ -523,7 +523,7 @@ describe("useRegisterViewModel", () => {
     const { result } = renderHook(() => useRegisterViewModel());
 
     await act(async () => {
-      result.current.authDialog?.onAuthenticated("cashier-1" as Id<"cashier">);
+      result.current.authDialog?.onAuthenticated("staff-1" as Id<"staffProfile">);
     });
 
     await act(async () => {
@@ -535,7 +535,7 @@ describe("useRegisterViewModel", () => {
     expect(mockVoidSession).not.toHaveBeenCalled();
     expect(mockResumeSession).toHaveBeenCalledWith({
       sessionId: "session-2",
-      cashierId: "cashier-1",
+      staffProfileId: "staff-1",
       terminalId: "terminal-1",
     });
   });
@@ -556,7 +556,7 @@ describe("useRegisterViewModel", () => {
     const { result } = renderHook(() => useRegisterViewModel());
 
     await act(async () => {
-      result.current.authDialog?.onAuthenticated("cashier-1" as Id<"cashier">);
+      result.current.authDialog?.onAuthenticated("staff-1" as Id<"staffProfile">);
     });
 
     expect(result.current.sessionPanel?.canHoldSession).toBe(false);
@@ -597,7 +597,7 @@ describe("useRegisterViewModel", () => {
     const { result } = renderHook(() => useRegisterViewModel());
 
     await act(async () => {
-      result.current.authDialog?.onAuthenticated("cashier-1" as Id<"cashier">);
+      result.current.authDialog?.onAuthenticated("staff-1" as Id<"staffProfile">);
     });
 
     await act(async () => {
@@ -615,7 +615,7 @@ describe("useRegisterViewModel", () => {
     const { result } = renderHook(() => useRegisterViewModel());
 
     await act(async () => {
-      result.current.authDialog?.onAuthenticated("cashier-1" as Id<"cashier">);
+      result.current.authDialog?.onAuthenticated("staff-1" as Id<"staffProfile">);
     });
 
     act(() => {
@@ -625,7 +625,7 @@ describe("useRegisterViewModel", () => {
     expect(mockSyncSessionCheckoutState).toHaveBeenCalledWith(
       expect.objectContaining({
         sessionId: "session-1",
-        cashierId: "cashier-1",
+        staffProfileId: "staff-1",
         checkoutStateVersion: expect.any(Number),
         stage: "paymentAdded",
         paymentMethod: "cash",
@@ -645,7 +645,7 @@ describe("useRegisterViewModel", () => {
     const { result } = renderHook(() => useRegisterViewModel());
 
     await act(async () => {
-      result.current.authDialog?.onAuthenticated("cashier-1" as Id<"cashier">);
+      result.current.authDialog?.onAuthenticated("staff-1" as Id<"staffProfile">);
     });
 
     act(() => {
@@ -689,7 +689,7 @@ describe("useRegisterViewModel", () => {
     const { result, rerender } = renderHook(() => useRegisterViewModel());
 
     await act(async () => {
-      result.current.authDialog?.onAuthenticated("cashier-1" as Id<"cashier">);
+      result.current.authDialog?.onAuthenticated("staff-1" as Id<"staffProfile">);
     });
 
     mockActiveSession = {
@@ -716,7 +716,7 @@ describe("useRegisterViewModel", () => {
     const { result } = renderHook(() => useRegisterViewModel());
 
     await act(async () => {
-      result.current.authDialog?.onAuthenticated("cashier-1" as Id<"cashier">);
+      result.current.authDialog?.onAuthenticated("staff-1" as Id<"staffProfile">);
     });
 
     act(() => {
@@ -740,7 +740,7 @@ describe("useRegisterViewModel", () => {
     const { result } = renderHook(() => useRegisterViewModel());
 
     await act(async () => {
-      result.current.authDialog?.onAuthenticated("cashier-1" as Id<"cashier">);
+      result.current.authDialog?.onAuthenticated("staff-1" as Id<"staffProfile">);
     });
 
     await act(async () => {
@@ -755,7 +755,7 @@ describe("useRegisterViewModel", () => {
     expect(mockUpdateSession).toHaveBeenCalledWith(
       expect.objectContaining({
         sessionId: "session-1",
-        cashierId: "cashier-1",
+        staffProfileId: "staff-1",
         customerId: "customer-2",
         customerInfo: {
           name: "Efua Mensah",

@@ -33,7 +33,7 @@ export function useConvexCommandGateway(): PosCommandGateway {
     holdSession(input: PosHoldSessionInput): Promise<PosHoldSessionResultDto> {
       return holdSessionMutation({
         sessionId: input.sessionId,
-        cashierId: input.cashierId,
+        staffProfileId: input.staffProfileId,
         holdReason: input.reason,
       });
     },

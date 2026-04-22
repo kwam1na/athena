@@ -203,6 +203,7 @@ const schema = defineSchema({
     .index("by_storeId_and_fingerprintHash", ["storeId", "fingerprintHash"]),
   posTransaction: defineTable(posTransactionSchema)
     .index("by_storeId", ["storeId"])
+    .index("by_staffProfileId", ["staffProfileId"])
     .index("by_storeId_status_completedAt", [
       "storeId",
       "status",
@@ -215,29 +216,37 @@ const schema = defineSchema({
   posSession: defineTable(posSessionSchema)
     .index("by_storeId", ["storeId"])
     .index("by_status", ["status"])
-    .index("by_cashierId", ["cashierId"])
-    .index("by_cashierId_and_status", ["cashierId", "status"])
+    .index("by_staffProfileId", ["staffProfileId"])
+    .index("by_staffProfileId_and_status", ["staffProfileId", "status"])
     .index("by_registerSessionId", ["registerSessionId"])
     .index("by_status_and_expiresAt", ["status", "expiresAt"])
     .index("by_storeId_and_status", ["storeId", "status"])
     .index("by_storeId_terminalId", ["storeId", "terminalId"])
-    .index("by_storeId_cashierId", ["storeId", "cashierId"])
+    .index("by_storeId_staffProfileId", ["storeId", "staffProfileId"])
     .index("by_storeId_status_terminalId", ["storeId", "status", "terminalId"])
-    .index("by_storeId_status_cashierId", ["storeId", "status", "cashierId"]),
+    .index("by_storeId_status_staffProfileId", [
+      "storeId",
+      "status",
+      "staffProfileId",
+    ]),
   posSessionItem: defineTable(posSessionItemSchema).index("by_sessionId", [
     "sessionId",
   ]),
   expenseSession: defineTable(expenseSessionSchema)
     .index("by_storeId", ["storeId"])
     .index("by_status", ["status"])
-    .index("by_cashierId", ["cashierId"])
-    .index("by_cashierId_and_status", ["cashierId", "status"])
+    .index("by_staffProfileId", ["staffProfileId"])
+    .index("by_staffProfileId_and_status", ["staffProfileId", "status"])
     .index("by_status_and_expiresAt", ["status", "expiresAt"])
     .index("by_storeId_and_status", ["storeId", "status"])
     .index("by_storeId_terminalId", ["storeId", "terminalId"])
-    .index("by_storeId_cashierId", ["storeId", "cashierId"])
+    .index("by_storeId_staffProfileId", ["storeId", "staffProfileId"])
     .index("by_storeId_status_terminalId", ["storeId", "status", "terminalId"])
-    .index("by_storeId_status_cashierId", ["storeId", "status", "cashierId"]),
+    .index("by_storeId_status_staffProfileId", [
+      "storeId",
+      "status",
+      "staffProfileId",
+    ]),
   expenseSessionItem: defineTable(expenseSessionItemSchema).index(
     "by_sessionId",
     ["sessionId"]
@@ -245,6 +254,7 @@ const schema = defineSchema({
   expenseTransaction: defineTable(expenseTransactionSchema)
     .index("by_storeId", ["storeId"])
     .index("by_status", ["status"])
+    .index("by_staffProfileId", ["staffProfileId"])
     .index("by_sessionId", ["sessionId"]),
   expenseTransactionItem: defineTable(expenseTransactionItemSchema).index(
     "by_transactionId",

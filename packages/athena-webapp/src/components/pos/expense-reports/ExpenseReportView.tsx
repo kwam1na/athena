@@ -62,6 +62,17 @@ export function ExpenseReportView() {
     }));
   }, [expenseTransaction]);
 
+  const staffProfileName = useMemo(() => {
+    const staffProfile = expenseTransaction?.staffProfile;
+    if (!staffProfile) return null;
+
+    if (staffProfile.firstName && staffProfile.lastName) {
+      return `${staffProfile.firstName} ${staffProfile.lastName.charAt(0)}.`;
+    }
+
+    return staffProfile.fullName;
+  }, [expenseTransaction]);
+
   if (!reportId) {
     return null;
   }
@@ -118,14 +129,12 @@ export function ExpenseReportView() {
                   )}
                 </CardHeader>
                 <CardContent className="space-y-4 text-sm">
-                  {expenseTransaction.cashier && (
+                  {expenseTransaction.staffProfile && (
                     <div className="flex items-center gap-3">
                       <User className="w-4 h-4 text-muted-foreground" />
                       <div>
-                        <p className="font-medium">
-                          {`${expenseTransaction.cashier.firstName} ${expenseTransaction.cashier.lastName.charAt(0)}.`}
-                        </p>
-                        <p className="text-xs text-muted-foreground">Cashier</p>
+                        <p className="font-medium">{staffProfileName}</p>
+                        <p className="text-xs text-muted-foreground">Staff</p>
                       </div>
                     </div>
                   )}

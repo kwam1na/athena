@@ -378,7 +378,7 @@ export async function completeTransaction(
     };
     registerNumber?: string;
     terminalId?: Id<"posTerminal">;
-    cashierId?: Id<"cashier">;
+    staffProfileId?: Id<"staffProfile">;
     registerSessionId?: Id<"registerSession">;
   },
 ) {
@@ -434,7 +434,7 @@ export async function completeTransaction(
     sessionId: undefined,
     registerSessionId: args.registerSessionId,
     customerId: args.customerId,
-    cashierId: args.cashierId,
+    staffProfileId: args.staffProfileId,
     registerNumber: args.registerNumber,
     terminalId: args.terminalId,
     subtotal: args.subtotal,
@@ -457,7 +457,7 @@ export async function completeTransaction(
     transactionNumber,
     posTransactionId: transactionId,
     registerSessionId: args.registerSessionId,
-    cashierId: args.cashierId,
+    staffProfileId: args.staffProfileId,
     terminalId: args.terminalId,
     customerId: args.customerId,
   });
@@ -571,7 +571,7 @@ export async function voidTransaction(
   args: {
     transactionId: Id<"posTransaction">;
     reason: string;
-    cashierId?: Id<"cashier">;
+    staffProfileId?: Id<"staffProfile">;
   },
 ) {
   const transaction = await getPosTransactionById(ctx, args.transactionId);
@@ -708,7 +708,7 @@ export async function createTransactionFromSessionHandler(
     sessionId: args.sessionId,
     registerSessionId: resolvedRegisterSessionId,
     customerId: session.customerId,
-    cashierId: session.cashierId,
+    staffProfileId: session.staffProfileId,
     registerNumber: session.registerNumber,
     terminalId: session.terminalId,
     subtotal,
@@ -732,7 +732,7 @@ export async function createTransactionFromSessionHandler(
     transactionNumber,
     posTransactionId: transactionId,
     registerSessionId: resolvedRegisterSessionId,
-    cashierId: session.cashierId,
+    staffProfileId: session.staffProfileId,
     terminalId: session.terminalId,
     customerId: session.customerId,
   });

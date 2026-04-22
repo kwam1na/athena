@@ -246,7 +246,7 @@ export const getStoreSessions = query({
   args: {
     storeId: v.id("store"),
     terminalId: v.optional(v.id("posTerminal")),
-    cashierId: v.optional(v.id("cashier")),
+    staffProfileId: v.optional(v.id("staffProfile")),
     status: v.optional(v.string()), // "active", "held", "completed", "void"
     limit: v.optional(v.number()),
   },
@@ -256,7 +256,7 @@ export const getStoreSessions = query({
 
     let sessionsQuery;
     let indexedTerminalFilter = false;
-    let indexedCashierFilter = false;
+    let indexedStaffFilter = false;
 
     if (status && args.terminalId) {
       indexedTerminalFilter = true;
@@ -268,15 +268,15 @@ export const getStoreSessions = query({
             .eq("status", status)
             .eq("terminalId", args.terminalId!)
         );
-    } else if (status && args.cashierId) {
-      indexedCashierFilter = true;
+    } else if (status && args.staffProfileId) {
+      indexedStaffFilter = true;
       sessionsQuery = ctx.db
         .query("posSession")
-        .withIndex("by_storeId_status_cashierId", (q) =>
+        .withIndex("by_storeId_status_staffProfileId", (q) =>
           q
             .eq("storeId", storeId)
             .eq("status", status)
-            .eq("cashierId", args.cashierId!)
+            .eq("staffProfileId", args.staffProfileId!)
         );
     } else if (args.terminalId) {
       indexedTerminalFilter = true;
@@ -285,12 +285,12 @@ export const getStoreSessions = query({
         .withIndex("by_storeId_terminalId", (q) =>
           q.eq("storeId", storeId).eq("terminalId", args.terminalId!)
         );
-    } else if (args.cashierId) {
-      indexedCashierFilter = true;
+    } else if (args.staffProfileId) {
+      indexedStaffFilter = true;
       sessionsQuery = ctx.db
         .query("posSession")
-        .withIndex("by_storeId_cashierId", (q) =>
-          q.eq("storeId", storeId).eq("cashierId", args.cashierId!)
+        .withIndex("by_storeId_staffProfileId", (q) =>
+          q.eq("storeId", storeId).eq("staffProfileId", args.staffProfileId!)
         );
     } else if (status) {
       sessionsQuery = ctx.db
@@ -312,9 +312,9 @@ export const getStoreSessions = query({
       );
     }
 
-    if (args.cashierId && !indexedCashierFilter) {
+    if (args.staffProfileId && !indexedStaffFilter) {
       sessions = sessions.filter(
-        (session) => session.cashierId === args.cashierId
+        (session) => session.staffProfileId === args.staffProfileId
       );
     }
 
@@ -370,7 +370,7 @@ export const createSession = mutation({
   args: {
     storeId: v.id("store"),
     terminalId: v.id("posTerminal"),
-    cashierId: v.optional(v.id("cashier")),
+    staffProfileId: v.optional(v.id("staffProfile")),
     registerNumber: v.optional(v.string()),
     registerSessionId: v.optional(v.id("registerSession")),
   },
@@ -394,7 +394,7 @@ export const createSession = mutation({
 export const updateSession = mutation({
   args: {
     sessionId: v.id("posSession"),
-    cashierId: v.id("cashier"),
+    staffProfileId: v.id("staffProfile"),
     customerId: v.optional(v.id("posCustomer")),
     customerInfo: v.optional(
       v.object({
@@ -425,7 +425,7 @@ export const updateSession = mutation({
     const validation = await validateSessionModifiable(
       ctx.db,
       sessionId,
-      args.cashierId
+      args.staffProfileId
     );
     if (!validation.success) {
       // For completed/void sessions, return current state without update
@@ -475,7 +475,7 @@ export const updateSession = mutation({
 export const holdSession = mutation({
   args: {
     sessionId: v.id("posSession"),
-    cashierId: v.id("cashier"),
+    staffProfileId: v.id("staffProfile"),
     holdReason: v.optional(v.string()),
   },
   returns: sessionResultValidator,
@@ -497,7 +497,7 @@ export const holdSession = mutation({
 export const resumeSession = mutation({
   args: {
     sessionId: v.id("posSession"),
-    cashierId: v.id("cashier"),
+    staffProfileId: v.id("staffProfile"),
     terminalId: v.id("posTerminal"),
   },
   returns: sessionResultValidator,
@@ -794,7 +794,7 @@ export const releaseSessionInventoryHoldsAndDeleteItems = mutation({
 export const syncSessionCheckoutState = mutation({
   args: {
     sessionId: v.id("posSession"),
-    cashierId: v.id("cashier"),
+    staffProfileId: v.id("staffProfile"),
     checkoutStateVersion: v.number(),
     payments: v.array(
       v.object({
@@ -818,7 +818,7 @@ export const syncSessionCheckoutState = mutation({
     const validation = await validateSessionActive(
       ctx.db,
       args.sessionId,
-      args.cashierId
+      args.staffProfileId
     );
 
     if (!validation.success) {
@@ -876,24 +876,24 @@ export const syncSessionCheckoutState = mutation({
   },
 });
 
-// Get active session for a register/cashier
+// Get active session for a register/staff member
 export const getActiveSession = query({
   args: {
     storeId: v.id("store"),
     terminalId: v.id("posTerminal"),
-    cashierId: v.optional(v.id("cashier")),
+    staffProfileId: v.optional(v.id("staffProfile")),
     registerNumber: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const now = Date.now();
-    const activeSessions = args.cashierId
+    const activeSessions = args.staffProfileId
       ? await ctx.db
           .query("posSession")
-          .withIndex("by_storeId_status_cashierId", (q) =>
+          .withIndex("by_storeId_status_staffProfileId", (q) =>
             q
               .eq("storeId", args.storeId)
               .eq("status", "active")
-              .eq("cashierId", args.cashierId!)
+              .eq("staffProfileId", args.staffProfileId!)
           )
           .order("desc")
           .take(ACTIVE_SESSION_CANDIDATE_LIMIT)
@@ -914,15 +914,15 @@ export const getActiveSession = query({
       (session) => !session.expiresAt || session.expiresAt >= now
     );
 
-    // Filter by cashier and/or register if provided
+    // Filter by staff member and/or register if provided
     let filteredSessions = nonExpiredSessions;
 
-    if (args.cashierId) {
+    if (args.staffProfileId) {
       filteredSessions = filteredSessions.filter(
         (s) => s.terminalId === args.terminalId
       );
       filteredSessions = filteredSessions.filter(
-        (s) => s.cashierId === args.cashierId
+        (s) => s.staffProfileId === args.staffProfileId
       );
     }
 
@@ -1094,9 +1094,9 @@ export const cleanupOldSessions = mutation({
   },
 });
 
-export const expireAllSessionsForCashier = mutation({
+export const expireAllSessionsForStaff = mutation({
   args: {
-    cashierId: v.id("cashier"),
+    staffProfileId: v.id("staffProfile"),
     terminalId: v.id("posTerminal"),
   },
   handler: async (ctx, args) => {
@@ -1104,14 +1104,14 @@ export const expireAllSessionsForCashier = mutation({
     const [activeSessions, heldSessions] = await Promise.all([
       ctx.db
         .query("posSession")
-        .withIndex("by_cashierId_and_status", (q) =>
-          q.eq("cashierId", args.cashierId).eq("status", "active")
+        .withIndex("by_staffProfileId_and_status", (q) =>
+          q.eq("staffProfileId", args.staffProfileId).eq("status", "active")
         )
         .take(ACTIVE_SESSION_CANDIDATE_LIMIT),
       ctx.db
         .query("posSession")
-        .withIndex("by_cashierId_and_status", (q) =>
-          q.eq("cashierId", args.cashierId).eq("status", "held")
+        .withIndex("by_staffProfileId_and_status", (q) =>
+          q.eq("staffProfileId", args.staffProfileId).eq("status", "held")
         )
         .take(ACTIVE_SESSION_CANDIDATE_LIMIT),
     ]);
@@ -1125,6 +1125,9 @@ export const expireAllSessionsForCashier = mutation({
         )
     );
 
-    return { success: true as const, data: { cashierId: args.cashierId } };
+    return {
+      success: true as const,
+      data: { staffProfileId: args.staffProfileId },
+    };
   },
 });

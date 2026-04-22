@@ -50,9 +50,9 @@ export async function getRegisterSessionById(
 
 export async function getCashierById(
   ctx: PosTransactionReadCtx,
-  cashierId: Id<"cashier">,
+  staffProfileId: Id<"staffProfile">,
 ) {
-  return ctx.db.get("cashier", cashierId);
+  return ctx.db.get("staffProfile", staffProfileId);
 }
 
 export async function getCustomerById(

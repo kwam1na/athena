@@ -381,7 +381,7 @@ describe("workflow trace core and public helpers", () => {
       transactionNumber: " POS-TXN-001 ",
       posTransactionId: "pos-txn-1" as Id<"posTransaction">,
       registerSessionId: "register-1" as Id<"registerSession">,
-      cashierId: "cashier-1" as Id<"cashier">,
+      staffProfileId: "staff-1" as Id<"staffProfile">,
       terminalId: "terminal-1" as Id<"posTerminal">,
       customerId: "customer-1" as Id<"posCustomer">,
     });

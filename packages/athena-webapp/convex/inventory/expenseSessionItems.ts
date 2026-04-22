@@ -60,7 +60,7 @@ export const addOrUpdateExpenseItem = mutation({
     sessionId: v.id("expenseSession"),
     productId: v.id("product"),
     productSkuId: v.id("productSku"),
-    cashierId: v.id("cashier"),
+    staffProfileId: v.id("staffProfile"),
     productSku: v.string(),
     barcode: v.optional(v.string()),
     productName: v.string(),
@@ -80,7 +80,7 @@ export const addOrUpdateExpenseItem = mutation({
       const validation = await validateExpenseSessionActive(
         ctx.db,
         args.sessionId,
-        args.cashierId
+        args.staffProfileId
       );
       if (!validation.success) {
         return error(validation.message!);
@@ -184,7 +184,7 @@ export const addOrUpdateExpenseItem = mutation({
 export const removeExpenseItem = mutation({
   args: {
     sessionId: v.id("expenseSession"),
-    cashierId: v.id("cashier"),
+    staffProfileId: v.id("staffProfile"),
     itemId: v.id("expenseSessionItem"),
   },
   returns: expenseOperationSuccessValidator,
@@ -196,7 +196,7 @@ export const removeExpenseItem = mutation({
       const sessionValidation = await validateExpenseSessionModifiable(
         ctx.db,
         args.sessionId,
-        args.cashierId
+        args.staffProfileId
       );
       if (!sessionValidation.success) {
         return error(sessionValidation.message!);

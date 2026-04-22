@@ -9,7 +9,7 @@ const HELD_SESSION_CANDIDATE_LIMIT = 20;
 type RegisterStateIdentity = {
   storeId: Id<"store">;
   terminalId?: Id<"posTerminal">;
-  cashierId?: Id<"cashier">;
+  staffProfileId?: Id<"staffProfile">;
   registerNumber?: string;
 };
 
@@ -58,11 +58,11 @@ async function querySessionsByStatus(
     case "cashier":
       sessions = await ctx.db
         .query("posSession")
-        .withIndex("by_storeId_status_cashierId", (q) =>
+        .withIndex("by_storeId_status_staffProfileId", (q) =>
           q
             .eq("storeId", identity.storeId)
             .eq("status", status)
-            .eq("cashierId", identity.cashierId!),
+            .eq("staffProfileId", identity.staffProfileId!),
         )
         .order("desc")
         .take(limit);
@@ -87,7 +87,7 @@ export function selectRegisterStateLookupStrategy(
     return "terminal";
   }
 
-  if (identity.cashierId) {
+  if (identity.staffProfileId) {
     return "cashier";
   }
 
@@ -107,7 +107,7 @@ export function summarizeRegisterStateSessions(
       sessionNumber: session.sessionNumber,
       status: session.status,
       terminalId: session.terminalId,
-      cashierId: session.cashierId,
+      staffProfileId: session.staffProfileId,
       registerNumber: session.registerNumber,
       expiresAt: session.expiresAt,
       updatedAt: session.updatedAt,
@@ -124,7 +124,7 @@ function matchesRegisterIdentity(
     return false;
   }
 
-  if (identity.cashierId && session.cashierId !== identity.cashierId) {
+  if (identity.staffProfileId && session.staffProfileId !== identity.staffProfileId) {
     return false;
   }
 

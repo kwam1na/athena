@@ -33,7 +33,7 @@ export type PosSaleTraceSeed = {
   subjectRefs: {
     posTransactionId?: Id<"posTransaction">;
     registerSessionId?: Id<"registerSession">;
-    cashierId?: Id<"cashier">;
+    staffProfileId?: Id<"staffProfile">;
     terminalId?: Id<"posTerminal">;
     customerId?: Id<"posCustomer">;
   };
@@ -47,7 +47,7 @@ export function buildPosSaleTraceSeed(args: {
   transactionNumber: string;
   posTransactionId?: Id<"posTransaction">;
   registerSessionId?: Id<"registerSession">;
-  cashierId?: Id<"cashier">;
+  staffProfileId?: Id<"staffProfile">;
   terminalId?: Id<"posTerminal">;
   customerId?: Id<"posCustomer">;
 }): PosSaleTraceSeed {
@@ -61,7 +61,7 @@ export function buildPosSaleTraceSeed(args: {
     Object.entries({
       posTransactionId: args.posTransactionId,
       registerSessionId: args.registerSessionId,
-      cashierId: args.cashierId,
+      staffProfileId: args.staffProfileId,
       terminalId: args.terminalId,
       customerId: args.customerId,
     }).filter(([, value]) => Boolean(value)),

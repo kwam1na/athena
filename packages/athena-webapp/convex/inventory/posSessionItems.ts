@@ -59,7 +59,7 @@ export const addOrUpdateItem = mutation({
     sessionId: v.id("posSession"),
     productId: v.id("product"),
     productSkuId: v.id("productSku"),
-    cashierId: v.id("cashier"),
+    staffProfileId: v.id("staffProfile"),
     productSku: v.string(),
     barcode: v.optional(v.string()),
     productName: v.string(),
@@ -90,7 +90,7 @@ export const addOrUpdateItem = mutation({
 export const removeItem = mutation({
   args: {
     sessionId: v.id("posSession"),
-    cashierId: v.id("cashier"),
+    staffProfileId: v.id("staffProfile"),
     itemId: v.id("posSessionItem"),
   },
   returns: operationSuccessValidator,

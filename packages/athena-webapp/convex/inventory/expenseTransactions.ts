@@ -78,7 +78,7 @@ export const createTransactionFromSession = internalMutation({
       transactionNumber,
       storeId: session.storeId,
       sessionId: args.sessionId,
-      cashierId: session.cashierId,
+      staffProfileId: session.staffProfileId,
       registerNumber: session.registerNumber,
       totalValue,
       status: "completed",
@@ -134,7 +134,7 @@ export const createTransactionFromSession = internalMutation({
 export const getExpenseTransactions = query({
   args: {
     storeId: v.id("store"),
-    cashierId: v.optional(v.id("cashier")),
+    staffProfileId: v.optional(v.id("staffProfile")),
     status: v.optional(v.string()),
     limit: v.optional(v.number()),
   },
@@ -145,8 +145,8 @@ export const getExpenseTransactions = query({
       transactionNumber: v.string(),
       storeId: v.id("store"),
       sessionId: v.id("expenseSession"),
-      cashierId: v.id("cashier"),
-      cashierName: v.union(v.string(), v.null()),
+      staffProfileId: v.id("staffProfile"),
+      staffProfileName: v.union(v.string(), v.null()),
       registerNumber: v.optional(v.string()),
       totalValue: v.number(),
       status: v.string(),
@@ -171,19 +171,20 @@ export const getExpenseTransactions = query({
 
     let transactions = await transactionsQuery.order("desc").take(limit);
 
-    if (args.cashierId) {
+    if (args.staffProfileId) {
       transactions = transactions.filter(
-        (transaction) => transaction.cashierId === args.cashierId
+        (transaction) => transaction.staffProfileId === args.staffProfileId
       );
     }
 
-    // Enrich with cashier name and item count
+    // Enrich with staff profile name and item count
     const enrichedTransactions = await Promise.all(
       transactions.map(async (transaction) => {
-        const cashier = await ctx.db.get(transaction.cashierId);
-        const cashierName = cashier
-          ? `${cashier.firstName} ${cashier.lastName.charAt(0).toUpperCase()}.`
-          : null;
+        const staffProfile = await ctx.db.get(
+          "staffProfile",
+          transaction.staffProfileId
+        );
+        const staffProfileName = staffProfile?.fullName ?? null;
 
         const items = await ctx.db
           .query("expenseTransactionItem")
@@ -196,7 +197,7 @@ export const getExpenseTransactions = query({
 
         return {
           ...transaction,
-          cashierName,
+          staffProfileName,
           itemCount,
         };
       })
@@ -216,13 +217,14 @@ export const getExpenseTransactionById = query({
       transactionNumber: v.string(),
       storeId: v.id("store"),
       sessionId: v.id("expenseSession"),
-      cashierId: v.id("cashier"),
-      cashier: v.union(
+      staffProfileId: v.id("staffProfile"),
+      staffProfile: v.union(
         v.null(),
         v.object({
-          _id: v.id("cashier"),
-          firstName: v.string(),
-          lastName: v.string(),
+          _id: v.id("staffProfile"),
+          fullName: v.string(),
+          firstName: v.optional(v.string()),
+          lastName: v.optional(v.string()),
         })
       ),
       registerNumber: v.optional(v.string()),
@@ -239,10 +241,11 @@ export const getExpenseTransactionById = query({
     const transaction = await ctx.db.get(args.transactionId);
     if (!transaction) return null;
 
-    // Get cashier information
-    const cashier = transaction.cashierId
-      ? await ctx.db.get(transaction.cashierId)
-      : null;
+    // Get staff profile information
+    const staffProfile = await ctx.db.get(
+      "staffProfile",
+      transaction.staffProfileId
+    );
 
     // Get transaction items
     const items = await ctx.db
@@ -254,11 +257,12 @@ export const getExpenseTransactionById = query({
 
     return {
       ...transaction,
-      cashier: cashier
+      staffProfile: staffProfile
         ? {
-            _id: cashier._id,
-            firstName: cashier.firstName,
-            lastName: cashier.lastName,
+            _id: staffProfile._id,
+            fullName: staffProfile.fullName,
+            firstName: staffProfile.firstName,
+            lastName: staffProfile.lastName,
           }
         : null,
       items,

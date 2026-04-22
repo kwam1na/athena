@@ -379,7 +379,12 @@ export const signIn = mutation({
     // Check for active sessions on OTHER terminals
     const loggedInSessions = await ctx.db
       .query("posSession")
-      .withIndex("by_cashierId", (q) => q.eq("cashierId", result.cashier?._id))
+      .withIndex("by_staffProfileId", (q) =>
+        q.eq(
+          "staffProfileId",
+          result.cashier?._id as unknown as Id<"staffProfile"> | undefined
+        )
+      )
       .filter((q) => q.gt(q.field("expiresAt"), now))
       .collect();
 

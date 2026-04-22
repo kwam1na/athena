@@ -22,7 +22,9 @@ interface CashierAuthDialogProps {
   open: boolean;
   storeId: Id<"store">;
   terminalId: Id<"posTerminal">;
-  onAuthenticated: (cashierId: Id<"cashier">) => void;
+  onAuthenticated:
+    | ((staffProfileId: Id<"staffProfile">) => void)
+    | ((cashierId: Id<"cashier">) => void);
   onDismiss: () => void;
 }
 
@@ -42,8 +44,8 @@ export const CashierAuthDialog = ({
   // Use mutation to authenticate
   const authenticate = useMutation(api.inventory.cashier.authenticate);
 
-  const expireAllSessionsForCashier = useMutation(
-    api.inventory.posSessions.expireAllSessionsForCashier
+  const expireAllSessionsForStaff = useMutation(
+    api.inventory.posSessions.expireAllSessionsForStaff
   );
 
   const signIn = useMutation(api.inventory.cashier.signIn);
@@ -101,15 +103,17 @@ export const CashierAuthDialog = ({
             toast.success(
               `Logged in as ${signInResult.cashier.firstName} ${signInResult.cashier.lastName.charAt(0).toUpperCase()}.`
             );
-            onAuthenticated(signInResult.cashier._id);
+            (
+              onAuthenticated as (staffProfileId: Id<"staffProfile">) => void
+            )(signInResult.cashier._id as unknown as Id<"staffProfile">);
           } else if ((signInResult as any).error) {
             toast.error((signInResult as any).error);
             setPin("");
             return;
           }
         } else {
-          const expireResult = await expireAllSessionsForCashier({
-            cashierId: result.cashier._id,
+          const expireResult = await expireAllSessionsForStaff({
+            staffProfileId: result.cashier._id as unknown as Id<"staffProfile">,
             terminalId,
           });
 
@@ -120,7 +124,9 @@ export const CashierAuthDialog = ({
             setPin("");
             return;
           }
-          onAuthenticated(result.cashier._id);
+          (onAuthenticated as (staffProfileId: Id<"staffProfile">) => void)(
+            result.cashier._id as unknown as Id<"staffProfile">,
+          );
           setState("auth");
         }
 

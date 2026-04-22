@@ -10,7 +10,7 @@ describe("buildPosSessionTraceSeed", () => {
       startedAt: 123,
       sessionNumber: " SES-001 ",
       posSessionId: "session_1" as Id<"posSession">,
-      cashierId: "cashier_1" as Id<"cashier">,
+      staffProfileId: "staff_1" as Id<"staffProfile">,
       terminalId: "terminal_1" as Id<"posTerminal">,
       customerId: "customer_1" as Id<"posCustomer">,
       posTransactionId: "txn_1" as Id<"posTransaction">,
@@ -24,7 +24,7 @@ describe("buildPosSessionTraceSeed", () => {
     expect(seed.trace.startedAt).toBe(123);
     expect(seed.subjectRefs).toEqual({
       posSessionId: "session_1",
-      cashierId: "cashier_1",
+      staffProfileId: "staff_1",
       terminalId: "terminal_1",
       customerId: "customer_1",
       posTransactionId: "txn_1",

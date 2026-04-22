@@ -23,6 +23,9 @@ import {
 export const useExpenseOperations = () => {
   const store = useExpenseStore();
   const { createSession } = useSessionManagementExpense();
+  const currentStaffProfileId = store.cashier.id as unknown as
+    | Id<"staffProfile">
+    | null;
 
   // Convex mutations
   const addOrUpdateItemMutation = useMutation(
@@ -130,11 +133,15 @@ export const useExpenseOperations = () => {
         });
 
         // Call server mutation to add/update item with inventory hold
+        if (!currentStaffProfileId) {
+          throw new Error("Staff profile missing");
+        }
+
         const { success, data } = await handlePOSOperation(
           () =>
             addOrUpdateItemMutation({
               sessionId: sessionId as Id<"expenseSession">,
-              cashierId: store.cashier.id as Id<"cashier">,
+              staffProfileId: currentStaffProfileId,
               productId: product.productId!,
               productSkuId: product.skuId!,
               productSku: product.sku || "",
@@ -192,7 +199,7 @@ export const useExpenseOperations = () => {
         throw error;
       }
     },
-    [store, ensureSession, addOrUpdateItemMutation]
+    [store, ensureSession, addOrUpdateItemMutation, currentStaffProfileId]
   );
 
   /**
@@ -282,11 +289,17 @@ export const useExpenseOperations = () => {
         return;
       }
 
+      if (!currentStaffProfileId) {
+        logger.error("[Expense] No staff profile for item removal");
+        showNoActiveSessionError("remove items");
+        return;
+      }
+
       const { success, data } = await handlePOSOperation(
         () =>
           removeItemMutation({
             sessionId: sessionId as Id<"expenseSession">,
-            cashierId: store.cashier.id as Id<"cashier">,
+            staffProfileId: currentStaffProfileId,
             itemId,
           }),
         {
@@ -305,7 +318,7 @@ export const useExpenseOperations = () => {
         });
       }
     },
-    [store, removeItemMutation]
+    [store, removeItemMutation, currentStaffProfileId]
   );
 
   /**
@@ -350,6 +363,12 @@ export const useExpenseOperations = () => {
         return;
       }
 
+      if (!currentStaffProfileId) {
+        logger.error("[Expense] No staff profile for quantity update");
+        showNoActiveSessionError("update quantities");
+        return;
+      }
+
       if (!item || !item.skuId || !item.productId) {
         logger.error("[Expense] Item not found or missing data", {
           itemId,
@@ -365,7 +384,7 @@ export const useExpenseOperations = () => {
         () =>
           addOrUpdateItemMutation({
             sessionId: sessionId as Id<"expenseSession">,
-            cashierId: store.cashier.id as Id<"cashier">,
+            staffProfileId: currentStaffProfileId,
             productId: item.productId!,
             productSkuId: item.skuId!,
             productSku: item.sku || "",
@@ -394,7 +413,7 @@ export const useExpenseOperations = () => {
         });
       }
     },
-    [store, addOrUpdateItemMutation, removeItem]
+    [store, addOrUpdateItemMutation, removeItem, currentStaffProfileId]
   );
 
   /**
