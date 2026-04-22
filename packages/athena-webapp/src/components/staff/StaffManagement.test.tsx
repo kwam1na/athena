@@ -73,6 +73,10 @@ function mockConvex({
   staffProfiles?: typeof defaultStaffProfiles;
   usernameAvailability?:
     | { available: boolean; normalizedUsername: string }
+    | ((args: { storeId: string; username: string }) => {
+        available: boolean;
+        normalizedUsername: string;
+      })
     | undefined;
 } = {}) {
   mockedUseQuery.mockImplementation((...[_reference, args]) => {
@@ -81,6 +85,13 @@ function mockConvex({
     }
 
     if (args && typeof args === "object" && "username" in args) {
+      if (typeof usernameAvailability === "function") {
+        return usernameAvailability({
+          storeId: args.storeId as string,
+          username: args.username as string,
+        }) as never;
+      }
+
       return usernameAvailability as never;
     }
 
@@ -214,7 +225,12 @@ describe("StaffManagement", () => {
   });
 
   it("edits an existing staff profile from the roster", async () => {
-    mockConvex();
+    mockConvex({
+      usernameAvailability: ({ username }) => ({
+        available: true,
+        normalizedUsername: username,
+      }),
+    });
     const user = userEvent.setup();
 
     render(
@@ -228,7 +244,15 @@ describe("StaffManagement", () => {
 
     const firstNameInput = screen.getByLabelText(/first name/i);
     await user.clear(firstNameInput);
-    await user.type(firstNameInput, "Afi");
+    await user.type(firstNameInput, "Kojo");
+
+    const lastNameInput = screen.getByLabelText(/last name/i);
+    await user.clear(lastNameInput);
+    await user.type(lastNameInput, "Badu");
+
+    const usernameInput = screen.getByLabelText(/username/i);
+    expect(usernameInput).toHaveAttribute("readonly");
+    await waitFor(() => expect(usernameInput).toHaveValue("kbadu"));
 
     const emailInput = screen.getByLabelText(/email/i);
     await user.clear(emailInput);
@@ -240,26 +264,26 @@ describe("StaffManagement", () => {
     await waitFor(() => expect(updateStaffProfile).toHaveBeenCalledTimes(1));
     expect(updateStaffProfile).toHaveBeenCalledWith({
       email: "afi@example.com",
-      firstName: "Afi",
+      firstName: "Kojo",
       hiredAt: new Date("2024-01-15T00:00:00").getTime(),
       jobTitle: "Cashier",
-      lastName: "Mensah",
+      lastName: "Badu",
       organizationId: "org-1",
       phoneNumber: "+233200000000",
       requestedRoles: ["manager"],
       staffCode: undefined,
       staffProfileId: "staff-1",
       storeId: "store-1",
-      username: "amens",
+      username: "kbadu",
     });
   });
 
-  it("blocks edits when a different username is already taken in the store", async () => {
+  it("derives the next available username while editing when the first candidate is taken", async () => {
     mockConvex({
-      usernameAvailability: {
-        available: false,
-        normalizedUsername: "taken",
-      },
+      usernameAvailability: ({ username }) => ({
+        available: username !== "kbadu",
+        normalizedUsername: username,
+      }),
     });
     const user = userEvent.setup();
 
@@ -271,14 +295,16 @@ describe("StaffManagement", () => {
     );
 
     await user.click(screen.getByRole("button", { name: /edit/i }));
-    const usernameInput = screen.getByLabelText(/username/i);
-    await user.clear(usernameInput);
-    await user.type(usernameInput, "taken");
+    const firstNameInput = screen.getByLabelText(/first name/i);
+    await user.clear(firstNameInput);
+    await user.type(firstNameInput, "Kojo");
 
-    expect(
-      await screen.findByText(/username is already in use for this store/i),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /update/i })).toBeDisabled();
-    expect(updateStaffProfile).not.toHaveBeenCalled();
+    const lastNameInput = screen.getByLabelText(/last name/i);
+    await user.clear(lastNameInput);
+    await user.type(lastNameInput, "Badu");
+
+    await waitFor(() =>
+      expect(screen.getByLabelText(/username/i)).toHaveValue("kbad2"),
+    );
   });
 });
