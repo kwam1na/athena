@@ -5,6 +5,7 @@ export const posSessionSchema = v.object({
   storeId: v.id("store"),
   cashierId: v.optional(v.id("cashier")), // Cashier who created the session
   registerNumber: v.optional(v.string()),
+  workflowTraceId: v.optional(v.string()),
 
   // Session state
   status: v.string(), // "active", "held", "completed", "void"

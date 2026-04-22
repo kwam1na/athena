@@ -1,6 +1,7 @@
 import { internalMutation, internalQuery, MutationCtx } from "../_generated/server";
 import { Id } from "../_generated/dataModel";
 import { v } from "convex/values";
+import { recordRegisterSessionTraceBestEffort } from "./registerSessionTracing";
 
 const REGISTER_SESSION_TRANSITIONS = {
   active: new Set(["closing"]),
@@ -19,6 +20,27 @@ type RegisterSessionCashAdjustmentKind = "sale" | "void";
 function trimOptional(value?: string | null) {
   const nextValue = value?.trim();
   return nextValue ? nextValue : undefined;
+}
+
+async function persistRegisterSessionWorkflowTraceIdBestEffort(
+  ctx: MutationCtx,
+  args: {
+    registerSessionId: Id<"registerSession">;
+    traceId?: string;
+    workflowTraceId?: string;
+  }
+) {
+  if (!args.traceId || args.workflowTraceId) {
+    return;
+  }
+
+  try {
+    await ctx.db.patch("registerSession", args.registerSessionId, {
+      workflowTraceId: args.traceId,
+    });
+  } catch (error) {
+    console.error("[workflow-trace] register.session.trace.link", error);
+  }
 }
 
 function normalizeRegisterSessionIdentity<T extends RegisterSessionIdentity>(args: T) {
@@ -313,6 +335,23 @@ export const openRegisterSession = internalMutation({
         ...identity,
       })
     );
+    const session = await ctx.db.get("registerSession", sessionId);
+
+    if (!session) {
+      return null;
+    }
+
+    const traceResult = await recordRegisterSessionTraceBestEffort(ctx, {
+      stage: "opened",
+      session,
+    });
+
+    await persistRegisterSessionWorkflowTraceIdBestEffort(ctx, {
+      registerSessionId: sessionId,
+      traceId: traceResult.traceId,
+      workflowTraceId: session.workflowTraceId,
+    });
+
     return ctx.db.get("registerSession", sessionId);
   },
 });
@@ -391,7 +430,33 @@ export const recordRegisterSessionTransaction = internalMutation({
       await ctx.db.patch("registerSession", args.registerSessionId, updates);
     }
 
-    return ctx.db.get("registerSession", args.registerSessionId);
+    const updatedSession = await ctx.db.get("registerSession", args.registerSessionId);
+
+    if (!updatedSession) {
+      return null;
+    }
+
+    const amount = calculateRegisterSessionCashDelta({
+      changeGiven: args.changeGiven,
+      payments: args.payments,
+    });
+
+    if (amount > 0) {
+      const traceResult = await recordRegisterSessionTraceBestEffort(ctx, {
+        stage:
+          args.adjustmentKind === "sale" ? "sale_recorded" : "void_recorded",
+        session: updatedSession,
+        amount,
+      });
+
+      await persistRegisterSessionWorkflowTraceIdBestEffort(ctx, {
+        registerSessionId: updatedSession._id,
+        traceId: traceResult.traceId,
+        workflowTraceId: updatedSession.workflowTraceId,
+      });
+    }
+
+    return updatedSession;
   },
 });
 
