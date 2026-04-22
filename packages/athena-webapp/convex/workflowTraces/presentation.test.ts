@@ -6,45 +6,45 @@ describe("buildWorkflowTraceViewModel", () => {
   it("sorts events by occurredAt and sequence and preserves trace health", () => {
     const view = buildWorkflowTraceViewModel({
       trace: {
-        traceId: "pos_sale:pos-123456",
-        workflowType: "pos_sale",
-        title: "POS sale POS-123456",
+        traceId: "repair_order:job-42",
+        workflowType: "repair_order",
+        title: "Repair order JOB-42",
         status: "succeeded",
         health: "partial",
-        primaryLookupType: "transaction_number",
-        primaryLookupValue: "POS-123456",
+        primaryLookupType: "reference_number",
+        primaryLookupValue: "JOB-42",
       },
       events: [
         {
-          traceId: "pos_sale:pos-123456",
-          workflowType: "pos_sale",
+          traceId: "repair_order:job-42",
+          workflowType: "repair_order",
           occurredAt: 200,
           sequence: 2,
           kind: "system_action",
-          step: "transaction_persisted",
+          step: "repair_order_persisted",
           status: "succeeded",
-          message: "Transaction persisted",
-          source: "workflow.posSale",
+          message: "Repair order persisted",
+          source: "workflow.shared",
         },
         {
-          traceId: "pos_sale:pos-123456",
-          workflowType: "pos_sale",
+          traceId: "repair_order:job-42",
+          workflowType: "repair_order",
           occurredAt: 200,
           sequence: 1,
           kind: "milestone",
-          step: "sale_completion_started",
+          step: "workflow_started",
           status: "started",
-          message: "Sale completion started",
-          source: "workflow.posSale",
+          message: "Workflow started",
+          source: "workflow.shared",
         },
       ],
     });
 
-    expect(view.header.traceId).toBe("pos_sale:pos-123456");
+    expect(view.header.traceId).toBe("repair_order:job-42");
     expect(view.header.health).toBe("partial");
     expect(view.events.map((event) => event.message)).toEqual([
-      "Sale completion started",
-      "Transaction persisted",
+      "Workflow started",
+      "Repair order persisted",
     ]);
   });
 });

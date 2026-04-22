@@ -65,12 +65,15 @@ export async function getWorkflowTraceByLookupWithCtx(
 export async function listWorkflowTraceEventsWithCtx(
   ctx: WorkflowTraceReaderCtx,
   input: {
+    storeId: Id<"store">;
     traceId: string;
   }
 ) {
   return ctx.db
     .query("workflowTraceEvent")
-    .withIndex("by_traceId_sequence", (q) => q.eq("traceId", input.traceId))
+    .withIndex("by_storeId_traceId_sequence", (q) =>
+      q.eq("storeId", input.storeId).eq("traceId", input.traceId)
+    )
     .collect();
 }
 
@@ -133,7 +136,9 @@ export async function appendWorkflowTraceEventWithCtx(
 ) {
   const latest = await ctx.db
     .query("workflowTraceEvent")
-    .withIndex("by_traceId_sequence", (q) => q.eq("traceId", input.traceId))
+    .withIndex("by_storeId_traceId_sequence", (q) =>
+      q.eq("storeId", input.storeId).eq("traceId", input.traceId)
+    )
     .order("desc")
     .first();
 
