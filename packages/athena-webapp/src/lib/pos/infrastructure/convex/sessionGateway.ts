@@ -4,6 +4,7 @@ import type { CartItem } from "@/components/pos/types";
 import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
 import type { POSSession } from "~/types";
+import { mapActiveSessionDto, mapHeldSessionsDto } from "./sessionGateway.mapper";
 
 export type PosSessionCustomer = {
   _id?: Id<"posCustomer">;
@@ -27,7 +28,7 @@ export function useConvexActiveSession(input: {
   cashierId?: Id<"cashier"> | null;
   registerNumber?: string;
 }): PosSessionDetail | null | undefined {
-  return useQuery(
+  const result = useQuery(
     api.inventory.posSessions.getActiveSession,
     input.storeId && input.terminalId && input.cashierId
       ? {
@@ -37,7 +38,15 @@ export function useConvexActiveSession(input: {
           registerNumber: input.registerNumber,
         }
       : "skip",
-  ) as PosSessionDetail | null | undefined;
+  );
+
+  if (result === undefined) {
+    return undefined;
+  }
+
+  return mapActiveSessionDto(result as unknown as PosSessionDetail | null) as
+    | PosSessionDetail
+    | null;
 }
 
 export function useConvexHeldSessions(input: {
@@ -46,7 +55,7 @@ export function useConvexHeldSessions(input: {
   cashierId?: Id<"cashier"> | null;
   limit?: number;
 }): PosSessionDetail[] | undefined {
-  return useQuery(
+  const result = useQuery(
     api.inventory.posSessions.getStoreSessions,
     input.storeId && input.terminalId && input.cashierId
       ? {
@@ -57,7 +66,13 @@ export function useConvexHeldSessions(input: {
           limit: input.limit ?? 10,
         }
       : "skip",
-  ) as PosSessionDetail[] | undefined;
+  );
+
+  if (result === undefined) {
+    return undefined;
+  }
+
+  return mapHeldSessionsDto(result as unknown as PosSessionDetail[]);
 }
 
 export function useConvexSessionActions() {
