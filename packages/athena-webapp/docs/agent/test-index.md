@@ -62,6 +62,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`convex/storeFront/returnExchangeOperations.test.ts`](../../convex/storeFront/returnExchangeOperations.test.ts)
 - [`convex/storeFront/storefrontObservabilityReport.test.ts`](../../convex/storeFront/storefrontObservabilityReport.test.ts)
 - [`convex/storeFront/timeQueryRefactors.test.ts`](../../convex/storeFront/timeQueryRefactors.test.ts)
+- [`convex/workflowTraces/adapters/posSale.test.ts`](../../convex/workflowTraces/adapters/posSale.test.ts)
 - [`convex/workflowTraces/presentation.test.ts`](../../convex/workflowTraces/presentation.test.ts)
 - [`convex/workflowTraces/queryUsage.test.ts`](../../convex/workflowTraces/queryUsage.test.ts)
 - [`convex/workflowTraces/schemaIndexes.test.ts`](../../convex/workflowTraces/schemaIndexes.test.ts)
