@@ -61,6 +61,8 @@ The entire data and API layer for both apps.
 - `operationalWorkItem`, `operationalEvent`, `inventoryMovement`
 - `paymentAllocation`, `registerSession`, `approvalRequest`, `customerProfile`
 
+Staff profiles are created with first name, last name, username, and role. Start date is optional. A pending credential is provisioned first, and PIN setup or reset is handled later from staff management.
+
 **Storefront**
 - `storeFrontUser`, `storeFrontSession`, `storeFrontVerificationCode`, `guest`
 - `bag`, `bagItem`, `savedBag`, `savedBagItem`

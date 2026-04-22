@@ -6,28 +6,23 @@ import {
   type QueryCtx,
 } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
+import {
+  operationalRoleValidator,
+  type OperationalRole,
+} from "./staffRoles";
 
-const operationalRoleValidator = v.union(
-  v.literal("manager"),
-  v.literal("front_desk"),
-  v.literal("stylist"),
-  v.literal("technician"),
-  v.literal("cashier")
-);
-
-const STAFF_CREDENTIAL_STATUS = v.union(
+export const STAFF_CREDENTIAL_STATUS = v.union(
+  v.literal("pending"),
   v.literal("active"),
   v.literal("suspended"),
   v.literal("revoked")
 );
 
-type StaffCredentialStatus = "active" | "suspended" | "revoked";
-type OperationalRole =
-  | "manager"
-  | "front_desk"
-  | "stylist"
-  | "technician"
-  | "cashier";
+export type StaffCredentialStatus =
+  | "pending"
+  | "active"
+  | "suspended"
+  | "revoked";
 type StaffCredentialReaderCtx =
   | Pick<QueryCtx, "db">
   | Pick<MutationCtx, "db">;
@@ -46,19 +41,31 @@ function requireNonEmptyUsername(username: string) {
   return normalizedUsername;
 }
 
-async function getCredentialByStaffProfileId(
+export async function getStaffCredentialByStaffProfileIdWithCtx(
   ctx: StaffCredentialReaderCtx,
   staffProfileId: Id<"staffProfile">
 ) {
-  const activeCredential = await ctx.db
-    .query("staffCredential")
-    .withIndex("by_staffProfileId_status", (q) =>
-      q.eq("staffProfileId", staffProfileId).eq("status", "active")
-    )
-    .first();
+  const [activeCredential, pendingCredential] = await Promise.all([
+    ctx.db
+      .query("staffCredential")
+      .withIndex("by_staffProfileId_status", (q) =>
+        q.eq("staffProfileId", staffProfileId).eq("status", "active")
+      )
+      .first(),
+    ctx.db
+      .query("staffCredential")
+      .withIndex("by_staffProfileId_status", (q) =>
+        q.eq("staffProfileId", staffProfileId).eq("status", "pending")
+      )
+      .first(),
+  ]);
 
   if (activeCredential) {
     return activeCredential;
+  }
+
+  if (pendingCredential) {
+    return pendingCredential;
   }
 
   return ctx.db
@@ -178,8 +185,20 @@ export async function listStaffCredentialsByStoreWithCtx(
   }
 ) {
   // Store staff rosters stay small enough for the admin credential screen to read them in full.
-  const [activeCredentials, suspendedCredentials, revokedCredentials] =
+  const [
+    pendingCredentials,
+    activeCredentials,
+    suspendedCredentials,
+    revokedCredentials,
+  ] =
     await Promise.all([
+      // eslint-disable-next-line @convex-dev/no-collect-in-query
+      ctx.db
+        .query("staffCredential")
+        .withIndex("by_storeId_status", (q) =>
+          q.eq("storeId", args.storeId).eq("status", "pending")
+        )
+        .collect(),
       // eslint-disable-next-line @convex-dev/no-collect-in-query
       ctx.db
         .query("staffCredential")
@@ -203,14 +222,19 @@ export async function listStaffCredentialsByStoreWithCtx(
         .collect(),
     ]);
 
-  return [...activeCredentials, ...suspendedCredentials, ...revokedCredentials];
+  return [
+    ...pendingCredentials,
+    ...activeCredentials,
+    ...suspendedCredentials,
+    ...revokedCredentials,
+  ];
 }
 
 export async function createStaffCredentialWithCtx(
   ctx: Pick<MutationCtx, "db">,
   args: {
     organizationId: Id<"organization">;
-    pinHash: string;
+    pinHash?: string;
     staffProfileId: Id<"staffProfile">;
     storeId: Id<"store">;
     username: string;
@@ -220,7 +244,8 @@ export async function createStaffCredentialWithCtx(
 
   await assertStaffProfileReadyForCredential(ctx, args);
 
-  const existingCredentialForStaffProfile = await getCredentialByStaffProfileId(
+  const existingCredentialForStaffProfile =
+    await getStaffCredentialByStaffProfileIdWithCtx(
     ctx,
     args.staffProfileId
   );
@@ -244,7 +269,7 @@ export async function createStaffCredentialWithCtx(
     storeId: args.storeId,
     username: normalizedUsername,
     pinHash: args.pinHash,
-    status: "active" as const,
+    status: args.pinHash ? ("active" as const) : ("pending" as const),
   });
 
   return ctx.db.get("staffCredential", credentialId);
@@ -265,7 +290,7 @@ export async function updateStaffCredentialWithCtx(
   const existingCredential = args.staffCredentialId
     ? await getCredentialById(ctx, args.staffCredentialId)
     : args.staffProfileId
-      ? await getCredentialByStaffProfileId(ctx, args.staffProfileId)
+      ? await getStaffCredentialByStaffProfileIdWithCtx(ctx, args.staffProfileId)
       : null;
 
   if (!existingCredential) {
@@ -311,8 +336,23 @@ export async function updateStaffCredentialWithCtx(
     updates.pinHash = args.pinHash;
   }
 
-  if (args.status !== undefined) {
-    updates.status = args.status;
+  const resolvedStatus =
+    args.status ??
+    (args.pinHash !== undefined && existingCredential.status === "pending"
+      ? "active"
+      : undefined);
+
+  if (resolvedStatus !== undefined) {
+    updates.status = resolvedStatus;
+  }
+
+  const nextStatus = (updates.status as StaffCredentialStatus | undefined) ??
+    existingCredential.status;
+  const nextPinHash =
+    (updates.pinHash as string | undefined) ?? existingCredential.pinHash;
+
+  if (nextStatus === "active" && !nextPinHash) {
+    throw new Error("Active staff credentials require a PIN.");
   }
 
   if (Object.keys(updates).length === 0) {
@@ -353,7 +393,7 @@ export async function authenticateStaffCredentialWithCtx(
     throw new Error("Multiple staff credentials match this username.");
   }
 
-  if (activeCredential.pinHash !== args.pinHash) {
+  if (!activeCredential.pinHash || activeCredential.pinHash !== args.pinHash) {
     throw new Error("Invalid staff credentials.");
   }
 
@@ -458,7 +498,7 @@ export const listStaffCredentialsByStore = query({
 export const createStaffCredential = mutation({
   args: {
     organizationId: v.id("organization"),
-    pinHash: v.string(),
+    pinHash: v.optional(v.string()),
     staffProfileId: v.id("staffProfile"),
     storeId: v.id("store"),
     username: v.string(),

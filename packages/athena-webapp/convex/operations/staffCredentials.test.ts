@@ -131,7 +131,7 @@ describe("staff credential operations", () => {
     });
   });
 
-  it("lists credentials for a single store", async () => {
+  it("lists credentials for a single store, including pending records", async () => {
     const { ctx } = createStaffCredentialsMutationCtx({
       credentials: [
         {
@@ -147,6 +147,14 @@ describe("staff credential operations", () => {
           _id: "credential-2",
           staffProfileId: "staff_profile_2" as Id<"staffProfile">,
           organizationId: "org_1" as Id<"organization">,
+          storeId: "store_1" as Id<"store">,
+          username: "pending-user",
+          status: "pending",
+        },
+        {
+          _id: "credential-3",
+          staffProfileId: "staff_profile_2" as Id<"staffProfile">,
+          organizationId: "org_1" as Id<"organization">,
           storeId: "store_2" as Id<"store">,
           username: "stockroom",
           pinHash: "hash-2",
@@ -159,14 +167,91 @@ describe("staff credential operations", () => {
       listStaffCredentialsByStoreWithCtx(ctx, {
         storeId: "store_1" as Id<"store">,
       })
-    ).resolves.toEqual([
-      expect.objectContaining({
-        _id: "credential-1",
-        staffProfileId: "staff_profile_1",
+    ).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          _id: "credential-1",
+          staffProfileId: "staff_profile_1",
+          username: "frontdesk",
+          status: "active",
+        }),
+        expect.objectContaining({
+          _id: "credential-2",
+          staffProfileId: "staff_profile_2",
+          username: "pending-user",
+          status: "pending",
+        }),
+      ])
+    );
+  });
+
+  it("keeps pending credentials from authenticating until PIN setup activates them", async () => {
+    const { ctx } = createStaffCredentialsMutationCtx({
+      credentials: [
+        {
+          _id: "credential-1",
+          staffProfileId: "staff_profile_1",
+          organizationId: "org_1",
+          storeId: "store_1",
+          username: "frontdesk",
+          status: "pending",
+        },
+      ],
+      profiles: [
+        {
+          _id: "staff_profile_1",
+          storeId: "store_1",
+          organizationId: "org_1",
+          status: "active",
+          fullName: "Ari Mensah",
+        },
+      ],
+      roles: [
+        {
+          _id: "role_1",
+          staffProfileId: "staff_profile_1",
+          organizationId: "org_1",
+          storeId: "store_1",
+          role: "cashier",
+          isPrimary: true,
+          status: "active",
+          assignedAt: 1,
+        },
+      ],
+    });
+
+    await expect(
+      authenticateStaffCredentialWithCtx(ctx, {
+        allowedRoles: ["cashier"],
+        storeId: "store_1" as Id<"store">,
         username: "frontdesk",
-        status: "active",
-      }),
-    ]);
+        pinHash: "hash-1",
+      })
+    ).rejects.toThrow("Invalid staff credentials.");
+
+    const activated = await updateStaffCredentialWithCtx(ctx, {
+      organizationId: "org_1" as Id<"organization">,
+      pinHash: "hash-1",
+      staffProfileId: "staff_profile_1" as Id<"staffProfile">,
+      storeId: "store_1" as Id<"store">,
+    });
+
+    expect(activated).toMatchObject({
+      pinHash: "hash-1",
+      status: "active",
+    });
+
+    await expect(
+      authenticateStaffCredentialWithCtx(ctx, {
+        allowedRoles: ["cashier"],
+        storeId: "store_1" as Id<"store">,
+        username: "frontdesk",
+        pinHash: "hash-1",
+      })
+    ).resolves.toMatchObject({
+      activeRoles: ["cashier"],
+      staffProfileId: "staff_profile_1",
+    });
   });
 
   it("creates an active credential for an active staff profile with active roles", async () => {

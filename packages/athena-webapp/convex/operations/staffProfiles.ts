@@ -7,24 +7,25 @@ import {
   type MutationCtx,
   type QueryCtx,
 } from "../_generated/server";
+import { normalizePhoneNumber } from "./helpers/linking";
+import {
+  createStaffCredentialWithCtx,
+  getStaffCredentialByStaffProfileIdWithCtx,
+  getStaffCredentialUsernameAvailabilityWithCtx,
+  listStaffCredentialsByStoreWithCtx,
+  updateStaffCredentialWithCtx,
+  type StaffCredentialStatus,
+} from "./staffCredentials";
 import {
   deriveDefaultOperationalRoles,
-  normalizePhoneNumber,
-  OperationalRole,
+  operationalRoleValidator,
+  type OperationalRole,
   uniqueOperationalRoles,
-} from "./helpers/linking";
+} from "./staffRoles";
 
 const MAX_STAFF_PROFILE_RESULTS = 100;
 const MAX_STAFF_ROLE_ASSIGNMENTS = 20;
 const MAX_STAFF_ROLE_RESULTS = MAX_STAFF_PROFILE_RESULTS * 5;
-
-const operationalRoleValidator = v.union(
-  v.literal("manager"),
-  v.literal("front_desk"),
-  v.literal("stylist"),
-  v.literal("technician"),
-  v.literal("cashier")
-);
 
 const staffProfileStatusValidator = v.union(
   v.literal("active"),
@@ -39,14 +40,18 @@ function normalizeOptionalString(value?: string) {
   return trimmed ? trimmed : undefined;
 }
 
-function requireFullName(fullName: string) {
-  const normalizedFullName = fullName.trim();
+function requireNameSegment(fieldName: "first name" | "last name", value?: string) {
+  const normalizedValue = normalizeOptionalString(value);
 
-  if (!normalizedFullName) {
-    throw new Error("Staff full name is required.");
+  if (!normalizedValue) {
+    throw new Error(`Staff ${fieldName} is required.`);
   }
 
-  return normalizedFullName;
+  return normalizedValue;
+}
+
+function buildStaffFullName(firstName: string, lastName: string) {
+  return `${firstName} ${lastName}`.trim();
 }
 
 async function ensureLinkedUserAvailable(
@@ -159,22 +164,17 @@ async function syncStaffRoleAssignmentsWithCtx(
 }
 
 function normalizeStaffProfilePatch(args: {
-  fullName?: string;
-  firstName?: string;
-  lastName?: string;
-  phoneNumber?: string;
   email?: string;
+  phoneNumber?: string;
   staffCode?: string;
   jobTitle?: string;
   notes?: string;
+  hiredAt?: number;
 }) {
   return {
     email: normalizeOptionalString(args.email),
-    firstName: normalizeOptionalString(args.firstName),
-    fullName:
-      args.fullName === undefined ? undefined : requireFullName(args.fullName),
+    hiredAt: args.hiredAt,
     jobTitle: normalizeOptionalString(args.jobTitle),
-    lastName: normalizeOptionalString(args.lastName),
     notes: normalizeOptionalString(args.notes),
     phoneNumber: normalizePhoneNumber(args.phoneNumber),
     staffCode: normalizeOptionalString(args.staffCode),
@@ -183,11 +183,19 @@ function normalizeStaffProfilePatch(args: {
 
 function buildStaffProfileResult(
   staffProfile: Doc<"staffProfile">,
-  roles: OperationalRole[]
+  args: {
+    credentialStatus: StaffCredentialStatus | null;
+    primaryRole: OperationalRole | null;
+    roles: OperationalRole[];
+    username: string | null;
+  }
 ) {
   return {
     ...staffProfile,
-    roles,
+    credentialStatus: args.credentialStatus,
+    primaryRole: args.primaryRole,
+    roles: args.roles,
+    username: args.username,
   };
 }
 
@@ -203,19 +211,31 @@ export async function getStaffProfileByIdWithCtx(
     return null;
   }
 
-  const roleAssignments = await ctx.db
-    .query("staffRoleAssignment")
-    .withIndex("by_staffProfileId", (q) =>
-      q.eq("staffProfileId", args.staffProfileId)
-    )
-    .take(MAX_STAFF_ROLE_ASSIGNMENTS);
+  const [roleAssignments, credential] = await Promise.all([
+    ctx.db
+      .query("staffRoleAssignment")
+      .withIndex("by_staffProfileId", (q) =>
+        q.eq("staffProfileId", args.staffProfileId)
+      )
+      .take(MAX_STAFF_ROLE_ASSIGNMENTS),
+    getStaffCredentialByStaffProfileIdWithCtx(ctx, args.staffProfileId),
+  ]);
 
-  return buildStaffProfileResult(
-    staffProfile,
-    roleAssignments
-      .filter((assignment) => assignment.status === "active")
-      .map((assignment) => assignment.role)
+  const activeRoleAssignments = roleAssignments.filter(
+    (assignment) => assignment.status === "active"
   );
+  const roles = activeRoleAssignments.map((assignment) => assignment.role);
+  const primaryRole =
+    activeRoleAssignments.find((assignment) => assignment.isPrimary)?.role ??
+    roles[0] ??
+    null;
+
+  return buildStaffProfileResult(staffProfile, {
+    credentialStatus: credential?.status ?? null,
+    primaryRole,
+    roles,
+    username: credential?.username ?? null,
+  });
 }
 
 export async function listStaffProfilesWithCtx(
@@ -225,35 +245,46 @@ export async function listStaffProfilesWithCtx(
     storeId: Id<"store">;
   }
 ) {
-  const staffProfiles = args.status
-    ? await ctx.db
-        .query("staffProfile")
-        .withIndex("by_storeId_status", (q) =>
-          q.eq("storeId", args.storeId).eq("status", args.status!)
-        )
-        .take(MAX_STAFF_PROFILE_RESULTS)
-    : await ctx.db
-        .query("staffProfile")
-        .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
-        .take(MAX_STAFF_PROFILE_RESULTS);
+  const [staffProfiles, roleAssignments, credentials] = await Promise.all([
+    args.status
+      ? ctx.db
+          .query("staffProfile")
+          .withIndex("by_storeId_status", (q) =>
+            q.eq("storeId", args.storeId).eq("status", args.status!)
+          )
+          .take(MAX_STAFF_PROFILE_RESULTS)
+      : ctx.db
+          .query("staffProfile")
+          .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
+          .take(MAX_STAFF_PROFILE_RESULTS),
+    ctx.db
+      .query("staffRoleAssignment")
+      .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
+      .take(MAX_STAFF_ROLE_RESULTS),
+    listStaffCredentialsByStoreWithCtx(ctx, { storeId: args.storeId }),
+  ]);
 
-  const roleAssignments = await ctx.db
-    .query("staffRoleAssignment")
-    .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
-    .take(MAX_STAFF_ROLE_RESULTS);
+  return staffProfiles.map((staffProfile) => {
+    const activeRoleAssignments = roleAssignments.filter(
+      (assignment) =>
+        assignment.staffProfileId === staffProfile._id &&
+        assignment.status === "active"
+    );
+    const roles = activeRoleAssignments.map((assignment) => assignment.role);
+    const credential =
+      credentials.find((candidate) => candidate.staffProfileId === staffProfile._id) ??
+      null;
 
-  return staffProfiles.map((staffProfile) =>
-    buildStaffProfileResult(
-      staffProfile,
-      roleAssignments
-        .filter(
-          (assignment) =>
-            assignment.staffProfileId === staffProfile._id &&
-            assignment.status === "active"
-        )
-        .map((assignment) => assignment.role)
-    )
-  );
+    return buildStaffProfileResult(staffProfile, {
+      credentialStatus: credential?.status ?? null,
+      primaryRole:
+        activeRoleAssignments.find((assignment) => assignment.isPrimary)?.role ??
+        roles[0] ??
+        null,
+      roles,
+      username: credential?.username ?? null,
+    });
+  });
 }
 
 export async function createStaffProfileWithCtx(
@@ -261,10 +292,10 @@ export async function createStaffProfileWithCtx(
   args: {
     createdByUserId?: Id<"athenaUser">;
     email?: string;
-    firstName?: string;
-    fullName: string;
+    firstName: string;
+    hiredAt?: number;
     jobTitle?: string;
-    lastName?: string;
+    lastName: string;
     linkedUserId?: Id<"athenaUser">;
     memberRole?: "full_admin" | "pos_only";
     notes?: string;
@@ -273,6 +304,7 @@ export async function createStaffProfileWithCtx(
     requestedRoles: OperationalRole[];
     staffCode?: string;
     storeId: Id<"store">;
+    username: string;
   }
 ) {
   await ensureLinkedUserAvailable(ctx, {
@@ -281,9 +313,25 @@ export async function createStaffProfileWithCtx(
   });
   assertRoleConfiguration(args);
 
+  const usernameAvailability = await getStaffCredentialUsernameAvailabilityWithCtx(
+    ctx as Pick<QueryCtx, "db">,
+    {
+      storeId: args.storeId,
+      username: args.username,
+    }
+  );
+
+  if (!usernameAvailability.available) {
+    throw new Error("Username is already in use for this store.");
+  }
+
+  const firstName = requireNameSegment("first name", args.firstName);
+  const lastName = requireNameSegment("last name", args.lastName);
   const profilePatch = {
     ...normalizeStaffProfilePatch(args),
-    fullName: requireFullName(args.fullName),
+    firstName,
+    fullName: buildStaffFullName(firstName, lastName),
+    lastName,
   };
   const staffProfileId = await ctx.db.insert("staffProfile", {
     ...profilePatch,
@@ -304,6 +352,13 @@ export async function createStaffProfileWithCtx(
     storeId: args.storeId,
   });
 
+  await createStaffCredentialWithCtx(ctx, {
+    organizationId: args.organizationId,
+    staffProfileId,
+    storeId: args.storeId,
+    username: args.username,
+  });
+
   return getStaffProfileByIdWithCtx(ctx, { staffProfileId });
 }
 
@@ -312,7 +367,7 @@ export async function updateStaffProfileWithCtx(
   args: {
     email?: string;
     firstName?: string;
-    fullName?: string;
+    hiredAt?: number;
     jobTitle?: string;
     lastName?: string;
     linkedUserId?: Id<"athenaUser">;
@@ -326,6 +381,7 @@ export async function updateStaffProfileWithCtx(
     status?: StaffProfileStatus;
     storeId: Id<"store">;
     updatedByUserId?: Id<"athenaUser">;
+    username?: string;
   }
 ) {
   const existingProfile = await ctx.db.get("staffProfile", args.staffProfileId);
@@ -356,9 +412,20 @@ export async function updateStaffProfileWithCtx(
     });
   }
 
-  const profilePatch = normalizeStaffProfilePatch(args);
+  const firstName = requireNameSegment(
+    "first name",
+    args.firstName ?? existingProfile.firstName
+  );
+  const lastName = requireNameSegment(
+    "last name",
+    args.lastName ?? existingProfile.lastName
+  );
+
   const updates = {
-    ...profilePatch,
+    ...normalizeStaffProfilePatch(args),
+    firstName,
+    fullName: buildStaffFullName(firstName, lastName),
+    lastName,
     linkedUserId:
       args.linkedUserId === undefined ? existingProfile.linkedUserId : args.linkedUserId,
     memberRole: args.memberRole ?? existingProfile.memberRole,
@@ -369,7 +436,7 @@ export async function updateStaffProfileWithCtx(
   const hasProfileUpdates =
     args.email !== undefined ||
     args.firstName !== undefined ||
-    args.fullName !== undefined ||
+    args.hiredAt !== undefined ||
     args.jobTitle !== undefined ||
     args.lastName !== undefined ||
     args.linkedUserId !== undefined ||
@@ -379,8 +446,9 @@ export async function updateStaffProfileWithCtx(
     args.staffCode !== undefined ||
     args.status !== undefined ||
     args.updatedByUserId !== undefined;
+  const hasCredentialUpdates = args.username !== undefined;
 
-  if (!hasProfileUpdates && !args.requestedRoles) {
+  if (!hasProfileUpdates && !args.requestedRoles && !hasCredentialUpdates) {
     throw new Error("No staff profile changes were provided.");
   }
 
@@ -394,6 +462,29 @@ export async function updateStaffProfileWithCtx(
       staffProfileId: args.staffProfileId,
       storeId: args.storeId,
     });
+  }
+
+  if (args.username !== undefined) {
+    const existingCredential = await getStaffCredentialByStaffProfileIdWithCtx(
+      ctx,
+      args.staffProfileId
+    );
+
+    if (existingCredential) {
+      await updateStaffCredentialWithCtx(ctx, {
+        organizationId: args.organizationId,
+        staffProfileId: args.staffProfileId,
+        storeId: args.storeId,
+        username: args.username,
+      });
+    } else {
+      await createStaffCredentialWithCtx(ctx, {
+        organizationId: args.organizationId,
+        staffProfileId: args.staffProfileId,
+        storeId: args.storeId,
+        username: args.username,
+      });
+    }
   }
 
   return getStaffProfileByIdWithCtx(ctx, {
@@ -434,10 +525,10 @@ export const createStaffProfile = mutation({
   args: {
     createdByUserId: v.optional(v.id("athenaUser")),
     email: v.optional(v.string()),
-    firstName: v.optional(v.string()),
-    fullName: v.string(),
+    firstName: v.string(),
+    hiredAt: v.optional(v.number()),
     jobTitle: v.optional(v.string()),
-    lastName: v.optional(v.string()),
+    lastName: v.string(),
     linkedUserId: v.optional(v.id("athenaUser")),
     memberRole: v.optional(v.union(v.literal("full_admin"), v.literal("pos_only"))),
     notes: v.optional(v.string()),
@@ -446,6 +537,7 @@ export const createStaffProfile = mutation({
     requestedRoles: v.array(operationalRoleValidator),
     staffCode: v.optional(v.string()),
     storeId: v.id("store"),
+    username: v.string(),
   },
   handler: (ctx, args) => createStaffProfileWithCtx(ctx, args),
 });
@@ -454,7 +546,7 @@ export const updateStaffProfile = mutation({
   args: {
     email: v.optional(v.string()),
     firstName: v.optional(v.string()),
-    fullName: v.optional(v.string()),
+    hiredAt: v.optional(v.number()),
     jobTitle: v.optional(v.string()),
     lastName: v.optional(v.string()),
     linkedUserId: v.optional(v.id("athenaUser")),
@@ -468,6 +560,7 @@ export const updateStaffProfile = mutation({
     status: v.optional(staffProfileStatusValidator),
     storeId: v.id("store"),
     updatedByUserId: v.optional(v.id("athenaUser")),
+    username: v.optional(v.string()),
   },
   handler: (ctx, args) => updateStaffProfileWithCtx(ctx, args),
 });

@@ -1,23 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
+import { Plus, UserMinus } from "lucide-react";
+import { toast } from "sonner";
 import { api } from "~/convex/_generated/api";
 import { Id } from "~/convex/_generated/dataModel";
-import { Button } from "../ui/button";
-import { Label } from "../ui/label";
-import { LoadingButton } from "../ui/loading-button";
-import { toast } from "sonner";
-import { Plus, UserMinus } from "lucide-react";
 import { hashPin } from "~/src/lib/security/pinHash";
 import { PinInput } from "../pos/PinInput";
-import { Input } from "../ui/input";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "../ui/table";
+import { Badge } from "../ui/badge";
+import { Button } from "../ui/button";
 import {
   Dialog,
   DialogContent,
@@ -26,47 +16,62 @@ import {
   DialogHeader,
   DialogTitle,
 } from "../ui/dialog";
+import { Input } from "../ui/input";
+import { Label } from "../ui/label";
+import { LoadingButton } from "../ui/loading-button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "../ui/table";
 
 interface CashierManagementProps {
   storeId: Id<"store">;
   organizationId: Id<"organization">;
 }
 
-interface CashierFormProps {
-  storeId: Id<"store">;
-  organizationId: Id<"organization">;
-  onSuccess: () => void;
-  onCancel: () => void;
-}
+type OperationalRole =
+  | "manager"
+  | "front_desk"
+  | "stylist"
+  | "technician"
+  | "cashier";
 
 type StaffProfileRow = {
   _id: Id<"staffProfile">;
-  firstName?: string | null;
+  credentialStatus: "pending" | "active" | "suspended" | "revoked" | null;
+  firstName: string;
   fullName: string;
-  lastName?: string | null;
-  roles?: Array<
-    "manager" | "front_desk" | "stylist" | "technician" | "cashier"
-  >;
+  hiredAt?: number | null;
+  lastName: string;
+  primaryRole?: OperationalRole | null;
+  roles?: OperationalRole[];
   status: "active" | "inactive";
+  username?: string | null;
 };
 
-type StaffCredentialRow = {
-  _id: Id<"staffCredential">;
-  staffProfileId: Id<"staffProfile">;
-  status: "active" | "suspended" | "revoked";
-  username: string;
+type PinSetupDialogState = {
+  mode: "set" | "reset";
+  staff: StaffProfileRow;
 };
 
-type StaffRosterRow = {
-  credentialId: Id<"staffCredential">;
-  credentialStatus: StaffCredentialRow["status"];
-  displayName: string;
-  fullName: string;
-  profileId: Id<"staffProfile">;
-  profileStatus: StaffProfileRow["status"];
-  roles: Array<"manager" | "front_desk" | "stylist" | "technician" | "cashier">;
-  username: string;
-};
+const ROLE_OPTIONS: Array<{ label: string; value: OperationalRole }> = [
+  { label: "Manager", value: "manager" },
+  { label: "Front Desk", value: "front_desk" },
+  { label: "Stylist", value: "stylist" },
+  { label: "Technician", value: "technician" },
+  { label: "Cashier", value: "cashier" },
+];
 
 const normalizeNameSegment = (value: string) =>
   value
@@ -103,110 +108,195 @@ const buildUsername = (first: string, last: string, suffix?: number) => {
   return username + suffixStr;
 };
 
-const buildFullName = (first: string, last: string) =>
-  [first.trim(), last.trim()].filter(Boolean).join(" ");
-
-const getDisplayName = (profile: {
-  firstName?: string | null;
-  fullName: string;
-  lastName?: string | null;
-}) => {
-  const fullName = profile.fullName.trim();
-  if (fullName) {
-    return fullName;
+const formatRoleLabel = (role?: OperationalRole | null) => {
+  if (!role) {
+    return "Unassigned";
   }
 
-  const parts = [profile.firstName?.trim(), profile.lastName?.trim()].filter(
-    (part): part is string => Boolean(part),
-  );
-
-  return parts.join(" ").trim();
+  return role
+    .split("_")
+    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+    .join(" ");
 };
 
-const formatStatusLabel = (row: StaffRosterRow) => {
-  if (row.profileStatus !== "active") {
+const formatStartDate = (timestamp?: number | null) => {
+  if (!timestamp) {
+    return "—";
+  }
+
+  return new Intl.DateTimeFormat(undefined, {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(new Date(timestamp));
+};
+
+const formatCredentialStatusLabel = (staff: StaffProfileRow) => {
+  if (staff.status !== "active") {
     return "Inactive";
   }
 
-  if (row.credentialStatus === "active") {
-    return "Active";
+  switch (staff.credentialStatus) {
+    case "pending":
+      return "Pending PIN";
+    case "active":
+      return "Active";
+    case "suspended":
+      return "Suspended";
+    case "revoked":
+      return "Revoked";
+    default:
+      return "Missing credential";
   }
-
-  return (
-    row.credentialStatus.charAt(0).toUpperCase() + row.credentialStatus.slice(1)
-  );
 };
 
-const CashierForm = ({
-  storeId,
+const CredentialStatusBadge = ({ staff }: { staff: StaffProfileRow }) => {
+  if (staff.status !== "active") {
+    return <Badge variant="outline">Inactive</Badge>;
+  }
+
+  switch (staff.credentialStatus) {
+    case "pending":
+      return (
+        <Badge
+          variant="outline"
+          className="border-amber-200 bg-amber-50 text-amber-700"
+        >
+          Pending PIN
+        </Badge>
+      );
+    case "active":
+      return (
+        <Badge
+          variant="outline"
+          className="border-emerald-200 bg-emerald-50 text-emerald-700"
+        >
+          Active
+        </Badge>
+      );
+    case "suspended":
+      return <Badge variant="outline">Suspended</Badge>;
+    case "revoked":
+      return <Badge variant="destructive">Revoked</Badge>;
+    default:
+      return <Badge variant="outline">Missing credential</Badge>;
+  }
+};
+
+function StaffProvisionForm({
   organizationId,
-  onSuccess,
   onCancel,
-}: CashierFormProps) => {
+  onSuccess,
+  storeId,
+}: {
+  organizationId: Id<"organization">;
+  onCancel: () => void;
+  onSuccess: () => void;
+  storeId: Id<"store">;
+}) {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [username, setUsername] = useState("");
   const [usernameSuffix, setUsernameSuffix] = useState(1);
   const [isCheckingUsername, setIsCheckingUsername] = useState(false);
-  const [pin, setPin] = useState("");
-  const [confirmPin, setConfirmPin] = useState("");
+  const [selectedRole, setSelectedRole] = useState<OperationalRole | "">("");
+  const [startDate, setStartDate] = useState("");
+  const [jobTitle, setJobTitle] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [email, setEmail] = useState("");
+  const [staffCode, setStaffCode] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
   const createStaffProfile = useMutation(
-    api.operations.staffProfiles.createStaffProfile,
-  );
-  const createStaffCredential = useMutation(
-    api.operations.staffCredentials.createStaffCredential,
-  );
-  const updateStaffProfile = useMutation(
-    api.operations.staffProfiles.updateStaffProfile,
+    api.operations.staffProfiles.createStaffProfile
   );
 
   const candidateUsername = useMemo(() => {
-    if (!isCheckingUsername) return "";
+    if (!isCheckingUsername) {
+      return "";
+    }
+
     return buildUsername(firstName, lastName, usernameSuffix);
   }, [firstName, lastName, usernameSuffix, isCheckingUsername]);
 
   const usernameAvailability = useQuery(
     api.operations.staffCredentials.getStaffCredentialUsernameAvailability,
-    candidateUsername ? { storeId, username: candidateUsername } : "skip",
+    candidateUsername ? { storeId, username: candidateUsername } : "skip"
   );
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  useEffect(() => {
+    const normalizedFirst = normalizeNameSegment(firstName);
+    const normalizedLast = normalizeNameSegment(lastName);
 
-    if (!firstName.trim() || !lastName.trim()) {
-      toast.error("First name and last name are required");
+    if (!normalizedFirst || !normalizedLast) {
+      setUsername("");
+      setUsernameSuffix(1);
+      setIsCheckingUsername(false);
       return;
     }
 
-    if (!username.trim()) {
-      toast.error("Username is required");
+    setUsername("");
+    setUsernameSuffix(1);
+    setIsCheckingUsername(true);
+  }, [firstName, lastName]);
+
+  useEffect(() => {
+    if (!isCheckingUsername) {
       return;
     }
 
-    if (!/^\d{6}$/.test(pin)) {
-      toast.error("PIN must be exactly 6 digits");
+    if (!candidateUsername) {
+      setUsername("");
+      setIsCheckingUsername(false);
       return;
     }
 
-    if (pin !== confirmPin) {
-      toast.error("PINs do not match");
+    if (usernameAvailability === undefined) {
+      return;
+    }
+
+    if (usernameAvailability.available) {
+      setUsername(candidateUsername);
+      setIsCheckingUsername(false);
+      return;
+    }
+
+    setUsernameSuffix((previous) => previous + 1);
+  }, [candidateUsername, isCheckingUsername, usernameAvailability]);
+
+  const isValid =
+    firstName.trim() &&
+    lastName.trim() &&
+    username.trim() &&
+    selectedRole &&
+    !isCheckingUsername;
+
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+
+    if (!isValid) {
+      toast.error("Complete the required staff details before saving.");
       return;
     }
 
     setIsSaving(true);
     try {
-      const hashedPin = await hashPin(pin);
-      const fullName = buildFullName(firstName, lastName);
+      const hiredAt = startDate
+        ? new Date(`${startDate}T00:00:00`).getTime()
+        : undefined;
 
       const profile = await createStaffProfile({
+        email: email.trim() || undefined,
         firstName: firstName.trim(),
-        fullName,
+        hiredAt,
+        jobTitle: jobTitle.trim() || undefined,
         lastName: lastName.trim(),
         organizationId,
-        requestedRoles: ["cashier"],
+        phoneNumber: phoneNumber.trim() || undefined,
+        requestedRoles: [selectedRole as OperationalRole],
+        staffCode: staffCode.trim() || undefined,
         storeId,
+        username,
       });
 
       if (!profile?._id) {
@@ -214,29 +304,8 @@ const CashierForm = ({
         return;
       }
 
-      const credential = await createStaffCredential({
-        organizationId,
-        pinHash: hashedPin,
-        staffProfileId: profile._id,
-        storeId,
-        username,
-      }).catch(async (credentialError) => {
-        await updateStaffProfile({
-          organizationId,
-          staffProfileId: profile._id,
-          status: "inactive",
-          storeId,
-        });
-        throw credentialError;
-      });
-
-      if (credential?._id) {
-        toast.success("Staff member added");
-        onSuccess();
-        return;
-      }
-
-      toast.error("Failed to add staff member");
+      toast.success("Staff member added. PIN setup is still pending.");
+      onSuccess();
     } catch (error) {
       toast.error((error as Error).message || "Failed to add staff member");
       console.error(error);
@@ -245,13 +314,172 @@ const CashierForm = ({
     }
   };
 
-  const isValid =
-    firstName.trim() &&
-    lastName.trim() &&
-    username.trim() &&
-    !isCheckingUsername &&
-    /^\d{6}$/.test(pin) &&
-    pin === confirmPin;
+  return (
+    <form onSubmit={handleSubmit} className="space-y-8">
+      <div className="space-y-2">
+        <p className="text-lg font-medium">Add staff member</p>
+        <p className="text-sm text-muted-foreground">
+          Save the staff record and username now. PIN setup can happen later when
+          the staff member is present.
+        </p>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor="staff-first-name">First name</Label>
+          <Input
+            id="staff-first-name"
+            placeholder="Ama"
+            value={firstName}
+            onChange={(event) => setFirstName(event.target.value)}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="staff-last-name">Last name</Label>
+          <Input
+            id="staff-last-name"
+            placeholder="Mensah"
+            value={lastName}
+            onChange={(event) => setLastName(event.target.value)}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="staff-username">Username</Label>
+          <Input
+            id="staff-username"
+            placeholder="amens"
+            value={isCheckingUsername ? "Checking..." : username}
+            readOnly
+            className="cursor-not-allowed bg-muted"
+            disabled={isCheckingUsername}
+          />
+          <p className="text-xs text-muted-foreground">
+            Athena generates the next available username from the staff name.
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="staff-role">Role</Label>
+          <Select
+            value={selectedRole}
+            onValueChange={(value) => setSelectedRole(value as OperationalRole)}
+          >
+            <SelectTrigger id="staff-role">
+              <SelectValue placeholder="Select role" />
+            </SelectTrigger>
+            <SelectContent>
+              {ROLE_OPTIONS.map((role) => (
+                <SelectItem key={role.value} value={role.value}>
+                  {role.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor="staff-start-date">Start date</Label>
+          <Input
+            id="staff-start-date"
+            type="date"
+            value={startDate}
+            onChange={(event) => setStartDate(event.target.value)}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="staff-job-title">Job title</Label>
+          <Input
+            id="staff-job-title"
+            placeholder="Lead stylist"
+            value={jobTitle}
+            onChange={(event) => setJobTitle(event.target.value)}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="staff-phone">Phone number</Label>
+          <Input
+            id="staff-phone"
+            placeholder="+233200000000"
+            value={phoneNumber}
+            onChange={(event) => setPhoneNumber(event.target.value)}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="staff-email">Email</Label>
+          <Input
+            id="staff-email"
+            placeholder="ama@example.com"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+          />
+        </div>
+
+        <div className="space-y-2 md:col-span-2">
+          <Label htmlFor="staff-code">Staff code</Label>
+          <Input
+            id="staff-code"
+            placeholder="ST-017"
+            value={staffCode}
+            onChange={(event) => setStaffCode(event.target.value)}
+          />
+        </div>
+      </div>
+
+      <div className="flex items-center gap-4">
+        <LoadingButton
+          type="submit"
+          variant="outline"
+          className="min-w-[96px]"
+          isLoading={isSaving}
+          disabled={!isValid}
+        >
+          Save
+        </LoadingButton>
+
+        <Button variant="ghost" type="button" onClick={onCancel}>
+          Cancel
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+function CredentialPinDialog({
+  onClose,
+  organizationId,
+  state,
+  storeId,
+}: {
+  onClose: () => void;
+  organizationId: Id<"organization">;
+  state: PinSetupDialogState | null;
+  storeId: Id<"store">;
+}) {
+  const [pin, setPin] = useState("");
+  const [confirmPin, setConfirmPin] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+
+  const updateStaffCredential = useMutation(
+    api.operations.staffCredentials.updateStaffCredential
+  );
+
+  useEffect(() => {
+    if (!state) {
+      setPin("");
+      setConfirmPin("");
+    }
+  }, [state]);
+
+  const showMismatch = Boolean(
+    pin.length > 0 && pin.length === confirmPin.length && pin !== confirmPin
+  );
 
   const handlePinKeyDown = (event: React.KeyboardEvent) => {
     const allowedKeys = [
@@ -271,311 +499,315 @@ const CashierForm = ({
     }
   };
 
-  useEffect(() => {
-    const normalizedFirst = normalizeNameSegment(firstName);
-    const normalizedLast = normalizeNameSegment(lastName);
-
-    if (!normalizedFirst || !normalizedLast) {
-      setUsername("");
-      setUsernameSuffix(1);
-      setIsCheckingUsername(false);
+  const handleSubmit = async () => {
+    if (!state) {
       return;
     }
 
-    setUsernameSuffix(1);
-    setIsCheckingUsername(true);
-  }, [firstName, lastName]);
-
-  useEffect(() => {
-    if (!isCheckingUsername) return;
-    if (!candidateUsername) {
-      setUsername("");
-      setIsCheckingUsername(false);
+    if (!/^\d{6}$/.test(pin)) {
+      toast.error("PIN must be exactly 6 digits");
       return;
     }
-    if (usernameAvailability === undefined) return;
 
-    if (usernameAvailability.available) {
-      setUsername(candidateUsername);
-      setIsCheckingUsername(false);
-    } else {
-      setUsernameSuffix((prev) => prev + 1);
+    if (pin !== confirmPin) {
+      toast.error("PINs do not match");
+      return;
     }
-  }, [candidateUsername, isCheckingUsername, usernameAvailability]);
 
-  const showMismatch = Boolean(
-    pin.length > 0 && pin.length == confirmPin.length && pin !== confirmPin,
-  );
+    setIsSaving(true);
+    try {
+      const pinHash = await hashPin(pin);
+
+      await updateStaffCredential({
+        organizationId,
+        pinHash,
+        staffProfileId: state.staff._id,
+        status: "active",
+        storeId,
+      });
+
+      toast.success(
+        state.mode === "set"
+          ? "PIN saved and credential activated"
+          : "PIN reset successfully"
+      );
+      onClose();
+    } catch (error) {
+      toast.error((error as Error).message || "Failed to save PIN");
+      console.error(error);
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-8">
-      <p className="text-md font-medium">Add staff member</p>
-      <div className="grid grid-cols-2 gap-8 w-[600px]">
-        <div className="space-y-2">
-          <Input
-            id="firstName"
-            placeholder="First name"
-            value={firstName}
-            onChange={(e) => setFirstName(e.target.value)}
-          />
+    <Dialog open={Boolean(state)} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>
+            {state?.mode === "set" ? "Set staff PIN" : "Reset staff PIN"}
+          </DialogTitle>
+          <DialogDescription>
+            {state
+              ? `${state.staff.fullName} will use ${state.staff.username} to sign in.`
+              : "Configure the staff PIN."}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-6">
+          <div className="space-y-2">
+            <Label htmlFor="staff-pin">PIN</Label>
+            <PinInput
+              value={pin}
+              onChange={(value) => setPin(value.replace(/\D/g, "").slice(0, 6))}
+              disabled={isSaving}
+              onKeyDown={handlePinKeyDown}
+              maxLength={6}
+              size="sm"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="staff-confirm-pin">Confirm PIN</Label>
+            <PinInput
+              value={confirmPin}
+              onChange={(value) =>
+                setConfirmPin(value.replace(/\D/g, "").slice(0, 6))
+              }
+              disabled={isSaving}
+              onKeyDown={handlePinKeyDown}
+              maxLength={6}
+              size="sm"
+            />
+          </div>
+
+          {showMismatch && (
+            <p className="text-sm font-medium text-destructive">
+              PINs don&apos;t match
+            </p>
+          )}
         </div>
 
-        <div className="space-y-2">
-          <Input
-            id="lastName"
-            placeholder="Last name"
-            value={lastName}
-            onChange={(e) => setLastName(e.target.value)}
-          />
-        </div>
-
-        <div className="space-y-2 relative">
-          <Input
-            id="username"
-            placeholder="Username"
-            value={isCheckingUsername ? "Checking..." : username}
-            readOnly
-            autoComplete="off"
-            className="cursor-not-allowed bg-muted"
-            disabled={isCheckingUsername}
-          />
-        </div>
-      </div>
-
-      <div className="grid grid-rows-2 gap-4">
-        <div className="space-y-2">
-          <Label htmlFor="pin">PIN</Label>
-          <PinInput
-            value={pin}
-            onChange={(value) => setPin(value.replace(/\D/g, "").slice(0, 6))}
-            disabled={isSaving}
-            onKeyDown={handlePinKeyDown}
-            maxLength={6}
-            size="sm"
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="confirmPin">Confirm PIN</Label>
-          <PinInput
-            value={confirmPin}
-            onChange={(value) =>
-              setConfirmPin(value.replace(/\D/g, "").slice(0, 6))
-            }
-            disabled={isSaving}
-            onKeyDown={handlePinKeyDown}
-            maxLength={6}
-            size="sm"
-          />
-        </div>
-        {showMismatch && (
-          <p className="text-sm text-destructive font-medium">
-            Pins don't match
-          </p>
-        )}
-      </div>
-
-      <div className="flex items-center gap-4">
-        <LoadingButton
-          type="submit"
-          variant="outline"
-          className="w-[80px]"
-          isLoading={isSaving}
-          disabled={!isValid}
-        >
-          Add
-        </LoadingButton>
-
-        <Button variant="ghost" type="button" onClick={onCancel}>
-          Cancel
-        </Button>
-      </div>
-    </form>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={isSaving}>
+            Cancel
+          </Button>
+          <LoadingButton
+            variant="ghost"
+            onClick={handleSubmit}
+            isLoading={isSaving}
+            disabled={pin.length !== 6 || confirmPin.length !== 6 || pin !== confirmPin}
+          >
+            {state?.mode === "set" ? "Save PIN" : "Reset PIN"}
+          </LoadingButton>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
-};
+}
 
 export const CashierManagement = ({
   storeId,
   organizationId,
 }: CashierManagementProps) => {
   const [showForm, setShowForm] = useState(false);
-  const [staffToDeactivate, setStaffToDeactivate] =
-    useState<StaffRosterRow | null>(null);
+  const [pinSetupState, setPinSetupState] = useState<PinSetupDialogState | null>(
+    null
+  );
+  const [staffToDeactivate, setStaffToDeactivate] = useState<StaffProfileRow | null>(
+    null
+  );
   const [isDeactivating, setIsDeactivating] = useState(false);
 
-  const staffProfiles = useQuery(
-    api.operations.staffProfiles.listStaffProfiles,
-    {
-      storeId,
-    },
-  ) as StaffProfileRow[] | undefined;
-  const staffCredentials = useQuery(
-    api.operations.staffCredentials.listStaffCredentialsByStore,
-    { storeId },
-  ) as StaffCredentialRow[] | undefined;
+  const staffProfiles = useQuery(api.operations.staffProfiles.listStaffProfiles, {
+    storeId,
+  }) as StaffProfileRow[] | undefined;
 
   const updateStaffProfile = useMutation(
-    api.operations.staffProfiles.updateStaffProfile,
+    api.operations.staffProfiles.updateStaffProfile
   );
   const updateStaffCredential = useMutation(
-    api.operations.staffCredentials.updateStaffCredential,
+    api.operations.staffCredentials.updateStaffCredential
   );
 
-  const roster = useMemo(() => {
-    const credentialByProfileId = new Map(
-      (staffCredentials ?? []).map((credential) => [
-        credential.staffProfileId,
-        credential,
-      ]),
-    );
-
-    return (staffProfiles ?? [])
-      .map((profile) => {
-        const credential = credentialByProfileId.get(profile._id);
-        if (!credential) {
-          return null;
-        }
-
-        return {
-          credentialId: credential._id,
-          credentialStatus: credential.status,
-          displayName: getDisplayName(profile),
-          fullName: profile.fullName,
-          profileId: profile._id,
-          profileStatus: profile.status,
-          roles: profile.roles ?? [],
-          username: credential.username,
-        } satisfies StaffRosterRow;
-      })
-      .filter((row): row is StaffRosterRow => row !== null)
-      .sort((left, right) => left.displayName.localeCompare(right.displayName));
-  }, [staffCredentials, staffProfiles]);
+  const roster = useMemo(
+    () =>
+      [...(staffProfiles ?? [])].sort((left, right) =>
+        left.fullName.localeCompare(right.fullName)
+      ),
+    [staffProfiles]
+  );
 
   const handleDeactivate = async () => {
-    if (!staffToDeactivate) return;
+    if (!staffToDeactivate) {
+      return;
+    }
 
     setIsDeactivating(true);
     try {
       await Promise.all([
         updateStaffProfile({
           organizationId,
-          staffProfileId: staffToDeactivate.profileId,
+          staffProfileId: staffToDeactivate._id,
           status: "inactive",
           storeId,
         }),
         updateStaffCredential({
           organizationId,
-          staffProfileId: staffToDeactivate.profileId,
+          staffProfileId: staffToDeactivate._id,
           status: "revoked",
           storeId,
         }),
       ]);
 
       toast.success("Staff member deactivated");
+      setStaffToDeactivate(null);
     } catch (error) {
-      toast.error(
-        (error as Error).message || "Failed to deactivate staff member",
-      );
+      toast.error((error as Error).message || "Failed to deactivate staff member");
       console.error(error);
     } finally {
       setIsDeactivating(false);
-      setStaffToDeactivate(null);
     }
   };
 
   return (
-    <div className="space-y-16">
-      <div>
-        <h3 className="text-lg font-medium mb-4">Staff</h3>
-
-        {roster.length > 0 && (
-          <div className="border rounded-lg">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Username</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="w-[100px]">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {roster.map((staff) => (
-                  <TableRow key={staff.credentialId}>
-                    <TableCell>
-                      {staff.displayName}
-                      {staff.roles.length > 0 && (
-                        <span className="ml-2 text-muted-foreground text-xs">
-                          {staff.roles.join(", ")}
-                        </span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <span className="text-muted-foreground">
-                        {staff.username}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      <span className="text-muted-foreground">
-                        {formatStatusLabel(staff)}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      {staff.profileStatus === "active" &&
-                      staff.credentialStatus === "active" ? (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setStaffToDeactivate(staff)}
-                        >
-                          <UserMinus className="w-4 h-4" />
-                        </Button>
-                      ) : (
-                        <span className="text-muted-foreground">-</span>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        )}
-
-        {roster.length === 0 && !showForm && (
-          <p className="text-sm text-muted-foreground">
-            No staff members added yet
-          </p>
-        )}
+    <div className="space-y-10">
+      <div className="space-y-2">
+        <h3 className="text-lg font-medium">Staff</h3>
+        <p className="text-sm text-muted-foreground">
+          Create staff profiles with usernames now. PIN setup happens separately
+          when the staff member is ready to activate their credential.
+        </p>
       </div>
 
-      {showForm && (
-        <CashierForm
-          storeId={storeId}
-          organizationId={organizationId}
-          onSuccess={() => {
-            setShowForm(false);
-          }}
-          onCancel={() => setShowForm(false)}
-        />
+      {roster.length > 0 ? (
+        <div className="overflow-hidden rounded-lg border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Username</TableHead>
+                <TableHead>Role</TableHead>
+                <TableHead>Start date</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="w-[240px]">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {roster.map((staff) => {
+                const canSetPin =
+                  staff.status === "active" &&
+                  (staff.credentialStatus === "pending" ||
+                    staff.credentialStatus === "active");
+                const canDeactivate =
+                  staff.status === "active" && staff.credentialStatus !== "revoked";
+
+                return (
+                  <TableRow key={staff._id}>
+                    <TableCell>
+                      <div className="space-y-1">
+                        <div className="font-medium">{staff.fullName}</div>
+                        {staff.roles && staff.roles.length > 1 ? (
+                          <div className="text-xs text-muted-foreground">
+                            {staff.roles.map((role) => formatRoleLabel(role)).join(", ")}
+                          </div>
+                        ) : null}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {staff.username ?? "—"}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline">
+                        {formatRoleLabel(staff.primaryRole)}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {formatStartDate(staff.hiredAt)}
+                    </TableCell>
+                    <TableCell>
+                      <div className="space-y-1">
+                        <CredentialStatusBadge staff={staff} />
+                        <div className="text-xs text-muted-foreground">
+                          {formatCredentialStatusLabel(staff)}
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap items-center gap-2">
+                        {canSetPin ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() =>
+                              setPinSetupState({
+                                mode:
+                                  staff.credentialStatus === "pending" ? "set" : "reset",
+                                staff,
+                              })
+                            }
+                          >
+                            {staff.credentialStatus === "pending" ? "Set PIN" : "Reset PIN"}
+                          </Button>
+                        ) : null}
+
+                        {canDeactivate ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setStaffToDeactivate(staff)}
+                          >
+                            <UserMinus className="mr-2 h-4 w-4" />
+                            Deactivate
+                          </Button>
+                        ) : (
+                          <span className="text-sm text-muted-foreground">No actions</span>
+                        )}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </div>
+      ) : (
+        <p className="text-sm text-muted-foreground">No staff members added yet.</p>
       )}
 
-      {!showForm && (
+      {showForm ? (
+        <div className="rounded-lg border p-6">
+          <StaffProvisionForm
+            organizationId={organizationId}
+            onCancel={() => setShowForm(false)}
+            onSuccess={() => setShowForm(false)}
+            storeId={storeId}
+          />
+        </div>
+      ) : (
         <Button variant="ghost" onClick={() => setShowForm(true)}>
-          <Plus className="w-4 h-4 mr-2" />
+          <Plus className="mr-2 h-4 w-4" />
           Add Staff Member
         </Button>
       )}
 
+      <CredentialPinDialog
+        onClose={() => setPinSetupState(null)}
+        organizationId={organizationId}
+        state={pinSetupState}
+        storeId={storeId}
+      />
+
       <Dialog
         open={staffToDeactivate !== null}
-        onOpenChange={(open: boolean) => !open && setStaffToDeactivate(null)}
+        onOpenChange={(open) => !open && setStaffToDeactivate(null)}
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Deactivate Staff Member</DialogTitle>
+            <DialogTitle>Deactivate staff member</DialogTitle>
             <DialogDescription>
-              Are you sure you want to deactivate this staff member? This will
-              revoke their POS credential and mark their staff profile inactive.
+              This will mark the staff profile inactive and revoke the reserved
+              or active credential for {staffToDeactivate?.fullName ?? "this staff member"}.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -586,9 +818,13 @@ export const CashierManagement = ({
             >
               Cancel
             </Button>
-            <Button onClick={handleDeactivate} disabled={isDeactivating}>
+            <LoadingButton
+              variant="ghost"
+              onClick={handleDeactivate}
+              isLoading={isDeactivating}
+            >
               Deactivate
-            </Button>
+            </LoadingButton>
           </DialogFooter>
         </DialogContent>
       </Dialog>
