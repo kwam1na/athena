@@ -1,5 +1,6 @@
 import type { Doc, Id } from "../../../_generated/dataModel";
 import type { MutationCtx } from "../../../_generated/server";
+import { internal } from "../../../_generated/api";
 
 const ACTIVE_SESSION_CANDIDATE_LIMIT = 100;
 const SESSION_ITEMS_PAGE_SIZE = 200;
@@ -17,6 +18,14 @@ export interface SessionCommandRepository {
   getSessionById(
     sessionId: Id<"posSession">,
   ): Promise<Doc<"posSession"> | null>;
+  getRegisterSessionById(
+    registerSessionId: Id<"registerSession">,
+  ): Promise<Doc<"registerSession"> | null>;
+  getOpenRegisterSessionForIdentity(args: {
+    storeId: Id<"store">;
+    terminalId?: Id<"posTerminal">;
+    registerNumber?: string;
+  }): Promise<Doc<"registerSession"> | null>;
   listSessionItems(
     sessionId: Id<"posSession">,
   ): Promise<Doc<"posSessionItem">[]>;
@@ -81,6 +90,19 @@ export function createSessionCommandRepository(
     },
     getSessionById(sessionId) {
       return ctx.db.get("posSession", sessionId);
+    },
+    getRegisterSessionById(registerSessionId) {
+      return ctx.db.get("registerSession", registerSessionId);
+    },
+    getOpenRegisterSessionForIdentity(args) {
+      return ctx.runQuery(
+        internal.operations.registerSessions.getOpenRegisterSession,
+        {
+          storeId: args.storeId,
+          terminalId: args.terminalId,
+          registerNumber: args.registerNumber,
+        },
+      );
     },
     listSessionItems(sessionId) {
       return collectSessionItemsFromPages((cursor) =>

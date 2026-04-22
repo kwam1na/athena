@@ -40,6 +40,7 @@ export interface StartSessionArgs {
   terminalId: Id<"posTerminal">;
   cashierId?: Id<"cashier">;
   registerNumber?: string;
+  registerSessionId?: Id<"registerSession">;
 }
 
 export interface HoldSessionArgs {
@@ -169,27 +170,58 @@ export function createPosSessionCommandService(
       }
 
       if (existingSession) {
+        const registerSessionBinding = await resolveRegisterSessionBinding(
+          dependencies,
+          {
+            storeId: existingSession.storeId,
+            terminalId: existingSession.terminalId,
+            registerNumber: existingSession.registerNumber ?? registerNumber,
+            preferredRegisterSessionId:
+              existingSession.registerSessionId ?? args.registerSessionId,
+            failureMessage: "Open the cash drawer before starting a sale.",
+          },
+        );
+        if (registerSessionBinding.status !== "ok") {
+          return registerSessionBinding;
+        }
+
         const existingItems = await dependencies.repository.listSessionItems(
           existingSession._id,
         );
+        const sessionPatch: Partial<
+          Omit<Doc<"posSession">, "_id" | "_creationTime">
+        > = {};
+
+        if (
+          existingSession.registerSessionId !==
+          registerSessionBinding.data.registerSessionId
+        ) {
+          sessionPatch.registerSessionId =
+            registerSessionBinding.data.registerSessionId;
+          sessionPatch.updatedAt = now;
+        }
 
         if (existingItems.length > 0) {
-          await dependencies.repository.patchSession(existingSession._id, {
+          Object.assign(sessionPatch, {
             status: "held",
             heldAt: now,
             updatedAt: now,
             holdReason: "Auto-held when new session started",
           });
+        }
 
+        if (Object.keys(sessionPatch).length > 0) {
+          await dependencies.repository.patchSession(existingSession._id, sessionPatch);
+        }
+
+        const updatedSession = {
+          ...existingSession,
+          ...sessionPatch,
+        };
+        if (existingItems.length > 0) {
           await recordSessionLifecycleBestEffort(dependencies, {
             stage: "autoHeld",
-            session: {
-              ...existingSession,
-              status: "held",
-              heldAt: now,
-              updatedAt: now,
-              holdReason: "Auto-held when new session started",
-            },
+            session: updatedSession,
             occurredAt: now,
             holdReason: "Auto-held when new session started",
           });
@@ -199,6 +231,20 @@ export function createPosSessionCommandService(
           sessionId: existingSession._id,
           expiresAt: existingSession.expiresAt,
         });
+      }
+
+      const registerSessionBinding = await resolveRegisterSessionBinding(
+        dependencies,
+        {
+          storeId: args.storeId,
+          terminalId: args.terminalId,
+          registerNumber,
+          preferredRegisterSessionId: args.registerSessionId,
+          failureMessage: "Open the cash drawer before starting a sale.",
+        },
+      );
+      if (registerSessionBinding.status !== "ok") {
+        return registerSessionBinding;
       }
 
       const latestSessionNumber =
@@ -214,6 +260,7 @@ export function createPosSessionCommandService(
         cashierId: args.cashierId,
         terminalId: args.terminalId,
         registerNumber,
+        registerSessionId: registerSessionBinding.data.registerSessionId,
         status: "active",
         createdAt: now,
         updatedAt: now,
@@ -229,6 +276,7 @@ export function createPosSessionCommandService(
           cashierId: args.cashierId,
           terminalId: args.terminalId,
           registerNumber,
+          registerSessionId: registerSessionBinding.data.registerSessionId,
           status: "active",
           createdAt: now,
           updatedAt: now,
@@ -305,18 +353,34 @@ export function createPosSessionCommandService(
         );
       }
 
+      const registerSessionBinding = await resolveRegisterSessionBinding(
+        dependencies,
+        {
+          storeId: session.storeId,
+          terminalId: session.terminalId,
+          registerNumber: session.registerNumber,
+          preferredRegisterSessionId: session.registerSessionId,
+          failureMessage: "Open the cash drawer before resuming this sale.",
+        },
+      );
+      if (registerSessionBinding.status !== "ok") {
+        return registerSessionBinding;
+      }
+
       const expiresAt = dependencies.calculateExpiration(now);
       await dependencies.repository.patchSession(args.sessionId, {
         status: "active",
         resumedAt: now,
         updatedAt: now,
         expiresAt,
+        registerSessionId: registerSessionBinding.data.registerSessionId,
       });
 
       await recordSessionLifecycleBestEffort(dependencies, {
         stage: "resumed",
         session: {
           ...session,
+          registerSessionId: registerSessionBinding.data.registerSessionId,
           status: "active",
           resumedAt: now,
           updatedAt: now,
@@ -545,6 +609,82 @@ function buildNextSessionNumber(
     : 0;
   const nextSequence = Number.isFinite(lastSequence) ? lastSequence + 1 : 1;
   return `${prefix}-${String(nextSequence).padStart(3, "0")}`;
+}
+
+function normalizeRegisterNumber(registerNumber?: string | null) {
+  const trimmedRegisterNumber = registerNumber?.trim();
+  return trimmedRegisterNumber ? trimmedRegisterNumber : undefined;
+}
+
+function isActiveRegisterSession(
+  registerSession: Pick<Doc<"registerSession">, "status">,
+) {
+  return registerSession.status === "open" || registerSession.status === "active";
+}
+
+function registerSessionMatchesIdentity(
+  registerSession: Pick<Doc<"registerSession">, "registerNumber" | "terminalId">,
+  identity: {
+    terminalId?: Id<"posTerminal">;
+    registerNumber?: string;
+  },
+) {
+  const normalizedRegisterNumber = normalizeRegisterNumber(identity.registerNumber);
+  const normalizedSessionRegisterNumber = normalizeRegisterNumber(
+    registerSession.registerNumber,
+  );
+
+  let hasSharedIdentity = false;
+
+  if (normalizedRegisterNumber && normalizedSessionRegisterNumber) {
+    hasSharedIdentity = true;
+    if (normalizedRegisterNumber !== normalizedSessionRegisterNumber) {
+      return false;
+    }
+  }
+
+  if (identity.terminalId && registerSession.terminalId) {
+    hasSharedIdentity = true;
+    if (identity.terminalId !== registerSession.terminalId) {
+      return false;
+    }
+  }
+
+  return hasSharedIdentity;
+}
+
+async function resolveRegisterSessionBinding(
+  dependencies: SessionCommandDependencies,
+  args: {
+    storeId: Id<"store">;
+    terminalId: Id<"posTerminal">;
+    registerNumber?: string;
+    preferredRegisterSessionId?: Id<"registerSession">;
+    failureMessage: string;
+  },
+): Promise<PosSessionCommandOutcome<{ registerSessionId: Id<"registerSession"> }>> {
+  const registerSession = args.preferredRegisterSessionId
+    ? await dependencies.repository.getRegisterSessionById(
+        args.preferredRegisterSessionId,
+      )
+    : await dependencies.repository.getOpenRegisterSessionForIdentity({
+        storeId: args.storeId,
+        terminalId: args.terminalId,
+        registerNumber: args.registerNumber,
+      });
+
+  if (
+    !registerSession ||
+    registerSession.storeId !== args.storeId ||
+    !isActiveRegisterSession(registerSession) ||
+    !registerSessionMatchesIdentity(registerSession, args)
+  ) {
+    return failure("validationFailed", args.failureMessage);
+  }
+
+  return success({
+    registerSessionId: registerSession._id,
+  });
 }
 
 function isSessionExpired(session: Pick<Doc<"posSession">, "expiresAt" | "status">, now: number) {

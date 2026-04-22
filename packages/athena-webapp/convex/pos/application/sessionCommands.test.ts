@@ -7,6 +7,7 @@ type SessionRecord = {
   terminalId: string;
   cashierId?: string;
   registerNumber?: string;
+  registerSessionId?: string;
   status: "active" | "held" | "completed" | "void" | "expired";
   workflowTraceId?: string;
   expiresAt: number;
@@ -14,6 +15,14 @@ type SessionRecord = {
   heldAt?: number;
   resumedAt?: number;
   holdReason?: string;
+};
+
+type RegisterSessionRecord = {
+  _id: string;
+  storeId: string;
+  status: "open" | "active" | "closing" | "closed";
+  terminalId?: string;
+  registerNumber?: string;
 };
 
 type SessionItemRecord = {
@@ -56,7 +65,17 @@ type TraceCall = {
 describe("createPosSessionCommandService", () => {
   it("creates a fresh active session when no matching active session exists", async () => {
     const commandService = await loadCommandService();
-    const repository = createFakeRepository();
+    const repository = createFakeRepository({
+      registerSessions: [
+        buildRegisterSession({
+          _id: "drawer-1",
+          storeId: "store-1",
+          status: "open",
+          terminalId: "terminal-1",
+          registerNumber: "1",
+        }),
+      ],
+    });
     const traceCalls: TraceCall[] = [];
 
     const result = await commandService(
@@ -88,6 +107,7 @@ describe("createPosSessionCommandService", () => {
         terminalId: "terminal-1",
         cashierId: "cashier-1",
         registerNumber: "1",
+        registerSessionId: "drawer-1",
         expiresAt: 61_000,
         workflowTraceId: "pos_session:ses-001",
       }),
@@ -144,6 +164,15 @@ describe("createPosSessionCommandService", () => {
     const commandService = await loadCommandService();
     const traceCalls: TraceCall[] = [];
     const repository = createFakeRepository({
+      registerSessions: [
+        buildRegisterSession({
+          _id: "drawer-1",
+          storeId: "store-1",
+          status: "open",
+          terminalId: "terminal-1",
+          registerNumber: "1",
+        }),
+      ],
       sessions: [
         buildSession({
           _id: "session-4",
@@ -151,6 +180,7 @@ describe("createPosSessionCommandService", () => {
           storeId: "store-1",
           terminalId: "terminal-1",
           cashierId: "cashier-1",
+          registerSessionId: "drawer-1",
           status: "active",
           expiresAt: 12_000,
           updatedAt: 950,
@@ -197,6 +227,7 @@ describe("createPosSessionCommandService", () => {
         status: "held",
         heldAt: 1_000,
         holdReason: "Auto-held when new session started",
+        registerSessionId: "drawer-1",
       }),
     );
     expect(traceCalls).toEqual([
@@ -272,7 +303,17 @@ describe("createPosSessionCommandService", () => {
 
   it("keeps session start successful when lifecycle tracing fails", async () => {
     const commandService = await loadCommandService();
-    const repository = createFakeRepository();
+    const repository = createFakeRepository({
+      registerSessions: [
+        buildRegisterSession({
+          _id: "drawer-1",
+          storeId: "store-1",
+          status: "open",
+          terminalId: "terminal-1",
+          registerNumber: "1",
+        }),
+      ],
+    });
 
     const result = await commandService(
       createDependencies({
@@ -298,6 +339,30 @@ describe("createPosSessionCommandService", () => {
     expect(repository.getSession("session-1")).not.toHaveProperty(
       "workflowTraceId",
     );
+  });
+
+  it("fails clearly when no open drawer can be resolved for a new retail session", async () => {
+    const commandService = await loadCommandService();
+    const repository = createFakeRepository();
+
+    const result = await commandService(
+      createDependencies({
+        repository,
+        now: 1_000,
+        nextExpiration: 61_000,
+      }),
+    ).startSession({
+      storeId: "store-1",
+      terminalId: "terminal-1",
+      cashierId: "cashier-1",
+      registerNumber: "1",
+    });
+
+    expect(result).toEqual({
+      status: "validationFailed",
+      message: "Open the cash drawer before starting a sale.",
+    });
+    expect(repository.sessions).toHaveLength(0);
   });
 
   it("refuses to resume an expired held session", async () => {
@@ -662,13 +727,22 @@ function createDependencies(options: {
 function createFakeRepository(seed?: {
   sessions?: SessionRecord[];
   items?: SessionItemRecord[];
+  registerSessions?: RegisterSessionRecord[];
 }) {
   const repository = {
     sessions: [...(seed?.sessions ?? [])],
     items: [...(seed?.items ?? [])],
+    registerSessions: [...(seed?.registerSessions ?? [])],
     getSession(sessionId: string) {
       return (
         repository.sessions.find((session) => session._id === sessionId) ?? null
+      );
+    },
+    getRegisterSession(registerSessionId: string) {
+      return (
+        repository.registerSessions.find(
+          (session) => session._id === registerSessionId,
+        ) ?? null
       );
     },
     getItem(itemId: string) {
@@ -701,6 +775,40 @@ function createFakeRepository(seed?: {
     },
     async getSessionById(sessionId: string) {
       return repository.getSession(sessionId);
+    },
+    async getRegisterSessionById(registerSessionId: string) {
+      return repository.getRegisterSession(registerSessionId);
+    },
+    async getOpenRegisterSessionForIdentity(args: {
+      storeId: string;
+      terminalId?: string;
+      registerNumber?: string;
+    }) {
+      if (args.registerNumber) {
+        return (
+          [...repository.registerSessions]
+            .reverse()
+            .find(
+              (session) =>
+                session.storeId === args.storeId &&
+                session.registerNumber === args.registerNumber &&
+                session.status !== "closed",
+            ) ?? null
+        );
+      }
+
+      if (!args.terminalId) {
+        return null;
+      }
+
+      return (
+        [...repository.registerSessions]
+          .reverse()
+          .find(
+            (session) =>
+              session.terminalId === args.terminalId && session.status !== "closed",
+          ) ?? null
+      );
     },
     async listSessionItems(sessionId: string) {
       return repository.items.filter((item) => item.sessionId === sessionId);
@@ -763,6 +871,12 @@ function buildSession(input: SessionRecord): SessionRecord {
   return input;
 }
 
+function buildRegisterSession(
+  input: RegisterSessionRecord,
+): RegisterSessionRecord {
+  return input;
+}
+
 function buildItem(
   input: Omit<SessionItemRecord, "createdAt" | "updatedAt">,
 ): SessionItemRecord {
@@ -781,6 +895,7 @@ function createCommandService(
     terminalId: string;
     cashierId?: string;
     registerNumber?: string;
+    registerSessionId?: string;
   }) => Promise<unknown>;
   holdSession: (args: {
     sessionId: string;

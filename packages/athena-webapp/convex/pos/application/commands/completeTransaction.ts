@@ -16,6 +16,7 @@ import {
   createPosTransaction,
   createPosTransactionItem,
   getPosSessionById,
+  getRegisterSessionById,
   getPosTransactionById,
   getProductSkuById,
   getStoreById,
@@ -69,6 +70,49 @@ export function buildCompleteTransactionResult(input: {
 
 function calculateTotalPaid(payments: PosPaymentInput[]) {
   return payments.reduce((sum, payment) => sum + payment.amount, 0);
+}
+
+function normalizeRegisterNumber(registerNumber?: string | null) {
+  const trimmedRegisterNumber = registerNumber?.trim();
+  return trimmedRegisterNumber ? trimmedRegisterNumber : undefined;
+}
+
+function registerSessionMatchesIdentity(
+  registerSession: {
+    registerNumber?: string;
+    terminalId?: Id<"posTerminal">;
+  },
+  identity: {
+    registerNumber?: string;
+    terminalId?: Id<"posTerminal">;
+  },
+) {
+  const normalizedRegisterNumber = normalizeRegisterNumber(identity.registerNumber);
+  const normalizedSessionRegisterNumber = normalizeRegisterNumber(
+    registerSession.registerNumber,
+  );
+
+  let hasSharedIdentity = false;
+
+  if (normalizedRegisterNumber && normalizedSessionRegisterNumber) {
+    hasSharedIdentity = true;
+    if (normalizedRegisterNumber !== normalizedSessionRegisterNumber) {
+      return false;
+    }
+  }
+
+  if (identity.terminalId && registerSession.terminalId) {
+    hasSharedIdentity = true;
+    if (identity.terminalId !== registerSession.terminalId) {
+      return false;
+    }
+  }
+
+  return hasSharedIdentity;
+}
+
+function isUsableRegisterSession(registerSession: { status: string }) {
+  return registerSession.status === "open" || registerSession.status === "active";
 }
 
 async function safeTraceWrite(
@@ -196,6 +240,45 @@ async function persistWorkflowTraceIdBestEffort(
       workflowTraceId: args.traceId,
     });
   });
+}
+
+async function resolveSessionRegisterSessionId(
+  ctx: MutationCtx,
+  args: {
+    session: NonNullable<Awaited<ReturnType<typeof getPosSessionById>>>;
+    providedRegisterSessionId?: Id<"registerSession">;
+  },
+) {
+  const resolvedRegisterSessionId =
+    args.session.registerSessionId ?? args.providedRegisterSessionId;
+
+  if (!resolvedRegisterSessionId) {
+    throw new Error("Open the cash drawer before completing this sale.");
+  }
+
+  if (
+    args.session.registerSessionId &&
+    args.providedRegisterSessionId &&
+    args.session.registerSessionId !== args.providedRegisterSessionId
+  ) {
+    throw new Error("Open the cash drawer before completing this sale.");
+  }
+
+  const registerSession = await getRegisterSessionById(ctx, resolvedRegisterSessionId);
+
+  if (
+    !registerSession ||
+    registerSession.storeId !== args.session.storeId ||
+    !isUsableRegisterSession(registerSession) ||
+    !registerSessionMatchesIdentity(registerSession, {
+      registerNumber: args.session.registerNumber,
+      terminalId: args.session.terminalId,
+    })
+  ) {
+    throw new Error("Open the cash drawer before completing this sale.");
+  }
+
+  return resolvedRegisterSessionId;
 }
 
 async function recordRegisterSessionSale(
@@ -571,6 +654,11 @@ export async function createTransactionFromSessionHandler(
     throw new Error("Cannot complete session with no items");
   }
 
+  const resolvedRegisterSessionId = await resolveSessionRegisterSessionId(ctx, {
+    session,
+    providedRegisterSessionId: args.registerSessionId,
+  });
+
   const skuQuantityMap = new Map<Id<"productSku">, number>();
   for (const item of items) {
     skuQuantityMap.set(
@@ -618,7 +706,7 @@ export async function createTransactionFromSessionHandler(
     transactionNumber,
     storeId: session.storeId,
     sessionId: args.sessionId,
-    registerSessionId: args.registerSessionId,
+    registerSessionId: resolvedRegisterSessionId,
     customerId: session.customerId,
     cashierId: session.cashierId,
     registerNumber: session.registerNumber,
@@ -643,7 +731,7 @@ export async function createTransactionFromSessionHandler(
     startedAt: traceStartedAt,
     transactionNumber,
     posTransactionId: transactionId,
-    registerSessionId: args.registerSessionId,
+    registerSessionId: resolvedRegisterSessionId,
     cashierId: session.cashierId,
     terminalId: session.terminalId,
     customerId: session.customerId,
@@ -660,16 +748,14 @@ export async function createTransactionFromSessionHandler(
     transactionId,
   });
 
-  if (args.registerSessionId) {
-    await recordRegisterSessionSale(ctx, {
-      changeGiven,
-      payments: args.payments,
-      registerSessionId: args.registerSessionId,
-      registerNumber: session.registerNumber,
-      storeId: session.storeId,
-      terminalId: session.terminalId,
-    });
-  }
+  await recordRegisterSessionSale(ctx, {
+    changeGiven,
+    payments: args.payments,
+    registerSessionId: resolvedRegisterSessionId,
+    registerNumber: session.registerNumber,
+    storeId: session.storeId,
+    terminalId: session.terminalId,
+  });
 
   const completionResult = buildCompleteTransactionResult({
     transactionId,
@@ -679,7 +765,7 @@ export async function createTransactionFromSessionHandler(
       organizationId: store?.organizationId,
       payments: args.payments,
       posTransactionId: transactionId,
-      registerSessionId: args.registerSessionId,
+      registerSessionId: resolvedRegisterSessionId,
       storeId: session.storeId,
       transactionNumber,
     }),
@@ -730,6 +816,7 @@ export async function createTransactionFromSessionHandler(
 
   await patchPosSession(ctx, args.sessionId, {
     transactionId,
+    registerSessionId: resolvedRegisterSessionId,
   });
 
   const finalizedTrace = await recordPosSaleTraceBestEffort(ctx, {

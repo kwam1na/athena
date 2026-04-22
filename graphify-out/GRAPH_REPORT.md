@@ -5,7 +5,7 @@
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 3623 nodes · 3101 edges · 1386 communities detected
+- 3633 nodes · 3120 edges · 1386 communities detected
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS
 - Token cost: 0 input · 0 output
 
@@ -1472,52 +1472,52 @@ Cohesion: 0.15
 Nodes (10): capitalizeFirstLetter(), capitalizeWords(), cn(), currencyFormatter(), formatDate(), getErrorForField(), getProductName(), getRelativeTime() (+2 more)
 
 ### Community 12 - "Community 12"
-Cohesion: 0.13
-Nodes (4): listCompletedTransactionsForDay(), listSessionItems(), listTransactionItems(), readAllQueryResults()
+Cohesion: 0.21
+Nodes (16): buildCompleteTransactionResult(), buildPosSaleTraceEvent(), buildPosSaleTraceRecord(), calculateTotalPaid(), completeTransaction(), createTransactionFromSessionHandler(), isUsableRegisterSession(), normalizeRegisterNumber() (+8 more)
 
 ### Community 13 - "Community 13"
+Cohesion: 0.2
+Nodes (16): createDefaultSessionCommandService(), createPosSessionCommandService(), failure(), isActiveRegisterSession(), isSessionExpired(), normalizeRegisterNumber(), registerSessionMatchesIdentity(), resolveRegisterSessionBinding() (+8 more)
+
+### Community 14 - "Community 14"
+Cohesion: 0.12
+Nodes (4): listCompletedTransactionsForDay(), listSessionItems(), listTransactionItems(), readAllQueryResults()
+
+### Community 15 - "Community 15"
 Cohesion: 0.16
 Nodes (9): checkIfItemsHaveChanged(), createOnlineOrder(), findBestValuePromoCode(), handleExistingSession(), handleOrderCreation(), handlePlaceOrder(), listSessionItems(), updateExistingSession() (+1 more)
 
-### Community 14 - "Community 14"
+### Community 16 - "Community 16"
 Cohesion: 0.22
 Nodes (16): buildDegreeIndex(), buildHotspotLines(), buildPackagePage(), buildRootIndexPage(), collectRepoCodeFiles(), compareHotspots(), countCommunities(), fileExists() (+8 more)
 
-### Community 15 - "Community 15"
+### Community 17 - "Community 17"
 Cohesion: 0.12
 Nodes (0):
 
-### Community 16 - "Community 16"
+### Community 18 - "Community 18"
 Cohesion: 0.12
 Nodes (1): DataTableViewOptions()
 
-### Community 17 - "Community 17"
+### Community 19 - "Community 19"
 Cohesion: 0.19
 Nodes (13): compareSnapshots(), fileExists(), formatArtifactList(), formatDetailLines(), formatError(), formatHarnessJanitorReport(), readUtf8OrNull(), runCheckStep() (+5 more)
 
-### Community 18 - "Community 18"
+### Community 20 - "Community 20"
 Cohesion: 0.21
 Nodes (14): buildNumericTrendStats(), buildRegressionWarnings(), buildRuntimeTrendOutput(), buildScenarioTrend(), collectHarnessRuntimeTrends(), formatMs(), formatPercent(), parseHarnessBehaviorReportLines() (+6 more)
 
-### Community 19 - "Community 19"
+### Community 21 - "Community 21"
 Cohesion: 0.27
 Nodes (15): assertValidOnlineOrderStatusTransition(), getOnlineOrderPaymentAmount(), getOnlineOrderPaymentMethodLabel(), getOnlineOrderStatusEventType(), getStoreOrganizationId(), isPaymentOnDeliveryOrder(), recordOnlineOrderCreatedEvent(), recordOnlineOrderFulfillmentMovement() (+7 more)
 
-### Community 20 - "Community 20"
+### Community 22 - "Community 22"
 Cohesion: 0.21
 Nodes (14): CheckoutSessionError, createCheckoutSession(), defaultCheckoutActionMessage(), getActiveCheckoutSession(), getBaseUrl(), getCheckoutActionErrorMessage(), getCheckoutErrorMessageFromPayload(), getCheckoutSession() (+6 more)
 
-### Community 21 - "Community 21"
+### Community 23 - "Community 23"
 Cohesion: 0.23
 Nodes (12): assertRegisterSessionIdentity(), assertRegisterSessionMatchesTransaction(), assertValidRegisterSessionTransition(), buildClosedRegisterSessionPatch(), buildRegisterSession(), buildRegisterSessionCloseoutPatch(), buildRegisterSessionDepositPatch(), buildRegisterSessionTransactionPatch() (+4 more)
-
-### Community 22 - "Community 22"
-Cohesion: 0.27
-Nodes (12): buildCompleteTransactionResult(), buildPosSaleTraceEvent(), buildPosSaleTraceRecord(), calculateTotalPaid(), completeTransaction(), createTransactionFromSessionHandler(), persistWorkflowTraceIdBestEffort(), recordPosSaleTraceBestEffort() (+4 more)
-
-### Community 23 - "Community 23"
-Cohesion: 0.25
-Nodes (12): createDefaultSessionCommandService(), createPosSessionCommandService(), failure(), isSessionExpired(), runHoldSessionCommand(), runRemoveSessionItemCommand(), runResumeSessionCommand(), runStartSessionCommand() (+4 more)
 
 ### Community 24 - "Community 24"
 Cohesion: 0.13
@@ -1665,67 +1665,67 @@ Nodes (6): findAthenaUserByEmailWithCtx(), getAuthenticatedAthenaUserWithCtx(), 
 
 ### Community 60 - "Community 60"
 Cohesion: 0.43
-Nodes (6): sendDiscountCodeEmail(), sendDiscountReminderEmail(), sendFeedbackRequestEmail(), sendNewOrderEmail(), sendOrderEmail(), sendVerificationCode()
+Nodes (6): buildMtnCollectionsLookupPrefixes(), isTargetEnvironment(), readScopedValue(), resolveConfigForPrefix(), resolveMtnCollectionsConfigFromEnv(), toEnvSegment()
 
 ### Community 61 - "Community 61"
 Cohesion: 0.43
-Nodes (6): buildMtnCollectionsLookupPrefixes(), isTargetEnvironment(), readScopedValue(), resolveConfigForPrefix(), resolveMtnCollectionsConfigFromEnv(), toEnvSegment()
+Nodes (6): buildPosSessionTraceEvent(), buildPosSessionTraceRecord(), buildTraceSummary(), formatPaymentMethod(), recordPosSessionTraceBestEffort(), safeTraceWrite()
 
 ### Community 62 - "Community 62"
-Cohesion: 0.43
-Nodes (6): buildPosSessionTraceEvent(), buildPosSessionTraceRecord(), buildTraceSummary(), formatPaymentMethod(), recordPosSessionTraceBestEffort(), safeTraceWrite()
+Cohesion: 0.25
+Nodes (0):
 
 ### Community 63 - "Community 63"
 Cohesion: 0.25
 Nodes (0):
 
 ### Community 64 - "Community 64"
+Cohesion: 0.43
+Nodes (6): sendDiscountCodeEmail(), sendDiscountReminderEmail(), sendFeedbackRequestEmail(), sendNewOrderEmail(), sendOrderEmail(), sendVerificationCode()
+
+### Community 65 - "Community 65"
 Cohesion: 0.36
 Nodes (4): buildPendingSkuContextById(), listPurchaseOrderLineItems(), listReplenishmentRecommendationsWithCtx(), listStoreProductSkus()
 
-### Community 65 - "Community 65"
-Cohesion: 0.25
-Nodes (1): DataTableRowActions()
-
 ### Community 66 - "Community 66"
 Cohesion: 0.25
-Nodes (0):
+Nodes (1): DataTableRowActions()
 
 ### Community 67 - "Community 67"
 Cohesion: 0.25
 Nodes (0):
 
 ### Community 68 - "Community 68"
-Cohesion: 0.46
-Nodes (7): addItemToBag(), clearBag(), getActiveBag(), getBaseUrl(), removeItemFromBag(), updateBagItem(), updateBagOwner()
-
-### Community 69 - "Community 69"
-Cohesion: 0.43
-Nodes (6): buildQueryString(), getAllProducts(), getBaseUrl(), getBestSellers(), getFeatured(), getProduct()
-
-### Community 70 - "Community 70"
 Cohesion: 0.25
 Nodes (0):
 
+### Community 69 - "Community 69"
+Cohesion: 0.46
+Nodes (7): addItemToBag(), clearBag(), getActiveBag(), getBaseUrl(), removeItemFromBag(), updateBagItem(), updateBagOwner()
+
+### Community 70 - "Community 70"
+Cohesion: 0.43
+Nodes (6): buildQueryString(), getAllProducts(), getBaseUrl(), getBestSellers(), getFeatured(), getProduct()
+
 ### Community 71 - "Community 71"
+Cohesion: 0.25
+Nodes (0):
+
+### Community 72 - "Community 72"
 Cohesion: 0.43
 Nodes (7): createStorefrontObservabilityContext(), createStorefrontObservabilityPayload(), getOrCreateStorefrontObservabilitySessionId(), isBrowserAutomationContext(), isSyntheticMonitorOrigin(), resolveStorefrontAnalyticsOrigin(), trackStorefrontEvent()
 
-### Community 72 - "Community 72"
+### Community 73 - "Community 73"
 Cohesion: 0.52
 Nodes (5): acquireInventoryHold(), acquireInventoryHoldsBatch(), adjustInventoryHold(), releaseInventoryHold(), validateInventoryAvailability()
 
-### Community 73 - "Community 73"
+### Community 74 - "Community 74"
 Cohesion: 0.57
 Nodes (6): buildHeaders(), createCollectionsAccessToken(), encodeBasicAuth(), getRequestToPayStatus(), requestToPay(), toError()
 
-### Community 74 - "Community 74"
+### Community 75 - "Community 75"
 Cohesion: 0.52
 Nodes (5): buildTraceEvent(), buildTraceRecord(), recordRegisterSessionTraceBestEffort(), resolveOccurredAt(), safeTraceWrite()
-
-### Community 75 - "Community 75"
-Cohesion: 0.29
-Nodes (0):
 
 ### Community 76 - "Community 76"
 Cohesion: 0.48
@@ -1776,16 +1776,16 @@ Cohesion: 0.29
 Nodes (0):
 
 ### Community 88 - "Community 88"
+Cohesion: 0.33
+Nodes (2): getProductName(), sortProduct()
+
+### Community 89 - "Community 89"
 Cohesion: 0.29
 Nodes (0):
 
-### Community 89 - "Community 89"
+### Community 90 - "Community 90"
 Cohesion: 0.52
 Nodes (6): addItemToSavedBag(), getActiveSavedBag(), getBaseUrl(), removeItemFromSavedBag(), updateSavedBagItem(), updateSavedBagOwner()
-
-### Community 90 - "Community 90"
-Cohesion: 0.33
-Nodes (2): getProductName(), sortProduct()
 
 ### Community 91 - "Community 91"
 Cohesion: 0.52
@@ -2132,44 +2132,44 @@ Cohesion: 0.5
 Nodes (0):
 
 ### Community 177 - "Community 177"
-Cohesion: 0.67
-Nodes (2): toDisplayAmount(), toPesewas()
-
-### Community 178 - "Community 178"
 Cohesion: 0.83
 Nodes (3): getCachedTokenRecord(), resolveAccessTokenForStore(), resolveConfigForStore()
 
-### Community 179 - "Community 179"
+### Community 178 - "Community 178"
 Cohesion: 0.67
 Nodes (2): maskMtnPartyId(), normalizeCollectionsTransaction()
 
-### Community 180 - "Community 180"
+### Community 179 - "Community 179"
 Cohesion: 0.67
 Nodes (2): buildOperationalEvent(), recordOperationalEventWithCtx()
 
-### Community 181 - "Community 181"
+### Community 180 - "Community 180"
 Cohesion: 0.67
 Nodes (2): buildOperationalWorkItem(), createOperationalWorkItemWithCtx()
 
-### Community 182 - "Community 182"
+### Community 181 - "Community 181"
 Cohesion: 0.67
 Nodes (2): expectIndex(), getTableIndexes()
 
-### Community 183 - "Community 183"
+### Community 182 - "Community 182"
 Cohesion: 0.5
 Nodes (0):
 
-### Community 184 - "Community 184"
+### Community 183 - "Community 183"
 Cohesion: 0.83
 Nodes (3): resolveServiceIntakeCustomerProfile(), splitFullName(), trimOptional()
 
-### Community 185 - "Community 185"
+### Community 184 - "Community 184"
 Cohesion: 0.5
 Nodes (0):
 
-### Community 186 - "Community 186"
+### Community 185 - "Community 185"
 Cohesion: 0.67
 Nodes (2): lookupByBarcode(), mapSkuToCatalogResult()
+
+### Community 186 - "Community 186"
+Cohesion: 0.5
+Nodes (0):
 
 ### Community 187 - "Community 187"
 Cohesion: 0.5
@@ -2180,16 +2180,16 @@ Cohesion: 0.5
 Nodes (0):
 
 ### Community 189 - "Community 189"
-Cohesion: 0.5
-Nodes (0):
-
-### Community 190 - "Community 190"
 Cohesion: 0.67
 Nodes (2): expectIndex(), getTableIndexes()
 
-### Community 191 - "Community 191"
+### Community 190 - "Community 190"
 Cohesion: 0.83
 Nodes (3): findExistingCustomerProfileId(), getStoreOrganizationId(), recordStoreFrontCustomerMilestone()
+
+### Community 191 - "Community 191"
+Cohesion: 0.5
+Nodes (0):
 
 ### Community 192 - "Community 192"
 Cohesion: 0.5
@@ -2212,24 +2212,24 @@ Cohesion: 0.5
 Nodes (0):
 
 ### Community 197 - "Community 197"
-Cohesion: 0.5
-Nodes (0):
-
-### Community 198 - "Community 198"
 Cohesion: 0.67
 Nodes (2): countGroupedAnalytics(), groupAnalytics()
+
+### Community 198 - "Community 198"
+Cohesion: 0.5
+Nodes (0):
 
 ### Community 199 - "Community 199"
 Cohesion: 0.5
 Nodes (0):
 
 ### Community 200 - "Community 200"
-Cohesion: 0.5
-Nodes (0):
-
-### Community 201 - "Community 201"
 Cohesion: 0.67
 Nodes (2): handleSubmit(), resetReplacementFields()
+
+### Community 201 - "Community 201"
+Cohesion: 0.5
+Nodes (0):
 
 ### Community 202 - "Community 202"
 Cohesion: 0.5
@@ -2252,20 +2252,20 @@ Cohesion: 0.5
 Nodes (0):
 
 ### Community 207 - "Community 207"
-Cohesion: 0.5
-Nodes (0):
-
-### Community 208 - "Community 208"
 Cohesion: 0.67
 Nodes (2): handleSubmit(), parseDateTimeLocal()
 
-### Community 209 - "Community 209"
+### Community 208 - "Community 208"
 Cohesion: 0.5
 Nodes (0):
 
-### Community 210 - "Community 210"
+### Community 209 - "Community 209"
 Cohesion: 0.67
 Nodes (2): getRiskStyles(), RiskIndicators()
+
+### Community 210 - "Community 210"
+Cohesion: 0.5
+Nodes (0):
 
 ### Community 211 - "Community 211"
 Cohesion: 0.5
@@ -2276,36 +2276,36 @@ Cohesion: 0.5
 Nodes (0):
 
 ### Community 213 - "Community 213"
-Cohesion: 0.5
-Nodes (0):
-
-### Community 214 - "Community 214"
 Cohesion: 0.67
 Nodes (2): mapActiveSessionDto(), normalizeCartItems()
 
-### Community 215 - "Community 215"
+### Community 214 - "Community 214"
 Cohesion: 0.5
 Nodes (0):
 
-### Community 216 - "Community 216"
+### Community 215 - "Community 215"
 Cohesion: 0.83
 Nodes (3): isBrowserFingerprintResult(), readStoredTerminalFingerprint(), readStoredTerminalFingerprintHash()
 
-### Community 217 - "Community 217"
+### Community 216 - "Community 216"
 Cohesion: 0.67
 Nodes (2): completePendingAuthSync(), sleep()
 
-### Community 218 - "Community 218"
+### Community 217 - "Community 217"
 Cohesion: 0.83
 Nodes (3): getBaseUrl(), getUserRedeemedOffers(), submitOffer()
 
-### Community 219 - "Community 219"
+### Community 218 - "Community 218"
 Cohesion: 0.83
 Nodes (3): getAllStores(), getBaseUrl(), getStore()
 
-### Community 220 - "Community 220"
+### Community 219 - "Community 219"
 Cohesion: 0.83
 Nodes (3): getAllSubcategories(), getBaseUrl(), getSubategory()
+
+### Community 220 - "Community 220"
+Cohesion: 0.5
+Nodes (0):
 
 ### Community 221 - "Community 221"
 Cohesion: 0.5
@@ -2328,8 +2328,8 @@ Cohesion: 0.5
 Nodes (0):
 
 ### Community 226 - "Community 226"
-Cohesion: 0.5
-Nodes (0):
+Cohesion: 0.67
+Nodes (2): toDisplayAmount(), toPesewas()
 
 ### Community 227 - "Community 227"
 Cohesion: 0.67
@@ -9016,9 +9016,9 @@ _Questions this graph is uniquely positioned to answer:_
   _Cohesion score 0.13 - nodes in this community are weakly interconnected._
 - **Should `Community 10` be split into smaller, more focused modules?**
   _Cohesion score 0.11 - nodes in this community are weakly interconnected._
-- **Should `Community 12` be split into smaller, more focused modules?**
-  _Cohesion score 0.13 - nodes in this community are weakly interconnected._
-- **Should `Community 15` be split into smaller, more focused modules?**
+- **Should `Community 14` be split into smaller, more focused modules?**
   _Cohesion score 0.12 - nodes in this community are weakly interconnected._
-- **Should `Community 16` be split into smaller, more focused modules?**
+- **Should `Community 17` be split into smaller, more focused modules?**
+  _Cohesion score 0.12 - nodes in this community are weakly interconnected._
+- **Should `Community 18` be split into smaller, more focused modules?**
   _Cohesion score 0.12 - nodes in this community are weakly interconnected._

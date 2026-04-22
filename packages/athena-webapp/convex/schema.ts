@@ -216,6 +216,7 @@ const schema = defineSchema({
     .index("by_status", ["status"])
     .index("by_cashierId", ["cashierId"])
     .index("by_cashierId_and_status", ["cashierId", "status"])
+    .index("by_registerSessionId", ["registerSessionId"])
     .index("by_status_and_expiresAt", ["status", "expiresAt"])
     .index("by_storeId_and_status", ["storeId", "status"])
     .index("by_storeId_terminalId", ["storeId", "terminalId"])
