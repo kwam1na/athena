@@ -232,30 +232,35 @@ function StaffProvisionForm({
     api.operations.staffProfiles.updateStaffProfile,
   );
 
+  const initialFirstName = staff?.firstName ?? "";
+  const initialLastName = staff?.lastName ?? "";
   const initialUsername = staff?.username?.trim().toLowerCase() ?? "";
-  const normalizedUsername = username.trim().toLowerCase();
-  const isEditingUsername =
-    mode === "edit" &&
-    normalizedUsername.length > 0 &&
-    normalizedUsername !== initialUsername;
+  const shouldAutoGenerateUsername =
+    mode === "create" ||
+    (mode === "edit" &&
+      (firstName.trim() !== initialFirstName.trim() ||
+        lastName.trim() !== initialLastName.trim()));
 
   const candidateUsername = useMemo(() => {
-    if (mode !== "create" || !isCheckingUsername) {
+    if (!shouldAutoGenerateUsername || !isCheckingUsername) {
       return "";
     }
 
     return buildUsername(firstName, lastName, usernameSuffix);
-  }, [firstName, isCheckingUsername, lastName, mode, usernameSuffix]);
+  }, [
+    firstName,
+    isCheckingUsername,
+    lastName,
+    shouldAutoGenerateUsername,
+    usernameSuffix,
+  ]);
 
   const usernameAvailability = useQuery(
     api.operations.staffCredentials.getStaffCredentialUsernameAvailability,
-    mode === "create"
-      ? candidateUsername
-        ? { storeId, username: candidateUsername }
-        : "skip"
-      : isEditingUsername
-        ? { storeId, username }
-        : "skip",
+    candidateUsername &&
+      !(mode === "edit" && candidateUsername === initialUsername)
+      ? { storeId, username: candidateUsername }
+      : "skip",
   );
 
   useEffect(() => {
@@ -275,7 +280,12 @@ function StaffProvisionForm({
   }, [mode, staff]);
 
   useEffect(() => {
-    if (mode !== "create") {
+    if (!shouldAutoGenerateUsername) {
+      if (mode === "edit") {
+        setUsername(staff?.username ?? "");
+      }
+      setUsernameSuffix(1);
+      setIsCheckingUsername(false);
       return;
     }
 
@@ -292,10 +302,10 @@ function StaffProvisionForm({
     setUsername("");
     setUsernameSuffix(1);
     setIsCheckingUsername(true);
-  }, [firstName, lastName, mode]);
+  }, [firstName, lastName, mode, shouldAutoGenerateUsername, staff]);
 
   useEffect(() => {
-    if (mode !== "create") {
+    if (!shouldAutoGenerateUsername) {
       return;
     }
 
@@ -305,6 +315,12 @@ function StaffProvisionForm({
 
     if (!candidateUsername) {
       setUsername("");
+      setIsCheckingUsername(false);
+      return;
+    }
+
+    if (mode === "edit" && candidateUsername === initialUsername) {
+      setUsername(candidateUsername);
       setIsCheckingUsername(false);
       return;
     }
@@ -320,36 +336,29 @@ function StaffProvisionForm({
     }
 
     setUsernameSuffix((previous) => previous + 1);
-  }, [candidateUsername, isCheckingUsername, mode, usernameAvailability]);
+  }, [
+    candidateUsername,
+    initialUsername,
+    isCheckingUsername,
+    mode,
+    shouldAutoGenerateUsername,
+    usernameAvailability,
+  ]);
 
-  const hasUsernameConflict =
-    mode === "edit" &&
-    isEditingUsername &&
-    usernameAvailability !== undefined &&
-    !usernameAvailability.available;
-
-  const isUsernamePending =
-    mode === "create"
-      ? isCheckingUsername
-      : isEditingUsername && usernameAvailability === undefined;
+  const isUsernamePending = isCheckingUsername;
 
   const isValid =
     firstName.trim() &&
     lastName.trim() &&
     username.trim() &&
     selectedRole &&
-    !isUsernamePending &&
-    !hasUsernameConflict;
+    !isUsernamePending;
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
 
     if (!isValid) {
-      toast.error(
-        hasUsernameConflict
-          ? "Choose a different username for this store."
-          : "Complete the required staff details before saving.",
-      );
+      toast.error("Complete the required staff details before saving.");
       return;
     }
 
@@ -441,23 +450,13 @@ function StaffProvisionForm({
           <Input
             id="staff-username"
             value={isUsernamePending ? "Checking..." : username}
-            readOnly={mode === "create"}
-            className={
-              mode === "create" ? "cursor-not-allowed bg-muted" : undefined
-            }
+            readOnly
+            className="cursor-not-allowed bg-muted"
             disabled={isUsernamePending}
-            onChange={(event) => setUsername(event.target.value)}
           />
           <p className="text-xs text-muted-foreground">
-            {mode === "create"
-              ? "Auto-generated from first and last name"
-              : "Keep the current username or choose a new one"}
+            Auto-generated from first and last name
           </p>
-          {hasUsernameConflict ? (
-            <p className="text-xs text-destructive">
-              Username is already in use for this store
-            </p>
-          ) : null}
         </div>
 
         <div className="space-y-2">

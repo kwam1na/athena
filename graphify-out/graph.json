@@ -19295,7 +19295,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_staff_staffmanagement_test_tsx",
       "source_file": "packages/athena-webapp/src/components/staff/StaffManagement.test.tsx",
-      "source_location": "L114",
+      "source_location": "L125",
       "target": "staffmanagement_test_chooserole",
       "weight": 1
     },
@@ -19321,6 +19321,18 @@
       "source_file": "packages/athena-webapp/src/components/staff/StaffManagement.tsx",
       "source_location": "L88",
       "target": "staffmanagement_buildusername",
+      "weight": 1
+    },
+    {
+      "_src": "packages_athena_webapp_src_components_staff_staffmanagement_tsx",
+      "_tgt": "staffmanagement_credentialpindialog",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1,
+      "relation": "contains",
+      "source": "packages_athena_webapp_src_components_staff_staffmanagement_tsx",
+      "source_file": "packages/athena-webapp/src/components/staff/StaffManagement.tsx",
+      "source_location": "L541",
+      "target": "staffmanagement_credentialpindialog",
       "weight": 1
     },
     {
@@ -19373,38 +19385,14 @@
     },
     {
       "_src": "packages_athena_webapp_src_components_staff_staffmanagement_tsx",
-      "_tgt": "staffmanagement_handlepinkeydown",
+      "_tgt": "staffmanagement_handledeactivate",
       "confidence": "EXTRACTED",
       "confidence_score": 1,
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_staff_staffmanagement_tsx",
       "source_file": "packages/athena-webapp/src/components/staff/StaffManagement.tsx",
-      "source_location": "L572",
-      "target": "staffmanagement_handlepinkeydown",
-      "weight": 1
-    },
-    {
-      "_src": "packages_athena_webapp_src_components_staff_staffmanagement_tsx",
-      "_tgt": "staffmanagement_handlesubmit",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1,
-      "relation": "contains",
-      "source": "packages_athena_webapp_src_components_staff_staffmanagement_tsx",
-      "source_file": "packages/athena-webapp/src/components/staff/StaffManagement.tsx",
-      "source_location": "L590",
-      "target": "staffmanagement_handlesubmit",
-      "weight": 1
-    },
-    {
-      "_src": "packages_athena_webapp_src_components_staff_staffmanagement_tsx",
-      "_tgt": "staffmanagement_if",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1,
-      "relation": "contains",
-      "source": "packages_athena_webapp_src_components_staff_staffmanagement_tsx",
-      "source_file": "packages/athena-webapp/src/components/staff/StaffManagement.tsx",
-      "source_location": "L735",
-      "target": "staffmanagement_if",
+      "source_location": "L733",
+      "target": "staffmanagement_handledeactivate",
       "weight": 1
     },
     {
@@ -19417,6 +19405,18 @@
       "source_file": "packages/athena-webapp/src/components/staff/StaffManagement.tsx",
       "source_location": "L80",
       "target": "staffmanagement_normalizenamesegment",
+      "weight": 1
+    },
+    {
+      "_src": "packages_athena_webapp_src_components_staff_staffmanagement_tsx",
+      "_tgt": "staffmanagement_staffprovisionform",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1,
+      "relation": "contains",
+      "source": "packages_athena_webapp_src_components_staff_staffmanagement_tsx",
+      "source_file": "packages/athena-webapp/src/components/staff/StaffManagement.tsx",
+      "source_location": "L194",
+      "target": "staffmanagement_staffprovisionform",
       "weight": 1
     },
     {
@@ -53641,7 +53641,7 @@
       "label": "chooseRole()",
       "norm_label": "chooserole()",
       "source_file": "packages/athena-webapp/src/components/staff/StaffManagement.test.tsx",
-      "source_location": "L114"
+      "source_location": "L125"
     },
     {
       "community": 290,
@@ -60162,6 +60162,15 @@
     {
       "community": 48,
       "file_type": "code",
+      "id": "staffmanagement_credentialpindialog",
+      "label": "CredentialPinDialog()",
+      "norm_label": "credentialpindialog()",
+      "source_file": "packages/athena-webapp/src/components/staff/StaffManagement.tsx",
+      "source_location": "L541"
+    },
+    {
+      "community": 48,
+      "file_type": "code",
       "id": "staffmanagement_credentialstatusbadge",
       "label": "CredentialStatusBadge()",
       "norm_label": "credentialstatusbadge()",
@@ -60198,29 +60207,11 @@
     {
       "community": 48,
       "file_type": "code",
-      "id": "staffmanagement_handlepinkeydown",
-      "label": "handlePinKeyDown()",
-      "norm_label": "handlepinkeydown()",
+      "id": "staffmanagement_handledeactivate",
+      "label": "handleDeactivate()",
+      "norm_label": "handledeactivate()",
       "source_file": "packages/athena-webapp/src/components/staff/StaffManagement.tsx",
-      "source_location": "L572"
-    },
-    {
-      "community": 48,
-      "file_type": "code",
-      "id": "staffmanagement_handlesubmit",
-      "label": "handleSubmit()",
-      "norm_label": "handlesubmit()",
-      "source_file": "packages/athena-webapp/src/components/staff/StaffManagement.tsx",
-      "source_location": "L344"
-    },
-    {
-      "community": 48,
-      "file_type": "code",
-      "id": "staffmanagement_if",
-      "label": "if()",
-      "norm_label": "if()",
-      "source_file": "packages/athena-webapp/src/components/staff/StaffManagement.tsx",
-      "source_location": "L735"
+      "source_location": "L733"
     },
     {
       "community": 48,
@@ -60230,6 +60221,15 @@
       "norm_label": "normalizenamesegment()",
       "source_file": "packages/athena-webapp/src/components/staff/StaffManagement.tsx",
       "source_location": "L80"
+    },
+    {
+      "community": 48,
+      "file_type": "code",
+      "id": "staffmanagement_staffprovisionform",
+      "label": "StaffProvisionForm()",
+      "norm_label": "staffprovisionform()",
+      "source_file": "packages/athena-webapp/src/components/staff/StaffManagement.tsx",
+      "source_location": "L194"
     },
     {
       "community": 480,
