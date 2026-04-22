@@ -59,6 +59,15 @@ const baseProps = {
   ],
 };
 
+async function chooseSelectOption(
+  user: ReturnType<typeof userEvent.setup>,
+  label: RegExp,
+  option: RegExp
+) {
+  await user.click(screen.getByRole("combobox", { name: label }));
+  await user.click(await screen.findByRole("option", { name: option }));
+}
+
 describe("ServiceCasesViewContent", () => {
   beforeEach(() => {
     window.scrollTo = vi.fn();
@@ -87,9 +96,9 @@ describe("ServiceCasesViewContent", () => {
 
     await user.click(screen.getByRole("button", { name: /use customer/i }));
     await user.type(screen.getByLabelText(/service title/i), "Closure Repair");
-    await user.selectOptions(screen.getByLabelText(/service mode/i), "repair");
-    await user.selectOptions(screen.getByLabelText(/service catalog/i), "catalog-1");
-    await user.selectOptions(screen.getByLabelText(/assigned staff/i), "staff-1");
+    await chooseSelectOption(user, /service mode/i, /^repair$/i);
+    await chooseSelectOption(user, /service catalog/i, /closure repair/i);
+    await chooseSelectOption(user, /assigned staff/i, /adjoa tetteh/i);
     await user.type(screen.getByLabelText(/quoted amount/i), "450");
     await user.click(screen.getByRole("button", { name: /create service case/i }));
 
@@ -124,7 +133,7 @@ describe("ServiceCasesViewContent", () => {
     expect(screen.getByText("1 pending approval")).toBeInTheDocument();
 
     await user.type(screen.getByLabelText(/payment amount/i), "75");
-    await user.selectOptions(screen.getByLabelText(/payment method/i), "card");
+    await chooseSelectOption(user, /payment method/i, /^card$/i);
     await user.click(screen.getByRole("button", { name: /record payment/i }));
     expect(onRecordPayment).toHaveBeenCalledWith({
       amount: 75,
@@ -154,7 +163,7 @@ describe("ServiceCasesViewContent", () => {
       usageType: "consumed",
     });
 
-    await user.selectOptions(screen.getByLabelText(/case status/i), "awaiting_pickup");
+    await chooseSelectOption(user, /case status/i, /awaiting pickup/i);
     await user.click(screen.getByRole("button", { name: /update status/i }));
     expect(onUpdateStatus).toHaveBeenCalledWith({
       serviceCaseId: "case-1",

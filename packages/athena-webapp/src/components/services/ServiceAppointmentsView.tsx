@@ -7,8 +7,16 @@ import { EmptyState } from "../states/empty/empty-state";
 import { NoPermissionView } from "../states/no-permission/NoPermissionView";
 import { ProtectedAdminSignInView } from "../states/signed-out/ProtectedAdminSignInView";
 import { Button } from "../ui/button";
+import { DateTimePicker } from "../ui/date-time-picker";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../ui/select";
 import { useProtectedAdminPageState } from "@/hooks/useProtectedAdminPageState";
 import { api } from "~/convex/_generated/api";
 
@@ -77,6 +85,14 @@ const initialFormState = {
 function parseDateTimeLocal(value: string) {
   const timestamp = new Date(value).getTime();
   return Number.isNaN(timestamp) ? null : timestamp;
+}
+
+function formatDateTimeLocal(value: Date) {
+  const pad = (part: number) => part.toString().padStart(2, "0");
+
+  return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(
+    value.getDate()
+  )}T${pad(value.getHours())}:${pad(value.getMinutes())}`;
 }
 
 export function ServiceAppointmentsViewContent({
@@ -216,60 +232,64 @@ export function ServiceAppointmentsViewContent({
 
           <div className="space-y-2">
             <Label htmlFor="service-catalog">Service catalog</Label>
-            <select
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-              id="service-catalog"
-              onChange={(event) =>
+            <Select
+              onValueChange={(value) =>
                 setForm((current) => ({
                   ...current,
-                  serviceCatalogId: event.target.value,
+                  serviceCatalogId: value,
                 }))
               }
               value={form.serviceCatalogId}
             >
-              <option value="">Select service</option>
-              {catalogItems.map((item) => (
-                <option key={item._id} value={item._id}>
-                  {item.name}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger aria-label="Service catalog" id="service-catalog">
+                <SelectValue placeholder="Select service" />
+              </SelectTrigger>
+              <SelectContent>
+                {catalogItems.map((item) => (
+                  <SelectItem key={item._id} value={item._id}>
+                    {item.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="assigned-staff">Assigned staff</Label>
-            <select
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-              id="assigned-staff"
-              onChange={(event) =>
+            <Select
+              onValueChange={(value) =>
                 setForm((current) => ({
                   ...current,
-                  assignedStaffProfileId: event.target.value,
+                  assignedStaffProfileId: value,
                 }))
               }
               value={form.assignedStaffProfileId}
             >
-              <option value="">Select staff member</option>
-              {staffOptions.map((staff) => (
-                <option key={staff._id} value={staff._id}>
-                  {staff.fullName}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger aria-label="Assigned staff" id="assigned-staff">
+                <SelectValue placeholder="Select staff member" />
+              </SelectTrigger>
+              <SelectContent>
+                {staffOptions.map((staff) => (
+                  <SelectItem key={staff._id} value={staff._id}>
+                    {staff.fullName}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="appointment-start">Appointment start</Label>
-            <Input
+            <DateTimePicker
               id="appointment-start"
-              onChange={(event) =>
+              onChange={(value) =>
                 setForm((current) => ({
                   ...current,
-                  startAt: event.target.value,
+                  startAt: value ? formatDateTimeLocal(value) : "",
                 }))
               }
-              type="datetime-local"
-              value={form.startAt}
+              placeholder="Choose an appointment start time"
+              value={form.startAt ? new Date(form.startAt) : undefined}
             />
           </div>
 
@@ -328,16 +348,20 @@ export function ServiceAppointmentsViewContent({
                   <Label htmlFor={`reschedule-${appointment._id}`}>
                     {`New time for ${appointment.serviceCatalogName ?? "appointment"}`}
                   </Label>
-                  <Input
+                  <DateTimePicker
                     id={`reschedule-${appointment._id}`}
-                    onChange={(event) =>
+                    onChange={(value) =>
                       setRescheduleTimes((current) => ({
                         ...current,
-                        [appointment._id]: event.target.value,
+                        [appointment._id]: value ? formatDateTimeLocal(value) : "",
                       }))
                     }
-                    type="datetime-local"
-                    value={rescheduleTimes[appointment._id] ?? ""}
+                    placeholder="Choose a new appointment time"
+                    value={
+                      rescheduleTimes[appointment._id]
+                        ? new Date(rescheduleTimes[appointment._id])
+                        : undefined
+                    }
                   />
                 </div>
 

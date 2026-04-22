@@ -25,6 +25,15 @@ const baseProps = {
   onUpdate: vi.fn().mockResolvedValue(undefined),
 };
 
+async function chooseSelectOption(
+  user: ReturnType<typeof userEvent.setup>,
+  label: RegExp,
+  option: RegExp
+) {
+  await user.click(screen.getByRole("combobox", { name: label }));
+  await user.click(await screen.findByRole("option", { name: option }));
+}
+
 describe("ServiceCatalogViewContent", () => {
   beforeEach(() => {
     window.scrollTo = vi.fn();
@@ -63,8 +72,8 @@ describe("ServiceCatalogViewContent", () => {
     await user.type(screen.getByLabelText(/service name/i), "Wash and Restyle");
     await user.clear(screen.getByLabelText(/duration/i));
     await user.type(screen.getByLabelText(/duration/i), "75");
-    await user.selectOptions(screen.getByLabelText(/service mode/i), "same_day");
-    await user.selectOptions(screen.getByLabelText(/deposit rule/i), "flat");
+    await chooseSelectOption(user, /service mode/i, /^same-day$/i);
+    await chooseSelectOption(user, /deposit rule/i, /flat deposit/i);
     await user.clear(screen.getByLabelText(/deposit value/i));
     await user.type(screen.getByLabelText(/deposit value/i), "45");
     await user.clear(screen.getByLabelText(/base price/i));
