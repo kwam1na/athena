@@ -212,6 +212,52 @@ describe("CashControlsDashboardContent", () => {
     expect(screen.getAllByRole("link", { name: "View session" }).length).toBeGreaterThan(0);
   });
 
+  it("surfaces a drawer opened from POS in the cash-controls ledgers", () => {
+    render(
+      <CashControlsDashboardContent
+        currency="USD"
+        dashboardSnapshot={{
+          ...baseSnapshot,
+          openSessions: [
+            {
+              _id: "session-pos-open",
+              expectedCash: 6200,
+              openedAt: new Date("2026-04-22T08:45:00.000Z").getTime(),
+              openingFloat: 5000,
+              registerNumber: "Register 2",
+              status: "active",
+              totalDeposited: 1200,
+              variance: 0,
+              workflowTraceId: "register_session:drawer-pos-open",
+            },
+          ],
+          recentDeposits: [
+            {
+              _id: "deposit-pos-open",
+              amount: 1200,
+              notes: "First safe drop after POS drawer open",
+              recordedAt: new Date("2026-04-22T10:05:00.000Z").getTime(),
+              recordedByStaffName: "Ama Mensah",
+              reference: "SAFE-120",
+              registerNumber: "Register 2",
+              registerSessionId: "session-pos-open",
+            },
+          ],
+        }}
+        focus="overview"
+        isLoading={false}
+        orgUrlSlug="v26"
+        storeUrlSlug="east-legon"
+      />,
+    );
+
+    expect(screen.getAllByText("Register 2").length).toBeGreaterThan(0);
+    expect(screen.getByText("First safe drop after POS drawer open")).toBeInTheDocument();
+    expect(screen.getByText("SAFE-120")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "View trace" })).toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: "View session" }).length).toBeGreaterThan(0);
+  });
+
   it("renders the register-focused shell without the closeout workspace sections", () => {
     render(
       <CashControlsDashboardContent
