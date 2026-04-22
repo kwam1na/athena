@@ -4,6 +4,7 @@ import { internal } from "../_generated/api";
 import { v } from "convex/values";
 import { buildApprovalRequest } from "../operations/approvalRequestHelpers";
 import { recordOperationalEventWithCtx } from "../operations/operationalEvents";
+import { recordRegisterSessionTraceBestEffort } from "../operations/registerSessionTracing";
 
 const CLOSEOUT_SESSION_LIMIT = 100;
 const DEFAULT_VARIANCE_APPROVAL_THRESHOLD = 5000;
@@ -104,6 +105,27 @@ function asNumber(value: unknown) {
 function trimOptional(value?: string | null) {
   const nextValue = value?.trim();
   return nextValue ? nextValue : undefined;
+}
+
+async function persistRegisterSessionWorkflowTraceIdBestEffort(
+  ctx: MutationCtx,
+  args: {
+    registerSessionId: Id<"registerSession">;
+    traceId?: string;
+    workflowTraceId?: string;
+  }
+) {
+  if (!args.traceId || args.workflowTraceId) {
+    return;
+  }
+
+  try {
+    await ctx.db.patch("registerSession", args.registerSessionId, {
+      workflowTraceId: args.traceId,
+    });
+  } catch (error) {
+    console.error("[workflow-trace] register.session.trace.link", error);
+  }
 }
 
 export function getCashControlsConfig(store?: { config?: unknown } | null): CashControlsConfig {
@@ -380,7 +402,7 @@ export const submitRegisterSessionCloseout = mutation({
       expectedCash: registerSession.expectedCash,
     });
 
-    await ctx.runMutation(
+    const closingSession = await ctx.runMutation(
       internal.operations.registerSessions.beginRegisterSessionCloseout,
       {
         countedCash: args.countedCash,
@@ -388,6 +410,32 @@ export const submitRegisterSessionCloseout = mutation({
         registerSessionId: args.registerSessionId,
       }
     );
+
+    const closeoutSubmittedAt = Date.now();
+    const closeoutSubmittedTraceResult = await recordRegisterSessionTraceBestEffort(
+      ctx,
+      {
+        stage: "closeout_submitted",
+        session:
+          closingSession ??
+          ({
+            ...registerSession,
+            countedCash: args.countedCash,
+            status: "closing",
+          } as typeof registerSession),
+        occurredAt: closeoutSubmittedAt,
+        actorStaffProfileId: args.actorStaffProfileId,
+        actorUserId: args.actorUserId,
+        countedCash: args.countedCash,
+        variance: closeoutReview.variance,
+      },
+    );
+
+    await persistRegisterSessionWorkflowTraceIdBestEffort(ctx, {
+      registerSessionId: registerSession._id,
+      traceId: closeoutSubmittedTraceResult.traceId,
+      workflowTraceId: registerSession.workflowTraceId,
+    });
 
     if (closeoutReview.requiresApproval) {
       await cancelPendingApprovalIfNeeded({
@@ -445,11 +493,43 @@ export const submitRegisterSessionCloseout = mutation({
         subjectType: "register_session",
       });
 
+      const approvalPendingSession = await ctx.db.get(
+        "registerSession",
+        registerSession._id
+      );
+      const approvalPendingAt = Date.now();
+      const approvalPendingTraceResult = await recordRegisterSessionTraceBestEffort(
+        ctx,
+        {
+          stage: "approval_pending",
+          session:
+            approvalPendingSession ??
+            ({
+              ...registerSession,
+              countedCash: args.countedCash,
+              managerApprovalRequestId: approvalRequestId,
+              status: "closing",
+            } as typeof registerSession),
+          occurredAt: approvalPendingAt,
+          actorStaffProfileId: args.actorStaffProfileId,
+          actorUserId: args.actorUserId,
+          approvalRequestId,
+          countedCash: args.countedCash,
+          variance: closeoutReview.variance,
+        },
+      );
+
+      await persistRegisterSessionWorkflowTraceIdBestEffort(ctx, {
+        registerSessionId: registerSession._id,
+        traceId: approvalPendingTraceResult.traceId,
+        workflowTraceId: approvalPendingSession?.workflowTraceId,
+      });
+
       return {
         action: "approval_required" as const,
         approvalRequest,
         closeoutReview,
-        registerSession: await ctx.db.get("registerSession", registerSession._id),
+        registerSession: approvalPendingSession,
       };
     }
 
@@ -489,6 +569,22 @@ export const submitRegisterSessionCloseout = mutation({
       subjectId: registerSession._id,
       subjectLabel: registerSession.registerNumber,
       subjectType: "register_session",
+    });
+
+    const closedTraceResult = await recordRegisterSessionTraceBestEffort(ctx, {
+      stage: "closed",
+      session: closedSession ?? registerSession,
+      occurredAt: closedSession?.closedAt,
+      actorStaffProfileId: args.actorStaffProfileId,
+      actorUserId: args.actorUserId,
+      countedCash: args.countedCash,
+      variance: closeoutReview.variance,
+    });
+
+    await persistRegisterSessionWorkflowTraceIdBestEffort(ctx, {
+      registerSessionId: registerSession._id,
+      traceId: closedTraceResult.traceId,
+      workflowTraceId: closedSession?.workflowTraceId,
     });
 
     return {
@@ -572,6 +668,39 @@ export const reviewRegisterSessionCloseout = mutation({
         subjectType: "register_session",
       });
 
+      const approvalTraceResult = await recordRegisterSessionTraceBestEffort(ctx, {
+        stage: "closeout_approved",
+        session: closedSession ?? registerSession,
+        occurredAt: closedSession?.closedAt,
+        actorStaffProfileId: args.reviewedByStaffProfileId,
+        actorUserId: args.reviewedByUserId,
+        approvalRequestId: approvalRequest._id,
+        countedCash: registerSession.countedCash,
+        variance: registerSession.variance,
+      });
+
+      await persistRegisterSessionWorkflowTraceIdBestEffort(ctx, {
+        registerSessionId: registerSession._id,
+        traceId: approvalTraceResult.traceId,
+        workflowTraceId: closedSession?.workflowTraceId,
+      });
+
+      const closedTraceResult = await recordRegisterSessionTraceBestEffort(ctx, {
+        stage: "closed",
+        session: closedSession ?? registerSession,
+        occurredAt: closedSession?.closedAt,
+        actorStaffProfileId: args.reviewedByStaffProfileId,
+        actorUserId: args.reviewedByUserId,
+        countedCash: registerSession.countedCash,
+        variance: registerSession.variance,
+      });
+
+      await persistRegisterSessionWorkflowTraceIdBestEffort(ctx, {
+        registerSessionId: registerSession._id,
+        traceId: closedTraceResult.traceId,
+        workflowTraceId: closedSession?.workflowTraceId,
+      });
+
       return {
         action: "approved" as const,
         approvalRequest: reviewedApprovalRequest,
@@ -594,10 +723,29 @@ export const reviewRegisterSessionCloseout = mutation({
       subjectType: "register_session",
     });
 
+    const rejectedSession = await ctx.db.get("registerSession", registerSession._id);
+    const rejectionOccurredAt = Date.now();
+    const rejectionTraceResult = await recordRegisterSessionTraceBestEffort(ctx, {
+      stage: "closeout_rejected",
+      session: rejectedSession ?? registerSession,
+      occurredAt: rejectionOccurredAt,
+      actorStaffProfileId: args.reviewedByStaffProfileId,
+      actorUserId: args.reviewedByUserId,
+      approvalRequestId: approvalRequest._id,
+      countedCash: registerSession.countedCash,
+      variance: registerSession.variance,
+    });
+
+    await persistRegisterSessionWorkflowTraceIdBestEffort(ctx, {
+      registerSessionId: registerSession._id,
+      traceId: rejectionTraceResult.traceId,
+      workflowTraceId: rejectedSession?.workflowTraceId,
+    });
+
     return {
       action: "rejected" as const,
       approvalRequest: reviewedApprovalRequest,
-      registerSession: await ctx.db.get("registerSession", registerSession._id),
+      registerSession: rejectedSession,
     };
   },
 });

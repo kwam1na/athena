@@ -1,10 +1,11 @@
-import { mutation, query, type QueryCtx } from "../_generated/server";
+import { mutation, query, type MutationCtx, type QueryCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import { v } from "convex/values";
 import { buildRegisterSessionCloseoutReview, getCashControlsConfig } from "./closeouts";
 import { recordOperationalEventWithCtx } from "../operations/operationalEvents";
 import { recordPaymentAllocationWithCtx } from "../operations/paymentAllocations";
 import { recordRegisterSessionDepositWithCtx } from "../operations/registerSessions";
+import { recordRegisterSessionTraceBestEffort } from "../operations/registerSessionTracing";
 
 const CASH_DEPOSIT_ALLOCATION_TYPE = "cash_deposit";
 const CASH_DEPOSIT_SUBJECT_TYPE = "register_cash_deposit";
@@ -45,11 +46,33 @@ type CashControlRegisterSession = Pick<
   | "registerNumber"
   | "status"
   | "variance"
+  | "workflowTraceId"
 >;
 
 function trimOptional(value?: string | null) {
   const nextValue = value?.trim();
   return nextValue ? nextValue : undefined;
+}
+
+async function persistRegisterSessionWorkflowTraceIdBestEffort(
+  ctx: MutationCtx,
+  args: {
+    registerSessionId: Id<"registerSession">;
+    traceId?: string;
+    workflowTraceId?: string;
+  }
+) {
+  if (!args.traceId || args.workflowTraceId) {
+    return;
+  }
+
+  try {
+    await ctx.db.patch("registerSession", args.registerSessionId, {
+      workflowTraceId: args.traceId,
+    });
+  } catch (error) {
+    console.error("[workflow-trace] register.session.trace.link", error);
+  }
 }
 
 function isCashControlDepositAllocation(
@@ -491,6 +514,10 @@ export const recordRegisterSessionDeposit = mutation({
       registerSessionId: args.registerSessionId,
     });
 
+    if (!updatedRegisterSession) {
+      throw new Error("Register session deposit was recorded without a session.");
+    }
+
     await recordOperationalEventWithCtx(ctx, {
       actorStaffProfileId: args.actorStaffProfileId,
       actorUserId: args.actorUserId,
@@ -509,6 +536,22 @@ export const recordRegisterSessionDeposit = mutation({
       subjectId: targetId,
       subjectLabel: registerSession.registerNumber,
       subjectType: CASH_DEPOSIT_SUBJECT_TYPE,
+    });
+
+    const occurredAt = Date.now();
+    const traceResult = await recordRegisterSessionTraceBestEffort(ctx, {
+      stage: "deposit_recorded",
+      session: updatedRegisterSession,
+      occurredAt,
+      amount: args.amount,
+      actorStaffProfileId: args.actorStaffProfileId,
+      actorUserId: args.actorUserId,
+    });
+
+    await persistRegisterSessionWorkflowTraceIdBestEffort(ctx, {
+      registerSessionId: args.registerSessionId,
+      traceId: traceResult.traceId,
+      workflowTraceId: updatedRegisterSession.workflowTraceId,
     });
 
     return {
