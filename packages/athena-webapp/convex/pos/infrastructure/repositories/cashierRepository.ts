@@ -30,21 +30,21 @@ export async function getCashierForRegisterState(
     .filter(Boolean)
     .map((value) => value!.trim().replace(/\s+/g, " "));
   const fallbackNames = staffProfile.fullName
-    ?.split(/\s+/)
+    .split(/\s+/)
     .filter(Boolean)
     .map((value) => value.trim());
 
   const resolvedFirstName =
-    firstName || fallbackNames?.[0] || staffProfile.fullName;
+    firstName || fallbackNames[0] || staffProfile.fullName;
   const resolvedLastName =
     restNames.join(" ") ||
-    fallbackNames?.slice(1).join(" ") ||
+    fallbackNames.slice(1).join(" ") ||
     resolvedFirstName;
 
   return {
     _id: staffProfile._id,
-    firstName: resolvedFirstName || "Athena",
-    lastName: resolvedLastName || "User",
+    firstName: resolvedFirstName,
+    lastName: resolvedLastName,
     active: staffProfile.status === "active",
   };
 }

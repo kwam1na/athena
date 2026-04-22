@@ -6,7 +6,7 @@ export const staffProfileSchema = v.object({
   memberRole: v.optional(
     v.union(v.literal("full_admin"), v.literal("pos_only")),
   ),
-  fullName: v.optional(v.string()),
+  fullName: v.string(),
   firstName: v.string(),
   lastName: v.string(),
   email: v.optional(v.string()),
