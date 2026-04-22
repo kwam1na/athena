@@ -27,7 +27,7 @@ export async function getCashierForRegisterState(
     [staffProfile.firstName, staffProfile.lastName]
       .filter(Boolean)
       .map((value) => value!.trim().replace(/\s+/g, " "));
-  const fallbackNames = staffProfile.fullName
+  const fallbackNames = staffProfile.fullName?
     .split(/\s+/)
     .filter(Boolean)
     .map((value) => value.trim());
