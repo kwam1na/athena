@@ -10,6 +10,12 @@ import {
   createSessionCommandRepository,
   type SessionCommandRepository,
 } from "../../infrastructure/repositories/sessionCommandRepository";
+import {
+  createPosSessionTraceRecorder,
+  type PosSessionTraceRecorder,
+  type PosSessionTraceStage,
+  type PosSessionTraceableSession,
+} from "./posSessionTracing";
 
 type CommandFailureStatus =
   | "cashierMismatch"
@@ -118,6 +124,7 @@ type SessionCommandDependencies = {
   calculateExpiration: (baseTime: number) => number;
   repository: SessionCommandRepository;
   inventory: PosInventoryHoldGateway;
+  tracing?: PosSessionTraceRecorder;
 };
 
 export function createPosSessionCommandService(
@@ -173,6 +180,19 @@ export function createPosSessionCommandService(
             updatedAt: now,
             holdReason: "Auto-held when new session started",
           });
+
+          await recordSessionLifecycleBestEffort(dependencies, {
+            stage: "autoHeld",
+            session: {
+              ...existingSession,
+              status: "held",
+              heldAt: now,
+              updatedAt: now,
+              holdReason: "Auto-held when new session started",
+            },
+            occurredAt: now,
+            holdReason: "Auto-held when new session started",
+          });
         }
 
         return success({
@@ -184,8 +204,12 @@ export function createPosSessionCommandService(
       const latestSessionNumber =
         await dependencies.repository.getLatestSessionNumber(args.storeId);
       const expiresAt = dependencies.calculateExpiration(now);
+      const sessionNumber = buildNextSessionNumber(
+        latestSessionNumber ?? undefined,
+        "SES",
+      );
       const sessionId = await dependencies.repository.createSession({
-        sessionNumber: buildNextSessionNumber(latestSessionNumber ?? undefined, "SES"),
+        sessionNumber,
         storeId: args.storeId,
         cashierId: args.cashierId,
         terminalId: args.terminalId,
@@ -194,6 +218,22 @@ export function createPosSessionCommandService(
         createdAt: now,
         updatedAt: now,
         expiresAt,
+      });
+
+      await recordSessionLifecycleBestEffort(dependencies, {
+        stage: "started",
+        session: {
+          _id: sessionId,
+          sessionNumber,
+          storeId: args.storeId,
+          cashierId: args.cashierId,
+          terminalId: args.terminalId,
+          registerNumber,
+          status: "active",
+          createdAt: now,
+          updatedAt: now,
+        },
+        occurredAt: now,
       });
 
       return success({ sessionId, expiresAt });
@@ -211,6 +251,19 @@ export function createPosSessionCommandService(
         status: "held",
         heldAt: now,
         updatedAt: now,
+        holdReason: args.holdReason,
+      });
+
+      await recordSessionLifecycleBestEffort(dependencies, {
+        stage: "held",
+        session: {
+          ...validation.data,
+          status: "held",
+          heldAt: now,
+          updatedAt: now,
+          holdReason: args.holdReason,
+        },
+        occurredAt: now,
         holdReason: args.holdReason,
       });
 
@@ -257,6 +310,17 @@ export function createPosSessionCommandService(
         resumedAt: now,
         updatedAt: now,
         expiresAt,
+      });
+
+      await recordSessionLifecycleBestEffort(dependencies, {
+        stage: "resumed",
+        session: {
+          ...session,
+          status: "active",
+          resumedAt: now,
+          updatedAt: now,
+        },
+        occurredAt: now,
       });
 
       return success({ sessionId: args.sessionId, expiresAt });
@@ -409,7 +473,35 @@ function createDefaultSessionCommandService(
     calculateExpiration: calculateSessionExpiration,
     repository: createSessionCommandRepository(ctx),
     inventory: createInventoryHoldGateway(ctx),
+    tracing: createPosSessionTraceRecorder(ctx),
   });
+}
+
+async function recordSessionLifecycleBestEffort(
+  dependencies: SessionCommandDependencies,
+  args: {
+    stage: PosSessionTraceStage;
+    session: PosSessionTraceableSession;
+    occurredAt?: number;
+    transactionId?: Id<"posTransaction">;
+    holdReason?: string;
+    voidReason?: string;
+  },
+) {
+  if (!dependencies.tracing) {
+    return;
+  }
+
+  try {
+    const traceResult = await dependencies.tracing.record(args);
+    if (!args.session.workflowTraceId && traceResult.traceCreated) {
+      await dependencies.repository.patchSession(args.session._id, {
+        workflowTraceId: traceResult.traceId,
+      });
+    }
+  } catch (error) {
+    console.error(`[workflow-trace] pos.session.lifecycle.${args.stage}`, error);
+  }
 }
 
 function buildNextSessionNumber(

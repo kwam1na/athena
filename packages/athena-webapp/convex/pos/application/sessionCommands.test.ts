@@ -8,6 +8,7 @@ type SessionRecord = {
   cashierId?: string;
   registerNumber?: string;
   status: "active" | "held" | "completed" | "void" | "expired";
+  workflowTraceId?: string;
   expiresAt: number;
   updatedAt: number;
   heldAt?: number;
@@ -39,14 +40,26 @@ type InventoryCall =
     }
   | { kind: "release"; skuId: string; quantity: number };
 
+type TraceCall = {
+  stage: string;
+  sessionId: string;
+  sessionNumber: string;
+  status: SessionRecord["status"];
+  traceId?: string;
+  transactionId?: string;
+  holdReason?: string;
+};
+
 describe("createPosSessionCommandService", () => {
   it("creates a fresh active session when no matching active session exists", async () => {
     const commandService = await loadCommandService();
     const repository = createFakeRepository();
+    const traceCalls: TraceCall[] = [];
 
     const result = await commandService(
       createDependencies({
         repository,
+        traceCalls,
         now: 1_000,
         nextExpiration: 61_000,
       }),
@@ -73,8 +86,18 @@ describe("createPosSessionCommandService", () => {
         cashierId: "cashier-1",
         registerNumber: "1",
         expiresAt: 61_000,
+        workflowTraceId: "pos_session:ses-001",
       }),
     );
+    expect(traceCalls).toEqual([
+      {
+        stage: "started",
+        sessionId: "session-1",
+        sessionNumber: "SES-001",
+        status: "active",
+        traceId: "pos_session:ses-001",
+      },
+    ]);
   });
 
   it("refuses to start a new session when the cashier is already active on another terminal", async () => {
@@ -116,6 +139,7 @@ describe("createPosSessionCommandService", () => {
 
   it("auto-holds an existing same-terminal session with items before returning it", async () => {
     const commandService = await loadCommandService();
+    const traceCalls: TraceCall[] = [];
     const repository = createFakeRepository({
       sessions: [
         buildSession({
@@ -147,6 +171,7 @@ describe("createPosSessionCommandService", () => {
     const result = await commandService(
       createDependencies({
         repository,
+        traceCalls,
         now: 1_000,
         nextExpiration: 61_000,
       }),
@@ -171,10 +196,21 @@ describe("createPosSessionCommandService", () => {
         holdReason: "Auto-held when new session started",
       }),
     );
+    expect(traceCalls).toEqual([
+      {
+        stage: "autoHeld",
+        sessionId: "session-4",
+        sessionNumber: "SES-004",
+        status: "held",
+        traceId: "pos_session:ses-004",
+        holdReason: "Auto-held when new session started",
+      },
+    ]);
   });
 
   it("holds a modifiable session without refreshing its expiration", async () => {
     const commandService = await loadCommandService();
+    const traceCalls: TraceCall[] = [];
     const repository = createFakeRepository({
       sessions: [
         buildSession({
@@ -184,6 +220,7 @@ describe("createPosSessionCommandService", () => {
           terminalId: "terminal-1",
           cashierId: "cashier-1",
           status: "active",
+          workflowTraceId: "pos_session:ses-002",
           expiresAt: 8_000,
           updatedAt: 500,
         }),
@@ -193,6 +230,7 @@ describe("createPosSessionCommandService", () => {
     const result = await commandService(
       createDependencies({
         repository,
+        traceCalls,
         now: 1_000,
         nextExpiration: 61_000,
       }),
@@ -216,6 +254,46 @@ describe("createPosSessionCommandService", () => {
         expiresAt: 8_000,
         holdReason: "Customer stepped away",
       }),
+    );
+    expect(traceCalls).toEqual([
+      {
+        stage: "held",
+        sessionId: "session-2",
+        sessionNumber: "SES-002",
+        status: "held",
+        traceId: "pos_session:ses-002",
+        holdReason: "Customer stepped away",
+      },
+    ]);
+  });
+
+  it("keeps session start successful when lifecycle tracing fails", async () => {
+    const commandService = await loadCommandService();
+    const repository = createFakeRepository();
+
+    const result = await commandService(
+      createDependencies({
+        repository,
+        traceError: new Error("trace unavailable"),
+        now: 1_000,
+        nextExpiration: 61_000,
+      }),
+    ).startSession({
+      storeId: "store-1",
+      terminalId: "terminal-1",
+      cashierId: "cashier-1",
+      registerNumber: "1",
+    });
+
+    expect(result).toEqual({
+      status: "ok",
+      data: {
+        sessionId: "session-1",
+        expiresAt: 61_000,
+      },
+    });
+    expect(repository.getSession("session-1")).not.toHaveProperty(
+      "workflowTraceId",
     );
   });
 
@@ -464,6 +542,12 @@ function createDependencies(options: {
   now: number;
   nextExpiration: number;
   inventoryCalls?: InventoryCall[];
+  traceCalls?: TraceCall[];
+  traceError?: Error;
+  traceResult?: {
+    traceCreated: boolean;
+    traceId: string;
+  };
 }) {
   return {
     now: () => options.now,
@@ -490,6 +574,35 @@ function createDependencies(options: {
       releaseHold: async (skuId: string, quantity: number) => {
         options.inventoryCalls?.push({ kind: "release", skuId, quantity });
         return { success: true };
+      },
+    },
+    tracing: {
+      record: async (input: {
+        stage: string;
+        session: SessionRecord;
+        transactionId?: string;
+        holdReason?: string;
+      }) => {
+        const traceCall: TraceCall = {
+          stage: input.stage,
+          sessionId: input.session._id,
+          sessionNumber: input.session.sessionNumber,
+          status: input.session.status,
+          transactionId: input.transactionId,
+          holdReason: input.holdReason,
+        };
+        options.traceCalls?.push(traceCall);
+
+        if (options.traceError) {
+          throw options.traceError;
+        }
+
+        const traceResult = options.traceResult ?? {
+          traceCreated: true,
+          traceId: `pos_session:${input.session.sessionNumber.toLowerCase()}`,
+        };
+        traceCall.traceId = traceResult.traceId;
+        return traceResult;
       },
     },
   };
