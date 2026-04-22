@@ -1103,7 +1103,7 @@
       "relation": "calls",
       "source": "core_getworkflowtracebyidwithctx",
       "source_file": "packages/athena-webapp/convex/workflowTraces/core.ts",
-      "source_location": "L90",
+      "source_location": "L91",
       "target": "core_createworkflowtracewithctx",
       "weight": 1
     },
@@ -12947,7 +12947,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_workflowtraces_core_ts",
       "source_file": "packages/athena-webapp/convex/workflowTraces/core.ts",
-      "source_location": "L133",
+      "source_location": "L134",
       "target": "core_appendworkflowtraceeventwithctx",
       "weight": 1
     },
@@ -12959,7 +12959,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_workflowtraces_core_ts",
       "source_file": "packages/athena-webapp/convex/workflowTraces/core.ts",
-      "source_location": "L80",
+      "source_location": "L81",
       "target": "core_createworkflowtracewithctx",
       "weight": 1
     },
@@ -13007,7 +13007,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_workflowtraces_core_ts",
       "source_file": "packages/athena-webapp/convex/workflowTraces/core.ts",
-      "source_location": "L103",
+      "source_location": "L104",
       "target": "core_registerworkflowtracelookupwithctx",
       "weight": 1
     },
@@ -64051,7 +64051,7 @@
       "label": "appendWorkflowTraceEventWithCtx()",
       "norm_label": "appendworkflowtraceeventwithctx()",
       "source_file": "packages/athena-webapp/convex/workflowTraces/core.ts",
-      "source_location": "L133"
+      "source_location": "L134"
     },
     {
       "community": 78,
@@ -64060,7 +64060,7 @@
       "label": "createWorkflowTraceWithCtx()",
       "norm_label": "createworkflowtracewithctx()",
       "source_file": "packages/athena-webapp/convex/workflowTraces/core.ts",
-      "source_location": "L80"
+      "source_location": "L81"
     },
     {
       "community": 78,
@@ -64096,7 +64096,7 @@
       "label": "registerWorkflowTraceLookupWithCtx()",
       "norm_label": "registerworkflowtracelookupwithctx()",
       "source_file": "packages/athena-webapp/convex/workflowTraces/core.ts",
-      "source_location": "L103"
+      "source_location": "L104"
     },
     {
       "community": 78,

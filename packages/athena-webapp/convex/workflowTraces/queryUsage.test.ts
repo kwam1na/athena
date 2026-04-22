@@ -116,10 +116,19 @@ function createTestCtx(seed?: Partial<WorkflowTraceTables>) {
       tables[tableName].push(row as never);
       return Promise.resolve(row._id);
     },
-    patch(id: string, value: Record<string, unknown>) {
-      for (const tableName of Object.keys(tables) as Array<
-        keyof WorkflowTraceTables
-      >) {
+    patch(
+      tableOrId: keyof WorkflowTraceTables | string,
+      idOrValue: string | Record<string, unknown>,
+      maybeValue?: Record<string, unknown>,
+    ) {
+      const tableNames =
+        maybeValue && tableOrId in tables
+          ? [tableOrId as keyof WorkflowTraceTables]
+          : (Object.keys(tables) as Array<keyof WorkflowTraceTables>);
+      const id = (maybeValue ? idOrValue : tableOrId) as string;
+      const value = (maybeValue ?? idOrValue) as Record<string, unknown>;
+
+      for (const tableName of tableNames) {
         const row = tables[tableName].find((entry) => entry._id === id);
 
         if (row) {

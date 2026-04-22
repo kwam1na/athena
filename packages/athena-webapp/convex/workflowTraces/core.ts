@@ -69,6 +69,7 @@ export async function listWorkflowTraceEventsWithCtx(
     traceId: string;
   }
 ) {
+  // eslint-disable-next-line @convex-dev/no-collect-in-query -- Trace timelines are loaded one trace at a time and stay bounded by a single workflow instance.
   return ctx.db
     .query("workflowTraceEvent")
     .withIndex("by_storeId_traceId_sequence", (q) =>
@@ -93,7 +94,7 @@ export async function createWorkflowTraceWithCtx(
   });
 
   if (existing) {
-    await ctx.db.patch(existing._id, normalizedTrace);
+    await ctx.db.patch("workflowTrace", existing._id, normalizedTrace);
     return existing._id;
   }
 
@@ -121,7 +122,7 @@ export async function registerWorkflowTraceLookupWithCtx(
 
   if (existing) {
     if (existing.traceId !== normalizedLookup.traceId) {
-      await ctx.db.patch(existing._id, normalizedLookup);
+      await ctx.db.patch("workflowTraceLookup", existing._id, normalizedLookup);
     }
 
     return existing._id;
