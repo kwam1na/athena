@@ -111,11 +111,12 @@ async function persistRegisterSessionWorkflowTraceIdBestEffort(
   ctx: MutationCtx,
   args: {
     registerSessionId: Id<"registerSession">;
+    traceCreated: boolean;
     traceId?: string;
     workflowTraceId?: string;
   }
 ) {
-  if (!args.traceId || args.workflowTraceId) {
+  if (!args.traceId || args.workflowTraceId || !args.traceCreated) {
     return;
   }
 
@@ -433,6 +434,7 @@ export const submitRegisterSessionCloseout = mutation({
 
     await persistRegisterSessionWorkflowTraceIdBestEffort(ctx, {
       registerSessionId: registerSession._id,
+      traceCreated: closeoutSubmittedTraceResult.traceCreated,
       traceId: closeoutSubmittedTraceResult.traceId,
       workflowTraceId: registerSession.workflowTraceId,
     });
@@ -521,6 +523,7 @@ export const submitRegisterSessionCloseout = mutation({
 
       await persistRegisterSessionWorkflowTraceIdBestEffort(ctx, {
         registerSessionId: registerSession._id,
+        traceCreated: approvalPendingTraceResult.traceCreated,
         traceId: approvalPendingTraceResult.traceId,
         workflowTraceId: approvalPendingSession?.workflowTraceId,
       });
@@ -583,6 +586,7 @@ export const submitRegisterSessionCloseout = mutation({
 
     await persistRegisterSessionWorkflowTraceIdBestEffort(ctx, {
       registerSessionId: registerSession._id,
+      traceCreated: closedTraceResult.traceCreated,
       traceId: closedTraceResult.traceId,
       workflowTraceId: closedSession?.workflowTraceId,
     });
@@ -681,6 +685,7 @@ export const reviewRegisterSessionCloseout = mutation({
 
       await persistRegisterSessionWorkflowTraceIdBestEffort(ctx, {
         registerSessionId: registerSession._id,
+        traceCreated: approvalTraceResult.traceCreated,
         traceId: approvalTraceResult.traceId,
         workflowTraceId: closedSession?.workflowTraceId,
       });
@@ -697,6 +702,7 @@ export const reviewRegisterSessionCloseout = mutation({
 
       await persistRegisterSessionWorkflowTraceIdBestEffort(ctx, {
         registerSessionId: registerSession._id,
+        traceCreated: closedTraceResult.traceCreated,
         traceId: closedTraceResult.traceId,
         workflowTraceId: closedSession?.workflowTraceId,
       });
@@ -738,6 +744,7 @@ export const reviewRegisterSessionCloseout = mutation({
 
     await persistRegisterSessionWorkflowTraceIdBestEffort(ctx, {
       registerSessionId: registerSession._id,
+      traceCreated: rejectionTraceResult.traceCreated,
       traceId: rejectionTraceResult.traceId,
       workflowTraceId: rejectedSession?.workflowTraceId,
     });

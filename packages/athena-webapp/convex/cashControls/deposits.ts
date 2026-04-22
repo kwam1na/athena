@@ -58,11 +58,12 @@ async function persistRegisterSessionWorkflowTraceIdBestEffort(
   ctx: MutationCtx,
   args: {
     registerSessionId: Id<"registerSession">;
+    traceCreated: boolean;
     traceId?: string;
     workflowTraceId?: string;
   }
 ) {
-  if (!args.traceId || args.workflowTraceId) {
+  if (!args.traceId || args.workflowTraceId || !args.traceCreated) {
     return;
   }
 
@@ -550,6 +551,7 @@ export const recordRegisterSessionDeposit = mutation({
 
     await persistRegisterSessionWorkflowTraceIdBestEffort(ctx, {
       registerSessionId: args.registerSessionId,
+      traceCreated: traceResult.traceCreated,
       traceId: traceResult.traceId,
       workflowTraceId: updatedRegisterSession.workflowTraceId,
     });

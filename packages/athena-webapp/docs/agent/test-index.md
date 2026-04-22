@@ -50,6 +50,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`convex/pos/application/sessionCommands.test.ts`](../../convex/pos/application/sessionCommands.test.ts)
 - [`convex/pos/infrastructure/repositories/sessionCommandRepository.test.ts`](../../convex/pos/infrastructure/repositories/sessionCommandRepository.test.ts)
 - [`convex/pos/infrastructure/repositories/sessionRepository.test.ts`](../../convex/pos/infrastructure/repositories/sessionRepository.test.ts)
+- [`convex/pos/public/transactions.test.ts`](../../convex/pos/public/transactions.test.ts)
 - [`convex/serviceOps/catalogAppointments.test.ts`](../../convex/serviceOps/catalogAppointments.test.ts)
 - [`convex/serviceOps/moduleWiring.test.ts`](../../convex/serviceOps/moduleWiring.test.ts)
 - [`convex/serviceOps/serviceCases.test.ts`](../../convex/serviceOps/serviceCases.test.ts)

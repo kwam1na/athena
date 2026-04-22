@@ -26,11 +26,12 @@ async function persistRegisterSessionWorkflowTraceIdBestEffort(
   ctx: MutationCtx,
   args: {
     registerSessionId: Id<"registerSession">;
+    traceCreated: boolean;
     traceId?: string;
     workflowTraceId?: string;
   }
 ) {
-  if (!args.traceId || args.workflowTraceId) {
+  if (!args.traceId || args.workflowTraceId || !args.traceCreated) {
     return;
   }
 
@@ -348,6 +349,7 @@ export const openRegisterSession = internalMutation({
 
     await persistRegisterSessionWorkflowTraceIdBestEffort(ctx, {
       registerSessionId: sessionId,
+      traceCreated: traceResult.traceCreated,
       traceId: traceResult.traceId,
       workflowTraceId: session.workflowTraceId,
     });
@@ -453,6 +455,7 @@ export const recordRegisterSessionTransaction = internalMutation({
 
       await persistRegisterSessionWorkflowTraceIdBestEffort(ctx, {
         registerSessionId: updatedSession._id,
+        traceCreated: traceResult.traceCreated,
         traceId: traceResult.traceId,
         workflowTraceId: updatedSession.workflowTraceId,
       });
