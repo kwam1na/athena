@@ -232,6 +232,7 @@ export function createPosSessionCommandService(
           status: "active",
           createdAt: now,
           updatedAt: now,
+          expiresAt,
         },
         occurredAt: now,
       });
@@ -338,6 +339,7 @@ export function createPosSessionCommandService(
         sessionId: args.sessionId,
         productSkuId: args.productSkuId,
       });
+      const previousQuantity = existingItem?.quantity;
 
       let itemId: Id<"posSessionItem">;
       if (existingItem) {
@@ -399,6 +401,21 @@ export function createPosSessionCommandService(
         expiresAt,
       });
 
+      if (!existingItem || previousQuantity !== args.quantity) {
+        await recordSessionLifecycleBestEffort(dependencies, {
+          stage: existingItem ? "itemQuantityUpdated" : "itemAdded",
+          session: {
+            ...validation.data,
+            updatedAt: now,
+            expiresAt,
+          },
+          occurredAt: now,
+          itemName: args.productName,
+          quantity: args.quantity,
+          previousQuantity,
+        });
+      }
+
       return success({ itemId, expiresAt });
     },
 
@@ -426,6 +443,18 @@ export function createPosSessionCommandService(
       await dependencies.repository.patchSession(args.sessionId, {
         updatedAt: now,
         expiresAt,
+      });
+
+      await recordSessionLifecycleBestEffort(dependencies, {
+        stage: "itemRemoved",
+        session: {
+          ...validation.data,
+          updatedAt: now,
+          expiresAt,
+        },
+        occurredAt: now,
+        itemName: item.productName,
+        quantity: item.quantity,
       });
 
       return success({ expiresAt });
@@ -486,6 +515,9 @@ async function recordSessionLifecycleBestEffort(
     transactionId?: Id<"posTransaction">;
     holdReason?: string;
     voidReason?: string;
+    itemName?: string;
+    quantity?: number;
+    previousQuantity?: number;
   },
 ) {
   if (!dependencies.tracing) {

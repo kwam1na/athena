@@ -13,6 +13,7 @@ export function RegisterCustomerPanel({
       isOpen={customerPanel.isOpen}
       onOpenChange={customerPanel.onOpenChange}
       customerInfo={customerPanel.customerInfo}
+      onCustomerCommitted={customerPanel.onCustomerCommitted}
       setCustomerInfo={customerPanel.setCustomerInfo}
     />
   );

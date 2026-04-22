@@ -153,6 +153,92 @@ describe("recordPosSessionTraceBestEffort", () => {
     );
   });
 
+  it("records cart quantity milestones with readable item details", async () => {
+    const traceSeed = buildPosSessionTraceSeed({
+      storeId: "store-1" as Id<"store">,
+      sessionNumber: "SES-001",
+      posSessionId: "session-1" as Id<"posSession">,
+      cashierId: "cashier-1" as Id<"cashier">,
+      terminalId: "terminal-1" as Id<"posTerminal">,
+    });
+
+    vi.mocked(createWorkflowTraceWithCtx).mockResolvedValue("trace-1" as never);
+    vi.mocked(registerWorkflowTraceLookupWithCtx).mockResolvedValue(
+      "lookup-1" as never,
+    );
+    vi.mocked(appendWorkflowTraceEventWithCtx).mockResolvedValue(
+      "event-1" as never,
+    );
+
+    await recordPosSessionTraceBestEffort({} as never, {
+      stage: "itemQuantityUpdated",
+      traceSeed,
+      occurredAt: 222,
+      itemName: "Hair Clips",
+      quantity: 2,
+      previousQuantity: 1,
+    });
+
+    expect(appendWorkflowTraceEventWithCtx).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        occurredAt: 222,
+        step: "cart_item_quantity_updated",
+        message: "Updated Hair Clips quantity from 1 to 2 in session SES-001",
+        details: expect.objectContaining({
+          itemName: "Hair Clips",
+          quantity: 2,
+          previousQuantity: 1,
+        }),
+      }),
+    );
+  });
+
+  it("records checkout submission milestones without marking the trace complete", async () => {
+    const traceSeed = buildPosSessionTraceSeed({
+      storeId: "store-1" as Id<"store">,
+      sessionNumber: "SES-001",
+      posSessionId: "session-1" as Id<"posSession">,
+      cashierId: "cashier-1" as Id<"cashier">,
+      terminalId: "terminal-1" as Id<"posTerminal">,
+    });
+
+    vi.mocked(createWorkflowTraceWithCtx).mockResolvedValue("trace-1" as never);
+    vi.mocked(registerWorkflowTraceLookupWithCtx).mockResolvedValue(
+      "lookup-1" as never,
+    );
+    vi.mocked(appendWorkflowTraceEventWithCtx).mockResolvedValue(
+      "event-1" as never,
+    );
+
+    await recordPosSessionTraceBestEffort({} as never, {
+      stage: "checkoutSubmitted",
+      traceSeed,
+      occurredAt: 444,
+      paymentMethod: "cash",
+      paymentCount: 2,
+    });
+
+    expect(createWorkflowTraceWithCtx).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        status: "started",
+      }),
+    );
+    expect(appendWorkflowTraceEventWithCtx).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        occurredAt: 444,
+        step: "checkout_submitted",
+        status: "started",
+        details: expect.objectContaining({
+          paymentCount: 2,
+          paymentMethod: "cash",
+        }),
+      }),
+    );
+  });
+
   it("reports traceCreated false when the trace row write fails", async () => {
     const traceSeed = buildPosSessionTraceSeed({
       storeId: "store-1" as Id<"store">,

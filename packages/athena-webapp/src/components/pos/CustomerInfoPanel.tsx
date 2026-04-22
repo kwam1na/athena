@@ -31,6 +31,7 @@ interface CustomerInfoPanelProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   customerInfo: CustomerInfo;
+  onCustomerCommitted: (customer: CustomerInfo) => Promise<void>;
   setCustomerInfo: React.Dispatch<React.SetStateAction<CustomerInfo>>;
 }
 
@@ -38,6 +39,7 @@ export function CustomerInfoPanel({
   isOpen,
   onOpenChange,
   customerInfo,
+  onCustomerCommitted,
   setCustomerInfo,
 }: CustomerInfoPanelProps) {
   const { activeStore } = useGetActiveStore();
@@ -60,12 +62,14 @@ export function CustomerInfoPanel({
   const handleSelectCustomer = (customer: POSCustomerSummary) => {
     console.log("🔄 Selecting customer:", customer);
 
-    setCustomerInfo({
+    const nextCustomerInfo = {
       customerId: customer._id,
       name: customer.name,
       email: customer.email || "",
       phone: customer.phone || "",
-    });
+    };
+    setCustomerInfo(nextCustomerInfo);
+    void onCustomerCommitted(nextCustomerInfo);
     setShowSearch(false);
     setSearchQuery("");
 
@@ -89,12 +93,14 @@ export function CustomerInfoPanel({
     });
 
     if (result.success && result.customer) {
-      setCustomerInfo({
+      const nextCustomerInfo = {
         customerId: result.customer._id,
         name: result.customer.name,
         email: result.customer.email || "",
         phone: result.customer.phone || "",
-      });
+      };
+      setCustomerInfo(nextCustomerInfo);
+      void onCustomerCommitted(nextCustomerInfo);
       setShowCreateForm(false);
       // Keep the panel open so user can see the edit button and customer details
       // Toast already shown by createCustomer hook
@@ -131,12 +137,14 @@ export function CustomerInfoPanel({
     });
 
     if (result.success) {
-      setCustomerInfo({
+      const nextCustomerInfo = {
         customerId: editingCustomer.customerId,
         name: editingCustomer.name.trim(),
         email: editingCustomer.email.trim(),
         phone: editingCustomer.phone.trim(),
-      });
+      };
+      setCustomerInfo(nextCustomerInfo);
+      void onCustomerCommitted(nextCustomerInfo);
       setIsEditing(false);
       // Toast already shown by updateCustomer hook
     } else {
@@ -154,7 +162,9 @@ export function CustomerInfoPanel({
   };
 
   const clearCustomer = () => {
-    setCustomerInfo({ name: "", email: "", phone: "" });
+    const nextCustomerInfo = { name: "", email: "", phone: "" };
+    setCustomerInfo(nextCustomerInfo);
+    void onCustomerCommitted(nextCustomerInfo);
     setSearchQuery("");
     setShowSearch(false);
     setShowCreateForm(false);

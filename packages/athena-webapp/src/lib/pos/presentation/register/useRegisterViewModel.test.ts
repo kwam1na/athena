@@ -15,6 +15,7 @@ const mockCompleteTransaction = vi.fn();
 const mockResumeSession = vi.fn();
 const mockVoidSession = vi.fn();
 const mockUpdateSession = vi.fn();
+const mockSyncSessionCheckoutState = vi.fn();
 const mockReleaseSessionInventoryHoldsAndDeleteItems = vi.fn();
 const mockRemoveItem = vi.fn();
 const mockNavigateBack = vi.fn();
@@ -51,6 +52,11 @@ let mockActiveSession:
         quantity: number;
         productId: Id<"product">;
         skuId: Id<"productSku">;
+      }>;
+      payments?: Array<{
+        method: "cash" | "card" | "mobile_money";
+        amount: number;
+        timestamp: number;
       }>;
       customer:
         | {
@@ -122,6 +128,7 @@ vi.mock("@/lib/pos/infrastructure/convex/sessionGateway", () => ({
     resumeSession: mockResumeSession,
     voidSession: mockVoidSession,
     updateSession: mockUpdateSession,
+    syncSessionCheckoutState: mockSyncSessionCheckoutState,
     releaseSessionInventoryHoldsAndDeleteItems:
       mockReleaseSessionInventoryHoldsAndDeleteItems,
     removeItem: mockRemoveItem,
@@ -238,6 +245,14 @@ describe("useRegisterViewModel", () => {
     mockUpdateSession.mockResolvedValue({
       sessionId: "session-1" as Id<"posSession">,
       expiresAt: Date.now() + 60_000,
+    });
+    mockSyncSessionCheckoutState.mockReset();
+    mockSyncSessionCheckoutState.mockResolvedValue({
+      success: true,
+      data: {
+        sessionId: "session-1" as Id<"posSession">,
+        expiresAt: Date.now() + 60_000,
+      },
     });
     mockReleaseSessionInventoryHoldsAndDeleteItems.mockReset();
     mockReleaseSessionInventoryHoldsAndDeleteItems.mockResolvedValue({
@@ -431,5 +446,91 @@ describe("useRegisterViewModel", () => {
     });
 
     expect(mockAddItem).not.toHaveBeenCalled();
+  });
+
+  it("syncs payment milestones through the checkout-state mutation", async () => {
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated("cashier-1" as Id<"cashier">);
+    });
+
+    act(() => {
+      result.current.checkout.onAddPayment("cash", 120);
+    });
+
+    expect(mockSyncSessionCheckoutState).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: "session-1",
+        cashierId: "cashier-1",
+        stage: "paymentAdded",
+        paymentMethod: "cash",
+        amount: 120,
+        payments: [
+          expect.objectContaining({
+            method: "cash",
+            amount: 120,
+          }),
+        ],
+      }),
+    );
+  });
+
+  it("records checkout submission before completing the transaction", async () => {
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated("cashier-1" as Id<"cashier">);
+    });
+
+    act(() => {
+      result.current.checkout.onAddPayment("cash", 120);
+    });
+
+    await act(async () => {
+      await result.current.checkout.onCompleteTransaction();
+    });
+
+    expect(mockSyncSessionCheckoutState).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: "session-1",
+        cashierId: "cashier-1",
+        stage: "checkoutSubmitted",
+      }),
+    );
+    expect(mockCompleteTransaction).toHaveBeenCalled();
+  });
+
+  it("commits customer changes through the session update path", async () => {
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated("cashier-1" as Id<"cashier">);
+    });
+
+    await act(async () => {
+      await result.current.customerPanel.onCustomerCommitted({
+        customerId: "customer-2" as Id<"posCustomer">,
+        name: "Efua Mensah",
+        email: "efua@example.com",
+        phone: "555-2222",
+      });
+    });
+
+    expect(mockUpdateSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: "session-1",
+        cashierId: "cashier-1",
+        customerId: "customer-2",
+        customerInfo: {
+          name: "Efua Mensah",
+          email: "efua@example.com",
+          phone: "555-2222",
+        },
+      }),
+    );
   });
 });

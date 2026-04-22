@@ -161,6 +161,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     resumeSession,
     voidSession,
     updateSession,
+    syncSessionCheckoutState,
     releaseSessionInventoryHoldsAndDeleteItems,
     removeItem,
   } = useConvexSessionActions();
@@ -238,12 +239,19 @@ export function useRegisterViewModel(): RegisterViewModel {
     }
 
     setCustomerInfo(mapSessionCustomer(activeSession?.customer ?? null));
-    setPayments([]);
+    setPayments(
+      (activeSession?.payments ?? []).map((payment) => ({
+        id: createPaymentId(),
+        method: payment.method as PosPaymentMethod,
+        amount: payment.amount,
+        timestamp: payment.timestamp,
+      })),
+    );
     setShowCustomerPanel(Boolean(activeSession?.customer));
     setIsTransactionCompleted(false);
     setCompletedOrderNumber(null);
     setCompletedTransactionData(null);
-  }, [activeSession?._id, activeSession?.customer, isTransactionCompleted]);
+  }, [activeSession?._id, activeSession?.customer, activeSession?.payments, isTransactionCompleted]);
 
   useEffect(() => {
     if (isTransactionCompleted || activeCartItems.length > 0 || payments.length === 0) {
@@ -345,6 +353,83 @@ export function useRegisterViewModel(): RegisterViewModel {
       }
     },
     [activeTotals.subtotal, activeTotals.tax, activeTotals.total, cashierId, customerInfo, updateSession],
+  );
+
+  const commitCustomerInfoBestEffort = useCallback(
+    async (nextCustomerInfo: CustomerInfo) => {
+      if (!activeSession?._id || !cashierId) {
+        return;
+      }
+
+      try {
+        await updateSession({
+          sessionId: activeSession._id as Id<"posSession">,
+          cashierId,
+          customerId: nextCustomerInfo.customerId,
+          customerInfo: hasCustomerDetails(nextCustomerInfo)
+            ? {
+                name: nextCustomerInfo.name || undefined,
+                email: nextCustomerInfo.email || undefined,
+                phone: nextCustomerInfo.phone || undefined,
+              }
+            : undefined,
+          subtotal: activeTotals.subtotal,
+          tax: activeTotals.tax,
+          total: activeTotals.total,
+        });
+      } catch (error) {
+        logger.warn("[POS] Failed to sync committed customer details", {
+          sessionId: activeSession._id,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    },
+    [
+      activeSession?._id,
+      activeTotals.subtotal,
+      activeTotals.tax,
+      activeTotals.total,
+      cashierId,
+      updateSession,
+    ],
+  );
+
+  const syncCheckoutStateBestEffort = useCallback(
+    async (args: {
+      nextPayments: Payment[];
+      stage:
+        | "paymentAdded"
+        | "paymentUpdated"
+        | "paymentRemoved"
+        | "paymentsCleared"
+        | "checkoutSubmitted";
+      paymentMethod?: PosPaymentMethod;
+      amount?: number;
+      previousAmount?: number;
+    }) => {
+      if (!activeSession?._id || !cashierId) {
+        return;
+      }
+
+      try {
+        await syncSessionCheckoutState({
+          sessionId: activeSession._id as Id<"posSession">,
+          cashierId,
+          payments: args.nextPayments.map(({ id, ...payment }) => payment),
+          stage: args.stage,
+          paymentMethod: args.paymentMethod,
+          amount: args.amount,
+          previousAmount: args.previousAmount,
+        });
+      } catch (error) {
+        logger.warn("[POS] Failed to sync checkout state", {
+          sessionId: activeSession._id,
+          stage: args.stage,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    },
+    [activeSession?._id, cashierId, syncSessionCheckoutState],
   );
 
   const holdCurrentSession = useCallback(async (reason?: string) => {
@@ -915,6 +1000,12 @@ export function useRegisterViewModel(): RegisterViewModel {
       return false;
     }
 
+    await syncCheckoutStateBestEffort({
+      nextPayments: payments,
+      stage: "checkoutSubmitted",
+      paymentMethod: payments[0]?.method,
+    });
+
     const result = await runCompleteTransaction({
       gateway: {
         completeTransaction: completeTransactionCommand,
@@ -969,6 +1060,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     payments,
     persistSessionMetadata,
     registerNumber,
+    syncCheckoutStateBestEffort,
   ]);
 
   const handleStartNewTransaction = useCallback(() => {
@@ -980,36 +1072,73 @@ export function useRegisterViewModel(): RegisterViewModel {
 
   const handleAddPayment = useCallback(
     (method: PosPaymentMethod, amount: number) => {
-      setPayments((current) => [
-        ...current,
-        {
-          id: createPaymentId(),
-          method,
-          amount,
-          timestamp: Date.now(),
-        },
-      ]);
+      const nextPayment = {
+        id: createPaymentId(),
+        method,
+        amount,
+        timestamp: Date.now(),
+      };
+      const nextPayments = [...payments, nextPayment];
+      setPayments(nextPayments);
+      void syncCheckoutStateBestEffort({
+        nextPayments,
+        stage: "paymentAdded",
+        paymentMethod: method,
+        amount,
+      });
     },
-    [],
+    [payments, syncCheckoutStateBestEffort],
   );
 
   const handleUpdatePayment = useCallback((paymentId: string, amount: number) => {
-    setPayments((current) =>
-      current.map((payment) =>
-        payment.id === paymentId ? { ...payment, amount } : payment,
-      ),
+    const previousPayment = payments.find((payment) => payment.id === paymentId);
+    const nextPayments = payments.map((payment) =>
+      payment.id === paymentId ? { ...payment, amount } : payment,
     );
-  }, []);
+
+    setPayments(nextPayments);
+
+    if (!previousPayment) {
+      return;
+    }
+
+    void syncCheckoutStateBestEffort({
+      nextPayments,
+      stage: "paymentUpdated",
+      paymentMethod: previousPayment.method,
+      amount,
+      previousAmount: previousPayment.amount,
+    });
+  }, [payments, syncCheckoutStateBestEffort]);
 
   const handleRemovePayment = useCallback((paymentId: string) => {
-    setPayments((current) =>
-      current.filter((payment) => payment.id !== paymentId),
-    );
-  }, []);
+    const removedPayment = payments.find((payment) => payment.id === paymentId);
+    const nextPayments = payments.filter((payment) => payment.id !== paymentId);
+    setPayments(nextPayments);
+
+    if (!removedPayment) {
+      return;
+    }
+
+    void syncCheckoutStateBestEffort({
+      nextPayments,
+      stage: "paymentRemoved",
+      paymentMethod: removedPayment.method,
+      amount: removedPayment.amount,
+    });
+  }, [payments, syncCheckoutStateBestEffort]);
 
   const handleClearPayments = useCallback(() => {
+    if (payments.length === 0) {
+      return;
+    }
+
     setPayments([]);
-  }, []);
+    void syncCheckoutStateBestEffort({
+      nextPayments: [],
+      stage: "paymentsCleared",
+    });
+  }, [payments.length, syncCheckoutStateBestEffort]);
 
   const header = useMemo(
     () =>
@@ -1106,6 +1235,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       isOpen: showCustomerPanel,
       onOpenChange: setShowCustomerPanel,
       customerInfo: getRegisterCustomerInfo(customerInfo),
+      onCustomerCommitted: commitCustomerInfoBestEffort,
       setCustomerInfo,
     },
     productEntry: {

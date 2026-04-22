@@ -17,7 +17,19 @@ export type PosSessionTraceStage =
   | "resumed"
   | "completed"
   | "voided"
-  | "expired";
+  | "expired"
+  | "customerLinked"
+  | "customerUpdated"
+  | "customerCleared"
+  | "itemAdded"
+  | "itemQuantityUpdated"
+  | "itemRemoved"
+  | "cartCleared"
+  | "paymentAdded"
+  | "paymentUpdated"
+  | "paymentRemoved"
+  | "paymentsCleared"
+  | "checkoutSubmitted";
 
 export type PosSessionTraceableSession = Pick<
   Doc<"posSession">,
@@ -31,17 +43,38 @@ export type PosSessionTraceableSession = Pick<
   | "status"
   | "createdAt"
   | "updatedAt"
+  | "expiresAt"
   | "heldAt"
   | "resumedAt"
   | "completedAt"
   | "holdReason"
   | "notes"
   | "transactionId"
+  | "customerInfo"
+  | "payments"
   | "subtotal"
   | "tax"
   | "total"
   | "workflowTraceId"
 >;
+
+type PosSessionTraceRecordArgs = {
+  stage: PosSessionTraceStage;
+  traceSeed: PosSessionTraceSeed;
+  occurredAt?: number;
+  transactionId?: Id<"posTransaction">;
+  holdReason?: string;
+  voidReason?: string;
+  customerName?: string;
+  itemName?: string;
+  quantity?: number;
+  previousQuantity?: number;
+  itemCount?: number;
+  paymentMethod?: string;
+  amount?: number;
+  previousAmount?: number;
+  paymentCount?: number;
+};
 
 export interface PosSessionTraceRecorder {
   record(args: {
@@ -51,6 +84,15 @@ export interface PosSessionTraceRecorder {
     transactionId?: Id<"posTransaction">;
     holdReason?: string;
     voidReason?: string;
+    customerName?: string;
+    itemName?: string;
+    quantity?: number;
+    previousQuantity?: number;
+    itemCount?: number;
+    paymentMethod?: string;
+    amount?: number;
+    previousAmount?: number;
+    paymentCount?: number;
   }): Promise<{
     traceCreated: boolean;
     traceId: string;
@@ -75,20 +117,26 @@ function buildTraceSummary(args: {
       return `POS session ${sessionNumber} was voided`;
     case "expired":
       return `POS session ${sessionNumber} expired before completion`;
+    case "customerLinked":
+    case "customerUpdated":
+    case "customerCleared":
+    case "itemAdded":
+    case "itemQuantityUpdated":
+    case "itemRemoved":
+    case "cartCleared":
+    case "paymentAdded":
+    case "paymentUpdated":
+    case "paymentRemoved":
+    case "paymentsCleared":
+    case "checkoutSubmitted":
+      return `POS session ${sessionNumber} is in progress`;
     case "started":
     default:
       return `Trace for POS session ${sessionNumber}`;
   }
 }
 
-function buildPosSessionTraceRecord(args: {
-  stage: PosSessionTraceStage;
-  traceSeed: PosSessionTraceSeed;
-  occurredAt?: number;
-  transactionId?: Id<"posTransaction">;
-  holdReason?: string;
-  voidReason?: string;
-}) {
+function buildPosSessionTraceRecord(args: PosSessionTraceRecordArgs) {
   if (args.stage === "started") {
     return args.traceSeed.trace;
   }
@@ -97,14 +145,29 @@ function buildPosSessionTraceRecord(args: {
   const baseRecord = {
     ...args.traceSeed.trace,
     summary: buildTraceSummary(args),
-    details: {
-      lookupValue: args.traceSeed.lookup.lookupValue,
-      sessionStage: args.stage,
-      ...(args.holdReason ? { holdReason: args.holdReason } : {}),
-      ...(args.voidReason ? { voidReason: args.voidReason } : {}),
-      ...(args.transactionId ? { transactionId: args.transactionId } : {}),
-    },
-  };
+      details: {
+        lookupValue: args.traceSeed.lookup.lookupValue,
+        sessionStage: args.stage,
+        ...(args.holdReason ? { holdReason: args.holdReason } : {}),
+        ...(args.voidReason ? { voidReason: args.voidReason } : {}),
+        ...(args.customerName ? { customerName: args.customerName } : {}),
+        ...(args.itemName ? { itemName: args.itemName } : {}),
+        ...(args.quantity !== undefined ? { quantity: args.quantity } : {}),
+        ...(args.previousQuantity !== undefined
+          ? { previousQuantity: args.previousQuantity }
+          : {}),
+        ...(args.itemCount !== undefined ? { itemCount: args.itemCount } : {}),
+        ...(args.paymentMethod ? { paymentMethod: args.paymentMethod } : {}),
+        ...(args.amount !== undefined ? { amount: args.amount } : {}),
+        ...(args.previousAmount !== undefined
+          ? { previousAmount: args.previousAmount }
+          : {}),
+        ...(args.paymentCount !== undefined
+          ? { paymentCount: args.paymentCount }
+          : {}),
+        ...(args.transactionId ? { transactionId: args.transactionId } : {}),
+      },
+    };
 
   switch (args.stage) {
     case "completed":
@@ -126,6 +189,18 @@ function buildPosSessionTraceRecord(args: {
         health: "partial" as const,
         completedAt: occurredAt,
       };
+    case "customerLinked":
+    case "customerUpdated":
+    case "customerCleared":
+    case "itemAdded":
+    case "itemQuantityUpdated":
+    case "itemRemoved":
+    case "cartCleared":
+    case "paymentAdded":
+    case "paymentUpdated":
+    case "paymentRemoved":
+    case "paymentsCleared":
+    case "checkoutSubmitted":
     case "autoHeld":
     case "held":
     case "resumed":
@@ -137,14 +212,15 @@ function buildPosSessionTraceRecord(args: {
   }
 }
 
-function buildPosSessionTraceEvent(args: {
-  stage: PosSessionTraceStage;
-  traceSeed: PosSessionTraceSeed;
-  occurredAt?: number;
-  transactionId?: Id<"posTransaction">;
-  holdReason?: string;
-  voidReason?: string;
-}) {
+function formatPaymentMethod(method: string | undefined) {
+  if (!method) {
+    return "payment";
+  }
+
+  return method.replaceAll("_", " ");
+}
+
+function buildPosSessionTraceEvent(args: PosSessionTraceRecordArgs) {
   const occurredAt =
     args.occurredAt ??
     (args.stage === "started" ? args.traceSeed.trace.startedAt : Date.now());
@@ -153,10 +229,193 @@ function buildPosSessionTraceEvent(args: {
     sessionStage: args.stage,
     ...(args.holdReason ? { holdReason: args.holdReason } : {}),
     ...(args.voidReason ? { voidReason: args.voidReason } : {}),
+    ...(args.customerName ? { customerName: args.customerName } : {}),
+    ...(args.itemName ? { itemName: args.itemName } : {}),
+    ...(args.quantity !== undefined ? { quantity: args.quantity } : {}),
+    ...(args.previousQuantity !== undefined
+      ? { previousQuantity: args.previousQuantity }
+      : {}),
+    ...(args.itemCount !== undefined ? { itemCount: args.itemCount } : {}),
+    ...(args.paymentMethod ? { paymentMethod: args.paymentMethod } : {}),
+    ...(args.amount !== undefined ? { amount: args.amount } : {}),
+    ...(args.previousAmount !== undefined
+      ? { previousAmount: args.previousAmount }
+      : {}),
+    ...(args.paymentCount !== undefined ? { paymentCount: args.paymentCount } : {}),
     ...(args.transactionId ? { transactionId: args.transactionId } : {}),
   };
 
   switch (args.stage) {
+    case "customerLinked":
+      return {
+        storeId: args.traceSeed.trace.storeId,
+        traceId: args.traceSeed.trace.traceId,
+        workflowType: args.traceSeed.trace.workflowType,
+        kind: "milestone" as const,
+        step: "customer_linked",
+        status: "info" as const,
+        message: args.customerName
+          ? `Linked ${args.customerName} to session ${sessionNumber}`
+          : `Linked a customer to session ${sessionNumber}`,
+        occurredAt,
+        source: args.traceSeed.eventSource,
+        subjectRefs: args.traceSeed.subjectRefs,
+        details,
+      };
+    case "customerUpdated":
+      return {
+        storeId: args.traceSeed.trace.storeId,
+        traceId: args.traceSeed.trace.traceId,
+        workflowType: args.traceSeed.trace.workflowType,
+        kind: "milestone" as const,
+        step: "customer_updated",
+        status: "info" as const,
+        message: `Updated customer details for session ${sessionNumber}`,
+        occurredAt,
+        source: args.traceSeed.eventSource,
+        subjectRefs: args.traceSeed.subjectRefs,
+        details,
+      };
+    case "customerCleared":
+      return {
+        storeId: args.traceSeed.trace.storeId,
+        traceId: args.traceSeed.trace.traceId,
+        workflowType: args.traceSeed.trace.workflowType,
+        kind: "milestone" as const,
+        step: "customer_cleared",
+        status: "info" as const,
+        message: `Cleared customer details from session ${sessionNumber}`,
+        occurredAt,
+        source: args.traceSeed.eventSource,
+        subjectRefs: args.traceSeed.subjectRefs,
+        details,
+      };
+    case "itemAdded":
+      return {
+        storeId: args.traceSeed.trace.storeId,
+        traceId: args.traceSeed.trace.traceId,
+        workflowType: args.traceSeed.trace.workflowType,
+        kind: "milestone" as const,
+        step: "cart_item_added",
+        status: "info" as const,
+        message: `Added ${args.itemName ?? "item"} x${args.quantity ?? 0} to session ${sessionNumber}`,
+        occurredAt,
+        source: args.traceSeed.eventSource,
+        subjectRefs: args.traceSeed.subjectRefs,
+        details,
+      };
+    case "itemQuantityUpdated":
+      return {
+        storeId: args.traceSeed.trace.storeId,
+        traceId: args.traceSeed.trace.traceId,
+        workflowType: args.traceSeed.trace.workflowType,
+        kind: "milestone" as const,
+        step: "cart_item_quantity_updated",
+        status: "info" as const,
+        message: `Updated ${args.itemName ?? "item"} quantity from ${args.previousQuantity ?? 0} to ${args.quantity ?? 0} in session ${sessionNumber}`,
+        occurredAt,
+        source: args.traceSeed.eventSource,
+        subjectRefs: args.traceSeed.subjectRefs,
+        details,
+      };
+    case "itemRemoved":
+      return {
+        storeId: args.traceSeed.trace.storeId,
+        traceId: args.traceSeed.trace.traceId,
+        workflowType: args.traceSeed.trace.workflowType,
+        kind: "milestone" as const,
+        step: "cart_item_removed",
+        status: "info" as const,
+        message: `Removed ${args.itemName ?? "item"} from session ${sessionNumber}`,
+        occurredAt,
+        source: args.traceSeed.eventSource,
+        subjectRefs: args.traceSeed.subjectRefs,
+        details,
+      };
+    case "cartCleared":
+      return {
+        storeId: args.traceSeed.trace.storeId,
+        traceId: args.traceSeed.trace.traceId,
+        workflowType: args.traceSeed.trace.workflowType,
+        kind: "milestone" as const,
+        step: "cart_cleared",
+        status: "info" as const,
+        message: `Cleared ${args.itemCount ?? 0} items from session ${sessionNumber}`,
+        occurredAt,
+        source: args.traceSeed.eventSource,
+        subjectRefs: args.traceSeed.subjectRefs,
+        details,
+      };
+    case "paymentAdded":
+      return {
+        storeId: args.traceSeed.trace.storeId,
+        traceId: args.traceSeed.trace.traceId,
+        workflowType: args.traceSeed.trace.workflowType,
+        kind: "milestone" as const,
+        step: "payment_added",
+        status: "info" as const,
+        message: `Added ${formatPaymentMethod(args.paymentMethod)} to session ${sessionNumber}`,
+        occurredAt,
+        source: args.traceSeed.eventSource,
+        subjectRefs: args.traceSeed.subjectRefs,
+        details,
+      };
+    case "paymentUpdated":
+      return {
+        storeId: args.traceSeed.trace.storeId,
+        traceId: args.traceSeed.trace.traceId,
+        workflowType: args.traceSeed.trace.workflowType,
+        kind: "milestone" as const,
+        step: "payment_updated",
+        status: "info" as const,
+        message: `Updated ${formatPaymentMethod(args.paymentMethod)} for session ${sessionNumber}`,
+        occurredAt,
+        source: args.traceSeed.eventSource,
+        subjectRefs: args.traceSeed.subjectRefs,
+        details,
+      };
+    case "paymentRemoved":
+      return {
+        storeId: args.traceSeed.trace.storeId,
+        traceId: args.traceSeed.trace.traceId,
+        workflowType: args.traceSeed.trace.workflowType,
+        kind: "milestone" as const,
+        step: "payment_removed",
+        status: "info" as const,
+        message: `Removed ${formatPaymentMethod(args.paymentMethod)} from session ${sessionNumber}`,
+        occurredAt,
+        source: args.traceSeed.eventSource,
+        subjectRefs: args.traceSeed.subjectRefs,
+        details,
+      };
+    case "paymentsCleared":
+      return {
+        storeId: args.traceSeed.trace.storeId,
+        traceId: args.traceSeed.trace.traceId,
+        workflowType: args.traceSeed.trace.workflowType,
+        kind: "milestone" as const,
+        step: "payments_cleared",
+        status: "info" as const,
+        message: `Cleared pending payments from session ${sessionNumber}`,
+        occurredAt,
+        source: args.traceSeed.eventSource,
+        subjectRefs: args.traceSeed.subjectRefs,
+        details,
+      };
+    case "checkoutSubmitted":
+      return {
+        storeId: args.traceSeed.trace.storeId,
+        traceId: args.traceSeed.trace.traceId,
+        workflowType: args.traceSeed.trace.workflowType,
+        kind: "milestone" as const,
+        step: "checkout_submitted",
+        status: "started" as const,
+        message: `Submitted checkout for session ${sessionNumber}`,
+        occurredAt,
+        source: args.traceSeed.eventSource,
+        subjectRefs: args.traceSeed.subjectRefs,
+        details,
+      };
     case "autoHeld":
       return {
         storeId: args.traceSeed.trace.storeId,
@@ -269,14 +528,7 @@ async function safeTraceWrite(label: string, action: () => Promise<unknown>) {
 
 export async function recordPosSessionTraceBestEffort(
   ctx: MutationCtx,
-  args: {
-    stage: PosSessionTraceStage;
-    traceSeed: PosSessionTraceSeed;
-    occurredAt?: number;
-    transactionId?: Id<"posTransaction">;
-    holdReason?: string;
-    voidReason?: string;
-  },
+  args: PosSessionTraceRecordArgs,
 ) {
   const traceRecord = buildPosSessionTraceRecord(args);
   const event = buildPosSessionTraceEvent(args);
@@ -324,6 +576,15 @@ export function createPosSessionTraceRecorder(
         transactionId: args.transactionId,
         holdReason: args.holdReason,
         voidReason: args.voidReason,
+        customerName: args.customerName ?? args.session.customerInfo?.name,
+        itemName: args.itemName,
+        quantity: args.quantity,
+        previousQuantity: args.previousQuantity,
+        itemCount: args.itemCount,
+        paymentMethod: args.paymentMethod,
+        amount: args.amount,
+        previousAmount: args.previousAmount,
+        paymentCount: args.paymentCount,
       });
     },
   };

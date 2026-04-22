@@ -48,6 +48,9 @@ type TraceCall = {
   traceId?: string;
   transactionId?: string;
   holdReason?: string;
+  itemName?: string;
+  quantity?: number;
+  previousQuantity?: number;
 };
 
 describe("createPosSessionCommandService", () => {
@@ -349,11 +352,13 @@ describe("createPosSessionCommandService", () => {
       ],
     });
     const inventoryCalls: InventoryCall[] = [];
+    const traceCalls: TraceCall[] = [];
 
     const result = await commandService(
       createDependencies({
         repository,
         inventoryCalls,
+        traceCalls,
         now: 1_000,
         nextExpiration: 61_000,
       }),
@@ -387,6 +392,18 @@ describe("createPosSessionCommandService", () => {
       }),
     );
     expect(repository.getSession("session-5")?.expiresAt).toBe(61_000);
+    expect(traceCalls).toEqual([
+      {
+        stage: "itemAdded",
+        sessionId: "session-5",
+        sessionNumber: "SES-005",
+        status: "active",
+        traceId: "pos_session:ses-005",
+        itemName: "Sneaker",
+        quantity: 2,
+        previousQuantity: undefined,
+      },
+    ]);
   });
 
   it("adjusts the existing inventory hold when updating a cart line quantity", async () => {
@@ -419,11 +436,13 @@ describe("createPosSessionCommandService", () => {
       ],
     });
     const inventoryCalls: InventoryCall[] = [];
+    const traceCalls: TraceCall[] = [];
 
     const result = await commandService(
       createDependencies({
         repository,
         inventoryCalls,
+        traceCalls,
         now: 1_000,
         nextExpiration: 61_000,
       }),
@@ -459,6 +478,18 @@ describe("createPosSessionCommandService", () => {
         price: 125,
       }),
     );
+    expect(traceCalls).toEqual([
+      {
+        stage: "itemQuantityUpdated",
+        sessionId: "session-6",
+        sessionNumber: "SES-006",
+        status: "active",
+        traceId: "pos_session:ses-006",
+        itemName: "Sneaker",
+        quantity: 5,
+        previousQuantity: 2,
+      },
+    ]);
   });
 
   it("releases the held quantity when removing a cart line", async () => {
@@ -491,11 +522,13 @@ describe("createPosSessionCommandService", () => {
       ],
     });
     const inventoryCalls: InventoryCall[] = [];
+    const traceCalls: TraceCall[] = [];
 
     const result = await commandService(
       createDependencies({
         repository,
         inventoryCalls,
+        traceCalls,
         now: 1_000,
         nextExpiration: 61_000,
       }),
@@ -516,6 +549,18 @@ describe("createPosSessionCommandService", () => {
     ]);
     expect(repository.getItem("item-3")).toBeNull();
     expect(repository.getSession("session-7")?.expiresAt).toBe(61_000);
+    expect(traceCalls).toEqual([
+      {
+        stage: "itemRemoved",
+        sessionId: "session-7",
+        sessionNumber: "SES-007",
+        status: "active",
+        traceId: "pos_session:ses-007",
+        itemName: "Sneaker",
+        quantity: 3,
+        previousQuantity: undefined,
+      },
+    ]);
   });
 });
 
@@ -582,6 +627,9 @@ function createDependencies(options: {
         session: SessionRecord;
         transactionId?: string;
         holdReason?: string;
+        itemName?: string;
+        quantity?: number;
+        previousQuantity?: number;
       }) => {
         const traceCall: TraceCall = {
           stage: input.stage,
@@ -590,6 +638,9 @@ function createDependencies(options: {
           status: input.session.status,
           transactionId: input.transactionId,
           holdReason: input.holdReason,
+          itemName: input.itemName,
+          quantity: input.quantity,
+          previousQuantity: input.previousQuantity,
         };
         options.traceCalls?.push(traceCall);
 

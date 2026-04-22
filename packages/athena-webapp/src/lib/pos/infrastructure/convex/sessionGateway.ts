@@ -79,6 +79,9 @@ export function useConvexSessionActions() {
   const resumeSessionMutation = useMutation(api.inventory.posSessions.resumeSession);
   const voidSessionMutation = useMutation(api.inventory.posSessions.voidSession);
   const updateSessionMutation = useMutation(api.inventory.posSessions.updateSession);
+  const syncSessionCheckoutStateMutation = useMutation(
+    api.inventory.posSessions.syncSessionCheckoutState,
+  );
   const releaseSessionMutation = useMutation(
     api.inventory.posSessions.releaseSessionInventoryHoldsAndDeleteItems,
   );
@@ -88,6 +91,7 @@ export function useConvexSessionActions() {
     resumeSession: resumeSessionMutation,
     voidSession: voidSessionMutation,
     updateSession: updateSessionMutation,
+    syncSessionCheckoutState: syncSessionCheckoutStateMutation,
     releaseSessionInventoryHoldsAndDeleteItems: releaseSessionMutation,
     removeItem: removeItemMutation,
   };
