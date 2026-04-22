@@ -141,7 +141,7 @@ export interface RegisterAuthDialogState {
   open: boolean;
   storeId: Id<"store">;
   terminalId: Id<"posTerminal">;
-  onAuthenticated: (cashierId: Id<"cashier">) => void;
+  onAuthenticated: (staffProfileId: Id<"staffProfile">) => void;
   onDismiss: () => void;
 }
 

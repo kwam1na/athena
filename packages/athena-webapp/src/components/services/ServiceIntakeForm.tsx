@@ -19,8 +19,8 @@ export type ServiceIntakeCustomerResult = {
 
 export type ServiceIntakeStaffOption = {
   _id: string;
-  email?: string;
   fullName: string;
+  phoneNumber?: string;
   roles: string[];
 };
 

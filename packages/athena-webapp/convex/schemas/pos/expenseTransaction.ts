@@ -4,7 +4,7 @@ export const expenseTransactionSchema = v.object({
   transactionNumber: v.string(), // Human-readable transaction ID (e.g., "001")
   storeId: v.id("store"),
   sessionId: v.id("expenseSession"), // Link to the session that created this transaction
-  cashierId: v.id("cashier"), // Cashier who processed the transaction
+  staffProfileId: v.id("staffProfile"), // Staff profile who processed the transaction
   registerNumber: v.optional(v.string()),
 
   // Transaction totals

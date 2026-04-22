@@ -731,8 +731,8 @@ export const createWalkInServiceCase = mutation({
     const createdByStaffProfile = args.createdByUserId
       ? await ctx.db
           .query("staffProfile")
-          .withIndex("by_storeId_userId", (q) =>
-            q.eq("storeId", args.storeId).eq("userId", args.createdByUserId!)
+          .withIndex("by_storeId_linkedUserId", (q) =>
+            q.eq("storeId", args.storeId).eq("linkedUserId", args.createdByUserId!)
           )
           .first()
       : null;

@@ -58,7 +58,7 @@ export const completeTransaction = mutation({
     customerInfo: v.optional(customerInfoValidator),
     registerNumber: v.optional(v.string()),
     terminalId: v.optional(v.id("posTerminal")),
-    cashierId: v.optional(v.id("cashier")),
+    staffProfileId: v.optional(v.id("staffProfile")),
     registerSessionId: v.optional(v.id("registerSession")),
   },
   handler: async (ctx, args) => completeTransactionCommand(ctx, args),
@@ -127,7 +127,7 @@ export const getTransactionById = query({
       cashier: v.union(
         v.null(),
         v.object({
-          _id: v.id("cashier"),
+          _id: v.id("staffProfile"),
           firstName: v.string(),
           lastName: v.string(),
         }),
@@ -167,7 +167,7 @@ export const voidTransaction = mutation({
   args: {
     transactionId: v.id("posTransaction"),
     reason: v.string(),
-    cashierId: v.optional(v.id("cashier")),
+    staffProfileId: v.optional(v.id("staffProfile")),
   },
   handler: async (ctx, args) => voidTransactionCommand(ctx, args),
 });

@@ -63,7 +63,6 @@ import type * as inventory_athenaUser from "../inventory/athenaUser.js";
 import type * as inventory_auth from "../inventory/auth.js";
 import type * as inventory_bannerMessage from "../inventory/bannerMessage.js";
 import type * as inventory_bestSeller from "../inventory/bestSeller.js";
-import type * as inventory_cashier from "../inventory/cashier.js";
 import type * as inventory_categories from "../inventory/categories.js";
 import type * as inventory_colors from "../inventory/colors.js";
 import type * as inventory_complimentaryProduct from "../inventory/complimentaryProduct.js";
@@ -121,12 +120,14 @@ import type * as operations_paymentAllocations from "../operations/paymentAlloca
 import type * as operations_registerSessionTracing from "../operations/registerSessionTracing.js";
 import type * as operations_registerSessions from "../operations/registerSessions.js";
 import type * as operations_serviceIntake from "../operations/serviceIntake.js";
+import type * as operations_staffCredentials from "../operations/staffCredentials.js";
 import type * as operations_staffProfiles from "../operations/staffProfiles.js";
 import type * as otp_EmailOTP from "../otp/EmailOTP.js";
 import type * as paystack_index from "../paystack/index.js";
 import type * as pos_application_commands_assignCustomer from "../pos/application/commands/assignCustomer.js";
 import type * as pos_application_commands_completeTransaction from "../pos/application/commands/completeTransaction.js";
 import type * as pos_application_commands_posSessionTracing from "../pos/application/commands/posSessionTracing.js";
+import type * as pos_application_commands_register from "../pos/application/commands/register.js";
 import type * as pos_application_commands_sessionCommands from "../pos/application/commands/sessionCommands.js";
 import type * as pos_application_commands_terminals from "../pos/application/commands/terminals.js";
 import type * as pos_application_dto from "../pos/application/dto.js";
@@ -143,6 +144,7 @@ import type * as pos_infrastructure_integrations_paymentAllocationService from "
 import type * as pos_infrastructure_repositories_cashierRepository from "../pos/infrastructure/repositories/cashierRepository.js";
 import type * as pos_infrastructure_repositories_catalogRepository from "../pos/infrastructure/repositories/catalogRepository.js";
 import type * as pos_infrastructure_repositories_customerRepository from "../pos/infrastructure/repositories/customerRepository.js";
+import type * as pos_infrastructure_repositories_registerSessionRepository from "../pos/infrastructure/repositories/registerSessionRepository.js";
 import type * as pos_infrastructure_repositories_sessionCommandRepository from "../pos/infrastructure/repositories/sessionCommandRepository.js";
 import type * as pos_infrastructure_repositories_sessionRepository from "../pos/infrastructure/repositories/sessionRepository.js";
 import type * as pos_infrastructure_repositories_terminalRepository from "../pos/infrastructure/repositories/terminalRepository.js";
@@ -156,7 +158,6 @@ import type * as schemas_inventory_appVerificationCode from "../schemas/inventor
 import type * as schemas_inventory_athenaUser from "../schemas/inventory/athenaUser.js";
 import type * as schemas_inventory_bannerMessage from "../schemas/inventory/bannerMessage.js";
 import type * as schemas_inventory_bestSeller from "../schemas/inventory/bestSeller.js";
-import type * as schemas_inventory_cashier from "../schemas/inventory/cashier.js";
 import type * as schemas_inventory_category from "../schemas/inventory/category.js";
 import type * as schemas_inventory_color from "../schemas/inventory/color.js";
 import type * as schemas_inventory_complimentaryProduct from "../schemas/inventory/complimentaryProduct.js";
@@ -182,6 +183,7 @@ import type * as schemas_operations_operationalEvent from "../schemas/operations
 import type * as schemas_operations_operationalWorkItem from "../schemas/operations/operationalWorkItem.js";
 import type * as schemas_operations_paymentAllocation from "../schemas/operations/paymentAllocation.js";
 import type * as schemas_operations_registerSession from "../schemas/operations/registerSession.js";
+import type * as schemas_operations_staffCredential from "../schemas/operations/staffCredential.js";
 import type * as schemas_operations_staffProfile from "../schemas/operations/staffProfile.js";
 import type * as schemas_operations_staffRoleAssignment from "../schemas/operations/staffRoleAssignment.js";
 import type * as schemas_payments_mtnCollections from "../schemas/payments/mtnCollections.js";
@@ -341,7 +343,6 @@ declare const fullApi: ApiFromModules<{
   "inventory/auth": typeof inventory_auth;
   "inventory/bannerMessage": typeof inventory_bannerMessage;
   "inventory/bestSeller": typeof inventory_bestSeller;
-  "inventory/cashier": typeof inventory_cashier;
   "inventory/categories": typeof inventory_categories;
   "inventory/colors": typeof inventory_colors;
   "inventory/complimentaryProduct": typeof inventory_complimentaryProduct;
@@ -399,12 +400,14 @@ declare const fullApi: ApiFromModules<{
   "operations/registerSessionTracing": typeof operations_registerSessionTracing;
   "operations/registerSessions": typeof operations_registerSessions;
   "operations/serviceIntake": typeof operations_serviceIntake;
+  "operations/staffCredentials": typeof operations_staffCredentials;
   "operations/staffProfiles": typeof operations_staffProfiles;
   "otp/EmailOTP": typeof otp_EmailOTP;
   "paystack/index": typeof paystack_index;
   "pos/application/commands/assignCustomer": typeof pos_application_commands_assignCustomer;
   "pos/application/commands/completeTransaction": typeof pos_application_commands_completeTransaction;
   "pos/application/commands/posSessionTracing": typeof pos_application_commands_posSessionTracing;
+  "pos/application/commands/register": typeof pos_application_commands_register;
   "pos/application/commands/sessionCommands": typeof pos_application_commands_sessionCommands;
   "pos/application/commands/terminals": typeof pos_application_commands_terminals;
   "pos/application/dto": typeof pos_application_dto;
@@ -421,6 +424,7 @@ declare const fullApi: ApiFromModules<{
   "pos/infrastructure/repositories/cashierRepository": typeof pos_infrastructure_repositories_cashierRepository;
   "pos/infrastructure/repositories/catalogRepository": typeof pos_infrastructure_repositories_catalogRepository;
   "pos/infrastructure/repositories/customerRepository": typeof pos_infrastructure_repositories_customerRepository;
+  "pos/infrastructure/repositories/registerSessionRepository": typeof pos_infrastructure_repositories_registerSessionRepository;
   "pos/infrastructure/repositories/sessionCommandRepository": typeof pos_infrastructure_repositories_sessionCommandRepository;
   "pos/infrastructure/repositories/sessionRepository": typeof pos_infrastructure_repositories_sessionRepository;
   "pos/infrastructure/repositories/terminalRepository": typeof pos_infrastructure_repositories_terminalRepository;
@@ -434,7 +438,6 @@ declare const fullApi: ApiFromModules<{
   "schemas/inventory/athenaUser": typeof schemas_inventory_athenaUser;
   "schemas/inventory/bannerMessage": typeof schemas_inventory_bannerMessage;
   "schemas/inventory/bestSeller": typeof schemas_inventory_bestSeller;
-  "schemas/inventory/cashier": typeof schemas_inventory_cashier;
   "schemas/inventory/category": typeof schemas_inventory_category;
   "schemas/inventory/color": typeof schemas_inventory_color;
   "schemas/inventory/complimentaryProduct": typeof schemas_inventory_complimentaryProduct;
@@ -460,6 +463,7 @@ declare const fullApi: ApiFromModules<{
   "schemas/operations/operationalWorkItem": typeof schemas_operations_operationalWorkItem;
   "schemas/operations/paymentAllocation": typeof schemas_operations_paymentAllocation;
   "schemas/operations/registerSession": typeof schemas_operations_registerSession;
+  "schemas/operations/staffCredential": typeof schemas_operations_staffCredential;
   "schemas/operations/staffProfile": typeof schemas_operations_staffProfile;
   "schemas/operations/staffRoleAssignment": typeof schemas_operations_staffRoleAssignment;
   "schemas/payments/mtnCollections": typeof schemas_payments_mtnCollections;

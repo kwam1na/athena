@@ -166,8 +166,8 @@ export const listAssignableStaff = query({
 
     return staffProfiles.map((staffProfile) => ({
       _id: staffProfile._id,
-      email: staffProfile.email,
       fullName: staffProfile.fullName,
+      phoneNumber: staffProfile.phoneNumber,
       roles: roleAssignments
         .filter(
           (assignment) =>
@@ -238,8 +238,8 @@ export const createServiceIntake = mutation({
     const createdByStaffProfile = args.createdByUserId
       ? await ctx.db
           .query("staffProfile")
-          .withIndex("by_storeId_userId", (q) =>
-            q.eq("storeId", args.storeId).eq("userId", args.createdByUserId!)
+          .withIndex("by_storeId_linkedUserId", (q) =>
+            q.eq("storeId", args.storeId).eq("linkedUserId", args.createdByUserId!)
           )
           .first()
       : null;

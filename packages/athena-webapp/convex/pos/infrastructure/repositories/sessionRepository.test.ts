@@ -9,7 +9,7 @@ import {
 const storeId = "store-1" as Id<"store">;
 const terminalId = "terminal-1" as Id<"posTerminal">;
 const otherTerminalId = "terminal-2" as Id<"posTerminal">;
-const cashierId = "cashier-1" as Id<"cashier">;
+const staffProfileId = "cashier-1" as Id<"staffProfile">;
 
 describe("selectRegisterStateLookupStrategy", () => {
   it("prefers the terminal lookup path when terminal and cashier are both known", () => {
@@ -17,7 +17,7 @@ describe("selectRegisterStateLookupStrategy", () => {
       selectRegisterStateLookupStrategy({
         storeId,
         terminalId,
-        cashierId,
+        staffProfileId,
       }),
     ).toBe("terminal");
   });
@@ -30,14 +30,14 @@ describe("summarizeRegisterStateSessions", () => {
         buildSession({
           _id: "expired-session" as Id<"posSession">,
           terminalId,
-          cashierId,
+          staffProfileId,
           expiresAt: 100,
           updatedAt: 200,
         }),
         buildSession({
           _id: "active-session" as Id<"posSession">,
           terminalId,
-          cashierId,
+          staffProfileId,
           expiresAt: 5_000,
           updatedAt: 300,
         }),
@@ -45,7 +45,7 @@ describe("summarizeRegisterStateSessions", () => {
       {
         storeId,
         terminalId,
-        cashierId,
+        staffProfileId,
       },
       1_000,
     );
@@ -59,14 +59,14 @@ describe("summarizeRegisterStateSessions", () => {
         buildSession({
           _id: "wrong-terminal" as Id<"posSession">,
           terminalId: otherTerminalId,
-          cashierId,
+          staffProfileId,
           expiresAt: 5_000,
           updatedAt: 300,
         }),
         buildSession({
           _id: "matching-terminal" as Id<"posSession">,
           terminalId,
-          cashierId,
+          staffProfileId,
           expiresAt: 5_000,
           updatedAt: 200,
         }),
@@ -74,7 +74,7 @@ describe("summarizeRegisterStateSessions", () => {
       {
         storeId,
         terminalId,
-        cashierId,
+        staffProfileId,
       },
       1_000,
     );
@@ -98,7 +98,7 @@ function buildSession(
     _creationTime: 0,
     sessionNumber: overrides.sessionNumber ?? "POS-001",
     storeId,
-    cashierId: overrides.cashierId,
+    staffProfileId: overrides.staffProfileId,
     registerNumber: overrides.registerNumber,
     status: overrides.status ?? "active",
     transactionId: overrides.transactionId,

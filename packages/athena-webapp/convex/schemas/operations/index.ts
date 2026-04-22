@@ -1,6 +1,7 @@
 export * from "./customerProfile";
 export * from "./staffProfile";
 export * from "./staffRoleAssignment";
+export * from "./staffCredential";
 export * from "./operationalWorkItem";
 export * from "./operationalEvent";
 export * from "./inventoryMovement";

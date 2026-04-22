@@ -25,16 +25,16 @@ export type PosSessionDetail = POSSession & {
 export function useConvexActiveSession(input: {
   storeId?: Id<"store">;
   terminalId?: Id<"posTerminal"> | null;
-  cashierId?: Id<"cashier"> | null;
+  staffProfileId?: Id<"staffProfile"> | null;
   registerNumber?: string;
 }): PosSessionDetail | null | undefined {
   const result = useQuery(
     api.inventory.posSessions.getActiveSession,
-    input.storeId && input.terminalId && input.cashierId
+    input.storeId && input.terminalId && input.staffProfileId
       ? {
           storeId: input.storeId,
           terminalId: input.terminalId,
-          cashierId: input.cashierId,
+          staffProfileId: input.staffProfileId,
           registerNumber: input.registerNumber,
         }
       : "skip",
@@ -52,16 +52,16 @@ export function useConvexActiveSession(input: {
 export function useConvexHeldSessions(input: {
   storeId?: Id<"store">;
   terminalId?: Id<"posTerminal"> | null;
-  cashierId?: Id<"cashier"> | null;
+  staffProfileId?: Id<"staffProfile"> | null;
   limit?: number;
 }): PosSessionDetail[] | undefined {
   const result = useQuery(
     api.inventory.posSessions.getStoreSessions,
-    input.storeId && input.terminalId && input.cashierId
+    input.storeId && input.terminalId && input.staffProfileId
       ? {
           storeId: input.storeId,
           terminalId: input.terminalId,
-          cashierId: input.cashierId,
+          staffProfileId: input.staffProfileId,
           status: "held",
           limit: input.limit ?? 10,
         }

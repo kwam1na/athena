@@ -1,9 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
-import { useQuery } from "convex/react";
 import { toast } from "sonner";
 
-import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
 
 import type { CustomerInfo, Payment, Product } from "@/components/pos/types";
@@ -103,7 +101,9 @@ export function useRegisterViewModel(): RegisterViewModel {
   const [registerNumberOverride, setRegisterNumberOverride] = useState<
     string | undefined
   >(undefined);
-  const [cashierId, setCashierId] = useState<Id<"cashier"> | null>(null);
+  const [staffProfileId, setStaffProfileId] = useState<Id<"staffProfile"> | null>(
+    null,
+  );
   const [showCustomerPanel, setShowCustomerPanel] = useState(false);
   const [showProductEntry, setShowProductEntry] = useState(true);
   const [productSearchQuery, setProductSearchQuery] = useState("");
@@ -131,7 +131,7 @@ export function useRegisterViewModel(): RegisterViewModel {
   const registerState = useConvexRegisterState({
     storeId: activeStore?._id,
     terminalId: terminal?._id ?? null,
-    cashierId,
+    staffProfileId,
     registerNumber: registerNumberOverride,
   });
   const bootstrapState = bootstrapRegister({
@@ -140,7 +140,7 @@ export function useRegisterViewModel(): RegisterViewModel {
   const activeSession = useConvexActiveSession({
     storeId: activeStore?._id,
     terminalId: terminal?._id ?? null,
-    cashierId,
+    staffProfileId,
     registerNumber: registerNumberOverride,
   });
   const activeRegisterNumber =
@@ -156,13 +156,10 @@ export function useRegisterViewModel(): RegisterViewModel {
   const heldSessions = useConvexHeldSessions({
     storeId: activeStore?._id,
     terminalId: terminal?._id ?? null,
-    cashierId,
+    staffProfileId,
     limit: 10,
   });
-  const cashier = useQuery(
-    api.inventory.cashier.getById,
-    cashierId ? { id: cashierId } : "skip",
-  );
+  const cashier = registerState?.cashier ?? null;
 
   useEffect(() => {
     if (activeRegisterNumber && activeRegisterNumber !== registerNumberOverride) {
@@ -196,7 +193,7 @@ export function useRegisterViewModel(): RegisterViewModel {
   const requiresDrawerGate = Boolean(
     activeStore?._id &&
       terminal?._id &&
-      cashierId &&
+      staffProfileId &&
       bootstrapState &&
       (bootstrapState.phase === "readyToStart" ||
         bootstrapState.phase === "resumable") &&
@@ -230,7 +227,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       }
 
       if (!options?.keepCashier) {
-        setCashierId(null);
+        setStaffProfileId(null);
       }
     },
     [setPaymentState],
@@ -266,7 +263,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     requestBootstrap,
     activeStore?._id,
     terminal?._id,
-    cashierId,
+    staffProfileId,
     registerNumberOverride,
   ]);
 
@@ -339,7 +336,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       return null;
     }
 
-    if (!activeStore?._id || !terminal?._id || !cashierId) {
+    if (!activeStore?._id || !terminal?._id || !staffProfileId) {
       toast.error("Sign in at a registered terminal before adding products");
       return null;
     }
@@ -351,7 +348,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       command: {
         storeId: activeStore._id,
         terminalId: terminal._id,
-        cashierId,
+        staffProfileId,
         registerNumber,
         registerSessionId: activeRegisterSessionId,
       },
@@ -368,7 +365,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     activeSession?._id,
     activeRegisterSessionId,
     activeStore?._id,
-    cashierId,
+    staffProfileId,
     registerNumber,
     registerState?.activeSession?._id,
     startSessionCommand,
@@ -377,14 +374,14 @@ export function useRegisterViewModel(): RegisterViewModel {
 
   const persistSessionMetadata = useCallback(
     async (session: PosSessionDetail | null | undefined) => {
-      if (!session?._id || !cashierId) {
+      if (!session?._id || !staffProfileId) {
         return true;
       }
 
       try {
         await updateSession({
           sessionId: session._id as Id<"posSession">,
-          cashierId,
+          staffProfileId,
           customerId: customerInfo.customerId,
           customerInfo: hasCustomerDetails(customerInfo)
             ? {
@@ -408,19 +405,26 @@ export function useRegisterViewModel(): RegisterViewModel {
         return false;
       }
     },
-    [activeTotals.subtotal, activeTotals.tax, activeTotals.total, cashierId, customerInfo, updateSession],
+    [
+      activeTotals.subtotal,
+      activeTotals.tax,
+      activeTotals.total,
+      customerInfo,
+      staffProfileId,
+      updateSession,
+    ],
   );
 
   const commitCustomerInfoBestEffort = useCallback(
     async (nextCustomerInfo: CustomerInfo) => {
-      if (!activeSession?._id || !cashierId) {
+      if (!activeSession?._id || !staffProfileId) {
         return;
       }
 
       try {
         await updateSession({
           sessionId: activeSession._id as Id<"posSession">,
-          cashierId,
+          staffProfileId,
           customerId: nextCustomerInfo.customerId,
           customerInfo: hasCustomerDetails(nextCustomerInfo)
             ? {
@@ -445,7 +449,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       activeTotals.subtotal,
       activeTotals.tax,
       activeTotals.total,
-      cashierId,
+      staffProfileId,
       updateSession,
     ],
   );
@@ -463,14 +467,14 @@ export function useRegisterViewModel(): RegisterViewModel {
       amount?: number;
       previousAmount?: number;
     }) => {
-      if (!activeSession?._id || !cashierId) {
+      if (!activeSession?._id || !staffProfileId) {
         return;
       }
 
       try {
         await syncSessionCheckoutState({
           sessionId: activeSession._id as Id<"posSession">,
-          cashierId,
+          staffProfileId,
           checkoutStateVersion: args.checkoutStateVersion,
           payments: args.nextPayments.map(({ id, ...payment }) => payment),
           stage: args.stage,
@@ -486,7 +490,7 @@ export function useRegisterViewModel(): RegisterViewModel {
         });
       }
     },
-    [activeSession?._id, cashierId, syncSessionCheckoutState],
+    [activeSession?._id, staffProfileId, syncSessionCheckoutState],
   );
 
   useEffect(() => {
@@ -511,7 +515,7 @@ export function useRegisterViewModel(): RegisterViewModel {
   ]);
 
   const holdCurrentSession = useCallback(async (reason?: string) => {
-    if (!activeSession || !cashierId) {
+    if (!activeSession || !staffProfileId) {
       toast.error("No active session to hold");
       return false;
     }
@@ -527,7 +531,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       },
       command: {
         sessionId: activeSession._id as Id<"posSession">,
-        cashierId,
+        staffProfileId,
         reason,
       },
     });
@@ -544,7 +548,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     return true;
   }, [
     activeSession,
-    cashierId,
+    staffProfileId,
     holdSessionCommand,
     persistSessionMetadata,
     resetDraftState,
@@ -575,7 +579,7 @@ export function useRegisterViewModel(): RegisterViewModel {
   const handleResumeSession = useCallback(async (
     sessionId: Id<"posSession">,
   ) => {
-    if (!cashierId || !terminal?._id) {
+    if (!staffProfileId || !terminal?._id) {
       toast.error("Sign in at a registered terminal before resuming a session");
       return;
     }
@@ -593,7 +597,7 @@ export function useRegisterViewModel(): RegisterViewModel {
 
     const result = await resumeSession({
       sessionId,
-      cashierId,
+      staffProfileId,
       terminalId: terminal._id,
     });
 
@@ -608,7 +612,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     toast.success("Session resumed");
   }, [
     activeSession,
-    cashierId,
+    staffProfileId,
     holdCurrentSession,
     resumeSession,
     setPaymentState,
@@ -616,7 +620,7 @@ export function useRegisterViewModel(): RegisterViewModel {
   ]);
 
   const handleStartNewSession = useCallback(async () => {
-    if (!activeStore?._id || !terminal?._id || !cashierId) {
+    if (!activeStore?._id || !terminal?._id || !staffProfileId) {
       toast.error("Sign in at a registered terminal before starting a session");
       return;
     }
@@ -644,7 +648,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       command: {
         storeId: activeStore._id,
         terminalId: terminal._id,
-        cashierId,
+        staffProfileId,
         registerNumber,
         registerSessionId: activeRegisterSessionId,
       },
@@ -664,7 +668,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     activeSession,
     activeRegisterSessionId,
     activeStore?._id,
-    cashierId,
+    staffProfileId,
     customerInfo,
     holdCurrentSession,
     registerNumber,
@@ -674,7 +678,7 @@ export function useRegisterViewModel(): RegisterViewModel {
   ]);
 
   const handleOpenDrawer = useCallback(async () => {
-    if (!activeStore?._id || !terminal?._id || !cashierId) {
+    if (!activeStore?._id || !terminal?._id || !staffProfileId) {
       setDrawerErrorMessage(
         "Sign in at a registered terminal before opening the drawer",
       );
@@ -715,7 +719,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     toast.success("Drawer opened");
   }, [
     activeStore?._id,
-    cashierId,
+    staffProfileId,
     drawerNotes,
     drawerOpeningFloat,
     openDrawerCommand,
@@ -728,7 +732,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     if (
       !activeStore?._id ||
       !terminal?._id ||
-      !cashierId ||
+      !staffProfileId ||
       !bootstrapState ||
       isTransactionCompleted ||
       bootstrapInitialized.current ||
@@ -758,7 +762,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       ) {
         const result = await resumeSession({
           sessionId: bootstrapState.resumableSession._id as Id<"posSession">,
-          cashierId,
+          staffProfileId,
           terminalId: terminal._id,
         });
 
@@ -777,7 +781,7 @@ export function useRegisterViewModel(): RegisterViewModel {
         command: {
           storeId: activeStore._id,
           terminalId: terminal._id,
-          cashierId,
+          staffProfileId,
           registerNumber: registerNumberOverride,
           registerSessionId: bootstrapState.activeRegisterSession?._id as
             | Id<"registerSession">
@@ -793,7 +797,7 @@ export function useRegisterViewModel(): RegisterViewModel {
   }, [
     activeStore?._id,
     bootstrapState,
-    cashierId,
+    staffProfileId,
     isTransactionCompleted,
     registerNumberOverride,
     requiresDrawerGate,
@@ -835,7 +839,7 @@ export function useRegisterViewModel(): RegisterViewModel {
   );
 
   const handleAddProduct = useCallback(async (product: Product) => {
-    if (!cashierId) {
+    if (!staffProfileId) {
       toast.error("A cashier must sign in before products can be added");
       return;
     }
@@ -859,7 +863,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       },
       command: {
         sessionId,
-        cashierId,
+        staffProfileId,
         productId: product.productId,
         productSkuId: product.skuId,
         productSku: product.sku || "",
@@ -881,13 +885,13 @@ export function useRegisterViewModel(): RegisterViewModel {
     }
 
     setProductSearchQuery("");
-  }, [activeCartItems, addItemCommand, cashierId, ensureSessionId]);
+  }, [activeCartItems, addItemCommand, ensureSessionId, staffProfileId]);
 
   const handleUpdateQuantity = useCallback(async (
     itemId: Id<"posSessionItem">,
     quantity: number,
   ) => {
-    if (!activeSession || !cashierId) {
+    if (!activeSession || !staffProfileId) {
       return;
     }
 
@@ -899,7 +903,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     if (quantity <= 0) {
       const result = await removeItem({
         sessionId: activeSession._id as Id<"posSession">,
-        cashierId,
+        staffProfileId,
         itemId,
       });
 
@@ -921,7 +925,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       },
       command: {
         sessionId: activeSession._id as Id<"posSession">,
-        cashierId,
+        staffProfileId,
         productId: item.productId,
         productSkuId: item.skuId,
         productSku: item.sku || "",
@@ -940,25 +944,25 @@ export function useRegisterViewModel(): RegisterViewModel {
     if (!result.ok) {
       toast.error(result.message);
     }
-  }, [activeSession, addItemCommand, cashierId, removeItem]);
+  }, [activeSession, addItemCommand, removeItem, staffProfileId]);
 
   const handleRemoveItem = useCallback(async (
     itemId: Id<"posSessionItem">,
   ) => {
-    if (!activeSession || !cashierId) {
+    if (!activeSession || !staffProfileId) {
       return;
     }
 
     const result = await removeItem({
       sessionId: activeSession._id as Id<"posSession">,
-      cashierId,
+      staffProfileId,
       itemId,
     });
 
     if (!result.success) {
       toast.error(result.message);
     }
-  }, [activeSession, cashierId, removeItem]);
+  }, [activeSession, removeItem, staffProfileId]);
 
   const handleClearCart = useCallback(async () => {
     if (!activeSession) {
@@ -1087,10 +1091,13 @@ export function useRegisterViewModel(): RegisterViewModel {
     }
   }, [isTransactionCompleted, showProductEntry]);
 
-  const handleCashierAuthenticated = useCallback((nextCashierId: Id<"cashier">) => {
-    setCashierId(nextCashierId);
-    requestBootstrap();
-  }, [requestBootstrap]);
+  const handleCashierAuthenticated = useCallback(
+    (nextStaffProfileId: Id<"staffProfile">) => {
+      setStaffProfileId(nextStaffProfileId);
+      requestBootstrap();
+    },
+    [requestBootstrap],
+  );
 
   const handleNavigateBack = useCallback(async () => {
     if (activeSession) {
@@ -1314,7 +1321,7 @@ export function useRegisterViewModel(): RegisterViewModel {
   );
 
   const sessionPanel =
-    activeStore?._id && terminal?._id && cashierId
+    activeStore?._id && terminal?._id && staffProfileId
       ? {
           activeSessionNumber: activeSession?.sessionNumber ?? null,
           activeSessionTraceId: activeSession?.workflowTraceId ?? null,
@@ -1364,7 +1371,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       : null;
 
   const cashierCard =
-    activeStore?._id && terminal?._id && cashierId
+    activeStore?._id && terminal?._id && staffProfileId
       ? {
           cashierName: getCashierDisplayName(cashier),
           onSignOut: handleCashierSignOut,
@@ -1372,7 +1379,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       : null;
 
   const drawerGate =
-    activeStore?._id && terminal?._id && cashierId && requiresDrawerGate
+    activeStore?._id && terminal?._id && staffProfileId && requiresDrawerGate
       ? {
           registerLabel: terminal.displayName,
           registerNumber,
@@ -1396,7 +1403,7 @@ export function useRegisterViewModel(): RegisterViewModel {
   const authDialog =
     activeStore?._id && terminal?._id
       ? {
-          open: !cashierId,
+          open: !staffProfileId,
           storeId: activeStore._id,
           terminalId: terminal._id,
           onAuthenticated: handleCashierAuthenticated,
@@ -1416,7 +1423,11 @@ export function useRegisterViewModel(): RegisterViewModel {
       setCustomerInfo,
     },
     productEntry: {
-      disabled: !terminal || !cashierId || requiresDrawerGate || isOpeningDrawer,
+      disabled:
+        !terminal ||
+        !staffProfileId ||
+        requiresDrawerGate ||
+        isOpeningDrawer,
       showProductLookup: showProductEntry,
       setShowProductLookup: setShowProductEntry,
       productSearchQuery,

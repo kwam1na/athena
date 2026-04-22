@@ -28,8 +28,8 @@ const baseProps = {
   staffOptions: [
     {
       _id: "staff-1",
-      email: "adjoa@example.com",
       fullName: "Adjoa Tetteh",
+      phoneNumber: "+233200000000",
       roles: ["stylist"],
     },
   ],

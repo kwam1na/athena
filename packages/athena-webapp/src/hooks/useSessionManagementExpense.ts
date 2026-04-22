@@ -8,6 +8,8 @@ import { logger } from "../lib/logger";
 import { useExpenseActiveSession } from "./useExpenseSessions";
 import { useGetTerminal } from "./useGetTerminal";
 
+type ExpenseActorId = Id<"staffProfile">;
+
 /**
  * Hook for Expense Session Management
  *
@@ -17,10 +19,11 @@ import { useGetTerminal } from "./useGetTerminal";
 export const useSessionManagementExpense = () => {
   const store = useExpenseStore();
   const terminal = useGetTerminal();
+  const currentStaffProfileId = store.cashier.id;
   const activeSession = useExpenseActiveSession(
     store.storeId,
     terminal?._id,
-    store.cashier.id || undefined
+    currentStaffProfileId || undefined
   );
 
   // Convex mutations
@@ -48,10 +51,10 @@ export const useSessionManagementExpense = () => {
    * Creates a new expense session
    */
   const createSession = useCallback(
-    async (storeId: Id<"store">, cashierId?: Id<"cashier">) => {
+    async (storeId: Id<"store">, staffProfileId?: ExpenseActorId) => {
       logger.info("[Expense] Creating new session", {
         storeId,
-        cashierId,
+        staffProfileId,
         registerNumber: store.ui.registerNumber,
         terminalId: store.terminalId,
       });
@@ -61,6 +64,14 @@ export const useSessionManagementExpense = () => {
         throw new Error("Terminal details missing");
       }
 
+      const sessionStaffProfileId =
+        staffProfileId !== undefined ? staffProfileId : currentStaffProfileId;
+
+      if (!sessionStaffProfileId) {
+        toast.error("Staff profile missing");
+        throw new Error("Staff profile missing");
+      }
+
       try {
         store.setSessionCreating(true);
         store.clearCart();
@@ -68,7 +79,7 @@ export const useSessionManagementExpense = () => {
 
         const result = await createSessionMutation({
           storeId,
-          cashierId: cashierId || (store.cashier.id as Id<"cashier">),
+          staffProfileId: sessionStaffProfileId,
           registerNumber: store.ui.registerNumber,
           terminalId: store.terminalId,
         });
@@ -84,7 +95,7 @@ export const useSessionManagementExpense = () => {
           sessionId: result.data.sessionId,
           expiresAt: result.data.expiresAt,
           registerNumber: store.ui.registerNumber,
-          cashierId,
+          staffProfileId,
         });
 
         toast.success("New expense session created");
@@ -98,7 +109,7 @@ export const useSessionManagementExpense = () => {
         store.setSessionCreating(false);
       }
     },
-    [createSessionMutation, store]
+    [createSessionMutation, currentStaffProfileId, store]
   );
 
   /**
@@ -106,7 +117,7 @@ export const useSessionManagementExpense = () => {
    */
   const updateSession = useCallback(
     async (updates: {
-      cashierId: Id<"cashier">;
+      staffProfileId: ExpenseActorId;
       notes?: string;
     }): Promise<{ success: true } | { success: false; error: string }> => {
       const sessionId = store.session.currentSessionId;
@@ -128,6 +139,7 @@ export const useSessionManagementExpense = () => {
         const result = await updateSessionMutation({
           sessionId: sessionId as Id<"expenseSession">,
           ...updates,
+          staffProfileId: updates.staffProfileId,
         });
 
         store.setSessionExpiresAt(result.expiresAt);
@@ -167,10 +179,17 @@ export const useSessionManagementExpense = () => {
       return { success: false, error };
     }
 
+    if (!currentStaffProfileId) {
+      const error = "No staff profile available for this session";
+      logger.error("[Expense] Cannot hold: Missing staff profile");
+      toast.error(error);
+      return { success: false, error };
+    }
+
     try {
       const result = await holdSessionMutation({
         sessionId: sessionId as Id<"expenseSession">,
-        cashierId: store.cashier.id as Id<"cashier">,
+        staffProfileId: currentStaffProfileId,
       });
 
       if (!result.success) {
@@ -202,7 +221,7 @@ export const useSessionManagementExpense = () => {
       toast.error(errorMessage);
       return { success: false, error: errorMessage };
     }
-  }, [holdSessionMutation, store, activeSession]);
+  }, [activeSession, currentStaffProfileId, holdSessionMutation, store]);
 
   /**
    * Resumes a held expense session
@@ -210,7 +229,7 @@ export const useSessionManagementExpense = () => {
   const resumeSession = useCallback(
     async (
       sessionId: Id<"expenseSession">,
-      cashierId: Id<"cashier">,
+      staffProfileId: ExpenseActorId,
       terminalId: Id<"posTerminal">
     ): Promise<
       | {
@@ -224,7 +243,7 @@ export const useSessionManagementExpense = () => {
       try {
         const result = await resumeSessionMutation({
           sessionId,
-          cashierId,
+          staffProfileId,
           terminalId,
         });
 

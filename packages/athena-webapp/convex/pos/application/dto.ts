@@ -10,7 +10,7 @@ import type {
 export interface GetRegisterStateArgs {
   storeId: Id<"store">;
   terminalId?: Id<"posTerminal">;
-  cashierId?: Id<"cashier">;
+  staffProfileId?: Id<"staffProfile">;
   registerNumber?: string;
 }
 

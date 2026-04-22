@@ -52,9 +52,14 @@ The entire data and API layer for both apps.
 **Inventory**
 - `store`, `organization`, `organizationMember`, `athenaUser`, `inviteCode`
 - `product`, `productSku`, `category`, `subcategory`, `color`
-- `cashier`, `bannerMessage`, `bestSeller`, `storeAsset`
+- `bannerMessage`, `bestSeller`, `storeAsset`
 - `promoCode`, `promoCodeItem`, `redeemedPromoCode`
 - `complimentaryProductsCollection`, `complimentaryProduct`
+
+**Operations**
+- `staffProfile`, `staffCredential`, `staffRoleAssignment`
+- `operationalWorkItem`, `operationalEvent`, `inventoryMovement`
+- `paymentAllocation`, `registerSession`, `approvalRequest`, `customerProfile`
 
 **Storefront**
 - `storeFrontUser`, `storeFrontSession`, `storeFrontVerificationCode`, `guest`
@@ -77,7 +82,8 @@ The entire data and API layer for both apps.
 
 | Directory | Purpose |
 |-----------|---------|
-| `convex/inventory/` | Inventory functions (products, stores, orgs, cashiers, promos) |
+| `convex/inventory/` | Inventory functions (products, stores, orgs, promos, POS/expense session entrypoints) |
+| `convex/operations/` | Shared operational rails (staff identities, credentials, register sessions, service intake, approvals) |
 | `convex/storeFront/` | Storefront functions (orders, checkout, reviews, rewards) |
 | `convex/pos/` | POS functions (sessions, transactions, terminals, expenses) |
 | `convex/llm/` | AI insights via OpenAI / Anthropic |

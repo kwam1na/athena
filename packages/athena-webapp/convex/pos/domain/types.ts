@@ -34,7 +34,7 @@ export interface PosRegisterSessionSummary {
   sessionNumber: string;
   status?: string;
   terminalId?: string;
-  cashierId?: string;
+  staffProfileId?: string;
   registerNumber?: string;
   expiresAt?: number;
   updatedAt?: number;

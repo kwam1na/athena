@@ -7,23 +7,39 @@ export async function getCashierForRegisterState(
   ctx: QueryCtx,
   args: {
     storeId: Id<"store">;
-    cashierId?: Id<"cashier">;
+    staffProfileId?: Id<"staffProfile">;
   },
 ): Promise<PosCashierSummary | null> {
-  if (!args.cashierId) {
+  if (!args.staffProfileId) {
     return null;
   }
 
-  const cashier = await ctx.db.get("cashier", args.cashierId);
-  if (!cashier || cashier.storeId !== args.storeId || !cashier.active) {
+  const staffProfile = await ctx.db.get("staffProfile", args.staffProfileId);
+  if (
+    !staffProfile ||
+    staffProfile.storeId !== args.storeId ||
+    staffProfile.status !== "active"
+  ) {
     return null;
   }
+
+  const [firstName, ...restNames] =
+    [staffProfile.firstName, staffProfile.lastName]
+      .filter(Boolean)
+      .map((value) => value!.trim().replace(/\s+/g, " "));
+  const fallbackNames = staffProfile.fullName
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((value) => value.trim());
+
+  const resolvedFirstName = firstName || fallbackNames[0] || staffProfile.fullName;
+  const resolvedLastName =
+    restNames.join(" ") || fallbackNames.slice(1).join(" ") || resolvedFirstName;
 
   return {
-    _id: cashier._id,
-    firstName: cashier.firstName,
-    lastName: cashier.lastName,
-    username: cashier.username,
-    active: cashier.active,
+    _id: staffProfile._id,
+    firstName: resolvedFirstName,
+    lastName: resolvedLastName,
+    active: staffProfile.status === "active",
   };
 }

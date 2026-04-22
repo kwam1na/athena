@@ -60,7 +60,7 @@ export function TransactionView() {
 
   const cartItems: CartItem[] = useMemo(() => {
     if (!transaction) return [];
-    return transaction.items.map((item) => ({
+    return transaction.items.map((item: (typeof transaction.items)[number]) => ({
       id: item._id,
       name: item.productName,
       barcode: item.barcode || "",

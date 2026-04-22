@@ -32,7 +32,7 @@ export type PosSessionTraceSeed = {
   };
   subjectRefs: {
     posSessionId?: Id<"posSession">;
-    cashierId?: Id<"cashier">;
+    staffProfileId?: Id<"staffProfile">;
     terminalId?: Id<"posTerminal">;
     customerId?: Id<"posCustomer">;
     posTransactionId?: Id<"posTransaction">;
@@ -46,7 +46,7 @@ export function buildPosSessionTraceSeed(args: {
   startedAt?: number;
   sessionNumber: string;
   posSessionId?: Id<"posSession">;
-  cashierId?: Id<"cashier">;
+  staffProfileId?: Id<"staffProfile">;
   terminalId?: Id<"posTerminal">;
   customerId?: Id<"posCustomer">;
   posTransactionId?: Id<"posTransaction">;
@@ -60,7 +60,7 @@ export function buildPosSessionTraceSeed(args: {
   const subjectRefs = Object.fromEntries(
     Object.entries({
       posSessionId: args.posSessionId,
-      cashierId: args.cashierId,
+      staffProfileId: args.staffProfileId,
       terminalId: args.terminalId,
       customerId: args.customerId,
       posTransactionId: args.posTransactionId,

@@ -25,7 +25,7 @@ export const getState = query({
   args: {
     storeId: v.id("store"),
     terminalId: v.optional(v.id("posTerminal")),
-    cashierId: v.optional(v.id("cashier")),
+    staffProfileId: v.optional(v.id("staffProfile")),
     registerNumber: v.optional(v.string()),
   },
   handler: async (ctx, args) => getRegisterState(ctx, args),

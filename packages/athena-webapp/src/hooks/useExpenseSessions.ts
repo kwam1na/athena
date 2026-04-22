@@ -3,18 +3,26 @@ import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
 import { logger } from "../lib/logger";
 
+type ExpenseActorId = Id<"staffProfile">;
+
 // Hook to get expense sessions for a store
 export const useExpenseStoreSessions = (
   storeId: Id<"store"> | undefined,
   terminalId: Id<"posTerminal"> | undefined,
-  cashierId?: Id<"cashier">,
+  staffProfileId?: ExpenseActorId,
   status?: "active" | "held" | "completed" | "void",
   limit?: number
 ) => {
   return useQuery(
     api.inventory.expenseSessions.getStoreExpenseSessions,
-    storeId && cashierId
-      ? { storeId, cashierId, terminalId, status, limit }
+    storeId && staffProfileId
+      ? {
+          storeId,
+          staffProfileId,
+          terminalId,
+          status,
+          limit,
+        }
       : "skip"
   );
 };
@@ -29,17 +37,22 @@ export const useExpenseSession = (
   );
 };
 
-// Hook to get active expense session for current register/cashier
+// Hook to get active expense session for current register/staff profile
 export const useExpenseActiveSession = (
   storeId: Id<"store"> | undefined,
   terminalId: Id<"posTerminal"> | undefined,
-  cashierId?: Id<"cashier">,
+  staffProfileId?: ExpenseActorId,
   registerNumber?: string
 ) => {
   return useQuery(
     api.inventory.expenseSessions.getActiveExpenseSession,
-    storeId && terminalId && cashierId
-      ? { storeId, cashierId, terminalId, registerNumber }
+    storeId && terminalId && staffProfileId
+      ? {
+          storeId,
+          staffProfileId,
+          terminalId,
+          registerNumber,
+        }
       : "skip"
   );
 };
@@ -54,14 +67,14 @@ export const useExpenseSessionCreate = () => {
     createSession: async (
       storeId: Id<"store">,
       terminalId: Id<"posTerminal">,
-      cashierId: Id<"cashier">,
+      staffProfileId: ExpenseActorId,
       registerNumber?: string
     ) => {
       try {
         const result = await createSession({
           storeId,
           terminalId,
-          cashierId,
+          staffProfileId,
           registerNumber,
         });
 
@@ -90,7 +103,7 @@ export const useExpenseSessionUpdate = () => {
   return {
     updateSession: async (
       sessionId: Id<"expenseSession">,
-      cashierId: Id<"cashier">,
+      staffProfileId: ExpenseActorId,
       updates: {
         notes?: string;
       }
@@ -98,7 +111,7 @@ export const useExpenseSessionUpdate = () => {
       try {
         return await updateSession({
           sessionId,
-          cashierId,
+          staffProfileId,
           ...updates,
         });
       } catch (error) {

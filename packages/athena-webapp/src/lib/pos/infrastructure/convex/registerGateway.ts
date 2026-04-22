@@ -39,7 +39,7 @@ export function useConvexRegisterState(
       ? {
           storeId: input.storeId,
           terminalId: input.terminalId ?? undefined,
-          cashierId: input.cashierId ?? undefined,
+          staffProfileId: input.staffProfileId ?? undefined,
           registerNumber: input.registerNumber,
         }
       : "skip",

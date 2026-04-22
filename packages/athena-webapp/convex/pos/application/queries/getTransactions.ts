@@ -12,8 +12,39 @@ import {
   listTransactionsByStore,
 } from "../../infrastructure/repositories/transactionRepository";
 
-function formatCashierName(args: { firstName: string; lastName: string }) {
-  return [args.firstName, `${args.lastName.charAt(0)}.`]
+function summarizeCashierName(args: {
+  fullName?: string;
+  firstName?: string;
+  lastName?: string;
+}) {
+  const firstName = args.firstName?.trim();
+  const lastName = args.lastName?.trim();
+
+  if (firstName || lastName) {
+    return {
+      firstName: firstName ?? args.fullName?.trim() ?? "Staff",
+      lastName: lastName ?? "",
+    };
+  }
+
+  const fullName = args.fullName?.trim();
+  if (!fullName) {
+    return {
+      firstName: "Staff",
+      lastName: "",
+    };
+  }
+
+  const parts = fullName.split(/\s+/);
+  return {
+    firstName: parts[0] ?? "Staff",
+    lastName: parts.slice(1).join(" "),
+  };
+}
+
+function formatCashierName(args: { firstName?: string; lastName?: string; fullName?: string }) {
+  const summary = summarizeCashierName(args);
+  return [summary.firstName, summary.lastName ? `${summary.lastName.charAt(0)}.` : ""]
     .filter(Boolean)
     .join(" ")
     .trim();
@@ -55,8 +86,8 @@ export async function getCompletedTransactions(
 
   return Promise.all(
     transactions.map(async (transaction) => {
-      const cashier = transaction.cashierId
-        ? await getCashierById(ctx, transaction.cashierId)
+      const cashier = transaction.staffProfileId
+        ? await getCashierById(ctx, transaction.staffProfileId)
         : null;
       const customer = transaction.customerId
         ? await getCustomerById(ctx, transaction.customerId)
@@ -78,10 +109,7 @@ export async function getCompletedTransactions(
         saleTraceId,
         sessionTraceId,
         cashierName: cashier
-          ? formatCashierName({
-              firstName: cashier.firstName,
-              lastName: cashier.lastName,
-            })
+          ? formatCashierName(cashier)
           : null,
         customerName:
           customer?.name ?? transaction.customerInfo?.name ?? null,
@@ -102,8 +130,8 @@ export async function getTransactionById(
     return null;
   }
 
-  const cashier = transaction.cashierId
-    ? await getCashierById(ctx, transaction.cashierId)
+  const cashier = transaction.staffProfileId
+    ? await getCashierById(ctx, transaction.staffProfileId)
     : null;
   const customer = transaction.customerId
     ? await getCustomerById(ctx, transaction.customerId)
@@ -134,8 +162,7 @@ export async function getTransactionById(
     cashier: cashier
       ? {
           _id: cashier._id,
-          firstName: cashier.firstName,
-          lastName: cashier.lastName,
+          ...summarizeCashierName(cashier),
         }
       : null,
     customer: customer

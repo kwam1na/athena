@@ -5,7 +5,7 @@ type SessionRecord = {
   sessionNumber: string;
   storeId: string;
   terminalId: string;
-  cashierId?: string;
+  staffProfileId?: string;
   registerNumber?: string;
   registerSessionId?: string;
   status: "active" | "held" | "completed" | "void" | "expired";
@@ -88,7 +88,7 @@ describe("createPosSessionCommandService", () => {
     ).startSession({
       storeId: "store-1",
       terminalId: "terminal-1",
-      cashierId: "cashier-1",
+      staffProfileId: "cashier-1",
       registerNumber: "1",
     });
 
@@ -105,7 +105,7 @@ describe("createPosSessionCommandService", () => {
         sessionNumber: "SES-001",
         status: "active",
         terminalId: "terminal-1",
-        cashierId: "cashier-1",
+        staffProfileId: "cashier-1",
         registerNumber: "1",
         registerSessionId: "drawer-1",
         expiresAt: 61_000,
@@ -132,7 +132,7 @@ describe("createPosSessionCommandService", () => {
           sessionNumber: "SES-009",
           storeId: "store-1",
           terminalId: "terminal-2",
-          cashierId: "cashier-1",
+          staffProfileId: "cashier-1",
           status: "active",
           expiresAt: 10_000,
           updatedAt: 900,
@@ -149,7 +149,7 @@ describe("createPosSessionCommandService", () => {
     ).startSession({
       storeId: "store-1",
       terminalId: "terminal-1",
-      cashierId: "cashier-1",
+      staffProfileId: "cashier-1",
       registerNumber: "1",
     });
 
@@ -179,7 +179,7 @@ describe("createPosSessionCommandService", () => {
           sessionNumber: "SES-004",
           storeId: "store-1",
           terminalId: "terminal-1",
-          cashierId: "cashier-1",
+          staffProfileId: "cashier-1",
           registerSessionId: "drawer-1",
           status: "active",
           expiresAt: 12_000,
@@ -211,7 +211,7 @@ describe("createPosSessionCommandService", () => {
     ).startSession({
       storeId: "store-1",
       terminalId: "terminal-1",
-      cashierId: "cashier-1",
+      staffProfileId: "cashier-1",
       registerNumber: "1",
     });
 
@@ -252,7 +252,7 @@ describe("createPosSessionCommandService", () => {
           sessionNumber: "SES-002",
           storeId: "store-1",
           terminalId: "terminal-1",
-          cashierId: "cashier-1",
+          staffProfileId: "cashier-1",
           status: "active",
           workflowTraceId: "pos_session:ses-002",
           expiresAt: 8_000,
@@ -270,7 +270,7 @@ describe("createPosSessionCommandService", () => {
       }),
     ).holdSession({
       sessionId: "session-2",
-      cashierId: "cashier-1",
+      staffProfileId: "cashier-1",
       holdReason: "Customer stepped away",
     });
 
@@ -325,7 +325,7 @@ describe("createPosSessionCommandService", () => {
     ).startSession({
       storeId: "store-1",
       terminalId: "terminal-1",
-      cashierId: "cashier-1",
+      staffProfileId: "cashier-1",
       registerNumber: "1",
     });
 
@@ -354,7 +354,7 @@ describe("createPosSessionCommandService", () => {
     ).startSession({
       storeId: "store-1",
       terminalId: "terminal-1",
-      cashierId: "cashier-1",
+      staffProfileId: "cashier-1",
       registerNumber: "1",
     });
 
@@ -374,7 +374,7 @@ describe("createPosSessionCommandService", () => {
           sessionNumber: "SES-003",
           storeId: "store-1",
           terminalId: "terminal-1",
-          cashierId: "cashier-1",
+          staffProfileId: "cashier-1",
           status: "held",
           expiresAt: 900,
           updatedAt: 500,
@@ -390,7 +390,7 @@ describe("createPosSessionCommandService", () => {
       }),
     ).resumeSession({
       sessionId: "session-3",
-      cashierId: "cashier-1",
+      staffProfileId: "cashier-1",
       terminalId: "terminal-1",
     });
 
@@ -409,7 +409,7 @@ describe("createPosSessionCommandService", () => {
           sessionNumber: "SES-005",
           storeId: "store-1",
           terminalId: "terminal-1",
-          cashierId: "cashier-1",
+          staffProfileId: "cashier-1",
           status: "active",
           expiresAt: 8_000,
           updatedAt: 500,
@@ -429,7 +429,7 @@ describe("createPosSessionCommandService", () => {
       }),
     ).upsertSessionItem({
       sessionId: "session-5",
-      cashierId: "cashier-1",
+      staffProfileId: "cashier-1",
       productId: "product-1",
       productSkuId: "sku-1",
       productSku: "SKU-1",
@@ -480,7 +480,7 @@ describe("createPosSessionCommandService", () => {
           sessionNumber: "SES-006",
           storeId: "store-1",
           terminalId: "terminal-1",
-          cashierId: "cashier-1",
+          staffProfileId: "cashier-1",
           status: "active",
           expiresAt: 8_000,
           updatedAt: 500,
@@ -513,7 +513,7 @@ describe("createPosSessionCommandService", () => {
       }),
     ).upsertSessionItem({
       sessionId: "session-6",
-      cashierId: "cashier-1",
+      staffProfileId: "cashier-1",
       productId: "product-1",
       productSkuId: "sku-1",
       productSku: "SKU-1",
@@ -566,7 +566,7 @@ describe("createPosSessionCommandService", () => {
           sessionNumber: "SES-007",
           storeId: "store-1",
           terminalId: "terminal-1",
-          cashierId: "cashier-1",
+          staffProfileId: "cashier-1",
           status: "active",
           expiresAt: 8_000,
           updatedAt: 500,
@@ -599,7 +599,7 @@ describe("createPosSessionCommandService", () => {
       }),
     ).removeSessionItem({
       sessionId: "session-7",
-      cashierId: "cashier-1",
+      staffProfileId: "cashier-1",
       itemId: "item-3",
     });
 
@@ -764,12 +764,12 @@ function createFakeRepository(seed?: {
     },
     async listActiveSessionsForCashier(args: {
       storeId: string;
-      cashierId: string;
+      staffProfileId: string;
     }) {
       return repository.sessions.filter(
         (session) =>
           session.storeId === args.storeId &&
-          session.cashierId === args.cashierId &&
+          session.staffProfileId === args.staffProfileId &&
           session.status === "active",
       );
     },
@@ -893,23 +893,23 @@ function createCommandService(
   startSession: (args: {
     storeId: string;
     terminalId: string;
-    cashierId?: string;
+    staffProfileId?: string;
     registerNumber?: string;
     registerSessionId?: string;
   }) => Promise<unknown>;
   holdSession: (args: {
     sessionId: string;
-    cashierId: string;
+    staffProfileId: string;
     holdReason?: string;
   }) => Promise<unknown>;
   resumeSession: (args: {
     sessionId: string;
-    cashierId: string;
+    staffProfileId: string;
     terminalId: string;
   }) => Promise<unknown>;
   upsertSessionItem: (args: {
     sessionId: string;
-    cashierId: string;
+    staffProfileId: string;
     productId: string;
     productSkuId: string;
     productSku: string;
@@ -919,7 +919,7 @@ function createCommandService(
   }) => Promise<unknown>;
   removeSessionItem: (args: {
     sessionId: string;
-    cashierId: string;
+    staffProfileId: string;
     itemId: string;
   }) => Promise<unknown>;
 } {

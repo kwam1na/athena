@@ -20,7 +20,7 @@ export async function validateSessionExists(
   db: DatabaseReader,
   sessionId: Id<"posSession">
 ): Promise<ValidationResult> {
-  const session = await db.get(sessionId);
+  const session = await db.get("posSession", sessionId);
 
   if (!session) {
     return {
@@ -39,9 +39,9 @@ export async function validateSessionExists(
 export async function validateSessionActive(
   db: DatabaseReader,
   sessionId: Id<"posSession">,
-  cashierId: Id<"cashier">
+  staffProfileId: Id<"staffProfile">
 ): Promise<ValidationResult> {
-  const session = await db.get(sessionId);
+  const session = await db.get("posSession", sessionId);
   const now = Date.now();
 
   console.log("session in validateSessionActive", session);
@@ -53,10 +53,10 @@ export async function validateSessionActive(
     };
   }
 
-  if (session.cashierId !== cashierId) {
+  if (session.staffProfileId !== staffProfileId) {
     return {
       success: false,
-      message: "This session is not associated with your cashier.",
+      message: "This session is not associated with your staff profile.",
     };
   }
 
@@ -95,9 +95,9 @@ export async function validateSessionActive(
 export async function validateSessionModifiable(
   db: DatabaseReader,
   sessionId: Id<"posSession">,
-  cashierId: Id<"cashier">
+  staffProfileId: Id<"staffProfile">
 ): Promise<ValidationResult> {
-  const session = await db.get(sessionId);
+  const session = await db.get("posSession", sessionId);
   const now = Date.now();
 
   if (!session) {
@@ -107,10 +107,10 @@ export async function validateSessionModifiable(
     };
   }
 
-  if (session.cashierId !== cashierId) {
+  if (session.staffProfileId !== staffProfileId) {
     return {
       success: false,
-      message: "This session is not associated with your cashier.",
+      message: "This session is not associated with your staff profile.",
     };
   }
 
@@ -134,7 +134,7 @@ export async function validateSessionModifiable(
 }
 
 /**
- * Validates session ownership based on store, cashier, or register
+ * Validates session ownership based on store, staff member, or register
  * Optional validation for multi-user environments
  */
 export async function validateSessionOwnership(
@@ -142,11 +142,11 @@ export async function validateSessionOwnership(
   sessionId: Id<"posSession">,
   options: {
     storeId?: Id<"store">;
-    cashierId?: Id<"cashier">;
+    staffProfileId?: Id<"staffProfile">;
     registerNumber?: string;
   }
 ): Promise<ValidationResult> {
-  const session = await db.get(sessionId);
+  const session = await db.get("posSession", sessionId);
 
   if (!session) {
     return {
@@ -162,10 +162,13 @@ export async function validateSessionOwnership(
     };
   }
 
-  if (options.cashierId && session.cashierId !== options.cashierId) {
+  if (
+    options.staffProfileId &&
+    session.staffProfileId !== options.staffProfileId
+  ) {
     return {
       success: false,
-      message: "This session belongs to a different cashier.",
+      message: "This session belongs to a different staff member.",
     };
   }
 
@@ -247,7 +250,7 @@ export async function validateItemBelongsToSession(
   itemId: Id<"posSessionItem">,
   sessionId: Id<"posSession">
 ): Promise<ValidationResult> {
-  const item = await db.get(itemId);
+  const item = await db.get("posSessionItem", itemId);
 
   if (!item) {
     return {

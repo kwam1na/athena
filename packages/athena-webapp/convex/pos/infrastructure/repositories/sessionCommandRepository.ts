@@ -13,7 +13,7 @@ export interface SessionCommandRepository {
   }): Promise<Doc<"posSession">[]>;
   listActiveSessionsForCashier(args: {
     storeId: Id<"store">;
-    cashierId: Id<"cashier">;
+    staffProfileId: Id<"staffProfile">;
   }): Promise<Doc<"posSession">[]>;
   getSessionById(
     sessionId: Id<"posSession">,
@@ -80,11 +80,11 @@ export function createSessionCommandRepository(
     listActiveSessionsForCashier(args) {
       return ctx.db
         .query("posSession")
-        .withIndex("by_storeId_status_cashierId", (q) =>
+        .withIndex("by_storeId_status_staffProfileId", (q) =>
           q
             .eq("storeId", args.storeId)
             .eq("status", "active")
-            .eq("cashierId", args.cashierId),
+            .eq("staffProfileId", args.staffProfileId),
         )
         .take(ACTIVE_SESSION_CANDIDATE_LIMIT);
     },

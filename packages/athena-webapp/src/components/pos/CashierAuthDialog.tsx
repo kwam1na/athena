@@ -22,7 +22,7 @@ interface CashierAuthDialogProps {
   open: boolean;
   storeId: Id<"store">;
   terminalId: Id<"posTerminal">;
-  onAuthenticated: (cashierId: Id<"cashier">) => void;
+  onAuthenticated: (staffProfileId: Id<"staffProfile">) => void;
   onDismiss: () => void;
 }
 
@@ -39,14 +39,13 @@ export const CashierAuthDialog = ({
   const [state, setState] = useState<"auth" | "signOut">("auth");
   const usernameInputRef = useRef<HTMLInputElement>(null);
 
-  // Use mutation to authenticate
-  const authenticate = useMutation(api.inventory.cashier.authenticate);
-
-  const expireAllSessionsForCashier = useMutation(
-    api.inventory.posSessions.expireAllSessionsForCashier
+  const authenticateStaffCredentialForTerminal = useMutation(
+    api.operations.staffCredentials.authenticateStaffCredentialForTerminal
   );
 
-  const signIn = useMutation(api.inventory.cashier.signIn);
+  const expireAllSessionsForStaff = useMutation(
+    api.inventory.posSessions.expireAllSessionsForStaff
+  );
 
   // Auto-focus username field when dialog opens
   useEffect(() => {
@@ -80,36 +79,27 @@ export const CashierAuthDialog = ({
       // Hash the PIN client-side before calling the mutation
       const hashed = await hashPin(pin);
 
-      // Call the mutation
-      const result = await authenticate({
+      const result = await authenticateStaffCredentialForTerminal({
+        allowedRoles: ["cashier", "manager"],
         username: username.trim(),
-        pin: hashed,
+        pinHash: hashed,
         storeId,
         terminalId,
       });
 
-      if (result.success && result.cashier) {
-        if (state === "auth") {
-          const signInResult = await signIn({
-            username: username.trim(),
-            pin: hashed,
-            storeId,
-            terminalId,
-          });
+      if (result.staffProfileId) {
+        const staffDisplayName =
+          result.staffProfile.fullName ||
+          [result.staffProfile.firstName, result.staffProfile.lastName]
+            .filter(Boolean)
+            .join(" ");
 
-          if (signInResult.success && signInResult.cashier) {
-            toast.success(
-              `Logged in as ${signInResult.cashier.firstName} ${signInResult.cashier.lastName.charAt(0).toUpperCase()}.`
-            );
-            onAuthenticated(signInResult.cashier._id);
-          } else if ((signInResult as any).error) {
-            toast.error((signInResult as any).error);
-            setPin("");
-            return;
-          }
+        if (state === "auth") {
+          toast.success(`Logged in as ${staffDisplayName}.`);
+          onAuthenticated(result.staffProfileId);
         } else {
-          const expireResult = await expireAllSessionsForCashier({
-            cashierId: result.cashier._id,
+          const expireResult = await expireAllSessionsForStaff({
+            staffProfileId: result.staffProfileId,
             terminalId,
           });
 
@@ -120,20 +110,16 @@ export const CashierAuthDialog = ({
             setPin("");
             return;
           }
-          onAuthenticated(result.cashier._id);
+          onAuthenticated(result.staffProfileId);
           setState("auth");
         }
 
         // Reset form
         setUsername("");
         setPin("");
-      } else if (result.error) {
-        toast.error(result.error);
-        // Clear PIN on error
-        setPin("");
       }
     } catch (error) {
-      toast.error("Authentication failed");
+      toast.error((error as Error).message || "Authentication failed");
       console.error(error);
       setPin("");
     } finally {

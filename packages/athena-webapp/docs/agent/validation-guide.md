@@ -49,6 +49,18 @@ Behavior scenarios:
 
 Use this when register-session, deposit, closeout, dashboard, operations-queue approval, or cash-controls route wiring changes. This is the confirmation slice for drawers opened from POS showing up in the dashboard and register-session detail views. Start `bunx convex dev` from `packages/athena-webapp` before validation when generated client refs or new Convex function exports changed.
 
+## Staff foundation and subsystem credential edits
+
+Touched surfaces: `convex/operations/staffCredentials.ts`, `convex/operations/staffProfiles.ts`, `convex/schema.ts`, `convex/inventory/posSessions.ts`, `convex/pos/application/queries/getRegisterState.ts`, `convex/pos/infrastructure/repositories/cashierRepository.ts`, `src/components/cashiers/CashierManagement.tsx`, `src/components/expense/ExpenseCompletion.tsx`, `src/components/expense/ExpenseView.tsx`, `src/components/pos/CashierAuthDialog.tsx`, `src/hooks/useExpenseSessions.ts`, `src/hooks/useSessionManagementExpense.ts`, `src/lib/pos/presentation/register/useRegisterViewModel.ts`, `src/stores/expenseStore.ts`, `types.ts`
+
+Run:
+
+- `bun run --filter '@athena/webapp' test -- convex/operations/staffCredentials.test.ts convex/inventory/sessionQueryIndexes.test.ts convex/pos/application/sessionCommands.test.ts convex/pos/application/completeTransaction.test.ts convex/pos/application/getTransactions.test.ts convex/pos/infrastructure/repositories/sessionRepository.test.ts convex/pos/application/getRegisterState.test.ts convex/inventory/posSessions.trace.test.ts convex/pos/application/posSessionTracing.test.ts src/lib/pos/infrastructure/convex/sessionGateway.test.ts src/lib/pos/infrastructure/convex/registerGateway.test.ts src/components/pos/register/POSRegisterView.test.tsx src/lib/pos/presentation/register/useRegisterViewModel.test.ts src/components/pos/transactions/TransactionView.test.tsx`
+- `bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json`
+- `bun run --filter '@athena/webapp' build`
+
+Use this when store staff identity, subsystem credential auth, or POS/expense actor attribution changes. It validates the staff credential rules plus the register, transaction, and expense flows that now share `staffProfileId` instead of the deleted cashier model.
+
 ## Workflow trace foundation, POS drawer gate, and trace-link edits
 
 Touched surfaces: `convex/workflowTraces`, `convex/schemas/observability`, `convex/pos/application/commands/completeTransaction.ts`, `convex/pos/application/commands/posSessionTracing.ts`, `convex/pos/application/queries/getTransactions.ts`, `convex/pos/public/transactions.ts`, `convex/inventory/posSessions.ts`, `convex/operations/registerSessionTracing.ts`, `convex/operations/registerSessions.ts`, `convex/cashControls/closeouts.ts`, `convex/cashControls/deposits.ts`, `convex/schemas/pos/posTransaction.ts`, `shared/workflowTrace.ts`, `src/components/traces`, `src/components/pos/SessionManager.tsx`, `src/components/pos/register`, `src/components/pos/session/HeldSessionsList.tsx`, `src/components/pos/transactions`, `src/lib/pos/presentation/register`, `src/components/cash-controls/CashControlsDashboard.tsx`, `src/components/cash-controls/RegisterSessionView.tsx`, `src/components/cash-controls/RegisterCloseoutView.tsx`, `src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/traces`

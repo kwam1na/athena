@@ -45,6 +45,8 @@ export const getExpenseSessionItems = query({
     })
   ),
   handler: async (ctx, args) => {
+    // Expense session carts stay small enough to read in full for a single session.
+    // eslint-disable-next-line @convex-dev/no-collect-in-query
     const items = await ctx.db
       .query("expenseSessionItem")
       .withIndex("by_sessionId", (q) => q.eq("sessionId", args.sessionId))
@@ -60,7 +62,7 @@ export const addOrUpdateExpenseItem = mutation({
     sessionId: v.id("expenseSession"),
     productId: v.id("product"),
     productSkuId: v.id("productSku"),
-    cashierId: v.id("cashier"),
+    staffProfileId: v.id("staffProfile"),
     productSku: v.string(),
     barcode: v.optional(v.string()),
     productName: v.string(),
@@ -80,18 +82,20 @@ export const addOrUpdateExpenseItem = mutation({
       const validation = await validateExpenseSessionActive(
         ctx.db,
         args.sessionId,
-        args.cashierId
+        args.staffProfileId
       );
       if (!validation.success) {
         return error(validation.message!);
       }
 
-      const session = await ctx.db.get(args.sessionId);
+      const session = await ctx.db.get("expenseSession", args.sessionId);
       if (!session) {
         return error("Session not found");
       }
 
       // Check if item already exists in session
+      // Expense session carts stay small enough to read in full for a single session.
+      // eslint-disable-next-line @convex-dev/no-collect-in-query
       const existingItems = await ctx.db
         .query("expenseSessionItem")
         .withIndex("by_sessionId", (q) => q.eq("sessionId", args.sessionId))
@@ -117,7 +121,7 @@ export const addOrUpdateExpenseItem = mutation({
         }
 
         // Update the item
-        await ctx.db.patch(existingItem._id, {
+        await ctx.db.patch("expenseSessionItem", existingItem._id, {
           quantity: args.quantity,
           price: args.price,
           barcode: args.barcode,
@@ -163,7 +167,7 @@ export const addOrUpdateExpenseItem = mutation({
       // Extend session expiration time
       const expiresAt = calculateExpenseSessionExpiration(now);
 
-      await ctx.db.patch(args.sessionId, {
+      await ctx.db.patch("expenseSession", args.sessionId, {
         updatedAt: now,
         expiresAt,
       });
@@ -184,7 +188,7 @@ export const addOrUpdateExpenseItem = mutation({
 export const removeExpenseItem = mutation({
   args: {
     sessionId: v.id("expenseSession"),
-    cashierId: v.id("cashier"),
+    staffProfileId: v.id("staffProfile"),
     itemId: v.id("expenseSessionItem"),
   },
   returns: expenseOperationSuccessValidator,
@@ -196,7 +200,7 @@ export const removeExpenseItem = mutation({
       const sessionValidation = await validateExpenseSessionModifiable(
         ctx.db,
         args.sessionId,
-        args.cashierId
+        args.staffProfileId
       );
       if (!sessionValidation.success) {
         return error(sessionValidation.message!);
@@ -213,7 +217,7 @@ export const removeExpenseItem = mutation({
       }
 
       // Get the item to release its inventory hold
-      const item = await ctx.db.get(args.itemId);
+      const item = await ctx.db.get("expenseSessionItem", args.itemId);
       if (!item) {
         return error("Item not found in cart");
       }
@@ -222,12 +226,12 @@ export const removeExpenseItem = mutation({
       await releaseInventoryHold(ctx.db, item.productSkuId, item.quantity);
 
       // Delete the item
-      await ctx.db.delete(args.itemId);
+      await ctx.db.delete("expenseSessionItem", args.itemId);
 
       // Extend session expiration time
       const expiresAt = calculateExpenseSessionExpiration(now);
 
-      await ctx.db.patch(args.sessionId, {
+      await ctx.db.patch("expenseSession", args.sessionId, {
         updatedAt: now,
         expiresAt,
       });
