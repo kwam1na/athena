@@ -172,7 +172,8 @@
       "name": "frontend-test-harness-edits",
       "pathPrefixes": [
         "packages/athena-webapp/src/test",
-        "packages/athena-webapp/src/tests"
+        "packages/athena-webapp/src/tests",
+        "packages/athena-webapp/vitest.setup.ts"
       ],
       "commands": [
         {

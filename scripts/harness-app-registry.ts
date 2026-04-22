@@ -401,7 +401,7 @@ export const HARNESS_APP_REGISTRY = [
       },
       {
         title: "Frontend test harness edits",
-        touchedPaths: ["src/test", "src/tests"],
+        touchedPaths: ["src/test", "src/tests", "vitest.setup.ts"],
         commands: [{ kind: "script", script: "test" }],
         note: "Run the package suite when package-local frontend test helpers or focused regression tests change.",
       },
