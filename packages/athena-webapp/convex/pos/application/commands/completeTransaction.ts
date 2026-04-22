@@ -3,6 +3,11 @@ import type { Id } from "../../../_generated/dataModel";
 import type { MutationCtx } from "../../../_generated/server";
 import { capitalizeWords, generateTransactionNumber } from "../../../utils";
 import {
+  appendWorkflowTraceEventWithCtx,
+  createWorkflowTraceWithCtx,
+  registerWorkflowTraceLookupWithCtx,
+} from "../../../workflowTraces/core";
+import {
   recordRetailSalePaymentAllocations,
   recordRetailVoidPaymentAllocations,
 } from "../../infrastructure/integrations/paymentAllocationService";
@@ -20,6 +25,10 @@ import {
   patchPosTransaction,
   patchProductSku,
 } from "../../infrastructure/repositories/transactionRepository";
+import {
+  buildPosSaleTraceSeed,
+  type PosSaleTraceSeed,
+} from "../../../workflowTraces/adapters/posSale";
 
 type PosPaymentInput = {
   method: string;
@@ -60,6 +69,107 @@ export function buildCompleteTransactionResult(input: {
 
 function calculateTotalPaid(payments: PosPaymentInput[]) {
   return payments.reduce((sum, payment) => sum + payment.amount, 0);
+}
+
+async function safeTraceWrite(
+  label: string,
+  action: () => Promise<unknown>,
+) {
+  try {
+    await action();
+  } catch (error) {
+    console.error(`[workflow-trace] ${label}`, error);
+  }
+}
+
+function buildPosSaleTraceRecord(args: {
+  stage: "bootstrap" | "finalized";
+  traceSeed: PosSaleTraceSeed;
+  transactionId: Id<"posTransaction">;
+  completedAt?: number;
+}) {
+  if (args.stage === "bootstrap") {
+    return args.traceSeed.trace;
+  }
+
+  return {
+    ...args.traceSeed.trace,
+    status: "succeeded" as const,
+    completedAt: args.completedAt,
+    details: {
+      transactionId: args.transactionId,
+      lookupValue: args.traceSeed.lookup.lookupValue,
+    },
+  };
+}
+
+function buildPosSaleTraceEvent(args: {
+  stage: "bootstrap" | "finalized";
+  traceSeed: PosSaleTraceSeed;
+  transactionId: Id<"posTransaction">;
+  completedAt?: number;
+}) {
+  if (args.stage === "bootstrap") {
+    return {
+      storeId: args.traceSeed.trace.storeId,
+      traceId: args.traceSeed.trace.traceId,
+      workflowType: args.traceSeed.trace.workflowType,
+      kind: "milestone" as const,
+      step: "sale_completion_started",
+      status: "started" as const,
+      message: `Sale completion started for ${args.traceSeed.trace.primaryLookupValue}`,
+      occurredAt: args.traceSeed.trace.startedAt,
+      source: args.traceSeed.eventSource,
+      subjectRefs: args.traceSeed.subjectRefs,
+    };
+  }
+
+  const occurredAt = args.completedAt ?? Date.now();
+  return {
+    storeId: args.traceSeed.trace.storeId,
+    traceId: args.traceSeed.trace.traceId,
+    workflowType: args.traceSeed.trace.workflowType,
+    kind: "milestone" as const,
+    step: "sale_completion_completed",
+    status: "succeeded" as const,
+    message: `Sale completion completed for ${args.traceSeed.trace.primaryLookupValue}`,
+    occurredAt,
+    source: args.traceSeed.eventSource,
+    subjectRefs: args.traceSeed.subjectRefs,
+    details: {
+      stage: args.stage,
+      transactionId: args.transactionId,
+    },
+  };
+}
+
+export async function recordPosSaleTraceBestEffort(
+  ctx: MutationCtx,
+  args: {
+    stage: "bootstrap" | "finalized";
+    traceSeed: PosSaleTraceSeed;
+    transactionId: Id<"posTransaction">;
+    completedAt?: number;
+  },
+) {
+  const traceRecord = buildPosSaleTraceRecord(args);
+  const event = buildPosSaleTraceEvent(args);
+
+  const safeWrite = async (label: string, action: () => Promise<unknown>) => {
+    await safeTraceWrite(label, action);
+  };
+
+  await safeWrite("pos.sale.trace.create", async () => {
+    await createWorkflowTraceWithCtx(ctx, traceRecord);
+  });
+
+  await safeWrite("pos.sale.trace.lookup", async () => {
+    await registerWorkflowTraceLookupWithCtx(ctx, args.traceSeed.lookup);
+  });
+
+  await safeWrite("pos.sale.trace.event", async () => {
+    await appendWorkflowTraceEventWithCtx(ctx, event);
+  });
 }
 
 async function recordRegisterSessionSale(
@@ -206,6 +316,7 @@ export async function completeTransaction(
   const changeGiven = totalPaid > args.total ? totalPaid - args.total : undefined;
   const primaryPaymentMethod = args.payments[0]?.method || "cash";
   const transactionNumber = generateTransactionNumber();
+  const traceStartedAt = Date.now();
   const completedAt = Date.now();
 
   const transactionId = await createPosTransaction(ctx, {
@@ -229,6 +340,24 @@ export async function completeTransaction(
     customerInfo: args.customerInfo,
     receiptPrinted: false,
   });
+  const store = await getStoreById(ctx, args.storeId);
+  const traceSeed = buildPosSaleTraceSeed({
+    storeId: args.storeId,
+    organizationId: store?.organizationId,
+    startedAt: traceStartedAt,
+    transactionNumber,
+    posTransactionId: transactionId,
+    registerSessionId: args.registerSessionId,
+    cashierId: args.cashierId,
+    terminalId: args.terminalId,
+    customerId: args.customerId,
+  });
+
+  await recordPosSaleTraceBestEffort(ctx, {
+    stage: "bootstrap",
+    traceSeed,
+    transactionId,
+  });
 
   if (args.registerSessionId) {
     await recordRegisterSessionSale(ctx, {
@@ -241,7 +370,6 @@ export async function completeTransaction(
     });
   }
 
-  const store = await getStoreById(ctx, args.storeId);
   const completionResult = buildCompleteTransactionResult({
     transactionId,
     transactionNumber,
@@ -303,6 +431,13 @@ export async function completeTransaction(
       return transactionItemId;
     }),
   );
+
+  await recordPosSaleTraceBestEffort(ctx, {
+    stage: "finalized",
+    traceSeed,
+    transactionId,
+    completedAt: Date.now(),
+  });
 
   return {
     success: true,
@@ -440,6 +575,7 @@ export async function createTransactionFromSessionHandler(
   const changeGiven = totalPaid > total ? totalPaid - total : undefined;
   const primaryPaymentMethod = args.payments[0]?.method || "cash";
   const transactionNumber = generateTransactionNumber();
+  const traceStartedAt = Date.now();
   const completedAt = Date.now();
 
   const transactionId = await createPosTransaction(ctx, {
@@ -464,6 +600,24 @@ export async function createTransactionFromSessionHandler(
     receiptPrinted: false,
     notes: args.notes,
   });
+  const store = await getStoreById(ctx, session.storeId);
+  const traceSeed = buildPosSaleTraceSeed({
+    storeId: session.storeId,
+    organizationId: store?.organizationId,
+    startedAt: traceStartedAt,
+    transactionNumber,
+    posTransactionId: transactionId,
+    registerSessionId: args.registerSessionId,
+    cashierId: session.cashierId,
+    terminalId: session.terminalId,
+    customerId: session.customerId,
+  });
+
+  await recordPosSaleTraceBestEffort(ctx, {
+    stage: "bootstrap",
+    traceSeed,
+    transactionId,
+  });
 
   if (args.registerSessionId) {
     await recordRegisterSessionSale(ctx, {
@@ -476,7 +630,6 @@ export async function createTransactionFromSessionHandler(
     });
   }
 
-  const store = await getStoreById(ctx, session.storeId);
   const completionResult = buildCompleteTransactionResult({
     transactionId,
     transactionNumber,
@@ -536,6 +689,13 @@ export async function createTransactionFromSessionHandler(
 
   await patchPosSession(ctx, args.sessionId, {
     transactionId,
+  });
+
+  await recordPosSaleTraceBestEffort(ctx, {
+    stage: "finalized",
+    traceSeed,
+    transactionId,
+    completedAt: Date.now(),
   });
 
   return {
