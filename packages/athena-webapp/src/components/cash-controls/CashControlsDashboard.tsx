@@ -2,8 +2,7 @@ import { Link, useParams } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
 import { motion } from "framer-motion";
 
-import useGetActiveStore from "@/hooks/useGetActiveStore";
-import { usePermissions } from "@/hooks/usePermissions";
+import { useProtectedAdminPageState } from "@/hooks/useProtectedAdminPageState";
 import { capitalizeWords, currencyFormatter } from "@/lib/utils";
 import { api } from "~/convex/_generated/api";
 import View from "../View";
@@ -11,6 +10,7 @@ import { FadeIn } from "../common/FadeIn";
 import { SimplePageHeader } from "../common/PageHeader";
 import { EmptyState } from "../states/empty/empty-state";
 import { NoPermissionView } from "../states/no-permission/NoPermissionView";
+import { ProtectedAdminSignInView } from "../states/signed-out/ProtectedAdminSignInView";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import {
@@ -640,8 +640,13 @@ export function CashControlsDashboard({
 }: {
   focus?: CashControlsDashboardFocus;
 }) {
-  const { activeStore } = useGetActiveStore();
-  const { canAccessOperations, isLoading } = usePermissions();
+  const {
+    activeStore,
+    canQueryProtectedData,
+    hasFullAdminAccess,
+    isAuthenticated,
+    isLoadingAccess,
+  } = useProtectedAdminPageState();
   const params = useParams({ strict: false }) as
     | {
         orgUrlSlug?: string;
@@ -649,15 +654,15 @@ export function CashControlsDashboard({
       }
     | undefined;
 
-  const dashboardSnapshotArgs = activeStore?._id
-    ? { storeId: activeStore._id }
+  const dashboardSnapshotArgs = canQueryProtectedData
+    ? { storeId: activeStore!._id }
     : "skip";
   const dashboardSnapshot = useQuery(
     api.cashControls.deposits.getDashboardSnapshot,
     dashboardSnapshotArgs,
   );
 
-  if (isLoading) {
+  if (isLoadingAccess) {
     return (
       <View>
         <div className="container mx-auto py-10 text-sm text-muted-foreground">
@@ -667,7 +672,13 @@ export function CashControlsDashboard({
     );
   }
 
-  if (!canAccessOperations()) {
+  if (!isAuthenticated) {
+    return (
+      <ProtectedAdminSignInView description="Your Athena session needs to reconnect before cash controls can load protected register and deposit data." />
+    );
+  }
+
+  if (!hasFullAdminAccess) {
     return <NoPermissionView />;
   }
 

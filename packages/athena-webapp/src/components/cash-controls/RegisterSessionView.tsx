@@ -4,9 +4,8 @@ import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
-import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { useAuth } from "@/hooks/useAuth";
-import { usePermissions } from "@/hooks/usePermissions";
+import { useProtectedAdminPageState } from "@/hooks/useProtectedAdminPageState";
 import { capitalizeWords, currencyFormatter } from "@/lib/utils";
 import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
@@ -15,6 +14,7 @@ import { FadeIn } from "../common/FadeIn";
 import { SimplePageHeader } from "../common/PageHeader";
 import { EmptyState } from "../states/empty/empty-state";
 import { NoPermissionView } from "../states/no-permission/NoPermissionView";
+import { ProtectedAdminSignInView } from "../states/signed-out/ProtectedAdminSignInView";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
@@ -630,9 +630,14 @@ export function RegisterSessionViewContent({
 }
 
 export function RegisterSessionView() {
-  const { activeStore } = useGetActiveStore();
+  const {
+    activeStore,
+    canQueryProtectedData,
+    hasFullAdminAccess,
+    isAuthenticated,
+    isLoadingAccess,
+  } = useProtectedAdminPageState();
   const { user } = useAuth();
-  const { canAccessOperations, isLoading } = usePermissions();
   const params = useParams({ strict: false }) as
     | {
         orgUrlSlug?: string;
@@ -642,10 +647,10 @@ export function RegisterSessionView() {
     | undefined;
 
   const registerSessionSnapshotArgs =
-    activeStore?._id && params?.sessionId
+    canQueryProtectedData && params?.sessionId
       ? {
           registerSessionId: params.sessionId as Id<"registerSession">,
-          storeId: activeStore._id,
+          storeId: activeStore!._id,
         }
       : "skip";
   const registerSessionSnapshot = useQuery(
@@ -682,7 +687,7 @@ export function RegisterSessionView() {
     }
   }
 
-  if (isLoading) {
+  if (isLoadingAccess) {
     return (
       <View>
         <div className="container mx-auto py-10 text-sm text-muted-foreground">
@@ -692,7 +697,13 @@ export function RegisterSessionView() {
     );
   }
 
-  if (!canAccessOperations()) {
+  if (!isAuthenticated) {
+    return (
+      <ProtectedAdminSignInView description="Your Athena session needs to reconnect before this register session can load protected cash-controls data." />
+    );
+  }
+
+  if (!hasFullAdminAccess) {
     return <NoPermissionView />;
   }
 

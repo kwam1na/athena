@@ -7,8 +7,8 @@ import { FadeIn } from "../common/FadeIn";
 import { RegisterCloseoutView } from "../cash-controls/RegisterCloseoutView";
 import { EmptyState } from "../states/empty/empty-state";
 import { NoPermissionView } from "../states/no-permission/NoPermissionView";
-import useGetActiveStore from "@/hooks/useGetActiveStore";
-import { usePermissions } from "@/hooks/usePermissions";
+import { ProtectedAdminSignInView } from "../states/signed-out/ProtectedAdminSignInView";
+import { useProtectedAdminPageState } from "@/hooks/useProtectedAdminPageState";
 import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
 import {
@@ -250,15 +250,20 @@ export function OperationsQueueViewContent({
 }
 
 export function OperationsQueueView() {
-  const { activeStore } = useGetActiveStore();
-  const { canAccessOperations, isLoading } = usePermissions();
+  const {
+    activeStore,
+    canQueryProtectedData,
+    hasFullAdminAccess,
+    isAuthenticated,
+    isLoadingAccess,
+  } = useProtectedAdminPageState();
   const [isSubmittingStockBatch, setIsSubmittingStockBatch] = useState(false);
   const [decisioningApprovalRequestId, setDecisioningApprovalRequestId] =
     useState<Id<"approvalRequest"> | null>(null);
 
   const queue = useQuery(
     operationsApi.operationalWorkItems.getQueueSnapshot,
-    activeStore?._id ? { storeId: activeStore._id } : "skip"
+    canQueryProtectedData ? { storeId: activeStore!._id } : "skip"
   ) as
     | {
         approvalRequests: QueueApprovalRequest[];
@@ -267,7 +272,7 @@ export function OperationsQueueView() {
     | undefined;
   const inventoryItems = useQuery(
     stockOpsApi.adjustments.listInventorySnapshot,
-    activeStore?._id ? { storeId: activeStore._id } : "skip"
+    canQueryProtectedData ? { storeId: activeStore!._id } : "skip"
   ) as InventorySnapshotItem[] | undefined;
   const submitStockAdjustmentBatch = useMutation(
     stockOpsApi.adjustments.submitStockAdjustmentBatch
@@ -312,19 +317,52 @@ export function OperationsQueueView() {
     }
   };
 
+  if (isLoadingAccess) {
+    return (
+      <View>
+        <div className="container mx-auto py-10 text-sm text-muted-foreground">
+          Loading operations queue...
+        </div>
+      </View>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <ProtectedAdminSignInView description="Your Athena session needs to reconnect before the operations workspace can load protected stock-ops and cash-controls data." />
+    );
+  }
+
+  if (!hasFullAdminAccess) {
+    return <NoPermissionView />;
+  }
+
+  if (!activeStore) {
+    return (
+      <View>
+        <div className="container mx-auto py-8">
+          <EmptyState
+            description="Select a store before opening stock adjustments or approval work."
+            title="No active store"
+          />
+        </div>
+      </View>
+    );
+  }
+
   return (
     <OperationsQueueViewContent
       approvalRequests={queue?.approvalRequests ?? []}
-      hasFullAdminAccess={canAccessOperations()}
+      hasFullAdminAccess={hasFullAdminAccess}
       inventoryItems={inventoryItems ?? []}
       isDecidingApprovalRequestId={decisioningApprovalRequestId}
-      isLoadingPermissions={isLoading}
-      isLoadingQueue={!!activeStore && (queue === undefined || inventoryItems === undefined)}
+      isLoadingPermissions={false}
+      isLoadingQueue={queue === undefined || inventoryItems === undefined}
       onDecideApprovalRequest={handleDecideApprovalRequest}
       isSubmittingStockBatch={isSubmittingStockBatch}
       onSubmitStockBatch={handleSubmitStockBatch}
       registerCloseoutSection={<RegisterCloseoutView />}
-      storeId={activeStore?._id}
+      storeId={activeStore._id}
       workItems={queue?.workItems ?? []}
     />
   );

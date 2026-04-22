@@ -16,16 +16,6 @@ export const Route = createFileRoute("/_authed")({
 });
 
 function AuthedComponent() {
-  const navigate = useNavigate();
-
-  const { user } = useAuth();
-
-  useEffect(() => {
-    if (user === null) {
-      navigate({ to: "/login" });
-    }
-  }, [user]);
-
   return (
     <>
       <StoreModal />
@@ -37,6 +27,8 @@ function AuthedComponent() {
 
 export default function Layout() {
   const [defaultOpen, setDefaultOpen] = useState<boolean | null>(true);
+  const navigate = useNavigate();
+  const { isLoading, user } = useAuth();
 
   // useEffect(() => {
   //   // Read the sidebar state from cookies
@@ -55,7 +47,13 @@ export default function Layout() {
   // }, []);
 
   // Don't render until we've read the cookie
-  if (defaultOpen === null) {
+  useEffect(() => {
+    if (!isLoading && user === null) {
+      navigate({ to: "/login" });
+    }
+  }, [isLoading, navigate, user]);
+
+  if (defaultOpen === null || isLoading || user === null) {
     return null; // or a loading spinner if you prefer
   }
 

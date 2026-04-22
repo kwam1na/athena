@@ -7,15 +7,18 @@ import {
 } from "./ProcurementView";
 
 const mockedHooks = vi.hoisted(() => ({
-  useConvexAuth: vi.fn(),
+  useAuth: vi.fn(),
   useGetActiveStore: vi.fn(),
   usePermissions: vi.fn(),
   useQuery: vi.fn(),
 }));
 
 vi.mock("convex/react", () => ({
-  useConvexAuth: mockedHooks.useConvexAuth,
   useQuery: mockedHooks.useQuery,
+}));
+
+vi.mock("@/hooks/useAuth", () => ({
+  useAuth: mockedHooks.useAuth,
 }));
 
 vi.mock("@/hooks/useGetActiveStore", () => ({
@@ -100,9 +103,9 @@ describe("ProcurementViewContent", () => {
   beforeEach(() => {
     window.scrollTo = vi.fn();
     vi.clearAllMocks();
-    mockedHooks.useConvexAuth.mockReturnValue({
-      isAuthenticated: true,
+    mockedHooks.useAuth.mockReturnValue({
       isLoading: false,
+      user: { _id: "auth-user-1" },
     });
     mockedHooks.useGetActiveStore.mockReturnValue({
       activeStore: { _id: "store-1" as Id<"store"> },
@@ -181,10 +184,10 @@ describe("ProcurementViewContent", () => {
     ).toBeInTheDocument();
   });
 
-  it("skips protected procurement queries while Convex auth is still loading", () => {
-    mockedHooks.useConvexAuth.mockReturnValue({
-      isAuthenticated: false,
+  it("skips protected procurement queries while auth is still loading", () => {
+    mockedHooks.useAuth.mockReturnValue({
       isLoading: true,
+      user: undefined,
     });
     mockedHooks.useQuery.mockReturnValue(undefined);
 
@@ -198,10 +201,10 @@ describe("ProcurementViewContent", () => {
     ]);
   });
 
-  it("renders a sign-in fallback instead of subscribing when Convex auth is missing", () => {
-    mockedHooks.useConvexAuth.mockReturnValue({
-      isAuthenticated: false,
+  it("renders a sign-in fallback instead of subscribing when auth is missing", () => {
+    mockedHooks.useAuth.mockReturnValue({
       isLoading: false,
+      user: null,
     });
     mockedHooks.useQuery.mockReturnValue(undefined);
 
@@ -215,6 +218,40 @@ describe("ProcurementViewContent", () => {
       "href",
       "/login"
     );
+    expect(mockedHooks.useQuery.mock.calls.map(([, args]) => args)).toEqual([
+      "skip",
+      "skip",
+      "skip",
+    ]);
+  });
+
+  it("renders a sign-in fallback when auth settles without a synced Athena user", () => {
+    mockedHooks.useAuth.mockReturnValue({
+      isLoading: false,
+      user: null,
+    });
+    mockedHooks.useQuery.mockReturnValue(undefined);
+
+    render(<ProcurementView />);
+
+    expect(screen.getByText("Sign in required")).toBeInTheDocument();
+    expect(mockedHooks.useQuery.mock.calls.map(([, args]) => args)).toEqual([
+      "skip",
+      "skip",
+      "skip",
+    ]);
+  });
+
+  it("waits for the authenticated Athena user before subscribing to protected procurement data", () => {
+    mockedHooks.useAuth.mockReturnValue({
+      isLoading: true,
+      user: undefined,
+    });
+    mockedHooks.useQuery.mockReturnValue(undefined);
+
+    render(<ProcurementView />);
+
+    expect(screen.getByText("Loading procurement workspace...")).toBeInTheDocument();
     expect(mockedHooks.useQuery.mock.calls.map(([, args]) => args)).toEqual([
       "skip",
       "skip",

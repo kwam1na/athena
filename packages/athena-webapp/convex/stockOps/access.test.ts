@@ -1,12 +1,22 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { Id } from "../_generated/dataModel";
 import type { QueryCtx } from "../_generated/server";
+
+const mockedAuthServer = vi.hoisted(() => ({
+  getAuthUserId: vi.fn(),
+}));
+
+vi.mock("@convex-dev/auth/server", () => ({
+  getAuthUserId: mockedAuthServer.getAuthUserId,
+}));
+
 import { requireStoreFullAdminAccess } from "./access";
 
 function createStockOpsAccessQueryCtx(args: {
   athenaUserEmail?: string;
+  authUserEmail?: string;
+  authUserId?: string | null;
   role: "full_admin" | "pos_only";
-  sessionEmail?: string;
 }) {
   const store = {
     _id: "store-1",
@@ -33,24 +43,27 @@ function createStockOpsAccessQueryCtx(args: {
           organizationId: "org-1",
           role: "pos_only" as const,
           userId: "athena-user-1",
-        };
+      };
+
+  mockedAuthServer.getAuthUserId.mockResolvedValue(args.authUserId ?? null);
 
   const ctx = {
-    auth: {
-      getUserIdentity() {
-        return Promise.resolve(
-          args.sessionEmail
-            ? {
-                email: args.sessionEmail,
-              }
-            : null
-        );
-      },
-    },
+    auth: {},
     db: {
       get(_table: string, id: string) {
         if (id === "store-1") {
           return Promise.resolve(store);
+        }
+
+        if (id === "auth-user-1") {
+          return Promise.resolve(
+            args.authUserEmail
+              ? {
+                  _id: "auth-user-1",
+                  email: args.authUserEmail,
+                }
+              : null
+          );
         }
 
         return Promise.resolve(null);
@@ -117,6 +130,8 @@ function createStockOpsAccessQueryCtx(args: {
 describe("stock ops access", () => {
   it("requires an authenticated user", async () => {
     const ctx = createStockOpsAccessQueryCtx({
+      authUserEmail: "manager@example.com",
+      authUserId: null,
       role: "full_admin",
     });
 
@@ -127,9 +142,10 @@ describe("stock ops access", () => {
 
   it("requires a matching Athena user record", async () => {
     const ctx = createStockOpsAccessQueryCtx({
+      authUserEmail: "manager@example.com",
+      authUserId: "auth-user-1",
       role: "full_admin",
       athenaUserEmail: undefined,
-      sessionEmail: "manager@example.com",
     });
 
     await expect(
@@ -139,9 +155,10 @@ describe("stock ops access", () => {
 
   it("requires full-admin membership for the store organization", async () => {
     const ctx = createStockOpsAccessQueryCtx({
+      authUserEmail: "manager@example.com",
+      authUserId: "auth-user-1",
       role: "pos_only",
       athenaUserEmail: "manager@example.com",
-      sessionEmail: "manager@example.com",
     });
 
     await expect(
@@ -151,9 +168,10 @@ describe("stock ops access", () => {
 
   it("returns the store and user for full-admin members", async () => {
     const ctx = createStockOpsAccessQueryCtx({
+      authUserEmail: "manager@example.com",
+      authUserId: "auth-user-1",
       role: "full_admin",
       athenaUserEmail: "manager@example.com",
-      sessionEmail: "manager@example.com",
     });
 
     await expect(

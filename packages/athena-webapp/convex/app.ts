@@ -5,18 +5,33 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 
 export const getCurrentUser = query({
   args: {},
-  handler: async (ctx): Promise<User | undefined> => {
+  handler: async (ctx): Promise<User | null> => {
     const userId = await getAuthUserId(ctx);
     if (!userId) {
-      return;
+      return null;
     }
 
-    const user = await ctx.db.get(userId);
+    const user = await ctx.db.get("users", userId);
 
     if (!user) {
-      return;
+      return null;
     }
 
     return user;
+  },
+});
+
+export const getCurrentUserIdentity = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+
+    if (!identity?.email) {
+      return null;
+    }
+
+    return {
+      email: identity.email,
+    };
   },
 });

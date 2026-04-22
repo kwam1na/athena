@@ -6,12 +6,12 @@ This key-folder index highlights the main directories agents are likely to need 
 
 ## Core app surfaces
 
-- [`src/routes`](../../src/routes) — TanStack route entrypoints and authenticated shells. Currently 69 file(s); key children: __root.tsx, _authed, _authed.tsx, index.tsx, join-team.index.tsx.
-- [`src/components`](../../src/components) — UI components, views, and package-local feature widgets. Currently 504 file(s); key children: GenericComboBox.tsx, Navbar.tsx, OrganizationView.tsx, OrganizationsView.tsx, PermissionGate.tsx.
+- [`src/routes`](../../src/routes) — TanStack route entrypoints and authenticated shells. Currently 70 file(s); key children: __root.tsx, _authed, _authed.test.tsx, _authed.tsx, index.tsx.
+- [`src/components`](../../src/components) — UI components, views, and package-local feature widgets. Currently 509 file(s); key children: GenericComboBox.tsx, Navbar.tsx, OrganizationView.tsx, OrganizationsView.tsx, PermissionGate.tsx.
 - [`src/components/traces`](../../src/components/traces) — Shared workflow trace screens, ordered timelines, and trace detail primitives. Currently 2 file(s); key children: WorkflowTraceView.test.tsx, WorkflowTraceView.tsx.
-- [`src/components/operations`](../../src/components/operations) — Manager-queue and stock-adjustment workflows that share approval rails with other operational surfaces. Currently 4 file(s); key children: OperationsQueueView.test.tsx, OperationsQueueView.tsx, StockAdjustmentWorkspace.test.tsx, StockAdjustmentWorkspace.tsx.
+- [`src/components/operations`](../../src/components/operations) — Manager-queue and stock-adjustment workflows that share approval rails with other operational surfaces. Currently 5 file(s); key children: OperationsQueueView.auth.test.tsx, OperationsQueueView.test.tsx, OperationsQueueView.tsx, StockAdjustmentWorkspace.test.tsx, StockAdjustmentWorkspace.tsx.
 - [`src/components/procurement`](../../src/components/procurement) — Procurement planning and receiving views for replenishment pressure and purchase-order execution. Currently 4 file(s); key children: ProcurementView.test.tsx, ProcurementView.tsx, ReceivingView.test.tsx, ReceivingView.tsx.
-- [`src/hooks`](../../src/hooks) — React hooks that fan out auth, shell, and feature state. Currently 36 file(s); key children: use-image-upload.ts, use-mobile.tsx, use-navigate-back.ts, use-navigation-keyboard-shortcuts.ts, use-pagination-persistence.ts.
+- [`src/hooks`](../../src/hooks) — React hooks that fan out auth, shell, and feature state. Currently 39 file(s); key children: use-image-upload.ts, use-mobile.tsx, use-navigate-back.ts, use-navigation-keyboard-shortcuts.ts, use-pagination-persistence.ts.
 - [`src/contexts`](../../src/contexts) — Context providers for app-wide state and wiring. Currently 5 file(s); key children: OnlineOrderContext.tsx, PermissionsContext.tsx, ProductContext.tsx, ThemeContext.tsx, UserContext.tsx.
 - [`src/lib`](../../src/lib) — Shared frontend helpers, schemas, and package utilities. Currently 64 file(s); key children: aws.ts, behaviorUtils.ts, browserFingerprint.ts, constants.ts, countries.ts.
 - [`shared`](../../shared) — Browser-safe helpers shared with Convex-backed workflows. Currently 4 file(s); key children: auth.ts, serviceIntake.ts, stockAdjustment.ts, workflowTrace.ts.
