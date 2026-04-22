@@ -1,7 +1,30 @@
 import { render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Id } from "~/convex/_generated/dataModel";
-import { ProcurementViewContent } from "./ProcurementView";
+import {
+  ProcurementView,
+  ProcurementViewContent,
+} from "./ProcurementView";
+
+const mockedHooks = vi.hoisted(() => ({
+  useConvexAuth: vi.fn(),
+  useGetActiveStore: vi.fn(),
+  usePermissions: vi.fn(),
+  useQuery: vi.fn(),
+}));
+
+vi.mock("convex/react", () => ({
+  useConvexAuth: mockedHooks.useConvexAuth,
+  useQuery: mockedHooks.useQuery,
+}));
+
+vi.mock("@/hooks/useGetActiveStore", () => ({
+  default: mockedHooks.useGetActiveStore,
+}));
+
+vi.mock("@/hooks/usePermissions", () => ({
+  usePermissions: mockedHooks.usePermissions,
+}));
 
 const baseProps: React.ComponentProps<typeof ProcurementViewContent> = {
   activeVendorCount: 3,
@@ -75,7 +98,20 @@ const baseProps: React.ComponentProps<typeof ProcurementViewContent> = {
 
 describe("ProcurementViewContent", () => {
   beforeEach(() => {
-    window.scrollTo = () => {};
+    window.scrollTo = vi.fn();
+    vi.clearAllMocks();
+    mockedHooks.useConvexAuth.mockReturnValue({
+      isAuthenticated: true,
+      isLoading: false,
+    });
+    mockedHooks.useGetActiveStore.mockReturnValue({
+      activeStore: { _id: "store-1" as Id<"store"> },
+    });
+    mockedHooks.usePermissions.mockReturnValue({
+      canAccessOperations: () => true,
+      isLoading: false,
+    });
+    mockedHooks.useQuery.mockReset();
   });
 
   it("renders the denied state for users without procurement access", () => {
@@ -143,5 +179,61 @@ describe("ProcurementViewContent", () => {
     expect(
       screen.getByText(/review the purchase-order workspace to inspect the remaining 1/i)
     ).toBeInTheDocument();
+  });
+
+  it("skips protected procurement queries while Convex auth is still loading", () => {
+    mockedHooks.useConvexAuth.mockReturnValue({
+      isAuthenticated: false,
+      isLoading: true,
+    });
+    mockedHooks.useQuery.mockReturnValue(undefined);
+
+    render(<ProcurementView />);
+
+    expect(screen.getByText("Loading procurement workspace...")).toBeInTheDocument();
+    expect(mockedHooks.useQuery.mock.calls.map(([, args]) => args)).toEqual([
+      "skip",
+      "skip",
+      "skip",
+    ]);
+  });
+
+  it("renders a sign-in fallback instead of subscribing when Convex auth is missing", () => {
+    mockedHooks.useConvexAuth.mockReturnValue({
+      isAuthenticated: false,
+      isLoading: false,
+    });
+    mockedHooks.useQuery.mockReturnValue(undefined);
+
+    render(<ProcurementView />);
+
+    expect(screen.getByText("Sign in required")).toBeInTheDocument();
+    expect(
+      screen.getByText(/your athena session needs to reconnect before procurement planning can load protected stock operations data/i)
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /sign in again/i })).toHaveAttribute(
+      "href",
+      "/login"
+    );
+    expect(mockedHooks.useQuery.mock.calls.map(([, args]) => args)).toEqual([
+      "skip",
+      "skip",
+      "skip",
+    ]);
+  });
+
+  it("subscribes to protected procurement queries once auth and permissions are ready", () => {
+    mockedHooks.useQuery
+      .mockReturnValueOnce([])
+      .mockReturnValueOnce([])
+      .mockReturnValueOnce([]);
+
+    render(<ProcurementView />);
+
+    expect(mockedHooks.useQuery.mock.calls.map(([, args]) => args)).toEqual([
+      { storeId: "store-1" },
+      { storeId: "store-1" },
+      { status: "active", storeId: "store-1" },
+    ]);
   });
 });

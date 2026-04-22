@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { useQuery } from "convex/react";
+import { useConvexAuth, useQuery } from "convex/react";
 import View from "../View";
 import { FadeIn } from "../common/FadeIn";
 import { EmptyState } from "../states/empty/empty-state";
 import { NoPermissionView } from "../states/no-permission/NoPermissionView";
+import { Button } from "../ui/button";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { usePermissions } from "@/hooks/usePermissions";
 import { api } from "~/convex/_generated/api";
@@ -504,10 +505,16 @@ export function ProcurementViewContent({
 
 export function ProcurementView() {
   const { activeStore } = useGetActiveStore();
+  const { isAuthenticated, isLoading: isLoadingAuth } = useConvexAuth();
   const { canAccessOperations, isLoading } = usePermissions();
   const hasFullAdminAccess = canAccessOperations();
+  const canQueryProtectedProcurement =
+    activeStore?._id &&
+    hasFullAdminAccess &&
+    isAuthenticated &&
+    !isLoadingAuth;
   const procurementQueryArgs =
-    activeStore?._id && hasFullAdminAccess
+    canQueryProtectedProcurement
       ? { storeId: activeStore._id }
       : "skip";
   const recommendations = useQuery(
@@ -520,20 +527,49 @@ export function ProcurementView() {
   ) as ProcurementOrderSummary[] | undefined;
   const vendors = useQuery(
     api.stockOps.vendors.listVendors,
-    activeStore?._id && hasFullAdminAccess
+    canQueryProtectedProcurement
       ? { status: "active", storeId: activeStore._id }
       : "skip"
   ) as Array<{ _id: Id<"vendor"> }> | undefined;
+
+  if (isLoading || isLoadingAuth) {
+    return (
+      <View>
+        <div className="container mx-auto py-10 text-sm text-muted-foreground">
+          Loading procurement workspace...
+        </div>
+      </View>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <View>
+        <div className="container mx-auto py-8">
+          <EmptyState
+            cta={
+              <Button asChild className="mt-4" variant="outline">
+                <a href="/login">Sign in again</a>
+              </Button>
+            }
+            description="Your Athena session needs to reconnect before procurement planning can load protected stock operations data."
+            title="Sign in required"
+          />
+        </div>
+      </View>
+    );
+  }
 
   return (
     <ProcurementViewContent
       activeVendorCount={vendors?.length ?? 0}
       hasActiveStore={Boolean(activeStore)}
       hasFullAdminAccess={hasFullAdminAccess}
-      isLoadingPermissions={isLoading}
+      isLoadingPermissions={false}
       isLoadingProcurement={Boolean(
         activeStore &&
           hasFullAdminAccess &&
+          isAuthenticated &&
           (recommendations === undefined ||
             purchaseOrders === undefined ||
             vendors === undefined)
