@@ -56,6 +56,7 @@ export function TransactionsView() {
       customerName: transaction.customerName,
       itemCount: transaction.itemCount,
       completedAt: transaction.completedAt,
+      hasTrace: transaction.hasTrace,
     }));
   }, [transactions, formatter]);
 

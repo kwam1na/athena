@@ -28,6 +28,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "../../ui/card";
 import { EmptyState } from "../../states/empty/empty-state";
 import { currencyFormatter } from "~/convex/utils";
 import { formatStoredAmount } from "~/src/lib/pos/displayAmounts";
+import { WorkflowTraceLink } from "./WorkflowTraceLink";
 
 type RouteParams =
   | {
@@ -129,16 +130,23 @@ export function TransactionView() {
             <div className="space-y-6">
               <div>
                 <CardHeader className="space-y-3">
-                  <Badge
-                    variant="outline"
-                    className="w-fit text-green-600 flex items-center gap-2"
-                  >
-                    <CheckCircle2 className="w-4 h-4" />
-                    Completed
-                    <p className="text-xs text-muted-foreground">
-                      {getRelativeTime(transaction.completedAt)}
-                    </p>
-                  </Badge>
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <Badge
+                      variant="outline"
+                      className="w-fit text-green-600 flex items-center gap-2"
+                    >
+                      <CheckCircle2 className="w-4 h-4" />
+                      Completed
+                      <p className="text-xs text-muted-foreground">
+                        {getRelativeTime(transaction.completedAt)}
+                      </p>
+                    </Badge>
+                    {transaction.hasTrace ? (
+                      <WorkflowTraceLink
+                        transactionNumber={transaction.transactionNumber}
+                      />
+                    ) : null}
+                  </div>
                   {/* <CardTitle className="text-lg">Transaction details</CardTitle> */}
                 </CardHeader>
                 <CardContent className="space-y-4 text-sm">

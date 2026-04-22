@@ -20,6 +20,7 @@ import {
   getProductSkuById,
   getStoreById,
   listSessionItems,
+  patchPosTransaction,
   patchPosSession,
   patchProductSku,
 } from "../infrastructure/repositories/transactionRepository";
@@ -168,7 +169,10 @@ describe("recordPosSaleTraceBestEffort", () => {
       completedAt: 222,
     });
 
-    expect(result).toBeUndefined();
+    expect(result).toEqual({
+      traceCreated: true,
+      traceId: traceSeed.trace.traceId,
+    });
     expect(createWorkflowTraceWithCtx).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
@@ -185,6 +189,35 @@ describe("recordPosSaleTraceBestEffort", () => {
         status: "succeeded",
       }),
     );
+  });
+
+  it("reports traceCreated false when the trace row write fails", async () => {
+    const traceSeed = buildPosSaleTraceSeed({
+      storeId: "store-1" as Id<"store">,
+      transactionNumber: "POS-TXN-001",
+      posTransactionId: "txn-1" as Id<"posTransaction">,
+    });
+
+    vi.mocked(createWorkflowTraceWithCtx).mockRejectedValue(
+      new Error("trace unavailable"),
+    );
+    vi.mocked(registerWorkflowTraceLookupWithCtx).mockResolvedValue(
+      "lookup-1" as never,
+    );
+    vi.mocked(appendWorkflowTraceEventWithCtx).mockResolvedValue(
+      "event-1" as never,
+    );
+
+    const result = await recordPosSaleTraceBestEffort({} as never, {
+      stage: "bootstrap",
+      traceSeed,
+      transactionId: "txn-1" as Id<"posTransaction">,
+    });
+
+    expect(result).toEqual({
+      traceCreated: false,
+      traceId: traceSeed.trace.traceId,
+    });
   });
 });
 
@@ -248,6 +281,13 @@ describe("completeTransaction trace ordering", () => {
       "trace:event:sale_completion_started",
     ]);
     expect(traceEvents).not.toContain("trace:create:succeeded");
+    expect(patchPosTransaction).toHaveBeenCalledWith(
+      expect.anything(),
+      "txn-1",
+      expect.objectContaining({
+        workflowTraceId: expect.stringMatching(/^pos_sale:/),
+      }),
+    );
   });
 
   it("does not write a successful session-sale trace before the session is fully patched", async () => {
@@ -326,5 +366,68 @@ describe("completeTransaction trace ordering", () => {
       "trace:event:sale_completion_started",
     ]);
     expect(traceEvents).not.toContain("trace:create:succeeded");
+    expect(patchPosTransaction).toHaveBeenCalledWith(
+      expect.anything(),
+      "txn-1",
+      expect.objectContaining({
+        workflowTraceId: expect.stringMatching(/^pos_sale:/),
+      }),
+    );
+  });
+
+  it("does not fail direct sale completion when workflowTraceId persistence fails", async () => {
+    vi.mocked(getStoreById).mockResolvedValue({
+      _id: "store-1",
+      organizationId: "org-1",
+    } as never);
+    vi.mocked(getProductSkuById).mockResolvedValue({
+      _id: "sku-1",
+      images: [],
+      inventoryCount: 10,
+      productId: "product-1",
+      quantityAvailable: 10,
+      sku: "SKU-1",
+    } as never);
+    vi.mocked(createPosTransaction).mockResolvedValue("txn-1" as never);
+    vi.mocked(recordRetailSalePaymentAllocations).mockResolvedValue(true);
+    vi.mocked(createPosTransactionItem).mockResolvedValue(
+      "txn-item-1" as never,
+    );
+    vi.mocked(patchProductSku).mockResolvedValue(undefined as never);
+    vi.mocked(updateCustomerStats).mockResolvedValue(undefined as never);
+    vi.mocked(createWorkflowTraceWithCtx).mockResolvedValue("trace-1" as never);
+    vi.mocked(registerWorkflowTraceLookupWithCtx).mockResolvedValue(
+      "lookup-1" as never,
+    );
+    vi.mocked(appendWorkflowTraceEventWithCtx).mockResolvedValue(
+      "event-1" as never,
+    );
+    vi.mocked(patchPosTransaction).mockRejectedValue(
+      new Error("trace link patch unavailable"),
+    );
+
+    await expect(
+      completeTransaction({} as never, {
+        storeId: "store-1" as Id<"store">,
+        items: [
+          {
+            skuId: "sku-1" as Id<"productSku">,
+            quantity: 1,
+            price: 10,
+            name: "Sneaker",
+            sku: "SKU-1",
+          },
+        ],
+        payments: [{ method: "cash", amount: 10, timestamp: 1 }],
+        subtotal: 10,
+        tax: 0,
+        total: 10,
+      }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        success: true,
+        transactionId: "txn-1",
+      }),
+    );
   });
 });

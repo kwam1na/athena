@@ -2,6 +2,7 @@ import { v } from "convex/values";
 
 export const posTransactionSchema = v.object({
   transactionNumber: v.string(),
+  workflowTraceId: v.optional(v.string()),
   storeId: v.id("store"),
   sessionId: v.optional(v.id("posSession")), // Link to the session that created this transaction (if created from session)
   registerSessionId: v.optional(v.id("registerSession")),
