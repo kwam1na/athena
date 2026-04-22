@@ -2,7 +2,6 @@ import { v } from "convex/values";
 
 export const staffRoleAssignmentSchema = v.object({
   staffProfileId: v.id("staffProfile"),
-  userId: v.id("athenaUser"),
   storeId: v.id("store"),
   organizationId: v.id("organization"),
   role: v.union(

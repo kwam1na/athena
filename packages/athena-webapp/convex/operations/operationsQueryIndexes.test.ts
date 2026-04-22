@@ -56,8 +56,13 @@ describe("operations query indexing", () => {
       },
       {
         table: "staffProfile",
-        descriptor: "by_storeId_userId",
-        fields: ["storeId", "userId"],
+        descriptor: "by_storeId_linkedUserId",
+        fields: ["storeId", "linkedUserId"],
+      },
+      {
+        table: "staffProfile",
+        descriptor: "by_storeId_status",
+        fields: ["storeId", "status"],
       },
       {
         table: "staffRoleAssignment",
@@ -68,6 +73,16 @@ describe("operations query indexing", () => {
         table: "staffRoleAssignment",
         descriptor: "by_storeId_role",
         fields: ["storeId", "role"],
+      },
+      {
+        table: "staffCredential",
+        descriptor: "by_staffProfileId_status",
+        fields: ["staffProfileId", "status"],
+      },
+      {
+        table: "staffCredential",
+        descriptor: "by_storeId_username",
+        fields: ["storeId", "username"],
       },
       {
         table: "operationalWorkItem",
@@ -125,7 +140,7 @@ describe("operations query indexing", () => {
     expect(customerProfilesSource).toContain('.withIndex("by_storeId_email"');
     expect(customerProfilesSource).toContain('.withIndex("by_storeId_phoneNumber"');
 
-    expect(staffProfilesSource).toContain('.withIndex("by_storeId_userId"');
+    expect(staffProfilesSource).toContain('.withIndex("by_storeId_linkedUserId"');
     expect(staffProfilesSource).toContain('.withIndex("by_staffProfileId"');
     expect(inventoryMovementsSource).toContain(
       '.withIndex("by_storeId_productSkuId"'
@@ -143,5 +158,6 @@ describe("operations query indexing", () => {
     expect(posCustomersSource).toContain("ensureCustomerProfileFromSourcesWithCtx");
     expect(typesSource).toContain("customerProfileSchema");
     expect(typesSource).toContain("staffProfileSchema");
+    expect(typesSource).toContain("staffCredentialSchema");
   });
 });

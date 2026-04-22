@@ -57,6 +57,7 @@ export type AthenaUser = Doc<"athenaUser">;
 export type CustomerProfile = Doc<"customerProfile">;
 export type StaffProfile = Doc<"staffProfile">;
 export type StaffRoleAssignment = Doc<"staffRoleAssignment">;
+export type StaffCredential = Doc<"staffCredential">;
 export type OperationalWorkItem = Doc<"operationalWorkItem">;
 export type OperationalEvent = Doc<"operationalEvent">;
 export type InventoryMovement = Doc<"inventoryMovement">;

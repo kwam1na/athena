@@ -16,7 +16,6 @@ function buildFullName(firstName?: string, lastName?: string, email?: string) {
 
 export function buildRoleAssignmentDrafts(args: {
   staffProfileId: Id<"staffProfile">;
-  userId: Id<"athenaUser">;
   storeId: Id<"store">;
   organizationId: Id<"organization">;
   memberRole: "full_admin" | "pos_only";
@@ -29,7 +28,6 @@ export function buildRoleAssignmentDrafts(args: {
 
   return roles.map((role, index) => ({
     staffProfileId: args.staffProfileId,
-    userId: args.userId,
     storeId: args.storeId,
     organizationId: args.organizationId,
     role,
@@ -46,8 +44,8 @@ export const getByUserAndStore = internalQuery({
   handler: async (ctx, args) =>
     ctx.db
       .query("staffProfile")
-      .withIndex("by_storeId_userId", (q) =>
-        q.eq("storeId", args.storeId).eq("userId", args.userId)
+      .withIndex("by_storeId_linkedUserId", (q) =>
+        q.eq("storeId", args.storeId).eq("linkedUserId", args.userId)
       )
       .first(),
 });
@@ -92,21 +90,22 @@ export const ensureStaffProfile = internalMutation({
 
     const existingProfile = await ctx.db
       .query("staffProfile")
-      .withIndex("by_storeId_userId", (q) =>
-        q.eq("storeId", args.storeId).eq("userId", args.userId)
+      .withIndex("by_storeId_linkedUserId", (q) =>
+        q.eq("storeId", args.storeId).eq("linkedUserId", args.userId)
       )
       .first();
 
     const profilePayload = {
       storeId: args.storeId,
       organizationId: args.organizationId,
-      userId: args.userId,
       memberRole: membership.role,
       fullName: buildFullName(user.firstName, user.lastName, user.email),
       firstName: user.firstName,
       lastName: user.lastName,
       email: user.email,
       phoneNumber: user.phoneNumber,
+      linkedUserId: args.userId,
+      updatedByUserId: args.userId,
       status: "active" as const,
     };
 
@@ -124,7 +123,6 @@ export const ensureStaffProfile = internalMutation({
     ]);
     const desiredRoles = buildRoleAssignmentDrafts({
       staffProfileId,
-      userId: args.userId,
       storeId: args.storeId,
       organizationId: args.organizationId,
       memberRole: membership.role,
@@ -161,7 +159,6 @@ export const ensureStaffProfile = internalMutation({
       await ctx.db.insert("staffRoleAssignment", {
         ...assignment,
         staffProfileId,
-        userId: args.userId,
         storeId: args.storeId,
         organizationId: args.organizationId,
         assignedAt: Date.now(),

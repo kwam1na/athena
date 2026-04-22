@@ -69,6 +69,7 @@ import {
   operationalWorkItemSchema,
   paymentAllocationSchema,
   registerSessionSchema,
+  staffCredentialSchema,
   staffProfileSchema,
   staffRoleAssignmentSchema,
 } from "./schemas/operations";
@@ -389,14 +390,18 @@ const schema = defineSchema({
     .index("by_storeId_status", ["storeId", "status"]),
   staffProfile: defineTable(staffProfileSchema)
     .index("by_storeId", ["storeId"])
-    .index("by_userId", ["userId"])
-    .index("by_storeId_userId", ["storeId", "userId"])
+    .index("by_linkedUserId", ["linkedUserId"])
+    .index("by_storeId_linkedUserId", ["storeId", "linkedUserId"])
     .index("by_storeId_status", ["storeId", "status"]),
   staffRoleAssignment: defineTable(staffRoleAssignmentSchema)
     .index("by_staffProfileId", ["staffProfileId"])
     .index("by_storeId", ["storeId"])
-    .index("by_storeId_role", ["storeId", "role"])
-    .index("by_userId", ["userId"]),
+    .index("by_storeId_role", ["storeId", "role"]),
+  staffCredential: defineTable(staffCredentialSchema)
+    .index("by_staffProfileId", ["staffProfileId"])
+    .index("by_staffProfileId_status", ["staffProfileId", "status"])
+    .index("by_storeId_username", ["storeId", "username"])
+    .index("by_storeId_status", ["storeId", "status"]),
 });
 
 export default schema;

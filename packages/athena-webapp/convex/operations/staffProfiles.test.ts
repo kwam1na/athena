@@ -11,7 +11,6 @@ describe("staff profile helpers", () => {
   it("merges requested roles without duplicating defaults", () => {
     const assignments = buildRoleAssignmentDrafts({
       staffProfileId: "staff_profile_1" as Id<"staffProfile">,
-      userId: "athena_user_1" as Id<"athenaUser">,
       storeId: "store_1" as Id<"store">,
       organizationId: "org_1" as Id<"organization">,
       memberRole: "pos_only",
@@ -29,7 +28,6 @@ describe("staff profile helpers", () => {
   it("keeps the default manager role primary for admins even if it is requested again", () => {
     const assignments = buildRoleAssignmentDrafts({
       staffProfileId: "staff_profile_2" as Id<"staffProfile">,
-      userId: "athena_user_2" as Id<"athenaUser">,
       storeId: "store_1" as Id<"store">,
       organizationId: "org_1" as Id<"organization">,
       memberRole: "full_admin",
