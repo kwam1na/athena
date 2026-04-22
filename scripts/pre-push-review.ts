@@ -4,13 +4,18 @@ import { writeGeneratedHarnessDocs } from "./harness-generate";
 import { runGraphifyCheck } from "./graphify-check";
 import { collectHarnessRepoValidationSelection } from "./harness-repo-validation";
 import { runHarnessSelfReview as runStructuredHarnessSelfReview } from "./harness-self-review";
-import { runHarnessReview } from "./harness-review";
+import {
+  getChangedFilesForHarnessReview,
+  runHarnessReview,
+} from "./harness-review";
 
 const ROOT_DIR = process.cwd();
 const BASE_REF = "origin/main";
 const GENERATED_HARNESS_DOC_PATHS = new Set(
   HARNESS_APP_REGISTRY.flatMap((app) => app.harnessDocs.generatedDocs)
 );
+const REPAIRED_DOCS_COMMIT_BLOCKER =
+  "Generated harness docs were auto-repaired locally. Review and commit the repaired files, then push again.";
 
 type SpawnedProcess = {
   exited: Promise<number>;
@@ -26,6 +31,11 @@ type HarnessSelfReviewSummary = {
 
 type PrePushReviewOptions = {
   getChangedFiles?: (rootDir: string) => Promise<string[]>;
+  getChangedFilesForRepairedTree?: (
+    rootDir: string,
+    baseRef: string
+  ) => Promise<string[]>;
+  getLocalChangedFiles?: (rootDir: string) => Promise<string[]>;
   runGraphifyCheck?: (rootDir: string) => Promise<void>;
   runArchitectureCheck?: (rootDir: string) => Promise<void>;
   runHarnessInferentialReview?: (rootDir: string) => Promise<void>;
@@ -174,6 +184,13 @@ export async function runPrePushReview(
 ) {
   const logger = options.logger ?? console;
   const getChangedFiles = options.getChangedFiles ?? getChangedFilesVsOriginMain;
+  const getChangedFilesForRepairedTree =
+    options.getChangedFilesForRepairedTree ??
+    ((nextRootDir: string, baseRef: string) =>
+      getChangedFilesForHarnessReview(nextRootDir, baseRef));
+  const getLocalChangedFiles =
+    options.getLocalChangedFiles ??
+    ((nextRootDir: string) => getChangedFilesForHarnessReview(nextRootDir));
   const runGraphifyFreshnessCheck =
     options.runGraphifyCheck ?? runGraphifyCheck;
   const runArchitecture = options.runArchitectureCheck ?? runArchitectureCheck;
@@ -187,18 +204,52 @@ export async function runPrePushReview(
     options.validateHarnessDocs ?? validateHarnessDocs;
   let changedFilesPromise: Promise<string[]> | undefined;
   let repairedGeneratedHarnessDocs = false;
+  let usingWorkingTreeChangedFiles = false;
 
   const loadChangedFiles = () => {
     changedFilesPromise ??= getChangedFiles(rootDir);
     return changedFilesPromise;
   };
 
-  const getChangedFilesForHarnessReview = async (nextRootDir: string) => {
+  const getChangedFilesForReviewStep = async (nextRootDir: string) => {
     if (nextRootDir === rootDir) {
       return loadChangedFiles();
     }
 
     return getChangedFiles(nextRootDir);
+  };
+
+  const refreshChangedFilesForWorkingTree = () => {
+    if (usingWorkingTreeChangedFiles) {
+      return changedFilesPromise ?? Promise.resolve([]);
+    }
+
+    changedFilesPromise = (async () => {
+      try {
+        return await getChangedFilesForRepairedTree(rootDir, BASE_REF);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        logger.warn(
+          `[pre-push] Warning: unable to diff repaired generated docs against ${BASE_REF}. Falling back to local working tree changes. (${message})`
+        );
+        return getLocalChangedFiles(rootDir);
+      }
+    })();
+    usingWorkingTreeChangedFiles = true;
+    return changedFilesPromise;
+  };
+
+  const getPendingGeneratedHarnessDocs = async () => {
+    const localChangedFiles = await getLocalChangedFiles(rootDir);
+    const pendingGeneratedDocs = localChangedFiles.filter((filePath) =>
+      GENERATED_HARNESS_DOC_PATHS.has(filePath)
+    );
+
+    if (pendingGeneratedDocs.length > 0) {
+      refreshChangedFilesForWorkingTree();
+    }
+
+    return pendingGeneratedDocs;
   };
 
   const maybeRepairGeneratedHarnessDocs = async (reason: string) => {
@@ -215,6 +266,7 @@ export async function runPrePushReview(
 
     logger.log(`[pre-push] Auto-repair: harness:generate (${reason})`);
     await runHarnessGenerateStep(rootDir);
+    await getPendingGeneratedHarnessDocs();
     repairedGeneratedHarnessDocs = true;
     return true;
   };
@@ -240,6 +292,8 @@ export async function runPrePushReview(
     );
   }
 
+  await getPendingGeneratedHarnessDocs();
+
   logger.log("[pre-push] Step 3/6: architecture:check");
   await runArchitecture(rootDir);
 
@@ -259,7 +313,7 @@ export async function runPrePushReview(
   try {
     await review(rootDir, {
       baseRef: BASE_REF,
-      getChangedFiles: getChangedFilesForHarnessReview,
+      getChangedFiles: getChangedFilesForReviewStep,
     });
   } catch (error) {
     const repaired = await maybeRepairGeneratedHarnessDocs(
@@ -271,17 +325,29 @@ export async function runPrePushReview(
 
     await review(rootDir, {
       baseRef: BASE_REF,
-      getChangedFiles: getChangedFilesForHarnessReview,
+      getChangedFiles: getChangedFilesForReviewStep,
     });
   }
 
-  if (repoValidation.matchedFiles.length > 0) {
+  const finalChangedFiles = await loadChangedFiles();
+  const finalRepoValidation = collectHarnessRepoValidationSelection(finalChangedFiles);
+
+  if (finalRepoValidation.matchedFiles.length > 0) {
     logger.log(
       "[pre-push] Step 6/6: harness:inferential-review skipped (repo harness validations already ran in harness:review)"
     );
   } else {
     logger.log("[pre-push] Step 6/6: harness:inferential-review");
     await runInferentialReview(rootDir);
+  }
+
+  const pendingGeneratedHarnessDocs = await getPendingGeneratedHarnessDocs();
+
+  if (repairedGeneratedHarnessDocs || pendingGeneratedHarnessDocs.length > 0) {
+    logger.log(
+      "\n[pre-push] Generated harness docs were repaired and revalidated locally."
+    );
+    throw new Error(REPAIRED_DOCS_COMMIT_BLOCKER);
   }
 
   logger.log("\n[pre-push] All checks passed.");
