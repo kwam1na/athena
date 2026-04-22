@@ -41,6 +41,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`convex/operations/registerSessionTracing.test.ts`](../../convex/operations/registerSessionTracing.test.ts)
 - [`convex/operations/registerSessions.trace.test.ts`](../../convex/operations/registerSessions.trace.test.ts)
 - [`convex/operations/serviceIntake.test.ts`](../../convex/operations/serviceIntake.test.ts)
+- [`convex/operations/staffCredentials.test.ts`](../../convex/operations/staffCredentials.test.ts)
 - [`convex/operations/staffProfiles.test.ts`](../../convex/operations/staffProfiles.test.ts)
 - [`convex/otp/EmailOTP.test.ts`](../../convex/otp/EmailOTP.test.ts)
 - [`convex/pos/application/completeTransaction.test.ts`](../../convex/pos/application/completeTransaction.test.ts)
