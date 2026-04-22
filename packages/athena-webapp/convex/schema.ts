@@ -277,6 +277,7 @@ const schema = defineSchema({
     .index("by_primarySubject", ["primarySubjectType", "primarySubjectId"]),
   workflowTraceEvent: defineTable(workflowTraceEventSchema)
     .index("by_storeId_traceId_occurredAt", ["storeId", "traceId", "occurredAt"])
+    .index("by_storeId_traceId_sequence", ["storeId", "traceId", "sequence"])
     .index("by_traceId_sequence", ["traceId", "sequence"]),
   workflowTraceLookup: defineTable(workflowTraceLookupSchema)
     .index("by_storeId_workflowType_lookup", [

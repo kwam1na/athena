@@ -168,6 +168,10 @@ import type * as schemas_inventory_promoCode from "../schemas/inventory/promoCod
 import type * as schemas_inventory_redeemedPromoCode from "../schemas/inventory/redeemedPromoCode.js";
 import type * as schemas_inventory_store from "../schemas/inventory/store.js";
 import type * as schemas_inventory_subcategory from "../schemas/inventory/subcategory.js";
+import type * as schemas_observability_index from "../schemas/observability/index.js";
+import type * as schemas_observability_workflowTrace from "../schemas/observability/workflowTrace.js";
+import type * as schemas_observability_workflowTraceEvent from "../schemas/observability/workflowTraceEvent.js";
+import type * as schemas_observability_workflowTraceLookup from "../schemas/observability/workflowTraceLookup.js";
 import type * as schemas_operations_approvalRequest from "../schemas/operations/approvalRequest.js";
 import type * as schemas_operations_customerProfile from "../schemas/operations/customerProfile.js";
 import type * as schemas_operations_index from "../schemas/operations/index.js";
@@ -266,6 +270,9 @@ import type * as storeFront_userOffers from "../storeFront/userOffers.js";
 import type * as storeFront_users from "../storeFront/users.js";
 import type * as types_payment from "../types/payment.js";
 import type * as utils from "../utils.js";
+import type * as workflowTraces_core from "../workflowTraces/core.js";
+import type * as workflowTraces_presentation from "../workflowTraces/presentation.js";
+import type * as workflowTraces_public from "../workflowTraces/public.js";
 
 import type {
   ApiFromModules,
@@ -434,6 +441,10 @@ declare const fullApi: ApiFromModules<{
   "schemas/inventory/redeemedPromoCode": typeof schemas_inventory_redeemedPromoCode;
   "schemas/inventory/store": typeof schemas_inventory_store;
   "schemas/inventory/subcategory": typeof schemas_inventory_subcategory;
+  "schemas/observability/index": typeof schemas_observability_index;
+  "schemas/observability/workflowTrace": typeof schemas_observability_workflowTrace;
+  "schemas/observability/workflowTraceEvent": typeof schemas_observability_workflowTraceEvent;
+  "schemas/observability/workflowTraceLookup": typeof schemas_observability_workflowTraceLookup;
   "schemas/operations/approvalRequest": typeof schemas_operations_approvalRequest;
   "schemas/operations/customerProfile": typeof schemas_operations_customerProfile;
   "schemas/operations/index": typeof schemas_operations_index;
@@ -532,6 +543,9 @@ declare const fullApi: ApiFromModules<{
   "storeFront/users": typeof storeFront_users;
   "types/payment": typeof types_payment;
   utils: typeof utils;
+  "workflowTraces/core": typeof workflowTraces_core;
+  "workflowTraces/presentation": typeof workflowTraces_presentation;
+  "workflowTraces/public": typeof workflowTraces_public;
 }>;
 
 /**
