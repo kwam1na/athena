@@ -11,6 +11,8 @@ const BASE_REF = "origin/main";
 const GENERATED_HARNESS_DOC_PATHS = new Set(
   HARNESS_APP_REGISTRY.flatMap((app) => app.harnessDocs.generatedDocs)
 );
+const REPAIRED_DOCS_COMMIT_BLOCKER =
+  "Generated harness docs were auto-repaired locally. Review and commit the repaired files, then push again.";
 
 type SpawnedProcess = {
   exited: Promise<number>;
@@ -282,6 +284,13 @@ export async function runPrePushReview(
   } else {
     logger.log("[pre-push] Step 6/6: harness:inferential-review");
     await runInferentialReview(rootDir);
+  }
+
+  if (repairedGeneratedHarnessDocs) {
+    logger.log(
+      "\n[pre-push] Generated harness docs were repaired and revalidated locally."
+    );
+    throw new Error(REPAIRED_DOCS_COMMIT_BLOCKER);
   }
 
   logger.log("\n[pre-push] All checks passed.");

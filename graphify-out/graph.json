@@ -28367,7 +28367,7 @@
       "relation": "calls",
       "source": "pre_push_review_formatblockerlist",
       "source_file": "scripts/pre-push-review.ts",
-      "source_location": "L239",
+      "source_location": "L241",
       "target": "pre_push_review_runprepushreview",
       "weight": 1
     },
@@ -33455,7 +33455,7 @@
       "relation": "contains",
       "source": "scripts_pre_push_review_test_ts",
       "source_file": "scripts/pre-push-review.test.ts",
-      "source_location": "L406",
+      "source_location": "L414",
       "target": "pre_push_review_test_error",
       "weight": 1
     },
@@ -33467,7 +33467,7 @@
       "relation": "contains",
       "source": "scripts_pre_push_review_test_ts",
       "source_file": "scripts/pre-push-review.test.ts",
-      "source_location": "L404",
+      "source_location": "L412",
       "target": "pre_push_review_test_log",
       "weight": 1
     },
@@ -33479,7 +33479,7 @@
       "relation": "contains",
       "source": "scripts_pre_push_review_test_ts",
       "source_file": "scripts/pre-push-review.test.ts",
-      "source_location": "L405",
+      "source_location": "L413",
       "target": "pre_push_review_test_warn",
       "weight": 1
     },
@@ -33491,7 +33491,7 @@
       "relation": "contains",
       "source": "scripts_pre_push_review_ts",
       "source_file": "scripts/pre-push-review.ts",
-      "source_location": "L135",
+      "source_location": "L137",
       "target": "pre_push_review_collectrepairableharnessdocerrors",
       "weight": 1
     },
@@ -33503,7 +33503,7 @@
       "relation": "contains",
       "source": "scripts_pre_push_review_ts",
       "source_file": "scripts/pre-push-review.ts",
-      "source_location": "L167",
+      "source_location": "L169",
       "target": "pre_push_review_formatblockerlist",
       "weight": 1
     },
@@ -33515,7 +33515,7 @@
       "relation": "contains",
       "source": "scripts_pre_push_review_ts",
       "source_file": "scripts/pre-push-review.ts",
-      "source_location": "L48",
+      "source_location": "L50",
       "target": "pre_push_review_getchangedfilesvsoriginmain",
       "weight": 1
     },
@@ -33527,7 +33527,7 @@
       "relation": "contains",
       "source": "scripts_pre_push_review_ts",
       "source_file": "scripts/pre-push-review.ts",
-      "source_location": "L89",
+      "source_location": "L91",
       "target": "pre_push_review_runarchitecturecheck",
       "weight": 1
     },
@@ -33539,7 +33539,7 @@
       "relation": "contains",
       "source": "scripts_pre_push_review_ts",
       "source_file": "scripts/pre-push-review.ts",
-      "source_location": "L107",
+      "source_location": "L109",
       "target": "pre_push_review_runharnessgenerate",
       "weight": 1
     },
@@ -33551,7 +33551,7 @@
       "relation": "contains",
       "source": "scripts_pre_push_review_ts",
       "source_file": "scripts/pre-push-review.ts",
-      "source_location": "L111",
+      "source_location": "L113",
       "target": "pre_push_review_runharnessimplementationtests",
       "weight": 1
     },
@@ -33563,7 +33563,7 @@
       "relation": "contains",
       "source": "scripts_pre_push_review_ts",
       "source_file": "scripts/pre-push-review.ts",
-      "source_location": "L123",
+      "source_location": "L125",
       "target": "pre_push_review_runharnessinferentialreview",
       "weight": 1
     },
@@ -33575,7 +33575,7 @@
       "relation": "contains",
       "source": "scripts_pre_push_review_ts",
       "source_file": "scripts/pre-push-review.ts",
-      "source_location": "L101",
+      "source_location": "L103",
       "target": "pre_push_review_runharnessselfreview",
       "weight": 1
     },
@@ -33587,7 +33587,7 @@
       "relation": "contains",
       "source": "scripts_pre_push_review_ts",
       "source_file": "scripts/pre-push-review.ts",
-      "source_location": "L171",
+      "source_location": "L173",
       "target": "pre_push_review_runprepushreview",
       "weight": 1
     },
@@ -56251,7 +56251,7 @@
       "label": "collectRepairableHarnessDocErrors()",
       "norm_label": "collectrepairableharnessdocerrors()",
       "source_file": "scripts/pre-push-review.ts",
-      "source_location": "L135"
+      "source_location": "L137"
     },
     {
       "community": 48,
@@ -56260,7 +56260,7 @@
       "label": "formatBlockerList()",
       "norm_label": "formatblockerlist()",
       "source_file": "scripts/pre-push-review.ts",
-      "source_location": "L167"
+      "source_location": "L169"
     },
     {
       "community": 48,
@@ -56269,7 +56269,7 @@
       "label": "getChangedFilesVsOriginMain()",
       "norm_label": "getchangedfilesvsoriginmain()",
       "source_file": "scripts/pre-push-review.ts",
-      "source_location": "L48"
+      "source_location": "L50"
     },
     {
       "community": 48,
@@ -56278,7 +56278,7 @@
       "label": "runArchitectureCheck()",
       "norm_label": "runarchitecturecheck()",
       "source_file": "scripts/pre-push-review.ts",
-      "source_location": "L89"
+      "source_location": "L91"
     },
     {
       "community": 48,
@@ -56287,7 +56287,7 @@
       "label": "runHarnessGenerate()",
       "norm_label": "runharnessgenerate()",
       "source_file": "scripts/pre-push-review.ts",
-      "source_location": "L107"
+      "source_location": "L109"
     },
     {
       "community": 48,
@@ -56296,7 +56296,7 @@
       "label": "runHarnessImplementationTests()",
       "norm_label": "runharnessimplementationtests()",
       "source_file": "scripts/pre-push-review.ts",
-      "source_location": "L111"
+      "source_location": "L113"
     },
     {
       "community": 48,
@@ -56305,7 +56305,7 @@
       "label": "runHarnessInferentialReview()",
       "norm_label": "runharnessinferentialreview()",
       "source_file": "scripts/pre-push-review.ts",
-      "source_location": "L123"
+      "source_location": "L125"
     },
     {
       "community": 48,
@@ -56314,7 +56314,7 @@
       "label": "runHarnessSelfReview()",
       "norm_label": "runharnessselfreview()",
       "source_file": "scripts/pre-push-review.ts",
-      "source_location": "L101"
+      "source_location": "L103"
     },
     {
       "community": 48,
@@ -56323,7 +56323,7 @@
       "label": "runPrePushReview()",
       "norm_label": "runprepushreview()",
       "source_file": "scripts/pre-push-review.ts",
-      "source_location": "L171"
+      "source_location": "L173"
     },
     {
       "community": 48,
