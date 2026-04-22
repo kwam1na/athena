@@ -37,6 +37,7 @@ export interface PosRegisterSessionSummary {
   expiresAt?: number;
   updatedAt?: number;
   heldAt?: number;
+  workflowTraceId?: string;
 }
 
 export interface PosRegisterPhaseInput {

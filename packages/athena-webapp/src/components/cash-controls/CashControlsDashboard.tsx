@@ -13,6 +13,7 @@ import { NoPermissionView } from "../states/no-permission/NoPermissionView";
 import { ProtectedAdminSignInView } from "../states/signed-out/ProtectedAdminSignInView";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
+import { WorkflowTraceRouteLink } from "../traces/WorkflowTraceRouteLink";
 import {
   Table,
   TableBody,
@@ -59,6 +60,7 @@ export type CashControlsDashboardSession = {
   status: string;
   totalDeposited: number;
   variance?: number;
+  workflowTraceId?: string | null;
 };
 
 export type CashControlsDashboardDeposit = {
@@ -343,7 +345,19 @@ function SessionLedger({
                     {formatCurrency(currency, session.variance ?? 0)}
                   </TableCell>
                   <TableCell className="text-right">
-                    <div className="opacity-0 transition duration-200 group-hover:opacity-100 group-focus-within:opacity-100">
+                    <div className="flex justify-end gap-2 opacity-0 transition duration-200 group-hover:opacity-100 group-focus-within:opacity-100">
+                      {session.workflowTraceId ? (
+                        <Button
+                          asChild
+                          className="border-stone-300 bg-white/90 text-stone-800 hover:bg-white"
+                          size="sm"
+                          variant="outline"
+                        >
+                          <WorkflowTraceRouteLink traceId={session.workflowTraceId}>
+                            View trace
+                          </WorkflowTraceRouteLink>
+                        </Button>
+                      ) : null}
                       <Button
                         asChild
                         className="border-stone-300 bg-white/90 text-stone-800 hover:bg-white"

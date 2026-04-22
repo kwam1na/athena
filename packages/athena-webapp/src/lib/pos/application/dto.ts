@@ -44,6 +44,7 @@ export interface PosRegisterSessionDto {
   expiresAt?: number;
   updatedAt?: number;
   heldAt?: number;
+  workflowTraceId?: string;
 }
 
 export interface PosRegisterStateDto {

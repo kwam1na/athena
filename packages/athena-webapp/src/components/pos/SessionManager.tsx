@@ -11,6 +11,7 @@ import type { RegisterSessionPanelState } from "@/lib/pos/presentation/register/
 
 import { FadeIn } from "../common/FadeIn";
 import { HeldSessionsList } from "./session/HeldSessionsList";
+import { WorkflowTraceRouteLink } from "../traces/WorkflowTraceRouteLink";
 
 interface SessionManagerProps {
   sessionPanel: RegisterSessionPanelState;
@@ -27,6 +28,15 @@ export function SessionManager({ sessionPanel }: SessionManagerProps) {
           </Badge>
         </FadeIn>
       )}
+
+      {sessionPanel.activeSessionTraceId ? (
+        <WorkflowTraceRouteLink
+          traceId={sessionPanel.activeSessionTraceId}
+          className="text-sm font-medium text-primary"
+        >
+          View trace
+        </WorkflowTraceRouteLink>
+      ) : null}
 
       {sessionPanel.hasExpiredSession && (
         <Badge

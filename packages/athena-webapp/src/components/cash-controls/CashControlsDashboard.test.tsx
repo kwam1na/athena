@@ -40,6 +40,7 @@ const baseSnapshot = {
     status: string;
     totalDeposited: number;
     variance?: number;
+    workflowTraceId?: string | null;
   }>,
   pendingCloseouts: [] as Array<{
     _id: string;
@@ -57,6 +58,7 @@ const baseSnapshot = {
     status: string;
     totalDeposited: number;
     variance?: number;
+    workflowTraceId?: string | null;
   }>,
   recentDeposits: [] as Array<{
     _id: string;
@@ -84,6 +86,7 @@ const baseSnapshot = {
     status: string;
     totalDeposited: number;
     variance?: number;
+    workflowTraceId?: string | null;
   }>,
 };
 
@@ -122,6 +125,7 @@ describe("CashControlsDashboardContent", () => {
               status: "active",
               totalDeposited: 8000,
               variance: 0,
+              workflowTraceId: "register_session:reg-1",
             },
           ],
           pendingCloseouts: [
@@ -141,6 +145,7 @@ describe("CashControlsDashboardContent", () => {
               status: "closing",
               totalDeposited: 2400,
               variance: -500,
+              workflowTraceId: "register_session:reg-3",
             },
           ],
           recentDeposits: [
@@ -182,6 +187,7 @@ describe("CashControlsDashboardContent", () => {
               status: "closing",
               totalDeposited: 2400,
               variance: -500,
+              workflowTraceId: "register_session:reg-3",
             },
           ],
         }}
@@ -202,6 +208,7 @@ describe("CashControlsDashboardContent", () => {
     expect(screen.getAllByText("Variance review required.").length).toBeGreaterThan(0);
     expect(screen.getByText("Midday safe drop")).toBeInTheDocument();
     expect(screen.getByText("BANK-339")).toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: "View trace" }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole("link", { name: "View session" }).length).toBeGreaterThan(0);
   });
 

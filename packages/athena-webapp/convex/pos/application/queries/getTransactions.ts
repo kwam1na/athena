@@ -4,6 +4,7 @@ import type { QueryCtx } from "../../../_generated/server";
 import {
   getCashierById,
   getCustomerById,
+  getPosSessionById,
   getPosTransactionById,
   listCompletedTransactions,
   listCompletedTransactionsForDay,
@@ -60,7 +61,12 @@ export async function getCompletedTransactions(
       const customer = transaction.customerId
         ? await getCustomerById(ctx, transaction.customerId)
         : null;
+      const session = transaction.sessionId
+        ? await getPosSessionById(ctx, transaction.sessionId)
+        : null;
       const items = await listTransactionItems(ctx, transaction._id);
+      const saleTraceId = transaction.workflowTraceId ?? null;
+      const sessionTraceId = session?.workflowTraceId ?? null;
 
       return {
         _id: transaction._id,
@@ -68,7 +74,9 @@ export async function getCompletedTransactions(
         total: transaction.total,
         paymentMethod: transaction.paymentMethod || null,
         completedAt: transaction.completedAt,
-        hasTrace: Boolean(transaction.workflowTraceId),
+        hasTrace: Boolean(saleTraceId),
+        saleTraceId,
+        sessionTraceId,
         cashierName: cashier
           ? formatCashierName({
               firstName: cashier.firstName,
@@ -100,7 +108,12 @@ export async function getTransactionById(
   const customer = transaction.customerId
     ? await getCustomerById(ctx, transaction.customerId)
     : null;
+  const session = transaction.sessionId
+    ? await getPosSessionById(ctx, transaction.sessionId)
+    : null;
   const items = await listTransactionItems(ctx, transaction._id);
+  const saleTraceId = transaction.workflowTraceId ?? null;
+  const sessionTraceId = session?.workflowTraceId ?? null;
 
   return {
     _id: transaction._id,
@@ -108,7 +121,9 @@ export async function getTransactionById(
     subtotal: transaction.subtotal ?? 0,
     tax: transaction.tax ?? 0,
     total: transaction.total,
-    hasTrace: Boolean(transaction.workflowTraceId),
+    hasTrace: Boolean(saleTraceId),
+    saleTraceId,
+    sessionTraceId,
     paymentMethod: transaction.paymentMethod,
     payments: transaction.payments,
     totalPaid: transaction.totalPaid ?? transaction.total,

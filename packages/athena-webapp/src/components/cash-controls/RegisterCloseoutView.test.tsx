@@ -3,6 +3,22 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { RegisterCloseoutViewContent } from "./RegisterCloseoutView";
 
+vi.mock("@tanstack/react-router", () => ({
+  Link: ({
+    children,
+    params: _params,
+    to,
+    ...props
+  }: React.AnchorHTMLAttributes<HTMLAnchorElement> & {
+    params?: unknown;
+    to?: string;
+  }) => (
+    <a href={to ?? "#"} {...props}>
+      {children}
+    </a>
+  ),
+}));
+
 const baseProps = {
   currency: "USD",
   isLoading: false,
@@ -30,6 +46,7 @@ const baseProps = {
     openedByStaffName?: string | null;
     registerNumber?: string | null;
     status: string;
+    workflowTraceId?: string | null;
   }[],
 };
 
@@ -70,6 +87,7 @@ describe("RegisterCloseoutViewContent", () => {
             openedByStaffName: "Ama Mensah",
             registerNumber: "Register 2",
             status: "active",
+            workflowTraceId: "register_session:reg-2",
           },
           {
             _id: "session-review",
@@ -93,6 +111,7 @@ describe("RegisterCloseoutViewContent", () => {
             openedByStaffName: "Adjoa Tetteh",
             registerNumber: "Register 4",
             status: "closing",
+            workflowTraceId: "register_session:reg-4",
           },
         ]}
       />,
@@ -106,6 +125,7 @@ describe("RegisterCloseoutViewContent", () => {
     expect(screen.getByText("Variance review pending")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Approve variance" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Reject variance" })).toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: "View trace" }).length).toBeGreaterThan(0);
     expect(
       screen.getByText("Variance of -20 exceeded the closeout approval threshold."),
     ).toBeInTheDocument();

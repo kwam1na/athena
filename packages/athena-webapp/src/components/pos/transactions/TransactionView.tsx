@@ -29,6 +29,7 @@ import { EmptyState } from "../../states/empty/empty-state";
 import { currencyFormatter } from "~/convex/utils";
 import { formatStoredAmount } from "~/src/lib/pos/displayAmounts";
 import { WorkflowTraceLink } from "./WorkflowTraceLink";
+import { WorkflowTraceRouteLink } from "../../traces/WorkflowTraceRouteLink";
 
 type RouteParams =
   | {
@@ -141,10 +142,21 @@ export function TransactionView() {
                         {getRelativeTime(transaction.completedAt)}
                       </p>
                     </Badge>
-                    {transaction.hasTrace ? (
-                      <WorkflowTraceLink
-                        transactionNumber={transaction.transactionNumber}
-                      />
+                    {transaction.saleTraceId || transaction.sessionTraceId ? (
+                      <div className="flex flex-wrap items-center gap-3">
+                        {transaction.saleTraceId ? (
+                          <WorkflowTraceLink
+                            transactionNumber={transaction.transactionNumber}
+                          >
+                            Sale trace
+                          </WorkflowTraceLink>
+                        ) : null}
+                        {transaction.sessionTraceId ? (
+                          <WorkflowTraceRouteLink traceId={transaction.sessionTraceId}>
+                            Session trace
+                          </WorkflowTraceRouteLink>
+                        ) : null}
+                      </div>
                     ) : null}
                   </div>
                   {/* <CardTitle className="text-lg">Transaction details</CardTitle> */}

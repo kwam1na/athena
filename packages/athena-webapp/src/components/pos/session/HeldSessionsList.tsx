@@ -5,6 +5,7 @@ import { Users, ShoppingCart, PlayCircle, Ban, Clock } from "lucide-react";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { useGetCurrencyFormatter } from "~/src/hooks/useGetCurrencyFormatter";
 import { formatStoredAmount } from "~/src/lib/pos/displayAmounts";
+import { WorkflowTraceRouteLink } from "~/src/components/traces/WorkflowTraceRouteLink";
 import type { RegisterSessionPanelState } from "@/lib/pos/presentation/register/registerUiState";
 
 interface HeldSessionsListProps {
@@ -90,6 +91,14 @@ export function HeldSessionsList({
                 )}
               </div>
               <div className="flex items-center gap-1">
+                {session.workflowTraceId ? (
+                  <WorkflowTraceRouteLink
+                    traceId={session.workflowTraceId}
+                    className="px-2 text-xs font-medium text-muted-foreground hover:text-primary"
+                  >
+                    View trace
+                  </WorkflowTraceRouteLink>
+                ) : null}
                 <Button
                   variant="ghost"
                   size="sm"

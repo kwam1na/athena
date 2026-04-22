@@ -55,6 +55,7 @@ const baseSnapshot = {
     status: "closing",
     totalDeposited: 2400,
     variance: -500,
+    workflowTraceId: "register_session:reg-3",
   },
   timeline: [] as Array<{
     _id: string;
@@ -133,6 +134,7 @@ describe("RegisterSessionViewContent", () => {
     expect(screen.getByText("BANK-339")).toBeInTheDocument();
     expect(screen.getByText("Recorded cash deposit of 2400.")).toBeInTheDocument();
     expect(screen.getByText("Ama Mensah")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "View trace" })).toBeInTheDocument();
   });
 
   it("submits a deposit with store, session, and actor context", async () => {
