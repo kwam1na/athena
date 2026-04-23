@@ -120,6 +120,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`src/components/services/ServiceIntakeView.test.tsx`](../../src/components/services/ServiceIntakeView.test.tsx)
 - [`src/components/staff/StaffManagement.test.tsx`](../../src/components/staff/StaffManagement.test.tsx)
 - [`src/components/store-configuration/components/MtnMomoView.test.tsx`](../../src/components/store-configuration/components/MtnMomoView.test.tsx)
+- [`src/components/store-configuration/hooks/useStoreConfigUpdate.test.tsx`](../../src/components/store-configuration/hooks/useStoreConfigUpdate.test.tsx)
 - [`src/components/traces/WorkflowTraceView.test.tsx`](../../src/components/traces/WorkflowTraceView.test.tsx)
 - [`src/components/ui/button.test.tsx`](../../src/components/ui/button.test.tsx)
 - [`src/components/ui/calendar.test.tsx`](../../src/components/ui/calendar.test.tsx)

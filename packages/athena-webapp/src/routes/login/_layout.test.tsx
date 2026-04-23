@@ -7,6 +7,7 @@ import {
   LOGGED_IN_USER_ID_KEY,
   PENDING_ATHENA_AUTH_SYNC_KEY,
 } from "~/src/lib/constants";
+import { ok, userError } from "~/shared/commandResult";
 
 const mocked = vi.hoisted(() => ({
   useConvexAuth: vi.fn(),
@@ -73,8 +74,14 @@ describe("LoginLayout", () => {
       authState.isAuthenticated ? "jwt-123" : null
     );
     mocked.syncAuthenticatedAthenaUser
-      .mockRejectedValueOnce(new Error("Sign in again to continue."))
-      .mockResolvedValue({ _id: "user-1" });
+      .mockResolvedValueOnce(
+        userError({
+          code: "authentication_failed",
+          message: "Sign in again to continue.",
+          retryable: true,
+        })
+      )
+      .mockResolvedValue(ok({ _id: "user-1" }));
     window.sessionStorage.setItem(PENDING_ATHENA_AUTH_SYNC_KEY, "1");
     vi.mocked(window.sessionStorage.getItem).mockReturnValue("1");
 
@@ -101,7 +108,7 @@ describe("LoginLayout", () => {
       isLoading: false,
     });
     mocked.useAuthToken.mockReturnValue("jwt-123");
-    mocked.syncAuthenticatedAthenaUser.mockResolvedValue({ _id: "user-2" });
+    mocked.syncAuthenticatedAthenaUser.mockResolvedValue(ok({ _id: "user-2" }));
     vi.mocked(window.sessionStorage.getItem).mockReturnValue(null);
 
     render(<LoginLayout />);
@@ -112,6 +119,33 @@ describe("LoginLayout", () => {
     expect(window.localStorage.setItem).toHaveBeenCalledWith(
       LOGGED_IN_USER_ID_KEY,
       "user-2"
+    );
+  });
+
+  it("surfaces safe auth-sync user errors without storing a bogus Athena user id", async () => {
+    mocked.useConvexAuth.mockReturnValue({
+      isAuthenticated: true,
+      isLoading: false,
+    });
+    mocked.useAuthToken.mockReturnValue("jwt-123");
+    mocked.syncAuthenticatedAthenaUser.mockResolvedValue(
+      userError({
+        code: "authentication_failed",
+        message: "Sign in again to continue.",
+      })
+    );
+    vi.mocked(window.sessionStorage.getItem).mockReturnValue("1");
+
+    render(<LoginLayout />);
+
+    await waitFor(() =>
+      expect(
+        screen.getByText("Sign in again to continue.")
+      ).toBeInTheDocument()
+    );
+    expect(window.localStorage.setItem).not.toHaveBeenCalledWith(
+      LOGGED_IN_USER_ID_KEY,
+      undefined
     );
   });
 
@@ -128,7 +162,9 @@ describe("LoginLayout", () => {
     });
     mocked.useAuthToken.mockReturnValue("jwt-123");
     mocked.useConvexAuthIdentity.mockImplementation(() => authIdentity);
-    mocked.syncAuthenticatedAthenaUser.mockReturnValue(deferred);
+    mocked.syncAuthenticatedAthenaUser.mockReturnValue(
+      deferred.then((value) => ok(value))
+    );
     vi.mocked(window.sessionStorage.getItem).mockReturnValue(null);
 
     const view = render(<LoginLayout />);

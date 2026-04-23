@@ -3,6 +3,7 @@ import type { Id } from "../_generated/dataModel";
 import { deriveDefaultOperationalRoles } from "./helpers/linking";
 import {
   buildRoleAssignmentDrafts,
+  createStaffProfile,
   createStaffProfileWithCtx,
   getStaffProfileByIdWithCtx,
   listStaffProfilesWithCtx,
@@ -86,6 +87,10 @@ function createStaffProfilesMutationCtx(seed?: {
   } as const;
 
   return { ctx: ctx as never, tables };
+}
+
+function getHandler(definition: unknown) {
+  return (definition as { _handler: Function })._handler;
 }
 
 describe("staff profile helpers", () => {
@@ -255,6 +260,49 @@ describe("staff profile helpers", () => {
     expect(managerRole).toMatchObject({
       isPrimary: true,
       status: "active",
+    });
+  });
+
+  it("returns a user_error when a new staff profile would duplicate a store username", async () => {
+    const { ctx } = createStaffProfilesMutationCtx({
+      profiles: [
+        {
+          _id: "staff_profile_1",
+          firstName: "Adjoa",
+          fullName: "Adjoa Tetteh",
+          lastName: "Tetteh",
+          organizationId: "org_1",
+          status: "active",
+          storeId: "store_1",
+        },
+      ],
+      credentials: [
+        {
+          _id: "credential_1",
+          organizationId: "org_1",
+          staffProfileId: "staff_profile_1",
+          status: "active",
+          storeId: "store_1",
+          username: "amens",
+        },
+      ],
+    });
+
+    await expect(
+      getHandler(createStaffProfile)(ctx, {
+        firstName: "Ama",
+        lastName: "Mensah",
+        organizationId: "org_1" as Id<"organization">,
+        requestedRoles: ["cashier"],
+        storeId: "store_1" as Id<"store">,
+        username: "amens",
+      })
+    ).resolves.toEqual({
+      kind: "user_error",
+      error: {
+        code: "conflict",
+        message: "Username is already in use for this store.",
+      },
     });
   });
 

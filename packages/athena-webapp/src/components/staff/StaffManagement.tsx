@@ -5,6 +5,8 @@ import { toast } from "sonner";
 import { api } from "~/convex/_generated/api";
 import { Id } from "~/convex/_generated/dataModel";
 import { hashPin } from "~/src/lib/security/pinHash";
+import { presentCommandToast } from "~/src/lib/errors/presentCommandToast";
+import { runCommand } from "~/src/lib/errors/runCommand";
 import { PinInput } from "../pos/PinInput";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
@@ -380,20 +382,25 @@ function StaffProvisionForm({
         username: username.trim(),
       };
 
-      const profile =
+      const result = await runCommand(() =>
         mode === "create"
-          ? await createStaffProfile(payload)
-          : await updateStaffProfile({
+          ? createStaffProfile(payload)
+          : updateStaffProfile({
               ...payload,
               staffProfileId: staff?._id as Id<"staffProfile">,
-            });
+            })
+      );
 
-      if (!profile?._id) {
-        toast.error(
-          mode === "create"
-            ? "Failed to add staff member"
-            : "Failed to update staff member",
-        );
+      if (result.kind !== "ok" || !result.data?._id) {
+        if (result.kind !== "ok") {
+          presentCommandToast(result);
+        } else {
+          toast.error(
+            mode === "create"
+              ? "Failed to add staff member"
+              : "Failed to update staff member",
+          );
+        }
         return;
       }
 
@@ -602,13 +609,20 @@ function CredentialPinDialog({
     try {
       const pinHash = await hashPin(pin);
 
-      await updateStaffCredential({
-        organizationId,
-        pinHash,
-        staffProfileId: state.staff._id,
-        status: "active",
-        storeId,
-      });
+      const result = await runCommand(() =>
+        updateStaffCredential({
+          organizationId,
+          pinHash,
+          staffProfileId: state.staff._id,
+          status: "active",
+          storeId,
+        })
+      );
+
+      if (result.kind !== "ok") {
+        presentCommandToast(result);
+        return;
+      }
 
       toast.success(
         state.mode === "set"
@@ -734,20 +748,34 @@ export const StaffManagement = ({
 
     setIsDeactivating(true);
     try {
-      await Promise.all([
-        updateStaffProfile({
-          organizationId,
-          staffProfileId: staffToDeactivate._id,
-          status: "inactive",
-          storeId,
-        }),
-        updateStaffCredential({
-          organizationId,
-          staffProfileId: staffToDeactivate._id,
-          status: "revoked",
-          storeId,
-        }),
+      const [profileResult, credentialResult] = await Promise.all([
+        runCommand(() =>
+          updateStaffProfile({
+            organizationId,
+            staffProfileId: staffToDeactivate._id,
+            status: "inactive",
+            storeId,
+          })
+        ),
+        runCommand(() =>
+          updateStaffCredential({
+            organizationId,
+            staffProfileId: staffToDeactivate._id,
+            status: "revoked",
+            storeId,
+          })
+        ),
       ]);
+
+      if (profileResult.kind !== "ok") {
+        presentCommandToast(profileResult);
+        return;
+      }
+
+      if (credentialResult.kind !== "ok") {
+        presentCommandToast(credentialResult);
+        return;
+      }
 
       toast.success("Staff member deactivated");
       setStaffToDeactivate(null);

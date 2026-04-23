@@ -11,6 +11,7 @@ import {
   type OperationalRole,
 } from "./staffRoles";
 import { ok, userError, type CommandResult } from "../../shared/commandResult";
+import { commandResultValidator } from "../lib/commandResultValidators";
 
 export const STAFF_CREDENTIAL_STATUS = v.union(
   v.literal("pending"),
@@ -555,7 +556,45 @@ export const createStaffCredential = mutation({
     storeId: v.id("store"),
     username: v.string(),
   },
-  handler: (ctx, args) => createStaffCredentialWithCtx(ctx, args),
+  returns: commandResultValidator(v.any()),
+  handler: async (ctx, args) => {
+    try {
+      return ok(await createStaffCredentialWithCtx(ctx, args));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+
+      if (message === "Staff profile not found.") {
+        return userError({
+          code: "not_found",
+          message,
+        });
+      }
+
+      if (
+        message === "Staff profile does not belong to this store." ||
+        message === "Staff credential already exists for this staff profile." ||
+        message === "Username is already in use for this store."
+      ) {
+        return userError({
+          code: "conflict",
+          message,
+        });
+      }
+
+      if (
+        message === "Staff profile is not active." ||
+        message === "Staff profile has no active role assignments." ||
+        message === "Username is required."
+      ) {
+        return userError({
+          code: "validation_failed",
+          message,
+        });
+      }
+
+      throw error;
+    }
+  },
 });
 
 export const updateStaffCredential = mutation({
@@ -568,7 +607,46 @@ export const updateStaffCredential = mutation({
     storeId: v.id("store"),
     username: v.optional(v.string()),
   },
-  handler: (ctx, args) => updateStaffCredentialWithCtx(ctx, args),
+  returns: commandResultValidator(v.any()),
+  handler: async (ctx, args) => {
+    try {
+      return ok(await updateStaffCredentialWithCtx(ctx, args));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+
+      if (message === "Staff credential not found.") {
+        return userError({
+          code: "not_found",
+          message,
+        });
+      }
+
+      if (
+        message === "Staff credential does not belong to this store." ||
+        message === "Username is already in use for this store."
+      ) {
+        return userError({
+          code: "conflict",
+          message,
+        });
+      }
+
+      if (
+        message === "Active staff credentials require a PIN." ||
+        message === "No credential changes were provided." ||
+        message === "Username is required." ||
+        message === "Staff profile is not active." ||
+        message === "Staff profile has no active role assignments."
+      ) {
+        return userError({
+          code: "validation_failed",
+          message,
+        });
+      }
+
+      throw error;
+    }
+  },
 });
 
 export const authenticateStaffCredential = mutation({

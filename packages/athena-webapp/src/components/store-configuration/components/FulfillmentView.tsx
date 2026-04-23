@@ -1,8 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import { StoreIcon, Truck } from "lucide-react";
-import { toast } from "sonner";
-import { useMutation } from "convex/react";
-import { api } from "~/convex/_generated/api";
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
 import View from "../../View";
 import { Input } from "../../ui/input";
@@ -11,6 +8,7 @@ import { Label } from "../../ui/label";
 import { Textarea } from "../../ui/textarea";
 import { Button } from "../../ui/button";
 import { getStoreConfigV2 } from "~/src/lib/storeConfig";
+import { useStoreConfigUpdate } from "../hooks/useStoreConfigUpdate";
 
 export const FulfillmentView = () => {
   const { activeStore } = useGetActiveStore();
@@ -19,7 +17,6 @@ export const FulfillmentView = () => {
     [activeStore?.config],
   );
 
-  const [isUpdatingConfig, setIsUpdatingConfig] = useState(false);
   const [enableStorePickup, setEnableStorePickup] = useState(true);
   const [enableDelivery, setEnableDelivery] = useState(true);
 
@@ -38,120 +35,82 @@ export const FulfillmentView = () => {
   const [deliveryHasUnsavedChanges, setDeliveryHasUnsavedChanges] =
     useState(false);
 
-  const patchConfig = useMutation(api.inventory.stores.patchConfigV2);
+  const { updateConfig, isUpdating: isUpdatingConfig } = useStoreConfigUpdate();
 
   const saveEnableStorePickupChanges = async (toggled: boolean) => {
-    setIsUpdatingConfig(true);
+    const previousValue = enableStorePickup;
     setEnableStorePickup(toggled);
 
-    try {
-      await patchConfig({
-        id: activeStore?._id!,
-        patch: {
-          commerce: {
-            fulfillment: {
-              enableStorePickup: toggled,
-            },
+    await updateConfig({
+      storeId: activeStore?._id!,
+      patch: {
+        commerce: {
+          fulfillment: {
+            enableStorePickup: toggled,
           },
         },
-      });
-      const message = toggled
+      },
+      successMessage: toggled
         ? "Store pickup has been enabled"
-        : "Store pickup has been disabled";
-
-      const icon = <StoreIcon className="w-4 h-4" />;
-      toast.message(message, { icon });
-    } catch (error) {
-      console.log(error);
-      toast.error("An error occurred while updating pickup settings", {
-        description: (error as Error).message,
-        position: "top-right",
-      });
-    }
-
-    setIsUpdatingConfig(false);
+        : "Store pickup has been disabled",
+      errorMessage: "An error occurred while updating pickup settings",
+      onError: () => {
+        setEnableStorePickup(previousValue);
+      },
+    });
   };
 
   const saveEnableDeliveryChanges = async (toggled: boolean) => {
-    setIsUpdatingConfig(true);
+    const previousValue = enableDelivery;
     setEnableDelivery(toggled);
 
-    try {
-      await patchConfig({
-        id: activeStore?._id!,
-        patch: {
-          commerce: {
-            fulfillment: {
-              enableDelivery: toggled,
-            },
+    await updateConfig({
+      storeId: activeStore?._id!,
+      patch: {
+        commerce: {
+          fulfillment: {
+            enableDelivery: toggled,
           },
         },
-      });
-      const message = toggled
+      },
+      successMessage: toggled
         ? "Delivery has been enabled"
-        : "Delivery has been disabled";
-
-      const icon = <Truck className="w-4 h-4" />;
-      toast.message(message, { icon });
-    } catch (error) {
-      console.log(error);
-      toast.error("An error occurred while updating delivery settings", {
-        description: (error as Error).message,
-        position: "top-right",
-      });
-    }
-
-    setIsUpdatingConfig(false);
+        : "Delivery has been disabled",
+      errorMessage: "An error occurred while updating delivery settings",
+      onError: () => {
+        setEnableDelivery(previousValue);
+      },
+    });
   };
 
   const savePickupRestriction = async (updates: Record<string, any>) => {
-    setIsUpdatingConfig(true);
-
-    try {
-      await patchConfig({
-        id: activeStore?._id!,
-        patch: {
-          commerce: {
-            fulfillment: {
-              pickupRestriction: updates,
-            },
+    await updateConfig({
+      storeId: activeStore?._id!,
+      patch: {
+        commerce: {
+          fulfillment: {
+            pickupRestriction: updates,
           },
         },
-      });
-      toast.success("Pickup restriction updated");
-    } catch (error) {
-      console.log(error);
-      toast.error("An error occurred while updating pickup restriction", {
-        description: (error as Error).message,
-      });
-    }
-
-    setIsUpdatingConfig(false);
+      },
+      successMessage: "Pickup restriction updated",
+      errorMessage: "An error occurred while updating pickup restriction",
+    });
   };
 
   const saveDeliveryRestriction = async (updates: Record<string, any>) => {
-    setIsUpdatingConfig(true);
-
-    try {
-      await patchConfig({
-        id: activeStore?._id!,
-        patch: {
-          commerce: {
-            fulfillment: {
-              deliveryRestriction: updates,
-            },
+    await updateConfig({
+      storeId: activeStore?._id!,
+      patch: {
+        commerce: {
+          fulfillment: {
+            deliveryRestriction: updates,
           },
         },
-      });
-      toast.success("Delivery restriction updated");
-    } catch (error) {
-      console.log(error);
-      toast.error("An error occurred while updating delivery restriction", {
-        description: (error as Error).message,
-      });
-    }
-
-    setIsUpdatingConfig(false);
+      },
+      successMessage: "Delivery restriction updated",
+      errorMessage: "An error occurred while updating delivery restriction",
+    });
   };
 
   const handlePickupRestrictionToggle = async (checked: boolean) => {

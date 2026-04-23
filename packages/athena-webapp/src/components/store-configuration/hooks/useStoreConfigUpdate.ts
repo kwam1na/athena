@@ -3,6 +3,8 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { api } from "~/convex/_generated/api";
 import { Id } from "~/convex/_generated/dataModel";
+import { presentCommandToast } from "~/src/lib/errors/presentCommandToast";
+import { runCommand } from "~/src/lib/errors/runCommand";
 
 interface UpdateConfigOptions {
   storeId: Id<"store">;
@@ -18,7 +20,7 @@ interface UpdateConfigOptions {
 
 export const useStoreConfigUpdate = () => {
   const [isUpdating, setIsUpdating] = useState(false);
-  const patchConfigMutation = useMutation(api.inventory.stores.patchConfigV2);
+  const patchConfigMutation = useMutation(api.inventory.stores.patchConfigV2Command);
 
   const updateConfig = async ({
     storeId,
@@ -39,11 +41,20 @@ export const useStoreConfigUpdate = () => {
         throw new Error("A config patch payload is required");
       }
 
-      await patchConfigMutation({
-        id: storeId,
-        patch: nextPatch,
-        mirrorLegacy,
-      });
+      const result = await runCommand(() =>
+        patchConfigMutation({
+          id: storeId,
+          patch: nextPatch,
+          mirrorLegacy,
+        })
+      );
+
+      if (result.kind !== "ok") {
+        presentCommandToast(result);
+        onError?.(new Error(result.error.message));
+        return;
+      }
+
       toast.success(successMessage, { position: "top-right" });
       onSuccess?.();
     } catch (error) {

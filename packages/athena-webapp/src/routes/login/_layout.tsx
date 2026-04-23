@@ -7,6 +7,7 @@ import {
   PENDING_ATHENA_AUTH_SYNC_KEY,
 } from "~/src/lib/constants";
 import { api } from "~/convex/_generated/api";
+import { runCommand } from "~/src/lib/errors/runCommand";
 
 const HOME_PATH = "/";
 
@@ -102,34 +103,45 @@ export function LoginLayout() {
       isSyncingRef.current = true;
       setAuthSyncError(null);
 
-      let user = null;
-      let lastRetryError: unknown = null;
+      let userId: string | null = null;
+      let finalErrorMessage: string | null = null;
 
       try {
         for (let attempt = 0; attempt < AUTH_SYNC_MAX_ATTEMPTS; attempt += 1) {
-          try {
-            user = await syncAuthenticatedAthenaUser({});
-            break;
-          } catch (error) {
-            lastRetryError = error;
-            const message = error instanceof Error ? error.message : "";
+          const result = await runCommand(() => syncAuthenticatedAthenaUser({}));
 
-            if (!message.includes(AUTH_SYNC_RETRYABLE_MESSAGE)) {
-              throw error;
-            }
+          if (result.kind === "ok") {
+            const resolvedUserId =
+              result.data && typeof result.data._id === "string"
+                ? result.data._id
+                : null;
 
-            if (attempt === AUTH_SYNC_MAX_ATTEMPTS - 1) {
+            if (resolvedUserId) {
+              userId = resolvedUserId;
               break;
             }
 
-            await sleep(AUTH_SYNC_RETRY_DELAY_MS);
+            finalErrorMessage = "Could not load your Athena user profile.";
+            break;
           }
+
+          finalErrorMessage = result.error.message;
+          const shouldRetry =
+            result.kind === "user_error" &&
+            result.error.retryable === true &&
+            result.error.message === AUTH_SYNC_RETRYABLE_MESSAGE;
+
+          if (!shouldRetry || attempt === AUTH_SYNC_MAX_ATTEMPTS - 1) {
+            break;
+          }
+
+          await sleep(AUTH_SYNC_RETRY_DELAY_MS);
         }
 
-        if (!user) {
-          throw lastRetryError instanceof Error
-            ? lastRetryError
-            : new Error("Could not load your Athena user profile.");
+        if (!userId) {
+          throw new Error(
+            finalErrorMessage ?? "Could not load your Athena user profile."
+          );
         }
 
         if (!isMountedRef.current) {
@@ -137,7 +149,7 @@ export function LoginLayout() {
         }
 
         sessionStorage.removeItem(PENDING_ATHENA_AUTH_SYNC_KEY);
-        localStorage.setItem(LOGGED_IN_USER_ID_KEY, user._id);
+        localStorage.setItem(LOGGED_IN_USER_ID_KEY, userId);
         window.location.assign("/");
       } catch (error) {
         if (!isMountedRef.current) {
