@@ -245,4 +245,77 @@ describe("ServiceCasesViewContent", () => {
       await screen.findByText("Refund service payments before cancelling the case."),
     ).toBeInTheDocument();
   });
+
+  it("clears detail errors when switching to a different case", async () => {
+    const user = userEvent.setup();
+    const onUpdateStatus = vi.fn().mockResolvedValueOnce(
+      userError({
+        code: "precondition_failed",
+        message: "Refund service payments before cancelling the case.",
+      }),
+    );
+
+    const { rerender } = render(
+      <ServiceCasesViewContent
+        {...baseProps}
+        onUpdateStatus={onUpdateStatus}
+        serviceCases={[
+          ...baseProps.serviceCases,
+          {
+            _id: "case-2",
+            balanceDueAmount: 0,
+            customerName: "Kojo Mensimah",
+            paymentStatus: "paid",
+            pendingApprovalCount: 0,
+            serviceCatalogName: "Revamp",
+            staffName: "Adjoa Tetteh",
+            status: "awaiting_pickup",
+          },
+        ]}
+      />,
+    );
+
+    await chooseSelectOption(user, /case status/i, /cancelled/i);
+    await user.click(screen.getByRole("button", { name: /update status/i }));
+
+    expect(
+      await screen.findByText("Refund service payments before cancelling the case."),
+    ).toBeInTheDocument();
+
+    rerender(
+      <ServiceCasesViewContent
+        {...baseProps}
+        onUpdateStatus={onUpdateStatus}
+        selectedCaseDetails={{
+          _id: "case-2",
+          balanceDueAmount: 0,
+          lineItems: [],
+          paymentAllocations: [],
+          paymentStatus: "paid",
+          pendingApprovals: [],
+          status: "awaiting_pickup",
+        }}
+        selectedCaseId="case-2"
+        serviceCases={[
+          ...baseProps.serviceCases,
+          {
+            _id: "case-2",
+            balanceDueAmount: 0,
+            customerName: "Kojo Mensimah",
+            paymentStatus: "paid",
+            pendingApprovalCount: 0,
+            serviceCatalogName: "Revamp",
+            staffName: "Adjoa Tetteh",
+            status: "awaiting_pickup",
+          },
+        ]}
+      />,
+    );
+
+    await waitFor(() =>
+      expect(
+        screen.queryByText("Refund service payments before cancelling the case."),
+      ).not.toBeInTheDocument(),
+    );
+  });
 });

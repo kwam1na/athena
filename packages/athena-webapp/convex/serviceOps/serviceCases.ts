@@ -320,10 +320,7 @@ export async function createServiceCaseWithCtx(
   const serviceCase = await ctx.db.get("serviceCase", serviceCaseId);
 
   if (!serviceCase) {
-    return userError({
-      code: "unavailable",
-      message: "Unable to create the service case.",
-    });
+    throw new Error("Unable to create the service case.");
   }
 
   const workItem = await ctx.db.get("operationalWorkItem", args.operationalWorkItemId);
@@ -720,15 +717,20 @@ export const updateServiceCaseStatus = mutation({
       return statusTransitionResult;
     }
 
-    const [currentServiceCase, pendingApprovals, paymentAllocations] = await Promise.all([
-      syncServiceCaseFinancialsWithCtx(ctx, serviceCase),
+    const [lineItems, pendingApprovals, paymentAllocations] = await Promise.all([
+      listServiceCaseLineItemsWithCtx(ctx, serviceCase._id),
       listPendingApprovalRequestsWithCtx(ctx, workItem._id),
       listServiceCaseAllocationsWithCtx(ctx, serviceCase.storeId, serviceCase._id),
     ]);
 
+    const totalAmount =
+      lineItems.length > 0
+        ? lineItems.reduce((sum, lineItem) => sum + lineItem.amount, 0)
+        : serviceCase.quotedAmount ?? 0;
     const paymentSummary = summarizePaymentAllocations(paymentAllocations);
+    const balanceDueAmount = Math.max(totalAmount - paymentSummary.netAmount, 0);
 
-    if ((currentServiceCase?.balanceDueAmount ?? 0) > 0 && args.status === "completed") {
+    if (balanceDueAmount > 0 && args.status === "completed") {
       return userError({
         code: "precondition_failed",
         message: "Cannot complete a service case with an outstanding balance.",
@@ -748,6 +750,8 @@ export const updateServiceCaseStatus = mutation({
         message: "Refund service payments before cancelling the case.",
       });
     }
+
+    await syncServiceCaseFinancialsWithCtx(ctx, serviceCase);
 
     await ctx.db.patch("serviceCase", serviceCase._id, {
       cancelledAt: args.status === "cancelled" ? Date.now() : undefined,

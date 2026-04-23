@@ -1,4 +1,4 @@
-import { useDeferredValue, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { toast } from "sonner";
 import View from "../View";
@@ -169,6 +169,10 @@ export function ServiceCasesViewContent({
     () => serviceCases.find((serviceCase) => serviceCase._id === selectedCaseId) ?? null,
     [selectedCaseId, serviceCases]
   );
+
+  useEffect(() => {
+    setDetailErrors([]);
+  }, [selectedCaseId]);
 
   const applyCommandResult = (
     result: ServiceCaseCommandResult,
