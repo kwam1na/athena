@@ -59,6 +59,10 @@ export function CustomerInfoPanel({
 
   const formatter = currencyFormatter(activeStore?.currency || "GHS");
 
+  const showCommandError = (message: string) => {
+    showValidationError([message]);
+  };
+
   const handleSelectCustomer = (customer: POSCustomerSummary) => {
     console.log("🔄 Selecting customer:", customer);
 
@@ -92,21 +96,20 @@ export function CustomerInfoPanel({
       phone: customerInfo.phone.trim() || undefined,
     });
 
-    if (result.success && result.customer) {
-      const nextCustomerInfo = {
-        customerId: result.customer._id,
-        name: result.customer.name,
-        email: result.customer.email || "",
-        phone: result.customer.phone || "",
-      };
-      setCustomerInfo(nextCustomerInfo);
-      void onCustomerCommitted(nextCustomerInfo);
-      setShowCreateForm(false);
-      // Keep the panel open so user can see the edit button and customer details
-      // Toast already shown by createCustomer hook
-    } else {
-      // Error already shown by createCustomer hook
+    if (result.kind !== "ok") {
+      showCommandError(result.error.message);
+      return;
     }
+
+    const nextCustomerInfo = {
+      customerId: result.data._id,
+      name: result.data.name,
+      email: result.data.email || "",
+      phone: result.data.phone || "",
+    };
+    setCustomerInfo(nextCustomerInfo);
+    void onCustomerCommitted(nextCustomerInfo);
+    setShowCreateForm(false);
   };
 
   const handleStartEdit = () => {
@@ -136,20 +139,20 @@ export function CustomerInfoPanel({
       phone: editingCustomer.phone.trim() || undefined,
     });
 
-    if (result.success) {
-      const nextCustomerInfo = {
-        customerId: editingCustomer.customerId,
-        name: editingCustomer.name.trim(),
-        email: editingCustomer.email.trim(),
-        phone: editingCustomer.phone.trim(),
-      };
-      setCustomerInfo(nextCustomerInfo);
-      void onCustomerCommitted(nextCustomerInfo);
-      setIsEditing(false);
-      // Toast already shown by updateCustomer hook
-    } else {
-      // Error already shown by updateCustomer hook
+    if (result.kind !== "ok") {
+      showCommandError(result.error.message);
+      return;
     }
+
+    const nextCustomerInfo = {
+      customerId: editingCustomer.customerId,
+      name: editingCustomer.name.trim(),
+      email: editingCustomer.email.trim(),
+      phone: editingCustomer.phone.trim(),
+    };
+    setCustomerInfo(nextCustomerInfo);
+    void onCustomerCommitted(nextCustomerInfo);
+    setIsEditing(false);
   };
 
   const handleCancelEdit = () => {

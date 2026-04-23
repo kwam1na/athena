@@ -1,4 +1,8 @@
 import { useMutation, useQuery } from "convex/react";
+import {
+  type NormalizedCommandResult,
+  runCommand,
+} from "@/lib/errors/runCommand";
 
 import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
@@ -29,18 +33,14 @@ export function useConvexPosCustomerCreate() {
       country?: string;
     };
     notes?: string;
-  }) => {
-    try {
-      const customer = await createCustomer(customerData);
-      return { success: true as const, customer };
-    } catch (error) {
-      return {
-        success: false as const,
-        error:
-          error instanceof Error ? error.message : "Failed to create customer",
-      };
-    }
-  };
+  }): Promise<
+    NormalizedCommandResult<{
+      _id: Id<"posCustomer">;
+      name: string;
+      email?: string;
+      phone?: string;
+    }>
+  > => runCommand(() => createCustomer(customerData));
 }
 
 export function useConvexPosCustomerUpdate() {
@@ -61,16 +61,6 @@ export function useConvexPosCustomerUpdate() {
       };
       notes?: string;
     },
-  ) => {
-    try {
-      await updateCustomer({ customerId, ...updates });
-      return { success: true as const };
-    } catch (error) {
-      return {
-        success: false as const,
-        error:
-          error instanceof Error ? error.message : "Failed to update customer",
-      };
-    }
-  };
+  ): Promise<NormalizedCommandResult<null>> =>
+    runCommand(() => updateCustomer({ customerId, ...updates }));
 }

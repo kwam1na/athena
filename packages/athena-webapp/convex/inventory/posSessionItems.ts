@@ -1,17 +1,48 @@
 import { v } from "convex/values";
 import { mutation, query } from "../_generated/server";
 import {
-  itemResultValidator,
-  operationSuccessValidator,
-  error,
-} from "./helpers/resultTypes";
-import {
   runRemoveSessionItemCommand,
   runUpsertSessionItemCommand,
 } from "../pos/application/commands/sessionCommands";
 import { collectSessionItemsFromPages } from "../pos/infrastructure/repositories/sessionCommandRepository";
+import { commandResultValidator } from "../lib/commandResultValidators";
+import { ok, userError } from "../../shared/commandResult";
 
 const SESSION_ITEMS_PAGE_SIZE = 200;
+
+const itemOperationDataValidator = v.object({
+  itemId: v.id("posSessionItem"),
+  expiresAt: v.number(),
+});
+
+const operationDataValidator = v.object({
+  expiresAt: v.number(),
+});
+
+function userErrorFromSessionItemFailure(result: { status: string; message: string }) {
+  switch (result.status) {
+    case "notFound":
+      return userError({
+        code: "not_found",
+        message: result.message,
+      });
+    case "inventoryUnavailable":
+      return userError({
+        code: "conflict",
+        message: result.message,
+      });
+    case "validationFailed":
+      return userError({
+        code: "validation_failed",
+        message: result.message,
+      });
+    default:
+      return userError({
+        code: "precondition_failed",
+        message: result.message,
+      });
+  }
+}
 
 // Get all items for a session
 export const getSessionItems = query({
@@ -71,18 +102,15 @@ export const addOrUpdateItem = mutation({
     color: v.optional(v.string()),
     areProcessingFeesAbsorbed: v.optional(v.boolean()),
   },
-  returns: itemResultValidator,
+  returns: commandResultValidator(itemOperationDataValidator),
   handler: async (ctx, args) => {
     const result = await runUpsertSessionItemCommand(ctx, args);
 
     if (result.status === "ok") {
-      return {
-        success: true as const,
-        data: result.data,
-      };
+      return ok(result.data);
     }
 
-    return error(result.message);
+    return userErrorFromSessionItemFailure(result);
   },
 });
 
@@ -93,17 +121,14 @@ export const removeItem = mutation({
     staffProfileId: v.id("staffProfile"),
     itemId: v.id("posSessionItem"),
   },
-  returns: operationSuccessValidator,
+  returns: commandResultValidator(operationDataValidator),
   handler: async (ctx, args) => {
     const result = await runRemoveSessionItemCommand(ctx, args);
 
     if (result.status === "ok") {
-      return {
-        success: true as const,
-        data: result.data,
-      };
+      return ok(result.data);
     }
 
-    return error(result.message);
+    return userErrorFromSessionItemFailure(result);
   },
 });
