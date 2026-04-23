@@ -19,9 +19,9 @@ Landing page for packages/athena-webapp. Use this page to orient around graph ho
 ## Graph Hotspots
 - `storeConfigV2.ts` (27 edges, Community 4) - [`packages/athena-webapp/convex/inventory/storeConfigV2.ts`](../../../packages/athena-webapp/convex/inventory/storeConfigV2.ts)
 - `ProductStock.tsx` (19 edges, Community 10) - [`packages/athena-webapp/src/components/add-product/ProductStock.tsx`](../../../packages/athena-webapp/src/components/add-product/ProductStock.tsx)
+- `moneyEntryAudit.test.ts` (18 edges, Community 15) - [`packages/athena-webapp/src/lib/moneyEntryAudit.test.ts`](../../../packages/athena-webapp/src/lib/moneyEntryAudit.test.ts)
 - `sessionCommands.ts` (18 edges, Community 13) - [`packages/athena-webapp/convex/pos/application/commands/sessionCommands.ts`](../../../packages/athena-webapp/convex/pos/application/commands/sessionCommands.ts)
 - `transactionRepository.ts` (18 edges, Community 14) - [`packages/athena-webapp/convex/pos/infrastructure/repositories/transactionRepository.ts`](../../../packages/athena-webapp/convex/pos/infrastructure/repositories/transactionRepository.ts)
-- `checkoutSession.ts` (17 edges, Community 15) - [`packages/athena-webapp/convex/storeFront/checkoutSession.ts`](../../../packages/athena-webapp/convex/storeFront/checkoutSession.ts)
 
 ## Navigation
 - [wiki index](../index.md) - back to the wiki index
