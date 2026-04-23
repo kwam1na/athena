@@ -5,9 +5,29 @@ import { v } from "convex/values";
 import { buildApprovalRequest } from "../operations/approvalRequestHelpers";
 import { recordOperationalEventWithCtx } from "../operations/operationalEvents";
 import { recordRegisterSessionTraceBestEffort } from "../operations/registerSessionTracing";
+import { ok, userError, type CommandResult } from "../../shared/commandResult";
 
 const CLOSEOUT_SESSION_LIMIT = 100;
 const DEFAULT_VARIANCE_APPROVAL_THRESHOLD = 5000;
+
+const userErrorValidator = v.object({
+  code: v.union(
+    v.literal("validation_failed"),
+    v.literal("authentication_failed"),
+    v.literal("authorization_failed"),
+    v.literal("not_found"),
+    v.literal("conflict"),
+    v.literal("precondition_failed"),
+    v.literal("rate_limited"),
+    v.literal("unavailable"),
+  ),
+  title: v.optional(v.string()),
+  message: v.string(),
+  fields: v.optional(v.record(v.string(), v.array(v.string()))),
+  retryable: v.optional(v.boolean()),
+  traceId: v.optional(v.string()),
+  metadata: v.optional(v.record(v.string(), v.any())),
+});
 
 type CashControlsConfig = {
   requireManagerSignoffForAnyVariance: boolean;
@@ -85,6 +105,58 @@ type ReviewRegisterSessionCloseoutResult =
       approvalRequest: Doc<"approvalRequest"> | null;
       registerSession: Doc<"registerSession"> | null;
     };
+
+const closeoutReviewValidator = v.object({
+  hasVariance: v.boolean(),
+  reason: v.optional(v.string()),
+  requiresApproval: v.boolean(),
+  variance: v.number(),
+});
+
+const submitRegisterSessionCloseoutResultValidator = v.union(
+  v.object({
+    kind: v.literal("ok"),
+    data: v.union(
+      v.object({
+        action: v.literal("approval_required"),
+        approvalRequest: v.union(v.null(), v.any()),
+        closeoutReview: closeoutReviewValidator,
+        registerSession: v.union(v.null(), v.any()),
+      }),
+      v.object({
+        action: v.literal("closed"),
+        closeoutReview: closeoutReviewValidator,
+        registerSession: v.union(v.null(), v.any()),
+      }),
+    ),
+  }),
+  v.object({
+    kind: v.literal("user_error"),
+    error: userErrorValidator,
+  }),
+);
+
+const reviewRegisterSessionCloseoutResultValidator = v.union(
+  v.object({
+    kind: v.literal("ok"),
+    data: v.union(
+      v.object({
+        action: v.literal("approved"),
+        approvalRequest: v.union(v.null(), v.any()),
+        registerSession: v.union(v.null(), v.any()),
+      }),
+      v.object({
+        action: v.literal("rejected"),
+        approvalRequest: v.union(v.null(), v.any()),
+        registerSession: v.union(v.null(), v.any()),
+      }),
+    ),
+  }),
+  v.object({
+    kind: v.literal("user_error"),
+    error: userErrorValidator,
+  }),
+);
 
 function asRecord(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -379,21 +451,35 @@ export const submitRegisterSessionCloseout = mutation({
     registerSessionId: v.id("registerSession"),
     storeId: v.id("store"),
   },
+  returns: submitRegisterSessionCloseoutResultValidator,
   handler: async (
     ctx: MutationCtx,
     args: SubmitRegisterSessionCloseoutArgs
-  ): Promise<SubmitRegisterSessionCloseoutResult> => {
+  ): Promise<CommandResult<SubmitRegisterSessionCloseoutResult>> => {
+    if (args.countedCash < 0) {
+      return userError({
+        code: "validation_failed",
+        message: "Counted cash cannot be negative.",
+      });
+    }
+
     const [registerSession, store] = await Promise.all([
       ctx.db.get("registerSession", args.registerSessionId),
       ctx.runQuery(internal.inventory.stores.findById, { id: args.storeId }),
     ]);
 
     if (!registerSession || registerSession.storeId !== args.storeId) {
-      throw new Error("Register session not found for this store.");
+      return userError({
+        code: "not_found",
+        message: "Register session not found for this store.",
+      });
     }
 
     if (registerSession.status === "closed") {
-      throw new Error("Register session is already closed.");
+      return userError({
+        code: "precondition_failed",
+        message: "Register session is already closed.",
+      });
     }
 
     const config = getCashControlsConfig(store);
@@ -528,12 +614,12 @@ export const submitRegisterSessionCloseout = mutation({
         workflowTraceId: approvalPendingSession?.workflowTraceId,
       });
 
-      return {
+      return ok({
         action: "approval_required" as const,
         approvalRequest,
         closeoutReview,
         registerSession: approvalPendingSession,
-      };
+      });
     }
 
     await cancelPendingApprovalIfNeeded({
@@ -591,11 +677,11 @@ export const submitRegisterSessionCloseout = mutation({
       workflowTraceId: closedSession?.workflowTraceId,
     });
 
-    return {
+    return ok({
       action: "closed" as const,
       closeoutReview,
       registerSession: closedSession,
-    };
+    });
   },
 });
 
@@ -608,18 +694,25 @@ export const reviewRegisterSessionCloseout = mutation({
     reviewedByUserId: v.optional(v.id("athenaUser")),
     storeId: v.id("store"),
   },
+  returns: reviewRegisterSessionCloseoutResultValidator,
   handler: async (
     ctx: MutationCtx,
     args: ReviewRegisterSessionCloseoutArgs
-  ): Promise<ReviewRegisterSessionCloseoutResult> => {
+  ): Promise<CommandResult<ReviewRegisterSessionCloseoutResult>> => {
     const registerSession = await ctx.db.get("registerSession", args.registerSessionId);
 
     if (!registerSession || registerSession.storeId !== args.storeId) {
-      throw new Error("Register session not found for this store.");
+      return userError({
+        code: "not_found",
+        message: "Register session not found for this store.",
+      });
     }
 
     if (!registerSession.managerApprovalRequestId) {
-      throw new Error("Register session does not have a pending closeout approval.");
+      return userError({
+        code: "precondition_failed",
+        message: "Register session does not have a pending closeout approval.",
+      });
     }
 
     const approvalRequest = await ctx.db.get(
@@ -628,7 +721,10 @@ export const reviewRegisterSessionCloseout = mutation({
     );
 
     if (!approvalRequest || approvalRequest.status !== "pending") {
-      throw new Error("Register closeout approval is no longer pending.");
+      return userError({
+        code: "precondition_failed",
+        message: "Register closeout approval is no longer pending.",
+      });
     }
 
     const reviewedApprovalRequest = await ctx.runMutation(
@@ -644,7 +740,10 @@ export const reviewRegisterSessionCloseout = mutation({
 
     if (args.decision === "approved") {
       if (registerSession.countedCash === undefined) {
-        throw new Error("Counted cash is required before approving register closeout.");
+        return userError({
+          code: "precondition_failed",
+          message: "Counted cash is required before approving register closeout.",
+        });
       }
 
       const closedSession = await ctx.runMutation(
@@ -707,11 +806,11 @@ export const reviewRegisterSessionCloseout = mutation({
         workflowTraceId: closedSession?.workflowTraceId,
       });
 
-      return {
+      return ok({
         action: "approved" as const,
         approvalRequest: reviewedApprovalRequest,
         registerSession: closedSession,
-      };
+      });
     }
 
     await recordOperationalEventWithCtx(ctx, {
@@ -749,10 +848,10 @@ export const reviewRegisterSessionCloseout = mutation({
       workflowTraceId: rejectedSession?.workflowTraceId,
     });
 
-    return {
+    return ok({
       action: "rejected" as const,
       approvalRequest: reviewedApprovalRequest,
       registerSession: rejectedSession,
-    };
+    });
   },
 });

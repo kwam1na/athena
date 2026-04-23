@@ -5,7 +5,7 @@
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 3716 nodes · 3241 edges · 1399 communities detected
+- 3718 nodes · 3246 edges · 1399 communities detected
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS
 - Token cost: 0 input · 0 output
 
@@ -1581,48 +1581,48 @@ Cohesion: 0.24
 Nodes (4): asBoolean(), asNumber(), asRecord(), getCashControlsConfig()
 
 ### Community 36 - "Community 36"
-Cohesion: 0.36
-Nodes (9): applyStockAdjustmentBatchWithCtx(), assertDistinctStockAdjustmentLineItems(), buildResolvedStockAdjustmentStatus(), buildStockAdjustmentDecisionEventType(), buildStockAdjustmentSourceId(), buildStockAdjustmentTitle(), resolveStockAdjustmentApprovalDecisionWithCtx(), submitStockAdjustmentBatchWithCtx() (+1 more)
-
-### Community 37 - "Community 37"
-Cohesion: 0.33
-Nodes (2): OrdersTableToolbarProvider(), useOrdersTableToolbar()
-
-### Community 38 - "Community 38"
-Cohesion: 0.18
-Nodes (0):
-
-### Community 39 - "Community 39"
 Cohesion: 0.29
 Nodes (7): formatDeliveryAddress(), getAmountPaidForOrder(), getDiscountValue(), getOrderAmount(), getOrderState(), getPickupActionState(), getPotentialPoints()
 
+### Community 37 - "Community 37"
+Cohesion: 0.36
+Nodes (9): applyStockAdjustmentBatchWithCtx(), assertDistinctStockAdjustmentLineItems(), buildResolvedStockAdjustmentStatus(), buildStockAdjustmentDecisionEventType(), buildStockAdjustmentSourceId(), buildStockAdjustmentTitle(), resolveStockAdjustmentApprovalDecisionWithCtx(), submitStockAdjustmentBatchWithCtx() (+1 more)
+
+### Community 38 - "Community 38"
+Cohesion: 0.33
+Nodes (2): OrdersTableToolbarProvider(), useOrdersTableToolbar()
+
+### Community 39 - "Community 39"
+Cohesion: 0.29
+Nodes (6): applyCommandResult(), handleReviewCloseout(), handleSubmitCloseout(), onReviewCloseout(), onSubmitCloseout(), trimOptional()
+
 ### Community 40 - "Community 40"
+Cohesion: 0.24
+Nodes (4): applyCommandResult(), buildDepositSubmissionKey(), handleRecordDeposit(), trimOptional()
+
+### Community 41 - "Community 41"
 Cohesion: 0.18
 Nodes (0):
 
-### Community 41 - "Community 41"
+### Community 42 - "Community 42"
+Cohesion: 0.18
+Nodes (0):
+
+### Community 43 - "Community 43"
 Cohesion: 0.31
 Nodes (6): expenseItemSuccess(), expenseSessionSuccess(), itemSuccess(), operationSuccess(), sessionSuccess(), success()
 
-### Community 42 - "Community 42"
+### Community 44 - "Community 44"
 Cohesion: 0.22
 Nodes (2): isValidEmail(), validateCustomerInfo()
 
-### Community 43 - "Community 43"
+### Community 45 - "Community 45"
 Cohesion: 0.22
 Nodes (2): listProductSkusByProductId(), readAllQueryResults()
 
-### Community 44 - "Community 44"
+### Community 46 - "Community 46"
 Cohesion: 0.2
 Nodes (0):
-
-### Community 45 - "Community 45"
-Cohesion: 0.29
-Nodes (5): handleReviewCloseout(), handleSubmitCloseout(), onReviewCloseout(), onSubmitCloseout(), trimOptional()
-
-### Community 46 - "Community 46"
-Cohesion: 0.24
-Nodes (3): buildDepositSubmissionKey(), handleRecordDeposit(), trimOptional()
 
 ### Community 47 - "Community 47"
 Cohesion: 0.29
@@ -1690,19 +1690,19 @@ Nodes (6): findAthenaUserByEmailWithCtx(), getAuthenticatedAthenaUserWithCtx(), 
 
 ### Community 63 - "Community 63"
 Cohesion: 0.43
-Nodes (6): buildMtnCollectionsLookupPrefixes(), isTargetEnvironment(), readScopedValue(), resolveConfigForPrefix(), resolveMtnCollectionsConfigFromEnv(), toEnvSegment()
+Nodes (6): sendDiscountCodeEmail(), sendDiscountReminderEmail(), sendFeedbackRequestEmail(), sendNewOrderEmail(), sendOrderEmail(), sendVerificationCode()
 
 ### Community 64 - "Community 64"
 Cohesion: 0.43
-Nodes (6): buildPosSessionTraceEvent(), buildPosSessionTraceRecord(), buildTraceSummary(), formatPaymentMethod(), recordPosSessionTraceBestEffort(), safeTraceWrite()
+Nodes (6): buildMtnCollectionsLookupPrefixes(), isTargetEnvironment(), readScopedValue(), resolveConfigForPrefix(), resolveMtnCollectionsConfigFromEnv(), toEnvSegment()
 
 ### Community 65 - "Community 65"
-Cohesion: 0.25
-Nodes (0):
+Cohesion: 0.43
+Nodes (6): buildPosSessionTraceEvent(), buildPosSessionTraceRecord(), buildTraceSummary(), formatPaymentMethod(), recordPosSessionTraceBestEffort(), safeTraceWrite()
 
 ### Community 66 - "Community 66"
-Cohesion: 0.43
-Nodes (6): sendDiscountCodeEmail(), sendDiscountReminderEmail(), sendFeedbackRequestEmail(), sendNewOrderEmail(), sendOrderEmail(), sendVerificationCode()
+Cohesion: 0.25
+Nodes (0):
 
 ### Community 67 - "Community 67"
 Cohesion: 0.36

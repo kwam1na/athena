@@ -1,6 +1,11 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  GENERIC_UNEXPECTED_ERROR_MESSAGE,
+  ok,
+  userError,
+} from "~/shared/commandResult";
 
 import { RegisterSessionViewContent } from "./RegisterSessionView";
 
@@ -198,7 +203,11 @@ describe("RegisterSessionViewContent", () => {
     vi.spyOn(Date, "now").mockReturnValue(1000);
 
     const user = userEvent.setup();
-    const onRecordDeposit = vi.fn().mockResolvedValue(undefined);
+    const onRecordDeposit = vi.fn().mockResolvedValue(
+      ok({
+        action: "recorded",
+      }),
+    );
 
     render(
       <RegisterSessionViewContent
@@ -227,6 +236,64 @@ describe("RegisterSessionViewContent", () => {
         storeId: "store-1",
         submissionKey: "register-session-deposit-session-1-rs",
       }),
+    );
+  });
+
+  it("shows safe inline errors for deposit user_error results", async () => {
+    const user = userEvent.setup();
+    const onRecordDeposit = vi.fn().mockResolvedValue(
+      userError({
+        code: "precondition_failed",
+        message: "Register session is not accepting new deposits.",
+      }),
+    );
+
+    render(
+      <RegisterSessionViewContent
+        actorUserId="user-1"
+        currency="USD"
+        isLoading={false}
+        onRecordDeposit={onRecordDeposit}
+        registerSessionSnapshot={baseSnapshot}
+        storeId="store-1"
+      />,
+    );
+
+    await user.type(screen.getByLabelText("Deposit amount"), "2500");
+    await user.click(screen.getByRole("button", { name: "Record deposit" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Register session is not accepting new deposits.",
+    );
+    expect(screen.getByLabelText("Deposit amount")).toHaveValue(2500);
+  });
+
+  it("shows generic inline errors for unexpected deposit failures", async () => {
+    const user = userEvent.setup();
+    const onRecordDeposit = vi.fn().mockResolvedValue({
+      kind: "unexpected_error",
+      error: {
+        title: "Something went wrong",
+        message: GENERIC_UNEXPECTED_ERROR_MESSAGE,
+      },
+    });
+
+    render(
+      <RegisterSessionViewContent
+        actorUserId="user-1"
+        currency="USD"
+        isLoading={false}
+        onRecordDeposit={onRecordDeposit}
+        registerSessionSnapshot={baseSnapshot}
+        storeId="store-1"
+      />,
+    );
+
+    await user.type(screen.getByLabelText("Deposit amount"), "2500");
+    await user.click(screen.getByRole("button", { name: "Record deposit" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      GENERIC_UNEXPECTED_ERROR_MESSAGE,
     );
   });
 });

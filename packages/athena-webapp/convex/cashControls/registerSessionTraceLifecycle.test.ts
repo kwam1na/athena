@@ -248,7 +248,10 @@ describe("register session trace lifecycle handlers", () => {
 
     expect(result).toEqual(
       expect.objectContaining({
-        action: "recorded",
+        kind: "ok",
+        data: expect.objectContaining({
+          action: "recorded",
+        }),
       }),
     );
     expect(mocks.traceRecord).toHaveBeenCalledWith(
@@ -307,7 +310,10 @@ describe("register session trace lifecycle handlers", () => {
 
     expect(result).toEqual(
       expect.objectContaining({
-        action: "approval_required",
+        kind: "ok",
+        data: expect.objectContaining({
+          action: "approval_required",
+        }),
       }),
     );
     expect(mocks.traceRecord).toHaveBeenNthCalledWith(
@@ -391,7 +397,10 @@ describe("register session trace lifecycle handlers", () => {
 
     expect(result).toEqual(
       expect.objectContaining({
-        action: "approved",
+        kind: "ok",
+        data: expect.objectContaining({
+          action: "approved",
+        }),
       }),
     );
     expect(mocks.traceRecord).toHaveBeenCalledWith(
@@ -453,7 +462,10 @@ describe("register session trace lifecycle handlers", () => {
 
     expect(result).toEqual(
       expect.objectContaining({
-        action: "rejected",
+        kind: "ok",
+        data: expect.objectContaining({
+          action: "rejected",
+        }),
       }),
     );
     expect(mocks.traceRecord).toHaveBeenCalledWith(
