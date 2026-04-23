@@ -17,6 +17,7 @@ import { useState } from "react";
 import { AlertModal } from "@/components/ui/modals/alert-modal";
 import { useDeleteProduct } from "../../product-actions";
 import { Product } from "~/types";
+import { presentUnexpectedErrorToast } from "~/src/lib/errors/presentUnexpectedErrorToast";
 
 interface DataTableRowActionsProps<TData> {
   row: Row<TData>;
@@ -52,9 +53,8 @@ export function DataTableRowActions<TData>({
         }),
       });
     } catch (e) {
-      toast("Something went wrong", {
+      presentUnexpectedErrorToast("Something went wrong", {
         icon: <Ban className="w-4 h-4" />,
-        description: (e as Error).message,
       });
     } finally {
       setIsDeleteMutationPending(false);

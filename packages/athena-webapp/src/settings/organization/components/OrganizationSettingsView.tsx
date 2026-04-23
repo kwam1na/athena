@@ -20,6 +20,7 @@ import { useGetActiveOrganization } from "@/hooks/useGetOrganizations";
 import { Organization, Store } from "~/types";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "~/convex/_generated/api";
+import { presentUnexpectedErrorToast } from "~/src/lib/errors/presentUnexpectedErrorToast";
 
 const OrganizationSettings = () => {
   const { activeOrganization } = useGetActiveOrganization();
@@ -92,9 +93,7 @@ const GeneralSettings = ({ organization }: { organization: Organization }) => {
         });
       }
     } catch (e) {
-      toast.error("Something went wrong", {
-        description: (e as Error).message,
-      });
+      presentUnexpectedErrorToast("Something went wrong");
     } finally {
       setIsUpdatingOrganization(false);
     }
@@ -162,7 +161,7 @@ const DeleteStore = ({ store }: { store: Store }) => {
 
       toast.success("Store deleted");
     } catch (e) {
-      toast.error("Something went wrong");
+      presentUnexpectedErrorToast("Something went wrong");
     } finally {
       setIsDeletingStore(false);
     }

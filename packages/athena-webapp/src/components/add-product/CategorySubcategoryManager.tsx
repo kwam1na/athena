@@ -20,6 +20,7 @@ import { Category } from "~/types";
 import { Id } from "~/convex/_generated/dataModel";
 import { toSlug } from "~/src/lib/utils";
 import { Checkbox } from "../ui/checkbox";
+import { presentUnexpectedErrorToast } from "~/src/lib/errors/presentUnexpectedErrorToast";
 
 export type CategoryManageOption = "category" | "subcategory";
 
@@ -107,9 +108,8 @@ function CategoryManager() {
         icon: <CheckCircledIcon className="w-4 h-4" />,
       });
     } catch (e) {
-      toast("Something went wrong", {
+      presentUnexpectedErrorToast("Something went wrong", {
         icon: <Ban className="w-4 h-4" />,
-        description: (e as Error).message,
       });
     } finally {
       setIsCreateMutationPending(false);
@@ -133,9 +133,8 @@ function CategoryManager() {
         icon: <CheckCircledIcon className="w-4 h-4" />,
       });
     } catch (e) {
-      toast("Something went wrong", {
+      presentUnexpectedErrorToast("Something went wrong", {
         icon: <Ban className="w-4 h-4" />,
-        description: (e as Error).message,
       });
     } finally {
       setIsUpdateMutationPending(false);
@@ -155,9 +154,8 @@ function CategoryManager() {
         icon: <CheckCircledIcon className="w-4 h-4" />,
       });
     } catch (e) {
-      toast("Something went wrong", {
+      presentUnexpectedErrorToast("Something went wrong", {
         icon: <Ban className="w-4 h-4" />,
-        description: (e as Error).message,
       });
     } finally {
       setIsDeleteMutationPending(false);
@@ -391,9 +389,8 @@ function SubcategoryManager() {
         icon: <CheckCircledIcon className="w-4 h-4" />,
       });
     } catch (e) {
-      toast("Something went wrong", {
+      presentUnexpectedErrorToast("Something went wrong", {
         icon: <Ban className="w-4 h-4" />,
-        description: (e as Error).message,
       });
     } finally {
       setIsCreateMutationPending(false);
@@ -420,9 +417,8 @@ function SubcategoryManager() {
         icon: <CheckCircledIcon className="w-4 h-4" />,
       });
     } catch (e) {
-      toast("Something went wrong", {
+      presentUnexpectedErrorToast("Something went wrong", {
         icon: <Ban className="w-4 h-4" />,
-        description: (e as Error).message,
       });
     } finally {
       setIsUpdateMutationPending(false);
@@ -442,9 +438,8 @@ function SubcategoryManager() {
         icon: <CheckCircledIcon className="w-4 h-4" />,
       });
     } catch (e) {
-      toast("Something went wrong", {
+      presentUnexpectedErrorToast("Something went wrong", {
         icon: <Ban className="w-4 h-4" />,
-        description: (e as Error).message,
       });
     } finally {
       setIsDeleteMutationPending(false);

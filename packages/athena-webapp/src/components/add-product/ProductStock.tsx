@@ -62,6 +62,7 @@ import { CopyImagesView } from "./copy-images/CopyImagesView";
 import { useSkusReservedInCheckout } from "@/hooks/useSkusReservedInCheckout";
 import { useSkusReservedInPosSession } from "@/hooks/useSkusReservedInPosSession";
 import { AlertModal } from "../ui/modals/alert-modal";
+import { presentUnexpectedErrorToast } from "~/src/lib/errors/presentUnexpectedErrorToast";
 
 export type ProductVariant = {
   id: string;
@@ -275,7 +276,7 @@ function Stock({
         toast.error(result.error || "Failed to generate barcode");
       }
     } catch (error) {
-      toast.error("Error generating barcode");
+      presentUnexpectedErrorToast("Error generating barcode");
       console.error(error);
     } finally {
       setIsGeneratingBarcode(false);
@@ -286,14 +287,18 @@ function Stock({
     const variant = productVariants.find((v) => v.id === variantId);
     if (!variant || !variant.barcode) return;
 
-    const result = await updateSkuMutation({
-      id: variantId as Id<"productSku">,
-      barcode: variant.barcode,
-    });
+    try {
+      const result = await updateSkuMutation({
+        id: variantId as Id<"productSku">,
+        barcode: variant.barcode,
+      });
 
-    if ((result as any)?.error) {
-      toast.error((result as any)?.error || "Failed to save barcode");
-      return;
+      if ((result as any)?.error) {
+        toast.error((result as any).error || "Failed to save barcode");
+      }
+    } catch (error) {
+      presentUnexpectedErrorToast("Failed to save barcode");
+      console.error(error);
     }
   };
 
@@ -369,7 +374,7 @@ function Stock({
       setClearBarcodeModalOpen(false);
       setVariantToClear(null);
     } catch (error) {
-      toast.error("Error clearing barcode");
+      presentUnexpectedErrorToast("Error clearing barcode");
       console.error(error);
     } finally {
       setIsClearingBarcode(false);

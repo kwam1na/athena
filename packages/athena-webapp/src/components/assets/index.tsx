@@ -17,6 +17,7 @@ import { useImageUpload } from "~/src/hooks/use-image-upload";
 import ImageUploader, { ImageFile } from "../ui/image-uploader";
 import { convertImagesToWebp } from "~/src/lib/imageUtils";
 import { getStoreConfigV2 } from "~/src/lib/storeConfig";
+import { presentUnexpectedErrorToast } from "~/src/lib/errors/presentUnexpectedErrorToast";
 
 const Header = () => {
   return (
@@ -66,8 +67,7 @@ const FeesView = () => {
       toast.success("Delivery fees updated", { position: "top-right" });
     } catch (error) {
       console.log(error);
-      toast.error("An error occurred while updating delivery fees", {
-        description: (error as Error).message,
+      presentUnexpectedErrorToast("An error occurred while updating delivery fees", {
         position: "top-right",
       });
     }
@@ -175,10 +175,12 @@ const ContactView = () => {
       toast.success("Contact information updated", { position: "top-right" });
     } catch (error) {
       console.log(error);
-      toast.error("An error occurred while updating contact information", {
-        description: (error as Error).message,
+      presentUnexpectedErrorToast(
+        "An error occurred while updating contact information",
+        {
         position: "top-right",
-      });
+        },
+      );
     }
 
     setIsUpdatingContactInfo(false);
@@ -268,10 +270,12 @@ const MaintenanceView = () => {
       toast.success(message);
     } catch (error) {
       console.log(error);
-      toast.error("An error occurred while updating store availability", {
-        description: (error as Error).message,
+      presentUnexpectedErrorToast(
+        "An error occurred while updating store availability",
+        {
         position: "top-right",
-      });
+        },
+      );
     }
 
     setIsUpdatingConfig(false);
@@ -372,9 +376,7 @@ export const StoreAssets = () => {
       setImages([]);
     } catch (error) {
       console.log(error);
-      toast.error("An error occurred while uploading images", {
-        description: (error as Error).message,
-      });
+      presentUnexpectedErrorToast("An error occurred while uploading images");
     } finally {
       setIsUploading(false);
     }

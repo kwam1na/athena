@@ -35,6 +35,7 @@ import { ProductStatus } from "../product/ProductStatus";
 import { ProtectedRoute } from "../ProtectedRoute";
 import { ProductStockStatus } from "../product/ProductStock";
 import { Product } from "~/types";
+import { presentUnexpectedErrorToast } from "~/src/lib/errors/presentUnexpectedErrorToast";
 
 function ProductViewContent() {
   const { productData, revertChanges, productVariants, updateProductVariants } =
@@ -103,9 +104,8 @@ function ProductViewContent() {
         });
       }
     } catch (e) {
-      toast("Something went wrong", {
+      presentUnexpectedErrorToast("Something went wrong", {
         icon: <Ban className="w-4 h-4" />,
-        description: (e as Error).message,
       });
     } finally {
       setIsDeleteMutationPending(false);
@@ -159,9 +159,7 @@ function ProductViewContent() {
     } catch (error) {
       console.error("Error saving product:", (error as Error).message);
 
-      toast.error("Something went wrong", {
-        description: (error as Error).message,
-      });
+      presentUnexpectedErrorToast("Something went wrong");
     } finally {
       setIsCreateMutationPending(false);
     }
@@ -234,9 +232,7 @@ function ProductViewContent() {
     } catch (error) {
       console.error("Error modifying product:", (error as ZodError).message);
 
-      toast.error("Something went wrong", {
-        description: (error as Error).message,
-      });
+      presentUnexpectedErrorToast("Something went wrong");
     } finally {
       setIsUpdateMutationPending(false);
     }
@@ -264,9 +260,7 @@ function ProductViewContent() {
 
         images = imageUrls;
       } catch (e) {
-        toast.error("Error processing images", {
-          description: (e as Error).message,
-        });
+        presentUnexpectedErrorToast("Error processing images");
       }
     }
 
@@ -327,9 +321,7 @@ function ProductViewContent() {
           update: { images: imageUrls },
         });
       } catch (e) {
-        toast.error("Error processing images.", {
-          description: (e as Error).message,
-        });
+        presentUnexpectedErrorToast("Error processing images.");
       }
     }
 
@@ -359,7 +351,7 @@ function ProductViewContent() {
     });
 
     if (res?.success === false) {
-      toast.error(res?.error);
+      toast.error(res?.error || "Something went wrong");
       return false;
     }
 
@@ -460,9 +452,8 @@ function ProductViewContent() {
           `Product visibility set to ${isVisible ? "visible" : "hidden"}`,
         );
       } catch (e) {
-        toast.error("Something went wrong", {
+        presentUnexpectedErrorToast("Something went wrong", {
           icon: <Ban className="w-3.5 h-3.5" />,
-          description: (e as Error).message,
         });
       } finally {
         setIsUpdatingProductVisibility(false);

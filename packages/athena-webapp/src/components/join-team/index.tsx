@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { LOGGED_IN_USER_ID_KEY } from "~/src/lib/constants";
 import { useNavigate } from "@tanstack/react-router";
 import { motion } from "framer-motion";
+import { presentUnexpectedErrorToast } from "~/src/lib/errors/presentUnexpectedErrorToast";
 
 export const JoinTeam = () => {
   const redeemCode = useMutation(api.inventory.inviteCode.redeem);
@@ -38,9 +39,7 @@ export const JoinTeam = () => {
         toast.error(res.message);
       }
     } catch (e) {
-      toast.error("An error occurred", {
-        description: (e as Error).message,
-      });
+      presentUnexpectedErrorToast("An error occurred");
     } finally {
       setIsRedeeming(false);
     }

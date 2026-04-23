@@ -23,6 +23,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { Store } from "~/types";
 import { useMutation } from "convex/react";
 import { api } from "~/convex/_generated/api";
+import { presentUnexpectedErrorToast } from "~/src/lib/errors/presentUnexpectedErrorToast";
 // import { deleteDirectoryInS3 } from "~/src/lib/aws";
 
 const StoreSettings = () => {
@@ -104,9 +105,8 @@ const GeneralSettings = ({ store }: { store: Store }) => {
         });
       }
     } catch (e) {
-      toast("Something went wrong", {
+      presentUnexpectedErrorToast("Something went wrong", {
         icon: <Ban className="h-4 w-4" />,
-        description: (e as Error).message,
       });
     } finally {
       setIsUpdateMutationPending(false);
@@ -187,9 +187,8 @@ const DeleteStore = ({ store }: { store: Store }) => {
         }),
       });
     } catch (e) {
-      toast("Something went wrong", {
+      presentUnexpectedErrorToast("Something went wrong", {
         icon: <Ban className="h-4 w-4" />,
-        description: (e as Error).message,
       });
     } finally {
       setIsDeleteMutationPending(false);
@@ -241,9 +240,8 @@ const DeleteAllProductsInStore = ({ store }: { store: Store }) => {
         icon: <CheckCircle2 className="h-4 w-4" />,
       });
     } catch (e) {
-      toast("Something went wrong", {
+      presentUnexpectedErrorToast("Something went wrong", {
         icon: <Ban className="h-4 w-4" />,
-        description: (e as Error).message,
       });
     } finally {
       setIsDeleteMutationPending(false);

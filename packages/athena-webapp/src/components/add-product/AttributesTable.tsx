@@ -173,6 +173,7 @@ import {
 } from "../ui/form";
 import { LoadingButton } from "../ui/loading-button";
 import { toast } from "sonner";
+import { presentUnexpectedErrorToast } from "~/src/lib/errors/presentUnexpectedErrorToast";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "~/convex/_generated/api";
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
@@ -222,9 +223,8 @@ export function ColorPopover() {
         icon: <CheckCircle2 className="h-4 w-4" />,
       });
     } catch (e) {
-      toast("Something went wrong", {
+      presentUnexpectedErrorToast("Something went wrong", {
         icon: <Ban className="h-4 w-4" />,
-        description: (e as Error).message,
       });
     } finally {
       setIsUpdateMutationPending(false);

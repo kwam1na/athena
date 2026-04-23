@@ -7,6 +7,7 @@ import { api } from "~/convex/_generated/api";
 import { useState } from "react";
 import { Id } from "~/convex/_generated/dataModel";
 import { toast } from "sonner";
+import { presentUnexpectedErrorToast } from "~/src/lib/errors/presentUnexpectedErrorToast";
 
 interface PromoCodeHeaderProps {
   isUpdating: boolean;
@@ -33,9 +34,7 @@ const PromoCodeHeader = ({ isUpdating, handleSave }: PromoCodeHeaderProps) => {
         }),
       });
     } catch (e) {
-      toast.error("Failed to delete promo code", {
-        description: (e as Error).message,
-      });
+      presentUnexpectedErrorToast("Failed to delete promo code");
     } finally {
       setIsDeletingPromoCode(false);
     }
