@@ -22,6 +22,19 @@ describe("POS display amounts", () => {
     expect(parseDisplayAmountInput("")).toBeUndefined();
   });
 
+  it("parses whole, decimal, and formatted display values as pesewas", () => {
+    expect(parseDisplayAmountInput("12")).toBe(1200);
+    expect(parseDisplayAmountInput("12.50")).toBe(1250);
+    expect(parseDisplayAmountInput("GHS 1,234.56")).toBe(123456);
+  });
+
+  it("rejects empty, incomplete, negative, and non-numeric values", () => {
+    expect(parseDisplayAmountInput("")).toBeUndefined();
+    expect(parseDisplayAmountInput(".")).toBeUndefined();
+    expect(parseDisplayAmountInput("-12")).toBeUndefined();
+    expect(parseDisplayAmountInput("not an amount")).toBeUndefined();
+  });
+
   it("renders payment validation errors in display units", () => {
     const validation = validatePaymentAmount(15000, 10000, formatter, "card");
 

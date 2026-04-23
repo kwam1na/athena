@@ -7,3 +7,8 @@ Rules:
 - Before answering architecture or codebase questions, read graphify-out/GRAPH_REPORT.md for god nodes and community structure
 - If graphify-out/wiki/index.md exists, navigate it instead of reading raw files
 - After modifying code files in this session, run `bun run graphify:rebuild` to keep the graph current
+
+## solutions
+
+Reusable implementation learnings live under docs/solutions/.
+Before changing a known bug pattern, search docs/solutions/ for related guidance.

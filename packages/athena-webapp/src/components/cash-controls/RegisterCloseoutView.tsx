@@ -8,7 +8,11 @@ import {
   runCommand,
 } from "@/lib/errors/runCommand";
 import { capitalizeWords, currencyFormatter } from "@/lib/utils";
-import { formatStoredAmount } from "@/lib/pos/displayAmounts";
+import {
+  formatStoredAmount,
+  parseDisplayAmountInput,
+} from "@/lib/pos/displayAmounts";
+import { toDisplayAmount } from "~/convex/lib/currency";
 import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
 import { userError } from "~/shared/commandResult";
@@ -106,6 +110,10 @@ function getVariance(registerSession: RegisterCloseoutSession) {
   return null;
 }
 
+function formatStoredAmountForInput(amount: number) {
+  return String(toDisplayAmount(amount));
+}
+
 export function RegisterCloseoutViewContent({
   currency,
   isLoading,
@@ -141,11 +149,11 @@ export function RegisterCloseoutViewContent({
     const countedCashValue =
       countedCashValues[registerSession._id] ??
       (registerSession.countedCash !== undefined
-        ? String(registerSession.countedCash)
+        ? formatStoredAmountForInput(registerSession.countedCash)
         : "");
-    const countedCash = Number(countedCashValue);
+    const countedCash = parseDisplayAmountInput(countedCashValue);
 
-    if (!countedCashValue || Number.isNaN(countedCash) || countedCash < 0) {
+    if (countedCash === undefined) {
       setErrors((current) => ({
         ...current,
         [registerSession._id]: "Enter the counted cash before submitting the closeout.",
@@ -376,12 +384,12 @@ export function RegisterCloseoutViewContent({
                             [registerSession._id]: event.target.value,
                           }))
                         }
-                        step="1"
+                        step="0.01"
                         type="number"
                         value={
                           countedCashValues[registerSession._id] ??
                           (registerSession.countedCash !== undefined
-                            ? String(registerSession.countedCash)
+                            ? formatStoredAmountForInput(registerSession.countedCash)
                             : "")
                         }
                       />

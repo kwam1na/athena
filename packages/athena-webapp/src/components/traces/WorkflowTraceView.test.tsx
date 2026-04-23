@@ -12,6 +12,13 @@ vi.mock("convex/react", () => ({
   useQuery: mockedHooks.useQuery,
 }));
 
+vi.mock("../common/PageHeader", () => ({
+  default: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  NavigateBackButton: () => null,
+}));
+
 describe("WorkflowTraceView", () => {
   beforeEach(() => {
     window.scrollTo = vi.fn();

@@ -22,6 +22,7 @@ import {
   runCommand,
 } from "@/lib/errors/runCommand";
 import { api } from "~/convex/_generated/api";
+import { parseDisplayAmountInput } from "~/src/lib/pos/displayAmounts";
 
 type CustomerResult = {
   _id: string;
@@ -203,6 +204,9 @@ export function ServiceCasesViewContent({
 
   const handleCreateCase = async () => {
     const errors: string[] = [];
+    const quotedAmount = createForm.quotedAmount.trim()
+      ? parseDisplayAmountInput(createForm.quotedAmount)
+      : undefined;
 
     if (!createForm.selectedCustomerId) {
       errors.push("Select a customer.");
@@ -216,6 +220,10 @@ export function ServiceCasesViewContent({
       errors.push("Select a staff member.");
     }
 
+    if (createForm.quotedAmount.trim() && quotedAmount === undefined) {
+      errors.push("Quoted amount must be a valid amount.");
+    }
+
     if (errors.length > 0) {
       setCreateErrors(errors);
       return;
@@ -225,9 +233,7 @@ export function ServiceCasesViewContent({
     const result = await onCreateCase({
       assignedStaffProfileId: createForm.assignedStaffProfileId,
       customerProfileId: createForm.selectedCustomerId,
-      quotedAmount: createForm.quotedAmount.trim()
-        ? Number(createForm.quotedAmount)
-        : undefined,
+      quotedAmount,
       serviceCatalogId: createForm.serviceCatalogId || undefined,
       serviceMode: createForm.serviceMode,
       title: createForm.title.trim(),
@@ -393,7 +399,7 @@ export function ServiceCasesViewContent({
               <Label htmlFor="case-quoted-amount">Quoted amount</Label>
               <Input
                 id="case-quoted-amount"
-                inputMode="numeric"
+                inputMode="decimal"
                 onChange={(event) =>
                   setCreateForm((current) => ({
                     ...current,
@@ -525,8 +531,15 @@ export function ServiceCasesViewContent({
                     <Button
                       onClick={async () => {
                         setDetailErrors([]);
+                        const amount = parseDisplayAmountInput(paymentForm.amount);
+
+                        if (amount === undefined) {
+                          setDetailErrors(["Payment amount must be a valid amount."]);
+                          return;
+                        }
+
                         const result = await onRecordPayment({
-                          amount: Number(paymentForm.amount),
+                          amount,
                           method: paymentForm.method,
                           serviceCaseId: activeServiceCaseId,
                         });
@@ -621,7 +634,7 @@ export function ServiceCasesViewContent({
                         <Label htmlFor="line-item-unit-price">Line item unit price</Label>
                         <Input
                           id="line-item-unit-price"
-                          inputMode="numeric"
+                          inputMode="decimal"
                           onChange={(event) =>
                             setLineItemForm((current) => ({
                               ...current,
@@ -635,12 +648,23 @@ export function ServiceCasesViewContent({
                     <Button
                       onClick={async () => {
                         setDetailErrors([]);
+                        const unitPrice = parseDisplayAmountInput(
+                          lineItemForm.unitPrice
+                        );
+
+                        if (unitPrice === undefined) {
+                          setDetailErrors([
+                            "Line item unit price must be a valid amount.",
+                          ]);
+                          return;
+                        }
+
                         const result = await onAddLineItem({
                           description: lineItemForm.description,
                           lineType: lineItemForm.lineType,
                           quantity: Number(lineItemForm.quantity),
                           serviceCaseId: activeServiceCaseId,
-                          unitPrice: Number(lineItemForm.unitPrice),
+                          unitPrice,
                         });
 
                         if (!applyCommandResult(result, setDetailErrors)) {

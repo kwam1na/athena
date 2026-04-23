@@ -12,7 +12,8 @@ const baseProps = {
     {
       _id: "catalog-1",
       depositType: "flat" as const,
-      depositValue: 100,
+      basePrice: 30050,
+      depositValue: 10000,
       durationMinutes: 90,
       name: "Closure Repair",
       pricingModel: "fixed" as const,
@@ -76,17 +77,17 @@ describe("ServiceCatalogViewContent", () => {
     await chooseSelectOption(user, /service mode/i, /^same-day$/i);
     await chooseSelectOption(user, /deposit rule/i, /flat deposit/i);
     await user.clear(screen.getByLabelText(/deposit value/i));
-    await user.type(screen.getByLabelText(/deposit value/i), "45");
+    await user.type(screen.getByLabelText(/deposit value/i), "45.25");
     await user.clear(screen.getByLabelText(/base price/i));
-    await user.type(screen.getByLabelText(/base price/i), "300");
+    await user.type(screen.getByLabelText(/base price/i), "300.50");
 
     await user.click(screen.getByRole("button", { name: /create service/i }));
 
     await waitFor(() => expect(onCreate).toHaveBeenCalledTimes(1));
     expect(onCreate.mock.calls[0][0]).toMatchObject({
-      basePrice: 300,
+      basePrice: 30050,
       depositType: "flat",
-      depositValue: 45,
+      depositValue: 4525,
       durationMinutes: 75,
       name: "Wash and Restyle",
       pricingModel: "fixed",
@@ -108,6 +109,8 @@ describe("ServiceCatalogViewContent", () => {
     await user.click(screen.getByRole("button", { name: /edit closure repair/i }));
 
     expect(screen.getByLabelText(/service name/i)).toHaveValue("Closure Repair");
+    expect(screen.getByLabelText(/base price/i)).toHaveValue("300.5");
+    expect(screen.getByLabelText(/deposit value/i)).toHaveValue("100");
 
     await user.clear(screen.getByLabelText(/service name/i));
     await user.type(
@@ -118,8 +121,36 @@ describe("ServiceCatalogViewContent", () => {
 
     await waitFor(() => expect(onUpdate).toHaveBeenCalledTimes(1));
     expect(onUpdate.mock.calls[0][0]).toMatchObject({
+      basePrice: 30050,
+      depositValue: 10000,
       name: "Custom Closure Repair",
       serviceCatalogId: "catalog-1",
+    });
+  });
+
+  it("keeps percentage catalog deposits as raw percentages", async () => {
+    const user = userEvent.setup();
+    const onCreate = vi.fn().mockResolvedValue({ kind: "ok", data: null });
+
+    render(<ServiceCatalogViewContent {...baseProps} onCreate={onCreate} />);
+
+    await user.clear(screen.getByLabelText(/service name/i));
+    await user.type(screen.getByLabelText(/service name/i), "Consultation");
+    await user.clear(screen.getByLabelText(/duration/i));
+    await user.type(screen.getByLabelText(/duration/i), "30");
+    await chooseSelectOption(user, /deposit rule/i, /percentage deposit/i);
+    await user.clear(screen.getByLabelText(/deposit value/i));
+    await user.type(screen.getByLabelText(/deposit value/i), "20");
+    await user.clear(screen.getByLabelText(/base price/i));
+    await user.type(screen.getByLabelText(/base price/i), "300.50");
+
+    await user.click(screen.getByRole("button", { name: /create service/i }));
+
+    await waitFor(() => expect(onCreate).toHaveBeenCalledTimes(1));
+    expect(onCreate.mock.calls[0][0]).toMatchObject({
+      basePrice: 30050,
+      depositType: "percentage",
+      depositValue: 20,
     });
   });
 

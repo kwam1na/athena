@@ -24,6 +24,11 @@ import PromoCodePreview from "./PromoCodePreview";
 import PromoCodeAnalytics from "./analytics/PromoCodeAnalytics";
 import { getStoreConfigV2 } from "~/src/lib/storeConfig";
 import { presentUnexpectedErrorToast } from "~/src/lib/errors/presentUnexpectedErrorToast";
+import {
+  parsePromoDiscountInput,
+  promoDiscountDisplayText,
+  promoDiscountInputValue,
+} from "./promoCodeMoney";
 
 function PromoCodeView() {
   const products = useGetProducts();
@@ -84,7 +89,12 @@ function PromoCodeView() {
   useEffect(() => {
     if (activePromoCode) {
       setPromoCode(activePromoCode.code);
-      setDiscount(activePromoCode.discountValue.toString());
+      setDiscount(
+        promoDiscountInputValue(
+          activePromoCode.discountValue,
+          activePromoCode.discountType
+        )
+      );
       setDiscountType(activePromoCode.discountType);
       setPromoCodeSpan(activePromoCode.span);
       setIsActive(activePromoCode.active);
@@ -150,10 +160,18 @@ function PromoCodeView() {
         ? Array.from(selectedProductSkus)
         : undefined;
 
-    const displayText =
-      discountType == "amount"
-        ? formatter.format(parseFloat(discount!))
-        : `${discount}%`;
+    const parsedDiscountValue = parsePromoDiscountInput(discount, discountType);
+
+    if (parsedDiscountValue === undefined) {
+      toast.error("Enter a valid discount amount.");
+      return;
+    }
+
+    const displayText = promoDiscountDisplayText(
+      parsedDiscountValue,
+      discountType,
+      formatter
+    );
 
     try {
       setIsAddingPromoCode(true);
@@ -161,7 +179,7 @@ function PromoCodeView() {
         storeId: activeStore._id,
         code: promoCode!,
         discountType: discountType,
-        discountValue: parseFloat(discount!),
+        discountValue: parsedDiscountValue,
         displayText: displayText,
         sitewide: isSitewide,
         autoApply: autoApply,
@@ -215,10 +233,18 @@ function PromoCodeView() {
         ? Array.from(selectedProductSkus)
         : undefined;
 
-    const displayText =
-      discountType == "amount"
-        ? formatter.format(parseFloat(discount!))
-        : `${discount}%`;
+    const parsedDiscountValue = parsePromoDiscountInput(discount, discountType);
+
+    if (parsedDiscountValue === undefined) {
+      toast.error("Enter a valid discount amount.");
+      return;
+    }
+
+    const displayText = promoDiscountDisplayText(
+      parsedDiscountValue,
+      discountType,
+      formatter
+    );
 
     try {
       setIsUpdatingPromoCode(true);
@@ -231,7 +257,7 @@ function PromoCodeView() {
         isExclusive: isExclusive,
         sitewide: isSitewide,
         discountType: discountType,
-        discountValue: parseFloat(discount!),
+        discountValue: parsedDiscountValue,
         displayText: displayText,
         span: promoCodeSpan,
         productSkus,
@@ -256,7 +282,7 @@ function PromoCodeView() {
               promotions: {
                 homepageDiscountCodeModalPromoCode: {
                   promoCodeId: promoCodeSlug,
-                  value: parseFloat(discount!),
+                  value: parsedDiscountValue,
                   displayText: displayText,
                   discountType: discountType,
                 },
@@ -301,12 +327,17 @@ function PromoCodeView() {
 
       const promoPayload = {
         promoCodeId: promoCodeSlug,
-        value: activePromoCode?.discountValue ?? parseFloat(discount || "0"),
+        value:
+          activePromoCode?.discountValue ??
+          parsePromoDiscountInput(discount, discountType) ??
+          0,
         displayText:
           activePromoCode?.displayText ||
-          (discountType === "amount"
-            ? formatter.format(parseFloat(discount || "0"))
-            : `${discount || 0}%`),
+          promoDiscountDisplayText(
+            parsePromoDiscountInput(discount, discountType) ?? 0,
+            discountType,
+            formatter
+          ),
         discountType: activePromoCode?.discountType ?? discountType,
       };
 
@@ -351,12 +382,17 @@ function PromoCodeView() {
 
       const promoPayload = {
         promoCodeId: promoCodeSlug,
-        value: activePromoCode?.discountValue ?? parseFloat(discount || "0"),
+        value:
+          activePromoCode?.discountValue ??
+          parsePromoDiscountInput(discount, discountType) ??
+          0,
         displayText:
           activePromoCode?.displayText ||
-          (discountType === "amount"
-            ? formatter.format(parseFloat(discount || "0"))
-            : `${discount || 0}%`),
+          promoDiscountDisplayText(
+            parsePromoDiscountInput(discount, discountType) ?? 0,
+            discountType,
+            formatter
+          ),
         discountType: activePromoCode?.discountType ?? discountType,
       };
 

@@ -23,6 +23,7 @@ import {
   TableHeader,
   TableRow,
 } from "../ui/table";
+import { getOrigin } from "~/src/lib/navigationUtils";
 
 const containerVariants = {
   hidden: {},
@@ -146,19 +147,40 @@ function SummaryStrip({
   const items =
     focus === "overview"
       ? [
-          { label: "Open sessions", value: String(snapshot.openSessions.length) },
-          { label: "Pending closeouts", value: String(snapshot.pendingCloseouts.length) },
+          {
+            label: "Open sessions",
+            value: String(snapshot.openSessions.length),
+          },
+          {
+            label: "Pending closeouts",
+            value: String(snapshot.pendingCloseouts.length),
+          },
           {
             label: "Unresolved variances",
             value: String(snapshot.unresolvedVariances.length),
           },
-          { label: "Recent deposits", value: String(snapshot.recentDeposits.length) },
+          {
+            label: "Recent deposits",
+            value: String(snapshot.recentDeposits.length),
+          },
         ]
       : [
-          { label: "Open sessions", value: String(snapshot.openSessions.length) },
-          { label: "Expected cash", value: formatCurrency(currency, expectedCashTotal) },
-          { label: "Deposited", value: formatCurrency(currency, depositedTotal) },
-          { label: "Recent deposits", value: String(snapshot.recentDeposits.length) },
+          {
+            label: "Open sessions",
+            value: String(snapshot.openSessions.length),
+          },
+          {
+            label: "Expected cash",
+            value: formatCurrency(currency, expectedCashTotal),
+          },
+          {
+            label: "Deposited",
+            value: formatCurrency(currency, depositedTotal),
+          },
+          {
+            label: "Recent deposits",
+            value: String(snapshot.recentDeposits.length),
+          },
         ];
 
   return (
@@ -317,7 +339,8 @@ function SessionLedger({
                       <p className="font-medium text-stone-950">
                         {formatRegisterName(session.registerNumber)}
                       </p>
-                      {showPendingApproval && session.pendingApprovalRequest?.reason ? (
+                      {showPendingApproval &&
+                      session.pendingApprovalRequest?.reason ? (
                         <p className="max-w-md text-xs text-stone-500">
                           {session.pendingApprovalRequest.reason}
                         </p>
@@ -342,7 +365,9 @@ function SessionLedger({
                   <TableCell className="font-mono text-stone-950">
                     {formatCurrency(currency, session.totalDeposited)}
                   </TableCell>
-                  <TableCell className={`font-mono ${getVarianceTone(session.variance)}`}>
+                  <TableCell
+                    className={`font-mono ${getVarianceTone(session.variance)}`}
+                  >
                     {formatCurrency(currency, session.variance ?? 0)}
                   </TableCell>
                   <TableCell className="text-right">
@@ -354,7 +379,9 @@ function SessionLedger({
                           size="sm"
                           variant="outline"
                         >
-                          <WorkflowTraceRouteLink traceId={session.workflowTraceId}>
+                          <WorkflowTraceRouteLink
+                            traceId={session.workflowTraceId}
+                          >
                             View trace
                           </WorkflowTraceRouteLink>
                         </Button>
@@ -371,6 +398,7 @@ function SessionLedger({
                             sessionId: session._id,
                             storeUrlSlug,
                           }}
+                          search={{ o: getOrigin() }}
                           to="/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId"
                         >
                           View session
@@ -478,6 +506,7 @@ function DepositsLedger({
                               sessionId: deposit.registerSessionId,
                               storeUrlSlug,
                             }}
+                            search={{ o: getOrigin() }}
                             to="/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId"
                           >
                             View session
@@ -533,10 +562,13 @@ export function CashControlsDashboardContent({
                 </p>
                 <div className="space-y-1">
                   <h1 className="text-3xl font-semibold tracking-[-0.05em] text-stone-950">
-                    {focus === "overview" ? "Register sessions" : "Register workspace"}
+                    {focus === "overview"
+                      ? "Register sessions"
+                      : "Register workspace"}
                   </h1>
                   <p className="text-sm text-stone-600">
-                    Open drawers first, manager follow-up second, cash-drop detail after that.
+                    Open drawers first, manager follow-up second, cash-drop
+                    detail after that.
                   </p>
                 </div>
               </div>

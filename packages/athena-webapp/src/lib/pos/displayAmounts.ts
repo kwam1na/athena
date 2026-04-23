@@ -10,6 +10,10 @@ export function formatStoredAmount(
 export function parseDisplayAmountInput(
   rawValue: string
 ): number | undefined {
+  if (rawValue.includes("-")) {
+    return undefined;
+  }
+
   const numericValue = rawValue.replace(/[^\d.]/g, "");
 
   if (numericValue === "" || numericValue === ".") {

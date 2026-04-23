@@ -2,7 +2,7 @@ import { useQuery } from "convex/react";
 import type { Id } from "~/convex/_generated/dataModel";
 
 import View from "../View";
-import PageHeader from "../common/PageHeader";
+import PageHeader, { NavigateBackButton } from "../common/PageHeader";
 import { FadeIn } from "../common/FadeIn";
 import { Badge } from "../ui/badge";
 import { NotFoundView } from "../states/not-found/NotFoundView";
@@ -75,31 +75,26 @@ export function WorkflowTraceHeader({
 }) {
   return (
     <PageHeader>
-      <div className="flex w-full flex-wrap items-start justify-between gap-4 px-4 py-4 sm:px-6">
-        <div className="space-y-2">
-          <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
-            Workflow trace
-          </p>
+      <div className="flex items-center justify-between w-full">
+        <div className="flex items-center gap-2">
+          <NavigateBackButton />
           <div className="space-y-1">
-            <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">
+            <h1 className="text-xl font-semibold tracking-tight">
               {header.title}
             </h1>
-            <p className="text-sm text-muted-foreground">
-              {formatTraceLabel(header.workflowType)} · Trace {header.traceId}
-            </p>
-          </div>
-
-          <div className="flex flex-wrap gap-2 pt-1">
-            <Badge variant="outline" className={getStatusTone(header.status)}>
-              {formatTraceLabel(header.status)}
-            </Badge>
-            <Badge variant="outline" className={getStatusTone(header.health)}>
-              {formatTraceLabel(header.health)}
-            </Badge>
+            <div className="flex items-center gap-2">
+              {header.summary && <p className="text-sm">{header.summary}</p>}
+              <Badge variant="outline" className={getStatusTone(header.status)}>
+                {formatTraceLabel(header.status)}
+              </Badge>
+              <Badge variant="outline" className={getStatusTone(header.health)}>
+                {formatTraceLabel(header.health)}
+              </Badge>
+            </div>
           </div>
         </div>
 
-        <div className="max-w-xl space-y-1 text-right">
+        <div className="max-w-xl flex items-center gap-4 text-right">
           <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
             Primary lookup
           </p>
@@ -111,12 +106,6 @@ export function WorkflowTraceHeader({
           </p>
         </div>
       </div>
-
-      {header.summary ? (
-        <div className="border-t px-4 py-3 text-sm text-muted-foreground sm:px-6">
-          {header.summary}
-        </div>
-      ) : null}
     </PageHeader>
   );
 }
@@ -155,10 +144,15 @@ export function WorkflowTraceTimeline({
                   {formatTraceLabel(event.step)}
                 </p>
                 <div className="flex flex-wrap gap-2">
-                  <Badge variant="outline" className={getStatusTone(event.status)}>
+                  <Badge
+                    variant="outline"
+                    className={getStatusTone(event.status)}
+                  >
                     {formatTraceLabel(event.status)}
                   </Badge>
-                  <Badge variant="outline">{formatTraceLabel(event.kind)}</Badge>
+                  <Badge variant="outline">
+                    {formatTraceLabel(event.kind)}
+                  </Badge>
                 </div>
               </div>
 
@@ -168,7 +162,9 @@ export function WorkflowTraceTimeline({
             </div>
 
             {event.message ? (
-              <p className="mt-3 text-sm text-muted-foreground">{event.message}</p>
+              <p className="mt-3 text-sm text-muted-foreground">
+                {event.message}
+              </p>
             ) : null}
           </li>
         ))}
@@ -184,7 +180,6 @@ export function WorkflowTraceView({
   storeId: Id<"store">;
   traceId: string;
 }) {
-
   const workflowTrace = useQuery(
     api.workflowTraces.public.getWorkflowTraceViewById,
     {
@@ -213,7 +208,7 @@ export function WorkflowTraceView({
 
   return (
     <View header={<WorkflowTraceHeader header={workflowTrace.header} />}>
-      <FadeIn>
+      <FadeIn className="space-y-8">
         <WorkflowTraceTimeline events={workflowTrace.events} />
       </FadeIn>
     </View>

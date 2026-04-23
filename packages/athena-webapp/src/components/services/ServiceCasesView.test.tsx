@@ -100,14 +100,14 @@ describe("ServiceCasesViewContent", () => {
     await chooseSelectOption(user, /service mode/i, /^repair$/i);
     await chooseSelectOption(user, /service catalog/i, /closure repair/i);
     await chooseSelectOption(user, /assigned staff/i, /adjoa tetteh/i);
-    await user.type(screen.getByLabelText(/quoted amount/i), "450");
+    await user.type(screen.getByLabelText(/quoted amount/i), "450.99");
     await user.click(screen.getByRole("button", { name: /create service case/i }));
 
     await waitFor(() => expect(onCreateCase).toHaveBeenCalledTimes(1));
     expect(onCreateCase.mock.calls[0][0]).toMatchObject({
       assignedStaffProfileId: "staff-1",
       customerProfileId: "customer-1",
-      quotedAmount: 450,
+      quotedAmount: 45099,
       serviceCatalogId: "catalog-1",
       serviceMode: "repair",
       title: "Closure Repair",
@@ -133,25 +133,25 @@ describe("ServiceCasesViewContent", () => {
 
     expect(screen.getByText("1 pending approval")).toBeInTheDocument();
 
-    await user.type(screen.getByLabelText(/payment amount/i), "75");
+    await user.type(screen.getByLabelText(/payment amount/i), "75.50");
     await chooseSelectOption(user, /payment method/i, /^card$/i);
     await user.click(screen.getByRole("button", { name: /record payment/i }));
     expect(onRecordPayment).toHaveBeenCalledWith({
-      amount: 75,
+      amount: 7550,
       method: "card",
       serviceCaseId: "case-1",
     });
 
     await user.type(screen.getByLabelText(/line item description/i), "Repair labour");
     await user.type(screen.getByLabelText(/line item quantity/i), "1");
-    await user.type(screen.getByLabelText(/line item unit price/i), "150");
+    await user.type(screen.getByLabelText(/line item unit price/i), "150.25");
     await user.click(screen.getByRole("button", { name: /add line item/i }));
     expect(onAddLineItem).toHaveBeenCalledWith({
       description: "Repair labour",
       lineType: "labor",
       quantity: 1,
       serviceCaseId: "case-1",
-      unitPrice: 150,
+      unitPrice: 15025,
     });
 
     await user.type(screen.getByLabelText(/material sku/i), "sku-1");
