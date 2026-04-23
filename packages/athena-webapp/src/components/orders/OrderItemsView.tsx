@@ -32,6 +32,9 @@ import { useAuth } from "~/src/hooks/useAuth";
 import { Badge } from "../ui/badge";
 import { LowStockStatus, OutOfStockStatus } from "../product/ProductStock";
 import { toDisplayAmount } from "~/convex/lib/currency";
+import { presentCommandToast } from "~/src/lib/errors/presentCommandToast";
+import { runCommand } from "~/src/lib/errors/runCommand";
+import { ok } from "~/shared/commandResult";
 
 function OrderItem({ item, order }: { item: any; order: any }) {
   const [isUpdatingOrderItem, setIsUpdatingOrderItem] = useState(false);
@@ -47,12 +50,18 @@ function OrderItem({ item, order }: { item: any; order: any }) {
   const handleUpdateOrderItem = async (isReady: boolean) => {
     try {
       setIsUpdatingOrderItem(true);
-      await updateOrderItem({
-        id: item._id,
-        updates: { isReady },
+      const result = await runCommand(async () => {
+        await updateOrderItem({
+          id: item._id,
+          updates: { isReady },
+        });
+
+        return ok(null);
       });
-    } catch (error) {
-      console.error(error);
+
+      if (result.kind !== "ok") {
+        presentCommandToast(result);
+      }
     } finally {
       setIsUpdatingOrderItem(false);
     }
@@ -63,12 +72,18 @@ function OrderItem({ item, order }: { item: any; order: any }) {
 
     try {
       setIsUpdatingOrderItem(true);
-      await returnItemToStock({
-        externalTransactionId: order.externalTransactionId,
-        onlineOrderItemIds: [item._id],
+      const result = await runCommand(async () => {
+        await returnItemToStock({
+          externalTransactionId: order.externalTransactionId,
+          onlineOrderItemIds: [item._id],
+        });
+
+        return ok(null);
       });
-    } catch (error) {
-      console.log(error);
+
+      if (result.kind !== "ok") {
+        presentCommandToast(result);
+      }
     } finally {
       setIsUpdatingOrderItem(false);
     }
@@ -77,31 +92,28 @@ function OrderItem({ item, order }: { item: any; order: any }) {
   const handleRequestFeedback = async () => {
     try {
       setIsRequestingFeedback(true);
-      const result = await requestFeedback({
-        productSkuId: item.productSkuId,
-        customerEmail: order.customerDetails.email,
-        customerName: order.customerDetails.firstName,
-        orderId: order._id,
-        orderItemId: item._id,
-        signedInAthenaUser: user
-          ? {
-              id: user._id,
-              email: user.email,
-            }
-          : undefined,
-      });
+      const result = await runCommand(() =>
+        requestFeedback({
+          productSkuId: item.productSkuId,
+          customerEmail: order.customerDetails.email,
+          customerName: order.customerDetails.firstName,
+          orderId: order._id,
+          orderItemId: item._id,
+          signedInAthenaUser: user
+            ? {
+                id: user._id,
+                email: user.email,
+              }
+            : undefined,
+        }),
+      );
 
-      if (!result.success) {
-        toast.error(result.error);
+      if (result.kind !== "ok") {
+        presentCommandToast(result);
         return;
       }
 
       toast.success("Feedback request sent");
-    } catch (error) {
-      console.error(error);
-      toast.error("Failed to send feedback request", {
-        description: (error as Error).message,
-      });
     } finally {
       setIsRequestingFeedback(false);
     }
@@ -297,11 +309,17 @@ export function OrderItemsView() {
 
     try {
       setIsUpdatingOrderItems(true);
-      await restockAllItems({
-        orderId: order._id,
+      const result = await runCommand(async () => {
+        await restockAllItems({
+          orderId: order._id,
+        });
+
+        return ok(null);
       });
-    } catch (error) {
-      console.error(error);
+
+      if (result.kind !== "ok") {
+        presentCommandToast(result);
+      }
     } finally {
       setIsUpdatingOrderItems(false);
     }

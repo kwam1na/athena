@@ -49,6 +49,8 @@ import { EmailStatusView } from "./EmailStatusView";
 import { ComposedPageHeader } from "../common/PageHeader";
 import { useAuth } from "~/src/hooks/useAuth";
 import { ReturnExchangeView } from "./ReturnExchangeView";
+import { presentCommandToast } from "~/src/lib/errors/presentCommandToast";
+import { runCommand } from "~/src/lib/errors/runCommand";
 
 export function RefundOptions() {
   const { order } = useOnlineOrder();
@@ -72,20 +74,22 @@ export function RefundOptions() {
   }) => {
     try {
       setIsRefundingOrder(true);
-      await refundOrder({
-        externalTransactionId: order?.externalTransactionId!,
-        amount: refundOptions.amount,
-        returnItemsToStock: returnToStock,
-      });
+      const result = await runCommand(() =>
+        refundOrder({
+          externalTransactionId: order?.externalTransactionId!,
+          amount: refundOptions.amount,
+          returnItemsToStock: returnToStock,
+        }),
+      );
+
+      if (result.kind !== "ok") {
+        presentCommandToast(result);
+        return;
+      }
 
       toast("Order refunded", {
         icon: <CheckCircledIcon className="w-4 h-4" />,
-      });
-    } catch (error) {
-      console.error(error);
-      toast("Something went wrong", {
-        icon: <Ban className="w-4 h-4" />,
-        description: (error as Error).message,
+        description: result.data.message,
       });
     } finally {
       setIsRefundingOrder(false);
@@ -202,16 +206,24 @@ const Header = () => {
   ) => {
     try {
       setIsUpdatingOrder(true);
-      await updateOrder({
-        orderId: order?._id,
-        update,
-        signedInAthenaUser: user
-          ? {
-              id: user._id,
-              email: user.email,
-            }
-          : undefined,
-      });
+      const result = await runCommand(() =>
+        updateOrder({
+          orderId: order?._id,
+          update,
+          signedInAthenaUser: user
+            ? {
+                id: user._id,
+                email: user.email,
+              }
+            : undefined,
+        }),
+      );
+
+      if (result.kind !== "ok") {
+        presentCommandToast(result);
+        return;
+      }
+
       toast(
         options?.successMessage ??
           (update.status
@@ -221,12 +233,6 @@ const Header = () => {
           icon: <CheckCircledIcon className="w-4 h-4" />,
         },
       );
-    } catch (error) {
-      console.error(error);
-      toast(options?.errorMessage ?? "Failed to update order", {
-        icon: <Ban className="w-4 h-4" />,
-        description: (error as Error).message,
-      });
     } finally {
       setIsUpdatingOrder(false);
     }
@@ -235,25 +241,27 @@ const Header = () => {
   const handleCancelOrder = async () => {
     try {
       setIsUpdatingOrder(true);
-      await updateOrder({
-        orderId: order?._id,
-        update: { status: "cancelled" },
-        returnItemsToStock: cancelOrderState.returnToStock,
-        signedInAthenaUser: user
-          ? {
-              id: user._id,
-              email: user.email,
-            }
-          : undefined,
-      });
+      const result = await runCommand(() =>
+        updateOrder({
+          orderId: order?._id,
+          update: { status: "cancelled" },
+          returnItemsToStock: cancelOrderState.returnToStock,
+          signedInAthenaUser: user
+            ? {
+                id: user._id,
+                email: user.email,
+              }
+            : undefined,
+        }),
+      );
+
+      if (result.kind !== "ok") {
+        presentCommandToast(result);
+        return;
+      }
+
       toast("Order cancelled", {
         icon: <CheckCircledIcon className="w-4 h-4" />,
-      });
-    } catch (error) {
-      console.error(error);
-      toast("Failed to cancel order", {
-        icon: <Ban className="w-4 h-4" />,
-        description: (error as Error).message,
       });
     } finally {
       setIsUpdatingOrder(false);
@@ -536,6 +544,10 @@ const VerifyPaymentAlert = () => {
       }
     } catch (error) {
       console.error(error);
+      toast("Unable to verify payment", {
+        icon: <Ban className="w-4 h-4" />,
+        description: "Please try again.",
+      });
     } finally {
       setIsVerifyingPayment(false);
     }

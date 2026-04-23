@@ -29,6 +29,8 @@ import { toast } from "sonner";
 import { useAuth } from "~/src/hooks/useAuth";
 import { getAmountPaidForOrder } from "./utils";
 import { toDisplayAmount } from "~/convex/lib/currency";
+import { presentCommandToast } from "~/src/lib/errors/presentCommandToast";
+import { runCommand } from "~/src/lib/errors/runCommand";
 
 interface ExternalTransaction {
   id: string;
@@ -173,22 +175,26 @@ export function OrderDetailsView() {
   );
 
   const handleMarkAsVerified = async () => {
-    try {
-      await updateOrder({
+    const result = await runCommand(() =>
+      updateOrder({
         orderId: order?._id,
         update: {
           hasVerifiedPayment: true,
         },
-      });
-      toast.success("Order marked as verified");
-    } catch (error) {
-      toast.error("Failed to mark order as verified");
+      }),
+    );
+
+    if (result.kind !== "ok") {
+      presentCommandToast(result);
+      return;
     }
+
+    toast.success("Order marked as verified");
   };
 
   const handleMarkPaymentCollected = async () => {
-    try {
-      await updateOrder({
+    const result = await runCommand(() =>
+      updateOrder({
         orderId: order?._id,
         update: {
           paymentCollected: true,
@@ -200,11 +206,15 @@ export function OrderDetailsView() {
               email: user.email,
             }
           : undefined,
-      });
-      toast.success("Payment marked as collected");
-    } catch (error) {
-      toast.error("Failed to mark payment as collected");
+      }),
+    );
+
+    if (result.kind !== "ok") {
+      presentCommandToast(result);
+      return;
     }
+
+    toast.success("Payment marked as collected");
   };
 
   if (!order || !activeStore) return null;

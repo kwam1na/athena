@@ -28,6 +28,8 @@ import {
   type RefundState,
   type RefundAction,
 } from "./refundUtils";
+import { presentCommandToast } from "~/src/lib/errors/presentCommandToast";
+import { runCommand } from "~/src/lib/errors/runCommand";
 
 export function RefundsView() {
   const { order } = useOnlineOrder();
@@ -107,38 +109,32 @@ export function RefundsView() {
           ? ["delivery-fee"]
           : [];
 
-      const res = await refundOrder({
-        externalTransactionId: order.externalTransactionId!,
-        amount: refundAmount,
-        returnItemsToStock: state.returnToStock,
-        onlineOrderItemIds: itemIds as any,
-        refundItems,
-        signedInAthenaUser: user
-          ? {
-              id: user._id,
-              email: user.email,
-            }
-          : undefined,
-      });
+      const result = await runCommand(() =>
+        refundOrder({
+          externalTransactionId: order.externalTransactionId!,
+          amount: refundAmount,
+          returnItemsToStock: state.returnToStock,
+          onlineOrderItemIds: itemIds as any,
+          refundItems,
+          signedInAthenaUser: user
+            ? {
+                id: user._id,
+                email: user.email,
+              }
+            : undefined,
+        }),
+      );
 
-      if (res.success) {
+      if (result.kind === "ok") {
         toast("Refund successful", {
           icon: <CheckCircledIcon className="w-4 h-4" />,
-          description: res.message,
+          description: result.data.message,
         });
         dispatch({ type: "RESET" });
-      } else {
-        toast("Refund failed", {
-          icon: <Ban className="w-4 h-4" />,
-          description: res.message,
-        });
+        return;
       }
-    } catch (error) {
-      console.error(error);
-      toast("Refund failed", {
-        icon: <Ban className="w-4 h-4" />,
-        description: (error as Error).message,
-      });
+
+      presentCommandToast(result);
     } finally {
       toggleIsRefundingOrder();
       dispatch({ type: "HIDE_MODAL" });

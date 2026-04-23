@@ -12,6 +12,8 @@ import { api } from "~/convex/_generated/api";
 import { LoadingButton } from "../ui/loading-button";
 import { useState } from "react";
 import { toast } from "sonner";
+import { presentCommandToast } from "~/src/lib/errors/presentCommandToast";
+import { runCommand } from "~/src/lib/errors/runCommand";
 
 export function EmailStatusView() {
   const { order } = useOnlineOrder();
@@ -60,22 +62,19 @@ export function EmailStatusView() {
     try {
       setSendingUpdateEmail(true);
 
-      const res = await sendOrderEmail({
-        orderId: order._id,
-        newStatus: orderStatus,
-      });
+      const result = await runCommand(() =>
+        sendOrderEmail({
+          orderId: order._id,
+          newStatus: orderStatus,
+        }),
+      );
 
-      if (res.success) {
-        toast.success("Email sent successfully");
-      } else {
-        toast.error("Failed to send email", {
-          description: res.message,
-        });
+      if (result.kind !== "ok") {
+        presentCommandToast(result);
+        return;
       }
-    } catch (e) {
-      toast.error("Failed to send email", {
-        description: (e as Error).message,
-      });
+
+      toast.success(result.data.message);
     } finally {
       setSendingUpdateEmail(false);
     }
