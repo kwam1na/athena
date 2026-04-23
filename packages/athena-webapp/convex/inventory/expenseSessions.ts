@@ -15,20 +15,59 @@ import {
   validateExpenseSessionActive,
   validateExpenseSessionModifiable,
 } from "./helpers/expenseSessionValidation";
-import {
-  expenseSessionOperationResultValidator,
-  expenseSessionResultValidator,
-  expenseSessionSuccess,
-  error,
-  createExpenseSessionResultValidator,
-} from "./helpers/resultTypes";
 import { calculateExpenseSessionExpiration } from "./helpers/expenseSessionExpiration";
-import { internal } from "../_generated/api";
+import { commandResultValidator } from "../lib/commandResultValidators";
+import { ok, userError } from "../../shared/commandResult";
+import { createExpenseTransactionFromSessionHandler } from "./expenseTransactions";
 
 const MAX_EXPENSE_SESSION_ITEMS = 200;
 const EXPENSE_SESSION_QUERY_CANDIDATE_LIMIT = 200;
 const ACTIVE_EXPENSE_SESSION_CANDIDATE_LIMIT = 100;
 const EXPENSE_SESSION_CLEANUP_BATCH_SIZE = 100;
+
+const expenseSessionOperationValidator = v.object({
+  sessionId: v.id("expenseSession"),
+  expiresAt: v.number(),
+});
+
+const expenseSessionIdValidator = v.object({
+  sessionId: v.id("expenseSession"),
+});
+
+const completedExpenseSessionValidator = v.object({
+  sessionId: v.id("expenseSession"),
+  transactionNumber: v.string(),
+});
+
+function expenseSessionError(
+  message: string,
+  code:
+    | "authorization_failed"
+    | "conflict"
+    | "not_found"
+    | "precondition_failed" = "precondition_failed",
+) {
+  return userError({
+    code,
+    message,
+  });
+}
+
+function mapExpenseSessionValidationError(message: string) {
+  if (message === "Session not found") {
+    return expenseSessionError(message, "not_found");
+  }
+
+  if (message.includes("different terminal") || message.includes("active session")) {
+    return expenseSessionError(message, "conflict");
+  }
+
+  if (message.includes("not associated")) {
+    return expenseSessionError(message, "authorization_failed");
+  }
+
+  return expenseSessionError(message, "precondition_failed");
+}
 
 function buildNextExpenseSessionNumber(latestSessionNumber: string | undefined) {
   const lastSequence = latestSessionNumber
@@ -249,7 +288,7 @@ export const createExpenseSession = mutation({
     staffProfileId: v.id("staffProfile"),
     registerNumber: v.optional(v.string()),
   },
-  returns: createExpenseSessionResultValidator,
+  returns: commandResultValidator(expenseSessionOperationValidator),
   handler: async (ctx, args) => {
     const now = Date.now();
     const registerNumber = args.registerNumber || "1";
@@ -287,11 +326,10 @@ export const createExpenseSession = mutation({
     );
 
     if (existingSessionOnDifferentTerminal) {
-      return {
-        success: false as const,
-        message:
-          "A session is active for this staff profile on a different terminal",
-      };
+      return expenseSessionError(
+        "A session is active for this staff profile on a different terminal",
+        "conflict",
+      );
     }
 
     if (existingSession) {
@@ -312,13 +350,10 @@ export const createExpenseSession = mutation({
         });
       }
 
-      return {
-        success: true as const,
-        data: {
-          sessionId: existingSession._id,
-          expiresAt: existingSession.expiresAt,
-        },
-      };
+      return ok({
+        sessionId: existingSession._id,
+        expiresAt: existingSession.expiresAt,
+      });
     }
 
     const latestSession = await ctx.db
@@ -346,7 +381,7 @@ export const createExpenseSession = mutation({
       expiresAt,
     });
 
-    return { success: true as const, data: { sessionId, expiresAt } };
+    return ok({ sessionId, expiresAt });
   },
 });
 
@@ -357,7 +392,7 @@ export const updateExpenseSession = mutation({
     staffProfileId: v.id("staffProfile"),
     notes: v.optional(v.string()),
   },
-  returns: expenseSessionOperationResultValidator,
+  returns: commandResultValidator(expenseSessionOperationValidator),
   handler: async (ctx, args) => {
     const { sessionId, ...updates } = args;
     const now = Date.now();
@@ -370,13 +405,23 @@ export const updateExpenseSession = mutation({
     );
     if (!validation.success) {
       const currentSession = await ctx.db.get("expenseSession", sessionId);
-      console.warn(
-        `Attempted to update ${currentSession?.status} expense session ${sessionId}. Ignoring update.`
+      if (
+        currentSession &&
+        currentSession.staffProfileId === args.staffProfileId &&
+        (currentSession.status === "completed" || currentSession.status === "void")
+      ) {
+        console.warn(
+          `Attempted to update ${currentSession.status} expense session ${sessionId}. Ignoring update.`,
+        );
+        return ok({
+          sessionId,
+          expiresAt: currentSession.expiresAt || now,
+        });
+      }
+
+      return mapExpenseSessionValidationError(
+        validation.message ?? "Expense session cannot be updated.",
       );
-      return {
-        sessionId,
-        expiresAt: currentSession?.expiresAt || now,
-      };
     }
 
     // Extend session expiration time
@@ -389,7 +434,7 @@ export const updateExpenseSession = mutation({
       expiresAt,
     });
 
-    return { sessionId, expiresAt };
+    return ok({ sessionId, expiresAt });
   },
 });
 
@@ -399,7 +444,7 @@ export const holdExpenseSession = mutation({
     sessionId: v.id("expenseSession"),
     staffProfileId: v.id("staffProfile"),
   },
-  returns: expenseSessionResultValidator,
+  returns: commandResultValidator(expenseSessionOperationValidator),
   handler: async (ctx, args) => {
     const now = Date.now();
 
@@ -410,13 +455,13 @@ export const holdExpenseSession = mutation({
       args.staffProfileId
     );
     if (!validation.success) {
-      return error(validation.message!);
+      return mapExpenseSessionValidationError(validation.message!);
     }
 
     // Get current session to access expiresAt
     const session = await ctx.db.get("expenseSession", args.sessionId);
     if (!session) {
-      return error("Session not found");
+      return expenseSessionError("Session not found", "not_found");
     }
 
     // Keep inventory holds in place when suspending
@@ -426,7 +471,7 @@ export const holdExpenseSession = mutation({
       updatedAt: now,
     });
 
-    return expenseSessionSuccess(args.sessionId, session.expiresAt);
+    return ok({ sessionId: args.sessionId, expiresAt: session.expiresAt });
   },
 });
 
@@ -437,14 +482,14 @@ export const resumeExpenseSession = mutation({
     staffProfileId: v.id("staffProfile"),
     terminalId: v.id("posTerminal"),
   },
-  returns: expenseSessionResultValidator,
+  returns: commandResultValidator(expenseSessionOperationValidator),
   handler: async (ctx, args) => {
     const now = Date.now();
 
     // Get the session
     const session = await ctx.db.get("expenseSession", args.sessionId);
     if (!session) {
-      return error("Session not found");
+      return expenseSessionError("Session not found", "not_found");
     }
 
     // Check if session has expired before resuming
@@ -452,7 +497,10 @@ export const resumeExpenseSession = mutation({
       (session.expiresAt && session.expiresAt < now) ||
       session.status === "expired"
     ) {
-      return error("This session has expired. Start a new one to proceed.");
+      return expenseSessionError(
+        "This session has expired. Start a new one to proceed.",
+        "precondition_failed",
+      );
     }
 
     // Check that this staff profile does not have an active session on a different terminal
@@ -468,8 +516,9 @@ export const resumeExpenseSession = mutation({
     );
 
     if (activeSessionsOnOtherTerminals.length > 0) {
-      return error(
-        "This staff profile has an active session on another terminal"
+      return expenseSessionError(
+        "This staff profile has an active session on another terminal",
+        "conflict",
       );
     }
 
@@ -484,7 +533,7 @@ export const resumeExpenseSession = mutation({
       expiresAt,
     });
 
-    return expenseSessionSuccess(args.sessionId, expiresAt);
+    return ok({ sessionId: args.sessionId, expiresAt });
   },
 });
 
@@ -495,45 +544,39 @@ export const completeExpenseSession = mutation({
     notes: v.optional(v.string()),
     totalValue: v.number(),
   },
-  returns: v.union(
-    v.object({
-      success: v.literal(true),
-      data: v.object({
-        sessionId: v.id("expenseSession"),
-        transactionNumber: v.string(),
-      }),
-    }),
-    v.object({
-      success: v.literal(false),
-      message: v.string(),
-    })
-  ),
-  handler: async (
-    ctx,
-    args
-  ): Promise<
-    | {
-        success: true;
-        data: { sessionId: Id<"expenseSession">; transactionNumber: string };
-      }
-    | { success: false; message: string }
-  > => {
+  returns: commandResultValidator(completedExpenseSessionValidator),
+  handler: async (ctx, args) => {
     const session = await ctx.db.get("expenseSession", args.sessionId);
     if (!session) {
-      return error("Session not found");
+      return expenseSessionError("Session not found", "not_found");
     }
 
     // Check if session has expired before completing
     const now = Date.now();
     if (session.expiresAt && session.expiresAt < now) {
-      return error("This session has expired. Start a new one to proceed.");
+      return expenseSessionError(
+        "This session has expired. Start a new one to proceed.",
+        "precondition_failed",
+      );
     }
 
     if (session.status !== "active") {
-      return error("Can only complete active sessions");
+      return expenseSessionError(
+        "Can only complete active sessions",
+        "precondition_failed",
+      );
     }
 
-    // Mark session as completed
+    const transactionResult = await createExpenseTransactionFromSessionHandler(ctx, {
+      sessionId: args.sessionId,
+      notes: args.notes,
+    });
+    if (transactionResult.kind !== "ok") {
+      return transactionResult;
+    }
+
+    // Mark session as completed after the transaction write succeeds so the
+    // session and transaction stay atomic within the same mutation.
     await ctx.db.patch("expenseSession", args.sessionId, {
       status: "completed",
       completedAt: now,
@@ -541,23 +584,10 @@ export const completeExpenseSession = mutation({
       notes: args.notes,
     });
 
-    // Create transaction from session
-    const transactionResult: { transactionNumber: string } =
-      await ctx.runMutation(
-        internal.inventory.expenseTransactions.createTransactionFromSession,
-        {
-          sessionId: args.sessionId,
-          notes: args.notes,
-        }
-      );
-
-    return {
-      success: true as const,
-      data: {
-        sessionId: args.sessionId,
-        transactionNumber: transactionResult.transactionNumber,
-      },
-    };
+    return ok({
+      sessionId: args.sessionId,
+      transactionNumber: transactionResult.data.transactionNumber,
+    });
   },
 });
 
@@ -566,25 +596,14 @@ export const voidExpenseSession = mutation({
   args: {
     sessionId: v.id("expenseSession"),
   },
-  returns: v.union(
-    v.object({
-      success: v.literal(true),
-      data: v.object({
-        sessionId: v.id("expenseSession"),
-      }),
-    }),
-    v.object({
-      success: v.literal(false),
-      message: v.string(),
-    })
-  ),
+  returns: commandResultValidator(expenseSessionIdValidator),
   handler: async (ctx, args) => {
     const now = Date.now();
 
     // Get the session
     const session = await ctx.db.get("expenseSession", args.sessionId);
     if (!session) {
-      return error("Session not found");
+      return expenseSessionError("Session not found", "not_found");
     }
 
     // Query all items for this session
@@ -616,7 +635,7 @@ export const voidExpenseSession = mutation({
       updatedAt: now,
     });
 
-    return { success: true as const, data: { sessionId: args.sessionId } };
+    return ok({ sessionId: args.sessionId });
   },
 });
 
@@ -624,23 +643,12 @@ export const releaseExpenseSessionInventoryHoldsAndDeleteItems = mutation({
   args: {
     sessionId: v.id("expenseSession"),
   },
-  returns: v.union(
-    v.object({
-      success: v.literal(true),
-      data: v.object({
-        sessionId: v.id("expenseSession"),
-      }),
-    }),
-    v.object({
-      success: v.literal(false),
-      message: v.string(),
-    })
-  ),
+  returns: commandResultValidator(expenseSessionIdValidator),
   handler: async (ctx, args) => {
     // Get the session
     const session = await ctx.db.get("expenseSession", args.sessionId);
     if (!session) {
-      return error("Session not found");
+      return expenseSessionError("Session not found", "not_found");
     }
 
     // Query all items for this session
@@ -672,7 +680,7 @@ export const releaseExpenseSessionInventoryHoldsAndDeleteItems = mutation({
       itemIds.map((itemId) => ctx.db.delete("expenseSessionItem", itemId))
     );
 
-    return { success: true as const, data: { sessionId: args.sessionId } };
+    return ok({ sessionId: args.sessionId });
   },
 });
 

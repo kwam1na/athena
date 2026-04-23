@@ -31,6 +31,8 @@ import { useNavigateBack } from "~/src/hooks/use-navigate-back";
 import { ExpenseCompletion } from "./ExpenseCompletion";
 import { useMutation } from "convex/react";
 import { api } from "~/convex/_generated/api";
+import { presentCommandToast } from "~/src/lib/errors/presentCommandToast";
+import { runCommand } from "~/src/lib/errors/runCommand";
 
 export function ExpenseView() {
   const { activeStore } = useGetActiveStore();
@@ -347,30 +349,32 @@ export function ExpenseView() {
     try {
       store.setTransactionCompleting(true);
       const totalValue = store.cart.total;
-      const result = await completeExpenseSession({
-        sessionId: sessionId as Id<"expenseSession">,
-        notes: store.ui.notes,
-        totalValue,
-      });
-
-      if (result.success) {
-        store.setTransactionCompleted(true, result.data.transactionNumber, {
-          completedAt: new Date(),
-          cartItems: store.cart.items,
-          totalValue,
+      const result = await runCommand(() =>
+        completeExpenseSession({
+          sessionId: sessionId as Id<"expenseSession">,
           notes: store.ui.notes,
-        });
-        toast.success("Expense recorded successfully");
-        store.clearTransaction();
-        store.clearCart();
-        store.clearSession();
-        store.clearCashier();
-      } else {
-        toast.error(result.message);
+          totalValue,
+        }),
+      );
+
+      if (result.kind !== "ok") {
+        presentCommandToast(result);
+        return;
       }
+
+      store.setTransactionCompleted(true, result.data.transactionNumber, {
+        completedAt: new Date(),
+        cartItems: store.cart.items,
+        totalValue,
+        notes: store.ui.notes,
+      });
+      toast.success("Expense recorded successfully");
+      store.clearTransaction();
+      store.clearCart();
+      store.clearSession();
+      store.clearCashier();
     } catch (error) {
       logger.error("[Expense] Failed to complete expense", error as Error);
-      toast.error((error as Error).message);
     } finally {
       store.setTransactionCompleting(false);
     }

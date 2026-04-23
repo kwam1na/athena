@@ -1,14 +1,28 @@
 import { useCallback } from "react";
 import { toast } from "sonner";
 import { useMutation } from "convex/react";
+
 import { api } from "../../convex/_generated/api";
-import { useExpenseStore } from "../stores/expenseStore";
 import { Id } from "../../convex/_generated/dataModel";
+import { presentCommandToast } from "../lib/errors/presentCommandToast";
+import {
+  type NormalizedCommandResult,
+  runCommand,
+} from "../lib/errors/runCommand";
 import { logger } from "../lib/logger";
+import { useExpenseStore } from "../stores/expenseStore";
 import { useExpenseActiveSession } from "./useExpenseSessions";
 import { useGetTerminal } from "./useGetTerminal";
 
 type ExpenseActorId = Id<"staffProfile">;
+
+function getCommandErrorMessage<T>(
+  result: Exclude<NormalizedCommandResult<T>, { kind: "ok" }>,
+) {
+  return result.kind === "user_error"
+    ? result.error.message
+    : result.error.message;
+}
 
 /**
  * Hook for Expense Session Management
@@ -23,33 +37,28 @@ export const useSessionManagementExpense = () => {
   const activeSession = useExpenseActiveSession(
     store.storeId,
     terminal?._id,
-    currentStaffProfileId || undefined
+    currentStaffProfileId || undefined,
   );
 
-  // Convex mutations
   const createSessionMutation = useMutation(
-    api.inventory.expenseSessions.createExpenseSession
+    api.inventory.expenseSessions.createExpenseSession,
   );
   const updateSessionMutation = useMutation(
-    api.inventory.expenseSessions.updateExpenseSession
+    api.inventory.expenseSessions.updateExpenseSession,
   );
   const holdSessionMutation = useMutation(
-    api.inventory.expenseSessions.holdExpenseSession
+    api.inventory.expenseSessions.holdExpenseSession,
   );
   const resumeSessionMutation = useMutation(
-    api.inventory.expenseSessions.resumeExpenseSession
+    api.inventory.expenseSessions.resumeExpenseSession,
   );
   const voidSessionMutation = useMutation(
-    api.inventory.expenseSessions.voidExpenseSession
+    api.inventory.expenseSessions.voidExpenseSession,
   );
   const releaseSessionInventoryHoldsAndDeleteItemsMutation = useMutation(
-    api.inventory.expenseSessions
-      .releaseExpenseSessionInventoryHoldsAndDeleteItems
+    api.inventory.expenseSessions.releaseExpenseSessionInventoryHoldsAndDeleteItems,
   );
 
-  /**
-   * Creates a new expense session
-   */
   const createSession = useCallback(
     async (storeId: Id<"store">, staffProfileId?: ExpenseActorId) => {
       logger.info("[Expense] Creating new session", {
@@ -59,7 +68,8 @@ export const useSessionManagementExpense = () => {
         terminalId: store.terminalId,
       });
 
-      if (!store.terminalId) {
+      const terminalId = store.terminalId;
+      if (!terminalId) {
         toast.error("Terminal details missing");
         throw new Error("Terminal details missing");
       }
@@ -77,15 +87,18 @@ export const useSessionManagementExpense = () => {
         store.clearCart();
         logger.debug("[Expense] Cleared cart before creating new session");
 
-        const result = await createSessionMutation({
-          storeId,
-          staffProfileId: sessionStaffProfileId,
-          registerNumber: store.ui.registerNumber,
-          terminalId: store.terminalId,
-        });
+        const result = await runCommand(() =>
+          createSessionMutation({
+            storeId,
+            staffProfileId: sessionStaffProfileId,
+            registerNumber: store.ui.registerNumber,
+            terminalId,
+          }),
+        );
 
-        if (!result.success) {
-          throw new Error(result.message);
+        if (result.kind !== "ok") {
+          presentCommandToast(result);
+          throw new Error(getCommandErrorMessage(result));
         }
 
         store.setCurrentSessionId(result.data.sessionId);
@@ -99,22 +112,17 @@ export const useSessionManagementExpense = () => {
         });
 
         toast.success("New expense session created");
-
         return result.data.sessionId;
       } catch (error) {
         logger.error("[Expense] Failed to create session", error as Error);
-        toast.error((error as Error).message);
         throw error;
       } finally {
         store.setSessionCreating(false);
       }
     },
-    [createSessionMutation, currentStaffProfileId, store]
+    [createSessionMutation, currentStaffProfileId, store],
   );
 
-  /**
-   * Updates expense session metadata (notes)
-   */
   const updateSession = useCallback(
     async (updates: {
       staffProfileId: ExpenseActorId;
@@ -129,38 +137,35 @@ export const useSessionManagementExpense = () => {
 
       if (!sessionId) {
         const error = "No active session to update";
-        logger.warn(
-          "[Expense] Attempted to update session without active session"
-        );
+        logger.warn("[Expense] Attempted to update session without active session");
         return { success: false, error };
       }
 
-      try {
-        const result = await updateSessionMutation({
+      const result = await runCommand(() =>
+        updateSessionMutation({
           sessionId: sessionId as Id<"expenseSession">,
           ...updates,
           staffProfileId: updates.staffProfileId,
-        });
+        }),
+      );
 
-        store.setSessionExpiresAt(result.expiresAt);
-
-        logger.debug("[Expense] Session updated successfully", {
-          sessionId: result.sessionId,
-          expiresAt: result.expiresAt,
-        });
-        return { success: true };
-      } catch (error) {
-        const errorMessage = (error as Error).message;
-        logger.error("[Expense] Failed to update session", error as Error);
+      if (result.kind !== "ok") {
+        const errorMessage = getCommandErrorMessage(result);
+        logger.error("[Expense] Failed to update session", { error: errorMessage });
         return { success: false, error: errorMessage };
       }
+
+      store.setSessionExpiresAt(result.data.expiresAt);
+
+      logger.debug("[Expense] Session updated successfully", {
+        sessionId: result.data.sessionId,
+        expiresAt: result.data.expiresAt,
+      });
+      return { success: true };
     },
-    [updateSessionMutation, store]
+    [store, updateSessionMutation],
   );
 
-  /**
-   * Holds/suspends the current expense session
-   */
   const holdSession = useCallback(async (): Promise<
     { success: true } | { success: false; error: string }
   > => {
@@ -186,51 +191,41 @@ export const useSessionManagementExpense = () => {
       return { success: false, error };
     }
 
-    try {
-      const result = await holdSessionMutation({
+    const result = await runCommand(() =>
+      holdSessionMutation({
         sessionId: sessionId as Id<"expenseSession">,
         staffProfileId: currentStaffProfileId,
-      });
+      }),
+    );
 
-      if (!result.success) {
-        logger.error("[Expense] Failed to hold session", {
-          sessionId,
-          message: result.message,
-        });
-        toast.error(result.message);
-        return { success: false, error: result.message };
-      }
-
-      store.setSessionExpiresAt(result.data.expiresAt);
-      store.setCurrentSessionId(null);
-      store.setActiveSession(null);
-      store.startNewTransaction();
-
-      logger.info("[Expense] Session held successfully", {
+    if (result.kind !== "ok") {
+      const errorMessage = getCommandErrorMessage(result);
+      logger.error("[Expense] Failed to hold session", {
         sessionId,
-        itemsHeld: store.cart.items.length,
+        message: errorMessage,
       });
-      toast.success("Session held");
-      return { success: true };
-    } catch (error) {
-      const errorMessage = (error as Error).message;
-      logger.error(
-        "[Expense] Unexpected error holding session",
-        error as Error
-      );
-      toast.error(errorMessage);
+      presentCommandToast(result);
       return { success: false, error: errorMessage };
     }
+
+    store.setSessionExpiresAt(result.data.expiresAt);
+    store.setCurrentSessionId(null);
+    store.setActiveSession(null);
+    store.startNewTransaction();
+
+    logger.info("[Expense] Session held successfully", {
+      sessionId,
+      itemsHeld: store.cart.items.length,
+    });
+    toast.success("Session held");
+    return { success: true };
   }, [activeSession, currentStaffProfileId, holdSessionMutation, store]);
 
-  /**
-   * Resumes a held expense session
-   */
   const resumeSession = useCallback(
     async (
       sessionId: Id<"expenseSession">,
       staffProfileId: ExpenseActorId,
-      terminalId: Id<"posTerminal">
+      terminalId: Id<"posTerminal">,
     ): Promise<
       | {
           success: true;
@@ -240,38 +235,32 @@ export const useSessionManagementExpense = () => {
     > => {
       logger.info("[Expense] Resuming held session", { sessionId });
 
-      try {
-        const result = await resumeSessionMutation({
+      const result = await runCommand(() =>
+        resumeSessionMutation({
           sessionId,
           staffProfileId,
           terminalId,
-        });
+        }),
+      );
 
-        if (!result.success) {
-          toast.error(result.message);
-          return { success: false, error: result.message };
-        }
-
-        store.setSessionExpiresAt(result.data.expiresAt);
-        toast.success("Session resumed");
-
-        return { success: true, data: result.data };
-      } catch (error) {
-        const errorMessage = (error as Error).message;
-        logger.error("[Expense] Unexpected error resuming session", {
+      if (result.kind !== "ok") {
+        const errorMessage = getCommandErrorMessage(result);
+        logger.error("[Expense] Failed to resume session", {
           sessionId,
-          error: error as Error,
+          message: errorMessage,
         });
-        toast.error(errorMessage);
+        presentCommandToast(result);
         return { success: false, error: errorMessage };
       }
+
+      store.setSessionExpiresAt(result.data.expiresAt);
+      toast.success("Session resumed");
+
+      return { success: true, data: result.data };
     },
-    [resumeSessionMutation, store]
+    [resumeSessionMutation, store],
   );
 
-  /**
-   * Voids the current expense session
-   */
   const voidSession = useCallback(async (): Promise<
     { success: true } | { success: false; error: string }
   > => {
@@ -289,79 +278,61 @@ export const useSessionManagementExpense = () => {
       return { success: false, error };
     }
 
-    try {
-      const result = await voidSessionMutation({
+    const result = await runCommand(() =>
+      voidSessionMutation({
         sessionId: sessionId as Id<"expenseSession">,
+      }),
+    );
+
+    if (result.kind !== "ok") {
+      const errorMessage = getCommandErrorMessage(result);
+      logger.error("[Expense] Failed to void session", {
+        sessionId,
+        message: errorMessage,
       });
-
-      if (!result.success) {
-        logger.error("[Expense] Failed to void session", {
-          sessionId,
-          message: result.message,
-        });
-        toast.error(result.message);
-        return { success: false, error: result.message };
-      }
-
-      // Clear session state
-      store.setCurrentSessionId(null);
-      store.setActiveSession(null);
-      store.startNewTransaction();
-
-      logger.info("[Expense] Session voided successfully", { sessionId });
-      toast.success("Session voided");
-      return { success: true };
-    } catch (error) {
-      const errorMessage = (error as Error).message;
-      logger.error(
-        "[Expense] Unexpected error voiding session",
-        error as Error
-      );
-      toast.error(errorMessage);
+      presentCommandToast(result);
       return { success: false, error: errorMessage };
     }
-  }, [voidSessionMutation, store, activeSession]);
 
-  /**
-   * Releases inventory holds and deletes items for a session
-   */
+    store.setCurrentSessionId(null);
+    store.setActiveSession(null);
+    store.startNewTransaction();
+
+    logger.info("[Expense] Session voided successfully", { sessionId });
+    toast.success("Session voided");
+    return { success: true };
+  }, [activeSession, store, voidSessionMutation]);
+
   const releaseSessionInventoryHoldsAndDeleteItems = useCallback(
     async (
-      sessionId: Id<"expenseSession">
+      sessionId: Id<"expenseSession">,
     ): Promise<{ success: true } | { success: false; error: string }> => {
       logger.info("[Expense] Releasing inventory holds and deleting items", {
         sessionId,
       });
 
-      try {
-        const result = await releaseSessionInventoryHoldsAndDeleteItemsMutation(
-          {
-            sessionId,
-          }
-        );
-
-        if (!result.success) {
-          logger.error("[Expense] Failed to release holds", {
-            sessionId,
-            message: result.message,
-          });
-          return { success: false, error: result.message };
-        }
-
-        logger.info("[Expense] Inventory holds released successfully", {
+      const result = await runCommand(() =>
+        releaseSessionInventoryHoldsAndDeleteItemsMutation({
           sessionId,
+        }),
+      );
+
+      if (result.kind !== "ok") {
+        const errorMessage = getCommandErrorMessage(result);
+        logger.error("[Expense] Failed to release holds", {
+          sessionId,
+          message: errorMessage,
         });
-        return { success: true };
-      } catch (error) {
-        const errorMessage = (error as Error).message;
-        logger.error(
-          "[Expense] Unexpected error releasing holds",
-          error as Error
-        );
+        presentCommandToast(result);
         return { success: false, error: errorMessage };
       }
+
+      logger.info("[Expense] Inventory holds released successfully", {
+        sessionId,
+      });
+      return { success: true };
     },
-    [releaseSessionInventoryHoldsAndDeleteItemsMutation]
+    [releaseSessionInventoryHoldsAndDeleteItemsMutation],
   );
 
   return {

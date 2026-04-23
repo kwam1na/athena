@@ -2,6 +2,7 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
 import { logger } from "../lib/logger";
+import { runCommand } from "../lib/errors/runCommand";
 
 type ExpenseActorId = Id<"staffProfile">;
 
@@ -71,21 +72,23 @@ export const useExpenseSessionCreate = () => {
       registerNumber?: string
     ) => {
       try {
-        const result = await createSession({
-          storeId,
-          terminalId,
-          staffProfileId,
-          registerNumber,
-        });
+        const result = await runCommand(() =>
+          createSession({
+            storeId,
+            terminalId,
+            staffProfileId,
+            registerNumber,
+          })
+        );
 
-        if (result.success) {
+        if (result.kind === "ok") {
           logger.debug("Expense session created successfully", {
             sessionId: result.data.sessionId,
           });
           return result.data.sessionId;
-        } else {
-          throw new Error(result.message);
         }
+
+        throw new Error(result.error.message);
       } catch (error) {
         logger.error("Failed to create expense session", error as Error);
         throw error;
@@ -109,11 +112,19 @@ export const useExpenseSessionUpdate = () => {
       }
     ) => {
       try {
-        return await updateSession({
-          sessionId,
-          staffProfileId,
-          ...updates,
-        });
+        const result = await runCommand(() =>
+          updateSession({
+            sessionId,
+            staffProfileId,
+            ...updates,
+          })
+        );
+
+        if (result.kind === "ok") {
+          return result.data;
+        }
+
+        throw new Error(result.error.message);
       } catch (error) {
         logger.error("Failed to update expense session", error as Error);
         throw error;
